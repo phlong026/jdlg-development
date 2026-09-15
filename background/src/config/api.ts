@@ -1,0 +1,220 @@
+// API配置
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+
+export const API_ENDPOINTS = {
+    // 认证
+    AUTH: {
+        LOGIN: '/api/v1/management/login',
+        LOGOUT: '/api/v1/management/logout',
+        ME: '/api/v1/management/me',
+    },
+    // 用户管理
+    USERS: {
+        LIST: '/api/v1/management/users',
+        DETAIL: (id: string) => `/api/v1/management/users/${id}`,
+        WORKBENCH: (id: string) => `/api/v1/management/users/${id}/workbench`,
+        SET_STONES: (id: string) => `/api/v1/management/users/${id}/stones`,
+        ADJUST_STONES: (id: string) => `/api/v1/management/users/${id}/stones/adjust`,
+        ENTERPRISE_WECHAT: (id: string) => `/api/v1/management/users/${id}/enterprise-wechat`,
+    },
+    DESIGNERS: {
+        LIST: '/api/v1/management/designers',
+        DETAIL: (id: string) => `/api/v1/management/designers/${id}`,
+        VISIBILITY: (id: string) => `/api/v1/management/designers/${id}/visibility`,
+        SERVICE_STATUS: (id: string) => `/api/v1/management/designers/${id}/service-status`,
+    },
+    DISTRIBUTION: {
+        OVERVIEW: '/api/v1/management/distribution/overview',
+        INVITERS: '/api/v1/management/distribution/inviters',
+        REWARDS: '/api/v1/management/distribution/rewards',
+    },
+    CONTENT_ANALYTICS: {
+        OVERVIEW: '/api/v1/management/content-analytics/overview',
+        DOWNLOAD_RANKING: '/api/v1/management/content-analytics/download-ranking',
+        ENGAGEMENT_RANKING: '/api/v1/management/content-analytics/engagement-ranking',
+        NEW_TEMPLATES: '/api/v1/management/content-analytics/new-templates',
+        LOW_CONVERSION: '/api/v1/management/content-analytics/low-conversion',
+        FEATURED_CASES: '/api/v1/management/content-analytics/featured-cases',
+    },
+    RISK_CONTROL: {
+        OVERVIEW: '/api/v1/management/risk-control/overview',
+        DEVICE_GROUPS: '/api/v1/management/risk-control/device-groups',
+        DEVICE_CHANGES: '/api/v1/management/risk-control/device-changes',
+        ALERTS: '/api/v1/management/risk-control/alerts',
+        USERS: '/api/v1/management/risk-control/users',
+    },
+    SUPPORT_TICKETS: {
+        OVERVIEW: '/api/v1/management/support-tickets/overview',
+        LIST: '/api/v1/management/support-tickets',
+        CREATE: '/api/v1/management/support-tickets',
+        DETAIL: (id: string) => `/api/v1/management/support-tickets/${id}`,
+        ASSIGN: (id: string) => `/api/v1/management/support-tickets/${id}/assign`,
+        STATUS: (id: string) => `/api/v1/management/support-tickets/${id}/status`,
+        RESOLUTION_NOTE: (id: string) => `/api/v1/management/support-tickets/${id}/resolution-note`,
+        SYNC_SYSTEM_EXCEPTIONS: '/api/v1/management/support-tickets/sync-system-exceptions',
+    },
+    CUSTOMER_LEADS: {
+        OVERVIEW: '/api/v1/management/customer-leads/overview',
+        FUNNEL: '/api/v1/management/customer-leads/funnel',
+        LIST: '/api/v1/management/customer-leads',
+        DETAIL: (id: string) => `/api/v1/management/customer-leads/${id}`,
+        FOLLOWUPS: (id: string) => `/api/v1/management/customer-leads/${id}/followups`,
+        STATUS: (id: string) => `/api/v1/management/customer-leads/${id}/status`,
+        BATCH: '/api/v1/management/customer-leads/batch',
+    },
+    REPORT_CENTER: {
+        OVERVIEW: '/api/v1/management/report-center/overview',
+        REPORTS: '/api/v1/management/report-center/reports',
+        EXPORT: '/api/v1/management/report-center/export',
+    },
+    // 商品管理
+    PRODUCTS: {
+        LIST: '/api/v1/admin/products',
+        CREATE: '/api/v1/admin/products',
+        DETAIL: (id: string) => `/api/v1/admin/products/${id}`,
+        UPDATE: (id: string) => `/api/v1/admin/products/${id}`,
+        DELETE: (id: string) => `/api/v1/admin/products/${id}`,
+        TOGGLE_STATUS: (id: string) => `/api/v1/admin/products/${id}/status`,
+    },
+    // 礼品管理
+    GIFTS: {
+        LIST: '/api/v1/admin/gifts',
+        CREATE: '/api/v1/admin/gifts',
+        DETAIL: (id: string) => `/api/v1/admin/gifts/${id}`,
+        UPDATE: (id: string) => `/api/v1/admin/gifts/${id}`,
+        DELETE: (id: string) => `/api/v1/admin/gifts/${id}`,
+        SCAN: '/api/v1/admin/gifts/scan',
+    },
+    // 仓库管理
+    WAREHOUSE: {
+        GET_USER_WAREHOUSE: (userId: string) => `/api/v1/admin/warehouse/user/${userId}`,
+        ADD_ITEM: '/api/v1/admin/warehouse/item',
+        UPDATE_ITEM: (id: string) => `/api/v1/admin/warehouse/item/${id}`,
+        DELETE_ITEM: (id: string) => `/api/v1/admin/warehouse/item/${id}`,
+    },
+    // 订单中心
+    ORDERS: {
+        LIST: '/api/v1/management/orders',
+        DETAIL: (id: string) => `/api/v1/management/orders/${id}`,
+        SUPPORT_TICKET: (id: string) => `/api/v1/management/orders/${id}/support-ticket`,
+        VIRTUAL_PAY_REFUND: (id: string) => `/api/v1/management/virtualpay/orders/${id}/refund`,
+    },
+    VIRTUAL_PAY: {
+        HEALTH: '/api/v1/management/virtualpay/health',
+        LOGS: '/api/v1/management/virtualpay/logs',
+    },
+    // 排名
+    RANKING: {
+        POINTS: '/api/v1/admin/ranking/points',
+        GIFTS: '/api/v1/admin/ranking/gifts',
+    },
+    // 统计
+    STATS: {
+        DASHBOARD_OVERVIEW: '/api/v1/management/dashboard/overview',
+        DASHBOARD_TRENDS: '/api/v1/management/dashboard/trends',
+        DASHBOARD_TODOS: '/api/v1/management/dashboard/todos',
+    },
+    // AI配置
+    AI: {
+        PRICING: '/api/v1/management/ai/pricing',
+        API_CONFIG: '/api/v1/management/ai/api/config',
+    },
+    AI_TASKS: {
+        LIST: '/api/v1/management/ai/tasks',
+        BACKFILL_MODELS: '/api/v1/management/ai/tasks/backfill-models',
+        DETAIL: (id: string) => `/api/v1/management/ai/tasks/${id}`,
+        SUPPORT_TICKET: (id: string) => `/api/v1/management/ai/tasks/${id}/support-ticket`,
+        VIDEO_LIST: '/api/v1/management/ai/video-tasks',
+        VIDEO_DETAIL: (id: string) => `/api/v1/management/ai/video-tasks/${id}`,
+        VIDEO_SUPPORT_TICKET: (id: string) => `/api/v1/management/ai/video-tasks/${id}/support-ticket`,
+    },
+    // OSS管理
+    OSS: {
+        LIST: '/api/v1/management/oss/files',
+        UPLOAD: '/api/v1/management/oss/upload',
+        DELETE: (id: string) => `/api/v1/management/oss/files/${id}`,
+        BATCH_DELETE: '/api/v1/management/oss/files/batch',
+    },
+    // 模板管理
+    TEMPLATES: {
+        LIST: '/api/v1/management/templates',
+        CREATE: '/api/v1/management/templates',
+        DETAIL: (id: string) => `/api/v1/management/templates/${id}`,
+        UPDATE: (id: string) => `/api/v1/management/templates/${id}`,
+        STATUS: (id: string) => `/api/v1/management/templates/${id}/status`,
+        DELETE: (id: string) => `/api/v1/management/templates/${id}`,
+        CATEGORY: (id: string) => `/api/v1/management/templates/${id}/category`,
+        FEATURED: (id: string) => `/api/v1/management/templates/${id}/featured`,
+        FEATURED_LIST: '/api/v1/management/templates/featured',
+        CATEGORIES: {
+            LIST: '/api/v1/management/templates/categories',
+            CREATE: '/api/v1/management/templates/categories',
+            DELETE: (id: string) => `/api/v1/management/templates/categories/${id}`,
+        },
+        TAB_CONFIG: '/api/v1/management/templates/tab-config',
+        FEATURED_GROUPS: {
+            LIST: '/api/v1/management/templates/featured-groups',
+            CREATE: '/api/v1/management/templates/featured-groups',
+            DETAIL: (id: string) => `/api/v1/management/templates/featured-groups/${id}`,
+            UPDATE: (id: string) => `/api/v1/management/templates/featured-groups/${id}`,
+            DELETE: (id: string) => `/api/v1/management/templates/featured-groups/${id}`,
+        },
+    },
+    INSPIRATIONS: {
+        LIST: '/api/v1/management/inspirations',
+        CREATE: '/api/v1/management/inspirations',
+        DETAIL: (id: string) => `/api/v1/management/inspirations/${id}`,
+        UPDATE: (id: string) => `/api/v1/management/inspirations/${id}`,
+        STATUS: (id: string) => `/api/v1/management/inspirations/${id}/status`,
+        DELETE: (id: string) => `/api/v1/management/inspirations/${id}`,
+    },
+    // 充值流水
+    RECHARGE: {
+        LIST: '/api/v1/management/recharge/records',
+        DETAIL: (id: string) => `/api/v1/management/recharge/records/${id}`,
+        EXPORT: '/api/v1/management/recharge/export',
+    },
+    // 日志管理
+    LOGS: {
+        LIST: '/api/v1/management/logs',
+        CONFIG: '/api/v1/management/logs/config',
+    },
+    // 实用工具管理
+    UTILITY_TOOLS: {
+        LIST: '/api/v1/management/utility-tools',
+        CREATE: '/api/v1/management/utility-tools',
+        DETAIL: (id: string) => `/api/v1/management/utility-tools/${id}`,
+        UPDATE: (id: string) => `/api/v1/management/utility-tools/${id}`,
+        DELETE: (id: string) => `/api/v1/management/utility-tools/${id}`,
+    },
+    AI_TOOLS: {
+        LIST: '/api/v1/management/ai-tools',
+        CREATE: '/api/v1/management/ai-tools',
+        DETAIL: (id: string) => `/api/v1/management/ai-tools/${id}`,
+        UPDATE: (id: string) => `/api/v1/management/ai-tools/${id}`,
+        DELETE: (id: string) => `/api/v1/management/ai-tools/${id}`,
+    },
+    // 充值配置管理
+    RECHARGE_CONFIG: {
+        LIST: '/api/v1/management/recharge-config',
+        GET: (paymentMode: string) => `/api/v1/management/recharge-config/${paymentMode}`,
+        CREATE_OR_UPDATE: '/api/v1/management/recharge-config',
+        DELETE: (id: string) => `/api/v1/management/recharge-config/${id}`,
+    },
+    MEMBERSHIP_PLANS: {
+        LIST: '/api/v1/management/membership-plans',
+        DETAIL: (id: string) => `/api/v1/management/membership-plans/${id}`,
+        CREATE_OR_UPDATE: '/api/v1/management/membership-plans',
+        DELETE: (id: string) => `/api/v1/management/membership-plans/${id}`,
+    },
+    MEMBERSHIP_OPERATIONS: {
+        OVERVIEW: '/api/v1/management/membership-operations/overview',
+        USERS: '/api/v1/management/membership-operations/users',
+    },
+    // 资质认证与审核（工单）
+    CERTIFICATION: {
+        LIST: '/api/v1/management/certification-applications',
+        DETAIL: (id: string) => `/api/v1/management/certification-applications/${id}`,
+        REVIEW: (id: string) => `/api/v1/management/certification-applications/${id}/review`,
+    },
+};

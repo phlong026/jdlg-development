@@ -1,0 +1,124 @@
+.layout-sidebar {
+  width: 220px;
+  background: linear-gradient(180deg, #fffdfa 0%, #ffffff 100%);
+  border-right: 1px solid #eee4d7;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.layout-sidebar.collapsed {
+  width: 72px;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #ffb74d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.logo-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-section-title {
+  padding: 0 12px;
+  color: #8b735d;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #4b5563;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-item .sidebar-icon {
+  font-size: 18px;
+}
+
+.sidebar-item:hover {
+  background: #f6eee3;
+  color: #8b5e3c;
+}
+
+.sidebar-item.active {
+  background: #f0e1cf;
+  color: #7a5335;
+  font-weight: 600;
+}
+
+.layout-sidebar.collapsed .sidebar-label {
+  display: none;
+}
+
+.layout-sidebar.collapsed .sidebar-section-title {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .layout-sidebar.mobile,
+  .layout-sidebar.mobile.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 82vw);
+    z-index: 1200;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+  }
+
+  .layout-sidebar.mobile.open {
+    transform: translateX(0);
+  }
+}
+

@@ -1,0 +1,679 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { FiActivity, FiClock, FiFileText, FiRefreshCw, FiSearch, FiUserCheck, FiX } from 'react-icons/fi';
+import Layout from '../component/layout';
+import {
+    batchUpdateCustomerLeads,
+    createCustomerLeadFollowup,
+    getCustomerLeadDetail,
+    getCustomerLeadFunnel,
+    getCustomerLeadList,
+    getCustomerLeadOverview,
+    updateCustomerLeadStatus,
+    type CustomerFunnelMetric,
+    type CustomerLeadActionPayload,
+    type CustomerLeadDetailResponse,
+    type CustomerLeadFollowupItem,
+    type CustomerLeadItem,
+    type CustomerLeadOverview,
+    type CustomerServiceEventItem,
+} from '../api/customerLeads';
+import './customerLeads.scss';
+
+const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
+const FiRefreshCwIcon = FiRefreshCw as unknown as React.ComponentType<any>;
+const FiFileTextIcon = FiFileText as unknown as React.ComponentType<any>;
+const FiUserCheckIcon = FiUserCheck as unknown as React.ComponentType<any>;
+const FiXIcon = FiX as unknown as React.ComponentType<any>;
+const FiClockIcon = FiClock as unknown as React.ComponentType<any>;
+const FiActivityIcon = FiActivity as unknown as React.ComponentType<any>;
+
+const defaultOverview: CustomerLeadOverview = {
+    total_count: 0,
+    new_count: 0,
+    contacted_count: 0,
+    high_intent_count: 0,
+    converted_count: 0,
+    today_new_count: 0,
+    todo_count: 0,
+    overdue_count: 0,
+};
+
+const statusLabelMap: Record<string, string> = {
+    new: '新线索',
+    contacted: '已联系',
+    converted: '已成交',
+    invalid: '无效',
+};
+
+const intentLabelMap: Record<string, string> = {
+    low: '低意向',
+    medium: '中意向',
+    high: '高意向',
+};
+
+const queueOptions = [
+    { key: 'todo', label: '待处理', help: '新线索和跟进中', countKey: 'todo_count' },
+    { key: 'today', label: '今日新增', help: '今天进入后台的线索', countKey: 'today_new_count' },
+    { key: 'high', label: '高意向', help: '优先电话或微信承接', countKey: 'high_intent_count' },
+    { key: 'overdue', label: '超时未跟进', help: '该联系但还没推进', countKey: 'overdue_count' },
+    { key: 'unassigned', label: '未分配', help: '还没有负责人', countKey: 'new_count' },
+    { key: 'all', label: '全部线索', help: '完整线索池', countKey: 'total_count' },
+] as const;
+
+const defaultAction = {
+    status: 'contacted',
+    assignedTo: '',
+    nextFollowupAt: '',
+    remark: '',
+};
+
+type ActionForm = typeof defaultAction;
+
+const formatDateTime = (value?: string | null) => {
+    if (!value) return '暂无';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('zh-CN', { hour12: false });
+};
+
+const formatDateInputValue = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const getDisplayName = (item: CustomerLeadItem) => {
+    return item.name?.trim() || (item.user_id ? `用户${item.user_id}` : '匿名用户');
+};
+
+const getContactText = (item: CustomerLeadItem) => {
+    const contacts = [item.wechat, item.enterprise_wechat_contact, item.phone].filter(Boolean);
+    return contacts.length > 0 ? contacts.join(' / ') : '未留联系方式';
+};
+
+const getQueueCount = (overview: CustomerLeadOverview, key: string) => {
+    return Number((overview as any)[key] || 0);
+};
+
+const buildActionPayload = (form: ActionForm): CustomerLeadActionPayload => ({
+    status: form.status,
+    remark: form.remark.trim(),
+    assigned_to: form.assignedTo.trim(),
+    next_followup_at: form.nextFollowupAt ? new Date(form.nextFollowupAt).toISOString() : undefined,
+});
+
+const describeEvent = (item: CustomerServiceEventItem) => {
+    const payload = item.payload || {};
+    const styleReference = payload.style_reference as Record<string, any> | undefined;
+    const summary = item.demand_summary || '';
+    switch (item.event_type) {
+        case 'welcome_shown':
+            return '进入智能客服页';
+        case 'structured_requirement_collected':
+            return summary ? `提交了结构化建房需求：${summary}` : '提交了结构化建房需求';
+        case 'generate_click':
+            return '点击了一键生成方案';
+        case 'human_handoff_triggered':
+            return '触发人工承接';
+        case 'style_reference_selected':
+            return `选择了风格参考图${styleReference?.title ? `：${styleReference.title}` : ''}`;
+        case 'knowledge_base_hit':
+            return '命中知识库回答';
+        case 'ai_chat_fallback':
+            return '进入 AI 兜底回答';
+        case 'lead_submit':
+            return '系统生成或更新了客服线索';
+        default:
+            return item.event_type || '未知事件';
+    }
+};
+
+const getNextActionText = (lead: CustomerLeadItem | null) => {
+    if (!lead) return '先查看线索详情';
+    if (lead.status === 'converted') return '已成交，补充成交备注即可';
+    if (lead.status === 'invalid') return '已标记无效，无需继续跟进';
+    if (lead.intent_level === 'high') return '建议优先电话或微信联系';
+    if (!lead.assigned_to) return '建议先分配负责人';
+    return '按下次跟进时间继续推进';
+};
+
+const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ embedded = false,readOnly=false }) => {
+    const Container = embedded ? React.Fragment : Layout;
+    const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
+    const [funnel, setFunnel] = useState<CustomerFunnelMetric[]>([]);
+    const [list, setList] = useState<CustomerLeadItem[]>([]);
+    const [total, setTotal] = useState(0);
+    const [page, setPage] = useState(1);
+    const [pageSize] = useState(20);
+    const [loading, setLoading] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
+    const [keyword, setKeyword] = useState('');
+    const [queue, setQueue] = useState('todo');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [intentFilter, setIntentFilter] = useState('all');
+    const [assignedFilter, setAssignedFilter] = useState('all');
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [detail, setDetail] = useState<CustomerLeadDetailResponse | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [actionTarget, setActionTarget] = useState<CustomerLeadItem | null>(null);
+    const [batchMode, setBatchMode] = useState(false);
+    const [actionForm, setActionForm] = useState<ActionForm>(defaultAction);
+    const [savingAction, setSavingAction] = useState(false);
+
+    const selectedItems = useMemo(() => list.filter((item) => selectedIds.includes(item.id)), [list, selectedIds]);
+    const activeLead = detail?.lead || null;
+    const activeEvents = detail?.events || [];
+    const activeFollowups = detail?.followups || [];
+    const activeIntentAnalysis = detail?.intent_analysis || null;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const params = {
+                page,
+                page_size: pageSize,
+                keyword,
+                queue: queue === 'all' ? undefined : queue,
+                status: statusFilter === 'all' ? undefined : statusFilter,
+                intent_level: intentFilter === 'all' ? undefined : intentFilter,
+                assigned_to: assignedFilter === 'all' ? undefined : assignedFilter,
+            };
+            const [overviewData, listData, funnelData] = await Promise.all([
+                getCustomerLeadOverview(),
+                getCustomerLeadList(params),
+                getCustomerLeadFunnel(),
+            ]);
+            setOverview({ ...defaultOverview, ...overviewData });
+            setList(listData.list || []);
+            setTotal(listData.total || 0);
+            setFunnel(funnelData.metrics || []);
+            setSelectedIds((ids) => ids.filter((id) => (listData.list || []).some((item) => item.id === id)));
+        } catch (error) {
+            console.error('加载客服线索失败', error);
+            window.alert(error instanceof Error ? error.message : '加载客服线索失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, [page, pageSize, keyword, queue, statusFilter, intentFilter, assignedFilter]);
+
+    const resetToFirstPage = () => {
+        if (page === 1) {
+            loadData();
+        } else {
+            setPage(1);
+        }
+    };
+
+    const handleSearch = () => {
+        setKeyword(searchInput.trim());
+        setPage(1);
+    };
+
+    const handleQueueChange = (nextQueue: string) => {
+        setQueue(nextQueue);
+        setPage(1);
+        setSelectedIds([]);
+    };
+
+    const handleViewDetail = async (item: CustomerLeadItem) => {
+        setDetailLoading(true);
+        try {
+            const data = await getCustomerLeadDetail(String(item.id));
+            setDetail(data);
+        } catch (error) {
+            console.error('加载客服线索详情失败', error);
+            window.alert(error instanceof Error ? error.message : '加载客服线索详情失败');
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    const handleCloseDetail = () => {
+        setDetail(null);
+    };
+
+    const openAction = (item?: CustomerLeadItem) => {
+        const lead = item || activeLead || null;
+        setActionTarget(lead);
+        setBatchMode(!lead);
+        setActionForm({
+            status: lead?.status === 'converted' || lead?.status === 'invalid' ? lead.status : 'contacted',
+            assignedTo: lead?.assigned_to || '',
+            nextFollowupAt: formatDateInputValue(lead?.next_followup_at || null),
+            remark: '',
+        });
+    };
+
+    const closeAction = () => {
+        setActionTarget(null);
+        setBatchMode(false);
+        setActionForm(defaultAction);
+    };
+
+    const saveAction = async () => {
+        if (!actionForm.remark.trim()) {
+            window.alert('请填写本次跟进记录，方便后续同事接手');
+            return;
+        }
+        const payload = buildActionPayload(actionForm);
+        setSavingAction(true);
+        try {
+            if(readOnly){alert("请在统一客户档案中处理跟进与归属");return}
+            if (batchMode) {
+                if (selectedIds.length === 0) {
+                    window.alert('请先选择要批量处理的线索');
+                    return;
+                }
+                await batchUpdateCustomerLeads(selectedIds, payload);
+                setSelectedIds([]);
+            } else if (actionTarget) {
+                await updateCustomerLeadStatus(String(actionTarget.id), payload);
+                if (activeLead?.id === actionTarget.id) {
+                    const latest = await getCustomerLeadDetail(String(actionTarget.id));
+                    setDetail(latest);
+                }
+            } else if (activeLead) {
+                await createCustomerLeadFollowup(String(activeLead.id), payload);
+                const latest = await getCustomerLeadDetail(String(activeLead.id));
+                setDetail(latest);
+            }
+            closeAction();
+            await loadData();
+        } catch (error) {
+            console.error('保存客服线索跟进失败', error);
+            window.alert(error instanceof Error ? error.message : '保存客服线索跟进失败');
+        } finally {
+            setSavingAction(false);
+        }
+    };
+
+    const toggleSelected = (id: number) => {
+        setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+    };
+
+    const toggleSelectPage = () => {
+        if (selectedIds.length === list.length) {
+            setSelectedIds([]);
+            return;
+        }
+        setSelectedIds(list.map((item) => item.id));
+    };
+
+    return (
+        <Container {...(embedded ? {} : { title: '客服线索工作台' })}>
+            <div className="customer-lead-page">
+                <div className="customer-lead-hero">
+                    <div>
+                        <p>管理后台 / 用户与内容运营 / 客服线索工作台</p>
+                        <h2>把智能客服里的意向用户推进到可跟进、可分配、可复盘</h2>
+                    </div>
+                    <button type="button" className="customer-lead-btn secondary" onClick={resetToFirstPage} disabled={loading}>
+                        <FiRefreshCwIcon />
+                        刷新
+                    </button>
+                </div>
+
+                <div className="customer-lead-stats">
+                    <div className="customer-lead-stat">
+                        <FiClockIcon />
+                        <span>待处理</span>
+                        <strong>{overview.todo_count || 0}</strong>
+                    </div>
+                    <div className="customer-lead-stat">
+                        <FiFileTextIcon />
+                        <span>今日新增</span>
+                        <strong>{overview.today_new_count || 0}</strong>
+                    </div>
+                    <div className="customer-lead-stat">
+                        <FiUserCheckIcon />
+                        <span>高意向</span>
+                        <strong>{overview.high_intent_count}</strong>
+                    </div>
+                    <div className="customer-lead-stat danger">
+                        <FiActivityIcon />
+                        <span>超时未跟进</span>
+                        <strong>{overview.overdue_count || 0}</strong>
+                    </div>
+                </div>
+
+                <section className="customer-lead-panel">
+                    <div className="customer-lead-queues">
+                        {queueOptions.map((item) => (
+                            <button
+                                key={item.key}
+                                type="button"
+                                className={`customer-lead-queue ${queue === item.key ? 'active' : ''}`}
+                                onClick={() => handleQueueChange(item.key)}
+                            >
+                                <span>{item.label}</span>
+                                <strong>{getQueueCount(overview, item.countKey)}</strong>
+                                <small>{item.help}</small>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="customer-lead-panel">
+                    <div className="customer-lead-panel-title">
+                        <h3>智能客服漏斗</h3>
+                        <p>帮助判断线索从进入客服到提交、生成、转人工的掉点。</p>
+                    </div>
+                    <div className="customer-lead-funnel">
+                        {funnel.map((item, index) => (
+                            <div className="customer-lead-funnel-item" key={item.key}>
+                                <span>{index + 1}</span>
+                                <strong>{item.label}</strong>
+                                <b>{item.count}</b>
+                                <small>{item.conversion_rate.toFixed(1)}%</small>
+                            </div>
+                        ))}
+                        {!loading && funnel.length === 0 ? (
+                            <div className="customer-lead-empty">暂无漏斗数据</div>
+                        ) : null}
+                    </div>
+                </section>
+
+                <section className="customer-lead-panel">
+                    <div className="customer-lead-toolbar">
+                        <div className="customer-lead-search">
+                            <FiSearchIcon />
+                            <input
+                                value={searchInput}
+                                onChange={(event) => setSearchInput(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') handleSearch();
+                                }}
+                                placeholder="搜索用户、需求、微信、电话"
+                            />
+                        </div>
+                        <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
+                            <option value="all">全部状态</option>
+                            <option value="new">新线索</option>
+                            <option value="contacted">已联系</option>
+                            <option value="converted">已成交</option>
+                            <option value="invalid">无效</option>
+                        </select>
+                        <select value={intentFilter} onChange={(event) => { setIntentFilter(event.target.value); setPage(1); }}>
+                            <option value="all">全部意向</option>
+                            <option value="high">高意向</option>
+                            <option value="medium">中意向</option>
+                            <option value="low">低意向</option>
+                        </select>
+                        <select value={assignedFilter} onChange={(event) => { setAssignedFilter(event.target.value); setPage(1); }}>
+                            <option value="all">全部负责人</option>
+                            <option value="unassigned">未分配</option>
+                        </select>
+                        <button type="button" className="customer-lead-btn" onClick={handleSearch}>
+                            <FiSearchIcon />
+                            查询
+                        </button>
+                    </div>
+
+                    {selectedIds.length > 0 ? (
+                        <div className="customer-lead-batchbar">
+                            <span>已选择 {selectedIds.length} 条线索</span>
+                            <button type="button" className="customer-lead-btn" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction()}>
+                                批量处理
+                            </button>
+                            <button type="button" className="customer-lead-btn secondary" onClick={() => setSelectedIds([])}>
+                                取消选择
+                            </button>
+                        </div>
+                    ) : null}
+
+                    <div className="customer-lead-table-wrap">
+                        <table className="customer-lead-table">
+                            <thead>
+                                <tr>
+                                    <th className="checkbox-cell">
+                                        <input type="checkbox" checked={list.length > 0 && selectedIds.length === list.length} onChange={toggleSelectPage} />
+                                    </th>
+                                    <th>用户</th>
+                                    <th>需求与联系方式</th>
+                                    <th>来源</th>
+                                    <th>负责人 / 下次跟进</th>
+                                    <th>意向</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {list.map((item) => (
+                                    <tr key={item.id}>
+                                        <td className="checkbox-cell">
+                                            <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
+                                        </td>
+                                        <td>
+                                            <strong>{getDisplayName(item)}</strong>
+                                            <span>ID：{item.user_id || '-'}</span>
+                                            <span>{formatDateTime(item.created_at)}</span>
+                                        </td>
+                                        <td className="customer-lead-demand">
+                                            <strong>{item.demand_summary || '暂无需求摘要'}</strong>
+                                            <span>{getContactText(item)}</span>
+                                        </td>
+                                        <td>
+                                            <strong>{item.source || '-'}</strong>
+                                            <span>{item.source_task_no || item.session_no || '-'}</span>
+                                        </td>
+                                        <td>
+                                            <strong>{item.assigned_to || '未分配'}</strong>
+                                            <span>{item.next_followup_at ? formatDateTime(item.next_followup_at) : '未设置下次跟进'}</span>
+                                        </td>
+                                        <td>
+                                            <span className={`intent-tag intent-${item.intent_level}`}>
+                                                {intentLabelMap[item.intent_level] || item.intent_level || '-'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span className={`status-tag status-${item.status}`}>
+                                                {statusLabelMap[item.status] || item.status || '-'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="customer-lead-actions">
+                                                <button type="button" className="customer-lead-link" onClick={() => void handleViewDetail(item)}>
+                                                    详情
+                                                </button>
+                                                <button type="button" className="customer-lead-link" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction(item)}>
+                                                    跟进
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {!loading && list.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="customer-lead-empty">暂无客服线索</td>
+                                    </tr>
+                                ) : null}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="customer-lead-pagination">
+                        <span>共 {total} 条，第 {page} / {totalPages} 页</span>
+                        <div>
+                            <button type="button" className="customer-lead-btn secondary" disabled={page <= 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button>
+                            <button type="button" className="customer-lead-btn secondary" disabled={page >= totalPages || loading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</button>
+                        </div>
+                    </div>
+                </section>
+
+                {(activeLead || detailLoading) ? (
+                    <div className="customer-lead-modal-overlay" onClick={handleCloseDetail}>
+                        <div className="customer-lead-modal" onClick={(event) => event.stopPropagation()}>
+                            <div className="customer-lead-modal-header">
+                                <div>
+                                    <h3>线索详情</h3>
+                                    <p>{activeLead ? `${getDisplayName(activeLead)} · ${getNextActionText(activeLead)}` : '正在加载线索详情'}</p>
+                                </div>
+                                <button type="button" className="customer-lead-modal-close" onClick={handleCloseDetail}>
+                                    <FiXIcon />
+                                </button>
+                            </div>
+                            {detailLoading && !activeLead ? (
+                                <div className="customer-lead-modal-empty">正在加载详情...</div>
+                            ) : activeLead ? (
+                                <div className="customer-lead-modal-body">
+                                    <section className="customer-lead-detail-section priority">
+                                        <h4>下一步建议</h4>
+                                        <div className="customer-lead-next-action">
+                                            <strong>{getNextActionText(activeLead)}</strong>
+                                            <span>{detail?.summary || '暂无客户摘要。'}</span>
+                                            <button type="button" className="customer-lead-btn" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction(activeLead)}>记录跟进</button>
+                                        </div>
+                                    </section>
+
+                                    <section className="customer-lead-detail-section">
+                                        <h4>客户信息</h4>
+                                        <div className="customer-lead-detail-grid">
+                                            <div><span>用户</span><strong>{getDisplayName(activeLead)}</strong></div>
+                                            <div><span>用户 ID</span><strong>{activeLead.user_id || '-'}</strong></div>
+                                            <div><span>联系方式</span><strong>{getContactText(activeLead)}</strong></div>
+                                            <div><span>负责人</span><strong>{activeLead.assigned_to || '未分配'}</strong></div>
+                                            <div><span>下次跟进</span><strong>{formatDateTime(activeLead.next_followup_at)}</strong></div>
+                                            <div><span>意向等级</span><strong>{intentLabelMap[activeLead.intent_level] || activeLead.intent_level || '-'}</strong></div>
+                                        </div>
+                                    </section>
+
+                                    <section className="customer-lead-detail-section">
+                                        <h4>建房需求</h4>
+                                        <div className="customer-lead-detail-grid">
+                                            <div className="wide"><span>需求摘要</span><strong>{activeLead.demand_summary || '暂无'}</strong></div>
+                                            <div><span>层数</span><strong>{activeLead.house_floors || '-'}</strong></div>
+                                            <div><span>风格</span><strong>{activeLead.house_style || '-'}</strong></div>
+                                            <div><span>面宽</span><strong>{activeLead.land_width || '-'}</strong></div>
+                                            <div><span>进深</span><strong>{activeLead.land_depth || '-'}</strong></div>
+                                            <div><span>房间需求</span><strong>{activeLead.room_requirement || '-'}</strong></div>
+                                        </div>
+                                    </section>
+
+                                    <section className="customer-lead-detail-section">
+                                        <h4>来源追踪</h4>
+                                        <div className="customer-lead-detail-grid">
+                                            <div><span>来源</span><strong>{activeLead.source || '-'}</strong></div>
+                                            <div><span>任务号</span><strong>{activeLead.source_task_no || '-'}</strong></div>
+                                            <div><span>会话号</span><strong>{activeLead.session_no || '-'}</strong></div>
+                                            <div><span>更新时间</span><strong>{formatDateTime(activeLead.updated_at)}</strong></div>
+                                        </div>
+                                    </section>
+
+                                    <section className="customer-lead-detail-section">
+                                        <h4>自动判断</h4>
+                                        <div className="customer-lead-summary">
+                                            {activeIntentAnalysis ? (
+                                                <div>
+                                                    <span className={`intent-tag intent-${activeIntentAnalysis.level}`}>
+                                                        {intentLabelMap[activeIntentAnalysis.level] || activeIntentAnalysis.level}
+                                                    </span>
+                                                    <small>评分 {activeIntentAnalysis.score}：{activeIntentAnalysis.reasons.join('；')}</small>
+                                                </div>
+                                            ) : <p>暂无自动判断。</p>}
+                                        </div>
+                                    </section>
+
+                                    <section className="customer-lead-detail-section">
+                                        <h4>跟进记录</h4>
+                                        <div className="customer-lead-followup-list">
+                                            {activeFollowups.length > 0 ? activeFollowups.map((item: CustomerLeadFollowupItem) => (
+                                                <div className="customer-lead-followup-item" key={item.id}>
+                                                    <div>
+                                                        <strong>{statusLabelMap[item.status] || item.status}</strong>
+                                                        <span>{formatDateTime(item.created_at)}</span>
+                                                    </div>
+                                                    <p>{item.remark}</p>
+                                                    <small>{item.operator_name || '系统记录'}{item.assigned_to ? ` · 分配给 ${item.assigned_to}` : ''}{item.next_followup_at ? ` · 下次 ${formatDateTime(item.next_followup_at)}` : ''}</small>
+                                                </div>
+                                            )) : (
+                                                <div className="customer-lead-modal-empty">暂无跟进记录</div>
+                                            )}
+                                        </div>
+                                    </section>
+
+                                    <section className="customer-lead-detail-section">
+                                        <h4>客户行为时间线</h4>
+                                        <div className="customer-lead-timeline">
+                                            {activeEvents.length > 0 ? activeEvents.map((event) => (
+                                                <div className="customer-lead-timeline-item" key={event.id}>
+                                                    <div className="customer-lead-timeline-dot" />
+                                                    <div>
+                                                        <strong>{describeEvent(event)}</strong>
+                                                        <span>{formatDateTime(event.created_at)}</span>
+                                                        {event.demand_summary ? <p>{event.demand_summary}</p> : null}
+                                                    </div>
+                                                </div>
+                                            )) : (
+                                                <div className="customer-lead-modal-empty">暂无事件记录</div>
+                                            )}
+                                        </div>
+                                    </section>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                ) : null}
+
+                {!readOnly&&(actionTarget || batchMode) ? (
+                    <div className="customer-lead-modal-overlay" onClick={closeAction}>
+                        <div className="customer-lead-action-modal" onClick={(event) => event.stopPropagation()}>
+                            <div className="customer-lead-modal-header">
+                                <div>
+                                    <h3>{batchMode ? `批量处理 ${selectedIds.length} 条线索` : `跟进 ${actionTarget ? getDisplayName(actionTarget) : ''}`}</h3>
+                                    <p>填写记录后，其他同事能直接接上，不用重新翻聊天上下文。</p>
+                                </div>
+                                <button type="button" className="customer-lead-modal-close" onClick={closeAction}>
+                                    <FiXIcon />
+                                </button>
+                            </div>
+                            <div className="customer-lead-action-form">
+                                {batchMode && selectedItems.length > 0 ? (
+                                    <div className="customer-lead-selected-list">
+                                        {selectedItems.slice(0, 5).map((item) => <span key={item.id}>{getDisplayName(item)}</span>)}
+                                        {selectedItems.length > 5 ? <span>+{selectedItems.length - 5}</span> : null}
+                                    </div>
+                                ) : null}
+                                <label>
+                                    状态
+                                    <select value={actionForm.status} onChange={(event) => setActionForm((form) => ({ ...form, status: event.target.value }))}>
+                                        <option value="new">新线索</option>
+                                        <option value="contacted">已联系</option>
+                                        <option value="converted">已成交</option>
+                                        <option value="invalid">无效</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    负责人
+                                    <input value={actionForm.assignedTo} onChange={(event) => setActionForm((form) => ({ ...form, assignedTo: event.target.value }))} placeholder="例如：张三 / 设计顾问A" />
+                                </label>
+                                <label>
+                                    下次跟进时间
+                                    <input type="datetime-local" value={actionForm.nextFollowupAt} onChange={(event) => setActionForm((form) => ({ ...form, nextFollowupAt: event.target.value }))} />
+                                </label>
+                                <label className="wide">
+                                    本次跟进记录
+                                    <textarea value={actionForm.remark} onChange={(event) => setActionForm((form) => ({ ...form, remark: event.target.value }))} rows={5} placeholder="例如：已电话沟通，用户关心三层新中式造价，约明天下午发初步预算。" />
+                                </label>
+                                <div className="customer-lead-action-footer">
+                                    <button type="button" className="customer-lead-btn secondary" onClick={closeAction}>取消</button>
+                                    <button type="button" className="customer-lead-btn" disabled={savingAction} onClick={() => void saveAction()}>
+                                        保存跟进
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+        </Container>
+    );
+};
+
+export default CustomerLeads;

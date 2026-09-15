@@ -1,0 +1,265 @@
+.management-search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, var(--admin-surface-muted) 0%, var(--admin-surface) 100%);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow-soft);
+  overflow: hidden;
+}
+
+.management-search-panel__header,
+.management-search-panel__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.management-search-panel__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 420px;
+  min-width: 260px;
+}
+
+.management-search-panel__title-block h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+.management-search-panel__title-block p {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.management-search-panel__actions,
+.management-search-panel__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.management-search-panel__actions {
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.management-search-panel__controls {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #f0e2d1;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffdf9 0%, #fcf7f0 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-sizing: border-box;
+  position: relative;
+  transition: border-color 0.24s ease, box-shadow 0.24s ease, transform 0.24s ease;
+}
+
+.management-search-panel__controls > * {
+  min-width: 0;
+}
+
+.management-search-panel__controls::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.52) 0%, rgba(255, 255, 255, 0) 52%);
+  opacity: 0.85;
+}
+
+.management-search-panel__controls:hover {
+  border-color: #e6cfb5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 12px 24px rgba(160, 124, 88, 0.08);
+}
+
+.management-search-panel__controls:focus-within {
+  border-color: #d1a477;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 4px rgba(209, 164, 119, 0.12), 0 16px 30px rgba(160, 124, 88, 0.1);
+  transform: translateY(-1px);
+}
+
+.management-search-panel__summary {
+  padding-top: 14px;
+  border-top: 1px solid #f2e6d8;
+  color: var(--admin-text-muted);
+  font-size: 13px;
+}
+
+.management-search-panel__summary strong {
+  color: #2f241b;
+}
+
+.management-search-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.management-search-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f6eee3;
+  color: #8b5e3c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.management-search-searchbox {
+  position: relative;
+  flex: 1 1 420px;
+  min-width: 0;
+  transition: transform 0.22s ease;
+}
+
+.management-search-searchicon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #b79b7b;
+  font-size: 16px;
+  pointer-events: none;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.management-search-input,
+.management-search-select,
+.management-search-date {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid #e7d8c6;
+  background: #fffdf9;
+  color: #2f241b;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.management-search-input:focus,
+.management-search-select:focus,
+.management-search-date:focus {
+  outline: none;
+  border-color: #c89d72;
+  box-shadow: 0 0 0 3px rgba(200, 157, 114, 0.14);
+}
+
+.management-search-searchbox:hover .management-search-searchicon,
+.management-search-searchbox:focus-within .management-search-searchicon {
+  color: #a87246;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.management-search-searchbox:hover,
+.management-search-searchbox:focus-within {
+  transform: translateY(-1px);
+}
+
+.management-search-input {
+  width: 100%;
+  padding: 0 14px 0 42px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7);
+}
+
+.management-search-input:hover,
+.management-search-select:hover,
+.management-search-date:hover {
+  border-color: #dbc0a4;
+}
+
+.management-search-select,
+.management-search-date {
+  min-width: 160px;
+  padding: 0 14px;
+  flex: 0 0 auto;
+}
+
+.management-search-panel .btn-primary,
+.management-search-panel .btn-secondary {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid #e7d8c6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.management-search-panel .btn-primary {
+  background: #8b5e3c;
+  border-color: #8b5e3c;
+  color: #ffffff;
+  box-shadow: 0 10px 18px rgba(139, 94, 60, 0.16);
+}
+
+.management-search-panel .btn-primary:hover {
+  background: #7a5335;
+  border-color: #7a5335;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(122, 83, 53, 0.22);
+}
+
+.management-search-panel .btn-secondary {
+  background: #ffffff;
+  color: #5f4a36;
+  box-shadow: 0 8px 16px rgba(139, 94, 60, 0.06);
+}
+
+.management-search-panel .btn-secondary:hover {
+  background: #faf4ec;
+  border-color: #ddc5aa;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(139, 94, 60, 0.1);
+}
+
+.management-search-panel .btn-primary:disabled,
+.management-search-panel .btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 960px) {
+  .management-search-panel__actions,
+  .management-search-panel__controls {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .management-search-panel__header {
+    align-items: stretch;
+  }
+
+  .management-search-searchbox,
+  .management-search-select,
+  .management-search-date {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .management-search-panel .btn-primary,
+  .management-search-panel .btn-secondary {
+    width: 100%;
+  }
+}

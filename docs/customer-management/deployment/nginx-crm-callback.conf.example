@@ -1,0 +1,12 @@
+# Insert inside the EXISTING HTTPS server block after checking duplicate routes.
+# This is NOT a complete Nginx/site configuration.
+# Preserve the original Go API and static admin routes.
+location = /iycallback/handle {
+    proxy_pass http://127.0.0.1:18087;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 15s;
+    client_max_body_size 128k;
+}

@@ -1,0 +1,56 @@
+name: jd-crm-report-preview
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: iyque_phase1
+      MYSQL_USER: crm
+      MYSQL_PASSWORD: LocalDatabaseOnly2026
+      MYSQL_ROOT_PASSWORD: LocalRootOnly2026
+      TZ: Asia/Shanghai
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_bin"]
+    volumes:
+      - data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/01-management.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      retries: 30
+  crm:
+    image: maven:3.9-eclipse-temurin-17
+    command: ["java", "-jar", "/app/app.jar"]
+    depends_on:
+      db: {condition: service_healthy}
+    volumes:
+      - ./artifacts/app-workflows-history.jar:/app/app.jar:ro
+    environment:
+      CRM_DB_URL: jdbc:mysql://db:3306/iyque_phase1?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+      CRM_DB_USER: crm
+      CRM_DB_PASSWORD: LocalDatabaseOnly2026
+      CRM_ADMIN_PASSWORD: LocalCRMAdminOnly2026
+      CRM_DEMO: "true"
+      CRM_STANDALONE_ENABLED: "false"
+      CRM_BRIDGE_KEY: 0123456789abcdef0123456789abcdef
+      CRM_BRIDGE_AUDIENCE: local-integration
+      TZ: Asia/Shanghai
+  web:
+    image: golang:1.24.13
+    command: ["/workspace/.crm-build/workflow-history-demo"]
+    working_dir: /workspace
+    ports: ["127.0.0.1:8092:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+      crm: {condition: service_started}
+    volumes:
+      - ../../../service:/workspace:ro
+      - ../../../background/dist:/frontend:ro
+    environment:
+      CRM_LOCAL_INTEGRATION: "true"
+      MYSQL_DSN: crm:LocalDatabaseOnly2026@tcp(db:3306)/jd_crm_integration?charset=utf8mb4&parseTime=true&loc=Local
+      CRM_BRIDGE_URL: http://crm:8080
+      CRM_BRIDGE_KEY: 0123456789abcdef0123456789abcdef
+      CRM_BRIDGE_AUDIENCE: local-integration
+      CRM_ALLOWED_ORIGINS: http://localhost:8092,http://127.0.0.1:8092
+      TZ: Asia/Shanghai
+volumes:
+  data:

@@ -1,0 +1,207 @@
+.virtual-pay-container {
+  padding: 20px 24px 24px;
+}
+
+.virtual-pay-toolbar,
+.log-toolbar,
+.virtual-pay-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.virtual-pay-toolbar h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: #111827;
+}
+
+.virtual-pay-toolbar p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.health-panel,
+.virtual-pay-table-wrap {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.health-overview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e5e7eb;
+
+  span,
+  small {
+    color: #6b7280;
+  }
+
+  strong {
+    font-size: 22px;
+  }
+
+  &.is-ok strong {
+    color: #047857;
+  }
+
+  &.is-warning strong {
+    color: #b45309;
+  }
+}
+
+.health-grid,
+.virtual-pay-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.health-item,
+.virtual-pay-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  background: #f9fafb;
+
+  span {
+    color: #6b7280;
+    font-size: 13px;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 18px;
+  }
+
+  .ok {
+    color: #047857;
+  }
+
+  .warning {
+    color: #b45309;
+  }
+}
+
+.log-toolbar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.log-toolbar .search-box {
+  min-width: 320px;
+  position: relative;
+}
+
+.log-toolbar input,
+.log-toolbar select {
+  height: 42px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #ffffff;
+  outline: none;
+}
+
+.log-toolbar input {
+  width: 100%;
+  padding-left: 38px;
+}
+
+.log-toolbar .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.virtual-pay-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.virtual-pay-table th,
+.virtual-pay-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.virtual-pay-table th {
+  background: #f9fafb;
+  color: #111827;
+  font-weight: 700;
+}
+
+.mono {
+  font-family: monospace;
+}
+
+.status-pill {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+
+  &.ok {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  &.warning {
+    background: #fef3c7;
+    color: #92400e;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  color: #9ca3af;
+  padding: 44px 16px;
+}
+
+.virtual-pay-pagination {
+  justify-content: flex-end;
+}
+
+@media (max-width: 1200px) {
+  .health-grid,
+  .virtual-pay-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .virtual-pay-container {
+    padding: 16px;
+  }
+
+  .virtual-pay-toolbar,
+  .virtual-pay-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .health-grid,
+  .virtual-pay-stats {
+    grid-template-columns: 1fr;
+  }
+}
