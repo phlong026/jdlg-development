@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
             },
         },
         build: {
+            // Open tabs can still request earlier hashed chunks during a preview update.
+            // Production releases should use separate directories and retain the previous release.
+            emptyOutDir: false,
             rollupOptions: {
                 output: {
                     manualChunks(id) {

@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/users"]) {
 .users-container {
   display: flex;
   flex-direction: column;
@@ -1030,4 +1032,5 @@
   .users-stats {
     grid-template-columns: 1fr;
   }
+}
 }

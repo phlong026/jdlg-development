@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiCheck, FiX, FiImage } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -140,7 +141,7 @@ const Inspirations: React.FC = () => {
             setList((data?.list || []).map(convertInspiration));
         } catch (error) {
             console.error('加载灵感素材失败:', error);
-            alert('加载灵感素材失败');
+            reportPageLoadError(error, '加载灵感素材失败');
         } finally {
             setLoading(false);
         }
@@ -203,7 +204,7 @@ const Inspirations: React.FC = () => {
             setShowEditModal(true);
         } catch (error) {
             console.error(error);
-            alert('获取详情失败');
+            reportPageLoadError(error, '获取详情失败');
         }
     };
 

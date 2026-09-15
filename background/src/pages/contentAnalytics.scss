@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/content-analytics"]) {
 .content-analytics-page {
   display: flex;
   flex-direction: column;
@@ -188,4 +190,5 @@
   .analytics-stats-grid {
     grid-template-columns: 1fr;
   }
+}
 }

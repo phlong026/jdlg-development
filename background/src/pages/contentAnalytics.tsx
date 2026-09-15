@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiActivity, FiClock, FiDownload, FiRefreshCw, FiSearch, FiTrendingDown, FiTrendingUp } from 'react-icons/fi';
@@ -78,7 +79,7 @@ const ContentAnalytics: React.FC = () => {
             setFeaturedCases(featuredCasesData.list || []);
         } catch (error) {
             console.error('加载内容运营分析失败:', error);
-            alert('加载内容运营分析失败');
+            reportPageLoadError(error, '加载内容运营分析失败');
         } finally {
             setLoading(false);
         }

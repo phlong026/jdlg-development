@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiLayers, FiHome, FiImage, FiCompass } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -122,7 +123,7 @@ const AITools: React.FC = () => {
             setTotal(res?.total || 0);
         } catch (error) {
             console.error('加载 AI 工具列表失败:', error);
-            alert('加载 AI 工具列表失败');
+            reportPageLoadError(error, '加载 AI 工具列表失败');
         } finally {
             setLoading(false);
         }
@@ -190,7 +191,7 @@ const AITools: React.FC = () => {
             setShowEditModal(true);
         } catch (error) {
             console.error(error);
-            alert('获取 AI 工具详情失败');
+            reportPageLoadError(error, '获取 AI 工具详情失败');
         }
     };
 

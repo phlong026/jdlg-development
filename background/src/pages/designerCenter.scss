@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/designer-center"]) {
 .designer-center-page {
   display: flex;
   flex-direction: column;
@@ -473,4 +475,5 @@
   .designer-list-side {
     align-items: flex-start;
   }
+}
 }

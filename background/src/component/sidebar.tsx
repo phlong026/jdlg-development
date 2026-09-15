@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, mobile = false, on
     const customerSection = { title: '客户管理', items: [{ path: '/customer-management', label: '客户管理工作台', icon: FiUsers }] };
     const visibleSections = session.user?.scope === 'crm_only' ? [customerSection] : session.user?.crmEnabled ? [menuSections[0], customerSection, ...menuSections.slice(1)] : menuSections;
     return (
-        <aside className={`layout-sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile' : ''} ${mobile && !collapsed ? 'open' : ''}`}>
+        <aside id="admin-sidebar" aria-label="后台导航" {...(mobile && collapsed ? { inert: '' } : {})} className={`layout-sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile' : ''} ${mobile && !collapsed ? 'open' : ''}`}>
             <div className="sidebar-logo">
                 <span className="logo-mark">AI</span>
                 {!collapsed && <span className="logo-text">管理后台</span>}
@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, mobile = false, on
                             {section.items.map((item) => {
                                 const Icon = item.icon;
                                 return (
-                                    <NavLink key={item.path} to={item.path} className="sidebar-item" onClick={onNavigate}>
+                                    <NavLink key={item.path} to={item.path} aria-label={item.label} title={collapsed ? item.label : undefined} className="sidebar-item" onClick={onNavigate}>
                                         <Icon className="sidebar-icon" />
                                         {!collapsed && <span className="sidebar-label">{item.label}</span>}
                                     </NavLink>

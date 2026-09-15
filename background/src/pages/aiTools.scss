@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/ai-tools"]) {
 .ai-tools-container {
   padding: 24px;
 }
@@ -599,4 +601,5 @@ input[type='file'].form-input::-webkit-file-upload-button {
   .form-group .image-preview {
     max-width: 100%;
   }
+}
 }

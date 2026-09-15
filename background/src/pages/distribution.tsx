@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiAward, FiGift, FiRefreshCw, FiSearch, FiShare2, FiUsers } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -47,7 +48,7 @@ const Distribution: React.FC = () => {
             setRewards(rewardsData.list || []);
         } catch (error) {
             console.error('加载分销邀请中心失败:', error);
-            alert('加载分销邀请中心失败');
+            reportPageLoadError(error, '加载分销邀请中心失败');
         } finally {
             setLoading(false);
         }

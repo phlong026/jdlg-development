@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiActivity, FiClock, FiFileText, FiRefreshCw, FiSearch, FiUserCheck, FiX } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -193,7 +194,7 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
             setSelectedIds((ids) => ids.filter((id) => (listData.list || []).some((item) => item.id === id)));
         } catch (error) {
             console.error('加载客服线索失败', error);
-            window.alert(error instanceof Error ? error.message : '加载客服线索失败');
+            reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
         } finally {
             setLoading(false);
         }
@@ -229,7 +230,7 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
             setDetail(data);
         } catch (error) {
             console.error('加载客服线索详情失败', error);
-            window.alert(error instanceof Error ? error.message : '加载客服线索详情失败');
+            reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索详情失败');
         } finally {
             setDetailLoading(false);
         }

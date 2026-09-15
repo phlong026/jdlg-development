@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/inspirations"]) {
 .inspirations-container {
   padding: 24px;
 }
@@ -391,4 +393,5 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
 }

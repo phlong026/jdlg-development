@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/recharge-config"]) {
 .recharge-config-container {
   padding: 24px;
 }
@@ -268,4 +270,5 @@
     background: #f9fafb;
     border-color: #d1d5db;
   }
+}
 }

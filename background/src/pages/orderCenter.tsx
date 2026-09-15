@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -166,7 +167,7 @@ const OrderCenter: React.FC = () => {
             setCurrentPage(Number(response.page || params?.page || 1));
         } catch (error) {
             console.error('加载订单中心失败:', error);
-            alert('加载订单中心失败');
+            reportPageLoadError(error, '加载订单中心失败');
         } finally {
             setLoading(false);
         }
@@ -222,7 +223,7 @@ const OrderCenter: React.FC = () => {
             setSearchParams(nextParams);
         } catch (error) {
             console.error('加载订单详情失败:', error);
-            alert('加载订单详情失败');
+            reportPageLoadError(error, '加载订单详情失败');
         }
     };
 

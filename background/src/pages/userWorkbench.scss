@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/user-workbench"]) {
 .user-workbench-page {
   display: flex;
   flex-direction: column;
@@ -1170,4 +1172,5 @@
   .mode-toggle {
     flex-direction: column;
   }
+}
 }

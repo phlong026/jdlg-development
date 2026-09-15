@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../component/layout';
@@ -176,7 +177,7 @@ const AITaskCenter: React.FC = () => {
             setPageSize(response.page_size || nextPageSize);
         } catch (error) {
             console.error('加载AI任务中心失败:', error);
-            alert('加载AI任务中心失败');
+            reportPageLoadError(error, '加载AI任务中心失败');
         } finally {
             setLoading(false);
         }
@@ -308,7 +309,7 @@ const AITaskCenter: React.FC = () => {
             setSearchParams(nextParams);
         } catch (error) {
             console.error('加载任务详情失败:', error);
-            alert('加载任务详情失败');
+            reportPageLoadError(error, '加载任务详情失败');
             setShowDetailModal(false);
         } finally {
             setDetailLoading(false);

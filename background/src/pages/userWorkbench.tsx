@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -282,7 +283,7 @@ const UserWorkbench: React.FC = () => {
             );
         } catch (error: any) {
             console.error('加载用户360工作台失败:', error);
-            alert(error?.message || '加载用户失败');
+            reportPageLoadError(error, error?.message || '加载用户失败');
         } finally {
             setLoading(false);
         }
@@ -396,7 +397,7 @@ const UserWorkbench: React.FC = () => {
             setEnterpriseWechatVerifiedAtText(detail?.enterprise_wechat_verified_at || '');
         } catch (error: any) {
             console.error('获取手机号授权状态失败:', error);
-            alert(error?.message || '获取手机号授权状态失败');
+            reportPageLoadError(error, error?.message || '获取手机号授权状态失败');
             setShowEnterpriseWechatModal(false);
         } finally {
             setEnterpriseWechatLoading(false);
@@ -490,7 +491,7 @@ const UserWorkbench: React.FC = () => {
             setCertificationDetail(detail || null);
         } catch (error: any) {
             console.error('获取认证详情失败:', error);
-            alert(error?.message || '获取认证详情失败');
+            reportPageLoadError(error, error?.message || '获取认证详情失败');
         } finally {
             setCertificationDetailLoading(false);
         }

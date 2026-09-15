@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/ai-config"]) {
 .ai-config-container {
   padding: 24px;
 }
@@ -566,4 +568,5 @@
     width: 100%;
     justify-content: center;
   }
+}
 }

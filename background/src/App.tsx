@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { BookmarkProvider } from './component/bookmark';
 import './App.scss';
+import './responsive.scss';
 import routes from './routes';
 import { ManagementSessionProvider } from './component/ManagementSession';
 

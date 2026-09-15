@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle, FiClock, FiRefreshCw, FiSearch, FiShield, FiUsers } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
@@ -68,7 +69,7 @@ const MembershipOperations: React.FC = () => {
             setUsers(usersData.list || []);
         } catch (error) {
             console.error('加载会员运营页失败:', error);
-            alert('加载会员运营页失败');
+            reportPageLoadError(error, '加载会员运营页失败');
         } finally {
             setLoading(false);
         }

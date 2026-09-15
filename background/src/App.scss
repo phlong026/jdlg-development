@@ -75,7 +75,7 @@
     .layout-content .management-actions,
     .layout-content .search-actions,
     .layout-content .filters,
-    .layout-content [class$='-filters'] {
+    .layout-content [class$='-filters']:not(.crm-filters) {
         width: 100% !important;
         flex-direction: column !important;
         align-items: stretch !important;
@@ -114,101 +114,6 @@
     .layout-content .btn-page {
         min-height: 40px;
         justify-content: center;
-    }
-
-    .layout-content [class*='table-container'],
-    .layout-content [class*='table-wrap'] {
-        overflow: visible !important;
-        border-radius: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-    }
-
-    .layout-content table {
-        width: 100% !important;
-        min-width: 0 !important;
-        border-collapse: separate !important;
-        border-spacing: 0 12px !important;
-        background: transparent !important;
-    }
-
-    .layout-content table thead {
-        display: none !important;
-    }
-
-    .layout-content table,
-    .layout-content table tbody,
-    .layout-content table tr,
-    .layout-content table td {
-        display: block;
-    }
-
-    .layout-content table tbody tr {
-        margin-bottom: 12px;
-        overflow: hidden;
-        border: 1px solid var(--admin-border);
-        border-radius: var(--admin-radius-md);
-        background: var(--admin-surface);
-        box-shadow: var(--admin-shadow-soft);
-    }
-
-    .layout-content table tbody tr:hover {
-        background: var(--admin-surface);
-    }
-
-    .layout-content table td {
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: none !important;
-        padding: 11px 14px !important;
-        border-bottom: 1px solid #f3ede6 !important;
-        color: #374151;
-        white-space: normal !important;
-        word-break: break-word;
-    }
-
-    .layout-content table td:last-child {
-        border-bottom: none !important;
-    }
-
-    .layout-content table td:not([colspan]) {
-        display: grid;
-        grid-template-columns: minmax(88px, 34%) minmax(0, 1fr);
-        gap: 12px;
-        align-items: flex-start;
-    }
-
-    .layout-content table td:not([colspan])::before {
-        content: attr(data-label);
-        color: var(--admin-text-muted);
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1.6;
-    }
-
-    .layout-content table td[colspan]::before {
-        display: none;
-    }
-
-    .layout-content table td > * {
-        min-width: 0;
-    }
-
-    .layout-content table td [class*='action'],
-    .layout-content .table-action-stack,
-    .layout-content .task-action-group,
-    .layout-content .tool-actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-start;
-        gap: 8px;
-    }
-
-    .layout-content table td button,
-    .layout-content .btn-action {
-        min-width: 40px;
-        min-height: 36px;
     }
 
     .layout-content .utility-tool-item,
@@ -297,6 +202,7 @@
         bottom: 0;
         z-index: 2;
         display: flex;
+        flex-direction: row !important;
         flex-wrap: wrap;
         align-items: stretch;
         justify-content: stretch;
@@ -321,17 +227,5 @@
     .layout-content .form-input,
     .layout-content .form-textarea {
         width: 100% !important;
-    }
-}
-
-@media (max-width: 480px) {
-    .layout-content table td:not([colspan]) {
-        grid-template-columns: 1fr;
-        gap: 4px;
-    }
-
-    .layout-content table td:not([colspan])::before {
-        font-size: 11px;
-        letter-spacing: 0.02em;
     }
 }

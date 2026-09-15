@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useMemo, useState, useEffect } from 'react';
 import { FiSave, FiPlus, FiEdit, FiTrash2, FiSettings, FiX, FiClipboard, FiSearch } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -117,7 +118,7 @@ const AIConfig: React.FC = () => {
             setPricings(data);
         } catch (error) {
             console.error('加载计费配置失败:', error);
-            alert('加载计费配置失败');
+            reportPageLoadError(error, '加载计费配置失败');
         }
     };
 
@@ -127,7 +128,7 @@ const AIConfig: React.FC = () => {
             setApiConfigs(data);
         } catch (error) {
             console.error('加载API配置失败:', error);
-            alert('加载API配置失败');
+            reportPageLoadError(error, '加载API配置失败');
         }
     };
 

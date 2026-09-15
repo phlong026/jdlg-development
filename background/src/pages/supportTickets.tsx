@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertCircle, FiClipboard, FiRefreshCw, FiSearch, FiTool } from 'react-icons/fi';
@@ -157,7 +158,7 @@ const SupportTickets: React.FC = () => {
             setList(listData.list || []);
         } catch (error) {
             console.error('加载工单中心失败:', error);
-            alert('加载工单中心失败');
+            reportPageLoadError(error, '加载工单中心失败');
         } finally {
             setLoading(false);
         }
@@ -224,7 +225,7 @@ const SupportTickets: React.FC = () => {
             setShowDetailModal(true);
         } catch (error) {
             console.error('获取工单详情失败:', error);
-            alert('获取工单详情失败');
+            reportPageLoadError(error, '获取工单详情失败');
         }
     };
 

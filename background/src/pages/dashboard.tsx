@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -138,7 +139,7 @@ const Dashboard: React.FC = () => {
             setTodos(todoRes || emptyTodos);
         } catch (error) {
             console.error('加载总控台数据失败:', error);
-            alert('加载总控台数据失败');
+            reportPageLoadError(error, '加载总控台数据失败');
         } finally {
             setLoading(false);
         }

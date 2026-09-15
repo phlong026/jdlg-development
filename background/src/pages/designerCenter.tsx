@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     FiCheckCircle,
@@ -127,7 +128,7 @@ const DesignerCenter: React.FC = () => {
             }
         } catch (error) {
             console.error('加载设计师列表失败:', error);
-            alert('加载设计师列表失败');
+            reportPageLoadError(error, '加载设计师列表失败');
         } finally {
             setLoading(false);
         }
@@ -140,7 +141,7 @@ const DesignerCenter: React.FC = () => {
             setDetail(response);
         } catch (error) {
             console.error('加载设计师详情失败:', error);
-            alert('加载设计师详情失败');
+            reportPageLoadError(error, '加载设计师详情失败');
         } finally {
             setDetailLoading(false);
         }

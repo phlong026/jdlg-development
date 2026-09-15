@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
@@ -57,7 +58,7 @@ const VirtualPay: React.FC = () => {
             setPage(Number(logData.page || nextPage));
         } catch (error) {
             console.error('加载虚拟支付监控失败:', error);
-            alert('加载虚拟支付监控失败');
+            reportPageLoadError(error, '加载虚拟支付监控失败');
         } finally {
             setLoading(false);
         }

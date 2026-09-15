@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/virtualpay"]) {
 .virtual-pay-container {
   padding: 20px 24px 24px;
 }
@@ -204,4 +206,5 @@
   .virtual-pay-stats {
     grid-template-columns: 1fr;
   }
+}
 }

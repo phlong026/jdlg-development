@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/risk-control"]) {
 .risk-control-page {
     display: flex;
     flex-direction: column;
@@ -230,4 +232,5 @@
     .risk-grid {
         grid-template-columns: 1fr;
     }
+}
 }

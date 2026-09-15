@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiSearch, FiSettings, FiX, FiRefreshCw } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -79,10 +80,10 @@ const Logs: React.FC = () => {
                 setLogs(result.data.list || []);
                 setTotal(result.data.total || 0);
             } else {
-                alert(result.msg || '获取日志列表失败');
+                reportPageLoadError(null, result.msg || '获取日志列表失败');
             }
         } catch (error: any) {
-            alert('获取日志列表失败: ' + error.message);
+            reportPageLoadError(error, '获取日志列表失败: ' + error.message);
         } finally {
             setLoading(false);
         }

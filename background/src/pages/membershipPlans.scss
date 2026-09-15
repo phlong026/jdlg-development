@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/membership-plans"]) {
 .membership-plans-container {
   padding: 24px;
 }
@@ -258,4 +260,5 @@
   background: white;
   color: #374151;
   border: 1px solid #d1d5db;
+}
 }

@@ -40,6 +40,7 @@ export const request = async <T = any>(
     config: RequestConfig = {}
 ): Promise<ApiResponse<T>> => {
     const { params, ...fetchConfig } = config;
+    const requestPage = window.location.pathname;
     
     const url = createUrl(endpoint, params);
     
@@ -71,7 +72,8 @@ export const request = async <T = any>(
                 window.location.href = '/admin/login';
                 throw new Error('未授权，请重新登录');
             }
-            throw new Error(`HTTP错误: ${response.status}`);
+            const problem = await response.json().catch(() => null);
+            throw new Error(problem?.message || problem?.msg || `服务暂时不可用（HTTP ${response.status}）`);
         }
         
         const data: ApiResponse<T> = await response.json();
@@ -83,6 +85,7 @@ export const request = async <T = any>(
         
         return data;
     } catch (error) {
+        if (error instanceof Error) Object.assign(error, { requestPage });
         console.error('API请求失败:', error);
         throw error;
     }

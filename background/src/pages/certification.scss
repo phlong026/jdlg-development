@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/certification"]) {
 .certification-container {
   padding: 0;
 }
@@ -470,4 +472,5 @@
   .cert-summary-grid {
     grid-template-columns: 1fr;
   }
+}
 }

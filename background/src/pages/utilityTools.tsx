@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiFileText, FiHelpCircle, FiVideo } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -80,7 +81,7 @@ const UtilityTools: React.FC = () => {
             setTotal(res?.total || list.length);
         } catch (error) {
             console.error('加载实用工具内容列表失败:', error);
-            alert('加载实用工具内容列表失败');
+            reportPageLoadError(error, '加载实用工具内容列表失败');
         } finally {
             setLoading(false);
         }
@@ -129,7 +130,7 @@ const UtilityTools: React.FC = () => {
             setShowEditModal(true);
         } catch (e) {
             console.error(e);
-            alert('获取详情失败');
+            reportPageLoadError(e, '获取详情失败');
         }
     };
 

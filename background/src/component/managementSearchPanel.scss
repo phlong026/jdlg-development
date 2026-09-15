@@ -1,4 +1,5 @@
 .management-search-panel {
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -24,7 +25,7 @@
   flex-direction: column;
   gap: 6px;
   flex: 1 1 420px;
-  min-width: 260px;
+  min-width: 0;
 }
 
 .management-search-panel__title-block h3 {

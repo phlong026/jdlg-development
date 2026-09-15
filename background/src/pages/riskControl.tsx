@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertTriangle, FiCpu, FiRefreshCw, FiRepeat, FiSearch, FiShield } from 'react-icons/fi';
@@ -68,7 +69,7 @@ const RiskControl: React.FC = () => {
             setRiskUsers(usersData.list || []);
         } catch (error) {
             console.error('加载风控台失败:', error);
-            alert('加载风控台失败');
+            reportPageLoadError(error, '加载风控台失败');
         } finally {
             setLoading(false);
         }

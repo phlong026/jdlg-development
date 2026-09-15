@@ -56,13 +56,13 @@ const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', collapsed = fal
         <header className="layout-topbar">
             <div className="topbar-left">
                 {onToggleSidebar && (
-                    <button className="topbar-menu-btn" type="button" onClick={onToggleSidebar}>
+                    <button className="topbar-menu-btn" type="button" aria-label={collapsed ? '展开导航' : '收起导航'} aria-expanded={!collapsed} aria-controls="admin-sidebar" onClick={onToggleSidebar}>
                         <FiMenu />
                     </button>
                 )}
                 <h1 className="topbar-title">
                     <DisplayIcon className="topbar-title-icon" />
-                    {displayTitle}
+                    <span>{displayTitle}</span>
                 </h1>
             </div>
             <div className="topbar-right">
@@ -84,4 +84,3 @@ const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', collapsed = fal
 };
 
 export default Topbar;
-

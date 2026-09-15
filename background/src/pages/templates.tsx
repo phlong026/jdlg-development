@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 ﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiEye, FiCheck, FiX, FiFolder } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -420,7 +421,7 @@ const Templates: React.FC = () => {
             setTemplates(list);
         } catch (error) {
             console.error('鍔犺浇妯℃澘鍒楄〃澶辫触:', error);
-            alert('鍔犺浇妯℃澘鍒楄〃澶辫触');
+            reportPageLoadError(error, '加载模板列表失败');
         } finally {
             setLoading(false);
         }
@@ -561,7 +562,7 @@ const Templates: React.FC = () => {
             setShowEditModal(true);
         } catch (e) {
             console.error(e);
-            alert('鑾峰彇璇︽儏澶辫触');
+            reportPageLoadError(e, '鑾峰彇璇︽儏澶辫触');
         }
     };
 
@@ -755,7 +756,7 @@ const Templates: React.FC = () => {
             setFeaturedGroups(Array.isArray(res?.list) ? res.list : []);
         } catch (e: any) {
             console.error('鍔犺浇绮鹃€夋渚嬬粍澶辫触:', e);
-            alert(e?.message || '鍔犺浇绮鹃€夋渚嬬粍澶辫触');
+            reportPageLoadError(e, e?.message || '鍔犺浇绮鹃€夋渚嬬粍澶辫触');
             setFeaturedGroups([]); // 鍑洪敊鏃惰缃负绌烘暟缁?
         } finally {
             setLoadingFeaturedGroups(false);
@@ -860,7 +861,7 @@ const Templates: React.FC = () => {
     };
 
     return (
-        <Layout title="妯℃澘骞垮満绠＄悊">
+        <Layout title="模板广场管理">
             <div className="templates-container">
                 <div className="templates-toolbar section-card">
                     <div className="templates-toolbar-top">
@@ -1716,4 +1717,3 @@ const Templates: React.FC = () => {
 };
 
 export default Templates;
-

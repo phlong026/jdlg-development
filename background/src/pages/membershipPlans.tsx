@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import Layout from '../component/layout';
 import {
@@ -44,7 +45,7 @@ const MembershipPlans: React.FC = () => {
             setPlans(list);
         } catch (error) {
             console.error('加载会员计划失败:', error);
-            alert('加载会员计划失败');
+            reportPageLoadError(error, '加载会员计划失败');
         } finally {
             setLoading(false);
         }
@@ -72,7 +73,7 @@ const MembershipPlans: React.FC = () => {
             });
         } catch (error) {
             console.error('加载会员计划详情失败:', error);
-            alert('加载会员计划详情失败');
+            reportPageLoadError(error, '加载会员计划详情失败');
         }
     };
 

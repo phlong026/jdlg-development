@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiEye, FiCheck, FiX, FiRefreshCw, FiSearch } from 'react-icons/fi';
@@ -60,7 +61,7 @@ const Certification: React.FC = () => {
             setTotal(res.total);
         } catch (e) {
             console.error('加载列表失败:', e);
-            alert('加载列表失败');
+            reportPageLoadError(e, '加载列表失败');
         } finally {
             setLoading(false);
         }
@@ -100,7 +101,7 @@ const Certification: React.FC = () => {
             setDetail(res || null);
         } catch (e) {
             console.error('加载详情失败:', e);
-            alert('加载详情失败');
+            reportPageLoadError(e, '加载详情失败');
         } finally {
             setDetailLoading(false);
         }

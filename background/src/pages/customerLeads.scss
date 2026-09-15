@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/customer-leads"], .layout-content[data-admin-page="/customer-management"]) {
 .customer-lead-page {
     display: flex;
     flex-direction: column;
@@ -786,4 +788,5 @@
     .customer-lead-follow {
         grid-template-columns: 1fr;
     }
+}
 }

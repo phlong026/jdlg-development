@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/utility-tools"]) {
 .utility-tools-container {
   padding: 24px;
 }
@@ -357,4 +359,5 @@
   flex-wrap: wrap;
   gap: 16px;
   align-items: flex-end;
+}
 }

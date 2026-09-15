@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/report-center"]) {
 .report-center-page {
     display: flex;
     flex-direction: column;
@@ -135,4 +137,5 @@
 }
 
 @media (max-width: 960px) {
+}
 }

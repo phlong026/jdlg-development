@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/ai-tasks"]) {
 .ai-task-center-container {
   padding: 24px;
 }
@@ -662,4 +664,5 @@
     flex-direction: column;
     align-items: stretch;
   }
+}
 }

@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/logs"]) {
 .logs-container {
   padding: 24px;
 }
@@ -393,4 +395,5 @@
 .form-hint {
   font-size: 12px;
   color: #6b7280;
+}
 }

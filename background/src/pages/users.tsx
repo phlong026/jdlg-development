@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../component/layout';
@@ -130,7 +131,7 @@ const Users: React.FC = () => {
                 await fetchUsers();
             } catch (error) {
                 console.error('加载用户列表失败:', error);
-                alert('加载用户列表失败');
+                reportPageLoadError(error, '加载用户列表失败');
             } finally {
                 setLoading(false);
             }
@@ -214,7 +215,7 @@ const Users: React.FC = () => {
             setShowEditUserModal(true);
         } catch (e) {
             console.error('获取用户详情失败:', e);
-            alert('获取用户详情失败');
+            reportPageLoadError(e, '获取用户详情失败');
         }
     };
 
@@ -238,7 +239,7 @@ const Users: React.FC = () => {
             setEnterpriseWechatVerifiedAtText(detail?.enterprise_wechat_verified_at || '');
         } catch (error) {
             console.error('获取手机号授权验证状态失败:', error);
-            alert('获取手机号授权验证状态失败');
+            reportPageLoadError(error, '获取手机号授权验证状态失败');
             setShowEnterpriseWechatModal(false);
         } finally {
             setEnterpriseWechatLoading(false);

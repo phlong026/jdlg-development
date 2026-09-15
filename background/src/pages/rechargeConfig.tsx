@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiSave, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -44,7 +45,7 @@ const RechargeConfig: React.FC = () => {
             setConfigs(list);
         } catch (error) {
             console.error('加载充值配置列表失败:', error);
-            alert('加载充值配置列表失败');
+            reportPageLoadError(error, '加载充值配置列表失败');
         } finally {
             setLoading(false);
         }

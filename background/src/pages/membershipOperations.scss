@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/membership-operations"]) {
 .membership-operations-page {
   display: flex;
   flex-direction: column;
@@ -206,4 +208,5 @@
   .membership-filters {
     grid-template-columns: 1fr;
   }
+}
 }

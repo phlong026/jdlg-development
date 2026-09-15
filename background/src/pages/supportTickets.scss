@@ -1,3 +1,5 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/support-tickets"]) {
 .support-ticket-page {
     display: flex;
     flex-direction: column;
@@ -328,4 +330,5 @@
     .modal-footer .btn-secondary {
         flex: 1 1 180px;
     }
+}
 }

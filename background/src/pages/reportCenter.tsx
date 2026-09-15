@@ -1,3 +1,4 @@
+import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiBarChart2, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import Layout from '../component/layout';
@@ -65,7 +66,7 @@ const ReportCenter: React.FC = () => {
             setReport({ columns: reportData.columns || [], rows: reportData.rows || [], summary: reportData.summary || {} });
         } catch (error) {
             console.error('加载报表中心失败:', error);
-            alert('加载报表中心失败');
+            reportPageLoadError(error, '加载报表中心失败');
         } finally {
             setLoading(false);
         }
