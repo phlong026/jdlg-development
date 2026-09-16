@@ -1,0 +1,12 @@
+%% name: management
+flowchart TB
+    route["routes：路径、标题、图标、懒加载组件"] --> guard["ProtectedRoute 调用 me 检查会话"]
+    guard --> layout["Layout 与 BookmarkProvider"]
+    layout --> page["业务页面：筛选、列表、详情、操作"]
+    page --> api["src/api 的业务接口函数"]
+    api --> request["Fetch 请求封装与 Session Cookie"]
+    request --> backend["Go management 路由"]
+    backend --> query["聚合查询或业务状态更新"]
+    query --> data[("与小程序共用的 MySQL 和 Redis")]
+    data --> backend
+    backend --> page

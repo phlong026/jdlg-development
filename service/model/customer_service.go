@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -248,10 +249,17 @@ CREATE TABLE IF NOT EXISTS customer_leads (
 `); err != nil {
 		return err
 	}
-	_, _ = m.DB.Exec(`ALTER TABLE customer_leads ADD COLUMN session_no VARCHAR(128) NOT NULL DEFAULT ''`)
-	_, _ = m.DB.Exec(`ALTER TABLE customer_leads ADD INDEX idx_session_no (session_no)`)
-	_, _ = m.DB.Exec(`ALTER TABLE customer_leads ADD COLUMN next_followup_at DATETIME NULL`)
-	_, _ = m.DB.Exec(`ALTER TABLE customer_leads ADD INDEX idx_next_followup_at (next_followup_at)`)
+	// 兼容旧库的增量列；失败大多表示列已存在，记录日志便于排查而非静默吞掉
+	for _, alter := range []string{
+		`ALTER TABLE customer_leads ADD COLUMN session_no VARCHAR(128) NOT NULL DEFAULT ''`,
+		`ALTER TABLE customer_leads ADD INDEX idx_session_no (session_no)`,
+		`ALTER TABLE customer_leads ADD COLUMN next_followup_at DATETIME NULL`,
+		`ALTER TABLE customer_leads ADD INDEX idx_next_followup_at (next_followup_at)`,
+	} {
+		if _, err := m.DB.Exec(alter); err != nil {
+			log.Printf("customer_leads 增量结构检查: %v", err)
+		}
+	}
 
 	if _, err := m.DB.Exec(`
 CREATE TABLE IF NOT EXISTS customer_lead_followups (
@@ -271,9 +279,15 @@ CREATE TABLE IF NOT EXISTS customer_lead_followups (
 `); err != nil {
 		return err
 	}
-	_, _ = m.DB.Exec(`ALTER TABLE customer_lead_followups ADD COLUMN assigned_to VARCHAR(64) NOT NULL DEFAULT ''`)
-	_, _ = m.DB.Exec(`ALTER TABLE customer_lead_followups ADD COLUMN next_followup_at DATETIME NULL`)
-	_, _ = m.DB.Exec(`ALTER TABLE customer_lead_followups ADD INDEX idx_next_followup_at (next_followup_at)`)
+	for _, alter := range []string{
+		`ALTER TABLE customer_lead_followups ADD COLUMN assigned_to VARCHAR(64) NOT NULL DEFAULT ''`,
+		`ALTER TABLE customer_lead_followups ADD COLUMN next_followup_at DATETIME NULL`,
+		`ALTER TABLE customer_lead_followups ADD INDEX idx_next_followup_at (next_followup_at)`,
+	} {
+		if _, err := m.DB.Exec(alter); err != nil {
+			log.Printf("customer_lead_followups 增量结构检查: %v", err)
+		}
+	}
 
 	if _, err := m.DB.Exec(`
 CREATE TABLE IF NOT EXISTS customer_service_events (
@@ -688,17 +702,28 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	return list, total, nil
 }
 
+// customerLeadDB 是 *sql.DB 与 *sql.Tx 共有的最小写事务接口，
+// 用于把"更新线索 + 写跟进"放进同一事务。
+type customerLeadDB interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
 func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
-	item := &CustomerLead{}
-	var nextFollowupAt sql.NullTime
-	err := m.DB.QueryRow(`
+	return scanCustomerLeadRow(m.DB.QueryRow(`
 		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
 		       COALESCE(remark, ''), created_at, updated_at
 		FROM customer_leads
 		WHERE id = ?
-	`, id).Scan(
+	`, id))
+}
+
+func scanCustomerLeadRow(row *sql.Row) (*CustomerLead, error) {
+	item := &CustomerLead{}
+	var nextFollowupAt sql.NullTime
+	err := row.Scan(
 		&item.ID,
 		&item.UserID,
 		&item.Name,
@@ -731,8 +756,7 @@ func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
 	return item, nil
 }
 
-func (m *CustomerServiceModel) ListEventsForLead(lead *CustomerLead, limit int) ([]*CustomerServiceEvent, error) {
-	if lead == nil || lead.ID <= 0 {
+func (m *CustomerServiceModel) ListEventsForLead(lead *CustomerLead, limit int) ([]*CustomerServiceEvent, error) {	if lead == nil || lead.ID <= 0 {
 		return []*CustomerServiceEvent{}, nil
 	}
 	if limit <= 0 || limit > 200 {
@@ -781,13 +805,17 @@ func (m *CustomerServiceModel) ListEventsForLead(lead *CustomerLead, limit int) 
 }
 
 func (m *CustomerServiceModel) CreateFollowup(input *CustomerLeadFollowupCreateInput) (int64, error) {
+	return m.createFollowupOn(m.DB, input)
+}
+
+func (m *CustomerServiceModel) createFollowupOn(db customerLeadDB, input *CustomerLeadFollowupCreateInput) (int64, error) {
 	if input == nil || input.LeadID <= 0 {
 		return 0, ErrInvalidCustomerLeadID
 	}
 	status := NormalizeCustomerLeadStatus(input.Status)
 	remark := strings.TrimSpace(input.Remark)
 	if remark != "" {
-		result, err := m.DB.Exec(`
+		result, err := db.Exec(`
 			INSERT INTO customer_lead_followups (lead_id, status, remark, assigned_to, next_followup_at, operator_id, operator_name, created_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
 		`, input.LeadID, status, remark, strings.TrimSpace(input.AssignedTo), input.NextFollowupAt, input.OperatorID, strings.TrimSpace(input.OperatorName))
@@ -1013,7 +1041,18 @@ func (m *CustomerServiceModel) UpdateLeadStatus(id int64, status string, remark 
 }
 
 func (m *CustomerServiceModel) ApplyLeadAction(id int64, input CustomerLeadActionInput) error {
-	lead, err := m.GetLead(id)
+	return m.applyLeadActionOn(m.DB, id, input)
+}
+
+func (m *CustomerServiceModel) applyLeadActionOn(db customerLeadDB, id int64, input CustomerLeadActionInput) error {
+	lead, err := scanCustomerLeadRow(db.QueryRow(`
+		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
+		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
+		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
+		       COALESCE(remark, ''), created_at, updated_at
+		FROM customer_leads
+		WHERE id = ?
+	`, id))
 	if err != nil {
 		return err
 	}
@@ -1041,7 +1080,7 @@ func (m *CustomerServiceModel) ApplyLeadAction(id int64, input CustomerLeadActio
 	if assignedTo == "" {
 		assignedTo = lead.AssignedTo
 	}
-	result, err := m.DB.Exec(`
+	result, err := db.Exec(`
 		UPDATE customer_leads
 		SET status = ?,
 		    intent_level = ?,
@@ -1075,6 +1114,78 @@ func (m *CustomerServiceModel) BatchApplyLeadAction(ids []int64, input CustomerL
 		}
 		updated++
 	}
+	return updated, nil
+}
+
+// ApplyLeadActionWithFollowup 在同一事务内更新线索状态并写入跟进记录，
+// 避免"状态已改但跟进记录缺失"的不一致。
+func (m *CustomerServiceModel) ApplyLeadActionWithFollowup(id int64, action CustomerLeadActionInput, followup *CustomerLeadFollowupCreateInput) (int64, error) {
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	if err := m.applyLeadActionOn(tx, id, action); err != nil {
+		return 0, err
+	}
+	var followupID int64
+	if followup != nil {
+		followup.LeadID = id
+		followupID, err = m.createFollowupOn(tx, followup)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	committed = true
+	return followupID, nil
+}
+
+// BatchApplyLeadActionWithFollowups 在单个事务内批量更新线索并逐条写跟进，
+// 任一条失败整体回滚，保证不会出现部分状态更新。
+func (m *CustomerServiceModel) BatchApplyLeadActionWithFollowups(ids []int64, input CustomerLeadActionInput, operatorID int64, operatorName string) (int, error) {
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	updated := 0
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if err := m.applyLeadActionOn(tx, id, input); err != nil {
+			return 0, err
+		}
+		if _, err := m.createFollowupOn(tx, &CustomerLeadFollowupCreateInput{
+			LeadID:         id,
+			Status:         input.Status,
+			Remark:         input.Remark,
+			AssignedTo:     input.AssignedTo,
+			NextFollowupAt: input.NextFollowupAt,
+			OperatorID:     operatorID,
+			OperatorName:   operatorName,
+		}); err != nil {
+			return 0, err
+		}
+		updated++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	committed = true
 	return updated, nil
 }
 

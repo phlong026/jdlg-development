@@ -3,6 +3,7 @@ package reportwecom
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -11,8 +12,32 @@ import (
 	"time"
 )
 
+// EventSink 由宿主（route 层）注入，在应答企微前持久化解密后的事件，
+// 并接管重试：报告业务失败或下游 CRM 转发失败由持久化行补偿，
+// 不再依赖企微超时重推。
+type EventSink interface {
+	// Record 保存原始事件（密文+明文）。duplicate=true 表示重复推送，直接应答成功。
+	Record(ctx context.Context, plain []byte, encrypted string, e Event) (dedupKey string, duplicate bool, err error)
+	// Settled 记录内联报告处理结果；permanent=true 的失败不再重试。
+	Settled(dedupKey string, handleErr error, permanent bool)
+}
+
+// PermanentEventError 判断报告处理错误是否值得重试：
+// 非本员工/未知 State/过期票据属于"不属于报告业务或已失效"，
+// 重试无意义；其余（存储、企微接口）视为暂时失败。
+func PermanentEventError(err error) bool {
+	return errors.Is(err, ErrNotOwner) || errors.Is(err, ErrExpired) || errors.Is(err, ErrUnionIDRequired)
+}
+
 // The query signature and encrypted recipient are both checked before parsing events.
-func Callback(config Config, service *Service) http.Handler {
+func Callback(config Config, service *Service, sinks ...EventSink) http.Handler {
+	var sink EventSink
+	for _, s := range sinks {
+		if s != nil {
+			sink = s
+			break
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if !config.Enabled || config.Token == "" || len(config.AESKey) != 43 || config.CorpID == "" || service == nil {
@@ -62,7 +87,34 @@ func Callback(config Config, service *Service) http.Handler {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 		defer cancel()
-		if err := service.HandleEvent(ctx, event); err != nil {
+		var dedupKey string
+		if sink != nil {
+			var duplicate bool
+			var recordErr error
+			dedupKey, duplicate, recordErr = sink.Record(ctx, plain, encrypted, event)
+			if recordErr != nil {
+				// 事件未落库：让企微重推，保证不丢事件
+				log.Printf("[report-wecom] warn callback=event_not_persisted")
+				http.Error(w, "event not persisted", 503)
+				return
+			}
+			if duplicate {
+				_, _ = w.Write([]byte("success"))
+				return
+			}
+		}
+		handleErr := service.HandleEvent(ctx, event)
+		if sink != nil {
+			// 事件已持久化，重试由 inbox 补偿完成，无需企微重推
+			sink.Settled(dedupKey, handleErr, handleErr != nil && PermanentEventError(handleErr))
+			if handleErr != nil {
+				log.Printf("[report-wecom] warn callback=not_applied")
+			}
+			_, _ = w.Write([]byte("success"))
+			return
+		}
+		if handleErr != nil {
+			// 无持久化兜底时保持旧行为：让企微重推
 			log.Printf("[report-wecom] warn callback=not_applied")
 			http.Error(w, "event not applied", 503)
 			return

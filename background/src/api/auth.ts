@@ -41,7 +41,8 @@ export const logout = async (): Promise<void> => {
 
 // 获取当前用户信息
 export const getMe = async (): Promise<LoginResponse> => {
-    const result = await fetch(API_BASE_URL + API_ENDPOINTS.AUTH.ME, {credentials:'include',cache:'no-store'});
+    // no-store + 超时：会话核验是全后台首屏前置，避免悬挂请求阻塞页面
+    const result = await fetch(API_BASE_URL + API_ENDPOINTS.AUTH.ME, {credentials:'include',cache:'no-store',signal:AbortSignal.timeout(10000)});
     const response = await result.json();
     if (!result.ok) throw Object.assign(new Error(response.msg || '会话检查失败'), {status:result.status});
     if (response.data) {

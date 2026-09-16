@@ -1,0 +1,17 @@
+%% name: customer-service
+flowchart TB
+    ask["用户咨询"] --> rules{"规则与意图判断"}
+    rules -->|"知识命中"| answer["知识回复，AI 可润色"]
+    rules -->|"高意向"| human["人工服务入口"]
+    rules -->|"生成、模板、造价需求"| guide["对应业务页面"]
+    rules -->|"未命中"| classify["AI 意图分类"]
+    classify --> guide
+    human --> form["联系方式与需求收集"]
+    guide --> form
+    form --> leads[("customer_leads")]
+    ask --> events[("customer_service_events")]
+    form --> events
+    leads --> admin["管理端分配、跟进、下次联系时间"]
+    admin --> followups[("customer_lead_followups")]
+    admin --> result["new、contacted、converted、invalid"]
+    events --> funnel["来源与转化漏斗分析"]

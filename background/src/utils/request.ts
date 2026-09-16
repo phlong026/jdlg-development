@@ -50,9 +50,12 @@ export const request = async <T = any>(
         ...fetchConfig.headers,
     };
     
-    // 添加token
+    // 添加token。
+    // 认证实际由 session cookie 承载（credentials:'include'）；本地保存的
+    // 'session_active' 只是"会话存在"标记，不能作为真实凭据发送，
+    // 否则会向服务端泄露可预测的伪 Bearer 头并干扰网关判断。
     const token = tokenUtils.getToken();
-    if (token) {
+    if (token && token !== 'session_active') {
         headers['Authorization'] = `Bearer ${token}`;
     }
     

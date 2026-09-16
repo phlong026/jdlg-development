@@ -194,7 +194,13 @@ type wecomBinding struct {
 	AccessVersion int64  `json:"-"`
 }
 
-func readWecomBinding(ctx context.Context, db *sql.DB, id int64) (wecomBinding, error) {
+// wecomBindingReader 让绑定读取既可用 *sql.DB 也可用事务 *sql.Tx，
+// 供授权保存流程在事务内核验身份，避免事务外读的检查窗口。
+type wecomBindingReader interface {
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+func readWecomBinding(ctx context.Context, db wecomBindingReader, id int64) (wecomBinding, error) {
 	b := wecomBinding{UserID: id}
 	e := db.QueryRowContext(ctx, `SELECT corp_id,employee_id,employee_name,enabled,version FROM management_wecom_identity WHERE user_id=?`, id).Scan(&b.CorpID, &b.EmployeeID, &b.EmployeeName, &b.Enabled, &b.Version)
 	return b, e
@@ -287,7 +293,7 @@ func saveWecomBinding(ctx context.Context, db *sql.DB, in wecomBinding, operator
 	return in, tx.Commit()
 }
 
-func validateStaffIdentity(ctx context.Context, db *sql.DB, id int64, employee string) error {
+func validateStaffIdentity(ctx context.Context, db wecomBindingReader, id int64, employee string) error {
 	b, e := readWecomBinding(ctx, db, id)
 	var absent *mysql.MySQLError
 	if errors.Is(e, sql.ErrNoRows) || (errors.As(e, &absent) && absent.Number == 1146) {

@@ -1,0 +1,12 @@
+%% name: reusable-target
+flowchart TB
+    transport["接口层：小程序、Web、回调"] --> application["应用服务：创建任务、购买、发放权益、交付报告"]
+    application --> policy["领域规则：身份、价格快照、状态机、权限"]
+    application --> ports["接口：Repository、Ledger、Provider、Storage、Renderer"]
+    jobs["统一 Worker：租约、重试、恢复"] --> application
+    ports --> db["SQL 仓储和事务"]
+    ports --> ledger["事务账本与幂等业务流水"]
+    ports --> external["微信、AI、企微适配器"]
+    ports --> assets["对象存储与文件渲染"]
+    db --> durable["任务、快照、Outbox 事件"]
+    durable --> jobs

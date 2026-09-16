@@ -4,7 +4,9 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
-    const proxyTarget = env.VITE_DEV_PROXY_TARGET || 'https://api.jiadilingguang.com';
+    // 开发代理默认只连本机 Go 服务；指向真实环境必须显式配置 VITE_DEV_PROXY_TARGET，
+    // 避免本地调试误写生产数据。
+    const proxyTarget = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080';
 
     return {
         base: '/admin/',

@@ -1,0 +1,13 @@
+%% name: configurable-tools
+flowchart TB
+    operations["管理端维护工具、风格和参考图"] --> config[("ai_tools 配置")]
+    config --> ui["小程序通用工具列表、详情、工作台"]
+    ui --> input["用户图、补充文字、预设 ID"]
+    input --> compose["服务端校验发布状态并重建提示词"]
+    config --> compose
+    compose --> mode{"风格参考模式"}
+    mode -->|"preview_only"| textOnly["展示图不进入模型输入"]
+    mode -->|"preview_and_model"| modelImage["追加模型参考图"]
+    textOnly --> engine["公共计费和图片任务引擎"]
+    modelImage --> engine
+    engine --> result["生成记录、结果详情、再次生成"]

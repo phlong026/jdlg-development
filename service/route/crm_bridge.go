@@ -18,6 +18,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -146,10 +147,13 @@ func crmSignature(key, canonical string) string {
 	m.Write([]byte(canonical))
 	return base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
+// crmRandom 生成签名 nonce。crypto/rand 在正常系统上不会失败；
+// 万一失败退回到时间+进程熵，保证调用方永不 panic（nonce 冲突会被
+// 数据库唯一约束拒绝，请求安全失败而不是重放）。
 func crmRandom() string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		panic(err)
+		return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("t%d-p%d", time.Now().UnixNano(), os.Getpid())))
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
@@ -223,6 +227,25 @@ func crmQuery(c *gin.Context) (url.Values, error) {
 	}
 	return q, nil
 }
+// crmExportRateLimit 限制每账号导出频率：CSV 导出是重查询，
+// 单机部署下用进程内滑动窗口兜底，避免误点或脚本刷取拖垮服务。
+var crmExportLimiter = struct {
+	sync.Mutex
+	last map[int64]time.Time
+}{last: map[int64]time.Time{}}
+
+const crmExportInterval = 15 * time.Second
+
+func crmExportAllowed(userID int64, now time.Time) bool {
+	crmExportLimiter.Lock()
+	defer crmExportLimiter.Unlock()
+	if last, ok := crmExportLimiter.last[userID]; ok && now.Sub(last) < crmExportInterval {
+		return false
+	}
+	crmExportLimiter.last[userID] = now
+	return true
+}
+
 func crmProxy(users *model.UserModel) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !crmEnabled() {
@@ -233,6 +256,13 @@ func crmProxy(users *model.UserModel) gin.HandlerFunc {
 		if !ok {
 			crmError(c, 404, "接口不存在")
 			return
+		}
+		if strings.HasPrefix(suffix, "/export/") {
+			if !crmExportAllowed(GetUserID(c), time.Now()) {
+				c.Header("Retry-After", "15")
+				crmError(c, 429, "导出过于频繁，请稍后再试")
+				return
+			}
 		}
 		if c.Request.Method != "GET" && !crmMutationAllowed(c.Request) {
 			crmError(c, 403, "请求来源校验失败")

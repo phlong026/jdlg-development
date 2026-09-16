@@ -1,0 +1,31 @@
+%% name: architecture
+flowchart TB
+    mini["微信小程序"]
+    admin["React 管理端"]
+    subgraph server["同一个 Go 服务进程"]
+        gateway["Gin：路由、Session、Token 校验"]
+        domain["业务模块：身份、内容、会员、交易、客服"]
+        jobs["后台任务：图片、视频、报告、支付补偿"]
+        persistence["数据访问：原生 SQL 与 Redis 操作"]
+        adapters["基础组件：外部 API 与媒体处理"]
+        gateway --> domain
+        domain --> jobs
+        domain --> persistence
+        jobs --> persistence
+        domain --> adapters
+        jobs --> adapters
+    end
+    mysql[("MySQL：业务事实与持久任务")]
+    redis[("Redis：会话、余额和缓存")]
+    cos[("COS：图片、视频与文档")]
+    models["AI 平台与 FastGPT"]
+    wechat["微信、企微、短信与身份核验"]
+    python["Python PDF 渲染与 FFmpeg"]
+    mini -->|"小程序 API"| gateway
+    admin -->|"管理 API"| gateway
+    persistence --> mysql
+    persistence --> redis
+    adapters --> models
+    adapters --> wechat
+    adapters --> cos
+    adapters --> python

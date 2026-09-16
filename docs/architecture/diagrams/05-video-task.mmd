@@ -1,0 +1,12 @@
+%% name: video-task
+flowchart TB
+    create["输入文本、参考图或首尾帧"] --> charge["扣费并调用供应商创建任务"]
+    charge --> persist[("保存 ai_video_tasks 与 external_id")]
+    persist --> monitor["后台监控，前端查询也可推进同步"]
+    restart["进程启动恢复活跃视频任务"] --> monitor
+    monitor --> state{"外部状态与结果"}
+    state -->|"仍生成中"| monitor
+    state -->|"已完成且可取结果"| archive["下载、视频水印、COS 归档"]
+    archive --> ready["有自有结果 URL 才交付成功"]
+    state -->|"不可恢复错误"| failure["条件更新失败状态，尝试退灵石"]
+    monitor -->|"等待过久"| support["建立或关联售后工单"]

@@ -336,7 +336,16 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 		c.JSON(200, gin.H{"code": 0, "data": result})
 	})
 	if module != nil && module.Wecom != nil {
+		// 事件统一收口：先落库再应答企微，报告重试与 CRM 转发由 inbox 补偿（P0-2）
+		inbox, inboxErr := newWecomEventInbox(module.DB, module.WecomConfig, module.Wecom)
+		if inboxErr != nil {
+			log.Printf("[wecom-inbox] 事件收口表不可用，回调退回内联模式: %v", inboxErr)
+		}
 		handler := gin.WrapH(reportwecom.Callback(module.WecomConfig, module.Wecom))
+		if inbox != nil {
+			handler = gin.WrapH(reportwecom.Callback(module.WecomConfig, module.Wecom, inbox))
+			startWecomEventDispatch(inbox)
+		}
 		v1.GET("/wecom/reports/callback", handler)
 		v1.POST("/wecom/reports/callback", handler)
 	}

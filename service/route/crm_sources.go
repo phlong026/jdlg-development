@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"log"
 	"strconv"
@@ -80,14 +81,12 @@ func registerCRMSources(g *gin.RouterGroup, db *sql.DB) {
 	if db == nil {
 		return
 	}
-	_, schemaErr := db.Exec(`CREATE TABLE IF NOT EXISTS customer_lead_crm_delivery (
- lead_id BIGINT UNSIGNED PRIMARY KEY,customer_id VARCHAR(128) NOT NULL DEFAULT '',source_hash VARCHAR(64) NOT NULL DEFAULT '',attempts INT NOT NULL DEFAULT 0,last_error VARCHAR(255) NOT NULL DEFAULT '',next_attempt_at DATETIME NULL,synced_at DATETIME NULL,history_cursor BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`)
-	if schemaErr == nil {
-		var columnCount int
-		schemaErr = db.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='customer_lead_crm_delivery' AND column_name='history_cursor'").Scan(&columnCount)
-		if schemaErr == nil && columnCount == 0 {
-			_, schemaErr = db.Exec("ALTER TABLE customer_lead_crm_delivery ADD COLUMN history_cursor BIGINT NOT NULL DEFAULT 0")
-		}
+	// 表结构由 sql/customer_lead_crm_delivery_up.sql 在部署时创建；
+	// 运行期只探测 readiness，缺失时降级为接口 503 与停用 worker。
+	var columnCount int
+	schemaErr := db.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='customer_lead_crm_delivery' AND column_name='history_cursor'").Scan(&columnCount)
+	if schemaErr == nil && columnCount == 0 {
+		schemaErr = errors.New("customer_lead_crm_delivery 表未创建，请先执行 sql/customer_lead_crm_delivery_up.sql")
 	}
 	g.GET("/source-sync", func(c *gin.Context) {
 		access, ok := c.Get("management.access")
@@ -117,7 +116,7 @@ func registerCRMSources(g *gin.RouterGroup, db *sql.DB) {
 	go func() {
 		for {
 			if err := syncCRMLeads(db); err != nil {
-				log.Print("CRM source checkpoint unavailable; will retry")
+				log.Printf("CRM source checkpoint unavailable; will retry: %v", err)
 			}
 			time.Sleep(time.Minute)
 		}

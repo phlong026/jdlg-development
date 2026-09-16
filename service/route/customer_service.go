@@ -294,24 +294,10 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			AssignedTo:     req.AssignedTo,
 			NextFollowupAt: nextFollowupAt,
 		}
-		updated, err := customerServiceModel.BatchApplyLeadAction(req.IDs, input)
+		updated, err := customerServiceModel.BatchApplyLeadActionWithFollowups(req.IDs, input, GetUserID(c), GetUsername(c))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "customer lead action failed: " + err.Error()})
 			return
-		}
-		for _, id := range req.IDs {
-			if id <= 0 {
-				continue
-			}
-			_, _ = customerServiceModel.CreateFollowup(&model.CustomerLeadFollowupCreateInput{
-				LeadID:         id,
-				Status:         req.Status,
-				Remark:         req.Remark,
-				AssignedTo:     req.AssignedTo,
-				NextFollowupAt: nextFollowupAt,
-				OperatorID:     GetUserID(c),
-				OperatorName:   GetUsername(c),
-			})
 		}
 		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"updated": updated}})
 	})
@@ -392,21 +378,12 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "invalid next_followup_at"})
 			return
 		}
-		if err := customerServiceModel.ApplyLeadAction(id, model.CustomerLeadActionInput{
+		followupID, err := customerServiceModel.ApplyLeadActionWithFollowup(id, model.CustomerLeadActionInput{
 			Status:         req.Status,
 			Remark:         req.Remark,
 			AssignedTo:     req.AssignedTo,
 			NextFollowupAt: nextFollowupAt,
-		}); err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "线索不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "更新客服线索状态失败: " + err.Error()})
-			return
-		}
-		followupID, err := customerServiceModel.CreateFollowup(&model.CustomerLeadFollowupCreateInput{
-			LeadID:         id,
+		}, &model.CustomerLeadFollowupCreateInput{
 			Status:         req.Status,
 			Remark:         req.Remark,
 			AssignedTo:     req.AssignedTo,
@@ -415,11 +392,15 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			OperatorName:   GetUsername(c),
 		})
 		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "线索不存在"})
+				return
+			}
 			if err == model.ErrInvalidCustomerLeadID {
 				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的线索ID"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建客服跟进记录失败: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "更新客服线索失败: " + err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"id": followupID}})
@@ -450,21 +431,12 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "invalid next_followup_at"})
 			return
 		}
-		if err := customerServiceModel.ApplyLeadAction(id, model.CustomerLeadActionInput{
+		if _, err := customerServiceModel.ApplyLeadActionWithFollowup(id, model.CustomerLeadActionInput{
 			Status:         req.Status,
 			Remark:         req.Remark,
 			AssignedTo:     req.AssignedTo,
 			NextFollowupAt: nextFollowupAt,
-		}); err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "线索不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "更新客服线索状态失败: " + err.Error()})
-			return
-		}
-		if _, err := customerServiceModel.CreateFollowup(&model.CustomerLeadFollowupCreateInput{
-			LeadID:         id,
+		}, &model.CustomerLeadFollowupCreateInput{
 			Status:         req.Status,
 			Remark:         req.Remark,
 			AssignedTo:     req.AssignedTo,
@@ -472,6 +444,10 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			OperatorID:     GetUserID(c),
 			OperatorName:   GetUsername(c),
 		}); err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "线索不存在"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "customer lead action failed: " + err.Error()})
 			return
 		}

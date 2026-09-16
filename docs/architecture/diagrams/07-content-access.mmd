@@ -1,0 +1,12 @@
+%% name: content-access
+flowchart TB
+    content["公开模板与详情"] --> action{"用户选择的动作"}
+    action -->|"做同款"| paid{"模板是否付费且未解锁"}
+    paid -->|"是"| unlock["扣灵石、写解锁记录、记作者收益"]
+    paid -->|"否"| payload["服务端恢复原任务或内部提示词"]
+    unlock --> payload
+    payload --> generate["另按生成场景计费并创建 AI 任务"]
+    action -->|"下载图片"| membership["登录、手机号、会员或兼容充值资格"]
+    membership --> limits["套餐期限、下载额度、频率检查"]
+    limits --> file["记录下载并返回文件"]
+    action -->|"收藏与互动"| social["收藏、点赞、评论、分享记录"]

@@ -193,7 +193,6 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
             setFunnel(funnelData.metrics || []);
             setSelectedIds((ids) => ids.filter((id) => (listData.list || []).some((item) => item.id === id)));
         } catch (error) {
-            console.error('加载客服线索失败', error);
             reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
         } finally {
             setLoading(false);
@@ -229,7 +228,6 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
             const data = await getCustomerLeadDetail(String(item.id));
             setDetail(data);
         } catch (error) {
-            console.error('加载客服线索详情失败', error);
             reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索详情失败');
         } finally {
             setDetailLoading(false);
@@ -288,7 +286,6 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
             closeAction();
             await loadData();
         } catch (error) {
-            console.error('保存客服线索跟进失败', error);
             window.alert(error instanceof Error ? error.message : '保存客服线索跟进失败');
         } finally {
             setSavingAction(false);
@@ -372,7 +369,7 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
                                 <span>{index + 1}</span>
                                 <strong>{item.label}</strong>
                                 <b>{item.count}</b>
-                                <small>{item.conversion_rate.toFixed(1)}%</small>
+                                <small>{(item.conversion_rate ?? 0).toFixed(1)}%</small>
                             </div>
                         ))}
                         {!loading && funnel.length === 0 ? (

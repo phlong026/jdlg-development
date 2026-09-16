@@ -139,7 +139,7 @@ func registerCRMAccess(g *gin.RouterGroup, users *model.UserModel) {
 		}
 		var old managementAccess
 		if in.Enabled && in.CRMEnabled && in.Role == "staff" {
-			if err := validateStaffIdentity(ctx, users.DB, in.UserID, in.EmployeeID); err != nil {
+			if err := validateStaffIdentity(ctx, tx, in.UserID, in.EmployeeID); err != nil {
 				crmError(c, 409, err.Error())
 				return
 			}

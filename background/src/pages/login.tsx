@@ -7,6 +7,8 @@ import './login.scss';
 
 const REMEMBERED_LOGIN_KEY = 'background_remembered_login';
 
+// 记住密码：按用户明确要求保留原有的读取、回填、保存与取消逻辑
+// （2026-09-16 上线评审中再次确认接受明文缓存的本机暴露风险）。
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const [account, setAccount] = useState('');
@@ -18,7 +20,7 @@ const Login: React.FC = () => {
     const [wecomEnabled,setWecomEnabled] = useState(false);
     useEffect(()=>{
         const controller=new AbortController();
-        fetch(API_BASE_URL+'/api/v1/management/wecom/config',{signal:controller.signal,credentials:'include'}).then(r=>r.json()).then(r=>setWecomEnabled(r.code===0&&r.data?.enabled===true)).catch(()=>{});
+        fetch(API_BASE_URL+'/api/v1/management/wecom/config',{signal:controller.signal,credentials:'include'}).then(r=>r.json()).then(r=>setWecomEnabled(r.code===0&&r.data?.enabled===true)).catch((err)=>{console.warn('企微登录配置探测失败，已隐藏入口',err)});
         const reason=new URLSearchParams(window.location.search).get('wecom_error');
         const messages:Record<string,string>={expired:'企微登录已过期或当前浏览器不匹配，请重新发起。',identity:'企微成员校验失败，请确认使用本企业已激活账号，或联系管理员检查应用权限。',not_enabled:'此企微成员尚未绑定已启用的后台账号，请联系管理员开通。',unavailable:'企微登录暂不可用，请稍后重试或使用账号登录。'};
         if(reason){setError(messages[reason]||'企微登录失败，请重新发起。');window.history.replaceState(null,'',window.location.pathname)}

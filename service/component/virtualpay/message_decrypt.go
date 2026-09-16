@@ -101,3 +101,17 @@ func pkcs7UnpadWeChat(b []byte) ([]byte, error) {
 	}
 	return b[:n-pad], nil
 }
+
+// SignPushSignature 生成微信消息推送的 signature 字段，算法与
+// VerifyPushSignature 完全一致（sha1(排序后拼接([token, timestamp, nonce, encrypt]))）。
+// 用于统一事件入口把原始密文转发给内部服务时重新签名：
+// 转发时刻晚于企微原始推送，必须以新时间戳重算签名才能通过对端时效校验。
+func SignPushSignature(token, timestamp, nonce, encrypt string) string {
+	arr := []string{token, timestamp, nonce, encrypt}
+	sort.Strings(arr)
+	h := sha1.New()
+	for _, s := range arr {
+		h.Write([]byte(s))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}

@@ -1,0 +1,18 @@
+%% name: virtual-payment
+flowchart TB
+    prepare["prepare：服务端校验商品并保存 pending 订单"] --> wx["小程序调起微信虚拟支付"]
+    wx --> confirm["客户端 confirm：查询微信订单"]
+    callback["微信推送：验签、解密、分发"] --> apply["共用发货入口 applyVirtualPayOrderSuccess"]
+    confirm --> apply
+    timer["60 秒补偿：扫描陈旧订单并查询微信"] --> apply
+    apply --> claim{"条件更新 pending 到 delivering"}
+    claim -->|"未取得处理权"| read["读取已有状态，返回成功或等待"]
+    claim -->|"取得处理权"| kind{"业务类型"}
+    kind -->|"充值"| recharge["加灵石、写流水、匹配会员"]
+    kind -->|"认证费"| certification["推进认证申请到待审核"]
+    kind -->|"报告"| report["按订单授权完整报告生成"]
+    recharge --> success["本地订单 success"]
+    certification --> success
+    report --> success
+    success --> goods["道具发货回执；报告还需 ready"]
+    goods -->|"回执失败"| retry["记录待上报，补偿重试"]

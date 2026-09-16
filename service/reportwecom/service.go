@@ -86,6 +86,7 @@ type Event struct {
 	EmployeeID     string `xml:"UserID"`
 	WelcomeCode    string `xml:"WelcomeCode"`
 	CreateTime     int64  `xml:"CreateTime"`
+	MsgId          string `xml:"MsgId"`
 }
 
 func (s *Service) verifyIdentity(ctx context.Context, t Ticket, externalID string) error {
