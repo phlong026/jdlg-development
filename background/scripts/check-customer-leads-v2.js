@@ -22,17 +22,18 @@ assert.match(api, /CustomerIntentAnalysis/, 'customer lead API should expose int
 assert.match(api, /getCustomerLeadDetail/, 'customer lead API should fetch detail');
 assert.match(api, /getCustomerLeadFunnel/, 'customer lead API should fetch funnel data');
 assert.match(api, /createCustomerLeadFollowup/, 'customer lead API should create followup records');
-assert.match(api, /updateCustomerLeadStatus[\s\S]*remark\?: string/, 'status update should accept remark');
+assert.match(api, /interface CustomerLeadActionPayload\s*{[\s\S]*?remark:\s*string;/, 'customer lead actions should require a remark');
+assert.match(api, /updateCustomerLeadStatus\s*=\s*async\s*\(id:\s*string,\s*payload:\s*CustomerLeadActionPayload\)/, 'status update should use the required action payload');
 
 assert.match(page, /handleViewDetail/, 'page should open detail');
 assert.match(page, /智能客服漏斗/, 'page should render funnel dashboard');
 assert.match(page, /客户摘要/, 'page should render generated customer summary');
-assert.match(page, /自动意向/, 'page should render automatic intent analysis');
+assert.match(page, /自动判断/, 'page should render automatic intent analysis');
 assert.match(page, /跟进记录/, 'page should render multiple followup records');
-assert.match(page, /事件时间线/, 'page should render event timeline');
+assert.match(page, /客户行为时间线/, 'page should render event timeline');
 assert.match(page, /保存跟进/, 'page should save follow-up remark');
-assert.match(page, /formatPayload/, 'page should render event payload context');
-assert.match(page, /detailRemark/, 'page should edit remark in detail modal');
+assert.match(page, /const describeEvent\s*=\s*\(item:\s*CustomerServiceEventItem\)[\s\S]*?item\.payload/, 'page should render event payload context');
+assert.match(page, /buildActionPayload[\s\S]*?remark:\s*form\.remark\.trim\(\)/, 'page should require and submit the follow-up remark');
 assert.match(styles, /customer-lead-modal/, 'detail modal styles should exist');
 assert.match(styles, /customer-lead-timeline/, 'timeline styles should exist');
 assert.match(styles, /customer-lead-funnel/, 'funnel styles should exist');
