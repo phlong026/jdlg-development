@@ -30,6 +30,7 @@ import (
 // 转发以新时间戳重新计算企微签名，要求两端回调 Token/AESKey 配置一致。
 //
 // 状态值：0=完成 1=待处理 2=跳过（不属于该下游） 3=永久失败。
+// attempts 是两个下游共享的补偿处理轮次，每轮开始前持久化加一。
 
 const wecomEventCRMDisabled = "未配置CRM桥接或转发已关闭"
 
@@ -152,7 +153,7 @@ func (s *wecomEventInbox) markCRM(dedupKey string, status int8, msg string, retr
 		next = fmt.Sprintf("DATE_ADD(NOW(), INTERVAL %d MINUTE)", wait)
 	}
 	_, err := s.db.Exec(`UPDATE wecom_event_inbox
- SET crm_status=?, last_error=?, next_attempt_at=` + next + ` WHERE dedup_key=?`, status, msg, dedupKey)
+ SET crm_status=?, last_error=?, next_attempt_at=`+next+` WHERE dedup_key=?`, status, msg, dedupKey)
 	if err != nil {
 		log.Printf("[wecom-inbox] mark crm status failed: %v", err)
 	}
@@ -165,17 +166,24 @@ func (s *wecomEventInbox) forwardWecomEvent(ctx context.Context, encryptedBody s
 	if base == "" {
 		return 0, errors.New("CRM bridge not configured")
 	}
+	body, err := xml.Marshal(struct {
+		XMLName xml.Name `xml:"xml"`
+		Encrypt string   `xml:"Encrypt"`
+	}{Encrypt: encryptedBody})
+	if err != nil {
+		return 0, err
+	}
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	nonce := crmRandom()
 	q := url.Values{}
 	q.Set("msg_signature", virtualpay.SignPushSignature(s.config.Token, ts, nonce, encryptedBody))
 	q.Set("timestamp", ts)
 	q.Set("nonce", nonce)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/iycallback/handle?"+q.Encode(), strings.NewReader(encryptedBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/iycallback/handle?"+q.Encode(), strings.NewReader(string(body)))
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("Content-Type", "text/plain; charset=UTF-8")
+	req.Header.Set("Content-Type", "application/xml; charset=UTF-8")
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	res, err := client.Do(req)
 	if err != nil {
@@ -223,10 +231,28 @@ func (s *wecomEventInbox) dispatchPending() {
 	forwardEnabled := os.Getenv("CRM_EVENT_FORWARD_ENABLED") != "false"
 	for _, p := range batch {
 		if p.attempts >= 100 {
-			s.markCRM(p.key, 3, "重试次数用尽", false, p.attempts)
-			s.db.Exec(`UPDATE wecom_event_inbox SET report_status=3, last_error='重试次数用尽' WHERE dedup_key=? AND report_status=1`, p.key)
+			if _, err := s.db.Exec(`UPDATE wecom_event_inbox
+ SET report_status=CASE WHEN report_status=1 THEN 3 ELSE report_status END,
+     crm_status=CASE WHEN crm_status=1 THEN 3 ELSE crm_status END,
+     last_error='重试次数用尽', next_attempt_at=NULL
+ WHERE dedup_key=? AND (report_status=1 OR crm_status=1)`, p.key); err != nil {
+				log.Printf("[wecom-inbox] mark attempts exhausted failed: %v", err)
+			}
 			continue
 		}
+		result, err := s.db.Exec(`UPDATE wecom_event_inbox SET attempts=attempts+1 WHERE dedup_key=? AND attempts=?`, p.key, p.attempts)
+		if err != nil {
+			log.Printf("[wecom-inbox] persist dispatch attempt failed: %v", err)
+			continue
+		}
+		affected, err := result.RowsAffected()
+		if err != nil || affected == 0 {
+			if err != nil {
+				log.Printf("[wecom-inbox] read dispatch attempt result failed: %v", err)
+			}
+			continue
+		}
+		p.attempts++
 		if p.crmStatus == 1 {
 			switch {
 			case !crmEnabled() || !forwardEnabled:
@@ -235,7 +261,7 @@ func (s *wecomEventInbox) dispatchPending() {
 				status, err := s.forwardWecomEvent(ctx, p.encrypted)
 				switch {
 				case err != nil:
-					s.markCRM(p.key, 1, "转发失败: "+err.Error(), true, p.attempts+1)
+					s.markCRM(p.key, 1, "转发失败: "+err.Error(), true, p.attempts)
 				case status == http.StatusOK:
 					s.markCRM(p.key, 0, "", false, p.attempts)
 				case status == http.StatusForbidden || status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge:
@@ -243,7 +269,7 @@ func (s *wecomEventInbox) dispatchPending() {
 					s.markCRM(p.key, 3, fmt.Sprintf("回调被拒绝 HTTP %d，请核对两端回调 Token/AESKey 配置", status), false, p.attempts)
 				default:
 					// 503=Java 尚未配置回调等暂时态，退避重试
-					s.markCRM(p.key, 1, fmt.Sprintf("下游未就绪 HTTP %d", status), true, p.attempts+1)
+					s.markCRM(p.key, 1, fmt.Sprintf("下游未就绪 HTTP %d", status), true, p.attempts)
 				}
 			}
 		}
@@ -264,7 +290,10 @@ func (s *wecomEventInbox) dispatchPending() {
 func (s *wecomEventInbox) cleanup() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM wecom_event_inbox WHERE created_at < DATE_SUB(NOW(), INTERVAL 14 DAY) LIMIT 500`); err != nil {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM wecom_event_inbox
+ WHERE report_status IN (0,2) AND crm_status IN (0,2)
+   AND updated_at < DATE_SUB(NOW(), INTERVAL 14 DAY)
+ LIMIT 500`); err != nil {
 		log.Printf("[wecom-inbox] cleanup failed: %v", err)
 	}
 }

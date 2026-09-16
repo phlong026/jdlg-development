@@ -55,7 +55,7 @@ func createDefaultAdmin(userModel *model.UserModel) error {
 		return err
 	}
 
-	log.Println("默认管理员账号创建成功：用户名 admin，密码 123456")
+	log.Println("默认管理员账号创建成功：用户名 admin（初始密码已由环境变量配置）")
 	return nil
 }
 
