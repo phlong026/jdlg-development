@@ -162,11 +162,17 @@ ENTERPRISE_WECHAT_CUSTOMER_SERVICE_URL=https://work.weixin.qq.com/kfid/kfccb23bf
 HTTP_ADDR=:8080
 SESSION_SECRET=jiadilinguang-session-secret
 
-# AI 视频配置（老张视频接口）
+# AI 生图配置
 LAOZHANG_API_KEY=your_laozhang_api_key
+LAOZHANG_IMAGE_BASE_URL=https://api2.laozhang.ai
+LAOZHANG_IMAGE_MODEL=gpt-image-2.5-sunburst-vip
+
+# AI 视频配置（与生图网关独立）
 AI_VIDEO_API_BASE_URL=https://api.laozhang.ai
 AI_VIDEO_MODEL=veo-3.1-landscape-fast-fl
 ```
+
+生图兼容 provider code 继续使用 `gpt-image-2-vip`，实际请求网关和模型由 `LAOZHANG_IMAGE_BASE_URL` 与 `LAOZHANG_IMAGE_MODEL` 决定；未配置或仅包含空白时使用上述默认值。数据库中的历史 Gemini 生图模板仍会经过兼容转换，后台修改普通生图地址不会覆盖这两项环境变量。修改后需重启 Go 服务生效。
 
 ## 数据库表结构
 

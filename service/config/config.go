@@ -102,10 +102,13 @@ type Config struct {
 // AIConfig AI服务配置
 // ArkAPIKey：火山引擎方舟（豆包聊天）使用，来自 ARK_API_KEY
 // LaoZhangAPIKey：老张平台（生图 / AI 视频等）使用，来自 LAOZHANG_API_KEY
+// LaoZhangImageBaseURL / LaoZhangImageModel：老张生图专用网关与模型
 // ToAPIsAPIKey：ToAPIs（备用生图）使用，来自 TOAPIS_API_KEY
 type AIConfig struct {
 	ArkAPIKey                     string // 火山/豆包 Key
 	LaoZhangAPIKey                string // 老张平台 Key
+	LaoZhangImageBaseURL          string // 老张生图网关，默认 api2.laozhang.ai
+	LaoZhangImageModel            string // 老张生图模型
 	ToAPIsAPIKey                  string // ToAPIs Key
 	FastGPTBaseURL                string // FastGPT 服务地址
 	FastGPTAPIKey                 string // FastGPT API Key
@@ -315,6 +318,9 @@ func Init() *Config {
 	arkKey := getEnv("ARK_API_KEY", "")
 	laozhangKey := getEnv("LAOZHANG_API_KEY", "")
 	toapisKey := getEnv("TOAPIS_API_KEY", "")
+	laozhangImageBaseURL := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_BASE_URL", ""), "https://api2.laozhang.ai")
+	laozhangImageBaseURL = strings.TrimRight(laozhangImageBaseURL, "/")
+	laozhangImageModel := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_MODEL", ""), "gpt-image-2.5-sunburst-vip")
 	globalConfig = &Config{
 		MySQL: MySQLConfig{
 			DSN: getEnv("MYSQL_DSN", "root:@tcp(127.0.0.1:3306)/jiadilinguang?charset=utf8mb4&parseTime=True&loc=Local"),
@@ -361,6 +367,8 @@ func Init() *Config {
 		AI: AIConfig{
 			ArkAPIKey:                     arkKey,
 			LaoZhangAPIKey:                laozhangKey,
+			LaoZhangImageBaseURL:          laozhangImageBaseURL,
+			LaoZhangImageModel:            laozhangImageModel,
 			ToAPIsAPIKey:                  toapisKey,
 			FastGPTBaseURL:                strings.TrimRight(getEnv("FASTGPT_BASE_URL", ""), "/"),
 			FastGPTAPIKey:                 getEnv("FASTGPT_API_KEY", ""),
@@ -401,6 +409,14 @@ func Get() *Config {
 		return Init()
 	}
 	return globalConfig
+}
+
+func normalizeStringSetting(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 // getEnv 读取环境变量，带默认值

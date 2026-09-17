@@ -51,8 +51,10 @@ func TestRuntimeAIDrawProviderDefaultsUseEnvironmentKeys(t *testing.T) {
 	processor := &AITaskProcessor{
 		cfg: &config.Config{
 			AI: config.AIConfig{
-				LaoZhangAPIKey: "laozhang-env-key",
-				ToAPIsAPIKey:   "toapis-env-key",
+				LaoZhangAPIKey:       "laozhang-env-key",
+				LaoZhangImageBaseURL: "https://images.example.com",
+				LaoZhangImageModel:   "production-image-model",
+				ToAPIsAPIKey:         "toapis-env-key",
 			},
 		},
 	}
@@ -71,8 +73,8 @@ func TestRuntimeAIDrawProviderDefaultsUseEnvironmentKeys(t *testing.T) {
 	if laozhang.APIKey != "laozhang-env-key" {
 		t.Fatalf("laozhang APIKey = %q, want env key", laozhang.APIKey)
 	}
-	if laozhang.APIEndpoint != geminiDrawGenerateContentEndpoint {
-		t.Fatalf("laozhang endpoint = %q, want built-in generateContent endpoint", laozhang.APIEndpoint)
+	if laozhang.APIEndpoint != "https://images.example.com/v1beta/models/gemini-3-pro-image-preview:generateContent" {
+		t.Fatalf("laozhang endpoint = %q, want configured image gateway", laozhang.APIEndpoint)
 	}
 	if laozhang.ProtocolType != "gemini_sync" {
 		t.Fatalf("laozhang protocol = %q, want gemini_sync", laozhang.ProtocolType)
@@ -103,6 +105,113 @@ func TestRuntimeAIDrawProviderDefaultsUseEnvironmentKeys(t *testing.T) {
 	}
 	if got := resolveConfiguredModel(toapis); got != "gemini-3-pro-image-preview" {
 		t.Fatalf("toapis model = %q, want built-in primary model", got)
+	}
+}
+
+func TestGPTImageCompatibilityProviderUsesConfiguredImageGatewayAndModel(t *testing.T) {
+	processor := &AITaskProcessor{cfg: &config.Config{AI: config.AIConfig{
+		LaoZhangAPIKey:       "test-key",
+		LaoZhangImageBaseURL: "https://images.example.com",
+		LaoZhangImageModel:   "production-image-model",
+	}}}
+
+	for _, hasImage := range []bool{false, true} {
+		got := processor.applyRuntimeAIDrawProviderDefaults(&AIAPIConfigData{
+			TaskType:     "ai_draw",
+			ProviderCode: "gpt-image-2-vip",
+		}, "ai_draw", hasImage)
+		if got.APIEndpoint != "https://images.example.com/v1/images/generations" {
+			t.Fatalf("hasImage=%t endpoint = %q", hasImage, got.APIEndpoint)
+		}
+		if model := resolveConfiguredModel(got); model != "production-image-model" {
+			t.Fatalf("hasImage=%t model = %q, want configured model", hasImage, model)
+		}
+		body, err := (&RequestPool{}).buildRequestBody(&AITaskContext{
+			TaskType:  "ai_draw",
+			APIConfig: got,
+			Prompt:    "test prompt",
+			ImageURL: func() string {
+				if hasImage {
+					return "https://example.com/ref.png"
+				}
+				return ""
+			}(),
+		})
+		if err != nil {
+			t.Fatalf("hasImage=%t buildRequestBody: %v", hasImage, err)
+		}
+		if body["model"] != "production-image-model" {
+			t.Fatalf("hasImage=%t body model = %v", hasImage, body["model"])
+		}
+		_, hasReference := body["image"]
+		if hasReference != hasImage {
+			t.Fatalf("hasImage=%t request image presence = %t", hasImage, hasReference)
+		}
+	}
+}
+
+func TestLaoZhangFallbacksUseConfiguredImageGateway(t *testing.T) {
+	processor := &AITaskProcessor{cfg: &config.Config{AI: config.AIConfig{
+		LaoZhangImageBaseURL: "https://images.example.com",
+	}}}
+
+	fallbacks := processor.getFallbackAIConfigs("ai_draw", true, &AIAPIConfigData{ProviderCode: "gpt-image-2-vip"})
+	want := []string{
+		"https://images.example.com/v1beta/models/gemini-3-pro-image-preview:generateContent",
+		"https://images.example.com/v1/images/generations",
+	}
+	if len(fallbacks) != len(want) {
+		t.Fatalf("fallback count = %d, want %d", len(fallbacks), len(want))
+	}
+	for i := range want {
+		if fallbacks[i].APIEndpoint != want[i] {
+			t.Fatalf("fallback[%d] endpoint = %q, want %q", i, fallbacks[i].APIEndpoint, want[i])
+		}
+	}
+}
+
+func TestImageGatewayConfigDoesNotChangeNonDrawConfig(t *testing.T) {
+	processor := &AITaskProcessor{cfg: &config.Config{AI: config.AIConfig{
+		LaoZhangImageBaseURL: "https://images.example.com",
+		LaoZhangImageModel:   "production-image-model",
+	}}}
+	original := &AIAPIConfigData{TaskType: "ai_chat", APIEndpoint: "https://chat.example.com/v1/chat/completions"}
+	if got := processor.applyRuntimeAIDrawProviderDefaults(original, "ai_chat", false); got != original {
+		t.Fatal("non-draw config should be returned unchanged")
+	}
+}
+
+func TestLegacyDrawNormalizationUsesConfiguredImageGateway(t *testing.T) {
+	processor := &AITaskProcessor{cfg: &config.Config{AI: config.AIConfig{
+		LaoZhangImageBaseURL: "https://images.example.com",
+	}}}
+	legacy := &AIAPIConfigData{
+		TaskType:     "ai_draw",
+		ProviderCode: "default",
+		APIEndpoint:  "https://legacy.example.com/v1/chat/completions",
+		BodyTemplate: `{"messages":[]}`,
+	}
+
+	got := processor.normalizeRuntimeAIConfigData(legacy, "ai_draw", false)
+	if got.APIEndpoint != "https://images.example.com/v1beta/models/gemini-3-pro-image-preview:generateContent" {
+		t.Fatalf("legacy endpoint = %q, want configured image gateway", got.APIEndpoint)
+	}
+}
+
+func TestUnknownDrawProviderIsNotRewritten(t *testing.T) {
+	processor := &AITaskProcessor{cfg: &config.Config{AI: config.AIConfig{
+		LaoZhangImageBaseURL: "https://images.example.com",
+	}}}
+	custom := &AIAPIConfigData{
+		TaskType:     "ai_draw",
+		ProviderCode: "custom-provider",
+		APIEndpoint:  "https://custom.example.com/v1/chat/completions",
+		BodyTemplate: `{"custom":true}`,
+	}
+
+	got := processor.normalizeRuntimeAIConfigData(custom, "ai_draw", false)
+	if got != custom {
+		t.Fatal("unknown draw provider should be returned unchanged")
 	}
 }
 
@@ -192,7 +301,7 @@ func TestBuildGPTImage2VipRequestBody(t *testing.T) {
 			ProviderCode: "gpt-image-2-vip",
 			ProtocolType: "openai_image_sync",
 			APIEndpoint:  laoZhangImageGenerationEndpoint,
-			BodyTemplate: getLaoZhangGPTImage2VipDrawBodyTemplate(true),
+			BodyTemplate: getLaoZhangGPTImage2VipDrawBodyTemplate(defaultLaoZhangImageModel, true),
 		},
 		Payload: map[string]interface{}{
 			"canvas":          "16:9",
@@ -208,8 +317,8 @@ func TestBuildGPTImage2VipRequestBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildRequestBody returned error: %v", err)
 	}
-	if body["model"] != "gpt-image-2-vip" {
-		t.Fatalf("model = %v, want gpt-image-2-vip", body["model"])
+	if body["model"] != defaultLaoZhangImageModel {
+		t.Fatalf("model = %v, want %s", body["model"], defaultLaoZhangImageModel)
 	}
 	if body["size"] != "3840x2160" {
 		t.Fatalf("size = %v, want 3840x2160", body["size"])

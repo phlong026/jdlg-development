@@ -13,10 +13,11 @@ import (
 	"service/model"
 )
 
-const geminiDrawGenerateContentEndpoint = "https://api.laozhang.ai/v1beta/models/gemini-3-pro-image-preview:generateContent"
-const geminiDrawFlashGenerateContentEndpoint = "https://api.laozhang.ai/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
+const defaultLaoZhangImageBaseURL = "https://api2.laozhang.ai"
+const defaultLaoZhangImageModel = "gpt-image-2.5-sunburst-vip"
+const geminiDrawGenerateContentEndpoint = defaultLaoZhangImageBaseURL + "/v1beta/models/gemini-3-pro-image-preview:generateContent"
 const toapisImageGenerationEndpoint = "https://toapis.com/v1/images/generations"
-const laoZhangImageGenerationEndpoint = "https://api.laozhang.ai/v1/images/generations"
+const laoZhangImageGenerationEndpoint = defaultLaoZhangImageBaseURL + "/v1/images/generations"
 const runningHubQueryEndpoint = "https://www.runninghub.cn/openapi/v2/query"
 
 // AITaskProcessor AI任务处理器
@@ -428,7 +429,7 @@ func (p *AITaskProcessor) getConfiguredAIConfig(taskType string, hasImage bool) 
 				apiConfigData.APIKeyName = "api_key"
 			}
 			apiConfigData = p.applyRuntimeAIDrawProviderDefaults(apiConfigData, taskType, hasImage)
-			apiConfigData = normalizeRuntimeAIConfigData(apiConfigData, taskType, hasImage)
+			apiConfigData = p.normalizeRuntimeAIConfigData(apiConfigData, taskType, hasImage)
 			if apiConfigData.APIEndpoint != "" && apiConfigData.Method != "" && apiConfigData.BodyTemplate != "" {
 				log.Printf("[AITaskProcessor] 使用数据库配置: %s -> %s", taskType, apiConfigData.APIEndpoint)
 				return apiConfigData
@@ -441,18 +442,22 @@ func (p *AITaskProcessor) getConfiguredAIConfig(taskType string, hasImage bool) 
 	return p.getHardcodedAIConfig(taskType, hasImage)
 }
 
-func normalizeRuntimeAIConfigData(apiConfigData *AIAPIConfigData, taskType string, hasImage bool) *AIAPIConfigData {
+func (p *AITaskProcessor) normalizeRuntimeAIConfigData(apiConfigData *AIAPIConfigData, taskType string, hasImage bool) *AIAPIConfigData {
 	if apiConfigData == nil {
 		return nil
 	}
 	if taskType != "ai_draw" {
 		return apiConfigData
 	}
+	providerCode := strings.ToLower(strings.TrimSpace(apiConfigData.ProviderCode))
+	if providerCode != "" && providerCode != "default" && providerCode != "laozhang" && providerCode != "gpt-image-2-vip" {
+		return apiConfigData
+	}
 	endpoint := strings.ToLower(strings.TrimSpace(apiConfigData.APIEndpoint))
 	cloned := *apiConfigData
 	mutated := false
 	if strings.Contains(endpoint, "/v1/chat/completions") {
-		cloned.APIEndpoint = geminiDrawGenerateContentEndpoint
+		cloned.APIEndpoint = p.laoZhangGeminiDrawEndpoint()
 		cloned.Method = "POST"
 		cloned.BodyTemplate = getGeminiDrawBodyTemplate(hasImage)
 		mutated = true
@@ -503,13 +508,13 @@ func (p *AITaskProcessor) applyRuntimeAIDrawProviderDefaults(apiConfigData *AIAP
 		cloned.ProviderCode = "gpt-image-2-vip"
 		cloned.ProviderName = "GPT-Image-2 VIP"
 		cloned.ProtocolType = "openai_image_sync"
-		cloned.APIEndpoint = laoZhangImageGenerationEndpoint
+		cloned.APIEndpoint = p.laoZhangImageGenerationEndpoint()
 		cloned.Method = "POST"
 		cloned.APIKey = p.getLaoZhangAPIKey()
 		cloned.APIKeyLocation = "header_bearer"
 		cloned.APIKeyName = "Authorization"
 		cloned.Headers = `{"Content-Type": "application/json"}`
-		cloned.BodyTemplate = getLaoZhangGPTImage2VipDrawBodyTemplate(hasImage)
+		cloned.BodyTemplate = getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), hasImage)
 	case "toapis":
 		cloned.ProviderCode = "toapis"
 		cloned.ProviderName = "ToAPIs"
@@ -525,7 +530,7 @@ func (p *AITaskProcessor) applyRuntimeAIDrawProviderDefaults(apiConfigData *AIAP
 		cloned.ProviderCode = "laozhang"
 		cloned.ProviderName = "老张 API"
 		cloned.ProtocolType = "gemini_sync"
-		cloned.APIEndpoint = geminiDrawGenerateContentEndpoint
+		cloned.APIEndpoint = p.laoZhangGeminiDrawEndpoint()
 		cloned.Method = "POST"
 		cloned.APIKey = p.getLaoZhangAPIKey()
 		cloned.APIKeyLocation = "header_bearer"
@@ -584,11 +589,15 @@ func getToAPIsGeminiFlashDrawBodyTemplate() string {
 	return `{"model":"gemini-3.1-flash-image-preview","prompt":"{{prompt}}","size":"{{aspect_ratio}}","n":1,"metadata":{"resolution":"{{image_size}}"}}`
 }
 
-func getLaoZhangGPTImage2VipDrawBodyTemplate(hasImage bool) string {
-	if hasImage {
-		return `{"model":"gpt-image-2-vip","prompt":"{{prompt}}","image":"{{image_url}}","size":"{{image_size}}","response_format":"b64_json","n":1}`
+func getLaoZhangGPTImage2VipDrawBodyTemplate(model string, hasImage bool) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = defaultLaoZhangImageModel
 	}
-	return `{"model":"gpt-image-2-vip","prompt":"{{prompt}}","size":"{{image_size}}","response_format":"b64_json","n":1}`
+	if hasImage {
+		return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","image":"{{image_url}}","size":"{{image_size}}","response_format":"b64_json","n":1}`, model)
+	}
+	return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","size":"{{image_size}}","response_format":"b64_json","n":1}`, model)
 }
 
 func getToAPIsGPTImage2DrawBodyTemplate() string {
@@ -610,9 +619,7 @@ func getLaoZhangSeedreamDrawBodyTemplate(hasImage bool) string {
 func (p *AITaskProcessor) getHardcodedAIConfig(taskType string, hasImage bool) *AIAPIConfigData {
 	// 从配置中获取老张平台 API Key
 	apiKey := p.getLaoZhangAPIKey()
-	if len(apiKey) >= 14 {
-		log.Printf("[AITaskProcessor] 使用环境配置中的 API Key: %s...%s", apiKey[:10], apiKey[len(apiKey)-4:])
-	} else if apiKey != "" {
+	if apiKey != "" {
 		log.Printf("[AITaskProcessor] 使用环境配置中的 API Key")
 	} else {
 		log.Printf("[AITaskProcessor] 当前未配置 LAOZHANG_API_KEY，将按无 Key 方式请求")
@@ -620,37 +627,35 @@ func (p *AITaskProcessor) getHardcodedAIConfig(taskType string, hasImage bool) *
 
 	if taskType == "ai_draw" {
 		if hasImage {
-			// 有参考图的绘画请求（使用 v1beta generateContent 接口）
-			log.Printf("[AITaskProcessor] 使用硬编码配置: AI绘画（带参考图，v1beta generateContent）")
+			log.Printf("[AITaskProcessor] 使用内置生图配置: model=%s, endpoint=%s, has_reference_images=true", p.laoZhangImageModel(), p.laoZhangImageGenerationEndpoint())
 			return &AIAPIConfigData{
 				TaskType:       "ai_draw",
 				ProviderCode:   "gpt-image-2-vip",
 				ProviderName:   "GPT-Image-2 VIP",
 				ProtocolType:   "openai_image_sync",
-				APIEndpoint:    laoZhangImageGenerationEndpoint,
+				APIEndpoint:    p.laoZhangImageGenerationEndpoint(),
 				Method:         "POST",
 				APIKey:         apiKey,
 				APIKeyLocation: "header_bearer",
 				APIKeyName:     "Authorization",
 				Headers:        `{"Content-Type": "application/json"}`,
-				BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(true),
+				BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), true),
 			}
 		}
 
-		// 纯文字生成图片（使用 v1beta generateContent 接口）
-		log.Printf("[AITaskProcessor] 使用硬编码配置: AI绘画（纯文字，v1beta generateContent）")
+		log.Printf("[AITaskProcessor] 使用内置生图配置: model=%s, endpoint=%s, has_reference_images=false", p.laoZhangImageModel(), p.laoZhangImageGenerationEndpoint())
 		return &AIAPIConfigData{
 			TaskType:       "ai_draw",
 			ProviderCode:   "gpt-image-2-vip",
 			ProviderName:   "GPT-Image-2 VIP",
 			ProtocolType:   "openai_image_sync",
-			APIEndpoint:    laoZhangImageGenerationEndpoint,
+			APIEndpoint:    p.laoZhangImageGenerationEndpoint(),
 			Method:         "POST",
 			APIKey:         apiKey,
 			APIKeyLocation: "header_bearer",
 			APIKeyName:     "Authorization",
 			Headers:        `{"Content-Type": "application/json"}`,
-			BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(false),
+			BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), false),
 		}
 	} else if taskType == "ai_chat" {
 		// AI聊天配置（仍使用 chat/completions）
@@ -689,7 +694,7 @@ func (p *AITaskProcessor) getFallbackAIConfigs(taskType string, hasImage bool, p
 		ProviderCode:   "laozhang",
 		ProviderName:   "Gemini 3 Pro Image fallback",
 		ProtocolType:   "gemini_sync",
-		APIEndpoint:    geminiDrawGenerateContentEndpoint,
+		APIEndpoint:    p.laoZhangGeminiDrawEndpoint(),
 		Method:         "POST",
 		APIKey:         apiKey,
 		APIKeyLocation: "header_bearer",
@@ -702,7 +707,7 @@ func (p *AITaskProcessor) getFallbackAIConfigs(taskType string, hasImage bool, p
 		ProviderCode:   "laozhang",
 		ProviderName:   "Seedream 4.5 second fallback",
 		ProtocolType:   "openai_image_sync",
-		APIEndpoint:    laoZhangImageGenerationEndpoint,
+		APIEndpoint:    p.laoZhangImageGenerationEndpoint(),
 		Method:         "POST",
 		APIKey:         apiKey,
 		APIKeyLocation: "header_bearer",
@@ -764,6 +769,32 @@ func (p *AITaskProcessor) getLaoZhangAPIKey() string {
 		log.Printf("[AITaskProcessor] ⚠ 未配置 LAOZHANG_API_KEY")
 	}
 	return apiKey
+}
+
+func (p *AITaskProcessor) laoZhangImageBaseURL() string {
+	if p.cfg == nil {
+		return defaultLaoZhangImageBaseURL
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(p.cfg.AI.LaoZhangImageBaseURL), "/")
+	if baseURL == "" {
+		return defaultLaoZhangImageBaseURL
+	}
+	return baseURL
+}
+
+func (p *AITaskProcessor) laoZhangImageModel() string {
+	if p.cfg == nil || strings.TrimSpace(p.cfg.AI.LaoZhangImageModel) == "" {
+		return defaultLaoZhangImageModel
+	}
+	return strings.TrimSpace(p.cfg.AI.LaoZhangImageModel)
+}
+
+func (p *AITaskProcessor) laoZhangImageGenerationEndpoint() string {
+	return p.laoZhangImageBaseURL() + "/v1/images/generations"
+}
+
+func (p *AITaskProcessor) laoZhangGeminiDrawEndpoint() string {
+	return p.laoZhangImageBaseURL() + "/v1beta/models/gemini-3-pro-image-preview:generateContent"
 }
 
 func (p *AITaskProcessor) getToAPIsAPIKey() string {
