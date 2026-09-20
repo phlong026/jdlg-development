@@ -1,0 +1,66 @@
+<view class="report-page">
+  <text class="eyebrow">为您家的报告 · 第 {{step + 1}} / 5 步</text>
+  <view class="step-track"><view wx:for="{{titles}}" wx:key="index" class="step-dot {{index <= step ? 'active' : ''}}" /></view>
+  <text class="page-title">{{titles[step]}}</text><text class="body">不了解的现场条件留待核实，不替您猜测。</text>
+  <text class="caption" wx:if="{{configLoading}}">正在核对报告服务…</text>
+  <block wx:if="{{configReady}}">
+    <view class="card form" wx:if="{{step === 0}}">
+      <text class="label">建房地区</text><picker mode="region" bindchange="region"><view class="input">{{input.site.region || '选择省 / 市 / 区县'}}</view></picker>
+      <text class="label">宅基地面宽（米）</text><input class="input" type="digit" value="{{input.site.width_m || ''}}" data-field="site.width_m" bindinput="field" placeholder="{{houseEnabled ? '大致尺寸；不清楚可留空' : '填写 4–50 米，例如 12'}}" />
+      <text class="label">宅基地进深（米）</text><input class="input" type="digit" value="{{input.site.depth_m || ''}}" data-field="site.depth_m" bindinput="field" placeholder="{{houseEnabled ? '与面宽一起填写或一起留空' : '填写 4–80 米，例如 10'}}" />
+      <block wx:if="{{houseEnabled}}">
+        <text class="label">可建边界与限制是否已经确认？</text><view class="choices"><button class="choice {{house.buildable_scope === 'unknown' ? 'selected' : ''}}" data-field="buildable_scope" data-value="unknown" bindtap="houseChoice">尚未确认</button><button class="choice {{house.buildable_scope === 'known' ? 'selected' : ''}}" data-field="buildable_scope" data-value="known" bindtap="houseChoice">已有明确条件</button></view>
+        <textarea wx:if="{{house.buildable_scope === 'known'}}" class="input textarea" value="{{house.buildable_constraints}}" maxlength="240" data-field="buildable_constraints" bindinput="houseField" placeholder="说明已确认的边界、退距或限高；报告仍需专业复核" />
+        <text class="label">道路与入口方向（可选）</text><input class="input" value="{{input.site.road_side}}" maxlength="120" data-field="site.road_side" bindinput="field" placeholder="例如南侧临路；不清楚可留空" />
+        <text class="label">朝向（可选）</text><input class="input" value="{{house.orientation}}" maxlength="120" data-field="orientation" bindinput="houseField" placeholder="填写您已了解的朝向" />
+        <text class="label">邻房、采光或地块限制（可选）</text><textarea class="input textarea" value="{{house.neighbor_notes}}" maxlength="240" data-field="neighbor_notes" bindinput="houseField" placeholder="例如东侧紧邻邻房、北侧有高差" />
+      </block>
+      <text class="caption">大致尺寸不等于可建范围；审批、退距和现场条件需要进一步核实。</text>
+    </view>
+    <view class="card form" wx:elif="{{step === 1}}">
+      <block wx:if="{{houseEnabled}}">
+        <text class="label">平时常住多少人？</text><input class="input" type="number" value="{{house.permanent_count === null ? '' : house.permanent_count}}" data-field="permanent_count" bindinput="houseField" placeholder="填写 0–30 人，包括长辈和孩子" />
+        <text class="label">返乡时另外增加多少人？</text><input class="input" type="number" value="{{house.returning_count === null ? '' : house.returning_count}}" data-field="returning_count" bindinput="houseField" placeholder="填写 0–50 人，没有则填 0" />
+        <text class="label">返乡频率</text><view class="choices"><button wx:for="{{frequencies}}" wx:key="value" class="choice {{house.return_frequency === item.value ? 'selected' : ''}}" data-field="return_frequency" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
+      </block>
+      <text class="label">家庭类型{{houseEnabled ? '（可选）' : ''}}</text><view class="choices"><button wx:for="{{families}}" wx:key="*this" class="choice {{input.household.family_type === item ? 'selected' : ''}}" data-field="household.family_type" data-value="{{item}}" bindtap="choice">{{item}}</button></view>
+      <text class="label">哪些人常住？老人、孩子有什么需要？</text><textarea class="input textarea" maxlength="80" value="{{input.household.residents}}" data-field="household.residents" bindinput="field" placeholder="例如父母常住，夫妻和孩子节假日回来；父亲不便爬楼" />
+    </view>
+    <view class="card form" wx:elif="{{step === 2}}">
+      <text class="label">计划建几层？</text><view class="choices"><button wx:for="{{floors}}" wx:key="*this" class="choice {{input.space.floors === item ? 'selected' : ''}}" data-field="space.floors" data-value="{{item}}" bindtap="choice">{{item}} 层</button></view>
+      <text class="label">希望有几间卧室？</text><input class="input" type="number" value="{{input.space.bedrooms || ''}}" data-field="space.bedrooms" bindinput="field" placeholder="填写 1–12 间" />
+      <block wx:if="{{houseEnabled}}">
+        <text class="label">首层长辈卧室</text><view class="choices"><button wx:for="{{yesNo}}" wx:key="value" class="choice {{house.elder_room === item.value ? 'selected' : ''}}" data-field="elder_room" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
+        <text class="label">庭院需求</text><view class="choices"><button wx:for="{{yesNo}}" wx:key="value" class="choice {{house.courtyard === item.value ? 'selected' : ''}}" data-field="courtyard" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
+        <text class="label">停车空间</text><view class="choices"><button wx:for="{{yesNo}}" wx:key="value" class="choice {{house.parking === item.value ? 'selected' : ''}}" data-field="parking" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
+        <text class="label">是否接受房间平时与团聚时采用不同用途？</text><view class="choices"><button class="choice {{house.flexible_use === 'yes' ? 'selected' : ''}}" data-field="flexible_use" data-value="yes" bindtap="houseChoice">可以灵活使用</button><button class="choice {{house.flexible_use === 'no' ? 'selected' : ''}}" data-field="flexible_use" data-value="no" bindtap="houseChoice">希望固定用途</button><button class="choice {{house.flexible_use === 'unknown' ? 'selected' : ''}}" data-field="flexible_use" data-value="unknown" bindtap="houseChoice">看方案再比较</button></view>
+        <text class="label">补充想明确保留的空间（可选）</text><text class="caption">例如书房、储藏间、茶室；无需重复填写所有卧室。</text>
+        <view class="inset" wx:for="{{house.rooms}}" wx:key="id" wx:for-item="room" wx:for-index="roomIndex">
+          <text class="label">空间名称</text><input class="input" value="{{room.name}}" maxlength="40" data-index="{{roomIndex}}" data-field="name" bindinput="roomField" placeholder="例如书房" />
+          <text class="label">数量</text><input class="input" type="number" value="{{room.count}}" data-index="{{roomIndex}}" data-field="count" bindinput="roomField" />
+          <text class="label">希望在哪一层？不限定填 0</text><input class="input" type="number" value="{{room.preferred_floor}}" data-index="{{roomIndex}}" data-field="preferred_floor" bindinput="roomField" />
+          <view class="switch-row"><text>必须满足</text><switch checked="{{room.required}}" color="#9f7957" data-index="{{roomIndex}}" data-field="required" bindchange="roomField" /></view>
+          <button class="secondary" data-index="{{roomIndex}}" bindtap="removeRoom">移除这一项</button>
+        </view>
+        <button class="secondary" bindtap="addRoom" disabled="{{house.rooms.length >= 12}}">添加空间需求</button>
+      </block>
+      <view wx:else class="switch-row"><text>一层需要长辈卧室</text><switch checked="{{input.space.first_floor_elder_room}}" color="#9f7957" bindchange="elder" /></view>
+      <text class="caption">计划层数不是审批结论，报告用于前期概念讨论。</text>
+    </view>
+    <view class="card form" wx:elif="{{step === 3}}">
+      <text class="label">更喜欢哪种建筑风格？</text><view class="choices"><button wx:for="{{styles}}" wx:key="*this" class="choice {{input.preference.style === item ? 'selected' : ''}}" data-field="preference.style" data-value="{{item}}" bindtap="choice">{{item}}</button><button wx:if="{{houseEnabled}}" class="choice {{input.preference.style === '待比较' ? 'selected' : ''}}" data-field="preference.style" data-value="待比较" bindtap="choice">待比较</button></view>
+      <text class="label">最在意的{{houseEnabled ? '一至三' : '三'}}件事</text><text class="caption">按重要性依次选择，先选的排在前面。</text><checkbox-group bindchange="priorities"><label class="check-row" wx:for="{{priorityChoices}}" wx:key="label"><checkbox value="{{item.label}}" checked="{{item.checked}}" color="#9f7957" />{{item.label}}</label></checkbox-group>
+      <text class="label">您希望建成怎样的家？</text><textarea class="input textarea" maxlength="80" value="{{input.preference.goal}}" data-field="preference.goal" bindinput="field" placeholder="例如让父母不用爬楼，节假日一家人住得下" />
+    </view>
+    <view class="card form" wx:else>
+      <text class="label">总预算（万元）{{houseEnabled ? '，未确定可留空' : ''}}</text><input class="input" type="digit" value="{{input.budget.wan || ''}}" data-field="budget.wan" bindinput="field" placeholder="{{houseEnabled ? '计划投入金额，不代表正式报价' : '填写 10–1000 万元'}}" />
+      <block wx:if="{{houseEnabled}}"><text class="label">逐项确认预算口径</text><view class="text-block" wx:for="{{house.budget_scope}}" wx:key="item" wx:for-item="scope" wx:for-index="scopeIndex"><text class="item-title">{{scope.item}}</text><view class="choices"><button wx:for="{{scopeStatuses}}" wx:key="value" wx:for-item="option" class="choice {{scope.status === option.value ? 'selected' : ''}}" data-index="{{scopeIndex}}" data-status="{{option.value}}" bindtap="budgetScope">{{option.label}}</button></view></view><text class="label">预计什么时候推进建房？（可选）</text><input class="input" value="{{house.start_window}}" maxlength="100" data-field="start_window" bindinput="houseField" placeholder="例如一年内开始，或暂未确定" /></block>
+      <block wx:else><text class="label">这笔钱需要包含</text><view class="choices"><button wx:for="{{scopes}}" wx:key="*this" class="choice {{input.budget.scope === item ? 'selected' : ''}}" data-field="budget.scope" data-value="{{item}}" bindtap="choice">{{item}}</button></view></block>
+      <view class="divider" /><text class="item-title">核对您的建房计划</text><text class="body">{{input.site.region}} · {{input.space.floors}} 层 · {{input.space.bedrooms}} 间卧室
+{{input.preference.style}} · {{input.preference.goal}}</text><text wx:if="{{houseEnabled}}" class="body">平时 {{house.permanent_count}} 人，返乡增加 {{house.returning_count}} 人。空间需求 {{house.rooms.length}} 项。</text>
+      <checkbox-group bindchange="consent"><label class="check-row"><checkbox value="agree" checked="{{consent}}" color="#9f7957" /><text>同意使用以上信息生成报告。我了解这是前期概念建议，不是施工或审批依据。</text></label></checkbox-group><text class="caption">无需上传身份证、产权证明或精确门牌地址。</text>
+    </view>
+    <button class="primary" bindtap="next" loading="{{busy}}" disabled="{{busy}}">{{nextLabel}}</button><button wx:if="{{step > 0}}" class="secondary" bindtap="previous" disabled="{{busy}}">返回上一步</button>
+  </block>
+  <text class="error" wx:if="{{error}}">{{error}}</text><button wx:if="{{!configReady && !configLoading}}" class="secondary" bindtap="loadConfig">重新检查报告服务</button>
+</view>

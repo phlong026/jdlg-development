@@ -1,0 +1,14 @@
+<view class="report-page landing">
+  <view wx:if="{{recent}}" class="inset"><text class="item-title">您上次的建房报告还在这里</text><button class="secondary" bindtap="resume">{{recent.paid ? '查看已购报告的交付进度' : '继续阅读我的建房方向'}}</button></view>
+  <view wx:if="{{recentError}}" class="error" bindtap="loadRecent">{{recentError}}</view>
+  <view class="hero">
+    <image class="hero-landscape" src="{{background}}" mode="aspectFill" aria-hidden="true" />
+    <view class="hero-content"><text class="eyebrow">甲第灵光 · 为一家人的长久生活</text><text class="hero-title">房子只建一次，
+先把一家人的日子想清楚。</text><text class="hero-copy">父母少爬一层楼，孩子多一处活动空间。
+好看的房子很多，适合您家的，要从您家出发。</text></view>
+  </view>
+  <view class="card"><text class="section-title">动工前，先看清这三件事</text><view class="value-row"><text class="number">01</text><view><text class="item-title">这块地，怎样装下一家人的生活？</text><text class="body">从宅基地、常住成员和房间需求，梳理真正重要的空间。</text></view></view><view class="value-row"><text class="number">02</text><view><text class="item-title">想要的很多，哪些应该先保住？</text><text class="body">把长辈起居、家庭团聚与预算放在一起，看清取舍。</text></view></view><view class="value-row"><text class="number">03</text><view><text class="item-title">跟家人、设计师，下一步怎么谈？</text><text class="body">先形成可讨论的建房方向，再比较不同概念方案。</text></view></view></view>
+  <view class="card subtle"><text class="section-title">先看您的建房方向，再决定是否深入</text><text class="body">填写五步信息，先阅读专属报告的前四部分。认可后，再购买包含三种概念方案、方案对比和预算建议的 14 页 PDF。</text><text class="caption">付费后后台制作报告；添加企业微信，接收您本人可打开的报告领取入口。概念建议不代替测绘、审批或施工图设计。</text></view>
+  <view class="error" wx:if="{{error}}">{{error}}</view><button wx:if="{{error}}" class="secondary" bindtap="loadConfig">重新检查服务</button>
+  <view class="bottom-action"><button class="primary" disabled="{{!enabled || loading}}" loading="{{loading}}" bindtap="start">从我家的情况开始</button><text class="caption">先填写、先阅读；购买前展示完整价格与交付内容</text></view>
+</view>

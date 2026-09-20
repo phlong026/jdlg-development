@@ -1,0 +1,8 @@
+<view class="report-page">
+  <text class="eyebrow">甲第灵光 · 您的专属建房报告</text><text class="page-title">{{statusLabel || '正在核对报告状态'}}</text>
+  <view class="card"><view class="status-row"><text class="item-title">付款确认</text><text>{{report.paid ? '已确认' : '正在核对'}}</text></view><view class="status-row"><text class="item-title">完整 PDF</text><text>{{pdfStatusLabel}}</text></view><view class="status-row"><text class="item-title">企业微信</text><text>{{report.bound ? '已绑定领取身份' : '待添加并确认身份'}}</text></view><text class="caption">{{deliveryHint}}</text></view>
+  <view class="card" wx:if="{{report.paid && !report.bound}}"><text class="section-title">等待时，先添加您的企业微信顾问</text><text class="body">添加后，企业微信会发送“领取我的报告”入口。请使用本次付款的小程序账号打开，完成领取身份校验。</text><button class="primary" bindtap="contact">获取专属添加二维码</button><image wx:if="{{qrURL}}" class="contact-qr" src="{{qrURL}}" mode="aspectFit" show-menu-by-longpress bindtap="showQR" /><text class="caption">请用本次付款的同一个微信添加。已是好友或没收到领取入口时，请在企业微信向顾问发送下方报告编号，协助核实领取身份。</text></view>
+  <view class="card" wx:if="{{canDownload}}"><text class="section-title">把这份报告，带到下一次家庭讨论里。</text><text class="body">14 页包含三种概念方案、取舍对比、预算配置与行动清单。下载后可收藏 PDF，后续也可从企业微信领取入口再次打开。</text><button class="primary" bindtap="document">领取完整 PDF</button></view>
+  <report-document wx:if="{{showDocument}}" title="完整建房报告 · 14 页" mode="full" status="{{documentStatus}}" document-url="{{documentURL}}" bind:refresh="document" />
+  <view class="error" wx:if="{{error}}">{{error}}</view><button wx:if="{{report.status === 'failed'}}" class="primary" bindtap="retry" loading="{{paying}}">重新生成，不重复付费</button><button class="secondary" bindtap="refresh">刷新交付状态</button><button class="secondary" bindtap="preview">回看前四部分</button><text class="caption">报告编号 {{id}} · 请勿向他人发送带有领取凭据的链接。</text>
+</view>

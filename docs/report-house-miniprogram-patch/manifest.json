@@ -1,0 +1,95 @@
+{
+  "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "files": [
+    {
+      "file": "miniprogram/pages/report/flow.ts",
+      "sha256": "ddbcfafe66b2a101fe2fefda91c1b6a798560843cf21caedef4fd95dd86a81ac",
+      "baseline_sha256": "00bf7aa74614185dc32fed148092951827bf7d2afe1d454ad9d18e84a6e9a5ca"
+    },
+    {
+      "file": "miniprogram/pages/report/api.ts",
+      "sha256": "05ca7047c175ead190d83f98a9eb739f8dc1ee8ab6e174eccc852aa8805b40b4",
+      "baseline_sha256": "773745456b2cc1fbb714739fc6bd79fb651a396a6b1b7259cbbb2abadeb86403"
+    },
+    {
+      "file": "miniprogram/pages/report/questionnaire.ts",
+      "sha256": "3c8bb25de65e9f876a8d8ebc327a580edfdcb51dddfde3944ce5165bb14b9f60",
+      "baseline_sha256": "eee2d1373a4bd131f40832a7e1bc84354ce11f33247e50065dc5dbcc160d5093"
+    },
+    {
+      "file": "miniprogram/pages/report/questionnaire.wxml",
+      "sha256": "350f4d12f8322bd0cc5f9c2a79c03bd7f00d42f5802b31ce785f6a12fa7e50b6",
+      "baseline_sha256": "293f1f4007ccd70c4ae9c939cb7ca2ad0c3d8c22b8321d1922f44dcb2bc05734"
+    },
+    {
+      "file": "miniprogram/pages/report/landing.ts",
+      "sha256": "cba6eea3ada3dbdb5a5cb24c28a2ecf14d4e8e4a7c67b433839b1da34f6860f6",
+      "baseline_sha256": "33af03d1cad3ab1855ee908b0088b2c4df95cdfedfc7fca2678986665b8a032e"
+    },
+    {
+      "file": "miniprogram/pages/report/landing.wxml",
+      "sha256": "adef2b2814593a128de259e6179b66fa51079ba24ea7f361c7c5f7b2c1b42ad5",
+      "baseline_sha256": "64a1ed91cbb21d4ea9f4444a1bb032cb4632027556fc8421aec4fa1378ab11f5"
+    },
+    {
+      "file": "miniprogram/pages/report/reader.ts",
+      "sha256": "f5e446b334e06e1aefbd9704a7c865c1c27f03660f76ea3d31de2f0397658b92",
+      "baseline_sha256": "f2f75a15ccf3f0ed906e9adf3a725ffc62ae2554ef97a671282aeaca7dbe78ef"
+    },
+    {
+      "file": "miniprogram/pages/report/preview.wxml",
+      "sha256": "5a3b9e733a728b47e372109035f538f8f57b8ab824327f398f5512ae00a121e5",
+      "baseline_sha256": "52a7ef3adfc78315c9c31f64b6a596af4b3297297c4ae48d0210e58162a3d969"
+    },
+    {
+      "file": "miniprogram/pages/report/delivery.wxml",
+      "sha256": "49c90f37e41c6fd2c80caf6dbdfa05dec1871bd20f68692b0521139935524ac4",
+      "baseline_sha256": "eddb0b1a9053a889c9f84fc9b82e8157a7506d82df67fe1fd15b9efbd7173b19"
+    },
+    {
+      "file": "tests/report-flow.test.js",
+      "sha256": "984166618aa3e792dca0c4a2bb456e6de4b991c01aa23dee74d679b35a801f24",
+      "baseline_sha256": "0ddacf6eaa9bcf1429e7ae85ef518cd70afe9f169b997d437b80eb8db52e4ee8"
+    },
+    {
+      "file": "tests/report-questionnaire.test.js",
+      "sha256": "0d1c4efe50ed5d29b77129792b92715074758243aea91fd985f9fcff4b6e3b06",
+      "baseline_sha256": "0ac4edf09a41752487113c6626023ac9c51c3ab17169fef02c2c8687acf92717"
+    },
+    {
+      "file": "tests/report-reader.test.js",
+      "sha256": "25381237b5e26b30547963da91f07d3138c5284d272198e6d00ba5455efae00a",
+      "baseline_sha256": "7593675161054525c940c516f22adfaf821d057ab7e725a6b3715c01995c58a6"
+    },
+    {
+      "file": "tests/report-landing.test.js",
+      "sha256": "c561040ad74b87b5e01625345d0365cced6a0ab46ed19d0b1c32ee8cc809ab3b",
+      "baseline_sha256": "4bf392a8977f3a087bbebd1f2d58e19617eabe1a2b602de11081471a85583770"
+    },
+    {
+      "file": "tests/report-layout.test.js",
+      "sha256": "34b2dae541a008faed9d18faee7d8eb653c9b4c52efec5097376ed09d3d632f8",
+      "baseline_sha256": "f4e7e8c6b018d70a80df4fc00e682c6acb2c4eccaf60bd4caaf0ee6840733c10"
+    },
+    {
+      "file": "tests/report-document.test.js",
+      "sha256": "308081526c50395c1635c99c12704cbc5b82b37811ddd88391c7f83d9c1cee07",
+      "baseline_sha256": "d394ef43fd7334898a73af1be34c8beb48e95f0bb3cdffa3de54c0abfd88751e"
+    },
+    {
+      "file": "tests/report-runtime.js",
+      "sha256": "f05982ec29a2148a560a9b3ac65ea540a796f095ed37934a79110921ac600000",
+      "baseline_sha256": null
+    },
+    {
+      "file": "tests/report-api.test.js",
+      "sha256": "719c90aafcb28c4b8d610c2581b45817d799209b0a2ef1f00db0e1940da27642",
+      "baseline_sha256": null
+    },
+    {
+      "file": "tests/report-template.test.js",
+      "sha256": "3b2749a2072d5692854a844f6cc0ac1460cf6d99d81263cacdfee94db3a25955",
+      "baseline_sha256": null
+    }
+  ]
+}

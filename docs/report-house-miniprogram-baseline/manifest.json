@@ -1,0 +1,65 @@
+{
+  "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "files": [
+    {
+      "file": "miniprogram/pages/report/flow.ts",
+      "sha256": "00bf7aa74614185dc32fed148092951827bf7d2afe1d454ad9d18e84a6e9a5ca"
+    },
+    {
+      "file": "miniprogram/pages/report/api.ts",
+      "sha256": "773745456b2cc1fbb714739fc6bd79fb651a396a6b1b7259cbbb2abadeb86403"
+    },
+    {
+      "file": "miniprogram/pages/report/questionnaire.ts",
+      "sha256": "eee2d1373a4bd131f40832a7e1bc84354ce11f33247e50065dc5dbcc160d5093"
+    },
+    {
+      "file": "miniprogram/pages/report/questionnaire.wxml",
+      "sha256": "293f1f4007ccd70c4ae9c939cb7ca2ad0c3d8c22b8321d1922f44dcb2bc05734"
+    },
+    {
+      "file": "miniprogram/pages/report/landing.ts",
+      "sha256": "33af03d1cad3ab1855ee908b0088b2c4df95cdfedfc7fca2678986665b8a032e"
+    },
+    {
+      "file": "miniprogram/pages/report/landing.wxml",
+      "sha256": "64a1ed91cbb21d4ea9f4444a1bb032cb4632027556fc8421aec4fa1378ab11f5"
+    },
+    {
+      "file": "miniprogram/pages/report/reader.ts",
+      "sha256": "f2f75a15ccf3f0ed906e9adf3a725ffc62ae2554ef97a671282aeaca7dbe78ef"
+    },
+    {
+      "file": "miniprogram/pages/report/preview.wxml",
+      "sha256": "52a7ef3adfc78315c9c31f64b6a596af4b3297297c4ae48d0210e58162a3d969"
+    },
+    {
+      "file": "miniprogram/pages/report/delivery.wxml",
+      "sha256": "eddb0b1a9053a889c9f84fc9b82e8157a7506d82df67fe1fd15b9efbd7173b19"
+    },
+    {
+      "file": "tests/report-flow.test.js",
+      "sha256": "0ddacf6eaa9bcf1429e7ae85ef518cd70afe9f169b997d437b80eb8db52e4ee8"
+    },
+    {
+      "file": "tests/report-questionnaire.test.js",
+      "sha256": "0ac4edf09a41752487113c6626023ac9c51c3ab17169fef02c2c8687acf92717"
+    },
+    {
+      "file": "tests/report-reader.test.js",
+      "sha256": "7593675161054525c940c516f22adfaf821d057ab7e725a6b3715c01995c58a6"
+    },
+    {
+      "file": "tests/report-landing.test.js",
+      "sha256": "4bf392a8977f3a087bbebd1f2d58e19617eabe1a2b602de11081471a85583770"
+    },
+    {
+      "file": "tests/report-layout.test.js",
+      "sha256": "f4e7e8c6b018d70a80df4fc00e682c6acb2c4eccaf60bd4caaf0ee6840733c10"
+    },
+    {
+      "file": "tests/report-document.test.js",
+      "sha256": "d394ef43fd7334898a73af1be34c8beb48e95f0bb3cdffa3de54c0abfd88751e"
+    }
+  ]
+}

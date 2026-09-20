@@ -1,0 +1,788 @@
+--- a/miniprogram/pages/report/flow.ts
++++ b/miniprogram/pages/report/flow.ts
+@@ -51 +51,5 @@
+-    const kinds = ['cover', 'evidence', 'profile', 'priorities'];
++    const protocol = snapshot?.meta?.protocol_version;
++    const kinds = protocol === 'report-house-v1'
++        ? ['house_profile', 'house_constraints', 'house_goals', 'house_confirmation']
++        : protocol === 'report-decision-v5' ? ['decision', 'evidence', 'directions', 'confirmation']
++            : ['cover', 'evidence', 'profile', 'priorities'];
+@@ -62 +66,80 @@
+-    return report.paid === true && report.bound === true && report.status === 'ready';
++    return report.paid === true && (isModernReport(report) || report.bound === true) && report.status === 'ready';
++}
++export function isModernReport(report: any): boolean {
++    return ['report-house-v1', 'report-decision-v5'].includes(report?.protocol_version);
++}
++
++export interface HouseDetails {
++    permanent_count: number | null;
++    returning_count: number | null;
++    return_frequency: string;
++    buildable_scope: string;
++    buildable_constraints: string;
++    flexible_use: string;
++    elder_room: string;
++    courtyard: string;
++    parking: string;
++    orientation: string;
++    neighbor_notes: string;
++    start_window: string;
++    rooms: { id: string; name: string; count: number; preferred_floor: number; required: boolean }[];
++    budget_scope: { item: string; status: string }[];
++}
++export function emptyHouseDetails(): HouseDetails {
++    return {
++        permanent_count: null, returning_count: null, return_frequency: 'unknown', buildable_scope: 'unknown',
++        buildable_constraints: '', flexible_use: 'unknown', elder_room: 'unknown', courtyard: 'unknown', parking: 'unknown',
++        orientation: '', neighbor_notes: '', start_window: '', rooms: [],
++        budget_scope: ['主体建造', '外立面装修', '室内装修', '庭院与围墙', '设计及前期资料'].map(item => ({ item, status: 'unknown' })),
++    };
++}
++export function validateHouseStep(input: ReportInput, house: HouseDetails, step: number): string {
++    const finite = (value: number, min: number, max: number) => Number.isFinite(value) && value >= min && value <= max;
++    if (step === 0) {
++        if (!input.site.region.trim() || input.site.region.length > 40) return '请选择建房地区。';
++        if ((input.site.width_m || input.site.depth_m) && (!finite(input.site.width_m, 1, 100) || !finite(input.site.depth_m, 1, 150))) return '尺寸可同时留空；填写时请提供完整面宽和进深。';
++        if (house.buildable_scope === 'known' && !house.buildable_constraints.trim()) return '请说明已确认的可建边界或限制条件。';
++    }
++    if (step === 1) {
++        const residents = input.household.residents.trim();
++        if (residents && (residents.length < 2 || residents.length > 80)) return '居住需求至少填写 2 字，最多 80 字；也可暂时留空。';
++        if (house.permanent_count === null || house.returning_count === null || !Number.isInteger(house.permanent_count) || !Number.isInteger(house.returning_count) || !finite(house.permanent_count, 0, 30) || !finite(house.returning_count, 0, 50)) return '请分别填写常住人数与返乡增加的人数，没有返乡成员时填 0。';
++        if (house.return_frequency === 'none' && house.returning_count !== 0) return '选择没有返乡成员时，返乡人数应为 0。';
++        if (!['none', 'monthly', 'quarterly', 'holidays', 'yearly', 'unknown'].includes(house.return_frequency)) return '请选择返乡频率。';
++    }
++    if (step === 2) {
++        if (![1, 2, 3].includes(input.space.floors) || !Number.isInteger(input.space.bedrooms) || !finite(input.space.bedrooms, 1, 12)) return '请选择计划层数与卧室数量。';
++        if (house.rooms.length > 12 || house.rooms.some(room => !room.name.trim() || room.name.length > 40 || !Number.isInteger(room.count) || !finite(room.count, 1, 12) || !Number.isInteger(room.preferred_floor) || !finite(room.preferred_floor, 0, input.space.floors))) return '请补全空间名称、数量和所在楼层；不限定楼层填 0。';
++    }
++    if (step === 3 && input.preference.goal.trim() && (input.preference.goal.trim().length < 2 || input.preference.goal.trim().length > 80)) return '建房目标至少填写 2 字，最多 80 字；也可暂时留空。';
++    if (step === 3 && (!input.preference.style || input.preference.priorities.length < 1 || input.preference.priorities.length > 3 || new Set(input.preference.priorities).size !== input.preference.priorities.length)) return '请选择建筑风格，并按重要性选择一至三项需求。';
++    if (step === 4 && input.budget.wan && !finite(input.budget.wan, 1, 10000)) return '预算可留空；填写时应为 1–10000 万元。';
++    return '';
++}
++
++export function houseRequestInput(input: ReportInput, details: HouseDetails): any {
++    for (let step = 0; step < 5; step++) {
++        const error = validateHouseStep(input, details, step);
++        if (error) throw new Error(error);
++    }
++    const house: any = {
++        style: input.preference.style, road_side: input.site.road_side === '待确认' ? '' : input.site.road_side,
++        orientation: details.orientation, neighbor_notes: details.neighbor_notes, start_window: details.start_window,
++        courtyard: details.courtyard, parking: details.parking, rooms: details.rooms.map(room => ({ ...room })),
++    };
++    if (details.elder_room !== 'unknown') house.first_floor_elder_room = details.elder_room === 'yes';
++    const data: any = {
++        primary_goal: 'space', region: input.site.region, buildable_scope: details.buildable_scope,
++        buildable_constraints: details.buildable_constraints, permanent_count: details.permanent_count,
++        returning_count: details.returning_count, return_frequency: details.return_frequency,
++        floors: input.space.floors, bedrooms: input.space.bedrooms, flexible_use: details.flexible_use,
++        priorities: input.preference.priorities.slice(), budget_scope: details.budget_scope.map(item => ({ ...item })), house,
++        family_perspectives: [
++            { role: '家庭类型', request: input.household.family_type.trim() },
++            { role: '居住安排', request: input.household.residents.trim() },
++            { role: '建房目标', request: input.preference.goal.trim() },
++        ].filter(item => item.request),
++    };
++    if (input.site.width_m && input.site.depth_m) data.approximate_dimensions = { width_m: input.site.width_m, depth_m: input.site.depth_m };
++    if (input.budget.wan) data.budget_wan = input.budget.wan;
++    return data;
+@@ -74,0 +158,27 @@
++
++// Read the frozen server facts, not a potentially edited local draft.
++export function houseConfirmationInputs(facts: { [key: string]: string }): { title: string; body: string }[] {
++    const labels: { [key: string]: string } = {
++        'intent.floors': '计划层数', 'intent.bedrooms': '卧室数量', 'house.style': '风格方向',
++        'house.first_floor_elder_room': '一层长辈房', 'intent.flexible_use': '房间兼用',
++        'house.courtyard': '庭院需求', 'house.parking': '停车需求', 'budget.wan': '预算参考 / 万元',
++        'site.buildable_constraints': '可建边界与限制', 'house.neighbors': '相邻建筑条件', 'house.start_window': '计划启动时间',
++    };
++    const values: { [key: string]: string } = { yes: '需要 / 接受', no: '不需要 / 不接受', unknown: '待确认' };
++    const rows = Object.keys(labels).filter(key => facts[key]).map(key => ({ title: labels[key], body: values[facts[key]] || facts[key] }));
++    for (const key of Object.keys(facts).sort()) {
++        if (key.startsWith('house.room.')) {
++            let room: any;
++            try { room = JSON.parse(facts[key]); } catch (_) { throw new Error('房间需求信息不完整，请刷新后再确认。'); }
++            if (room && room.preferred_floor === undefined) room.preferred_floor = 0;
++            if (!room || typeof room.name !== 'string' || !room.name || !Number.isInteger(room.count) || room.count < 1 || !Number.isInteger(room.preferred_floor) || room.preferred_floor < 0 || typeof room.required !== 'boolean') throw new Error('房间需求信息不完整，请刷新后再确认。');
++            rows.push({ title: room.name, body: room.count + '间；' + (room.preferred_floor ? room.preferred_floor + '层' : '楼层不限') + '；' + (room.required ? '必须满足' : '可协商') });
++        } else if (key.startsWith('family.perspective.')) rows.push({ title: '补充需求', body: facts[key] });
++        else if (key.startsWith('budget.scope.')) {
++            const [status, ...name] = facts[key].split(': ');
++            const scopes: { [key: string]: string } = { included: '需要包含', excluded: '不包含', unknown: '待确认' };
++            rows.push({ title: name.join(': ') || '预算范围', body: scopes[status] || '待确认' });
++        }
++    }
++    return rows;
++}
+--- a/miniprogram/pages/report/api.ts
++++ b/miniprogram/pages/report/api.ts
+@@ -6 +6,2 @@
+-    if (!token && suffix !== '/config')
++    const publicRequest = method === 'GET' && ['/config', '/house/questions', '/v5/questions'].includes(suffix.split('?')[0]);
++    if (!token && !publicRequest)
+@@ -8,2 +9,3 @@
+-    const path = ROOT + suffix.split('?')[0];
+-    const params = token ? await generateRequestParams(token, body, path, getCachedDeviceFingerprint() || '') : null;
++    // Server verification signs URL.Path plus RawQuery, including PDF mode.
++    const path = ROOT + suffix;
++    const params = token && !publicRequest ? await generateRequestParams(token, body, path, getCachedDeviceFingerprint() || '') : null;
+@@ -17 +19 @@
+-            if (response.statusCode === 200 && result?.code === 0)
++            if (response.statusCode >= 200 && response.statusCode < 300 && result?.code === 0)
+--- a/miniprogram/pages/report/questionnaire.ts
++++ b/miniprogram/pages/report/questionnaire.ts
+@@ -1 +1 @@
+-import { emptyInput, validateStep, ReportInput } from './flow';
++import { emptyInput, validateStep, emptyHouseDetails, validateHouseStep, houseRequestInput } from './flow';
+@@ -4,0 +5 @@
++const HOUSE_DRAFT_KEY = 'building_report_draft_house_v1';
+@@ -7,0 +9,4 @@
++        houseEnabled: false, house: emptyHouseDetails(), configReady: false, configLoading: true,
++        frequencies: [{ value: 'none', label: '没有返乡成员' }, { value: 'monthly', label: '每月' }, { value: 'quarterly', label: '每季度' }, { value: 'holidays', label: '节假日' }, { value: 'yearly', label: '每年' }, { value: 'unknown', label: '尚不确定' }],
++        yesNo: [{ value: 'yes', label: '需要' }, { value: 'no', label: '不需要' }, { value: 'unknown', label: '待比较' }],
++        scopeStatuses: [{ value: 'included', label: '包含' }, { value: 'excluded', label: '不包含' }, { value: 'unknown', label: '待确认' }],
+@@ -17,2 +22,20 @@
+-    onLoad() {
+-        const draft = wx.getStorageSync(DRAFT_KEY);
++    async onLoad() {
++        this.syncPriorityChoices();
++        await this.loadConfig();
++    },
++    async loadConfig() {
++        this.setData({ configReady: false, configLoading: true, error: '' });
++        try {
++            const config = await reportRequest('/config');
++            if (!config.enabled) throw new Error('建房报告服务正在准备中，请稍后再来。');
++            if (config.house_enabled) {
++                const schema = await reportRequest('/house/questions');
++                if (schema.version !== 'report-house-v1') throw new Error('整屋报告问卷暂时不可用，请稍后重试。');
++            }
++            this.setData({ houseEnabled: config.house_enabled === true, configReady: true });
++            this.restoreDraft();
++        } catch (error: any) { this.setData({ error: error.message }); }
++        finally { this.setData({ configLoading: false }); }
++    },
++    restoreDraft() {
++        const draft = wx.getStorageSync(this.data.houseEnabled ? HOUSE_DRAFT_KEY : DRAFT_KEY);
+@@ -21 +44,3 @@
+-            this.setData({ input: draft.input, step, nextLabel: step < 4 ? '继续，想清楚下一步' : '生成我家的建房方向' });
++            const house = { ...emptyHouseDetails(), ...(draft.house || {}) };
++            if (!Array.isArray(house.rooms) || !Array.isArray(house.budget_scope)) return;
++            this.setData({ input: draft.input, house, step, nextLabel: step < 4 ? '继续，想清楚下一步' : '生成我家的建房方向' });
+@@ -26,2 +51,4 @@
+-    saveDraft() { if (!(this as any)._submitted)
+-        wx.setStorageSync(DRAFT_KEY, { input: this.data.input, step: this.data.step, expires: Date.now() + 7 * 86400000 }); },
++    saveDraft() {
++        if (!(this as any)._submitted && this.data.configReady)
++            wx.setStorageSync(this.data.houseEnabled ? HOUSE_DRAFT_KEY : DRAFT_KEY, { input: this.data.input, house: this.data.house, step: this.data.step, expires: Date.now() + 7 * 86400000 });
++    },
+@@ -30 +57 @@
+-        const allowed = ['site.width_m', 'site.depth_m', 'household.residents', 'space.bedrooms', 'preference.goal', 'budget.wan'];
++        const allowed = ['site.width_m', 'site.depth_m', 'site.road_side', 'household.residents', 'space.bedrooms', 'preference.goal', 'budget.wan'];
+@@ -54,0 +82,33 @@
++    houseField(e: any) {
++        const field = e.currentTarget.dataset.field;
++        if (!['permanent_count', 'returning_count', 'buildable_constraints', 'orientation', 'neighbor_notes', 'start_window'].includes(field)) return;
++        const value = ['permanent_count', 'returning_count'].includes(field) ? (e.detail.value === '' ? null : Number(e.detail.value)) : String(e.detail.value);
++        this.setData({ ['house.' + field]: value, error: '' }); this.saveDraft();
++    },
++    houseChoice(e: any) {
++        const { field, value } = e.currentTarget.dataset;
++        const allowed: { [key: string]: string[] } = { return_frequency: this.data.frequencies.map(item => item.value), buildable_scope: ['known', 'unknown'], flexible_use: ['yes', 'no', 'unknown'], elder_room: ['yes', 'no', 'unknown'], courtyard: ['yes', 'no', 'unknown'], parking: ['yes', 'no', 'unknown'] };
++        if (!allowed[field]?.includes(value)) return;
++        this.setData({ ['house.' + field]: value, error: '' }); this.saveDraft();
++    },
++    addRoom() {
++        if (this.data.house.rooms.length >= 12) return;
++        const rooms = this.data.house.rooms.slice();
++        let next = 1; while (rooms.some(room => room.id === 'room-' + next)) next++;
++        rooms.push({ id: 'room-' + next, name: '', count: 1, preferred_floor: 0, required: true });
++        this.setData({ 'house.rooms': rooms }); this.saveDraft();
++    },
++    roomField(e: any) {
++        const index = Number(e.currentTarget.dataset.index), field = e.currentTarget.dataset.field;
++        if (!Number.isInteger(index) || !this.data.house.rooms[index] || !['name', 'count', 'preferred_floor', 'required'].includes(field)) return;
++        const rooms = this.data.house.rooms.map(room => ({ ...room }));
++        (rooms[index] as any)[field] = field === 'name' ? String(e.detail.value) : field === 'required' ? Boolean(e.detail.value) : Number(e.detail.value);
++        this.setData({ 'house.rooms': rooms, error: '' }); this.saveDraft();
++    },
++    removeRoom(e: any) { const index = Number(e.currentTarget.dataset.index); this.setData({ 'house.rooms': this.data.house.rooms.filter((_, i) => i !== index) }); this.saveDraft(); },
++    budgetScope(e: any) {
++        const index = Number(e.currentTarget.dataset.index), status = e.currentTarget.dataset.status;
++        if (!this.data.house.budget_scope[index] || !this.data.scopeStatuses.some(item => item.value === status)) return;
++        const items = this.data.house.budget_scope.map(item => ({ ...item })); items[index].status = status;
++        this.setData({ 'house.budget_scope': items }); this.saveDraft();
++    },
+@@ -60 +120,3 @@
+-        const error = validateStep(this.data.input as ReportInput, this.data.step);
++        if (!this.data.configReady) { this.setData({ error: '请先检查报告服务，再继续填写。' }); return; }
++        const validate = (step: number) => this.data.houseEnabled ? validateHouseStep(this.data.input, this.data.house, step) : validateStep(this.data.input, step);
++        const error = validate(this.data.step);
+@@ -73 +135 @@
+-            const message = validateStep(this.data.input, step);
++            const message = validate(step);
+@@ -88 +150,2 @@
+-            const result = await reportRequest('', 'POST', this.data.input);
++            const body = this.data.houseEnabled ? houseRequestInput(this.data.input, this.data.house) : this.data.input;
++            const result = await reportRequest(this.data.houseEnabled ? '/house' : '', 'POST', body);
+@@ -90 +153 @@
+-            wx.removeStorageSync(DRAFT_KEY);
++            wx.removeStorageSync(this.data.houseEnabled ? HOUSE_DRAFT_KEY : DRAFT_KEY);
+--- a/miniprogram/pages/report/questionnaire.wxml
++++ b/miniprogram/pages/report/questionnaire.wxml
+@@ -2,9 +2,64 @@
+-  <text class="eyebrow">为您家的报告 · 第 {{step + 1}} / 5 步</text><view class="step-track"><view wx:for="{{titles}}" wx:key="index" class="step-dot {{index <= step ? 'active' : ''}}" /></view><text class="page-title">{{titles[step]}}</text><text class="body">不了解的现场条件留待核实，不替您猜测。</text>
+-  <view class="card form" wx:if="{{step === 0}}"><text class="label">建房地区</text><picker mode="region" bindchange="region"><view class="input">{{input.site.region || '选择省 / 市 / 区县'}}</view></picker><text class="label">宅基地面宽（米）</text><input class="input" type="digit" value="{{input.site.width_m || ''}}" data-field="site.width_m" bindinput="field" placeholder="填写 4–50 米，例如 12" /><text class="label">宅基地进深（米）</text><input class="input" type="digit" value="{{input.site.depth_m || ''}}" data-field="site.depth_m" bindinput="field" placeholder="填写 4–80 米，例如 10" /><text class="caption">填大致尺寸即可；可建边界、朝向、临路与审批条件需要后续核实。</text></view>
+-  <view class="card form" wx:elif="{{step === 1}}"><text class="label">家庭类型</text><view class="choices"><button wx:for="{{families}}" wx:key="*this" class="choice {{input.household.family_type === item ? 'selected' : ''}}" data-field="household.family_type" data-value="{{item}}" bindtap="choice">{{item}}</button></view><text class="label">哪些人常住？是否有老人、孩子？</text><textarea class="input textarea" maxlength="80" value="{{input.household.residents}}" data-field="household.residents" bindinput="field" placeholder="例如：夫妻、两个孩子，父母长期同住" /></view>
+-  <view class="card form" wx:elif="{{step === 2}}"><text class="label">计划建几层？</text><view class="choices"><button wx:for="{{floors}}" wx:key="*this" class="choice {{input.space.floors === item ? 'selected' : ''}}" data-field="space.floors" data-value="{{item}}" bindtap="choice">{{item}} 层</button></view><text class="label">希望有几间卧室？</text><input class="input" type="number" value="{{input.space.bedrooms || ''}}" data-field="space.bedrooms" bindinput="field" placeholder="填写 1–12 间" /><view class="switch-row"><text>一层需要长辈卧室</text><switch checked="{{input.space.first_floor_elder_room}}" color="#9f7957" bindchange="elder" /></view><text class="caption">计划层数不是审批结论；报告不会把未经核实的条件当作已获批准。</text></view>
+-  <view class="card form" wx:elif="{{step === 3}}"><text class="label">更喜欢哪种建筑风格？</text><view class="choices"><button wx:for="{{styles}}" wx:key="*this" class="choice {{input.preference.style === item ? 'selected' : ''}}" data-field="preference.style" data-value="{{item}}" bindtap="choice">{{item}}</button></view><text class="label">最在意的三件事</text><text class="caption">按重要性依次选择，先选的排在前面。</text><checkbox-group bindchange="priorities"><label class="check-row" wx:for="{{priorityChoices}}" wx:key="label"><checkbox value="{{item.label}}" checked="{{item.checked}}" color="#9f7957" />{{item.label}}</label></checkbox-group><text class="label">您希望建成怎样的家？</text><textarea class="input textarea" maxlength="80" value="{{input.preference.goal}}" data-field="preference.goal" bindinput="field" placeholder="例如：让父母不用爬楼，节假日一家人住得下" /></view>
+-  <view class="card form" wx:else><text class="label">总预算（万元）</text><input class="input" type="digit" value="{{input.budget.wan || ''}}" data-field="budget.wan" bindinput="field" placeholder="填写 10–1000 万元" /><text class="label">这笔钱需要包含</text><view class="choices"><button wx:for="{{scopes}}" wx:key="*this" class="choice {{input.budget.scope === item ? 'selected' : ''}}" data-field="budget.scope" data-value="{{item}}" bindtap="choice">{{item}}</button></view><view class="divider" /><text class="item-title">核对您的建房计划</text><text class="body">{{input.site.region}} · {{input.site.width_m}} × {{input.site.depth_m}} 米
+-{{input.household.family_type}} · {{input.space.floors}} 层 · {{input.space.bedrooms}} 间卧室
+-{{input.preference.style}} · {{input.preference.goal}}</text><checkbox-group bindchange="consent"><label class="check-row"><checkbox value="agree" checked="{{consent}}" color="#9f7957" /><text>同意使用以上信息生成报告。我了解这是前期概念建议，不是施工或审批依据。</text></label></checkbox-group><text class="caption">无需上传身份证、产权证明或精确门牌地址。</text></view>
+-  <text class="error" wx:if="{{error}}">{{error}}</text><button class="primary" bindtap="next" loading="{{busy}}" disabled="{{busy}}">{{nextLabel}}</button><button wx:if="{{step > 0}}" class="secondary" bindtap="previous" disabled="{{busy}}">返回上一步</button>
++  <text class="eyebrow">为您家的报告 · 第 {{step + 1}} / 5 步</text>
++  <view class="step-track"><view wx:for="{{titles}}" wx:key="index" class="step-dot {{index <= step ? 'active' : ''}}" /></view>
++  <text class="page-title">{{titles[step]}}</text><text class="body">不了解的现场条件留待核实，不替您猜测。</text>
++  <text class="caption" wx:if="{{configLoading}}">正在核对报告服务…</text>
++  <block wx:if="{{configReady}}">
++    <view class="card form" wx:if="{{step === 0}}">
++      <text class="label">建房地区</text><picker mode="region" bindchange="region"><view class="input">{{input.site.region || '选择省 / 市 / 区县'}}</view></picker>
++      <text class="label">宅基地面宽（米）</text><input class="input" type="digit" value="{{input.site.width_m || ''}}" data-field="site.width_m" bindinput="field" placeholder="{{houseEnabled ? '大致尺寸；不清楚可留空' : '填写 4–50 米，例如 12'}}" />
++      <text class="label">宅基地进深（米）</text><input class="input" type="digit" value="{{input.site.depth_m || ''}}" data-field="site.depth_m" bindinput="field" placeholder="{{houseEnabled ? '与面宽一起填写或一起留空' : '填写 4–80 米，例如 10'}}" />
++      <block wx:if="{{houseEnabled}}">
++        <text class="label">可建边界与限制是否已经确认？</text><view class="choices"><button class="choice {{house.buildable_scope === 'unknown' ? 'selected' : ''}}" data-field="buildable_scope" data-value="unknown" bindtap="houseChoice">尚未确认</button><button class="choice {{house.buildable_scope === 'known' ? 'selected' : ''}}" data-field="buildable_scope" data-value="known" bindtap="houseChoice">已有明确条件</button></view>
++        <textarea wx:if="{{house.buildable_scope === 'known'}}" class="input textarea" value="{{house.buildable_constraints}}" maxlength="240" data-field="buildable_constraints" bindinput="houseField" placeholder="说明已确认的边界、退距或限高；报告仍需专业复核" />
++        <text class="label">道路与入口方向（可选）</text><input class="input" value="{{input.site.road_side}}" maxlength="120" data-field="site.road_side" bindinput="field" placeholder="例如南侧临路；不清楚可留空" />
++        <text class="label">朝向（可选）</text><input class="input" value="{{house.orientation}}" maxlength="120" data-field="orientation" bindinput="houseField" placeholder="填写您已了解的朝向" />
++        <text class="label">邻房、采光或地块限制（可选）</text><textarea class="input textarea" value="{{house.neighbor_notes}}" maxlength="240" data-field="neighbor_notes" bindinput="houseField" placeholder="例如东侧紧邻邻房、北侧有高差" />
++      </block>
++      <text class="caption">大致尺寸不等于可建范围；审批、退距和现场条件需要进一步核实。</text>
++    </view>
++    <view class="card form" wx:elif="{{step === 1}}">
++      <block wx:if="{{houseEnabled}}">
++        <text class="label">平时常住多少人？</text><input class="input" type="number" value="{{house.permanent_count === null ? '' : house.permanent_count}}" data-field="permanent_count" bindinput="houseField" placeholder="填写 0–30 人，包括长辈和孩子" />
++        <text class="label">返乡时另外增加多少人？</text><input class="input" type="number" value="{{house.returning_count === null ? '' : house.returning_count}}" data-field="returning_count" bindinput="houseField" placeholder="填写 0–50 人，没有则填 0" />
++        <text class="label">返乡频率</text><view class="choices"><button wx:for="{{frequencies}}" wx:key="value" class="choice {{house.return_frequency === item.value ? 'selected' : ''}}" data-field="return_frequency" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
++      </block>
++      <text class="label">家庭类型{{houseEnabled ? '（可选）' : ''}}</text><view class="choices"><button wx:for="{{families}}" wx:key="*this" class="choice {{input.household.family_type === item ? 'selected' : ''}}" data-field="household.family_type" data-value="{{item}}" bindtap="choice">{{item}}</button></view>
++      <text class="label">哪些人常住？老人、孩子有什么需要？</text><textarea class="input textarea" maxlength="80" value="{{input.household.residents}}" data-field="household.residents" bindinput="field" placeholder="例如父母常住，夫妻和孩子节假日回来；父亲不便爬楼" />
++    </view>
++    <view class="card form" wx:elif="{{step === 2}}">
++      <text class="label">计划建几层？</text><view class="choices"><button wx:for="{{floors}}" wx:key="*this" class="choice {{input.space.floors === item ? 'selected' : ''}}" data-field="space.floors" data-value="{{item}}" bindtap="choice">{{item}} 层</button></view>
++      <text class="label">希望有几间卧室？</text><input class="input" type="number" value="{{input.space.bedrooms || ''}}" data-field="space.bedrooms" bindinput="field" placeholder="填写 1–12 间" />
++      <block wx:if="{{houseEnabled}}">
++        <text class="label">首层长辈卧室</text><view class="choices"><button wx:for="{{yesNo}}" wx:key="value" class="choice {{house.elder_room === item.value ? 'selected' : ''}}" data-field="elder_room" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
++        <text class="label">庭院需求</text><view class="choices"><button wx:for="{{yesNo}}" wx:key="value" class="choice {{house.courtyard === item.value ? 'selected' : ''}}" data-field="courtyard" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
++        <text class="label">停车空间</text><view class="choices"><button wx:for="{{yesNo}}" wx:key="value" class="choice {{house.parking === item.value ? 'selected' : ''}}" data-field="parking" data-value="{{item.value}}" bindtap="houseChoice">{{item.label}}</button></view>
++        <text class="label">是否接受房间平时与团聚时采用不同用途？</text><view class="choices"><button class="choice {{house.flexible_use === 'yes' ? 'selected' : ''}}" data-field="flexible_use" data-value="yes" bindtap="houseChoice">可以灵活使用</button><button class="choice {{house.flexible_use === 'no' ? 'selected' : ''}}" data-field="flexible_use" data-value="no" bindtap="houseChoice">希望固定用途</button><button class="choice {{house.flexible_use === 'unknown' ? 'selected' : ''}}" data-field="flexible_use" data-value="unknown" bindtap="houseChoice">看方案再比较</button></view>
++        <text class="label">补充想明确保留的空间（可选）</text><text class="caption">例如书房、储藏间、茶室；无需重复填写所有卧室。</text>
++        <view class="inset" wx:for="{{house.rooms}}" wx:key="id" wx:for-item="room" wx:for-index="roomIndex">
++          <text class="label">空间名称</text><input class="input" value="{{room.name}}" maxlength="40" data-index="{{roomIndex}}" data-field="name" bindinput="roomField" placeholder="例如书房" />
++          <text class="label">数量</text><input class="input" type="number" value="{{room.count}}" data-index="{{roomIndex}}" data-field="count" bindinput="roomField" />
++          <text class="label">希望在哪一层？不限定填 0</text><input class="input" type="number" value="{{room.preferred_floor}}" data-index="{{roomIndex}}" data-field="preferred_floor" bindinput="roomField" />
++          <view class="switch-row"><text>必须满足</text><switch checked="{{room.required}}" color="#9f7957" data-index="{{roomIndex}}" data-field="required" bindchange="roomField" /></view>
++          <button class="secondary" data-index="{{roomIndex}}" bindtap="removeRoom">移除这一项</button>
++        </view>
++        <button class="secondary" bindtap="addRoom" disabled="{{house.rooms.length >= 12}}">添加空间需求</button>
++      </block>
++      <view wx:else class="switch-row"><text>一层需要长辈卧室</text><switch checked="{{input.space.first_floor_elder_room}}" color="#9f7957" bindchange="elder" /></view>
++      <text class="caption">计划层数不是审批结论，报告用于前期概念讨论。</text>
++    </view>
++    <view class="card form" wx:elif="{{step === 3}}">
++      <text class="label">更喜欢哪种建筑风格？</text><view class="choices"><button wx:for="{{styles}}" wx:key="*this" class="choice {{input.preference.style === item ? 'selected' : ''}}" data-field="preference.style" data-value="{{item}}" bindtap="choice">{{item}}</button><button wx:if="{{houseEnabled}}" class="choice {{input.preference.style === '待比较' ? 'selected' : ''}}" data-field="preference.style" data-value="待比较" bindtap="choice">待比较</button></view>
++      <text class="label">最在意的{{houseEnabled ? '一至三' : '三'}}件事</text><text class="caption">按重要性依次选择，先选的排在前面。</text><checkbox-group bindchange="priorities"><label class="check-row" wx:for="{{priorityChoices}}" wx:key="label"><checkbox value="{{item.label}}" checked="{{item.checked}}" color="#9f7957" />{{item.label}}</label></checkbox-group>
++      <text class="label">您希望建成怎样的家？</text><textarea class="input textarea" maxlength="80" value="{{input.preference.goal}}" data-field="preference.goal" bindinput="field" placeholder="例如让父母不用爬楼，节假日一家人住得下" />
++    </view>
++    <view class="card form" wx:else>
++      <text class="label">总预算（万元）{{houseEnabled ? '，未确定可留空' : ''}}</text><input class="input" type="digit" value="{{input.budget.wan || ''}}" data-field="budget.wan" bindinput="field" placeholder="{{houseEnabled ? '计划投入金额，不代表正式报价' : '填写 10–1000 万元'}}" />
++      <block wx:if="{{houseEnabled}}"><text class="label">逐项确认预算口径</text><view class="text-block" wx:for="{{house.budget_scope}}" wx:key="item" wx:for-item="scope" wx:for-index="scopeIndex"><text class="item-title">{{scope.item}}</text><view class="choices"><button wx:for="{{scopeStatuses}}" wx:key="value" wx:for-item="option" class="choice {{scope.status === option.value ? 'selected' : ''}}" data-index="{{scopeIndex}}" data-status="{{option.value}}" bindtap="budgetScope">{{option.label}}</button></view></view><text class="label">预计什么时候推进建房？（可选）</text><input class="input" value="{{house.start_window}}" maxlength="100" data-field="start_window" bindinput="houseField" placeholder="例如一年内开始，或暂未确定" /></block>
++      <block wx:else><text class="label">这笔钱需要包含</text><view class="choices"><button wx:for="{{scopes}}" wx:key="*this" class="choice {{input.budget.scope === item ? 'selected' : ''}}" data-field="budget.scope" data-value="{{item}}" bindtap="choice">{{item}}</button></view></block>
++      <view class="divider" /><text class="item-title">核对您的建房计划</text><text class="body">{{input.site.region}} · {{input.space.floors}} 层 · {{input.space.bedrooms}} 间卧室
++{{input.preference.style}} · {{input.preference.goal}}</text><text wx:if="{{houseEnabled}}" class="body">平时 {{house.permanent_count}} 人，返乡增加 {{house.returning_count}} 人。空间需求 {{house.rooms.length}} 项。</text>
++      <checkbox-group bindchange="consent"><label class="check-row"><checkbox value="agree" checked="{{consent}}" color="#9f7957" /><text>同意使用以上信息生成报告。我了解这是前期概念建议，不是施工或审批依据。</text></label></checkbox-group><text class="caption">无需上传身份证、产权证明或精确门牌地址。</text>
++    </view>
++    <button class="primary" bindtap="next" loading="{{busy}}" disabled="{{busy}}">{{nextLabel}}</button><button wx:if="{{step > 0}}" class="secondary" bindtap="previous" disabled="{{busy}}">返回上一步</button>
++  </block>
++  <text class="error" wx:if="{{error}}">{{error}}</text><button wx:if="{{!configReady && !configLoading}}" class="secondary" bindtap="loadConfig">重新检查报告服务</button>
+--- a/miniprogram/pages/report/landing.ts
++++ b/miniprogram/pages/report/landing.ts
+@@ -4 +4 @@
+-    data: { enabled: false, loading: true, error: '', recent: null as any, recentError: '', background: resolveAssetPath('/assets/home/logo+背景图.png') },
++    data: { enabled: false, houseEnabled: false, loading: true, error: '', recent: null as any, recentError: '', background: resolveAssetPath('/assets/home/logo+背景图.png') },
+@@ -6,2 +6,4 @@
+-    onShow() { if (this.data.enabled)
+-        this.loadRecent(); },
++    onShow() {
++        if (this.data.enabled)
++            this.loadRecent();
++    },
+@@ -12 +14 @@
+-            this.setData({ enabled: config.enabled === true, error: config.enabled ? '' : '建房报告服务正在准备中，开放后即可填写。' });
++            this.setData({ enabled: config.enabled === true, houseEnabled: config.house_enabled === true, error: config.enabled ? '' : '建房报告服务正在准备中，开放后即可填写。' });
+@@ -48,2 +50,4 @@
+-    start() { if (this.data.enabled)
+-        wx.navigateTo({ url: '/pages/report/questionnaire', fail: () => this.setData({ error: '页面打开失败，请重试。' }) }); },
++    start() {
++        if (this.data.enabled)
++            wx.navigateTo({ url: '/pages/report/questionnaire', fail: () => this.setData({ error: '页面打开失败，请重试。' }) });
++    },
+--- a/miniprogram/pages/report/landing.wxml
++++ b/miniprogram/pages/report/landing.wxml
+@@ -11 +11 @@
+-  <view class="card subtle"><text class="section-title">先看您的建房方向，再决定是否深入</text><text class="body">填写五步信息，先阅读专属报告的前四部分。认可后，再购买包含三种概念方案、方案对比和预算建议的 14 页 PDF。</text><text class="caption">付费后后台制作报告；添加企业微信，接收您本人可打开的报告领取入口。概念建议不代替测绘、审批或施工图设计。</text></view>
++  <view class="card subtle"><text class="section-title">先看您的建房方向，再决定是否深入</text><text class="body">{{houseEnabled ? '填写五步信息，先阅读专属报告的四页需求分析。确认后可购买整屋图文报告，包含分层平面、体量与外观、方案比较和行动清单。页数根据楼层与方案内容展开。' : '填写五步信息，先阅读专属报告的前四部分。认可后，再购买包含三种概念方案、方案对比和预算建议的 14 页 PDF。'}}</text><text class="caption">{{houseEnabled ? '支付后后台异步制作，购买账号可直接领取；也可添加企业微信接收入口与继续沟通。概念图示不代替测绘、审批或施工图设计。' : '付费后后台制作报告；添加企业微信，接收您本人可打开的报告领取入口。概念建议不代替测绘、审批或施工图设计。'}}</text></view>
+--- a/miniprogram/pages/report/reader.ts
++++ b/miniprogram/pages/report/reader.ts
+@@ -2 +2 @@
+-import { previewSections, shouldPoll, statusText, canOpenFull } from './flow';
++import { previewSections, shouldPoll, statusText, canOpenFull, isModernReport, houseConfirmationInputs } from './flow';
+@@ -4,0 +5,13 @@
++function paymentBlockHint(reason: string): string {
++    if (!reason) return '';
++    const messages: { [key: string]: string } = {
++        confirmation_required: '请先确认上方需求，再购买完整报告。',
++        payment_disabled: '完整报告暂未开放购买，请稍后查看。',
++        preview_not_ready: '需求分析尚未完成，请稍后再查看。',
++        already_paid: '这份报告已购买，无需重复支付。',
++        invalid_confirmation: '需求确认版本已变化，请刷新后重新确认。',
++        invalid_preview: '报告信息需要重新核对，请重新填写并生成预览。',
++        invalid_frozen_input: '报告信息需要重新核对，请重新填写并生成预览。',
++    };
++    return messages[reason] || (/[\u4e00-\u9fff]/.test(reason) ? reason : '完整报告暂未开放购买，请稍后重试。');
++}
+@@ -8 +21,4 @@
+-        data: { id: '', loading: true, error: '', report: null as any, sections: [] as any[], facts: null as any, missing: [] as string[], statusLabel: '', pdfStatusLabel: '正在核对', deliveryHint: '读取报告状态后显示制作与领取进度。', price: '', paying: false, qrURL: '', canDownload: false, documentURL: '', documentStatus: 'loading', documentMode: delivery ? 'full' : 'preview', showDocument: false },
++        data: {
++            id: '', loading: true, error: '', report: null as any, sections: [] as any[], facts: null as any, missing: [] as string[], statusLabel: '', pdfStatusLabel: '正在核对', deliveryHint: '读取报告状态后显示制作与领取进度。', price: '', paying: false, qrURL: '', canDownload: false, documentURL: '', documentStatus: 'loading', documentMode: delivery ? 'full' : 'preview', showDocument: false,
++            modern: false, houseReport: false, canRetry: false, contactSupport: false, needsConfirmation: false, confirmationChoice: '', confirmationOptions: [] as any[], confirming: false, canPurchase: false, prioritySummary: '', paymentBlockHint: '', houseInputs: [] as any[]
++        },
+@@ -19,0 +36,2 @@
++            (this as any)._readFailures = 0;
++            this.setData({ confirming: false });
+@@ -28,0 +47 @@
++            (this as any)._confirmation = null;
+@@ -41,0 +61 @@
++                (this as any)._readFailures = 0;
+@@ -42,0 +63,7 @@
++                const modern = isModernReport(report);
++                const contactSupport = report.next_action === 'contact_support' || report.error_code === 'image_submission_uncertain';
++                const needsConfirmation = modern && !report.confirmed && report.status === 'preview_ready';
++                const needsOption = report.protocol_version === 'report-decision-v5' && report.preview_snapshot?.diagnosis?.recipe === 'space';
++                const confirmationOptions = needsOption
++                    ? [{ value: 'option_a', label: '更倾向方向一' }, { value: 'option_b', label: '更倾向方向二' }, { value: 'undecided', label: '保留两种方向，继续比较' }]
++                    : [{ value: 'confirm', label: '确认这些需求与优先顺序' }, { value: 'undecided', label: '部分取舍未定，保留比较' }];
+@@ -53 +80,17 @@
+-                this.setData({ report, sections, facts: report.preview_snapshot?.facts || null, missing: report.preview_snapshot?.facts?.missing || [], error: '', loading: false, statusLabel: statusText(report.status), pdfStatusLabel, deliveryHint, price: report.quote?.price_fen > 0 ? (report.quote.price_fen / 100).toFixed(2) : '', canDownload: canOpenFull(report) });
++                if (modern && report.paid) {
++                    if (report.status === 'ready') deliveryHint = '完整报告已保存在私有云存储，使用当前购买账号即可领取；企业微信可用于后续沟通。';
++                    else if (report.status !== 'failed') deliveryHint = '正在按您家的需求分阶段生成文字与图片，完成后自动合成 PDF。离开页面不会中断，可稍后回来查看。';
++                }
++                if (contactSupport) {
++                    pdfStatusLabel = '需要核对生成结果';
++                    deliveryHint = '部分绘图请求结果需要核对。请联系顾问并提供报告编号，核对完成前无需重新生成或重复购买。';
++                }
++                this.setData({
++                    report, sections, modern, houseReport: report.protocol_version === 'report-house-v1', contactSupport, needsConfirmation, confirmationOptions,
++                    canRetry: report.status === 'failed' && !contactSupport && (!modern || report.next_action === 'retry'),
++                    paymentBlockHint: paymentBlockHint(report.payment_block_reason || report.quote?.block_reason || ''),
++                    canPurchase: report.can_pay === true && (!modern || (report.confirmed === true && report.quote?.can_pay === true)),
++                    prioritySummary: report.preview_snapshot?.facts?.['intent.priorities'] || '',
++                    houseInputs: report.protocol_version === 'report-house-v1' ? houseConfirmationInputs(report.preview_snapshot?.facts || {}) : [],
++                    facts: report.preview_snapshot?.facts || null, missing: report.preview_snapshot?.facts?.missing || [], error: '', loading: false, statusLabel: contactSupport ? '报告生成结果正在核对' : statusText(report.status), pdfStatusLabel, deliveryHint, price: report.quote?.price_fen > 0 ? (report.quote.price_fen / 100).toFixed(2) : '', canDownload: canOpenFull(report)
++                });
+@@ -55,5 +98,6 @@
+-                if (waiting && ++(this as any)._polls < 60)
+-                    (this as any)._timer = setTimeout(() => this.refresh(), 5000);
+-            }
+-            catch (error: any) {
+-                if ((this as any)._visible && sequence === (this as any)._sequence)
++                const polls = ++(this as any)._polls;
++                if (!contactSupport && waiting && (modern || polls < 60))
++                    (this as any)._timer = setTimeout(() => this.refresh(), modern && polls > 12 ? 15000 : 5000);
++            }
++            catch (error: any) {
++                if ((this as any)._visible && sequence === (this as any)._sequence) {
+@@ -60,0 +105,7 @@
++                    const failures = ((this as any)._readFailures || 0) + 1;
++                    (this as any)._readFailures = failures;
++                    const previous = this.data.report;
++                    const waiting = previous ? shouldPoll(previous.status) || (delivery && !previous.paid) : failures <= 3;
++                    if (waiting && ![401, 403, 404].includes(error.statusCode))
++                        (this as any)._timer = setTimeout(() => this.refresh(), 15000);
++                }
+@@ -64 +115 @@
+-            if (this.data.paying)
++            if (this.data.paying || this.data.report?.next_action === 'contact_support' || this.data.report?.error_code === 'image_submission_uncertain' || (isModernReport(this.data.report) && this.data.report?.next_action !== 'retry'))
+@@ -82 +133,7 @@
+-            const agreed = await new Promise<boolean>(resolve => wx.showModal({ title: '购买完整建房报告', content: '价格 ¥' + this.data.price + '。包含三种概念方案及比较、预算建议，共 14 页 PDF。支付后开始制作，需添加企业微信领取本人专属入口；不含施工图、审批或人工定制设计。', confirmText: '确认购买', success: r => resolve(r.confirm), fail: () => resolve(false) }));
++            const modern = isModernReport(this.data.report);
++            if (modern && (!this.data.report.confirmed || this.data.report.quote?.can_pay !== true)) return;
++            const scope = this.data.report.protocol_version === 'report-house-v1'
++                ? '包含整屋概念方案、分层空间与图示、方案比较、预算边界、设计任务书及行动清单。页数随楼层和方案内容变化。'
++                : modern ? '包含需求分析、方向比较、预算口径、设计需求及行动清单。' : '包含三种概念方案及比较、预算建议，共 14 页 PDF。';
++            const receipt = modern ? '支付后异步制作，当前购买账号可直接领取，企业微信沟通可选。' : '支付后开始制作，需添加企业微信领取本人专属入口。';
++            const agreed = await new Promise<boolean>(resolve => wx.showModal({ title: '购买完整建房报告', content: '价格 ¥' + this.data.price + '。' + scope + receipt + '不含施工图、审批或人工定制设计。', confirmText: '确认购买', success: r => resolve(r.confirm), fail: () => resolve(false) }));
+@@ -104,0 +162,28 @@
++        chooseConfirmation(e: any) {
++            const choice = e.currentTarget.dataset.choice;
++            if (!this.data.confirmationOptions.some((option: any) => option.value === choice)) return;
++            this.setData({ confirmationChoice: choice, error: '' });
++        },
++        async confirm() {
++            if (this.data.confirming || !this.data.needsConfirmation) return;
++            if (!this.data.confirmationOptions.some((option: any) => option.value === this.data.confirmationChoice)) { this.setData({ error: '请先确认您的需求或保留待比较的取舍。' }); return; }
++            const report = this.data.report, diagnosis = report?.preview_snapshot?.diagnosis;
++            if (!diagnosis?.id || !report.input_hash) { this.setData({ error: '确认依据不完整，请刷新报告。' }); return; }
++            const sequence = (this as any)._sequence;
++            const confirmation = {};
++            (this as any)._confirmation = confirmation;
++            this.setData({ confirming: true, error: '' });
++            try {
++                // Empty priorities preserve the server's frozen ordered list;
++                // do not reconstruct structured values from display copy.
++                await reportRequest('/' + this.data.id + '/confirmation', 'POST', { diagnosis_id: diagnosis.id, input_hash: report.input_hash, choice: this.data.confirmationChoice, priorities: [] });
++                if ((this as any)._visible && sequence === (this as any)._sequence) await this.refresh();
++            } catch (error: any) {
++                if ((this as any)._visible && sequence === (this as any)._sequence) this.setData({ error: error.message });
++            } finally {
++                if ((this as any)._confirmation === confirmation) {
++                    (this as any)._confirmation = null;
++                    if ((this as any)._visible) this.setData({ confirming: false });
++                }
++            }
++        },
+--- a/miniprogram/pages/report/preview.wxml
++++ b/miniprogram/pages/report/preview.wxml
+@@ -4,0 +5,14 @@
++    <block wx:if="{{modern}}">
++      <view class="card" wx:for="{{sections}}" wx:for-item="section" wx:key="number">
++        <text class="eyebrow">0{{section.number}} / 04 · 您家的建房方向</text>
++        <text class="section-title">{{section.title}}</text><text class="body">{{section.subtitle}}</text>
++        <view class="text-block" wx:for="{{section.blocks}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view>
++        <view class="value-row" wx:for="{{section.priorities}}" wx:key="title"><text class="number">0{{index + 1}}</text><view><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view></view>
++        <view class="inset" wx:for="{{section.table}}" wx:for-item="row" wx:key="index"><text class="body" wx:for="{{row}}" wx:for-item="cell" wx:key="index">{{cell}}</text></view>
++        <view class="text-block" wx:for="{{section.actions}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view>
++        <text class="body" wx:if="{{section.note}}">{{section.note}}</text><text class="caption" wx:if="{{section.disclaimer}}">{{section.disclaimer}}</text>
++        <view class="inset" wx:if="{{houseReport && section.number === 4}}"><text class="item-title">确认本次设计输入</text><view class="text-block" wx:for="{{houseInputs}}" wx:key="index"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view></view>
++      </view>
++      <view class="card" wx:if="{{!report.paid}}"><text class="section-title">{{report.confirmed ? '需求已确认' : '这些内容是否准确？'}}</text><text class="body" wx:if="{{prioritySummary}}">您的优先顺序：{{prioritySummary}}</text><block wx:if="{{needsConfirmation}}"><view class="choices"><button wx:for="{{confirmationOptions}}" wx:key="value" class="choice {{confirmationChoice === item.value ? 'selected' : ''}}" data-choice="{{item.value}}" bindtap="chooseConfirmation">{{item.label}}</button></view><button class="primary" bindtap="confirm" disabled="{{!confirmationChoice || confirming}}" loading="{{confirming}}">确认需求，查看购买条件</button><text class="caption">确认不会扣费。若核心信息有误，请先重新填写，再购买。</text></block></view>
++    </block>
++    <block wx:else>
+@@ -12 +26,3 @@
+-    <view class="card purchase" wx:if="{{!report.paid}}"><text class="eyebrow">接下来，把方向放进具体方案里</text><text class="section-title">不是再多看几张漂亮图片，
++    </block>
++    <view class="card purchase" wx:if="{{modern && !report.paid}}"><text class="eyebrow">把需求变成可讨论的方案</text><text class="section-title">{{houseReport ? '为您家生成图文并茂的整屋报告' : '进一步比较适合您家的建房方向'}}</text><text class="body" wx:if="{{houseReport}}">根据已确认的家庭与宅基地信息，生成整屋概念方案、逐层平面、体量与外观方向，并附方案比较、预算边界、设计需求和行动清单。完整报告页数随楼层与方案内容变化。</text><text class="body" wx:else>依据您确认的需求，继续展开方向比较、预算口径、设计需求和行动清单。</text><button class="primary" loading="{{paying}}" disabled="{{!canPurchase || paying || confirming}}" bindtap="pay">{{canPurchase ? '购买完整建房报告 · ¥' + price : report.confirmed ? '暂未开放购买' : '请先确认上方需求'}}</button><text class="caption" wx:if="{{paymentBlockHint}}">{{paymentBlockHint}}</text><text class="caption">支付后后台异步制作。购买账号可直接领取，企业微信用于接收入口和后续沟通。图示为概念参考，需后续实测与专业设计深化。</text></view>
++    <view class="card purchase" wx:elif="{{!report.paid}}"><text class="eyebrow">接下来，把方向放进具体方案里</text><text class="section-title">不是再多看几张漂亮图片，
+@@ -16 +32 @@
+-· 方案横向比较、预算配置与下一步资料清单</text><text class="caption">方案基于审核素材匹配，需后续现场核实与设计深化；不等同于为您定制的施工图。</text><button class="primary" loading="{{paying}}" disabled="{{!report.can_pay || paying}}" bindtap="pay">{{report.can_pay ? '查看完整建房报告 · ¥' + price : '完整方案暂未开放购买'}}</button><text class="caption" wx:if="{{report.payment_block_reason}}">{{report.payment_block_reason}}</text><text class="caption">付费后制作 14 页 PDF；添加企业微信，接收本人专属领取入口。</text></view>
++· 方案横向比较、预算配置与下一步资料清单</text><text class="caption">方案基于审核素材匹配，需后续现场核实与设计深化；不等同于为您定制的施工图。</text><button class="primary" loading="{{paying}}" disabled="{{!report.can_pay || paying}}" bindtap="pay">{{report.can_pay ? '查看完整建房报告 · ¥' + price : '完整方案暂未开放购买'}}</button><text class="caption" wx:if="{{paymentBlockHint}}">{{paymentBlockHint}}</text><text class="caption">付费后制作 14 页 PDF；添加企业微信，接收本人专属领取入口。</text></view>
+@@ -20 +36,2 @@
+-  <view class="error" wx:if="{{error}}">{{error}}</view><button class="secondary" wx:if="{{error || !sections.length}}" bindtap="refresh">刷新报告状态</button><button wx:if="{{report.status === 'failed'}}" class="primary" loading="{{paying}}" bindtap="retry">重试生成</button>
++  <view class="inset" wx:if="{{contactSupport}}"><text class="body">{{deliveryHint}}</text><text class="caption">报告编号 {{id}}</text></view>
++  <view class="error" wx:if="{{error}}">{{error}}</view><button class="secondary" wx:if="{{error || !sections.length}}" bindtap="refresh">刷新报告状态</button><button wx:if="{{canRetry}}" class="primary" loading="{{paying}}" bindtap="retry">重试生成</button>
+--- a/miniprogram/pages/report/delivery.wxml
++++ b/miniprogram/pages/report/delivery.wxml
+@@ -3,5 +3,5 @@
+-  <view class="card"><view class="status-row"><text class="item-title">付款确认</text><text>{{report.paid ? '已确认' : '正在核对'}}</text></view><view class="status-row"><text class="item-title">完整 PDF</text><text>{{pdfStatusLabel}}</text></view><view class="status-row"><text class="item-title">企业微信</text><text>{{report.bound ? '已绑定领取身份' : '待添加并确认身份'}}</text></view><text class="caption">{{deliveryHint}}</text></view>
+-  <view class="card" wx:if="{{report.paid && !report.bound}}"><text class="section-title">等待时，先添加您的企业微信顾问</text><text class="body">添加后，企业微信会发送“领取我的报告”入口。请使用本次付款的小程序账号打开，完成领取身份校验。</text><button class="primary" bindtap="contact">获取专属添加二维码</button><image wx:if="{{qrURL}}" class="contact-qr" src="{{qrURL}}" mode="aspectFit" show-menu-by-longpress bindtap="showQR" /><text class="caption">请用本次付款的同一个微信添加。已是好友或没收到领取入口时，请在企业微信向顾问发送下方报告编号，协助核实领取身份。</text></view>
+-  <view class="card" wx:if="{{canDownload}}"><text class="section-title">把这份报告，带到下一次家庭讨论里。</text><text class="body">14 页包含三种概念方案、取舍对比、预算配置与行动清单。下载后可收藏 PDF，后续也可从企业微信领取入口再次打开。</text><button class="primary" bindtap="document">领取完整 PDF</button></view>
+-  <report-document wx:if="{{showDocument}}" title="完整建房报告 · 14 页" mode="full" status="{{documentStatus}}" document-url="{{documentURL}}" bind:refresh="document" />
+-  <view class="error" wx:if="{{error}}">{{error}}</view><button wx:if="{{report.status === 'failed'}}" class="primary" bindtap="retry" loading="{{paying}}">重新生成，不重复付费</button><button class="secondary" bindtap="refresh">刷新交付状态</button><button class="secondary" bindtap="preview">回看前四部分</button><text class="caption">报告编号 {{id}} · 请勿向他人发送带有领取凭据的链接。</text>
++  <view class="card"><view class="status-row"><text class="item-title">付款确认</text><text>{{report.paid ? '已确认' : '正在核对'}}</text></view><view class="status-row"><text class="item-title">完整 PDF</text><text>{{pdfStatusLabel}}</text></view><view class="status-row"><text class="item-title">企业微信</text><text>{{report.bound ? '已关联顾问' : modern ? '可选，便于后续沟通' : '待添加并确认身份'}}</text></view><text class="caption">{{deliveryHint}}</text></view>
++  <view class="card" wx:if="{{report.paid && !report.bound}}"><text class="section-title">{{modern ? '需要后续沟通时，添加您的顾问' : '等待时，先添加您的企业微信顾问'}}</text><text class="body">{{modern ? '完整报告制作完成后，购买账号即可在本页领取。添加顾问还可通过企业微信接收入口并交流建房需求。' : '添加后，企业微信会发送“领取我的报告”入口。请使用本次付款的小程序账号打开，完成领取身份校验。'}}</text><button class="primary" bindtap="contact">获取专属添加二维码</button><image wx:if="{{qrURL}}" class="contact-qr" src="{{qrURL}}" mode="aspectFit" show-menu-by-longpress bindtap="showQR" /><text class="caption">请用本次付款的同一个微信添加。已是好友或没收到领取入口时，请在企业微信向顾问发送下方报告编号，协助核实领取身份。</text></view>
++  <view class="card" wx:if="{{canDownload}}"><text class="section-title">把这份报告，带到下一次家庭讨论里。</text><text class="body">{{houseReport ? '报告包含整屋概念方案、逐层平面、体量与外观、方案对比、预算边界及行动清单；页数随您家的需求展开。下载后可收藏，并与家人、设计师讨论。' : modern ? '报告按您确认的需求展开方向比较、预算口径与行动清单。下载后可收藏，并与家人、设计师讨论。' : '14 页包含三种概念方案、取舍对比、预算配置与行动清单。下载后可收藏 PDF，后续也可从企业微信领取入口再次打开。'}}</text><button class="primary" bindtap="document">领取完整 PDF</button></view>
++  <report-document wx:if="{{showDocument}}" title="{{modern ? '完整建房报告' : '完整建房报告 · 14 页'}}" mode="full" status="{{documentStatus}}" document-url="{{documentURL}}" bind:refresh="document" />
++  <view class="error" wx:if="{{error}}">{{error}}</view><button wx:if="{{canRetry}}" class="primary" bindtap="retry" loading="{{paying}}">重新生成，不重复付费</button><button class="secondary" bindtap="refresh">刷新交付状态</button><button class="secondary" bindtap="preview">回看前四部分</button><text class="caption">报告编号 {{id}} · 请勿向他人发送带有领取凭据的链接。</text>
+--- a/tests/report-flow.test.js
++++ b/tests/report-flow.test.js
+@@ -6 +6 @@
+-const ts = require('../../AItestPlatform/node_modules/typescript');
++const ts = require('./report-runtime')('typescript');
+@@ -51,0 +52,41 @@
++
++test('house form builds server input without losing priorities, rooms or unknown budget', () => {
++ const f = flow(); const input = f.emptyInput();
++ Object.assign(input.site, { region: '福建泉州', width_m: 12, depth_m: 10 });
++ Object.assign(input.household, { family_type: '返乡度假', residents: '父母常住，子女节假日回来' });
++ Object.assign(input.space, { floors: 2, bedrooms: 4 });
++ Object.assign(input.preference, { style: '新闽派', priorities: ['老人起居', '预算控制'], goal: '父母方便起居' });
++ const house = f.emptyHouseDetails();
++ Object.assign(house, { permanent_count: 2, returning_count: 4, return_frequency: 'holidays', elder_room: 'yes', courtyard: 'yes', parking: 'no', flexible_use: 'yes' });
++ house.rooms = [{ id: 'study', name: '书房', count: 1, preferred_floor: 2, required: true }];
++ assert.equal(f.validateHouseStep(input, house, 1), '');
++ const data = f.houseRequestInput(input, house);
++ assert.equal(data.permanent_count, 2); assert.equal(data.returning_count, 4);
++ assert.equal(data.house.first_floor_elder_room, true); assert.equal(data.house.rooms[0].preferred_floor, 2);
++ assert.deepEqual(Array.from(data.priorities), ['老人起居', '预算控制']);
++ assert.equal(data.budget_wan, undefined); assert.equal(data.house.courtyard, 'yes');
++ house.return_frequency = 'none'; assert.ok(f.validateHouseStep(input, house, 1));
++ house.returning_count = 0; assert.equal(f.validateHouseStep(input, house, 1), '');
++ house.rooms[0].preferred_floor = 3; assert.ok(f.validateHouseStep(input, house, 2));
++});
++
++test('modern reports have four matching preview blocks and optional enterprise binding', () => {
++ const f = flow();
++ const snapshot = { meta: { protocol_version: 'report-house-v1' }, facts: {}, pages: ['house_profile','house_constraints','house_goals','house_confirmation'].map((kind,i)=>({number:i+1,kind})) };
++ assert.equal(f.previewSections(snapshot).length, 4);
++ for (const protocol_version of ['report-house-v1','report-decision-v5']) {
++  assert.equal(f.canOpenFull({ protocol_version, paid:true, bound:false, status:'ready' }), true);
++  assert.equal(f.canOpenFull({ protocol_version, paid:false, bound:false, status:'ready' }), false);
++ }
++ assert.equal(f.canOpenFull({ paid:true,bound:false,status:'ready' }),false);
++});
++
++test('house optional perspective text matches server minimum length without losing user input', () => {
++ const f=flow(),input=f.emptyInput(),house=f.emptyHouseDetails();
++ input.household.residents='父'; assert.match(f.validateHouseStep(input,house,1),/人数|至少/);
++ house.permanent_count=2;house.returning_count=0;
++ assert.match(f.validateHouseStep(input,house,1),/至少/);
++ input.household.residents='父母';assert.equal(f.validateHouseStep(input,house,1),'');
++ input.preference.style='新中式';input.preference.priorities=['老人起居'];input.preference.goal='静';
++ assert.match(f.validateHouseStep(input,house,3),/至少/);
++});
+--- a/tests/report-questionnaire.test.js
++++ b/tests/report-questionnaire.test.js
+@@ -6 +6 @@
+-const ts = require('../../AItestPlatform/node_modules/typescript');
++const ts = require('./report-runtime')('typescript');
+@@ -16 +16 @@
+-function questionnaire() {
++function questionnaire(houseEnabled = false) {
+@@ -28 +28 @@
+-      './api': { reportRequest: (...args) => new Promise((resolve, reject) => requests.push({ args, resolve, reject })) },
++      './api': { reportRequest: (...args) => args[0] === '/config' ? Promise.resolve({enabled:true,house_enabled:houseEnabled}) : args[0] === '/house/questions' ? Promise.resolve({version:'report-house-v1'}) : new Promise((resolve, reject) => requests.push({ args, resolve, reject })) },
+@@ -46,2 +46,2 @@
+-test('questionnaire preserves priority selection order because recommendation weights depend on it', () => {
+-  const h = questionnaire(); h.page.onLoad();
++test('questionnaire preserves priority selection order because recommendation weights depend on it', async () => {
++  const h = questionnaire(); await h.page.onLoad();
+@@ -58 +58 @@
+-  const h = questionnaire(); Object.assign(h.page.data, { step: 4, consent: true, input: validInput() });
++  const h = questionnaire(); await h.page.onLoad(); Object.assign(h.page.data, { step: 4, consent: true, input: validInput() });
+@@ -68 +68 @@
+-  const h = questionnaire(); Object.assign(h.page.data, { step: 4, input: validInput() });
++  const h = questionnaire(); await h.page.onLoad(); Object.assign(h.page.data, { step: 4, input: validInput() });
+@@ -82,0 +83,25 @@
++
++test('enabled house questionnaire collects actual controls and submits the new protocol', async () => {
++ const h=questionnaire(true);await h.page.onLoad();
++ assert.equal(h.page.data.houseEnabled,true);
++ Object.assign(h.page.data,{step:4,consent:true,input:validInput()});
++ h.page.houseField({currentTarget:{dataset:{field:'permanent_count'}},detail:{value:'2'}});
++ h.page.houseField({currentTarget:{dataset:{field:'returning_count'}},detail:{value:'4'}});
++ for (const [field,value] of Object.entries({return_frequency:'holidays',elder_room:'yes',parking:'no',courtyard:'yes',flexible_use:'yes'})) h.page.houseChoice({currentTarget:{dataset:{field,value}}});
++ h.page.addRoom();h.page.roomField({currentTarget:{dataset:{index:0,field:'name'}},detail:{value:'书房'}});
++ h.page.roomField({currentTarget:{dataset:{index:0,field:'preferred_floor'}},detail:{value:'2'}});
++ h.page.budgetScope({currentTarget:{dataset:{index:0,status:'included'}}});
++ const work=h.page.next();assert.equal(h.requests.length,1);
++ const [suffix,method,body]=h.requests[0].args;
++ assert.equal(suffix,'/house');assert.equal(method,'POST');assert.equal(body.house.style,'新中式');
++ assert.equal(body.permanent_count,2);assert.equal(body.returning_count,4);assert.equal(body.house.first_floor_elder_room,true);
++ assert.equal(body.house.rooms[0].name,'书房');assert.equal(body.house.rooms[0].preferred_floor,2);assert.equal(body.budget_scope[0].status,'included');
++ h.requests[0].resolve({id:'new-house'});await work;assert.match(h.redirects[0].url,/new-house$/);
++});
++
++test('house draft resumes separately and rejects invalid rooms before a request', async () => {
++ const h=questionnaire(true);await h.page.onLoad();Object.assign(h.page.data,{step:4,consent:true,input:validInput()});
++ Object.assign(h.page.data.house,{permanent_count:2,returning_count:0,return_frequency:'none'});
++ h.page.addRoom();await h.page.next();assert.equal(h.requests.length,0);assert.equal(h.page.data.step,2);
++ assert.ok(h.store.has('building_report_draft_house_v1'));assert.equal(h.store.has('building_report_draft_v1'),false);
++});
+--- a/tests/report-reader.test.js
++++ b/tests/report-reader.test.js
+@@ -6 +6 @@
+-const ts = require('../../AItestPlatform/node_modules/typescript');
++const ts = require('./report-runtime')('typescript');
+@@ -22 +22 @@
+- const exports = compile('pages/report/reader.ts', { wx, require: id => modules[id], setTimeout: callback => { const timer = { callback, cleared: false }; timers.push(timer); return timer; }, clearTimeout: timer => { if (timer) timer.cleared = true; } });
++ const exports = compile('pages/report/reader.ts', { wx, require: id => modules[id], setTimeout: (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer; }, clearTimeout: timer => { if (timer) timer.cleared = true; } });
+@@ -92,0 +93,88 @@
++
++function housePreview(extra = {}) { return { ...preview(), protocol_version:'report-house-v1', input_hash:'a'.repeat(64), confirmed:false, can_pay:false, next_action:'confirm', preview_snapshot:{meta:{protocol_version:'report-house-v1'},facts:{'intent.priorities':'老人起居、预算控制'},diagnosis:{id:'diagnosis-1',recipe:'space'},pages:['house_profile','house_constraints','house_goals','house_confirmation'].map((kind,i)=>({number:i+1,kind,title:kind,blocks:[{title:'依据',body:'用户输入'}]}))},...extra}; }
++
++test('house confirmation posts the frozen identity then obtains payment eligibility from server', async () => {
++ const h = harness(); h.instance.onShow(); h.requests[0].resolve(housePreview()); await tick();
++ assert.equal(h.instance.data.needsConfirmation,true);
++ h.instance.chooseConfirmation({currentTarget:{dataset:{choice:'confirm'}}});
++ const work=h.instance.confirm(); await tick();
++ assert.equal(h.requests[1].args[0],'/r1/confirmation');
++ assert.equal(h.requests[1].args[2].diagnosis_id,'diagnosis-1');
++ assert.equal(h.requests[1].args[2].input_hash,'a'.repeat(64));
++ assert.equal(h.requests[1].args[2].choice,'confirm');
++ h.requests[1].resolve({confirmed:true}); await tick();
++ assert.equal(h.instance.data.report.can_pay,false);
++ h.requests[2].resolve(housePreview({confirmed:true,can_pay:true,next_action:'pay'})); await work;
++ assert.equal(h.instance.data.report.can_pay,true);
++});
++
++test('uncertain image submissions expose support and cannot retry from the reader', async () => {
++ const h=harness();h.instance.onShow();h.requests[0].resolve(housePreview({status:'failed',paid:true,next_action:'contact_support',error_code:'image_submission_uncertain'}));await tick();
++ assert.equal(h.instance.data.canRetry,false);assert.match(h.instance.data.deliveryHint,/核对|顾问/);
++ await h.instance.retry();assert.equal(h.requests.length,1);
++});
++
++test('paid-ready house PDF opens without enterprise binding and never promises fourteen pages', async () => {
++ const h=harness();h.instance.onShow();h.requests[0].resolve(housePreview({status:'ready',paid:true,bound:false,confirmed:true,next_action:'download'}));await tick();
++ assert.equal(h.instance.data.canDownload,true);assert.equal(h.instance.data.modern,true);
++ assert.doesNotMatch(h.instance.data.deliveryHint,/绑定/);
++});
++
++test('leaving confirmation releases busy state without allowing an old completion to affect a newer attempt',async()=>{
++ const h=harness();h.instance.onShow();h.requests[0].resolve(housePreview());await tick();
++ h.instance.chooseConfirmation({currentTarget:{dataset:{choice:'confirm'}}});const first=h.instance.confirm();
++ h.instance.onHide();h.instance.onShow();h.requests[2].resolve(housePreview());await tick();
++ assert.equal(h.instance.data.confirming,false);
++ const second=h.instance.confirm();assert.equal(h.instance.data.confirming,true);
++ h.requests[1].reject(new Error('old error'));await first;
++ assert.equal(h.instance.data.confirming,true);assert.equal(h.instance.data.error,'');
++ h.requests[3].reject(new Error('current error'));await second;
++ assert.equal(h.instance.data.confirming,false);assert.equal(h.instance.data.error,'current error');
++});
++test('modern generation continues polling beyond five minutes and stops when hidden or ready',async()=>{
++ const h=harness();h.instance.onShow();
++ for(let index=0;index<65;index++) {
++  h.requests[index].resolve(housePreview({status:'full_generating',paid:true,confirmed:true}));await tick();
++  assert.equal(h.timers.length,index+1,'must keep a timer while modern report is generating');
++  assert.equal(h.timers[index].delay,index<12?5000:15000);
++  h.timers[index].callback();
++ }
++ h.requests[65].resolve(housePreview({status:'ready',paid:true,confirmed:true}));await tick();
++ assert.equal(h.timers.length,65);assert.equal(h.instance.data.canDownload,true);
++ h.instance.onHide();assert.equal(h.timers[64].cleared,true);
++});
++test('house confirmation exposes required rooms and core design constraints from frozen facts',async()=>{
++ const h=harness(),report=housePreview();Object.assign(report.preview_snapshot.facts,{
++  'intent.floors':'2','intent.bedrooms':'4','house.first_floor_elder_room':'yes','house.style':'新中式',
++  'house.room.study':JSON.stringify({id:'study',name:'书房',count:1,preferred_floor:2,required:true})
++ });h.instance.onShow();h.requests[0].resolve(report);await tick();
++ assert.ok(h.instance.data.houseInputs.some(item=>item.title==='书房'&&/必须满足/.test(item.body)&&/2层/.test(item.body)));
++ assert.ok(h.instance.data.houseInputs.some(item=>/层数/.test(item.title)&&item.body==='2'));
++});
++
++test('server omits unrestricted room floor and preserves neighbor facts in confirmation',async()=>{
++ const h=harness(),report=housePreview();Object.assign(report.preview_snapshot.facts,{
++  'house.neighbors':'东侧紧邻邻房',
++  'house.room.study':JSON.stringify({id:'study',name:'书房',count:1,required:true})
++ });h.instance.onShow();h.requests[0].resolve(report);await tick();
++ assert.equal(h.instance.data.error,'');assert.equal(h.instance.data.sections.length,4);
++ assert.ok(h.instance.data.houseInputs.some(item=>item.title==='书房'&&/楼层不限/.test(item.body)));
++ assert.ok(h.instance.data.houseInputs.some(item=>item.body==='东侧紧邻邻房'));
++});
++
++test('transient polling errors recover and authorization errors stop requests',async()=>{
++ const h=harness();h.instance.onShow();h.requests[0].resolve(housePreview({paid:true,status:'full_generating'}));await tick();
++ h.timers[0].callback();h.requests[1].reject(new Error('网络中断'));await tick();
++ assert.equal(h.instance.data.error,'网络中断');assert.equal(h.timers.length,2);assert.equal(h.timers[1].delay,15000);
++ h.timers[1].callback();h.requests[2].resolve(housePreview({paid:true,status:'ready'}));await tick();
++ assert.equal(h.instance.data.error,'');assert.equal(h.instance.data.canDownload,true);assert.equal(h.timers.length,2);
++ const initial=harness();initial.instance.onShow();initial.requests[0].reject(new Error('暂时超时'));await tick();assert.equal(initial.timers.length,1);
++ initial.timers[0].callback();initial.requests[1].reject({message:'请登录',statusCode:401});await tick();assert.equal(initial.timers.length,1);
++});
++
++test('modern payment reasons show customer copy rather than internal codes',async()=>{
++ for(const [reason,expected] of [['confirmation_required','请先确认'],['payment_disabled','暂未开放'],['provider_internal_new_reason','稍后重试']]) {
++  const h=harness();h.instance.onShow();h.requests[0].resolve(housePreview({payment_block_reason:reason}));await tick();
++  assert.match(h.instance.data.paymentBlockHint,new RegExp(expected));assert.doesNotMatch(h.instance.data.paymentBlockHint,/_/);
++ }
++});
+--- a/tests/report-landing.test.js
++++ b/tests/report-landing.test.js
+@@ -6 +6 @@
+-const ts = require('../../AItestPlatform/node_modules/typescript');
++const ts = require('./report-runtime')('typescript');
+--- a/tests/report-layout.test.js
++++ b/tests/report-layout.test.js
+@@ -5 +5 @@
+-const sass = require('../../AItestPlatform/node_modules/sass');
++const sass = require('./report-runtime')('sass');
+--- a/tests/report-document.test.js
++++ b/tests/report-document.test.js
+@@ -6 +6 @@
+-const ts = require('../../AItestPlatform/node_modules/typescript');
++const ts = require('./report-runtime')('typescript');
+--- /dev/null
++++ b/tests/report-runtime.js
+@@ -0,0 +1,8 @@
++const path = require('node:path');
++module.exports = function runtime(name) {
++  const roots = [process.env.REPORT_TEST_NODE_MODULES, path.resolve(__dirname, '../../background/node_modules'), path.resolve(__dirname, '../../AItestPlatform/node_modules')].filter(Boolean);
++  for (const root of roots) {
++    try { return require(require.resolve(name, { paths: [root] })); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
++  }
++  throw new Error('Set REPORT_TEST_NODE_MODULES to an existing runtime containing ' + name + '; no dependency installation is required.');
++};
+--- /dev/null
++++ b/tests/report-api.test.js
+@@ -0,0 +1,15 @@
++const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
++const assert=require('node:assert/strict');const {test}=require('node:test');const ts=require('./report-runtime')('typescript');
++function api(token='fixture') { const calls=[];const exports={};const js=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../miniprogram/pages/report/api.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;vm.runInNewContext(js,{exports,require:id=>id.endsWith('/parameter')?{generateRequestParams:async()=>({}),paramsToHeaders:()=>({})}:{getCachedDeviceFingerprint:()=>''},wx:{getStorageSync:()=>token,removeStorageSync(){},request:options=>calls.push(options)}});return {exports,calls};}
++test('asynchronous 202 house creation returns the report identity',async()=>{const h=api();const pending=h.exports.reportRequest('/house','POST',{primary_goal:'space'});await new Promise(r=>setImmediate(r));h.calls[0].success({statusCode:202,data:{code:0,data:{id:'house-1'}}});assert.equal((await pending).id,'house-1');});
++test('public house questions do not require login while customer reports remain private',async()=>{const h=api('');const pending=h.exports.reportRequest('/house/questions');await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);h.calls[0].success({statusCode:200,data:{code:0,data:{version:'report-house-v1'}}});await pending;await assert.rejects(h.exports.reportRequest('/house','POST',{}),/登录/);});
++
++test('private PDF signatures include the exact query required by the server middleware',async()=>{
++ const signed=[];const calls=[];const exports={};
++ const source=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../miniprogram/pages/report/api.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
++ vm.runInNewContext(source,{exports,require:id=>id.endsWith('/parameter')?{generateRequestParams:async(...args)=>{signed.push(args);return {};},paramsToHeaders:()=>({})}:{getCachedDeviceFingerprint:()=>''},wx:{getStorageSync:()=> 'owner',request:options=>calls.push(options)}});
++ const pending=exports.reportRequest('/r1/document?mode=full');await new Promise(r=>setImmediate(r));
++ assert.equal(signed[0][2],'/api/v1/miniprogram/reports/r1/document?mode=full');
++ calls[0].success({statusCode:200,data:{code:0,data:{document_url:'https://example.test/private.pdf'}}});await pending;
++});
++test('the existing V5 question endpoint is public',async()=>{const h=api('');const work=h.exports.reportRequest('/v5/questions');await new Promise(r=>setImmediate(r));assert.equal(h.calls.length,1);h.calls[0].success({statusCode:200,data:{code:0,data:{}}});await work;});
+--- /dev/null
++++ b/tests/report-template.test.js
+@@ -0,0 +1,51 @@
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++const { execFileSync } = require('node:child_process');
++const assert = require('node:assert/strict');
++const { test } = require('node:test');
++const compiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/package.nw/node_modules/wcc-exec/wcc';
++const options = { skip: !fs.existsSync(compiler) && 'Set WXML_COMPILER to an existing WeChat WXML compiler' };
++function render(page, data) {
++  const file = 'miniprogram/pages/report/' + page + '.wxml';
++  const source = execFileSync(compiler, [file], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8' });
++  const context = { window: {}, console: { log: error => { throw error; } } };
++  vm.createContext(context); vm.runInContext(source, context);
++  return context.$gwx(file)(data);
++}
++function nodes(tree) { return typeof tree === 'object' && tree ? [tree, ...(tree.children || []).flatMap(nodes)] : []; }
++function text(tree) { return typeof tree === 'string' ? tree : (tree?.children || []).map(text).join('\n'); }
++
++test('compiled house preview renders blocks, requirements and confirmation without legacy promises', options, () => {
++  const tree = render('preview', {
++    modern: true, houseReport: true, report: { paid: false }, needsConfirmation: true,
++    confirmationOptions: [{ value: 'confirm', label: '确认需求' }], confirmationChoice: 'confirm',
++    houseInputs: [{ title: '书房', body: '1间；楼层不限；必须满足' }],
++    sections: [1,2,3,4].map(number => ({ number, title: '第' + number + '页', blocks: [{ title: '输入依据', body: '来自用户填写' }] }))
++  });
++  assert.match(text(tree), /书房/); assert.match(text(tree), /必须满足/); assert.match(text(tree), /来自用户填写/);
++  assert.match(text(tree), /页数随/); assert.doesNotMatch(text(tree), /14 页|10 页|三种概念方案|需添加企业微信/);
++  assert.ok(nodes(tree).some(node => node.attr?.bindtap === 'confirm'));
++  assert.ok(nodes(tree).some(node => node.attr?.bindtap === 'pay' && node.attr.disabled === true));
++});
++test('compiled questionnaire exposes every new input through actual page handlers', options, () => {
++  const input = { site: {}, household: {}, space: {}, preference: { priorities: [] }, budget: {} };
++  const house = { rooms: [{ id: 'room-1', name: '书房', count: 1, preferred_floor: 0, required: true }], budget_scope: [{ item: '主体建造', status: 'unknown' }] };
++  const all = [];
++  for (let step=0; step<5; step++) all.push(...nodes(render('questionnaire', {
++    step, configReady: true, houseEnabled: true, input, house, titles: [], floors: [1,2,3],
++    yesNo: [{ value: 'yes', label: '需要' }], frequencies: [{ value: 'monthly', label: '每月' }],
++    scopeStatuses: [{ value: 'included', label: '包含' }]
++  })));
++  for (const field of ['permanent_count','returning_count','return_frequency','elder_room','courtyard','parking','flexible_use','name','count','preferred_floor','required','start_window'])
++    assert.ok(all.some(node => node.attr?.['data-field'] === field), field + ' must be collected in the actual WXML');
++  assert.ok(all.some(node => node.attr?.bindtap === 'budgetScope'));
++});
++test('compiled landing and delivery use content-driven pages only for modern reports', options, () => {
++  assert.doesNotMatch(text(render('landing', { houseEnabled: true })), /14 页|10 页/);
++  assert.match(text(render('landing', { houseEnabled: false })), /14 页/);
++  const delivery = render('delivery', { modern: true, houseReport: true, canDownload: true, report: { paid: true, bound: false } });
++  assert.match(text(delivery), /完整 PDF/); assert.match(text(delivery), /可选/);
++  assert.doesNotMatch(text(delivery), /14 页|10 页|待添加并确认身份/);
++  assert.ok(nodes(delivery).some(node => node.attr?.bindtap === 'document'));
++});
