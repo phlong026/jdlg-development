@@ -45,7 +45,7 @@ func (s *Service) CreatePreview(ctx context.Context, userID int64, input Input) 
 	if err != nil {
 		return SafeView{}, err
 	}
-	return s.safeView(ctx, stored), nil
+	return s.safeView(stored), nil
 }
 
 func (s *Service) Get(ctx context.Context, userID int64, reportID string) (SafeView, error) {
@@ -53,7 +53,7 @@ func (s *Service) Get(ctx context.Context, userID int64, reportID string) (SafeV
 	if err != nil {
 		return SafeView{}, err
 	}
-	return s.safeView(ctx, record), nil
+	return s.safeView(record), nil
 }
 
 func (s *Service) Latest(ctx context.Context, userID int64) (SafeView, error) {
@@ -67,7 +67,11 @@ func (s *Service) Latest(ctx context.Context, userID int64) (SafeView, error) {
 	if err != nil {
 		return SafeView{}, err
 	}
-	return s.safeView(ctx, record), nil
+	record, err = s.hydrateDecisionContext(ctx, record)
+	if err != nil {
+		return SafeView{}, err
+	}
+	return s.safeView(record), nil
 }
 
 func (s *Service) GetPaymentQuote(ctx context.Context, userID int64, reportID string) (PaymentQuote, error) {
@@ -115,22 +119,23 @@ func (s *Service) AuthorizeVerifiedPayment(ctx context.Context, userID int64, re
 	if !validIdentifier(orderNo, 128) {
 		return SafeView{}, ErrInvalidInput
 	}
-	record, err := s.get(ctx, userID, reportID)
-	if err != nil {
-		return SafeView{}, err
+	if !s.config.Enabled {
+		return SafeView{}, ErrDisabled
 	}
-	if record.Paid {
-		stored, err := s.store.AuthorizePaid(ctx, userID, reportID, orderNo)
-		if err != nil {
-			return SafeView{}, err
-		}
-		return s.safeView(ctx, stored), nil
+	if userID <= 0 || !validIdentifier(reportID, 64) {
+		return SafeView{}, ErrInvalidInput
 	}
+	// Persist the verified entitlement before hydrating auxiliary response data.
+	// A decision-context read failure must not lose an accepted provider payment.
 	stored, err := s.store.AuthorizePaid(ctx, userID, reportID, orderNo)
 	if err != nil {
 		return SafeView{}, err
 	}
-	return s.safeView(ctx, stored), nil
+	stored, err = s.hydrateDecisionContext(ctx, stored)
+	if err != nil {
+		return SafeView{}, err
+	}
+	return s.safeView(stored), nil
 }
 
 // BindVerifiedEnterpriseContact is only for a verified enterprise WeChat
@@ -153,7 +158,11 @@ func (s *Service) Retry(ctx context.Context, userID int64, reportID string) (Saf
 	if err != nil {
 		return SafeView{}, err
 	}
-	return s.safeView(ctx, record), nil
+	record, err = s.hydrateDecisionContext(ctx, record)
+	if err != nil {
+		return SafeView{}, err
+	}
+	return s.safeView(record), nil
 }
 
 func (s *Service) GetDownloadURL(ctx context.Context, userID int64, reportID, mode string) (string, error) {
@@ -172,7 +181,7 @@ func (s *Service) GetDownloadURL(ctx context.Context, userID int64, reportID, mo
 		if !record.Paid {
 			return "", ErrPaymentRequired
 		}
-		if !record.Bound {
+		if record.ProtocolVersion != ProtocolDecisionV5 && !record.Bound {
 			return "", ErrBindingRequired
 		}
 		if record.Status != StatusReady {
@@ -198,6 +207,9 @@ func (s *Service) EnsurePreviewPDF(ctx context.Context, userID int64, reportID s
 	if err != nil {
 		return err
 	}
+	if record.ProtocolVersion == ProtocolDecisionV5 {
+		return ErrNotReady
+	}
 	if record.PreviewObjectKey != "" {
 		return nil
 	}
@@ -222,7 +234,11 @@ func (s *Service) get(ctx context.Context, userID int64, reportID string) (*Repo
 	if userID <= 0 || !validIdentifier(reportID, 64) {
 		return nil, ErrInvalidInput
 	}
-	return s.store.GetForUser(ctx, userID, reportID)
+	record, err := s.store.GetForUser(ctx, userID, reportID)
+	if err != nil {
+		return nil, err
+	}
+	return s.hydrateDecisionContext(ctx, record)
 }
 
 func (s *Service) paymentQuote(record *Report) PaymentQuote {
@@ -237,6 +253,25 @@ func (s *Service) paymentQuote(record *Report) PaymentQuote {
 	}
 	if record.Paid {
 		quote.BlockReason = "already_paid"
+		return quote
+	}
+	if record.ProtocolVersion == ProtocolDecisionV5 {
+		if !s.config.DecisionEnabled || !validIdentifier(s.config.ProductID, 64) || s.config.PriceFen <= 0 {
+			quote.BlockReason = "payment_disabled"
+			return quote
+		}
+		snapshot, blockReason := validateDecisionPayment(record)
+		if blockReason != "" {
+			quote.BlockReason = blockReason
+			return quote
+		}
+		quote.CanPay = true
+		quote.PackID = "decision-v5-" + snapshot.Recipe
+		quote.PackVersion = DecisionTemplateVersion
+		return quote
+	}
+	if s.config.LegacyPaymentBlocked {
+		quote.BlockReason = "delivery_unavailable"
 		return quote
 	}
 	if s.catalog == nil {
@@ -259,22 +294,70 @@ func (s *Service) paymentQuote(record *Report) PaymentQuote {
 	return quote
 }
 
-func (s *Service) safeView(ctx context.Context, record *Report) SafeView {
+func (s *Service) safeView(record *Report) SafeView {
 	quote := s.paymentQuote(record)
+	confirmed := false
+	if record.ProtocolVersion == ProtocolDecisionV5 {
+		_, blockReason := validateDecisionPayment(record)
+		confirmed = blockReason == ""
+	}
 	return SafeView{
-		ID: record.ID, Status: record.Status, PreviewSnapshot: publicPreview(record.PreviewSnapshot),
-		GenerationMode: record.GenerationMode, CanPay: quote.CanPay,
+		ID: record.ID, ProtocolVersion: record.ProtocolVersion, InputHash: record.InputHash,
+		Status: record.Status, Stage: reportStage(record, confirmed), Confirmed: confirmed, NextAction: nextReportAction(record, confirmed),
+		PreviewSnapshot: publicPreview(record),
+		GenerationMode:  record.GenerationMode, CanPay: quote.CanPay,
 		PaymentBlockReason: quote.BlockReason, Paid: record.Paid, Bound: record.Bound,
-		ErrorCode: record.ErrorCode, CreatedAt: record.CreatedAt,
+		ErrorCode: record.ErrorCode, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
 }
 
-func publicPreview(raw json.RawMessage) json.RawMessage {
-	if len(raw) == 0 {
+func reportStage(record *Report, confirmed bool) string {
+	if record.ProtocolVersion != ProtocolDecisionV5 {
+		return record.Status
+	}
+	switch record.Status {
+	case StatusPreviewQueued:
+		return DecisionStagePreviewPending
+	case StatusFullQueued:
+		return "full_pending"
+	case StatusPreviewGenerating, StatusFullGenerating:
+		if record.CurrentStage != "" && record.CurrentStage != DecisionStagePreviewPending && record.CurrentStage != DecisionStageConfirmed {
+			return record.CurrentStage
+		}
+		return record.Status
+	case StatusPreviewReady:
+		if confirmed {
+			return DecisionStageConfirmed
+		}
+		return "awaiting_confirmation"
+	case StatusReady:
+		return StatusReady
+	case StatusFailed:
+		return StatusFailed
+	default:
+		return record.Status
+	}
+}
+
+func publicPreview(record *Report) json.RawMessage {
+	if record == nil || len(record.PreviewSnapshot) == 0 {
 		return nil
 	}
+	if record.ProtocolVersion == ProtocolDecisionV5 {
+		var snapshot DecisionSnapshot
+		if json.Unmarshal(record.PreviewSnapshot, &snapshot) != nil || ValidateDecisionSnapshot(snapshot, ModePreview) != nil ||
+			snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != ProtocolDecisionV5 {
+			return nil
+		}
+		snapshot.Confirmation = nil
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			return nil
+		}
+		return data
+	}
 	var snapshot Snapshot
-	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot.Pages) != 4 {
+	if json.Unmarshal(record.PreviewSnapshot, &snapshot) != nil || len(snapshot.Pages) != 4 {
 		return nil
 	}
 	snapshot.Assets = nil
@@ -285,6 +368,29 @@ func publicPreview(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return data
+}
+
+func nextReportAction(record *Report, confirmed bool) string {
+	switch record.Status {
+	case StatusPreviewQueued, StatusPreviewGenerating:
+		return "wait_preview"
+	case StatusPreviewReady:
+		if record.ProtocolVersion == ProtocolDecisionV5 && !confirmed {
+			return "confirm_decision"
+		}
+		if record.Paid {
+			return "wait_report"
+		}
+		return "pay"
+	case StatusFullQueued, StatusFullGenerating:
+		return "wait_report"
+	case StatusReady:
+		return "download"
+	case StatusFailed:
+		return "retry"
+	default:
+		return "wait"
+	}
 }
 
 func validIdentifier(value string, max int) bool {

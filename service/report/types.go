@@ -81,6 +81,9 @@ type Report struct {
 	InputHash           string          `json:"input_hash"`
 	ProtocolVersion     string          `json:"protocol_version"`
 	InputJSON           json.RawMessage `json:"input_json"`
+	ConfirmationJSON    json.RawMessage `json:"-"`
+	ConfirmationHash    string          `json:"-"`
+	CurrentStage        string          `json:"-"`
 	PreviewSnapshot     json.RawMessage `json:"preview_snapshot,omitempty"`
 	FullSnapshot        json.RawMessage `json:"full_snapshot,omitempty"`
 	Status              string          `json:"status"`
@@ -110,7 +113,12 @@ type Report struct {
 // SafeView is the only report shape intended for mini-program responses.
 type SafeView struct {
 	ID                 string          `json:"id"`
+	ProtocolVersion    string          `json:"protocol_version"`
+	InputHash          string          `json:"input_hash"`
 	Status             string          `json:"status"`
+	Stage              string          `json:"stage"`
+	Confirmed          bool            `json:"confirmed"`
+	NextAction         string          `json:"next_action"`
 	PreviewSnapshot    json.RawMessage `json:"preview_snapshot,omitempty"`
 	GenerationMode     string          `json:"generation_mode"`
 	CanPay             bool            `json:"can_pay"`
@@ -119,6 +127,7 @@ type SafeView struct {
 	Bound              bool            `json:"bound"`
 	ErrorCode          string          `json:"error_code,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 type PaymentQuote struct {

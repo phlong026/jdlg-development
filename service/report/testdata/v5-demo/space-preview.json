@@ -1,0 +1,163 @@
+{
+  "meta": {
+    "schema_version": "report-decision-v5",
+    "protocol_version": "report-decision-v5",
+    "source": "report-orchestrator-v5",
+    "report_id": "DEMO-space-20260920",
+    "input_hash": "137c01650d957d5aaefef7b207d9068cd45069368d9ccb3df915ddd3beb86a5b",
+    "date": "2026年09月20日",
+    "demonstration": false,
+    "generation_mode": "ai_assisted"
+  },
+  "facts": {
+    "budget.scope.6b9e6a42747f": "unknown: 庭院",
+    "budget.scope.add389d53910": "included: 室内装修",
+    "budget.scope.d6a7576b7962": "included: 主体",
+    "budget.wan": "100",
+    "household.permanent_count": "2",
+    "household.return_frequency": "holidays",
+    "household.returning_count": "4",
+    "input.primary_goal": "space",
+    "intent.bedrooms": "4",
+    "intent.flexible_use": "yes",
+    "intent.floors": "2",
+    "intent.priorities": "父母居住舒适 / 节日团聚 / 投入可控",
+    "readiness.stage": "unknown",
+    "site.approx_dimensions": "10m x 15m (user estimate)",
+    "site.buildable_constraints": "unknown",
+    "site.buildable_scope": "unknown",
+    "site.region": "泉州南安"
+  },
+  "recipe": "space",
+  "diagnosis": {
+    "id": "diagnosis-896d52c9d1a4e192",
+    "recipe": "space",
+    "topic": "日常居住与节日团聚空间的取舍",
+    "reason": "常住人数与返乡人数形成两种使用情景，需要先确认房间是否长期固定，再让设计师验证空间条件。",
+    "evidence_refs": [
+      "household.permanent_count",
+      "household.returning_count",
+      "household.return_frequency",
+      "intent.flexible_use",
+      "intent.priorities"
+    ],
+    "options": [
+      {
+        "title": "保留固定客房",
+        "body": "团聚时准备更直接，但要一并比较长期空置房间对日常空间的影响。"
+      },
+      {
+        "title": "使用可转换房间",
+        "body": "日常可服务阅读、收纳或活动，团聚前需明确转换方式与隐私边界。"
+      }
+    ],
+    "unknowns": [
+      "实际可建范围未核实",
+      "庭院是否包含在计划投入内待确认"
+    ],
+    "question": "你更在意随时可住的独立房间，还是日常空间利用率？拿不准也可以保留两个方向。"
+  },
+  "pages": [
+    {
+      "number": 1,
+      "access": "free",
+      "kind": "decision",
+      "title": "我家值得先决定什么",
+      "subtitle": "日常居住与节日团聚空间的取舍",
+      "sources": [
+        "household.permanent_count",
+        "household.returning_count",
+        "household.return_frequency",
+        "intent.flexible_use",
+        "intent.priorities"
+      ],
+      "blocks": [
+        {
+          "title": "核心判断",
+          "body": "常住人数与返乡人数形成两种使用情景，需要先确认房间是否长期固定，再让设计师验证空间条件。"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "access": "free",
+      "kind": "evidence",
+      "title": "为什么提出这个判断",
+      "subtitle": "依据用户已填写的事实，同时保留未知边界。",
+      "sources": [
+        "household.permanent_count",
+        "household.returning_count",
+        "household.return_frequency",
+        "intent.flexible_use",
+        "intent.priorities"
+      ],
+      "blocks": [
+        {
+          "title": "常住人数",
+          "body": "2 人"
+        },
+        {
+          "title": "额外返乡人数",
+          "body": "4 人"
+        },
+        {
+          "title": "返乡频率",
+          "body": "节假日返乡"
+        },
+        {
+          "title": "房间兼用接受度",
+          "body": "可接受兼用"
+        },
+        {
+          "title": "当前优先级",
+          "body": "父母居住舒适 / 节日团聚 / 投入可控"
+        }
+      ],
+      "note": "实际可建范围未核实；庭院是否包含在计划投入内待确认"
+    },
+    {
+      "number": 3,
+      "access": "free",
+      "kind": "directions",
+      "title": "可比较的方向",
+      "subtitle": "展示收益、代价与成立条件，不把概念方向当成已定方案。",
+      "sources": [
+        "household.permanent_count",
+        "household.returning_count",
+        "household.return_frequency",
+        "intent.flexible_use",
+        "intent.priorities"
+      ],
+      "blocks": [
+        {
+          "title": "保留固定客房",
+          "body": "团聚时准备更直接，但要一并比较长期空置房间对日常空间的影响。"
+        },
+        {
+          "title": "使用可转换房间",
+          "body": "日常可服务阅读、收纳或活动，团聚前需明确转换方式与隐私边界。"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "access": "free",
+      "kind": "confirmation",
+      "title": "确认后可以继续解决什么",
+      "subtitle": "你更在意随时可住的独立房间，还是日常空间利用率？拿不准也可以保留两个方向。",
+      "sources": [
+        "intent.priorities"
+      ],
+      "blocks": [
+        {
+          "title": "个性化深化",
+          "body": "形成使用情景比较、空间取舍表、设计师任务书和行动计划。"
+        },
+        {
+          "title": "结论边界",
+          "body": "未核实的工程与审批条件会作为待确认事项，不会被写成已知结论。"
+        }
+      ]
+    }
+  ]
+}

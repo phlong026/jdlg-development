@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 import tempfile
 
+import fitz
+from pypdf import PdfReader
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -25,6 +27,61 @@ FILL = {"bed": "#E3ECE5", "wet": "#E3ECEF", "living": "#F1E5D1",
 KINDS = ["cover", "evidence", "profile", "priorities", "overview", "plans",
          "elevation", "plans", "elevation", "plans", "elevation",
          "comparison", "budget", "actions"]
+
+
+def _font_is_embedded(font):
+    font = font.get_object()
+    descendants = font.get("/DescendantFonts", [])
+    candidates = [font] + [item.get_object() for item in descendants]
+    for candidate in candidates:
+        descriptor = candidate.get("/FontDescriptor")
+        if descriptor:
+            descriptor = descriptor.get_object()
+            if any(descriptor.get(key) for key in ("/FontFile", "/FontFile2", "/FontFile3")):
+                return True
+    return False
+
+
+def verify_rendered_pdf(path, expected_pages):
+    """Reject an incomplete artifact before it replaces the last valid report."""
+    path = Path(path)
+    try:
+        reader = PdfReader(path, strict=True)
+        if reader.is_encrypted or len(reader.pages) != expected_pages:
+            raise ValueError("rendered PDF page count does not match report mode")
+
+        embedded_font_found = False
+        for page in reader.pages:
+            width, height = float(page.mediabox.width), float(page.mediabox.height)
+            if not math.isclose(width, W, abs_tol=0.75) or not math.isclose(height, H, abs_tol=0.75):
+                raise ValueError("rendered PDF page is not A4")
+            if not (page.extract_text() or "").strip():
+                raise ValueError("rendered PDF contains an empty page")
+            resources = page.get("/Resources")
+            fonts = resources.get_object().get("/Font", {}) if resources else {}
+            embedded_font_found = embedded_font_found or any(
+                _font_is_embedded(font) for font in fonts.get_object().values()
+            )
+        if not embedded_font_found:
+            raise ValueError("rendered PDF does not contain an embedded font")
+
+        with fitz.open(path) as document:
+            if document.page_count != expected_pages:
+                raise ValueError("rendered PDF page count does not match report mode")
+            tolerance = 1.5
+            for page in document:
+                for block in page.get_text("blocks", sort=True):
+                    x0, y0, x1, y1, text, _, block_type = block
+                    if block_type != 0 or not text.strip():
+                        continue
+                    if (x0 < -tolerance or y0 < -tolerance
+                            or x1 > page.rect.width + tolerance
+                            or y1 > page.rect.height + tolerance):
+                        raise ValueError("rendered PDF contains text outside the page")
+    except ValueError:
+        raise
+    except Exception as error:
+        raise ValueError("rendered PDF cannot be opened and inspected") from error
 
 
 def wrap(value, width, size):
@@ -448,6 +505,9 @@ class Report:
 
 
 def render_report(data, output, mode, font, asset_root=None):
+    if data.get("meta", {}).get("schema_version") == "report-decision-v5":
+        from decision_v5 import render_decision_v5
+        return render_decision_v5(data, output, mode, font)
     validate(data, mode, asset_root)
     pdfmetrics.registerFont(TTFont("CN", str(font)))
     output = Path(output)
@@ -458,6 +518,7 @@ def render_report(data, output, mode, font, asset_root=None):
     try:
         report = Report(data, name, mode, asset_root)
         report.render()
+        verify_rendered_pdf(name, expected_pages=4 if mode == "preview" else 14)
         os.replace(name, output)
         return report.boxes
     finally:

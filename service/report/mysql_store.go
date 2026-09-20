@@ -189,20 +189,20 @@ func (s *MySQLStore) RetryFailed(ctx context.Context, userID int64, reportID str
 	return s.GetForUser(ctx, userID, reportID)
 }
 
-func (s *MySQLStore) Claim(ctx context.Context, now time.Time, lease time.Duration, maxAttempts int) (*Job, error) {
+func (s *MySQLStore) Claim(ctx context.Context, _ time.Time, lease time.Duration, maxAttempts int) (*Job, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, storeFailure("claim_begin", "", err)
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `UPDATE building_reports SET status=?,failed_stage=CASE WHEN status=? THEN ? ELSE ? END,error_code='attempts_exhausted',lease_token=NULL,lease_until=NULL,updated_at=NOW(6)
-WHERE status IN (?,?) AND lease_until<? AND attempt_count>=?`, StatusFailed, StatusPreviewGenerating, ModePreview, ModeFull, StatusPreviewGenerating, StatusFullGenerating, now, maxAttempts)
+WHERE status IN (?,?) AND lease_until<NOW(6) AND attempt_count>=?`, StatusFailed, StatusPreviewGenerating, ModePreview, ModeFull, StatusPreviewGenerating, StatusFullGenerating, maxAttempts)
 	if err != nil {
 		return nil, storeFailure("claim_expired", "", err)
 	}
 	row := tx.QueryRowContext(ctx, `SELECT `+reportColumns+` FROM building_reports
-WHERE attempt_count<? AND (status IN (?,?) OR (status IN (?,?) AND lease_until<?))
-ORDER BY created_at ASC LIMIT 1 FOR UPDATE`, maxAttempts, StatusPreviewQueued, StatusFullQueued, StatusPreviewGenerating, StatusFullGenerating, now)
+WHERE attempt_count<? AND (status IN (?,?) OR (status IN (?,?) AND lease_until<NOW(6)))
+ORDER BY created_at ASC LIMIT 1 FOR UPDATE`, maxAttempts, StatusPreviewQueued, StatusFullQueued, StatusPreviewGenerating, StatusFullGenerating)
 	record, err := scanReport(row)
 	if errors.Is(err, ErrNotFound) {
 		if err := tx.Commit(); err != nil {
@@ -223,8 +223,8 @@ ORDER BY created_at ASC LIMIT 1 FOR UPDATE`, maxAttempts, StatusPreviewQueued, S
 		}
 	}
 	token := uuid.NewString()
-	leaseUntil := now.Add(lease)
-	result, err := tx.ExecContext(ctx, `UPDATE building_reports SET status=?,attempt_count=attempt_count+1,lease_token=?,lease_until=?,updated_at=NOW(6) WHERE report_id=?`, next, token, leaseUntil, record.ID)
+	leaseUntil := time.Now().Add(lease)
+	result, err := tx.ExecContext(ctx, `UPDATE building_reports SET status=?,attempt_count=attempt_count+1,lease_token=?,lease_until=DATE_ADD(NOW(6),INTERVAL ? MICROSECOND),updated_at=NOW(6) WHERE report_id=?`, next, token, lease.Microseconds(), record.ID)
 	if err != nil {
 		return nil, storeFailure("claim_update", record.ID, err)
 	}
@@ -244,7 +244,7 @@ ORDER BY created_at ASC LIMIT 1 FOR UPDATE`, maxAttempts, StatusPreviewQueued, S
 
 func (s *MySQLStore) CompletePreview(ctx context.Context, reportID, leaseToken string, snapshot json.RawMessage, mode, objectKey string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE building_reports SET preview_snapshot=?,preview_object_key=?,generation_mode=?,status=?,attempt_count=0,lease_token=NULL,lease_until=NULL,error_code=NULL,failed_stage=NULL,updated_at=NOW(6)
-WHERE report_id=? AND status=? AND lease_token=?`, snapshot, objectKey, mode, StatusPreviewReady, reportID, StatusPreviewGenerating, leaseToken)
+WHERE report_id=? AND status=? AND lease_token=? AND lease_until>NOW(6)`, snapshot, objectKey, mode, StatusPreviewReady, reportID, StatusPreviewGenerating, leaseToken)
 	return checkedUpdate("complete_preview", reportID, result, err)
 }
 
@@ -270,7 +270,7 @@ WHERE report_id=? AND user_id=? AND preview_snapshot IS NOT NULL AND (preview_ob
 
 func (s *MySQLStore) CompleteFull(ctx context.Context, reportID, leaseToken string, snapshot json.RawMessage, objectKey string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE building_reports SET full_snapshot=?,full_object_key=?,status=?,lease_token=NULL,lease_until=NULL,error_code=NULL,failed_stage=NULL,updated_at=NOW(6)
-WHERE report_id=? AND paid=1 AND status=? AND lease_token=?`, snapshot, objectKey, StatusReady, reportID, StatusFullGenerating, leaseToken)
+WHERE report_id=? AND paid=1 AND status=? AND lease_token=? AND lease_until>NOW(6)`, snapshot, objectKey, StatusReady, reportID, StatusFullGenerating, leaseToken)
 	return checkedUpdate("complete_full", reportID, result, err)
 }
 
@@ -286,7 +286,7 @@ func (s *MySQLStore) Fail(ctx context.Context, reportID, leaseToken, stage, erro
 		}
 	}
 	result, err := s.db.ExecContext(ctx, `UPDATE building_reports SET status=?,failed_stage=?,error_code=?,lease_token=NULL,lease_until=NULL,updated_at=NOW(6)
-WHERE report_id=? AND status=? AND lease_token=?`, next, stage, errorCode, reportID, expected, leaseToken)
+WHERE report_id=? AND status=? AND lease_token=? AND lease_until>NOW(6)`, next, stage, errorCode, reportID, expected, leaseToken)
 	return checkedUpdate("fail", reportID, result, err)
 }
 

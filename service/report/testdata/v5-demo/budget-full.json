@@ -1,0 +1,380 @@
+{
+  "meta": {
+    "schema_version": "report-decision-v5",
+    "protocol_version": "report-decision-v5",
+    "source": "report-orchestrator-v5",
+    "report_id": "DEMO-budget-20260920",
+    "input_hash": "a5f22d9e8ec224ffabbb9403b3235defc361454f376e982e335478a9f302e37f",
+    "date": "2026年09月20日",
+    "demonstration": false,
+    "generation_mode": "ai_assisted"
+  },
+  "facts": {
+    "budget.scope.12ab93790874": "unknown: 门窗与机电",
+    "budget.scope.7e5894b37937": "excluded: 庭院景观",
+    "budget.scope.add389d53910": "unknown: 室内装修",
+    "budget.scope.f47862894e1d": "included: 主体结构",
+    "budget.wan": "unknown",
+    "household.permanent_count": "unknown",
+    "household.return_frequency": "unknown",
+    "household.returning_count": "unknown",
+    "input.primary_goal": "budget",
+    "intent.bedrooms": "unknown",
+    "intent.flexible_use": "unknown",
+    "intent.floors": "unknown",
+    "intent.priorities": "投入可控 / 必需功能不缩水 / 后期变更少",
+    "readiness.stage": "unknown",
+    "site.approx_dimensions": "unknown",
+    "site.buildable_constraints": "unknown",
+    "site.buildable_scope": "unknown",
+    "site.region": "福建泉州"
+  },
+  "recipe": "budget",
+  "diagnosis": {
+    "id": "diagnosis-8e4142e8383e2830",
+    "recipe": "budget",
+    "topic": "先统一计划投入的覆盖范围",
+    "reason": "当前计划投入金额尚未确认，但可以先分清主体、装修、庭院与设备等范围中的包含项、排除项和待确认项。",
+    "evidence_refs": [
+      "budget.wan",
+      "intent.priorities",
+      "budget.scope.f47862894e1d",
+      "budget.scope.add389d53910",
+      "budget.scope.7e5894b37937",
+      "budget.scope.12ab93790874"
+    ],
+    "options": [
+      {
+        "title": "必要需求与明确包含项",
+        "body": "保留已表达的生活底线，并用同一询价口径确认覆盖范围。"
+      },
+      {
+        "title": "可调整需求与待确认范围",
+        "body": "对尚未决定是否包含的项目单独询价，不预先假设单价或节省金额。"
+      }
+    ],
+    "unknowns": [
+      "宅基地估算尺寸未提供",
+      "实际可建范围未核实",
+      "计划投入金额未提供",
+      "室内装修是否包含在计划投入内待确认",
+      "门窗与机电是否包含在计划投入内待确认",
+      "返乡使用频率未确认"
+    ],
+    "question": "哪些需求必须包含在当前计划投入内，哪些可以分期或单独询价？"
+  },
+  "confirmation": {
+    "diagnosis_id": "diagnosis-8e4142e8383e2830",
+    "input_hash": "a5f22d9e8ec224ffabbb9403b3235defc361454f376e982e335478a9f302e37f",
+    "choice": "confirm",
+    "priorities": [
+      "投入可控",
+      "必需功能不缩水",
+      "后期变更少"
+    ]
+  },
+  "pages": [
+    {
+      "number": 1,
+      "access": "paid",
+      "kind": "recommendation",
+      "title": "本次报告的核心建议",
+      "subtitle": "先统一计划投入的覆盖范围",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "blocks": [
+        {
+          "title": "建议",
+          "body": "当前计划投入金额尚未确认，但可以先分清主体、装修、庭院与设备等范围中的包含项、排除项和待确认项。"
+        },
+        {
+          "title": "阅读边界",
+          "body": "这是建房前期决策底稿，需要测绘、审批、设计和正式询价核实的内容已单独标出。"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "access": "paid",
+      "kind": "facts",
+      "title": "我家的事实与待核实项",
+      "subtitle": "将用户自述、计算信息与未知项分开。",
+      "sources": [
+        "input.primary_goal",
+        "site.region",
+        "site.approx_dimensions",
+        "site.buildable_scope",
+        "household.permanent_count",
+        "household.returning_count",
+        "household.return_frequency",
+        "intent.floors",
+        "intent.bedrooms",
+        "budget.wan"
+      ],
+      "blocks": [
+        {
+          "title": "当前最想解决的问题",
+          "body": "预算怎么安排"
+        },
+        {
+          "title": "建房地区",
+          "body": "福建泉州"
+        },
+        {
+          "title": "宅基地估算尺寸",
+          "body": "待确认"
+        },
+        {
+          "title": "可建范围核实状态",
+          "body": "待确认"
+        },
+        {
+          "title": "常住人数",
+          "body": "待确认"
+        },
+        {
+          "title": "额外返乡人数",
+          "body": "待确认"
+        },
+        {
+          "title": "返乡频率",
+          "body": "待确认"
+        },
+        {
+          "title": "意向层数",
+          "body": "待确认"
+        },
+        {
+          "title": "意向卧室数",
+          "body": "待确认"
+        },
+        {
+          "title": "计划投入",
+          "body": "待确认"
+        }
+      ],
+      "note": "宅基地估算尺寸未提供；实际可建范围未核实；计划投入金额未提供；室内装修是否包含在计划投入内待确认；门窗与机电是否包含在计划投入内待确认；返乡使用频率未确认"
+    },
+    {
+      "number": 3,
+      "access": "paid",
+      "kind": "criteria",
+      "title": "决策优先级与评价标准",
+      "subtitle": "以用户确认后的顺序比较。",
+      "sources": [
+        "intent.priorities"
+      ],
+      "priorities": [
+        {
+          "title": "优先级 1",
+          "body": "投入可控"
+        },
+        {
+          "title": "优先级 2",
+          "body": "必需功能不缩水"
+        },
+        {
+          "title": "优先级 3",
+          "body": "后期变更少"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "access": "paid",
+      "kind": "analysis_primary",
+      "title": "投入边界与必要需求",
+      "subtitle": "说明收益、影响、成立条件和待验证内容。",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "blocks": [
+        {
+          "title": "主要收益",
+          "body": "按已确认优先级说明这个方向对日常使用、家庭沟通和后续推进的帮助。"
+        },
+        {
+          "title": "需要接受的代价",
+          "body": "保留用户尚未确认的边界，不把概念方向写成已定方案。"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "access": "paid",
+      "kind": "analysis_secondary",
+      "title": "可调整需求与待核实代价",
+      "subtitle": "使用同一组家庭事实作可比较的分析。",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "blocks": [
+        {
+          "title": "成立条件",
+          "body": "需要家庭、设计师和相关专业人员用同一份任务书继续核对。"
+        },
+        {
+          "title": "待验证事项",
+          "body": "尚未核实的地块、审批、投入范围与家庭意见会改变最终结论。"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "access": "paid",
+      "kind": "decision_table",
+      "title": "投入取舍决策表",
+      "subtitle": "将判断条件与可能改变结论的新信息列清。",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "blocks": [
+        {
+          "title": "必要需求与明确包含项",
+          "body": "保留已表达的生活底线，并用同一询价口径确认覆盖范围。"
+        },
+        {
+          "title": "可调整需求与待确认范围",
+          "body": "对尚未决定是否包含的项目单独询价，不预先假设单价或节省金额。"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "access": "paid",
+      "kind": "budget_scope",
+      "title": "预算范围与询价清单",
+      "subtitle": "只使用用户填写的计划投入和范围状态。",
+      "sources": [
+        "budget.wan",
+        "budget.scope.12ab93790874",
+        "budget.scope.7e5894b37937",
+        "budget.scope.add389d53910",
+        "budget.scope.f47862894e1d"
+      ],
+      "blocks": [
+        {
+          "title": "已确认的范围",
+          "body": "只列出用户已明确填写的投入与包含项，作为同口径询价的起点。"
+        },
+        {
+          "title": "待核实的范围",
+          "body": "未知项需分别询价并保留书面回执，本页不构成正式工程报价。"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "access": "paid",
+      "kind": "designer_brief",
+      "title": "给设计师的需求任务书",
+      "subtitle": "将已确认需求、可协商项和待回答问题放在同一页。",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "blocks": [
+        {
+          "title": "已确认优先级",
+          "body": "投入可控 / 必需功能不缩水 / 后期变更少"
+        },
+        {
+          "title": "需要设计师回答",
+          "body": "哪些需求必须包含在当前计划投入内，哪些可以分期或单独询价？"
+        },
+        {
+          "title": "待核实条件",
+          "body": "宅基地估算尺寸未提供；实际可建范围未核实；计划投入金额未提供；室内装修是否包含在计划投入内待确认；门窗与机电是否包含在计划投入内待确认；返乡使用频率未确认"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "access": "paid",
+      "kind": "action_plan",
+      "title": "下一步行动计划",
+      "subtitle": "每项行动说明前置条件、完成凭证和建议责任方。",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "actions": [
+        {
+          "title": "冻结本次询价口径",
+          "body": "前置：确认已包含项主体结构。凭证：投入范围清单。责任方：家庭决策人。"
+        },
+        {
+          "title": "单独核实待定范围",
+          "body": "前置：列出待确认项室内装修、门窗与机电。凭证：同口径分项询价回执。责任方：询价对象与家庭。"
+        },
+        {
+          "title": "根据同口径回执取舍",
+          "body": "前置：各方使用同一范围回复。凭证：可比较的询价表与需求取舍记录。责任方：家庭决策人。"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "access": "paid",
+      "kind": "confirmation_sheet",
+      "title": "沟通确认单",
+      "subtitle": "下次家庭与设计师沟通时可直接使用。",
+      "sources": [
+        "budget.wan",
+        "intent.priorities",
+        "budget.scope.f47862894e1d",
+        "budget.scope.add389d53910",
+        "budget.scope.7e5894b37937",
+        "budget.scope.12ab93790874"
+      ],
+      "blocks": [
+        {
+          "title": "确认核心问题",
+          "body": "先统一计划投入的覆盖范围"
+        },
+        {
+          "title": "确认优先顺序",
+          "body": "投入可控 / 必需功能不缩水 / 后期变更少"
+        },
+        {
+          "title": "确认仍未知的事项",
+          "body": "宅基地估算尺寸未提供；实际可建范围未核实；计划投入金额未提供；室内装修是否包含在计划投入内待确认；门窗与机电是否包含在计划投入内待确认；返乡使用频率未确认"
+        },
+        {
+          "title": "记录会改变结论的新信息",
+          "body": "新增的测绘、审批、家庭意见或正式询价结果需进入新的修订版本。"
+        }
+      ],
+      "note": "报告模板：full-10-v1"
+    }
+  ]
+}

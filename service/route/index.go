@@ -50,7 +50,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
 	}
-	if reportModule != nil {
+	if reportModule != nil && reportModule.EmbeddedWorker {
 		go reportModule.Run(reportContext)
 	}
 	// 健康检查

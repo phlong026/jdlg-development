@@ -34,8 +34,19 @@ func TestHTTPTextClientReturnsOnlyBoundedExplanationFields(t *testing.T) {
 
 func TestCOSStorageUploadsWithPrivateACLAndReturnsSignedURL(t *testing.T) {
 	var privateACL bool
+	var checksum string
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		privateACL = request.Header.Get("x-cos-acl") == "private" && request.Header.Get("Content-Type") == "application/pdf"
+		if request.Method == http.MethodGet {
+			_, _ = response.Write([]byte("%PDF-1.7\ntest"))
+			return
+		}
+		if request.Method == http.MethodPut {
+			privateACL = request.Header.Get("x-cos-acl") == "private" && request.Header.Get("Content-Type") == "application/pdf"
+			checksum = request.Header.Get("x-cos-meta-report-sha256")
+		} else {
+			response.Header().Set("x-cos-meta-report-sha256", checksum)
+			response.Header().Set("Content-Length", "13")
+		}
 		response.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()

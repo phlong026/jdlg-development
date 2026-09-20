@@ -2,7 +2,9 @@ package route
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,12 +26,15 @@ import (
 )
 
 type ReportModule struct {
-	Service     *report.Service
-	Worker      *report.Worker
-	Renderer    report.Renderer
-	Wecom       *reportwecom.Service
-	WecomConfig reportwecom.Config
-	DB          *sql.DB
+	Service           *report.Service
+	Worker            *report.Worker
+	Renderer          report.Renderer
+	Wecom             *reportwecom.Service
+	WecomConfig       reportwecom.Config
+	DB                *sql.DB
+	DecisionEnabled   bool
+	EmbeddedWorker    bool
+	WorkerConcurrency int
 }
 type unavailablePackCatalog struct{}
 
@@ -56,6 +62,16 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 	if err := store.VerifySchema(checkCtx); err != nil {
 		return nil, err
 	}
+	if cfg.MultiAgentEnabled {
+		if err := store.VerifyAgentSchema(checkCtx); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.DecisionEnabled {
+		if err := store.VerifyDecisionSchema(checkCtx); err != nil {
+			return nil, err
+		}
+	}
 	pdfConfig := component.ReportPDFConfig{PythonPath: os.Getenv("REPORT_PDF_PYTHON"), ScriptPath: os.Getenv("REPORT_PDF_SCRIPT"), FontPath: os.Getenv("REPORT_PDF_FONT"), AssetRoot: os.Getenv("REPORT_ASSET_ROOT"), Timeout: 90 * time.Second}
 	var renderer report.Renderer
 	var storage report.PrivateStorage
@@ -72,6 +88,16 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		renderer, err = component.NewReportPDFRenderer(pdfConfig)
 		if err != nil {
 			return nil, err
+		}
+		if cfg.MultiAgentEnabled {
+			version, err := reportArtifactVersion(pdfConfig)
+			if err != nil {
+				return nil, err
+			}
+			renderer, err = report.NewCachedRenderer(renderer, os.Getenv("REPORT_ARTIFACT_DIR"), version)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if os.Getenv("REPORT_COS_BUCKET") != "" {
@@ -96,22 +122,32 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		catalog = packs
 	}
 	wecomConfig, wecomErr := reportwecom.LoadConfig()
-	if wecomErr != nil || !wecomConfig.Enabled || !appConfig.VirtualPay.Enabled || wecomConfig.AppID != appConfig.Wechat.AppID {
+	cfg.LegacyPaymentBlocked = wecomErr != nil || !wecomConfig.Enabled || wecomConfig.AppID != appConfig.Wechat.AppID
+	if !appConfig.VirtualPay.Enabled || !cfg.DecisionEnabled && (wecomErr != nil || !wecomConfig.Enabled || wecomConfig.AppID != appConfig.Wechat.AppID) {
 		cfg.PaymentEnabled = false
 		log.Printf("[report] warn checkout=disabled reason=delivery_or_payment_configuration")
 	}
 	var wecomStore *reportwecom.SQLStore
 	var wecomProvider *reportwecom.HTTPProvider
-	if wecomErr == nil && wecomConfig.Enabled {
+	if wecomErr == nil && wecomConfig.Enabled && wecomConfig.AppID == appConfig.Wechat.AppID {
 		wecomStore = &reportwecom.SQLStore{DB: db}
 		if err := wecomStore.VerifySchema(checkCtx); err != nil {
-			return nil, err
-		}
-		wecomProvider = reportwecom.NewHTTPProvider(wecomConfig)
-		// Refresh the welcome thumbnail before any payment can be offered.
-		if err := wecomProvider.Warmup(checkCtx); err != nil {
-			cfg.PaymentEnabled = false
-			log.Printf("[report] warn checkout=disabled reason=wecom_not_ready")
+			if !cfg.DecisionEnabled {
+				return nil, err
+			}
+			cfg.LegacyPaymentBlocked = true
+			wecomStore = nil
+			log.Printf("[report] warn delivery=unavailable reason=wecom_schema_not_ready")
+		} else {
+			wecomProvider = reportwecom.NewHTTPProvider(wecomConfig)
+			// Legacy checkout still requires a usable welcome delivery path.
+			if err := wecomProvider.Warmup(checkCtx); err != nil {
+				cfg.LegacyPaymentBlocked = true
+				if !cfg.DecisionEnabled {
+					cfg.PaymentEnabled = false
+				}
+				log.Printf("[report] warn delivery=unavailable reason=wecom_not_ready")
+			}
 		}
 	}
 	service, err := report.NewService(cfg, store, catalog, storage)
@@ -119,7 +155,7 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		return nil, err
 	}
 	var textClient report.TextClient
-	if os.Getenv("REPORT_TEXT_ENDPOINT") != "" {
+	if !cfg.MultiAgentEnabled && os.Getenv("REPORT_TEXT_ENDPOINT") != "" {
 		if !strings.HasPrefix(os.Getenv("REPORT_TEXT_ENDPOINT"), "https://") {
 			return nil, report.ErrInvalidInput
 		}
@@ -128,15 +164,82 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 			return nil, err
 		}
 	}
-	worker, err := report.NewWorker(cfg, store, report.NewGenerator(textClient), catalog, renderer, storage)
+	var workerOptions []report.WorkerOption
+	if cfg.MultiAgentEnabled {
+		agentClient, err := configuredReportAgentClient()
+		if err != nil {
+			return nil, err
+		}
+		agents, err := report.NewMultiAgentRunner(agentClient, store)
+		if err != nil {
+			return nil, err
+		}
+		var runner report.AgentRunner = agents
+		if cfg.DecisionEnabled {
+			decision, err := report.NewReportOrchestrator(agentClient, store)
+			if err != nil {
+				return nil, err
+			}
+			runner = report.ProtocolDispatcher{Legacy: agents, Decision: decision}
+		}
+		workerOptions = append(workerOptions, report.WithAgentRunner(runner))
+	}
+	worker, err := report.NewWorker(cfg, store, report.NewGenerator(textClient), catalog, renderer, storage, workerOptions...)
 	if err != nil {
 		return nil, err
 	}
-	module := &ReportModule{Service: service, Worker: worker, Renderer: renderer, DB: db, WecomConfig: wecomConfig}
+	module := &ReportModule{Service: service, Worker: worker, Renderer: renderer, DB: db, WecomConfig: wecomConfig, DecisionEnabled: cfg.DecisionEnabled, EmbeddedWorker: cfg.EmbeddedWorker, WorkerConcurrency: cfg.WorkerConcurrency}
 	if wecomProvider != nil {
 		module.Wecom = &reportwecom.Service{Provider: wecomProvider, Store: wecomStore, Identity: module, Binder: service, EmployeeID: wecomConfig.EmployeeID}
 	}
 	return module, nil
+}
+
+func configuredReportAgentClient() (*report.HTTPAgentClient, error) {
+	endpoint := strings.TrimSpace(os.Getenv("REPORT_TEXT_ENDPOINT"))
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return nil, report.ErrInvalidInput
+	}
+	model := strings.TrimSpace(os.Getenv("REPORT_TEXT_MODEL"))
+	roleModel := func(name string) string {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+		return model
+	}
+	version := strings.TrimSpace(os.Getenv("REPORT_AGENT_CONFIG_VERSION"))
+	if version == "" {
+		version = "v1"
+	}
+	return report.NewHTTPAgentClient(report.MultiAgentHTTPConfig{
+		Endpoint: endpoint, APIKey: os.Getenv("REPORT_TEXT_API_KEY"), ConfigVersion: version,
+		PlannerModel: roleModel("REPORT_AGENT_PLANNER_MODEL"), WriterModel: roleModel("REPORT_AGENT_WRITER_MODEL"),
+		VisualModel: roleModel("REPORT_AGENT_VISUAL_MODEL"), ReviewerModel: roleModel("REPORT_AGENT_REVIEWER_MODEL"),
+		DiagnosisModel: roleModel("REPORT_AGENT_DIAGNOSIS_MODEL"), DecisionModel: roleModel("REPORT_AGENT_DECISION_MODEL"),
+		BudgetModel: roleModel("REPORT_AGENT_BUDGET_MODEL"), EditorModel: roleModel("REPORT_AGENT_EDITOR_MODEL"),
+		Timeout: 45 * time.Second, MaxResponseBytes: 256 << 10,
+	}, &http.Client{Timeout: 45 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})
+}
+
+func reportArtifactVersion(config component.ReportPDFConfig) (string, error) {
+	digest := sha256.New()
+	for _, source := range []string{config.ScriptPath, filepath.Join(filepath.Dir(config.ScriptPath), "decision_v5.py"), config.FontPath} {
+		file, err := os.Open(source)
+		if err != nil {
+			log.Printf("[report] error artifact_version=open_failed")
+			return "", report.ErrNotReady
+		}
+		written, readErr := io.Copy(digest, io.LimitReader(file, 128<<20+1))
+		closeErr := file.Close()
+		if readErr != nil || closeErr != nil || written > 128<<20 {
+			log.Printf("[report] error artifact_version=read_failed")
+			return "", report.ErrNotReady
+		}
+		_, _ = digest.Write([]byte{0})
+	}
+	_, _ = digest.Write([]byte(os.Getenv("REPORT_AGENT_CONFIG_VERSION")))
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
 func privateReportStorage(cfg *config.Config) (report.PrivateStorage, error) {
@@ -171,23 +274,39 @@ func hostPart(value string) bool {
 	return true
 }
 
+// Run uses database leases for coordination across both embedded and standalone workers.
 func (m *ReportModule) Run(ctx context.Context) {
-	if m == nil {
+	if m == nil || m.Worker == nil {
 		return
 	}
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			_, err := m.Worker.RunOnce(ctx)
-			if err != nil && ctx.Err() == nil {
-				log.Printf("[report] warn worker_cycle=failed")
-			}
-		}
+	concurrency := m.WorkerConcurrency
+	if concurrency < 1 || concurrency > 8 {
+		concurrency = 1
 	}
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ctx.Err() == nil {
+				worked, err := m.Worker.RunOnce(ctx)
+				if err != nil && ctx.Err() == nil {
+					log.Printf("[report] warn worker_cycle=failed")
+				}
+				if worked && err == nil {
+					continue
+				}
+				timer := time.NewTimer(2 * time.Second)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 func (m *ReportModule) OwnerUnionID(ctx context.Context, userID int64, id string) (string, error) {
 	view, err := m.Service.Get(ctx, userID, id)
@@ -220,9 +339,10 @@ func (m *ReportModule) requireActivePayment(ctx context.Context, userID int64, i
 }
 
 func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModule) {
+	registerDecisionQuestions(public, module)
 	public.GET("/reports/config", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
-		c.JSON(200, gin.H{"code": 0, "data": gin.H{"enabled": module != nil}})
+		c.JSON(200, gin.H{"code": 0, "data": gin.H{"enabled": module != nil, "decision_enabled": module != nil && module.DecisionEnabled}})
 	})
 	group := auth.Group("/reports")
 	group.Use(func(c *gin.Context) {
@@ -236,6 +356,7 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 			c.AbortWithStatusJSON(401, gin.H{"code": 401, "msg": "请先登录"})
 		}
 	})
+	registerDecisionReportRoutes(group, module)
 	group.POST("", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 		decoder := json.NewDecoder(c.Request.Body)
@@ -277,7 +398,7 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 			reportError(c, err)
 			return
 		}
-		if result.CanPay {
+		if result.CanPay && result.ProtocolVersion != report.ProtocolDecisionV5 {
 			var union string
 			if module.DB.QueryRowContext(ctx, "SELECT COALESCE(unionid,'') FROM users WHERE id=?", user).Scan(&union) != nil || union == "" {
 				result.CanPay = false
@@ -292,7 +413,7 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 			report.SafeView
 			Quote               report.PaymentQuote `json:"quote"`
 			PreviewPDFAvailable bool                `json:"preview_pdf_available"`
-		}{result, quote, module.Renderer != nil}})
+		}{result, quote, module.Renderer != nil && result.ProtocolVersion != report.ProtocolDecisionV5}})
 	})
 	group.POST("/:id/retry", func(c *gin.Context) {
 		result, err := module.Service.Retry(c.Request.Context(), GetTokenCodeSession(c).UserID, c.Param("id"))
@@ -356,6 +477,10 @@ func reportBlockMessage(code string) string {
 		return "这份报告已购买，无需重复支付。"
 	case "preview_not_ready":
 		return "先读完您的建房方向，再决定是否深入。"
+	case "confirmation_required":
+		return "请先确认诊断方向和关注重点，再购买完整报告。"
+	case "invalid_confirmation", "invalid_preview", "invalid_frozen_input":
+		return "报告信息版本不一致，请重新填写并生成预览。"
 	case "reviewed_pack_unavailable":
 		return "暂未匹配到符合条件的审核方案，当前不收取报告费用。"
 	default:

@@ -105,7 +105,8 @@ func RegisterVirtualPayRoutes(
 				return
 			}
 			user, userErr := deps.UserDBModel.GetByID(codeSession.UserID)
-			if userErr != nil || validateReportWechatIdentity(user, session) != nil {
+			view, viewErr := deps.ReportService.Get(c.Request.Context(), codeSession.UserID, req.ReportID)
+			if userErr != nil || viewErr != nil || validateReportProtocolIdentity(user, session, view.ProtocolVersion) != nil {
 				c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": "当前微信身份无法购买该报告"})
 				return
 			}

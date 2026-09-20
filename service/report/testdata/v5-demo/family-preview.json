@@ -1,0 +1,156 @@
+{
+  "meta": {
+    "schema_version": "report-decision-v5",
+    "protocol_version": "report-decision-v5",
+    "source": "report-orchestrator-v5",
+    "report_id": "DEMO-family-20260920",
+    "input_hash": "0600cd42b9a04a2983ea5e1e485daab2c34222e47dd409d322d5b7f857c4bf8b",
+    "date": "2026年09月20日",
+    "demonstration": false,
+    "generation_mode": "ai_assisted"
+  },
+  "facts": {
+    "budget.wan": "unknown",
+    "family.perspective.01": "子女: 节假日返乡时保留完整团聚空间与临时睡眠能力",
+    "family.perspective.02": "孙辈: 活动空间安全，与老人休息区互不干扰",
+    "family.perspective.03": "父母: 首层日常起居、厨房与卫生间使用方便",
+    "household.permanent_count": "unknown",
+    "household.return_frequency": "holidays",
+    "household.returning_count": "unknown",
+    "input.primary_goal": "family",
+    "intent.bedrooms": "unknown",
+    "intent.flexible_use": "unknown",
+    "intent.floors": "unknown",
+    "intent.priorities": "先形成全家可确认的共同底线 / 保留老人日常起居便利 / 团聚时的私密与互动平衡",
+    "readiness.stage": "unknown",
+    "site.approx_dimensions": "unknown",
+    "site.buildable_constraints": "unknown",
+    "site.buildable_scope": "unknown",
+    "site.region": "福建南安"
+  },
+  "recipe": "family",
+  "diagnosis": {
+    "id": "diagnosis-59fb8e62728743b7",
+    "recipe": "family",
+    "topic": "先分清共同底线与已表达的不同需求",
+    "reason": "已收集多个家庭视角，应先把共同底线、个人偏好和可协商事项分开，不把不同表达自动定性为冲突。",
+    "evidence_refs": [
+      "intent.priorities",
+      "family.perspective.01",
+      "family.perspective.02",
+      "family.perspective.03"
+    ],
+    "options": [
+      {
+        "title": "共同底线清单",
+        "body": "找出所有人都认可且不宜交换的生活需求。"
+      },
+      {
+        "title": "不同需求与可协商项",
+        "body": "把各方已表达的需求放在同一组使用情景中比较，记录需要共同确认的条件。"
+      }
+    ],
+    "unknowns": [
+      "宅基地估算尺寸未提供",
+      "实际可建范围未核实",
+      "计划投入金额未提供"
+    ],
+    "question": "请确认哪些是全家共同底线，哪些仍需要家庭讨论？"
+  },
+  "pages": [
+    {
+      "number": 1,
+      "access": "free",
+      "kind": "decision",
+      "title": "我家值得先决定什么",
+      "subtitle": "先分清共同底线与已表达的不同需求",
+      "sources": [
+        "intent.priorities",
+        "family.perspective.01",
+        "family.perspective.02",
+        "family.perspective.03"
+      ],
+      "blocks": [
+        {
+          "title": "核心判断",
+          "body": "已收集多个家庭视角，应先把共同底线、个人偏好和可协商事项分开，不把不同表达自动定性为冲突。"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "access": "free",
+      "kind": "evidence",
+      "title": "为什么提出这个判断",
+      "subtitle": "依据用户已填写的事实，同时保留未知边界。",
+      "sources": [
+        "intent.priorities",
+        "family.perspective.01",
+        "family.perspective.02",
+        "family.perspective.03"
+      ],
+      "blocks": [
+        {
+          "title": "当前优先级",
+          "body": "先形成全家可确认的共同底线 / 保留老人日常起居便利 / 团聚时的私密与互动平衡"
+        },
+        {
+          "title": "家庭视角 1",
+          "body": "子女: 节假日返乡时保留完整团聚空间与临时睡眠能力"
+        },
+        {
+          "title": "家庭视角 2",
+          "body": "孙辈: 活动空间安全，与老人休息区互不干扰"
+        },
+        {
+          "title": "家庭视角 3",
+          "body": "父母: 首层日常起居、厨房与卫生间使用方便"
+        }
+      ],
+      "note": "宅基地估算尺寸未提供；实际可建范围未核实；计划投入金额未提供"
+    },
+    {
+      "number": 3,
+      "access": "free",
+      "kind": "directions",
+      "title": "可比较的方向",
+      "subtitle": "先把共同底线与待讨论项分开。",
+      "sources": [
+        "intent.priorities",
+        "family.perspective.01",
+        "family.perspective.02",
+        "family.perspective.03"
+      ],
+      "blocks": [
+        {
+          "title": "共同底线清单",
+          "body": "找出所有人都认可且不宜交换的生活需求。"
+        },
+        {
+          "title": "不同需求与可协商项",
+          "body": "把各方已表达的需求放在同一组使用情景中比较，记录需要共同确认的条件。"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "access": "free",
+      "kind": "confirmation",
+      "title": "确认后可以继续解决什么",
+      "subtitle": "请确认哪些是全家共同底线，哪些仍需要家庭讨论？",
+      "sources": [
+        "intent.priorities"
+      ],
+      "blocks": [
+        {
+          "title": "个性化深化",
+          "body": "形成共识与待讨论表、家庭讨论清单、设计师任务书和行动计划。"
+        },
+        {
+          "title": "结论边界",
+          "body": "未核实的工程与审批条件会作为待确认事项，不会被写成已知结论。"
+        }
+      ]
+    }
+  ]
+}

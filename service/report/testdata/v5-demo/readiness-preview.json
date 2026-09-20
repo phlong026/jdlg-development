@@ -1,0 +1,174 @@
+{
+  "meta": {
+    "schema_version": "report-decision-v5",
+    "protocol_version": "report-decision-v5",
+    "source": "report-orchestrator-v5",
+    "report_id": "DEMO-readiness-20260920",
+    "input_hash": "b804ea5abd102900b4dde0f3786eb53a0c658f5dcd589f2d011784f25840bfe2",
+    "date": "2026年09月20日",
+    "demonstration": false,
+    "generation_mode": "ai_assisted"
+  },
+  "facts": {
+    "budget.wan": "unknown",
+    "household.permanent_count": "unknown",
+    "household.return_frequency": "unknown",
+    "household.returning_count": "unknown",
+    "input.primary_goal": "readiness",
+    "intent.bedrooms": "unknown",
+    "intent.flexible_use": "unknown",
+    "intent.floors": "unknown",
+    "intent.priorities": "先解决真正阻断下一步的事项 / 让家庭和专业人员同口径沟通 / 已有资料不重复办理",
+    "readiness.item.01": "missing: 宅基地边界与可建条件核实",
+    "readiness.item.02": "missing: 审批所需材料目录",
+    "readiness.item.03": "existing: 家庭需求清单",
+    "readiness.item.04": "unknown: 现场测绘资料",
+    "readiness.stage": "information",
+    "site.approx_dimensions": "unknown",
+    "site.buildable_constraints": "unknown",
+    "site.buildable_scope": "unknown",
+    "site.region": "福建南安"
+  },
+  "recipe": "readiness",
+  "diagnosis": {
+    "id": "diagnosis-d4a2b95d932d2ec3",
+    "recipe": "readiness",
+    "topic": "先识别真正阻断下一步的条件",
+    "reason": "当前阶段的资料可分为已具备、缺失和尚未确认。先处理会阻断后续决策的项目，其余准备工作可以并行推进。",
+    "evidence_refs": [
+      "readiness.stage",
+      "intent.priorities",
+      "readiness.item.01",
+      "readiness.item.02",
+      "readiness.item.03",
+      "readiness.item.04"
+    ],
+    "options": [
+      {
+        "title": "阻断项与前置条件",
+        "body": "将标记为缺失或未知、且会影响下一阶段的资料放在首位。"
+      },
+      {
+        "title": "可并行准备的事项",
+        "body": "在不依赖未核实结论的范围内，同步整理家庭需求、沟通清单和询价口径。"
+      }
+    ],
+    "unknowns": [
+      "宅基地估算尺寸未提供",
+      "实际可建范围未核实",
+      "计划投入金额未提供",
+      "返乡使用频率未确认"
+    ],
+    "question": "请确认哪些资料已有可核对的凭证，哪些仍需要联系专业人员核实？"
+  },
+  "pages": [
+    {
+      "number": 1,
+      "access": "free",
+      "kind": "decision",
+      "title": "我家值得先决定什么",
+      "subtitle": "先识别真正阻断下一步的条件",
+      "sources": [
+        "readiness.stage",
+        "intent.priorities",
+        "readiness.item.01",
+        "readiness.item.02",
+        "readiness.item.03",
+        "readiness.item.04"
+      ],
+      "blocks": [
+        {
+          "title": "核心判断",
+          "body": "当前阶段的资料可分为已具备、缺失和尚未确认。先处理会阻断后续决策的项目，其余准备工作可以并行推进。"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "access": "free",
+      "kind": "evidence",
+      "title": "为什么提出这个判断",
+      "subtitle": "依据用户已填写的事实，同时保留未知边界。",
+      "sources": [
+        "readiness.stage",
+        "intent.priorities",
+        "readiness.item.01",
+        "readiness.item.02",
+        "readiness.item.03",
+        "readiness.item.04"
+      ],
+      "blocks": [
+        {
+          "title": "当前准备阶段",
+          "body": "资料整理阶段"
+        },
+        {
+          "title": "当前优先级",
+          "body": "先解决真正阻断下一步的事项 / 让家庭和专业人员同口径沟通 / 已有资料不重复办理"
+        },
+        {
+          "title": "准备事项｜宅基地边界与可建条件核实",
+          "body": "尚缺失：宅基地边界与可建条件核实"
+        },
+        {
+          "title": "准备事项｜审批所需材料目录",
+          "body": "尚缺失：审批所需材料目录"
+        },
+        {
+          "title": "准备事项｜家庭需求清单",
+          "body": "已具备：家庭需求清单"
+        },
+        {
+          "title": "准备事项｜现场测绘资料",
+          "body": "待确认：现场测绘资料"
+        }
+      ],
+      "note": "宅基地估算尺寸未提供；实际可建范围未核实；计划投入金额未提供；返乡使用频率未确认"
+    },
+    {
+      "number": 3,
+      "access": "free",
+      "kind": "directions",
+      "title": "推进条件与并行事项",
+      "subtitle": "分清真正阻断项与可并行的准备。",
+      "sources": [
+        "readiness.stage",
+        "intent.priorities",
+        "readiness.item.01",
+        "readiness.item.02",
+        "readiness.item.03",
+        "readiness.item.04"
+      ],
+      "blocks": [
+        {
+          "title": "阻断项与前置条件",
+          "body": "将标记为缺失或未知、且会影响下一阶段的资料放在首位。"
+        },
+        {
+          "title": "可并行准备的事项",
+          "body": "在不依赖未核实结论的范围内，同步整理家庭需求、沟通清单和询价口径。"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "access": "free",
+      "kind": "confirmation",
+      "title": "确认后可以继续解决什么",
+      "subtitle": "请确认哪些资料已有可核对的凭证，哪些仍需要联系专业人员核实？",
+      "sources": [
+        "intent.priorities"
+      ],
+      "blocks": [
+        {
+          "title": "个性化深化",
+          "body": "形成阻断项、资料依赖、责任人建议和沟通顺序。"
+        },
+        {
+          "title": "结论边界",
+          "body": "未核实的工程与审批条件会作为待确认事项，不会被写成已知结论。"
+        }
+      ]
+    }
+  ]
+}

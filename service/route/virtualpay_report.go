@@ -21,6 +21,18 @@ const (
 	reportPaymentTimeout = 10 * time.Second
 )
 
+// V5 delivery is independent of enterprise contact linking. OpenID is still
+// verified by code2session against the authenticated report owner's account.
+func validateReportProtocolIdentity(user *model.User, session *function.WechatCode2SessionResponse, protocol string) error {
+	if protocol != report.ProtocolDecisionV5 {
+		return validateReportWechatIdentity(user, session)
+	}
+	if user == nil || session == nil || strings.TrimSpace(user.OpenID) == "" || user.OpenID != session.OpenID {
+		return errors.New("report payment: WeChat identity mismatch")
+	}
+	return nil
+}
+
 func validateReportWechatIdentity(user *model.User, session *function.WechatCode2SessionResponse) error {
 	if user == nil || session == nil || strings.TrimSpace(user.OpenID) == "" || user.OpenID != session.OpenID {
 		return errors.New("report payment: WeChat identity mismatch")
