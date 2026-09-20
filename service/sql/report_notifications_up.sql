@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS report_notifications (
+  event_id CHAR(64) NOT NULL,
+  report_id VARCHAR(64) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  event_type VARCHAR(32) NOT NULL DEFAULT 'report_ready',
+  status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  external_user_id VARCHAR(128) NOT NULL DEFAULT '',
+  attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+  receipt VARCHAR(256) NOT NULL DEFAULT '',
+  error_code VARCHAR(64) NOT NULL DEFAULT '',
+  lease_token VARCHAR(64) NULL,
+  lease_until DATETIME(6) NULL,
+  next_attempt_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (event_id),
+  UNIQUE KEY uk_report_notification_event (report_id,event_type),
+  KEY idx_report_notification_claim (status,next_attempt_at,lease_until,created_at),
+  KEY idx_report_notification_owner (user_id,status,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报告完成通知独立事务外盒，不代表企微消息已送达';
