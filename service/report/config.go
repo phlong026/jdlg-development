@@ -15,6 +15,7 @@ type Config struct {
 	LegacyPaymentBlocked bool
 	MultiAgentEnabled    bool
 	DecisionEnabled      bool
+	HouseEnabled         bool
 	EmbeddedWorker       bool
 	WorkerConcurrency    int
 	ProtocolVersion      string
@@ -44,6 +45,10 @@ func LoadConfig() (Config, error) {
 	if err != nil || decisionEnabled && !multiAgent {
 		return Config{}, fmt.Errorf("report config: REPORT_DECISION_ENABLED requires multi-agent execution")
 	}
+	houseEnabled, err := strconv.ParseBool(valueOr("REPORT_HOUSE_ENABLED", "false"))
+	if err != nil || houseEnabled && !decisionEnabled {
+		return Config{}, fmt.Errorf("report config: REPORT_HOUSE_ENABLED requires decision execution")
+	}
 	embeddedWorker, err := strconv.ParseBool(valueOr("REPORT_WORKER_EMBEDDED", "true"))
 	if err != nil {
 		return Config{}, fmt.Errorf("report config: invalid REPORT_WORKER_EMBEDDED")
@@ -69,6 +74,7 @@ func LoadConfig() (Config, error) {
 		PaymentEnabled:    paymentEnabled,
 		MultiAgentEnabled: multiAgent,
 		DecisionEnabled:   decisionEnabled,
+		HouseEnabled:      houseEnabled,
 		EmbeddedWorker:    embeddedWorker,
 		WorkerConcurrency: concurrency,
 		ProtocolVersion:   valueOr("REPORT_PROTOCOL_VERSION", protocol),
@@ -82,6 +88,9 @@ func LoadConfig() (Config, error) {
 	}
 	if config.ProtocolVersion == "" || config.PriceFen < 0 || config.MaxAttempts < 1 || config.MaxAttempts > 10 || config.LeaseDuration <= config.JobTimeout+10*time.Second || config.JobTimeout <= 0 || config.JobTimeout > 10*time.Minute || config.DownloadTTL <= 0 || config.DownloadTTL > time.Hour {
 		return Config{}, fmt.Errorf("report config: invalid bounded setting")
+	}
+	if houseEnabled && config.JobTimeout < 4*time.Minute {
+		return Config{}, fmt.Errorf("report config: REPORT_HOUSE_ENABLED requires job timeout of at least 4m for 2K image requests")
 	}
 	if paymentEnabled && (!enabled || config.ProductID == "" || config.PriceFen <= 0 || !decisionEnabled && !filepath.IsAbs(config.ManifestPath)) {
 		return Config{}, fmt.Errorf("report config: payment requires enabled module, product, price and absolute manifest path")

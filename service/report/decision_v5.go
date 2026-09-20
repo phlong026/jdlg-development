@@ -60,6 +60,7 @@ const (
 )
 
 type DecisionInput struct {
+	House                 *HouseRequirements  `json:"house,omitempty"`
 	PrimaryGoal           string              `json:"primary_goal"`
 	Region                string              `json:"region,omitempty"`
 	ApproximateDimensions DecisionDimensions  `json:"approximate_dimensions,omitempty"`
@@ -118,6 +119,7 @@ type DecisionBrief struct {
 }
 
 type DecisionSnapshot struct {
+	House        *HouseContent         `json:"house,omitempty"`
 	Meta         SnapshotMeta          `json:"meta"`
 	Facts        map[string]string     `json:"facts"`
 	Recipe       string                `json:"recipe"`
@@ -205,6 +207,12 @@ func NormalizeDecisionInput(input DecisionInput) (DecisionInput, error) {
 	if len(unknowns) > 0 && !boundedCleanText(strings.Join(unknowns, "；"), 1, 500) {
 		return DecisionInput{}, ErrInvalidInput
 	}
+	if input.House != nil {
+		input.House, err = normalizeHouseRequirements(input)
+		if err != nil {
+			return DecisionInput{}, err
+		}
+	}
 	return input, nil
 }
 
@@ -234,7 +242,7 @@ func NormalizeDecisionConfirmation(input DecisionInput, confirmation DecisionCon
 	confirmation.InputHash = strings.TrimSpace(confirmation.InputHash)
 	confirmation.Choice = strings.TrimSpace(confirmation.Choice)
 	choiceValid := oneOf(confirmation.Choice, ChoiceConfirm, ChoiceUndecided)
-	if normalized.PrimaryGoal == GoalSpace {
+	if normalized.PrimaryGoal == GoalSpace && normalized.House == nil {
 		choiceValid = oneOf(confirmation.Choice, ChoiceOptionA, ChoiceOptionB, ChoiceUndecided)
 	}
 	if confirmation.DiagnosisID != PlanDecision(normalized).ID || confirmation.InputHash != inputHash || !choiceValid {
@@ -282,10 +290,14 @@ func BuildDecisionFacts(input DecisionInput) map[string]string {
 	for index, item := range input.PreparationItems {
 		facts[fmt.Sprintf("readiness.item.%02d", index+1)] = item.Status + ": " + item.Item
 	}
+	addHouseFacts(input, facts)
 	return facts
 }
 
 func PlanDecision(input DecisionInput) DecisionBrief {
+	if input.House != nil {
+		return PlanHouseDecision(input)
+	}
 	normalized, err := NormalizeDecisionInput(input)
 	if err != nil {
 		return DecisionBrief{}
@@ -308,6 +320,9 @@ func PlanDecision(input DecisionInput) DecisionBrief {
 }
 
 func ValidateDecisionBrief(input DecisionInput, brief DecisionBrief) error {
+	if input.House != nil {
+		return ValidateHouseBrief(input, brief)
+	}
 	normalized, err := NormalizeDecisionInput(input)
 	if err != nil {
 		return err
@@ -340,6 +355,9 @@ func ValidateDecisionBrief(input DecisionInput, brief DecisionBrief) error {
 }
 
 func BuildDecisionPreview(record *Report, input DecisionInput, brief DecisionBrief) (DecisionSnapshot, error) {
+	if record != nil && record.ProtocolVersion == ProtocolHouseV1 {
+		return BuildHousePreview(record, input, brief)
+	}
 	normalized, err := validateDecisionRecord(record, input)
 	if err != nil {
 		return DecisionSnapshot{}, err
@@ -403,6 +421,9 @@ func BuildDecisionFull(record *Report, input DecisionInput, confirmation Decisio
 }
 
 func ValidateDecisionSnapshot(snapshot DecisionSnapshot, mode string) error {
+	if snapshot.Meta.ProtocolVersion == ProtocolHouseV1 {
+		return ValidateHouseSnapshot(snapshot, mode)
+	}
 	wantPages := 0
 	switch mode {
 	case ModePreview:
@@ -519,7 +540,7 @@ func decisionUnknowns(input DecisionInput) []string {
 }
 
 func validateDecisionRecord(record *Report, input DecisionInput) (DecisionInput, error) {
-	if record == nil || record.ID == "" || record.ProtocolVersion != ProtocolDecisionV5 || record.InputHash == "" {
+	if record == nil || record.ID == "" || !IsDecisionProtocol(record.ProtocolVersion) || record.InputHash == "" || (record.ProtocolVersion == ProtocolHouseV1) != (input.House != nil) {
 		return DecisionInput{}, ErrInvalidInput
 	}
 	normalized, err := NormalizeDecisionInput(input)
@@ -548,7 +569,13 @@ func decisionMeta(record *Report, _ string) SnapshotMeta {
 	if !record.CreatedAt.IsZero() {
 		date = record.CreatedAt.Format("2006年01月02日")
 	}
-	return SnapshotMeta{SchemaVersion: SchemaDecisionV5, ProtocolVersion: ProtocolDecisionV5, Source: DecisionSourceV5, ReportID: record.ID, InputHash: record.InputHash, Date: date, Demonstration: false, GenerationMode: record.GenerationMode}
+	meta := SnapshotMeta{SchemaVersion: SchemaDecisionV5, ProtocolVersion: ProtocolDecisionV5, Source: DecisionSourceV5, ReportID: record.ID, InputHash: record.InputHash, Date: date, Demonstration: false, GenerationMode: record.GenerationMode}
+	if record.ProtocolVersion == ProtocolHouseV1 {
+		meta.SchemaVersion = SchemaHouseV1
+		meta.ProtocolVersion = ProtocolHouseV1
+		meta.Source = HouseSource
+	}
+	return meta
 }
 
 func decisionBriefID(input DecisionInput, brief DecisionBrief) string {

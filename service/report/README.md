@@ -1,6 +1,8 @@
-# 决策型报告 Agent V5
+# 报告 Agent：整屋图文版与 V5
 
-本模块实现用户输入 → 四页诊断预览 → 用户确认 → 已验证支付 → 异步十页完整报告。十页是完整报告总页数。免费阶段只保存 JSON，付费阶段输出一个由十张完整页面图片组成的 PDF。
+新整屋协议 `report-house-v1` 已接入主编排、逐图持久任务、真实图像审核和动态 PDF；详见 [整屋接口与运行说明](HOUSE.md)。旧 `report-decision-v5` 保持下述固定十页行为和已购报告兼容。
+
+V5 路径：用户输入 → 四页诊断预览 → 用户确认 → 已验证支付 → 异步十页完整报告。免费阶段保存 JSON，付费阶段输出单一完整页面图片 PDF。
 
 ## 编排与内容
 
@@ -40,7 +42,7 @@ CGO_ENABLED=0 go run ./cmd/report_illustrations --plan /absolute/plan.json --out
 
 该命令会产生真实外部调用和费用。先写 `submitting` 收据再发起一次请求；不跟随生成请求的重定向、不自动重试付费请求。完成收据绑定渠道、网关、模型、提示词、尺寸与参考图哈希；只复用验证通过的原图。`submitting` 表示需核对提供商结果，不能直接删除收据重跑。
 
-当前交付边界：2K 客户端和本地命令已测试；生产 `ReportOrchestrator` / worker 尚未自动规划、生成或保存插图，Go `SnapshotPage` 也尚未承载图片字段，不能把 Python 插图支持当作在线异步生图链路完成。后续接入须持久化每张图的任务状态与资产引用，再进入最终渲染。
+V5 原编排仍不自动生图；新 `HouseOrchestrator` 已通过 `SnapshotPage.illustrations` 接入生产图片任务和渲染。CLI 样稿与新协议生产路径分开维护，真实供应商联调状态见 HOUSE.md。
 
 `reportpdf/build_illustrated_demo.py` 是固定合成案例的可复现排版工具，拒绝其他输入或选择，不用于真实客户生成。它保留原样稿事实、诊断与选择，补充已明确标记的人工样稿文案、AI 意向图及程序示意图。本次样稿使用内置 imagegen，原图实际 1672×941，未声称经过服务端 2K 接口或真实订单联调。
 
@@ -159,8 +161,8 @@ cd reportpdf
 
 `TestDecisionPipelineWithRealPDF` 额外串联创建、真实 Go 主编排、确认、测试支付授权、Go 子进程适配器、正式 Python 渲染及下载归属校验。设置 `REPORT_V5_REAL_PDF_TEST=1`、`REPORT_PDF_PYTHON`、`REPORT_PDF_FONT` 后运行该测试；数据库、模型和存储仍使用测试替身，不会产生真实支付或外部通知。
 
-此仓库包含服务端与后台；小程序源码在另一份独立 checkout。本模块已提供前端接口合同，尚需在那里接入：四类表单、HTTP 202、诊断确认、状态轮询、十页文案和取消 V5 企微绑定下载门槛；还需核实带 query 的请求签名。
+小程序整屋接入位于用户确认的开发版916/JDLG/miniprogram复制源码，改动备份和补丁位于本仓docs/report-house-miniprogram-baseline与docs/report-house-miniprogram-patch；详见HOUSE.md。
 
-现有企微只支持添加好友时通过 welcome_code 发领取小程序入口，并有入站回调补偿。尚未实现报告完成后的主动消息 outbox/dispatcher；不能把一次性欢迎消息当成可无限重试的完成通知。自动推送须先确认企业已有可用的发送 API/权限。报告 ready 与通知成功是不同状态，用户可直接从报告中心下载，不发送会过期的 COS URL 作为长期入口。
+现有企微欢迎消息只用于添加好友时发送领取入口。新协议完成通知由独立reportnotify队列处理，通过显式配置的企业消息网关投递；未配置网关时保留待人工处理状态。网关的企业微信权限与真实送达仍需上线联调。报告ready独立于通知状态，通知只携带长期小程序入口。
 
 回滚应先关闭新任务入口并停止 V5 worker，保留已购买任务及报告可读性。两个新增表的 down SQL 会删除确认/断点数据，只适用于隔离测试；线上有订单后不要直接删表。业务代码回退前应处理或停留所有 V5 在途任务。

@@ -388,6 +388,7 @@ func applyDecisionEdits(base DecisionSnapshot, result WriterResult) (DecisionSna
 type ProtocolDispatcher struct {
 	Legacy   AgentRunner
 	Decision AgentRunner
+	House    AgentRunner
 }
 
 func (d ProtocolDispatcher) Run(ctx context.Context, r *Report, mode string, pack *ReviewedPack) (json.RawMessage, string, error) {
@@ -397,6 +398,9 @@ func (d ProtocolDispatcher) Run(ctx context.Context, r *Report, mode string, pac
 	runner := d.Legacy
 	if r.ProtocolVersion == ProtocolDecisionV5 {
 		runner = d.Decision
+	}
+	if r.ProtocolVersion == ProtocolHouseV1 {
+		runner = d.House
 	}
 	if runner == nil {
 		return nil, "", ErrAgentUnavailable

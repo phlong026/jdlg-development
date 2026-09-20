@@ -39,7 +39,7 @@ func (s *decisionMemoryStore) SaveDecisionConfirmation(_ context.Context, userID
 	if record == nil || record.UserID != userID {
 		return DecisionContext{}, ErrNotFound
 	}
-	if record.ProtocolVersion != ProtocolDecisionV5 || record.Status != StatusPreviewReady || len(record.PreviewSnapshot) == 0 || record.Paid || record.PendingOrderNo != "" {
+	if !IsDecisionProtocol(record.ProtocolVersion) || record.Status != StatusPreviewReady || len(record.PreviewSnapshot) == 0 || record.Paid || record.PendingOrderNo != "" {
 		return DecisionContext{}, ErrConflict
 	}
 	if existing, ok := s.contexts[reportID]; ok && existing.ConfirmationHash != "" {

@@ -54,6 +54,7 @@ type AgentIdentity struct {
 }
 
 type AgentRequest struct {
+	Images        []AgentImage    `json:"-"`
 	Role          string          `json:"role"`
 	Model         string          `json:"model"`
 	PromptVersion string          `json:"prompt_version"`

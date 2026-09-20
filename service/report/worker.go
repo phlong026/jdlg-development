@@ -40,6 +40,14 @@ func NewWorker(config Config, store Store, generator SnapshotGenerator, catalog 
 	if config.MultiAgentEnabled && worker.agents == nil {
 		return nil, ErrInvalidInput
 	}
+	if config.HouseEnabled {
+		if !config.DecisionEnabled || config.JobTimeout < 4*time.Minute {
+			return nil, ErrInvalidInput
+		}
+		if _, ok := store.(houseYieldStore); !ok {
+			return nil, ErrInvalidInput
+		}
+	}
 	if config.DecisionEnabled {
 		if !config.MultiAgentEnabled {
 			return nil, ErrInvalidInput
@@ -67,8 +75,15 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	jobCtx, cancel := context.WithTimeout(ctx, w.config.JobTimeout)
 	defer cancel()
 	if err := w.run(jobCtx, job); err != nil {
+		if errors.Is(err, ErrHousePending) && job.Report.ProtocolVersion == ProtocolHouseV1 {
+			store, ok := w.store.(houseYieldStore)
+			if !ok {
+				return true, ErrInvalidInput
+			}
+			return true, store.YieldHouse(ctx, job.Report.ID, job.LeaseToken, job.Mode)
+		}
 		code := workerErrorCode(jobCtx, err)
-		retry := job.Report.AttemptCount < w.config.MaxAttempts && !errors.Is(err, ErrAgentRejected)
+		retry := job.Report.AttemptCount < w.config.MaxAttempts && !errors.Is(err, ErrAgentRejected) && !errors.Is(err, ErrImageUncertain)
 		if failErr := w.store.Fail(ctx, job.Report.ID, job.LeaseToken, job.Mode, code, retry); failErr != nil {
 			log.Printf("[report] report_id=%s stage=%s failure_persist=failed", job.Report.ID, job.Mode)
 			return true, ErrConflict
@@ -83,7 +98,7 @@ func (w *Worker) run(ctx context.Context, job *Job) error {
 	if job == nil || job.Report == nil || job.Report.ID == "" || job.LeaseToken == "" {
 		return ErrInvalidInput
 	}
-	if job.Report.ProtocolVersion == ProtocolDecisionV5 {
+	if IsDecisionProtocol(job.Report.ProtocolVersion) {
 		return w.runDecision(ctx, job)
 	}
 	switch job.Mode {
@@ -153,6 +168,9 @@ func (w *Worker) run(ctx context.Context, job *Job) error {
 }
 
 func (w *Worker) runDecision(ctx context.Context, job *Job) error {
+	if job.Report.ProtocolVersion == ProtocolHouseV1 && !w.config.HouseEnabled {
+		return ErrDisabled
+	}
 	if !w.config.DecisionEnabled || !w.config.MultiAgentEnabled || w.agents == nil {
 		return ErrDisabled
 	}
@@ -218,7 +236,7 @@ func (w *Worker) runDecision(ctx context.Context, job *Job) error {
 func validateDecisionWorkerSnapshot(record *Report, raw json.RawMessage, mode string) error {
 	var snapshot DecisionSnapshot
 	if json.Unmarshal(raw, &snapshot) != nil || ValidateDecisionSnapshot(snapshot, mode) != nil ||
-		snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != ProtocolDecisionV5 {
+		snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != record.ProtocolVersion {
 		return ErrInvalidInput
 	}
 	if mode == ModeFull && (snapshot.Confirmation == nil || snapshot.Confirmation.InputHash != record.InputHash || snapshot.Confirmation.DiagnosisID != snapshot.Diagnosis.ID) {
@@ -238,6 +256,9 @@ func reportObjectKey(record *Report, mode, leaseToken string) string {
 }
 
 func workerErrorCode(ctx context.Context, err error) string {
+	if errors.Is(err, ErrImageUncertain) {
+		return "image_submission_uncertain"
+	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
 		return "generation_timeout"
 	}

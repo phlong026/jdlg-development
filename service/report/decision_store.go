@@ -70,7 +70,7 @@ func (s *MySQLStore) SaveDecisionConfirmation(ctx context.Context, userID int64,
 	if err != nil {
 		return DecisionContext{}, err
 	}
-	if record.ProtocolVersion != ProtocolDecisionV5 || record.Status != StatusPreviewReady || len(record.PreviewSnapshot) == 0 || record.Paid || record.PendingOrderNo != "" {
+	if !IsDecisionProtocol(record.ProtocolVersion) || record.Status != StatusPreviewReady || len(record.PreviewSnapshot) == 0 || record.Paid || record.PendingOrderNo != "" {
 		return DecisionContext{}, ErrConflict
 	}
 	var existingJSON sql.NullString
@@ -128,7 +128,7 @@ func (s *MySQLStore) SetDecisionStage(ctx context.Context, reportID, leaseToken,
 	defer tx.Rollback()
 	var found string
 	err = tx.QueryRowContext(ctx, `SELECT report_id FROM building_reports
-WHERE report_id=? AND protocol_version=? AND status IN (?,?) AND lease_token=? AND lease_until>NOW(6) FOR UPDATE`, reportID, ProtocolDecisionV5, StatusPreviewGenerating, StatusFullGenerating, leaseToken).Scan(&found)
+WHERE report_id=? AND protocol_version IN (?,?) AND status IN (?,?) AND lease_token=? AND lease_until>NOW(6) FOR UPDATE`, reportID, ProtocolDecisionV5, ProtocolHouseV1, StatusPreviewGenerating, StatusFullGenerating, leaseToken).Scan(&found)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrConflict
 	}

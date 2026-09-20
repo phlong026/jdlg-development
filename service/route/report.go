@@ -22,6 +22,7 @@ import (
 	"service/component"
 	"service/config"
 	"service/report"
+	"service/reportnotify"
 	"service/reportwecom"
 )
 
@@ -33,6 +34,8 @@ type ReportModule struct {
 	WecomConfig       reportwecom.Config
 	DB                *sql.DB
 	DecisionEnabled   bool
+	HouseEnabled      bool
+	Notifications     *reportnotify.Service
 	EmbeddedWorker    bool
 	WorkerConcurrency int
 }
@@ -73,6 +76,15 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		}
 	}
 	pdfConfig := component.ReportPDFConfig{PythonPath: os.Getenv("REPORT_PDF_PYTHON"), ScriptPath: os.Getenv("REPORT_PDF_SCRIPT"), FontPath: os.Getenv("REPORT_PDF_FONT"), AssetRoot: os.Getenv("REPORT_ASSET_ROOT"), Timeout: 90 * time.Second}
+	if cfg.HouseEnabled {
+		if !filepath.IsAbs(pdfConfig.AssetRoot) || pdfConfig.PythonPath == "" {
+			return nil, report.ErrNotReady
+		}
+		info, err := os.Stat(filepath.Join(filepath.Dir(pdfConfig.ScriptPath), "house_v1.py"))
+		if err != nil || !info.Mode().IsRegular() {
+			return nil, report.ErrNotReady
+		}
+	}
 	var renderer report.Renderer
 	var storage report.PrivateStorage
 	if pdfConfig.PythonPath != "" {
@@ -180,7 +192,15 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 			if err != nil {
 				return nil, err
 			}
-			runner = report.ProtocolDispatcher{Legacy: agents, Decision: decision}
+			dispatcher := report.ProtocolDispatcher{Legacy: agents, Decision: decision}
+			if cfg.HouseEnabled {
+				house, err := configuredHouseOrchestrator(ctx, db, appConfig, agentClient, store, pdfConfig.AssetRoot)
+				if err != nil {
+					return nil, err
+				}
+				dispatcher.House = house
+			}
+			runner = dispatcher
 		}
 		workerOptions = append(workerOptions, report.WithAgentRunner(runner))
 	}
@@ -188,7 +208,13 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 	if err != nil {
 		return nil, err
 	}
-	module := &ReportModule{Service: service, Worker: worker, Renderer: renderer, DB: db, WecomConfig: wecomConfig, DecisionEnabled: cfg.DecisionEnabled, EmbeddedWorker: cfg.EmbeddedWorker, WorkerConcurrency: cfg.WorkerConcurrency}
+	module := &ReportModule{Service: service, Worker: worker, Renderer: renderer, DB: db, WecomConfig: wecomConfig, DecisionEnabled: cfg.DecisionEnabled, HouseEnabled: cfg.HouseEnabled, EmbeddedWorker: cfg.EmbeddedWorker, WorkerConcurrency: cfg.WorkerConcurrency}
+	if cfg.HouseEnabled {
+		module.Notifications, err = configuredReportNotifications(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if wecomProvider != nil {
 		module.Wecom = &reportwecom.Service{Provider: wecomProvider, Store: wecomStore, Identity: module, Binder: service, EmployeeID: wecomConfig.EmployeeID}
 	}
@@ -218,13 +244,21 @@ func configuredReportAgentClient() (*report.HTTPAgentClient, error) {
 		VisualModel: roleModel("REPORT_AGENT_VISUAL_MODEL"), ReviewerModel: roleModel("REPORT_AGENT_REVIEWER_MODEL"),
 		DiagnosisModel: roleModel("REPORT_AGENT_DIAGNOSIS_MODEL"), DecisionModel: roleModel("REPORT_AGENT_DECISION_MODEL"),
 		BudgetModel: roleModel("REPORT_AGENT_BUDGET_MODEL"), EditorModel: roleModel("REPORT_AGENT_EDITOR_MODEL"),
-		Timeout: 45 * time.Second, MaxResponseBytes: 256 << 10,
+		SpatialModel: roleModel("REPORT_AGENT_SPATIAL_MODEL"),
+		Timeout:      45 * time.Second, MaxResponseBytes: 256 << 10,
 	}, &http.Client{Timeout: 45 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})
 }
 
 func reportArtifactVersion(config component.ReportPDFConfig) (string, error) {
 	digest := sha256.New()
-	for _, source := range []string{config.ScriptPath, filepath.Join(filepath.Dir(config.ScriptPath), "decision_v5.py"), config.FontPath} {
+	sources := []string{config.ScriptPath, filepath.Join(filepath.Dir(config.ScriptPath), "decision_v5.py"), config.FontPath}
+	houseScript := filepath.Join(filepath.Dir(config.ScriptPath), "house_v1.py")
+	if _, err := os.Stat(houseScript); err == nil {
+		sources = append(sources, houseScript)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", report.ErrNotReady
+	}
+	for _, source := range sources {
 		file, err := os.Open(source)
 		if err != nil {
 			log.Printf("[report] error artifact_version=open_failed")
@@ -284,6 +318,13 @@ func (m *ReportModule) Run(ctx context.Context) {
 		concurrency = 1
 	}
 	var wg sync.WaitGroup
+	if m.Notifications != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			m.runNotifications(ctx)
+		}()
+	}
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
 		go func() {
@@ -340,9 +381,10 @@ func (m *ReportModule) requireActivePayment(ctx context.Context, userID int64, i
 
 func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModule) {
 	registerDecisionQuestions(public, module)
+	registerHouseQuestions(public, module)
 	public.GET("/reports/config", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
-		c.JSON(200, gin.H{"code": 0, "data": gin.H{"enabled": module != nil, "decision_enabled": module != nil && module.DecisionEnabled}})
+		c.JSON(200, gin.H{"code": 0, "data": gin.H{"enabled": module != nil, "decision_enabled": module != nil && module.DecisionEnabled, "house_enabled": module != nil && module.HouseEnabled}})
 	})
 	group := auth.Group("/reports")
 	group.Use(func(c *gin.Context) {
@@ -357,6 +399,7 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 		}
 	})
 	registerDecisionReportRoutes(group, module)
+	registerHouseRoutes(group, module)
 	group.POST("", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 		decoder := json.NewDecoder(c.Request.Body)
@@ -398,7 +441,7 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 			reportError(c, err)
 			return
 		}
-		if result.CanPay && result.ProtocolVersion != report.ProtocolDecisionV5 {
+		if result.CanPay && !report.IsDecisionProtocol(result.ProtocolVersion) {
 			var union string
 			if module.DB.QueryRowContext(ctx, "SELECT COALESCE(unionid,'') FROM users WHERE id=?", user).Scan(&union) != nil || union == "" {
 				result.CanPay = false
@@ -413,7 +456,7 @@ func RegisterReportRoutes(public, auth, v1 *gin.RouterGroup, module *ReportModul
 			report.SafeView
 			Quote               report.PaymentQuote `json:"quote"`
 			PreviewPDFAvailable bool                `json:"preview_pdf_available"`
-		}{result, quote, module.Renderer != nil && result.ProtocolVersion != report.ProtocolDecisionV5}})
+		}{result, quote, module.Renderer != nil && !report.IsDecisionProtocol(result.ProtocolVersion)}})
 	})
 	group.POST("/:id/retry", func(c *gin.Context) {
 		result, err := module.Service.Retry(c.Request.Context(), GetTokenCodeSession(c).UserID, c.Param("id"))

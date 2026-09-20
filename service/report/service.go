@@ -151,8 +151,12 @@ func (s *Service) BindVerifiedEnterpriseContact(ctx context.Context, userID int6
 }
 
 func (s *Service) Retry(ctx context.Context, userID int64, reportID string) (SafeView, error) {
-	if _, err := s.get(ctx, userID, reportID); err != nil {
+	previous, err := s.get(ctx, userID, reportID)
+	if err != nil {
 		return SafeView{}, err
+	}
+	if previous.ErrorCode == "image_submission_uncertain" {
+		return SafeView{}, ErrConflict
 	}
 	record, err := s.store.RetryFailed(ctx, userID, reportID)
 	if err != nil {
@@ -181,7 +185,7 @@ func (s *Service) GetDownloadURL(ctx context.Context, userID int64, reportID, mo
 		if !record.Paid {
 			return "", ErrPaymentRequired
 		}
-		if record.ProtocolVersion != ProtocolDecisionV5 && !record.Bound {
+		if !IsDecisionProtocol(record.ProtocolVersion) && !record.Bound {
 			return "", ErrBindingRequired
 		}
 		if record.Status != StatusReady {
@@ -207,7 +211,7 @@ func (s *Service) EnsurePreviewPDF(ctx context.Context, userID int64, reportID s
 	if err != nil {
 		return err
 	}
-	if record.ProtocolVersion == ProtocolDecisionV5 {
+	if IsDecisionProtocol(record.ProtocolVersion) {
 		return ErrNotReady
 	}
 	if record.PreviewObjectKey != "" {
@@ -255,7 +259,7 @@ func (s *Service) paymentQuote(record *Report) PaymentQuote {
 		quote.BlockReason = "already_paid"
 		return quote
 	}
-	if record.ProtocolVersion == ProtocolDecisionV5 {
+	if IsDecisionProtocol(record.ProtocolVersion) {
 		if !s.config.DecisionEnabled || !validIdentifier(s.config.ProductID, 64) || s.config.PriceFen <= 0 {
 			quote.BlockReason = "payment_disabled"
 			return quote
@@ -268,6 +272,15 @@ func (s *Service) paymentQuote(record *Report) PaymentQuote {
 		quote.CanPay = true
 		quote.PackID = "decision-v5-" + snapshot.Recipe
 		quote.PackVersion = DecisionTemplateVersion
+		if record.ProtocolVersion == ProtocolHouseV1 {
+			if !s.config.HouseEnabled {
+				quote.CanPay = false
+				quote.BlockReason = "payment_disabled"
+				return quote
+			}
+			quote.PackID = "whole-house-v1"
+			quote.PackVersion = HouseTemplateVersion
+		}
 		return quote
 	}
 	if s.config.LegacyPaymentBlocked {
@@ -297,7 +310,7 @@ func (s *Service) paymentQuote(record *Report) PaymentQuote {
 func (s *Service) safeView(record *Report) SafeView {
 	quote := s.paymentQuote(record)
 	confirmed := false
-	if record.ProtocolVersion == ProtocolDecisionV5 {
+	if IsDecisionProtocol(record.ProtocolVersion) {
 		_, blockReason := validateDecisionPayment(record)
 		confirmed = blockReason == ""
 	}
@@ -312,7 +325,7 @@ func (s *Service) safeView(record *Report) SafeView {
 }
 
 func reportStage(record *Report, confirmed bool) string {
-	if record.ProtocolVersion != ProtocolDecisionV5 {
+	if !IsDecisionProtocol(record.ProtocolVersion) {
 		return record.Status
 	}
 	switch record.Status {
@@ -343,10 +356,10 @@ func publicPreview(record *Report) json.RawMessage {
 	if record == nil || len(record.PreviewSnapshot) == 0 {
 		return nil
 	}
-	if record.ProtocolVersion == ProtocolDecisionV5 {
+	if IsDecisionProtocol(record.ProtocolVersion) {
 		var snapshot DecisionSnapshot
 		if json.Unmarshal(record.PreviewSnapshot, &snapshot) != nil || ValidateDecisionSnapshot(snapshot, ModePreview) != nil ||
-			snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != ProtocolDecisionV5 {
+			snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != record.ProtocolVersion {
 			return nil
 		}
 		snapshot.Confirmation = nil
@@ -375,7 +388,7 @@ func nextReportAction(record *Report, confirmed bool) string {
 	case StatusPreviewQueued, StatusPreviewGenerating:
 		return "wait_preview"
 	case StatusPreviewReady:
-		if record.ProtocolVersion == ProtocolDecisionV5 && !confirmed {
+		if IsDecisionProtocol(record.ProtocolVersion) && !confirmed {
 			return "confirm_decision"
 		}
 		if record.Paid {
@@ -387,6 +400,9 @@ func nextReportAction(record *Report, confirmed bool) string {
 	case StatusReady:
 		return "download"
 	case StatusFailed:
+		if record.ErrorCode == "image_submission_uncertain" {
+			return "contact_support"
+		}
 		return "retry"
 	default:
 		return "wait"

@@ -17,9 +17,9 @@ import (
 
 func TestDecisionPaymentIdentityRetainsOwnerCheckWithoutUnionIDGate(t *testing.T) {
 	user := &model.User{ID: 7, OpenID: "owner"}
-	for _, protocol := range []string{report.ProtocolDecisionV5, "report-service-v1"} {
+	for _, protocol := range []string{report.ProtocolDecisionV5, report.ProtocolHouseV1, "report-service-v1"} {
 		err := validateReportProtocolIdentity(user, &function.WechatCode2SessionResponse{OpenID: "owner"}, protocol)
-		if (err == nil) != (protocol == report.ProtocolDecisionV5) {
+		if (err == nil) != (report.IsDecisionProtocol(protocol)) {
 			t.Fatalf("protocol=%s err=%v", protocol, err)
 		}
 		if validateReportProtocolIdentity(user, &function.WechatCode2SessionResponse{OpenID: "other"}, protocol) == nil {

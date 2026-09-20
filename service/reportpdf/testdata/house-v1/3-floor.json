@@ -1,0 +1,977 @@
+{
+  "confirmation": {
+    "choice": "undecided",
+    "diagnosis_id": "house-diagnosis-9d0b0ac3894cb871",
+    "input_hash": "82cc6697f909c06afcbf4378e9472b005240448ced760524bc8b9b744710a732",
+    "priorities": [
+      "父母居住舒适",
+      "家庭团聚",
+      "投入可控"
+    ]
+  },
+  "diagnosis": {
+    "evidence_refs": [
+      "household.permanent_count",
+      "household.returning_count",
+      "household.return_frequency",
+      "intent.floors",
+      "intent.bedrooms",
+      "intent.flexible_use",
+      "intent.priorities",
+      "house.style"
+    ],
+    "id": "house-diagnosis-9d0b0ac3894cb871",
+    "options": [
+      {
+        "body": "优先减少常住成员的上下楼和相互干扰，再为返乡使用保留明确的启用条件。",
+        "title": "日常舒适方向"
+      },
+      {
+        "body": "在不削弱日常居住底线的前提下，加强节日聚会、待客与多人共处的空间组织。",
+        "title": "团聚均衡方向"
+      }
+    ],
+    "question": "请确认这些家庭事实和设计底线是否准确；确认后将据此生成整屋方案、逐层概念平面、体量与外观方向。",
+    "reason": "整屋方案需要同时回应常住家庭、返乡使用、逐层房间分配和预算边界，先把不可交换的生活需求固定下来，再比较有实质差异的组织方向。",
+    "recipe": "space",
+    "topic": "先确定整屋的日常居住底线与团聚弹性",
+    "unknowns": [
+      "实际可建范围未核实",
+      "相邻建筑与采光遮挡条件待核实"
+    ]
+  },
+  "facts": {
+    "budget.wan": "120",
+    "house.courtyard": "yes",
+    "house.first_floor_elder_room": "yes",
+    "house.member.01": "{\"role\":\"父母\",\"count\":2,\"residence\":\"permanent\",\"needs\":[\"首层起居\"]}",
+    "house.member.02": "{\"role\":\"子女家庭\",\"count\":4,\"residence\":\"returning\"}",
+    "house.neighbors": "unknown",
+    "house.orientation": "坐北朝南",
+    "house.parking": "yes",
+    "house.road_side": "south",
+    "house.room.elder": "{\"id\":\"elder\",\"name\":\"老人房\",\"count\":1,\"preferred_floor\":1,\"required\":true}",
+    "house.start_window": "一年内",
+    "house.style": "新闽派",
+    "household.permanent_count": "2",
+    "household.return_frequency": "holidays",
+    "household.returning_count": "4",
+    "input.primary_goal": "space",
+    "intent.bedrooms": "5",
+    "intent.flexible_use": "yes",
+    "intent.floors": "3",
+    "intent.priorities": "父母居住舒适 / 家庭团聚 / 投入可控",
+    "readiness.stage": "unknown",
+    "site.approx_dimensions": "12m x 16m (user estimate)",
+    "site.buildable_constraints": "unknown",
+    "site.buildable_scope": "unknown",
+    "site.region": "泉州南安"
+  },
+  "house": {
+    "actions": [
+      {
+        "evidence": "形成可核对的边界资料",
+        "owner": "业主与专业人员",
+        "prerequisite": "宅基地资料",
+        "task": "核实可建边界"
+      },
+      {
+        "evidence": "形成同口径询价清单",
+        "owner": "业主",
+        "prerequisite": "方案成本敏感项",
+        "task": "统一询价范围"
+      }
+    ],
+    "budget": [
+      {
+        "body": "分别核对主体、装修与庭院范围。",
+        "title": "统一询价口径"
+      },
+      {
+        "body": "分别核对屋面、门廊与大开间的影响。",
+        "title": "成本敏感项"
+      }
+    ],
+    "comparison": [
+      [
+        "方案",
+        "日常",
+        "团聚"
+      ],
+      [
+        "日常舒适型",
+        "优先",
+        "需准备"
+      ],
+      [
+        "团聚均衡型",
+        "均衡",
+        "优先"
+      ]
+    ],
+    "designer_brief": [
+      {
+        "body": "卧室总数与首层老人房不得减少。",
+        "title": "必须满足"
+      },
+      {
+        "body": "可建边界和相邻条件需要专业复核。",
+        "title": "仍待核实"
+      }
+    ],
+    "images": [
+      {
+        "asset": "house/fixture/daily-floor-1.png",
+        "floor": 1,
+        "height": 1152,
+        "id": "daily-floor-1",
+        "kind": "floor_plan",
+        "model": "fixture",
+        "scheme_id": "daily",
+        "scheme_version": "daily-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/daily-floor-2.png",
+        "floor": 2,
+        "height": 1152,
+        "id": "daily-floor-2",
+        "kind": "floor_plan",
+        "model": "fixture",
+        "scheme_id": "daily",
+        "scheme_version": "daily-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/daily-floor-3.png",
+        "floor": 3,
+        "height": 1152,
+        "id": "daily-floor-3",
+        "kind": "floor_plan",
+        "model": "fixture",
+        "scheme_id": "daily",
+        "scheme_version": "daily-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/daily-massing.png",
+        "height": 1152,
+        "id": "daily-massing",
+        "kind": "massing",
+        "model": "fixture",
+        "reference_id": "daily-floor-1",
+        "scheme_id": "daily",
+        "scheme_version": "daily-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/daily-exterior.png",
+        "height": 1152,
+        "id": "daily-exterior",
+        "kind": "exterior",
+        "model": "fixture",
+        "reference_id": "daily-massing",
+        "scheme_id": "daily",
+        "scheme_version": "daily-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/gathering-floor-1.png",
+        "floor": 1,
+        "height": 1152,
+        "id": "gathering-floor-1",
+        "kind": "floor_plan",
+        "model": "fixture",
+        "scheme_id": "gathering",
+        "scheme_version": "gathering-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/gathering-floor-2.png",
+        "floor": 2,
+        "height": 1152,
+        "id": "gathering-floor-2",
+        "kind": "floor_plan",
+        "model": "fixture",
+        "scheme_id": "gathering",
+        "scheme_version": "gathering-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/gathering-floor-3.png",
+        "floor": 3,
+        "height": 1152,
+        "id": "gathering-floor-3",
+        "kind": "floor_plan",
+        "model": "fixture",
+        "scheme_id": "gathering",
+        "scheme_version": "gathering-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/gathering-massing.png",
+        "height": 1152,
+        "id": "gathering-massing",
+        "kind": "massing",
+        "model": "fixture",
+        "reference_id": "gathering-floor-1",
+        "scheme_id": "gathering",
+        "scheme_version": "gathering-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      },
+      {
+        "asset": "house/fixture/gathering-exterior.png",
+        "height": 1152,
+        "id": "gathering-exterior",
+        "kind": "exterior",
+        "model": "fixture",
+        "reference_id": "gathering-massing",
+        "scheme_id": "gathering",
+        "scheme_version": "gathering-v1",
+        "sha256": "504ec557c77bcd048805c5b6adda1a750fa1ebe0345c53a9f6bc1856bc47140d",
+        "width": 2048
+      }
+    ],
+    "plan": {
+      "focus": [
+        "父母日常",
+        "返乡团聚",
+        "投入边界"
+      ],
+      "scheme_count": 2
+    },
+    "schemes": [
+      {
+        "assumptions": [
+          "可建边界待核实"
+        ],
+        "cost_sensitive": [
+          "屋面",
+          "门廊"
+        ],
+        "evidence_refs": [
+          "intent.floors",
+          "intent.bedrooms"
+        ],
+        "facade": "新闽派简洁体量",
+        "floors": [
+          {
+            "circulation": "减少卧室与公共活动相互穿行",
+            "name": "第1层",
+            "number": 1,
+            "rooms": [
+              {
+                "count": 1,
+                "kind": "elder_bedroom",
+                "name": "老人房",
+                "requirement_id": "elder"
+              },
+              {
+                "count": 1,
+                "kind": "bedroom",
+                "name": "卧室",
+                "requirement_id": "bedrooms"
+              }
+            ],
+            "stair_position": "靠近公共交通核",
+            "summary": "按家庭使用情景组织空间"
+          },
+          {
+            "circulation": "减少卧室与公共活动相互穿行",
+            "name": "第2层",
+            "number": 2,
+            "rooms": [
+              {
+                "count": 2,
+                "kind": "bedroom",
+                "name": "卧室",
+                "requirement_id": "bedrooms"
+              }
+            ],
+            "stair_position": "靠近公共交通核",
+            "summary": "按家庭使用情景组织空间"
+          },
+          {
+            "circulation": "减少卧室与公共活动相互穿行",
+            "name": "第3层",
+            "number": 3,
+            "rooms": [
+              {
+                "count": 1,
+                "kind": "bedroom",
+                "name": "卧室",
+                "requirement_id": "bedrooms"
+              }
+            ],
+            "stair_position": "靠近公共交通核",
+            "summary": "按家庭使用情景组织空间"
+          }
+        ],
+        "gain": "首层日常使用完整",
+        "id": "daily",
+        "name": "日常舒适型",
+        "strategy": "优先保证父母日常生活",
+        "tradeoff": "团聚空间需要预先安排",
+        "version": "daily-v1"
+      },
+      {
+        "assumptions": [
+          "可建边界待核实"
+        ],
+        "cost_sensitive": [
+          "大开间",
+          "外廊"
+        ],
+        "evidence_refs": [
+          "household.returning_count",
+          "intent.priorities"
+        ],
+        "facade": "新闽派院落感",
+        "floors": [
+          {
+            "circulation": "减少卧室与公共活动相互穿行",
+            "name": "第1层",
+            "number": 1,
+            "rooms": [
+              {
+                "count": 1,
+                "kind": "elder_bedroom",
+                "name": "老人房",
+                "requirement_id": "elder"
+              },
+              {
+                "count": 1,
+                "kind": "bedroom",
+                "name": "卧室",
+                "requirement_id": "bedrooms"
+              }
+            ],
+            "stair_position": "靠近公共交通核",
+            "summary": "按家庭使用情景组织空间"
+          },
+          {
+            "circulation": "减少卧室与公共活动相互穿行",
+            "name": "第2层",
+            "number": 2,
+            "rooms": [
+              {
+                "count": 2,
+                "kind": "bedroom",
+                "name": "卧室",
+                "requirement_id": "bedrooms"
+              }
+            ],
+            "stair_position": "靠近公共交通核",
+            "summary": "按家庭使用情景组织空间"
+          },
+          {
+            "circulation": "减少卧室与公共活动相互穿行",
+            "name": "第3层",
+            "number": 3,
+            "rooms": [
+              {
+                "count": 1,
+                "kind": "bedroom",
+                "name": "卧室",
+                "requirement_id": "bedrooms"
+              }
+            ],
+            "stair_position": "靠近公共交通核",
+            "summary": "按家庭使用情景组织空间"
+          }
+        ],
+        "gain": "团聚时公共空间更完整",
+        "id": "gathering",
+        "name": "团聚均衡型",
+        "strategy": "兼顾日常与节日团聚",
+        "tradeoff": "日常需承担更多维护",
+        "version": "gathering-v1"
+      }
+    ]
+  },
+  "meta": {
+    "date": "2026年09月20日",
+    "demonstration": false,
+    "generation_mode": "multi_agent",
+    "input_hash": "82cc6697f909c06afcbf4378e9472b005240448ced760524bc8b9b744710a732",
+    "protocol_version": "report-house-v1",
+    "report_id": "house-report-test",
+    "schema_version": "house-report-v1",
+    "source": "house-agent-v1"
+  },
+  "pages": [
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "2 人",
+          "title": "常住人数"
+        },
+        {
+          "body": "4 人",
+          "title": "额外返乡人数"
+        },
+        {
+          "body": "节假日返乡",
+          "title": "返乡频率"
+        },
+        {
+          "body": "{\"role\":\"父母\",\"count\":2,\"residence\":\"permanent\",\"needs\":[\"首层起居\"]}",
+          "title": "已填写信息"
+        },
+        {
+          "body": "{\"role\":\"子女家庭\",\"count\":4,\"residence\":\"returning\"}",
+          "title": "已填写信息"
+        }
+      ],
+      "kind": "house_profile",
+      "number": 1,
+      "sources": [
+        "household.permanent_count",
+        "household.returning_count",
+        "household.return_frequency",
+        "house.member.01",
+        "house.member.02"
+      ],
+      "subtitle": "先区分日常常住与返乡团聚两种真实使用情景。",
+      "title": "我家的居住画像"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "泉州南安",
+          "title": "建房地区"
+        },
+        {
+          "body": "12 米 × 16 米（用户估算）",
+          "title": "宅基地估算尺寸"
+        },
+        {
+          "body": "待确认",
+          "title": "可建范围核实状态"
+        },
+        {
+          "body": "待确认",
+          "title": "已知可建条件"
+        },
+        {
+          "body": "south",
+          "title": "已填写信息"
+        },
+        {
+          "body": "坐北朝南",
+          "title": "已填写信息"
+        },
+        {
+          "body": "yes",
+          "title": "已填写信息"
+        },
+        {
+          "body": "yes",
+          "title": "已填写信息"
+        }
+      ],
+      "kind": "house_constraints",
+      "note": "实际可建范围未核实；相邻建筑与采光遮挡条件待核实",
+      "number": 2,
+      "sources": [
+        "site.region",
+        "site.approx_dimensions",
+        "site.buildable_scope",
+        "site.buildable_constraints",
+        "house.road_side",
+        "house.orientation",
+        "house.courtyard",
+        "house.parking"
+      ],
+      "subtitle": "已知条件用于限定方向，未知条件继续保留为专业核实项。",
+      "title": "宅基地与建造条件"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "整屋方案需要同时回应常住家庭、返乡使用、逐层房间分配和预算边界，先把不可交换的生活需求固定下来，再比较有实质差异的组织方向。",
+          "title": "核心判断"
+        },
+        {
+          "body": "优先减少常住成员的上下楼和相互干扰，再为返乡使用保留明确的启用条件。",
+          "title": "日常舒适方向"
+        },
+        {
+          "body": "在不削弱日常居住底线的前提下，加强节日聚会、待客与多人共处的空间组织。",
+          "title": "团聚均衡方向"
+        }
+      ],
+      "kind": "house_goals",
+      "number": 3,
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "intent.flexible_use",
+        "intent.priorities",
+        "house.style",
+        "house.first_floor_elder_room"
+      ],
+      "subtitle": "先确定整屋的日常居住底线与团聚弹性",
+      "title": "整屋设计目标与取舍"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "形成有实质差异的整屋方向，并逐层说明房间、动线、收益、代价和成立条件。",
+          "title": "整屋概念方案"
+        },
+        {
+          "body": "生成对应的概念平面、体量、外观、方案比较、询价边界、设计任务书和行动清单。",
+          "title": "图文与执行资料"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "kind": "house_confirmation",
+      "number": 4,
+      "sources": [
+        "intent.priorities",
+        "intent.floors",
+        "intent.bedrooms"
+      ],
+      "subtitle": "请确认这些家庭事实和设计底线是否准确；确认后将据此生成整屋方案、逐层概念平面、体量与外观方向。",
+      "title": "确认后生成哪些成果"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "优先保证父母日常生活；主要收益：首层日常使用完整；需要接受：团聚空间需要预先安排",
+          "title": "日常舒适型"
+        },
+        {
+          "body": "兼顾日常与节日团聚；主要收益：团聚时公共空间更完整；需要接受：日常需承担更多维护",
+          "title": "团聚均衡型"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "kind": "house_overview",
+      "number": 5,
+      "sources": [
+        "household.permanent_count",
+        "household.returning_count",
+        "intent.floors",
+        "intent.bedrooms",
+        "intent.priorities"
+      ],
+      "subtitle": "各方向使用相同家庭事实，但在空间组织、使用收益和需要接受的代价上保持实质差异。",
+      "title": "整屋概念方案总览"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "老人房×1、卧室×1",
+          "title": "空间配置"
+        },
+        {
+          "body": "减少卧室与公共活动相互穿行",
+          "title": "动线组织"
+        },
+        {
+          "body": "靠近公共交通核",
+          "title": "楼梯位置"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/daily-floor-1.png",
+          "caption": "按结构化房间清单生成，用于前期讨论，实际尺寸与结构需专业复核。",
+          "title": "第1层概念平面"
+        }
+      ],
+      "kind": "house_floor_plan",
+      "number": 6,
+      "scheme": "daily",
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "house.first_floor_elder_room",
+        "intent.flexible_use"
+      ],
+      "subtitle": "按家庭使用情景组织空间",
+      "title": "日常舒适型｜第1层概念平面"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "卧室×2",
+          "title": "空间配置"
+        },
+        {
+          "body": "减少卧室与公共活动相互穿行",
+          "title": "动线组织"
+        },
+        {
+          "body": "靠近公共交通核",
+          "title": "楼梯位置"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/daily-floor-2.png",
+          "caption": "按结构化房间清单生成，用于前期讨论，实际尺寸与结构需专业复核。",
+          "title": "第2层概念平面"
+        }
+      ],
+      "kind": "house_floor_plan",
+      "number": 7,
+      "scheme": "daily",
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "house.first_floor_elder_room",
+        "intent.flexible_use"
+      ],
+      "subtitle": "按家庭使用情景组织空间",
+      "title": "日常舒适型｜第2层概念平面"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "卧室×1",
+          "title": "空间配置"
+        },
+        {
+          "body": "减少卧室与公共活动相互穿行",
+          "title": "动线组织"
+        },
+        {
+          "body": "靠近公共交通核",
+          "title": "楼梯位置"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/daily-floor-3.png",
+          "caption": "按结构化房间清单生成，用于前期讨论，实际尺寸与结构需专业复核。",
+          "title": "第3层概念平面"
+        }
+      ],
+      "kind": "house_floor_plan",
+      "number": 8,
+      "scheme": "daily",
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "house.first_floor_elder_room",
+        "intent.flexible_use"
+      ],
+      "subtitle": "按家庭使用情景组织空间",
+      "title": "日常舒适型｜第3层概念平面"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "首层日常使用完整",
+          "title": "方案收益"
+        },
+        {
+          "body": "团聚空间需要预先安排",
+          "title": "方案代价"
+        },
+        {
+          "body": "屋面、门廊",
+          "title": "成本敏感项"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/daily-massing.png",
+          "caption": "体量图与本方案逐层空间数据关联。",
+          "title": "体量关系"
+        },
+        {
+          "asset": "house/fixture/daily-exterior.png",
+          "caption": "外观图引用同方案体量，仅表达风格和构成方向。",
+          "title": "外观方向"
+        }
+      ],
+      "kind": "house_exterior",
+      "number": 9,
+      "scheme": "daily",
+      "sources": [
+        "intent.floors",
+        "house.style",
+        "house.orientation",
+        "house.courtyard",
+        "house.parking"
+      ],
+      "subtitle": "新闽派简洁体量",
+      "title": "日常舒适型｜体量与外观方向"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "老人房×1、卧室×1",
+          "title": "空间配置"
+        },
+        {
+          "body": "减少卧室与公共活动相互穿行",
+          "title": "动线组织"
+        },
+        {
+          "body": "靠近公共交通核",
+          "title": "楼梯位置"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/gathering-floor-1.png",
+          "caption": "按结构化房间清单生成，用于前期讨论，实际尺寸与结构需专业复核。",
+          "title": "第1层概念平面"
+        }
+      ],
+      "kind": "house_floor_plan",
+      "number": 10,
+      "scheme": "gathering",
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "house.first_floor_elder_room",
+        "intent.flexible_use"
+      ],
+      "subtitle": "按家庭使用情景组织空间",
+      "title": "团聚均衡型｜第1层概念平面"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "卧室×2",
+          "title": "空间配置"
+        },
+        {
+          "body": "减少卧室与公共活动相互穿行",
+          "title": "动线组织"
+        },
+        {
+          "body": "靠近公共交通核",
+          "title": "楼梯位置"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/gathering-floor-2.png",
+          "caption": "按结构化房间清单生成，用于前期讨论，实际尺寸与结构需专业复核。",
+          "title": "第2层概念平面"
+        }
+      ],
+      "kind": "house_floor_plan",
+      "number": 11,
+      "scheme": "gathering",
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "house.first_floor_elder_room",
+        "intent.flexible_use"
+      ],
+      "subtitle": "按家庭使用情景组织空间",
+      "title": "团聚均衡型｜第2层概念平面"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "卧室×1",
+          "title": "空间配置"
+        },
+        {
+          "body": "减少卧室与公共活动相互穿行",
+          "title": "动线组织"
+        },
+        {
+          "body": "靠近公共交通核",
+          "title": "楼梯位置"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/gathering-floor-3.png",
+          "caption": "按结构化房间清单生成，用于前期讨论，实际尺寸与结构需专业复核。",
+          "title": "第3层概念平面"
+        }
+      ],
+      "kind": "house_floor_plan",
+      "number": 12,
+      "scheme": "gathering",
+      "sources": [
+        "intent.floors",
+        "intent.bedrooms",
+        "house.first_floor_elder_room",
+        "intent.flexible_use"
+      ],
+      "subtitle": "按家庭使用情景组织空间",
+      "title": "团聚均衡型｜第3层概念平面"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "团聚时公共空间更完整",
+          "title": "方案收益"
+        },
+        {
+          "body": "日常需承担更多维护",
+          "title": "方案代价"
+        },
+        {
+          "body": "大开间、外廊",
+          "title": "成本敏感项"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "illustrations": [
+        {
+          "asset": "house/fixture/gathering-massing.png",
+          "caption": "体量图与本方案逐层空间数据关联。",
+          "title": "体量关系"
+        },
+        {
+          "asset": "house/fixture/gathering-exterior.png",
+          "caption": "外观图引用同方案体量，仅表达风格和构成方向。",
+          "title": "外观方向"
+        }
+      ],
+      "kind": "house_exterior",
+      "number": 13,
+      "scheme": "gathering",
+      "sources": [
+        "intent.floors",
+        "house.style",
+        "house.orientation",
+        "house.courtyard",
+        "house.parking"
+      ],
+      "subtitle": "新闽派院落感",
+      "title": "团聚均衡型｜体量与外观方向"
+    },
+    {
+      "access": "paid",
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "kind": "house_comparison",
+      "number": 14,
+      "sources": [
+        "intent.priorities",
+        "intent.floors",
+        "intent.bedrooms"
+      ],
+      "subtitle": "从家庭使用、空间组织、外观与成本敏感项比较，不强迫用户在证据不足时定案。",
+      "table": [
+        [
+          "方案",
+          "日常",
+          "团聚"
+        ],
+        [
+          "日常舒适型",
+          "优先",
+          "需准备"
+        ],
+        [
+          "团聚均衡型",
+          "均衡",
+          "优先"
+        ]
+      ],
+      "title": "整屋方案比较与建议"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "分别核对主体、装修与庭院范围。",
+          "title": "统一询价口径"
+        },
+        {
+          "body": "分别核对屋面、门廊与大开间的影响。",
+          "title": "成本敏感项"
+        }
+      ],
+      "kind": "house_budget",
+      "number": 15,
+      "sources": [
+        "budget.wan",
+        "intent.priorities"
+      ],
+      "subtitle": "预算内容随方案成本敏感项展开，不将未知范围写成正式报价。",
+      "title": "预算边界与统一询价清单"
+    },
+    {
+      "access": "paid",
+      "blocks": [
+        {
+          "body": "卧室总数与首层老人房不得减少。",
+          "title": "必须满足"
+        },
+        {
+          "body": "可建边界和相邻条件需要专业复核。",
+          "title": "仍待核实"
+        }
+      ],
+      "disclaimer": "本报告中的平面、体量和外观均为前期概念表达，不是施工图、审批图或精确工程测量结果；需由具备资质的专业人员结合实测和当地规范复核。",
+      "kind": "house_designer_brief",
+      "number": 16,
+      "sources": [
+        "intent.priorities",
+        "intent.floors",
+        "intent.bedrooms",
+        "intent.flexible_use",
+        "house.first_floor_elder_room"
+      ],
+      "subtitle": "区分必须满足、优先满足、可协商和仍待核实的条件。",
+      "title": "交给设计师的需求任务书"
+    },
+    {
+      "access": "paid",
+      "actions": [
+        {
+          "body": "负责：业主与专业人员；前置：宅基地资料；完成依据：形成可核对的边界资料",
+          "title": "核实可建边界"
+        },
+        {
+          "body": "负责：业主；前置：方案成本敏感项；完成依据：形成同口径询价清单",
+          "title": "统一询价范围"
+        }
+      ],
+      "kind": "house_actions",
+      "number": 17,
+      "sources": [
+        "site.buildable_scope",
+        "house.start_window",
+        "budget.wan"
+      ],
+      "subtitle": "每项任务写清负责角色、前置条件和完成依据。",
+      "title": "下一步行动计划"
+    }
+  ],
+  "recipe": "space"
+}

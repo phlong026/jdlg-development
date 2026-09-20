@@ -187,22 +187,23 @@ type SnapshotFacts struct {
 }
 
 type SnapshotPage struct {
-	Number     int            `json:"number"`
-	Access     string         `json:"access"`
-	Kind       string         `json:"kind"`
-	Scheme     string         `json:"scheme,omitempty"`
-	Title      string         `json:"title"`
-	Subtitle   string         `json:"subtitle"`
-	Fixed      string         `json:"fixed,omitempty"`
-	Dynamic    string         `json:"dynamic,omitempty"`
-	AI         string         `json:"ai,omitempty"`
-	Sources    []string       `json:"sources,omitempty"`
-	Blocks     []ContentBlock `json:"blocks,omitempty"`
-	Priorities []ContentBlock `json:"priorities,omitempty"`
-	Table      [][]string     `json:"table,omitempty"`
-	Note       string         `json:"note,omitempty"`
-	Actions    []ContentBlock `json:"actions,omitempty"`
-	Disclaimer string         `json:"disclaimer,omitempty"`
+	Illustrations []ReportIllustration `json:"illustrations,omitempty"`
+	Number        int                  `json:"number"`
+	Access        string               `json:"access"`
+	Kind          string               `json:"kind"`
+	Scheme        string               `json:"scheme,omitempty"`
+	Title         string               `json:"title"`
+	Subtitle      string               `json:"subtitle"`
+	Fixed         string               `json:"fixed,omitempty"`
+	Dynamic       string               `json:"dynamic,omitempty"`
+	AI            string               `json:"ai,omitempty"`
+	Sources       []string             `json:"sources,omitempty"`
+	Blocks        []ContentBlock       `json:"blocks,omitempty"`
+	Priorities    []ContentBlock       `json:"priorities,omitempty"`
+	Table         [][]string           `json:"table,omitempty"`
+	Note          string               `json:"note,omitempty"`
+	Actions       []ContentBlock       `json:"actions,omitempty"`
+	Disclaimer    string               `json:"disclaimer,omitempty"`
 }
 
 type ContentBlock struct {

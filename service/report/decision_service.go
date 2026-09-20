@@ -12,6 +12,23 @@ import (
 )
 
 func (s *Service) CreateDecisionPreview(ctx context.Context, userID int64, input DecisionInput) (SafeView, error) {
+	if input.House != nil {
+		return SafeView{}, ErrInvalidInput
+	}
+	return s.createDecisionPreview(ctx, userID, input, ProtocolDecisionV5)
+}
+
+func (s *Service) CreateHousePreview(ctx context.Context, userID int64, input DecisionInput) (SafeView, error) {
+	if !s.config.HouseEnabled {
+		return SafeView{}, ErrDisabled
+	}
+	if input.House == nil {
+		return SafeView{}, ErrInvalidInput
+	}
+	return s.createDecisionPreview(ctx, userID, input, ProtocolHouseV1)
+}
+
+func (s *Service) createDecisionPreview(ctx context.Context, userID int64, input DecisionInput, protocol string) (SafeView, error) {
 	if !s.config.Enabled || !s.config.DecisionEnabled {
 		return SafeView{}, ErrDisabled
 	}
@@ -35,7 +52,7 @@ func (s *Service) CreateDecisionPreview(ctx context.Context, userID int64, input
 	now := time.Now()
 	record := &Report{
 		ID: uuid.NewString(), UserID: userID, InputHash: inputHash,
-		ProtocolVersion: ProtocolDecisionV5, InputJSON: inputJSON,
+		ProtocolVersion: protocol, InputJSON: inputJSON,
 		Status: StatusPreviewQueued, GenerationMode: GenerationRulesOnly,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -55,7 +72,7 @@ func (s *Service) ConfirmDecision(ctx context.Context, userID int64, reportID st
 	if err != nil {
 		return SafeView{}, err
 	}
-	if record.ProtocolVersion != ProtocolDecisionV5 || record.Status != StatusPreviewReady || len(record.PreviewSnapshot) == 0 || record.Paid || record.PendingOrderNo != "" {
+	if !IsDecisionProtocol(record.ProtocolVersion) || record.Status != StatusPreviewReady || len(record.PreviewSnapshot) == 0 || record.Paid || record.PendingOrderNo != "" {
 		return SafeView{}, ErrConflict
 	}
 	var input DecisionInput
@@ -68,7 +85,7 @@ func (s *Service) ConfirmDecision(ctx context.Context, userID int64, reportID st
 	}
 	var snapshot DecisionSnapshot
 	if err := json.Unmarshal(record.PreviewSnapshot, &snapshot); err != nil || ValidateDecisionSnapshot(snapshot, ModePreview) != nil ||
-		snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != ProtocolDecisionV5 {
+		snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != record.ProtocolVersion {
 		return SafeView{}, ErrInvalidInput
 	}
 	if confirmation.DiagnosisID != snapshot.Diagnosis.ID || confirmation.InputHash != record.InputHash {
@@ -98,7 +115,7 @@ func (s *Service) ConfirmDecision(ctx context.Context, userID int64, reportID st
 }
 
 func (s *Service) hydrateDecisionContext(ctx context.Context, record *Report) (*Report, error) {
-	if record == nil || record.ProtocolVersion != ProtocolDecisionV5 {
+	if record == nil || !IsDecisionProtocol(record.ProtocolVersion) {
 		return record, nil
 	}
 	decisionStore, ok := s.store.(DecisionContextStore)
@@ -148,7 +165,7 @@ func validateDecisionPayment(record *Report) (DecisionSnapshot, string) {
 		return DecisionSnapshot{}, "invalid_frozen_input"
 	}
 	var snapshot DecisionSnapshot
-	if json.Unmarshal(record.PreviewSnapshot, &snapshot) != nil || ValidateDecisionSnapshot(snapshot, ModePreview) != nil || snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != ProtocolDecisionV5 {
+	if json.Unmarshal(record.PreviewSnapshot, &snapshot) != nil || ValidateDecisionSnapshot(snapshot, ModePreview) != nil || snapshot.Meta.ReportID != record.ID || snapshot.Meta.InputHash != record.InputHash || snapshot.Meta.ProtocolVersion != record.ProtocolVersion {
 		return DecisionSnapshot{}, "invalid_preview"
 	}
 	var confirmation DecisionConfirmation
