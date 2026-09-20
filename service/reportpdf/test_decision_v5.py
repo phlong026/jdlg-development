@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 import fitz
+from PIL import Image
 from pypdf import PdfReader
 
 from decision_v5 import FONT_SIZES, render_decision_v5, validate_decision_v5
@@ -179,12 +180,20 @@ class DecisionV5Tests(unittest.TestCase):
         self.canonical = self.root / "canonical.pdf"
         self.images = self.root / "pages"
 
-    def render(self, mode="full", data=None):
+    def render(self, mode="full", data=None, asset_root=None):
         return render_decision_v5(
             data or self.data, self.output, mode, FONT,
             canonical_output=self.canonical,
             page_images_dir=self.images,
+            asset_root=asset_root,
         )
+
+    def make_image(self, name, size=(1200, 800), color=(191, 165, 119)):
+        asset_root = self.root / "assets"
+        asset_root.mkdir(exist_ok=True)
+        path = asset_root / name
+        Image.new("RGB", size, color).save(path)
+        return asset_root, path
 
     def test_full_report_keeps_searchable_canonical_and_delivers_ten_image_pages(self):
         self.render()
@@ -292,8 +301,112 @@ class DecisionV5Tests(unittest.TestCase):
                 self.assertIn(report_id[:8] + "…" + report_id[-8:], text)
                 self.assertIn("01 / 10", text)
 
+    def test_two_controlled_illustrations_render_in_complete_ten_page_report(self):
+        asset_root, _ = self.make_image("courtyard.png", size=(1672, 941))
+        self.make_image("living-room.jpg", size=(1672, 941), color=(85, 113, 102))
+        self.data["pages"][4]["illustrations"] = [
+            {
+                "asset": "courtyard.png",
+                "title": "院落与室内关系示意",
+                "caption": "用于说明归家、停留与室内公共空间之间的关系。",
+            },
+            {
+                "asset": "living-room.jpg",
+                "title": "家庭共享空间示意",
+                "caption": "画面只表达生活场景，不代表已经确定的建筑方案。",
+            },
+        ]
+        self.render(asset_root=asset_root)
+        self.assertEqual(len(PdfReader(self.output).pages), 10)
+        canonical_text = "\n".join(
+            page.extract_text() or "" for page in PdfReader(self.canonical).pages
+        )
+        self.assertIn("院落与室内关系示意", canonical_text)
+        self.assertIn("画面只表达生活场景", canonical_text)
+        with fitz.open(self.canonical) as document:
+            page = document[4]
+            images = sorted(page.get_image_info(), key=lambda item: item["bbox"][0])
+            self.assertEqual(len(images), 2)
+            blocks = page.get_text("blocks")
+            for image, title in zip(images, ("院落与室内关系示意", "家庭共享空间示意")):
+                title_top = next(block[1] for block in blocks if title in block[4])
+                self.assertLess(title_top - image["bbox"][3], 25)
+
+    def test_cover_with_two_short_blocks_and_one_landscape_illustration_fits(self):
+        asset_root, _ = self.make_image("cover.png", size=(1672, 941))
+        self.data["pages"][0]["blocks"].append({
+            "title": "阅读边界",
+            "body": "需要测绘、审批和设计核实的内容已单独标出。",
+        })
+        self.data["pages"][0]["illustrations"] = [{
+            "asset": "cover.png",
+            "title": "家庭生活场景示意",
+            "caption": "用于建立阅读情境，不代表已确定建筑方案。",
+        }]
+        self.data["pages"][0]["note"] = ""
+        self.data["pages"][0]["disclaimer"] = ""
+        self.render(asset_root=asset_root)
+        with fitz.open(self.canonical) as document:
+            self.assertEqual(len(document[0].get_image_info()), 1)
+
+    def test_illustrations_reject_missing_unsafe_damaged_and_oversized_assets(self):
+        asset_root, _ = self.make_image("valid.png")
+        outside = self.root / "outside.png"
+        Image.new("RGB", (40, 40), (1, 2, 3)).save(outside)
+        (asset_root / "escape.png").symlink_to(outside)
+        (asset_root / "damaged.png").write_bytes(b"not an image")
+        self.make_image("oversized.png", size=(9000, 1))
+        cases = (
+            ("missing.png", asset_root),
+            (str(outside), asset_root),
+            ("../outside.png", asset_root),
+            ("escape.png", asset_root),
+            ("damaged.png", asset_root),
+            ("oversized.png", asset_root),
+            ("valid.png", None),
+        )
+        for asset, root in cases:
+            with self.subTest(asset=asset, asset_root=root):
+                data = decision_snapshot()
+                data["pages"][4]["illustrations"] = [{
+                    "asset": asset,
+                    "title": "受控示意图",
+                    "caption": "仅用于验证图片资产读取边界。",
+                }]
+                with self.assertRaises(ValueError):
+                    render_decision_v5(data, self.output, "full", FONT, asset_root=root)
+        too_many = decision_snapshot()
+        illustration = {
+            "asset": "valid.png", "title": "受控示意图", "caption": "验证数量上限。",
+        }
+        too_many["pages"][4]["illustrations"] = [illustration] * 3
+        with self.assertRaises(ValueError):
+            render_decision_v5(
+                too_many, self.output, "full", FONT, asset_root=asset_root
+            )
+
+    def test_illustration_overflow_is_rejected_without_replacing_previous_pdf(self):
+        self.render()
+        original = self.output.read_bytes()
+        asset_root, _ = self.make_image("overflow.png")
+        data = decision_snapshot()
+        data["pages"][9]["illustrations"] = [{
+            "asset": "overflow.png",
+            "title": "空间不足时不得裁切",
+            "caption": "完整的图片、标题和说明必须同时容纳在页面内。",
+        }]
+        with self.assertRaisesRegex(ValueError, "exceeds page"):
+            self.render(data=data, asset_root=asset_root)
+        self.assertEqual(self.output.read_bytes(), original)
+
     def test_existing_render_entry_dispatches_v5_without_changing_cli_contract(self):
-        render_report(self.data, self.output, "full", FONT)
+        asset_root, _ = self.make_image("dispatch.png")
+        self.data["pages"][4]["illustrations"] = [{
+            "asset": "dispatch.png",
+            "title": "入口分发示意",
+            "caption": "验证统一渲染入口会传递受控资产目录。",
+        }]
+        render_report(self.data, self.output, "full", FONT, asset_root=asset_root)
         self.assertEqual(len(PdfReader(self.output).pages), 10)
 
     def test_real_go_snapshots_for_every_recipe_render_preview_and_full(self):

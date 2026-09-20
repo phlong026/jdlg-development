@@ -12,8 +12,10 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
+import warnings
 
 import fitz
+from PIL import Image
 from pypdf import PdfReader
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
@@ -54,6 +56,9 @@ FULL_KINDS = (
     "recommendation", "facts", "criteria", "analysis_primary", "analysis_secondary",
     "decision_table", "budget_scope", "designer_brief", "action_plan", "confirmation_sheet",
 )
+MAX_ASSET_BYTES = 20 * 1024 * 1024
+MAX_IMAGE_EDGE = 8192
+MAX_IMAGE_PIXELS = 25_000_000
 
 
 def _plain_text(value, field, *, required=False):
@@ -106,7 +111,70 @@ def _validate_string_list(values, field):
         _plain_text(value, f"{field}[{index}]", required=True)
 
 
-def validate_decision_v5(data, mode):
+def _resolve_illustration_asset(asset_root, asset):
+    if asset_root is None:
+        raise ValueError("illustrations require an explicit asset root")
+    root = Path(asset_root)
+    try:
+        root = root.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError("illustration asset root is unavailable") from error
+    if not root.is_dir():
+        raise ValueError("illustration asset root must be a directory")
+
+    relative = Path(asset)
+    unsafe_path = relative.is_absolute() or ".." in relative.parts
+    unsupported_type = relative.suffix.lower() not in (".png", ".jpg", ".jpeg")
+    if unsafe_path or unsupported_type:
+        raise ValueError("illustration asset must be a relative PNG or JPEG path")
+    try:
+        resolved = (root / relative).resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError("illustration asset is unavailable") from error
+    try:
+        within_root = os.path.commonpath((str(root), str(resolved))) == str(root)
+    except ValueError:
+        within_root = False
+    if not within_root or not resolved.is_file():
+        raise ValueError("illustration asset resolves outside its asset root")
+    try:
+        asset_size = resolved.stat().st_size
+    except OSError as error:
+        raise ValueError("illustration asset is unavailable") from error
+    if asset_size > MAX_ASSET_BYTES:
+        raise ValueError("illustration asset is too large")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(resolved) as image:
+                width, height = image.size
+                if image.format not in ("PNG", "JPEG"):
+                    raise ValueError("illustration asset is not a PNG or JPEG")
+                if (width <= 0 or height <= 0 or width > MAX_IMAGE_EDGE or height > MAX_IMAGE_EDGE
+                        or width * height > MAX_IMAGE_PIXELS):
+                    raise ValueError("illustration dimensions are too large")
+                image.verify()
+    except ValueError:
+        raise
+    except Exception as error:
+        raise ValueError("illustration asset is damaged") from error
+    return resolved
+
+
+def _validate_illustrations(illustrations, field, asset_root):
+    if not isinstance(illustrations, list) or len(illustrations) > 2:
+        raise ValueError(f"{field} must contain at most two items")
+    for index, illustration in enumerate(illustrations):
+        if not isinstance(illustration, dict):
+            raise ValueError(f"{field}[{index}] must be an object")
+        if set(illustration) != {"asset", "title", "caption"}:
+            raise ValueError(f"{field}[{index}] has unknown or missing fields")
+        for key in ("asset", "title", "caption"):
+            _plain_text(illustration.get(key), f"{field}[{index}].{key}", required=True)
+        _resolve_illustration_asset(asset_root, illustration["asset"])
+
+
+def validate_decision_v5(data, mode, asset_root=None):
     if mode not in ("preview", "full"):
         raise ValueError("invalid report mode")
     if not isinstance(data, dict):
@@ -182,6 +250,9 @@ def validate_decision_v5(data, mode):
         _validate_blocks(page.get("blocks", []), f"pages[{index}].blocks")
         _validate_blocks(page.get("priorities", []), f"pages[{index}].priorities")
         _validate_blocks(page.get("actions", []), f"pages[{index}].actions")
+        _validate_illustrations(
+            page.get("illustrations", []), f"pages[{index}].illustrations", asset_root
+        )
         table = page.get("table", [])
         if not isinstance(table, list):
             raise ValueError("page table must be a list")
@@ -220,11 +291,12 @@ def _wrapped_lines(text, width, size):
 
 
 class DecisionV5Page:
-    def __init__(self, pdf, data, page, total):
+    def __init__(self, pdf, data, page, total, asset_root=None):
         self.pdf = pdf
         self.data = data
         self.page = page
         self.total = total
+        self.asset_root = asset_root
 
     def text(self, value, x, top, width, size, color=INK, leading=None, max_lines=None,
              bottom_limit=CONTENT_BOTTOM):
@@ -341,6 +413,80 @@ class DecisionV5Page:
             top += row_height
         return top + 12
 
+    def illustration_card(
+            self, illustration, top, x, width, max_image_height,
+            min_image_height, bottom_limit):
+        title_lines = _wrapped_lines(illustration["title"], width - 24, FONT_SIZES["card_title"])
+        caption_lines = _wrapped_lines(illustration["caption"], width - 24, FONT_SIZES["note"])
+        if len(title_lines) > 2 or len(caption_lines) > 3:
+            raise ValueError(f"page {self.page['number']}: illustration copy exceeds fixed slot")
+        asset = _resolve_illustration_asset(self.asset_root, illustration["asset"])
+        try:
+            with Image.open(asset) as image:
+                source_width, source_height = image.size
+        except Exception as error:
+            raise ValueError("illustration asset cannot be measured") from error
+        title_height = len(title_lines) * 16
+        caption_height = len(caption_lines) * 13
+        fixed_height = 12 + 12 + title_height + 6 + caption_height + 14
+        available_image_height = bottom_limit - top - fixed_height - 12
+        image_height = min(
+            max_image_height,
+            (width - 24) * source_height / source_width,
+            available_image_height,
+        )
+        if image_height < min_image_height:
+            raise ValueError(f"page {self.page['number']}: illustration exceeds page")
+        height = fixed_height + image_height
+        self.rect(x, top, width, height)
+        try:
+            self.pdf.drawImage(
+                str(asset), x + 12, H - top - 12 - image_height,
+                width=width - 24, height=image_height,
+                preserveAspectRatio=True, anchor="c", mask="auto",
+            )
+        except Exception as error:
+            raise ValueError("illustration asset cannot be rendered") from error
+        copy_top = top + 24 + image_height
+        self.text(
+            illustration["title"], x + 12, copy_top, width - 24,
+            FONT_SIZES["card_title"], JADE, leading=16, max_lines=2,
+        )
+        self.text(
+            illustration["caption"], x + 12, copy_top + title_height + 6, width - 24,
+            FONT_SIZES["note"], MUTED, leading=13, max_lines=3,
+        )
+        return top + height + 12
+
+    def illustration_list(self, illustrations, top):
+        if not illustrations:
+            return top
+        top += self.text("场景示意", MARGIN, top, CONTENT_WIDTH, FONT_SIZES["section"]) + 10
+        reserve = 0
+        for prefix, value in (
+                ("说明｜", self.page.get("note", "")),
+                ("专业边界｜", self.page.get("disclaimer", ""))):
+            if value:
+                reserve += len(_wrapped_lines(prefix + value, CONTENT_WIDTH, FONT_SIZES["note"])) * 13 + 8
+        bottom_limit = CONTENT_BOTTOM - reserve
+        if len(illustrations) == 1:
+            return self.illustration_card(
+                illustrations[0], top, MARGIN, CONTENT_WIDTH,
+                max_image_height=230, min_image_height=190, bottom_limit=bottom_limit,
+            )
+        gap = 12
+        width = (CONTENT_WIDTH - gap) / 2
+        return max(
+            self.illustration_card(
+                illustrations[0], top, MARGIN, width,
+                max_image_height=180, min_image_height=90, bottom_limit=bottom_limit,
+            ),
+            self.illustration_card(
+                illustrations[1], top, MARGIN + width + gap, width,
+                max_image_height=180, min_image_height=90, bottom_limit=bottom_limit,
+            ),
+        )
+
     def finish(self, top):
         note = self.page.get("note", "")
         if note:
@@ -370,6 +516,7 @@ class DecisionV5Page:
         top = self.block_list(self.page.get("priorities", []), top, "判断优先级")
         top = self.table(self.page.get("table", []), top)
         top = self.block_list(self.page.get("actions", []), top, "下一步行动", numbered=True)
+        top = self.illustration_list(self.page.get("illustrations", []), top)
         self.finish(top)
 
 
@@ -393,6 +540,8 @@ def _contracted_page_text(page):
             values.extend((block["title"], block["body"]))
     for row in page.get("table", []):
         values.extend(row)
+    for illustration in page.get("illustrations", []):
+        values.extend((illustration["title"], illustration["caption"]))
     return [value for value in values if value]
 
 
@@ -432,7 +581,9 @@ def _verify_canonical(path, data, pages):
     if not embedded_font_found:
         raise ValueError("canonical PDF does not contain an embedded font")
     with fitz.open(path) as document:
-        for page in document:
+        for index, page in enumerate(document):
+            if len(page.get_image_info()) != len(data["pages"][index].get("illustrations", [])):
+                raise ValueError("canonical PDF illustration count does not match snapshot")
             for block in page.get_text("blocks", sort=True):
                 x0, y0, x1, y1, text, _, block_type = block
                 if block_type != 0 or not text.strip():
@@ -441,14 +592,14 @@ def _verify_canonical(path, data, pages):
                     raise ValueError("canonical PDF contains text outside the page")
 
 
-def _render_canonical(data, target, mode, font):
+def _render_canonical(data, target, mode, font, asset_root=None):
     count = 4 if mode == "preview" else 10
     pdfmetrics.registerFont(TTFont(FONT_NAME, str(font)))
     pdf = canvas.Canvas(str(target), pagesize=A4, invariant=1)
     pdf.setTitle("甲第灵光 · 我家的建房决策报告")
     pdf.setAuthor("甲第灵光 ArchLight")
     for page in data["pages"][:count]:
-        DecisionV5Page(pdf, data, page, count).draw()
+        DecisionV5Page(pdf, data, page, count, asset_root=asset_root).draw()
     pdf.save()
     _verify_canonical(target, data, count)
 
@@ -484,9 +635,11 @@ def _rasterize_and_package(canonical, target, image_dir, expected_pages):
                 raise ValueError("image PDF must contain exactly one complete image per page")
 
 
-def render_decision_v5(data, output, mode, font, *, canonical_output=None, page_images_dir=None):
+def render_decision_v5(
+        data, output, mode, font, *, canonical_output=None, page_images_dir=None,
+        asset_root=None):
     """Render atomically; failed validation or overflow preserves prior output."""
-    expected_pages = validate_decision_v5(data, mode)
+    expected_pages = validate_decision_v5(data, mode, asset_root=asset_root)
     output = Path(output)
     font = Path(font)
     if not font.is_file():
@@ -498,7 +651,7 @@ def render_decision_v5(data, output, mode, font, *, canonical_output=None, page_
     image_dir = temp_root / "pages"
     image_pdf = temp_root / "report.pdf"
     try:
-        _render_canonical(data, vector_pdf, mode, font)
+        _render_canonical(data, vector_pdf, mode, font, asset_root=asset_root)
         _rasterize_and_package(vector_pdf, image_pdf, image_dir, expected_pages)
         if canonical_output is not None:
             canonical_output = Path(canonical_output)

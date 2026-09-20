@@ -507,7 +507,7 @@ class Report:
 def render_report(data, output, mode, font, asset_root=None):
     if data.get("meta", {}).get("schema_version") == "report-decision-v5":
         from decision_v5 import render_decision_v5
-        return render_decision_v5(data, output, mode, font)
+        return render_decision_v5(data, output, mode, font, asset_root=asset_root)
     validate(data, mode, asset_root)
     pdfmetrics.registerFont(TTFont("CN", str(font)))
     output = Path(output)

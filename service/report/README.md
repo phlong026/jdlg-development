@@ -16,6 +16,42 @@ Go 主编排器 `ReportOrchestrator` 决定调用顺序和状态，不让模型�
 
 每个内容结论保留事实引用。空间拒绝兼用时不会生成兼用建议；家庭只有一个已表达视角时不会虚构冲突；准备配方区分阻断与可并行事项。用户确认 A/B 后，推荐方向随之变化；确认后的优先级贯穿评价标准、设计师任务书与沟通确认单。未知金额、地块尺寸不由模型估算。
 
+## 图文 PDF 与 2K 绘图入口
+
+V5 Python 渲染器接受可选 `pages[].illustrations`，每页最多两项：
+
+```json
+{"asset":"flex-day.png","title":"平时：阅读与日常活动","caption":"AI 意向图，用于表达空间使用方式。"}
+```
+
+`asset` 必须是调用方显式 `--asset-root` 内的相对 PNG/JPEG 文件名。标题与说明由排版程序绘制；图片不拉伸，缺失、损坏、越界或版面溢出会失败并保留原 PDF。检查母版中的每个图片实例后，仍将完整页面栅格化为单一图片型 PDF。未声明插图的旧快照保持无图兼容；这不表示自动绘图已经启用。
+
+本地命令 `cmd/report_illustrations` 复用 `LAOZHANG_API_KEY`、`LAOZHANG_IMAGE_BASE_URL`、`LAOZHANG_IMAGE_MODEL` 和既有 GPT-Image 请求模板。固定请求 16:9、2048×1152，并验证原始响应的真实尺寸；不将低清图放大冒充 2K。计划文件是非空 JSON 数组：
+
+```json
+[{"id":"flex-day","prompt":"依据已确认需求生成日常使用场景","reference":"optional-reference.png"}]
+```
+
+`reference` 可省略，只能指向计划目录内的本地图片。完成某张图片后，可将它放在后续计划目录中作参考。调用方式（在 `service` 目录）：
+
+```sh
+CGO_ENABLED=0 go run ./cmd/report_illustrations --plan /absolute/plan.json --output /absolute/images
+```
+
+该命令会产生真实外部调用和费用。先写 `submitting` 收据再发起一次请求；不跟随生成请求的重定向、不自动重试付费请求。完成收据绑定渠道、网关、模型、提示词、尺寸与参考图哈希；只复用验证通过的原图。`submitting` 表示需核对提供商结果，不能直接删除收据重跑。
+
+当前交付边界：2K 客户端和本地命令已测试；生产 `ReportOrchestrator` / worker 尚未自动规划、生成或保存插图，Go `SnapshotPage` 也尚未承载图片字段，不能把 Python 插图支持当作在线异步生图链路完成。后续接入须持久化每张图的任务状态与资产引用，再进入最终渲染。
+
+`reportpdf/build_illustrated_demo.py` 是固定合成案例的可复现排版工具，拒绝其他输入或选择，不用于真实客户生成。它保留原样稿事实、诊断与选择，补充已明确标记的人工样稿文案、AI 意向图及程序示意图。本次样稿使用内置 imagegen，原图实际 1672×941，未声称经过服务端 2K 接口或真实订单联调。
+
+```sh
+/usr/bin/python3 reportpdf/build_illustrated_demo.py \
+  --output /absolute/demo-directory \
+  --font /absolute/chinese-font.ttf
+```
+
+该目录的 `assets/` 需先准备 `exterior.png`、`elder-room.png`、`fixed-guest.png`、`flex-day.png`、`flex-night.png`。脚本绘制三张说明性图表，并生成十页 PDF；不会自动调用模型。额外测试为 `python3 -m unittest test_illustrated_demo.py`（在 `reportpdf` 目录）。
+
 ## 异步任务与恢复
 
 `building_reports` 是持久任务队列，`report_agent_stages` 保存各阶段结果，`report_decision_contexts` 保存确认快照及可展示进度。使用数据库行锁、租约 token、有效租约和状态条件限制写入。多个 worker 可以消费同一数据库，最大本进程并发为 8。
