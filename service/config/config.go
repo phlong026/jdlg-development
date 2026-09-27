@@ -109,6 +109,7 @@ type AIConfig struct {
 	LaoZhangAPIKey                string // 老张平台 Key
 	LaoZhangImageBaseURL          string // 老张生图网关，默认 api2.laozhang.ai
 	LaoZhangImageModel            string // 老张生图模型
+	LaoZhangImageQuality          string // GPT-Image-2.5 VIP 渲染质量档 low/medium/high/xhigh/max，非法值回退 high（VIP 按次计费五档同价，档位只影响细节与耗时）
 	ToAPIsAPIKey                  string // ToAPIs Key
 	FastGPTBaseURL                string // FastGPT 服务地址
 	FastGPTAPIKey                 string // FastGPT API Key
@@ -321,6 +322,7 @@ func Init() *Config {
 	laozhangImageBaseURL := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_BASE_URL", ""), "https://api2.laozhang.ai")
 	laozhangImageBaseURL = strings.TrimRight(laozhangImageBaseURL, "/")
 	laozhangImageModel := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_MODEL", ""), "gpt-image-2.5-sunburst-vip")
+	laozhangImageQuality := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_QUALITY", ""), "")
 	globalConfig = &Config{
 		MySQL: MySQLConfig{
 			DSN: getEnv("MYSQL_DSN", "root:@tcp(127.0.0.1:3306)/jiadilinguang?charset=utf8mb4&parseTime=True&loc=Local"),
@@ -369,6 +371,7 @@ func Init() *Config {
 			LaoZhangAPIKey:                laozhangKey,
 			LaoZhangImageBaseURL:          laozhangImageBaseURL,
 			LaoZhangImageModel:            laozhangImageModel,
+			LaoZhangImageQuality:          laozhangImageQuality,
 			ToAPIsAPIKey:                  toapisKey,
 			FastGPTBaseURL:                strings.TrimRight(getEnv("FASTGPT_BASE_URL", ""), "/"),
 			FastGPTAPIKey:                 getEnv("FASTGPT_API_KEY", ""),

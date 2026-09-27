@@ -1,6 +1,7 @@
 package component
 
 import (
+	"encoding/json"
 	"os"
 	"service/config"
 	"strings"
@@ -301,7 +302,7 @@ func TestBuildGPTImage2VipRequestBody(t *testing.T) {
 			ProviderCode: "gpt-image-2-vip",
 			ProtocolType: "openai_image_sync",
 			APIEndpoint:  laoZhangImageGenerationEndpoint,
-			BodyTemplate: getLaoZhangGPTImage2VipDrawBodyTemplate(defaultLaoZhangImageModel, true),
+			BodyTemplate: getLaoZhangGPTImage2VipDrawBodyTemplate(defaultLaoZhangImageModel, "high", true),
 		},
 		Payload: map[string]interface{}{
 			"canvas":          "16:9",
@@ -359,5 +360,53 @@ func TestExecuteToAPIsAsyncImageTasksKeepsPartialSuccess(t *testing.T) {
 		if !strings.Contains(batchSource, want) {
 			t.Fatalf("requests.go missing partial-success guard %q", want)
 		}
+	}
+}
+
+func TestLaoZhangGPTImage2VipTemplateQuality(t *testing.T) {
+	cases := []struct {
+		name        string
+		quality     string
+		wantContain string
+		wantAbsent  string
+	}{
+		{name: "high档注入", quality: "high", wantContain: `"quality":"high"`, wantAbsent: ""},
+		{name: "xhigh档注入", quality: "xhigh", wantContain: `"quality":"xhigh"`, wantAbsent: ""},
+		{name: "空串省略字段走auto", quality: "", wantContain: "", wantAbsent: `"quality"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := getLaoZhangGPTImage2VipDrawBodyTemplate(defaultLaoZhangImageModel, tc.quality, false)
+			if !json.Valid([]byte(body)) {
+				t.Fatalf("template should be valid JSON: %s", body)
+			}
+			if tc.wantContain != "" && !strings.Contains(body, tc.wantContain) {
+				t.Fatalf("expected %s in template: %s", tc.wantContain, body)
+			}
+			if tc.wantAbsent != "" && strings.Contains(body, tc.wantAbsent) {
+				t.Fatalf("expected no %s in template: %s", tc.wantAbsent, body)
+			}
+		})
+	}
+}
+
+func TestLaoZhangImageQualityFallback(t *testing.T) {
+	invalid := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+		AI: config.AIConfig{LaoZhangAPIKey: "k", LaoZhangImageQuality: "bogus"},
+	})
+	if got := invalid.laoZhangImageQuality(); got != "high" {
+		t.Fatalf("非法档位应回退 high, got %s", got)
+	}
+	valid := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+		AI: config.AIConfig{LaoZhangAPIKey: "k", LaoZhangImageQuality: "xhigh"},
+	})
+	if got := valid.laoZhangImageQuality(); got != "xhigh" {
+		t.Fatalf("合法档位应透传, got %s", got)
+	}
+	empty := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+		AI: config.AIConfig{LaoZhangAPIKey: "k"},
+	})
+	if got := empty.laoZhangImageQuality(); got != "high" {
+		t.Fatalf("未配置默认 high, got %s", got)
 	}
 }

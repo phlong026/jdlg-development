@@ -15,6 +15,18 @@ import (
 
 const defaultLaoZhangImageBaseURL = "https://api2.laozhang.ai"
 const defaultLaoZhangImageModel = "gpt-image-2.5-sunburst-vip"
+const defaultLaoZhangImageQuality = "high"
+
+// laoZhangImageQualityLevels 老张 GPT-Image-2.5 VIP 合法质量档位
+// 文档：https://docs.laozhang.ai/api-capabilities/gpt-image-2-5 （VIP 按次计费五档同价，档位只影响细节与耗时）
+var laoZhangImageQualityLevels = map[string]bool{
+	"low":    true,
+	"medium": true,
+	"high":   true,
+	"xhigh":  true,
+	"max":    true,
+}
+
 const geminiDrawGenerateContentEndpoint = defaultLaoZhangImageBaseURL + "/v1beta/models/gemini-3-pro-image-preview:generateContent"
 const toapisImageGenerationEndpoint = "https://toapis.com/v1/images/generations"
 const laoZhangImageGenerationEndpoint = defaultLaoZhangImageBaseURL + "/v1/images/generations"
@@ -514,7 +526,7 @@ func (p *AITaskProcessor) applyRuntimeAIDrawProviderDefaults(apiConfigData *AIAP
 		cloned.APIKeyLocation = "header_bearer"
 		cloned.APIKeyName = "Authorization"
 		cloned.Headers = `{"Content-Type": "application/json"}`
-		cloned.BodyTemplate = getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), hasImage)
+		cloned.BodyTemplate = getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), p.laoZhangImageQuality(), hasImage)
 	case "toapis":
 		cloned.ProviderCode = "toapis"
 		cloned.ProviderName = "ToAPIs"
@@ -589,15 +601,20 @@ func getToAPIsGeminiFlashDrawBodyTemplate() string {
 	return `{"model":"gemini-3.1-flash-image-preview","prompt":"{{prompt}}","size":"{{aspect_ratio}}","n":1,"metadata":{"resolution":"{{image_size}}"}}`
 }
 
-func getLaoZhangGPTImage2VipDrawBodyTemplate(model string, hasImage bool) string {
+func getLaoZhangGPTImage2VipDrawBodyTemplate(model, quality string, hasImage bool) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = defaultLaoZhangImageModel
 	}
-	if hasImage {
-		return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","image":"{{image_url}}","size":"{{image_size}}","response_format":"b64_json","n":1}`, model)
+	// quality 为空串时不注入该字段（模型按 auto 自选），非空则显式指定渲染档位
+	qualityField := ""
+	if q := strings.TrimSpace(quality); q != "" {
+		qualityField = fmt.Sprintf(`,"quality":%q`, q)
 	}
-	return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","size":"{{image_size}}","response_format":"b64_json","n":1}`, model)
+	if hasImage {
+		return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","image":"{{image_url}}","size":"{{image_size}}"%s,"response_format":"b64_json","n":1}`, model, qualityField)
+	}
+	return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","size":"{{image_size}}"%s,"response_format":"b64_json","n":1}`, model, qualityField)
 }
 
 func getToAPIsGPTImage2DrawBodyTemplate() string {
@@ -639,7 +656,7 @@ func (p *AITaskProcessor) getHardcodedAIConfig(taskType string, hasImage bool) *
 				APIKeyLocation: "header_bearer",
 				APIKeyName:     "Authorization",
 				Headers:        `{"Content-Type": "application/json"}`,
-				BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), true),
+				BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), p.laoZhangImageQuality(), true),
 			}
 		}
 
@@ -655,7 +672,7 @@ func (p *AITaskProcessor) getHardcodedAIConfig(taskType string, hasImage bool) *
 			APIKeyLocation: "header_bearer",
 			APIKeyName:     "Authorization",
 			Headers:        `{"Content-Type": "application/json"}`,
-			BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), false),
+			BodyTemplate:   getLaoZhangGPTImage2VipDrawBodyTemplate(p.laoZhangImageModel(), p.laoZhangImageQuality(), false),
 		}
 	} else if taskType == "ai_chat" {
 		// AI聊天配置（仍使用 chat/completions）
@@ -787,6 +804,19 @@ func (p *AITaskProcessor) laoZhangImageModel() string {
 		return defaultLaoZhangImageModel
 	}
 	return strings.TrimSpace(p.cfg.AI.LaoZhangImageModel)
+}
+
+// laoZhangImageQuality 返回生图渲染质量档位；未配置或非法值回退 high。
+// 不传 quality 时模型按 auto 自选，质量不可控，故显式注入。
+func (p *AITaskProcessor) laoZhangImageQuality() string {
+	quality := ""
+	if p.cfg != nil {
+		quality = strings.TrimSpace(p.cfg.AI.LaoZhangImageQuality)
+	}
+	if laoZhangImageQualityLevels[quality] {
+		return quality
+	}
+	return defaultLaoZhangImageQuality
 }
 
 func (p *AITaskProcessor) laoZhangImageGenerationEndpoint() string {
