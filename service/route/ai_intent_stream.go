@@ -1,7 +1,6 @@
 package route
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -22,7 +21,7 @@ import (
 // IntentStreamRequest 意图识别流式请求
 type IntentStreamRequest struct {
 	Text          string `json:"text" binding:"required"`
-	SessionNo    string `json:"session_no"`
+	SessionNo     string `json:"session_no"`
 	DemandContext string `json:"demand_context"`
 }
 
@@ -75,8 +74,10 @@ func handleIntentStream(c *gin.Context, codeSessionModel *model.CodeSessionRedis
 			IntentLevel: "medium",
 			GuideAction: entry.guideAction,
 		})
-		// 调 AI 润色知识库回复，流式输出
-		streamKnowledgeReply(c, text, entry.reply, req.DemandContext, cfg)
+		// 知识库文案已是打磨好的口语化成稿，直接返回原文，
+		// 省去一次大模型调用的首字延迟（原润色环节约 1-2s）
+		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: entry.reply})
+		sendIntentSSE(c, IntentSSEResponse{Type: "done"})
 		return
 	}
 
@@ -123,7 +124,6 @@ type knowledgeEntry struct {
 	reply           string
 	guideAction     string
 }
-
 
 var knowledgeBaseEntries = []knowledgeEntry{
 	// ────────── 闲聊问候类 ──────────
@@ -276,117 +276,14 @@ func sendIntentSSE(c *gin.Context, data IntentSSEResponse) {
 	c.Writer.Flush()
 }
 
-// ==================== 知识库命中后 AI 润色流式输出 ====================
-
-func streamKnowledgeReply(c *gin.Context, userText, referenceReply, demandContext string, cfg *config.Config) {
-	apiKey := cfg.AI.LaoZhangAPIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("LAOZHANG_API_KEY")
+// intentClassifyModel 返回意图分类用的轻量快速模型。
+// 分类任务只需输出一个短 JSON，用大杯模型（gpt-5.5）首字延迟高且纯属浪费；
+// 如通道不支持默认模型，可通过 LAOZHANG_INTENT_MODEL 环境变量覆盖。
+func intentClassifyModel() string {
+	if m := os.Getenv("LAOZHANG_INTENT_MODEL"); m != "" {
+		return m
 	}
-	if apiKey == "" {
-		// 无 API Key，直接返回预设回复
-		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: referenceReply})
-		sendIntentSSE(c, IntentSSEResponse{Type: "done"})
-		return
-	}
-
-	systemPrompt := `你是甲第灵光 AI 建房顾问。你的任务是根据用户的问题和参考回复内容，用自然、温柔、专业的语气重新组织回复。
-规则：
-1. 保持参考回复的核心信息不变，不要遗漏关键内容
-2. 根据用户的具体问题调整表达方式，让回复更贴合语境
-3. 语气温柔、生活化，像朋友聊天一样自然
-4. 不要生硬照搬参考内容，适当润色和调整语序
-5. 回复长度控制在参考内容的 0.8-1.5 倍之间
-6. 不要添加参考内容中没有的信息`
-
-	userPrompt := fmt.Sprintf("用户问题：%s\n\n参考回复内容：%s", userText, referenceReply)
-	if demandContext != "" {
-		userPrompt += fmt.Sprintf("\n\n用户已收集的需求上下文：%s", demandContext)
-	}
-
-	messages := []map[string]string{
-		{"role": "system", "content": systemPrompt},
-		{"role": "user", "content": userPrompt},
-	}
-
-	body := map[string]interface{}{
-		"model":    laozhangChatModel,
-		"stream":   true,
-		"messages": messages,
-	}
-
-	requestJSON, err := json.Marshal(body)
-	if err != nil {
-		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: referenceReply})
-		sendIntentSSE(c, IntentSSEResponse{Type: "done"})
-		return
-	}
-
-	endpoint := laozhangChatBaseURL + "/chat/completions"
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestJSON))
-	if err != nil {
-		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: referenceReply})
-		sendIntentSSE(c, IntentSSEResponse{Type: "done"})
-		return
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		log.Printf("[IntentStream] AI润色请求失败: %v", err)
-		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: referenceReply})
-		sendIntentSSE(c, IntentSSEResponse{Type: "done"})
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		log.Printf("[IntentStream] AI润色返回错误: %d, %s", resp.StatusCode, string(bodyBytes))
-		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: referenceReply})
-		sendIntentSSE(c, IntentSSEResponse{Type: "done"})
-		return
-	}
-
-	reader := bufio.NewReader(resp.Body)
-	hasContent := false
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			break
-		}
-		line = strings.TrimSpace(line)
-		if line == "" || !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
-			break
-		}
-		var evt map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &evt); err != nil {
-			continue
-		}
-		if choices, ok := evt["choices"].([]interface{}); ok && len(choices) > 0 {
-			if choice, ok := choices[0].(map[string]interface{}); ok {
-				if d, ok := choice["delta"].(map[string]interface{}); ok {
-					if content, ok := d["content"].(string); ok && content != "" {
-						hasContent = true
-						sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: content})
-					}
-				}
-			}
-		}
-	}
-	if !hasContent {
-		sendIntentSSE(c, IntentSSEResponse{Type: "content", Content: referenceReply})
-	}
-	sendIntentSSE(c, IntentSSEResponse{Type: "done"})
+	return "gpt-4o-mini"
 }
 
 // ==================== AI 兜底意图分类（流式） ====================
@@ -430,7 +327,7 @@ func streamAIIntentClassify(c *gin.Context, userText, demandContext string, cfg 
 	}
 
 	body := map[string]interface{}{
-		"model":    laozhangChatModel,
+		"model":    intentClassifyModel(),
 		"stream":   false,
 		"messages": messages,
 	}
@@ -452,7 +349,7 @@ func streamAIIntentClassify(c *gin.Context, userText, demandContext string, cfg 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second} // 分类是回复前置步骤，超时快速降级到 chat 意图
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		log.Printf("[IntentStream] AI意图分类请求失败: %v", err)
