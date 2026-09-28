@@ -1,16 +1,79 @@
 package route
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
+	"log"
 	"net/http"
 	"service/function"
 	"service/model"
 	"strings"
 	"unicode/utf8"
 )
+
+// crmAccessIntent is the pending authorization intent (B1): written by the prepare transaction into
+// management_crm_link.intent, cleared after the final transaction confirms success, and replayed by
+// the retry endpoint / compensation worker after a remote failure or a process crash.
+type crmAccessIntent struct {
+	UserID      int64  `json:"userId"`
+	Revision    int64  `json:"revision"`
+	Scope       string `json:"scope"`
+	Enabled     bool   `json:"enabled"`
+	DisplayName string `json:"displayName"`
+	EmployeeID  string `json:"employeeId"`
+	Role        string `json:"role"`
+	CRMEnabled  bool   `json:"crmEnabled"`
+	OperatorID  int64  `json:"operatorId"`
+}
+
+// crmIntentMissing reports whether the error is "unknown column" (MySQL 1054), i.e. the
+// compensation migration has not been applied yet.
+func crmIntentMissing(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1054
+}
+
+// crmPrepareLink writes the pending link together with the replay intent; un-migrated
+// environments degrade to the legacy write so the core authorization flow keeps working.
+func crmPrepareLink(ctx context.Context, tx *sql.Tx, userID int64, username string, revision int64, intent string, operator int64) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO management_crm_link(user_id,crm_username,state,enabled,version,intent,attempts,updated_by,updated_at) VALUES (?,?,'pending',FALSE,?,?,0,?,NOW(6)) ON DUPLICATE KEY UPDATE state='pending',enabled=FALSE,version=VALUES(version),intent=VALUES(intent),attempts=0,updated_by=VALUES(updated_by),updated_at=VALUES(updated_at)`, userID, username, revision, intent, operator)
+	if !crmIntentMissing(err) {
+		return err
+	}
+	log.Printf("[crm-access] management_crm_link.intent missing, compensation degraded (apply management_crm_link_intent_up.sql)")
+	_, err = tx.ExecContext(ctx, `INSERT INTO management_crm_link(user_id,crm_username,state,enabled,version,updated_by,updated_at) VALUES (?,?,'pending',FALSE,?,?,NOW(6)) ON DUPLICATE KEY UPDATE state='pending',enabled=FALSE,version=VALUES(version),updated_by=VALUES(updated_by),updated_at=VALUES(updated_at)`, userID, username, revision, operator)
+	return err
+}
+
+// crmFinalizeLink writes the terminal link state and, on success, clears the replay intent;
+// un-migrated environments degrade to the legacy write.
+func crmFinalizeLink(ctx context.Context, tx *sql.Tx, result string, enabled bool, userID, revision int64) error {
+	if result == "active" {
+		if _, err := tx.ExecContext(ctx, `UPDATE management_crm_link SET state='active',enabled=?,intent=NULL,updated_at=NOW(6) WHERE user_id=? AND version=?`, enabled, userID, revision); !crmIntentMissing(err) {
+			return err
+		}
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE management_crm_link SET state=?,enabled=?,updated_at=NOW(6) WHERE user_id=? AND version=?`, result, enabled, userID, revision)
+	return err
+}
+
+// crmIntentAudit renders the audit payload of a replay; automatic replays carry a replay marker.
+func crmIntentAudit(intent crmAccessIntent, automatic bool) string {
+	if !automatic {
+		payload, _ := json.Marshal(intent)
+		return string(payload)
+	}
+	payload, _ := json.Marshal(struct {
+		crmAccessIntent
+		Replay bool `json:"replay"`
+	}{intent, true})
+	return string(payload)
+}
 
 type crmAccessInput struct {
 	UserID      int64  `json:"userId"`
@@ -165,8 +228,9 @@ func registerCRMAccess(g *gin.RouterGroup, users *model.UserModel) {
 			return
 		}
 		username := fmt.Sprintf("managed-%d", in.UserID)
-		_, err = tx.ExecContext(ctx, `INSERT INTO management_crm_link(user_id,crm_username,state,enabled,version,updated_by,updated_at) VALUES (?,?,'pending',FALSE,?,?,NOW(6)) ON DUPLICATE KEY UPDATE state='pending',enabled=FALSE,version=VALUES(version),updated_by=VALUES(updated_by),updated_at=VALUES(updated_at)`, in.UserID, username, revision, GetUserID(c))
-		if err != nil || tx.Commit() != nil {
+		// Persist the replay intent before the remote call; it is cleared only after the final transaction confirms success.
+		intent, _ := json.Marshal(crmAccessIntent{UserID: in.UserID, Revision: revision, Scope: in.Scope, Enabled: in.Enabled, DisplayName: in.DisplayName, EmployeeID: in.EmployeeID, Role: in.Role, CRMEnabled: in.CRMEnabled, OperatorID: GetUserID(c)})
+		if err := crmPrepareLink(ctx, tx, in.UserID, username, revision, string(intent), GetUserID(c)); err != nil || tx.Commit() != nil {
 			crmError(c, 503, "授权准备失败")
 			return
 		}
@@ -190,8 +254,7 @@ func registerCRMAccess(g *gin.RouterGroup, users *model.UserModel) {
 			crmError(c, 409, "授权被另一操作更新，请刷新核对")
 			return
 		}
-		_, err = finalTx.ExecContext(ctx, `UPDATE management_crm_link SET state=?,enabled=?,updated_at=NOW(6) WHERE user_id=? AND version=?`, result, result == "active" && in.CRMEnabled && in.Enabled, in.UserID, revision)
-		if err != nil {
+		if err := crmFinalizeLink(ctx, finalTx, result, result == "active" && in.CRMEnabled && in.Enabled, in.UserID, revision); err != nil {
 			crmError(c, 503, "授权保存失败")
 			return
 		}
@@ -213,4 +276,58 @@ func registerCRMAccess(g *gin.RouterGroup, users *model.UserModel) {
 		}
 		c.JSON(200, gin.H{"code": 0, "data": gin.H{"version": revision}})
 	})
+	// B1：平台管理员手动重试 pending 的授权意图（自动补偿 worker 之外的兜底入口）。
+	g.POST("/access/retry", admin, func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
+		var in struct {
+			UserID int64 `json:"userId"`
+		}
+		if c.ShouldBindJSON(&in) != nil || in.UserID <= 0 {
+			crmError(c, 400, "请选择要重试的账号")
+			return
+		}
+		ctx := c.Request.Context()
+		tx, err := users.DB.BeginTx(ctx, nil)
+		if err != nil {
+			crmError(c, 503, "授权服务不可用")
+			return
+		}
+		var version int64
+		var state string
+		var payload sql.NullString
+		err = tx.QueryRowContext(ctx, `SELECT version,state,intent FROM management_crm_link WHERE user_id=? FOR UPDATE`, in.UserID).Scan(&version, &state, &payload)
+		if crmIntentMissing(err) {
+			tx.Rollback()
+			crmError(c, 503, "补偿结构未就绪，请先应用数据库变更")
+			return
+		}
+		if err != nil || state != "pending" || !payload.Valid || payload.String == "" {
+			tx.Rollback()
+			crmError(c, 409, "该账号没有待重试的配置")
+			return
+		}
+		var intent crmAccessIntent
+		if json.Unmarshal([]byte(payload.String), &intent) != nil || intent.UserID != in.UserID || intent.Revision != version {
+			tx.Rollback()
+			crmError(c, 500, "补偿意图已损坏，请联系平台管理员")
+			return
+		}
+		if tx.Commit() != nil {
+			crmError(c, 503, "授权服务不可用")
+			return
+		}
+		switch outcome, message := crmReplayIntent(ctx, users.DB, intent, version, GetUserID(c), false); outcome {
+		case crmReplayActive:
+			c.JSON(200, gin.H{"code": 0, "data": gin.H{"version": version}})
+		case crmReplaySuperseded:
+			crmError(c, 409, "授权已被新操作更新，请刷新查看")
+		case crmReplayRemoteFailed:
+			crmError(c, 502, message)
+		default:
+			crmError(c, 503, message)
+		}
+	})
+	if crmEnabled() && users != nil {
+		startCRMAccessCompensation(users.DB)
+	}
 }

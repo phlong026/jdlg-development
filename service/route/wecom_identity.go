@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -206,6 +207,93 @@ func readWecomBinding(ctx context.Context, db wecomBindingReader, id int64) (wec
 	return b, e
 }
 
+// wecomRosterProvider 由登录路由注册时填入，供会话在职复核复用其 token 缓存与企微调用能力；
+// 未注册时复核跳过（fail-open，原防线不变）。
+var wecomRosterProvider *wecomIdentityProvider
+
+// 在职复核缓存（B2）：每员工每实例稳态 ≤1 次外部调用/5 分钟；
+// 降级判定只缓存 60 秒，企微恢复后尽快重新复核。
+const (
+	wecomRosterTTL        = 5 * time.Minute
+	wecomRosterDegradeTTL = 60 * time.Second
+)
+
+type wecomRosterEntry struct {
+	active bool
+	until  time.Time
+}
+
+var wecomRosterCache = struct {
+	sync.Mutex
+	entries map[string]wecomRosterEntry
+}{entries: map[string]wecomRosterEntry{}}
+
+type wecomRosterState int
+
+const (
+	wecomRosterActive wecomRosterState = iota
+	wecomRosterInactive
+	wecomRosterUnknown
+)
+
+// fetchRosterState 现场查询通讯录：仅把"用户不存在(46004)"与"user/get status!=1"
+// 判为明确离职；其余错误（网络/权限/其他 errcode）视为无法判定，交降级策略处理。
+func (p *wecomIdentityProvider) fetchRosterState(ctx context.Context, c wecomLoginConfig, id string) (wecomRosterState, string) {
+	if !memberIDPattern.MatchString(id) {
+		return wecomRosterUnknown, "员工UserID格式异常"
+	}
+	var m wecomMember
+	e := p.authorizedCall(ctx, c, "user/get", url.Values{"userid": {id}}, &m)
+	if e == nil {
+		if m.ID != id || m.Status != 1 {
+			return wecomRosterInactive, "成员已停用或不在应用可读取范围"
+		}
+		return wecomRosterActive, ""
+	}
+	var code wecomProviderError
+	if errors.As(e, &code) && code == 46004 {
+		return wecomRosterInactive, "成员不存在"
+	}
+	return wecomRosterUnknown, e.Error()
+}
+
+// ensureRosterActive 复核在职状态并维护缓存，仅在明确离职时返回 false。
+// 降级（设计 3.4）：调用失败有旧值沿用旧值、无缓存按在职放行（fail-open）——
+// 复核是新增防线，原防线（绑定表、8 小时窗口、Java roster）保持不变。
+func (p *wecomIdentityProvider) ensureRosterActive(ctx context.Context, c wecomLoginConfig, id string) (bool, string) {
+	key := c.Corp + "\n" + id
+	now := time.Now()
+	wecomRosterCache.Lock()
+	entry, cached := wecomRosterCache.entries[key]
+	wecomRosterCache.Unlock()
+	if cached && now.Before(entry.until) {
+		return entry.active, ""
+	}
+	state, reason := p.fetchRosterState(ctx, c, id)
+	switch state {
+	case wecomRosterActive:
+		storeRosterEntry(key, wecomRosterEntry{active: true, until: now.Add(wecomRosterTTL)})
+		return true, ""
+	case wecomRosterInactive:
+		storeRosterEntry(key, wecomRosterEntry{active: false, until: now.Add(wecomRosterTTL)})
+		return false, reason
+	}
+	if cached {
+		storeRosterEntry(key, wecomRosterEntry{active: entry.active, until: now.Add(wecomRosterDegradeTTL)})
+		log.Printf("[wecom-roster] 复核降级沿用旧判定 active=%v corp=%s employee=%s: %s", entry.active, c.Corp, id, reason)
+		return entry.active, "复核降级沿用旧判定"
+	}
+	storeRosterEntry(key, wecomRosterEntry{active: true, until: now.Add(wecomRosterDegradeTTL)})
+	log.Printf("[wecom-roster] 复核降级放行 corp=%s employee=%s: %s", c.Corp, id, reason)
+	return true, "复核降级放行"
+}
+
+func storeRosterEntry(key string, e wecomRosterEntry) {
+	wecomRosterCache.Lock()
+	wecomRosterCache.entries[key] = e
+	wecomRosterCache.Unlock()
+}
+
 // Sessions retain the binding revision, so rebind/disable invalidates issued OAuth sessions.
 func checkWecomSession(c *gin.Context, db *sql.DB) bool {
 	s := sessions.Default(c)
@@ -226,6 +314,17 @@ func checkWecomSession(c *gin.Context, db *sql.DB) bool {
 	if e != nil || !b.Enabled || b.CorpID != cfg.Corp || s.Get("wecom_corp") != b.CorpID || s.Get("wecom_employee") != b.EmployeeID || s.Get("wecom_version") != b.Version || expiry <= time.Now().Unix() {
 		crmError(c, 401, "企微身份绑定已变更或登录已过期，请重新登录")
 		return false
+	}
+	// B2 在职复核：将离职后的会话失效窗口从小时级压缩到分钟级（缓存 5 分钟）。
+	if p := wecomRosterProvider; p != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		active, reason := p.ensureRosterActive(ctx, cfg, b.EmployeeID)
+		cancel()
+		if !active {
+			log.Printf("[wecom-roster] 会话因员工离职失效 corp=%s employee=%s: %s", b.CorpID, b.EmployeeID, reason)
+			crmError(c, 401, "企微员工已停用，登录已失效，请重新登录")
+			return false
+		}
 	}
 	return true
 }
@@ -414,6 +513,7 @@ func registerWecomLogin(r *gin.RouterGroup, users *model.UserModel) {
 	registerWecomLoginProvider(r, users, newWecomIdentityProvider())
 }
 func registerWecomLoginProvider(r *gin.RouterGroup, users *model.UserModel, p *wecomIdentityProvider) {
+	wecomRosterProvider = p
 	g := r.Group("/wecom")
 	g.GET("/config", func(c *gin.Context) {
 		_, e := loadWecomLoginConfig()

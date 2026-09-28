@@ -236,6 +236,12 @@ var crmExportLimiter = struct {
 
 const crmExportInterval = 15 * time.Second
 
+// crmSessionInactiveCode 判定 Java 桥接错误码是否属于"用户会话失效"（B4b）：
+// 账号或员工已停用应引导重新登录，而非当作普通功能错误透传。
+func crmSessionInactiveCode(code string) bool {
+	return code == "account_inactive" || code == "employee_inactive"
+}
+
 func crmExportAllowed(userID int64, now time.Time) bool {
 	crmExportLimiter.Lock()
 	defer crmExportLimiter.Unlock()
@@ -297,10 +303,18 @@ func crmProxy(users *model.UserModel) gin.HandlerFunc {
 		if status < 200 || status >= 300 {
 			var e struct {
 				Message string `json:"message"`
+				Code    string `json:"code"`
 			}
 			json.Unmarshal(data, &e)
 			if e.Message == "" {
 				e.Message = "客户请求失败"
+			}
+			// B4b：账号/员工停用是用户会话失效而非功能限制——清本地会话并返回 401，
+			// 前端据此走统一软跳登录页；桥接签名类 401 仍为 502，范围限制类 403 原样透传。
+			if crmSessionInactiveCode(e.Code) {
+				ClearUserSession(c)
+				crmError(c, 401, e.Message+"，请重新登录")
+				return
 			}
 			crmError(c, status, e.Message)
 			return

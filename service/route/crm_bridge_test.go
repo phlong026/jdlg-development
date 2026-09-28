@@ -96,3 +96,18 @@ func TestCRMSourceTruncatesOnUTF16Boundary(t *testing.T) {
 		t.Fatalf("surrogate boundary failed")
 	}
 }
+
+// B4b：只有账号/员工停用两类错误码触发会话失效（清会话 + 401），其余错误码不改变透传语义。
+func TestCRMSessionInactiveCodes(t *testing.T) {
+	for code, want := range map[string]bool{
+		"account_inactive":      true,
+		"employee_inactive":     true,
+		"":                      false,
+		"internal_unauthorized": false,
+		"ACCOUNT_INACTIVE":      false,
+	} {
+		if got := crmSessionInactiveCode(code); got != want {
+			t.Errorf("code %q: got %v want %v", code, got, want)
+		}
+	}
+}

@@ -53,11 +53,15 @@ func identityTestProvider() *wecomIdentityProvider {
 			}
 		case "/cgi-bin/user/get":
 			id := r.URL.Query().Get("userid")
-			status := 1
-			if id == "disabled" {
-				status = 2
+			if id == "missing" {
+				data = `{"errcode":46004,"errmsg":"user not exist"}`
+			} else {
+				status := 1
+				if id == "disabled" {
+					status = 2
+				}
+				data = fmt.Sprintf(`{"userid":%q,"name":"核验成员","status":%d}`, id, status)
 			}
-			data = fmt.Sprintf(`{"userid":%q,"name":"核验成员","status":%d}`, id, status)
 		default:
 			return nil, fmt.Errorf("unexpected endpoint")
 		}
@@ -194,7 +198,7 @@ func TestWecomIdentityMySQLFlow(t *testing.T) {
 		if _, e := saveWecomBinding(ctx, db, wecomBinding{UserID: 5, CorpID: cfg.Corp, EmployeeID: "member-5", Enabled: true}, 1); e == nil {
 			t.Fatal("stale role snapshot accepted")
 		}
-		exec(`INSERT INTO management_crm_link VALUES (5,'managed-5','pending',FALSE,2,1,NOW(6))`)
+		exec(`INSERT INTO management_crm_link(user_id,crm_username,state,enabled,version,updated_by,updated_at) VALUES (5,'managed-5','pending',FALSE,2,1,NOW(6))`)
 		if _, e := saveWecomBinding(ctx, db, wecomBinding{UserID: 5, CorpID: cfg.Corp, EmployeeID: "member-5", Enabled: true, AccessVersion: 2}, 1); e == nil {
 			t.Fatal("pending role accepted")
 		}
@@ -386,4 +390,68 @@ func TestWecomInvalidatedTokenRefreshesOnlyOnce(t *testing.T) {
 	if _, e := p.exchange(context.Background(), cfg, "employee-a"); e == nil {
 		t.Fatal("permanent token error accepted")
 	}
+}
+
+func resetRosterCache() {
+	wecomRosterCache.Lock()
+	wecomRosterCache.entries = map[string]wecomRosterEntry{}
+	wecomRosterCache.Unlock()
+}
+
+func expireRosterEntry(corp, id string) {
+	key := corp + "\n" + id
+	wecomRosterCache.Lock()
+	if e, ok := wecomRosterCache.entries[key]; ok {
+		e.until = time.Now().Add(-time.Second)
+		wecomRosterCache.entries[key] = e
+	}
+	wecomRosterCache.Unlock()
+}
+
+// B2 在职复核：明确离职拒绝、新鲜缓存抑制外部调用、降级（沿用旧值 / 无缓存放行）。
+func TestWecomRosterRecheck(t *testing.T) {
+	cfg := identityTestConfig(t)
+	p := identityTestProvider()
+	ctx := context.Background()
+	resetRosterCache()
+	defer resetRosterCache()
+	t.Run("active cached without repeated calls", func(t *testing.T) {
+		calls := 0
+		base := p.client.Transport
+		p.client.Transport = identityTransport(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return base.RoundTrip(r)
+		})
+		if ok, _ := p.ensureRosterActive(ctx, cfg, "employee-a"); !ok || calls == 0 {
+			t.Fatalf("active member refused calls=%d", calls)
+		}
+		first := calls
+		if ok, _ := p.ensureRosterActive(ctx, cfg, "employee-a"); !ok || calls != first {
+			t.Fatal("fresh cache did not suppress provider call")
+		}
+	})
+	t.Run("explicit departure refused", func(t *testing.T) {
+		if ok, reason := p.ensureRosterActive(ctx, cfg, "disabled"); ok || reason == "" {
+			t.Fatal("disabled member accepted")
+		}
+		if ok, _ := p.ensureRosterActive(ctx, cfg, "missing"); ok {
+			t.Fatal("missing member accepted")
+		}
+	})
+	t.Run("stale value carried during outage", func(t *testing.T) {
+		if ok, _ := p.ensureRosterActive(ctx, cfg, "missing"); ok {
+			t.Fatal("missing member accepted")
+		}
+		expireRosterEntry(cfg.Corp, "missing")
+		p.client.Transport = identityTransport(func(*http.Request) (*http.Response, error) { return nil, fmt.Errorf("network down") })
+		if ok, _ := p.ensureRosterActive(ctx, cfg, "missing"); ok {
+			t.Fatal("stale inactive not carried during outage")
+		}
+	})
+	t.Run("no cache fail-open during outage", func(t *testing.T) {
+		p.client.Transport = identityTransport(func(*http.Request) (*http.Response, error) { return nil, fmt.Errorf("network down") })
+		if ok, _ := p.ensureRosterActive(ctx, cfg, "flaky"); !ok {
+			t.Fatal("uncached outage not fail-open")
+		}
+	})
 }

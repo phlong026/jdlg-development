@@ -80,13 +80,23 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			return
 		}
 
+		// 返回平台访问范围，前端据此直达落地页（crm_only 无需再经 dashboard 二次跳转）
+		accessScope := ""
+		if access, accessErr := readManagementAccess(c.Request.Context(), userDBModel.DB, result.User.ID); accessErr == nil && access.Enabled {
+			accessScope = access.Scope
+		}
+		data := gin.H{
+			"id":       result.User.ID,
+			"username": result.User.Username,
+		}
+		if accessScope != "" {
+			data["scope"] = accessScope
+			data["crmEnabled"] = crmEnabled()
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"msg":  "登录成功",
-			"data": gin.H{
-				"id":       result.User.ID,
-				"username": result.User.Username,
-			},
+			"data": data,
 		})
 	})
 
