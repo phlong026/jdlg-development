@@ -72,7 +72,7 @@ const Login: React.FC = () => {
         setLoading(true);
         try {
             const normalizedAccount = account.trim();
-            await login({
+            const result = await login({
                 username: normalizedAccount,
                 password: password,
             });
@@ -87,7 +87,8 @@ const Login: React.FC = () => {
             } else {
                 window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
             }
-            navigate('/dashboard');
+            // crm_only 账号直接落到客户管理，避免经 dashboard 二次重定向
+            navigate(result.scope === 'crm_only' ? '/customer-management' : '/dashboard');
         } catch (err: any) {
             setError(err.message || '登录失败，请检查账号和密码');
         } finally {

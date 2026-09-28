@@ -76,7 +76,9 @@ const menuSections = [
 const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, mobile = false, onNavigate }) => {
     const session = useManagementSession();
     const customerSection = { title: '客户管理', items: [{ path: '/customer-management', label: '客户管理工作台', icon: FiUsers }] };
-    const visibleSections = session.user?.scope === 'crm_only' ? [customerSection] : session.user?.crmEnabled ? [menuSections[0], customerSection, ...menuSections.slice(1)] : menuSections;
+    // fail-closed：仅 platform_admin 渲染平台菜单；scope 缺失或未知值时不暴露平台模块（与页内 tab 判定一致）
+    const isPlatform = session.user?.scope === 'platform_admin';
+    const visibleSections = !isPlatform ? [customerSection] : session.user?.crmEnabled ? [menuSections[0], customerSection, ...menuSections.slice(1)] : menuSections;
     return (
         <aside id="admin-sidebar" aria-label="后台导航" {...(mobile && collapsed ? { inert: '' } : {})} className={`layout-sidebar ${collapsed ? 'collapsed' : ''} ${mobile ? 'mobile' : ''} ${mobile && !collapsed ? 'open' : ''}`}>
             <div className="sidebar-logo">

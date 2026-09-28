@@ -1,6 +1,7 @@
 import { get, post } from '../utils/request';
 import { API_ENDPOINTS, API_BASE_URL } from '../config/api';
 import { tokenUtils } from '../utils/token';
+import { expireSession } from '../utils/session';
 
 // 登录请求
 export interface LoginRequest {
@@ -13,7 +14,7 @@ export interface LoginResponse {
     id: number;
     username: string;
     scope?: 'platform_admin' | 'crm_only';
-    crmEnabled?: boolean;
+    crmEnabled?: boolean; // 预留：与 /me 同源；页面已有"接入未配置"兜底提示，登录跳转不依赖该字段
 }
 
 // 登录
@@ -34,8 +35,7 @@ export const logout = async (): Promise<void> => {
     try {
         await post(API_ENDPOINTS.AUTH.LOGOUT);
     } finally {
-        tokenUtils.removeToken();
-        window.dispatchEvent(new Event('management-session-expired'));
+        expireSession();
     }
 };
 

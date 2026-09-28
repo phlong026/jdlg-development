@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/api';
 import { tokenUtils } from './token';
+import { expireSession } from './session';
 
 // API响应类型
 export interface ApiResponse<T = any> {
@@ -69,10 +70,8 @@ export const request = async <T = any>(
         // 处理HTTP错误
         if (!response.ok) {
             if (response.status === 401) {
-                // Token过期，清除并跳转到登录页
-                tokenUtils.removeToken();
-                window.dispatchEvent(new Event('management-session-expired'));
-                window.location.href = '/admin/login';
+                // 会话失效：统一软跳（清 token + 事件 → ProtectedRoute 返回登录页），不再整页硬跳
+                expireSession();
                 throw new Error('未授权，请重新登录');
             }
             const problem = await response.json().catch(() => null);

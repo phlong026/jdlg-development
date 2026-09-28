@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config/api';
+import { expireSession } from '../utils/session';
 const BASE = '/api/v1/management/crm';
 export type Stage = 'new'|'following'|'won'|'paused'|'invalid';
 export interface Customer { id:string; name:string; avatar:string; ownerId:string|null; stage:Stage; category:string; intent:string; phone:string; demand:string; createdAt:string; updatedAt:string; addedTimeSource:string; nextFollowupAt:string|null; lastFollowupAt:string|null; version:number; customerNumber:string|null;ownerUsername:string|null;wechat:string;address:string;buildingArea:number|null;buildingType:string;expectedBuildTime:string;remark:string;protectionExpiresAt:string|null;poolAt:string|null; lifecycle:string; historicalReviewed:boolean; mergedInto:string|null }
@@ -19,7 +20,7 @@ export class CRMError extends Error {constructor(public status:number,message:st
 export async function crm<T>(path:string,options:{method?:string;body?:unknown;query?:Filter;signal?:AbortSignal;download?:boolean}={}):Promise<T> {
  const query=new URLSearchParams();Object.entries(options.query||{}).forEach(([k,v])=>{if(v!==undefined&&v!=='')query.set(k,String(v))});
  const response=await fetch(API_BASE_URL+BASE+path+(query.size?'?'+query:''),{method:options.method||'GET',credentials:'include',signal:options.signal,headers:{'Content-Type':'application/json','X-CRM-Request':'1'},body:options.body===undefined?undefined:JSON.stringify(options.body)});
- if(response.status===401){window.dispatchEvent(new Event('management-session-expired'));throw new CRMError(401,'登录已失效，请重新登录')}
+ if(response.status===401){expireSession();throw new CRMError(401,'登录已失效，请重新登录')}
  if(options.download&&response.ok)return await response.blob() as T;
  let payload:any;try{payload=await response.json()}catch{throw new CRMError(response.status,'服务响应异常，请稍后重试')}
  if(!response.ok||(payload.code!==0&&payload.code!==200))throw new CRMError(response.status,payload.msg||payload.message||'操作失败');
