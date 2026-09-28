@@ -18,6 +18,22 @@ import (
 
 const migrationTrackingTable = "app_data_migrations"
 
+// autoStartupMigrations 服务启动时自动执行的迁移白名单。
+//
+// 只有「纯增量结构变更」（ALTER TABLE ADD COLUMN、CREATE TABLE/INDEX 等）、幂等、
+// 且代码侧已对未迁移环境做降级处理的迁移，才允许加入。
+//
+// 严禁加入以下类型（历史上多数迁移属于此类，必须人工择机执行）：
+//   - 回滚脚本（*_down.sql）
+//   - 含 DELETE / DROP / TRUNCATE 的数据清理脚本（删重复、清空模块数据）
+//   - 账号合并、数据搬迁等一次性数据手术
+//   - 含 UPDATE 的回填脚本（需人工确认影响行数后再执行）
+//
+// main 包中的 TestAutoStartupMigrationsAreSafe 会在编译期测试中拦截违规项。
+var autoStartupMigrations = []string{
+	"management_crm_link_intent_up.sql",
+}
+
 //go:embed sql/*.sql
 var embeddedMigrations embed.FS
 
@@ -62,6 +78,28 @@ func maybeRunDataMigrationCommand() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// runAutoStartupMigrations 在服务启动时执行白名单内的迁移（fail-soft）。
+//
+// 失败只记录错误日志并继续启动，不阻塞服务：这些迁移对应的代码路径都已对
+// 「列缺失」等未迁移状态做了降级处理（例如 crmIntentMissing 检测 MySQL 1054 后
+// 回退旧逻辑），因此带病启动优于直接不可用。失败信息务必通过日志告警人工跟进。
+func runAutoStartupMigrations(ctx context.Context, db *sql.DB) {
+	if len(autoStartupMigrations) == 0 {
+		return
+	}
+	for _, name := range autoStartupMigrations {
+		applied, err := runEmbeddedDataMigration(ctx, db, name)
+		switch {
+		case err != nil:
+			log.Printf("[启动迁移] ❌ 执行失败，已跳过并继续启动（请人工核查）: %s, err=%v", name, err)
+		case applied:
+			log.Printf("[启动迁移] ✅ 已执行: %s", name)
+		default:
+			log.Printf("[启动迁移] 此前已执行，跳过: %s", name)
+		}
+	}
 }
 
 func listEmbeddedMigrationFiles() ([]string, error) {

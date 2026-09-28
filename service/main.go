@@ -102,6 +102,9 @@ func main() {
 	defer db.Close()
 	log.Println("MySQL 连接成功")
 
+	// 3.1. 启动时执行白名单内的数据迁移（fail-soft：失败不阻塞启动，仅记录日志）
+	runAutoStartupMigrations(context.Background(), db)
+
 	// 4. 初始化Redis客户端
 	rdb, err := component.InitRedis(cfg)
 	if err != nil {
