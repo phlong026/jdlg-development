@@ -876,7 +876,6 @@ func stripGPTImage2VipDrawTopLevelFields(body map[string]interface{}) {
 	}
 	delete(body, "service_type")
 	delete(body, "service")
-	delete(body, "quality")
 	delete(body, "canvas")
 	delete(body, "generate_count")
 	delete(body, "scene_direction")
@@ -2246,7 +2245,6 @@ func enforceAIDrawResolutionFields(body map[string]interface{}, apiConfig *AIAPI
 	}
 	if isGPTImage2VipConfig(apiConfig) {
 		stripGPTImage2VipDrawTopLevelFields(body)
-		delete(body, "quality")
 		delete(body, "resolution")
 		if requestImageSize != "" {
 			body["size"] = requestImageSize

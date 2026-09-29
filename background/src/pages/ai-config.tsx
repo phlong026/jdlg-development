@@ -51,7 +51,7 @@ const pricingSceneLabels: Record<string, string> = {
 const getPricingSceneLabel = (scene: string) => pricingSceneLabels[scene] || '';
 
 const getDefaultAPIEndpoint = (providerCode: string) => {
-    if (providerCode === 'gpt-image-2-vip') return 'https://api.laozhang.ai/v1/images/generations';
+    if (providerCode === 'gpt-image-2-vip') return 'https://api2.laozhang.ai/v1/images/generations';
     if (providerCode === 'toapis') return 'https://toapis.com/v1/images/generations';
     if (providerCode === 'laozhang') return 'https://api.laozhang.ai/v1beta/models/gemini-3-pro-image-preview:generateContent';
     return '';
@@ -63,7 +63,7 @@ const getDefaultBodyTemplate = (providerCode: string) => {
             model: 'gpt-image-2-vip',
             prompt: '{{prompt}}',
             size: '{{image_size}}',
-            response_format: 'b64_json',
+            quality: 'high',
             n: 1,
         };
     }

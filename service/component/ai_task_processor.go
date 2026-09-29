@@ -611,9 +611,9 @@ func getLaoZhangGPTImage2VipDrawBodyTemplate(model, quality string, hasImage boo
 		qualityField = fmt.Sprintf(`,"quality":%q`, q)
 	}
 	if hasImage {
-		return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","image":"{{image_url}}","size":"{{image_size}}"%s,"response_format":"b64_json","n":1}`, model, qualityField)
+		return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","image":"{{image_url}}","size":"{{image_size}}"%s,"n":1}`, model, qualityField)
 	}
-	return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","size":"{{image_size}}"%s,"response_format":"b64_json","n":1}`, model, qualityField)
+	return fmt.Sprintf(`{"model":%q,"prompt":"{{prompt}}","size":"{{image_size}}"%s,"n":1}`, model, qualityField)
 }
 
 func getToAPIsGPTImage2DrawBodyTemplate() string {

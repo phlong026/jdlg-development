@@ -166,6 +166,29 @@ func TestDefaultDrawRouteUsesPreviousGPTImage2VipModel(t *testing.T) {
 		if !strings.Contains(drawConfig.BodyTemplate, `"quality":"high"`) {
 			t.Fatalf("hasImage=%t should keep supported high quality", hasImage)
 		}
+		task := &AITaskContext{
+			TaskType:  "ai_draw",
+			APIConfig: drawConfig,
+			Payload:   map[string]interface{}{"canvas": "1:1", "quality": "hd"},
+			Prompt:    "draw a house",
+		}
+		if hasImage {
+			task.ImageURL = "https://example.com/reference.png"
+		}
+		body, err := (&RequestPool{}).buildRequestBody(task)
+		if err != nil {
+			t.Fatalf("hasImage=%t buildRequestBody: %v", hasImage, err)
+		}
+		if body["model"] != "gpt-image-2-vip" || body["size"] != "2048x2048" || body["quality"] != "high" {
+			t.Fatalf("hasImage=%t unexpected final model/size/quality: %#v", hasImage, body)
+		}
+		if _, exists := body["response_format"]; exists {
+			t.Fatalf("hasImage=%t should use the model's default Base64 response", hasImage)
+		}
+		_, hasReference := body["image"]
+		if hasReference != hasImage {
+			t.Fatalf("hasImage=%t final request reference presence=%t", hasImage, hasReference)
+		}
 	}
 }
 
@@ -345,7 +368,10 @@ func TestBuildGPTImage2VipRequestBody(t *testing.T) {
 	if body["image"] != "https://example.com/ref.png" {
 		t.Fatalf("image = %v, want reference URL", body["image"])
 	}
-	for _, forbidden := range []string{"quality", "resolution", "canvas", "service", "scene_direction", "image_url", "image_size", "aspect_ratio"} {
+	if body["quality"] != "high" {
+		t.Fatalf("quality = %v, want model quality high", body["quality"])
+	}
+	for _, forbidden := range []string{"resolution", "canvas", "service", "scene_direction", "image_url", "image_size", "aspect_ratio"} {
 		if _, exists := body[forbidden]; exists {
 			t.Fatalf("%s should not be kept in GPT-Image-2 VIP request body: %#v", forbidden, body)
 		}
