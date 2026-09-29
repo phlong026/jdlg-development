@@ -10,7 +10,7 @@ func TestLaoZhangImageConfigDefaults(t *testing.T) {
 	if cfg.AI.LaoZhangImageBaseURL != "https://api2.laozhang.ai" {
 		t.Fatalf("LaoZhangImageBaseURL = %q, want production image gateway", cfg.AI.LaoZhangImageBaseURL)
 	}
-	if cfg.AI.LaoZhangImageModel != "gpt-image-2.5-sunburst-vip" {
+	if cfg.AI.LaoZhangImageModel != "gpt-image-2-vip" {
 		t.Fatalf("LaoZhangImageModel = %q, want production image model", cfg.AI.LaoZhangImageModel)
 	}
 }
@@ -36,7 +36,7 @@ func TestLaoZhangImageConfigWhitespaceFallsBack(t *testing.T) {
 	if cfg.AI.LaoZhangImageBaseURL != "https://api2.laozhang.ai" {
 		t.Fatalf("LaoZhangImageBaseURL = %q, want safe default", cfg.AI.LaoZhangImageBaseURL)
 	}
-	if cfg.AI.LaoZhangImageModel != "gpt-image-2.5-sunburst-vip" {
+	if cfg.AI.LaoZhangImageModel != "gpt-image-2-vip" {
 		t.Fatalf("LaoZhangImageModel = %q, want safe default", cfg.AI.LaoZhangImageModel)
 	}
 }

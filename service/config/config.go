@@ -109,7 +109,7 @@ type AIConfig struct {
 	LaoZhangAPIKey                string // 老张平台 Key
 	LaoZhangImageBaseURL          string // 老张生图网关，默认 api2.laozhang.ai
 	LaoZhangImageModel            string // 老张生图模型
-	LaoZhangImageQuality          string // GPT-Image-2.5 VIP 渲染质量档 low/medium/high/xhigh/max，非法值回退 high（VIP 按次计费五档同价，档位只影响细节与耗时）
+	LaoZhangImageQuality          string // 老张生图渲染质量档，默认 high；具体档位由所选模型决定
 	ToAPIsAPIKey                  string // ToAPIs Key
 	FastGPTBaseURL                string // FastGPT 服务地址
 	FastGPTAPIKey                 string // FastGPT API Key
@@ -321,7 +321,7 @@ func Init() *Config {
 	toapisKey := getEnv("TOAPIS_API_KEY", "")
 	laozhangImageBaseURL := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_BASE_URL", ""), "https://api2.laozhang.ai")
 	laozhangImageBaseURL = strings.TrimRight(laozhangImageBaseURL, "/")
-	laozhangImageModel := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_MODEL", ""), "gpt-image-2.5-sunburst-vip")
+	laozhangImageModel := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_MODEL", ""), "gpt-image-2-vip")
 	laozhangImageQuality := normalizeStringSetting(getEnv("LAOZHANG_IMAGE_QUALITY", ""), "")
 	globalConfig = &Config{
 		MySQL: MySQLConfig{

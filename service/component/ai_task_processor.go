@@ -14,11 +14,10 @@ import (
 )
 
 const defaultLaoZhangImageBaseURL = "https://api2.laozhang.ai"
-const defaultLaoZhangImageModel = "gpt-image-2.5-sunburst-vip"
+const defaultLaoZhangImageModel = "gpt-image-2-vip"
 const defaultLaoZhangImageQuality = "high"
 
-// laoZhangImageQualityLevels 老张 GPT-Image-2.5 VIP 合法质量档位
-// 文档：https://docs.laozhang.ai/api-capabilities/gpt-image-2-5 （VIP 按次计费五档同价，档位只影响细节与耗时）
+// laoZhangImageQualityLevels 老张生图质量档位；GPT-Image-2 VIP 使用 low/medium/high。
 var laoZhangImageQualityLevels = map[string]bool{
 	"low":    true,
 	"medium": true,
@@ -812,6 +811,9 @@ func (p *AITaskProcessor) laoZhangImageQuality() string {
 	quality := ""
 	if p.cfg != nil {
 		quality = strings.TrimSpace(p.cfg.AI.LaoZhangImageQuality)
+	}
+	if p.laoZhangImageModel() == "gpt-image-2-vip" && (quality == "xhigh" || quality == "max") {
+		return defaultLaoZhangImageQuality
 	}
 	if laoZhangImageQualityLevels[quality] {
 		return quality

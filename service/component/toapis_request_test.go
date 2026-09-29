@@ -151,6 +151,24 @@ func TestGPTImageCompatibilityProviderUsesConfiguredImageGatewayAndModel(t *test
 	}
 }
 
+func TestDefaultDrawRouteUsesPreviousGPTImage2VipModel(t *testing.T) {
+	t.Setenv("LAOZHANG_IMAGE_MODEL", "")
+	t.Setenv("LAOZHANG_IMAGE_QUALITY", "")
+	processor := &AITaskProcessor{cfg: config.Init()}
+	for _, hasImage := range []bool{false, true} {
+		drawConfig := processor.getHardcodedAIConfig("ai_draw", hasImage)
+		if drawConfig.ProviderCode != "gpt-image-2-vip" {
+			t.Fatalf("provider = %q, want gpt-image-2-vip", drawConfig.ProviderCode)
+		}
+		if got := resolveConfiguredModel(drawConfig); got != "gpt-image-2-vip" {
+			t.Fatalf("hasImage=%t model = %q, want gpt-image-2-vip", hasImage, got)
+		}
+		if !strings.Contains(drawConfig.BodyTemplate, `"quality":"high"`) {
+			t.Fatalf("hasImage=%t should keep supported high quality", hasImage)
+		}
+	}
+}
+
 func TestLaoZhangFallbacksUseConfiguredImageGateway(t *testing.T) {
 	processor := &AITaskProcessor{cfg: &config.Config{AI: config.AIConfig{
 		LaoZhangImageBaseURL: "https://images.example.com",
@@ -398,10 +416,16 @@ func TestLaoZhangImageQualityFallback(t *testing.T) {
 		t.Fatalf("非法档位应回退 high, got %s", got)
 	}
 	valid := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
-		AI: config.AIConfig{LaoZhangAPIKey: "k", LaoZhangImageQuality: "xhigh"},
+		AI: config.AIConfig{LaoZhangAPIKey: "k", LaoZhangImageModel: "gpt-image-2.5-sunburst-vip", LaoZhangImageQuality: "xhigh"},
 	})
 	if got := valid.laoZhangImageQuality(); got != "xhigh" {
 		t.Fatalf("合法档位应透传, got %s", got)
+	}
+	previousModel := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+		AI: config.AIConfig{LaoZhangImageModel: "gpt-image-2-vip", LaoZhangImageQuality: "xhigh"},
+	})
+	if got := previousModel.laoZhangImageQuality(); got != "high" {
+		t.Fatalf("GPT-Image-2 VIP 不支持 xhigh, got %s", got)
 	}
 	empty := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{LaoZhangAPIKey: "k"},

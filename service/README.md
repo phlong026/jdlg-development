@@ -165,7 +165,7 @@ SESSION_SECRET=jiadilinguang-session-secret
 # AI 生图配置
 LAOZHANG_API_KEY=your_laozhang_api_key
 LAOZHANG_IMAGE_BASE_URL=https://api2.laozhang.ai
-LAOZHANG_IMAGE_MODEL=gpt-image-2.5-sunburst-vip
+LAOZHANG_IMAGE_MODEL=gpt-image-2-vip
 
 # AI 视频配置（与生图网关独立）
 AI_VIDEO_API_BASE_URL=https://api.laozhang.ai
