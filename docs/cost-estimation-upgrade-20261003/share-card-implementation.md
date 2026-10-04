@@ -129,6 +129,20 @@
 
 回滚：`git apply --reverse docs/cost-estimation-upgrade-20261003/share-card-form-polish-20261004.patch`，已通过反向应用检查。
 
+## 2026-10-04 填写页营销标题与问号报价排版
+
+- 分享标题按用户指定改为“10秒估算建房报价 平台大数据，造价更精准”。
+- 左侧主文案排为“建房要花”与“？元”两行：首行深棕色 56 px，问号红色 116 px，单位深棕色 44 px；按问号实际宽度摆放单位，保持 14 px 间距，避免重叠。
+- 下方说明“填写建房参数 / 查看参考造价”、按钮“开始测算”以及建筑、细金框和背景保持已确认方案。无结果仍不展示实际金额或默认参数；报告分享不受影响。
+
+修改文件：填写页 `aicost.ts/.js`、分享绘图工具 `costEstimateShareImage.ts/.js`，及两份分享测试。未新增依赖、抽象或计算逻辑。源码增量保存为 `share-card-form-invitation-20261004.patch`，反向应用检查通过。
+
+验证：先用测试复现标题与问号文案未更新，再修改。19 项相关测试、TypeScript、JS 语法、TS/JS 同步、空白及凭据检查通过；生产依赖审计 0 vulnerabilities。完整增量自审完成；实际代码渲染已确认问号和单位清晰分隔，文字不遮挡建筑；报告 PNG 与已确认版本逐字节相同。
+
+预览 `share-card-form-invitation/chat-card-preview.png` 的聊天外框为模拟展示。当前开发者工具前台是真机调试断开窗口，未取得本轮原生分享接收效果；本轮未上传或发布。用户提供的营销标题只用于文案展示，本轮没有增加十秒计时或大数据服务。
+
+回滚：`git apply --reverse docs/cost-estimation-upgrade-20261003/share-card-form-invitation-20261004.patch`。
+
 ## 回滚
 
 删除 `costEstimateShareImage.ts/.js` 与图片资源，并将 `aicostresult.ts/.js` 的 `onShareAppMessage` 恢复为原有静态分享配置即可。

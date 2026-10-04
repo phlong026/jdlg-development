@@ -1,0 +1,113 @@
+--- a/miniprogram/miniprogram/pages/aicost/aicost.ts
++++ b/miniprogram/miniprogram/pages/aicost/aicost.ts
+@@ -167,7 +167,7 @@
+   },
+
+   onShareAppMessage() {
+-    const title = '建房预算怎么安排？填写参数，查看参考造价';
++    const title = '10秒估算建房报价 平台大数据，造价更精准';
+     const path = '/pages/aicost/aicost';
+     return {
+       title,
+--- a/miniprogram/miniprogram/pages/aicost/aicost.js
++++ b/miniprogram/miniprogram/pages/aicost/aicost.js
+@@ -138,7 +138,7 @@
+     onLoad() {
+     },
+     onShareAppMessage() {
+-        const title = '建房预算怎么安排？填写参数，查看参考造价';
++        const title = '10秒估算建房报价 平台大数据，造价更精准';
+         const path = '/pages/aicost/aicost';
+         return {
+             title,
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.ts
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.ts
+@@ -131,8 +131,14 @@
+     ctx.font = '600 36px sans-serif';
+     ctx.fillText('建房造价测算', 62, 156);
+     ctx.font = '700 56px sans-serif';
+-    ctx.fillText('建房要花', 62, 276);
+-    ctx.fillText('多少钱？', 62, 352);
++    ctx.fillText('建房要花', 62, 258);
++    ctx.fillStyle = '#e62c12';
++    ctx.font = '800 116px sans-serif';
++    ctx.fillText('？', 62, 390);
++    const questionWidth = ctx.measureText('？').width;
++    ctx.fillStyle = '#704416';
++    ctx.font = '600 44px sans-serif';
++    ctx.fillText('元', 76 + questionWidth, 390);
+     ctx.font = '500 30px sans-serif';
+     ctx.fillText('填写建房参数', 62, 450);
+     ctx.fillText('查看参考造价', 62, 498);
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.js
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.js
+@@ -115,8 +115,14 @@
+         ctx.font = '600 36px sans-serif';
+         ctx.fillText('建房造价测算', 62, 156);
+         ctx.font = '700 56px sans-serif';
+-        ctx.fillText('建房要花', 62, 276);
+-        ctx.fillText('多少钱？', 62, 352);
++        ctx.fillText('建房要花', 62, 258);
++        ctx.fillStyle = '#e62c12';
++        ctx.font = '800 116px sans-serif';
++        ctx.fillText('？', 62, 390);
++        const questionWidth = ctx.measureText('？').width;
++        ctx.fillStyle = '#704416';
++        ctx.font = '600 44px sans-serif';
++        ctx.fillText('元', 76 + questionWidth, 390);
+         ctx.font = '500 30px sans-serif';
+         ctx.fillText('填写建房参数', 62, 450);
+         ctx.fillText('查看参考造价', 62, 498);
+--- a/miniprogram/tests/aicost-form-share.test.js
++++ b/miniprogram/tests/aicost-form-share.test.js
+@@ -23,7 +23,7 @@
+
+ test('blank form shares the same poster without calculating or claiming a price', async () => {
+   const { share, cards } = formShare();
+-  assert.equal(share.title, '建房预算怎么安排？填写参数，查看参考造价');
++  assert.equal(share.title, '10秒估算建房报价 平台大数据，造价更精准');
+   assert.equal(share.path, '/pages/aicost/aicost');
+   const result = await share.promise;
+   assert.equal(result.imageUrl, 'wxfile://form-share.jpg');
+@@ -37,7 +37,7 @@
+ test('form invitation does not present unfinished or default selections as report facts', async () => {
+   const { share, cards } = formShare({ city: '厦门', buildingArea: '440', footprintArea: '', structureType: '钢结构', windowStandard: '品质型' });
+   await share.promise;
+-  assert.equal(share.title, '建房预算怎么安排？填写参数，查看参考造价');
++  assert.equal(share.title, '10秒估算建房报价 平台大数据，造价更精准');
+   assert.equal(cards[0].buildingArea, '');
+   assert.equal(cards[0].structureType, '');
+   assert.equal(cards[0].windowStandard, '');
+--- a/miniprogram/tests/cost-estimate-share-image.test.js
++++ b/miniprogram/tests/cost-estimate-share-image.test.js
+@@ -134,12 +134,14 @@
+   assert.ok(Number(parameter.font.match(/(\d+)px/)[1]) <= 36);
+ });
+
+-test('unestimated form card invites a calculation without showing an amount or unit', async () => {
++test('unestimated form card uses a question placeholder without claiming a price', async () => {
+   const helper = loadShareImageHelper();
+   await helper.prepare({ city: '泉州', buildingArea: '', structureType: '框架结构', windowStandard: '标准型' });
+   const labels = helper.textCalls.map(item => item.text);
+   assert.ok(labels.includes('建房要花'));
+-  assert.ok(labels.includes('多少钱？'));
++  assert.ok(labels.includes('？'));
++  assert.ok(labels.includes('元'));
++  assert.ok(!labels.includes('多少钱？'));
+   assert.ok(labels.includes('开始测算'));
+   assert.ok(labels.includes('填写建房参数'));
+   assert.ok(labels.includes('查看参考造价'));
+@@ -147,6 +149,13 @@
+   const headline = helper.textCalls.find(item => item.text === '建房要花');
+   assert.equal(headline.color, '#704416');
+   assert.ok(Number(headline.font.match(/(\d+)px/)[1]) <= 56);
++  const question = helper.textCalls.find(item => item.text === '？');
++  const yuan = helper.textCalls.find(item => item.text === '元');
++  const questionWidth = Number(question.font.match(/(\d+)px/)[1]) * 0.6;
++  assert.equal(question.color, '#e62c12');
++  assert.equal(question.y, yuan.y);
++  assert.ok(yuan.x >= question.x + questionWidth + 12);
++  assert.ok(yuan.x + 2 * Number(yuan.font.match(/(\d+)px/)[1]) <= 396, 'invitation unit stays before the villa');
+   const [, x, , width] = helper.imageCalls[0];
+   assert.ok(width < 610);
+   assert.ok(x + width <= 966, 'show the right facade inside the frame');
