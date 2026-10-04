@@ -50,6 +50,19 @@
 
 本次布局回滚可执行 `git apply --reverse docs/cost-estimation-upgrade-20261003/share-card-layout-20261004.patch`，已通过反向应用检查。
 
+## 2026-10-04 分享卡比例与首页配色统一
+
+- 别墅由 650 px 缩小至 570 px，整体右移、下移，补回顶部细金色边框，保留屋顶黄色灯带；左右、顶部和地面渐变衔接米金背景。
+- 标题由 50 px 调为 44 px，金额最大由 148 px 调为 132 px，参数由 42/40 px 调为 36/34 px，并降低参数字重。
+- 按钮取色自首页 `/assets/home/核心输入区.png` 中央 AI 金色徽章，渐变为 `#eaceb5`、`#d5a073`、`#cd8b55`，搭配深棕文字。按钮高度 116 px，文字 44 px。
+- 仅修改分享绘图工具 TS/JS 和对应测试；动态标题、跳转路径及报价计算保持原有行为，没有新增依赖或通用抽象。
+
+验证：先以新增测试复现图片比例未缩小，再完成修改；相关 15 项测试、项目 TypeScript 检查、JS 语法和空白检查通过。生产依赖审计显示 0 vulnerabilities，改动文件未检出硬编码凭据。完整源码差异经过自审，未发现新增错误处理、性能或无用代码问题。
+
+微信开发者工具使用本次实际绘图代码成功加载图片、导出本地 JPEG 并打开模拟器预览，调试器 0 errors。截图为本任务产物 `share-card-refined/devtools-share-preview.png`。卡片上的金额、单位、参数与建筑没有重叠，顶部细金边可见，图片边缘自然衔接。`chat-card-preview.png` 的聊天外框为本地模拟展示；真实微信接收方卡片仍需更新版本后重新分享验收。
+
+小程序目录原本被 Git 忽略，本次源码差异保存为 `share-card-refinement-20261004.patch`。反向应用检查通过，可用 `git apply --reverse docs/cost-estimation-upgrade-20261003/share-card-refinement-20261004.patch` 单独回滚本轮视觉调整。
+
 ## 回滚
 
 删除 `costEstimateShareImage.ts/.js` 与图片资源，并将 `aicostresult.ts/.js` 的 `onShareAppMessage` 恢复为原有静态分享配置即可。
