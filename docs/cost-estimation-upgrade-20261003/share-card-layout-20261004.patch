@@ -8,12 +8,12 @@
    'assets/images/cost-estimate-share-house.jpg',
 -  '/assets/images/cost-estimate-share-house.jpg',
  ];
- 
+
  export type CostEstimateShareCard = {
 @@ -90,68 +90,86 @@
    return filePath;
  }
- 
+
 -function drawImageCover(ctx: any, image: any, x: number, y: number, width: number, height: number) {
 -  const sourceWidth = image.width || image.naturalWidth;
 -  const sourceHeight = image.height || image.naturalHeight;
@@ -70,7 +70,7 @@
 -  ctx.restore();
 +  return ctx.measureText(text).width;
  }
- 
+
  function drawCardText(ctx: any, card: CostEstimateShareCard) {
    const amount = cleanAmount(card.totalCost);
 -  const amountFontSize = amount.length > 5 ? 104 : 116;
@@ -84,7 +84,7 @@
 +
 +  ctx.font = '700 62px sans-serif';
 +  const unitWidth = ctx.measureText('万元').width;
- 
+
    ctx.fillStyle = '#e64b3c';
 -  ctx.font = `800 ${amountFontSize}px sans-serif`;
 -  const amountWidth = ctx.measureText(amount).width;
@@ -114,7 +114,7 @@
 +  fitText(ctx, specificationText, 600, 40, 520);
 +  ctx.fillText(specificationText, 62, 467);
  }
- 
+
  function drawCallToAction(ctx: any) {
 -  const button = ctx.createLinearGradient(70, 0, 930, 0);
 -  button.addColorStop(0, '#d3ad70');
@@ -144,12 +144,12 @@
 +  ctx.lineWidth = 5;
 +  ctx.stroke();
  }
- 
+
  async function createShareImage(card: CostEstimateShareCard): Promise<string> {
 @@ -162,15 +180,11 @@
    const ctx = canvas?.getContext('2d');
    if (!canvas || !ctx) return '';
- 
+
 -  const background = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
 -  background.addColorStop(0, '#f5ead9');
 -  background.addColorStop(1, '#eadac2');
@@ -162,7 +162,7 @@
 -  ctx.fillStyle = 'rgba(255, 251, 244, 0.95)';
 -  drawRoundedRect(ctx, 44, 38, 912, 570, 30);
 -  ctx.fill();
- 
+
    const houseImage = await loadBundledHouseImage(canvas);
    drawCardHouseImage(ctx, houseImage);
 --- a/miniprogram/miniprogram/utils/costEstimateShareImage.js
@@ -352,7 +352,7 @@
 -  return { prepare: context.exports.prepareCostEstimateShareImage, writes, calls, imageSources, textCalls };
 +  return { prepare: context.exports.prepareCostEstimateShareImage, writes, calls, imageSources, textCalls, imageCalls, clips };
  }
- 
+
  test('share card exports a JPEG and returns the local image path to WeChat', async () => {
 @@ -75,11 +77,28 @@
    assert.equal(imageUrl.startsWith('wxfile://user-data/cost-estimate-share/'), true);
