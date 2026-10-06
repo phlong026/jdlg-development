@@ -27,6 +27,52 @@
     }
 }
 
+// 从用户 360 点「查看关联线索」进来时的过滤提示
+.customer-lead-userfilter {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    border: 1px solid #e8d6bd;
+    border-radius: 12px;
+    background: #fff8ee;
+    color: #5b4a3b;
+    font-size: 13px;
+
+    a {
+        color: #8b5e3c;
+        font-weight: 600;
+        text-decoration: none;
+
+        &:hover { text-decoration: underline; }
+    }
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+        padding: 4px 10px;
+        border: 1px solid #e0d2bf;
+        border-radius: 8px;
+        background: #fff;
+        color: #5b4a3b;
+        font-size: 12px;
+        cursor: pointer;
+    }
+}
+
+// 线索 → 用户账号的跳转链接
+.customer-lead-userlink {
+    display: inline-block;
+    color: #8b5e3c;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
+}
+
 .customer-lead-queues {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

@@ -129,7 +129,7 @@ export const routes: AppRoute[] = [
     },
     {
         path: '/customer-leads',
-        title: '客服线索工作台',
+        title: '销售线索',
         element: withSuspense(<CustomerLeads />),
         icon: FiFileText,
     },

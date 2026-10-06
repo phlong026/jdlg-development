@@ -82,6 +82,7 @@ export interface CustomerLeadListParams {
     intent_level?: string;
     queue?: string;
     assigned_to?: string;
+    user_id?: number;
     page?: number;
     page_size?: number;
 }

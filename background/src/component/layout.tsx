@@ -30,8 +30,9 @@ const AdminLayout: React.FC = () => {
     const [navMode, setNavMode] = useState<NavMode>(readNavMode);
     const [searchOpen, setSearchOpen] = useState(false);
     const groups = visibleGroups(session.user?.scope, session.user?.crmEnabled);
-    const where = locate(pathname);
-    const subnavGroup = where ? groups.find((g) => g.id === where.group.id) : undefined;
+    // 在当前账号可见的分组里定位：启用 CRM 时 /customer-management 属于「销售线索」的二级页
+    const where = locate(pathname, groups);
+    const subnavGroup = where?.group;
 
     const toggleNavMode = () => {
         const next: NavMode = navMode === 'new' ? 'old' : 'new';

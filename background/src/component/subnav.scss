@@ -52,6 +52,19 @@
 
 .subnav-spacer { flex: 1; }
 
+// 队列 Tab 上的待办数量
+.subnav-badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
 .subnav-back { padding-left: 0; margin-right: 8px; }
 
 .subnav-entry {

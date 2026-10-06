@@ -55,7 +55,7 @@ export default function CustomerManagement(){
    {tab==='notices'&&<NoticePanel key={'n'+refresh} open={setSelected}/>}
    {tab==='sync'&&supervisor&&<><SyncPanel key={'s'+refresh}/><PushStatus key={'p'+refresh}/></>}
    {tab==='access'&&platform&&<AccessPanel key={'a'+refresh}/>}
-   {tab==='leads'&&platform&&<><SourceSyncStatus key={'ss'+refresh}/><CustomerLeads readOnly={!!session.crmContext}/></>}
+   {tab==='leads'&&platform&&<><SourceSyncStatus key={'ss'+refresh}/><CustomerLeads embedded readOnly={!!session.crmContext}/></>}
   </React.Fragment>}
   {reporting&&<div className="crm-overlay"><section className="crm-drawer" role="dialog" aria-modal="true" aria-label="新增客户报备"><header><h2>新增客户报备</h2></header><div className="crm-drawer-body"><CustomerReportForm cancel={()=>setReporting(false)} saved={c=>{setReporting(false);changed();setSelected(c.id)}}/></div></section></div>}
   {selected&&!reporting&&<CustomerDrawer id={selected} supervisor={supervisor} close={()=>setSelected(null)} changed={changed}/>}

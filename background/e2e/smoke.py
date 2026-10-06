@@ -121,6 +121,25 @@ def api_checks():
         status, _body = crm.call("GET", "/orders")
         assert status == 403, f"期望 403，实际 {status}"
 
+    print("\n[API] 销售线索")
+
+    @check("线索列表支持 user_id 过滤：只返回该用户的线索；不带 user_id 返回全部；非法 user_id 视为不过滤")
+    def _():
+        status, everything = admin.call("GET", "/customer-leads?page=1&page_size=100")
+        assert status == 200, status
+        items = everything["data"]["list"]
+        owned = [i for i in items if i["user_id"] > 0]
+        assert owned, "本地种子里应有关联了用户账号的线索（先执行 dev.sh seed）"
+        uid = owned[0]["user_id"]
+        STATE["lead_user_id"] = uid
+        status, filtered = admin.call("GET", f"/customer-leads?page=1&page_size=100&user_id={uid}")
+        got = filtered["data"]["list"]
+        assert status == 200 and got and all(i["user_id"] == uid for i in got), f"user_id 过滤结果不对: {[i['user_id'] for i in got]}"
+        assert filtered["data"]["total"] == len([i for i in items if i["user_id"] == uid])
+        assert filtered["data"]["total"] < everything["data"]["total"], "过滤后应少于全部线索"
+        status, junk = admin.call("GET", "/customer-leads?page=1&page_size=100&user_id=abc")
+        assert status == 200 and junk["data"]["total"] == everything["data"]["total"], "非法 user_id 应当不过滤"
+
     print("\n[API] 接口契约：列表字段不得为 null")
 
     @check("列表接口在空表 / 搜索无结果时返回 [] 而不是 null（Go 的 nil 切片会序列化成 null，前端 list.length 直接崩溃）")
@@ -435,7 +454,7 @@ def browser_checks():
             anon.context.close()
 
         print("\n[浏览器] 新导航（9 个一级入口 + 子导航条，网址不变）")
-        EXPECT_GROUPS = ["工作台", "用户与设计师", "订单与支付", "AI 运营", "内容运营", "异常工单", "客服线索工作台", "风控与增长", "系统设置"]
+        EXPECT_GROUPS = ["工作台", "用户账号", "订单与支付", "AI 运营", "内容运营", "异常工单", "销售线索", "风控与增长", "系统设置"]
 
         def sidebar_labels():
             return pg.eval_on_selector_all(".layout-sidebar .sidebar-item", "els => els.map(e => e.getAttribute('aria-label'))")
@@ -443,7 +462,7 @@ def browser_checks():
         def subnav_tabs():
             return pg.eval_on_selector_all(".layout-subnav .subnav-tab", "els => els.map(e => e.textContent.trim())")
 
-        @check("侧栏只有 9 个一级入口（旧导航 24 项），客服线索工作台是一级入口，系统设置固定在底部")
+        @check("侧栏只有 9 个一级入口（旧导航 24 项），销售线索是一级入口，系统设置固定在底部")
         def _():
             pg.goto(WEB + "/admin/dashboard")
             pg.wait_for_selector(".layout-sidebar .sidebar-item")
@@ -502,6 +521,75 @@ def browser_checks():
             pg.wait_for_selector(".layout-subnav")
             active = pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.textContent.trim()")
             assert active == "用户列表", active
+
+        @check("「用户账号」与「销售线索」在侧栏里各带一行说明，一眼能分辨")
+        def _():
+            pg.goto(WEB + "/admin/dashboard")
+            pg.wait_for_selector(".layout-sidebar .sidebar-item")
+            hints = pg.eval_on_selector_all(".layout-sidebar .sidebar-item", "els => Object.fromEntries(els.map(e => [e.getAttribute('aria-label'), (e.querySelector('.sidebar-hint')||{}).textContent || '']))")
+            assert hints["用户账号"] == "已注册的小程序用户", hints
+            assert hints["销售线索"] == "留了联系方式，待跟进", hints
+
+        @check("销售线索有分类：6 个队列 Tab（地址 ?queue=），待办队列带数量角标，切换后列表随之变化")
+        def _():
+            pg.goto(WEB + "/admin/customer-leads")
+            pg.wait_for_selector(".layout-subnav .subnav-tab")
+            labels = pg.eval_on_selector_all(".layout-subnav .subnav-tab", "els => els.map(e => e.childNodes[0].textContent.trim())")
+            assert labels == ["待处理", "今日新增", "高意向", "超时未跟进", "未分配", "全部线索"], labels
+            assert pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.childNodes[0].textContent.trim()") == "待处理", "默认应落在待处理"
+            pg.wait_for_selector(".layout-subnav .subnav-badge", timeout=8000)
+            badge = int(pg.locator(".layout-subnav .subnav-tab", has_text="待处理").locator(".subnav-badge").inner_text())
+            assert badge > 0, "种子数据里有待处理线索，角标应大于 0"
+            pg.locator(".layout-subnav .subnav-tab", has_text="全部线索").click()
+            pg.wait_for_url(re.compile(r".*/admin/customer-leads\?queue=all$"), timeout=10000)
+            pg.wait_for_load_state("networkidle")
+            all_rows = pg.locator(".layout-content tbody tr").count()
+            pg.locator(".layout-subnav .subnav-tab", has_text="高意向").click()
+            pg.wait_for_url(re.compile(r".*queue=high$"), timeout=10000)
+            pg.wait_for_load_state("networkidle")
+            high_rows = pg.locator(".layout-content tbody tr").count()
+            assert 0 < high_rows < all_rows, f"高意向 {high_rows} 条应少于全部 {all_rows} 条"
+            assert pg.locator(".customer-lead-queues").count() == 0, "单独打开时队列已移到子导航条，页内不应再重复显示"
+
+        @check("线索 ⇄ 用户账号 互相跳转：用户 360「查看关联线索」→ 只看该用户；线索行「查看用户账号」→ 用户 360；可清除过滤")
+        def _():
+            uid = str(STATE["lead_user_id"])
+            pg.goto(WEB + "/admin/user-workbench?userId=" + uid)
+            pg.get_by_role("button", name="查看关联线索").click()
+            pg.wait_for_url(re.compile(rf".*/admin/customer-leads\?queue=all&user_id={uid}$"), timeout=10000)
+            pg.wait_for_selector(".customer-lead-userfilter", timeout=8000)
+            pg.wait_for_load_state("networkidle")
+            links = pg.eval_on_selector_all(".layout-content tbody .customer-lead-userlink", "els => els.map(e => e.getAttribute('href'))")
+            assert links and all(h.endswith("userId=" + uid) for h in links), links
+            pg.locator(".layout-content tbody .customer-lead-userlink").first.click()
+            pg.wait_for_url(re.compile(rf".*/admin/user-workbench\?userId={uid}$"), timeout=10000)
+            pg.go_back()
+            pg.wait_for_selector(".customer-lead-userfilter", timeout=8000)
+            pg.locator(".customer-lead-userfilter button").click()
+            pg.wait_for_function("!location.search.includes('user_id')", timeout=5000)
+            assert pg.locator(".customer-lead-userfilter").count() == 0
+
+        @check("启用 CRM 时：客户管理并入「销售线索」右侧入口（线索 → 客户），侧栏不再单列；二级页可返回")
+        def _():
+            def force_crm(route):
+                resp = route.fetch()
+                body = resp.json()
+                body["data"]["crmEnabled"] = True
+                route.fulfill(response=resp, json=body)
+            pg.route("**/api/v1/management/me", force_crm)
+            try:
+                pg.goto(WEB + "/admin/customer-leads")
+                pg.wait_for_selector(".layout-subnav .subnav-entry", timeout=8000)
+                assert sidebar_labels() == EXPECT_GROUPS, "侧栏不应多出独立的「客户管理」: " + str(sidebar_labels())
+                pg.locator(".layout-subnav .subnav-entry", has_text="客户管理").click()
+                pg.wait_for_url(re.compile(r".*/admin/customer-management$"), timeout=10000)
+                pg.wait_for_selector(".layout-subnav .subnav-back", timeout=8000)
+                assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "销售线索"
+                assert "返回销售线索" in pg.locator(".layout-subnav .subnav-back").inner_text()
+                pg.locator(".layout-subnav .subnav-back").click()
+                pg.wait_for_url(re.compile(r".*/admin/customer-leads$"), timeout=10000)
+            finally:
+                pg.unroute("**/api/v1/management/me")
 
         @check("⌘K 页面搜索：Ctrl+K → 输入「充值配置」→ 回车 → /recharge-config")
         def _():

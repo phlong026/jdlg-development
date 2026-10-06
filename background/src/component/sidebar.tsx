@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, mobile = false, mo
     }
 
     const groups = visibleGroups(scope, crmEnabled);
-    const activeId = locate(pathname)?.group.id;
+    const activeId = locate(pathname, groups)?.group.id;
     const renderItem = (group: (typeof groups)[number]) => {
         const Icon = group.icon;
         const active = group.id === activeId;
@@ -75,12 +75,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, mobile = false, mo
                 to={group.pages[0].path}
                 aria-label={group.label}
                 aria-current={active ? 'page' : undefined}
-                title={collapsed ? group.label : undefined}
+                title={collapsed ? group.label : group.hint}
                 className={`sidebar-item ${active ? 'active' : ''}`}
                 onClick={onNavigate}
             >
                 <Icon className="sidebar-icon" />
-                {!collapsed && <span className="sidebar-label">{group.label}</span>}
+                {!collapsed && (
+                    <span className="sidebar-label">
+                        {group.label}
+                        {group.hint && <small className="sidebar-hint">{group.hint}</small>}
+                    </span>
+                )}
             </Link>
         );
     };

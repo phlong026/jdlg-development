@@ -624,6 +624,11 @@ const UserWorkbench: React.FC = () => {
                 <div className="workbench-breadcrumb-row">
                     <button className="link-button" onClick={() => navigate('/users')}>返回用户列表</button>
                     {selectedUser && (
+                        <button className="link-button" onClick={() => navigate(`/customer-leads?queue=all&user_id=${selectedUser.id}`)}>
+                            查看关联线索
+                        </button>
+                    )}
+                    {selectedUser && (
                         <button className="link-button" onClick={handleCopyUserId}>
                             <FiCopy />
                             复制用户ID

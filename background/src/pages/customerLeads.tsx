@@ -1,5 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { FiActivity, FiClock, FiFileText, FiRefreshCw, FiSearch, FiUserCheck, FiX } from 'react-icons/fi';
 import {
     batchUpdateCustomerLeads,
@@ -17,6 +18,8 @@ import {
     type CustomerLeadOverview,
     type CustomerServiceEventItem,
 } from '../api/customerLeads';
+import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
+import { publishLeadOverview } from '../component/leadOverviewStore';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -50,15 +53,6 @@ const intentLabelMap: Record<string, string> = {
     medium: '中意向',
     high: '高意向',
 };
-
-const queueOptions = [
-    { key: 'todo', label: '待处理', help: '新线索和跟进中', countKey: 'todo_count' },
-    { key: 'today', label: '今日新增', help: '今天进入后台的线索', countKey: 'today_new_count' },
-    { key: 'high', label: '高意向', help: '优先电话或微信承接', countKey: 'high_intent_count' },
-    { key: 'overdue', label: '超时未跟进', help: '该联系但还没推进', countKey: 'overdue_count' },
-    { key: 'unassigned', label: '未分配', help: '还没有负责人', countKey: 'new_count' },
-    { key: 'all', label: '全部线索', help: '完整线索池', countKey: 'total_count' },
-] as const;
 
 const defaultAction = {
     status: 'contacted',
@@ -139,7 +133,10 @@ const getNextActionText = (lead: CustomerLeadItem | null) => {
     return '按下次跟进时间继续推进';
 };
 
-const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
+// embedded：嵌在客户管理页的一个栏目里时，队列用页内卡片切换、不读写地址；
+// 单独打开（/customer-leads）时队列由地址 ?queue= 决定，切换入口在顶部子导航条，?user_id= 可只看某个用户的线索。
+const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ readOnly=false, embedded=false }) => {
+    const [params, setParams] = useSearchParams();
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
     const [funnel, setFunnel] = useState<CustomerFunnelMetric[]>([]);
     const [list, setList] = useState<CustomerLeadItem[]>([]);
@@ -149,7 +146,10 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
     const [loading, setLoading] = useState(false);
     const [searchInput, setSearchInput] = useState('');
     const [keyword, setKeyword] = useState('');
-    const [queue, setQueue] = useState('todo');
+    const [localQueue, setLocalQueue] = useState(DEFAULT_LEAD_QUEUE);
+    const urlQueue = params.get('queue') || '';
+    const queue = embedded ? localQueue : (leadQueues.some((item) => item.key === urlQueue) ? urlQueue : DEFAULT_LEAD_QUEUE);
+    const userIdFilter = embedded ? 0 : Number(params.get('user_id')) || 0;
     const [statusFilter, setStatusFilter] = useState('all');
     const [intentFilter, setIntentFilter] = useState('all');
     const [assignedFilter, setAssignedFilter] = useState('all');
@@ -176,6 +176,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
                 page_size: pageSize,
                 keyword,
                 queue: queue === 'all' ? undefined : queue,
+                user_id: userIdFilter || undefined,
                 status: statusFilter === 'all' ? undefined : statusFilter,
                 intent_level: intentFilter === 'all' ? undefined : intentFilter,
                 assigned_to: assignedFilter === 'all' ? undefined : assignedFilter,
@@ -185,7 +186,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
                 getCustomerLeadList(params),
                 getCustomerLeadFunnel(),
             ]);
-            setOverview({ ...defaultOverview, ...overviewData });
+            const nextOverview = { ...defaultOverview, ...overviewData };
+            setOverview(nextOverview);
+            publishLeadOverview(nextOverview as unknown as Record<string, number>);
             setList(listData.list || []);
             setTotal(listData.total || 0);
             setFunnel(funnelData.metrics || []);
@@ -199,7 +202,13 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
 
     useEffect(() => {
         loadData();
-    }, [page, pageSize, keyword, queue, statusFilter, intentFilter, assignedFilter]);
+    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter]);
+
+    // 切换队列 / 用户过滤时回到第一页并清空勾选
+    useEffect(() => {
+        setPage(1);
+        setSelectedIds([]);
+    }, [queue, userIdFilter]);
 
     const resetToFirstPage = () => {
         if (page === 1) {
@@ -215,7 +224,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
     };
 
     const handleQueueChange = (nextQueue: string) => {
-        setQueue(nextQueue);
+        setLocalQueue(nextQueue);
         setPage(1);
         setSelectedIds([]);
     };
@@ -339,9 +348,20 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
                     </div>
                 </div>
 
+                {userIdFilter > 0 && (
+                    <div className="customer-lead-userfilter" role="status">
+                        <span>仅显示用户 ID <strong>{userIdFilter}</strong> 的线索</span>
+                        <Link to={`/user-workbench?userId=${userIdFilter}`}>查看用户账号</Link>
+                        <button type="button" onClick={() => { const next = new URLSearchParams(params); next.delete('user_id'); setParams(next); }}>
+                            <FiX />清除
+                        </button>
+                    </div>
+                )}
+
+                {embedded && (
                 <section className="customer-lead-panel">
                     <div className="customer-lead-queues">
-                        {queueOptions.map((item) => (
+                        {leadQueues.map((item) => (
                             <button
                                 key={item.key}
                                 type="button"
@@ -355,6 +375,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
                         ))}
                     </div>
                 </section>
+                )}
 
                 <section className="customer-lead-panel">
                     <div className="customer-lead-panel-title">
@@ -448,7 +469,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
                                         </td>
                                         <td>
                                             <strong>{getDisplayName(item)}</strong>
-                                            <span>ID：{item.user_id || '-'}</span>
+                                            {item.user_id > 0
+                                                ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>查看用户账号 ›</Link>
+                                                : <span>未关联用户账号</span>}
                                             <span>{formatDateTime(item.created_at)}</span>
                                         </td>
                                         <td className="customer-lead-demand">
@@ -532,7 +555,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
                                         <h4>客户信息</h4>
                                         <div className="customer-lead-detail-grid">
                                             <div><span>用户</span><strong>{getDisplayName(activeLead)}</strong></div>
-                                            <div><span>用户 ID</span><strong>{activeLead.user_id || '-'}</strong></div>
+                                            <div><span>用户账号</span><strong>{activeLead.user_id > 0 ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${activeLead.user_id}`}>ID {activeLead.user_id} ›</Link> : '未关联'}</strong></div>
                                             <div><span>联系方式</span><strong>{getContactText(activeLead)}</strong></div>
                                             <div><span>负责人</span><strong>{activeLead.assigned_to || '未分配'}</strong></div>
                                             <div><span>下次跟进</span><strong>{formatDateTime(activeLead.next_followup_at)}</strong></div>

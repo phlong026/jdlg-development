@@ -99,6 +99,29 @@ export interface NavPage {
     label: string;
 }
 
+export interface NavQueue {
+    key: string;
+    label: string;
+    /** 线索总览接口里对应的数量字段 */
+    countKey: string;
+    /** 在队列页卡片里的一句话说明 */
+    help: string;
+    /** 需要人处理的队列：在 Tab 上显示数量角标 */
+    alert?: boolean;
+}
+
+/** 销售线索的队列分类：子导航 Tab 与（嵌入客户管理时的）页内队列卡片共用这一份。 */
+export const leadQueues: NavQueue[] = [
+    { key: 'todo', label: '待处理', countKey: 'todo_count', help: '新线索和跟进中', alert: true },
+    { key: 'today', label: '今日新增', countKey: 'today_new_count', help: '今天进入后台的线索' },
+    { key: 'high', label: '高意向', countKey: 'high_intent_count', help: '优先电话或微信承接', alert: true },
+    { key: 'overdue', label: '超时未跟进', countKey: 'overdue_count', help: '该联系但还没推进', alert: true },
+    { key: 'unassigned', label: '未分配', countKey: 'new_count', help: '还没有负责人', alert: true },
+    { key: 'all', label: '全部线索', countKey: 'total_count', help: '完整线索池' },
+];
+
+export const DEFAULT_LEAD_QUEUE = 'todo';
+
 export interface NavGroup {
     id: string;
     label: string;
@@ -108,7 +131,11 @@ export interface NavGroup {
     /** 属于该分组、但不出现在 Tab 里的页面（例如用户 360 是从用户列表点进去的详情页） */
     related?: NavPage[];
     /** 低频的"二级页"：不占侧栏，从分组页右侧的入口进入 */
-    secondary?: { label: string; pages: NavPage[] };
+    secondary?: { label: string; pages: NavPage[]; icon?: ComponentType<{ className?: string }> };
+    /** 侧栏分组名下的一行灰色说明：用来区分名字相近的分组（用户账号 vs 销售线索） */
+    hint?: string;
+    /** 落地页内的"队列"分类：在子导航条里显示为 Tab（地址 ?queue=xxx），页面本身网址不变 */
+    queues?: NavQueue[];
     /** 固定在侧栏底部 */
     pinned?: boolean;
 }
@@ -116,7 +143,7 @@ export interface NavGroup {
 export const navGroups: NavGroup[] = [
     { id: 'dashboard', label: '工作台', icon: FiHome, pages: [{ path: '/dashboard', label: '后台总控台' }] },
     {
-        id: 'users', label: '用户与设计师', icon: FiUsers,
+        id: 'users', label: '用户账号', icon: FiUsers, hint: '已注册的小程序用户',
         pages: [
             { path: '/users', label: '用户列表' },
             { path: '/designer-center', label: '设计师' },
@@ -156,9 +183,15 @@ export const navGroups: NavGroup[] = [
         ],
     },
     { id: 'support', label: '异常工单', icon: FiFileText, pages: [{ path: '/support-tickets', label: '异常工单中心' }] },
-    // 客服线索工作台是高频的一级入口：不放进 Tab，也不因启用 CRM 而隐藏（原侧栏里它始终独立可见）
-    { id: 'leads', label: '客服线索工作台', icon: FiUserCheck, pages: [{ path: '/customer-leads', label: '客服线索工作台' }] },
-    { id: 'crm', label: '客户管理', icon: FiUsers, pages: [{ path: '/customer-management', label: '客户管理工作台' }] },
+    // 销售线索是高频的一级入口：不放进 Tab，也不因启用 CRM 而隐藏（原侧栏里它始终独立可见）。
+    // 与"用户账号"的区别：用户是已注册的账号（运营/审核处理），线索是在智能客服里留了联系方式、待销售跟进的人。
+    // 分类用队列 Tab 表达；启用 CRM 时，客户管理作为"线索 → 客户"的下一步放在右侧入口（见 visibleGroups）。
+    {
+        id: 'leads', label: '销售线索', icon: FiUserCheck, hint: '留了联系方式，待跟进',
+        pages: [{ path: '/customer-leads', label: '线索跟进' }],
+        queues: leadQueues,
+    },
+    { id: 'crm', label: '客户管理', icon: FiUsers, hint: '企业微信客户跟进', pages: [{ path: '/customer-management', label: '客户管理工作台' }] },
     {
         id: 'growth', label: '风控与增长', icon: FiShield,
         pages: [
@@ -180,12 +213,14 @@ export const navGroups: NavGroup[] = [
 /**
  * 当前账号可见的新导航分组。
  * - 非 platform_admin（含 scope 缺失）：只有客户管理（fail-closed，与旧导航一致）；
- * - platform_admin：未启用 CRM 时不显示"客户管理"，其余分组全部可见。
+ * - platform_admin：不单列"客户管理"；启用 CRM 时把它挂在"销售线索"右侧入口（线索 → 客户），避免同一批线索两个入口。
  */
 export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
     const crm = navGroups.find((g) => g.id === 'crm')!;
     if (scope !== 'platform_admin') return [crm];
-    return navGroups.filter((g) => g.id !== 'crm' || crmEnabled);
+    return navGroups
+        .filter((g) => g.id !== 'crm')
+        .map((g) => (g.id === 'leads' && crmEnabled ? { ...g, secondary: { label: '客户管理', icon: FiUsers, pages: crm.pages } } : g));
 }
 
 export interface NavLocation {
