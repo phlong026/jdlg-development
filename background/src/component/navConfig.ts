@@ -92,7 +92,7 @@ export function visibleSections(scope: string | undefined, crmEnabled: boolean |
     return crmEnabled ? [platformSections[0], customerSection, ...platformSections.slice(1)] : platformSections;
 }
 
-/* ───────────────────────── 新导航：8 个分组 + 子导航条 ───────────────────────── */
+/* ───────────────────────── 新导航：分组 + 子导航条 ───────────────────────── */
 
 export interface NavPage {
     path: string;
@@ -155,13 +155,9 @@ export const navGroups: NavGroup[] = [
             { path: '/content-analytics', label: '内容分析' },
         ],
     },
-    {
-        id: 'support', label: '客户与工单', icon: FiFileText,
-        pages: [
-            { path: '/support-tickets', label: '异常工单' },
-            { path: '/customer-leads', label: '客服线索' },
-        ],
-    },
+    { id: 'support', label: '异常工单', icon: FiFileText, pages: [{ path: '/support-tickets', label: '异常工单中心' }] },
+    // 客服线索工作台是高频的一级入口：不放进 Tab，也不因启用 CRM 而隐藏（原侧栏里它始终独立可见）
+    { id: 'leads', label: '客服线索工作台', icon: FiUserCheck, pages: [{ path: '/customer-leads', label: '客服线索工作台' }] },
     { id: 'crm', label: '客户管理', icon: FiUsers, pages: [{ path: '/customer-management', label: '客户管理工作台' }] },
     {
         id: 'growth', label: '风控与增长', icon: FiShield,
@@ -184,14 +180,12 @@ export const navGroups: NavGroup[] = [
 /**
  * 当前账号可见的新导航分组。
  * - 非 platform_admin（含 scope 缺失）：只有客户管理（fail-closed，与旧导航一致）；
- * - platform_admin：未启用 CRM 时不显示"客户管理"；启用 CRM 后"客服线索"已嵌在客户管理里，从 Tab 中去掉。
+ * - platform_admin：未启用 CRM 时不显示"客户管理"，其余分组全部可见。
  */
 export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
     const crm = navGroups.find((g) => g.id === 'crm')!;
     if (scope !== 'platform_admin') return [crm];
-    return navGroups
-        .filter((g) => g.id !== 'crm' || crmEnabled)
-        .map((g) => (g.id === 'support' && crmEnabled ? { ...g, pages: g.pages.filter((p) => p.path !== '/customer-leads') } : g));
+    return navGroups.filter((g) => g.id !== 'crm' || crmEnabled);
 }
 
 export interface NavLocation {
