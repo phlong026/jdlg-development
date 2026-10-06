@@ -72,16 +72,19 @@ for (const file of scssFiles) {
   }
 }
 
-// 4. 侧栏条目
-const sidebarFile = path.join(SRC, 'component/sidebar.tsx');
-if (fs.existsSync(sidebarFile)) {
-  const text = read(sidebarFile);
+// 4. 导航条目（单一数据源 navConfig.ts；兼容仍把菜单写在 sidebar.tsx 的旧写法）
+let navEntries = 0;
+for (const rel of ['component/navConfig.ts', 'component/sidebar.tsx']) {
+  const navFile = path.join(SRC, rel);
+  if (!fs.existsSync(navFile)) continue;
+  const text = read(navFile);
   for (const m of text.matchAll(/\bpath:\s*'(\/[^']*)'/g)) {
-    if (!routes.has(m[1])) add('侧栏', sidebarFile, text, m.index, `侧栏条目 ${m[1]} 不在路由表中`);
+    navEntries += 1;
+    if (!routes.has(m[1])) add('导航', navFile, text, m.index, `导航条目 ${m[1]} 不在路由表中`);
   }
 }
 
-console.log(`路由 ${routes.size} 条；已检查跳转字面量 ${checked} 处；样式作用域 ${scoped} 处`);
+console.log(`路由 ${routes.size} 条；已检查跳转字面量 ${checked} 处；样式作用域 ${scoped} 处；导航条目 ${navEntries} 个`);
 if (problems.length) {
   console.error(`\n发现 ${problems.length} 个问题：`);
   for (const p of problems) console.error('  ' + p);
