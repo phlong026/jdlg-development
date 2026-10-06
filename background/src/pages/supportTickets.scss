@@ -6,6 +6,11 @@
     gap: 16px;
 }
 
+// 本页筛选项多（搜索框 + 3 个下拉 + 按钮），共享面板里搜索框 420px 的基准宽度会把按钮挤到第二行
+.management-search-panel .management-search-searchbox {
+    flex-basis: 240px;
+}
+
 .support-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

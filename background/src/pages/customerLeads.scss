@@ -33,7 +33,10 @@
     gap: 12px;
 }
 
-.customer-lead-queue {
+.customer-lead-page .customer-lead-queue {
+    // 嵌在客户管理页时会被 `.crm-page button { display: inline-flex }` 命中，文字被挤成竖排；这里显式保持块级
+    // （.customer-lead-page 前缀提高特异性，不依赖样式表加载顺序）
+    display: block;
     min-height: 104px;
     border: 1px solid #e2e8f0;
     border-radius: 12px;

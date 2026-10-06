@@ -1,6 +1,7 @@
 // Scope lazy-loaded styles so visiting another page cannot change this page.
 :where(.layout-content[data-admin-page="/virtualpay"]) {
-// 本页的按钮原本靠其它页面的 .btn-secondary 样式"泄漏"才正常，样式按路径限定后丢失，这里补上（与订单中心一致）。
+// 本页的按钮原本靠其它页面的 .btn-primary / .btn-secondary 样式"泄漏"才正常，样式按路径限定后丢失，这里补上（与订单中心一致）。
+.btn-primary,
 .btn-secondary {
   display: inline-flex;
   align-items: center;
@@ -17,6 +18,12 @@
   cursor: pointer;
 
   &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: #8b5e3c;
+  color: #ffffff;
 }
 
 .virtual-pay-container {
@@ -86,6 +93,12 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 16px;
+}
+
+// 统计区直接放在页面里（不在面板内），不需要面板的内边距，否则左右缩进、与上下区块对不齐
+.virtual-pay-stats {
+  padding: 0;
+  margin-bottom: 16px;
 }
 
 .health-item,
