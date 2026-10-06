@@ -1,5 +1,24 @@
 // Scope lazy-loaded styles so visiting another page cannot change this page.
 :where(.layout-content[data-admin-page="/virtualpay"]) {
+// 本页的按钮原本靠其它页面的 .btn-secondary 样式"泄漏"才正常，样式按路径限定后丢失，这里补上（与订单中心一致）。
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
 .virtual-pay-container {
   padding: 20px 24px 24px;
 }

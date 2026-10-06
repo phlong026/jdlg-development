@@ -27,6 +27,31 @@
      box-shadow: var(--admin-shadow-soft);
  }
 
+ // section-card 的默认外观（卡片：白底、浅棕边框、圆角、阴影、内边距）。
+ // 历史原因：这份样式原本只写在 dashboard.scss 里，靠"全局泄漏"让其它页面的卡片看起来正常；
+ // 9 月 15 日各页面样式按路径限定作用域后，用到 section-card 却没自己定义外观的页面
+ // （风控台、设计师、分销、内容分析、异常工单、报表导出、AI 任务、会员运营等）卡片就失去了内边距甚至边框。
+ // 用 :where() 把优先级降为 0：任何页面自己的 section-card 样式（总控台 24px、认证页 20px 等）都会覆盖它。
+ // 只列出确实缺样式的页面：templates、certification、dashboard、user-workbench 等已自己定义了 section-card，
+ // 不能再套一层默认（会多出边框等，改变本来正常的页面）。新页面若用 section-card，请在自己的 scss 里定义。
+ :where(.layout-content:is(
+   [data-admin-page="/users"],
+   [data-admin-page="/designer-center"],
+   [data-admin-page="/distribution"],
+   [data-admin-page="/content-analytics"],
+   [data-admin-page="/risk-control"],
+   [data-admin-page="/support-tickets"],
+   [data-admin-page="/report-center"],
+   [data-admin-page="/ai-tasks"],
+   [data-admin-page="/membership-operations"]
+ ) .section-card) {
+     background: var(--admin-surface);
+     border: 1px solid var(--admin-border);
+     border-radius: var(--admin-radius-lg);
+     box-shadow: var(--admin-shadow-soft);
+     padding: 20px;
+ }
+
  .route-loading {
      min-height: calc(100vh - 120px);
      display: flex;
