@@ -497,8 +497,6 @@ def browser_checks():
         def _():
             bad = []
             for path in static_routes():
-                if path == "/customer-management":
-                    continue  # 本地未启用 CRM，该分组不显示
                 pg.goto(WEB + "/admin" + path)
                 pg.wait_for_selector(".layout-sidebar .sidebar-item")
                 n = pg.locator(".layout-sidebar .sidebar-item.active").count()
@@ -554,17 +552,20 @@ def browser_checks():
             assert hints["用户账号"] == "已注册的小程序用户", hints
             assert hints["销售线索"] == "留了联系方式，待跟进", hints
 
-        @check("销售线索分三类：顶部 Tab「线索 · 商机」（启用 CRM 时前面多「客户」），「线索」Tab 带待处理角标")
+        CARD_LABELS = "els => els.map(e => e.querySelector('.subnav-card-label').textContent.trim())"
+
+        @check("销售线索分三类：顶部是入口卡片「客户 · 线索 · 商机」，当前类别高亮；客户未接入 CRM 时灰色标注，「线索」卡片带待处理角标")
         def _():
             pg.goto(WEB + "/admin/customer-leads")
-            pg.wait_for_selector(".layout-subnav .subnav-tab")
-            labels = pg.eval_on_selector_all(".layout-subnav .subnav-tab", "els => els.map(e => e.childNodes[0].textContent.trim())")
-            assert labels == ["线索", "商机"], labels
-            assert pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.childNodes[0].textContent.trim()") == "线索"
-            pg.wait_for_selector(".layout-subnav .subnav-badge", timeout=8000)
-            badge = int(pg.locator(".layout-subnav .subnav-tab", has_text="线索").locator(".subnav-badge").inner_text())
+            pg.wait_for_selector(".layout-subnav-cards .subnav-card")
+            assert pg.eval_on_selector_all(".layout-subnav-cards .subnav-card", CARD_LABELS) == ["客户", "线索", "商机"]
+            assert pg.locator(".layout-subnav").count() == 0, "卡片导航与文字 Tab 二选一，不应同时出现"
+            assert pg.eval_on_selector(".subnav-card.is-current .subnav-card-label", "e => e.textContent.trim()") == "线索"
+            customer = pg.locator(".subnav-card", has_text="客户")
+            assert "tone-gray" in customer.get_attribute("class") and "未接入" in customer.inner_text(), "本地未启用 CRM：客户卡片应为灰色并标注未接入"
+            pg.wait_for_selector(".subnav-card .subnav-badge", timeout=8000)
+            badge = int(pg.locator(".subnav-card", has_text="线索").locator(".subnav-badge").inner_text())
             assert badge > 0, "种子数据里有待处理线索，角标应大于 0"
-            assert pg.locator(".layout-subnav .subnav-tab", has_text="线索").count() == 1
 
         @check("线索队列在页内筛选条里：6 个队列带数量，默认待处理；切换后地址 ?queue= 与列表随之变化")
         def _():
@@ -589,31 +590,39 @@ def browser_checks():
         @check("商机占位页 /opportunities：只说明未启用，不展示任何数字；可返回线索")
         def _():
             pg.goto(WEB + "/admin/customer-leads")
-            pg.wait_for_selector(".layout-subnav .subnav-tab")
-            pg.locator(".layout-subnav .subnav-tab", has_text="商机").click()
+            pg.wait_for_selector(".layout-subnav-cards .subnav-card")
+            pg.locator(".subnav-card", has_text="商机").click()
             pg.wait_for_url(re.compile(r".*/admin/opportunities$"), timeout=10000)
             pg.wait_for_selector(".opportunities-card", timeout=8000)
             assert "暂未启用" in pg.locator(".opportunities-card").inner_text()
             assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "销售线索"
-            assert pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.childNodes[0].textContent.trim()") == "商机"
+            assert pg.eval_on_selector(".subnav-card.is-current .subnav-card-label", "e => e.textContent.trim()") == "商机"
             pg.locator(".opportunities-card a", has_text="返回线索").click()
             pg.wait_for_url(re.compile(r".*/admin/customer-leads$"), timeout=10000)
 
-        @check("销售线索概览区（参考企业微信「销售」页）：入口卡片 + 线索简报 + 线索阶段环形图，数字自洽")
+        @check("销售线索概览区：线索简报 + 线索阶段环形图并排，数字自洽；不再显示、也不再请求智能客服漏斗")
         def _():
+            funnel_calls = []
+            on_request = lambda req: funnel_calls.append(req.url) if "/customer-leads/funnel" in req.url else None
+            pg.on("request", on_request)
             pg.goto(WEB + "/admin/customer-leads")
             pg.wait_for_selector(".lead-hub .lead-hub-donut-center strong", timeout=8000)
             pg.wait_for_load_state("networkidle")
-            tiles = pg.eval_on_selector_all(".lead-hub-tile", "els => els.map(e => e.textContent.trim())")
-            assert tiles == ["线索", "商机未启用"], f"未启用 CRM 时入口应为 线索 + 商机(未启用): {tiles}"
+            assert pg.locator(".lead-hub-tile").count() == 0, "入口卡片已移到布局层的导航条，概览区不再重复"
+            assert "智能客服漏斗" not in pg.locator(".layout-content").inner_text(), "漏斗已从线索页去掉"
             total = int(pg.locator(".lead-hub-donut-center strong").inner_text())
             legend = pg.eval_on_selector_all(".lead-hub-legend li", "els => els.map(e => [e.querySelector('span').textContent, parseInt(e.querySelector('b').textContent)])")
             assert [n for n, _ in legend] == ["新线索", "跟进中", "已成交", "无效"], legend
             assert sum(c for _, c in legend) == total > 0, f"各阶段之和应等于线索量 {total}: {legend}"
             figures = pg.eval_on_selector_all(".lead-hub-figures > div", "els => Object.fromEntries(els.map(e => [e.querySelector('span').textContent, parseInt(e.querySelector('strong').textContent)]))")
-            badge = int(pg.locator(".layout-subnav .subnav-tab", has_text="线索").locator(".subnav-badge").inner_text())
-            assert figures["待处理"] == badge, f"简报的待处理 {figures['待处理']} 应与「线索」Tab 角标 {badge} 一致"
+            badge = int(pg.locator(".subnav-card", has_text="线索").locator(".subnav-badge").inner_text())
+            assert figures["待处理"] == badge, f"简报的待处理 {figures['待处理']} 应与「线索」卡片角标 {badge} 一致"
+            # 简报与线索阶段并排：两张卡片同一行
+            tops = pg.eval_on_selector_all(".lead-hub > .lead-hub-card", "els => els.map(e => Math.round(e.getBoundingClientRect().top))")
+            assert len(tops) == 2 and tops[0] == tops[1], f"桌面宽度下简报与线索阶段应并排: {tops}"
             assert pg.locator(".lead-hub-donut circle").count() >= 2, "环形图应画出底环和至少一段"
+            pg.remove_listener("request", on_request)
+            assert not funnel_calls, f"不应再请求漏斗接口: {funnel_calls}"
 
         @check("线索 ⇄ 用户账号 互相跳转：用户 360「查看关联线索」→ 只看该用户；线索行「查看用户账号」→ 用户 360；可清除过滤")
         def _():
@@ -633,7 +642,7 @@ def browser_checks():
             pg.wait_for_function("!location.search.includes('user_id')", timeout=5000)
             assert pg.locator(".customer-lead-userfilter").count() == 0
 
-        @check("启用 CRM 时：销售线索 Tab 变成「客户 · 线索 · 商机」，侧栏不再单列「客户管理」，客户 ⇄ 线索可来回切换")
+        @check("启用 CRM 时：「客户」卡片变为蓝色可用（去掉「未接入」），侧栏不单列客户管理；客户 ⇄ 线索可来回切换")
         def _():
             def force_crm(route):
                 resp = route.fetch()
@@ -643,20 +652,30 @@ def browser_checks():
             pg.route("**/api/v1/management/me", force_crm)
             try:
                 pg.goto(WEB + "/admin/customer-leads")
-                pg.wait_for_selector(".layout-subnav .subnav-tab", timeout=8000)
-                labels = pg.eval_on_selector_all(".layout-subnav .subnav-tab", "els => els.map(e => e.childNodes[0].textContent.trim())")
-                assert labels == ["客户", "线索", "商机"], labels
+                pg.wait_for_selector(".layout-subnav-cards .subnav-card", timeout=8000)
+                assert pg.eval_on_selector_all(".layout-subnav-cards .subnav-card", CARD_LABELS) == ["客户", "线索", "商机"]
+                customer = pg.locator(".subnav-card", has_text="客户")
+                assert "tone-blue" in customer.get_attribute("class") and "未接入" not in customer.inner_text(), customer.inner_text()
                 assert sidebar_labels() == EXPECT_GROUPS, "侧栏不应多出独立的「客户管理」: " + str(sidebar_labels())
-                assert pg.locator(".lead-hub-tile", has_text="客户").count() == 1, "启用 CRM 时概览区应出现「客户」入口"
-                pg.locator(".layout-subnav .subnav-tab", has_text="客户").click()
+                customer.click()
                 pg.wait_for_url(re.compile(r".*/admin/customer-management$"), timeout=10000)
-                pg.wait_for_selector(".layout-subnav .subnav-tab.active", timeout=8000)
+                pg.wait_for_selector(".subnav-card.is-current", timeout=8000)
                 assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "销售线索"
-                assert pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.childNodes[0].textContent.trim()") == "客户"
-                pg.locator(".layout-subnav .subnav-tab", has_text="线索").click()
+                assert pg.eval_on_selector(".subnav-card.is-current .subnav-card-label", "e => e.textContent.trim()") == "客户"
+                pg.locator(".subnav-card", has_text="线索").click()
                 pg.wait_for_url(re.compile(r".*/admin/customer-leads$"), timeout=10000)
             finally:
                 pg.unroute("**/api/v1/management/me")
+
+        @check("未启用 CRM 时「客户」卡片仍可进入客户管理页（线索 / 账号与权限栏目不依赖 CRM），且侧栏高亮「销售线索」")
+        def _():
+            pg.goto(WEB + "/admin/customer-leads")
+            pg.wait_for_selector(".layout-subnav-cards .subnav-card")
+            pg.locator(".subnav-card", has_text="客户").click()
+            pg.wait_for_url(re.compile(r".*/admin/customer-management$"), timeout=10000)
+            pg.wait_for_selector(".subnav-card.is-current", timeout=8000)
+            assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "销售线索"
+            assert pg.eval_on_selector(".subnav-card.is-current .subnav-card-label", "e => e.textContent.trim()") == "客户"
 
         @check("⌘K 页面搜索：Ctrl+K → 输入「充值配置」→ 回车 → /recharge-config")
         def _():

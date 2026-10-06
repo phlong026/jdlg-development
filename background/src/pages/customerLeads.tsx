@@ -6,11 +6,9 @@ import {
     batchUpdateCustomerLeads,
     createCustomerLeadFollowup,
     getCustomerLeadDetail,
-    getCustomerLeadFunnel,
     getCustomerLeadList,
     getCustomerLeadOverview,
     updateCustomerLeadStatus,
-    type CustomerFunnelMetric,
     type CustomerLeadActionPayload,
     type CustomerLeadDetailResponse,
     type CustomerLeadFollowupItem,
@@ -140,7 +138,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [params, setParams] = useSearchParams();
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
     const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-    const [funnel, setFunnel] = useState<CustomerFunnelMetric[]>([]);
     const [list, setList] = useState<CustomerLeadItem[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -183,10 +180,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 intent_level: intentFilter === 'all' ? undefined : intentFilter,
                 assigned_to: assignedFilter === 'all' ? undefined : assignedFilter,
             };
-            const [overviewData, listData, funnelData] = await Promise.all([
+            const [overviewData, listData] = await Promise.all([
                 getCustomerLeadOverview(),
                 getCustomerLeadList(params),
-                getCustomerLeadFunnel(),
             ]);
             const nextOverview = { ...defaultOverview, ...overviewData };
             setOverview(nextOverview);
@@ -194,7 +190,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             publishLeadOverview(nextOverview as unknown as Record<string, number>);
             setList(listData.list || []);
             setTotal(listData.total || 0);
-            setFunnel(funnelData.metrics || []);
             setSelectedIds((ids) => ids.filter((id) => (listData.list || []).some((item) => item.id === id)));
         } catch (error) {
             reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
@@ -385,26 +380,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </div>
                 </section>
                 )}
-
-                <section className="customer-lead-panel">
-                    <div className="customer-lead-panel-title">
-                        <h3>智能客服漏斗</h3>
-                        <p>帮助判断线索从进入客服到提交、生成、转人工的掉点。</p>
-                    </div>
-                    <div className="customer-lead-funnel">
-                        {funnel.map((item, index) => (
-                            <div className="customer-lead-funnel-item" key={item.key}>
-                                <span>{index + 1}</span>
-                                <strong>{item.label}</strong>
-                                <b>{item.count}</b>
-                                <small>{(item.conversion_rate ?? 0).toFixed(1)}%</small>
-                            </div>
-                        ))}
-                        {!loading && funnel.length === 0 ? (
-                            <div className="customer-lead-empty">暂无漏斗数据</div>
-                        ) : null}
-                    </div>
-                </section>
 
                 {!embedded && (
                     <nav className="customer-lead-queuebar" aria-label="线索队列">

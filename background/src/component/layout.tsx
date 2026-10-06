@@ -4,6 +4,7 @@ import type { PageLoadFailure } from '../utils/pageLoadError';
 import Sidebar from './sidebar';
 import Topbar from './topbar';
 import SubNav from './SubNav';
+import SubNavCards from './SubNavCards';
 import CommandPalette from './CommandPalette';
 import { useManagementSession } from './ManagementSession';
 import { locate, searchablePages, visibleGroups } from './navConfig';
@@ -142,7 +143,9 @@ const AdminLayout: React.FC = () => {
             {isMobile && !collapsed ? <button className="layout-overlay" type="button" onClick={handleToggleSidebar} aria-label="关闭侧边栏" /> : null}
             <div className="layout-main" {...(isMobile && !collapsed ? { inert: '' } : {})}>
                 <Topbar title={current?.title} icon={current?.icon} collapsed={collapsed} onToggleSidebar={handleToggleSidebar} onSearch={() => setSearchOpen(true)} />
-                {navMode === 'new' && where && subnavGroup ? <SubNav group={subnavGroup} location={where} /> : null}
+                {navMode === 'new' && where && subnavGroup
+                    ? (subnavGroup.display === 'cards' ? <SubNavCards group={subnavGroup} location={where} /> : <SubNav group={subnavGroup} location={where} />)
+                    : null}
                 <div className="layout-content" data-admin-page={pathname} ref={contentRef}>
                     {loadFailure && <div className="page-load-error" role="alert"><div><strong>页面数据未能加载</strong><p>{loadFailure}</p><small>下方仅显示页面结构，统计值和空列表不代表实际业务数据。</small></div><button type="button" onClick={() => window.location.reload()}>重新加载</button></div>}
                     <Outlet />

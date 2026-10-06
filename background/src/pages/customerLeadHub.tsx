@@ -1,8 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiChevronRight, FiRefreshCw, FiTrendingUp, FiUserCheck, FiUsers } from 'react-icons/fi';
+import { FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
-import { useManagementSession } from '../component/ManagementSession';
 import './customerLeadHub.scss';
 
 // 线索阶段：与 customer_leads.status 的四个取值一一对应，颜色沿用常见销售看板的蓝 / 黄 / 绿 / 灰
@@ -26,12 +25,10 @@ interface HubProps {
 }
 
 /**
- * 销售线索的概览区：入口卡片 → 线索简报 → 线索阶段（环形图）。
- * 版式参考企业微信「销售」页：先给全局数字，再进入下面的队列与列表。
+ * 销售线索的概览区：线索简报 + 线索阶段（环形图），桌面端左右并排，让下面的队列与列表尽早出现在首屏。
+ * 客户 · 线索 · 商机 的入口卡片在布局层（SubNavCards），三个页面共用。
  */
 const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onRefresh }) => {
-    const session = useManagementSession();
-    const crmEnabled = !!session.user?.crmEnabled && session.user?.scope === 'platform_admin';
     const total = overview.total_count || 0;
     const stages = STAGES.map((stage) => {
         const count = Number(overview[stage.key] || 0);
@@ -51,26 +48,6 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
 
     return (
         <div className="lead-hub">
-            <div className="lead-hub-tiles">
-                {crmEnabled && (
-                    <Link className="lead-hub-tile lead-hub-tile-customer" to="/customer-management">
-                        <span>客户</span>
-                        <FiChevronRight className="lead-hub-tile-arrow" />
-                        <FiUsers className="lead-hub-tile-icon" aria-hidden />
-                    </Link>
-                )}
-                <Link className="lead-hub-tile lead-hub-tile-lead is-current" to="/customer-leads?queue=todo" aria-current="page">
-                    <span>线索</span>
-                    <FiChevronRight className="lead-hub-tile-arrow" />
-                    <FiUserCheck className="lead-hub-tile-icon" aria-hidden />
-                </Link>
-                <Link className="lead-hub-tile lead-hub-tile-opportunity" to="/opportunities">
-                    <span>商机</span>
-                    <small>未启用</small>
-                    <FiTrendingUp className="lead-hub-tile-icon" aria-hidden />
-                </Link>
-            </div>
-
             <section className="lead-hub-card">
                 <header className="lead-hub-card-head">
                     <h2>线索简报</h2>

@@ -1,0 +1,44 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { FiChevronRight } from 'react-icons/fi';
+import type { NavGroup, NavLocation } from './navConfig';
+import { useLeadOverviewCounts } from './leadOverviewStore';
+import './subnavCards.scss';
+
+interface Props {
+    group: NavGroup;
+    location: NavLocation;
+}
+
+/**
+ * 卡片式分组导航（display: 'cards'）：位于顶栏与内容区之间，与文字 Tab 的 SubNav 二选一。
+ * 销售线索的 客户 · 线索 · 商机 三个页面都显示它，当前所在的那张高亮，所以任何一页都能切到另外两类。
+ */
+const SubNavCards: React.FC<Props> = ({ group, location }) => {
+    const counts = useLeadOverviewCounts();
+    return (
+        <nav className="layout-subnav-cards" aria-label={`${group.label}分类`}>
+            {group.pages.map((page) => {
+                const Icon = page.icon;
+                const current = page.path === location.page.path;
+                const count = page.badgeKey ? counts[page.badgeKey] ?? 0 : 0;
+                return (
+                    <Link
+                        key={page.path}
+                        to={page.path}
+                        className={`subnav-card tone-${page.tone ?? 'blue'} ${current ? 'is-current' : ''}`}
+                        aria-current={current ? 'page' : undefined}
+                    >
+                        <span className="subnav-card-label">{page.label}</span>
+                        {count > 0 && <span className="subnav-badge" aria-label={`${count} 条待处理`}>{count > 99 ? '99+' : count}</span>}
+                        {page.note && <small>{page.note}</small>}
+                        {!page.note && <FiChevronRight className="subnav-card-arrow" />}
+                        {Icon && <Icon className="subnav-card-icon" aria-hidden />}
+                    </Link>
+                );
+            })}
+        </nav>
+    );
+};
+
+export default SubNavCards;

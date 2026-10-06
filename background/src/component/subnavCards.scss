@@ -1,0 +1,61 @@
+// 销售线索的入口卡片导航条（客户 · 线索 · 商机）
+.layout-subnav-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  flex-shrink: 0;
+  padding: 14px 24px;
+  border-bottom: 1px solid #eadfce;
+  background: #faf6ef;
+}
+
+.subnav-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 64px;
+  padding: 0 18px;
+  border-radius: 14px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14); }
+
+  small { font-size: 12px; font-weight: 400; opacity: 0.9; }
+
+  // 当前所在的类别：描边高亮
+  &.is-current { outline: 3px solid rgba(139, 94, 60, 0.4); outline-offset: 2px; }
+
+  &.tone-blue { background: linear-gradient(120deg, #2f7bff 0%, #5ba4ff 100%); }
+  &.tone-orange { background: linear-gradient(120deg, #ff8a2a 0%, #ffb067 100%); }
+  &.tone-gray { background: linear-gradient(120deg, #9aa5b1 0%, #c3cbd3 100%); }
+}
+
+.subnav-card-arrow { font-size: 18px; }
+
+.subnav-card-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  transform: translateY(-50%);
+  opacity: 0.28;
+}
+
+.subnav-card .subnav-badge {
+  background: #fff;
+  color: #c2410c;
+}
+
+@media (max-width: 640px) {
+  .layout-subnav-cards { padding: 10px 12px; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .subnav-card { height: 52px; padding: 0 10px; font-size: 16px; }
+  .subnav-card-icon, .subnav-card-arrow { display: none; }
+}

@@ -18,6 +18,7 @@ import {
     FiImage,
     FiShield,
     FiBarChart2,
+    FiTrendingUp,
 } from 'react-icons/fi';
 
 export interface NavItem {
@@ -99,6 +100,10 @@ export interface NavPage {
     label: string;
     /** 在 Tab 上显示数量角标：取线索总览里的该字段（见 leadOverviewStore），为 0 时不显示 */
     badgeKey?: string;
+    /** 卡片式导航（display: 'cards'）用：卡片右侧的大图标、渐变色，以及「未启用」之类的小注 */
+    icon?: ComponentType<{ className?: string }>;
+    tone?: 'blue' | 'orange' | 'gray';
+    note?: string;
 }
 
 export interface NavQueue {
@@ -136,6 +141,8 @@ export interface NavGroup {
     secondary?: { label: string; pages: NavPage[] };
     /** 侧栏分组名下的一行灰色说明：用来区分名字相近的分组（用户账号 vs 销售线索） */
     hint?: string;
+    /** 分组内导航的形式：默认是文字 Tab；'cards' 为彩色入口卡片（销售线索：客户 · 线索 · 商机，参考企业微信「销售」页） */
+    display?: 'tabs' | 'cards';
     /** 点击侧栏进入的页面；缺省为 pages[0]（销售线索的 Tab 顺序是 客户 · 线索 · 商机，但高频的是线索） */
     landing?: string;
     /** 固定在侧栏底部 */
@@ -187,14 +194,15 @@ export const navGroups: NavGroup[] = [
     { id: 'support', label: '异常工单', icon: FiFileText, pages: [{ path: '/support-tickets', label: '异常工单中心' }] },
     // 销售线索是高频的一级入口：不因启用 CRM 而隐藏（原侧栏里它始终独立可见）。
     // 与"用户账号"的区别：用户是已注册的账号（运营/审核处理），线索是在智能客服里留了联系方式、待销售跟进的人。
-    // 分组内分三类：客户（CRM，启用后才出现，见 visibleGroups）· 线索 · 商机（暂未启用）；
-    // 线索自己的队列（待处理 / 高意向…）在线索页内，不占子导航。
+    // 分组内分三类，用入口卡片导航：客户（CRM，启用后才出现，见 visibleGroups）· 线索 · 商机（暂未启用）；
+    // 线索自己的队列（待处理 / 高意向…）在线索页内，不占导航。
     {
         id: 'leads', label: '销售线索', icon: FiUserCheck, hint: '留了联系方式，待跟进',
         landing: '/customer-leads',
+        display: 'cards',
         pages: [
-            { path: '/customer-leads', label: '线索', badgeKey: 'todo_count' },
-            { path: '/opportunities', label: '商机' },
+            { path: '/customer-leads', label: '线索', badgeKey: 'todo_count', icon: FiUserCheck, tone: 'orange' },
+            { path: '/opportunities', label: '商机', icon: FiTrendingUp, tone: 'gray', note: '未启用' },
         ],
     },
     { id: 'crm', label: '客户管理', icon: FiUsers, hint: '企业微信客户跟进', pages: [{ path: '/customer-management', label: '客户管理工作台' }] },
@@ -219,14 +227,20 @@ export const navGroups: NavGroup[] = [
 /**
  * 当前账号可见的新导航分组。
  * - 非 platform_admin（含 scope 缺失）：只有客户管理（fail-closed，与旧导航一致）；
- * - platform_admin：不单列"客户管理"；启用 CRM 时它作为"销售线索"的第一个 Tab「客户」（客户 · 线索 · 商机）。
+ * - platform_admin：不单列"客户管理"，它作为"销售线索"的第一张卡片「客户」（客户 · 线索 · 商机）始终可见；
+ *   未启用 CRM 时卡片为灰色并标注「未接入」（客户管理页里的线索栏目与账号权限栏目不依赖 CRM，仍可进入）。
  */
 export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
     const crm = navGroups.find((g) => g.id === 'crm')!;
     if (scope !== 'platform_admin') return [crm];
     return navGroups
         .filter((g) => g.id !== 'crm')
-        .map((g) => (g.id === 'leads' && crmEnabled ? { ...g, pages: [{ path: crm.pages[0].path, label: '客户' }, ...g.pages] } : g));
+        .map((g) => (g.id === 'leads' ? { ...g, pages: [
+            crmEnabled
+                ? { path: crm.pages[0].path, label: '客户', icon: FiUsers, tone: 'blue' as const }
+                : { path: crm.pages[0].path, label: '客户', icon: FiUsers, tone: 'gray' as const, note: '未接入' },
+            ...g.pages,
+        ] } : g));
 }
 
 export interface NavLocation {

@@ -15,13 +15,6 @@ export interface CustomerLeadOverview {
     invalid_count?: number;
 }
 
-export interface CustomerFunnelMetric {
-    key: string;
-    label: string;
-    count: number;
-    conversion_rate: number;
-}
-
 export interface CustomerLeadItem {
     id: number;
     user_id: number;
@@ -105,10 +98,6 @@ export interface CustomerLeadDetailResponse {
     intent_analysis: CustomerIntentAnalysis;
 }
 
-export interface CustomerFunnelResponse {
-    metrics: CustomerFunnelMetric[];
-}
-
 export const getCustomerLeadOverview = async (): Promise<CustomerLeadOverview> => {
     const response = await get<CustomerLeadOverview>(API_ENDPOINTS.CUSTOMER_LEADS.OVERVIEW);
     if (!response.data) {
@@ -121,14 +110,6 @@ export const getCustomerLeadList = async (params?: CustomerLeadListParams): Prom
     const response = await get<CustomerLeadListResponse>(API_ENDPOINTS.CUSTOMER_LEADS.LIST, params as Record<string, any>);
     if (!response.data) {
         throw new Error('获取客服线索列表失败');
-    }
-    return response.data;
-};
-
-export const getCustomerLeadFunnel = async (): Promise<CustomerFunnelResponse> => {
-    const response = await get<CustomerFunnelResponse>(API_ENDPOINTS.CUSTOMER_LEADS.FUNNEL);
-    if (!response.data) {
-        throw new Error('获取客服漏斗数据失败');
     }
     return response.data;
 };
