@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useMemo, useState, useEffect } from 'react';
 import { FiSave, FiPlus, FiEdit, FiTrash2, FiSettings, FiX, FiClipboard, FiSearch } from 'react-icons/fi';
-import Layout from '../component/layout';
 import { getAIPricingList, saveAIPricing, getAIAPIConfigList, saveAIAPIConfig, type AIPricing, type AIAPIConfig } from '../api/ai';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import JSONTreeEditor from '../component/json-tree-editor';
@@ -197,7 +196,7 @@ const AIConfig: React.FC = () => {
     };
 
     return (
-        <Layout title="AI配置">
+        <>
             <div className="ai-config-container">
                 <ManagementSearchPanel
                     title={activeTab === 'pricing' ? 'AI 计费检索' : 'AI 接口检索'}
@@ -434,7 +433,7 @@ const AIConfig: React.FC = () => {
                     />
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

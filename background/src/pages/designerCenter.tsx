@@ -14,7 +14,6 @@ import {
     FiXCircle,
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getDesignerManagementDetail,
@@ -258,7 +257,7 @@ const DesignerCenter: React.FC = () => {
     };
 
     return (
-        <Layout title="设计师中心">
+        <>
             <div className="designer-center-page">
                 <ManagementSearchPanel
                     title="设计师检索与运营处理"
@@ -494,7 +493,7 @@ const DesignerCenter: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiCheck, FiX, FiImage } from 'react-icons/fi';
-import Layout from '../component/layout';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 import {
     createInspiration,
@@ -311,7 +310,7 @@ const Inspirations: React.FC = () => {
     };
 
     return (
-        <Layout title="灵感素材审核">
+        <>
             <div className="inspirations-container">
                 <div className="inspirations-stats">
                     <div className="stat-item"><span className="stat-label">总数</span><span className="stat-value">{stats.total}</span></div>
@@ -466,7 +465,7 @@ const Inspirations: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

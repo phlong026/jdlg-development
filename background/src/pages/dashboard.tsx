@@ -14,7 +14,6 @@ import {
     FiUsers,
     FiZap,
 } from 'react-icons/fi';
-import Layout from '../component/layout';
 import {
     getDashboardOverview,
     getDashboardTodos,
@@ -401,7 +400,7 @@ const Dashboard: React.FC = () => {
     }, [navigate, todos]);
 
     return (
-        <Layout title="后台总控台">
+        <>
             <div className="dashboard-page">
                 <section className={`dashboard-hero section-card ${healthStatus.tone}`}>
                     <div className="dashboard-hero-main">
@@ -690,7 +689,7 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

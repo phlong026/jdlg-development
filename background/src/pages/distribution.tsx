@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiAward, FiGift, FiRefreshCw, FiSearch, FiShare2, FiUsers } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import { getDistributionInviters, getDistributionOverview, getDistributionRewards, type DistributionInviterItem, type DistributionOverview, type DistributionRewardItem } from '../api/distribution';
 import './distribution.scss';
@@ -68,7 +67,7 @@ const Distribution: React.FC = () => {
     };
 
     return (
-        <Layout title="分销邀请中心">
+        <>
             <div className="distribution-page">
                 <ManagementSearchPanel
                     title="邀请检索与奖励追踪"
@@ -241,7 +240,7 @@ const Distribution: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

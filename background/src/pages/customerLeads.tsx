@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiActivity, FiClock, FiFileText, FiRefreshCw, FiSearch, FiUserCheck, FiX } from 'react-icons/fi';
-import Layout from '../component/layout';
 import {
     batchUpdateCustomerLeads,
     createCustomerLeadFollowup,
@@ -140,8 +139,7 @@ const getNextActionText = (lead: CustomerLeadItem | null) => {
     return '按下次跟进时间继续推进';
 };
 
-const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ embedded = false,readOnly=false }) => {
-    const Container = embedded ? React.Fragment : Layout;
+const CustomerLeads: React.FC<{ readOnly?:boolean }> = ({ readOnly=false }) => {
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
     const [funnel, setFunnel] = useState<CustomerFunnelMetric[]>([]);
     const [list, setList] = useState<CustomerLeadItem[]>([]);
@@ -305,7 +303,7 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
     };
 
     return (
-        <Container {...(embedded ? {} : { title: '客服线索工作台' })}>
+        <>
             <div className="customer-lead-page">
                 <div className="customer-lead-hero">
                     <div>
@@ -670,7 +668,7 @@ const CustomerLeads: React.FC<{ embedded?: boolean;readOnly?:boolean }> = ({ emb
                     </div>
                 ) : null}
             </div>
-        </Container>
+        </>
     );
 };
 

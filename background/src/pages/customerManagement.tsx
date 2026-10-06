@@ -1,7 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {FiUsers,FiClock,FiRefreshCw,FiSearch,FiX,FiChevronRight,FiAlertCircle} from 'react-icons/fi';
-import Layout from '../component/layout';
 import {useManagementSession} from '../component/ManagementSession';
 import {crm,CRMError,inPool,activityNames,downloadCustomers,stages,categories,intents,dateTime,type Customer,type Dashboard,type Detail,type Employee,type Filter,type CustomerPage,type Stage,type SyncState,type Account,type Attachment,lifecycleNames} from '../api/wecomCustomers';
 import CustomerLeads from './customerLeads';
@@ -44,8 +43,8 @@ export default function CustomerManagement(){
  const [selected,setSelected]=useState<string|null>(null),[refresh,setRefresh]=useState(0);
  useEffect(()=>{setSelected(null)},[tab,session.user?.id]);
  const changed=()=>setRefresh(n=>n+1);
- if(session.crmLoading)return <Layout title="客户管理"><div className="crm-loading">正在读取客户权限…</div></Layout>;
- return <Layout title="客户管理"><div className="crm-page">
+ if(session.crmLoading)return <><div className="crm-loading">正在读取客户权限…</div></>;
+ return <><div className="crm-page">
   <header className="crm-heading"><div><span className="crm-eyebrow">CUSTOMER MANAGEMENT</span><h1>{titleOf[tab]}</h1><p>{session.crmContext?.account.displayName||session.user?.username}，{supervisor?'关注团队客户与跟进进度':'查看客户需求，安排下一次联系'}</p></div><div className="crm-actions">{session.crmContext&&<button className="crm-primary" onClick={()=>setReporting(true)}>＋ 新增客户报备</button>}<button className="crm-secondary" onClick={changed}><FiRefreshCw/>刷新</button></div></header>
   <nav className="crm-tabs" aria-label="客户管理栏目">{allowed.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>go(t)}>{titleOf[t]}</button>)}</nav>
   {session.crmContext?.demo&&<div className="crm-note">演示环境 · 虚构数据 · 真实企微自动接入尚未启用</div>}
@@ -56,11 +55,11 @@ export default function CustomerManagement(){
    {tab==='notices'&&<NoticePanel key={'n'+refresh} open={setSelected}/>}
    {tab==='sync'&&supervisor&&<><SyncPanel key={'s'+refresh}/><PushStatus key={'p'+refresh}/></>}
    {tab==='access'&&platform&&<AccessPanel key={'a'+refresh}/>}
-   {tab==='leads'&&platform&&<><SourceSyncStatus key={'ss'+refresh}/><CustomerLeads embedded readOnly={!!session.crmContext}/></>}
+   {tab==='leads'&&platform&&<><SourceSyncStatus key={'ss'+refresh}/><CustomerLeads readOnly={!!session.crmContext}/></>}
   </React.Fragment>}
   {reporting&&<div className="crm-overlay"><section className="crm-drawer" role="dialog" aria-modal="true" aria-label="新增客户报备"><header><h2>新增客户报备</h2></header><div className="crm-drawer-body"><CustomerReportForm cancel={()=>setReporting(false)} saved={c=>{setReporting(false);changed();setSelected(c.id)}}/></div></section></div>}
   {selected&&!reporting&&<CustomerDrawer id={selected} supervisor={supervisor} close={()=>setSelected(null)} changed={changed}/>}
- </div></Layout>;
+ </div></>;
 }
 
 function Home({supervisor,open,go}:{supervisor:boolean;open:(id:string)=>void;go:(tab:string,queue?:string)=>void}){

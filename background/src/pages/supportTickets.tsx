@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertCircle, FiClipboard, FiRefreshCw, FiSearch, FiTool } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     assignSupportTicket,
@@ -277,7 +276,7 @@ const SupportTickets: React.FC = () => {
     const detailSourceSummaryItems = getSourceSummaryItems(detail);
 
     return (
-        <Layout title="异常工单中心">
+        <>
             <div className="support-ticket-page">
                 <ManagementSearchPanel
                     title="工单检索与异常处理"
@@ -548,7 +547,7 @@ const SupportTickets: React.FC = () => {
                     </div>
                 ) : null}
             </div>
-        </Layout>
+        </>
     );
 };
 

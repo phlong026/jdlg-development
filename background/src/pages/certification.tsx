@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiEye, FiCheck, FiX, FiRefreshCw, FiSearch } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getCertificationList,
@@ -177,7 +176,7 @@ const Certification: React.FC = () => {
     }, [list]);
 
     return (
-        <Layout title="资质认证与审核">
+        <>
             <div className="certification-container">
                 <ManagementSearchPanel
                     title="认证申请检索与审核处理"
@@ -551,7 +550,7 @@ const Certification: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

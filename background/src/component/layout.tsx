@@ -1,33 +1,38 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import type { PageLoadFailure } from '../utils/pageLoadError';
 import Sidebar from './sidebar';
 import Topbar from './topbar';
-import Bookmark, { useBookmark } from './bookmark';
+import { routes } from '../routes';
 import './layout.scss';
 
-interface LayoutProps {
-    title?: string;
-    children: React.ReactNode;
-}
-
-const Layout: React.FC<LayoutProps> = ({ title = '管理后台', children }) => {
+/**
+ * 路由层的统一布局：侧栏、顶栏只挂载一次，页面通过 <Outlet /> 渲染在内容区。
+ * 以前每个页面各自包一层 <Layout>，每次跳转都会重建侧栏与顶栏（并重复请求 /me）。
+ *
+ * 必须保持的约定（24 个 scss 依赖它们）：
+ *   - 内容区类名 .layout-content，且 data-admin-page 等于当前路径；
+ *   - 内容区内的 <table> 由下面的 MutationObserver 统一加上横向滚动提示。
+ */
+const AdminLayout: React.FC = () => {
     const { pathname } = useLocation();
     const [loadFailure, setLoadFailure] = useState('');
     const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
     const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
     const contentRef = useRef<HTMLDivElement>(null);
-    const { refreshKey } = useBookmark();
+    const current = routes.find((route) => route.path === pathname);
 
     useEffect(() => {
         setLoadFailure('');
+        // 内容区现在是同一个元素：切换页面时要手动回到顶部（以前每页重建，天然从顶部开始）
+        contentRef.current?.scrollTo({ top: 0 });
         const report = (event: Event) => {
             const detail = (event as CustomEvent<PageLoadFailure>).detail;
             if (detail?.path === window.location.pathname) setLoadFailure(detail.message);
         };
         window.addEventListener('admin-page-load-error', report);
         return () => window.removeEventListener('admin-page-load-error', report);
-    }, [pathname, refreshKey]);
+    }, [pathname]);
 
     useEffect(() => {
         const query = window.matchMedia('(max-width: 1024px)');
@@ -78,10 +83,11 @@ const Layout: React.FC<LayoutProps> = ({ title = '管理后台', children }) => 
             });
         };
         syncTables();
+        // 内容区是同一个节点，页面切换时靠子树变化触发重新同步
         const observer = new MutationObserver(scheduleSync);
         observer.observe(root, { childList: true, subtree: true });
         return () => { observer.disconnect(); resizeObserver.disconnect(); cancelAnimationFrame(frame); };
-    }, [refreshKey]);
+    }, []);
 
     useEffect(() => {
         if (!isMobile || collapsed) return;
@@ -106,15 +112,14 @@ const Layout: React.FC<LayoutProps> = ({ title = '管理后台', children }) => 
             <Sidebar collapsed={collapsed} mobile={isMobile} onNavigate={handleSidebarNavigate} />
             {isMobile && !collapsed ? <button className="layout-overlay" type="button" onClick={handleToggleSidebar} aria-label="关闭侧边栏" /> : null}
             <div className="layout-main" {...(isMobile && !collapsed ? { inert: '' } : {})}>
-                <Topbar title={title} collapsed={collapsed} onToggleSidebar={handleToggleSidebar} />
-                <Bookmark />
-                <div className="layout-content" data-admin-page={pathname} key={refreshKey} ref={contentRef}>
+                <Topbar title={current?.title} icon={current?.icon} collapsed={collapsed} onToggleSidebar={handleToggleSidebar} />
+                <div className="layout-content" data-admin-page={pathname} ref={contentRef}>
                     {loadFailure && <div className="page-load-error" role="alert"><div><strong>页面数据未能加载</strong><p>{loadFailure}</p><small>下方仅显示页面结构，统计值和空列表不代表实际业务数据。</small></div><button type="button" onClick={() => window.location.reload()}>重新加载</button></div>}
-                    {children}
+                    <Outlet />
                 </div>
             </div>
         </div>
     );
 };
 
-export default Layout;
+export default AdminLayout;

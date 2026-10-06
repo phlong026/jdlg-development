@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Layout from '../component/layout';
 import {
     backfillAITaskModels,
     createAITaskSupportTicket,
@@ -373,7 +372,7 @@ const AITaskCenter: React.FC = () => {
     };
 
     return (
-        <Layout title="AI任务中心">
+        <>
             <div className="ai-task-center-container">
                 <div className="task-tabs">
                     <button className={`tab-button ${activeTab === 'image' ? 'active' : ''}`} onClick={() => handleTabChange('image')}>图片任务</button>
@@ -699,7 +698,7 @@ const AITaskCenter: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

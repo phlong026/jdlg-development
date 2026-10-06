@@ -1,6 +1,5 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
-import Layout from '../component/layout';
 import {
     getMembershipPlanList,
     getMembershipPlan,
@@ -125,7 +124,7 @@ const MembershipPlans: React.FC = () => {
     };
 
     return (
-        <Layout title="会员计划">
+        <>
             <div className="membership-plans-container">
                 <div className="config-toolbar">
                     <div className="toolbar-left">
@@ -306,7 +305,7 @@ const MembershipPlans: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

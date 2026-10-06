@@ -1,45 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FiMenu,
     FiLogOut,
     FiMonitor,
 } from 'react-icons/fi';
-import { logout, getMe } from '../api/auth';
-import { useBookmark } from './bookmark';
+import type { FeatherIcon } from '../compat/react-icons-fi';
+import { logout } from '../api/auth';
+import { useManagementSession } from './ManagementSession';
 import './topbar.scss';
 
 interface TopbarProps {
     title?: string;
+    icon?: FeatherIcon;
     collapsed?: boolean;
     onToggleSidebar?: () => void;
 }
 
-const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', collapsed = false, onToggleSidebar }) => {
+const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', icon, collapsed = false, onToggleSidebar }) => {
     const navigate = useNavigate();
-    const [username, setUsername] = useState('管理员');
+    const session = useManagementSession();
     const [showUserMenu, setShowUserMenu] = useState(false);
 
-    // 获取当前激活的书签（Topbar 在 BookmarkProvider 内部，可以直接使用）
-    const { getActiveBookmark } = useBookmark();
-    const activeBookmark = getActiveBookmark();
-
-    // 根据当前激活的书签或路径确定显示的标题和图标
-    const displayTitle = activeBookmark?.title || title;
-    const DisplayIcon = activeBookmark?.icon || FiMonitor;
-
-    useEffect(() => {
-        // 加载用户信息
-        const loadUserInfo = async () => {
-            try {
-                const user = await getMe();
-                setUsername(user.username || '管理员');
-            } catch (error) {
-                console.error('获取用户信息失败:', error);
-            }
-        };
-        loadUserInfo();
-    }, []);
+    // 用户名直接取会话上下文：不再每次导航重复请求 /me
+    const username = session.user?.username || '管理员';
+    const DisplayIcon = icon || FiMonitor;
 
     const handleLogout = async () => {
         try {
@@ -62,7 +47,7 @@ const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', collapsed = fal
                 )}
                 <h1 className="topbar-title">
                     <DisplayIcon className="topbar-title-icon" />
-                    <span>{displayTitle}</span>
+                    <span>{title}</span>
                 </h1>
             </div>
             <div className="topbar-right">

@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiFileText, FiHelpCircle, FiVideo } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getUtilityToolList,
@@ -215,7 +214,7 @@ const UtilityTools: React.FC = () => {
     };
 
     return (
-        <Layout title="实用工具管理">
+        <>
             <div className="utility-tools-container">
                 <ManagementSearchPanel
                     title="实用工具检索与内容维护"
@@ -398,7 +397,7 @@ const UtilityTools: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

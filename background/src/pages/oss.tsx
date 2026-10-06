@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiSearch, FiUpload, FiTrash2, FiDownload, FiEye, FiRefreshCw, FiX } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 import './oss.scss';
@@ -216,7 +215,7 @@ const OSS: React.FC = () => {
     };
 
     return (
-        <Layout title="OSS管理">
+        <>
             <div className="oss-container">
                 <ManagementSearchPanel
                     title="OSS 文件检索与资产管理"
@@ -463,7 +462,7 @@ const OSS: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

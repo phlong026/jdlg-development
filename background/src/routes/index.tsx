@@ -17,7 +17,6 @@ import {
     FiShield,
     FiBarChart2,
 } from 'react-icons/fi';
-import ProtectedRoute from '../component/ProtectedRoute';
 
 const Login = lazy(() => import('../pages/login'));
 const Dashboard = lazy(() => import('../pages/dashboard'));
@@ -61,7 +60,7 @@ export interface AppRoute {
 }
 
 export const routes: AppRoute[] = [
-    { path: '/customer-management', title: '客户管理', element: withSuspense(<ProtectedRoute><CustomerManagement /></ProtectedRoute>), icon: FiUsers },
+    { path: '/customer-management', title: '客户管理', element: withSuspense(<CustomerManagement />), icon: FiUsers },
     {
         path: '/login',
         title: '登录',
@@ -71,145 +70,145 @@ export const routes: AppRoute[] = [
     {
         path: '/dashboard',
         title: '后台总控台',
-        element: withSuspense(<ProtectedRoute><Dashboard /></ProtectedRoute>),
+        element: withSuspense(<Dashboard />),
         icon: FiHome,
     },
     {
         path: '/users',
         title: '用户管理',
-        element: withSuspense(<ProtectedRoute><Users /></ProtectedRoute>),
+        element: withSuspense(<Users />),
         icon: FiUsers,
     },
     {
         path: '/user-workbench',
         title: '用户360工作台',
-        element: withSuspense(<ProtectedRoute><UserWorkbench /></ProtectedRoute>),
+        element: withSuspense(<UserWorkbench />),
         icon: FiCompass,
     },
     {
         path: '/designer-center',
         title: '设计师中心',
-        element: withSuspense(<ProtectedRoute><DesignerCenter /></ProtectedRoute>),
+        element: withSuspense(<DesignerCenter />),
         icon: FiUsers,
     },
     {
         path: '/certification',
         title: '资质认证与审核',
-        element: withSuspense(<ProtectedRoute><Certification /></ProtectedRoute>),
+        element: withSuspense(<Certification />),
         icon: FiUserCheck,
     },
     {
         path: '/logs',
         title: '日志管理',
-        element: withSuspense(<ProtectedRoute><Logs /></ProtectedRoute>),
+        element: withSuspense(<Logs />),
         icon: FiFileText,
     },
     {
         path: '/distribution',
         title: '分销邀请中心',
-        element: withSuspense(<ProtectedRoute><Distribution /></ProtectedRoute>),
+        element: withSuspense(<Distribution />),
         icon: FiShare2,
     },
     {
         path: '/content-analytics',
         title: '内容运营分析',
-        element: withSuspense(<ProtectedRoute><ContentAnalytics /></ProtectedRoute>),
+        element: withSuspense(<ContentAnalytics />),
         icon: FiActivity,
     },
     {
         path: '/risk-control',
         title: '风控台',
-        element: withSuspense(<ProtectedRoute><RiskControl /></ProtectedRoute>),
+        element: withSuspense(<RiskControl />),
         icon: FiShield,
     },
     {
         path: '/support-tickets',
         title: '异常工单中心',
-        element: withSuspense(<ProtectedRoute><SupportTickets /></ProtectedRoute>),
+        element: withSuspense(<SupportTickets />),
         icon: FiFileText,
     },
     {
         path: '/customer-leads',
         title: '客服线索工作台',
-        element: withSuspense(<ProtectedRoute><CustomerLeads /></ProtectedRoute>),
+        element: withSuspense(<CustomerLeads />),
         icon: FiFileText,
     },
     {
         path: '/report-center',
         title: '报表导出中心',
-        element: withSuspense(<ProtectedRoute><ReportCenter /></ProtectedRoute>),
+        element: withSuspense(<ReportCenter />),
         icon: FiBarChart2,
     },
     {
         path: '/ai-tasks',
         title: 'AI任务中心',
-        element: withSuspense(<ProtectedRoute><AITaskCenter /></ProtectedRoute>),
+        element: withSuspense(<AITaskCenter />),
         icon: FiActivity,
     },
     {
         path: '/ai-config',
         title: 'AI配置',
-        element: withSuspense(<ProtectedRoute><AIConfig /></ProtectedRoute>),
+        element: withSuspense(<AIConfig />),
         icon: FiSettings,
     },
     {
         path: '/oss',
         title: 'OSS管理',
-        element: withSuspense(<ProtectedRoute><OSS /></ProtectedRoute>),
+        element: withSuspense(<OSS />),
         icon: FiCloud,
     },
     {
         path: '/templates',
         title: '模板广场管理',
-        element: withSuspense(<ProtectedRoute><Templates /></ProtectedRoute>),
+        element: withSuspense(<Templates />),
         icon: FiLayers,
     },
     {
         path: '/inspirations',
         title: '灵感素材审核',
-        element: withSuspense(<ProtectedRoute><Inspirations /></ProtectedRoute>),
+        element: withSuspense(<Inspirations />),
         icon: FiImage,
     },
     {
         path: '/recharge',
         title: '订单中心',
-        element: withSuspense(<ProtectedRoute><OrderCenter /></ProtectedRoute>),
+        element: withSuspense(<OrderCenter />),
         icon: FiDollarSign,
     },
     {
         path: '/virtualpay',
         title: '虚拟支付监控',
-        element: withSuspense(<ProtectedRoute><VirtualPay /></ProtectedRoute>),
+        element: withSuspense(<VirtualPay />),
         icon: FiDollarSign,
     },
     {
         path: '/utility-tools',
         title: '实用工具管理',
-        element: withSuspense(<ProtectedRoute><UtilityTools /></ProtectedRoute>),
+        element: withSuspense(<UtilityTools />),
         icon: FiFileText,
     },
     {
         path: '/ai-tools',
         title: 'AI工具管理',
-        element: withSuspense(<ProtectedRoute><AITools /></ProtectedRoute>),
+        element: withSuspense(<AITools />),
         icon: FiLayers,
     },
     {
         path: '/recharge-config',
         title: '充值配置',
-        element: withSuspense(<ProtectedRoute><RechargeConfig /></ProtectedRoute>),
+        element: withSuspense(<RechargeConfig />),
         icon: FiDollarSign,
     },
     {
         path: '/membership-plans',
         title: '会员计划',
-        element: withSuspense(<ProtectedRoute><MembershipPlans /></ProtectedRoute>),
+        element: withSuspense(<MembershipPlans />),
         icon: FiDollarSign,
     },
     {
         path: '/membership-operations',
         title: '用户会员运营',
-        element: withSuspense(<ProtectedRoute><MembershipOperations /></ProtectedRoute>),
+        element: withSuspense(<MembershipOperations />),
         icon: FiUserCheck,
     },
 ];

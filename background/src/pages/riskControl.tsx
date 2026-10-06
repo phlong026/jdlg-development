@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertTriangle, FiCpu, FiRefreshCw, FiRepeat, FiSearch, FiShield } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getRiskControlAlerts,
@@ -101,7 +100,7 @@ const RiskControl: React.FC = () => {
     };
 
     return (
-        <Layout title="风控台">
+        <>
             <div className="risk-control-page">
                 <ManagementSearchPanel
                     title="风险检索与异常排查"
@@ -375,7 +374,7 @@ const RiskControl: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

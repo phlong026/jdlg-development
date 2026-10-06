@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
-import Layout from '../component/layout';
 import {
     getVirtualPayHealth,
     getXPayLogs,
@@ -75,7 +74,7 @@ const VirtualPay: React.FC = () => {
     };
 
     return (
-        <Layout title="虚拟支付监控">
+        <>
             <div className="virtual-pay-container">
                 <div className="virtual-pay-toolbar">
                     <div>
@@ -174,7 +173,7 @@ const VirtualPay: React.FC = () => {
                     <button className="btn-secondary" disabled={loading || page >= totalPages} onClick={() => void loadData(page + 1)}>下一页</button>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

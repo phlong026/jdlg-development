@@ -14,7 +14,6 @@ import {
     FiUser,
     FiZap,
 } from 'react-icons/fi';
-import Layout from '../component/layout';
 import {
     adjustUserStones,
     getUserDetail,
@@ -620,7 +619,7 @@ const UserWorkbench: React.FC = () => {
     }, [navigate, workbenchSummary]);
 
     return (
-        <Layout title="用户360工作台">
+        <>
             <div className="user-workbench-page">
                 <div className="workbench-breadcrumb-row">
                     <button className="link-button" onClick={() => navigate('/users')}>返回用户列表</button>
@@ -1429,7 +1428,7 @@ const UserWorkbench: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

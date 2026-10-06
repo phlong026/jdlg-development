@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiSearch, FiSettings, FiX, FiRefreshCw } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 import './logs.scss';
@@ -149,7 +148,7 @@ const Logs: React.FC = () => {
     };
 
     return (
-        <Layout title="日志管理">
+        <>
             <div className="logs-container">
                 <ManagementSearchPanel
                     title="日志检索与配置"
@@ -374,7 +373,7 @@ const Logs: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

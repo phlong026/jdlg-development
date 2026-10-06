@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Layout from '../component/layout';
 import { createOrderSupportTicket, getOrderDetail, getOrderList, refundVirtualPayOrder, type OrderDetail, type OrderListItem, type OrderListParams, type OrderSummary } from '../api/orders';
 import './orderCenter.scss';
 
@@ -292,7 +291,7 @@ const OrderCenter: React.FC = () => {
     };
 
     return (
-        <Layout title="订单中心">
+        <>
             <div className="order-center-container">
                 <div className="order-center-toolbar">
                     <div className="toolbar-left">
@@ -600,7 +599,7 @@ const OrderCenter: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

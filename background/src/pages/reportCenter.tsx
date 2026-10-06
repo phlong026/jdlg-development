@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiBarChart2, FiDownload, FiRefreshCw } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import { getReportCenterExportUrl, getReportCenterOverview, getReportCenterReport, type ReportCenterOverview } from '../api/reportCenter';
 import './reportCenter.scss';
@@ -84,7 +83,7 @@ const ReportCenter: React.FC = () => {
     const currentPeriodLabel = periodOptions.find((item) => item.value === period)?.label || period;
 
     return (
-        <Layout title="报表导出中心">
+        <>
             <div className="report-center-page">
                 <ManagementSearchPanel
                     title="报表筛选与导出"
@@ -167,7 +166,7 @@ const ReportCenter: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

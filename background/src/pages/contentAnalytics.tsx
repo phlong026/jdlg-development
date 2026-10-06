@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiActivity, FiClock, FiDownload, FiRefreshCw, FiSearch, FiTrendingDown, FiTrendingUp } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getContentAnalyticsDownloadRanking,
@@ -189,7 +188,7 @@ const ContentAnalytics: React.FC = () => {
     );
 
     return (
-        <Layout title="内容运营分析">
+        <>
             <div className="content-analytics-page">
                 <ManagementSearchPanel
                     title="模板检索与内容分析"
@@ -342,7 +341,7 @@ const ContentAnalytics: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

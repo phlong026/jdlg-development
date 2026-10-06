@@ -2,7 +2,6 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle, FiClock, FiRefreshCw, FiSearch, FiShield, FiUsers } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getMembershipOperationsOverview,
@@ -124,7 +123,7 @@ const MembershipOperations: React.FC = () => {
     };
 
     return (
-        <Layout title="用户会员运营">
+        <>
             <div className="membership-operations-page">
                 <ManagementSearchPanel
                     title="会员检索与权益排查"
@@ -282,7 +281,7 @@ const MembershipOperations: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

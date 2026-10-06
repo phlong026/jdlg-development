@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 ﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiEye, FiCheck, FiX, FiFolder } from 'react-icons/fi';
-import Layout from '../component/layout';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
 import {
     getTemplateList,
@@ -861,7 +860,7 @@ const Templates: React.FC = () => {
     };
 
     return (
-        <Layout title="模板广场管理">
+        <>
             <div className="templates-container">
                 <div className="templates-toolbar section-card">
                     <div className="templates-toolbar-top">
@@ -1712,7 +1711,7 @@ const Templates: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

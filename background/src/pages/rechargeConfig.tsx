@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { FiSave, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
-import Layout from '../component/layout';
 import {
     getRechargeConfigList,
     getRechargeConfig,
@@ -117,7 +116,7 @@ const RechargeConfig: React.FC = () => {
     };
 
     return (
-        <Layout title="充值配置">
+        <>
             <div className="recharge-config-container">
                 <div className="config-toolbar">
                     <div className="toolbar-left">
@@ -395,7 +394,7 @@ const RechargeConfig: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

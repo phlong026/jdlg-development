@@ -25,7 +25,7 @@
   background: linear-gradient(180deg, #f8f6f2 0%, #f4f1ec 100%);
 }
 
-.layout-topbar, .bookmark-container { flex-shrink: 0; }
+.layout-topbar { flex-shrink: 0; }
 .layout-content > * { min-width: 0; max-width: 100%; }
 .layout-content:has(.crm-overlay, .modal-overlay, .workbench-modal-overlay) { overflow: hidden; }
 

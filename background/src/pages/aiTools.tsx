@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiLayers, FiHome, FiImage, FiCompass } from 'react-icons/fi';
-import Layout from '../component/layout';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getAIToolList,
@@ -439,7 +438,7 @@ const AITools: React.FC = () => {
     void renderToolImageField;
 
     return (
-        <Layout title="AI工具管理">
+        <>
             <div className="ai-tools-container">
                 <ManagementSearchPanel
                     title="AI 工具检索与配置维护"
@@ -856,7 +855,7 @@ const AITools: React.FC = () => {
                     </div>
                 )}
             </div>
-        </Layout>
+        </>
     );
 };
 

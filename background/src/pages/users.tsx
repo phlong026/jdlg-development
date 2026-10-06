@@ -1,7 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../component/layout';
 import {
     getUserList,
     getUserDetail,
@@ -329,7 +328,7 @@ const Users: React.FC = () => {
 
 
     return (
-        <Layout title="用户管理">
+        <>
             <div className="users-container">
                 <div className="users-toolbar section-card">
                     <div className="toolbar-top">
@@ -907,7 +906,7 @@ const Users: React.FC = () => {
                 )}
 
             </div>
-        </Layout>
+        </>
     );
 };
 
