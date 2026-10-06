@@ -406,6 +406,28 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </div>
                 </section>
 
+                {!embedded && (
+                    <nav className="customer-lead-queuebar" aria-label="线索队列">
+                        {leadQueues.map((item) => {
+                            const next = new URLSearchParams(params);
+                            next.set('queue', item.key);
+                            const count = getQueueCount(overview, item.countKey);
+                            return (
+                                <Link
+                                    key={item.key}
+                                    to={`/customer-leads?${next.toString()}`}
+                                    className={`customer-lead-queuepill ${queue === item.key ? 'active' : ''}`}
+                                    aria-current={queue === item.key ? 'page' : undefined}
+                                    title={item.help}
+                                >
+                                    {item.label}
+                                    <b className={item.alert && count > 0 ? 'is-alert' : ''}>{count}</b>
+                                </Link>
+                            );
+                        })}
+                    </nav>
+                )}
+
                 <section className="customer-lead-panel">
                     <div className="customer-lead-toolbar">
                         <div className="customer-lead-search">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiChevronRight, FiRefreshCw, FiUserCheck, FiUsers } from 'react-icons/fi';
+import { FiChevronRight, FiRefreshCw, FiTrendingUp, FiUserCheck, FiUsers } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
 import { useManagementSession } from '../component/ManagementSession';
 import './customerLeadHub.scss';
@@ -52,11 +52,6 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
     return (
         <div className="lead-hub">
             <div className="lead-hub-tiles">
-                <Link className="lead-hub-tile lead-hub-tile-lead" to="/customer-leads?queue=todo">
-                    <span>线索</span>
-                    <FiChevronRight className="lead-hub-tile-arrow" />
-                    <FiUserCheck className="lead-hub-tile-icon" aria-hidden />
-                </Link>
                 {crmEnabled && (
                     <Link className="lead-hub-tile lead-hub-tile-customer" to="/customer-management">
                         <span>客户</span>
@@ -64,6 +59,16 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                         <FiUsers className="lead-hub-tile-icon" aria-hidden />
                     </Link>
                 )}
+                <Link className="lead-hub-tile lead-hub-tile-lead is-current" to="/customer-leads?queue=todo" aria-current="page">
+                    <span>线索</span>
+                    <FiChevronRight className="lead-hub-tile-arrow" />
+                    <FiUserCheck className="lead-hub-tile-icon" aria-hidden />
+                </Link>
+                <Link className="lead-hub-tile lead-hub-tile-opportunity" to="/opportunities">
+                    <span>商机</span>
+                    <small>未启用</small>
+                    <FiTrendingUp className="lead-hub-tile-icon" aria-hidden />
+                </Link>
             </div>
 
             <section className="lead-hub-card">

@@ -72,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, mobile = false, mo
         return (
             <Link
                 key={group.id}
-                to={group.pages[0].path}
+                to={group.landing ?? group.pages[0].path}
                 aria-label={group.label}
                 aria-current={active ? 'page' : undefined}
                 title={collapsed ? group.label : group.hint}

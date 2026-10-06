@@ -227,10 +227,18 @@ func seedTemplates(db *sql.DB) error {
 
 // seedLeads 写入虚构的客服线索：同一个用户可以有多条线索，也有未关联账号的匿名线索，
 // 并覆盖各种状态 / 负责人组合，使各队列（待处理、未分配、高意向……）的数量互不相同，
-// 这样"总览数量必须等于队列列表条数"的检查才有区分度。以 SessionNo 去重，可重复执行。
+// 这样"总览数量必须等于队列列表条数"的检查才有区分度。每次执行都会先清掉上一次种下的本地线索再重建，可重复执行。
 func seedLeads(db *sql.DB, userIDs []int64) error {
 	if len(userIDs) < 3 {
 		return fmt.Errorf("至少需要 3 个小程序用户才能写入线索，当前 %d 个", len(userIDs))
+	}
+	// CreateLead 会把同一用户的开放线索合并，重复执行时按 id 更新状态会落空；
+	// 先清掉上次种下的本地线索（仅 LOCAL-S 开头的会话号，且 guardLocalOnly 已保证只写本机库）再重建，保证幂等。
+	if _, err := db.Exec(`DELETE FROM customer_lead_followups WHERE lead_id IN (SELECT id FROM customer_leads WHERE session_no LIKE 'LOCAL-S%')`); err != nil {
+		return fmt.Errorf("清理旧的本地线索跟进记录失败: %w", err)
+	}
+	if _, err := db.Exec(`DELETE FROM customer_leads WHERE session_no LIKE 'LOCAL-S%'`); err != nil {
+		return fmt.Errorf("清理旧的本地线索失败: %w", err)
 	}
 	leads := model.NewCustomerServiceModel(db)
 	type spec struct {
@@ -245,6 +253,8 @@ func seedLeads(db *sql.DB, userIDs []int64) error {
 		{input: model.CustomerLeadCreateInput{UserID: userIDs[2], Name: "黄先生", Phone: "13800000003", SessionNo: "LOCAL-S4", DemandSummary: "现代极简别墅，想了解造价"}, status: "converted", assignedTo: "sales_a"},
 		{input: model.CustomerLeadCreateInput{UserID: 0, Name: "匿名访客", SessionNo: "LOCAL-S5", DemandSummary: "随便问问"}, status: "invalid"},
 		{input: model.CustomerLeadCreateInput{UserID: userIDs[1], Name: "陈女士", Phone: "13800000002", SessionNo: "LOCAL-S6", DemandSummary: "两层闽南红砖自建房，宅基地 10 米宽 14 米深，预算 35 万，今天想电话沟通"}, status: "converted", assignedTo: "sales_b"},
+		// 仍待跟进的高意向线索：保证「高意向」队列非空，队列数量检查才有区分度
+		{input: model.CustomerLeadCreateInput{UserID: userIDs[3], Name: "吴先生", Phone: "13800000004", SessionNo: "LOCAL-S7", DemandSummary: "两层闽南红砖自建房，宅基地 11 米宽 16 米深，预算 45 万，今天想电话沟通"}},
 	}
 	for i := range specs {
 		input := specs[i].input

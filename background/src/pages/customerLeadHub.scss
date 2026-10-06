@@ -34,6 +34,12 @@
 
 .lead-hub-tile-lead { background: linear-gradient(120deg, #ff8a2a 0%, #ffb067 100%); }
 .lead-hub-tile-customer { background: linear-gradient(120deg, #2f7bff 0%, #5ba4ff 100%); }
+.lead-hub-tile-opportunity {
+    background: linear-gradient(120deg, #9aa5b1 0%, #c3cbd3 100%);
+    small { font-size: 12px; font-weight: 400; opacity: 0.9; }
+}
+// 当前所在的类别：描边高亮
+.lead-hub-tile.is-current { outline: 3px solid rgba(139, 94, 60, 0.35); outline-offset: 2px; }
 
 .lead-hub-tile-arrow { font-size: 20px; }
 

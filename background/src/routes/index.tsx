@@ -16,6 +16,7 @@ import {
     FiImage,
     FiShield,
     FiBarChart2,
+    FiTrendingUp,
 } from 'react-icons/fi';
 
 const Login = lazy(() => import('../pages/login'));
@@ -28,6 +29,7 @@ const ContentAnalytics = lazy(() => import('../pages/contentAnalytics'));
 const RiskControl = lazy(() => import('../pages/riskControl'));
 const SupportTickets = lazy(() => import('../pages/supportTickets'));
 const CustomerLeads = lazy(() => import('../pages/customerLeads'));
+const Opportunities = lazy(() => import('../pages/opportunities'));
 const CustomerManagement = lazy(() => import('../pages/customerManagement'));
 const ReportCenter = lazy(() => import('../pages/reportCenter'));
 const AITaskCenter = lazy(() => import('../pages/aiTaskCenter'));
@@ -132,6 +134,12 @@ export const routes: AppRoute[] = [
         title: '销售线索',
         element: withSuspense(<CustomerLeads />),
         icon: FiFileText,
+    },
+    {
+        path: '/opportunities',
+        title: '商机',
+        element: withSuspense(<Opportunities />),
+        icon: FiTrendingUp,
     },
     {
         path: '/report-center',

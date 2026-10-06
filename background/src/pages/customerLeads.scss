@@ -73,6 +73,48 @@
     &:hover { text-decoration: underline; }
 }
 
+// 线索队列筛选条（单独打开时放在列表上方，取代原来顶部的 Tab）
+.customer-lead-queuebar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.customer-lead-queuepill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid #e0d2bf;
+    border-radius: 999px;
+    background: #fff;
+    color: #5b4a3b;
+    font-size: 14px;
+    text-decoration: none;
+
+    b {
+        min-width: 22px;
+        padding: 0 6px;
+        border-radius: 11px;
+        background: #f1ebe2;
+        color: #5b4a3b;
+        font-size: 12px;
+        line-height: 22px;
+        text-align: center;
+
+        &.is-alert { background: #c2410c; color: #fff; }
+    }
+
+    &:hover { border-color: #8b5e3c; }
+
+    &.active {
+        border-color: #8b5e3c;
+        background: #f0e1cf;
+        color: #7a5335;
+        font-weight: 600;
+    }
+}
+
 .customer-lead-queues {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
