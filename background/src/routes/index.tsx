@@ -75,7 +75,7 @@ export const routes: AppRoute[] = [
     },
     {
         path: '/users',
-        title: '用户管理',
+        title: '用户账号',
         element: withSuspense(<Users />),
         icon: FiUsers,
     },

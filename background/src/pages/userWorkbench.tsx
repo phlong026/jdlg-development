@@ -643,10 +643,10 @@ const UserWorkbench: React.FC = () => {
                         </div>
                         <div className="entry-guidance-content">
                             <h3>用户360是单用户处理页，不是后台找人首页</h3>
-                            <p>推荐你从“后台总控台”的异常队列，或者“用户管理”列表点击某个用户进入。只有临时快速找人时，才使用下面的辅助搜索。</p>
+                            <p>推荐你从“后台总控台”的异常队列，或者“用户账号”列表点击某个用户进入。只有临时快速找人时，才使用下面的辅助搜索。</p>
                             <div className="entry-guidance-actions">
                                 <button className="btn-secondary" onClick={() => navigate('/dashboard')}>返回总控台</button>
-                                <button className="btn-primary" onClick={() => navigate('/users')}>进入用户管理</button>
+                                <button className="btn-primary" onClick={() => navigate('/users')}>进入用户账号</button>
                             </div>
                         </div>
                     </div>
@@ -719,7 +719,7 @@ const UserWorkbench: React.FC = () => {
                 {!selectedUser ? (
                     <div className="section-card empty-panel compact-empty-panel">
                         <h3>还没有进入具体用户</h3>
-                        <p>你可以返回总控台看待处理队列，或回到用户管理列表点击某个用户进入用户360。</p>
+                        <p>你可以返回总控台看待处理队列，或回到用户账号列表点击某个用户进入用户360。</p>
                     </div>
                 ) : (
                     <>

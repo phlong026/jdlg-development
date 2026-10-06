@@ -546,7 +546,8 @@ def browser_checks():
             all_rows = pg.locator(".layout-content tbody tr").count()
             pg.locator(".layout-subnav .subnav-tab", has_text="高意向").click()
             pg.wait_for_url(re.compile(r".*queue=high$"), timeout=10000)
-            pg.wait_for_load_state("networkidle")
+            # URL 先变、列表后刷新：等行数真正变化再断言（否则会读到上一个队列的旧列表）
+            pg.wait_for_function(f"document.querySelectorAll('.layout-content tbody tr').length < {all_rows}", timeout=8000)
             high_rows = pg.locator(".layout-content tbody tr").count()
             assert 0 < high_rows < all_rows, f"高意向 {high_rows} 条应少于全部 {all_rows} 条"
             assert pg.locator(".customer-lead-queues").count() == 0, "单独打开时队列已移到子导航条，页内不应再重复显示"
