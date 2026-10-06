@@ -1,6 +1,6 @@
 // 后台导航的单一数据源。
-// 侧栏渲染、可见性判断都读这里；页面网址保持不变（24 个 scss 以旧网址限定样式作用域，
-// 网址一改页面会整页失去样式——见 scripts/check-routes.mjs）。
+// 新导航（分组 + 子导航条）、旧导航（平铺分组，灰度回退用）与 ⌘K 页面搜索都读这里；
+// 页面网址保持不变（24 个 scss 以旧网址限定样式作用域，网址一改页面会整页失去样式——见 scripts/check-routes.mjs）。
 import type { ComponentType } from 'react';
 import {
     FiHome,
@@ -90,4 +90,133 @@ export const customerSection: NavSection = {
 export function visibleSections(scope: string | undefined, crmEnabled: boolean | undefined): NavSection[] {
     if (scope !== 'platform_admin') return [customerSection];
     return crmEnabled ? [platformSections[0], customerSection, ...platformSections.slice(1)] : platformSections;
+}
+
+/* ───────────────────────── 新导航：8 个分组 + 子导航条 ───────────────────────── */
+
+export interface NavPage {
+    path: string;
+    label: string;
+}
+
+export interface NavGroup {
+    id: string;
+    label: string;
+    icon: ComponentType<{ className?: string }>;
+    /** 分组内的页面；第一个是点击侧栏时进入的落地页，多于一个时在子导航条里显示为 Tab */
+    pages: NavPage[];
+    /** 属于该分组、但不出现在 Tab 里的页面（例如用户 360 是从用户列表点进去的详情页） */
+    related?: NavPage[];
+    /** 低频的"二级页"：不占侧栏，从分组页右侧的入口进入 */
+    secondary?: { label: string; pages: NavPage[] };
+    /** 固定在侧栏底部 */
+    pinned?: boolean;
+}
+
+export const navGroups: NavGroup[] = [
+    { id: 'dashboard', label: '工作台', icon: FiHome, pages: [{ path: '/dashboard', label: '后台总控台' }] },
+    {
+        id: 'users', label: '用户与设计师', icon: FiUsers,
+        pages: [
+            { path: '/users', label: '用户列表' },
+            { path: '/designer-center', label: '设计师' },
+            { path: '/certification', label: '认证审核' },
+            { path: '/membership-operations', label: '会员运营' },
+        ],
+        related: [{ path: '/user-workbench', label: '用户360工作台' }],
+    },
+    {
+        id: 'orders', label: '订单与支付', icon: FiDollarSign,
+        pages: [
+            { path: '/recharge', label: '订单中心' },
+            { path: '/virtualpay', label: '虚拟支付监控' },
+        ],
+        secondary: {
+            label: '支付与会员配置',
+            pages: [
+                { path: '/recharge-config', label: '充值配置' },
+                { path: '/membership-plans', label: '会员计划' },
+            ],
+        },
+    },
+    {
+        id: 'ai', label: 'AI 运营', icon: FiActivity,
+        pages: [
+            { path: '/ai-tasks', label: 'AI 任务中心' },
+            { path: '/ai-tools', label: 'AI 工具管理' },
+        ],
+    },
+    {
+        id: 'content', label: '内容运营', icon: FiLayers,
+        pages: [
+            { path: '/templates', label: '模板广场' },
+            { path: '/inspirations', label: '灵感素材' },
+            { path: '/utility-tools', label: '实用工具' },
+            { path: '/content-analytics', label: '内容分析' },
+        ],
+    },
+    {
+        id: 'support', label: '客户与工单', icon: FiFileText,
+        pages: [
+            { path: '/support-tickets', label: '异常工单' },
+            { path: '/customer-leads', label: '客服线索' },
+        ],
+    },
+    { id: 'crm', label: '客户管理', icon: FiUsers, pages: [{ path: '/customer-management', label: '客户管理工作台' }] },
+    {
+        id: 'growth', label: '风控与增长', icon: FiShield,
+        pages: [
+            { path: '/risk-control', label: '风控台' },
+            { path: '/distribution', label: '分销邀请' },
+            { path: '/report-center', label: '报表导出' },
+        ],
+    },
+    {
+        id: 'settings', label: '系统设置', icon: FiSettings, pinned: true,
+        pages: [
+            { path: '/ai-config', label: 'AI 配置' },
+            { path: '/oss', label: 'OSS 管理' },
+            { path: '/logs', label: '日志管理' },
+        ],
+    },
+];
+
+/**
+ * 当前账号可见的新导航分组。
+ * - 非 platform_admin（含 scope 缺失）：只有客户管理（fail-closed，与旧导航一致）；
+ * - platform_admin：未启用 CRM 时不显示"客户管理"；启用 CRM 后"客服线索"已嵌在客户管理里，从 Tab 中去掉。
+ */
+export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
+    const crm = navGroups.find((g) => g.id === 'crm')!;
+    if (scope !== 'platform_admin') return [crm];
+    return navGroups
+        .filter((g) => g.id !== 'crm' || crmEnabled)
+        .map((g) => (g.id === 'support' && crmEnabled ? { ...g, pages: g.pages.filter((p) => p.path !== '/customer-leads') } : g));
+}
+
+export interface NavLocation {
+    group: NavGroup;
+    page: NavPage;
+    /** 是否位于该分组的二级页（如充值配置、会员计划） */
+    inSecondary: boolean;
+}
+
+/** 根据当前路径找到所属分组；不在任何分组里返回 undefined。 */
+export function locate(pathname: string, groups: NavGroup[] = navGroups): NavLocation | undefined {
+    for (const group of groups) {
+        const page = group.pages.find((p) => p.path === pathname) ?? group.related?.find((p) => p.path === pathname);
+        if (page) return { group, page, inSecondary: false };
+        const secondary = group.secondary?.pages.find((p) => p.path === pathname);
+        if (secondary) return { group, page: secondary, inSecondary: true };
+    }
+    return undefined;
+}
+
+/** ⌘K 页面搜索的条目：当前账号可见的所有页面，含二级页与关联页。 */
+export function searchablePages(groups: NavGroup[]): { path: string; label: string; group: string }[] {
+    return groups.flatMap((g) => [
+        ...g.pages.map((p) => ({ path: p.path, label: p.label, group: g.label })),
+        ...(g.related ?? []).map((p) => ({ path: p.path, label: p.label, group: g.label })),
+        ...(g.secondary?.pages ?? []).map((p) => ({ path: p.path, label: p.label, group: `${g.label} › ${g.secondary!.label}` })),
+    ]);
 }

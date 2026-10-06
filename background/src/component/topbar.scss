@@ -219,3 +219,34 @@
     color: #6b7280;
   }
 }
+
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 190px;
+  padding: 0 10px;
+  border: 1px solid #e0d2bf;
+  border-radius: 10px;
+  background: #fcfaf7;
+  color: #8a6f55;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { border-color: #8b5e3c; color: #7a5335; }
+
+  .topbar-search-text { flex: 1; text-align: left; }
+
+  kbd {
+    font: 11px/1 ui-monospace, Menlo, monospace;
+    padding: 3px 6px;
+    border: 1px solid #e0d2bf;
+    border-radius: 6px;
+    background: #fff;
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar-search { min-width: 0; padding: 0 9px; .topbar-search-text, kbd { display: none; } }
+}

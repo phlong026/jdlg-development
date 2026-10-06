@@ -84,6 +84,18 @@ for (const rel of ['component/navConfig.ts', 'component/sidebar.tsx']) {
   }
 }
 
+// 5. 新导航覆盖：除登录页外，每个路由都必须归属某个分组，否则页面会从导航里消失
+const navFileText = fs.existsSync(path.join(SRC, 'component/navConfig.ts')) ? read(path.join(SRC, 'component/navConfig.ts')) : '';
+const groupsBlock = navFileText.slice(navFileText.indexOf('export const navGroups'), navFileText.indexOf('export function visibleGroups'));
+if (groupsBlock.length > 0) {
+  const grouped = new Set([...groupsBlock.matchAll(/\bpath:\s*'(\/[^']*)'/g)].map((m) => m[1]));
+  for (const route of routes) {
+    if (route !== '/login' && !grouped.has(route)) {
+      problems.push(`[导航覆盖] 路由 ${route} 不属于 navConfig.ts 的任何分组，页面将无法从导航进入`);
+    }
+  }
+}
+
 console.log(`路由 ${routes.size} 条；已检查跳转字面量 ${checked} 处；样式作用域 ${scoped} 处；导航条目 ${navEntries} 个`);
 if (problems.length) {
   console.error(`\n发现 ${problems.length} 个问题：`);

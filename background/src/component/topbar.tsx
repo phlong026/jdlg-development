@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FiMenu,
+    FiSearch,
     FiLogOut,
     FiMonitor,
 } from 'react-icons/fi';
@@ -15,9 +16,10 @@ interface TopbarProps {
     icon?: FeatherIcon;
     collapsed?: boolean;
     onToggleSidebar?: () => void;
+    onSearch?: () => void;
 }
 
-const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', icon, collapsed = false, onToggleSidebar }) => {
+const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', icon, collapsed = false, onToggleSidebar, onSearch }) => {
     const navigate = useNavigate();
     const session = useManagementSession();
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -51,6 +53,13 @@ const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', icon, collapsed
                 </h1>
             </div>
             <div className="topbar-right">
+                {onSearch && (
+                    <button className="topbar-search" type="button" onClick={onSearch} aria-label="搜索页面（Ctrl/⌘ K）">
+                        <FiSearch />
+                        <span className="topbar-search-text">搜索页面</span>
+                        <kbd>⌘K</kbd>
+                    </button>
+                )}
                 <div className="topbar-user" onClick={() => setShowUserMenu(!showUserMenu)}>
                     <div className="topbar-avatar">{username[0]?.toUpperCase() || 'A'}</div>
                     <span className="topbar-username">{username}</span>

@@ -3,6 +3,11 @@ import { Outlet, useLocation } from 'react-router-dom';
 import type { PageLoadFailure } from '../utils/pageLoadError';
 import Sidebar from './sidebar';
 import Topbar from './topbar';
+import SubNav from './SubNav';
+import CommandPalette from './CommandPalette';
+import { useManagementSession } from './ManagementSession';
+import { locate, searchablePages, visibleGroups } from './navConfig';
+import { readNavMode, saveNavMode, type NavMode } from './navMode';
 import { routes } from '../routes';
 import './layout.scss';
 
@@ -21,6 +26,29 @@ const AdminLayout: React.FC = () => {
     const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
     const contentRef = useRef<HTMLDivElement>(null);
     const current = routes.find((route) => route.path === pathname);
+    const session = useManagementSession();
+    const [navMode, setNavMode] = useState<NavMode>(readNavMode);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const groups = visibleGroups(session.user?.scope, session.user?.crmEnabled);
+    const where = locate(pathname);
+    const subnavGroup = where ? groups.find((g) => g.id === where.group.id) : undefined;
+
+    const toggleNavMode = () => {
+        const next: NavMode = navMode === 'new' ? 'old' : 'new';
+        saveNavMode(next);
+        setNavMode(next);
+    };
+
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                setSearchOpen((open) => !open);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
 
     useEffect(() => {
         setLoadFailure('');
@@ -109,15 +137,17 @@ const AdminLayout: React.FC = () => {
 
     return (
         <div className="layout-container">
-            <Sidebar collapsed={collapsed} mobile={isMobile} onNavigate={handleSidebarNavigate} />
+            <Sidebar collapsed={collapsed} mobile={isMobile} mode={navMode} onNavigate={handleSidebarNavigate} onToggleMode={toggleNavMode} />
             {isMobile && !collapsed ? <button className="layout-overlay" type="button" onClick={handleToggleSidebar} aria-label="关闭侧边栏" /> : null}
             <div className="layout-main" {...(isMobile && !collapsed ? { inert: '' } : {})}>
-                <Topbar title={current?.title} icon={current?.icon} collapsed={collapsed} onToggleSidebar={handleToggleSidebar} />
+                <Topbar title={current?.title} icon={current?.icon} collapsed={collapsed} onToggleSidebar={handleToggleSidebar} onSearch={() => setSearchOpen(true)} />
+                {navMode === 'new' && where && subnavGroup ? <SubNav group={subnavGroup} location={where} /> : null}
                 <div className="layout-content" data-admin-page={pathname} ref={contentRef}>
                     {loadFailure && <div className="page-load-error" role="alert"><div><strong>页面数据未能加载</strong><p>{loadFailure}</p><small>下方仅显示页面结构，统计值和空列表不代表实际业务数据。</small></div><button type="button" onClick={() => window.location.reload()}>重新加载</button></div>}
                     <Outlet />
                 </div>
             </div>
+            <CommandPalette open={searchOpen} items={searchablePages(groups)} onClose={() => setSearchOpen(false)} />
         </div>
     );
 };

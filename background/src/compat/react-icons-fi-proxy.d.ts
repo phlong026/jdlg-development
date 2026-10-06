@@ -10,6 +10,7 @@ export type FeatherIcon = (props: React.SVGProps<SVGSVGElement> & {
 export const FiActivity: FeatherIcon;
 export const FiAlertCircle: FeatherIcon;
 export const FiAlertTriangle: FeatherIcon;
+export const FiArrowLeft: FeatherIcon;
 export const FiAward: FeatherIcon;
 export const FiBarChart2: FeatherIcon;
 export const FiCheck: FeatherIcon;
