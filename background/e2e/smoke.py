@@ -298,6 +298,12 @@ def browser_checks():
                         })""", path)
                     needs_scope = path not in ("/customer-management",) or True
                     assert scoped or not needs_scope, f"没有找到 data-admin-page=\"{path}\" 的样式"
+                    # 卡片排版：section-card 有内容却没有内边距，说明页面靠别处"泄漏"的样式才正常（文字会贴边）
+                    flat = page.evaluate(
+                        """() => [...document.querySelectorAll('.layout-content .section-card')]
+                            .filter(e => (e.innerText || '').trim() && getComputedStyle(e).padding.split(' ').every(v => v === '0px'))
+                            .map(e => e.className.toString().slice(0, 50))""")
+                    assert not flat, f"{len(flat)} 张卡片没有内边距: {flat[:3]}"
                     unexpected = [e for e in console_errors if not any(k in e for k in KNOWN_NOISE)]
                     assert not unexpected, f"控制台错误: {unexpected[:2]}"
                     bad = [b for b in bad_responses if b not in findings]
@@ -428,8 +434,8 @@ def browser_checks():
             anon.wait_for_url(re.compile(r".*/admin/login"), timeout=10000)
             anon.context.close()
 
-        print("\n[浏览器] 新导航（8 个分组 + 子导航条，网址不变）")
-        EXPECT_GROUPS = ["工作台", "用户与设计师", "订单与支付", "AI 运营", "内容运营", "客户与工单", "风控与增长", "系统设置"]
+        print("\n[浏览器] 新导航（9 个一级入口 + 子导航条，网址不变）")
+        EXPECT_GROUPS = ["工作台", "用户与设计师", "订单与支付", "AI 运营", "内容运营", "异常工单", "客服线索工作台", "风控与增长", "系统设置"]
 
         def sidebar_labels():
             return pg.eval_on_selector_all(".layout-sidebar .sidebar-item", "els => els.map(e => e.getAttribute('aria-label'))")
@@ -437,7 +443,7 @@ def browser_checks():
         def subnav_tabs():
             return pg.eval_on_selector_all(".layout-subnav .subnav-tab", "els => els.map(e => e.textContent.trim())")
 
-        @check("侧栏只有 8 个分组（旧导航 24 项），系统设置固定在底部")
+        @check("侧栏只有 9 个一级入口（旧导航 24 项），客服线索工作台是一级入口，系统设置固定在底部")
         def _():
             pg.goto(WEB + "/admin/dashboard")
             pg.wait_for_selector(".layout-sidebar .sidebar-item")
@@ -520,14 +526,14 @@ def browser_checks():
             pg.wait_for_selector(".layout-sidebar .sidebar-item")
             assert pg.locator(".layout-sidebar .sidebar-item").count() == 24, "刷新后旧导航没有保持"
             pg.get_by_role("button", name="返回新导航").click()
-            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 8", timeout=5000)
+            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 9", timeout=5000)
 
         @check("地址参数 ?nav=old 可直接进入旧导航（灰度回退链接）")
         def _():
             pg.goto(WEB + "/admin/dashboard?nav=old")
             pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 24", timeout=8000)
             pg.goto(WEB + "/admin/dashboard?nav=new")  # 还原
-            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 8", timeout=8000)
+            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 9", timeout=8000)
 
         ctx3.close()
 
