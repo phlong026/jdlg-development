@@ -67,31 +67,6 @@ export const API_ENDPOINTS = {
         REPORTS: '/api/v1/management/report-center/reports',
         EXPORT: '/api/v1/management/report-center/export',
     },
-    // 商品管理
-    PRODUCTS: {
-        LIST: '/api/v1/admin/products',
-        CREATE: '/api/v1/admin/products',
-        DETAIL: (id: string) => `/api/v1/admin/products/${id}`,
-        UPDATE: (id: string) => `/api/v1/admin/products/${id}`,
-        DELETE: (id: string) => `/api/v1/admin/products/${id}`,
-        TOGGLE_STATUS: (id: string) => `/api/v1/admin/products/${id}/status`,
-    },
-    // 礼品管理
-    GIFTS: {
-        LIST: '/api/v1/admin/gifts',
-        CREATE: '/api/v1/admin/gifts',
-        DETAIL: (id: string) => `/api/v1/admin/gifts/${id}`,
-        UPDATE: (id: string) => `/api/v1/admin/gifts/${id}`,
-        DELETE: (id: string) => `/api/v1/admin/gifts/${id}`,
-        SCAN: '/api/v1/admin/gifts/scan',
-    },
-    // 仓库管理
-    WAREHOUSE: {
-        GET_USER_WAREHOUSE: (userId: string) => `/api/v1/admin/warehouse/user/${userId}`,
-        ADD_ITEM: '/api/v1/admin/warehouse/item',
-        UPDATE_ITEM: (id: string) => `/api/v1/admin/warehouse/item/${id}`,
-        DELETE_ITEM: (id: string) => `/api/v1/admin/warehouse/item/${id}`,
-    },
     // 订单中心
     ORDERS: {
         LIST: '/api/v1/management/orders',
@@ -102,11 +77,6 @@ export const API_ENDPOINTS = {
     VIRTUAL_PAY: {
         HEALTH: '/api/v1/management/virtualpay/health',
         LOGS: '/api/v1/management/virtualpay/logs',
-    },
-    // 排名
-    RANKING: {
-        POINTS: '/api/v1/admin/ranking/points',
-        GIFTS: '/api/v1/admin/ranking/gifts',
     },
     // 统计
     STATS: {
