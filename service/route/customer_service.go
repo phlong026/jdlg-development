@@ -246,8 +246,11 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			return
 		}
 		page, pageSize, offset := parseCustomerLeadPageParams(c)
+		// 非法或缺省的 user_id 视为不过滤，与其余筛选项（all）的容错方式一致
+		userID, _ := strconv.ParseInt(strings.TrimSpace(c.Query("user_id")), 10, 64)
 		list, total, err := customerServiceModel.ListLeads(model.CustomerLeadListParams{
 			Keyword:     c.Query("keyword"),
+			UserID:      userID,
 			Status:      c.DefaultQuery("status", "all"),
 			IntentLevel: c.DefaultQuery("intent_level", "all"),
 			Source:      c.DefaultQuery("source", "all"),

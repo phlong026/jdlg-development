@@ -203,3 +203,27 @@ func TestCustomerLeadIntentAnalysisDoesNotTreatDesignerQuestionAsHigh(t *testing
 		t.Fatalf("designer question should not be high intent, got score %d", analysis.Score)
 	}
 }
+
+// 用户 360 → "查看关联线索"：列表接口必须能按 user_id 过滤，且 user_id<=0 时不加条件（保持原有"全部线索"行为）
+func TestCustomerLeadListSupportsUserIDFilter(t *testing.T) {
+	modelSource, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	routeSource, err := os.ReadFile("../route/customer_service.go")
+	if err != nil {
+		t.Fatalf("read route customer_service.go: %v", err)
+	}
+	for _, want := range []string{
+		"UserID      int64",
+		"if params.UserID > 0 {",
+		"where = append(where, `user_id = ?`)",
+	} {
+		if !strings.Contains(string(modelSource), want) {
+			t.Fatalf("ListLeads should filter by user id, missing %q", want)
+		}
+	}
+	if !strings.Contains(string(routeSource), `c.Query("user_id")`) {
+		t.Fatal("lead list route should read the user_id query parameter")
+	}
+}

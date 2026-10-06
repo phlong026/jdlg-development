@@ -70,6 +70,7 @@ type CustomerLeadCreateInput struct {
 
 type CustomerLeadListParams struct {
 	Keyword     string
+	UserID      int64
 	Status      string
 	IntentLevel string
 	Source      string
@@ -605,6 +606,10 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		likeKeyword := "%" + keyword + "%"
 		where = append(where, `(name LIKE ? OR phone LIKE ? OR wechat LIKE ? OR enterprise_wechat_contact LIKE ? OR demand_summary LIKE ? OR source_task_no LIKE ?)`)
 		args = append(args, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword)
+	}
+	if params.UserID > 0 {
+		where = append(where, `user_id = ?`)
+		args = append(args, params.UserID)
 	}
 	if status := strings.TrimSpace(params.Status); status != "" && status != "all" {
 		where = append(where, `status = ?`)

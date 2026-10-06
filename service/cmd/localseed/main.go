@@ -77,7 +77,10 @@ func run() error {
 	if err := seedTemplates(db); err != nil {
 		return err
 	}
-	log.Printf("完成：管理账号 admin_local / crm_local，小程序用户 %d 个，订单与模板已写入", len(userIDs))
+	if err := seedLeads(db, userIDs); err != nil {
+		return err
+	}
+	log.Printf("完成：管理账号 admin_local / crm_local，小程序用户 %d 个，订单、模板与客服线索已写入", len(userIDs))
 	return nil
 }
 
@@ -217,6 +220,30 @@ func seedTemplates(db *sql.DB) error {
 		}
 		if err := templates.Create(t); err != nil {
 			return fmt.Errorf("写入模板 %s 失败: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// seedLeads 写入虚构的客服线索：同一个用户可以有多条线索，也有未关联账号的匿名线索。
+// 以 SessionNo 去重，可重复执行。
+func seedLeads(db *sql.DB, userIDs []int64) error {
+	if len(userIDs) < 3 {
+		return fmt.Errorf("至少需要 3 个小程序用户才能写入线索，当前 %d 个", len(userIDs))
+	}
+	leads := model.NewCustomerServiceModel(db)
+	specs := []model.CustomerLeadCreateInput{
+		{UserID: userIDs[0], Name: "林先生", Phone: "13800000001", SessionNo: "LOCAL-S1", DemandSummary: "两层闽南红砖自建房，宅基地 12 米宽 15 米深，想要三个卧室，预算 40 万，希望尽快电话沟通"},
+		{UserID: userIDs[0], Name: "林先生", Phone: "13800000001", SessionNo: "LOCAL-S2", DemandSummary: "想再看看三层方案，还没想好"},
+		{UserID: userIDs[1], Name: "陈女士", Wechat: "chen_local", SessionNo: "LOCAL-S3", DemandSummary: "新中式庭院，三层，留微信方便联系"},
+		{UserID: userIDs[2], Name: "黄先生", Phone: "13800000003", SessionNo: "LOCAL-S4", DemandSummary: "现代极简别墅，想了解造价"},
+		{UserID: 0, Name: "匿名访客", SessionNo: "LOCAL-S5", DemandSummary: "随便问问"},
+	}
+	for i := range specs {
+		spec := specs[i]
+		spec.Source = "ai_customer_service"
+		if _, err := leads.CreateLead(&spec); err != nil {
+			return fmt.Errorf("写入线索 %s 失败（是否已执行过一次 start 让表自动创建？）: %w", spec.SessionNo, err)
 		}
 	}
 	return nil
