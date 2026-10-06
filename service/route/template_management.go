@@ -701,7 +701,7 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 				}
 
 				// 获取每个组的案例详情
-				var result []gin.H
+				result := make([]gin.H, 0)
 				for _, group := range groups {
 					groupData := gin.H{
 						"id":           group.ID,

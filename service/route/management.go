@@ -186,7 +186,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			}
 
 			// 获取每个用户的灵石余额
-			var userList []gin.H
+			userList := make([]gin.H, 0)
 			for _, u := range users {
 				stones, _ := userRedisModel.GetStones(u.ID)
 				verifiedAt := ""
@@ -846,7 +846,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				return
 			}
 
-			var fileList []gin.H
+			fileList := make([]gin.H, 0)
 			for _, f := range files {
 				// 格式化来源信息
 				sourceLabel := f.SourceName
@@ -1163,7 +1163,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				return
 			}
 
-			var logs []gin.H
+			logs := make([]gin.H, 0)
 			for _, l := range logList {
 				logs = append(logs, gin.H{
 					"id":        l.ID,

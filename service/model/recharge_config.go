@@ -126,7 +126,7 @@ func (m *RechargeConfigModel) List() ([]*RechargeConfig, error) {
 	}
 	defer rows.Close()
 
-	var configs []*RechargeConfig
+	configs := make([]*RechargeConfig, 0)
 	for rows.Next() {
 		config := &RechargeConfig{}
 		var isEnabledInt int

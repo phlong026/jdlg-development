@@ -130,7 +130,7 @@ func (m *UtilityToolModel) List(category, keyword string, isPublished *bool, lim
 	}
 	defer rows.Close()
 
-	var tools []*UtilityTool
+	tools := make([]*UtilityTool, 0)
 	for rows.Next() {
 		tool := &UtilityTool{}
 		var isPublishedInt int

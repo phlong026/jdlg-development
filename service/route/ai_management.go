@@ -127,7 +127,7 @@ func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricin
 			}
 
 			// 解析JSON字符串为对象
-			var configsWithParsedJSON []gin.H
+			configsWithParsedJSON := make([]gin.H, 0)
 			for _, config := range configs {
 				var headers map[string]interface{}
 				var bodyTemplate map[string]interface{}

@@ -24,7 +24,8 @@ export interface RechargeConfigItem {
 // 获取充值配置列表
 export const getRechargeConfigList = async () => {
     const res = await get<{ list: RechargeConfigItem[] }>(API_ENDPOINTS.RECHARGE_CONFIG.LIST);
-    return res.data!.list;
+    // 后端空表时历史上返回 null；前端不信任这一点，避免 list.length 直接让整页崩溃
+    return res.data?.list ?? [];
 };
 
 // 获取单个充值配置

@@ -96,7 +96,7 @@ func (m *FeaturedCaseGroupModel) List(limit int, offset int) ([]*FeaturedCaseGro
 	}
 	defer rows.Close()
 
-	var groups []*FeaturedCaseGroup
+	groups := make([]*FeaturedCaseGroup, 0)
 	for rows.Next() {
 		group := &FeaturedCaseGroup{}
 		err := rows.Scan(
@@ -121,7 +121,7 @@ func (m *FeaturedCaseGroupModel) GetAll() ([]*FeaturedCaseGroup, error) {
 	}
 	defer rows.Close()
 
-	var groups []*FeaturedCaseGroup
+	groups := make([]*FeaturedCaseGroup, 0)
 	for rows.Next() {
 		group := &FeaturedCaseGroup{}
 		err := rows.Scan(
