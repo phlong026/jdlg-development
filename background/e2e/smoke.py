@@ -60,6 +60,7 @@ def _json(raw):
 
 
 RESULTS = []
+STATE = {}  # 浏览器检查之间共享的会话状态（登录一次，避免撞上后端的登录限流）
 LIST_KEYS = ("list", "items", "records", "rows", "tasks", "users", "templates", "configs", "plans", "tickets", "groups", "categories", "files")
 CONFIG_API_FILE = os.path.join(os.path.dirname(__file__), "..", "src", "config", "api.ts")
 SKIP_PATHS = ("/login", "/logout", "/me", "/export", "/cos/sts", "/wecom", "/upload")
@@ -265,7 +266,16 @@ def browser_checks():
             page.fill("#login-account", "admin_local")
             page.fill("#login-password", PASSWORD)
             page.click("button[type=submit]")
-            page.wait_for_url(re.compile(r".*/admin/dashboard"), timeout=15000)
+            try:
+                page.wait_for_url(re.compile(r".*/admin/dashboard"), timeout=15000)
+            except Exception:
+                body = page.inner_text("body")[:120]
+                hint = "（被登录限流：每账号 5 分钟内限制次数，请稍等几分钟再跑）" if "频繁" in body else ""
+                raise AssertionError(f"登录后没有进入总控台{hint}，页面: {body!r}")
+            # 登录落地的总控台会同时发 3 个接口请求；不等它们结束就跳走，旧页面会把被浏览器取消的请求记进控制台，
+            # 被下一个路由的检查误认成它自己的错误。
+            page.wait_for_load_state("networkidle", timeout=20000)
+            STATE["admin"] = ctx.storage_state()  # 后面的上下文复用会话，不再重复登录，省登录限流额度
 
         for path in routes:
             if True:
@@ -339,16 +349,12 @@ def browser_checks():
             pg.wait_for_url(re.compile(r".*/admin/customer-management"), timeout=10000)
             ctx2.close()
         print("\n[浏览器] 统一布局（布局上移到路由层）的行为")
-        ctx3 = browser.new_context(viewport={"width": 1366, "height": 860})
+        ctx3 = browser.new_context(viewport={"width": 1366, "height": 860}, storage_state=STATE.get("admin"))
         pg = ctx3.new_page()
         me_requests = []
         pg.on("request", lambda r: me_requests.append(r.url) if r.url.endswith("/api/v1/management/me") else None)
-        pg.goto(WEB + "/admin/login")
-        pg.fill("#login-account", "admin_local")
-        pg.fill("#login-password", PASSWORD)
-        pg.click("button[type=submit]")
-        pg.wait_for_url(re.compile(r".*/admin/dashboard"), timeout=15000)
-        pg.wait_for_selector(".layout-content")
+        pg.goto(WEB + "/admin/dashboard")
+        pg.wait_for_selector(".layout-content", timeout=15000)
 
         def go_via_sidebar(path):
             pg.locator(f'a.sidebar-item[href="/admin{path}"]').click()
@@ -420,6 +426,30 @@ def browser_checks():
             anon.context.close()
 
         ctx3.close()
+
+        print("\n[浏览器] 移动端宽度（390x844）：抽屉导航")
+        mctx = browser.new_context(viewport={"width": 390, "height": 844}, storage_state=STATE.get("admin"))
+        mp = mctx.new_page()
+        mp.goto(WEB + "/admin/dashboard")
+        mp.wait_for_selector(".layout-content", timeout=15000)
+
+        @check("手机宽度：侧栏默认收起；点菜单按钮展开抽屉")
+        def _():
+            assert mp.evaluate("document.querySelector('.layout-sidebar').classList.contains('mobile')"), "移动端模式未生效"
+            assert not mp.evaluate("document.querySelector('.layout-sidebar').classList.contains('open')"), "抽屉默认不应展开"
+            mp.locator(".topbar-menu-btn").click()
+            assert mp.evaluate("document.querySelector('.layout-sidebar').classList.contains('open')"), "点击后抽屉未展开"
+
+        @check("手机宽度：点导航项后跳转并自动收起抽屉，页面无横向溢出")
+        def _():
+            mp.locator('a.sidebar-item[href="/admin/users"]').click()
+            mp.wait_for_url(re.compile(r".*/admin/users$"), timeout=10000)
+            mp.wait_for_selector(".users-table", timeout=10000)
+            assert not mp.evaluate("document.querySelector('.layout-sidebar').classList.contains('open')"), "跳转后抽屉没有收起"
+            overflow = mp.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+            assert overflow <= 1, f"整页出现横向溢出 {overflow}px"
+
+        mctx.close()
         browser.close()
 
 
