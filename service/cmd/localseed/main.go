@@ -225,25 +225,40 @@ func seedTemplates(db *sql.DB) error {
 	return nil
 }
 
-// seedLeads 写入虚构的客服线索：同一个用户可以有多条线索，也有未关联账号的匿名线索。
-// 以 SessionNo 去重，可重复执行。
+// seedLeads 写入虚构的客服线索：同一个用户可以有多条线索，也有未关联账号的匿名线索，
+// 并覆盖各种状态 / 负责人组合，使各队列（待处理、未分配、高意向……）的数量互不相同，
+// 这样"总览数量必须等于队列列表条数"的检查才有区分度。以 SessionNo 去重，可重复执行。
 func seedLeads(db *sql.DB, userIDs []int64) error {
 	if len(userIDs) < 3 {
 		return fmt.Errorf("至少需要 3 个小程序用户才能写入线索，当前 %d 个", len(userIDs))
 	}
 	leads := model.NewCustomerServiceModel(db)
-	specs := []model.CustomerLeadCreateInput{
-		{UserID: userIDs[0], Name: "林先生", Phone: "13800000001", SessionNo: "LOCAL-S1", DemandSummary: "两层闽南红砖自建房，宅基地 12 米宽 15 米深，想要三个卧室，预算 40 万，希望尽快电话沟通"},
-		{UserID: userIDs[0], Name: "林先生", Phone: "13800000001", SessionNo: "LOCAL-S2", DemandSummary: "想再看看三层方案，还没想好"},
-		{UserID: userIDs[1], Name: "陈女士", Wechat: "chen_local", SessionNo: "LOCAL-S3", DemandSummary: "新中式庭院，三层，留微信方便联系"},
-		{UserID: userIDs[2], Name: "黄先生", Phone: "13800000003", SessionNo: "LOCAL-S4", DemandSummary: "现代极简别墅，想了解造价"},
-		{UserID: 0, Name: "匿名访客", SessionNo: "LOCAL-S5", DemandSummary: "随便问问"},
+	type spec struct {
+		input      model.CustomerLeadCreateInput
+		status     string // 为空表示保持"新线索"
+		assignedTo string
+	}
+	specs := []spec{
+		{input: model.CustomerLeadCreateInput{UserID: userIDs[0], Name: "林先生", Phone: "13800000001", SessionNo: "LOCAL-S1", DemandSummary: "两层闽南红砖自建房，宅基地 12 米宽 15 米深，想要三个卧室，预算 40 万，希望尽快电话沟通"}},
+		{input: model.CustomerLeadCreateInput{UserID: userIDs[0], Name: "林先生", Phone: "13800000001", SessionNo: "LOCAL-S2", DemandSummary: "想再看看三层方案，还没想好"}, status: "contacted"},
+		{input: model.CustomerLeadCreateInput{UserID: userIDs[1], Name: "陈女士", Wechat: "chen_local", SessionNo: "LOCAL-S3", DemandSummary: "新中式庭院，三层，留微信方便联系"}, status: "contacted", assignedTo: "sales_a"},
+		{input: model.CustomerLeadCreateInput{UserID: userIDs[2], Name: "黄先生", Phone: "13800000003", SessionNo: "LOCAL-S4", DemandSummary: "现代极简别墅，想了解造价"}, status: "converted", assignedTo: "sales_a"},
+		{input: model.CustomerLeadCreateInput{UserID: 0, Name: "匿名访客", SessionNo: "LOCAL-S5", DemandSummary: "随便问问"}, status: "invalid"},
+		{input: model.CustomerLeadCreateInput{UserID: userIDs[1], Name: "陈女士", Phone: "13800000002", SessionNo: "LOCAL-S6", DemandSummary: "两层闽南红砖自建房，宅基地 10 米宽 14 米深，预算 35 万，今天想电话沟通"}, status: "converted", assignedTo: "sales_b"},
 	}
 	for i := range specs {
-		spec := specs[i]
-		spec.Source = "ai_customer_service"
-		if _, err := leads.CreateLead(&spec); err != nil {
-			return fmt.Errorf("写入线索 %s 失败（是否已执行过一次 start 让表自动创建？）: %w", spec.SessionNo, err)
+		input := specs[i].input
+		input.Source = "ai_customer_service"
+		id, err := leads.CreateLead(&input)
+		if err != nil {
+			return fmt.Errorf("写入线索 %s 失败（是否已执行过一次 start 让表自动创建？）: %w", input.SessionNo, err)
+		}
+		if specs[i].status == "" {
+			continue
+		}
+		action := model.CustomerLeadActionInput{Status: specs[i].status, AssignedTo: specs[i].assignedTo, Remark: "localseed 虚构跟进"}
+		if err := leads.ApplyLeadAction(id, action); err != nil {
+			return fmt.Errorf("更新线索 %s 状态失败: %w", input.SessionNo, err)
 		}
 	}
 	return nil

@@ -227,3 +227,23 @@ func TestCustomerLeadListSupportsUserIDFilter(t *testing.T) {
 		t.Fatal("lead list route should read the user_id query parameter")
 	}
 }
+
+// 队列数量（Overview）与队列列表（ListLeads）必须共用同一段 SQL 条件，否则 Tab 角标会和列表条数对不上
+func TestCustomerLeadOverviewSharesQueueConditions(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, cond := range []string{"leadQueueHighCond", "leadQueueUnassignedCond"} {
+		// 定义 1 次 + ListLeads 用 1 次 + Overview 用 1 次
+		if got := strings.Count(content, cond); got != 3 {
+			t.Fatalf("%s 应当被定义一次并在列表与总览各使用一次（共 3 处），实际 %d 处", cond, got)
+		}
+	}
+	for _, want := range []string{`json:"high_todo_count"`, `json:"unassigned_count"`, `json:"invalid_count"`} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("overview should expose %s", want)
+		}
+	}
+}

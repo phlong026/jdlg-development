@@ -89,7 +89,17 @@ type CustomerLeadOverview struct {
 	TodayNewCount   int64 `json:"today_new_count"`
 	TodoCount       int64 `json:"todo_count"`
 	OverdueCount    int64 `json:"overdue_count"`
+	// 以下三项与队列列表使用同一段 SQL 条件，保证 Tab 角标 = 点进去看到的条数
+	HighTodoCount   int64 `json:"high_todo_count"`
+	UnassignedCount int64 `json:"unassigned_count"`
+	InvalidCount    int64 `json:"invalid_count"`
 }
+
+// 队列的 SQL 条件：ListLeads（列表）与 Overview（数量）共用，避免两边口径漂移。
+const (
+	leadQueueHighCond       = `intent_level = 'high' AND status IN ('new', 'contacted')`
+	leadQueueUnassignedCond = `status IN ('new', 'contacted') AND assigned_to = ''`
+)
 
 type CustomerFunnelMetric struct {
 	Key            string  `json:"key"`
@@ -637,11 +647,11 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	case "today":
 		where = append(where, `created_at >= CURDATE()`)
 	case "high":
-		where = append(where, `intent_level = 'high' AND status IN ('new', 'contacted')`)
+		where = append(where, leadQueueHighCond)
 	case "overdue":
 		where = append(where, `status IN ('new', 'contacted') AND (next_followup_at IS NULL OR next_followup_at <= NOW() OR updated_at <= DATE_SUB(NOW(), INTERVAL 1 DAY))`)
 	case "unassigned":
-		where = append(where, `status IN ('new', 'contacted') AND assigned_to = ''`)
+		where = append(where, leadQueueUnassignedCond)
 	}
 
 	whereSQL := strings.Join(where, " AND ")
@@ -949,7 +959,10 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 			COALESCE(SUM(CASE WHEN status = 'converted' THEN 1 ELSE 0 END), 0) AS converted_count,
 			COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END), 0) AS today_new_count,
 			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') THEN 1 ELSE 0 END), 0) AS todo_count,
-			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') AND (next_followup_at IS NULL OR next_followup_at <= NOW() OR updated_at <= DATE_SUB(NOW(), INTERVAL 1 DAY)) THEN 1 ELSE 0 END), 0) AS overdue_count
+			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') AND (next_followup_at IS NULL OR next_followup_at <= NOW() OR updated_at <= DATE_SUB(NOW(), INTERVAL 1 DAY)) THEN 1 ELSE 0 END), 0) AS overdue_count,
+			COALESCE(SUM(CASE WHEN `+leadQueueHighCond+` THEN 1 ELSE 0 END), 0) AS high_todo_count,
+			COALESCE(SUM(CASE WHEN `+leadQueueUnassignedCond+` THEN 1 ELSE 0 END), 0) AS unassigned_count,
+			COALESCE(SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid_count
 		FROM customer_leads`
 	if err := m.DB.QueryRow(query).Scan(
 		&overview.TotalCount,
@@ -960,6 +973,9 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 		&overview.TodayNewCount,
 		&overview.TodoCount,
 		&overview.OverdueCount,
+		&overview.HighTodoCount,
+		&overview.UnassignedCount,
+		&overview.InvalidCount,
 	); err != nil {
 		return nil, err
 	}
