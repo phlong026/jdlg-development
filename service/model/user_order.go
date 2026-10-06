@@ -638,6 +638,9 @@ func (m *UserOrderModel) HasSuccessfulRecharge(userID int64) (bool, error) {
 	return count > 0, nil
 }
 
+// orderStatusFilterException 是管理端订单列表 status 参数的特殊取值：失败 + 待处理。
+const orderStatusFilterException = "exception"
+
 func (m *UserOrderModel) buildManagementWhere(keyword, orderType, orderCategory, status, payChannel, startDate, endDate string) (string, []interface{}) {
 	where := []string{"u.user_type = 'miniprogram'"}
 	args := make([]interface{}, 0)
@@ -654,7 +657,12 @@ func (m *UserOrderModel) buildManagementWhere(keyword, orderType, orderCategory,
 		where = append(where, "o.order_category = ?")
 		args = append(args, orderCategory)
 	}
-	if status != "" && status != "all" {
+	switch {
+	case status == orderStatusFilterException:
+		// "仅看异常单"：必须在服务端对全量数据筛选，前端只过滤当前页会漏掉其他页的异常单。
+		// 字面量展开，不产生绑定参数。
+		where = append(where, "o.status IN ('failed', 'pending')")
+	case status != "" && status != "all":
 		where = append(where, "o.status = ?")
 		args = append(args, status)
 	}

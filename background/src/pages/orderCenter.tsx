@@ -137,14 +137,15 @@ const OrderCenter: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(DEFAULT_PAGE_SIZE);
     const [total, setTotal] = useState(0);
-    const displayedRecords = onlyExceptions ? records.filter((record) => record.status === 'failed' || record.status === 'pending') : records;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     const buildOrderQueryParams = (overrides?: Partial<OrderListParams>): OrderListParams => ({
         keyword: searchKeyword.trim(),
         type: typeFilter,
         order_category: categoryFilter,
-        status: statusFilter,
+        // "仅看异常单"交给后端对全量数据筛选（status=exception = 失败 + 待处理）；
+        // 只在当前页前端过滤会漏掉其他页的异常单，计数也会失真。
+        status: onlyExceptions ? 'exception' : statusFilter,
         pay_channel: payChannelFilter,
         start_date: dateRange.start,
         end_date: dateRange.end,
@@ -199,6 +200,13 @@ const OrderCenter: React.FC = () => {
     const handleSearch = () => {
         setCurrentPage(1);
         void loadOrders(buildOrderQueryParams({ page: 1 }));
+    };
+
+    const handleToggleExceptions = () => {
+        const next = !onlyExceptions;
+        setOnlyExceptions(next);
+        setCurrentPage(1);
+        void loadOrders(buildOrderQueryParams({ page: 1, status: next ? 'exception' : statusFilter }));
     };
 
     const handleReset = () => {
@@ -321,7 +329,7 @@ const OrderCenter: React.FC = () => {
                                 <option value="service">设计服务</option>
                                 <option value="withdraw">提现</option>
                             </select>
-                            <select className="filter-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                            <select className="filter-select" value={statusFilter} disabled={onlyExceptions} title={onlyExceptions ? '“仅看异常单”已限定为失败与待处理，取消后可选其他状态' : undefined} onChange={(event) => setStatusFilter(event.target.value)}>
                                 <option value="all">全部状态</option>
                                 <option value="pending">待处理</option>
                                 <option value="success">成功</option>
@@ -350,7 +358,7 @@ const OrderCenter: React.FC = () => {
                         </div>
                     </div>
                     <div className="toolbar-right">
-                        <button className={`btn-secondary ${onlyExceptions ? 'is-active' : ''}`} onClick={() => setOnlyExceptions((prev) => !prev)}>
+                        <button className={`btn-secondary ${onlyExceptions ? 'is-active' : ''}`} onClick={handleToggleExceptions} disabled={loading} aria-pressed={onlyExceptions}>
                             <FiAlertCircle />
                             {onlyExceptions ? '查看全部' : '仅看异常单'}
                         </button>
@@ -368,7 +376,7 @@ const OrderCenter: React.FC = () => {
                 <div className="order-summary-banner">
                     <div className="order-summary-banner-row">
                         <span>当前筛选摘要</span>
-                        <strong>{onlyExceptions ? `${displayedRecords.length} 条异常` : `${summary.total_count} 条`}</strong>
+                        <strong>{onlyExceptions ? `${summary.total_count} 条异常` : `${summary.total_count} 条`}</strong>
                     </div>
                     <div className="order-summary-banner-meta">
                         {getFilterSummary({
@@ -429,12 +437,12 @@ const OrderCenter: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {displayedRecords.length === 0 ? (
+                            {records.length === 0 ? (
                                 <tr>
                                     <td colSpan={11} className="empty-state">暂无订单记录</td>
                                 </tr>
                             ) : (
-                                displayedRecords.map((record) => {
+                                records.map((record) => {
                                     const statusMeta = formatStatus(record.status);
                                     return (
                                         <tr key={record.id} className={record.status === 'failed' ? 'row-alert-failed' : record.status === 'pending' ? 'row-alert-pending' : ''}>
@@ -442,7 +450,7 @@ const OrderCenter: React.FC = () => {
                                                 {record.pay_channel === 'virtualpay' ? (
                                                     <button
                                                         className="virtualpay-order-link"
-                                                        onClick={() => navigate(`/virtual-pay?keyword=${encodeURIComponent(record.order_no)}`)}
+                                                        onClick={() => navigate(`/virtualpay?keyword=${encodeURIComponent(record.order_no)}`)}
                                                         title="查看虚拟支付详情"
                                                     >
                                                         {record.order_no}
