@@ -10,6 +10,9 @@ export interface CustomerLeadOverview {
     today_new_count?: number;
     todo_count?: number;
     overdue_count?: number;
+    high_todo_count?: number;
+    unassigned_count?: number;
+    invalid_count?: number;
 }
 
 export interface CustomerFunnelMetric {

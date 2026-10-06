@@ -1,0 +1,170 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/customer-leads"]) {
+.lead-hub {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+// 入口卡片：渐变底 + 右侧半透明大图标，版式参考企业微信「销售」页
+.lead-hub-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.lead-hub-tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 76px;
+    padding: 0 20px;
+    border-radius: 14px;
+    overflow: hidden;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.14); }
+}
+
+.lead-hub-tile-lead { background: linear-gradient(120deg, #ff8a2a 0%, #ffb067 100%); }
+.lead-hub-tile-customer { background: linear-gradient(120deg, #2f7bff 0%, #5ba4ff 100%); }
+
+.lead-hub-tile-arrow { font-size: 20px; }
+
+.lead-hub-tile-icon {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    width: 64px;
+    height: 64px;
+    transform: translateY(-50%);
+    opacity: 0.28;
+}
+
+.lead-hub-card {
+    border: 1px solid var(--admin-border, #eadfce);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(80, 60, 40, 0.05);
+    overflow: hidden;
+}
+
+.lead-hub-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1ebe2;
+
+    h2 { margin: 0; font-size: 18px; color: #1f2937; }
+}
+
+.lead-hub-period { margin-left: auto; color: #6b7280; font-size: 14px; }
+
+.lead-hub-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid #e0d2bf;
+    border-radius: 10px;
+    background: #fff;
+    color: #5b4a3b;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.lead-hub-more {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    color: #8b8f99;
+    font-size: 14px;
+    text-decoration: none;
+
+    &:hover { color: #8b5e3c; }
+}
+
+// 注意：类名不要以 -stats / -summary-grid 结尾，否则会被 responsive.scss 的通配规则在手机宽度下强制改成单列
+.lead-hub-figures {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 18px 8px;
+    text-align: center;
+
+    span { display: block; color: #6b7280; font-size: 14px; }
+
+    strong {
+        display: block;
+        margin-top: 6px;
+        color: #111827;
+        font-size: 30px;
+        line-height: 1.1;
+        font-weight: 500;
+
+        &.is-alert { color: #c2410c; }
+    }
+}
+
+.lead-hub-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    padding: 24px 20px 20px;
+}
+
+.lead-hub-donut {
+    position: relative;
+    width: 168px;
+    text-align: center;
+
+    svg { display: block; width: 168px; height: 168px; }
+
+    small { display: block; margin-top: 8px; color: #9ca3af; font-size: 13px; }
+}
+
+.lead-hub-donut-center {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 168px;
+    height: 168px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    strong { font-size: 28px; font-weight: 500; color: #111827; line-height: 1.1; }
+    span { margin-top: 4px; color: #4b5563; font-size: 14px; }
+}
+
+.lead-hub-legend {
+    flex: 0 1 280px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+
+    li { display: flex; align-items: center; gap: 12px; font-size: 15px; color: #1f2937; }
+    i { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+    span { flex: 1; }
+    b { font-weight: 400; color: #4b5563; }
+}
+
+@media (max-width: 640px) {
+    .lead-hub-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 16px; }
+    .lead-hub-stage { flex-direction: column; gap: 24px; }
+    .lead-hub-legend { flex: none; width: 100%; max-width: 320px; }
+}
+}

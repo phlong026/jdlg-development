@@ -114,9 +114,9 @@ export interface NavQueue {
 export const leadQueues: NavQueue[] = [
     { key: 'todo', label: '待处理', countKey: 'todo_count', help: '新线索和跟进中', alert: true },
     { key: 'today', label: '今日新增', countKey: 'today_new_count', help: '今天进入后台的线索' },
-    { key: 'high', label: '高意向', countKey: 'high_intent_count', help: '优先电话或微信承接', alert: true },
+    { key: 'high', label: '高意向', countKey: 'high_todo_count', help: '优先电话或微信承接', alert: true },
     { key: 'overdue', label: '超时未跟进', countKey: 'overdue_count', help: '该联系但还没推进', alert: true },
-    { key: 'unassigned', label: '未分配', countKey: 'new_count', help: '还没有负责人', alert: true },
+    { key: 'unassigned', label: '未分配', countKey: 'unassigned_count', help: '还没有负责人', alert: true },
     { key: 'all', label: '全部线索', countKey: 'total_count', help: '完整线索池' },
 ];
 

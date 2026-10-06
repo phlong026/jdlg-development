@@ -140,6 +140,29 @@ def api_checks():
         status, junk = admin.call("GET", "/customer-leads?page=1&page_size=100&user_id=abc")
         assert status == 200 and junk["data"]["total"] == everything["data"]["total"], "非法 user_id 应当不过滤"
 
+    @check("线索总览里每个队列的数量 = 该队列列表的 total（Tab 角标不能和点进去看到的条数对不上）")
+    def _():
+        status, ov = admin.call("GET", "/customer-leads/overview")
+        assert status == 200, status
+        counts = ov["data"]
+        queues = [("todo", "todo_count"), ("today", "today_new_count"), ("high", "high_todo_count"),
+                  ("overdue", "overdue_count"), ("unassigned", "unassigned_count"), ("all", "total_count")]
+        bad = []
+        for queue, key in queues:
+            status, lst = admin.call("GET", f"/customer-leads?page=1&page_size=1&queue={queue}")
+            assert status == 200, status
+            if counts.get(key) != lst["data"]["total"]:
+                bad.append(f"{queue}: 总览 {key}={counts.get(key)} ≠ 列表 {lst['data']['total']}")
+        assert not bad, "; ".join(bad)
+
+    @check("线索总览补充各阶段数量：新线索 / 跟进中 / 已成交 / 无效，加起来等于总数")
+    def _():
+        status, ov = admin.call("GET", "/customer-leads/overview")
+        c = ov["data"]
+        parts = [c.get("new_count"), c.get("contacted_count"), c.get("converted_count"), c.get("invalid_count")]
+        assert None not in parts, f"缺少阶段字段: {parts}"
+        assert sum(parts) == c["total_count"], f"阶段之和 {sum(parts)} ≠ 总数 {c['total_count']}"
+
     print("\n[API] 接口契约：列表字段不得为 null")
 
     @check("列表接口在空表 / 搜索无结果时返回 [] 而不是 null（Go 的 nil 切片会序列化成 null，前端 list.length 直接崩溃）")
@@ -552,6 +575,22 @@ def browser_checks():
             assert 0 < high_rows < all_rows, f"高意向 {high_rows} 条应少于全部 {all_rows} 条"
             assert pg.locator(".customer-lead-queues").count() == 0, "单独打开时队列已移到子导航条，页内不应再重复显示"
 
+        @check("销售线索概览区（参考企业微信「销售」页）：入口卡片 + 线索简报 + 线索阶段环形图，数字自洽")
+        def _():
+            pg.goto(WEB + "/admin/customer-leads")
+            pg.wait_for_selector(".lead-hub .lead-hub-donut-center strong", timeout=8000)
+            pg.wait_for_load_state("networkidle")
+            tiles = pg.eval_on_selector_all(".lead-hub-tile", "els => els.map(e => e.textContent.trim())")
+            assert tiles == ["线索"], f"未启用 CRM 时只应有「线索」入口: {tiles}"
+            total = int(pg.locator(".lead-hub-donut-center strong").inner_text())
+            legend = pg.eval_on_selector_all(".lead-hub-legend li", "els => els.map(e => [e.querySelector('span').textContent, parseInt(e.querySelector('b').textContent)])")
+            assert [n for n, _ in legend] == ["新线索", "跟进中", "已成交", "无效"], legend
+            assert sum(c for _, c in legend) == total > 0, f"各阶段之和应等于线索量 {total}: {legend}"
+            figures = pg.eval_on_selector_all(".lead-hub-figures > div", "els => Object.fromEntries(els.map(e => [e.querySelector('span').textContent, parseInt(e.querySelector('strong').textContent)]))")
+            badge = int(pg.locator(".layout-subnav .subnav-tab", has_text="待处理").locator(".subnav-badge").inner_text())
+            assert figures["待处理"] == badge, f"简报的待处理 {figures['待处理']} 应与 Tab 角标 {badge} 一致"
+            assert pg.locator(".lead-hub-donut circle").count() >= 2, "环形图应画出底环和至少一段"
+
         @check("线索 ⇄ 用户账号 互相跳转：用户 360「查看关联线索」→ 只看该用户；线索行「查看用户账号」→ 用户 360；可清除过滤")
         def _():
             uid = str(STATE["lead_user_id"])
@@ -582,6 +621,7 @@ def browser_checks():
                 pg.goto(WEB + "/admin/customer-leads")
                 pg.wait_for_selector(".layout-subnav .subnav-entry", timeout=8000)
                 assert sidebar_labels() == EXPECT_GROUPS, "侧栏不应多出独立的「客户管理」: " + str(sidebar_labels())
+                assert pg.locator(".lead-hub-tile", has_text="客户").count() == 1, "启用 CRM 时概览区应出现「客户」入口"
                 pg.locator(".layout-subnav .subnav-entry", has_text="客户管理").click()
                 pg.wait_for_url(re.compile(r".*/admin/customer-management$"), timeout=10000)
                 pg.wait_for_selector(".layout-subnav .subnav-back", timeout=8000)

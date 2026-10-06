@@ -20,6 +20,7 @@ import {
 } from '../api/customerLeads';
 import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
 import { publishLeadOverview } from '../component/leadOverviewStore';
+import CustomerLeadHub from './customerLeadHub';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -138,6 +139,7 @@ const getNextActionText = (lead: CustomerLeadItem | null) => {
 const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ readOnly=false, embedded=false }) => {
     const [params, setParams] = useSearchParams();
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
+    const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
     const [funnel, setFunnel] = useState<CustomerFunnelMetric[]>([]);
     const [list, setList] = useState<CustomerLeadItem[]>([]);
     const [total, setTotal] = useState(0);
@@ -188,6 +190,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             ]);
             const nextOverview = { ...defaultOverview, ...overviewData };
             setOverview(nextOverview);
+            setUpdatedAt(new Date());
             publishLeadOverview(nextOverview as unknown as Record<string, number>);
             setList(listData.list || []);
             setTotal(listData.total || 0);
@@ -314,6 +317,8 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     return (
         <>
             <div className="customer-lead-page">
+                {embedded ? (
+                <>
                 <div className="customer-lead-hero">
                     <div>
                         <p>管理后台 / 客服线索工作台</p>
@@ -347,6 +352,10 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                         <strong>{overview.overdue_count || 0}</strong>
                     </div>
                 </div>
+                </>
+                ) : (
+                    <CustomerLeadHub overview={overview} loading={loading} updatedAt={updatedAt} onRefresh={resetToFirstPage} />
+                )}
 
                 {userIdFilter > 0 && (
                     <div className="customer-lead-userfilter" role="status">
