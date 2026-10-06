@@ -3,7 +3,7 @@
 
   python3.11 e2e/visual.py capture /tmp/visual-before     # 在改造前的代码上拍基线
   python3.11 e2e/visual.py capture /tmp/visual-after      # 改造后再拍一次
-  python3.11 e2e/visual.py compare /tmp/visual-before /tmp/visual-after
+  python3.11 e2e/visual.py compare /tmp/visual-before /tmp/visual-after [--only-content]
 
 每个页面截三块：.layout-content 左上角固定 1150x700 区域、.layout-topbar、.layout-sidebar。
 内容区从自身左上角起截取，所以"去掉书签栏导致内容区变高"不会产生差异；
@@ -75,11 +75,12 @@ def compare_images(pb, pa):
     return True, f"差异 {ratio:.3%}", None
 
 
-def compare(before, after):
+def compare(before, after, only_content=False):
+    parts = () if only_content else PARTS
     bad = 0
     for path in routes():
         page_bad = 0
-        for suffix, label in [("", "内容"), *[("." + p, p) for p in PARTS]]:
+        for suffix, label in [("", "内容"), *[("." + p, p) for p in parts]]:
             f = name(path) + suffix + ".png"
             ok, msg, diff = compare_images(os.path.join(before, f), os.path.join(after, f))
             if not ok:
@@ -90,8 +91,8 @@ def compare(before, after):
         bad += page_bad
         if page_bad == 0:
             print(f"  ✔ {path}")
-    total = len(routes()) * (1 + len(PARTS))
-    print(f"\n{'全部一致' if not bad else str(bad) + ' 处有差异'}（{len(routes())} 个页面 × 内容/顶栏/侧栏 = {total} 张截图）")
+    total = len(routes()) * (1 + len(parts))
+    print(f"\n{'全部一致' if not bad else str(bad) + ' 处有差异'}（{len(routes())} 个页面，共 {total} 张截图）")
     sys.exit(1 if bad else 0)
 
 
@@ -99,6 +100,6 @@ if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "capture":
         capture(sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "compare":
-        compare(sys.argv[2], sys.argv[3])
+        compare(sys.argv[2], sys.argv[3], only_content="--only-content" in sys.argv)
     else:
         sys.exit(__doc__)

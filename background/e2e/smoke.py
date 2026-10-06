@@ -312,7 +312,7 @@ def browser_checks():
             page.goto(WEB + "/admin/this-page-does-not-exist")
             page.wait_for_url(re.compile(r".*/admin/dashboard"), timeout=10000)
             # 布局先渲染、页面代码块再懒加载：重定向瞬间内容区只有"页面加载中…"，需要等内容就绪
-            page.wait_for_function("document.querySelector('.layout-content').innerText.trim().length > 10", timeout=10000)
+            page.wait_for_function("(document.querySelector('.layout-content')?.innerText || '').trim().length > 10", timeout=10000)
 
         @check("D-5 订单中心：仅看异常单 → 显示全量 6 条异常（旧逻辑会显示 0）")
         def _():
@@ -347,6 +347,9 @@ def browser_checks():
             pg.wait_for_url(re.compile(r".*/admin/customer-management"), timeout=15000)
             pg.goto(WEB + "/admin/recharge")
             pg.wait_for_url(re.compile(r".*/admin/customer-management"), timeout=10000)
+            pg.wait_for_selector(".layout-sidebar .sidebar-item")
+            n = pg.locator(".layout-sidebar .sidebar-item").count()
+            assert n == 1, f"crm_only 账号应只看到 1 个导航入口，实际 {n}"
             ctx2.close()
         print("\n[浏览器] 统一布局（布局上移到路由层）的行为")
         ctx3 = browser.new_context(viewport={"width": 1366, "height": 860}, storage_state=STATE.get("admin"))
@@ -372,7 +375,7 @@ def browser_checks():
         @check("站内跳转不再重复请求 /me（以前每个页面的顶栏都会请求一次）")
         def _():
             before = len(me_requests)
-            for path in ("/users", "/ai-tasks", "/logs", "/dashboard"):
+            for path in ("/users", "/ai-tasks", "/support-tickets", "/dashboard"):
                 go_via_sidebar(path)
             assert len(me_requests) == before, f"站内跳转期间额外请求了 {len(me_requests) - before} 次 /me"
 
@@ -406,7 +409,7 @@ def browser_checks():
             pg.wait_for_selector(".layout-content", timeout=15000)
             pg.wait_for_load_state("networkidle")
             assert "user-workbench" in pg.url and "userId=" in pg.url, pg.url
-            pg.wait_for_function("document.querySelector('.layout-content').innerText.trim().length > 20", timeout=10000)
+            pg.wait_for_function("(document.querySelector('.layout-content')?.innerText || '').trim().length > 20", timeout=10000)
 
         @check("侧栏折叠状态在页面切换后保持（以前每个页面都会重置）")
         def _():
@@ -424,6 +427,107 @@ def browser_checks():
             anon.goto(WEB + "/admin/users")
             anon.wait_for_url(re.compile(r".*/admin/login"), timeout=10000)
             anon.context.close()
+
+        print("\n[浏览器] 新导航（8 个分组 + 子导航条，网址不变）")
+        EXPECT_GROUPS = ["工作台", "用户与设计师", "订单与支付", "AI 运营", "内容运营", "客户与工单", "风控与增长", "系统设置"]
+
+        def sidebar_labels():
+            return pg.eval_on_selector_all(".layout-sidebar .sidebar-item", "els => els.map(e => e.getAttribute('aria-label'))")
+
+        def subnav_tabs():
+            return pg.eval_on_selector_all(".layout-subnav .subnav-tab", "els => els.map(e => e.textContent.trim())")
+
+        @check("侧栏只有 8 个分组（旧导航 24 项），系统设置固定在底部")
+        def _():
+            pg.goto(WEB + "/admin/dashboard")
+            pg.wait_for_selector(".layout-sidebar .sidebar-item")
+            assert sidebar_labels() == EXPECT_GROUPS, sidebar_labels()
+            in_pinned = pg.eval_on_selector_all(".sidebar-pinned .sidebar-item", "els => els.map(e => e.getAttribute('aria-label'))")
+            assert in_pinned == ["系统设置"], in_pinned
+
+        @check("每个页面都能从导航到达：打开任一路由，侧栏恰有 1 个分组高亮")
+        def _():
+            bad = []
+            for path in static_routes():
+                if path == "/customer-management":
+                    continue  # 本地未启用 CRM，该分组不显示
+                pg.goto(WEB + "/admin" + path)
+                pg.wait_for_selector(".layout-sidebar .sidebar-item")
+                n = pg.locator(".layout-sidebar .sidebar-item.active").count()
+                if n != 1:
+                    bad.append((path, n))
+            assert not bad, f"高亮数量不为 1 的页面: {bad}"
+
+        @check("分组页显示同组 Tab；单页分组（工作台）没有子导航条")
+        def _():
+            pg.goto(WEB + "/admin/users")
+            pg.wait_for_selector(".layout-subnav")
+            assert subnav_tabs() == ["用户列表", "设计师", "认证审核", "会员运营"], subnav_tabs()
+            pg.goto(WEB + "/admin/dashboard")
+            pg.wait_for_selector(".layout-content")
+            assert pg.locator(".layout-subnav").count() == 0, "工作台不应有子导航条"
+
+        @check("点 Tab 跳转到原有网址并高亮：订单中心 → 虚拟支付监控（/virtualpay）")
+        def _():
+            pg.goto(WEB + "/admin/recharge")
+            pg.wait_for_selector(".layout-subnav")
+            pg.locator(".layout-subnav .subnav-tab", has_text="虚拟支付监控").click()
+            pg.wait_for_url(re.compile(r".*/admin/virtualpay$"), timeout=10000)
+            active = pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.textContent.trim()")
+            assert active == "虚拟支付监控", active
+            assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "订单与支付"
+
+        @check("二级页：订单与支付 → 支付与会员配置（/recharge-config）→ 返回")
+        def _():
+            pg.goto(WEB + "/admin/recharge")
+            pg.wait_for_selector(".layout-subnav")
+            pg.locator(".layout-subnav .subnav-entry", has_text="支付与会员配置").click()
+            pg.wait_for_url(re.compile(r".*/admin/recharge-config$"), timeout=10000)
+            pg.wait_for_selector(".layout-subnav .subnav-back", timeout=5000)  # URL 先变、界面后渲染，等二级页的子导航条出现
+            assert subnav_tabs() == ["充值配置", "会员计划"], subnav_tabs()
+            assert pg.locator(".layout-subnav .subnav-back").count() == 1
+            assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "订单与支付"
+            pg.locator(".layout-subnav .subnav-back").click()
+            pg.wait_for_url(re.compile(r".*/admin/recharge$"), timeout=10000)
+
+        @check("详情页（用户 360）归属用户分组并高亮「用户列表」Tab")
+        def _():
+            pg.goto(WEB + "/admin/user-workbench?userId=" + USER_ID)
+            pg.wait_for_selector(".layout-subnav")
+            active = pg.eval_on_selector(".layout-subnav .subnav-tab.active", "e => e.textContent.trim()")
+            assert active == "用户列表", active
+
+        @check("⌘K 页面搜索：Ctrl+K → 输入「充值配置」→ 回车 → /recharge-config")
+        def _():
+            pg.goto(WEB + "/admin/dashboard")
+            pg.wait_for_selector(".layout-content")
+            pg.keyboard.press("Control+k")
+            pg.wait_for_selector(".cmdk-panel", timeout=5000)
+            pg.keyboard.type("充值配置")
+            pg.wait_for_selector(".cmdk-item.on")
+            pg.keyboard.press("Enter")
+            pg.wait_for_url(re.compile(r".*/admin/recharge-config$"), timeout=10000)
+            assert pg.locator(".cmdk-panel").count() == 0
+
+        @check("旧导航开关：切到旧导航 → 平铺 24 项、无子导航条；刷新后保持；可切回")
+        def _():
+            pg.goto(WEB + "/admin/recharge")
+            pg.wait_for_selector(".layout-subnav")
+            pg.get_by_role("button", name="切换到旧导航").click()
+            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 24", timeout=5000)
+            assert pg.locator(".layout-subnav").count() == 0
+            pg.reload()
+            pg.wait_for_selector(".layout-sidebar .sidebar-item")
+            assert pg.locator(".layout-sidebar .sidebar-item").count() == 24, "刷新后旧导航没有保持"
+            pg.get_by_role("button", name="返回新导航").click()
+            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 8", timeout=5000)
+
+        @check("地址参数 ?nav=old 可直接进入旧导航（灰度回退链接）")
+        def _():
+            pg.goto(WEB + "/admin/dashboard?nav=old")
+            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 24", timeout=8000)
+            pg.goto(WEB + "/admin/dashboard?nav=new")  # 还原
+            pg.wait_for_function("document.querySelectorAll('.layout-sidebar .sidebar-item').length === 8", timeout=8000)
 
         ctx3.close()
 
