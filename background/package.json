@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run check",
+    "typecheck": "tsc --noEmit",
+    "check:routes": "node scripts/check-routes.mjs",
+    "check": "npm run typecheck && npm run check:routes",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
