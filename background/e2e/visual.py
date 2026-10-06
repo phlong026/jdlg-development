@@ -5,8 +5,9 @@
   python3.11 e2e/visual.py capture /tmp/visual-after      # 改造后再拍一次
   python3.11 e2e/visual.py compare /tmp/visual-before /tmp/visual-after
 
-截取的是 .layout-content 的左上角固定 1150x700 区域（不含侧栏、顶栏、书签栏），
-因此"去掉书签栏导致内容区变高"不会产生差异；任何样式丢失、布局错位都会被抓到。
+每个页面截三块：.layout-content 左上角固定 1150x700 区域、.layout-topbar、.layout-sidebar。
+内容区从自身左上角起截取，所以"去掉书签栏导致内容区变高"不会产生差异；
+任何样式丢失、布局错位、顶栏标题 / 侧栏高亮的变化都会被抓到。
 """
 import os
 import re
@@ -21,6 +22,7 @@ ROUTES_FILE = os.path.join(os.path.dirname(__file__), "..", "src", "routes", "in
 CLIP_W, CLIP_H = 1150, 700
 # 像素差异占比超过该阈值才算"有差异"（抗抗锯齿 / 亚像素噪音）
 THRESHOLD = 0.002
+PARTS = ("topbar", "sidebar")
 
 
 def routes():
@@ -53,33 +55,43 @@ def capture(out_dir):
             box = page.locator(".layout-content").bounding_box()
             clip = {"x": box["x"], "y": box["y"], "width": min(box["width"], CLIP_W), "height": min(box["height"], CLIP_H)}
             page.screenshot(path=os.path.join(out_dir, name(path) + ".png"), clip=clip)
+            for part in PARTS:
+                page.locator(".layout-" + part).first.screenshot(path=os.path.join(out_dir, f"{name(path)}.{part}.png"))
             print(f"  已截取 {path}")
         browser.close()
+
+
+def compare_images(pb, pa):
+    """返回 (是否一致, 描述, 差异图)。"""
+    if not (os.path.exists(pb) and os.path.exists(pa)):
+        return False, "缺少截图", None
+    a, b = Image.open(pb).convert("RGB"), Image.open(pa).convert("RGB")
+    if a.size != b.size:
+        return False, f"尺寸不同 {a.size} → {b.size}", None
+    diff = np.abs(np.asarray(a, dtype=np.int16) - np.asarray(b, dtype=np.int16)).sum(axis=2) > 24
+    ratio = diff.mean()
+    if ratio > THRESHOLD:
+        return False, f"{ratio:.2%} 的像素不同", diff
+    return True, f"差异 {ratio:.3%}", None
 
 
 def compare(before, after):
     bad = 0
     for path in routes():
-        f = name(path) + ".png"
-        pb, pa = os.path.join(before, f), os.path.join(after, f)
-        if not (os.path.exists(pb) and os.path.exists(pa)):
-            print(f"  ✘ {path}: 缺少截图")
-            bad += 1
-            continue
-        a, b = Image.open(pb).convert("RGB"), Image.open(pa).convert("RGB")
-        if a.size != b.size:
-            print(f"  ✘ {path}: 尺寸不同 {a.size} → {b.size}")
-            bad += 1
-            continue
-        diff = np.abs(np.asarray(a, dtype=np.int16) - np.asarray(b, dtype=np.int16)).sum(axis=2) > 24
-        ratio = diff.mean()
-        if ratio > THRESHOLD:
-            Image.fromarray((diff * 255).astype("uint8")).save(os.path.join(after, name(path) + ".diff.png"))
-            print(f"  ✘ {path}: {ratio:.2%} 的像素不同（差异图 {name(path)}.diff.png）")
-            bad += 1
-        else:
-            print(f"  ✔ {path}: 差异 {ratio:.3%}")
-    print(f"\n{'全部一致' if not bad else str(bad) + ' 个页面有差异'}（共 {len(routes())} 个页面）")
+        page_bad = 0
+        for suffix, label in [("", "内容"), *[("." + p, p) for p in PARTS]]:
+            f = name(path) + suffix + ".png"
+            ok, msg, diff = compare_images(os.path.join(before, f), os.path.join(after, f))
+            if not ok:
+                page_bad += 1
+                if diff is not None:
+                    Image.fromarray((diff * 255).astype("uint8")).save(os.path.join(after, name(path) + suffix + ".diff.png"))
+                print(f"  ✘ {path} [{label}]: {msg}")
+        bad += page_bad
+        if page_bad == 0:
+            print(f"  ✔ {path}")
+    total = len(routes()) * (1 + len(PARTS))
+    print(f"\n{'全部一致' if not bad else str(bad) + ' 处有差异'}（{len(routes())} 个页面 × 内容/顶栏/侧栏 = {total} 张截图）")
     sys.exit(1 if bad else 0)
 
 

@@ -23,6 +23,7 @@ import urllib.request
 API = os.environ.get("E2E_API", "http://127.0.0.1:28180")
 WEB = os.environ.get("E2E_WEB", "http://127.0.0.1:5180")
 PASSWORD = os.environ.get("E2E_PASSWORD", "LocalAdmin!2026")  # localseed 的虚构本地口令
+USER_ID = os.environ.get("E2E_USER_ID", "3")  # localseed 写入的第一个小程序用户
 ROUTES_FILE = os.path.join(os.path.dirname(__file__), "..", "src", "routes", "index.tsx")
 
 
@@ -279,9 +280,12 @@ def browser_checks():
                     text = page.inner_text(".layout-content").strip()
                     assert len(text) > 10, "页面内容为空"
                     # 样式作用域：该路径对应的 scss 必须已注入，否则页面会整页失去样式（R-1）
+                    # 开发模式是 <style> 标签，生产构建是 CSS 文件：统一从 styleSheets 的规则里找
                     scoped = page.evaluate(
-                        """(path) => [...document.querySelectorAll('style')]
-                            .some(s => s.textContent.includes('data-admin-page="' + path + '"'))""", path)
+                        """(path) => [...document.styleSheets].some(ss => {
+                            try { return [...ss.cssRules].some(r => r.cssText.includes('data-admin-page="' + path + '"')); }
+                            catch (e) { return false; }
+                        })""", path)
                     needs_scope = path not in ("/customer-management",) or True
                     assert scoped or not needs_scope, f"没有找到 data-admin-page=\"{path}\" 的样式"
                     unexpected = [e for e in console_errors if not any(k in e for k in KNOWN_NOISE)]
@@ -297,7 +301,8 @@ def browser_checks():
         def _():
             page.goto(WEB + "/admin/this-page-does-not-exist")
             page.wait_for_url(re.compile(r".*/admin/dashboard"), timeout=10000)
-            assert len(page.inner_text(".layout-content").strip()) > 10
+            # 布局先渲染、页面代码块再懒加载：重定向瞬间内容区只有"页面加载中…"，需要等内容就绪
+            page.wait_for_function("document.querySelector('.layout-content').innerText.trim().length > 10", timeout=10000)
 
         @check("D-5 订单中心：仅看异常单 → 显示全量 6 条异常（旧逻辑会显示 0）")
         def _():
@@ -333,6 +338,88 @@ def browser_checks():
             pg.goto(WEB + "/admin/recharge")
             pg.wait_for_url(re.compile(r".*/admin/customer-management"), timeout=10000)
             ctx2.close()
+        print("\n[浏览器] 统一布局（布局上移到路由层）的行为")
+        ctx3 = browser.new_context(viewport={"width": 1366, "height": 860})
+        pg = ctx3.new_page()
+        me_requests = []
+        pg.on("request", lambda r: me_requests.append(r.url) if r.url.endswith("/api/v1/management/me") else None)
+        pg.goto(WEB + "/admin/login")
+        pg.fill("#login-account", "admin_local")
+        pg.fill("#login-password", PASSWORD)
+        pg.click("button[type=submit]")
+        pg.wait_for_url(re.compile(r".*/admin/dashboard"), timeout=15000)
+        pg.wait_for_selector(".layout-content")
+
+        def go_via_sidebar(path):
+            pg.locator(f'a.sidebar-item[href="/admin{path}"]').click()
+            pg.wait_for_url(re.compile(".*/admin" + re.escape(path) + "$"), timeout=10000)
+            pg.wait_for_selector(".layout-content", timeout=10000)
+
+        @check("侧栏 / 顶栏只挂载一次：站内跳转后同一个 DOM 节点仍在")
+        def _():
+            pg.evaluate("document.querySelector('.layout-sidebar').dataset.mark = 'kept'; document.querySelector('.layout-topbar').dataset.mark = 'kept'")
+            for path in ("/users", "/recharge", "/templates", "/dashboard"):
+                go_via_sidebar(path)
+            marks = pg.evaluate("[document.querySelector('.layout-sidebar').dataset.mark, document.querySelector('.layout-topbar').dataset.mark]")
+            assert marks == ["kept", "kept"], f"侧栏/顶栏被重建了: {marks}"
+
+        @check("站内跳转不再重复请求 /me（以前每个页面的顶栏都会请求一次）")
+        def _():
+            before = len(me_requests)
+            for path in ("/users", "/ai-tasks", "/logs", "/dashboard"):
+                go_via_sidebar(path)
+            assert len(me_requests) == before, f"站内跳转期间额外请求了 {len(me_requests) - before} 次 /me"
+
+        @check("切换页面后内容区回到顶部（内容区是同一个元素，必须手动复位）")
+        def _():
+            go_via_sidebar("/templates")
+            # 等页面内容渲染到足够长，否则"页面加载中…"阶段没有滚动条，无法验证复位
+            pg.wait_for_function("(() => { const c = document.querySelector('.layout-content'); return c.scrollHeight > c.clientHeight + 100; })()", timeout=15000)
+            pg.evaluate("document.querySelector('.layout-content').scrollTo({top: 99999})")
+            scrolled = pg.evaluate("document.querySelector('.layout-content').scrollTop")
+            assert scrolled > 50, f"前提不成立：页面不够长，无法验证滚动复位（scrollTop={scrolled}）"
+            go_via_sidebar("/users")
+            pg.wait_for_timeout(300)
+            top = pg.evaluate("document.querySelector('.layout-content').scrollTop")
+            assert top == 0, f"跳转后内容区停在了旧页面的滚动位置 scrollTop={top}"
+
+        @check("浏览器后退 / 前进正常，且页面内容随之切换")
+        def _():
+            go_via_sidebar("/users")
+            go_via_sidebar("/templates")
+            pg.go_back()
+            pg.wait_for_url(re.compile(r".*/admin/users$"), timeout=10000)
+            pg.wait_for_selector(".users-table")
+            pg.go_forward()
+            pg.wait_for_url(re.compile(r".*/admin/templates$"), timeout=10000)
+            pg.wait_for_selector(".layout-content")
+
+        @check("带参数的深链刷新后仍可用：/user-workbench?userId=…")
+        def _():
+            pg.goto(WEB + "/admin/user-workbench?userId=" + USER_ID)
+            pg.wait_for_selector(".layout-content", timeout=15000)
+            pg.wait_for_load_state("networkidle")
+            assert "user-workbench" in pg.url and "userId=" in pg.url, pg.url
+            pg.wait_for_function("document.querySelector('.layout-content').innerText.trim().length > 20", timeout=10000)
+
+        @check("侧栏折叠状态在页面切换后保持（以前每个页面都会重置）")
+        def _():
+            go_via_sidebar("/dashboard")
+            pg.locator(".topbar-menu-btn").click()
+            collapsed = pg.evaluate("document.querySelector('.layout-sidebar').classList.contains('collapsed')")
+            go_via_sidebar("/users")
+            after = pg.evaluate("document.querySelector('.layout-sidebar').classList.contains('collapsed')")
+            assert collapsed == after, f"折叠状态在跳转后改变: {collapsed} → {after}"
+            pg.locator(".topbar-menu-btn").click()  # 还原
+
+        @check("未登录直接访问受保护页面 → 跳转登录页")
+        def _():
+            anon = browser.new_context().new_page()
+            anon.goto(WEB + "/admin/users")
+            anon.wait_for_url(re.compile(r".*/admin/login"), timeout=10000)
+            anon.context.close()
+
+        ctx3.close()
         browser.close()
 
 
