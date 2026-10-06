@@ -581,10 +581,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				return
 			}
 
-			var req struct {
-				Stones int64  `json:"stones" binding:"required,min=0"` // 新的灵石余额
-				Remark string `json:"remark"`                          // 备注（可选）
-			}
+			var req setStonesRequest
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
@@ -606,8 +603,9 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			// 获取当前灵石余额
 			oldStones, _ := userRedisModel.GetStones(id)
 
-			// 设置新的灵石余额
-			if err := userRedisModel.SetStones(id, req.Stones); err != nil {
+			// 设置新的灵石余额（0 是合法余额；required 已保证字段存在）
+			newStones := *req.Stones
+			if err := userRedisModel.SetStones(id, newStones); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "修改灵石余额失败: " + err.Error(),
@@ -618,14 +616,14 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			// 记录操作日志
 			adminName := GetUsername(c)
 			logMessage := fmt.Sprintf("管理员 %s 将用户 %s (ID:%d) 的灵石余额从 %d 修改为 %d",
-				adminName, u.Username, u.ID, oldStones, req.Stones)
+				adminName, u.Username, u.ID, oldStones, newStones)
 			if req.Remark != "" {
 				logMessage += "，备注: " + req.Remark
 			}
 			// 可以将日志记录到数据库（这里使用log打印）
 			log.Println(logMessage)
-			if stoneRecordModel != nil && req.Stones != oldStones {
-				delta := req.Stones - oldStones
+			if stoneRecordModel != nil && newStones != oldStones {
+				delta := newStones - oldStones
 				recordType := "manual_grant"
 				sceneDesc := "管理员增加灵石"
 				if delta < 0 {
@@ -646,7 +644,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 					"id":         u.ID,
 					"username":   u.Username,
 					"old_stones": oldStones,
-					"new_stones": req.Stones,
+					"new_stones": newStones,
 				},
 			})
 		})

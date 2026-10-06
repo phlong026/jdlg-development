@@ -604,9 +604,7 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 				return
 			}
 
-			var req struct {
-				IsFeatured bool `json:"is_featured" binding:"required"`
-			}
+			var req setFeaturedRequest
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
@@ -624,7 +622,8 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 				return
 			}
 
-			if err := templateModel.SetFeatured(id, req.IsFeatured); err != nil {
+			isFeatured := *req.IsFeatured // required 已保证字段存在；false 表示取消精选
+			if err := templateModel.SetFeatured(id, isFeatured); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "操作失败: " + err.Error(),
@@ -632,7 +631,7 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 				return
 			}
 
-			template.IsFeatured = req.IsFeatured
+			template.IsFeatured = isFeatured
 			c.JSON(http.StatusOK, gin.H{
 				"code": 0,
 				"msg":  "操作成功",
