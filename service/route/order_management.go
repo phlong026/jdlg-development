@@ -1,6 +1,8 @@
 package route
 
 import (
+	"bytes"
+	"time"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -72,6 +74,56 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 				"page_size": pageSize,
 			},
 		})
+	})
+
+
+	// 订单导出 CSV（B4）：复用列表的全部筛选条件，导出前 10000 条（上限防拖垮）。
+	// 文件名带导出时间与筛选状态，财务对账可直接归档。
+	orders.GET("/export", func(c *gin.Context) {
+		if userOrderModel == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "订单服务不可用"})
+			return
+		}
+		keyword := strings.TrimSpace(c.Query("keyword"))
+		orderType := strings.TrimSpace(c.DefaultQuery("type", "all"))
+		orderCategory := strings.TrimSpace(c.DefaultQuery("order_category", "all"))
+		status := strings.TrimSpace(c.DefaultQuery("status", "all"))
+		payChannel := strings.TrimSpace(c.DefaultQuery("pay_channel", "all"))
+		startDate := strings.TrimSpace(c.Query("start_date"))
+		endDate := strings.TrimSpace(c.Query("end_date"))
+
+		const exportLimit = 10000
+		list, _, err := userOrderModel.ListForManagement(keyword, orderType, orderCategory, status, payChannel, startDate, endDate, exportLimit, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "导出订单失败: " + err.Error()})
+			return
+		}
+
+		var buf bytes.Buffer
+		buf.WriteString("\uFEFF") // Excel 直接打开不乱码
+		buf.WriteString("订单号,用户ID,用户名,类型,类别,标题,金额,状态,支付渠道,创建时间\n")
+		for _, o := range list {
+			cells := []string{
+				o.OrderNo, strconv.FormatInt(o.UserID, 10), o.Username,
+				o.Type, o.OrderCategory, o.Title,
+				strconv.FormatInt(o.Amount, 10), o.Status, o.PayChannel,
+				o.CreatedAt.Format("2006-01-02 15:04:05"),
+			}
+			for i, cell := range cells {
+				// CSV 注入防护：以 = + - @ 开头的单元格前置单引号，避免 Excel 当公式执行
+				if strings.HasPrefix(cell, "=") || strings.HasPrefix(cell, "+") || strings.HasPrefix(cell, "-") || strings.HasPrefix(cell, "@") {
+					cells[i] = "'" + cell
+				}
+				if strings.ContainsAny(cells[i], ",\"\n") {
+					cells[i] = "\"" + strings.ReplaceAll(cells[i], "\"", "\"\"") + "\""
+				}
+			}
+			buf.WriteString(strings.Join(cells, ",") + "\n")
+		}
+
+		c.Header("Content-Type", "text/csv; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=orders-%s.csv", time.Now().Format("20060102-150405")))
+		c.Data(http.StatusOK, "text/csv; charset=utf-8", buf.Bytes())
 	})
 
 	orders.GET("/:id", func(c *gin.Context) {

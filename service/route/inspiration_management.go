@@ -28,9 +28,7 @@ func RegisterInspirationManagementRoutes(r *gin.RouterGroup, inspirationModel *m
 			if page < 1 {
 				page = 1
 			}
-			if pageSize < 1 {
-				pageSize = 20
-			}
+			pageSize = clampManagementPageSize(pageSize)
 			offset := (page - 1) * pageSize
 			list, err := inspirationModel.List(topic, scene, style, status, keyword, 0, pageSize, offset)
 			if err != nil {

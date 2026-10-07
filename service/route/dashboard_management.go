@@ -63,8 +63,56 @@ func dashboardPendingWechatWhere() string {
     `
 }
 
-func RegisterDashboardManagementRoutes(r *gin.RouterGroup, userDBModel *model.UserModel) {
+func RegisterDashboardManagementRoutes(r *gin.RouterGroup, userDBModel *model.UserModel, customerServiceModel *model.CustomerServiceModel) {
     dashboard := r.Group("/dashboard")
+
+    // 今日待办：运营/客服每天上班第一眼要看的东西（B1）。
+    // 每项数字都带直达链接所需的路由，前端不做任何二次拼装。
+    dashboard.GET("/todo", func(c *gin.Context) {
+        if userDBModel == nil || userDBModel.DB == nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "总控台服务不可用"})
+            return
+        }
+        db := userDBModel.DB
+
+        pendingCertifications, err := queryDashboardInt64(db, `SELECT COUNT(*) FROM certification_applications WHERE status = 'pending_review'`)
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取待审认证数失败: " + err.Error()})
+            return
+        }
+        openTickets, err := queryDashboardInt64(db, `SELECT COUNT(*) FROM support_tickets WHERE status = 'open'`)
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取待处理工单数失败: " + err.Error()})
+            return
+        }
+        overdueTickets, err := queryDashboardInt64(db, `SELECT COUNT(*) FROM support_tickets WHERE status = 'open' AND created_at < (NOW() - INTERVAL 48 HOUR)`)
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取超时工单数失败: " + err.Error()})
+            return
+        }
+        // 线索计数复用线索总览的口径（与销售线索页角标同源，不会出现两套数字）
+        var todoLeads, overdueLeads int64
+        if customerServiceModel != nil {
+            if overview, err := customerServiceModel.Overview(); err == nil && overview != nil {
+                todoLeads = overview.TodoCount
+                overdueLeads = overview.OverdueCount
+            }
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+            "code": 0,
+            "msg":  "success",
+            "data": gin.H{
+                "items": []gin.H{
+                    {"key": "certifications", "label": "待审认证", "count": pendingCertifications, "path": "/certification", "urgent": false},
+                    {"key": "tickets", "label": "待处理工单", "count": openTickets, "path": "/support-tickets", "urgent": false},
+                    {"key": "tickets_overdue", "label": "超时 48h 工单", "count": overdueTickets, "path": "/support-tickets", "urgent": overdueTickets > 0},
+                    {"key": "leads_todo", "label": "待跟进线索", "count": todoLeads, "path": "/customer-leads?queue=todo", "urgent": false},
+                    {"key": "leads_overdue", "label": "超时未跟进线索", "count": overdueLeads, "path": "/customer-leads?queue=overdue", "urgent": overdueLeads > 0},
+                },
+            },
+        })
+    })
 
     dashboard.GET("/overview", func(c *gin.Context) {
         if userDBModel == nil || userDBModel.DB == nil {

@@ -8,6 +8,8 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -152,7 +154,12 @@ func (m *UserRedisModel) AddStones(userID int64, amount int64) error {
 // SetStones 直接设置用户灵石余额（管理员操作）
 func (m *UserRedisModel) SetStones(userID int64, amount int64) error {
 	key := "user:stones:" + strconv.FormatInt(userID, 10)
-	
+
+	// 与异步同步共用同一把用户锁，避免"设置"与"异步同步"交错写 MySQL
+	mu := lockStonesSync(userID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	// 直接设置新余额到Redis
 	if err := m.Redis.Set(m.ctx, key, amount, 0).Err(); err != nil {
 		return err
@@ -166,15 +173,31 @@ func (m *UserRedisModel) SetStones(userID int64, amount int64) error {
 		log.Printf("sync stones to MySQL failed: %v", err)
 		return err
 	}
-	
+
 	return nil
 }
 
-// syncStonesToMySQL 异步同步余额到MySQL
+// syncStonesToMySQL 异步同步余额到MySQL。
+//
+// 同一用户的同步必须串行且写入前重读 Redis 最新值：多个 goroutine 并发
+// "读 Redis → 写 MySQL" 时，慢的那个会用自己的旧读值覆盖刚写入的新值，
+// 服务重启回填（LoadStonesFromMySQL）后表现为用户余额回退。
+// 进程内按用户加锁 + 锁内重读，保证后执行的同步一定写入更新的值。
+var stonesSyncLocks sync.Map // map[int64]*sync.Mutex
+
+func lockStonesSync(userID int64) *sync.Mutex {
+	muAny, _ := stonesSyncLocks.LoadOrStore(userID, &sync.Mutex{})
+	return muAny.(*sync.Mutex)
+}
+
 func (m *UserRedisModel) syncStonesToMySQL(userID int64) {
 	if m.DB == nil {
 		return
 	}
+	mu := lockStonesSync(userID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	key := "user:stones:" + strconv.FormatInt(userID, 10)
 	val, err := m.Redis.Get(m.ctx, key).Result()
 	if err != nil {

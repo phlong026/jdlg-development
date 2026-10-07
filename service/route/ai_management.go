@@ -1,10 +1,19 @@
 package route
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
+	"errors"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"time"
+
+	"github.com/gin-gonic/gin"
 	"service/model"
 	"strings"
 )
@@ -14,6 +23,44 @@ type AIPricingRequest struct {
 	Scene       string                 `json:"scene" binding:"required"`
 	Stones      int64                  `json:"stones" binding:"required"`
 	ExtraConfig map[string]interface{} `json:"extra_config"`
+}
+
+// validateAIEndpointSecurity 校验 AI 接口地址的安全性。
+// "测试/调用"能力与可配置 endpoint 组合构成 SSRF 向量：地址若可指向内网或
+// 攻击者服务器，保存的 API Key 会被原样发往目标。因此要求必须是 https 公网地址，
+// 拒绝环回/私网/链路本地目标（域名按解析结果再核一遍）。
+func validateAIEndpointSecurity(rawEndpoint string) string {
+	u, err := url.Parse(strings.TrimSpace(rawEndpoint))
+	if err != nil || u.Host == "" {
+		return "接口地址格式无效"
+	}
+	if u.Scheme != "https" {
+		return "接口地址必须使用 https（防止密钥明文出网）"
+	}
+	host := u.Hostname()
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") {
+		return "接口地址不能使用本地域名"
+	}
+	denyIP := func(ip net.IP) bool {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if denyIP(ip) {
+			return "接口地址不能指向内网/本机地址"
+		}
+		return ""
+	}
+	addrs, err := net.LookupIP(host)
+	if err != nil {
+		// 解析失败不阻塞保存，交给后续真实调用暴露问题
+		return ""
+	}
+	for _, a := range addrs {
+		if denyIP(a) {
+			return "接口地址解析到内网/本机地址，不允许保存"
+		}
+	}
+	return ""
 }
 
 func validateAIAPIConfigRequest(taskType, apiEndpoint, protocolType string, bodyTemplate map[string]interface{}) string {
@@ -46,11 +93,122 @@ func validateAIAPIConfigRequest(taskType, apiEndpoint, protocolType string, body
 }
 
 // RegisterAIManagementRoutes 注册AI管理后台路由
+// aiConfigTestResult 连通性测试的分类结论。
+// 不发起真实生成请求（避免花掉灵石与生成费），只验证"地址可达、TLS 正常、
+// 鉴权头是否被对端接受"，抓住最常见的配置错误（地址抄错、Key 失效）。
+type aiConfigTestResult struct {
+	OK         bool   `json:"ok"`
+	HTTPStatus int    `json:"http_status,omitempty"`
+	Category   string `json:"category"` // ok / network_error / timeout / auth_rejected / request_rejected / server_error / unsafe_endpoint
+	Message    string `json:"message"`
+}
+
+func registerAIAPIConfigTestRoute(ai *gin.RouterGroup, apiConfigModel *model.AIAPIConfigModel) {
+	ai.POST("/api/config/test", func(c *gin.Context) {
+		if apiConfigModel == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "AI 配置服务不可用"})
+			return
+		}
+		var req struct {
+			ID           int64  `json:"id"`
+			TaskType     string `json:"task_type"`
+			ProviderCode string `json:"provider_code"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
+			return
+		}
+
+		config, err := lookupAIAPIConfig(apiConfigModel, req.ID, req.TaskType, req.ProviderCode)
+		if err != nil || config == nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "配置不存在"})
+			return
+		}
+
+		// endpoint 安全校验与保存同源：拒绝内网/非 https 目标，防测试能力被用作 SSRF 探测
+		if msg := validateAIEndpointSecurity(config.APIEndpoint); msg != "" {
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": aiConfigTestResult{
+				Category: "unsafe_endpoint", Message: msg,
+			}})
+			return
+		}
+
+		result := probeAIEndpoint(c.Request.Context(), config)
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": result})
+	})
+}
+
+// lookupAIAPIConfig 按 id 或 (task_type, provider_code) 唯一定位一条配置。
+func lookupAIAPIConfig(m *model.AIAPIConfigModel, id int64, taskType, providerCode string) (*model.AIAPIConfig, error) {
+	configs, err := m.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	for _, cfg := range configs {
+		if id > 0 && cfg.ID == id {
+			return cfg, nil
+		}
+		if id == 0 && taskType != "" && providerCode != "" && cfg.TaskType == taskType && cfg.ProviderCode == providerCode {
+			return cfg, nil
+		}
+	}
+	return nil, nil
+}
+
+// probeAIEndpoint 向配置的接口地址发一个最小 POST 并按响应分类。
+// 无论 2xx/4xx/5xx，只要拿到 HTTP 响应就证明"地址与 TLS 正确"；401/403 说明
+// 地址对但密钥/鉴权方式配置有误——这正是测试要抓的东西。
+func probeAIEndpoint(ctx context.Context, config *model.AIAPIConfig) aiConfigTestResult {
+	payload := []byte(`{}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.APIEndpoint, bytes.NewReader(payload))
+	if err != nil {
+		return aiConfigTestResult{Category: "network_error", Message: "构造请求失败: " + err.Error()}
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// 与真实调用一致的鉴权头注入（api_key_location）
+	key := config.APIKey
+	switch config.APIKeyLocation {
+	case "header_bearer":
+		req.Header.Set("Authorization", "Bearer "+key)
+	case "header_custom":
+		req.Header.Set(config.APIKeyName, key)
+	case "query":
+		q := req.URL.Query()
+		q.Set(config.APIKeyName, key)
+		req.URL.RawQuery = q.Encode()
+	case "body":
+		// 空 JSON 探测即可，不注入（body 模式的真实模板各供应商不同）
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "timeout") {
+			return aiConfigTestResult{Category: "timeout", Message: "10 秒内无响应，请检查地址是否正确"}
+		}
+		return aiConfigTestResult{Category: "network_error", Message: "网络错误: " + err.Error()}
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
+
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		return aiConfigTestResult{OK: true, HTTPStatus: resp.StatusCode, Category: "ok", Message: "接口可达且接受了请求"}
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return aiConfigTestResult{HTTPStatus: resp.StatusCode, Category: "auth_rejected", Message: fmt.Sprintf("地址可达但鉴权被拒（HTTP %d）：请检查 API Key 是否有效、发送位置配置是否正确", resp.StatusCode)}
+	case resp.StatusCode >= 400 && resp.StatusCode < 500:
+		return aiConfigTestResult{HTTPStatus: resp.StatusCode, Category: "request_rejected", Message: fmt.Sprintf("对端拒绝了探测请求（HTTP %d）：地址可达；空请求体被拒属正常，可结合真实任务判断", resp.StatusCode)}
+	default:
+		return aiConfigTestResult{HTTPStatus: resp.StatusCode, Category: "server_error", Message: fmt.Sprintf("对端服务错误（HTTP %d）：稍后重试或检查供应商状态", resp.StatusCode)}
+	}
+}
+
 func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricingModel, apiConfigModel *model.AIAPIConfigModel) {
+
 	ai := r.Group("/ai")
-	{
-		// 获取所有计费配置
-		ai.GET("/pricing", func(c *gin.Context) {
+	registerAIAPIConfigTestRoute(ai, apiConfigModel)
+	ai.GET("/pricing", func(c *gin.Context) {
 			pricings, err := pricingModel.GetAll()
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
@@ -283,6 +441,13 @@ func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricin
 				bodyTemplateJSON = string(bodyBytes)
 			}
 
+			if securityMsg := validateAIEndpointSecurity(req.APIEndpoint); securityMsg != "" {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  FormatValidationError(securityMsg, "APIEndpoint"),
+				})
+				return
+			}
 			if validationMsg := validateAIAPIConfigRequest(req.TaskType, req.APIEndpoint, req.ProtocolType, req.BodyTemplate); validationMsg != "" {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
@@ -338,4 +503,3 @@ func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricin
 			})
 		})
 	}
-}

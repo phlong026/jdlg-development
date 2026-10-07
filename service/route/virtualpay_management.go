@@ -1,6 +1,7 @@
 package route
 
 import (
+"log"
 	"context"
 	"database/sql"
 	"errors"
@@ -249,14 +250,15 @@ func refundVirtualPayRechargeOrder(ctx context.Context, cfg *config.Config, deps
 	}
 
 	if err := deps.UserModel.DeductStones(order.UserID, order.Amount); err != nil {
-		_ = restoreVirtualPayRefunding(deps.UserOrderModel, order.ID)
+		if rbErr := restoreVirtualPayRefunding(deps.UserOrderModel, order.ID); rbErr != nil {
+			log.Printf("[VirtualPay][资金] 扣回灵石失败且回滚状态失败，订单卡在 refunding 待补偿核对: orderID=%d err=%v", order.ID, rbErr)
+		}
 		return nil, fmt.Errorf("扣回灵石失败: %w", err)
 	}
 
 	accessToken, err := function.GetAccessToken(cfg.Wechat.AppID, cfg.Wechat.AppSecret)
 	if err != nil {
-		_ = deps.UserModel.AddStones(order.UserID, order.Amount)
-		_ = restoreVirtualPayRefunding(deps.UserOrderModel, order.ID)
+		logRollbackRefundFailure(deps, order, "get_access_token", err)
 		return nil, fmt.Errorf("获取微信 access_token 失败: %w", err)
 	}
 
@@ -273,8 +275,7 @@ func refundVirtualPayRechargeOrder(ctx context.Context, cfg *config.Config, deps
 		Env:          pickXPayEnv(cfg, platform),
 	})
 	if err != nil {
-		_ = deps.UserModel.AddStones(order.UserID, order.Amount)
-		_ = restoreVirtualPayRefunding(deps.UserOrderModel, order.ID)
+		logRollbackRefundFailure(deps, order, "refund_order", err)
 		return nil, fmt.Errorf("微信虚拟支付退款失败: %w", err)
 	}
 
@@ -289,6 +290,22 @@ func refundVirtualPayRechargeOrder(ctx context.Context, cfg *config.Config, deps
 		NewStones:    oldStones - order.Amount,
 		Status:       "refunding",
 	}, nil
+}
+
+
+// logRollbackRefundFailure 退款链路失败后的回滚（退还灵石 + 状态回 success）。
+// 回滚自身失败时订单会卡在 refunding 且用户灵石少记，必须留痕供补偿任务/人工核对，
+// 不能再像以前那样用 _ = 吞掉。
+func logRollbackRefundFailure(deps VirtualPayDeps, order *model.UserOrder, stage string, cause error) {
+	if err := deps.UserModel.AddStones(order.UserID, order.Amount); err != nil {
+		log.Printf("[VirtualPay][资金][严重] 退款失败(%s)且退还灵石失败，需人工核对: orderNo=%s user=%d amount=%d err=%v",
+			stage, order.OrderNo, order.UserID, order.Amount, err)
+	}
+	if err := restoreVirtualPayRefunding(deps.UserOrderModel, order.ID); err != nil {
+		log.Printf("[VirtualPay][资金][严重] 退款失败(%s)且回滚订单状态失败，订单卡在 refunding 待补偿核对: orderNo=%s err=%v",
+			stage, order.OrderNo, err)
+	}
+	log.Printf("[VirtualPay][资金] 退款失败(%s)已回滚（退还灵石+状态回 success）: orderNo=%s cause=%v", stage, order.OrderNo, cause)
 }
 
 func claimVirtualPayRefunding(userOrderModel *model.UserOrderModel, orderID int64) (bool, error) {

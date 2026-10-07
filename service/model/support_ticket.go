@@ -35,6 +35,10 @@ type SupportTicketOverview struct {
 	InProgressCount int64 `json:"in_progress_count"`
 	ClosedCount     int64 `json:"closed_count"`
 	HighPriorityCount int64 `json:"high_priority_count"`
+	// 队列 Tab 补充口径：今日新增 / 超 48 小时仍未处理的待办（与列表的
+	// status=today / status=overdue 虚拟筛选共用同一段 SQL 条件）
+	TodayCount   int64 `json:"today_count"`
+	OverdueCount int64 `json:"overdue_count"`
 }
 
 type SupportTicketListParams struct {
@@ -207,8 +211,17 @@ func (m *SupportTicketModel) ListForManagement(params SupportTicketListParams) (
 		args = append(args, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword)
 	}
 	if value := strings.TrimSpace(params.Status); value != "" && value != "all" {
-		where = append(where, `t.status = ?`)
-		args = append(args, value)
+		switch value {
+		case "today":
+			// 虚拟队列：今日新增（供队列 Tab 使用，DB 中无此状态值）
+			where = append(where, `t.created_at >= CURDATE()`)
+		case "overdue":
+			// 虚拟队列：超 48 小时仍待处理
+			where = append(where, `t.status = 'open' AND t.created_at < (NOW() - INTERVAL 48 HOUR)`)
+		default:
+			where = append(where, `t.status = ?`)
+			args = append(args, value)
+		}
 	}
 	if value := strings.TrimSpace(params.Type); value != "" && value != "all" {
 		where = append(where, `t.type = ?`)
@@ -292,8 +305,18 @@ func (m *SupportTicketModel) Overview() (*SupportTicketOverview, error) {
 	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM support_tickets WHERE priority = 'high' AND status <> 'closed'`).Scan(&result.HighPriorityCount); err != nil {
 		return nil, err
 	}
+	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM support_tickets WHERE created_at >= CURDATE()`).Scan(&result.TodayCount); err != nil {
+		return nil, err
+	}
+	if err := m.DB.QueryRow(supportTicketOverdueWhere).Scan(&result.OverdueCount); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
+
+// supportTicketOverdueWhere "超时工单"的统一口径：仍待处理且创建超过 48 小时。
+// 队列计数与列表筛选共用这一段，防止两处数字对不上（与销售线索的队列口径治理同款）。
+const supportTicketOverdueWhere = `SELECT COUNT(*) FROM support_tickets WHERE status = 'open' AND created_at < (NOW() - INTERVAL 48 HOUR)`
 
 func (m *SupportTicketModel) UpdateStatus(id int64, status string) error {
 	normalized := normalizeSupportTicketStatus(status)

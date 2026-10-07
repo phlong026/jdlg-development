@@ -245,9 +245,7 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 			if page < 1 {
 				page = 1
 			}
-			if pageSize < 1 {
-				pageSize = 20
-			}
+			pageSize = clampManagementPageSize(pageSize)
 
 			offset := (page - 1) * pageSize
 			templateList, err := templateModel.List(category, status, pageSize, offset)
@@ -677,9 +675,7 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 				if page < 1 {
 					page = 1
 				}
-				if pageSize < 1 {
-					pageSize = 20
-				}
+			pageSize = clampManagementPageSize(pageSize)
 				offset := (page - 1) * pageSize
 
 				groups, err := featuredCaseGroupModel.List(pageSize, offset)

@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"service/component/virtualpay"
 	"service/config"
+	"service/function"
 )
 
 // 补偿任务调参（按 TODO 阶段 2.3 约定，避免散落到 ENV）。
@@ -20,6 +22,10 @@ const (
 	virtualpayCompensateExpireMinutes    = 30
 	virtualpayCompensateBatchLimit       = 50
 	virtualpayGoodsReportRetryBatchLimit = 50
+	// refundRefundingStaleMinutes 退款单卡在 refunding 超过该时长即触发微信侧核对。
+	// 正常流转（claim → 微信退款 → 推送 refunded）在分钟级完成，10 分钟仍卡住
+	// 基本可判定推送丢失或退款中途崩溃。
+	refundRefundingStaleMinutes = 10
 )
 
 // VirtualPayCompensator 周期性扫描卡 pending 的虚拟支付订单，主动复用 confirm 链路推进发货。
@@ -106,6 +112,7 @@ func (vc *VirtualPayCompensator) tick() {
 		return
 	}
 	if len(orderNos) == 0 {
+		vc.scanRefundingStuckOrders()
 		vc.retryGoodsDeliverReports()
 		return
 	}
@@ -131,7 +138,69 @@ func (vc *VirtualPayCompensator) tick() {
 		}
 		log.Printf("[VirtualPay] compensate ok: orderNo=%s state=%s", orderNo, state)
 	}
+	vc.scanRefundingStuckOrders()
 	vc.retryGoodsDeliverReports()
+}
+
+// scanRefundingStuckOrders 兜底核对卡在 refunding 的退款单（P1-8）。
+//
+// 正常流转由微信 xpay_refund_notify 推送把订单推进到 refunded；推送丢失或
+// 进程在"claim → 扣灵石 → 微信退款"中途崩溃时订单会永久卡在 refunding。
+// 处理策略：
+//   - 微信侧订单状态已是 REFUND → 退款确实成功，安全落终态 refunded（幂等）
+//   - 其它状态 → 不自动回滚（无法区分崩溃发生在扣灵石之前还是之后，自动补
+//     灵石可能造成重复加账），打 [资金] 告警日志交由人工核对处置
+func (vc *VirtualPayCompensator) scanRefundingStuckOrders() {
+	orderNos, err := vc.deps.UserOrderModel.ListVirtualPayRefundingStale(refundRefundingStaleMinutes, virtualpayCompensateBatchLimit)
+	if err != nil {
+		log.Printf("[VirtualPay] list refunding-stale err: %v", err)
+		return
+	}
+	if len(orderNos) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, orderNo := range orderNos {
+		select {
+		case <-vc.stopCh:
+			return
+		default:
+		}
+		meta, err := vc.deps.UserOrderModel.GetVirtualPayOrderMeta(orderNo)
+		if err != nil || meta == nil {
+			log.Printf("[VirtualPay][资金] refunding-stale get meta err: orderNo=%s err=%v", orderNo, err)
+			continue
+		}
+		if meta.OpenID == "" {
+			log.Printf("[VirtualPay][资金] refunding-stale 缺少 openid 无法核对微信侧状态，需人工处理: orderNo=%s", orderNo)
+			continue
+		}
+		accessToken, err := function.GetAccessToken(vc.cfg.Wechat.AppID, vc.cfg.Wechat.AppSecret)
+		if err != nil {
+			log.Printf("[VirtualPay] refunding-stale get access_token err: %v", err)
+			return
+		}
+		resp, err := virtualpay.QueryOrder(ctx, accessToken, virtualpay.QueryOrderRequest{
+			OpenID:     meta.OpenID,
+			OutTradeNo: orderNo,
+			Env:        pickXPayEnv(vc.cfg, ""),
+		})
+		if err != nil {
+			log.Printf("[VirtualPay][资金] refunding-stale query err: orderNo=%s err=%v", orderNo, err)
+			continue
+		}
+		if resp.State == virtualpay.OrderStateRefund {
+			if err := vc.deps.UserOrderModel.UpdateStatus(orderNo, "refunded"); err != nil {
+				log.Printf("[VirtualPay][资金] refunding-stale 落终态失败需人工处理: orderNo=%s err=%v", orderNo, err)
+				continue
+			}
+			log.Printf("[VirtualPay] refunding-stale 微信侧已退款，落终态 refunded: orderNo=%s", orderNo)
+			continue
+		}
+		log.Printf("[VirtualPay][资金] refunding-stale 微信侧状态=%s（退款未在微信侧生效），订单卡在 refunding，需人工核对扣回与退款是否一致: orderNo=%s", resp.State, orderNo)
+	}
 }
 
 func (vc *VirtualPayCompensator) retryGoodsDeliverReports() {

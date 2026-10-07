@@ -339,6 +339,32 @@ func (m *UserOrderModel) ReleasePendingOrder(orderNo string) error {
 // staleMinutes 用于避免和 confirm 接口竞争（用户刚下单的订单还在前端 success 路径上）。
 //
 // 仅返回最少必要字段，让补偿任务批量处理时减少回包大小。
+// ListVirtualPayRefundingStale 列出卡在 refunding 状态超过 staleMinutes 的退款单。
+// 正常流程由微信 xpay_refund_notify 推送推进到 refunded；推送丢失或进程在
+// 退款中途崩溃时订单会永久卡死，由补偿任务用微信侧订单状态兜底核对。
+func (m *UserOrderModel) ListVirtualPayRefundingStale(staleMinutes, limit int) ([]string, error) {
+	rows, err := m.DB.Query(
+		`SELECT order_no FROM user_orders
+		 WHERE pay_channel = 'virtualpay' AND type = 'recharge' AND status = 'refunding'
+		   AND updated_at < (NOW() - INTERVAL ? MINUTE)
+		 ORDER BY updated_at ASC LIMIT ?`,
+		staleMinutes, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var orderNos []string
+	for rows.Next() {
+		var no string
+		if err := rows.Scan(&no); err != nil {
+			return nil, err
+		}
+		orderNos = append(orderNos, no)
+	}
+	return orderNos, rows.Err()
+}
+
 func (m *UserOrderModel) ListVirtualPayPendingForCompensation(staleMinutes, limit int) ([]string, error) {
 	rows, err := m.DB.Query(
 		`SELECT order_no FROM user_orders

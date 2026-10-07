@@ -20,9 +20,7 @@ func RegisterUtilityToolManagementRoutes(r *gin.RouterGroup, utilityToolModel *m
 			if page < 1 {
 				page = 1
 			}
-			if pageSize < 1 {
-				pageSize = 20
-			}
+			pageSize = clampManagementPageSize(pageSize)
 			offset := (page - 1) * pageSize
 
 			var isPublished *bool

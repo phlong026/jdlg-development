@@ -46,6 +46,8 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	buildingCodeChatModel *model.BuildingCodeChatModel,
 	cfg *config.Config) func() {
 	reportContext, stopReports := context.WithCancel(context.Background())
+	// 管理端操作审计写入器（在下方管理路由块内初始化，停止时冲刷）
+	var auditWriter *model.AuditWriter
 	reportModule, reportErr := NewReportModule(reportContext, component.GetDB(), cfg)
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
@@ -148,8 +150,17 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 需要认证的管理接口
 		managementAuth := management.Group("")
 		managementAuth.Use(AuthRequired, ManagementAccessRequired(userDBModel))
+
+		// 操作审计（阶段 A）：记录所有写操作；建表 fail-soft（启动迁移白名单也会建）
+		managementAuditModel := model.NewManagementAuditModel(userDBModel.DB)
+		if err := managementAuditModel.InitTable(); err != nil {
+			log.Printf("[审计] 初始化操作审计表失败（审计写入将丢失，请人工核查）: %v", err)
+		}
+		auditWriter = model.NewAuditWriter(managementAuditModel, 256)
+		managementAuth.Use(ManagementAuditRecorder(auditWriter))
+		RegisterManagementAuditRoutes(managementAuth, managementAuditModel)
 		RegisterCRMManagementRoutes(managementAuth, userDBModel)
-		RegisterDashboardManagementRoutes(managementAuth, userDBModel)
+		RegisterDashboardManagementRoutes(managementAuth, userDBModel, customerServiceModel)
 		RegisterAIManagementRoutes(managementAuth, pricingModel, apiConfigModel)
 		RegisterAITaskManagementRoutes(managementAuth, pricingModel, taskModel, videoTaskModel, supportTicketModel)
 		RegisterUserWorkbenchManagementRoutes(managementAuth, userDBModel, userModel, userProfileModel, stoneRecordModel, userOrderModel, userMembershipModel, taskModel, videoTaskModel, pricingModel)
@@ -176,5 +187,8 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 小程序实用工具接口（公开接口）
 		RegisterUtilityToolRoutes(miniprogram, utilityToolModel)
 	}
-	return stopReports
+	return func() {
+		stopReports()
+		auditWriter.Stop()
+	}
 }

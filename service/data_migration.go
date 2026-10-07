@@ -32,6 +32,8 @@ const migrationTrackingTable = "app_data_migrations"
 // main 包中的 TestAutoStartupMigrationsAreSafe 会在编译期测试中拦截违规项。
 var autoStartupMigrations = []string{
 	"management_crm_link_intent_up.sql",
+	// 管理端操作审计表（纯增量 CREATE TABLE IF NOT EXISTS，幂等）
+	"management_operation_audit_up.sql",
 }
 
 //go:embed sql/*.sql
