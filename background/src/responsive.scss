@@ -75,3 +75,58 @@
 @media (prefers-reduced-motion: reduce) {
   .layout-sidebar { transition: none; }
 }
+
+// ---- 筛选行的断点细分（覆盖 App.scss 旧全局"768 以下全部纵排"规则）----
+// App.scss 在 ≤768 把 .filters 强制 column+stretch，平板宽度下每个下拉全宽独占一行，
+// 首屏被筛选器占满（订单中心尤甚）。768 宽度足够横排 2~3 列，恢复横向 wrap；
+// 更窄的屏幕（≤560）再回到纵排全宽（触屏更易点按）。
+@media (max-width: 768px) {
+  .layout-content .filters {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+  }
+  .layout-content .filters > * {
+    width: auto !important;
+    flex: 0 1 auto !important;
+  }
+  .layout-content .filters > select,
+  .layout-content .filters > input,
+  .layout-content .filters > .filter-select,
+  .layout-content .filters > .filter-date {
+    flex: 1 1 180px !important;
+    min-width: 0;
+  }
+  .layout-content .filters > .search-box {
+    flex: 1 1 100% !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .layout-content .filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .layout-content .filters > * {
+    width: 100% !important;
+  }
+  /* 与 768 块同特异性且更晚声明：column 布局里 flex-basis 会作用成高度，
+     必须清掉 768 块的 flex:1 1 180px，否则 select 被撑成 180px 高的大块 */
+  .layout-content .filters > select,
+  .layout-content .filters > input,
+  .layout-content .filters > .filter-select,
+  .layout-content .filters > .filter-date,
+  .layout-content .filters > .search-box {
+    flex: 0 0 auto !important;
+  }
+}
+
+// 工单队列条：窄屏允许横向滚动而不折行（折行会把队列挤成三行）
+@media (max-width: 560px) {
+  .ticket-queues {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ticket-queue-tab { flex-shrink: 0; }
+}
