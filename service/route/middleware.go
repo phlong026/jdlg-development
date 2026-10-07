@@ -48,6 +48,16 @@ func SetUserSession(c *gin.Context, userID int64, username string, userType stri
 	session.Set("user_id", userID)
 	session.Set("username", username)
 	session.Set("user_type", userType)
+	// 管理端会话安全属性必须显式设置：redistore 默认 30 天有效期且不带
+	// HttpOnly/Secure/SameSite，一旦后台出现 XSS 会话即可被脚本读取外传。
+	// 与企微登录（wecom_identity.go）及 CRM 模式的 8 小时会话保持一致。
+	session.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   28800,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 	return session.Save()
 }
 

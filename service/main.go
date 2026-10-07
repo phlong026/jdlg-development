@@ -351,6 +351,16 @@ func main() {
 	if err := function.InitCrypto(cfg.Server.SM2PrivateKey, cfg.Server.SM2PublicKey, cfg.Server.SM4Key); err != nil {
 		log.Printf("初始化加密模块警告: %v（token 加解密可能无法工作）", err)
 	}
+	// 密钥仍在用代码内置默认值时强警告。不直接拒绝启动：SM4/HMAC 密钥与小程序端共享，
+	// 单方面换钥会让全部小程序请求验签失败，必须双端同步发版后才能切换（见 docs 安全方案）。
+	if cfg.Server.SM4Key == "" {
+		if cfg.IsDevelopment() {
+			log.Println("[安全] SM4_KEY 未配置，正在使用内置默认密钥（仅限本地开发）")
+		} else {
+			log.Println("[安全][严重] SM4_KEY 未配置，生产环境正在使用可从公开代码推导的默认密钥！" +
+				"小程序 token 加解密与请求验签形同虚设。请尽快按部署文档配置 SM4_KEY 并与小程序端同步切换。")
+		}
+	}
 
 	// 12.1. 初始化微信支付（证书目录默认 service/certificate，APIv3 密钥可从 certificate/APIv3密钥.md 读取）
 	wpCfg := wechatpay.Config{

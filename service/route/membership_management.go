@@ -1,6 +1,7 @@
 package route
 
 import (
+	"fmt"
 	"net/http"
 	"service/model"
 	"strconv"
@@ -9,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterMembershipManagementRoutes(r *gin.RouterGroup, membershipPlanModel *model.MembershipPlanModel) {
+func RegisterMembershipManagementRoutes(r *gin.RouterGroup, membershipPlanModel *model.MembershipPlanModel, userMembershipModel *model.UserMembershipModel) {
 	membership := r.Group("/membership-plans")
 	membership.GET("", func(c *gin.Context) {
 		if membershipPlanModel == nil {
@@ -109,6 +110,27 @@ func RegisterMembershipManagementRoutes(r *gin.RouterGroup, membershipPlanModel 
 		if err != nil || id <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的ID"})
 			return
+		}
+		plan, err := membershipPlanModel.GetByID(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "会员计划不存在"})
+			return
+		}
+		// 引用检查：已有用户持有（或曾持有）该计划时物理删除会产生悬空引用，
+		// 影响会员状态计算与对账；引导改为停用（is_enabled = false）
+		if userMembershipModel != nil {
+			count, err := userMembershipModel.CountByPlan(plan.ID, plan.PlanCode)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "检查会员计划引用失败: " + err.Error()})
+				return
+			}
+			if count > 0 {
+				c.JSON(http.StatusConflict, gin.H{
+					"code": 409,
+					"msg":  fmt.Sprintf("已有 %d 位用户持有过该计划，不能删除；请改为停用（编辑并关闭「启用」）", count),
+				})
+				return
+			}
 		}
 		if err := membershipPlanModel.Delete(id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "删除会员计划失败: " + err.Error()})

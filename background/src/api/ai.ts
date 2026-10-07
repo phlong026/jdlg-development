@@ -30,7 +30,8 @@ export interface AIAPIConfig {
     enable_prompt_optimization?: boolean; // 是否开启提示词优化
     image_path?: string; // 用户图片在JSON中的路径，如 "image" 或 "data.images[0]"
     // API Key 配置
-    api_key?: string; // API Key 值
+    api_key?: string; // API Key 掩码（如 sk-1****abcd），明文不再下发
+    api_key_configured?: boolean; // 是否已配置密钥；编辑时留空提交表示保持不变
     api_key_location?: APIKeyLocation; // API Key 发送位置: header, query, body
     api_key_name?: string; // API Key 参数名，如 Authorization, api_key, X-API-Key
     created_at?: string;

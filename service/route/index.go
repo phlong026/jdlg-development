@@ -166,7 +166,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterUtilityToolManagementRoutes(managementAuth, utilityToolModel)
 		RegisterAIToolManagementRoutes(managementAuth, aiToolModel, taskModel)
 		RegisterRechargeConfigManagementRoutes(managementAuth, rechargeConfigModel)
-		RegisterMembershipManagementRoutes(managementAuth, membershipPlanModel)
+		RegisterMembershipManagementRoutes(managementAuth, membershipPlanModel, userMembershipModel)
 		RegisterMembershipOperationsManagementRoutes(managementAuth, userDBModel, userProfileModel, userMembershipModel, userOrderModel)
 		RegisterSupportTicketManagementRoutes(managementAuth, supportTicketModel)
 		RegisterCustomerLeadManagementRoutes(managementAuth, customerServiceModel)

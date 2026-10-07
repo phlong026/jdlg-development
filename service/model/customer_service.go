@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -22,6 +24,13 @@ const (
 )
 
 var ErrInvalidCustomerLeadID = errors.New("invalid customer lead id")
+
+// isIdempotentAlterSkip 判断增量 ALTER 是否因目标已存在而失败（1060 列已存在 / 1061 索引已存在）。
+// 这类"失败"是幂等升级的预期结果，静默跳过；其它错误仍需记录日志排查。
+func isIdempotentAlterSkip(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && (mysqlErr.Number == 1060 || mysqlErr.Number == 1061)
+}
 
 type CustomerLead struct {
 	ID                      int64      `json:"id"`
@@ -260,14 +269,15 @@ CREATE TABLE IF NOT EXISTS customer_leads (
 `); err != nil {
 		return err
 	}
-	// 兼容旧库的增量列；失败大多表示列已存在，记录日志便于排查而非静默吞掉
+	// 兼容旧库的增量列；列/索引已存在（1060/1061）是幂等升级的预期结果，跳过不记录，
+	// 只有真正的结构错误才打日志，避免每次启动刷重复错误淹没排障
 	for _, alter := range []string{
 		`ALTER TABLE customer_leads ADD COLUMN session_no VARCHAR(128) NOT NULL DEFAULT ''`,
 		`ALTER TABLE customer_leads ADD INDEX idx_session_no (session_no)`,
 		`ALTER TABLE customer_leads ADD COLUMN next_followup_at DATETIME NULL`,
 		`ALTER TABLE customer_leads ADD INDEX idx_next_followup_at (next_followup_at)`,
 	} {
-		if _, err := m.DB.Exec(alter); err != nil {
+		if _, err := m.DB.Exec(alter); err != nil && !isIdempotentAlterSkip(err) {
 			log.Printf("customer_leads 增量结构检查: %v", err)
 		}
 	}
@@ -295,7 +305,7 @@ CREATE TABLE IF NOT EXISTS customer_lead_followups (
 		`ALTER TABLE customer_lead_followups ADD COLUMN next_followup_at DATETIME NULL`,
 		`ALTER TABLE customer_lead_followups ADD INDEX idx_next_followup_at (next_followup_at)`,
 	} {
-		if _, err := m.DB.Exec(alter); err != nil {
+		if _, err := m.DB.Exec(alter); err != nil && !isIdempotentAlterSkip(err) {
 			log.Printf("customer_lead_followups 增量结构检查: %v", err)
 		}
 	}

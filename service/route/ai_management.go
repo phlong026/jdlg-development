@@ -148,7 +148,9 @@ func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricin
 					"is_active":                  config.IsActive,
 					"api_endpoint":               config.APIEndpoint,
 					"method":                     config.Method,
-					"api_key":                    config.APIKey,
+					// 密钥只返回掩码与是否已配置，明文进出浏览器会被内存/缓存/截屏带出
+					"api_key":                    model.MaskAPIKey(config.APIKey),
+					"api_key_configured":         config.APIKey != "",
 					"api_key_location":           config.APIKeyLocation,
 					"api_key_name":               config.APIKeyName,
 					"headers":                    headers,
@@ -287,6 +289,20 @@ func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricin
 					"msg":  FormatValidationError(validationMsg, "APIEndpoint"),
 				})
 				return
+			}
+
+			// 空密钥不覆盖：列表接口只返回掩码，前端编辑时留空表示"保持原密钥不变"，
+			// 此处回填数据库中的原值，避免掩码或空串被写回配置
+			if strings.TrimSpace(req.APIKey) == "" {
+				existing, err := apiConfigModel.GetExistingAPIKey(req.ID, req.TaskType, req.ProviderCode)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code": 500,
+						"msg":  "读取原密钥失败: " + err.Error(),
+					})
+					return
+				}
+				req.APIKey = existing
 			}
 
 			apiConfig := &model.AIAPIConfig{

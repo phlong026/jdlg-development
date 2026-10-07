@@ -197,6 +197,35 @@ func (m *AIAPIConfigModel) GetAll() ([]*AIAPIConfig, error) {
 	return configs, nil
 }
 
+// GetExistingAPIKey 返回现有配置的 api_key，用于"空值不覆盖原密钥"语义。
+// 优先按 id 精确匹配；新配置（id=0）按唯一键 (task_type, provider_code) 查找。
+// 查不到（首次创建）返回空字符串。
+func (m *AIAPIConfigModel) GetExistingAPIKey(id int64, taskType, providerCode string) (string, error) {
+	var key string
+	var err error
+	if id > 0 {
+		err = m.DB.QueryRow(`SELECT api_key FROM ai_api_config WHERE id = ?`, id).Scan(&key)
+	} else {
+		err = m.DB.QueryRow(`SELECT api_key FROM ai_api_config WHERE task_type = ? AND provider_code = ?`, taskType, providerCode).Scan(&key)
+	}
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return key, err
+}
+
+// MaskAPIKey 生成密钥掩码：保留前 4 位与后 4 位便于辨认，中间以 **** 代替；
+// 短密钥只保留首字符，避免掩码本身泄露过多。
+func MaskAPIKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		return string(key[0]) + "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
+}
+
 // Upsert 创建或更新API配置
 func (m *AIAPIConfigModel) Upsert(config *AIAPIConfig) error {
 	normalizeAIAPIConfig(config)

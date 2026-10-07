@@ -553,7 +553,8 @@ const APIConfigModal: React.FC<APIConfigModalProps> = ({ config, onSave, onClose
     const [imagePath, setImagePath] = useState(config?.image_path || '');
 
     // API Key 配置
-    const [apiKey, setApiKey] = useState(config?.api_key || '');
+    // 密钥输入框不预填：列表接口只返回掩码，留空提交表示保持原密钥不变
+    const [apiKey, setApiKey] = useState('');
     const [apiKeyLocation, setApiKeyLocation] = useState<'header_bearer' | 'header_custom' | 'query' | 'body' | 'none'>(
         config?.api_key_location as any || 'header_bearer'
     );
@@ -830,9 +831,12 @@ const APIConfigModal: React.FC<APIConfigModalProps> = ({ config, onSave, onClose
                                     type="password"
                                     value={apiKey}
                                     onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="输入 API Key（可选）"
+                                    placeholder={config?.api_key_configured ? `已配置 ${config.api_key}，留空保持不变` : '输入 API Key（可选）'}
                                     disabled={loading}
                                 />
+                                {config?.api_key_configured && (
+                                    <div className="form-hint">已保存的密钥只会以掩码显示；需要更换时输入新值即可</div>
+                                )}
                             </div>
 
                             <div className="form-row">

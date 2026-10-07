@@ -67,6 +67,12 @@ func ManagementAccessRequired(users *model.UserModel) gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		// 浏览器在页面跳转时取消未完成的请求，属于客户端行为而非服务故障，
+		// 直接中止即可，否则会以 503 计入日志造成 5xx 假警报
+		if errors.Is(err, context.Canceled) {
+			c.Abort()
+			return
+		}
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			crmError(c, 503, "管理授权服务不可用")
 			return

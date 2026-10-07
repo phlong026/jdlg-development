@@ -122,6 +122,17 @@ func (m *UserMembershipModel) GetByUserID(userID int64) (*UserMembership, error)
 	return scanUserMembership(row)
 }
 
+// CountByPlan 统计引用某会员计划的用户会员数（按 plan_id 或历史 plan_code 匹配）。
+// 供删除会员计划前做引用检查，避免产生悬空引用。
+func (m *UserMembershipModel) CountByPlan(planID int64, planCode string) (int64, error) {
+	var count int64
+	err := m.DB.QueryRow(`
+		SELECT COUNT(*) FROM user_memberships
+		WHERE plan_id = ? OR (plan_id = 0 AND plan_code = ?)
+	`, planID, planCode).Scan(&count)
+	return count, err
+}
+
 func (m *UserMembershipModel) GetActiveByUserID(userID int64) (*UserMembership, error) {
 	row := m.DB.QueryRow(`
 		SELECT id, user_id, plan_id, plan_code, plan_title, source_order_no, status, template_download_enabled, started_at, granted_at, expired_at, created_at, updated_at

@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -24,6 +25,22 @@ func abs(n int64) int64 {
 		return -n
 	}
 	return n
+}
+
+// maxAdminUploadSize 管理员上传单个文件的大小上限（与规范文件上传的 50MB 保持一致）
+const maxAdminUploadSize int64 = 50 << 20
+
+// adminUploadExtensions 管理员上传的扩展名白名单。
+// 覆盖素材库常用格式，明确排除 html/svg（存储型 XSS 向量）与可执行/脚本文件。
+var adminUploadExtensions = map[string]bool{
+	// 图片
+	"jpg": true, "jpeg": true, "png": true, "webp": true, "gif": true, "bmp": true, "ico": true, "tiff": true,
+	// 文档
+	"pdf": true, "doc": true, "docx": true, "xls": true, "xlsx": true, "ppt": true, "pptx": true, "txt": true, "csv": true,
+	// 音视频
+	"mp3": true, "wav": true, "aac": true, "mp4": true, "mov": true, "webm": true,
+	// 压缩包与设计源文件
+	"zip": true, "rar": true, "7z": true, "psd": true, "ai": true, "sketch": true,
 }
 
 func generateAdminUploadObjectKey(filename string) string {
@@ -475,7 +492,37 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			if req.Password != nil {
 				newPassword := strings.TrimSpace(*req.Password)
 				if newPassword != "" {
-					hashed := function.HashPassword(newPassword)
+					var hashed string
+					if u.UserType == "management" {
+						// 管理账号必须用 bcrypt 自适应哈希（MD5+固定盐可被秒级彩虹表反查）；
+						// 登录侧 VerifyPassword 兼容两种哈希，改密后下次登录即走 bcrypt 验证
+						if len(newPassword) < 12 {
+							c.JSON(http.StatusBadRequest, gin.H{
+								"code": 400,
+								"msg":  "管理账号密码长度至少 12 位",
+							})
+							return
+						}
+						bcryptHash, err := function.HashManagementPassword(newPassword)
+						if err != nil {
+							c.JSON(http.StatusInternalServerError, gin.H{
+								"code": 500,
+								"msg":  "密码加密失败: " + err.Error(),
+							})
+							return
+						}
+						hashed = bcryptHash
+					} else {
+						// 小程序用户令牌体系与密码无关，保持既有哈希方式，但补最小长度校验
+						if len(newPassword) < 8 {
+							c.JSON(http.StatusBadRequest, gin.H{
+								"code": 400,
+								"msg":  "密码长度至少 8 位",
+							})
+							return
+						}
+						hashed = function.HashPassword(newPassword)
+					}
 					updates = append(updates, "password = ?")
 					args = append(args, hashed)
 				}
@@ -884,11 +931,28 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 
 		// 上传OSS文件（管理员上传）
 		oss.POST("/upload", func(c *gin.Context) {
+			// 限制请求体大小，防止恶意大文件把内存打爆（OOM）
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAdminUploadSize)
 			file, err := c.FormFile("file")
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
 					"msg":  "文件上传失败: " + err.Error(),
+				})
+				return
+			}
+			if file.Size <= 0 || file.Size > maxAdminUploadSize {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "文件大小需在 50MB 以内",
+				})
+				return
+			}
+			ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(file.Filename), "."))
+			if !adminUploadExtensions[ext] {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "不支持的文件类型: " + ext + "（可上传图片、文档、音视频、压缩包等常见格式）",
 				})
 				return
 			}
@@ -904,13 +968,12 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			}
 			defer src.Close()
 
-			// 读取文件内容
-			fileData := make([]byte, file.Size)
-			_, err = src.Read(fileData)
-			if err != nil {
+			// 读取文件内容：io.Reader 的单次 Read 不保证读满，大文件会被静默截断产生损坏文件
+			fileData, err := io.ReadAll(io.LimitReader(src, maxAdminUploadSize+1))
+			if err != nil || int64(len(fileData)) > maxAdminUploadSize {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
-					"msg":  "读取文件失败: " + err.Error(),
+					"msg":  "读取文件失败或文件过大",
 				})
 				return
 			}
@@ -956,8 +1019,10 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 
 			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
 			if err := ossFileModel.Create(ossFile); err != nil {
-				// 如果数据库保存失败，尝试删除COS中的文件
-				cosClient.Object.Delete(context.Background(), objectKey)
+				// 如果数据库保存失败，尝试删除COS中的文件；删除失败会留下孤儿对象，必须留痕人工清理
+				if _, delErr := cosClient.Object.Delete(context.Background(), objectKey); delErr != nil {
+					log.Printf("管理员上传回滚失败（COS 残留孤儿对象需人工清理）: objectKey=%s, err=%v", objectKey, delErr)
+				}
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "保存文件记录失败: " + err.Error(),
