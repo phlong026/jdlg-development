@@ -34,7 +34,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ open, items, onClose })
 
     const list = useMemo(() => {
         const q = query.trim().toLowerCase();
-        return items.filter((item) => !q || `${item.label}${item.group}${item.path}`.toLowerCase().includes(q)).slice(0, 12);
+        // 只匹配页面名与路径：分组名不参与匹配（避免搜"设计"时命中整个分组的所有页面）
+        return items.filter((item) => !q || `${item.label}${item.path}`.toLowerCase().includes(q)).slice(0, 12);
     }, [items, query]);
 
     if (!open) return null;

@@ -1,380 +1,235 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiSettings, FiX, FiRefreshCw } from 'react-icons/fi';
-import ManagementSearchPanel from '../component/managementSearchPanel';
+import { FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/api';
+import { reportPageLoadError } from '../utils/pageLoadError';
 import './logs.scss';
 
-interface Log {
+interface AuditItem {
     id: number;
-    type: string;
-    level: 'info' | 'warning' | 'error';
-    message: string;
-    user?: string;
-    timestamp: string;
-    details?: string;
+    user_id: number;
+    username: string;
+    method: string;
+    path: string;
+    target_type: string;
+    target_id: string;
+    status: number;
+    duration_ms: number;
+    ip: string;
+    created_at: string;
 }
 
-interface LogConfig {
-    rotate_interval: number; // 日志分割间隔（小时）
-    retention_days: number;  // 日志保存天数
+const METHOD_LABELS: Record<string, string> = {
+    POST: '创建',
+    PUT: '更新',
+    PATCH: '更新',
+    DELETE: '删除',
+};
+
+const TARGET_LABELS: Record<string, string> = {
+    users: '用户账号',
+    'membership-plans': '会员计划',
+    templates: '模板',
+    inspirations: '灵感素材',
+    'utility-tools': '实用工具',
+    'ai-tools': 'AI 工具',
+    'ai/api': 'AI 配置',
+    orders: '订单',
+    audit: '操作审计',
+    oss: '文件库',
+};
+
+function targetLabel(type: string): string {
+    return TARGET_LABELS[type] || type || '—';
 }
 
-const Logs: React.FC = () => {
-    const [logs, setLogs] = useState<Log[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [searchInput, setSearchInput] = useState('');
-    const [searchKeyword, setSearchKeyword] = useState('');
-    const [typeFilter, setTypeFilter] = useState<string>('all');
-    const [levelFilter, setLevelFilter] = useState<string>('all');
-    const [page, setPage] = useState(1);
-    const [pageSize] = useState(20);
+/**
+ * 操作审计页（路由沿用 /logs，页面已从"日志管理"改造）：
+ * 记录所有管理端写操作——谁在什么时候对什么资源做了什么，结果如何。
+ * 数据来自后端审计中间件自动落库，无需任何手动配置。
+ */
+const AuditLogs: React.FC = () => {
+    const [items, setItems] = useState<AuditItem[]>([]);
     const [total, setTotal] = useState(0);
-    const [showConfigModal, setShowConfigModal] = useState(false);
-    const [config, setConfig] = useState<LogConfig>({ rotate_interval: 24, retention_days: 30 });
-    const [savingConfig, setSavingConfig] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const pageSize = 20;
+    const [usernameFilter, setUsernameFilter] = useState('');
+    const [targetFilter, setTargetFilter] = useState('');
+    const [methodFilter, setMethodFilter] = useState('');
+    const [searchInput, setSearchInput] = useState('');
 
-    // 获取日志配置
-    const fetchConfig = async () => {
-        try {
-            const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.LOGS.CONFIG}`, {
-                credentials: 'include',
-            });
-
-            if (!response.ok) {
-                throw new Error('获取配置失败');
-            }
-
-            const result = await response.json();
-            if (result.code === 0) {
-                setConfig(result.data);
-            }
-        } catch (error: any) {
-            console.error('获取日志配置失败:', error);
-        }
-    };
-
-    // 获取日志列表
-    const fetchLogs = async () => {
+    const fetchList = async () => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
                 page_size: pageSize.toString(),
-                type: typeFilter,
-                level: levelFilter,
-                keyword: searchKeyword,
             });
+            if (usernameFilter) params.set('username', usernameFilter);
+            if (targetFilter) params.set('target_type', targetFilter);
+            if (methodFilter) params.set('method', methodFilter);
 
-            const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.LOGS.LIST}?${params}`, {
+            const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.AUDIT.LIST}?${params}`, {
                 credentials: 'include',
             });
-
             if (!response.ok) {
-                throw new Error('获取日志列表失败');
+                throw new Error('获取操作审计失败');
             }
-
             const result = await response.json();
             if (result.code === 0) {
-                setLogs(result.data.list || []);
+                setItems(result.data.list || []);
                 setTotal(result.data.total || 0);
             } else {
-                reportPageLoadError(null, result.msg || '获取日志列表失败');
+                reportPageLoadError(null, result.msg || '获取操作审计失败');
             }
         } catch (error: any) {
-            reportPageLoadError(error, '获取日志列表失败: ' + error.message);
+            reportPageLoadError(error, '获取操作审计失败: ' + error.message);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchConfig();
-        fetchLogs();
-    }, [page, typeFilter, levelFilter, searchKeyword]);
+        fetchList();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, usernameFilter, targetFilter, methodFilter]);
 
-    const filteredLogs = logs;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-    const getLevelClass = (level: string) => {
-        const levelMap: Record<string, string> = {
-            info: 'level-info',
-            warning: 'level-warning',
-            error: 'level-error',
-        };
-        return levelMap[level] || '';
-    };
-
-    const handleSaveConfig = async () => {
-        setSavingConfig(true);
-        try {
-            const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.LOGS.CONFIG}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify(config),
-            });
-
-            if (!response.ok) {
-                throw new Error('保存配置失败');
-            }
-
-            const result = await response.json();
-            if (result.code === 0) {
-                alert('配置保存成功');
-                setShowConfigModal(false);
-            } else {
-                alert(result.msg || '保存配置失败');
-            }
-        } catch (error: any) {
-            alert('保存配置失败: ' + error.message);
-        } finally {
-            setSavingConfig(false);
-        }
-    };
-
-    const handleSearch = () => {
-        setPage(1);
-        setSearchKeyword(searchInput.trim());
-    };
-
-    const handleReset = () => {
-        setSearchInput('');
-        setSearchKeyword('');
-        setTypeFilter('all');
-        setLevelFilter('all');
-        setPage(1);
+    const statusClass = (status: number) => {
+        if (status >= 500) return 'level-error';
+        if (status >= 400) return 'level-warning';
+        return 'level-info';
     };
 
     return (
-        <>
-            <div className="logs-container">
-                <ManagementSearchPanel
-                    title="日志检索与配置"
-                    description="先按日志类型、级别和关键词缩小范围，再查看详情定位问题。日志导出接口当前未接通，所以先把查询与配置闭环做好。"
-                    actions={(
-                        <>
-                            <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
-                            <button className="btn-secondary" onClick={fetchLogs} disabled={loading}>
-                                <FiRefreshCw />
-                                {loading ? '刷新中...' : '刷新'}
-                            </button>
-                            <button className="btn-secondary" onClick={() => setShowConfigModal(true)}>
-                                <FiSettings />
-                                配置
-                            </button>
-                        </>
-                    )}
-                    controls={(
-                        <>
-                            <div className="management-search-searchbox">
-                                <FiSearch className="management-search-searchicon" />
-                                <input
-                                    type="text"
-                                    className="management-search-input"
-                                    placeholder="搜索日志内容、用户、错误关键字..."
-                                    value={searchInput}
-                                    onChange={(e) => setSearchInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            handleSearch();
-                                        }
-                                    }}
-                                />
-                            </div>
-                            <select
-                                className="management-search-select"
-                                value={typeFilter}
-                                onChange={(e) => {
-                                    setTypeFilter(e.target.value);
-                                    setPage(1);
-                                }}
-                            >
-                                <option value="all">全部类型</option>
-                                <option value="user_action">用户操作</option>
-                                <option value="system">系统日志</option>
-                                <option value="api">API请求</option>
-                                <option value="error">错误日志</option>
-                            </select>
-                            <select
-                                className="management-search-select"
-                                value={levelFilter}
-                                onChange={(e) => {
-                                    setLevelFilter(e.target.value);
-                                    setPage(1);
-                                }}
-                            >
-                                <option value="all">全部级别</option>
-                                <option value="info">信息</option>
-                                <option value="warning">警告</option>
-                                <option value="error">错误</option>
-                            </select>
-                            <button className="btn-primary" onClick={handleSearch}>搜索日志</button>
-                        </>
-                    )}
-                    summary={(
-                        <>
-                            <div>
-                                当前共 <strong>{total}</strong> 条日志
-                            </div>
-                            <div className="management-search-tags">
-                                {searchKeyword ? <span className="management-search-tag">关键词：{searchKeyword}</span> : null}
-                                {typeFilter !== 'all' ? <span className="management-search-tag">类型：{typeFilter}</span> : null}
-                                {levelFilter !== 'all' ? <span className="management-search-tag">级别：{levelFilter}</span> : null}
-                            </div>
-                        </>
-                    )}
-                />
-
-                {loading ? (
-                    <div className="loading-state">加载中...</div>
-                ) : (
-                    <div className="logs-table-container">
-                        <table className="logs-table">
-                            <thead>
-                                <tr>
-                                    <th>时间</th>
-                                    <th>类型</th>
-                                    <th>级别</th>
-                                    <th>用户</th>
-                                    <th>消息</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredLogs.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className="empty-state">
-                                            该功能尚未启用：系统当前不会向日志表写入数据（改造为操作审计的计划见 docs/权限与审计设计方案）
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredLogs.map((log) => (
-                                        <tr key={log.id}>
-                                            <td>{new Date(log.timestamp).toLocaleString('zh-CN')}</td>
-                                            <td>{log.type}</td>
-                                            <td>
-                                                <span className={`level-badge ${getLevelClass(log.level)}`}>
-                                                    {log.level}
-                                                </span>
-                                            </td>
-                                            <td>{log.user || '-'}</td>
-                                            <td>{log.message}</td>
-                                            <td>
-                                                {log.details && (
-                                                    <button
-                                                        className="btn-action btn-view"
-                                                        onClick={() => {
-                                                            try {
-                                                                const details = JSON.parse(log.details || '{}');
-                                                                alert('详情：\n' + JSON.stringify(details, null, 2));
-                                                            } catch {
-                                                                alert('详情：' + log.details);
-                                                            }
-                                                        }}
-                                                    >
-                                                        查看详情
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* 分页 */}
-                {total > pageSize && (
-                    <div className="pagination">
-                        <button
-                            className="btn-page"
-                            disabled={page === 1}
-                            onClick={() => setPage(page - 1)}
-                        >
-                            上一页
-                        </button>
-                        <span className="page-info">
-                            第 {page} 页，共 {Math.ceil(total / pageSize)} 页
-                        </span>
-                        <button
-                            className="btn-page"
-                            disabled={page >= Math.ceil(total / pageSize)}
-                            onClick={() => setPage(page + 1)}
-                        >
-                            下一页
-                        </button>
-                    </div>
-                )}
-
-                {/* 配置模态框 */}
-                {showConfigModal && (
-                    <div className="modal-overlay" onClick={() => setShowConfigModal(false)}>
-                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>日志配置</h3>
-                                <button className="modal-close" onClick={() => setShowConfigModal(false)}>
-                                    <FiX />
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="config-form">
-                                    <div className="form-group">
-                                        <label>日志分割间隔（小时）</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="168"
-                                            value={config.rotate_interval}
-                                            onChange={(e) => setConfig({
-                                                ...config,
-                                                rotate_interval: parseInt(e.target.value) || 24
-                                            })}
-                                            className="form-input"
-                                        />
-                                        <span className="form-hint">范围：1-168小时（1周）</span>
-                                    </div>
-                                    <div className="form-group">
-                                        <label>日志保存天数</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="365"
-                                            value={config.retention_days}
-                                            onChange={(e) => setConfig({
-                                                ...config,
-                                                retention_days: parseInt(e.target.value) || 30
-                                            })}
-                                            className="form-input"
-                                        />
-                                        <span className="form-hint">范围：1-365天（1年）</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button
-                                    className="btn-secondary"
-                                    onClick={() => setShowConfigModal(false)}
-                                    disabled={savingConfig}
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    className="btn-primary"
-                                    onClick={handleSaveConfig}
-                                    disabled={savingConfig}
-                                >
-                                    {savingConfig ? '保存中...' : '保存'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+        <div className="logs-container">
+            <div className="management-search-panel">
+                <div className="management-search-searchbox">
+                    <FiSearch className="management-search-searchicon" />
+                    <input
+                        type="text"
+                        className="management-search-input"
+                        placeholder="按操作人筛选（如 admin）"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                setPage(1);
+                                setUsernameFilter(searchInput.trim());
+                            }
+                        }}
+                    />
+                </div>
+                <select
+                    className="management-search-select"
+                    value={targetFilter}
+                    onChange={(e) => {
+                        setPage(1);
+                        setTargetFilter(e.target.value);
+                    }}
+                >
+                    <option value="">全部资源</option>
+                    {Object.entries(TARGET_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                    ))}
+                </select>
+                <select
+                    className="management-search-select"
+                    value={methodFilter}
+                    onChange={(e) => {
+                        setPage(1);
+                        setMethodFilter(e.target.value);
+                    }}
+                >
+                    <option value="">全部操作</option>
+                    {Object.entries(METHOD_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}（{value}）</option>
+                    ))}
+                </select>
+                <button
+                    className="btn-secondary"
+                    onClick={() => {
+                        setPage(1);
+                        setUsernameFilter(searchInput.trim());
+                    }}
+                    disabled={loading}
+                >
+                    <FiSearch />
+                    查询
+                </button>
+                <button
+                    className="btn-secondary"
+                    onClick={() => {
+                        setSearchInput('');
+                        setUsernameFilter('');
+                        setTargetFilter('');
+                        setMethodFilter('');
+                        setPage(1);
+                    }}
+                >
+                    重置筛选
+                </button>
+                <button className="btn-secondary" onClick={fetchList} disabled={loading}>
+                    <FiRefreshCw />
+                    {loading ? '刷新中...' : '刷新'}
+                </button>
             </div>
-        </>
+
+            <div className="logs-table-container section-card">
+                <table className="logs-table">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>操作人</th>
+                            <th>操作</th>
+                            <th>资源</th>
+                            <th>接口</th>
+                            <th>结果</th>
+                            <th>耗时</th>
+                            <th>来源 IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="empty-state">
+                                    {loading ? '加载中...' : '暂无操作记录——管理端的创建、更新、删除操作会自动出现在这里'}
+                                </td>
+                            </tr>
+                        ) : (
+                            items.map((item) => (
+                                <tr key={item.id}>
+                                    <td>{new Date(item.created_at).toLocaleString('zh-CN')}</td>
+                                    <td>{item.username || `用户#${item.user_id}`}</td>
+                                    <td>{METHOD_LABELS[item.method] || item.method}</td>
+                                    <td>
+                                        {targetLabel(item.target_type)}
+                                        {item.target_id ? ` #${item.target_id}` : ''}
+                                    </td>
+                                    <td className="audit-path" title={item.path}>{item.path}</td>
+                                    <td>
+                                        <span className={statusClass(item.status)}>{item.status}</span>
+                                    </td>
+                                    <td>{item.duration_ms}ms</td>
+                                    <td>{item.ip || '—'}</td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+                <div className="pagination">
+                    <button className="btn-secondary" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>
+                        上一页
+                    </button>
+                    <span className="page-info">第 {page} / {totalPages} 页 · 共 {total} 条</span>
+                    <button className="btn-secondary" disabled={page >= totalPages || loading} onClick={() => setPage(page + 1)}>
+                        下一页
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 };
 
-export default Logs;
+export default AuditLogs;

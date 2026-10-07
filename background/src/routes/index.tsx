@@ -101,7 +101,7 @@ export const routes: AppRoute[] = [
     },
     {
         path: '/logs',
-        title: '日志管理',
+        title: '操作审计',
         element: withSuspense(<Logs />),
         icon: FiFileText,
     },

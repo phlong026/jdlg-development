@@ -1395,7 +1395,9 @@ const UserWorkbench: React.FC = () => {
                                         </div>
                                     )}
                                     <div className="form-group">
-                                        <label>{stonesMode === 'set' ? '新余额' : '调整数量'}</label>
+                                        <label>
+                                            {stonesMode === 'set' ? '新余额（上限 100000）' : '调整数量（正数增加，负数扣除；单次上限 10000）'}
+                                        </label>
                                         <input
                                             type="number"
                                             className="form-input"

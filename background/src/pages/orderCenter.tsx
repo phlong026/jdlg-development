@@ -1,8 +1,11 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
-import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch } from 'react-icons/fi';
+import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch,
+    FiDownload,
+} from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createOrderSupportTicket, getOrderDetail, getOrderList, refundVirtualPayOrder, type OrderDetail, type OrderListItem, type OrderListParams, type OrderSummary } from '../api/orders';
+import { API_BASE_URL } from '../config/api';
 import './orderCenter.scss';
 
 const formatOrderType = (value: string) => {
@@ -360,6 +363,26 @@ const OrderCenter: React.FC = () => {
                         <button className={`btn-secondary ${onlyExceptions ? 'is-active' : ''}`} onClick={handleToggleExceptions} disabled={loading} aria-pressed={onlyExceptions}>
                             <FiAlertCircle />
                             {onlyExceptions ? '查看全部' : '仅看异常单'}
+                        </button>
+                        <button
+                            className="btn-secondary"
+                            title="按当前筛选条件导出 CSV（最多 1 万条，含 BOM 可直接用 Excel 打开）"
+                            onClick={() => {
+                                const params = buildOrderQueryParams();
+                                const qs = new URLSearchParams({
+                                    keyword: params.keyword || '',
+                                    type: params.type,
+                                    order_category: params.order_category,
+                                    status: params.status,
+                                    pay_channel: params.pay_channel,
+                                    start_date: params.start_date || '',
+                                    end_date: params.end_date || '',
+                                });
+                                window.open(`${API_BASE_URL}/api/v1/management/orders/export?${qs}`, '_blank');
+                            }}
+                        >
+                            <FiDownload />
+                            导出 CSV
                         </button>
                         <button className="btn-primary" onClick={handleSearch}>
                             <FiSearch />

@@ -858,7 +858,8 @@ const Users: React.FC = () => {
                                     <div className="form-group">
                                         <label>
                                             {stonesMode === 'set' ? '新余额' : '调整数量'}
-                                            {stonesMode === 'adjust' && <span className="hint">（正数增加，负数扣除）</span>}
+                                            {stonesMode === 'adjust' && <span className="hint">（正数增加，负数扣除；单次上限 10000）</span>}
+                                            {stonesMode === 'set' && <span className="hint">（上限 100000）</span>}
                                         </label>
                                         <input
                                             type="number"

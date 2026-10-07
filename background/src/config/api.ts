@@ -82,11 +82,13 @@ export const API_ENDPOINTS = {
         DASHBOARD_OVERVIEW: '/api/v1/management/dashboard/overview',
         DASHBOARD_TRENDS: '/api/v1/management/dashboard/trends',
         DASHBOARD_TODOS: '/api/v1/management/dashboard/todos',
+        DASHBOARD_TODO: '/api/v1/management/dashboard/todo',
     },
     // AI配置
     AI: {
         PRICING: '/api/v1/management/ai/pricing',
         API_CONFIG: '/api/v1/management/ai/api/config',
+        API_CONFIG_TEST: '/api/v1/management/ai/api/config/test',
     },
     AI_TASKS: {
         LIST: '/api/v1/management/ai/tasks',
@@ -143,10 +145,9 @@ export const API_ENDPOINTS = {
         DETAIL: (id: string) => `/api/v1/management/recharge/records/${id}`,
         EXPORT: '/api/v1/management/recharge/export',
     },
-    // 日志管理
-    LOGS: {
-        LIST: '/api/v1/management/logs',
-        CONFIG: '/api/v1/management/logs/config',
+    // 操作审计（原"日志管理"：logs 表无人写入，已按审计方案改造为操作审计页）
+    AUDIT: {
+        LIST: '/api/v1/management/audit',
     },
     // 实用工具管理
     UTILITY_TOOLS: {

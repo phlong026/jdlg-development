@@ -2,6 +2,7 @@ import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useMemo, useState, useEffect } from 'react';
 import { FiSave, FiPlus, FiEdit, FiTrash2, FiSettings, FiX, FiClipboard, FiSearch } from 'react-icons/fi';
 import { getAIPricingList, saveAIPricing, getAIAPIConfigList, saveAIAPIConfig, type AIPricing, type AIAPIConfig } from '../api/ai';
+import { testAIAPIConfig, type AIAPIConfigTestResult } from '../api/ai';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import JSONTreeEditor from '../component/json-tree-editor';
 import './ai-config.scss';
@@ -555,6 +556,8 @@ const APIConfigModal: React.FC<APIConfigModalProps> = ({ config, onSave, onClose
     // API Key 配置
     // 密钥输入框不预填：列表接口只返回掩码，留空提交表示保持原密钥不变
     const [apiKey, setApiKey] = useState('');
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<AIAPIConfigTestResult | null>(null);
     const [apiKeyLocation, setApiKeyLocation] = useState<'header_bearer' | 'header_custom' | 'query' | 'body' | 'none'>(
         config?.api_key_location as any || 'header_bearer'
     );
@@ -922,6 +925,7 @@ const APIConfigModal: React.FC<APIConfigModalProps> = ({ config, onSave, onClose
                                     placeholder="如: prompt 或 data.prompt"
                                     disabled={loading}
                                 />
+                                <span className="form-hint">从返回 JSON 里取哪一段作为提示词，如 data.reply；不确定时看接口文档的返回示例</span>
                             </div>
                             <div className="form-group">
                                 <label>图片路径</label>
@@ -932,6 +936,7 @@ const APIConfigModal: React.FC<APIConfigModalProps> = ({ config, onSave, onClose
                                     placeholder="如: image 或 data.images[0]"
                                     disabled={loading}
                                 />
+                                <span className="form-hint">把用户参考图放进请求 JSON 的哪个位置，如 data.images[0]；系统会自动注入图片</span>
                             </div>
                         </div>
 
@@ -1011,6 +1016,33 @@ const APIConfigModal: React.FC<APIConfigModalProps> = ({ config, onSave, onClose
                         <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>
                             取消
                         </button>
+                        <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={testing || loading || !config?.id}
+                            title={config?.id ? '向配置的接口地址发一个轻量探测（不产生生成费用）' : '先保存配置后才能测试'}
+                            onClick={async () => {
+                                if (!config?.id) return;
+                                setTesting(true);
+                                setTestResult(null);
+                                try {
+                                    const result = await testAIAPIConfig({ id: config.id });
+                                    setTestResult(result);
+                                } catch (error: any) {
+                                    setTestResult({ ok: false, category: 'network_error', message: '测试请求失败: ' + (error?.message || error) });
+                                } finally {
+                                    setTesting(false);
+                                }
+                            }}
+                        >
+                            {testing ? '测试中...' : '测试此配置'}
+                        </button>
+                        {testResult && (
+                            <div className={`form-hint ${testResult.ok ? 'test-ok' : 'test-fail'}`} style={{ color: testResult.ok ? '#2f7d4f' : '#d14343' }}>
+                                {testResult.ok ? '✓ ' : '✗ '}
+                                {testResult.message}
+                            </div>
+                        )}
                         <button type="submit" className="btn-primary" disabled={loading}>
                             <FiSave />
                             保存

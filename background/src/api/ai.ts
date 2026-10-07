@@ -38,6 +38,20 @@ export interface AIAPIConfig {
     updated_at?: string;
 }
 
+
+export interface AIAPIConfigTestResult {
+    ok: boolean;
+    http_status?: number;
+    category: 'ok' | 'network_error' | 'timeout' | 'auth_rejected' | 'request_rejected' | 'server_error' | 'unsafe_endpoint';
+    message: string;
+}
+
+// 测试 AI 配置连通性：不发起真实生成（不花灵石/生成费），只验证地址可达与鉴权是否被接受
+export const testAIAPIConfig = async (payload: { id?: number; task_type?: string; provider_code?: string }): Promise<AIAPIConfigTestResult> => {
+    const response = await post<AIAPIConfigTestResult>(API_ENDPOINTS.AI.API_CONFIG_TEST, payload);
+    return response.data;
+};
+
 // 获取所有计费配置
 export const getAIPricingList = async (): Promise<AIPricing[]> => {
     const response = await get<AIPricing[]>(API_ENDPOINTS.AI.PRICING);

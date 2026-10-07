@@ -7,6 +7,9 @@ export interface SupportTicketOverview {
     in_progress_count: number;
     closed_count: number;
     high_priority_count: number;
+    // 队列 Tab 口径：今日新增 / 超 48 小时仍待处理（与列表 status=today/overdue 筛选同源）
+    today_count: number;
+    overdue_count: number;
 }
 
 export interface SupportTicketItem {

@@ -17,6 +17,8 @@ import {
 import {
     getDashboardOverview,
     getDashboardTodos,
+    getDashboardTodoItems,
+    type DashboardTodoItem,
     getDashboardTrends,
     type DashboardFailedTaskItem,
     type DashboardOverview,
@@ -123,19 +125,22 @@ const Dashboard: React.FC = () => {
     const [overview, setOverview] = useState<DashboardOverview>(emptyOverview);
     const [trends, setTrends] = useState<DashboardTrendItem[]>([]);
     const [todos, setTodos] = useState<DashboardTodos>(emptyTodos);
+    const [todoItems, setTodoItems] = useState<DashboardTodoItem[]>([]);
     const [recentUsers, setRecentUsers] = useState<RecentUserItem[]>([]);
 
     const loadDashboard = async () => {
         setLoading(true);
         try {
-            const [overviewRes, trendRes, todoRes] = await Promise.all([
+            const [overviewRes, trendRes, todoRes, todoItemsRes] = await Promise.all([
                 getDashboardOverview(),
                 getDashboardTrends(),
                 getDashboardTodos(),
+                getDashboardTodoItems().catch(() => [] as DashboardTodoItem[]),
             ]);
             setOverview(overviewRes || emptyOverview);
             setTrends(trendRes || []);
             setTodos(todoRes || emptyTodos);
+            setTodoItems(todoItemsRes || []);
         } catch (error) {
             console.error('加载总控台数据失败:', error);
             reportPageLoadError(error, '加载总控台数据失败');
@@ -259,48 +264,31 @@ const Dashboard: React.FC = () => {
     }, [overview.pending_certifications, overview.pending_exceptions, overview.today_failed_tasks]);
 
     const primaryActions = useMemo(() => {
-        return [
-            { label: '处理失败任务', hint: `${todos.counts.failed_tasks} 条待排查`, path: '/ai-tasks', icon: FiZap },
-            { label: '审核认证申请', hint: `${overview.pending_certifications} 条待处理`, path: '/certification', icon: FiClock },
-            { label: '排查异常用户', hint: `${overview.pending_exceptions} 个异常点`, path: '/users', icon: FiAlertCircle },
+        // 今日待办（B1）：工单与线索来自 /dashboard/todo（与各页队列角标同源），
+        // 失败任务/异常用户沿用原数据源；两项都为 0 的待办不占首屏
+        const actionIcons: Record<string, React.ReactNode> = {
+            certifications: <FiClock />,
+            tickets: <FiShield />,
+            tickets_overdue: <FiAlertCircle />,
+            leads_todo: <FiUsers />,
+            leads_overdue: <FiActivity />,
+        };
+        const fromTodoItems = todoItems
+            .filter(item => item.count > 0)
+            .map(item => ({
+                label: item.label,
+                hint: `${item.count} 条待处理${item.urgent ? ' · 需尽快' : ''}`,
+                path: item.path,
+                icon: actionIcons[item.key] ?? <FiChevronRight />,
+            }));
+        const fallback = [
+            { label: '处理失败任务', hint: `${todos.counts.failed_tasks} 条待排查`, path: '/ai-tasks', icon: <FiZap /> },
+            { label: '排查异常用户', hint: `${overview.pending_exceptions} 个异常点`, path: '/users', icon: <FiAlertCircle /> },
         ];
-    }, [overview.pending_certifications, overview.pending_exceptions, todos.counts.failed_tasks]);
+        const actions = [...fromTodoItems, ...fallback];
+        return actions.slice(0, 6);
+    }, [todoItems, overview.pending_exceptions, todos.counts.failed_tasks]);
 
-    const systemEntryGroups = useMemo(() => {
-        return [
-            {
-                title: '用户与设计师',
-                items: [
-                    { label: '用户中心', path: '/users', icon: FiUsers },
-                    { label: '设计师中心', path: '/designer-center', icon: FiUsers },
-                    { label: '会员运营', path: '/membership-operations', icon: FiUsers },
-                ],
-            },
-            {
-                title: '交易与运营',
-                items: [
-                    { label: '订单中心', path: '/recharge', icon: FiCreditCard },
-                    { label: '分销邀请', path: '/distribution', icon: FiBarChart2 },
-                    { label: '内容分析', path: '/content-analytics', icon: FiBarChart2 },
-                ],
-            },
-            {
-                title: '内容与AI',
-                items: [
-                    { label: '模板广场', path: '/templates', icon: FiLayers },
-                    { label: 'AI任务中心', path: '/ai-tasks', icon: FiActivity },
-                    { label: '异常工单', path: '/support-tickets', icon: FiAlertCircle },
-                ],
-            },
-            {
-                title: '系统配置',
-                items: [
-                    { label: 'AI配置', path: '/ai-config', icon: FiRefreshCw },
-                    { label: '报表中心', path: '/report-center', icon: FiBarChart2 },
-                ],
-            },
-        ];
-    }, []);
 
     const trendCards = useMemo(() => {
         return [
@@ -433,10 +421,9 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="cockpit-action-list">
                             {primaryActions.map((item) => {
-                                const Icon = item.icon;
                                 return (
                                     <button key={item.label} className="cockpit-action-item" onClick={() => navigate(item.path)}>
-                                        <span className="cockpit-action-icon"><Icon /></span>
+                                        <span className="cockpit-action-icon">{item.icon}</span>
                                         <span className="cockpit-action-text">
                                             <strong>{item.label}</strong>
                                             <small>{item.hint}</small>
@@ -507,10 +494,9 @@ const Dashboard: React.FC = () => {
                             <div className="workbench-priority-layout">
                                 <div className="priority-action-grid">
                                     {primaryActions.map((item) => {
-                                        const Icon = item.icon;
                                         return (
                                             <button key={item.label} className="priority-action-card" onClick={() => navigate(item.path)}>
-                                                <span className="priority-action-icon"><Icon /></span>
+                                                <span className="priority-action-icon">{item.icon}</span>
                                                 <span className="priority-action-content">
                                                     <strong>{item.label}</strong>
                                                     <small>{item.hint}</small>
@@ -635,33 +621,6 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <div className="workspace-side-column">
-                        <div className="section-card side-card">
-                            <div className="section-head compact">
-                                <div>
-                                    <h3>系统入口</h3>
-                                    <p>按业务逻辑重新分组，先看人，再看交易和内容，低频配置放到最后，减少“到处找入口”的障碍。</p>
-                                </div>
-                            </div>
-                            <div className="entry-group-list">
-                                {systemEntryGroups.map((group) => (
-                                    <div key={group.title} className="entry-group-block">
-                                        <div className="entry-group-title">{group.title}</div>
-                                        <div className="quick-grid">
-                                            {group.items.map((item) => {
-                                                const Icon = item.icon;
-                                                return (
-                                                    <button key={item.label} className="quick-entry" onClick={() => navigate(item.path)}>
-                                                        <Icon />
-                                                        <span>{item.label}</span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
                         <div className="section-card side-card">
                             <div className="section-head compact">
                                 <div>

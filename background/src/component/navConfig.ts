@@ -63,7 +63,7 @@ export const platformSections: NavSection[] = [
         items: [
             { path: '/risk-control', label: '风控台', icon: FiShield },
             { path: '/report-center', label: '报表导出中心', icon: FiBarChart2 },
-            { path: '/logs', label: '日志管理', icon: FiFileText },
+            { path: '/logs', label: '操作审计', icon: FiFileText },
         ],
     },
     {
@@ -219,7 +219,7 @@ export const navGroups: NavGroup[] = [
         pages: [
             { path: '/ai-config', label: 'AI 配置' },
             { path: '/oss', label: 'OSS 管理' },
-            { path: '/logs', label: '日志管理' },
+            { path: '/logs', label: '操作审计' },
         ],
     },
 ];

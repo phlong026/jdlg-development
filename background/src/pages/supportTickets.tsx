@@ -29,6 +29,8 @@ const defaultOverview: SupportTicketOverview = {
     in_progress_count: 0,
     closed_count: 0,
     high_priority_count: 0,
+    today_count: 0,
+    overdue_count: 0,
 };
 
 const typeLabelMap: Record<string, string> = {
@@ -349,6 +351,26 @@ const SupportTickets: React.FC = () => {
                         </>
                     )}
                 />
+
+                {/* 队列筛选条（B2）：对齐销售线索页的模式，客服上班先看队列而不是先想筛选条件 */}
+                <div className="ticket-queues" role="tablist" aria-label="工单队列">
+                    {([
+                        { key: 'open', label: '待处理', count: overview.open_count, todo: true },
+                        { key: 'in_progress', label: '处理中', count: overview.in_progress_count, todo: false },
+                        { key: 'today', label: '今日新增', count: overview.today_count, todo: false },
+                        { key: 'overdue', label: '超48小时', count: overview.overdue_count, todo: true },
+                        { key: 'all', label: '全部工单', count: overview.total_count, todo: false },
+                    ] as const).map((queue) => (
+                        <button
+                            key={queue.key}
+                            className={`ticket-queue-tab ${statusFilter === queue.key ? 'active' : ''} ${queue.todo && queue.count > 0 ? 'is-todo' : ''}`}
+                            onClick={() => setStatusFilter(queue.key)}
+                        >
+                            {queue.label}
+                            <span className="ticket-queue-count">{queue.count}</span>
+                        </button>
+                    ))}
+                </div>
 
                 <div className="support-stats-grid">
                     <div className="stat-card section-card">

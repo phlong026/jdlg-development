@@ -88,7 +88,11 @@ export const request = async <T = any>(
         return data;
     } catch (error) {
         if (error instanceof Error) Object.assign(error, { requestPage });
-        console.error('API请求失败:', error);
+        // 页面快速跳转时浏览器会取消未完成请求，属正常现象，不算错误
+        const aborted = error instanceof DOMException && error.name === 'AbortError';
+        if (!aborted) {
+            console.error('API请求失败:', error);
+        }
         throw error;
     }
 };

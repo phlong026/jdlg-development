@@ -80,6 +80,22 @@ export const getDashboardTrends = async (): Promise<DashboardTrendItem[]> => {
     return response.data || [];
 };
 
+
+export interface DashboardTodoItem {
+    key: string;
+    label: string;
+    count: number;
+    path: string;
+    urgent: boolean;
+}
+
+// 今日待办（B1）：待审认证 / 待处理工单 / 超时工单 / 待跟进线索 / 超时线索，
+// 数字与对应页面的队列角标同源
+export const getDashboardTodoItems = async (): Promise<DashboardTodoItem[]> => {
+    const response = await get<{ items: DashboardTodoItem[] }>(API_ENDPOINTS.STATS.DASHBOARD_TODO);
+    return response.data?.items || [];
+};
+
 export const getDashboardTodos = async (): Promise<DashboardTodos> => {
     const response = await get<DashboardTodos>(API_ENDPOINTS.STATS.DASHBOARD_TODOS);
     if (!response.data) {

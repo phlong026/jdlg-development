@@ -28,10 +28,19 @@ ROUTES_FILE = os.path.join(os.path.dirname(__file__), "..", "src", "routes", "in
 
 
 def guard_local(*urls):
+    # 默认只允许本机。会话 Cookie 已强制 Secure，本地 http 的 API 段需要 https 环境；
+    # 服务器（https 测试环境）通过 E2E_ALLOW_REMOTE=1 显式放行——脚本会写数据，
+    # 请只对可承受写操作的测试环境开启。
+    allow_remote = os.environ.get("E2E_ALLOW_REMOTE") == "1"
     for u in urls:
-        host = urllib.parse.urlparse(u).hostname
-        if host not in ("127.0.0.1", "localhost"):
-            sys.exit(f"拒绝运行：{u} 不是本机地址（本脚本会写数据，只允许本地联调环境）")
+        parsed = urllib.parse.urlparse(u)
+        host = parsed.hostname
+        if host in ("127.0.0.1", "localhost"):
+            continue
+        if allow_remote and parsed.scheme == "https":
+            print(f"[护栏] E2E_ALLOW_REMOTE=1，放行 https 目标: {u}")
+            continue
+        sys.exit(f"拒绝运行：{u} 不是本机地址。对服务器 https 测试环境运行请设置 E2E_ALLOW_REMOTE=1（脚本会写数据）")
 
 
 class Api:
@@ -690,6 +699,36 @@ def browser_checks():
             pg.keyboard.press("Enter")
             pg.wait_for_url(re.compile(r".*/admin/recharge-config$"), timeout=10000)
             assert pg.locator(".cmdk-panel").count() == 0
+
+        @check("工单队列 Tab：待处理/处理中/今日新增/超48小时/全部，带数量，点击切换列表")
+        def _():
+            pg.goto(WEB + "/admin/support-tickets")
+            pg.wait_for_selector(".ticket-queues .ticket-queue-tab", timeout=8000)
+            tabs = pg.locator(".ticket-queue-tab")
+            labels = pg.eval_on_selector_all(".ticket-queue-tab", "els => els.map(e => e.textContent.trim())")
+            for want in ["待处理", "处理中", "今日新增", "超48小时", "全部工单"]:
+                assert any(want in t for t in labels), f"缺少队列 {want}: {labels}"
+            # 每个队列 Tab 都显示数量
+            counts = pg.eval_on_selector_all(".ticket-queue-count", "els => els.map(e => e.textContent.trim())")
+            assert len(counts) >= 5, counts
+            pg.locator(".ticket-queue-tab", has_text="待处理").first.click()
+            pg.wait_for_load_state("networkidle")
+
+        @check("操作审计页（原日志页）：记录写操作，谁/何时/对什么")
+        def _():
+            pg.evaluate("window.localStorage.setItem('adminNav', 'new')")
+            # 先制造一条写操作：空参数的会员计划保存会 400，但请求已通过鉴权，审计中间件照记
+            # （400 也是有效审计记录，且不产生真实业务数据）
+            # 制造一条写操作：空参数保存会 400，但已通过鉴权，审计中间件照记。
+            # 必须用页面内 fetch（浏览器网络栈对 127.0.0.1 接受 Secure Cookie）；
+            # pg.request 走独立网络栈遵守 Secure 属性，本地 http 下不带 Cookie 会 401
+            fetch_js = "fetch('/api/v1/management/membership-plans', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}', credentials: 'include'}).then(function(r){return r.status;})"
+            pg.evaluate(fetch_js)
+            pg.goto(WEB + "/admin/logs")
+            pg.wait_for_selector(".logs-table", timeout=8000)
+            body = pg.locator(".logs-table").inner_text()
+            assert "操作人" in body, "审计页表头应包含「操作人」列: " + body[:120]
+            assert "admin_local" in body, f"审计页应显示 admin_local 的写操作记录，实际: {body[:200]}"
 
         @check("旧导航开关：切到旧导航 → 平铺 24 项、无子导航条；刷新后保持；可切回")
         def _():
