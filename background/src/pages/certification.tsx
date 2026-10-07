@@ -197,7 +197,7 @@ const Certification: React.FC = () => {
                                 <input
                                     type="text"
                                     className="management-search-input"
-                                    placeholder="搜索用户ID、姓名、企业名、证件号、统一社会信用代码"
+                                    placeholder="搜索姓名、企业名、证件号或统一社会信用代码"
                                     value={keywordInput}
                                     onChange={(e) => setKeywordInput(e.target.value)}
                                     onKeyDown={(e) => {

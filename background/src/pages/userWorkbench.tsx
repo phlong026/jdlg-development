@@ -670,7 +670,7 @@ const UserWorkbench: React.FC = () => {
                                         void handleSearch();
                                     }
                                 }}
-                                placeholder="请输入用户ID、用户名、手机号或企微手机号"
+                                placeholder="请输入手机号、用户名或昵称（也支持用户ID）"
                                 className="workbench-search-input"
                             />
                         </div>

@@ -299,7 +299,7 @@ const OrderCenter: React.FC = () => {
                             <FiSearch className="search-icon" />
                             <input
                                 type="text"
-                                placeholder="搜索订单号、用户ID、用户名或标题..."
+                                placeholder="搜索订单号、用户名或商品标题..."
                                 value={searchKeyword}
                                 onChange={(event) => setSearchKeyword(event.target.value)}
                                 onKeyDown={(event) => {

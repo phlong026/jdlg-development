@@ -121,7 +121,7 @@ const VirtualPay: React.FC = () => {
                             onKeyDown={(event) => {
                                 if (event.key === 'Enter') handleSearch();
                             }}
-                            placeholder="搜索订单号、openid 或消息 ID"
+                            placeholder="搜索订单号或微信用户标识（openid）"
                         />
                     </div>
                     <select value={eventFilter} onChange={(event) => setEventFilter(event.target.value)}>

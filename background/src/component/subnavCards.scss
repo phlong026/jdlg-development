@@ -59,3 +59,10 @@
   .subnav-card { height: 52px; padding: 0 10px; font-size: 16px; }
   .subnav-card-icon, .subnav-card-arrow { display: none; }
 }
+
+// 「未启用」的占位卡片：视觉上明确不可进入，无指针与跳转
+.subnav-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.4);
+}

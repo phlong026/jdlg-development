@@ -121,7 +121,7 @@ const RiskControl: React.FC = () => {
                                 <input
                                     type="text"
                                     className="management-search-input"
-                                    placeholder="搜索用户名、昵称或设备ID"
+                                    placeholder="搜索用户名或昵称（也支持设备ID）"
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
                                     onKeyDown={(e) => {

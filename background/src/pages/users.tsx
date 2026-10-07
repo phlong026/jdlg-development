@@ -1,6 +1,7 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FiSearch } from 'react-icons/fi';
 import {
     getUserList,
     getUserDetail,
@@ -166,7 +167,6 @@ const Users: React.FC = () => {
     const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
     const currentStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
     const currentEnd = total === 0 ? 0 : Math.min(page * pageSize, total);
-    const currentPageCount = users.length;
     const currentPageVerifiedCount = users.filter((user) => !!user.enterpriseWechatVerified).length;
     const currentPagePendingCount = users.filter((user) => !user.enterpriseWechatVerified).length;
     const currentPageStones = users.reduce((sum, user) => sum + user.pointsBalance, 0);
@@ -347,10 +347,10 @@ const Users: React.FC = () => {
                     </div>
                     <div className="toolbar-left">
                         <div className="search-box">
-                            <span className="search-icon">🔍</span>
+                            <span className="search-icon"><FiSearch size={14} /></span>
                             <input
                                 type="text"
-                                placeholder="搜索用户名、用户ID或手机号..."
+                                placeholder="搜索手机号、昵称或用户名（也支持用户ID）..."
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={(e) => {
@@ -375,11 +375,9 @@ const Users: React.FC = () => {
                     </div>
                     <div className="toolbar-footer">
                         <div className="toolbar-summary">
-                            <span className="summary-tag">第 {page} / {totalPages} 页 · 当前 {currentStart}-{currentEnd} / {total}</span>
-                            当前显示 <strong>{currentPageCount}</strong> 条，本页范围 {currentStart}-{currentEnd} / {total}
+                            <span className="summary-tag">第 {page} / {totalPages} 页 · {currentStart}-{currentEnd} / 共 {total} 条</span>
                             {searchKeyword ? <span className="summary-tag">关键词：{searchKeyword}</span> : null}
                             {enterpriseWechatFilter !== 'all' ? <span className="summary-tag">手机号授权：{enterpriseWechatFilter === 'verified' ? '已授权' : '待授权'}</span> : null}
-                            <span className="summary-note">建议：确认目标用户后，优先进入用户360继续处理</span>
                         </div>
                         <button className="btn-primary" onClick={handleSearch}>搜索用户</button>
                     </div>

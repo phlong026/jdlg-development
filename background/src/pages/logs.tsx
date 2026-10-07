@@ -246,7 +246,7 @@ const Logs: React.FC = () => {
                                 {filteredLogs.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="empty-state">
-                                            暂无日志数据
+                                            该功能尚未启用：系统当前不会向日志表写入数据（改造为操作审计的计划见 docs/权限与审计设计方案）
                                         </td>
                                     </tr>
                                 ) : (

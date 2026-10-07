@@ -279,8 +279,7 @@ const SupportTickets: React.FC = () => {
         <>
             <div className="support-ticket-page">
                 <ManagementSearchPanel
-                    title="工单检索与异常处理"
-                    description="先按用户、工单类型、来源和状态找到目标工单，再决定是同步异常、手工建单，还是直接推进处理。"
+                    title="工单搜索"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
@@ -305,7 +304,7 @@ const SupportTickets: React.FC = () => {
                                 <input
                                     type="text"
                                     className="management-search-input"
-                                    placeholder="搜索用户名、昵称、工单标题或来源ID"
+                                    placeholder="搜索用户名、昵称或工单标题"
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
                                     onKeyDown={(e) => {

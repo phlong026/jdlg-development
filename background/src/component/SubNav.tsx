@@ -30,10 +30,15 @@ const SubNav: React.FC<SubNavProps> = ({ group, location }) => {
     return (
         <nav className="layout-subnav" aria-label={`${group.label}子导航`}>
             {inSecondary && (
-                <Link className="subnav-back" to={group.pages[0].path}>
-                    <FiArrowLeft />
-                    返回{group.label}
-                </Link>
+                /* 二级页显示面包屑（分组 / 当前页），分组名可点回分组落地页，箭头保留"返回"直觉 */
+                <span className="subnav-breadcrumb">
+                    <Link className="subnav-back" to={group.pages[0].path}>
+                        <FiArrowLeft />
+                        {group.label}
+                    </Link>
+                    <span className="subnav-crumb-sep" aria-hidden>/</span>
+                    <span className="subnav-crumb-current">{location.page.label}</span>
+                </span>
             )}
             {tabs.length > 1 && tabs.map((page) => {
                 const count = page.badgeKey ? counts[page.badgeKey] ?? 0 : 0;

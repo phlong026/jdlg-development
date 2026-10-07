@@ -22,12 +22,28 @@ const SubNavCards: React.FC<Props> = ({ group, location }) => {
                 const Icon = page.icon;
                 const current = page.path === location.page.path;
                 const count = page.badgeKey ? counts[page.badgeKey] ?? 0 : 0;
+                // 「未启用」是纯占位（如商机），没有可看的页面，渲染为禁用态而非可点击链接；
+                // 「未接入」（如未接 CRM 的客户）页面本身的基础栏目可用，保持可点，仅悬停说明
+                if (page.note === '未启用') {
+                    return (
+                        <span
+                            key={page.path}
+                            className={`subnav-card tone-${page.tone ?? 'blue'} is-disabled`}
+                            title="该模块规划中，尚未启用"
+                        >
+                            <span className="subnav-card-label">{page.label}</span>
+                            <small>{page.note}</small>
+                            {Icon && <Icon className="subnav-card-icon" aria-hidden />}
+                        </span>
+                    );
+                }
                 return (
                     <Link
                         key={page.path}
                         to={page.path}
                         className={`subnav-card tone-${page.tone ?? 'blue'} ${current ? 'is-current' : ''}`}
                         aria-current={current ? 'page' : undefined}
+                        title={page.note === '未接入' ? 'CRM 未接入，仅基础栏目可用' : undefined}
                     >
                         <span className="subnav-card-label">{page.label}</span>
                         {count > 0 && <span className="subnav-badge" aria-label={`${count} 条待处理`}>{count > 99 ? '99+' : count}</span>}

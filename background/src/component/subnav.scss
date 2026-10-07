@@ -81,3 +81,8 @@
 @media (max-width: 640px) {
   .layout-subnav { padding: 0 12px; }
 }
+
+// 二级页面包屑：分组（可点）/ 当前页（不可点）
+.subnav-breadcrumb { display: inline-flex; align-items: center; gap: 8px; }
+.subnav-crumb-sep { color: #c9b8a8; }
+.subnav-crumb-current { font-size: 14px; color: #5f4632; font-weight: 600; }

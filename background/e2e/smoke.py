@@ -587,16 +587,18 @@ def browser_checks():
             assert 0 < high_count < all_rows, f"高意向 {high_count} 条应少于全部 {all_rows} 条"
             assert pg.locator(".customer-lead-queues").count() == 0, "单独打开时不应再有页内队列卡片"
 
-        @check("商机占位页 /opportunities：只说明未启用，不展示任何数字；可返回线索")
+        @check("商机占位页 /opportunities：只说明未启用，不展示任何数字；入口卡片为禁用态；可返回线索")
         def _():
             pg.goto(WEB + "/admin/customer-leads")
             pg.wait_for_selector(".layout-subnav-cards .subnav-card")
-            pg.locator(".subnav-card", has_text="商机").click()
-            pg.wait_for_url(re.compile(r".*/admin/opportunities$"), timeout=10000)
+            # 商机未启用：入口卡片应为禁用态（span，不可点），直接以网址访问占位页
+            disabled = pg.locator(".subnav-card.is-disabled", has_text="商机")
+            assert disabled.count() == 1, "商机卡片应为禁用态"
+            assert "未启用" in disabled.inner_text()
+            pg.goto(WEB + "/admin/opportunities")
             pg.wait_for_selector(".opportunities-card", timeout=8000)
             assert "暂未启用" in pg.locator(".opportunities-card").inner_text()
             assert pg.eval_on_selector(".sidebar-item.active", "e => e.getAttribute('aria-label')") == "销售线索"
-            assert pg.eval_on_selector(".subnav-card.is-current .subnav-card-label", "e => e.textContent.trim()") == "商机"
             pg.locator(".opportunities-card a", has_text="返回线索").click()
             pg.wait_for_url(re.compile(r".*/admin/customer-leads$"), timeout=10000)
 
