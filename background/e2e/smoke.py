@@ -34,19 +34,9 @@ def guard_local(*urls):
             sys.exit(f"拒绝运行：{u} 不是本机地址（本脚本会写数据，只允许本地联调环境）")
 
 
-class LocalhostCookiePolicy(http.cookiejar.DefaultCookiePolicy):
-    """管理端会话 Cookie 已强制 Secure（安全修复）。本地联调走 http，
-    默认策略不会回传 Secure Cookie，这里仅放行该属性；域/路径匹配仍按默认策略。
-    本脚本入口已限制只允许对 127.0.0.1/localhost 运行。"""
-
-    def return_ok_secure(self, cookie, request):
-        return True
-
-
 class Api:
     def __init__(self):
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(
-            http.cookiejar.CookieJar(policy=LocalhostCookiePolicy())))
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
     def call(self, method, path, body=None):
         data = json.dumps(body).encode() if body is not None else None
