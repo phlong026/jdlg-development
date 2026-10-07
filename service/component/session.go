@@ -2,9 +2,9 @@ package component
 
 import (
 	"fmt"
-	"log"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/redis"
+	"log"
 	"net/http"
 	"os"
 	"service/config"
@@ -35,10 +35,9 @@ func InitSessionStore(cfg *config.Config) (sessions.Store, error) {
 		return nil, err
 	}
 
-	// 统一会话 Cookie 安全属性：有效期 8 小时、HttpOnly、Secure、SameSite=Lax。
-	// 此前仅在启用 CRM 桥接时设置，密码登录路径会落回 redistore 默认值
-	// （30 天有效期、无 HttpOnly/Secure），三条登录路径行为不一致。
-	store.Options(sessions.Options{Path: "/", MaxAge: 28800, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+	if os.Getenv("CRM_BRIDGE_URL") != "" {
+		store.Options(sessions.Options{Path: "/", MaxAge: 28800, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+	}
 	SessionStore = store
 	return store, nil
 }

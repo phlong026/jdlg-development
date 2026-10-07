@@ -172,6 +172,7 @@
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 16px; /* 审计页内容卡：与全站 section-card 一致的内边距 */
 }
 
 .logs-table {
