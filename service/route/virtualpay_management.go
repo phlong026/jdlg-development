@@ -275,8 +275,13 @@ func refundVirtualPayRechargeOrder(ctx context.Context, cfg *config.Config, deps
 		Env:          pickXPayEnv(cfg, platform),
 	})
 	if err != nil {
-		logRollbackRefundFailure(deps, order, "refund_order", err)
-		return nil, fmt.Errorf("微信虚拟支付退款失败: %w", err)
+		// 微信退款是"超时不代表失败"的场景：请求可能已被受理、退款推送稍后到达。
+		// 若此时回滚（退还灵石+状态回 success），推送到达后用户将"真钱已退、灵石也已
+		// 退回"双重得利，且 refund_deduct 流水缺失无法对账。因此保持 refunding 状态
+		// 与已扣灵石不动，由补偿任务 10 分钟后按微信侧真实状态核对：
+		// REFUND → 落终态 refunded（灵石已扣，账实相符）；其它状态 → [资金] 告警人工处理。
+		log.Printf("[VirtualPay][资金] 微信退款请求失败，保持 refunding 待补偿核对（请勿手工改余额）: orderNo=%s err=%v", order.OrderNo, err)
+		return nil, fmt.Errorf("微信虚拟支付退款请求失败（订单进入补偿核对，最终结果以微信侧为准）: %w", err)
 	}
 
 	if deps.StoneRecordModel != nil {
@@ -297,15 +302,21 @@ func refundVirtualPayRechargeOrder(ctx context.Context, cfg *config.Config, deps
 // 回滚自身失败时订单会卡在 refunding 且用户灵石少记，必须留痕供补偿任务/人工核对，
 // 不能再像以前那样用 _ = 吞掉。
 func logRollbackRefundFailure(deps VirtualPayDeps, order *model.UserOrder, stage string, cause error) {
+	failed := false
 	if err := deps.UserModel.AddStones(order.UserID, order.Amount); err != nil {
+		failed = true
 		log.Printf("[VirtualPay][资金][严重] 退款失败(%s)且退还灵石失败，需人工核对: orderNo=%s user=%d amount=%d err=%v",
 			stage, order.OrderNo, order.UserID, order.Amount, err)
 	}
 	if err := restoreVirtualPayRefunding(deps.UserOrderModel, order.ID); err != nil {
+		failed = true
 		log.Printf("[VirtualPay][资金][严重] 退款失败(%s)且回滚订单状态失败，订单卡在 refunding 待补偿核对: orderNo=%s err=%v",
 			stage, order.OrderNo, err)
 	}
-	log.Printf("[VirtualPay][资金] 退款失败(%s)已回滚（退还灵石+状态回 success）: orderNo=%s cause=%v", stage, order.OrderNo, cause)
+	// 两步都成功才说"已回滚"，否则上面已有 [严重] 日志，这里再说"已回滚"会误导值班排障
+	if !failed {
+		log.Printf("[VirtualPay][资金] 退款失败(%s)已回滚（退还灵石+状态回 success）: orderNo=%s cause=%v", stage, order.OrderNo, cause)
+	}
 }
 
 func claimVirtualPayRefunding(userOrderModel *model.UserOrderModel, orderID int64) (bool, error) {

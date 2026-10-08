@@ -38,6 +38,20 @@ const (
 	maxAdminSetStones    int64 = 100000 // 直接设置的目标余额上限
 )
 
+// rollbackStonesDelta 按增量回滚一次灵石设置（newStones → oldStones 的逆操作）。
+// 用 Add/Deduct 原子增量而非 SetStones 绝对值覆盖：回滚窗口内的并发扣减/充值不会被冲掉。
+// DeductStones 余额不足时返回错误，由调用方以 [资金][严重] 告警人工介入。
+func rollbackStonesDelta(userRedisModel *model.UserRedisModel, userID, oldStones, newStones int64) error {
+	inverse := oldStones - newStones
+	if inverse == 0 {
+		return nil
+	}
+	if inverse > 0 {
+		return userRedisModel.AddStones(userID, inverse)
+	}
+	return userRedisModel.DeductStones(userID, -inverse)
+}
+
 // createAdminStonesRecord 写管理端灵石流水。返回错误而不是吞掉：
 // 余额已变而流水缺失会让对账无从下手，调用方必须回滚或明示人工介入。
 func createAdminStonesRecord(stoneRecordModel *model.StoneRecordModel, userID int64, recordType string, delta int64, sceneDesc, remark string) error {
@@ -182,9 +196,6 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				page = 1
 			}
 			pageSize = clampManagementPageSize(pageSize)
-			if pageSize > 100 {
-				pageSize = 100
-			}
 			if enterpriseWechatStatus != "verified" && enterpriseWechatStatus != "pending" {
 				enterpriseWechatStatus = "all"
 			}
@@ -648,6 +659,16 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				return
 			}
 			if err := userRedisModel.SetStones(id, newStones); err != nil {
+				// SetStones 先写 Redis 再写 MySQL：MySQL 失败时 Redis 可能已变更。
+				// 若就此返回，余额已变而无流水，且重试会以污染后的值做差，永远补不上流水；
+				// 服务重启还会把 Redis 拉回旧值，表现为"设置成功后余额弹回"。
+				if current, gerr := userRedisModel.GetStones(id); gerr == nil && current != oldStones {
+					if rbErr := rollbackStonesDelta(userRedisModel, id, oldStones, current); rbErr != nil {
+						log.Printf("[资金][严重] 灵石设置 MySQL 失败且 Redis 回滚失败，需人工核对: user=%d old=%d redis当前=%d err=%v", u.ID, oldStones, current, rbErr)
+					} else {
+						log.Printf("[资金] 灵石设置 MySQL 同步失败，Redis 已增量回滚: user=%d", u.ID)
+					}
+				}
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "修改灵石余额失败: " + err.Error(),
@@ -676,9 +697,10 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 					remark += "：" + req.Remark
 				}
 				if err := createAdminStonesRecord(stoneRecordModel, u.ID, recordType, delta, sceneDesc, remark); err != nil {
-					// 流水是对账依据：写不进去就把余额回滚到旧值，绝不能"余额变了但没有流水"
+					// 流水是对账依据：写不进去就把本次变更增量冲销，绝不能"余额变了但没有流水"。
+					// 用增量补偿而非 SetStones 绝对值回滚：回滚窗口内的并发扣减/充值不会被覆盖
 					log.Printf("[资金] 灵石设置流水失败 user=%d old=%d new=%d err=%v", u.ID, oldStones, newStones, err)
-					if rbErr := userRedisModel.SetStones(id, oldStones); rbErr != nil {
+					if rbErr := rollbackStonesDelta(userRedisModel, id, oldStones, newStones); rbErr != nil {
 						log.Printf("[资金][严重] 回滚失败，需人工核对 user=%d old=%d new=%d err=%v", u.ID, oldStones, newStones, rbErr)
 					}
 					c.JSON(http.StatusInternalServerError, gin.H{

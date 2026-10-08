@@ -181,7 +181,13 @@ func probeAIEndpoint(ctx context.Context, config *model.AIAPIConfig) aiConfigTes
 		// 空 JSON 探测即可，不注入（body 模式的真实模板各供应商不同）
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// 禁止跟随重定向：公网端点可 302 到内网/http 地址，跟随会绕过 endpoint 校验
+	// 形成 SSRF 探测，且自定义 Header 形态的 API Key 会被带往重定向目标。
+	// ErrUseLastResponse 让 client 直接返回 3xx 响应，由下方状态分支归类提示。
+	client := &http.Client{
+		Timeout:       10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "timeout") {
@@ -197,6 +203,8 @@ func probeAIEndpoint(ctx context.Context, config *model.AIAPIConfig) aiConfigTes
 		return aiConfigTestResult{OK: true, HTTPStatus: resp.StatusCode, Category: "ok", Message: "接口可达且接受了请求"}
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return aiConfigTestResult{HTTPStatus: resp.StatusCode, Category: "auth_rejected", Message: fmt.Sprintf("地址可达但鉴权被拒（HTTP %d）：请检查 API Key 是否有效、发送位置配置是否正确", resp.StatusCode)}
+	case resp.StatusCode >= 300 && resp.StatusCode < 400:
+		return aiConfigTestResult{HTTPStatus: resp.StatusCode, Category: "request_rejected", Message: fmt.Sprintf("对端返回重定向（HTTP %d）：测试不跟随重定向，请确认配置的是最终接口地址", resp.StatusCode)}
 	case resp.StatusCode >= 400 && resp.StatusCode < 500:
 		return aiConfigTestResult{HTTPStatus: resp.StatusCode, Category: "request_rejected", Message: fmt.Sprintf("对端拒绝了探测请求（HTTP %d）：地址可达；空请求体被拒属正常，可结合真实任务判断", resp.StatusCode)}
 	default:

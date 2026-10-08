@@ -48,6 +48,8 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	reportContext, stopReports := context.WithCancel(context.Background())
 	// 管理端操作审计写入器（在下方管理路由块内初始化，停止时冲刷）
 	var auditWriter *model.AuditWriter
+	// 虚拟支付补偿任务：随服务关闭先停，避免 tick 与 DB/Redis 关闭赛跑
+	var virtualPayCompensator *VirtualPayCompensator
 	reportModule, reportErr := NewReportModule(reportContext, component.GetDB(), cfg)
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
@@ -123,7 +125,8 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		}
 		RegisterVirtualPayRoutes(miniprogramAI, cfg, userOrderModel, virtualPayDeps)
 		// 启动补偿任务：每 60s 扫描卡 pending 的虚拟支付订单，主动推进发货
-		NewVirtualPayCompensator(cfg, virtualPayDeps).Start()
+		virtualPayCompensator = NewVirtualPayCompensator(cfg, virtualPayDeps)
+		virtualPayCompensator.Start()
 		// 微信消息推送统一入口（v1 组下无需 token；验签解密 + 幂等去重 + 业务分发）
 		RegisterWXMsgRoutes(v1, cfg, virtualPayDeps)
 		// 认证申请（个人设计师/企业）：提交时支付认证费，支付成功后工单进入管理员审核
@@ -188,6 +191,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterUtilityToolRoutes(miniprogram, utilityToolModel)
 	}
 	return func() {
+		virtualPayCompensator.Stop()
 		stopReports()
 		auditWriter.Stop()
 	}
