@@ -36,5 +36,12 @@
     "width": 2559,
     "height": 5532,
     "scale": 3
+  },
+  "revision": {
+    "backgroundBlend": "multiply",
+    "backgroundOpacity": 0.85,
+    "removedSecondaryEntries": true,
+    "nativeRemovedTextPresent": false,
+    "compileErrors": 0
   }
 }

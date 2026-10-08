@@ -79,8 +79,8 @@
     {
       "path": "miniprogram/pages/index/index.scss",
       "role": "restore",
-      "afterSha256": "f29284dcdd1a15950d5e2f8b61121bfb388d04054df3e36e617e29cd0bcad2a1",
-      "afterSize": 24260,
+      "afterSha256": "6f8e1f694bf3a5231e0a7055d63918e0c69e39e381ccc2fe545fd5f40c442366",
+      "afterSize": 23944,
       "beforeSha256": "9784ca32ab15055bc8f9dce297a39e04f055364634eaf954357c977dfe8f5cff",
       "beforeSize": 18540
     },
@@ -95,16 +95,16 @@
     {
       "path": "miniprogram/pages/index/index.wxml",
       "role": "restore",
-      "afterSha256": "05d4d6dba7d4d0d4c3b0451d611ffce521d28c31a1abc66f03be85c0fe07ec83",
-      "afterSize": 21909,
+      "afterSha256": "923fc1ec7056912f952fd657b0877eefc4354b85a0954b28eeecf37f9ae9701d",
+      "afterSize": 21252,
       "beforeSha256": "15fb1b15def24087a17114daf631a25594435dc947a2f47fb9b644d2077e4ce3",
       "beforeSize": 15837
     },
     {
       "path": "miniprogram/pages/index/index.wxss",
       "role": "restore",
-      "afterSha256": "45a3b9e6436a44c4ad4fc356b774244c68b074fce56d9db7ee17f458e50e8943",
-      "afterSize": 19962,
+      "afterSha256": "329aff7578303e5db0371485ae6eb92d831cbae7d090fd48a9c6443679a54a32",
+      "afterSize": 19567,
       "beforeSha256": "eccc377c0cb81756e02c4d32bd52a18cb29eeb8ca77806fcf59964d8bc81804d",
       "beforeSize": 13782
     },
@@ -285,8 +285,8 @@
     {
       "path": "tests/home-smart-service-fixed.test.js",
       "role": "test-only",
-      "afterSha256": "e6c920254c443cbe6ac2657789c85f476fd41f7db05c8acd090f3584cdb497cb",
-      "afterSize": 938
+      "afterSha256": "93dca9318ba48d1ae9e48fd77770d49bf79f399bb2f8c8c5cd9f2397580b956c",
+      "afterSize": 1090
     }
   ]
 }

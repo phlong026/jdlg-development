@@ -8,6 +8,6 @@ const hero = markup.slice(markup.indexOf('<view class="home-canvas">'), markup.i
 assert.match(hero, /class="hotspot smart-service-float"[^>]*bindtap="onMascotTap"[^>]*aria-label="在线客服"/);
 assert.doesNotMatch(markup, /smart-service-fixed-layer/);
 assert.match(styles, /\.hotspot\s*{[^}]*position:\s*absolute/);
-assert.match(markup, /pages\/checkin\/checkin\?source=index/);
-assert.match(markup, /pages\/Invitefriends\/Invitefriends\?source=index/);
-console.log('Customer service scrolls with the confirmed hero; checkin and invite remain reachable');
+assert.doesNotMatch(markup, /每日签到|邀请好友|先想清楚怎么住|再决定怎么建|梳理建房方向/);
+assert.doesNotMatch(markup, /home-secondary-actions|building-report-entry|pages\/checkin\/checkin|pages\/Invitefriends\/Invitefriends|pages\/report\/landing/);
+console.log('Customer service remains in the hero; cancelled secondary entries and placeholder copy are absent');

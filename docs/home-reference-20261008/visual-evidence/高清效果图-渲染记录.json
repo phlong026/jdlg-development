@@ -1,10 +1,10 @@
 {
-  "exportedAt": "2026-10-08T14:46:15.971Z",
+  "exportedAt": "2026-10-08T15:13:50.045Z",
   "source": {
     "wxmlPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxml",
     "wxssPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxss",
-    "wxmlSha256": "05d4d6dba7d4d0d4c3b0451d611ffce521d28c31a1abc66f03be85c0fe07ec83",
-    "wxssSha256": "45a3b9e6436a44c4ad4fc356b774244c68b074fce56d9db7ee17f458e50e8943"
+    "wxmlSha256": "923fc1ec7056912f952fd657b0877eefc4354b85a0954b28eeecf37f9ae9701d",
+    "wxssSha256": "329aff7578303e5db0371485ae6eb92d831cbae7d090fd48a9c6443679a54a32"
   },
   "logicalViewport": {
     "width": 853,
@@ -26,7 +26,7 @@
   },
   "background": {
     "gradient": "linear-gradient(rgb(230, 218, 202), rgb(236, 228, 217))",
-    "backdropOpacity": "0.24",
+    "backdropOpacity": "0.85",
     "samplingMethod": "最终 PNG 的背景空白点；每点平均 15×15 物理像素，等于 5×5 逻辑像素",
     "samples": [
       {
@@ -36,11 +36,11 @@
         "logicalCoordinates": true,
         "sampleSquarePhysicalPixels": 15,
         "rgb": [
-          236,
-          227,
-          214
+          229,
+          216,
+          198
         ],
-        "hex": "#ece3d6"
+        "hex": "#e5d8c6"
       },
       {
         "label": "上部左侧边缘背景",
@@ -49,11 +49,11 @@
         "logicalCoordinates": true,
         "sampleSquarePhysicalPixels": 15,
         "rgb": [
-          237,
-          228,
-          216
+          230,
+          218,
+          201
         ],
-        "hex": "#ede4d8"
+        "hex": "#e6dac9"
       },
       {
         "label": "中部右侧边缘背景",
@@ -62,11 +62,11 @@
         "logicalCoordinates": true,
         "sampleSquarePhysicalPixels": 15,
         "rgb": [
-          238,
-          231,
-          219
+          232,
+          220,
+          205
         ],
-        "hex": "#eee7db"
+        "hex": "#e8dccd"
       },
       {
         "label": "造价卡片上方左侧背景",
@@ -75,11 +75,11 @@
         "logicalCoordinates": true,
         "sampleSquarePhysicalPixels": 15,
         "rgb": [
-          239,
-          230,
-          221
+          234,
+          221,
+          206
         ],
-        "hex": "#efe6dd"
+        "hex": "#eaddce"
       },
       {
         "label": "首屏底部右侧背景",
@@ -88,11 +88,11 @@
         "logicalCoordinates": true,
         "sampleSquarePhysicalPixels": 15,
         "rgb": [
-          241,
           233,
-          224
+          225,
+          211
         ],
-        "hex": "#f1e9e0"
+        "hex": "#e9e1d3"
       }
     ]
   },

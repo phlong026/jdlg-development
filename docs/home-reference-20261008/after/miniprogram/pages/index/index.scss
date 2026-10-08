@@ -1,14 +1,9 @@
 /**index.scss**/
-.building-report-entry {
-  padding: 30rpx; margin: 0 0 32rpx; border: 1rpx solid #cfbda4;
-  border-radius: 24rpx; background: #f9f3e8; color: #71543e;
-  &__title { display: block; font-size: 31rpx; font-weight: 600; line-height: 1.7; }
-  &__copy { display: block; font-size: 24rpx; line-height: 1.8; margin-top: 12rpx; }
-}
 page { overflow: visible; background: #ece4d9; }
 .pages { width: 100vw; min-height: 100vh; background: #ece4d9; overflow-x: hidden; box-sizing: border-box; }
-.home-canvas { position: relative; width: 750rpx; height: 1488.57rpx; color: #473720; font-family: "PingFang SC", sans-serif; background: linear-gradient(180deg, #e6daca, #ece4d9); }
-.home-backdrop { opacity: .24; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.home-canvas { position: relative; isolation: isolate; width: 750rpx; height: 1488.57rpx; color: #473720; font-family: "PingFang SC", sans-serif; background: linear-gradient(180deg, #e6daca, #ece4d9); }
+// 乘色保留暖米色底色，让山水纹理显现，避免米白图片冲淡整页配色。
+.home-backdrop { opacity: .85; mix-blend-mode: multiply; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .home-art-layer { position: absolute; left: 0; top: 105.51rpx; width: 750rpx; height: 1383.06rpx; }
 .home-art-layer > text, .home-art-layer > image, .home-art-layer > view, .home-art-layer > picker { position: absolute; box-sizing: border-box; }
 .brand-symbol { left: 54.51rpx; top: 40.45rpx; width: 158.26rpx; height: 131.89rpx; }
@@ -68,7 +63,6 @@ page { overflow: visible; background: #ece4d9; }
 .quick-estimate::after { border: 0; }
 .info-icon { width: 19rpx; height: 19rpx; border: 1.5rpx solid #787b83; border-radius: 50%; font: 16rpx/19rpx Georgia, serif; text-align: center; }
 .content { position: relative; margin-top: 0; padding: 30rpx 30rpx calc(180rpx + env(safe-area-inset-bottom)); box-sizing: border-box; }
-.home-secondary-actions { display: flex; justify-content: center; gap: 48rpx; margin-bottom: 30rpx; color: #73583f; font-size: 25rpx; }
 
 .case-section {
   margin-bottom: 40rpx;

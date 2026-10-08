@@ -69,14 +69,6 @@
     </view>
   </view>
   <view class="content">
-    <view class="home-secondary-actions">
-      <view bindtap="onOpenPage" data-url="/pages/checkin/checkin?source=index" role="button">每日签到</view>
-      <view bindtap="onOpenPage" data-url="/pages/Invitefriends/Invitefriends?source=index" role="button">邀请好友</view>
-    </view>
-    <view class="building-report-entry" bindtap="onOpenPage" data-url="/pages/report/landing" role="button" aria-label="开始我的建房报告">
-      <text class="building-report-entry__title">先想清楚怎么住，再决定怎么建</text>
-      <text class="building-report-entry__copy">从您家的情况出发，梳理建房方向 →</text>
-    </view>
     <view class="case-section" wx:if="{{featuredGroups && featuredGroups.length > 0}}">
       <text class="case-title">精选案例对比</text>
       <view class="featured-groups">

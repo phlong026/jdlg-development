@@ -1,5 +1,5 @@
 {
-  "scannedTextFiles": 50,
+  "scannedTextFiles": 52,
   "findings": [],
-  "dependencies": "npm audit --omit=dev: 0 reported vulnerabilities; dependencies unchanged"
+  "productionDependencyVulnerabilities": 0
 }
