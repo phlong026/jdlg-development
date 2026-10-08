@@ -1,6 +1,6 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FiSearch } from 'react-icons/fi';
 import {
     getUserList,
@@ -37,9 +37,14 @@ const pageSizeOptions = [20, 50, 100];
 
 const Users: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [searchInput, setSearchInput] = useState('');
     const [searchKeyword, setSearchKeyword] = useState('');
-    const [enterpriseWechatFilter, setEnterpriseWechatFilter] = useState<'all' | 'verified' | 'pending'>('all');
+    // ?wechat=pending|verified：总控台「下载权限待核验」带参直达，落地即应用手机号授权筛选
+    const wechatParam = searchParams.get('wechat');
+    const [enterpriseWechatFilter, setEnterpriseWechatFilter] = useState<'all' | 'verified' | 'pending'>(
+        wechatParam === 'pending' || wechatParam === 'verified' ? wechatParam : 'all',
+    );
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showStonesModal, setShowStonesModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);

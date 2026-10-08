@@ -187,11 +187,27 @@ const AITaskCenter: React.FC = () => {
     }, [activeTab]);
 
     useEffect(() => {
+        // 支持 ?tab=image|video 与 ?status=failed（总控台失败任务待办带参直达，落地即应用筛选）
         const tab = searchParams.get('tab');
+        const statusParam = searchParams.get('status');
+        let nextTab = activeTab;
+        let changed = false;
         if ((tab === 'image' || tab === 'video') && tab !== activeTab) {
             setActiveTab(tab);
+            nextTab = tab;
+            changed = true;
         }
-    }, [searchParams, activeTab]);
+        if (statusParam && statusParam !== 'all' && statusParam !== status) {
+            setStatus(statusParam);
+            changed = true;
+        }
+        if (changed) {
+            // tab 变化时 activeTab 的监听 effect 会用最新 state 重跑；
+            // 仅 status 变化的场景在这里手动加载一次
+            void loadData(nextTab, keyword, statusParam && statusParam !== 'all' ? statusParam : status, scene, 1, pageSize);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     useEffect(() => {
         const taskId = searchParams.get('taskId');
