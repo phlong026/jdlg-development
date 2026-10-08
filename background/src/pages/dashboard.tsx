@@ -1,31 +1,27 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FiActivity,
     FiAlertCircle,
-    FiBarChart2,
     FiChevronRight,
     FiClock,
     FiCreditCard,
-    FiLayers,
+    FiDollarSign,
+    FiFileText,
     FiRefreshCw,
-    FiShield,
+    FiTrendingUp,
+    FiUserCheck,
     FiUsers,
     FiZap,
 } from 'react-icons/fi';
 import {
     getDashboardOverview,
-    getDashboardTodos,
     getDashboardTodoItems,
-    type DashboardTodoItem,
-    getDashboardTrends,
-    type DashboardFailedTaskItem,
     type DashboardOverview,
-    type DashboardTodoCertificationItem,
-    type DashboardTodoUserItem,
-    type DashboardTodos,
+    type DashboardTodoItem,
     type DashboardTrendItem,
+    getDashboardTrends,
 } from '../api/stats';
 import './dashboard.scss';
 
@@ -39,84 +35,68 @@ const RECENT_USERS_STORAGE_KEY = 'user-workbench-recent-users';
 const emptyOverview: DashboardOverview = {
     total_users: 0,
     today_new_users: 0,
+    yesterday_new_users: 0,
+    today_income_fen: 0,
+    yesterday_income_fen: 0,
     today_orders: 0,
+    yesterday_orders: 0,
     today_success_orders: 0,
-    today_success_amount: 0,
+    yesterday_success_orders: 0,
     today_image_tasks: 0,
     today_video_tasks: 0,
+    yesterday_tasks: 0,
     today_failed_tasks: 0,
+    yesterday_failed_tasks: 0,
     pending_certifications: 0,
-    pending_exceptions: 0,
 };
 
-const emptyTodos: DashboardTodos = {
-    counts: {
-        pending_certifications: 0,
-        zero_stones_users: 0,
-        pending_wechat_users: 0,
-        failed_tasks: 0,
-    },
-    pending_certifications: [],
-    zero_stones_users: [],
-    pending_wechat_users: [],
-    failed_tasks: [],
-};
-
-const formatDateTime = (value?: string | null) => {
-    if (!value) return '暂无';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString('zh-CN');
-};
-
-const formatCompactNumber = (value: number) => {
-    if (value >= 10000) {
-        return `${(value / 10000).toFixed(1)}w`;
+const formatMoneyYuan = (fen: number) => {
+    const yuan = fen / 100;
+    if (yuan >= 10000) {
+        return `${(yuan / 10000).toFixed(1)}w`;
     }
-    return String(value);
+    return yuan.toLocaleString('zh-CN', { maximumFractionDigits: yuan % 1 === 0 ? 0 : 2 });
 };
 
-const getUserDisplayName = (item?: DashboardTodoUserItem | DashboardFailedTaskItem | null) => {
-    if (!item) return '';
-    return item.nickname?.trim() || item.username || `用户${item.user_id}`;
-};
+const formatCompact = (value: number) => (value >= 10000 ? `${(value / 10000).toFixed(1)}w` : String(value));
 
-const getCertificationTypeLabel = (item: DashboardTodoCertificationItem) => {
-    return item.type === 'designer' ? '个人设计师认证' : '企业认证';
-};
-
-const getTaskTypeLabel = (item: DashboardFailedTaskItem) => {
-    return item.task_type === 'video' ? '视频任务' : '图片任务';
-};
-
-const buildTrendPolyline = (values: number[], width = 260, height = 112, padding = 14) => {
-    if (!values.length) {
-        return '';
+/** 环比文案：昨为 0 今为 0 → 持平；昨 0 今>0 → 新增；否则百分比。涨红跌绿（国内电商后台惯例）。 */
+const buildDelta = (today: number, yesterday: number, unit = '') => {
+    if (today === 0 && yesterday === 0) {
+        return { text: '— 持平', tone: 'flat' as const };
     }
-    const maxValue = Math.max(...values, 1);
-    const innerWidth = Math.max(width - padding * 2, 1);
-    const innerHeight = Math.max(height - padding * 2, 1);
-    const step = values.length === 1 ? 0 : innerWidth / (values.length - 1);
-    return values.map((value, index) => {
-        const x = padding + step * index;
-        const y = padding + innerHeight - (value / maxValue) * innerHeight;
-        return `${x},${y}`;
-    }).join(' ');
+    if (yesterday === 0) {
+        return { text: `新增 ${today}${unit}`, tone: 'up' as const };
+    }
+    const pct = Math.round(((today - yesterday) / yesterday) * 100);
+    if (pct === 0) {
+        return { text: '— 持平', tone: 'flat' as const };
+    }
+    return pct > 0
+        ? { text: `↑ ${pct}%`, tone: 'up' as const }
+        : { text: `↓ ${Math.abs(pct)}%`, tone: 'down' as const };
 };
 
-const buildTrendAreaPath = (values: number[], width = 260, height = 112, padding = 14) => {
-    if (!values.length) {
-        return '';
-    }
-    const polyline = buildTrendPolyline(values, width, height, padding);
-    if (!polyline) {
-        return '';
-    }
-    const points = polyline.split(' ');
-    const baseline = height - padding;
-    const firstPoint = points[0]?.split(',') || [`${padding}`, `${baseline}`];
-    const lastPoint = points[points.length - 1]?.split(',') || [`${width - padding}`, `${baseline}`];
-    return `M ${firstPoint[0]} ${baseline} L ${points.map(point => point.replace(',', ' ')).join(' L ')} L ${lastPoint[0]} ${baseline} Z`;
+const CHART_W = 960;
+const CHART_H = 210;
+const CHART_PAD = { left: 46, right: 14, top: 14, bottom: 26 };
+
+type TrendMetricKey = 'income' | 'orders' | 'users' | 'tasks';
+
+const TREND_METRICS: { key: TrendMetricKey; label: string; drillPath: string }[] = [
+    { key: 'income', label: '充值收入', drillPath: '/recharge' },
+    { key: 'orders', label: '订单量', drillPath: '/recharge' },
+    { key: 'users', label: '新增用户', drillPath: '/users' },
+    { key: 'tasks', label: 'AI 任务', drillPath: '/ai-tasks' },
+];
+
+const TODO_ICONS: Record<string, React.ReactNode> = {
+    certifications: <FiUserCheck />,
+    tickets: <FiFileText />,
+    tickets_overdue: <FiAlertCircle />,
+    leads_todo: <FiTrendingUp />,
+    leads_overdue: <FiClock />,
+    failed_tasks_7d: <FiZap />,
 };
 
 const Dashboard: React.FC = () => {
@@ -124,30 +104,33 @@ const Dashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [overview, setOverview] = useState<DashboardOverview>(emptyOverview);
     const [trends, setTrends] = useState<DashboardTrendItem[]>([]);
-    const [todos, setTodos] = useState<DashboardTodos>(emptyTodos);
     const [todoItems, setTodoItems] = useState<DashboardTodoItem[]>([]);
     const [recentUsers, setRecentUsers] = useState<RecentUserItem[]>([]);
+    const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+    const [trendMetric, setTrendMetric] = useState<TrendMetricKey>('income');
+    const [trendRange, setTrendRange] = useState<7 | 30>(7);
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+    const chartWrapRef = useRef<HTMLDivElement>(null);
 
-    const loadDashboard = async () => {
+    const loadDashboard = useCallback(async (range: 7 | 30 = trendRange) => {
         setLoading(true);
         try {
-            const [overviewRes, trendRes, todoRes, todoItemsRes] = await Promise.all([
+            const [overviewRes, trendRes, todoRes] = await Promise.all([
                 getDashboardOverview(),
-                getDashboardTrends(),
-                getDashboardTodos(),
-                getDashboardTodoItems().catch(() => [] as DashboardTodoItem[]),
+                getDashboardTrends(range),
+                getDashboardTodoItems(),
             ]);
             setOverview(overviewRes || emptyOverview);
             setTrends(trendRes || []);
-            setTodos(todoRes || emptyTodos);
-            setTodoItems(todoItemsRes || []);
+            setTodoItems(todoRes || []);
+            setLoadedAt(new Date());
         } catch (error) {
             console.error('加载总控台数据失败:', error);
             reportPageLoadError(error, '加载总控台数据失败');
         } finally {
             setLoading(false);
         }
-    };
+    }, [trendRange]);
 
     useEffect(() => {
         void loadDashboard();
@@ -160,495 +143,464 @@ const Dashboard: React.FC = () => {
         } catch (error) {
             console.error('读取最近访问用户失败:', error);
         }
+        // 每分钟自动刷新（页面切到后台时跳过，回来后立即补一次）
+        const timer = window.setInterval(() => {
+            if (!document.hidden) {
+                void loadDashboard();
+            }
+        }, 60000);
+        const onVisible = () => {
+            if (!document.hidden) {
+                void loadDashboard();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            window.clearInterval(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const todayTaskTotal = overview.today_image_tasks + overview.today_video_tasks;
+    // 超时的排最前、数量多的靠前——运营从上往下处理即可
+    const actionItems = useMemo(
+        () => todoItems
+            .filter(item => item.kind === 'action' && item.count > 0)
+            .sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0) || b.count - a.count),
+        [todoItems],
+    );
+    const watchItems = useMemo(() => todoItems.filter(item => item.kind === 'watch'), [todoItems]);
+    const urgentCount = useMemo(() => todoItems.filter(item => item.kind === 'action' && item.urgent && item.count > 0).length, [todoItems]);
+    const todoTotal = useMemo(() => actionItems.reduce((sum, item) => sum + item.count, 0), [actionItems]);
 
-    const taskSuccessRateText = useMemo(() => {
-        if (todayTaskTotal === 0) {
-            return '—';
-        }
-        return `${(((todayTaskTotal - overview.today_failed_tasks) / todayTaskTotal) * 100).toFixed(1)}%`;
-    }, [overview.today_failed_tasks, todayTaskTotal]);
+    const todayTasks = overview.today_image_tasks + overview.today_video_tasks;
+    const successRate = todayTasks === 0 ? null : ((todayTasks - overview.today_failed_tasks) / todayTasks) * 100;
+    const yesterdayRate = overview.yesterday_tasks === 0 ? null : ((overview.yesterday_tasks - overview.yesterday_failed_tasks) / overview.yesterday_tasks) * 100;
 
-    const heroHighlights = useMemo(() => {
-        return [
-            {
-                key: 'new-users',
-                label: '今日新增',
-                value: formatCompactNumber(overview.today_new_users),
-                detail: `总用户 ${formatCompactNumber(overview.total_users)}`,
-            },
-            {
-                key: 'revenue',
-                label: '成功成交',
-                value: formatCompactNumber(overview.today_success_amount),
-                detail: `成功订单 ${overview.today_success_orders} 单`,
-            },
-            {
-                key: 'task-success-rate',
-                label: '任务成功率',
-                value: taskSuccessRateText,
-                detail: todayTaskTotal === 0 ? '今天还没有任务' : `失败 ${overview.today_failed_tasks} 条`,
-            },
-        ];
-    }, [overview.today_failed_tasks, overview.today_new_users, overview.today_success_amount, overview.today_success_orders, overview.total_users, taskSuccessRateText, todayTaskTotal]);
-
-    const pillarCards = useMemo(() => {
-        return [
-            {
-                key: 'users',
-                title: '用户与增长',
-                value: formatCompactNumber(overview.total_users),
-                icon: FiUsers,
-                tone: 'neutral',
-                path: '/users',
-                actionLabel: '查看用户中心',
-                description: '先看今天有没有新增，再判断增长是否放缓。',
-                stats: [
-                    { label: '今日新增', value: `${overview.today_new_users} 人` },
-                    { label: '异常用户', value: `${overview.pending_exceptions} 个` },
-                ],
-            },
-            {
-                key: 'orders',
-                title: '交易与收入',
-                value: formatCompactNumber(overview.today_success_amount),
-                icon: FiCreditCard,
-                tone: 'warm',
-                path: '/recharge',
-                actionLabel: '进入订单中心',
-                description: '把金额和成功单量放在一起看，更容易判断收入质量。',
-                stats: [
-                    { label: '今日订单', value: `${overview.today_orders} 单` },
-                    { label: '成功支付', value: `${overview.today_success_orders} 单` },
-                ],
-            },
-            {
-                key: 'tasks',
-                title: '履约与异常',
-                value: formatCompactNumber(todayTaskTotal),
-                icon: FiActivity,
-                tone: 'warning',
-                path: '/ai-tasks',
-                actionLabel: '进入AI任务中心',
-                description: '这里同时看任务量、失败量和异常池，最能反映交付压力。',
-                stats: [
-                    { label: '图片 / 视频', value: `${overview.today_image_tasks} / ${overview.today_video_tasks}` },
-                    { label: '失败 / 异常', value: `${overview.today_failed_tasks} / ${overview.pending_exceptions}` },
-                ],
-            },
-        ];
-    }, [overview.pending_exceptions, overview.today_failed_tasks, overview.today_image_tasks, overview.today_new_users, overview.today_orders, overview.today_success_amount, overview.today_success_orders, overview.today_video_tasks, overview.total_users, todayTaskTotal]);
-
-    const healthStatus = useMemo(() => {
-        if (overview.today_failed_tasks >= 8 || overview.pending_exceptions >= 20) {
+    // 健康状态用可解释口径：有超时待办或失败率异常才亮黄，不再依赖魔法数字阈值
+    const health = useMemo(() => {
+        if (urgentCount > 0) {
             return {
-                label: '高压预警',
-                description: '失败任务或异常队列偏高，建议先处理履约与客服压力。',
-                tone: 'danger',
+                label: '需关注',
+                description: `有 ${urgentCount} 项超时待办（工单或线索），建议今天清掉。`,
+                tone: 'warning' as const,
             };
         }
-        if (overview.today_failed_tasks >= 3 || overview.pending_certifications >= 8) {
+        if (successRate !== null && successRate < 90 && todayTasks >= 10) {
             return {
-                label: '关注中',
-                description: '业务整体可控，但审核或任务失败已经开始堆积。',
-                tone: 'warning',
+                label: '履约承压',
+                description: `今日任务失败率 ${(100 - successRate).toFixed(1)}%，建议先排查失败原因。`,
+                tone: 'danger' as const,
             };
         }
         return {
             label: '运行平稳',
-            description: '今天核心经营与履约指标总体正常，可以重点看增长与效率。',
-            tone: 'success',
+            description: '今日核心经营与履约指标正常。',
+            tone: 'success' as const,
         };
-    }, [overview.pending_certifications, overview.pending_exceptions, overview.today_failed_tasks]);
+    }, [successRate, todayTasks, urgentCount]);
 
-    const primaryActions = useMemo(() => {
-        // 今日待办（B1）：工单与线索来自 /dashboard/todo（与各页队列角标同源），
-        // 失败任务/异常用户沿用原数据源；两项都为 0 的待办不占首屏
-        const actionIcons: Record<string, React.ReactNode> = {
-            certifications: <FiClock />,
-            tickets: <FiShield />,
-            tickets_overdue: <FiAlertCircle />,
-            leads_todo: <FiUsers />,
-            leads_overdue: <FiActivity />,
-        };
-        const fromTodoItems = todoItems
-            .filter(item => item.count > 0)
-            .map(item => ({
-                label: item.label,
-                hint: `${item.count} 条待处理${item.urgent ? ' · 需尽快' : ''}`,
-                path: item.path,
-                icon: actionIcons[item.key] ?? <FiChevronRight />,
-            }));
-        const fallback = [
-            { label: '处理失败任务', hint: `${todos.counts.failed_tasks} 条待排查`, path: '/ai-tasks', icon: <FiZap /> },
-            { label: '排查异常用户', hint: `${overview.pending_exceptions} 个异常点`, path: '/users', icon: <FiAlertCircle /> },
-        ];
-        const actions = [...fromTodoItems, ...fallback];
-        return actions.slice(0, 6);
-    }, [todoItems, overview.pending_exceptions, todos.counts.failed_tasks]);
-
-
-    const trendCards = useMemo(() => {
-        return [
+    const kpiCards = useMemo(() => {
+        const cards = [
             {
-                key: 'new-users',
-                label: '新增用户',
-                tone: 'neutral',
-                values: trends.map(item => item.new_users),
-                latest: trends[trends.length - 1]?.new_users || 0,
-                total: trends.reduce((sum, item) => sum + item.new_users, 0),
-                peak: Math.max(...trends.map(item => item.new_users), 0),
+                key: 'income',
+                label: '今日充值收入',
+                value: `¥${formatMoneyYuan(overview.today_income_fen)}`,
+                delta: buildDelta(overview.today_income_fen, overview.yesterday_income_fen),
+                sub: '较昨日 · 微信支付成功口径',
+                path: '/recharge',
+                icon: <FiDollarSign />,
             },
             {
                 key: 'orders',
-                label: '订单量',
-                tone: 'warm',
-                values: trends.map(item => item.order_count),
-                latest: trends[trends.length - 1]?.order_count || 0,
-                total: trends.reduce((sum, item) => sum + item.order_count, 0),
-                peak: Math.max(...trends.map(item => item.order_count), 0),
+                label: '成功订单',
+                value: `${overview.today_success_orders}`,
+                delta: buildDelta(overview.today_success_orders, overview.yesterday_success_orders, '单'),
+                sub: `今日下单 ${overview.today_orders} 单`,
+                path: '/recharge',
+                icon: <FiCreditCard />,
             },
             {
-                key: 'revenue',
-                label: '成交金额',
-                tone: 'gold',
-                values: trends.map(item => item.success_amount),
-                latest: trends[trends.length - 1]?.success_amount || 0,
-                total: trends.reduce((sum, item) => sum + item.success_amount, 0),
-                peak: Math.max(...trends.map(item => item.success_amount), 0),
+                key: 'users',
+                label: '新增用户',
+                value: `${overview.today_new_users}`,
+                delta: buildDelta(overview.today_new_users, overview.yesterday_new_users, '人'),
+                sub: `累计 ${formatCompact(overview.total_users)} 人`,
+                path: '/users',
+                icon: <FiUsers />,
             },
             {
                 key: 'tasks',
-                label: 'AI任务量',
-                tone: 'blue',
-                values: trends.map(item => item.image_tasks + item.video_tasks),
-                latest: trends[trends.length - 1] ? (trends[trends.length - 1].image_tasks + trends[trends.length - 1].video_tasks) : 0,
-                total: trends.reduce((sum, item) => sum + item.image_tasks + item.video_tasks, 0),
-                peak: Math.max(...trends.map(item => item.image_tasks + item.video_tasks), 0),
-            },
-            {
-                key: 'failed',
-                label: '失败任务',
-                tone: 'danger',
-                values: trends.map(item => item.failed_tasks),
-                latest: trends[trends.length - 1]?.failed_tasks || 0,
-                total: trends.reduce((sum, item) => sum + item.failed_tasks, 0),
-                peak: Math.max(...trends.map(item => item.failed_tasks), 0),
+                label: 'AI 任务量',
+                value: `${formatCompact(todayTasks)}`,
+                delta: buildDelta(todayTasks, overview.yesterday_tasks, '个'),
+                sub: `图片 ${overview.today_image_tasks} · 视频 ${overview.today_video_tasks}`,
+                path: '/ai-tasks',
+                icon: <FiActivity />,
             },
         ];
-    }, [trends]);
+        if (successRate !== null) {
+            cards.push({
+                key: 'rate',
+                label: '任务成功率',
+                value: `${successRate.toFixed(1)}%`,
+                delta: successRate !== null && yesterdayRate !== null
+                    ? (() => {
+                        const diff = successRate - yesterdayRate;
+                        if (Math.abs(diff) < 0.05) return { text: '— 持平', tone: 'flat' as const };
+                        return diff > 0
+                            ? { text: `↑ ${diff.toFixed(1)}pp`, tone: 'up' as const }
+                            : { text: `↓ ${Math.abs(diff).toFixed(1)}pp`, tone: 'down' as const };
+                    })()
+                    : { text: '— 昨日无任务', tone: 'flat' as const },
+                sub: `今日失败 ${overview.today_failed_tasks} 个`,
+                path: '/ai-tasks',
+                icon: <FiZap />,
+            });
+        }
+        cards.push({
+            key: 'todo',
+            label: '待我处理',
+            value: `${todoTotal}`,
+            delta: { text: urgentCount > 0 ? `${urgentCount} 项超时` : '无超时项', tone: urgentCount > 0 ? ('up' as const) : ('flat' as const) },
+            sub: '点击查看下方待办清单',
+            path: '',
+            icon: <FiClock />,
+        });
+        return cards;
+    }, [overview, successRate, yesterdayRate, todayTasks, todoTotal, urgentCount]);
 
-    const exceptionLanes = useMemo(() => {
-        return [
-            {
-                key: 'zero-stones',
-                title: '灵石不足用户',
-                count: todos.counts.zero_stones_users,
-                description: '适合客服或运营先补偿、提醒充值，避免用户卡在下一步。',
-                tone: 'gold',
-                items: todos.zero_stones_users.map(item => ({
-                    key: `stone-${item.user_id}`,
-                    title: getUserDisplayName(item),
-                    meta: `当前灵石 ${item.stones || 0}`,
-                    extra: `ID ${item.user_id}`,
-                    onClick: () => navigate(`/user-workbench?userId=${item.user_id}`),
-                })),
-            },
-            {
-                key: 'pending-wechat',
-                title: '下载权限待核验',
-                count: todos.counts.pending_wechat_users,
-                description: '重点看未留手机号或授权未完成的用户，减少下载咨询堆积。',
-                tone: 'blue',
-                items: todos.pending_wechat_users.map(item => ({
-                    key: `wechat-${item.user_id}`,
-                    title: getUserDisplayName(item),
-                    meta: item.enterprise_wechat_contact || '当前未填写企微手机号',
-                    extra: `ID ${item.user_id}`,
-                    onClick: () => navigate(`/user-workbench?userId=${item.user_id}`),
-                })),
-            },
-            {
-                key: 'failed-tasks',
-                title: '失败任务池',
-                count: todos.counts.failed_tasks,
-                description: '优先看失败原因、模型和任务号，便于快速补偿或转工单。',
-                tone: 'danger',
-                items: todos.failed_tasks.map(item => ({
-                    key: `${item.task_type}-${item.task_no}`,
-                    title: `${getTaskTypeLabel(item)} · ${getUserDisplayName(item)}`,
-                    meta: `${item.scene || '-'} · ${item.model || '模型待回填'}`,
-                    extra: item.task_no,
-                    onClick: () => navigate('/ai-tasks?tab=' + (item.task_type === 'video' ? 'video' : 'image') + `&taskId=${encodeURIComponent(item.task_no)}`),
-                })),
-            },
-        ];
-    }, [navigate, todos]);
+    /* ───────────── 趋势图 ───────────── */
+
+    // 主序列：AI 任务用「图片+视频合计」画主线；视频另以虚线单独呈现，便于区分两条业务线
+    const trendSeries = useMemo(() => {
+        switch (trendMetric) {
+            case 'income':
+                return trends.map(item => item.income_fen / 100);
+            case 'orders':
+                return trends.map(item => item.order_count);
+            case 'users':
+                return trends.map(item => item.new_users);
+            case 'tasks':
+            default:
+                return trends.map(item => item.image_tasks + item.video_tasks);
+        }
+    }, [trendMetric, trends]);
+
+    const trendSecondary = useMemo(
+        () => (trendMetric === 'tasks' ? trends.map(item => item.video_tasks) : null),
+        [trendMetric, trends],
+    );
+
+    const trendMax = useMemo(() => Math.max(...trendSeries, 1) * 1.15, [trendSeries]);
+
+    const trendGeom = useMemo(() => {
+        const innerW = CHART_W - CHART_PAD.left - CHART_PAD.right;
+        const innerH = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
+        const n = trendSeries.length;
+        const x = (i: number) => CHART_PAD.left + (n <= 1 ? innerW / 2 : (innerW * i) / (n - 1));
+        const y = (v: number) => CHART_PAD.top + innerH - (v / trendMax) * innerH;
+        const polyline = trendSeries.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+        const baseline = CHART_H - CHART_PAD.bottom;
+        const areaPath = polyline
+            ? `M ${x(0)} ${baseline} L ${trendSeries.map((v, i) => `${x(i)} ${y(v)}`).join(' L ')} L ${x(n - 1)} ${baseline} Z`
+            : '';
+        const secondaryPolyline = trendSecondary
+            ? trendSecondary.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+            : '';
+        return { x, y, polyline, areaPath, secondaryPolyline, innerW, innerH, baseline };
+    }, [trendMax, trendSeries, trendSecondary]);
+
+    const yTicks = useMemo(() => {
+        const metric = TREND_METRICS.find(m => m.key === trendMetric);
+        return [0, 1, 2, 3, 4].map(k => {
+            const raw = (trendMax * (4 - k)) / 4;
+            const text = metric?.key === 'income'
+                ? (raw >= 1000 ? `${(raw / 1000).toFixed(1)}k` : Math.round(raw).toString())
+                : Math.round(raw).toString();
+            return { y: CHART_PAD.top + ((CHART_H - CHART_PAD.top - CHART_PAD.bottom) * k) / 4, text };
+        });
+    }, [trendMax, trendMetric]);
+
+    const handleChartMove = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (!trendSeries.length) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const px = ((event.clientX - rect.left) / rect.width) * CHART_W;
+        const innerW = CHART_W - CHART_PAD.left - CHART_PAD.right;
+        const n = trendSeries.length;
+        const index = Math.max(0, Math.min(n - 1, Math.round(((px - CHART_PAD.left) / innerW) * (n - 1))));
+        setHoverIndex(index);
+    };
+
+    const chartTooltip = useMemo(() => {
+        if (hoverIndex === null || !trends[hoverIndex]) return null;
+        const item = trends[hoverIndex];
+        const prev = hoverIndex > 0 ? trendSeries[hoverIndex - 1] : null;
+        const value = trendSeries[hoverIndex];
+        const metric = TREND_METRICS.find(m => m.key === trendMetric)!;
+        // income 序列存的已经是元；其余指标是计数
+        const valueText = metric.key === 'income'
+            ? `¥${value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+            : `${value}`;
+        const diffText = prev === null || prev === 0 ? '' : ` · 环比 ${value >= prev ? '+' : ''}${Math.round(((value - prev) / prev) * 100)}%`;
+        const breakText = trendMetric === 'tasks'
+            ? ` · 图片 ${item.image_tasks} · 视频 ${item.video_tasks}`
+            : '';
+        return { item, valueText: `${valueText}${breakText}`, diffText, metric };
+    }, [hoverIndex, trendMetric, trends, trendSeries]);
+
+    const switchTrendRange = async (range: 7 | 30) => {
+        if (range === trendRange) return;
+        setTrendRange(range);
+        setLoading(true);
+        try {
+            const trendRes = await getDashboardTrends(range);
+            setTrends(trendRes || []);
+        } catch (error) {
+            console.error('切换趋势范围失败:', error);
+            reportPageLoadError(error, '加载趋势数据失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const scrollToTodo = () => {
+        document.querySelector('.dash-card-todo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const loadedAtText = loadedAt
+        ? `数据截至 ${loadedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+        : '数据加载中';
 
     return (
-        <>
-            <div className="dashboard-page">
-                <section className={`dashboard-hero section-card ${healthStatus.tone}`}>
-                    <div className="dashboard-hero-main">
-                        <div className="dashboard-hero-head">
-                            <div>
-                                <div className="cockpit-badge">经营总览</div>
-                                <h2>{healthStatus.label}</h2>
-                                <p>{healthStatus.description}</p>
-                            </div>
-                            <button className="btn-secondary" onClick={() => void loadDashboard()} disabled={loading}>
-                                <FiRefreshCw />
-                                {loading ? '刷新中...' : '刷新数据'}
-                            </button>
-                        </div>
-                        <div className="hero-highlight-grid">
-                            {heroHighlights.map((item) => (
-                                <div key={item.key} className="hero-highlight-card">
-                                    <span>{item.label}</span>
-                                    <strong>{item.value}</strong>
-                                    <small>{item.detail}</small>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="dashboard-hero-side">
-                        <div className="dashboard-side-title">
-                            <h3>马上处理</h3>
-                            <p>先解决会直接影响交付和客服压力的事情。</p>
-                        </div>
-                        <div className="cockpit-action-list">
-                            {primaryActions.map((item) => {
-                                return (
-                                    <button key={item.label} className="cockpit-action-item" onClick={() => navigate(item.path)}>
-                                        <span className="cockpit-action-icon">{item.icon}</span>
-                                        <span className="cockpit-action-text">
-                                            <strong>{item.label}</strong>
-                                            <small>{item.hint}</small>
-                                        </span>
-                                        <FiChevronRight />
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </section>
-
-                <section className="pillar-grid">
-                    {pillarCards.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <div key={item.key} className={`pillar-card section-card ${item.tone}`}>
-                                <div className="pillar-card-head">
-                                    <span className="pillar-card-icon"><Icon /></span>
-                                    <button className="btn-link-action" onClick={() => navigate(item.path)}>
-                                        {item.actionLabel}
-                                        <FiChevronRight />
-                                    </button>
-                                </div>
-                                <div className="pillar-card-title">{item.title}</div>
-                                <div className="pillar-card-value">{item.value}</div>
-                                <div className="pillar-card-desc">{item.description}</div>
-                                <div className="pillar-card-stats">
-                                    {item.stats.map((stat) => (
-                                        <div key={stat.label} className="pillar-stat-pill">
-                                            <span>{stat.label}</span>
-                                            <strong>{stat.value}</strong>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </section>
-
-                <div className="dashboard-workspace">
-                    <div className="workspace-main-column">
-                        <div className="section-card workbench-card">
-                            <div className="section-head">
-                                <div>
-                                    <h3>今日优先处理</h3>
-                                    <p>先处理认证、失败任务和异常用户，再进入具体模块继续深挖，顺序更符合运营日常工作流。</p>
-                                </div>
-                            </div>
-                            <div className="workbench-summary-row">
-                                <div className="workbench-summary-pill">
-                                    <span>待认证</span>
-                                    <strong>{overview.pending_certifications}</strong>
-                                </div>
-                                <div className="workbench-summary-pill">
-                                    <span>失败任务</span>
-                                    <strong>{todos.counts.failed_tasks}</strong>
-                                </div>
-                                <div className="workbench-summary-pill">
-                                    <span>下载核验</span>
-                                    <strong>{todos.counts.pending_wechat_users}</strong>
-                                </div>
-                                <div className="workbench-summary-pill">
-                                    <span>灵石不足</span>
-                                    <strong>{todos.counts.zero_stones_users}</strong>
-                                </div>
-                            </div>
-                            <div className="workbench-priority-layout">
-                                <div className="priority-action-grid">
-                                    {primaryActions.map((item) => {
-                                        return (
-                                            <button key={item.label} className="priority-action-card" onClick={() => navigate(item.path)}>
-                                                <span className="priority-action-icon">{item.icon}</span>
-                                                <span className="priority-action-content">
-                                                    <strong>{item.label}</strong>
-                                                    <small>{item.hint}</small>
-                                                </span>
-                                                <FiChevronRight />
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                <div className="workbench-panel certification-panel">
-                                    <div className="panel-head-row">
-                                        <div>
-                                            <h4>待审核认证</h4>
-                                            <p>这里保留今天最需要优先清空的认证队列，避免设计师和企业流程堵塞。</p>
-                                        </div>
-                                        <button className="btn-link-action" onClick={() => navigate('/certification')}>
-                                            进入认证页
-                                            <FiChevronRight />
-                                        </button>
-                                    </div>
-                                    {todos.pending_certifications.length === 0 ? (
-                                        <div className="empty-inline success">当前没有待审核认证。</div>
-                                    ) : (
-                                        <div className="queue-list">
-                                            {todos.pending_certifications.map((item) => (
-                                                <button
-                                                    key={item.id}
-                                                    className="queue-item"
-                                                    onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}
-                                                >
-                                                    <div>
-                                                        <div className="queue-title">用户 {item.user_id} · {getCertificationTypeLabel(item)}</div>
-                                                        <div className="queue-desc">
-                                                            {item.identity_type ? `${item.identity_type} · ` : ''}申请时间：{formatDateTime(item.created_at)}
-                                                        </div>
-                                                    </div>
-                                                    <FiChevronRight />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="section-card alert-board-card">
-                            <div className="section-head">
-                                <div>
-                                    <h3>异常处理台</h3>
-                                    <p>把高频异常改成横向卡片浏览，避免一列长文字把版面挤垮，也方便快速点进处理。</p>
-                                </div>
-                                <button className="btn-link-action" onClick={() => navigate('/support-tickets')}>
-                                    进入异常工单
-                                    <FiChevronRight />
-                                </button>
-                            </div>
-                            <div className="alert-lane-list">
-                                {exceptionLanes.map((lane) => (
-                                    <div key={lane.key} className={`alert-lane ${lane.tone}`}>
-                                        <div className="alert-lane-head">
-                                            <div>
-                                                <h4>{lane.title}</h4>
-                                                <p>{lane.description}</p>
-                                            </div>
-                                            <strong>{lane.count}</strong>
-                                        </div>
-                                        {lane.items.length === 0 ? (
-                                            <div className="mini-queue-empty">当前没有需要处理的记录。</div>
-                                        ) : (
-                                            <div className="alert-lane-track">
-                                                {lane.items.map((item) => (
-                                                    <button key={item.key} className="alert-ticket-card" onClick={item.onClick}>
-                                                        <div className="alert-ticket-title">{item.title}</div>
-                                                        <div className="alert-ticket-meta">{item.meta}</div>
-                                                        <div className="alert-ticket-extra">{item.extra}</div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="section-card trend-section-card">
-                            <div className="section-head">
-                                <div>
-                                    <h3>最近7天趋势</h3>
-                                    <p>改为图表化展示，不再堆长行文字。先看用户、订单、成交、任务和失败变化，再判断问题落在哪条业务线。</p>
-                                </div>
-                            </div>
-                            {trends.length === 0 ? (
-                                <div className="empty-inline">暂时没有趋势数据。</div>
-                            ) : (
-                                <div className="trend-chart-grid">
-                                    {trendCards.map((card) => (
-                                        <div key={card.key} className={`trend-chart-card ${card.tone}`}>
-                                            <div className="trend-chart-head">
-                                                <div>
-                                                    <span>{card.label}</span>
-                                                    <strong>{formatCompactNumber(card.latest)}</strong>
-                                                </div>
-                                                <div className="trend-chart-stats">
-                                                    <small>7日累计 {formatCompactNumber(card.total)}</small>
-                                                    <small>峰值 {formatCompactNumber(card.peak)}</small>
-                                                </div>
-                                            </div>
-                                            <svg viewBox="0 0 260 112" className="trend-chart-svg" preserveAspectRatio="none" aria-hidden="true">
-                                                <path d={buildTrendAreaPath(card.values)} className="trend-area" />
-                                                <polyline points={buildTrendPolyline(card.values)} className="trend-line" />
-                                            </svg>
-                                        </div>
-                                    ))}
-                                    <div className="trend-date-strip">
-                                        {trends.map((item) => (
-                                            <span key={item.date}>{item.label}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="workspace-side-column">
-                        <div className="section-card side-card">
-                            <div className="section-head compact">
-                                <div>
-                                    <h3>最近访问用户</h3>
-                                    <p>继续处理最近正在跟进的用户。</p>
-                                </div>
-                            </div>
-                            {recentUsers.length === 0 ? (
-                                <div className="mini-queue-empty">你最近还没有进入过用户360。</div>
-                            ) : (
-                                <div className="recent-user-list">
-                                    {recentUsers.map((item) => (
-                                        <button
-                                            key={item.id}
-                                            className="recent-user-row"
-                                            onClick={() => navigate(`/user-workbench?userId=${item.id}`)}
-                                        >
-                                            <span>{item.username}</span>
-                                            <strong>ID {item.id}</strong>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+        <div className="dashboard-page">
+            <div className="dash-pagehead">
+                <h1>后台总控台</h1>
+                <span className={`dash-health ${health.tone}`}><i />{health.label}</span>
+                <div className="dash-pagehead-tip" title={health.description}>{health.description}</div>
+                <div className="dash-meta">
+                    <span>{loadedAtText} · 每分钟自动刷新</span>
+                    <button className="dash-btn-refresh" onClick={() => void loadDashboard()} disabled={loading}>
+                        <FiRefreshCw />
+                        {loading ? '刷新中…' : '刷新'}
+                    </button>
                 </div>
             </div>
-        </>
+
+            <section className="dash-kpi-band">
+                {kpiCards.map(card => (
+                    <button
+                        key={card.key}
+                        className="dash-kpi"
+                        onClick={card.key === 'todo' ? scrollToTodo : () => navigate(card.path)}
+                    >
+                        <span className="dash-kpi-label">{card.icon}{card.label}</span>
+                        <span className="dash-kpi-value">{card.value}</span>
+                        <span className={`dash-kpi-delta ${card.delta.tone}`}>{card.delta.text}</span>
+                        <span className="dash-kpi-sub">{card.sub}</span>
+                    </button>
+                ))}
+            </section>
+
+            <div className="dash-workspace">
+                <div className="dash-main-col">
+                    <section className="dash-card dash-card-todo">
+                        <div className="dash-card-head">
+                            <h3>今日待办</h3>
+                            {urgentCount > 0 && <span className="dash-badge-urgent">{urgentCount} 项超时</span>}
+                            <span className="dash-card-note">处理完成后实时减少</span>
+                        </div>
+                        {actionItems.length === 0 ? (
+                            <div className="dash-empty-ok">当前没有需要处理的待办。</div>
+                        ) : (
+                            <div className="dash-todo-list">
+                                {actionItems.map(item => (
+                                    <button key={item.key} className="dash-todo-row" onClick={() => navigate(item.path)}>
+                                        <span className={`dash-todo-ico ${item.urgent ? 'hot' : 'calm'}`}>
+                                            {TODO_ICONS[item.key] ?? <FiChevronRight />}
+                                        </span>
+                                        <span className="dash-todo-main">
+                                            <span className="dash-todo-title">
+                                                {item.label}
+                                                {item.urgent && <em className="dash-tag-urgent">超时</em>}
+                                            </span>
+                                            {item.hint && <span className="dash-todo-sub">{item.hint}</span>}
+                                        </span>
+                                        <span className="dash-todo-num">{item.count}</span>
+                                        <span className="dash-todo-go"><FiChevronRight /></span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    <section className="dash-card">
+                        <div className="dash-card-head">
+                            <h3>经营趋势</h3>
+                            {trendMetric === 'tasks' && (
+                                <span className="dash-trend-legend">
+                                    <i className="main" />合计
+                                    <i className="secondary" />视频（另计）
+                                </span>
+                            )}
+                            <div className="dash-trend-tools">
+                                <div className="dash-seg">
+                                    {TREND_METRICS.map(metric => (
+                                        <button
+                                            key={metric.key}
+                                            className={trendMetric === metric.key ? 'on' : ''}
+                                            onClick={() => setTrendMetric(metric.key)}
+                                        >
+                                            {metric.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="dash-seg">
+                                    {([7, 30] as const).map(range => (
+                                        <button
+                                            key={range}
+                                            className={trendRange === range ? 'on' : ''}
+                                            onClick={() => void switchTrendRange(range)}
+                                        >
+                                            {range} 天
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        {trendSeries.length === 0 ? (
+                            <div className="dash-empty">暂无趋势数据。</div>
+                        ) : (
+                            <div className="dash-chart-wrap" ref={chartWrapRef}>
+                                {chartTooltip && (
+                                    <div
+                                        className="dash-chart-tip"
+                                        style={{
+                                            left: `${(trendGeom.x(hoverIndex!) / CHART_W) * 100}%`,
+                                            top: `${(trendGeom.y(trendSeries[hoverIndex!]) / CHART_H) * 100}%`,
+                                        }}
+                                    >
+                                        <span className="dash-chart-tip-date">{chartTooltip.item.label}{chartTooltip.diffText}</span>
+                                        <b>{chartTooltip.valueText}</b>
+                                    </div>
+                                )}
+                                <svg
+                                    viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+                                    preserveAspectRatio="none"
+                                    onMouseMove={handleChartMove}
+                                    onMouseLeave={() => setHoverIndex(null)}
+                                    onClick={() => navigate(TREND_METRICS.find(m => m.key === trendMetric)!.drillPath)}
+                                >
+                                    {yTicks.map(tick => (
+                                        <g key={tick.y}>
+                                            <line
+                                                x1={CHART_PAD.left}
+                                                x2={CHART_W - CHART_PAD.right}
+                                                y1={tick.y}
+                                                y2={tick.y}
+                                                className="dash-chart-grid"
+                                            />
+                                            <text x={CHART_PAD.left - 8} y={tick.y + 4} textAnchor="end" className="dash-chart-axis">
+                                                {tick.text}
+                                            </text>
+                                        </g>
+                                    ))}
+                                    {trends.map((item, i) => {
+                                        const step = trendRange === 7 ? 1 : 3;
+                                        if (i % step !== 0 && i !== trends.length - 1) return null;
+                                        return (
+                                            <text
+                                                key={item.date}
+                                                x={trendGeom.x(i)}
+                                                y={CHART_H - 8}
+                                                textAnchor="middle"
+                                                className="dash-chart-axis"
+                                            >
+                                                {item.label}
+                                            </text>
+                                        );
+                                    })}
+                                    <path d={trendGeom.areaPath} className="dash-chart-area" />
+                                    <polyline points={trendGeom.polyline} className="dash-chart-line" />
+                                    {trendSecondary && (
+                                        <polyline points={trendGeom.secondaryPolyline} className="dash-chart-line dash-chart-line-secondary" />
+                                    )}
+                                    {hoverIndex !== null && (
+                                        <>
+                                            <line
+                                                x1={trendGeom.x(hoverIndex)}
+                                                x2={trendGeom.x(hoverIndex)}
+                                                y1={CHART_PAD.top}
+                                                y2={CHART_H - CHART_PAD.bottom}
+                                                className="dash-chart-hover-line"
+                                            />
+                                            <circle
+                                                cx={trendGeom.x(hoverIndex)}
+                                                cy={trendGeom.y(trendSeries[hoverIndex])}
+                                                r={4}
+                                                className="dash-chart-hover-dot"
+                                            />
+                                            {trendSecondary && (
+                                                <circle
+                                                    cx={trendGeom.x(hoverIndex)}
+                                                    cy={trendGeom.y(trendSecondary[hoverIndex])}
+                                                    r={3}
+                                                    className="dash-chart-hover-dot dash-chart-hover-dot-secondary"
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                </svg>
+                            </div>
+                        )}
+                    </section>
+                </div>
+
+                <div className="dash-side-col">
+                    <section className="dash-card">
+                        <div className="dash-card-head">
+                            <h3>异常监控</h3>
+                            <span className="dash-card-note">只看计数，明细进各模块页</span>
+                        </div>
+                        <div className="dash-watch-list">
+                            {watchItems.map(item => (
+                                <button key={item.key} className="dash-watch-row" onClick={() => navigate(item.path)}>
+                                    <span className="dash-watch-title">
+                                        {item.label}
+                                        {item.hint && <small>{item.hint}</small>}
+                                    </span>
+                                    <span className={`dash-watch-num ${item.count > 0 ? 'warn' : 'ok'}`}>{item.count}</span>
+                                    <FiChevronRight />
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="dash-card">
+                        <div className="dash-card-head">
+                            <h3>最近访问用户</h3>
+                        </div>
+                        {recentUsers.length === 0 ? (
+                            <div className="dash-empty">最近没有打开过用户 360。</div>
+                        ) : (
+                            <div className="dash-recent-list">
+                                {recentUsers.slice(0, 5).map(item => (
+                                    <button
+                                        key={item.id}
+                                        className="dash-recent-row"
+                                        onClick={() => navigate(`/user-workbench?userId=${item.id}`)}
+                                    >
+                                        <span className="dash-recent-name">{item.username}</span>
+                                        <span className="dash-recent-id">ID {item.id}</span>
+                                        <FiChevronRight />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            </div>
+        </div>
     );
 };
 

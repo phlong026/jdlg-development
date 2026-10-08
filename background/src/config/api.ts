@@ -81,7 +81,6 @@ export const API_ENDPOINTS = {
     STATS: {
         DASHBOARD_OVERVIEW: '/api/v1/management/dashboard/overview',
         DASHBOARD_TRENDS: '/api/v1/management/dashboard/trends',
-        DASHBOARD_TODOS: '/api/v1/management/dashboard/todos',
         DASHBOARD_TODO: '/api/v1/management/dashboard/todo',
     },
     // AI配置
