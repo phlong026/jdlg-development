@@ -1,0 +1,40 @@
+{
+  "typescriptExitCode": 0,
+  "sassExitCode": 0,
+  "jsSyntax": {
+    "files": 13,
+    "failures": 0
+  },
+  "relevantTests": {
+    "tests": 27,
+    "pass": 27,
+    "fail": 0
+  },
+  "fullTests": {
+    "tests": 82,
+    "pass": 80,
+    "fail": 2,
+    "baselineFailures": 2
+  },
+  "security": {
+    "hardcodedSecretFindings": 0,
+    "productionDependencyVulnerabilities": 0
+  },
+  "rollbackTests": {
+    "tests": 2,
+    "pass": 2,
+    "fail": 0
+  },
+  "nativePreview": {
+    "mode": "touristappid",
+    "compileErrors": 0,
+    "warnings": 6,
+    "quickEstimate": "physical button click navigated and prefilled 福建 / 泉州, 320",
+    "formalAppId": "current account lacks developer permission"
+  },
+  "render": {
+    "width": 2559,
+    "height": 5532,
+    "scale": 3
+  }
+}

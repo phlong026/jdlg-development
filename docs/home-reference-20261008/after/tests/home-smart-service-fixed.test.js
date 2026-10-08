@@ -1,0 +1,13 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '..');
+const markup = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
+const styles = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.scss'), 'utf8');
+const hero = markup.slice(markup.indexOf('<view class="home-canvas">'), markup.indexOf('<view class="content">'));
+assert.match(hero, /class="hotspot smart-service-float"[^>]*bindtap="onMascotTap"[^>]*aria-label="在线客服"/);
+assert.doesNotMatch(markup, /smart-service-fixed-layer/);
+assert.match(styles, /\.hotspot\s*{[^}]*position:\s*absolute/);
+assert.match(markup, /pages\/checkin\/checkin\?source=index/);
+assert.match(markup, /pages\/Invitefriends\/Invitefriends\?source=index/);
+console.log('Customer service scrolls with the confirmed hero; checkin and invite remain reachable');

@@ -1,0 +1,80 @@
+{
+  "exportedAt": "2026-10-08T14:46:15.971Z",
+  "pngPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/需求文档/首页视觉方案/20261008-用户确认复刻/首页效果图-高清确认版.png",
+  "source": {
+    "wxmlPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxml",
+    "wxssPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxss",
+    "wxmlSha256": "05d4d6dba7d4d0d4c3b0451d611ffce521d28c31a1abc66f03be85c0fe07ec83",
+    "wxssSha256": "45a3b9e6436a44c4ad4fc356b774244c68b074fce56d9db7ee17f458e50e8943"
+  },
+  "gradient": "linear-gradient(rgb(230, 218, 202), rgb(236, 228, 217))",
+  "backdropOpacity": "0.24",
+  "samplingMethod": "最终 PNG 的背景空白点；每点平均 15×15 物理像素，等于 5×5 逻辑像素",
+  "samples": [
+    {
+      "label": "顶部中央空白背景",
+      "x": 426,
+      "y": 24,
+      "logicalCoordinates": true,
+      "sampleSquarePhysicalPixels": 15,
+      "rgb": [
+        236,
+        227,
+        214
+      ],
+      "hex": "#ece3d6"
+    },
+    {
+      "label": "上部左侧边缘背景",
+      "x": 12,
+      "y": 360,
+      "logicalCoordinates": true,
+      "sampleSquarePhysicalPixels": 15,
+      "rgb": [
+        237,
+        228,
+        216
+      ],
+      "hex": "#ede4d8"
+    },
+    {
+      "label": "中部右侧边缘背景",
+      "x": 841,
+      "y": 790,
+      "logicalCoordinates": true,
+      "sampleSquarePhysicalPixels": 15,
+      "rgb": [
+        238,
+        231,
+        219
+      ],
+      "hex": "#eee7db"
+    },
+    {
+      "label": "造价卡片上方左侧背景",
+      "x": 12,
+      "y": 1070,
+      "logicalCoordinates": true,
+      "sampleSquarePhysicalPixels": 15,
+      "rgb": [
+        239,
+        230,
+        221
+      ],
+      "hex": "#efe6dd"
+    },
+    {
+      "label": "首屏底部右侧背景",
+      "x": 841,
+      "y": 1680,
+      "logicalCoordinates": true,
+      "sampleSquarePhysicalPixels": 15,
+      "rgb": [
+        241,
+        233,
+        224
+      ],
+      "hex": "#f1e9e0"
+    }
+  ]
+}

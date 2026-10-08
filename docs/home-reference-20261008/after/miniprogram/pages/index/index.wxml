@@ -1,0 +1,345 @@
+<!--index.wxml-->
+<view class="pages">
+  <view class="home-canvas">
+    <image class="home-backdrop" src="/assets/home-reference/hd/backdrop.jpg" mode="scaleToFill" aria-hidden="true" />
+    <view class="home-art-layer">
+      <image class="brand-symbol" src="/assets/home-reference/hd/brand-symbol-old.png" mode="aspectFit" aria-hidden="true" />
+      <view class="brand-copy"><image class="brand-name" src="/assets/home-reference/hd/brand-name-old.png" mode="aspectFit" aria-label="甲第灵光" /><image class="brand-en" src="/assets/home-reference/hd/brand-en-old.png" mode="aspectFit" aria-label="ArchLight" /></view>
+      <view class="brand-slogan"><view class="slogan-line"></view><text>让理想家园触手可及</text><view class="slogan-line"></view></view>
+      <view class="hotspot smart-service-float" bindtap="onMascotTap" role="button" aria-label="在线客服">
+        <image class="customer-icon" src="/assets/smart-service-icon.png" mode="aspectFit" aria-hidden="true" /><text>在线客服</text>
+      </view>
+      <view class="service-panel"></view>
+      <view class="service-grid">
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/advisor.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">建房顾问</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aicost/aicost" role="button" aria-label="造价测算">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/calculator.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">造价测算</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI工具">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/ai-tools.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">AI工具</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=exterior" role="button" aria-label="别墅设计">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/villa.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">别墅设计</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=interior" role="button" aria-label="装修设计">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/interior.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">装修设计</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=courtyard&amp;prompt=庭院景观设计" role="button" aria-label="庭院设计">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/courtyard.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">庭院设计</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/buildingreplacement/buildingreplacement" role="button" aria-label="旧房翻新">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/renovation.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">旧房翻新</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">
+          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/templates.png" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">模板广场</text>
+        </view>
+      </view>
+      <view class="ai-panel"><view class="ai-panel-inner"></view></view>
+      <view class="hotspot ai-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="AI设计"><text>AI</text></view>
+      <text class="ai-title">拍照说需求 · 1分钟出方案</text>
+      <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="拍照上传"><image src="/assets/home-reference/hd/camera.png" mode="aspectFit" aria-hidden="true" /><text>拍照上传</text></view>
+      <view class="ai-action-divider"></view>
+      <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI生图工具"><image src="/assets/home-reference/hd/sparkles.png" mode="aspectFit" aria-hidden="true" /><text>AI生图工具</text></view>
+      <view class="cost-panel"></view>
+      <view class="cost-stat-icon"><image class="cost-stat-bars" src="/assets/home-reference/hd/cost-stat-v2.png" mode="aspectFit" aria-hidden="true" /></view>
+      <text class="cost-title">智能造价</text>
+      <text class="cost-copy">快速估算项目造价，合理规划您的理想之家</text>
+      <view class="cost-form-panel"></view>
+      <text class="cost-project-label">项目类型</text>
+      <view class="quick-project quick-project--rural {{quickProjectType === 'rural_villa' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="rural_villa" role="button" aria-label="乡村别墅" aria-pressed="{{quickProjectType === 'rural_villa'}}"><image src="/assets/home-reference/hd/rural-villa.png" mode="aspectFit" aria-hidden="true" /><text>乡村别墅</text></view>
+      <view class="quick-project quick-project--urban {{quickProjectType === 'urban_renewal' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="urban_renewal" role="button" aria-label="城市更新" aria-pressed="{{quickProjectType === 'urban_renewal'}}"><image src="/assets/home-reference/hd/urban-building.png" mode="aspectFit" aria-hidden="true" /><text>城市更新</text></view>
+      <text class="cost-region-label">所在地区</text>
+      <text class="cost-area-label">建筑面积</text>
+      <picker class="quick-region" mode="multiSelector" range="{{quickRegionOptions}}" value="{{quickRegionIndex}}" bindcolumnchange="onQuickRegionColumnChange" bindchange="onQuickRegionChange" bindcancel="onQuickRegionCancel" aria-label="所在地区">
+        <view class="quick-region-hitbox"><image src="/assets/home-reference/hd/location.png" mode="aspectFit" aria-hidden="true" /><text class="quick-region-value {{quickRegionText ? 'quick-region-value--selected' : ''}}">{{quickRegionText || '请选择'}}</text><view class="field-chevron"></view></view>
+      </picker>
+      <view class="quick-area"><image src="/assets/home-reference/hd/ruler.png" mode="aspectFit" aria-hidden="true" /><input class="quick-area-input" type="digit" value="{{quickArea}}" placeholder="请输入" placeholder-class="quick-area-placeholder" bindinput="onQuickAreaInput" aria-label="建筑面积，平方米" /><text class="area-unit">m²</text></view>
+      <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算">立即估算</button>
+      <view class="estimate-note"><text class="info-icon">i</text><text>估算结果仅供参考</text></view>
+    </view>
+  </view>
+  <view class="content">
+    <view class="home-secondary-actions">
+      <view bindtap="onOpenPage" data-url="/pages/checkin/checkin?source=index" role="button">每日签到</view>
+      <view bindtap="onOpenPage" data-url="/pages/Invitefriends/Invitefriends?source=index" role="button">邀请好友</view>
+    </view>
+    <view class="building-report-entry" bindtap="onOpenPage" data-url="/pages/report/landing" role="button" aria-label="开始我的建房报告">
+      <text class="building-report-entry__title">先想清楚怎么住，再决定怎么建</text>
+      <text class="building-report-entry__copy">从您家的情况出发，梳理建房方向 →</text>
+    </view>
+    <view class="case-section" wx:if="{{featuredGroups && featuredGroups.length > 0}}">
+      <text class="case-title">精选案例对比</text>
+      <view class="featured-groups">
+        <view class="featured-group" wx:for="{{featuredGroups}}" wx:key="id">
+          <view class="case-comparison" wx:if="{{item.display_mode === 'comparison'}}">
+            <view class="case-card" wx:if="{{item.case1}}">
+              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">
+                <view class="case-image-wrapper">
+                  <text class="case-label">{{item.case1_label}}</text>
+                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>
+                </view>
+                <view class="case-content">
+                  <text class="case-item-title">{{item.case1.name}}</text>
+                  <text class="case-item-desc">{{item.case1.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>
+                </view>
+              </view>
+            </view>
+            <view class="vs-divider" wx:if="{{item.case1 && item.case2}}">VS</view>
+            <view class="case-card" wx:if="{{item.case2}}">
+              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case2.id}}">
+                <view class="case-image-wrapper">
+                  <text class="case-label">{{item.case2_label}}</text>
+                  <image class="case-image" src="{{item.case2.thumbnail || item.case2.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>
+                </view>
+                <view class="case-content">
+                  <text class="case-item-title">{{item.case2.name}}</text>
+                  <text class="case-item-desc">{{item.case2.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="case-side-by-side" wx:elif="{{item.display_mode === 'side_by_side'}}">
+            <view class="case-card" wx:if="{{item.case1}}">
+              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">
+                <view class="case-image-wrapper">
+                  <text class="case-label">{{item.case1_label}}</text>
+                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>
+                </view>
+                <view class="case-content">
+                  <text class="case-item-title">{{item.case1.name}}</text>
+                  <text class="case-item-desc">{{item.case1.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>
+                </view>
+              </view>
+            </view>
+            <view class="case-card" wx:if="{{item.case2}}">
+              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case2.id}}">
+                <view class="case-image-wrapper">
+                  <text class="case-label">{{item.case2_label}}</text>
+                  <image class="case-image" src="{{item.case2.thumbnail || item.case2.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>
+                </view>
+                <view class="case-content">
+                  <text class="case-item-title">{{item.case2.name}}</text>
+                  <text class="case-item-desc">{{item.case2.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="case-normal" wx:elif="{{item.display_mode === 'normal'}}">
+            <view class="case-card" wx:if="{{item.case1}}">
+              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">
+                <view class="case-image-wrapper">
+                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>
+                </view>
+                <view class="case-content">
+                  <text class="case-item-title">{{item.case1.name}}</text>
+                  <text class="case-item-desc">{{item.case1.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+      <!-- 暂时隐藏：查看本地规范、联系服务商按钮
+      <view class="case-actions">
+        <view class="action-btn" bindtap="onViewLocalSpec">
+          <text>查看本地规范</text>
+        </view>
+        <view class="action-btn" bindtap="onContactService">
+          <text>联系服务商</text>
+        </view>
+      </view>
+      -->
+    </view>
+    <view class="case-section case-section-skeleton" wx:elif="{{featuredGroupsLoading}}">
+      <view class="case-title skeleton-block skeleton-title"></view>
+      <view class="featured-groups skeleton-groups">
+        <view class="skeleton-group-row">
+          <view class="skeleton-card"></view>
+          <view class="skeleton-card"></view>
+        </view>
+        <view class="skeleton-group-row">
+          <view class="skeleton-card skeleton-card-wide"></view>
+        </view>
+      </view>
+      <!-- 暂时隐藏：骨架屏按钮占位
+      <view class="case-actions">
+        <view class="action-btn skeleton-action"></view>
+        <view class="action-btn skeleton-action"></view>
+      </view>
+      -->
+    </view>
+  </view>
+
+  <view wx:if="{{homeIntroPopupVisible}}" class="popup-mask" bindtap="closeHomeIntroPopup" catchtouchmove="noop">
+    <view class="home-intro-popup" catchtap="noop">
+      <!-- 装饰性背景光效 -->
+      <view class="home-intro-bg-decor"></view>
+
+      <!-- Logo 图片 -->
+      <view class="home-intro-logo-wrap">
+        <image class="home-intro-logo-img" src="{{introLogoImage}}" mode="aspectFit" />
+      </view>
+
+      <!-- 关闭按钮 -->
+      <view class="home-intro-close" bindtap="closeHomeIntroPopup">
+        <text class="home-intro-close-icon">×</text>
+      </view>
+
+      <!-- 标题区域 -->
+      <view class="home-intro-title-wrap">
+        <text class="home-intro-title">甲第灵光 AI 设计助手</text>
+        <text class="home-intro-subtitle">用AI帮你快速整理设计灵感、生成方案参考，并按需使用模板与会员权益。</text>
+      </view>
+
+      <!-- 功能列表 -->
+      <view class="home-intro-list">
+        <view class="home-intro-item" hover-class="home-intro-item-active" bindtap="onHomeIntroItemTap" data-url="/pages/aigenerate/aigenerate?source=home_intro">
+          <view class="home-intro-item-inner">
+            <view class="home-intro-icon home-intro-icon-ai">
+              <text class="home-intro-icon-text">AI</text>
+            </view>
+            <view class="home-intro-texts">
+              <text class="home-intro-item-title">AI设计灵感生成</text>
+              <text class="home-intro-item-desc">上传图片或输入需求，生成建筑、庭院、室内等设计参考。</text>
+            </view>
+          </view>
+        </view>
+        <view class="home-intro-item" hover-class="home-intro-item-active" bindtap="onHomeIntroItemTap" data-url="/pages/template/template?source=home_intro">
+          <view class="home-intro-item-inner">
+            <view class="home-intro-icon home-intro-icon-right">
+              <text class="home-intro-icon-text">权</text>
+            </view>
+            <view class="home-intro-texts">
+              <text class="home-intro-item-title">模板下载与灵石权益</text>
+              <text class="home-intro-item-desc">部分AI生成、模板下载和深度服务会消耗灵石或会员权益。</text>
+            </view>
+          </view>
+        </view>
+        <view class="home-intro-item" hover-class="home-intro-item-active" bindtap="onHomeIntroItemTap" data-url="/pages/topupcenter/topupcenter">
+          <view class="home-intro-item-inner">
+            <view class="home-intro-icon home-intro-icon-pay">
+              <text class="home-intro-icon-text">付</text>
+            </view>
+            <view class="home-intro-texts">
+              <text class="home-intro-item-title">充值前确认金额与权益</text>
+              <text class="home-intro-item-desc">充值由你自主选择，支付前会展示金额、权益和到账说明。</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="home-intro-actions">
+        <view class="home-intro-primary" hover-class="home-intro-primary-active" bindtap="onHomeIntroTopup">了解充值权益</view>
+        <view class="home-intro-secondary" hover-class="home-intro-secondary-active" bindtap="closeHomeIntroPopup">先逛逛</view>
+      </view>
+
+      <!-- 联系客服 -->
+      <view class="home-intro-service" bindtap="onHomeIntroContact">
+        <text class="home-intro-service-icon">☎</text>
+        <text class="home-intro-service-text">联系客服</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{contactPopupVisible}}" class="popup-mask" bindtap="closeContactPopup">
+    <view class="contact-popup" catchtap="noop">
+      <view class="popup-header">
+        <view class="popup-header-main">
+          <text class="popup-title">联系服务商</text>
+          <text class="popup-subtitle">选择更适合你的沟通方式，快速获得帮助</text>
+        </view>
+        <view class="popup-close" bindtap="closeContactPopup">×</view>
+      </view>
+
+      <!-- 在线客服（小程序原生客服） -->
+      <view class="supplier-option supplier-option-contact">
+        <view class="supplier-option-icon supplier-chat-icon">💬</view>
+        <view class="supplier-option-content">
+          <text class="supplier-option-title">在线客服</text>
+          <text class="supplier-option-desc">在线消息咨询</text>
+        </view>
+        <view class="supplier-option-right">
+          <text class="supplier-option-badge green">立即咨询</text>
+          <text class="supplier-option-arrow">›</text>
+        </view>
+        <button class="supplier-option-contact-btn" open-type="contact" bindcontact="onNativeContactSuccess"></button>
+      </view>
+
+      <!-- 电话咨询 -->
+      <view class="supplier-option" bindtap="onCallSupplier">
+        <view class="supplier-option-icon supplier-phone-icon">☎</view>
+        <view class="supplier-option-content">
+          <text class="supplier-option-title">电话咨询</text>
+          <text class="supplier-option-desc">{{supplierPhone}}</text>
+        </view>
+        <view class="supplier-option-right">
+          <text class="supplier-option-badge warm">立即联系</text>
+          <text class="supplier-option-arrow">›</text>
+        </view>
+      </view>
+
+      <!-- 智能客服（企微客服，失败弹二维码） -->
+      <view class="supplier-option" bindtap="onSmartServiceTap">
+        <view class="supplier-option-icon supplier-ai-icon">🤖</view>
+        <view class="supplier-option-content">
+          <text class="supplier-option-title">智能客服</text>
+          <text class="supplier-option-desc">AI 智能问答</text>
+        </view>
+        <view class="supplier-option-right">
+          <text class="supplier-option-badge green">立即体验</text>
+          <text class="supplier-option-arrow">›</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{wechatPopupVisible}}" class="popup-mask" bindtap="closeWechatQrcode">
+    <view class="wechat-popup" catchtap="noop">
+      <view class="popup-header">
+        <view class="popup-header-main">
+          <text class="popup-title">企业微信咨询</text>
+          <text class="popup-subtitle">长按识别二维码，添加后可继续一对一沟通与服务跟进</text>
+        </view>
+        <view class="popup-close" bindtap="closeWechatQrcode">×</view>
+      </view>
+
+      <view class="wechat-summary-card">
+        <view class="wechat-summary-icon">微</view>
+        <view class="wechat-summary-content">
+          <text class="wechat-summary-title">企业微信在线咨询</text>
+          <text class="wechat-summary-desc">当前为二维码备用入口，若直达客服未拉起，可长按识别继续咨询</text>
+        </view>
+      </view>
+
+      <view class="wechat-qrcode-wrapper">
+        <image wx:if="{{supplierWechatQrAvailable}}" class="wechat-qrcode-image" src="{{supplierWechatQr}}" mode="aspectFit" binderror="onWechatQrcodeError" bindtap="previewWechatQrcode" />
+        <view wx:else class="wechat-qrcode-placeholder">
+          <text class="wechat-qrcode-placeholder-title">请补充客服二维码图片</text>
+          <text class="wechat-qrcode-placeholder-desc">将二维码图片放到 /assets/企业微信二维码.png</text>
+        </view>
+      </view>
+
+      <view class="wechat-service-tip">
+        <text class="wechat-service-tip-text">{{enterpriseWechatTip}}</text>
+      </view>
+
+      <view class="wechat-popup-footer">
+        <view class="wechat-footer-btn secondary" bindtap="closeWechatQrcode">稍后再看</view>
+        <view class="wechat-footer-btn primary" bindtap="previewWechatQrcode">查看大图</view>
+      </view>
+    </view>
+  </view>
+</view>

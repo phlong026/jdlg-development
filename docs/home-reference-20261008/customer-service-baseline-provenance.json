@@ -1,0 +1,56 @@
+{
+  "baselineSource": "/tmp/jdlg-home-reference-preview",
+  "currentProject": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "allComparedFilesIdentical": true,
+  "files": [
+    {
+      "path": "miniprogram/pages/customerservice/customerservice.json",
+      "byteIdentical": true,
+      "originalSha256": "5297bac447d405ff155fc1a07cdf78d1a6d16a6e8fd3602fd4171ebb05624d2a",
+      "currentSha256": "5297bac447d405ff155fc1a07cdf78d1a6d16a6e8fd3602fd4171ebb05624d2a"
+    },
+    {
+      "path": "miniprogram/pages/customerservice/customerservice.ts",
+      "byteIdentical": true,
+      "originalSha256": "5cbaa6d4ca5588f362d7c699aa79a588c29e99ac2d2911237960f2f72b0e69f9",
+      "currentSha256": "5cbaa6d4ca5588f362d7c699aa79a588c29e99ac2d2911237960f2f72b0e69f9"
+    },
+    {
+      "path": "miniprogram/pages/customerservice/customerservice.scss",
+      "byteIdentical": true,
+      "originalSha256": "36ef46cbad39b8ed9db53c8063d80cbde6044e170591b70766c793e930838885",
+      "currentSha256": "36ef46cbad39b8ed9db53c8063d80cbde6044e170591b70766c793e930838885"
+    },
+    {
+      "path": "miniprogram/pages/customerservice/customerservice.js",
+      "byteIdentical": true,
+      "originalSha256": "6f4f0084de63cf0fa747d99104172f232b5f9ddfc1294ae0ca1be35e06b4f2eb",
+      "currentSha256": "6f4f0084de63cf0fa747d99104172f232b5f9ddfc1294ae0ca1be35e06b4f2eb"
+    },
+    {
+      "path": "miniprogram/pages/customerservice/customerservice.wxml",
+      "byteIdentical": true,
+      "originalSha256": "db9e2221494bde8f8e5d54d858cc96390010556e94cda3afe5613f45c32d3012",
+      "currentSha256": "db9e2221494bde8f8e5d54d858cc96390010556e94cda3afe5613f45c32d3012"
+    },
+    {
+      "path": "miniprogram/utils/customerServiceKnowledge.ts",
+      "byteIdentical": true,
+      "originalSha256": "fa94743e6a60eaa615c4cd6c78307c161c77b8a816d7d63710d650c65193d722",
+      "currentSha256": "fa94743e6a60eaa615c4cd6c78307c161c77b8a816d7d63710d650c65193d722"
+    },
+    {
+      "path": "miniprogram/utils/customerServiceKnowledge.js",
+      "byteIdentical": true,
+      "originalSha256": "9b578781e75bd546b0f3455d50c78d1368a4b4711f01b6d16b964a84ef9bcb4d",
+      "currentSha256": "9b578781e75bd546b0f3455d50c78d1368a4b4711f01b6d16b964a84ef9bcb4d"
+    },
+    {
+      "path": "miniprogram/assets/icons/send-plane.svg",
+      "byteIdentical": true,
+      "originalSha256": "db7f8ad5bb9b45b9e18bc2fa7f947f28ca32bd82df1e0c179abc6e030ca7525d",
+      "currentSha256": "db7f8ad5bb9b45b9e18bc2fa7f947f28ca32bd82df1e0c179abc6e030ca7525d"
+    }
+  ],
+  "baselineTestFolder": "/tmp/jdlg-home-reference-work/customer-service-baseline"
+}
