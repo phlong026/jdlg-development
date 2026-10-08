@@ -311,3 +311,36 @@ func GetTokenCodeSession(c *gin.Context) *model.CodeSession {
 	}
 	return cs
 }
+
+// MiniprogramBannedBlock 封禁用户拦截（挂在 TokenAuthRequired 之后）：
+// 已封禁账号即使持有旧 token，也不能发起 AI 任务、充值、认证等写操作。
+// 每请求一次 status 查询——当前用户量级可接受；若日后量大可加短 TTL 缓存。
+func MiniprogramBannedBlock(userDBModel *model.UserModel) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if userDBModel == nil || userDBModel.DB == nil {
+			c.Next()
+			return
+		}
+		cs := GetTokenCodeSession(c)
+		if cs == nil || cs.UserID <= 0 {
+			c.Next()
+			return
+		}
+		banned, reason, err := userDBModel.GetUserBanStatus(cs.UserID)
+		if err != nil {
+			// 查询失败放行：封禁是收紧型控制，不能因 DB 抖动误伤全量用户
+			c.Next()
+			return
+		}
+		if banned {
+			msg := "账号已被封禁，如有疑问请联系客服"
+			if reason != "" {
+				msg += "：" + reason
+			}
+			c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": msg})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

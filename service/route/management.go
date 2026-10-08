@@ -14,6 +14,7 @@ import (
 	"service/processor"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -73,6 +74,40 @@ func clampManagementPageSize(size int) int {
 		return managementPageSizeMax
 	}
 	return size
+}
+
+// parsePositiveQueryInt 解析正整数查询参数，非法或非正返回 0（=不过滤）
+func parsePositiveQueryInt(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+// maskPhoneNumber 管理端列表展示用手机号脱敏：11 位保留前3后4，其余位数按长度截半保留
+func maskPhoneNumber(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	digits := 0
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			digits++
+		}
+	}
+	if digits == 11 && len(s) == 11 {
+		return s[:3] + "****" + s[7:]
+	}
+	if len(s) <= 4 {
+		return strings.Repeat("*", len(s))
+	}
+	keep := len(s) / 4
+	if keep < 1 {
+		keep = 1
+	}
+	return s[:keep] + "****" + s[len(s)-keep:]
 }
 
 // RegisterManagementRoutes 注册管理后台路由
@@ -204,7 +239,24 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			filters := model.ManagementUserListFilters{
 				Keyword:                keyword,
 				EnterpriseWechatStatus: enterpriseWechatStatus,
+				IdentityType:           strings.TrimSpace(c.Query("identity_type")),
+				Status:                 strings.TrimSpace(c.Query("status")),
+				CreatedWithinDays:      parsePositiveQueryInt(c.Query("created_within_days")),
 			}
+			if v := c.Query("stones_min"); v != "" {
+				if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+					filters.StonesMin = &n
+				}
+			}
+			if v := c.Query("stones_max"); v != "" {
+				if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+					filters.StonesMax = &n
+				}
+			}
+			filters.RiskOnly = c.Query("risk") == "1"
+			filters.Member = strings.TrimSpace(c.Query("member"))
+			filters.SortBy = strings.TrimSpace(c.Query("sort_by"))
+			filters.SortDesc = c.Query("sort_order") == "desc"
 
 			users, err := userDBModel.ListManagementUsers(filters, pageSize, offset)
 			if err != nil {
@@ -232,14 +284,37 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				if u.EnterpriseWechatVerifiedAt != nil {
 					verifiedAt = u.EnterpriseWechatVerifiedAt.Format("2006-01-02 15:04:05")
 				}
+				// 风险标签：列表只展示廉价可算的结构化信号；同设备多账号/未设密码在 360 详情里查
+				riskTags := make([]string, 0)
+				if u.LastDeviceChangeTime != nil && u.LastDeviceChangeTime.After(time.Now().Add(-7*24*time.Hour)) {
+					riskTags = append(riskTags, "recent_device_change")
+				}
+				memberStatus := ""
+				if u.MemberStatus == "active" && u.MemberExpiredAt != nil && u.MemberExpiredAt.After(time.Now()) {
+					memberStatus = "active"
+				} else if u.MemberStatus != "" {
+					memberStatus = "expired"
+				}
+				bannedAt := ""
+				if u.BannedAt != nil {
+					bannedAt = u.BannedAt.Format("2006-01-02 15:04:05")
+				}
 				userList = append(userList, gin.H{
 					"id":                            u.ID,
 					"username":                      u.Username,
 					"user_type":                     u.UserType,
 					"stones":                        stones,
 					"nickname":                      strings.TrimSpace(u.Nickname),
+					"phone":                         maskPhoneNumber(u.Phone),
+					"identity_type":                 u.IdentityType,
+					"status":                        u.Status,
+					"banned_reason":                 u.BannedReason,
+					"banned_at":                     bannedAt,
+					"risk_tags":                     riskTags,
+					"member_status":                 memberStatus,
+					"member_plan_title":             u.MemberPlanTitle,
 					"enterprise_wechat_verified":    u.EnterpriseWechatVerified,
-					"enterprise_wechat_contact":     strings.TrimSpace(u.EnterpriseWechatContact),
+					"enterprise_wechat_contact":     maskPhoneNumber(strings.TrimSpace(u.EnterpriseWechatContact)),
 					"enterprise_wechat_verified_at": verifiedAt,
 					"created_at":                    u.CreatedAt,
 					"updated_at":                    u.UpdatedAt,
@@ -254,6 +329,102 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 					"total":     total,
 					"page":      page,
 					"page_size": pageSize,
+				},
+			})
+		})
+
+		// 用户列表全库真实口径统计（替代旧版"按当前页计算"的失真统计）
+		auth.GET("/user-stats", func(c *gin.Context) {
+			stats, err := userDBModel.GetManagementUserStats()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取用户统计失败: " + err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": stats})
+		})
+
+		// 封禁用户：拦截登录与 AI 任务/支付发起（POST 会被审计中间件记录）
+		user.POST("/:id/ban", func(c *gin.Context) {
+			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			var req struct {
+				Reason string `json:"reason" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("请填写封禁原因: " + err.Error())})
+				return
+			}
+			reason := strings.TrimSpace(req.Reason)
+			if len(reason) > 200 {
+				reason = reason[:200]
+			}
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			if u.UserType != "miniprogram" {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "仅支持封禁小程序用户"})
+				return
+			}
+			if err := userDBModel.SetUserBanned(id, true, reason); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "封禁失败: " + err.Error()})
+				return
+			}
+			log.Printf("[风控] 管理员 %s 封禁用户 %s (ID:%d)，原因: %s", GetUsername(c), u.Username, id, reason)
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已封禁", "data": gin.H{"id": id, "status": "banned"}})
+		})
+
+		// 解封用户
+		user.POST("/:id/unban", func(c *gin.Context) {
+			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			var req struct {
+				Reason string `json:"reason"`
+			}
+			_ = c.ShouldBindJSON(&req)
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			if err := userDBModel.SetUserBanned(id, false, strings.TrimSpace(req.Reason)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "解封失败: " + err.Error()})
+				return
+			}
+			log.Printf("[风控] 管理员 %s 解封用户 %s (ID:%d)，说明: %s", GetUsername(c), u.Username, id, req.Reason)
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已解封", "data": gin.H{"id": id, "status": "active"}})
+		})
+
+		// 查看完整手机号（列表默认脱敏；POST 形式让审计中间件自动记录本次查看）
+		user.POST("/:id/phone-reveal", func(c *gin.Context) {
+			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			if _, err := userDBModel.GetByID(id); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			var phone, wechatContact string
+			if err := userDBModel.DB.QueryRow(`SELECT COALESCE(p.phone, ''), COALESCE(p.enterprise_wechat_contact, '') FROM user_profiles p WHERE p.user_id = ?`, id).Scan(&phone, &wechatContact); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户扩展信息不存在"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"user_id":                   id,
+					"phone":                     phone,
+					"enterprise_wechat_contact": wechatContact,
 				},
 			})
 		})

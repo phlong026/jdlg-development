@@ -52,6 +52,9 @@ func buildMembershipOperationsWhere(filters membershipOperationsFilters) (string
 		args = append(args, model.DefaultRechargePermanentPlanCode)
 	case "expired":
 		where += ` AND um.user_id IS NOT NULL AND (um.status <> 'active' OR um.expired_at <= NOW())`
+	case "lifetime":
+		where += ` AND um.user_id IS NOT NULL AND um.status = 'active' AND um.plan_code = ?`
+		args = append(args, model.DefaultRechargePermanentPlanCode)
 	case "legacy":
 		where += ` AND um.user_id IS NULL AND ` + membershipOperationsSuccessfulRechargeExists
 	case "permission_disabled":
@@ -242,6 +245,33 @@ func buildManagementMembershipPayload(userMembershipModel *model.UserMembershipM
 func RegisterMembershipOperationsManagementRoutes(r *gin.RouterGroup, userDBModel *model.UserModel, userProfileModel *model.UserProfileModel, userMembershipModel *model.UserMembershipModel, userOrderModel *model.UserOrderModel) {
 	membership := r.Group("/membership-operations")
 
+	// 修复下载权限：会员有效但权限被关闭时，管理端核对来源订单后一键恢复（POST 经审计记录）
+	membership.POST("/users/:user_id/fix-permission", func(c *gin.Context) {
+		userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
+		if err != nil || userID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+			return
+		}
+		if userMembershipModel == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "会员服务不可用"})
+			return
+		}
+		current, err := userMembershipModel.GetByUserID(userID)
+		if err != nil || current == nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "该用户没有会员记录"})
+			return
+		}
+		if current.Status != "active" || !current.ExpiredAt.After(time.Now()) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "会员已过期或未生效，不能直接开启下载权限；请先核对来源订单"})
+			return
+		}
+		if err := userMembershipModel.UpdateTemplateDownloadEnabled(userID, true); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "修复失败: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已开启下载权限", "data": gin.H{"user_id": userID, "template_download_enabled": true}})
+	})
+
 	membership.GET("/overview", func(c *gin.Context) {
 		if userDBModel == nil || userDBModel.DB == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "会员运营服务不可用"})
@@ -258,6 +288,7 @@ func RegisterMembershipOperationsManagementRoutes(r *gin.RouterGroup, userDBMode
 		expiredUsers, _ := queryMembershipOperationsCount(db, membershipOperationsFilters{Status: "expired"})
 		permissionDisabledUsers, _ := queryMembershipOperationsCount(db, membershipOperationsFilters{PermissionState: "disabled"})
 		legacyUsers, _ := queryMembershipOperationsCount(db, membershipOperationsFilters{Status: "legacy"})
+		lifetimeUsers, _ := queryMembershipOperationsCount(db, membershipOperationsFilters{Status: "lifetime"})
 
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
@@ -269,6 +300,7 @@ func RegisterMembershipOperationsManagementRoutes(r *gin.RouterGroup, userDBMode
 				"expired_users":              expiredUsers,
 				"permission_disabled_users":  permissionDisabledUsers,
 				"legacy_recharge_users":      legacyUsers,
+				"lifetime_users":             lifetimeUsers,
 			},
 		})
 	})

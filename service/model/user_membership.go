@@ -225,3 +225,13 @@ func (m *UserMembershipModel) UpdateStatusByUserID(userID int64, status string) 
 	_, err := m.DB.Exec(`UPDATE user_memberships SET status = ?, updated_at = NOW() WHERE user_id = ?`, status, userID)
 	return err
 }
+
+// UpdateTemplateDownloadEnabled 修复/调整会员模板下载权限（管理端；POST 端点经审计中间件记录）
+func (m *UserMembershipModel) UpdateTemplateDownloadEnabled(userID int64, enabled bool) error {
+	v := 0
+	if enabled {
+		v = 1
+	}
+	_, err := m.DB.Exec(`UPDATE user_memberships SET template_download_enabled = ?, updated_at = NOW() WHERE user_id = ?`, v, userID)
+	return err
+}

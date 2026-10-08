@@ -36,6 +36,7 @@ export interface DesignerManagementListSummary {
     public_designers: number;
     approved_designers: number;
     designers_with_works: number;
+    service_enabled_designers?: number;
 }
 
 export interface DesignerManagementListResponse {
@@ -53,6 +54,7 @@ export interface DesignerManagementListParams {
     certification_status?: string;
     visible?: string;
     specialty?: string;
+    service_state?: 'all' | 'enabled' | 'paused';
 }
 
 export interface DesignerManagementWorkItem {

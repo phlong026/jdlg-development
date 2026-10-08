@@ -1,139 +1,159 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FiSearch } from 'react-icons/fi';
+import { FiEye, FiSearch } from 'react-icons/fi';
 import {
     getUserList,
-    getUserDetail,
-    setUserStones,
-    adjustUserStones,
-    updateUser,
-    getUserEnterpriseWechatVerification,
-    updateUserEnterpriseWechatVerification,
+    getUserStats,
+    revealUserPhone,
+    banUser,
+    unbanUser,
+    getUserMergePrecheck,
     type User as ApiUser,
     type UserListParams,
+    type UserStats,
+    type UserMergePrecheck,
 } from '../api/users';
 import './users.scss';
 
-interface User {
+interface UserRow {
     id: string;
     username: string;
-    pointsBalance: number;
+    displayName: string;
+    stones: number;
     createdAt: string;
-    enterpriseWechatVerified?: boolean;
-    enterpriseWechatVerifiedAt?: string;
-    enterpriseWechatContact?: string;
-    nickname?: string;
-    avatar?: string;
-    designerBio?: string;
-    specialtyStyles?: string;
-    designerExperienceYears?: number;
-    serviceTitle?: string;
-    phone?: string;
-    identityType?: string;
+    phone: string; // 后端已脱敏；揭示后为完整号码
+    identityType: string;
+    status: string; // active | banned
+    bannedReason: string;
+    bannedAt: string;
+    riskTags: string[];
+    memberStatus: string;
+    memberPlanTitle: string;
+    enterpriseWechatVerified: boolean;
 }
 
 const pageSizeOptions = [20, 50, 100];
 
+const IDENTITY_TYPES = ['乡墅业主', '设计师', '施工队', '建材商', '机构用户'];
+const STONES_RANGES = [
+    { key: 'zero', label: '余额 0（耗尽）', min: 0, max: 0 },
+    { key: 'low', label: '1 – 500', min: 1, max: 500 },
+    { key: 'mid', label: '500 – 5,000', min: 501, max: 5000 },
+    { key: 'high', label: '5,000 以上', min: 5001, max: undefined as number | undefined },
+];
+const CREATED_RANGES = [
+    { key: '1', label: '今日' },
+    { key: '7', label: '近 7 天' },
+    { key: '30', label: '近 30 天' },
+];
+
+const RISK_TAG_LABELS: Record<string, string> = {
+    recent_device_change: '近7天换绑设备',
+    same_device_multiple_accounts: '同设备多账号',
+};
+
+const formatDateTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value || '-';
+    return date.toLocaleString('zh-CN');
+};
+
 const Users: React.FC = () => {
     const navigate = useNavigate();
+    // ?wechat=pending|verified：总控台「下载权限待核验」带参直达，落地即应用手机号授权筛选
     const [searchParams] = useSearchParams();
+    const wechatParam = searchParams.get('wechat');
+
     const [searchInput, setSearchInput] = useState('');
     const [searchKeyword, setSearchKeyword] = useState('');
-    // ?wechat=pending|verified：总控台「下载权限待核验」带参直达，落地即应用手机号授权筛选
-    const wechatParam = searchParams.get('wechat');
-    const [enterpriseWechatFilter, setEnterpriseWechatFilter] = useState<'all' | 'verified' | 'pending'>(
+    const [identityFilter, setIdentityFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+    const [wechatFilter, setWechatFilter] = useState<'all' | 'verified' | 'pending'>(
         wechatParam === 'pending' || wechatParam === 'verified' ? wechatParam : 'all',
     );
-    const [showDetailModal, setShowDetailModal] = useState(false);
-    const [showStonesModal, setShowStonesModal] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [users, setUsers] = useState<User[]>([]);
+    const [memberFilter, setMemberFilter] = useState('');
+    const [createdFilter, setCreatedFilter] = useState('');
+    const [stonesFilter, setStonesFilter] = useState('');
+    const [riskFilter, setRiskFilter] = useState(false);
+    const [sortBy, setSortBy] = useState<'stones' | 'created_at' | ''>('');
+    const [sortDesc, setSortDesc] = useState(true);
+
+    const [stats, setStats] = useState<UserStats | null>(null);
+    const [rows, setRows] = useState<UserRow[]>([]);
+    const [revealedPhones, setRevealedPhones] = useState<Record<string, string>>({});
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
     const [total, setTotal] = useState(0);
     const [reloadSeed, setReloadSeed] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [stonesLoading, setStonesLoading] = useState(false);
 
-    // 灵石修改相关状态
-    const [stonesMode, setStonesMode] = useState<'set' | 'adjust'>('adjust'); // set: 设置绝对值, adjust: 增减
-    const [stonesValue, setStonesValue] = useState<string>('');
-    const [stonesRemark, setStonesRemark] = useState('');
-    // 用户信息编辑
-    const [showEditUserModal, setShowEditUserModal] = useState(false);
-    const [editUsername, setEditUsername] = useState('');
-    const [editPassword, setEditPassword] = useState('');
-    const [editPasswordConfirm, setEditPasswordConfirm] = useState('');
-    const [editNickname, setEditNickname] = useState('');
-    const [editAvatar, setEditAvatar] = useState('');
-    const [editDesignerBio, setEditDesignerBio] = useState('');
-    const [editSpecialtyStyles, setEditSpecialtyStyles] = useState('');
-    const [editDesignerExperienceYears, setEditDesignerExperienceYears] = useState('0');
-    const [editServiceTitle, setEditServiceTitle] = useState('');
-    const [editLoading, setEditLoading] = useState(false);
-    const [showEnterpriseWechatModal, setShowEnterpriseWechatModal] = useState(false);
-    const [enterpriseWechatVerified, setEnterpriseWechatVerified] = useState(false);
-    const [enterpriseWechatContact, setEnterpriseWechatContact] = useState('');
-    const [enterpriseWechatVerifiedAtText, setEnterpriseWechatVerifiedAtText] = useState('');
-    const [enterpriseWechatLoading, setEnterpriseWechatLoading] = useState(false);
-    const [enterpriseWechatSaving, setEnterpriseWechatSaving] = useState(false);
+    // 封禁/解封弹窗
+    const [banTarget, setBanTarget] = useState<UserRow | null>(null);
+    const [banMode, setBanMode] = useState<'ban' | 'unban'>('ban');
+    const [banReason, setBanReason] = useState('');
+    const [banSubmitting, setBanSubmitting] = useState(false);
 
-    // 转换API数据格式
-    const convertUser = (apiUser: ApiUser): User => {
-        return {
-            id: String(apiUser.id),
-            username: apiUser.username || '用户' + apiUser.id,
-            pointsBalance: apiUser.stones || 0,
-            createdAt: apiUser.created_at,
-            enterpriseWechatVerified: !!apiUser.enterprise_wechat_verified,
-            enterpriseWechatVerifiedAt: apiUser.enterprise_wechat_verified_at || '',
-            enterpriseWechatContact: apiUser.enterprise_wechat_contact || '',
-            nickname: apiUser.nickname || '',
-            avatar: apiUser.avatar || '',
-            designerBio: apiUser.designer_bio || '',
-            specialtyStyles: apiUser.specialty_styles || '',
-            designerExperienceYears: apiUser.designer_experience_years || 0,
-            serviceTitle: apiUser.service_title || '',
-            phone: apiUser.phone || '',
-            identityType: apiUser.identity_type || '',
-        };
-    };
+    // 账号合并向导（只读预检）
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [mergeFromId, setMergeFromId] = useState('');
+    const [mergeToId, setMergeToId] = useState('');
+    const [mergePrecheck, setMergePrecheck] = useState<UserMergePrecheck | null>(null);
+    const [mergeLoading, setMergeLoading] = useState(false);
 
-    const fetchUsers = async ({
-        nextPage = page,
-        nextPageSize = pageSize,
-        nextKeyword = searchKeyword,
-        nextEnterpriseWechatFilter = enterpriseWechatFilter,
-    }: {
-        nextPage?: number;
-        nextPageSize?: number;
-        nextKeyword?: string;
-        nextEnterpriseWechatFilter?: 'all' | 'verified' | 'pending';
-    } = {}) => {
+    const convertRow = (apiUser: ApiUser): UserRow => ({
+        id: String(apiUser.id),
+        username: apiUser.username || `用户${apiUser.id}`,
+        displayName: apiUser.nickname?.trim() || apiUser.username || `用户${apiUser.id}`,
+        stones: apiUser.stones || 0,
+        createdAt: apiUser.created_at,
+        phone: apiUser.phone || '',
+        identityType: apiUser.identity_type || '',
+        status: apiUser.status || 'active',
+        bannedReason: apiUser.banned_reason || '',
+        bannedAt: apiUser.banned_at || '',
+        riskTags: apiUser.risk_tags || [],
+        memberStatus: apiUser.member_status || '',
+        memberPlanTitle: apiUser.member_plan_title || '',
+        enterpriseWechatVerified: !!apiUser.enterprise_wechat_verified,
+    });
+
+    const buildListParams = useCallback((overrides: Partial<UserListParams> = {}): UserListParams => {
         const params: UserListParams = {
-            page: nextPage,
-            page_size: nextPageSize,
+            page,
+            page_size: pageSize,
         };
-        if (nextKeyword) params.keyword = nextKeyword;
-        if (nextEnterpriseWechatFilter !== 'all') {
-            params.enterprise_wechat_status = nextEnterpriseWechatFilter;
+        if (searchKeyword) params.keyword = searchKeyword;
+        if (identityFilter) params.identity_type = identityFilter;
+        if (statusFilter) params.status = statusFilter;
+        if (wechatFilter !== 'all') params.enterprise_wechat_status = wechatFilter;
+        if (memberFilter) params.member = memberFilter as 'active' | 'none';
+        if (createdFilter) params.created_within_days = Number(createdFilter);
+        if (stonesFilter) {
+            const range = STONES_RANGES.find((item) => item.key === stonesFilter);
+            if (range) {
+                params.stones_min = range.min;
+                params.stones_max = range.max;
+            }
         }
-        const response = await getUserList(params);
-        setUsers(response.list.map(convertUser));
-        setTotal(response.total || 0);
-    };
+        if (riskFilter) params.risk = 1;
+        if (sortBy) {
+            params.sort_by = sortBy;
+            params.sort_order = sortDesc ? 'desc' : 'asc';
+        }
+        return { ...params, ...overrides };
+    }, [page, pageSize, searchKeyword, identityFilter, statusFilter, wechatFilter, memberFilter, createdFilter, stonesFilter, riskFilter, sortBy, sortDesc]);
 
-    const refreshUsers = () => {
-        setReloadSeed((value) => value + 1);
-    };
+    const refresh = () => setReloadSeed((value) => value + 1);
 
-    // 加载用户列表
     useEffect(() => {
-        const loadUsers = async () => {
+        const load = async () => {
             setLoading(true);
             try {
-                await fetchUsers();
+                const response = await getUserList(buildListParams());
+                setRows(response.list.map(convertRow));
+                setTotal(response.total || 0);
+                setRevealedPhones({});
             } catch (error) {
                 console.error('加载用户列表失败:', error);
                 reportPageLoadError(error, '加载用户列表失败');
@@ -141,776 +161,568 @@ const Users: React.FC = () => {
                 setLoading(false);
             }
         };
-        void loadUsers();
-    }, [page, pageSize, searchKeyword, enterpriseWechatFilter, reloadSeed]);
+        void load();
+        // 列表重载只依赖筛选与分页状态；buildListParams 是它们的纯函数
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, pageSize, searchKeyword, identityFilter, statusFilter, wechatFilter, memberFilter, createdFilter, stonesFilter, riskFilter, sortBy, sortDesc, reloadSeed]);
+
+    // 全库统计与列表解耦：进入页面与每次刷新/封禁操作后重取
+    useEffect(() => {
+        const loadStats = async () => {
+            try {
+                setStats(await getUserStats());
+            } catch (error) {
+                console.error('加载用户统计失败:', error);
+            }
+        };
+        void loadStats();
+    }, [reloadSeed]);
+
+    const hasActiveFilters = () =>
+        !!searchKeyword || !!identityFilter || !!statusFilter || wechatFilter !== 'all' ||
+        !!memberFilter || !!createdFilter || !!stonesFilter || riskFilter;
 
     const handleSearch = () => {
-        const nextKeyword = searchInput.trim();
-        if (page !== 1) {
-            setPage(1);
-        }
-        if (nextKeyword !== searchKeyword) {
-            setSearchKeyword(nextKeyword);
+        const next = searchInput.trim();
+        if (page !== 1) setPage(1);
+        if (next !== searchKeyword) {
+            setSearchKeyword(next);
             return;
         }
-        if (page === 1) {
-            refreshUsers();
-        }
+        refresh();
     };
 
-    const handleResetFilters = () => {
+    const resetFilters = () => {
         setSearchInput('');
         setSearchKeyword('');
-        setEnterpriseWechatFilter('all');
+        setIdentityFilter('');
+        setStatusFilter('');
+        setWechatFilter('all');
+        setMemberFilter('');
+        setCreatedFilter('');
+        setStonesFilter('');
+        setRiskFilter(false);
+        setSortBy('');
         setPage(1);
-        setPageSize(pageSizeOptions[0]);
-        if (searchKeyword === '' && enterpriseWechatFilter === 'all' && page === 1 && pageSize === pageSizeOptions[0]) {
-            refreshUsers();
-        }
+        if (hasActiveFilters()) refresh();
+    };
+
+    const applyKpiFilter = (patch: () => void) => {
+        resetFilters();
+        // resetFilters 在无既有筛选时不会触发 reload，这里统一补一次刷新
+        window.setTimeout(() => {
+            patch();
+            setPage(1);
+            refresh();
+        }, 0);
     };
 
     const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
-    const currentStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
-    const currentEnd = total === 0 ? 0 : Math.min(page * pageSize, total);
-    const currentPageVerifiedCount = users.filter((user) => !!user.enterpriseWechatVerified).length;
-    const currentPagePendingCount = users.filter((user) => !user.enterpriseWechatVerified).length;
-    const currentPageStones = users.reduce((sum, user) => sum + user.pointsBalance, 0);
 
-    const handleEnterpriseWechatFilterChange = (value: 'all' | 'verified' | 'pending') => {
-        setEnterpriseWechatFilter(value);
-        setPage(1);
-    };
-
-    const handlePageSizeChange = (value: number) => {
-        setPageSize(value);
-        setPage(1);
-    };
-
-    const handlePrevPage = () => {
-        if (page <= 1) return;
-        setPage(page - 1);
-    };
-
-    const handleNextPage = () => {
-        if (page >= totalPages) return;
-        setPage(page + 1);
-    };
-
-    // 处理查看详情
-    const handleViewDetail = (user: User) => {
-        setSelectedUser(user);
-        setShowDetailModal(true);
-    };
-
-    // 打开编辑用户信息弹窗
-    const handleOpenEditUserModal = async (user: User) => {
-        try {
-            const detail = await getUserDetail(user.id);
-            setSelectedUser(detail ? convertUser(detail) : user);
-            setEditUsername(detail?.username || user.username);
-            setEditPassword('');
-            setEditPasswordConfirm('');
-            setEditNickname(detail?.nickname || '');
-            setEditAvatar(detail?.avatar || '');
-            setEditDesignerBio(detail?.designer_bio || '');
-            setEditSpecialtyStyles(detail?.specialty_styles || '');
-            setEditDesignerExperienceYears(String(detail?.designer_experience_years || 0));
-            setEditServiceTitle(detail?.service_title || '');
-            setShowEditUserModal(true);
-        } catch (e) {
-            console.error('获取用户详情失败:', e);
-            reportPageLoadError(e, '获取用户详情失败');
-        }
-    };
-
-    // 处理打开灵石修改弹窗
-    const handleOpenStonesModal = (user: User) => {
-        setSelectedUser(user);
-        setStonesMode('adjust');
-        setStonesValue('');
-        setStonesRemark('');
-        setShowStonesModal(true);
-    };
-
-    const handleOpenEnterpriseWechatModal = async (user: User) => {
-        setSelectedUser(user);
-        setEnterpriseWechatLoading(true);
-        setShowEnterpriseWechatModal(true);
-        try {
-            const detail = await getUserEnterpriseWechatVerification(user.id);
-            setEnterpriseWechatVerified(!!detail?.enterprise_wechat_verified);
-            setEnterpriseWechatContact(detail?.enterprise_wechat_contact || '');
-            setEnterpriseWechatVerifiedAtText(detail?.enterprise_wechat_verified_at || '');
-        } catch (error) {
-            console.error('获取手机号授权验证状态失败:', error);
-            reportPageLoadError(error, '获取手机号授权验证状态失败');
-            setShowEnterpriseWechatModal(false);
-        } finally {
-            setEnterpriseWechatLoading(false);
-        }
-    };
-
-    const handleEnterpriseWechatSubmit = async () => {
-        if (!selectedUser) return;
-        const contact = enterpriseWechatContact.trim();
-        if (enterpriseWechatVerified && !contact) {
-            alert('手机号授权通过时必须填写手机号');
-            return;
-        }
-        setEnterpriseWechatSaving(true);
-        try {
-            const result = await updateUserEnterpriseWechatVerification(selectedUser.id, {
-                verified: enterpriseWechatVerified,
-                contact,
+    const handleRevealPhone = async (row: UserRow) => {
+        if (revealedPhones[row.id]) {
+            setRevealedPhones((prev) => {
+                const next = { ...prev };
+                delete next[row.id];
+                return next;
             });
-            setEnterpriseWechatVerified(!!result?.enterprise_wechat_verified);
-            setEnterpriseWechatContact(result?.enterprise_wechat_contact || contact);
-            setEnterpriseWechatVerifiedAtText(result?.enterprise_wechat_verified_at || '');
-            alert('手机号授权状态已保存');
-            refreshUsers();
-            setShowEnterpriseWechatModal(false);
-        } catch (error: any) {
-            console.error('保存手机号授权状态失败:', error);
-            alert(error?.message || '保存手机号授权状态失败');
-        } finally {
-            setEnterpriseWechatSaving(false);
-        }
-    };
-
-    // 处理灵石修改
-    const handleStonesSubmit = async () => {
-        if (!selectedUser) return;
-
-        const value = parseInt(stonesValue);
-        if (isNaN(value)) {
-            alert('请输入有效的数字');
             return;
         }
-
-        if (stonesMode === 'set' && value < 0) {
-            alert('灵石余额不能为负数');
-            return;
-        }
-
-        if (stonesMode === 'adjust' && value === 0) {
-            alert('调整数量不能为0');
-            return;
-        }
-
-        setStonesLoading(true);
         try {
-            if (stonesMode === 'set') {
-                await setUserStones(selectedUser.id, {
-                    stones: value,
-                    remark: stonesRemark || undefined,
-                });
-            } else {
-                await adjustUserStones(selectedUser.id, {
-                    amount: value,
-                    remark: stonesRemark || undefined,
-                });
+            const data = await revealUserPhone(row.id);
+            if (data) {
+                const full = data.phone || data.enterprise_wechat_contact || '';
+                if (full) {
+                    setRevealedPhones((prev) => ({ ...prev, [row.id]: full }));
+                }
             }
-
-            alert('修改成功');
-            setShowStonesModal(false);
-
-            // 刷新用户列表
-            refreshUsers();
-        } catch (error: any) {
-            console.error('修改灵石失败:', error);
-            alert(error.message || '修改灵石失败');
-        } finally {
-            setStonesLoading(false);
+        } catch (error) {
+            console.error('查看完整手机号失败:', error);
+            reportPageLoadError(error, '查看完整手机号失败');
         }
     };
 
-    // 快捷调整
-    const handleQuickAdjust = (amount: number) => {
-        setStonesMode('adjust');
-        setStonesValue(String(amount));
+    const openBanModal = (row: UserRow, mode: 'ban' | 'unban') => {
+        setBanTarget(row);
+        setBanMode(mode);
+        setBanReason('');
     };
 
+    const submitBan = async () => {
+        if (!banTarget) return;
+        setBanSubmitting(true);
+        try {
+            if (banMode === 'ban') {
+                await banUser(banTarget.id, banReason.trim());
+            } else {
+                await unbanUser(banTarget.id, banReason.trim());
+            }
+            setBanTarget(null);
+            refresh();
+        } catch (error) {
+            console.error('封禁/解封失败:', error);
+            reportPageLoadError(error, banMode === 'ban' ? '封禁失败' : '解封失败');
+        } finally {
+            setBanSubmitting(false);
+        }
+    };
 
+    const toggleSort = (key: 'stones' | 'created_at') => {
+        if (sortBy === key) {
+            setSortDesc((prev) => !prev);
+        } else {
+            setSortBy(key);
+            setSortDesc(true);
+        }
+        setPage(1);
+    };
+
+    const runMergePrecheck = async () => {
+        const from = mergeFromId.trim();
+        const to = mergeToId.trim();
+        if (!from || !to) {
+            return;
+        }
+        setMergeLoading(true);
+        setMergePrecheck(null);
+        try {
+            setMergePrecheck(await getUserMergePrecheck(from, to));
+        } catch (error: any) {
+            console.error('合并预检失败:', error);
+            reportPageLoadError(error, '合并预检失败');
+        } finally {
+            setMergeLoading(false);
+        }
+    };
+
+    const phoneVerifiedPercent = stats && stats.total > 0 ? ((stats.phone_verified / stats.total) * 100).toFixed(1) : '0.0';
+
+    const kpiCards = [
+        {
+            key: 'total',
+            label: '用户总数',
+            value: stats ? stats.total.toLocaleString() : '—',
+            sub: `今日新增 ${stats?.today_new ?? '—'}`,
+            onClick: resetFilters,
+        },
+        {
+            key: 'verified',
+            label: '手机号已授权',
+            value: stats ? stats.phone_verified.toLocaleString() : '—',
+            sub: `${phoneVerifiedPercent}% · 待授权 ${stats?.phone_pending ?? '—'}`,
+            onClick: () => applyKpiFilter(() => setWechatFilter('verified')),
+        },
+        {
+            key: 'member',
+            label: '会员生效中',
+            value: stats ? stats.member_active.toLocaleString() : '—',
+            sub: '全库口径',
+            onClick: () => applyKpiFilter(() => setMemberFilter('active')),
+        },
+        {
+            key: 'stones',
+            label: '灵石总余额',
+            value: stats ? stats.stones_total.toLocaleString() : '—',
+            sub: '资金口径 · 以流水对账为准',
+            onClick: null, // 只读资金指标，不参与筛选
+        },
+        {
+            key: 'zero',
+            label: '灵石耗尽·曾充值',
+            value: stats ? stats.zero_stones_recharged.toLocaleString() : '—',
+            sub: '转化召回候选',
+            onClick: () => applyKpiFilter(() => setStonesFilter('zero')),
+        },
+        {
+            key: 'risk',
+            label: '风险账号',
+            value: stats ? (stats.banned + stats.risk_users).toLocaleString() : '—',
+            sub: `已封禁 ${stats?.banned ?? '—'} · 信号待处置 ${stats?.risk_users ?? '—'}`,
+            onClick: () => applyKpiFilter(() => setRiskFilter(true)),
+        },
+    ];
+
+    const filterChips: { label: string; clear: () => void }[] = [];
+    if (searchKeyword) filterChips.push({ label: `搜索：${searchKeyword}`, clear: () => { setSearchInput(''); setSearchKeyword(''); } });
+    if (identityFilter) filterChips.push({ label: `身份：${identityFilter}`, clear: () => setIdentityFilter('') });
+    if (statusFilter) filterChips.push({ label: `状态：${statusFilter === 'banned' ? '已封禁' : '正常'}`, clear: () => setStatusFilter('') });
+    if (wechatFilter !== 'all') filterChips.push({ label: `手机授权：${wechatFilter === 'verified' ? '已授权' : '待授权'}`, clear: () => setWechatFilter('all') });
+    if (memberFilter) filterChips.push({ label: `会员：${memberFilter === 'active' ? '生效中' : '无会员'}`, clear: () => setMemberFilter('') });
+    if (createdFilter) filterChips.push({ label: `注册：${CREATED_RANGES.find((r) => r.key === createdFilter)?.label ?? ''}`, clear: () => setCreatedFilter('') });
+    if (stonesFilter) filterChips.push({ label: `余额：${STONES_RANGES.find((r) => r.key === stonesFilter)?.label ?? ''}`, clear: () => setStonesFilter('') });
+    if (riskFilter) filterChips.push({ label: '风险信号账号', clear: () => setRiskFilter(false) });
 
     return (
-        <>
-            <div className="users-container">
-                <div className="users-toolbar section-card">
-                    <div className="toolbar-top">
-                        <div className="toolbar-title-block">
-                            <h3>用户检索与工作台入口</h3>
-                            <p>这里主要负责找人、筛人和判断优先级。真正的订单、任务、灵石、认证与风控处理，请进入用户360工作台完成。</p>
-                        </div>
-                        <div className="toolbar-actions">
-                            <button className="btn-secondary" onClick={refreshUsers} disabled={loading}>
-                                {loading ? '刷新中...' : '刷新数据'}
-                            </button>
-                            <button className="btn-secondary" onClick={handleResetFilters}>
-                                重置筛选
-                            </button>
-                        </div>
+        <div className="users-container">
+            <div className="users-toolbar section-card">
+                <div className="toolbar-top">
+                    <div className="toolbar-title-block">
+                        <h3>用户检索与账号管理</h3>
+                        <p>找人、筛人、看账号状态与风险信号；订单、灵石、认证等单用户处理请进入用户360工作台。以下统计为全库真实口径。</p>
                     </div>
-                    <div className="toolbar-left">
-                        <div className="search-box">
-                            <span className="search-icon"><FiSearch size={14} /></span>
-                            <input
-                                type="text"
-                                placeholder="搜索手机号、昵称或用户名（也支持用户ID）..."
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        handleSearch();
-                                    }
-                                }}
-                                className="search-input"
-                            />
-                        </div>
-                        <div className="filters">
-                            <select
-                                className="filter-select"
-                                value={enterpriseWechatFilter}
-                                onChange={(e) => handleEnterpriseWechatFilterChange(e.target.value as 'all' | 'verified' | 'pending')}
-                            >
-                                <option value="all">手机号授权：全部</option>
-                                <option value="verified">仅看已授权</option>
-                                <option value="pending">仅看待授权</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div className="toolbar-footer">
-                        <div className="toolbar-summary">
-                            <span className="summary-tag">第 {page} / {totalPages} 页 · {currentStart}-{currentEnd} / 共 {total} 条</span>
-                            {searchKeyword ? <span className="summary-tag">关键词：{searchKeyword}</span> : null}
-                            {enterpriseWechatFilter !== 'all' ? <span className="summary-tag">手机号授权：{enterpriseWechatFilter === 'verified' ? '已授权' : '待授权'}</span> : null}
-                        </div>
-                        <button className="btn-primary" onClick={handleSearch}>搜索用户</button>
+                    <div className="toolbar-actions">
+                        <button
+                            className="btn-secondary"
+                            onClick={() => { setShowMergeModal(true); setMergePrecheck(null); }}
+                            title="两个账号的资产对照与冲突预检（执行走 DBA 受控流程）"
+                        >
+                            账号合并预检
+                        </button>
+                        <button className="btn-secondary" onClick={refresh} disabled={loading}>
+                            {loading ? '刷新中...' : '刷新数据'}
+                        </button>
+                        <button className="btn-secondary" onClick={resetFilters} disabled={!hasActiveFilters()}>
+                            重置筛选
+                        </button>
                     </div>
                 </div>
-
-                <div className="users-stats-note">除总用户数外，其余统计按当前页计算。</div>
-
-                <div className="users-stats">
-                    <div className="stat-item">
-                        <span className="stat-label">用户总数</span>
-                        <span className="stat-value">{total}</span>
+                <div className="toolbar-left">
+                    <div className="search-box">
+                        <span className="search-icon"><FiSearch size={14} /></span>
+                        <input
+                            type="text"
+                            placeholder="搜索 ID / 用户名 / 昵称 / 手机号（模糊匹配）"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSearch();
+                            }}
+                            className="search-input"
+                        />
                     </div>
-                    <div className="stat-item">
-                        <span className="stat-label">手机号已授权</span>
-                        <span className="stat-value">{currentPageVerifiedCount}</span>
+                    <div className="filters">
+                        <select className="filter-select" value={identityFilter} onChange={(e) => { setIdentityFilter(e.target.value); setPage(1); }}>
+                            <option value="">身份类型：全部</option>
+                            {IDENTITY_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                        <select className="filter-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+                            <option value="">账号状态：全部</option>
+                            <option value="active">仅正常</option>
+                            <option value="banned">仅已封禁</option>
+                        </select>
+                        <select className="filter-select" value={wechatFilter} onChange={(e) => { setWechatFilter(e.target.value as 'all' | 'verified' | 'pending'); setPage(1); }}>
+                            <option value="all">手机授权：全部</option>
+                            <option value="verified">仅已授权</option>
+                            <option value="pending">仅待授权</option>
+                        </select>
+                        <select className="filter-select" value={memberFilter} onChange={(e) => { setMemberFilter(e.target.value); setPage(1); }}>
+                            <option value="">会员：全部</option>
+                            <option value="active">生效中</option>
+                            <option value="none">无会员</option>
+                        </select>
+                        <select className="filter-select" value={createdFilter} onChange={(e) => { setCreatedFilter(e.target.value); setPage(1); }}>
+                            <option value="">注册时间：全部</option>
+                            {CREATED_RANGES.map((range) => <option key={range.key} value={range.key}>{range.label}</option>)}
+                        </select>
+                        <select className="filter-select" value={stonesFilter} onChange={(e) => { setStonesFilter(e.target.value); setPage(1); }}>
+                            <option value="">灵石余额：全部</option>
+                            {STONES_RANGES.map((range) => <option key={range.key} value={range.key}>{range.label}</option>)}
+                        </select>
                     </div>
-                    <div className="stat-item">
-                        <span className="stat-label">手机号待授权验证</span>
-                        <span className="stat-value">{currentPagePendingCount}</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-label">总灵石</span>
-                        <span className="stat-value">{currentPageStones}</span>
-                    </div>
+                    {filterChips.length > 0 && (
+                        <div className="filter-chips">
+                            {filterChips.map((chip) => (
+                                <span className="filter-chip" key={chip.label}>
+                                    {chip.label}
+                                    <button onClick={chip.clear} title="移除该筛选">✕</button>
+                                </span>
+                            ))}
+                            <button className="filter-chip-clear" onClick={resetFilters}>清空全部</button>
+                        </div>
+                    )}
                 </div>
+            </div>
 
-                <div className="users-table-container">
+            <div className="users-stats">
+                {kpiCards.map((card) => (
+                    <div
+                        key={card.key}
+                        className={`stat-item ${card.onClick ? 'clickable' : ''}`}
+                        onClick={card.onClick ?? undefined}
+                        title={card.onClick ? '点击应用筛选' : '只读指标'}
+                    >
+                        <span className="stat-label">{card.label}</span>
+                        <span className="stat-value">{card.value}</span>
+                        <span className="stat-sub">{card.sub}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="users-table-container">
+                <div className="users-table-wrap">
                     <table className="users-table">
-                        <thead>
+                    <thead>
+                        <tr>
+                            <th>用户</th>
+                            <th>手机号</th>
+                            <th>身份</th>
+                            <th>状态</th>
+                            <th>风险</th>
+                            <th>手机授权</th>
+                            <th>会员</th>
+                            <th className="sortable" onClick={() => toggleSort('stones')}>
+                                灵石余额 {sortBy === 'stones' ? (sortDesc ? '↓' : '↑') : '↕'}
+                            </th>
+                            <th className="sortable" onClick={() => toggleSort('created_at')}>
+                                注册时间 {sortBy === 'created_at' ? (sortDesc ? '↓' : '↑') : '↕'}
+                            </th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.length === 0 ? (
                             <tr>
-                                <th>用户ID</th>
-                                <th>用户名</th>
-                                <th>手机号</th>
-                                <th>身份类型</th>
-                                <th>手机号授权</th>
-                                <th>灵石余额</th>
-                                <th>创建时间</th>
-                                <th>工作台入口</th>
+                                <td colSpan={10} className="empty-state">
+                                    {loading ? '加载中...' : '没有符合当前筛选条件的用户'}
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {users.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="empty-state">
-                                        暂无用户数据
-                                    </td>
-                                </tr>
-                            ) : (
-                                users.map((user) => (
-                                    <tr key={user.id}>
-                                        <td>{user.id}</td>
+                        ) : (
+                            rows.map((row) => {
+                                const banned = row.status !== 'active';
+                                const fullPhone = revealedPhones[row.id];
+                                return (
+                                    <tr key={row.id} className={banned ? 'row-banned' : ''} onClick={() => navigate(`/user-workbench?userId=${row.id}`)}>
                                         <td>
-                                            <button
-                                                className="user-link-button"
-                                                onClick={() => navigate(`/user-workbench?userId=${user.id}`)}
-                                                title="进入用户360工作台"
-                                            >
-                                                {user.username}
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <span className="user-phone-text">{user.phone || '-'}</span>
-                                        </td>
-                                        <td>
-                                            <span className="identity-type-badge">{user.identityType || '-'}</span>
-                                        </td>
-                                        <td>
-                                            <div className="wechat-status-cell">
-                                                <span className={`status-badge ${user.enterpriseWechatVerified ? 'status-verified' : 'status-pending'}`}>
-                                                    {user.enterpriseWechatVerified ? '已授权' : '待授权'}
-                                                </span>
-                                                <span className="wechat-status-meta">
-                                                    {user.enterpriseWechatContact || (user.enterpriseWechatVerified ? '已留手机号' : '手机号待授权验证')}
+                                            <div className="user-id-cell">
+                                                <span className="user-avatar-letter">{row.displayName.slice(0, 1).toUpperCase()}</span>
+                                                <span>
+                                                    <span className="user-name">{row.displayName}</span>
+                                                    <span className="user-sub">ID {row.id} · {row.username}</span>
                                                 </span>
                                             </div>
+                                        </td>
+                                        <td onClick={(e) => e.stopPropagation()}>
+                                            {fullPhone ? (
+                                                <span className="user-phone-text revealed" title="已展示完整号码，本次查看已记入审计">{fullPhone}</span>
+                                            ) : row.phone ? (
+                                                <span className="user-phone-text">
+                                                    {row.phone}
+                                                    <button className="phone-reveal" onClick={() => handleRevealPhone(row)} title="查看完整号码（记审计）">
+                                                        <FiEye size={13} />
+                                                    </button>
+                                                </span>
+                                            ) : (
+                                                <span className="user-phone-none">未授权</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            {row.identityType
+                                                ? <span className="identity-type-badge">{row.identityType}</span>
+                                                : <span className="user-phone-none">未填写</span>}
+                                        </td>
+                                        <td>
+                                            {banned ? (
+                                                <span className="status-badge status-banned" title={`${row.bannedReason}${row.bannedAt ? ` · ${row.bannedAt}` : ''}`}>已封禁</span>
+                                            ) : (
+                                                <span className="status-badge status-normal">正常</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            {row.riskTags.length > 0
+                                                ? <span className="risk-tag">{row.riskTags.map((tag) => RISK_TAG_LABELS[tag] || tag).join('、')}</span>
+                                                : <span className="user-phone-none">—</span>}
+                                        </td>
+                                        <td>
+                                            <span className={`status-badge ${row.enterpriseWechatVerified ? 'status-verified' : 'status-pending'}`}>
+                                                {row.enterpriseWechatVerified ? '已授权' : '待授权'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {row.memberStatus === 'active'
+                                                ? <span className="member-badge on" title={row.memberPlanTitle}>生效中</span>
+                                                : row.memberStatus === 'expired'
+                                                    ? <span className="member-badge expired">已到期</span>
+                                                    : <span className="user-phone-none">—</span>}
                                         </td>
                                         <td>
                                             <span className="points-balance">
                                                 <span style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }}>✦</span>
-                                                {user.pointsBalance}
+                                                {row.stones.toLocaleString()}
                                             </span>
                                         </td>
-                                        <td>{new Date(user.createdAt).toLocaleString('zh-CN')}</td>
-                                        <td>
+                                        <td>{formatDateTime(row.createdAt)}</td>
+                                        <td onClick={(e) => e.stopPropagation()}>
                                             <div className="action-buttons">
                                                 <button
                                                     className="btn-action btn-enter-workbench"
-                                                    onClick={() => navigate(`/user-workbench?userId=${user.id}`)}
+                                                    onClick={() => navigate(`/user-workbench?userId=${row.id}`)}
                                                     title="进入用户360工作台"
                                                 >
-                                                    <span>进入360</span>
+                                                    360
                                                 </button>
-                                                <button
-                                                    className="btn-action btn-view"
-                                                    onClick={() => handleViewDetail(user)}
-                                                    title="查看当前列表摘要"
-                                                >
-                                                    <span>列表摘要</span>
-                                                </button>
+                                                {banned ? (
+                                                    <button className="btn-action btn-unban" onClick={() => openBanModal(row, 'unban')} title="解封该账号">
+                                                        解封
+                                                    </button>
+                                                ) : (
+                                                    <button className="btn-action btn-ban" onClick={() => openBanModal(row, 'ban')} title="封禁该账号（拦截登录与AI任务/支付）">
+                                                        封禁
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                    <div className="users-pagination">
-                        <div className="users-pagination-left">
-                            <span className="users-pagination-label">每页显示</span>
-                            <select
-                                className="filter-select users-page-size-select"
-                                value={pageSize}
-                                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                                disabled={loading}
-                            >
-                                {pageSizeOptions.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                ))}
-                            </select>
-                            <span className="users-pagination-note">共 {total} 个用户</span>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
+                </div>
+                <div className="users-pagination">
+                    <div className="users-pagination-left">
+                        <span className="users-pagination-label">每页显示</span>
+                        <select
+                            className="filter-select users-page-size-select"
+                            value={pageSize}
+                            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                            disabled={loading}
+                        >
+                            {pageSizeOptions.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
+                        <span className="users-pagination-note">共 {total} 个用户</span>
+                    </div>
+                    <div className="users-pagination-right">
+                        <button className="users-page-button" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)}>上一页</button>
+                        <span className="users-page-info">第 {page} 页，共 {totalPages} 页</span>
+                        <button className="users-page-button" disabled={page >= totalPages || loading} onClick={() => setPage((p) => p + 1)}>下一页</button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 封禁/解封确认弹窗 */}
+            {banTarget && (
+                <div className="modal-overlay" onClick={() => setBanTarget(null)}>
+                    <div className="modal-content ban-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>{banMode === 'ban' ? '封禁账号' : '解封账号'}</h3>
+                            <button className="modal-close" onClick={() => setBanTarget(null)}>✕</button>
                         </div>
-                        <div className="users-pagination-right">
-                            <button className="users-page-button" disabled={page <= 1 || loading} onClick={handlePrevPage}>上一页</button>
-                            <span className="users-page-info">第 {page} 页，共 {totalPages} 页</span>
-                            <button className="users-page-button" disabled={page >= totalPages || loading} onClick={handleNextPage}>下一页</button>
+                        <div className="modal-body">
+                            <div className="ban-user-bar">
+                                <span>{banTarget.displayName}（ID {banTarget.id}）</span>
+                                {banMode === 'ban' && banTarget.stones > 0 && (
+                                    <span className="ban-warn">余额 ✦{banTarget.stones.toLocaleString()} 将被冻结（数据保留，解封后恢复）</span>
+                                )}
+                            </div>
+                            {banMode === 'ban' ? (
+                                <>
+                                    <div className="form-group">
+                                        <label>封禁原因（必填，将展示给用户并记入审计）</label>
+                                        <textarea
+                                            className="form-input"
+                                            rows={3}
+                                            value={banReason}
+                                            onChange={(e) => setBanReason(e.target.value)}
+                                            placeholder="例如：同设备批量注册刷签到 / 违规内容 / 资金风控"
+                                        />
+                                    </div>
+                                    <div className="ban-tip">
+                                        封禁后立即生效：拒绝登录（微信/手机号/密码三条通路）、拦截 AI 任务与充值发起；解封后自动恢复。
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="form-group">
+                                        <label>解封说明（选填，记入审计）</label>
+                                        <textarea
+                                            className="form-input"
+                                            rows={2}
+                                            value={banReason}
+                                            onChange={(e) => setBanReason(e.target.value)}
+                                            placeholder="例如：已与用户核实，误判解除"
+                                        />
+                                    </div>
+                                    {banTarget.bannedReason && (
+                                        <div className="ban-tip">原封禁原因：{banTarget.bannedReason}{banTarget.bannedAt ? ` · ${banTarget.bannedAt}` : ''}</div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-secondary" onClick={() => setBanTarget(null)}>取消</button>
+                            <button
+                                className={banMode === 'ban' ? 'btn-danger-solid' : 'btn-primary'}
+                                onClick={submitBan}
+                                disabled={banSubmitting || (banMode === 'ban' && !banReason.trim())}
+                            >
+                                {banSubmitting ? '提交中...' : banMode === 'ban' ? '确认封禁' : '确认解封'}
+                            </button>
                         </div>
                     </div>
                 </div>
-
-                {/* 用户详情弹窗 */}
-                {showDetailModal && selectedUser && (
-                    <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
-                        <div className="modal-content detail-modal" onClick={(e) => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>用户详情</h3>
-                                <button className="modal-close" onClick={() => setShowDetailModal(false)}>
-                                    ✕
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="user-detail">
-                                    <div className="detail-section">
-                                        <div className="detail-avatar">
-                                            <span>{selectedUser.username[0]?.toUpperCase() || 'U'}</span>
-                                        </div>
-                                        <div className="detail-name">{selectedUser.username}</div>
-                                    </div>
-                                    <div className="detail-info">
-                                        <div className="info-row">
-                                            <span className="info-label">用户ID:</span>
-                                            <span className="info-value">{selectedUser.id}</span>
-                                        </div>
-                                        <div className="info-row">
-                                            <span className="info-label">灵石余额:</span>
-                                            <span className="info-value points">
-                                                <span style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }}>✦</span>
-                                                {selectedUser.pointsBalance}
-                                            </span>
-                                        </div>
-                                        <div className="info-row">
-                                            <span className="info-label">创建时间:</span>
-                                            <span className="info-value">{new Date(selectedUser.createdAt).toLocaleString('zh-CN')}</span>
-                                        </div>
-                                        <div className="info-row info-row-tip">
-                                            <span className="info-label">下一步:</span>
-                                            <span className="info-value">如需继续处理订单、任务、灵石、认证或风控，请进入用户360工作台。</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn-primary" onClick={() => navigate(`/user-workbench?userId=${selectedUser.id}`)}>
-                                    进入用户360
-                                </button>
-                                <button className="btn-secondary" onClick={() => setShowDetailModal(false)}>
-                                    关闭
-                                </button>
-                            </div>
+            )}
+            {/* 账号合并预检弹窗 */}
+            {showMergeModal && (
+                <div className="modal-overlay" onClick={() => setShowMergeModal(false)}>
+                    <div className="modal-content merge-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>账号合并预检</h3>
+                            <button className="modal-close" onClick={() => setShowMergeModal(false)}>✕</button>
                         </div>
-                    </div>
-                )}
-
-                {/* 编辑用户信息弹窗 */}
-                {showEditUserModal && selectedUser && (
-                    <div className="modal-overlay" onClick={() => setShowEditUserModal(false)}>
-                        <div className="modal-content edit-user-modal" onClick={(e) => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>编辑用户信息</h3>
-                                <button className="modal-close" onClick={() => setShowEditUserModal(false)}>
-                                    ✕
+                        <div className="modal-body">
+                            <div className="merge-inputs">
+                                <div className="form-group">
+                                    <label>源账号 ID（被合并、将被冻结）</label>
+                                    <input className="form-input" value={mergeFromId} onChange={(e) => setMergeFromId(e.target.value)} placeholder="例如 25" />
+                                </div>
+                                <div className="form-group">
+                                    <label>主账号 ID（资产并入、保留登录）</label>
+                                    <input className="form-input" value={mergeToId} onChange={(e) => setMergeToId(e.target.value)} placeholder="例如 13" />
+                                </div>
+                                <button className="btn-primary" onClick={runMergePrecheck} disabled={mergeLoading || !mergeFromId.trim() || !mergeToId.trim()}>
+                                    {mergeLoading ? '预检中...' : '开始预检'}
                                 </button>
                             </div>
-                            <div className="modal-body">
-                                <div className="form-group">
-                                    <label>登录用户名 *</label>
-                                    <input
-                                        className="form-input"
-                                        value={editUsername}
-                                        onChange={(e) => setEditUsername(e.target.value)}
-                                        placeholder="请输入登录用户名"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>新密码（留空则不修改）</label>
-                                    <input
-                                        type="password"
-                                        className="form-input"
-                                        value={editPassword}
-                                        onChange={(e) => setEditPassword(e.target.value)}
-                                        placeholder="设置登录密码"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>确认新密码</label>
-                                    <input
-                                        type="password"
-                                        className="form-input"
-                                        value={editPasswordConfirm}
-                                        onChange={(e) => setEditPasswordConfirm(e.target.value)}
-                                        placeholder="再次输入新密码"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>昵称</label>
-                                    <input
-                                        className="form-input"
-                                        value={editNickname}
-                                        onChange={(e) => setEditNickname(e.target.value)}
-                                        placeholder="请输入昵称"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>头像 URL</label>
-                                    <input
-                                        className="form-input"
-                                        value={editAvatar}
-                                        onChange={(e) => setEditAvatar(e.target.value)}
-                                        placeholder="https://..."
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>设计师简介</label>
-                                    <textarea
-                                        className="form-input"
-                                        rows={4}
-                                        value={editDesignerBio}
-                                        onChange={(e) => setEditDesignerBio(e.target.value)}
-                                        placeholder="请输入设计师简介"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>擅长方向</label>
-                                    <textarea
-                                        className="form-input"
-                                        rows={3}
-                                        value={editSpecialtyStyles}
-                                        onChange={(e) => setEditSpecialtyStyles(e.target.value)}
-                                        placeholder="例如：别墅设计、庭院营造、室内软装"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>真实从业经验（年）</label>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        className="form-input"
-                                        value={editDesignerExperienceYears}
-                                        onChange={(e) => setEditDesignerExperienceYears(e.target.value)}
-                                        placeholder="例如：8"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>服务标题</label>
-                                    <input
-                                        className="form-input"
-                                        value={editServiceTitle}
-                                        onChange={(e) => setEditServiceTitle(e.target.value)}
-                                        placeholder="例如：室内设计师"
-                                    />
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowEditUserModal(false)}>
-                                    取消
-                                </button>
-                                <button
-                                    className="btn-primary"
-                                    onClick={async () => {
-                                        if (!selectedUser) return;
-                                        const username = editUsername.trim();
-                                        if (!username) {
-                                            alert('用户名不能为空');
-                                            return;
-                                        }
-                                        if (editPassword || editPasswordConfirm) {
-                                            if (editPassword !== editPasswordConfirm) {
-                                                alert('两次输入的密码不一致');
-                                                return;
-                                            }
-                                            if (editPassword.length < 6) {
-                                                alert('密码长度至少 6 位');
-                                                return;
-                                            }
-                                        }
-                                        setEditLoading(true);
-                                        try {
-                                            await updateUser(selectedUser.id, {
-                                                username,
-                                                password: editPassword || undefined,
-                                                nickname: editNickname.trim() || undefined,
-                                                avatar: editAvatar.trim() || undefined,
-                                                designer_bio: editDesignerBio.trim() || undefined,
-                                                specialty_styles: editSpecialtyStyles.trim() || undefined,
-                                                designer_experience_years: Math.max(0, Number(editDesignerExperienceYears) || 0),
-                                                service_title: editServiceTitle.trim() || undefined,
-                                            });
-                                            // 更新本地列表展示的用户名
-                                            refreshUsers();
-                                            alert('保存成功');
-                                            setShowEditUserModal(false);
-                                        } catch (error: any) {
-                                            console.error('更新用户失败:', error);
-                                            alert(error?.message || '更新用户失败');
-                                        } finally {
-                                            setEditLoading(false);
-                                        }
-                                    }}
-                                    disabled={editLoading || !editUsername.trim()}
-                                >
-                                    {editLoading ? '保存中...' : '保存'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {showEnterpriseWechatModal && selectedUser && (
-                    <div className="modal-overlay" onClick={() => setShowEnterpriseWechatModal(false)}>
-                        <div className="modal-content enterprise-wechat-modal" onClick={(e) => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>手机号授权验证</h3>
-                                <button className="modal-close" onClick={() => setShowEnterpriseWechatModal(false)}>
-                                    ✕
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                {enterpriseWechatLoading ? (
-                                    <div className="empty-state">正在加载手机号授权状态...</div>
-                                ) : (
-                                    <div className="enterprise-wechat-form">
-                                        <div className="verification-summary-card">
-                                            <div className="verification-summary-row">
-                                                <span className="user-label">用户：{selectedUser.username}</span>
-                                                <span className={`verification-badge ${enterpriseWechatVerified ? 'verified' : 'pending'}`}>
-                                                    {enterpriseWechatVerified ? '已授权' : '待授权'}
-                                                </span>
-                                            </div>
-                                            <div className="verification-summary-meta">用户ID：{selectedUser.id}</div>
-                                            <div className="verification-summary-meta">
-                                                当前状态：{enterpriseWechatVerified ? '已完成手机号授权验证' : '手机号待授权验证'}
-                                            </div>
-                                            <div className="verification-summary-meta">
-                                                授权时间：{enterpriseWechatVerifiedAtText || '暂未授权'}
-                                            </div>
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label>授权状态</label>
-                                            <div className="mode-toggle">
-                                                <button
-                                                    className={`mode-btn ${!enterpriseWechatVerified ? 'active' : ''}`}
-                                                    onClick={() => setEnterpriseWechatVerified(false)}
-                                                >
-                                                    待授权
-                                                </button>
-                                                <button
-                                                    className={`mode-btn ${enterpriseWechatVerified ? 'active' : ''}`}
-                                                    onClick={() => setEnterpriseWechatVerified(true)}
-                                                >
-                                                    已授权
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label>授权手机号</label>
-                                            <input
-                                                type="text"
-                                                value={enterpriseWechatContact}
-                                                onChange={(e) => setEnterpriseWechatContact(e.target.value)}
-                                                placeholder="请输入用户授权后的手机号"
-                                                className="form-input"
-                                            />
-                                        </div>
-
-                                        <div className="verification-tip-box">
-                                            说明：正常情况下用户完成手机号授权后，系统会自动更新状态；如需补录，可在这里同步手机号授权结果。
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowEnterpriseWechatModal(false)}>
-                                    取消
-                                </button>
-                                <button
-                                    className="btn-primary"
-                                    onClick={handleEnterpriseWechatSubmit}
-                                    disabled={enterpriseWechatLoading || enterpriseWechatSaving}
-                                >
-                                    {enterpriseWechatSaving ? '保存中...' : '保存授权状态'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 修改灵石弹窗 */}
-                {showStonesModal && selectedUser && (
-                    <div className="modal-overlay" onClick={() => setShowStonesModal(false)}>
-                        <div className="modal-content stones-modal" onClick={(e) => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>修改灵石余额</h3>
-                                <button className="modal-close" onClick={() => setShowStonesModal(false)}>
-                                    ✕
-                                </button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="stones-form">
-                                    <div className="user-info-bar">
-                                        <span className="user-label">用户: {selectedUser.username}</span>
-                                        <span className="current-stones">
-                                            当前灵石: <strong>{selectedUser.pointsBalance}</strong>
-                                        </span>
-                                    </div>
-
-                                    <div className="form-group">
-                                        <label>操作类型</label>
-                                        <div className="mode-toggle">
-                                            <button
-                                                className={`mode-btn ${stonesMode === 'adjust' ? 'active' : ''}`}
-                                                onClick={() => setStonesMode('adjust')}
-                                            >
-                                                增减灵石
-                                            </button>
-                                            <button
-                                                className={`mode-btn ${stonesMode === 'set' ? 'active' : ''}`}
-                                                onClick={() => setStonesMode('set')}
-                                            >
-                                                设置余额
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {stonesMode === 'adjust' && (
-                                        <div className="form-group">
-                                            <label>快捷操作</label>
-                                            <div className="quick-buttons">
-                                                <button className="quick-btn add" onClick={() => handleQuickAdjust(100)}>
-                                                    <span>+</span> 100
-                                                </button>
-                                                <button className="quick-btn add" onClick={() => handleQuickAdjust(500)}>
-                                                    <span>+</span> 500
-                                                </button>
-                                                <button className="quick-btn add" onClick={() => handleQuickAdjust(1000)}>
-                                                    <span>+</span> 1000
-                                                </button>
-                                                <button className="quick-btn minus" onClick={() => handleQuickAdjust(-100)}>
-                                                    <span>-</span> 100
-                                                </button>
-                                                <button className="quick-btn minus" onClick={() => handleQuickAdjust(-500)}>
-                                                    <span>-</span> 500
-                                                </button>
-                                            </div>
+                            {mergePrecheck && (
+                                <div className="merge-result">
+                                    <table className="merge-compare">
+                                        <thead>
+                                            <tr>
+                                                <th>资产项</th>
+                                                <th>源账号 #{mergePrecheck.from.user_id}（{mergePrecheck.from.username}）</th>
+                                                <th>主账号 #{mergePrecheck.to.user_id}（{mergePrecheck.to.username}）</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {([
+                                                ['灵石余额', (a: typeof mergePrecheck.from) => `✦ ${a.stones.toLocaleString()}`],
+                                                ['订单数', (a: typeof mergePrecheck.from) => a.orders.toLocaleString()],
+                                                ['灵石流水', (a: typeof mergePrecheck.from) => a.stone_records.toLocaleString()],
+                                                ['AI 任务（图/视频）', (a: typeof mergePrecheck.from) => `${a.ai_tasks} / ${a.ai_video_tasks}`],
+                                                ['发布作品', (a: typeof mergePrecheck.from) => a.templates.toLocaleString()],
+                                                ['会员记录', (a: typeof mergePrecheck.from) => a.memberships.toLocaleString()],
+                                                ['认证申请', (a: typeof mergePrecheck.from) => a.certifications.toLocaleString()],
+                                                ['账号状态', (a: typeof mergePrecheck.from) => a.status === 'banned' ? '已封禁' : '正常'],
+                                            ] as [string, (a: typeof mergePrecheck.from) => string][]).map(([label, pick]) => (
+                                                <tr key={label}>
+                                                    <td>{label}</td>
+                                                    <td className="col-from">{pick(mergePrecheck.from)}</td>
+                                                    <td className="col-to">{pick(mergePrecheck.to)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {mergePrecheck.conflicts.length > 0 && (
+                                        <div className="merge-conflicts">
+                                            <b>冲突点（执行前需人工决策）：</b>
+                                            <ul>
+                                                {mergePrecheck.conflicts.map((item) => <li key={item}>{item}</li>)}
+                                            </ul>
                                         </div>
                                     )}
-
-                                    <div className="form-group">
-                                        <label>
-                                            {stonesMode === 'set' ? '新余额' : '调整数量'}
-                                            {stonesMode === 'adjust' && <span className="hint">（正数增加，负数扣除；单次上限 10000）</span>}
-                                            {stonesMode === 'set' && <span className="hint">（上限 100000）</span>}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={stonesValue}
-                                            onChange={(e) => setStonesValue(e.target.value)}
-                                            placeholder={stonesMode === 'set' ? '请输入新的灵石余额' : '请输入调整数量'}
-                                            className="form-input"
-                                        />
-                                    </div>
-
-                                    {stonesMode === 'adjust' && stonesValue && !isNaN(parseInt(stonesValue)) && (
-                                        <div className="preview-result">
-                                            预计修改后: <strong>{selectedUser.pointsBalance + parseInt(stonesValue)}</strong> 灵石
-                                        </div>
-                                    )}
-
-                                    <div className="form-group">
-                                        <label>备注（可选）</label>
-                                        <input
-                                            type="text"
-                                            value={stonesRemark}
-                                            onChange={(e) => setStonesRemark(e.target.value)}
-                                            placeholder="请输入操作备注，如：活动奖励、补偿等"
-                                            className="form-input"
-                                        />
-                                    </div>
+                                    <div className="ban-tip">{mergePrecheck.execution_note}</div>
                                 </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowStonesModal(false)}>
-                                    取消
-                                </button>
-                                <button
-                                    className="btn-primary"
-                                    onClick={handleStonesSubmit}
-                                    disabled={stonesLoading || !stonesValue}
-                                >
-                                    {stonesLoading ? '处理中...' : '确认修改'}
-                                </button>
-                            </div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-secondary" onClick={() => setShowMergeModal(false)}>关闭</button>
                         </div>
                     </div>
-                )}
-
-            </div>
-        </>
+                </div>
+            )}
+        </div>
     );
 };
 

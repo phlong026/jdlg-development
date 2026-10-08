@@ -1,11 +1,12 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
-import { FiAlertCircle, FiClock, FiRefreshCw, FiSearch, FiShield, FiUsers } from 'react-icons/fi';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FiAlertCircle, FiClock, FiRefreshCw, FiSearch, FiShield, FiUsers, FiZap } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
     getMembershipOperationsOverview,
     getMembershipOperationsUsers,
+    fixMembershipPermission,
     type MembershipOperationsOverview,
     type MembershipOperationsUserItem,
 } from '../api/membershipOperations';
@@ -46,6 +47,7 @@ const MembershipOperations: React.FC = () => {
     const [overview, setOverview] = useState<MembershipOperationsOverview>(defaultOverview);
     const [users, setUsers] = useState<MembershipOperationsUserItem[]>([]);
     const [loading, setLoading] = useState(false);
+    const [fixingUserId, setFixingUserId] = useState<number | null>(null);
     const [keywordInput, setKeywordInput] = useState('');
     const [keyword, setKeyword] = useState('');
     const [status, setStatus] = useState('all');
@@ -102,14 +104,44 @@ const MembershipOperations: React.FC = () => {
                 desc: '适合做续费提醒和重点运营。',
             },
             {
-                key: 'risk',
-                title: '权限异常/已过期',
-                value: overview.permission_disabled_users + overview.expired_users,
+                key: 'expired',
+                title: '已过期',
+                value: overview.expired_users,
+                icon: FiClockIcon,
+                desc: '到期 30 天内的用户可做召回。',
+            },
+            {
+                key: 'permission',
+                title: '权限异常',
+                value: overview.permission_disabled_users,
                 icon: FiAlertCircleIcon,
-                desc: '优先排查下载权限关闭或已过期用户。',
+                desc: '会员有效但下载权限关闭，优先修复。',
+            },
+            {
+                key: 'lifetime',
+                title: '终身会员',
+                value: overview.lifetime_users ?? 0,
+                icon: FiZap as unknown as React.ComponentType<any>,
+                desc: '永久计划生效中（含旧版充值达标）。',
             },
         ];
     }, [overview]);
+
+    const handleFixPermission = async (userId: number) => {
+        if (!window.confirm(`确认修复用户 ${userId} 的模板下载权限？\n修复前请先核对来源订单仍有效；操作将记入审计。`)) {
+            return;
+        }
+        setFixingUserId(userId);
+        try {
+            await fixMembershipPermission(userId);
+            await loadData();
+        } catch (error: any) {
+            console.error('修复下载权限失败:', error);
+            window.alert(error?.message || '修复下载权限失败');
+        } finally {
+            setFixingUserId(null);
+        }
+    };
 
     const handleSearch = () => {
         setKeyword(keywordInput.trim());
@@ -205,6 +237,7 @@ const MembershipOperations: React.FC = () => {
                                     <th>用户</th>
                                     <th>会员计划</th>
                                     <th>会员状态</th>
+                                    <th>剩余天数</th>
                                     <th>下载权限</th>
                                     <th>有效期</th>
                                     <th>来源订单</th>
@@ -215,14 +248,18 @@ const MembershipOperations: React.FC = () => {
                             <tbody>
                                 {users.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="empty-state">暂无会员用户数据</td>
+                                        <td colSpan={9} className="empty-state">暂无会员用户数据</td>
                                     </tr>
                                 ) : (
                                     users.map((item) => {
                                         const sourceOrder = item.source_order;
                                         const latestRecharge = item.latest_recharge_order;
+                                        // 权限异常：有会员记录但下载权限关闭（行高亮，可一键修复）
+                                        const permissionIssue = !item.template_download_enabled && !item.legacy_recharge_member;
+                                        const expiringSoon = item.status === 'active' && !item.lifetime_membership && item.remaining_days > 0 && item.remaining_days <= 7;
+                                        const rowClass = permissionIssue ? 'row-perm-issue' : expiringSoon ? 'row-expiring' : '';
                                         return (
-                                            <tr key={item.user_id}>
+                                            <tr key={item.user_id} className={rowClass}>
                                                 <td>
                                                     <div className="user-cell">
                                                         <strong>{item.display_name || item.username}</strong>
@@ -237,11 +274,11 @@ const MembershipOperations: React.FC = () => {
                                                 </td>
                                                 <td>
                                                     <span className={`status-badge status-${item.status || 'inactive'}`}>
-                                                        {MEMBERSHIP_STATUS_MAP[item.status || 'inactive'] || item.status || '未知'}
+                                                        {item.lifetime_membership ? '终身会员' : (MEMBERSHIP_STATUS_MAP[item.status || 'inactive'] || item.status || '未知')}
                                                     </span>
-                                                    {item.remaining_days > 0 && !item.lifetime_membership ? (
-                                                        <div className="cell-sub">剩余 {item.remaining_days} 天</div>
-                                                    ) : null}
+                                                </td>
+                                                <td>
+                                                    <RemainingDays item={item} />
                                                 </td>
                                                 <td>
                                                     <span className={`perm-badge ${item.template_download_enabled ? 'enabled' : 'disabled'}`}>
@@ -251,7 +288,7 @@ const MembershipOperations: React.FC = () => {
                                                 <td>
                                                     <div className="time-cell">
                                                         <span>生效：{item.granted_at_text || '暂无'}</span>
-                                                        <span>到期：{item.expired_at_text || '暂无'}</span>
+                                                        <span>到期：{item.lifetime_membership ? '永久有效' : (item.expired_at_text || '暂无')}</span>
                                                     </div>
                                                 </td>
                                                 <td>
@@ -270,6 +307,16 @@ const MembershipOperations: React.FC = () => {
                                                     <div className="table-actions">
                                                         <button className="btn-link" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>用户360</button>
                                                         <button className="btn-link" onClick={() => navigate('/recharge')}>订单中心</button>
+                                                        {permissionIssue && (
+                                                            <button
+                                                                className="btn-link fix-perm"
+                                                                disabled={fixingUserId === item.user_id}
+                                                                onClick={() => handleFixPermission(item.user_id)}
+                                                                title="核对来源订单有效后，一键恢复下载权限（记审计）"
+                                                            >
+                                                                {fixingUserId === item.user_id ? '修复中...' : '修复权限'}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -282,6 +329,33 @@ const MembershipOperations: React.FC = () => {
                 </div>
             </div>
         </>
+    );
+};
+
+// 剩余天数进度条：≤7 天橙、已到期红、终身/长期显示永久徽标
+const RemainingDays: React.FC<{ item: MembershipOperationsUserItem }> = ({ item }) => {
+    if (item.lifetime_membership) {
+        return <span className="life-perm-badge">永久</span>;
+    }
+    if (item.legacy_recharge_member) {
+        return <span className="life-perm-badge legacy">长期</span>;
+    }
+    if (item.remaining_days <= 0) {
+        return (
+            <div className="lifebar">
+                <div className="bar"><i style={{ width: '100%', background: '#dc2626' }} /></div>
+                <div className="txt"><em style={{ color: '#dc2626' }}>已到期</em></div>
+            </div>
+        );
+    }
+    const total = 365;
+    const pct = Math.max(4, Math.min(100, Math.round((item.remaining_days / total) * 100)));
+    const color = item.remaining_days <= 7 ? '#dc2626' : item.remaining_days <= 30 ? '#b45309' : '#059669';
+    return (
+        <div className="lifebar">
+            <div className="bar"><i style={{ width: `${pct}%`, background: color }} /></div>
+            <div className="txt">剩 <em style={{ color }}>{item.remaining_days}</em> 天</div>
+        </div>
     );
 };
 

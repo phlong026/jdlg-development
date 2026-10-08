@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"hash/crc32"
+	"log"
 	"strings"
 	"time"
 )
@@ -29,6 +30,15 @@ type UserModel struct {
 type ManagementUserListFilters struct {
 	Keyword                string
 	EnterpriseWechatStatus string
+	IdentityType           string // 精确匹配身份类型（乡墅业主/设计师/施工队/建材商/机构用户）
+	Status                 string // active=仅正常, banned=仅封禁, 空=全部
+	CreatedWithinDays      int    // >0 时按注册时间过滤
+	StonesMin              *int64
+	StonesMax              *int64
+	RiskOnly               bool   // 仅看结构化风险信号（近7天换绑设备/同设备多账号），与统计卡口径一致
+	Member                 string // active=会员生效中, none=无会员, 空=全部
+	SortBy                 string // stones | created_at，空=id DESC（默认）
+	SortDesc               bool
 }
 
 type ManagementUserListItem struct {
@@ -39,6 +49,14 @@ type ManagementUserListItem struct {
 	EnterpriseWechatContact    string     `json:"enterprise_wechat_contact"`
 	Phone                      string     `json:"phone"`
 	IdentityType               string     `json:"identity_type"`
+	Status                     string     `json:"status"`
+	BannedReason               string     `json:"banned_reason"`
+	BannedAt                   *time.Time `json:"banned_at"`
+	HasPassword                bool       `json:"has_password"`
+	LastDeviceChangeTime       *time.Time `json:"last_device_change_time"`
+	MemberStatus               string     `json:"member_status"`
+	MemberExpiredAt            *time.Time `json:"member_expired_at"`
+	MemberPlanTitle            string     `json:"member_plan_title"`
 }
 
 // NewUserModel 创建用户模型
@@ -64,7 +82,63 @@ func buildManagementUserListWhere(filters ManagementUserListFilters) (string, []
 		whereParts = append(whereParts, "COALESCE(p.enterprise_wechat_verified, 0) = 0")
 	}
 
+	if identityType := strings.TrimSpace(filters.IdentityType); identityType != "" {
+		whereParts = append(whereParts, "COALESCE(p.identity_type, '') = ?")
+		args = append(args, identityType)
+	}
+
+	switch strings.TrimSpace(filters.Status) {
+	case "active":
+		whereParts = append(whereParts, "COALESCE(u.status, 'active') = 'active'")
+	case "banned":
+		whereParts = append(whereParts, "COALESCE(u.status, 'active') <> 'active'")
+	}
+
+	if filters.CreatedWithinDays > 0 {
+		whereParts = append(whereParts, "u.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)")
+		args = append(args, filters.CreatedWithinDays)
+	}
+
+	if filters.StonesMin != nil {
+		whereParts = append(whereParts, "u.stones >= ?")
+		args = append(args, *filters.StonesMin)
+	}
+	if filters.StonesMax != nil {
+		whereParts = append(whereParts, "u.stones <= ?")
+		args = append(args, *filters.StonesMax)
+	}
+
+	if filters.RiskOnly {
+		whereParts = append(whereParts, `(
+			(p.last_device_change_time IS NOT NULL AND p.last_device_change_time > DATE_SUB(NOW(), INTERVAL 7 DAY))
+			OR (COALESCE(p.device_id, '') <> '' AND EXISTS (SELECT 1 FROM user_profiles p2 WHERE p2.device_id = p.device_id AND p2.user_id <> p.user_id))
+		)`)
+	}
+
+	switch filters.Member {
+	case "active":
+		whereParts = append(whereParts, "um.status = 'active' AND um.expired_at > NOW()")
+	case "none":
+		whereParts = append(whereParts, "um.user_id IS NULL")
+	}
+
 	return " WHERE " + strings.Join(whereParts, " AND "), args
+}
+
+// buildManagementUserListOrder 列表排序白名单（防注入；默认按 ID 倒序）
+func buildManagementUserListOrder(filters ManagementUserListFilters) string {
+	dir := "ASC"
+	if filters.SortDesc {
+		dir = "DESC"
+	}
+	switch filters.SortBy {
+	case "stones":
+		return " ORDER BY u.stones " + dir + ", u.id DESC"
+	case "created_at":
+		return " ORDER BY u.created_at " + dir + ", u.id DESC"
+	default:
+		return " ORDER BY u.id DESC"
+	}
 }
 
 // Create 创建用户
@@ -324,6 +398,9 @@ CREATE TABLE IF NOT EXISTS users (
 	unionid VARCHAR(128) DEFAULT NULL,
 	user_type VARCHAR(32) NOT NULL DEFAULT 'miniprogram',
 	can_withdraw TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已认证可提现',
+	status VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT '账号状态：active=正常, banned=已封禁',
+	banned_reason VARCHAR(255) NOT NULL DEFAULT '' COMMENT '封禁原因',
+	banned_at TIMESTAMP NULL DEFAULT NULL COMMENT '封禁时间',
 	merge_status VARCHAR(32) NOT NULL DEFAULT 'normal',
 	merged_to_user_id BIGINT UNSIGNED NULL DEFAULT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -341,7 +418,55 @@ CREATE TABLE IF NOT EXISTS users (
 	if err := m.InitCanWithdrawColumn(); err != nil {
 		return err
 	}
+	if err := m.InitUserStatusColumns(); err != nil {
+		return err
+	}
 	return m.InitMergeColumns()
+}
+
+// InitUserStatusColumns 为已有 users 表添加账号状态列（兼容老库，可重复执行）
+func (m *UserModel) InitUserStatusColumns() error {
+	for _, col := range []struct {
+		exists string
+		ddl    string
+	}{
+		{"status", "ALTER TABLE users ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT '账号状态：active=正常, banned=已封禁'"},
+		{"banned_reason", "ALTER TABLE users ADD COLUMN banned_reason VARCHAR(255) NOT NULL DEFAULT '' COMMENT '封禁原因'"},
+		{"banned_at", "ALTER TABLE users ADD COLUMN banned_at TIMESTAMP NULL DEFAULT NULL COMMENT '封禁时间'"},
+	} {
+		var exists int
+		err := m.DB.QueryRow(`SELECT COUNT(*) FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?`, col.exists).Scan(&exists)
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			if _, err = m.DB.Exec(col.ddl); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// SetUserBanned 封禁/解封小程序用户（管理端调用，操作人由路由层审计记录）
+func (m *UserModel) SetUserBanned(userID int64, banned bool, reason string) error {
+	if banned {
+		_, err := m.DB.Exec(`UPDATE users SET status = 'banned', banned_reason = ?, banned_at = NOW(), updated_at = NOW() WHERE id = ?`, reason, userID)
+		return err
+	}
+	_, err := m.DB.Exec(`UPDATE users SET status = 'active', banned_reason = '', banned_at = NULL, updated_at = NOW() WHERE id = ?`, userID)
+	return err
+}
+
+// GetUserBanStatus 读取账号封禁状态；老行无 status 列值时视为 active
+func (m *UserModel) GetUserBanStatus(userID int64) (banned bool, reason string, err error) {
+	var status string
+	err = m.DB.QueryRow(`SELECT COALESCE(status, 'active'), COALESCE(banned_reason, '') FROM users WHERE id = ?`, userID).Scan(&status, &reason)
+	if err != nil {
+		return false, "", err
+	}
+	return status != "active", reason, nil
 }
 
 // UpdateCanWithdraw 更新用户是否可提现（认证通过后由管理后台调用）
@@ -437,10 +562,13 @@ func (m *UserModel) ListManagementUsers(filters ManagementUserListFilters, limit
 	whereSQL, args := buildManagementUserListWhere(filters)
 	query := `SELECT u.id, u.username, u.user_type, COALESCE(u.can_withdraw, 0), u.created_at, u.updated_at,
 	                  COALESCE(p.nickname, ''), COALESCE(p.enterprise_wechat_verified, 0), p.enterprise_wechat_verified_at, COALESCE(p.enterprise_wechat_contact, ''),
-	                  COALESCE(p.phone, ''), COALESCE(p.identity_type, '')
+	                  COALESCE(p.phone, ''), COALESCE(p.identity_type, ''),
+	                  COALESCE(u.status, 'active'), COALESCE(u.banned_reason, ''), u.banned_at,
+	                  COALESCE(p.has_password, 0), p.last_device_change_time,
+	                  COALESCE(um.status, ''), um.expired_at, COALESCE(um.plan_title, '')
 	          FROM users u
-	          LEFT JOIN user_profiles p ON p.user_id = u.id` + whereSQL + `
-	          ORDER BY u.id DESC
+	          LEFT JOIN user_profiles p ON p.user_id = u.id
+	          LEFT JOIN user_memberships um ON um.user_id = u.id` + whereSQL + buildManagementUserListOrder(filters) + `
 	          LIMIT ? OFFSET ?`
 
 	queryArgs := append(args, limit, offset)
@@ -455,6 +583,8 @@ func (m *UserModel) ListManagementUsers(filters ManagementUserListFilters, limit
 		item := &ManagementUserListItem{}
 		var canWithdraw int
 		var enterpriseWechatVerified int
+		var hasPassword int
+		var memberExpiredAt sql.NullTime
 		if err := rows.Scan(
 			&item.ID,
 			&item.Username,
@@ -468,11 +598,24 @@ func (m *UserModel) ListManagementUsers(filters ManagementUserListFilters, limit
 			&item.EnterpriseWechatContact,
 			&item.Phone,
 			&item.IdentityType,
+			&item.Status,
+			&item.BannedReason,
+			&item.BannedAt,
+			&hasPassword,
+			&item.LastDeviceChangeTime,
+			&item.MemberStatus,
+			&memberExpiredAt,
+			&item.MemberPlanTitle,
 		); err != nil {
+			log.Printf("[用户列表] 行扫描失败 id=%d: %v", item.ID, err)
 			continue
 		}
 		item.CanWithdraw = canWithdraw != 0
 		item.EnterpriseWechatVerified = enterpriseWechatVerified != 0
+		item.HasPassword = hasPassword != 0
+		if memberExpiredAt.Valid {
+			item.MemberExpiredAt = &memberExpiredAt.Time
+		}
 		users = append(users, item)
 	}
 
@@ -490,6 +633,59 @@ func (m *UserModel) CountManagementUsers(filters ManagementUserListFilters) (int
 		return 0, err
 	}
 	return count, nil
+}
+
+// ManagementUserStats 用户列表页全库真实口径统计（不再按当前页计算）
+type ManagementUserStats struct {
+	Total              int64 `json:"total"`
+	TodayNew           int64 `json:"today_new"`
+	PhoneVerified      int64 `json:"phone_verified"`
+	PhonePending       int64 `json:"phone_pending"`
+	MemberActive       int64 `json:"member_active"`
+	StonesTotal        int64 `json:"stones_total"`
+	ZeroStonesRecharge int64 `json:"zero_stones_recharged"`
+	Banned             int64 `json:"banned"`
+	RiskUsers          int64 `json:"risk_users"` // 近7天换绑设备或同设备多账号（不含已封禁，封禁单独计）
+}
+
+func (m *UserModel) GetManagementUserStats() (*ManagementUserStats, error) {
+	stats := &ManagementUserStats{}
+	count := func(dest *int64, query string, args ...interface{}) error {
+		return m.DB.QueryRow(query, args...).Scan(dest)
+	}
+	if err := count(&stats.Total, `SELECT COUNT(*) FROM users WHERE user_type = 'miniprogram'`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.TodayNew, `SELECT COUNT(*) FROM users WHERE user_type = 'miniprogram' AND created_at >= CURDATE()`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.PhoneVerified, `SELECT COUNT(*) FROM users u JOIN user_profiles p ON p.user_id = u.id WHERE u.user_type = 'miniprogram' AND p.enterprise_wechat_verified = 1`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.PhonePending, `SELECT COUNT(*) FROM users u LEFT JOIN user_profiles p ON p.user_id = u.id WHERE u.user_type = 'miniprogram' AND COALESCE(p.enterprise_wechat_verified, 0) = 0`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.MemberActive, `SELECT COUNT(*) FROM users u JOIN user_memberships um ON um.user_id = u.id WHERE u.user_type = 'miniprogram' AND um.status = 'active' AND um.expired_at > NOW()`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.StonesTotal, `SELECT COALESCE(SUM(stones), 0) FROM users WHERE user_type = 'miniprogram'`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.ZeroStonesRecharge, `SELECT COUNT(*) FROM users u WHERE u.user_type = 'miniprogram' AND COALESCE(u.stones, 0) <= 0 AND EXISTS (SELECT 1 FROM user_orders o WHERE o.user_id = u.id AND o.type = 'recharge' AND o.status = 'success')`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.Banned, `SELECT COUNT(*) FROM users WHERE user_type = 'miniprogram' AND COALESCE(status, 'active') <> 'active'`); err != nil {
+		return nil, err
+	}
+	if err := count(&stats.RiskUsers, `SELECT COUNT(*) FROM users u JOIN user_profiles p ON p.user_id = u.id
+		WHERE u.user_type = 'miniprogram' AND COALESCE(u.status, 'active') = 'active'
+		AND (
+			(p.last_device_change_time IS NOT NULL AND p.last_device_change_time > DATE_SUB(NOW(), INTERVAL 7 DAY))
+			OR (COALESCE(p.device_id, '') <> '' AND EXISTS (SELECT 1 FROM user_profiles p2 WHERE p2.device_id = p.device_id AND p2.user_id <> p.user_id))
+		)`); err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
 
 func (m *UserModel) GetAll(limit, offset int) ([]*User, error) {

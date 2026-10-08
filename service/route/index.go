@@ -81,9 +81,10 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 签到接口（简化token认证）
 		checkinModel := model.NewCheckinModel(component.GetDB())
 		RegisterCheckinRoutes(miniprogram, codeSessionModel, checkinModel, userModel, stoneRecordModel)
-		// AI接口（需要token验证）
+		// AI接口（需要token验证；封禁账号持旧 token 也一律拦截）
 		miniprogramAI := miniprogram.Group("")
 		miniprogramAI.Use(TokenAuthRequired(codeSessionModel))
+		miniprogramAI.Use(MiniprogramBannedBlock(userDBModel))
 		RegisterReportRoutes(miniprogram, miniprogramAI, v1, reportModule)
 		RegisterAIRoutes(miniprogramAI, codeSessionModel, userModel, pricingModel, taskModel, stoneRecordModel, userOrderModel, inviteRelationModel, aiToolModel, templateModel, templateUnlockModel)
 		RegisterRuralVillaDesignRoutes(miniprogramAI, codeSessionModel, userModel, pricingModel, taskModel, stoneRecordModel, userOrderModel, inviteRelationModel)
@@ -182,6 +183,8 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterRechargeConfigManagementRoutes(managementAuth, rechargeConfigModel)
 		RegisterMembershipManagementRoutes(managementAuth, membershipPlanModel, userMembershipModel)
 		RegisterMembershipOperationsManagementRoutes(managementAuth, userDBModel, userProfileModel, userMembershipModel, userOrderModel)
+		// 账号合并向导：只读预检（执行走 DBA 定制流程，不在管理端开放）
+		RegisterUserMergeManagementRoutes(managementAuth, userDBModel)
 		RegisterSupportTicketManagementRoutes(managementAuth, supportTicketModel)
 		RegisterCustomerLeadManagementRoutes(managementAuth, customerServiceModel)
 		// 认证工单管理：列表、详情、审核（通过/拒绝），通过后更新用户 can_withdraw

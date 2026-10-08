@@ -12,6 +12,7 @@ import {
     FiUser,
     FiUsers,
     FiXCircle,
+    FiZap,
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import ManagementSearchPanel from '../component/managementSearchPanel';
@@ -28,17 +29,18 @@ import {
 } from '../api/designers';
 import './designerCenter.scss';
 
-const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
-const FiRefreshCwIcon = FiRefreshCw as unknown as React.ComponentType<any>;
-const FiUsersIcon = FiUsers as unknown as React.ComponentType<any>;
-const FiEyeIcon = FiEye as unknown as React.ComponentType<any>;
-const FiCheckCircleIcon = FiCheckCircle as unknown as React.ComponentType<any>;
-const FiImageIcon = FiImage as unknown as React.ComponentType<any>;
-const FiShieldIcon = FiShield as unknown as React.ComponentType<any>;
-const FiStarIcon = FiStar as unknown as React.ComponentType<any>;
-const FiUserIcon = FiUser as unknown as React.ComponentType<any>;
-const FiChevronRightIcon = FiChevronRight as unknown as React.ComponentType<any>;
-const FiXCircleIcon = FiXCircle as unknown as React.ComponentType<any>;
+    const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
+    const FiRefreshCwIcon = FiRefreshCw as unknown as React.ComponentType<any>;
+    const FiUsersIcon = FiUsers as unknown as React.ComponentType<any>;
+    const FiEyeIcon = FiEye as unknown as React.ComponentType<any>;
+    const FiCheckCircleIcon = FiCheckCircle as unknown as React.ComponentType<any>;
+    const FiImageIcon = FiImage as unknown as React.ComponentType<any>;
+    const FiShieldIcon = FiShield as unknown as React.ComponentType<any>;
+    const FiStarIcon = FiStar as unknown as React.ComponentType<any>;
+    const FiUserIcon = FiUser as unknown as React.ComponentType<any>;
+    const FiChevronRightIcon = FiChevronRight as unknown as React.ComponentType<any>;
+    const FiXCircleIcon = FiXCircle as unknown as React.ComponentType<any>;
+    const FiZapIcon = FiZap as unknown as React.ComponentType<any>;
 
 const CERT_STATUS_MAP: Record<string, string> = {
     pending_payment: '待支付',
@@ -70,6 +72,7 @@ const defaultSummary: DesignerManagementListSummary = {
     public_designers: 0,
     approved_designers: 0,
     designers_with_works: 0,
+    service_enabled_designers: 0,
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -99,6 +102,7 @@ const DesignerCenter: React.FC = () => {
     const [keyword, setKeyword] = useState(initialKeyword);
     const [certificationStatus, setCertificationStatus] = useState('all');
     const [visible, setVisible] = useState('all');
+    const [serviceState, setServiceState] = useState<'all' | 'enabled' | 'paused'>('all');
 
     const loadList = async (nextSelectedId?: number | null) => {
         setLoading(true);
@@ -109,6 +113,7 @@ const DesignerCenter: React.FC = () => {
                 keyword,
                 certification_status: certificationStatus,
                 visible,
+                service_state: serviceState,
             });
             setItems(response.list || []);
             setSummary(response.summary || defaultSummary);
@@ -148,7 +153,7 @@ const DesignerCenter: React.FC = () => {
 
     useEffect(() => {
         void loadList();
-    }, [keyword, certificationStatus, visible]);
+    }, [keyword, certificationStatus, visible, serviceState]);
 
     useEffect(() => {
         if (!selectedId) {
@@ -188,6 +193,12 @@ const DesignerCenter: React.FC = () => {
                 value: summary.designers_with_works,
                 icon: FiImageIcon,
             },
+            {
+                key: 'service',
+                title: '接单中',
+                value: summary.service_enabled_designers ?? 0,
+                icon: FiZapIcon,
+            },
         ];
     }, [summary]);
 
@@ -200,6 +211,7 @@ const DesignerCenter: React.FC = () => {
         setKeyword('');
         setCertificationStatus('all');
         setVisible('all');
+        setServiceState('all');
     };
 
     const handleToggleVisibility = async (item: DesignerManagementItem) => {
@@ -300,6 +312,15 @@ const DesignerCenter: React.FC = () => {
                                 <option value="public">已公开</option>
                                 <option value="hidden">已隐藏</option>
                             </select>
+                            <select
+                                className="management-search-select"
+                                value={serviceState}
+                                onChange={(e) => setServiceState(e.target.value as 'all' | 'enabled' | 'paused')}
+                            >
+                                <option value="all">全部接单状态</option>
+                                <option value="enabled">接单中</option>
+                                <option value="paused">暂停接单</option>
+                            </select>
                             <button className="btn-primary" onClick={handleSearch}>搜索设计师</button>
                         </>
                     )}
@@ -312,6 +333,7 @@ const DesignerCenter: React.FC = () => {
                                 {keyword ? <span className="management-search-tag">关键词：{keyword}</span> : null}
                                 {certificationStatus !== 'all' ? <span className="management-search-tag">认证状态：{CERT_STATUS_MAP[certificationStatus] || certificationStatus}</span> : null}
                                 {visible !== 'all' ? <span className="management-search-tag">主页状态：{visible === 'public' ? '已公开' : '已隐藏'}</span> : null}
+                                {serviceState !== 'all' ? <span className="management-search-tag">接单状态：{serviceState === 'enabled' ? '接单中' : '暂停接单'}</span> : null}
                             </div>
                         </>
                     )}

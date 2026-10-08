@@ -16,6 +16,7 @@ type designerManagementFilters struct {
 	CertificationStatus string
 	Visible             string
 	Specialty           string
+	ServiceState        string // enabled=接单中, paused=暂停接单, 空=全部
 }
 
 const designerManagementJoins = `
@@ -79,6 +80,13 @@ func buildDesignerManagementWhere(filters designerManagementFilters) (string, []
 	if specialty != "" {
 		where += ` AND COALESCE(p.specialty_styles, '') LIKE ?`
 		args = append(args, "%"+specialty+"%")
+	}
+
+	switch strings.TrimSpace(filters.ServiceState) {
+	case "enabled":
+		where += ` AND COALESCE(p.service_enabled, 0) = 1`
+	case "paused":
+		where += ` AND COALESCE(p.service_enabled, 0) = 0`
 	}
 
 	return where, args
@@ -198,6 +206,7 @@ func RegisterDesignerManagementRoutes(r *gin.RouterGroup, userDBModel *model.Use
 			CertificationStatus: c.DefaultQuery("certification_status", "all"),
 			Visible:             c.DefaultQuery("visible", "all"),
 			Specialty:           c.Query("specialty"),
+			ServiceState:        c.DefaultQuery("service_state", "all"),
 		}
 		ids, total, err := queryDesignerManagementUserIDs(userDBModel.DB, filters, pageSize, offset)
 		if err != nil {
@@ -220,6 +229,10 @@ func RegisterDesignerManagementRoutes(r *gin.RouterGroup, userDBModel *model.Use
 		withWorksCount, err := queryDesignerManagementWithWorksCount(userDBModel.DB)
 		if err != nil {
 			withWorksCount = 0
+		}
+		serviceEnabledCount, err := queryDesignerManagementCount(userDBModel.DB, designerManagementFilters{ServiceState: "enabled"})
+		if err != nil {
+			serviceEnabledCount = 0
 		}
 
 		list := make([]gin.H, 0, len(ids))
@@ -298,6 +311,7 @@ func RegisterDesignerManagementRoutes(r *gin.RouterGroup, userDBModel *model.Use
 					"public_designers":  publicCount,
 					"approved_designers": approvedCount,
 					"designers_with_works": withWorksCount,
+					"service_enabled_designers": serviceEnabledCount,
 				},
 			},
 		})
@@ -417,9 +431,10 @@ func RegisterDesignerManagementRoutes(r *gin.RouterGroup, userDBModel *model.Use
 				"type":             latestCert.Type,
 				"status":           latestCert.Status,
 				"identity_type":    latestCert.IdentityType,
-				"real_name":        latestCert.RealName,
+				// 真实姓名/信用代码与认证审核页同口径脱敏；完整值走认证 reveal 端点（记审计）
+				"real_name":        maskCertRealName(latestCert.RealName),
 				"company_name":     latestCert.CompanyName,
-				"credit_code":      latestCert.CreditCode,
+				"credit_code":      maskCertCreditCode(latestCert.CreditCode),
 				"extra_docs_remark": latestCert.ExtraDocsRemark,
 				"admin_remark":     latestCert.AdminRemark,
 				"created_at":       latestCert.CreatedAt,

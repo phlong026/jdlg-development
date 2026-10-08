@@ -209,4 +209,83 @@
     grid-template-columns: 1fr;
   }
 }
+/* ============ 剩余天数进度条 ============ */
+.lifebar {
+  width: 110px;
+
+  .bar {
+    height: 5px;
+    border-radius: 3px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    margin-bottom: 3px;
+
+    i {
+      display: block;
+      height: 100%;
+      border-radius: 3px;
+    }
+  }
+
+  .txt {
+    font-size: 11px;
+    color: #6b7280;
+    font-variant-numeric: tabular-nums;
+
+    em {
+      font-style: normal;
+      font-weight: 700;
+    }
+  }
+}
+
+.life-perm-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.life-perm-badge.legacy {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* 行高亮：权限异常（红）/ 7 天内到期（橙） */
+.membership-table tbody tr.row-perm-issue {
+  background: #fef2f2;
+
+  &:hover {
+    background: #fee2e2;
+  }
+}
+
+.membership-table tbody tr.row-expiring {
+  background: #fffbeb;
+
+  &:hover {
+    background: #fef3c7;
+  }
+}
+
+.table-actions .btn-link.fix-perm {
+  color: #dc2626;
+  font-weight: 600;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    color: #9ca3af;
+    cursor: wait;
+    text-decoration: none;
+  }
+}
+
+
 }

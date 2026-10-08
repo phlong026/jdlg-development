@@ -18,6 +18,12 @@ export interface User {
     service_title?: string;
     phone?: string;
     identity_type?: string;
+    status?: string;               // active | banned
+    banned_reason?: string;
+    banned_at?: string;
+    risk_tags?: string[];          // recent_device_change 等，与 360 同源
+    member_status?: string;        // active | expired | ''（无会员）
+    member_plan_title?: string;
     created_at: string;
     updated_at: string;
 }
@@ -30,12 +36,32 @@ export interface UserListResponse {
     page_size: number;
 }
 
+// 用户列表全库真实口径统计（不再按当前页计算）
+export interface UserStats {
+    total: number;
+    today_new: number;
+    phone_verified: number;
+    phone_pending: number;
+    member_active: number;
+    stones_total: number;
+    zero_stones_recharged: number;
+    banned: number;
+    risk_users: number;
+}
+
 // 用户列表参数
 export interface UserListParams {
     keyword?: string;
     status?: string;
-    role?: string;
+    identity_type?: string;
     enterprise_wechat_status?: 'all' | 'verified' | 'pending';
+    created_within_days?: number;
+    stones_min?: number;
+    stones_max?: number;
+    risk?: 0 | 1;
+    member?: 'active' | 'none';
+    sort_by?: 'stones' | 'created_at';
+    sort_order?: 'asc' | 'desc';
     page?: number;
     page_size?: number;
 }
@@ -167,6 +193,70 @@ export const getUserList = async (params?: UserListParams): Promise<UserListResp
         };
     }
     return { list: [], total: 0, page: 1, page_size: 20 };
+};
+
+// 用户列表全库统计（KPI 带数据源）
+export const getUserStats = async (): Promise<UserStats | null> => {
+    const response = await get<UserStats>(API_ENDPOINTS.USERS.STATS);
+    return response.data || null;
+};
+
+// 封禁用户（原因必填；POST 端点由审计中间件自动记录）
+export const banUser = async (id: string | number, reason: string): Promise<boolean> => {
+    const response = await post<unknown>(API_ENDPOINTS.USERS.BAN(id), { reason });
+    return response.code === 0;
+};
+
+// 解封用户（说明选填）
+export const unbanUser = async (id: string | number, reason?: string): Promise<boolean> => {
+    const response = await post<unknown>(API_ENDPOINTS.USERS.UNBAN(id), { reason: reason || '' });
+    return response.code === 0;
+};
+
+// 查看完整手机号（列表默认脱敏；每次查看记审计）
+export const revealUserPhone = async (id: string | number): Promise<{
+    user_id: number;
+    phone: string;
+    enterprise_wechat_contact: string;
+} | null> => {
+    const response = await post<{
+        user_id: number;
+        phone: string;
+        enterprise_wechat_contact: string;
+    }>(API_ENDPOINTS.USERS.PHONE_REVEAL(id), {});
+    return response.data || null;
+};
+
+// ============ 账号合并向导（只读预检；执行走 DBA 定制流程） ============
+
+export interface UserMergeAccount {
+    user_id: number;
+    username: string;
+    user_type: string;
+    status: string;
+    stones: number;
+    phone: string;
+    enterprise_wechat_contact: string;
+    orders: number;
+    stone_records: number;
+    ai_tasks: number;
+    ai_video_tasks: number;
+    templates: number;
+    memberships: number;
+    certifications: number;
+    phone_identities: number;
+}
+
+export interface UserMergePrecheck {
+    from: UserMergeAccount;
+    to: UserMergeAccount;
+    conflicts: string[];
+    execution_note: string;
+}
+
+export const getUserMergePrecheck = async (fromId: string, toId: string): Promise<UserMergePrecheck | null> => {
+    const response = await get<UserMergePrecheck>(API_ENDPOINTS.USERS.MERGE_PRECHECK, { from: fromId, to: toId });
+    return response.data || null;
 };
 
 // 获取用户详情

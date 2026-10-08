@@ -31,6 +31,24 @@ import (
 
 // RegisterMiniprogramRoutes 注册小程序路由
 func RegisterMiniprogramRoutes(r *gin.RouterGroup, authProcessor *processor.AuthProcessor, codeSessionModel *model.CodeSessionRedisModel, userModel *model.UserRedisModel, stoneRecordModel *model.StoneRecordModel, inviteRelationModel *model.InviteRelationModel, userDBModel *model.UserModel, userInviteCodeModel *model.UserInviteCodeModel, userProfileModel *model.UserProfileModel, aiToolModel *model.AIToolModel, templateSquareConfigModel *model.TemplateSquareConfigModel) {
+	// rejectBannedMiniprogramUser 登录成功后的封禁校验：已封禁账号不允许建立新会话。
+	// 返回 true 表示已写响应并终止，调用方直接 return。
+	rejectBannedMiniprogramUser := func(c *gin.Context, userID int64) bool {
+		if userDBModel == nil {
+			return false
+		}
+		banned, reason, err := userDBModel.GetUserBanStatus(userID)
+		if err != nil || !banned {
+			return false
+		}
+		msg := "账号已被封禁，如有疑问请联系客服"
+		if reason != "" {
+			msg += "：" + reason
+		}
+		c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": msg})
+		return true
+	}
+
 	// 登录接口
 	r.POST("/login", func(c *gin.Context) {
 		var req processor.WechatLoginRequest
@@ -58,6 +76,10 @@ func RegisterMiniprogramRoutes(r *gin.RouterGroup, authProcessor *processor.Auth
 				"code": 400,
 				"msg":  "登录失败: " + err.Error(),
 			})
+			return
+		}
+
+		if rejectBannedMiniprogramUser(c, result.User.ID) {
 			return
 		}
 
@@ -158,6 +180,10 @@ func RegisterMiniprogramRoutes(r *gin.RouterGroup, authProcessor *processor.Auth
 				"code": 403,
 				"msg":  "该账号不支持小程序登录",
 			})
+			return
+		}
+
+		if rejectBannedMiniprogramUser(c, result.User.ID) {
 			return
 		}
 
@@ -285,6 +311,11 @@ func RegisterMiniprogramRoutes(r *gin.RouterGroup, authProcessor *processor.Auth
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "登录失败: " + err.Error()})
 			return
 		}
+
+		if rejectBannedMiniprogramUser(c, result.User.ID) {
+			return
+		}
+
 		// 邀请码绑定与奖励
 		if req.InviteCode != "" && inviteRelationModel != nil && userModel != nil && stoneRecordModel != nil && userDBModel != nil {
 			inviteeID := result.User.ID

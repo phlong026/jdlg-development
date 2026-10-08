@@ -1,4 +1,4 @@
-import { get } from '../utils/request';
+import { get, post } from '../utils/request';
 import { API_ENDPOINTS } from '../config/api';
 
 export interface MembershipOperationsOverview {
@@ -8,6 +8,7 @@ export interface MembershipOperationsOverview {
     expired_users: number;
     permission_disabled_users: number;
     legacy_recharge_users: number;
+    lifetime_users?: number;
 }
 
 export interface MembershipOperationsOrderInfo {
@@ -68,4 +69,10 @@ export const getMembershipOperationsUsers = async (params?: MembershipOperations
         throw new Error('获取会员用户列表失败');
     }
     return response.data;
+};
+
+// 修复下载权限：会员有效但权限被关闭时，核对来源订单后一键恢复（POST 经审计记录）
+export const fixMembershipPermission = async (userId: number): Promise<boolean> => {
+    await post(API_ENDPOINTS.MEMBERSHIP_OPERATIONS.FIX_PERMISSION(userId), {});
+    return true;
 };

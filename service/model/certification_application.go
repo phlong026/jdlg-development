@@ -198,19 +198,74 @@ func (m *CertificationApplicationModel) Create(app *CertificationApplication) er
 
 // GetByID 根据 ID 获取
 func (m *CertificationApplicationModel) GetByID(id int64) (*CertificationApplication, error) {
-	q := `SELECT id, user_id, type, real_name, id_card_no, company_name, credit_code, legal_person,
-	       aliyun_passed, aliyun_msg, extra_docs_remark, identity_type, status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
+	q := `SELECT id, user_id, type, IFNULL(real_name,''), IFNULL(id_card_no,''), IFNULL(company_name,''), IFNULL(credit_code,''), IFNULL(legal_person,''),
+	       aliyun_passed, IFNULL(aliyun_msg,''), IFNULL(extra_docs_remark,''), IFNULL(identity_type,''), status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
 	      FROM certification_applications WHERE id = ?`
 	return scanCertificationApplicationRow(m.DB.QueryRow(q, id))
 }
 
 // List 分页列表，status 为空则不过滤
+// CertificationStats 认证队列全库口径统计（审核页队列 Tab 与 KPI 的数据源）
+type CertificationStats struct {
+	PendingReview  int64 `json:"pending_review"`
+	Overdue48h     int64 `json:"overdue_48h"` // 待审核且提交超 48 小时
+	PendingPayment int64 `json:"pending_payment"`
+	Approved       int64 `json:"approved"`
+	Rejected       int64 `json:"rejected"`
+	Total          int64 `json:"total"`
+}
+
+// Stats 按状态全量计数；一次 GROUP BY + 一次超时计数
+func (m *CertificationApplicationModel) Stats() (*CertificationStats, error) {
+	stats := &CertificationStats{}
+	rows, err := m.DB.Query(`SELECT status, COUNT(*) FROM certification_applications GROUP BY status`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status string
+		var count int64
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		stats.Total += count
+		switch status {
+		case CertificationStatusPendingReview:
+			stats.PendingReview = count
+		case CertificationStatusPendingPayment:
+			stats.PendingPayment = count
+		case CertificationStatusApproved:
+			stats.Approved = count
+		case CertificationStatusRejected:
+			stats.Rejected = count
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM certification_applications WHERE status = ? AND created_at < DATE_SUB(NOW(), INTERVAL 48 HOUR)`,
+		CertificationStatusPendingReview).Scan(&stats.Overdue48h); err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
 func (m *CertificationApplicationModel) List(status, keyword string, limit, offset int) ([]*CertificationApplication, int64, error) {
+	return m.ListWithOverdue(status, keyword, false, limit, offset)
+}
+
+// ListWithOverdue overdue=true 时仅返回待审核且提交超 48 小时的申请（超时队列）
+func (m *CertificationApplicationModel) ListWithOverdue(status, keyword string, overdue bool, limit, offset int) ([]*CertificationApplication, int64, error) {
 	where := "1=1"
 	args := []interface{}{}
 	if status != "" {
 		where += " AND status = ?"
 		args = append(args, status)
+	}
+	if overdue {
+		where += " AND status = ? AND created_at < DATE_SUB(NOW(), INTERVAL 48 HOUR)"
+		args = append(args, CertificationStatusPendingReview)
 	}
 	trimmedKeyword := strings.TrimSpace(keyword)
 	if trimmedKeyword != "" {
@@ -231,8 +286,9 @@ func (m *CertificationApplicationModel) List(status, keyword string, limit, offs
 		return nil, 0, err
 	}
 	args = append(args, limit, offset)
-	q := `SELECT id, user_id, type, real_name, id_card_no, company_name, credit_code, legal_person,
-	       aliyun_passed, aliyun_msg, extra_docs_remark, identity_type, status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
+	// 字符串列统一 IFNULL：历史数据可能存在 NULL（本地种子即触发过整页 500），scan 进 string 会失败
+	q := `SELECT id, user_id, type, IFNULL(real_name,''), IFNULL(id_card_no,''), IFNULL(company_name,''), IFNULL(credit_code,''), IFNULL(legal_person,''),
+	       aliyun_passed, IFNULL(aliyun_msg,''), IFNULL(extra_docs_remark,''), IFNULL(identity_type,''), status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
 	      FROM certification_applications WHERE ` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	rows, err := m.DB.Query(q, args...)
 	if err != nil {
@@ -271,15 +327,15 @@ func (m *CertificationApplicationModel) RejectBySystem(id int64, adminRemark str
 
 // GetPendingByUser 获取用户最近一条待支付或待审核申请（用于防止重复提交）
 func (m *CertificationApplicationModel) GetPendingByUser(userID int64) (*CertificationApplication, error) {
-	q := `SELECT id, user_id, type, real_name, id_card_no, company_name, credit_code, legal_person,
-	       aliyun_passed, aliyun_msg, extra_docs_remark, identity_type, status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
+	q := `SELECT id, user_id, type, IFNULL(real_name,''), IFNULL(id_card_no,''), IFNULL(company_name,''), IFNULL(credit_code,''), IFNULL(legal_person,''),
+	       aliyun_passed, IFNULL(aliyun_msg,''), IFNULL(extra_docs_remark,''), IFNULL(identity_type,''), status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
 	      FROM certification_applications WHERE user_id = ? AND status IN ('pending_payment','pending_review') ORDER BY id DESC LIMIT 1`
 	return scanCertificationApplicationRow(m.DB.QueryRow(q, userID))
 }
 
 func (m *CertificationApplicationModel) ListEffectiveByUser(userID, excludeID int64) ([]*CertificationApplication, error) {
-	q := `SELECT id, user_id, type, real_name, id_card_no, company_name, credit_code, legal_person,
-	       aliyun_passed, aliyun_msg, extra_docs_remark, identity_type, status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
+	q := `SELECT id, user_id, type, IFNULL(real_name,''), IFNULL(id_card_no,''), IFNULL(company_name,''), IFNULL(credit_code,''), IFNULL(legal_person,''),
+	       aliyun_passed, IFNULL(aliyun_msg,''), IFNULL(extra_docs_remark,''), IFNULL(identity_type,''), status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
 	      FROM certification_applications
 	      WHERE user_id = ? AND status IN ('pending_payment','pending_review','approved')`
 	args := []interface{}{userID}
@@ -358,8 +414,8 @@ func (m *CertificationApplicationModel) ValidateAccountConsistency(app *Certific
 
 // GetLatestByUser 获取用户最近一条认证申请（任意状态，用于状态展示）
 func (m *CertificationApplicationModel) GetLatestByUser(userID int64) (*CertificationApplication, error) {
-	q := `SELECT id, user_id, type, real_name, id_card_no, company_name, credit_code, legal_person,
-	       aliyun_passed, aliyun_msg, extra_docs_remark, identity_type, status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
+	q := `SELECT id, user_id, type, IFNULL(real_name,''), IFNULL(id_card_no,''), IFNULL(company_name,''), IFNULL(credit_code,''), IFNULL(legal_person,''),
+	       aliyun_passed, IFNULL(aliyun_msg,''), IFNULL(extra_docs_remark,''), IFNULL(identity_type,''), status, IFNULL(admin_remark,''), reviewed_at, reviewed_by, created_at, updated_at
 	      FROM certification_applications
 	      WHERE user_id = ?
 	      ORDER BY CASE status

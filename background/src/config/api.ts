@@ -16,6 +16,11 @@ export const API_ENDPOINTS = {
         SET_STONES: (id: string) => `/api/v1/management/users/${id}/stones`,
         ADJUST_STONES: (id: string) => `/api/v1/management/users/${id}/stones/adjust`,
         ENTERPRISE_WECHAT: (id: string) => `/api/v1/management/users/${id}/enterprise-wechat`,
+        STATS: '/api/v1/management/user-stats',
+        BAN: (id: string | number) => `/api/v1/management/users/${id}/ban`,
+        UNBAN: (id: string | number) => `/api/v1/management/users/${id}/unban`,
+        PHONE_REVEAL: (id: string | number) => `/api/v1/management/users/${id}/phone-reveal`,
+        MERGE_PRECHECK: '/api/v1/management/user-merge/precheck',
     },
     DESIGNERS: {
         LIST: '/api/v1/management/designers',
@@ -179,11 +184,14 @@ export const API_ENDPOINTS = {
     MEMBERSHIP_OPERATIONS: {
         OVERVIEW: '/api/v1/management/membership-operations/overview',
         USERS: '/api/v1/management/membership-operations/users',
+        FIX_PERMISSION: (userId: string | number) => `/api/v1/management/membership-operations/users/${userId}/fix-permission`,
     },
     // 资质认证与审核（工单）
     CERTIFICATION: {
         LIST: '/api/v1/management/certification-applications',
         DETAIL: (id: string) => `/api/v1/management/certification-applications/${id}`,
         REVIEW: (id: string) => `/api/v1/management/certification-applications/${id}/review`,
+        STATS: '/api/v1/management/certification-application-stats',
+        REVEAL: (id: string) => `/api/v1/management/certification-applications/${id}/reveal`,
     },
 };
