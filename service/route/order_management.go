@@ -2,12 +2,12 @@ package route
 
 import (
 	"bytes"
-	"time"
 	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -25,7 +25,7 @@ func supportTicketPriorityByOrderStatus(status string) string {
 	}
 }
 
-func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.UserOrderModel, userDBModel *model.UserModel, certificationModel *model.CertificationApplicationModel, userMembershipModel *model.UserMembershipModel, supportTicketModel *model.SupportTicketModel) {
+func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.UserOrderModel, userDBModel *model.UserModel, certificationModel *model.CertificationApplicationModel, userMembershipModel *model.UserMembershipModel, supportTicketModel *model.SupportTicketModel, wechatCoinCalibrationModel *model.WechatCoinCalibrationModel) {
 	orders := r.Group("/orders")
 
 	orders.GET("", func(c *gin.Context) {
@@ -76,9 +76,10 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 		})
 	})
 
-
 	// 订单导出 CSV（B4）：复用列表的全部筛选条件，导出前 10000 条（上限防拖垮）。
 	// 文件名带导出时间与筛选状态，财务对账可直接归档。
+	// 列语义（T5）：人民币与灵石分列——amount 是灵石变动（充值正/消费负），
+	// 真实支付金额在 amount_fen；认证费订单此前导出为 0 的缺陷由 amount_fen 列修复。
 	orders.GET("/export", func(c *gin.Context) {
 		if userOrderModel == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "订单服务不可用"})
@@ -88,7 +89,7 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 		orderType := strings.TrimSpace(c.DefaultQuery("type", "all"))
 		orderCategory := strings.TrimSpace(c.DefaultQuery("order_category", "all"))
 		status := strings.TrimSpace(c.DefaultQuery("status", "all"))
-		payChannel := strings.TrimSpace(c.DefaultQuery("pay_channel", "all"))
+		payChannel := strings.TrimSpace(c.Query("pay_channel"))
 		startDate := strings.TrimSpace(c.Query("start_date"))
 		endDate := strings.TrimSpace(c.Query("end_date"))
 
@@ -101,23 +102,38 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 
 		var buf bytes.Buffer
 		buf.WriteString("\uFEFF") // Excel 直接打开不乱码
-		buf.WriteString("订单号,用户ID,用户名,类型,类别,标题,金额,状态,支付渠道,创建时间\n")
+		buf.WriteString("订单号,用户ID,用户名,类型,类别,标题,支付金额(元),灵石变动,状态,支付渠道,支付模式,创建时间,完成时间\n")
 		for _, o := range list {
-			cells := []string{
+			// 文本列走 CSV 注入防护；数值/时间列是系统生成的受控值，保持原样（负数不能被引号转成文本）
+			textCells := []string{
 				o.OrderNo, strconv.FormatInt(o.UserID, 10), o.Username,
 				o.Type, o.OrderCategory, o.Title,
-				strconv.FormatInt(o.Amount, 10), o.Status, o.PayChannel,
+				o.Status, o.PayChannel, o.PayMode,
 				o.CreatedAt.Format("2006-01-02 15:04:05"),
 			}
-			for i, cell := range cells {
+			for i, cell := range textCells {
 				// CSV 注入防护：以 = + - @ 开头的单元格前置单引号，避免 Excel 当公式执行
 				if strings.HasPrefix(cell, "=") || strings.HasPrefix(cell, "+") || strings.HasPrefix(cell, "-") || strings.HasPrefix(cell, "@") {
-					cells[i] = "'" + cell
+					textCells[i] = "'" + cell
 				}
-				if strings.ContainsAny(cells[i], ",\"\n") {
-					cells[i] = "\"" + strings.ReplaceAll(cells[i], "\"", "\"\"") + "\""
+				if strings.ContainsAny(textCells[i], ",\"\n") {
+					textCells[i] = "\"" + strings.ReplaceAll(textCells[i], "\"", "\"\"") + "\""
 				}
 			}
+			amountYuan := ""
+			if o.AmountFen > 0 {
+				amountYuan = fmt.Sprintf("%.2f", float64(o.AmountFen)/100)
+			}
+			completedAt := ""
+			if o.CompletedAt != nil {
+				completedAt = o.CompletedAt.Format("2006-01-02 15:04:05")
+			}
+			// 列顺序与表头一致：文本列(已防护) + 数值列 + 时间列
+			cells := make([]string, 0, 13)
+			cells = append(cells, textCells[:6]...)
+			cells = append(cells, amountYuan, strconv.FormatInt(o.Amount, 10))
+			cells = append(cells, textCells[6:]...)
+			cells = append(cells, completedAt)
 			buf.WriteString(strings.Join(cells, ",") + "\n")
 		}
 
@@ -176,6 +192,29 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 				}
 			}
 		}
+		// 资金视图（T3）：虚拟支付用户的"微信侧在账 / 本地可用 / 已消费"三数。
+		// 微信侧在账 = 本地镜像（Σ成功充值 − Σ已退款，见 WechatCoinMirrorByUsers）；
+		// consumed_net 为两账净差额，含邀请/签到/手工调整等非虚拟支付来源灵石的净影响，
+		// 前端口径说明必须注明。校准字段来自最近一次实测（可能无记录）。
+		fundView := gin.H{}
+		if userDBModel != nil && wechatCoinCalibrationModel != nil {
+			mirror, mirrorErr := userOrderModel.WechatCoinMirrorByUser(order.UserID)
+			if mirrorErr == nil {
+				isVirtualpayCoin := order.PayChannel == "virtualpay" && order.PayMode == "short_series_coin"
+				if isVirtualpayCoin || mirror > 0 {
+					if localStones, stonesErr := userDBModel.GetStonesByID(order.UserID); stonesErr == nil {
+						fundView["wechat_mirror"] = mirror
+						fundView["local_stones"] = localStones
+						fundView["consumed_net"] = mirror - localStones
+						if cal, calErr := wechatCoinCalibrationModel.GetByUserID(order.UserID); calErr == nil {
+							fundView["calibrated_at"] = cal.CalibratedAt
+							fundView["measured_balance"] = cal.MeasuredBalance
+							fundView["diff"] = cal.Diff
+						}
+					}
+				}
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"msg":  "success",
@@ -183,6 +222,7 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 				"order":      order,
 				"user":       userPayload,
 				"membership": membershipPayload,
+				"fund_view":  fundView,
 			},
 		})
 	})

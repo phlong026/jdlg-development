@@ -15,6 +15,9 @@ import (
 //   - 推送幂等去重：(out_trade_no, event) 唯一索引，重放推送被 INSERT 唯一冲突拦下
 //   - 异步重试追踪：道具模式 notify_provide_goods 失败时通过此表记录与重试
 //   - 异常排查：保留 raw_payload 便于追溯具体推送内容
+//
+// UserID / Username 是管理端列表的反查字段（非本表列），由 List 通过
+// out_trade_no → user_orders.order_no → users 联查填充；无对应订单时为 0/空。
 type XPayMessageLog struct {
 	ID         int64     `json:"id" db:"id"`
 	MsgID      string    `json:"msg_id" db:"msg_id"`
@@ -24,6 +27,8 @@ type XPayMessageLog struct {
 	RawPayload string    `json:"raw_payload" db:"raw_payload"`
 	Processed  bool      `json:"processed" db:"processed"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+	UserID     int64     `json:"user_id"`
+	Username   string    `json:"username"`
 }
 
 // XPayMessageLogModel 数据访问层。
@@ -92,20 +97,33 @@ func (m *XPayMessageLogModel) MarkProcessed(outTradeNo, event string) error {
 	return err
 }
 
+// GetByID 按日志 ID 读取单条推送（管理端"重放推送"用）。
+func (m *XPayMessageLogModel) GetByID(id int64) (*XPayMessageLog, error) {
+	row := m.DB.QueryRow(
+		`SELECT id, msg_id, event, openid, out_trade_no, COALESCE(raw_payload, ''), processed, created_at
+		 FROM xpay_message_logs WHERE id = ?`, id)
+	item := &XPayMessageLog{}
+	if err := row.Scan(&item.ID, &item.MsgID, &item.Event, &item.OpenID, &item.OutTradeNo, &item.RawPayload, &item.Processed, &item.CreatedAt); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
 func (m *XPayMessageLogModel) List(keyword, event string, processed *bool, limit, offset int) ([]*XPayMessageLog, int64, error) {
 	where := []string{"1=1"}
 	args := make([]interface{}, 0)
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		where = append(where, "(out_trade_no LIKE ? OR openid LIKE ? OR msg_id LIKE ?)")
-		args = append(args, like, like, like)
+		// 关键词同时命中推送字段与客户名：运营手里通常是订单号或客户名，不是 openid。
+		where = append(where, "(l.out_trade_no LIKE ? OR l.openid LIKE ? OR l.msg_id LIKE ? OR u.username LIKE ?)")
+		args = append(args, like, like, like, like)
 	}
 	if event != "" && event != "all" {
-		where = append(where, "event = ?")
+		where = append(where, "l.event = ?")
 		args = append(args, event)
 	}
 	if processed != nil {
-		where = append(where, "processed = ?")
+		where = append(where, "l.processed = ?")
 		if *processed {
 			args = append(args, 1)
 		} else {
@@ -114,12 +132,16 @@ func (m *XPayMessageLogModel) List(keyword, event string, processed *bool, limit
 	}
 	whereSQL := " WHERE " + strings.Join(where, " AND ")
 	var total int64
-	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM xpay_message_logs`+whereSQL, args...).Scan(&total); err != nil {
+	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM xpay_message_logs l`+whereSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
-	rows, err := m.DB.Query(`SELECT id, msg_id, event, openid, out_trade_no, COALESCE(raw_payload, ''), processed, created_at
-		FROM xpay_message_logs`+whereSQL+` ORDER BY created_at DESC LIMIT ? OFFSET ?`, queryArgs...)
+	// LEFT JOIN 反查客户：order_no 全表唯一，join 不会放大行数；COUNT 因此也无需 join。
+	rows, err := m.DB.Query(`SELECT l.id, l.msg_id, l.event, l.openid, l.out_trade_no, COALESCE(l.raw_payload, ''), l.processed, l.created_at,
+		COALESCE(o.user_id, 0), COALESCE(u.username, '')
+		FROM xpay_message_logs l
+		LEFT JOIN user_orders o ON o.order_no = l.out_trade_no
+		LEFT JOIN users u ON u.id = o.user_id`+whereSQL+` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -127,7 +149,7 @@ func (m *XPayMessageLogModel) List(keyword, event string, processed *bool, limit
 	list := make([]*XPayMessageLog, 0)
 	for rows.Next() {
 		item := &XPayMessageLog{}
-		if err := rows.Scan(&item.ID, &item.MsgID, &item.Event, &item.OpenID, &item.OutTradeNo, &item.RawPayload, &item.Processed, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.MsgID, &item.Event, &item.OpenID, &item.OutTradeNo, &item.RawPayload, &item.Processed, &item.CreatedAt, &item.UserID, &item.Username); err != nil {
 			return nil, 0, err
 		}
 		list = append(list, item)

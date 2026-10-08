@@ -77,10 +77,14 @@ export const API_ENDPOINTS = {
         DETAIL: (id: string) => `/api/v1/management/orders/${id}`,
         SUPPORT_TICKET: (id: string) => `/api/v1/management/orders/${id}/support-ticket`,
         VIRTUAL_PAY_REFUND: (id: string) => `/api/v1/management/virtualpay/orders/${id}/refund`,
+        VIRTUAL_PAY_REFUND_PREVIEW: (id: string) => `/api/v1/management/virtualpay/orders/${id}/refund-preview`,
+        VIRTUAL_PAY_VERIFY_REFUND: (id: string) => `/api/v1/management/virtualpay/orders/${id}/verify-refund`,
+        VIRTUAL_PAY_ADVANCE: (id: string) => `/api/v1/management/virtualpay/orders/${id}/advance`,
     },
     VIRTUAL_PAY: {
         HEALTH: '/api/v1/management/virtualpay/health',
         LOGS: '/api/v1/management/virtualpay/logs',
+        XPAY_LOG_REPLAY: (id: number) => `/api/v1/management/virtualpay/xpay-logs/${id}/replay`,
     },
     // 统计
     STATS: {

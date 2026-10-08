@@ -4,7 +4,21 @@ import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch,
     FiDownload,
 } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createOrderSupportTicket, getOrderDetail, getOrderList, refundVirtualPayOrder, type OrderDetail, type OrderListItem, type OrderListParams, type OrderSummary } from '../api/orders';
+import {
+    advanceVirtualPayOrder,
+    createOrderSupportTicket,
+    getRefundPreview,
+    getOrderDetail,
+    getOrderList,
+    refundVirtualPayOrder,
+    verifyRefundAgainstWechat,
+    type OrderDetail,
+    type OrderListItem,
+    type OrderListParams,
+    type OrderSummary,
+    type RefundPreview,
+} from '../api/orders';
+import { getXPayLogs, type XPayMessageLogItem } from '../api/virtualPay';
 import { API_BASE_URL } from '../config/api';
 import './orderCenter.scss';
 
@@ -15,6 +29,7 @@ const formatOrderType = (value: string) => {
         culture: '内容消费',
         withdraw: '提现',
         certification: '认证费',
+        report: '建房报告',
     };
     return map[value] || value || '-';
 };
@@ -27,20 +42,28 @@ const formatOrderCategory = (value: string) => {
         certification: '认证',
         withdraw: '提现',
         service: '设计服务',
+        report: '建房报告',
+        enterprise_recharge: '企业充值',
     };
     return map[value] || value || '-';
 };
 
+// 状态中文映射（T4）：delivering/refunding 是资金流转的中间态，必须给中文，
+// 否则列表直接显示英文原值；卡单由"仅看异常单"的服务端条件兜底捕获。
 const formatStatus = (value: string) => {
-    if (value === 'refunding') return { label: '退款中', className: 'status-pending' };
-    if (value === 'refunded') return { label: '已退款', className: 'status-cancelled' };
     const map: Record<string, { label: string; className: string }> = {
         pending: { label: '待处理', className: 'status-pending' },
+        delivering: { label: '发货中', className: 'status-pending' },
         success: { label: '成功', className: 'status-success' },
+        refunding: { label: '退款中', className: 'status-pending' },
+        refunded: { label: '已退款', className: 'status-cancelled' },
         failed: { label: '失败', className: 'status-failed' },
         cancelled: { label: '已取消', className: 'status-cancelled' },
     };
-    return map[value] || { label: value || '-', className: '' };
+    if (map[value]) return map[value];
+    if (value === 'refunding') return { label: '退款中', className: 'status-pending' };
+    if (value === 'refunded') return { label: '已退款', className: 'status-cancelled' };
+    return { label: value || '-', className: '' };
 };
 
 const formatPayChannel = (value?: string) => {
@@ -48,7 +71,7 @@ const formatPayChannel = (value?: string) => {
         wechatpay: '微信支付',
         virtualpay: '虚拟支付',
     };
-    return map[value || ''] || value || '-';
+    return map[value] || value || '-';
 };
 
 const formatPayMode = (value?: string) => {
@@ -56,7 +79,17 @@ const formatPayMode = (value?: string) => {
         short_series_coin: '代币',
         short_series_goods: '道具',
     };
-    return map[value || ''] || value || '-';
+    return map[value] || value || '-';
+};
+
+const formatXPayEvent = (value: string) => {
+    const map: Record<string, string> = {
+        xpay_coin_pay_notify: '代币支付',
+        xpay_goods_deliver_notify: '道具发货',
+        xpay_refund_notify: '退款通知',
+        xpay_complaint_notify: '投诉',
+    };
+    return map[value] || value || '-';
 };
 
 const isNegativeOrderValue = (item: Pick<OrderListItem, 'amount' | 'type' | 'order_category'>) => {
@@ -73,6 +106,12 @@ const formatOrderValue = (item: Pick<OrderListItem, 'amount' | 'type' | 'order_c
         return `${sign}¥${absAmount}`;
     }
     return `${sign}${absAmount} 灵石`;
+};
+
+/** 支付金额（元）：真实人民币金额在 amount_fen（T5 口径；认证费/报告此前显示 0 的问题在此修复） */
+const formatAmountYuan = (amountFen?: number) => {
+    if (!amountFen || amountFen <= 0) return '-';
+    return `¥${(amountFen / 100).toFixed(2)}`;
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -115,9 +154,11 @@ const getFilterSummary = (params: {
     if (params.status !== 'all') parts.push(`状态：${formatStatus(params.status).label}`);
     if (params.payChannel !== 'all') parts.push(`支付通道：${formatPayChannel(params.payChannel)}`);
     if (params.start || params.end) parts.push(`日期：${params.start || '不限'} ~ ${params.end || '不限'}`);
-    if (params.onlyExceptions) parts.push('仅看异常单');
+    if (params.onlyExceptions) parts.push('仅看异常单（含卡发货/卡退款）');
     return parts.length > 0 ? parts.join(' ｜ ') : '当前正在查看全部订单数据。';
 };
+
+const formatNumber = (value?: number) => (typeof value === 'number' ? value.toLocaleString('zh-CN') : '-');
 
 const OrderCenter: React.FC = () => {
     const navigate = useNavigate();
@@ -125,7 +166,8 @@ const OrderCenter: React.FC = () => {
     const [records, setRecords] = useState<OrderListItem[]>([]);
     const [summary, setSummary] = useState<OrderSummary>(emptySummary);
     const [loading, setLoading] = useState(false);
-    const [searchKeyword, setSearchKeyword] = useState('');
+    // 支持从其它页面带 orderNo 参数直达（如虚拟支付监控的"订单"跳转）：作为初始关键词检索
+    const [searchKeyword, setSearchKeyword] = useState(() => searchParams.get('orderNo') || '');
     const [typeFilter, setTypeFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -134,8 +176,13 @@ const OrderCenter: React.FC = () => {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
+    const [detailLogs, setDetailLogs] = useState<XPayMessageLogItem[]>([]);
     const [creatingTicketOrderId, setCreatingTicketOrderId] = useState<number | null>(null);
     const [refundingOrderId, setRefundingOrderId] = useState<number | null>(null);
+    const [actingOrderId, setActingOrderId] = useState<number | null>(null);
+    // 退款确认弹窗（T8）：先取影响预览，确认后才真正发起退款
+    const [refundPreview, setRefundPreview] = useState<RefundPreview | null>(null);
+    const [refundPreviewLoading, setRefundPreviewLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(DEFAULT_PAGE_SIZE);
     const [total, setTotal] = useState(0);
@@ -145,7 +192,7 @@ const OrderCenter: React.FC = () => {
         keyword: searchKeyword.trim(),
         type: typeFilter,
         order_category: categoryFilter,
-        // "仅看异常单"交给后端对全量数据筛选（status=exception = 失败 + 待处理）；
+        // "仅看异常单"交给后端对全量数据筛选（status=exception = 失败 + 待处理 + 卡发货/卡退款）；
         // 只在当前页前端过滤会漏掉其他页的异常单，计数也会失真。
         status: onlyExceptions ? 'exception' : statusFilter,
         pay_channel: payChannelFilter,
@@ -199,6 +246,24 @@ const OrderCenter: React.FC = () => {
         })();
     }, [searchParams, selectedDetail?.order?.id]);
 
+    // 详情抽屉打开时拉取该订单的微信推送日志（关联记录，一次轻量查询）
+    useEffect(() => {
+        if (!showDetailModal || !selectedDetail?.order?.order_no) {
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const data = await getXPayLogs({ keyword: selectedDetail.order.order_no, page: 1, page_size: 10 });
+                if (!cancelled) setDetailLogs(data.list || []);
+            } catch (error) {
+                console.error('加载订单推送日志失败:', error);
+                if (!cancelled) setDetailLogs([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [showDetailModal, selectedDetail?.order?.order_no]);
+
     const handleSearch = () => {
         setCurrentPage(1);
         void loadOrders(buildOrderQueryParams({ page: 1 }));
@@ -240,6 +305,7 @@ const OrderCenter: React.FC = () => {
     const handleCloseDetail = () => {
         setShowDetailModal(false);
         setSelectedDetail(null);
+        setDetailLogs([]);
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete('orderId');
         setSearchParams(nextParams);
@@ -259,22 +325,34 @@ const OrderCenter: React.FC = () => {
         }
     };
 
-    const handleRefundVirtualPayOrder = async (order: OrderListItem | OrderDetail['order']) => {
-        if (!canRefundVirtualPayOrder(order)) {
-            alert('仅支持已成功到账的虚拟支付充值订单退款');
-            return;
-        }
-        const reason = window.prompt(`确认退款订单 ${order.order_no}？\n将先扣回 ${order.amount} 灵石，余额不足时不会发起微信退款。`, '运营后台退款');
-        if (reason === null) {
-            return;
-        }
-        setRefundingOrderId(order.id);
+    // 退款（T8）：先取影响预览（扣回灵石/余额/会员回收计划），用户在弹窗中确认后才执行
+    const openRefundPreview = async (order: Pick<OrderListItem, 'id' | 'order_no'>) => {
+        setRefundPreviewLoading(true);
+        setRefundPreview(null);
         try {
-            const result = await refundVirtualPayOrder(String(order.id), reason);
-            alert(`退款已提交：${result.order_no}\n扣回灵石：${result.refund_amount}\n余额：${result.old_stones} → ${result.new_stones}`);
+            const preview = await getRefundPreview(String(order.id));
+            setRefundPreview(preview);
+        } catch (error: any) {
+            console.error('获取退款影响预览失败:', error);
+            alert(error?.message || '获取退款影响预览失败');
+        } finally {
+            setRefundPreviewLoading(false);
+        }
+    };
+
+    const handleConfirmRefund = async () => {
+        if (!refundPreview) return;
+        const orderId = refundPreview.order_id;
+        const reason = window.prompt('请填写退款原因（记入审计日志）', '运营后台退款');
+        if (reason === null) return;
+        setRefundingOrderId(orderId);
+        try {
+            const result = await refundVirtualPayOrder(String(orderId), reason);
+            alert(`退款已提交：${result.order_no}\n扣回灵石：${result.refund_amount}\n余额：${result.old_stones} → ${result.new_stones}\n微信确认退款后，本单授予的会员将自动回收。`);
+            setRefundPreview(null);
             await loadOrders(buildOrderQueryParams());
-            if (selectedDetail?.order?.id === order.id) {
-                const detail = await getOrderDetail(String(order.id));
+            if (selectedDetail?.order?.id === orderId) {
+                const detail = await getOrderDetail(String(orderId));
                 setSelectedDetail(detail);
             }
         } catch (error: any) {
@@ -285,6 +363,40 @@ const OrderCenter: React.FC = () => {
         }
     };
 
+    // 卡退款核对微信侧（T6）
+    const handleVerifyRefund = async (order: OrderListItem) => {
+        setActingOrderId(order.id);
+        try {
+            const result = await verifyRefundAgainstWechat(String(order.id));
+            if (result.settled) {
+                alert(`微信侧已确认退款（REFUND），订单 ${result.order_no} 已落终态"已退款"，关联会员已同步回收。`);
+            } else {
+                alert(`微信侧当前状态：${result.wechat_state}（退款未在微信侧生效）。\n订单保持"退款中"，请核对该用户的扣回灵石与退款是否一致，必要时转人工处理。`);
+            }
+            await loadOrders(buildOrderQueryParams());
+        } catch (error: any) {
+            console.error('核对微信侧失败:', error);
+            alert(error?.message || '核对微信侧失败');
+        } finally {
+            setActingOrderId(null);
+        }
+    };
+
+    // 卡发货立即推进（T6）
+    const handleAdvanceOrder = async (order: OrderListItem) => {
+        setActingOrderId(order.id);
+        try {
+            const result = await advanceVirtualPayOrder(String(order.id));
+            alert(`推进完成，微信侧状态：${result.state}。`);
+            await loadOrders(buildOrderQueryParams());
+        } catch (error: any) {
+            console.error('推进订单失败:', error);
+            alert(error?.message || '推进订单失败');
+        } finally {
+            setActingOrderId(null);
+        }
+    };
+
     const handlePageChange = (page: number) => {
         if (page < 1 || page > totalPages || page === currentPage || loading) {
             return;
@@ -292,6 +404,8 @@ const OrderCenter: React.FC = () => {
         setCurrentPage(page);
         void loadOrders(buildOrderQueryParams({ page }));
     };
+
+    const detailOrder = selectedDetail?.order;
 
     return (
         <>
@@ -320,6 +434,7 @@ const OrderCenter: React.FC = () => {
                                 <option value="consume">AI消费</option>
                                 <option value="culture">内容消费</option>
                                 <option value="certification">认证费</option>
+                                <option value="report">建房报告</option>
                                 <option value="withdraw">提现</option>
                             </select>
                             <select className="filter-select" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
@@ -328,12 +443,15 @@ const OrderCenter: React.FC = () => {
                                 <option value="ai">AI生成</option>
                                 <option value="template">模板</option>
                                 <option value="certification">认证</option>
+                                <option value="report">建房报告</option>
+                                <option value="enterprise_recharge">企业充值</option>
                                 <option value="service">设计服务</option>
                                 <option value="withdraw">提现</option>
                             </select>
-                            <select className="filter-select" value={statusFilter} disabled={onlyExceptions} title={onlyExceptions ? '“仅看异常单”已限定为失败与待处理，取消后可选其他状态' : undefined} onChange={(event) => setStatusFilter(event.target.value)}>
+                            <select className="filter-select" value={statusFilter} disabled={onlyExceptions} title={onlyExceptions ? '“仅看异常单”已限定为失败、待处理与卡单，取消后可选其他状态' : undefined} onChange={(event) => setStatusFilter(event.target.value)}>
                                 <option value="all">全部状态</option>
                                 <option value="pending">待处理</option>
+                                <option value="delivering">发货中</option>
                                 <option value="success">成功</option>
                                 <option value="refunding">退款中</option>
                                 <option value="refunded">已退款</option>
@@ -366,7 +484,7 @@ const OrderCenter: React.FC = () => {
                         </button>
                         <button
                             className="btn-secondary"
-                            title="按当前筛选条件导出 CSV（最多 1 万条，含 BOM 可直接用 Excel 打开）"
+                            title="按当前筛选条件导出 CSV（最多 1 万条，含 BOM 可直接用 Excel 打开）。含支付金额(元)/灵石变动/完成时间列，财务可直接对账"
                             onClick={() => {
                                 const params = buildOrderQueryParams();
                                 const qs = new URLSearchParams({
@@ -438,7 +556,7 @@ const OrderCenter: React.FC = () => {
 
                 <div className="order-tip-card">
                     <strong>说明：</strong>
-                    <span>订单数值会按业务语义展示。充值和 AI 消费通常对应灵石，认证费对应人民币金额，具体以订单标题与描述为准。</span>
+                    <span>订单数值按业务语义展示：支付金额列（元）为用户实付人民币；灵石列为到账/消耗数量。"微信侧在账"是该用户在微信虚拟支付账本中的代币余额（本地镜像），点击订单详情可看完整资金视图。</span>
                 </div>
 
                 <div className="order-center-table-container">
@@ -449,8 +567,8 @@ const OrderCenter: React.FC = () => {
                                 <th>用户</th>
                                 <th>类型</th>
                                 <th>业务分类</th>
-                                <th>订单数值</th>
-                                <th>支付通道</th>
+                                <th>支付金额 / 订单数值</th>
+                                <th title="该用户当前在微信虚拟支付账本中的代币余额（本地镜像 = 累计成功充值 − 已退款）">微信侧在账</th>
                                 <th>状态</th>
                                 <th>标题 / 描述</th>
                                 <th>创建时间</th>
@@ -466,8 +584,10 @@ const OrderCenter: React.FC = () => {
                             ) : (
                                 records.map((record) => {
                                     const statusMeta = formatStatus(record.status);
+                                    const isStuckRefunding = record.status === 'refunding';
+                                    const isAdvancable = record.pay_channel === 'virtualpay' && (record.status === 'pending' || record.status === 'delivering');
                                     return (
-                                        <tr key={record.id} className={record.status === 'failed' ? 'row-alert-failed' : record.status === 'pending' ? 'row-alert-pending' : ''}>
+                                        <tr key={record.id} className={record.status === 'failed' ? 'row-alert-failed' : record.status === 'pending' || record.status === 'delivering' || record.status === 'refunding' ? 'row-alert-pending' : ''}>
                                             <td>
                                                 {record.pay_channel === 'virtualpay' ? (
                                                     <button
@@ -494,14 +614,18 @@ const OrderCenter: React.FC = () => {
                                             </td>
                                             <td>{formatOrderType(record.type)}</td>
                                             <td>{formatOrderCategory(record.order_category)}</td>
-                                            <td><span className={`order-value ${isNegativeOrderValue(record) ? 'negative' : 'positive'}`}>{formatOrderValue(record)}</span></td>
                                             <td>
-                                                <div className="pay-channel-cell">
-                                                    <span className={`pay-channel-badge ${record.pay_channel === 'virtualpay' ? 'is-virtualpay' : ''}`}>
-                                                        {formatPayChannel(record.pay_channel)}
-                                                    </span>
-                                                    {record.pay_mode && <span>{formatPayMode(record.pay_mode)}</span>}
+                                                <div className="order-amount-cell">
+                                                    <strong>{formatAmountYuan(record.amount_fen)}</strong>
+                                                    <span className={`order-value ${isNegativeOrderValue(record) ? 'negative' : 'positive'}`}>{formatOrderValue(record)}</span>
                                                 </div>
+                                            </td>
+                                            <td>
+                                                {record.pay_channel === 'virtualpay' && record.pay_mode === 'short_series_coin' ? (
+                                                    <span className="coin-mirror" title="该用户微信侧代币余额（本地镜像）">{formatNumber(record.wechat_coin_mirror)} 枚</span>
+                                                ) : (
+                                                    <span className="coin-mirror-na">—</span>
+                                                )}
                                             </td>
                                             <td>
                                                 <span className={`status-badge ${statusMeta.className}`}>{statusMeta.label}</span>
@@ -520,6 +644,28 @@ const OrderCenter: React.FC = () => {
                                                         <FiEye size={14} />
                                                         <span>详情</span>
                                                     </button>
+                                                    {isStuckRefunding && (
+                                                        <button
+                                                            className="btn-action btn-ticket"
+                                                            onClick={() => void handleVerifyRefund(record)}
+                                                            disabled={actingOrderId === record.id}
+                                                            title="查询微信侧真实退款状态：已 REFUND 则自动落终态"
+                                                        >
+                                                            <FiRefreshCw size={14} />
+                                                            <span>{actingOrderId === record.id ? '核对中...' : '核对微信侧'}</span>
+                                                        </button>
+                                                    )}
+                                                    {isAdvancable && (
+                                                        <button
+                                                            className="btn-action btn-ticket"
+                                                            onClick={() => void handleAdvanceOrder(record)}
+                                                            disabled={actingOrderId === record.id}
+                                                            title="手动触发一次发货推进（补偿任务每 60 秒也会自动推进）"
+                                                        >
+                                                            <FiRefreshCw size={14} />
+                                                            <span>{actingOrderId === record.id ? '推进中...' : '立即推进'}</span>
+                                                        </button>
+                                                    )}
                                                     <button
                                                         className="btn-action btn-ticket"
                                                         onClick={() => void handleCreateSupportTicket(record)}
@@ -532,9 +678,9 @@ const OrderCenter: React.FC = () => {
                                                     {canRefundVirtualPayOrder(record) && (
                                                         <button
                                                             className="btn-action btn-ticket"
-                                                            onClick={() => void handleRefundVirtualPayOrder(record)}
+                                                            onClick={() => void openRefundPreview(record)}
                                                             disabled={refundingOrderId === record.id}
-                                                            title="虚拟支付退款"
+                                                            title="虚拟支付退款（先展示影响清单）"
                                                         >
                                                             <FiRotateCcw size={14} />
                                                             <span>{refundingOrderId === record.id ? '退款中...' : '退款'}</span>
@@ -559,64 +705,183 @@ const OrderCenter: React.FC = () => {
                     <button className="btn-secondary" onClick={() => handlePageChange(currentPage + 1)} disabled={loading || currentPage >= totalPages}>下一页</button>
                 </div>
 
-                {showDetailModal && selectedDetail && (
-                    <div className="modal-overlay" onClick={handleCloseDetail}>
-                        <div className="modal-content" onClick={(event) => event.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>订单详情</h3>
-                                <button className="modal-close" onClick={handleCloseDetail}>✕</button>
+                {showDetailModal && selectedDetail && detailOrder && (
+                    <>
+                        <div className="drawer-overlay" onClick={handleCloseDetail}></div>
+                        <aside className="order-drawer" role="dialog" aria-label="订单详情">
+                            <div className="drawer-header">
+                                <div>
+                                    <h3>
+                                        订单详情
+                                        <span className={`status-badge ${formatStatus(detailOrder.status).className}`}>{formatStatus(detailOrder.status).label}</span>
+                                    </h3>
+                                    <div className="drawer-subtitle">{detailOrder.order_no} · 创建于 {formatDateTime(detailOrder.created_at)}</div>
+                                </div>
+                                <button className="drawer-close" onClick={handleCloseDetail}>✕</button>
                             </div>
-                            <div className="modal-body">
+                            <div className="drawer-body">
+                                {selectedDetail.fund_view && (
+                                    <div className="fund-view-card">
+                                        <div className="fund-view-title">
+                                            资金视图 · 充值与微信虚拟支付账本
+                                            <span
+                                                className="fund-view-legend"
+                                                title="微信侧在账 = 本地镜像（累计成功充值 − 已退款）；本地可用 = 用户当前灵石余额；已消费 = 两账净差额，含邀请/签到/手工调整等非虚拟支付来源灵石的净影响"
+                                            >
+                                                口径说明
+                                            </span>
+                                        </div>
+                                        <div className="fund-view-grid">
+                                            <div className="fund-item">
+                                                <span className="fund-k">微信侧在账</span>
+                                                <strong className="fund-v">{formatNumber(selectedDetail.fund_view.wechat_mirror)}<small>枚代币</small></strong>
+                                                <span className="fund-s">资金押在微信账上</span>
+                                            </div>
+                                            <div className="fund-item highlight">
+                                                <span className="fund-k">本地可用</span>
+                                                <strong className="fund-v">{formatNumber(selectedDetail.fund_view.local_stones)}<small>灵石</small></strong>
+                                                <span className="fund-s">当前实际可用余额</span>
+                                            </div>
+                                            <div className="fund-item">
+                                                <span className="fund-k">已本地消费</span>
+                                                <strong className="fund-v">{formatNumber(selectedDetail.fund_view.consumed_net)}<small>灵石</small></strong>
+                                                <span className="fund-s">两账净差额（见口径说明）</span>
+                                            </div>
+                                        </div>
+                                        {selectedDetail.fund_view.calibrated_at && (
+                                            <div className={`fund-view-cal ${((selectedDetail.fund_view.diff || 0) !== 0) ? 'is-diff' : ''}`}>
+                                                {((selectedDetail.fund_view.diff || 0) !== 0)
+                                                    ? `最近校准 ${formatDateTime(selectedDetail.fund_view.calibrated_at)}：微信实测 ${formatNumber(selectedDetail.fund_view.measured_balance)} 与镜像差 ${formatNumber(selectedDetail.fund_view.diff)}，建议核对`
+                                                    : `最近校准 ${formatDateTime(selectedDetail.fund_view.calibrated_at)}：与微信实测一致（用户支付时顺路核对）`}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="detail-section">
-                                    <div className="info-row"><span className="info-label">订单号</span><span className="info-value">{selectedDetail.order.order_no}</span></div>
-                                    <div className="info-row"><span className="info-label">用户</span><span className="info-value">{selectedDetail.user?.username || `用户${selectedDetail.order.user_id}`}</span></div>
-                                    <div className="info-row"><span className="info-label">用户ID</span><span className="info-value">{selectedDetail.order.user_id}</span></div>
-                                    <div className="info-row"><span className="info-label">订单类型</span><span className="info-value">{formatOrderType(selectedDetail.order.type)}</span></div>
-                                    <div className="info-row"><span className="info-label">业务分类</span><span className="info-value">{formatOrderCategory(selectedDetail.order.order_category)}</span></div>
-                                    <div className="info-row"><span className="info-label">订单数值</span><span className={`info-value ${isNegativeOrderValue(selectedDetail.order) ? 'negative' : 'positive'}`}>{formatOrderValue(selectedDetail.order)}</span></div>
-                                    <div className="info-row"><span className="info-label">支付通道</span><span className="info-value">{formatPayChannel(selectedDetail.order.pay_channel)}</span></div>
-                                    <div className="info-row"><span className="info-label">支付模式</span><span className="info-value">{formatPayMode(selectedDetail.order.pay_mode)}</span></div>
-                                    {selectedDetail.order.pay_channel === 'virtualpay' && (
-                                        <>
-                                            <div className="info-row"><span className="info-label">虚拟支付商品</span><span className="info-value">{selectedDetail.order.product_id || '-'}</span></div>
-                                            <div className="info-row"><span className="info-label">虚拟支付金额</span><span className="info-value">{selectedDetail.order.amount_fen ? `${selectedDetail.order.amount_fen} 分` : '-'}</span></div>
-                                            <div className="info-row"><span className="info-label">发货上报</span><span className="info-value">{selectedDetail.order.deliver_reported ? '已上报' : `未上报 / ${selectedDetail.order.deliver_report_attempts || 0} 次`}</span></div>
-                                        </>
+                                    <h4>客户与订单</h4>
+                                    <div className="detail-grid">
+                                        <div className="info-row"><span className="info-label">用户</span><span className="info-value">{selectedDetail.user?.username || `用户${detailOrder.user_id}`}（ID {detailOrder.user_id}）</span></div>
+                                        <div className="info-row"><span className="info-label">订单类型</span><span className="info-value">{formatOrderType(detailOrder.type)}</span></div>
+                                        <div className="info-row"><span className="info-label">业务分类</span><span className="info-value">{formatOrderCategory(detailOrder.order_category)}</span></div>
+                                        <div className="info-row"><span className="info-label">支付金额</span><span className="info-value">{formatAmountYuan(detailOrder.amount_fen)}</span></div>
+                                        <div className="info-row"><span className="info-label">订单数值</span><span className={`info-value ${isNegativeOrderValue(detailOrder) ? 'negative' : 'positive'}`}>{formatOrderValue(detailOrder)}</span></div>
+                                        <div className="info-row"><span className="info-label">支付通道</span><span className="info-value">{formatPayChannel(detailOrder.pay_channel)}{detailOrder.pay_mode ? ` · ${formatPayMode(detailOrder.pay_mode)}` : ''}</span></div>
+                                        {detailOrder.pay_channel === 'virtualpay' && (
+                                            <>
+                                                <div className="info-row"><span className="info-label">虚拟支付商品</span><span className="info-value">{detailOrder.product_id || '-'}</span></div>
+                                                <div className="info-row"><span className="info-label">发货上报</span><span className="info-value">{detailOrder.deliver_reported ? '已上报' : `未上报 / ${detailOrder.deliver_report_attempts || 0} 次`}</span></div>
+                                            </>
+                                        )}
+                                        <div className="info-row"><span className="info-label">标题</span><span className="info-value">{detailOrder.title || '-'}</span></div>
+                                        <div className="info-row"><span className="info-label">完成时间</span><span className="info-value">{formatDateTime(detailOrder.completed_at)}</span></div>
+                                    </div>
+                                    {detailOrder.description && (
+                                        <div className="info-row info-row-full"><span className="info-label">说明</span><span className="info-value long-text">{detailOrder.description}</span></div>
                                     )}
-                                    <div className="info-row"><span className="info-label">状态</span><span className={`info-value ${formatStatus(selectedDetail.order.status).className}`}>{formatStatus(selectedDetail.order.status).label}</span></div>
-                                    <div className="info-row"><span className="info-label">标题</span><span className="info-value">{selectedDetail.order.title || '-'}</span></div>
-                                    <div className="info-row"><span className="info-label">说明</span><span className="info-value long-text">{selectedDetail.order.description || '-'}</span></div>
-                                    <div className="info-row"><span className="info-label">创建时间</span><span className="info-value">{formatDateTime(selectedDetail.order.created_at)}</span></div>
-                                    <div className="info-row"><span className="info-label">完成时间</span><span className="info-value">{formatDateTime(selectedDetail.order.completed_at)}</span></div>
-                                    {selectedDetail.membership && (
-                                        <>
+                                </div>
+
+                                {selectedDetail.membership && (
+                                    <div className="detail-section">
+                                        <h4>关联会员</h4>
+                                        <div className="detail-grid">
                                             <div className="info-row"><span className="info-label">会员计划</span><span className="info-value">{selectedDetail.membership.plan_title}</span></div>
                                             <div className="info-row"><span className="info-label">会员状态</span><span className="info-value">{selectedDetail.membership.status}</span></div>
                                             <div className="info-row"><span className="info-label">下载权限</span><span className="info-value">{selectedDetail.membership.template_download_enabled ? '已开启' : '未开启'}</span></div>
                                             <div className="info-row"><span className="info-label">会员到期</span><span className="info-value">{selectedDetail.membership.is_lifetime ? '长期有效' : formatDateTime(selectedDetail.membership.expired_at)}</span></div>
-                                        </>
+                                            <div className="info-row info-row-full"><span className="info-label">授予订单</span><span className="info-value">{selectedDetail.membership.source_order_no || '-'}</span></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="detail-section">
+                                    <h4>关联推送（微信 → 我方）</h4>
+                                    {detailLogs.length === 0 ? (
+                                        <div className="detail-empty">该订单暂无推送记录（推送丢失时补偿任务会自动推进，无需担心）</div>
+                                    ) : (
+                                        <div className="related-logs">
+                                            {detailLogs.map((logItem) => (
+                                                <div key={logItem.id} className="related-log-item">
+                                                    <span className="related-log-event">{formatXPayEvent(logItem.event)}</span>
+                                                    <span className={`status-pill ${logItem.processed ? 'ok' : 'warning'}`}>{logItem.processed ? '已处理' : '未处理'}</span>
+                                                    <span className="related-log-time">{formatDateTime(logItem.created_at)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="drawer-footer">
                                 <button
                                     className="btn-secondary"
-                                    onClick={() => void handleCreateSupportTicket(selectedDetail.order)}
-                                    disabled={creatingTicketOrderId === selectedDetail.order.id}
+                                    onClick={() => void handleCreateSupportTicket(detailOrder)}
+                                    disabled={creatingTicketOrderId === detailOrder.id}
                                 >
-                                    {creatingTicketOrderId === selectedDetail.order.id ? '转单中...' : '转异常工单'}
+                                    {creatingTicketOrderId === detailOrder.id ? '转单中...' : '转异常工单'}
                                 </button>
-                                {canRefundVirtualPayOrder(selectedDetail.order) && (
+                                {canRefundVirtualPayOrder(detailOrder) && (
                                     <button
                                         className="btn-secondary"
-                                        onClick={() => void handleRefundVirtualPayOrder(selectedDetail.order)}
-                                        disabled={refundingOrderId === selectedDetail.order.id}
+                                        onClick={() => void openRefundPreview(detailOrder)}
+                                        disabled={refundingOrderId === detailOrder.id}
                                     >
-                                        {refundingOrderId === selectedDetail.order.id ? '退款中...' : '虚拟支付退款'}
+                                        {refundingOrderId === detailOrder.id ? '退款中...' : '虚拟支付退款'}
                                     </button>
                                 )}
-                                <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${selectedDetail.order.user_id}`)}>进入用户360</button>
+                                <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${detailOrder.user_id}`)}>进入用户360</button>
+                                <span style={{ flex: 1 }}></span>
                                 <button className="btn-primary" onClick={handleCloseDetail}>关闭</button>
+                            </div>
+                        </aside>
+                    </>
+                )}
+
+                {/* 退款确认弹窗（T8）：展示全部影响后再执行 */}
+                {(refundPreview || refundPreviewLoading) && (
+                    <div className="modal-overlay" onClick={() => { if (!refundingOrderId) setRefundPreview(null); }}>
+                        <div className="modal-content refund-preview-modal" onClick={(event) => event.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3>退款确认{refundPreview ? ` · ${refundPreview.order_no}` : ''}</h3>
+                                <button className="modal-close" onClick={() => { if (!refundingOrderId) setRefundPreview(null); }}>✕</button>
+                            </div>
+                            <div className="modal-body">
+                                {refundPreviewLoading || !refundPreview ? (
+                                    <div className="detail-empty">正在获取退款影响清单...</div>
+                                ) : (
+                                    <>
+                                        <ul className="refund-impact-list">
+                                            <li>
+                                                <strong>扣回灵石：</strong>{formatNumber(refundPreview.stones_to_deduct)} 枚（实付 {formatAmountYuan(refundPreview.amount_fen)}）
+                                            </li>
+                                            <li>
+                                                <strong>用户当前余额：</strong>{formatNumber(refundPreview.current_stones)} 枚
+                                                {refundPreview.sufficient
+                                                    ? ' — 余额充足，可发起'
+                                                    : <span className="refund-impact-danger"> — 余额不足，无法发起（微信代币可能未被消费，需先人工核对差额）</span>}
+                                            </li>
+                                            {refundPreview.membership && (
+                                                <li>
+                                                    <strong>会员处理：</strong>{refundPreview.membership.plan_title}
+                                                    （{refundPreview.membership.recover_detail || '该笔订单未授予会员，无需处理'}）
+                                                </li>
+                                            )}
+                                            <li>
+                                                <strong>执行顺序：</strong>先扣回灵石 → 发起微信退款 → 微信确认后订单落"已退款"并自动回收会员（如上）。全程记审计日志。
+                                            </li>
+                                        </ul>
+                                        <div className="refund-impact-note">微信退款"超时不代表失败"：提交后订单进入"退款中"，由补偿任务按微信侧真实状态自动收尾；卡超 10 分钟会出现"核对微信侧"按钮。</div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn-secondary" onClick={() => setRefundPreview(null)} disabled={!!refundingOrderId}>取消</button>
+                                <button
+                                    className="btn-primary"
+                                    onClick={() => void handleConfirmRefund()}
+                                    disabled={refundPreviewLoading || !refundPreview || !refundPreview.sufficient || !!refundingOrderId}
+                                >
+                                    {refundingOrderId ? '退款提交中...' : '确认发起退款'}
+                                </button>
                             </div>
                         </div>
                     </div>

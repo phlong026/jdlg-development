@@ -554,3 +554,314 @@
   }
 }
 }
+
+/* ============ 详情抽屉（T9：替代原 Modal，可边看列表边看详情） ============ */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(53, 41, 28, 0.32);
+  z-index: 90;
+  animation: drawerFadeIn 0.18s ease;
+}
+
+@keyframes drawerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.order-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 560px;
+  max-width: 94vw;
+  height: 100vh;
+  background: #fffdf8;
+  border-left: 1px solid #e9dfd0;
+  box-shadow: -12px 0 40px rgba(53, 41, 28, 0.18);
+  z-index: 91;
+  display: flex;
+  flex-direction: column;
+  animation: drawerSlideIn 0.22s ease;
+}
+
+@keyframes drawerSlideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.drawer-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid #e9dfd0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  h3 {
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .drawer-subtitle {
+    font-size: 12px;
+    color: #b3a48e;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.drawer-close {
+  margin-left: auto;
+  border: 1px solid #e9dfd0;
+  background: #fffdf8;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  color: #8a7a66;
+  font-size: 14px;
+  flex-shrink: 0;
+
+  &:hover {
+    color: #c0392b;
+    border-color: #c0392b;
+  }
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+
+.drawer-footer {
+  border-top: 1px solid #e9dfd0;
+  padding: 12px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #faf5ec;
+}
+
+/* ============ 资金视图卡（T3 核心展示） ============ */
+.fund-view-card {
+  background: linear-gradient(135deg, #3a2d1d 0%, #59401f 60%, #6d4a1e 100%);
+  border-radius: 12px;
+  color: #f4ead9;
+  padding: 14px 16px 12px;
+  margin-bottom: 16px;
+}
+
+.fund-view-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.fund-view-legend {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: #f0cf8f;
+  border: 1px solid rgba(240, 207, 143, 0.65);
+  border-radius: 10px;
+  padding: 0 8px;
+  cursor: help;
+}
+
+.fund-view-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.fund-item {
+  background: rgba(255, 248, 236, 0.08);
+  border: 1px solid rgba(232, 192, 122, 0.25);
+  border-radius: 10px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  &.highlight {
+    background: rgba(232, 192, 122, 0.16);
+    border-color: rgba(232, 192, 122, 0.55);
+  }
+
+  .fund-k {
+    font-size: 11px;
+    color: #d8c5a2;
+  }
+
+  .fund-v {
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+
+    small {
+      font-size: 11px;
+      font-weight: 400;
+      color: #cbb894;
+      margin-left: 2px;
+    }
+  }
+
+  .fund-s {
+    font-size: 10px;
+    color: #bda87f;
+  }
+}
+
+.fund-view-cal {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: #b7e0c9;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  padding: 6px 10px;
+
+  &.is-diff {
+    color: #f3b8a8;
+  }
+}
+
+/* ============ 详情区块 ============ */
+.detail-section {
+  margin-bottom: 14px;
+
+  h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #35291c;
+    margin-bottom: 8px;
+  }
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 14px;
+  background: #fffdf8;
+  border: 1px solid #e9dfd0;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.info-row-full {
+  grid-column: 1 / -1;
+}
+
+.detail-empty {
+  font-size: 12.5px;
+  color: #b3a48e;
+  background: #faf5ec;
+  border: 1px dashed #e9dfd0;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+/* ============ 关联推送 ============ */
+.related-logs {
+  border: 1px solid #e9dfd0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.related-log-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #e9dfd0;
+  font-size: 12.5px;
+  background: #fffdf8;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .related-log-event {
+    font-weight: 600;
+  }
+
+  .related-log-time {
+    margin-left: auto;
+    color: #b3a48e;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.status-pill {
+  display: inline-flex;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+
+  &.ok {
+    background: #e6f3ec;
+    color: #2f8f6b;
+  }
+
+  &.warning {
+    background: #faf0da;
+    color: #b97f1f;
+  }
+}
+
+/* ============ 列表列（微信侧在账 + 金额双口径） ============ */
+.order-amount-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  strong {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.coin-mirror {
+  font-variant-numeric: tabular-nums;
+  color: #8c5024;
+  font-weight: 600;
+}
+
+.coin-mirror-na {
+  color: #d5c9b6;
+}
+
+/* ============ 退款影响预览弹窗（T8） ============ */
+.refund-preview-modal {
+  max-width: 520px;
+
+  .refund-impact-list {
+    margin: 0 0 12px;
+    padding-left: 18px;
+    font-size: 13px;
+    line-height: 1.9;
+
+    .refund-impact-danger {
+      color: #c0392b;
+      font-weight: 600;
+    }
+  }
+
+  .refund-impact-note {
+    font-size: 11.5px;
+    color: #8a7a66;
+    background: #faf0da;
+    border: 1px solid #ecd9ac;
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+}

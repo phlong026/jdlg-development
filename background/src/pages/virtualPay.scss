@@ -240,3 +240,40 @@
   }
 }
 }
+
+/* 推送日志客户反查（T1）：客户列可点击进入用户360 */
+.user-link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #8b5e3c;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  &:hover {
+    color: #6d4426;
+  }
+
+  .user-id-meta {
+    color: #9ca3af;
+    font-size: 11px;
+    text-decoration: none;
+  }
+}
+
+.btn-mini {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: #8b5e3c;
+    border-color: #8b5e3c;
+  }
+}

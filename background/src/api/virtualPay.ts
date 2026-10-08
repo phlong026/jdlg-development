@@ -1,4 +1,4 @@
-import { get } from '../utils/request';
+import { get, post } from '../utils/request';
 import { API_ENDPOINTS } from '../config/api';
 
 export interface VirtualPayHealthItem {
@@ -16,6 +16,8 @@ export interface VirtualPayHealth {
     order_summary: {
         total_virtualpay_orders: number;
         pending_orders: number;
+        delivering_orders?: number;
+        refunding_stuck_orders?: number;
         refunded_orders: number;
         unreported_goods_orders: number;
     };
@@ -30,6 +32,9 @@ export interface XPayMessageLogItem {
     processed: boolean;
     error_msg: string;
     created_at: string;
+    /** 反查自 user_orders/users；无对应订单时为 0/空 */
+    user_id: number;
+    username: string;
 }
 
 export interface XPayLogSummary {
@@ -59,5 +64,11 @@ export const getXPayLogs = async (params?: XPayLogListParams) => {
         page: number;
         page_size: number;
     }>(API_ENDPOINTS.VIRTUAL_PAY.LOGS, params);
+    return res.data!;
+};
+
+/** 重放推送（T6）：用留存的推送原文重新执行业务分发（幂等） */
+export const replayXPayLog = async (id: number) => {
+    const res = await post<{ id: number; event: string; order_no: string; replayed: boolean }>(API_ENDPOINTS.VIRTUAL_PAY.XPAY_LOG_REPLAY(id), {});
     return res.data!;
 };

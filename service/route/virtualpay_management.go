@@ -1,14 +1,15 @@
 package route
 
 import (
-"log"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -53,7 +54,11 @@ func formatFenStatus(v int64) string {
 	return strconv.FormatInt(v, 10) + " 分"
 }
 
-func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, userOrderModel *model.UserOrderModel, userModel *model.UserRedisModel, stoneRecordModel *model.StoneRecordModel, xpayLogModel *model.XPayMessageLogModel) {
+// RegisterVirtualPayManagementRoutes 注册虚拟支付管理端路由。
+//
+// 参数收拢为 VirtualPayDeps：核对退款/推进发货（T6）需要完整的 confirm 链路依赖，
+// 与小程序端共享同一份注入，避免两处参数漂移。
+func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, deps VirtualPayDeps) {
 	group := r.Group("/virtualpay")
 
 	group.GET("/health", func(c *gin.Context) {
@@ -68,13 +73,17 @@ func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, 
 
 		var totalVirtualpayOrders int64
 		var pendingOrders int64
+		var deliveringOrders int64
+		var refundingStuckOrders int64
 		var refundedOrders int64
 		var unreportedGoodsOrders int64
-		if userOrderModel != nil && userOrderModel.DB != nil {
-			_ = userOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay'`).Scan(&totalVirtualpayOrders)
-			_ = userOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'pending'`).Scan(&pendingOrders)
-			_ = userOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'refunded'`).Scan(&refundedOrders)
-			_ = userOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'success' AND pay_mode = 'short_series_goods' AND COALESCE(deliver_reported, 0) = 0`).Scan(&unreportedGoodsOrders)
+		if deps.UserOrderModel != nil && deps.UserOrderModel.DB != nil {
+			_ = deps.UserOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay'`).Scan(&totalVirtualpayOrders)
+			_ = deps.UserOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'pending'`).Scan(&pendingOrders)
+			_ = deps.UserOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'delivering'`).Scan(&deliveringOrders)
+			_ = deps.UserOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'refunding' AND updated_at < (NOW() - INTERVAL 10 MINUTE)`).Scan(&refundingStuckOrders)
+			_ = deps.UserOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'refunded'`).Scan(&refundedOrders)
+			_ = deps.UserOrderModel.DB.QueryRow(`SELECT COUNT(*) FROM user_orders WHERE pay_channel = 'virtualpay' AND status = 'success' AND pay_mode = 'short_series_goods' AND COALESCE(deliver_reported, 0) = 0`).Scan(&unreportedGoodsOrders)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{
@@ -85,6 +94,8 @@ func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, 
 			"order_summary": gin.H{
 				"total_virtualpay_orders": totalVirtualpayOrders,
 				"pending_orders":          pendingOrders,
+				"delivering_orders":       deliveringOrders,
+				"refunding_stuck_orders":  refundingStuckOrders,
 				"refunded_orders":         refundedOrders,
 				"unreported_goods_orders": unreportedGoodsOrders,
 			},
@@ -92,6 +103,7 @@ func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, 
 	})
 
 	group.GET("/logs", func(c *gin.Context) {
+		xpayLogModel := deps.XPayMessageLogModel
 		if xpayLogModel == nil {
 			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"list": []gin.H{}, "summary": gin.H{}, "total": 0, "page": 1, "page_size": 20}})
 			return
@@ -151,11 +163,7 @@ func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, 
 		}
 		_ = c.ShouldBindJSON(&req)
 
-		result, err := refundVirtualPayRechargeOrder(c.Request.Context(), cfg, VirtualPayDeps{
-			UserOrderModel:   userOrderModel,
-			UserModel:        userModel,
-			StoneRecordModel: stoneRecordModel,
-		}, orderID, req.Reason, req.Platform)
+		result, err := refundVirtualPayRechargeOrder(c.Request.Context(), cfg, deps, orderID, req.Reason, req.Platform)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if isVirtualPayRefundBadRequest(err) {
@@ -166,6 +174,180 @@ func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, 
 		}
 		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": result})
 	})
+
+	// 退款影响预览（T8）：退款确认弹窗的数据源。
+	// 展示将扣回的灵石、当前余额（含是否充足）、该笔订单授予的会员及回收计划，
+	// 让运营在发起退款前看到全部影响，替代原来"扣完才知道"的裸 prompt。
+	group.GET("/orders/:id/refund-preview", func(c *gin.Context) {
+		orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || orderID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的订单ID"})
+			return
+		}
+		preview, err := buildVirtualPayRefundPreview(deps, orderID)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if isVirtualPayRefundBadRequest(err) {
+				status = http.StatusBadRequest
+			}
+			c.JSON(status, gin.H{"code": status, "msg": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": preview})
+	})
+
+	// 核对微信侧（T6）：卡在 refunding 的订单立即查微信真实状态。
+	// REFUND → 落终态 refunded（含会员回收）；其它状态原样返回供人工判断。
+	group.POST("/orders/:id/verify-refund", func(c *gin.Context) {
+		orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || orderID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的订单ID"})
+			return
+		}
+		order, err := deps.UserOrderModel.GetByID(orderID)
+		if err != nil || order == nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "订单不存在"})
+			return
+		}
+		if order.Status != "refunding" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "仅退款中(refunding)状态的订单需要核对，当前状态=" + order.Status})
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+		state, verifyErr := verifyRefundingOrderAgainstWechat(ctx, cfg, deps, order.OrderNo)
+		if verifyErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "核对失败: " + verifyErr.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{
+			"order_no":     order.OrderNo,
+			"wechat_state": state,
+			"settled":      state == "REFUND",
+		}})
+	})
+
+	// 立即推进（T6）：卡在 pending/delivering 的订单手动触发一次 confirm 链路。
+	group.POST("/orders/:id/advance", func(c *gin.Context) {
+		orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || orderID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的订单ID"})
+			return
+		}
+		order, err := deps.UserOrderModel.GetByID(orderID)
+		if err != nil || order == nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "订单不存在"})
+			return
+		}
+		if order.Status != "pending" && order.Status != "delivering" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "仅待处理/发货中状态的订单可推进，当前状态=" + order.Status})
+			return
+		}
+		meta, err := deps.UserOrderModel.GetVirtualPayOrderMeta(order.OrderNo)
+		if err != nil || meta == nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "虚拟支付订单元信息不存在"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+		defer cancel()
+		state, advanceErr := advanceVirtualPayOrder(ctx, cfg, deps, meta, "")
+		if advanceErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "推进失败: " + advanceErr.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{
+			"order_no": order.OrderNo,
+			"state":    state,
+		}})
+	})
+
+	// 重放推送（T6）：用留存的推送原文重新执行业务分发。
+	// 分发函数（发货/退款收尾）全部幂等：发货有 claim 原子锁，退款收尾有状态条件保护。
+	group.POST("/xpay-logs/:id/replay", func(c *gin.Context) {
+		logID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil || logID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的日志ID"})
+			return
+		}
+		xpayLogModel := deps.XPayMessageLogModel
+		if xpayLogModel == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "推送日志服务不可用"})
+			return
+		}
+		item, err := xpayLogModel.GetByID(logID)
+		if err != nil || item == nil {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "推送日志不存在"})
+			return
+		}
+		if item.OutTradeNo == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "该日志无商户订单号，无法重放"})
+			return
+		}
+		dispatchErr := dispatchXPayEvent(item.Event, item.OutTradeNo, item.OpenID, cfg, deps)
+		if dispatchErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "重放失败: " + dispatchErr.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{
+			"id":       item.ID,
+			"event":    item.Event,
+			"order_no": item.OutTradeNo,
+			"replayed": true,
+		}})
+	})
+}
+
+// buildVirtualPayRefundPreview 组装退款影响预览（T8）。
+func buildVirtualPayRefundPreview(deps VirtualPayDeps, orderID int64) (gin.H, error) {
+	if deps.UserOrderModel == nil || deps.UserModel == nil {
+		return nil, errors.New("虚拟支付退款服务未初始化")
+	}
+	order, err := deps.UserOrderModel.GetByID(orderID)
+	if err != nil {
+		return nil, err
+	}
+	currentStones, err := deps.UserModel.GetStones(order.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("查询用户灵石余额失败: %w", err)
+	}
+	// 复用退款校验（不含"执行"语义）：通道/类型/模式/状态/openid 合法性
+	if err := validateVirtualPayRechargeRefund(order, currentStones); err != nil {
+		return nil, err
+	}
+
+	preview := gin.H{
+		"order_id":                order.ID,
+		"order_no":                order.OrderNo,
+		"user_id":                 order.UserID,
+		"stones_to_deduct":        order.Amount,
+		"current_stones":          currentStones,
+		"sufficient":              currentStones >= order.Amount,
+		"amount_fen":              order.AmountFen,
+		"membership_recover_plan": "none",
+	}
+	if deps.UserMembershipModel != nil {
+		if membership, mErr := deps.UserMembershipModel.GetActiveByUserID(order.UserID); mErr == nil && membership != nil {
+			plan := gin.H{
+				"plan_title":      membership.PlanTitle,
+				"expired_at":      membership.ExpiredAt,
+				"is_lifetime":     model.IsLifetimeMembership(membership),
+				"source_order_no": membership.SourceOrderNo,
+			}
+			switch {
+			case membership.SourceOrderNo == order.OrderNo && membership.PrevExpiredAt != nil:
+				plan["recover_plan"] = "restored_prev"
+				plan["recover_detail"] = fmt.Sprintf("回滚到期时间 %s（本单续期前快照）", membership.PrevExpiredAt.Format("2006-01-02 15:04"))
+			case membership.SourceOrderNo == order.OrderNo:
+				plan["recover_plan"] = "revoke"
+				plan["recover_detail"] = "本单首次授予，退款后整段撤销"
+			default:
+				plan["recover_plan"] = "skipped_superseded"
+				plan["recover_detail"] = "会员已被后续充值续期（" + membership.SourceOrderNo + "），退款不自动回收，请人工评估"
+			}
+			preview["membership"] = plan
+		}
+	}
+	return preview, nil
 }
 
 type virtualPayRefundResult struct {
@@ -296,7 +478,6 @@ func refundVirtualPayRechargeOrder(ctx context.Context, cfg *config.Config, deps
 		Status:       "refunding",
 	}, nil
 }
-
 
 // logRollbackRefundFailure 退款链路失败后的回滚（退还灵石 + 状态回 success）。
 // 回滚自身失败时订单会卡在 refunding 且用户灵石少记，必须留痕供补偿任务/人工核对，

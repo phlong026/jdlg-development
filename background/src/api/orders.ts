@@ -23,6 +23,8 @@ export interface OrderListItem {
     description: string;
     completed_at?: string | null;
     created_at: string;
+    /** 该用户"微信侧代币在账"本地镜像（T3，用户维度；道具/消费类订单前端按列语义展示） */
+    wechat_coin_mirror?: number;
 }
 
 export interface OrderSummary {
@@ -73,6 +75,8 @@ export interface OrderDetail {
         source_order_no: string;
         is_lifetime: boolean;
     } | null;
+    /** 资金视图（T3）：仅虚拟支付代币用户返回 */
+    fund_view?: OrderFundView;
 }
 
 export interface OrderListParams {
@@ -124,5 +128,52 @@ export const createOrderSupportTicket = async (id: string) => {
 
 export const refundVirtualPayOrder = async (id: string, reason?: string) => {
     const res = await post<VirtualPayRefundResult>(API_ENDPOINTS.ORDERS.VIRTUAL_PAY_REFUND(id), { reason: reason || '' });
+    return res.data!;
+};
+
+/** 资金视图（T3）：虚拟支付用户的微信侧/本地两侧余额与差额 */
+export interface OrderFundView {
+    wechat_mirror?: number;
+    local_stones?: number;
+    consumed_net?: number;
+    calibrated_at?: string;
+    measured_balance?: number;
+    diff?: number;
+}
+
+/** 退款影响预览（T8）：退款确认弹窗数据源 */
+export interface RefundPreview {
+    order_id: number;
+    order_no: string;
+    user_id: number;
+    stones_to_deduct: number;
+    current_stones: number;
+    sufficient: boolean;
+    amount_fen: number;
+    membership_recover_plan: string;
+    membership?: {
+        plan_title: string;
+        expired_at: string;
+        is_lifetime: boolean;
+        source_order_no: string;
+        recover_plan: 'revoke' | 'restored_prev' | 'skipped_superseded';
+        recover_detail?: string;
+    };
+}
+
+export const getRefundPreview = async (id: string) => {
+    const res = await get<RefundPreview>(API_ENDPOINTS.ORDERS.VIRTUAL_PAY_REFUND_PREVIEW(id));
+    return res.data!;
+};
+
+/** 卡退款核对微信侧（T6）：微信侧已 REFUND 时服务端自动落终态 refunded（含会员回收） */
+export const verifyRefundAgainstWechat = async (id: string) => {
+    const res = await post<{ order_no: string; wechat_state: string; settled: boolean }>(API_ENDPOINTS.ORDERS.VIRTUAL_PAY_VERIFY_REFUND(id), {});
+    return res.data!;
+};
+
+/** 卡发货立即推进（T6）：手动触发一次 confirm 链路 */
+export const advanceVirtualPayOrder = async (id: string) => {
+    const res = await post<{ order_no: string; state: string }>(API_ENDPOINTS.ORDERS.VIRTUAL_PAY_ADVANCE(id), {});
     return res.data!;
 };

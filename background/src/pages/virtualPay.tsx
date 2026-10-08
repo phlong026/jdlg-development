@@ -1,7 +1,7 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiRefreshCw, FiSearch } from 'react-icons/fi';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getVirtualPayHealth,
     getXPayLogs,
@@ -25,6 +25,7 @@ const formatDateTime = (value?: string) => {
 };
 
 const VirtualPay: React.FC = () => {
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [health, setHealth] = useState<VirtualPayHealth | null>(null);
     const [logs, setLogs] = useState<XPayMessageLogItem[]>([]);
@@ -144,23 +145,48 @@ const VirtualPay: React.FC = () => {
                             <tr>
                                 <th>事件</th>
                                 <th>订单号</th>
+                                <th>客户</th>
                                 <th>OpenID</th>
                                 <th>处理状态</th>
                                 <th>错误</th>
                                 <th>时间</th>
+                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
                             {logs.length === 0 ? (
-                                <tr><td colSpan={6} className="empty-state">暂无推送日志</td></tr>
+                                <tr><td colSpan={8} className="empty-state">暂无推送日志</td></tr>
                             ) : logs.map((item) => (
                                 <tr key={item.id}>
                                     <td>{item.event || '-'}</td>
                                     <td className="mono">{item.out_trade_no || '-'}</td>
+                                    <td>
+                                        {item.user_id > 0 ? (
+                                            <button
+                                                className="user-link-button"
+                                                title={`${item.username || '用户'} · 进入用户360`}
+                                                onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}
+                                            >
+                                                {item.username || `用户${item.user_id}`}
+                                                <span className="user-id-meta"> ID {item.user_id}</span>
+                                            </button>
+                                        ) : (
+                                            <span title="推送未关联到本地订单">-</span>
+                                        )}
+                                    </td>
                                     <td className="mono">{item.openid || '-'}</td>
                                     <td><span className={`status-pill ${item.processed ? 'ok' : 'warning'}`}>{item.processed ? '已处理' : '未处理'}</span></td>
                                     <td>{item.error_msg || '-'}</td>
                                     <td>{formatDateTime(item.created_at)}</td>
+                                    <td>
+                                        <button
+                                            className="btn-mini"
+                                            title="跳转订单中心按订单号检索"
+                                            onClick={() => navigate(`/recharge?orderNo=${encodeURIComponent(item.out_trade_no)}`)}
+                                        >
+                                            订单
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

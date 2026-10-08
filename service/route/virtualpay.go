@@ -12,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"service/component"
 	"service/component/virtualpay"
 	"service/config"
 	"service/function"
@@ -56,7 +55,7 @@ func RegisterVirtualPayRoutes(
 	userOrderModel *model.UserOrderModel,
 	deps VirtualPayDeps,
 ) {
-	sessionKeyModel := model.NewSessionKeyRedisModel(component.GetRedis())
+	sessionKeyModel := deps.SessionKeyModel
 	miniprogramAuth.POST("/virtualpay/prepare", func(c *gin.Context) {
 		codeSession := GetTokenCodeSession(c)
 		if codeSession == nil {
@@ -204,7 +203,16 @@ func confirmVirtualPayOrder(ctx context.Context, cfg *config.Config, deps Virtua
 	if meta.UserID != userID {
 		return "", errBadParam("订单不属于当前用户")
 	}
-	return advanceVirtualPayOrder(ctx, cfg, deps, meta, platform)
+	state, err := advanceVirtualPayOrder(ctx, cfg, deps, meta, platform)
+	if err != nil {
+		return state, err
+	}
+	// 顺路校准（T7）：支付确认成功后，用尚新鲜的 session_key 实测微信侧代币余额。
+	// 放在 confirm 而非发货函数内：校准是尽力而为的旁路，不能影响发货结果。
+	if state == string(virtualpay.OrderStatePaid) {
+		calibrateWechatCoinAfterPaid(ctx, cfg, deps, meta, orderNo)
+	}
+	return state, nil
 }
 
 // advanceVirtualPayOrder 在已知订单元信息的前提下推进订单状态。

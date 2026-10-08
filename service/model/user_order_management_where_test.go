@@ -6,14 +6,20 @@ import (
 )
 
 // "仅看异常单"必须在服务端对全量数据筛选；前端只过滤当前页会漏掉其他页的异常单。
-// 约定：status 传 "exception" 表示 失败(failed) 或 待处理(pending)。
+// 约定：status 传 "exception" 表示 失败(failed)/待处理(pending)/卡发货(delivering>5min)/卡退款(refunding>10min)。
 
 func TestBuildManagementWhereExceptionStatus(t *testing.T) {
 	m := &UserOrderModel{}
 	where, args := m.buildManagementWhere("", "all", "all", "exception", "all", "", "")
 
 	if !strings.Contains(where, "o.status IN ('failed', 'pending')") {
-		t.Fatalf("exception 应展开为 failed/pending 两个状态，实际 WHERE: %s", where)
+		t.Fatalf("exception 应包含 failed/pending 两个状态，实际 WHERE: %s", where)
+	}
+	if !strings.Contains(where, "o.status = 'delivering'") || !strings.Contains(where, "INTERVAL 5 MINUTE") {
+		t.Fatalf("exception 应包含卡发货(delivering>5min)条件，实际 WHERE: %s", where)
+	}
+	if !strings.Contains(where, "o.status = 'refunding'") || !strings.Contains(where, "INTERVAL 10 MINUTE") {
+		t.Fatalf("exception 应包含卡退款(refunding>10min)条件，实际 WHERE: %s", where)
 	}
 	if strings.Contains(where, "o.status = ?") {
 		t.Fatalf("exception 不应再按单个状态等值匹配，实际 WHERE: %s", where)

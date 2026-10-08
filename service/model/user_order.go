@@ -36,27 +36,30 @@ type UserOrder struct {
 }
 
 type OrderManagementItem struct {
-	ID                    int64      `json:"id"`
-	UserID                int64      `json:"user_id"`
-	Username              string     `json:"username"`
-	DesignerUserID        int64      `json:"designer_user_id"`
-	TemplateID            *int64     `json:"template_id,omitempty"`
-	OrderNo               string     `json:"order_no"`
-	Type                  string     `json:"type"`
-	OrderCategory         string     `json:"order_category"`
-	Amount                int64      `json:"amount"`
-	Status                string     `json:"status"`
-	ReviewStatus          string     `json:"review_status"`
-	Title                 string     `json:"title"`
-	Description           string     `json:"description"`
-	PayChannel            string     `json:"pay_channel"`
-	PayMode               string     `json:"pay_mode"`
-	ProductID             string     `json:"product_id"`
-	AmountFen             int64      `json:"amount_fen"`
-	DeliverReported       bool       `json:"deliver_reported"`
-	DeliverReportAttempts int        `json:"deliver_report_attempts"`
-	CompletedAt           *time.Time `json:"completed_at,omitempty"`
-	CreatedAt             time.Time  `json:"created_at"`
+	ID                    int64  `json:"id"`
+	UserID                int64  `json:"user_id"`
+	Username              string `json:"username"`
+	DesignerUserID        int64  `json:"designer_user_id"`
+	TemplateID            *int64 `json:"template_id,omitempty"`
+	OrderNo               string `json:"order_no"`
+	Type                  string `json:"type"`
+	OrderCategory         string `json:"order_category"`
+	Amount                int64  `json:"amount"`
+	Status                string `json:"status"`
+	ReviewStatus          string `json:"review_status"`
+	Title                 string `json:"title"`
+	Description           string `json:"description"`
+	PayChannel            string `json:"pay_channel"`
+	PayMode               string `json:"pay_mode"`
+	ProductID             string `json:"product_id"`
+	AmountFen             int64  `json:"amount_fen"`
+	DeliverReported       bool   `json:"deliver_reported"`
+	DeliverReportAttempts int    `json:"deliver_report_attempts"`
+	// WechatCoinMirror 该订单用户的"微信侧代币在账"本地镜像（见 WechatCoinMirrorByUsers）。
+	// 仅列表接口按页批量填充；道具模式/消费类订单该值属于用户维度而非订单维度，前端需按列语义展示。
+	WechatCoinMirror int64      `json:"wechat_coin_mirror"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 type OrderManagementSummary struct {
@@ -664,8 +667,68 @@ func (m *UserOrderModel) HasSuccessfulRecharge(userID int64) (bool, error) {
 	return count > 0, nil
 }
 
-// orderStatusFilterException 是管理端订单列表 status 参数的特殊取值：失败 + 待处理。
-const orderStatusFilterException = "exception"
+// WechatCoinMirrorByUsers 批量计算用户"微信侧代币在账"本地镜像。
+//
+// 口径：Σ(虚拟支付代币充值订单) − Σ(已退款)，只统计已结算状态：
+//   - success：已发货到账，微信侧代币已入账
+//   - refunded：退款已完成，微信侧代币已扣回
+//   - refunding（退款流转中）不计入：灵石已本地扣回但微信侧尚在退回途中，
+//     该窗口内镜像略高于微信真值，属可接受的分钟级误差（卡单由补偿任务收敛）
+//
+// 消费类订单不参与：AI 消费只扣本地灵石，不动微信代币账本；
+// 道具模式（认证费/报告）走 goodsPrice 直接扣钱，同样不占代币账本。
+// userIDs 为空时返回空 map。
+func (m *UserOrderModel) WechatCoinMirrorByUsers(userIDs []int64) (map[int64]int64, error) {
+	result := make(map[int64]int64, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(userIDs)), ",")
+	args := make([]interface{}, 0, len(userIDs)+3)
+	args = append(args, "virtualpay", "short_series_coin", "recharge")
+	for _, id := range userIDs {
+		args = append(args, id)
+	}
+	query := `SELECT user_id, COALESCE(SUM(CASE WHEN status = 'success' THEN amount WHEN status = 'refunded' THEN -amount ELSE 0 END), 0)
+	          FROM user_orders
+	          WHERE pay_channel = ? AND pay_mode = ? AND type = ? AND user_id IN (` + placeholders + `)
+	          GROUP BY user_id`
+	rows, err := m.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID, mirror int64
+		if err := rows.Scan(&userID, &mirror); err != nil {
+			return nil, err
+		}
+		result[userID] = mirror
+	}
+	return result, rows.Err()
+}
+
+// WechatCoinMirrorByUser 单用户镜像值，无虚拟支付代币充值记录时返回 0。
+func (m *UserOrderModel) WechatCoinMirrorByUser(userID int64) (int64, error) {
+	mirrors, err := m.WechatCoinMirrorByUsers([]int64{userID})
+	if err != nil {
+		return 0, err
+	}
+	return mirrors[userID], nil
+}
+
+// orderStatusFilterException 是管理端订单列表 status 参数的特殊取值。
+const (
+	// orderStatusFilterException "仅看异常单"：失败 + 待处理 + 卡单（见下两个阈值）。
+	orderStatusFilterException = "exception"
+	// orderStuckDeliveringMinutes 发货中(delivering)超过该时长视为卡单。
+	// 补偿任务 2 分钟即开始推进（virtualpayCompensateStaleMinutes），5 分钟仍未完成
+	// 说明发货链路反复失败，运营应介入。
+	orderStuckDeliveringMinutes = 5
+	// orderStuckRefundingMinutes 退款中(refunding)超过该时长视为卡单。
+	// 与补偿任务的微信侧核对阈值（refundRefundingStaleMinutes）保持一致。
+	orderStuckRefundingMinutes = 10
+)
 
 func (m *UserOrderModel) buildManagementWhere(keyword, orderType, orderCategory, status, payChannel, startDate, endDate string) (string, []interface{}) {
 	where := []string{"u.user_type = 'miniprogram'"}
@@ -686,8 +749,11 @@ func (m *UserOrderModel) buildManagementWhere(keyword, orderType, orderCategory,
 	switch {
 	case status == orderStatusFilterException:
 		// "仅看异常单"：必须在服务端对全量数据筛选，前端只过滤当前页会漏掉其他页的异常单。
-		// 字面量展开，不产生绑定参数。
-		where = append(where, "o.status IN ('failed', 'pending')")
+		// 字面量展开，不产生绑定参数。delivering/refunding 是正常流转的中间态，
+		// 只有限时超过阈值（卡单）才计入异常，避免把正在支付/退款的单全部标红。
+		where = append(where, "(o.status IN ('failed', 'pending')"+
+			" OR (o.status = 'delivering' AND o.created_at < (NOW() - INTERVAL "+strconv.Itoa(orderStuckDeliveringMinutes)+" MINUTE))"+
+			" OR (o.status = 'refunding' AND o.updated_at < (NOW() - INTERVAL "+strconv.Itoa(orderStuckRefundingMinutes)+" MINUTE)))")
 	case status != "" && status != "all":
 		where = append(where, "o.status = ?")
 		args = append(args, status)
@@ -749,6 +815,18 @@ func (m *UserOrderModel) ListForManagement(keyword, orderType, orderCategory, st
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
+	}
+	// 按本页用户批量填充微信侧代币镜像（一次聚合查询，避免每行 JOIN 派生表）
+	userIDs := make([]int64, 0, len(list))
+	for _, item := range list {
+		userIDs = append(userIDs, item.UserID)
+	}
+	mirrors, err := m.WechatCoinMirrorByUsers(userIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, item := range list {
+		item.WechatCoinMirror = mirrors[item.UserID]
 	}
 	return list, total, nil
 }

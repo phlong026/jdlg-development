@@ -233,6 +233,11 @@ func main() {
 		log.Fatalf("初始化 xpay_message_logs 表失败: %v", err)
 	}
 
+	// 10.8.2. 初始化微信侧代币余额校准记录表（双账差额监控 D7；纯增量建表，幂等）
+	if err := model.NewWechatCoinCalibrationModel(db).InitTable(); err != nil {
+		log.Fatalf("初始化 wechat_coin_calibrations 表失败: %v", err)
+	}
+
 	// 10.9. 初始化邀请关系表
 	inviteRelationModel := model.NewInviteRelationModel(db)
 	if err := inviteRelationModel.InitTable(); err != nil {

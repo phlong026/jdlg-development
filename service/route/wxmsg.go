@@ -277,13 +277,14 @@ func dispatchXPayEvent(event, outTradeNo, openID string, cfg *config.Config, dep
 	}
 }
 
-// markVirtualPayOrderRefunded 退款最小处理：订单状态置 refunded。
+// markVirtualPayOrderRefunded 退款收尾：订单落 refunded 终态 + 会员整单回收。
 //
-// 业务侧的灵石/会员/认证回滚动作留待产品/财务确认（历史遗留问题阶段 3.3）。
-// 当前先把订单状态记下，确保推送被正确 ack；运营可在管理后台基于 status='refunded' 做后续处置。
+// 原"最小处理"（仅改状态）升级为 SettleVirtualPayRefundCompleted：
+// 退款在微信侧确认完成后，该订单授予的会员同步回收（T8 策略：整单回收）；
+// 会员已被后续订单续期时跳过并留日志，由运营人工评估。
 func markVirtualPayOrderRefunded(deps VirtualPayDeps, orderNo string) error {
 	if deps.UserOrderModel == nil {
 		return errors.New("UserOrderModel not injected")
 	}
-	return deps.UserOrderModel.UpdateStatus(orderNo, "refunded")
+	return SettleVirtualPayRefundCompleted(deps, orderNo)
 }

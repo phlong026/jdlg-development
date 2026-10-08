@@ -26,6 +26,12 @@ type VirtualPayDeps struct {
 	UserMembershipModel *model.UserMembershipModel
 	CertificationModel  *model.CertificationApplicationModel
 	XPayMessageLogModel *model.XPayMessageLogModel
+	// SessionKeyModel 微信 session_key 缓存：顺路校准（T7）按 openid 取签名凭证
+	SessionKeyModel *model.SessionKeyRedisModel
+	// WechatCoinCalibrationModel 微信侧代币余额实测记录（D7 双账差额监控）
+	WechatCoinCalibrationModel *model.WechatCoinCalibrationModel
+	// SupportTicketModel 双账差额自动工单（T7）
+	SupportTicketModel *model.SupportTicketModel
 }
 
 // ErrOrderNotFound 订单不存在。
@@ -204,4 +210,30 @@ func readOrderAmountFen(deps VirtualPayDeps, orderNo string) (int64, error) {
 		return 0, err
 	}
 	return v, nil
+}
+
+// SettleVirtualPayRefundCompleted 退款在微信侧确认完成后的本地收尾（推送与补偿任务共用）。
+//
+//  1. 订单落 refunded 终态；
+//  2. 整单回收该订单授予的会员（T8 策略：整单回收——首次授予撤销、续期回滚到快照、
+//     已被后续订单续期则跳过转人工）。
+//
+// 收尾放在"退款确认完成"而非"发起退款"时点：若退款中途失败回滚（灵石已退还、
+// 状态回 success），会员未被回收，无需补偿；反之在确认完成时回收，不会冤枉用户。
+func SettleVirtualPayRefundCompleted(deps VirtualPayDeps, orderNo string) error {
+	if deps.UserOrderModel == nil {
+		return errors.New("virtualpay: UserOrderModel 未注入")
+	}
+	if err := deps.UserOrderModel.UpdateStatus(orderNo, "refunded"); err != nil {
+		return err
+	}
+	if deps.UserMembershipModel != nil {
+		action, err := deps.UserMembershipModel.RevokeMembershipBySourceOrderNo(orderNo)
+		if err != nil {
+			log.Printf("[VirtualPay][资金] 退款收尾-会员回收失败，需人工核对: orderNo=%s action=%s err=%v", orderNo, action, err)
+		} else {
+			log.Printf("[VirtualPay][资金] 退款收尾-会员回收: orderNo=%s action=%s", orderNo, action)
+		}
+	}
+	return nil
 }
