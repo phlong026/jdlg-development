@@ -7,6 +7,8 @@ export interface AIPricing {
     scene: string;
     stones: number;
     extra_config?: any;
+    /** 调价备注：写入版本记录（可空），后端仅在定价变化时留痕 */
+    note?: string;
     created_at?: string;
     updated_at?: string;
 }

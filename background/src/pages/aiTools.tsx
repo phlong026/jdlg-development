@@ -1,5 +1,5 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiLayers, FiHome, FiImage, FiCompass } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import {
@@ -8,8 +8,14 @@ import {
     createAITool,
     updateAITool,
     deleteAITool,
+    publishAITool,
+    getAIToolDiff,
+    getAIToolVersions,
+    rollbackAITool,
     type AIToolItem,
     type AIToolCategory,
+    type AIToolDiffItem,
+    type AIToolVersion,
     type AIToolPresetReference,
     type AIToolStylePreset,
     type AIToolUpsertRequest,
@@ -54,6 +60,7 @@ const defaultForm = () => ({
     isCommon: false,
     presetReferences: [] as AIToolPresetReference[],
     stylePresets: [] as AIToolStylePreset[],
+    draftNote: '',
 });
 
 type ToolFormState = ReturnType<typeof defaultForm>;
@@ -96,6 +103,29 @@ const categoryLabelMap: Record<AIToolCategory, string> = {
     planning: '规划',
 };
 
+/** 近7日逐日调用迷你趋势图：纯 SVG 折线，数据来自列表接口的 daily_series_7d */
+const UsageSpark: React.FC<{ series?: number[] }> = ({ series }) => {
+    const points = (series ?? []).filter((n) => typeof n === 'number');
+    if (points.length < 2) {
+        return <span className="tool-spark-empty">—</span>;
+    }
+    const max = Math.max(1, ...points);
+    const width = 84;
+    const height = 22;
+    const step = width / (points.length - 1);
+    const path = points
+        .map((value, index) => `${(index * step).toFixed(1)},${(height - 2 - (value / max) * (height - 4)).toFixed(1)}`)
+        .join(' ');
+    const rising = points[points.length - 1] >= points[0];
+    return (
+        <svg className="tool-spark" viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-label="近7日调用趋势">
+            <polyline fill="none" stroke={rising ? '#2f8f6b' : '#c0392b'} strokeWidth="1.6" points={path} />
+        </svg>
+    );
+};
+
+const formatFailedRate = (rate?: number) => (rate == null ? '—' : `${((rate || 0) * 100).toFixed(1)}% 失败`);
+
 const AITools: React.FC = () => {
     const [tools, setTools] = useState<AIToolItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -109,6 +139,16 @@ const AITools: React.FC = () => {
     const [selectedTool, setSelectedTool] = useState<AIToolItem | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [formData, setFormData] = useState<ToolFormState>(defaultForm());
+    /** 列表排序：usage_7d 按近7日调用降序（默认，运营视角），sort_order 按后台配置顺序 */
+    const [sortBy, setSortBy] = useState<'usage_7d' | 'sort_order'>('usage_7d');
+    /** 发布确认弹窗（diff of 草稿 vs 线上） */
+    const [diffTarget, setDiffTarget] = useState<{ tool: AIToolItem; items: AIToolDiffItem[]; draftNote: string } | null>(null);
+    const [publishNote, setPublishNote] = useState('');
+    const [publishing, setPublishing] = useState(false);
+    /** 版本历史弹窗 */
+    const [versionsTarget, setVersionsTarget] = useState<AIToolItem | null>(null);
+    const [versions, setVersions] = useState<AIToolVersion[] | null>(null);
+    const [rollingBackId, setRollingBackId] = useState<number | null>(null);
 
     const loadTools = useCallback(async () => {
         setLoading(true);
@@ -127,6 +167,78 @@ const AITools: React.FC = () => {
             setLoading(false);
         }
     }, [categoryFilter, publishedFilter, searchKeyword]);
+
+    /** 展示排序：近7日调用（默认）或配置排序 */
+    const sortedTools = useMemo(() => {
+        const list = [...tools];
+        if (sortBy === 'usage_7d') {
+            list.sort((a, b) => (b.usage_7d ?? 0) - (a.usage_7d ?? 0) || (a.sort_order || 0) - (b.sort_order || 0));
+        } else {
+            list.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        }
+        return list;
+    }, [tools, sortBy]);
+
+    /** 近7日零调用的已发布工具：运营下线/合并候选 */
+    const zeroUsageCount = useMemo(() => tools.filter((tool) => tool.is_published && (tool.usage_7d ?? 0) === 0).length, [tools]);
+
+    /** 有未发布修改（待发布）的工具数 */
+    const pendingDraftCount = useMemo(() => tools.filter((tool) => tool.draft_differs).length, [tools]);
+
+    /** 打开发布确认弹窗：拉取草稿与线上的差异 */
+    const handleOpenDiff = async (tool: AIToolItem) => {
+        try {
+            const diff = await getAIToolDiff(tool.id);
+            setPublishNote('');
+            setDiffTarget({ tool, items: diff.items || [], draftNote: diff.draft_note || '' });
+        } catch (error: any) {
+            alert(`获取草稿差异失败: ${error?.message || '未知错误'}`);
+        }
+    };
+
+    const handleConfirmPublish = async () => {
+        if (!diffTarget) return;
+        setPublishing(true);
+        try {
+            const result = await publishAITool(diffTarget.tool.id, publishNote.trim() || undefined);
+            alert(`已发布 v${result.version_no}，线上即时生效。`);
+            setDiffTarget(null);
+            await loadTools();
+        } catch (error: any) {
+            alert(`发布失败: ${error?.message || '未知错误'}`);
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    const handleOpenVersions = async (tool: AIToolItem) => {
+        setVersionsTarget(tool);
+        setVersions(null);
+        try {
+            const list = await getAIToolVersions(tool.id);
+            setVersions(list);
+        } catch (error: any) {
+            console.error('加载版本历史失败:', error);
+            setVersions([]);
+        }
+    };
+
+    const handleRollback = async (tool: AIToolItem, version: AIToolVersion) => {
+        if (!window.confirm(`回滚到 v${version.version_no}？\n\n线上将立即恢复为该版本配置；回滚本身也会生成新版本号并留痕。`)) {
+            return;
+        }
+        setRollingBackId(version.id);
+        try {
+            const result = await rollbackAITool(tool.id, version.id);
+            alert(`已回滚：新版本 v${result.version_no}（内容 = v${result.rolled_back_to}）。`);
+            await handleOpenVersions(tool);
+            await loadTools();
+        } catch (error: any) {
+            alert(`回滚失败: ${error?.message || '未知错误'}`);
+        } finally {
+            setRollingBackId(null);
+        }
+    };
 
     useEffect(() => {
         void loadTools();
@@ -177,6 +289,7 @@ const AITools: React.FC = () => {
             isCommon: detail.is_common ?? false,
             presetReferences: Array.isArray(detail.preset_references) ? detail.preset_references.map((item) => ({ ...item })) : [],
             stylePresets: Array.isArray(detail.style_presets) ? detail.style_presets.map((item) => ({ ...item })) : [],
+            draftNote: (detail as any).draft_note || '',
         });
     };
 
@@ -236,6 +349,7 @@ const AITools: React.FC = () => {
                 prompt_suffix: String(item.prompt_suffix || '').trim(),
             };
         }).filter((item) => item.id || item.name || item.preview_image_url || item.model_reference_image_url || item.prompt_suffix),
+        note: formData.draftNote.trim(),
     });
 
     const validateForm = () => {
@@ -270,6 +384,7 @@ const AITools: React.FC = () => {
         try {
             await createAITool(buildPayload());
             resetModal();
+            alert('工具已创建，内容存为草稿' + (formData.isPublished ? '并已发布 v1（线上可见）' : '（未发布，线上不可见；发布后生效）'));
             await loadTools();
         } catch (error: any) {
             alert(error?.message || '创建失败');
@@ -285,9 +400,10 @@ const AITools: React.FC = () => {
         try {
             await updateAITool(String(selectedTool.id), buildPayload());
             resetModal();
+            alert('已保存为草稿：线上配置未变化。要生效请在列表点「发布」。');
             await loadTools();
         } catch (error: any) {
-            alert(error?.message || '更新失败');
+            alert(error?.message || '保存失败');
         } finally {
             setActionLoading(null);
         }
@@ -480,6 +596,10 @@ const AITools: React.FC = () => {
                                 <option value="published">已发布</option>
                                 <option value="draft">未发布</option>
                             </select>
+                            <select className="management-search-select" value={sortBy} onChange={(e) => setSortBy(e.target.value as 'usage_7d' | 'sort_order')}>
+                                <option value="usage_7d">按近7日调用排序</option>
+                                <option value="sort_order">按配置顺序排序</option>
+                            </select>
                             <button className="btn-primary" onClick={handleSearch}>搜索工具</button>
                         </>
                     )}
@@ -487,6 +607,8 @@ const AITools: React.FC = () => {
                         <>
                             <div>
                                 当前共 <strong>{total}</strong> 个 AI 工具
+                                {pendingDraftCount > 0 ? <span className="tool-pending-draft"> · {pendingDraftCount} 个待发布</span> : null}
+                                {zeroUsageCount > 0 ? <span className="tool-zero-usage"> · {zeroUsageCount} 个已发布但近7日零调用</span> : null}
                             </div>
                             <div className="management-search-tags">
                                 {searchKeyword ? <span className="management-search-tag">关键词：{searchKeyword}</span> : null}
@@ -501,11 +623,13 @@ const AITools: React.FC = () => {
                     <div className="loading-state">加载中...</div>
                 ) : (
                     <div className="ai-tools-list">
-                        {tools.length === 0 ? (
+                        {sortedTools.length === 0 ? (
                             <div className="empty-state">暂无 AI 工具</div>
                         ) : (
-                            tools.map((tool) => (
-                                <div key={tool.id} className="ai-tool-item">
+                            sortedTools.map((tool) => {
+                                const zeroUsage = tool.is_published && (tool.usage_7d ?? 0) === 0;
+                                return (
+                                <div key={tool.id} className={`ai-tool-item ${zeroUsage ? 'tool-item-zero' : ''}`}>
                                     <div className="tool-icon">{getCategoryIcon(tool.category)}</div>
                                     <div className="tool-content">
                                         <div className="tool-header">
@@ -518,22 +642,36 @@ const AITools: React.FC = () => {
                                                 <span className={`tool-status ${tool.is_published ? 'published' : 'draft'}`}>
                                                     {tool.is_published ? '已发布' : '未发布'}
                                                 </span>
+                                                {tool.draft_differs ? <span className="tool-badge pending-draft">有未发布修改</span> : null}
+                                                {!tool.draft_differs && tool.has_draft ? <span className="tool-badge draft-clean">草稿</span> : null}
                                             </div>
                                         </div>
                                         <div className="tool-meta">
                                             <span className="tool-category">{getCategoryLabel(tool.category)}</span>
                                             <span>排序: {tool.sort_order || 0}</span>
-                                            <span>使用: {tool.usage_count || 0}</span>
-                                            <span>旧版兼容项: {(tool.preset_references || []).length}</span>
-                                            <span>风格卡片: {(tool.style_presets || []).length}</span>
+                                            <span className="tool-usage-hl">近7日调用: {(tool.usage_7d ?? 0).toLocaleString()}</span>
+                                            <span>{formatFailedRate(tool.failed_rate_7d)}</span>
+                                            <span>贡献灵石: {(tool.stones_7d ?? 0).toLocaleString()}</span>
+                                            <span>累计使用: {tool.usage_count || 0}</span>
                                         </div>
                                         <div className="tool-preview">
                                             <p>{tool.short_description || '暂无短描述'}</p>
                                             {tool.default_prompt ? <p className="tool-prompt">默认提示词：{tool.default_prompt}</p> : null}
                                         </div>
+                                        <div className="tool-usage-foot">
+                                            <UsageSpark series={tool.daily_series_7d} />
+                                            {zeroUsage ? <span className="tool-zero-hint">近7日零调用 · 建议下线或合并</span> : null}
+                                        </div>
                                     </div>
                                     <div className="tool-actions">
-                                        <button className="btn-action btn-edit" onClick={() => void handleEdit(tool)} title="编辑">
+                                        <button className="btn-action btn-publish" onClick={() => void handleOpenDiff(tool)} disabled={!tool.has_draft}
+                                            title={tool.has_draft ? '把当前草稿发布到线上' : '没有待发布的草稿'}>
+                                            发布
+                                        </button>
+                                        <button className="btn-action btn-versions" onClick={() => void handleOpenVersions(tool)} title="版本历史与效果对比">
+                                            版本
+                                        </button>
+                                        <button className="btn-action btn-edit" onClick={() => void handleEdit(tool)} title="编辑（保存进草稿）">
                                             <FiEdit size={14} />
                                         </button>
                                         <button className="btn-action btn-delete" onClick={() => void handleDelete(String(tool.id))} disabled={actionLoading === String(tool.id)} title="删除">
@@ -541,7 +679,8 @@ const AITools: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 )}
@@ -615,6 +754,10 @@ const AITools: React.FC = () => {
                                 <div className="form-group">
                                     <label>详细描述</label>
                                     <textarea className="form-input" rows={4} value={formData.detailDescription} onChange={(e) => setFormData((prev) => ({ ...prev, detailDescription: e.target.value }))} placeholder="工具详情页介绍" />
+                                </div>
+                                <div className="form-group">
+                                    <label>修改备注 <span className="form-help-inline">（写入版本记录，不进入生效内容）</span></label>
+                                    <input className="form-input" value={formData.draftNote} onChange={(e) => setFormData((prev) => ({ ...prev, draftNote: e.target.value }))} placeholder="如：强化线稿表现（发布与回滚历史里可见）" />
                                 </div>
                                 <div className="form-group">
                                     <label>默认提示词</label>
@@ -848,8 +991,113 @@ const AITools: React.FC = () => {
                             <div className="modal-footer">
                                 <button className="btn-secondary" onClick={resetModal}>取消</button>
                                 <button className="btn-primary" onClick={showEditModal ? () => void handleSaveEdit() : () => void handleAdd()} disabled={actionLoading === (selectedTool ? String(selectedTool.id) : 'add')}>
-                                    {actionLoading === (selectedTool ? String(selectedTool.id) : 'add') ? '保存中...' : '保存'}
+                                    {actionLoading === (selectedTool ? String(selectedTool.id) : 'add') ? '保存中...' : (showEditModal ? '保存草稿' : '创建（存为草稿）')}
                                 </button>
+                            </div>
+                            {showEditModal && selectedTool ? (
+                                <div className="modal-draft-hint">
+                                    保存只写入草稿，线上配置不变；需要生效请在列表点「发布」，发布前会展示与线上的差异。
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                )}
+
+                {/* 发布确认弹窗：草稿 vs 线上差异 + 备注 */}
+                {diffTarget && (
+                    <div className="modal-overlay" onClick={() => setDiffTarget(null)}>
+                        <div className="modal-content modal-form tool-diff-modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3>发布确认 · {diffTarget.tool.name}</h3>
+                                <button className="modal-close" onClick={() => setDiffTarget(null)}>✕</button>
+                            </div>
+                            <div className="modal-body">
+                                {diffTarget.items.length === 0 ? (
+                                    <div className="diff-empty">草稿与线上配置一致，无需发布。</div>
+                                ) : (
+                                    <>
+                                        <p className="diff-summary">以下 <b>{diffTarget.items.length}</b> 处将发布到线上（小程序即时生效）：</p>
+                                        <table className="diff-table">
+                                            <thead>
+                                                <tr><th>项目</th><th>线上</th><th>草稿</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {diffTarget.items.map((item) => (
+                                                    <tr key={item.field}>
+                                                        <td className="diff-label">
+                                                            {item.label}
+                                                            {item.kind === 'added' ? <em className="diff-kind added">新增</em> : null}
+                                                            {item.kind === 'removed' ? <em className="diff-kind removed">移除</em> : null}
+                                                        </td>
+                                                        <td className="diff-before">{item.before || <span className="diff-none">（无）</span>}</td>
+                                                        <td className="diff-after">{item.after || <span className="diff-none">（删除）</span>}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        <div className="form-group" style={{ marginTop: 12 }}>
+                                            <label>发布备注</label>
+                                            <input value={publishNote} onChange={(e) => setPublishNote(e.target.value)} placeholder="写入版本记录，如：v3 强化线稿" />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn-secondary" onClick={() => setDiffTarget(null)}>取消</button>
+                                <button className="btn-primary" onClick={() => void handleConfirmPublish()} disabled={publishing || diffTarget.items.length === 0}>
+                                    {publishing ? '发布中…' : `确认发布（${diffTarget.items.length} 处变更）`}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 版本历史弹窗：版本链 + 发布前后效果对比 + 回滚 */}
+                {versionsTarget && (
+                    <div className="modal-overlay" onClick={() => setVersionsTarget(null)}>
+                        <div className="modal-content modal-form tool-versions-modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3>版本历史 · {versionsTarget.name}</h3>
+                                <button className="modal-close" onClick={() => setVersionsTarget(null)}>✕</button>
+                            </div>
+                            <div className="modal-body">
+                                {versions === null ? (
+                                    <div className="diff-empty">加载中…</div>
+                                ) : versions.length === 0 ? (
+                                    <div className="diff-empty">该工具还没有发布过版本（旧工具从下次发布起开始留版本）。</div>
+                                ) : (
+                                    <table className="diff-table versions-table">
+                                        <thead>
+                                            <tr><th>版本</th><th>发布时间</th><th>操作人 / 备注</th><th>发布前7日</th><th>发布后</th><th>操作</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {versions.map((version, index) => (
+                                                <tr key={version.id}>
+                                                    <td><b>v{version.version_no}</b>{index === 0 ? <em className="diff-kind current">线上</em> : null}</td>
+                                                    <td>{version.published_at ? new Date(version.published_at).toLocaleString('zh-CN') : '-'}</td>
+                                                    <td>{version.created_by || '-'}<span className="diff-note">{version.note || ''}</span></td>
+                                                    <td className="diff-stat">
+                                                        {version.stats ? `${version.stats.before.total} 次 · ${version.stats.before.success_rate >= 0 ? (version.stats.before.success_rate * 100).toFixed(1) + '%' : '—'}` : '—'}
+                                                    </td>
+                                                    <td className="diff-stat">
+                                                        {version.stats ? `${version.stats.after.total} 次 · ${version.stats.after.success_rate >= 0 ? (version.stats.after.success_rate * 100).toFixed(1) + '%' : '—'}` : '—'}
+                                                    </td>
+                                                    <td>
+                                                        {index === 0 ? <span className="diff-none">当前线上</span> : (
+                                                            <button className="btn-link rollback-link" onClick={() => void handleRollback(versionsTarget, version)} disabled={rollingBackId === version.id}>
+                                                                {rollingBackId === version.id ? '回滚中…' : `回滚到此版`}
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                <div className="diff-empty small">效果对比口径：发布前 7 日 vs 本版发布至下版发布之间；「—」表示无样本。</div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn-primary" onClick={() => setVersionsTarget(null)}>关闭</button>
                             </div>
                         </div>
                     </div>

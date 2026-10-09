@@ -20,6 +20,7 @@ export interface AITaskItem {
     status: string;
     raw_status?: string;
     stones_used: number;
+    refunded_stones?: number;
     error_message: string;
     raw_error_message?: string;
     segment_count?: number;
@@ -57,15 +58,28 @@ export interface AITaskDetail {
 export interface AITaskListResponse {
     list: AITaskItem[];
     summary: AITaskSummary;
+    queues?: AIQueueCounts;
     total: number;
     page: number;
     page_size: number;
 }
 
+/** 运营队列计数（后端 QueueCounts 聚合，角标与队列 Tab 共用） */
+export interface AIQueueCounts {
+    failed: number;
+    timeout: number;
+    running: number;
+    today_new: number;
+    total_open: number;
+}
+
+export type AITaskQueue = 'failed' | 'timeout' | 'running' | 'today' | 'all';
+
 export interface AITaskListParams {
     keyword?: string;
     status?: string;
     scene?: string;
+    queue?: AITaskQueue;
     page?: number;
     page_size?: number;
 }
@@ -113,5 +127,31 @@ export const createAITaskSupportTicket = async (id: string) => {
 
 export const createAIVideoTaskSupportTicket = async (id: string) => {
     const res = await post<CreateSupportTicketResult>(API_ENDPOINTS.AI_TASKS.VIDEO_SUPPORT_TICKET(id), {});
+    return res.data!;
+};
+
+export interface BatchSupportTicketResult {
+    created_count: number;
+    existed_count: number;
+    created_ids: number[];
+    first_error: string;
+}
+
+/** 批量转异常工单：失败队列勾选多条一次性建单，已有未关闭工单的自动跳过 */
+export const batchCreateAITaskSupportTickets = async (ids: number[]) => {
+    const res = await post<BatchSupportTicketResult>(API_ENDPOINTS.AI_TASKS.BATCH_SUPPORT_TICKETS, { ids });
+    return res.data!;
+};
+
+export interface RetryAITaskResult {
+    new_task_id: number;
+    new_task_no: string;
+    retry_of: string;
+    note: string;
+}
+
+/** 重新执行失败任务：以当前启用配置重新入队，不重复扣费（管理员补偿动作，仅图片任务） */
+export const retryAITask = async (id: string | number) => {
+    const res = await post<RetryAITaskResult>(API_ENDPOINTS.AI_TASKS.RETRY(id), {});
     return res.data!;
 };

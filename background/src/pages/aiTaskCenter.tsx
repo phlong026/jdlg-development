@@ -3,15 +3,19 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     backfillAITaskModels,
+    batchCreateAITaskSupportTickets,
     createAITaskSupportTicket,
     createAIVideoTaskSupportTicket,
     getAITaskDetail,
     getAITaskList,
     getAIVideoTaskDetail,
     getAIVideoTaskList,
+    retryAITask,
     type AITaskDetail,
     type AITaskItem,
     type AITaskSummary,
+    type AIQueueCounts,
+    type AITaskQueue,
 } from '../api/aiTasks';
 import { getSupportTicketDetail, updateSupportTicketResolutionNote, updateSupportTicketStatus } from '../api/supportTickets';
 import './aiTaskCenter.scss';
@@ -23,18 +27,63 @@ const emptySummary: AITaskSummary = {
     failed_count: 0,
 };
 
+const emptyQueues: AIQueueCounts = { failed: 0, timeout: 0, running: 0, today_new: 0, total_open: 0 };
+
 const pageSizeOptions = [20, 50, 100];
 
+/**
+ * 状态统一映射（改版 2026-10）：图片/视频两套状态机（pending·queued / running·processing / success·completed）
+ * 归并为 4 个运营状态。列表展示与筛选选项都用这一份。
+ */
 const formatStatus = (status: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        pending: { label: '待处理', className: 'status-pending' },
-        running: { label: '处理中', className: 'status-running' },
-        processing: { label: '处理中', className: 'status-running' },
-        success: { label: '成功', className: 'status-success' },
-        failed: { label: '失败', className: 'status-failed' },
-    };
-    return map[status] || { label: status || '-', className: '' };
+    switch (status) {
+        case 'pending':
+        case 'queued':
+            return { label: '待处理', className: 'status-pending', key: 'pending' };
+        case 'running':
+        case 'processing':
+            return { label: '处理中', className: 'status-running', key: 'running' };
+        case 'success':
+        case 'completed':
+            return { label: '成功', className: 'status-success', key: 'success' };
+        case 'failed':
+            return { label: '失败', className: 'status-failed', key: 'failed' };
+        default:
+            return { label: status || '-', className: '', key: status || '-' };
+    }
 };
+
+const sceneLabels: Record<string, string> = {
+    ai_draw_single: 'AI 绘画-单图',
+    ai_draw_multi: 'AI 绘画-多图',
+    new_minnan_tool_text_to_image: '新闽派-文生图',
+    new_minnan_tool_image_to_image: '新闽派-图生图',
+    ai_chat_single: 'AI 对话-单轮',
+    ai_chat_multi: 'AI 对话-多轮',
+    rural_villa_design: '乡村别墅设计',
+    allround_design: '全能设计',
+    building_replacement: '建筑换新',
+    parent_child_design: '亲子设计',
+    ai_cost_doc: 'AI 造价文档',
+};
+
+const sceneLabel = (scene?: string) => (scene ? sceneLabels[scene] || scene : '-');
+
+interface TaskQueueTab {
+    key: AITaskQueue;
+    label: string;
+    help: string;
+    /** 需要人处理的队列：角标用红色 */
+    alert?: boolean;
+}
+
+const queueTabs: TaskQueueTab[] = [
+    { key: 'failed', label: '失败待处理', help: '近7日失败任务（系统已自动退款，待人工排查/转工单）', alert: true },
+    { key: 'timeout', label: '超时未完成', help: '处理中但超过30分钟未出结果', alert: true },
+    { key: 'running', label: '处理中', help: '排队与执行中的任务' },
+    { key: 'today', label: '今日新增', help: '今天进入系统的全部任务' },
+    { key: 'all', label: '全部任务', help: '完整任务池（可用筛选器缩小范围）' },
+];
 
 const formatDateTime = (value?: string) => {
     if (!value) return '-';
@@ -105,6 +154,17 @@ const resolveTaskModelText = (task?: { model?: string; api_endpoint?: string }, 
     return '模型待回填';
 };
 
+/** 主力生图模型（与后端降级链一致）：任务最终模型 ≠ 主力 即发生了降级 */
+const PRIMARY_DRAW_MODEL = 'gpt-image-2-vip';
+const FALLBACK_DRAW_MODELS = ['gemini-3-pro', 'seedream'];
+
+const isFallbackModel = (model?: string) => {
+    const value = String(model || '').toLowerCase();
+    if (!value || value === '模型待回填') return false;
+    if (value.startsWith(PRIMARY_DRAW_MODEL)) return false;
+    return FALLBACK_DRAW_MODELS.some((prefix) => value.startsWith(prefix));
+};
+
 const isLongRunningTask = (item: AITaskItem) => {
     if (!['pending', 'running', 'processing'].includes(item.status)) {
         return false;
@@ -116,23 +176,24 @@ const isLongRunningTask = (item: AITaskItem) => {
     return Date.now() - createdAt >= 30 * 60 * 1000;
 };
 
-const getTaskFilterSummary = (params: { tab: 'image' | 'video'; keyword: string; status: string; scene: string }) => {
-    const parts: string[] = [];
-    parts.push(params.tab === 'image' ? '图片任务' : '视频任务');
-    if (params.keyword) parts.push(`关键词：${params.keyword}`);
-    if (params.status !== 'all') parts.push(`状态：${formatStatus(params.status).label}`);
-    if (params.tab === 'image' && params.scene !== 'all') parts.push(`场景：${params.scene}`);
-    return parts.join(' ｜ ');
-};
-
 const formatQuickActionTimestamp = () => new Date().toLocaleString('zh-CN');
 
 const AITaskCenter: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<'image' | 'video'>('image');
+    const [queue, setQueue] = useState<AITaskQueue>(() => {
+        const fromUrl = searchParams.get('queue');
+        return queueTabs.some((tab) => tab.key === fromUrl) ? (fromUrl as AITaskQueue) : 'failed';
+    });
     const [list, setList] = useState<AITaskItem[]>([]);
     const [summary, setSummary] = useState<AITaskSummary>(emptySummary);
+    const [queues, setQueues] = useState<AIQueueCounts>(emptyQueues);
+    /** 视频队列计数（与图片分开存，Tab 切换时各自显示） */
+    const [videoQueues, setVideoQueues] = useState<AIQueueCounts>(emptyQueues);
+    /** 失败队列勾选中的任务 ID（批量转工单用） */
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [batchLoading, setBatchLoading] = useState(false);
     const [loading, setLoading] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
@@ -155,9 +216,11 @@ const AITaskCenter: React.FC = () => {
     const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
     const currentStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
     const currentEnd = total === 0 ? 0 : Math.min(page * pageSize, total);
+    const activeQueue = queueTabs.find((tab) => tab.key === queue) || queueTabs[0];
 
     const loadData = async (
         tab: 'image' | 'video',
+        nextQueue: AITaskQueue = queue,
         nextKeyword = keyword,
         nextStatus = status,
         nextScene = scene,
@@ -166,11 +229,26 @@ const AITaskCenter: React.FC = () => {
     ) => {
         setLoading(true);
         try {
+            const params = {
+                keyword: nextKeyword,
+                status: nextQueue === 'all' ? nextStatus : 'all',
+                scene: nextScene,
+                page: nextPage,
+                page_size: nextPageSize,
+                queue: nextQueue,
+            };
             const response = tab === 'image'
-                ? await getAITaskList({ keyword: nextKeyword, status: nextStatus, scene: nextScene, page: nextPage, page_size: nextPageSize })
-                : await getAIVideoTaskList({ keyword: nextKeyword, status: nextStatus, page: nextPage, page_size: nextPageSize });
+                ? await getAITaskList(params)
+                : await getAIVideoTaskList(params);
             setList(response.list || []);
             setSummary(response.summary || emptySummary);
+            if (response.queues) {
+                if (tab === 'image') {
+                    setQueues(response.queues);
+                } else {
+                    setVideoQueues(response.queues);
+                }
+            }
             setTotal(response.total || 0);
             setPage(response.page || nextPage);
             setPageSize(response.page_size || nextPageSize);
@@ -183,28 +261,29 @@ const AITaskCenter: React.FC = () => {
     };
 
     useEffect(() => {
-        void loadData(activeTab, keyword, status, scene, 1, pageSize);
-    }, [activeTab]);
+        void loadData('image', queue, '', 'all', 'all', 1, 20);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [queue]);
 
     useEffect(() => {
-        // 支持 ?tab=image|video 与 ?status=failed（总控台失败任务待办带参直达，落地即应用筛选）
+        // 支持 ?tab=image|video 与 ?status=failed（总控台/总览页带参直达，落地即应用）
         const tab = searchParams.get('tab');
         const statusParam = searchParams.get('status');
-        let nextTab = activeTab;
+        const queueParam = searchParams.get('queue');
         let changed = false;
         if ((tab === 'image' || tab === 'video') && tab !== activeTab) {
             setActiveTab(tab);
-            nextTab = tab;
             changed = true;
+        }
+        if (queueParam && queueTabs.some((t) => t.key === queueParam) && queueParam !== queue) {
+            setQueue(queueParam as AITaskQueue);
+            return; // queue 变化由上面的 effect 处理
         }
         if (statusParam && statusParam !== 'all' && statusParam !== status) {
             setStatus(statusParam);
+            setQueue('all');
+            void loadData(tab === 'video' ? 'video' : 'image', 'all', keyword, statusParam, scene, 1, pageSize);
             changed = true;
-        }
-        if (changed) {
-            // tab 变化时 activeTab 的监听 effect 会用最新 state 重跑；
-            // 仅 status 变化的场景在这里手动加载一次
-            void loadData(nextTab, keyword, statusParam && statusParam !== 'all' ? statusParam : status, scene, 1, pageSize);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
@@ -251,8 +330,17 @@ const AITaskCenter: React.FC = () => {
         })();
     }, [searchParams, selectedDetail?.id, selectedDetail?.type]);
 
+    const pickQueue = (nextQueue: AITaskQueue) => {
+        if (nextQueue === queue) return;
+        setQueue(nextQueue);
+        setBackfillFeedback('');
+        const next = new URLSearchParams(searchParams);
+        next.set('queue', nextQueue);
+        setSearchParams(next, { replace: true });
+    };
+
     const handleSearch = () => {
-        void loadData(activeTab, keyword, status, scene, 1, pageSize);
+        void loadData(activeTab, queue, keyword, status, scene, 1, pageSize);
     };
 
     const handleReset = () => {
@@ -260,26 +348,26 @@ const AITaskCenter: React.FC = () => {
         setStatus('all');
         setScene('all');
         setBackfillFeedback('');
-        void loadData(activeTab, '', 'all', 'all', 1, pageSize);
+        void loadData(activeTab, queue, '', 'all', 'all', 1, pageSize);
     };
 
     const handlePageSizeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const nextPageSize = Number(event.target.value) || 20;
-        void loadData(activeTab, keyword, status, scene, 1, nextPageSize);
+        void loadData(activeTab, queue, keyword, status, scene, 1, nextPageSize);
     };
 
     const handlePrevPage = () => {
         if (page <= 1 || loading) {
             return;
         }
-        void loadData(activeTab, keyword, status, scene, page - 1, pageSize);
+        void loadData(activeTab, queue, keyword, status, scene, page - 1, pageSize);
     };
 
     const handleNextPage = () => {
         if (page >= totalPages || loading) {
             return;
         }
-        void loadData(activeTab, keyword, status, scene, page + 1, pageSize);
+        void loadData(activeTab, queue, keyword, status, scene, page + 1, pageSize);
     };
 
     const handleTabChange = (tab: 'image' | 'video') => {
@@ -287,7 +375,9 @@ const AITaskCenter: React.FC = () => {
             return;
         }
         setBackfillFeedback('');
+        setSelectedIds(new Set());
         setActiveTab(tab);
+        void loadData(tab, queue, keyword, 'all', 'all', 1, pageSize);
     };
 
     const handleBackfillModels = async () => {
@@ -298,7 +388,7 @@ const AITaskCenter: React.FC = () => {
             const summaryText = `本次检查 ${result.inspected_count} 条成功图片任务，回填 ${result.updated_count} 条模型/接口信息。`;
             setBackfillFeedback(summaryText);
             alert(summaryText);
-            await loadData('image', activeTab === 'image' ? keyword : '', activeTab === 'image' ? status : 'all', activeTab === 'image' ? scene : 'all', activeTab === 'image' ? page : 1, activeTab === 'image' ? pageSize : 20);
+            await loadData('image', queue, keyword, status, scene, page, pageSize);
         } catch (error) {
             console.error('回填历史任务模型失败:', error);
             alert('回填历史任务模型失败');
@@ -387,6 +477,65 @@ const AITaskCenter: React.FC = () => {
         }
     };
 
+    const activeQueueCounts = activeTab === 'image' ? queues : videoQueues;
+    const queueCount = (key: AITaskQueue): number | undefined => {
+        switch (key) {
+            case 'failed': return activeQueueCounts.failed;
+            case 'timeout': return activeQueueCounts.timeout;
+            case 'running': return activeQueueCounts.running;
+            case 'today': return activeQueueCounts.today_new;
+            default: return undefined;
+        }
+    };
+
+    const toggleSelected = (id: number) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    };
+
+    const handleBatchTickets = async () => {
+        const ids = Array.from(selectedIds);
+        if (!ids.length) return;
+        if (!window.confirm(`将为勾选的 ${ids.length} 个失败任务批量创建异常工单（已有未关闭工单的自动跳过），是否继续？`)) {
+            return;
+        }
+        setBatchLoading(true);
+        try {
+            const result = await batchCreateAITaskSupportTickets(ids);
+            alert(`批量转单完成：新建 ${result.created_count} 个工单，${result.existed_count} 个任务已有工单跳过。`);
+            setSelectedIds(new Set());
+            navigate('/support-tickets');
+        } catch (error: any) {
+            console.error('批量转工单失败:', error);
+            alert(`批量转工单失败: ${error?.message || '未知错误'}`);
+        } finally {
+            setBatchLoading(false);
+        }
+    };
+
+    const handleRetryTask = async () => {
+        if (!selectedTaskItem || selectedDetail?.type === 'video') return;
+        if (!window.confirm(`重新执行任务 ${selectedTaskItem.task_no}？\n\n将以当前启用配置重新入队，不重复扣费（管理员补偿动作）。`)) {
+            return;
+        }
+        try {
+            const result = await retryAITask(selectedTaskItem.id);
+            alert(`重试任务已入队：${result.new_task_no}（不重复扣费），稍后可在队列中查看进度。`);
+            handleCloseDetail();
+            void loadData(activeTab, queue, keyword, status, scene, 1, pageSize);
+        } catch (error: any) {
+            console.error('重新执行失败:', error);
+            alert(`重新执行失败: ${error?.message || '未知错误'}`);
+        }
+    };
+
     return (
         <>
             <div className="ai-task-center-container">
@@ -395,11 +544,42 @@ const AITaskCenter: React.FC = () => {
                     <button className={`tab-button ${activeTab === 'video' ? 'active' : ''}`} onClick={() => handleTabChange('video')}>视频任务</button>
                 </div>
 
+                <div className="task-queue-tabs">
+                    {queueTabs.map((tab) => {
+                        const count = queueCount(tab.key);
+                        return (
+                            <button
+                                key={tab.key}
+                                className={`task-queue-tab ${queue === tab.key ? 'on' : ''} ${tab.alert && count ? 'alert-t' : ''}`}
+                                onClick={() => pickQueue(tab.key)}
+                                title={tab.help}
+                            >
+                                {tab.label}
+                                {count !== undefined ? <span className="task-queue-count">{count.toLocaleString()}</span> : null}
+                            </button>
+                        );
+                    })}
+                    <span className="task-queue-help">{activeQueue.help}</span>
+                    {queue === 'failed' ? (
+                        <button
+                            className="task-batch-btn"
+                            onClick={() => void handleBatchTickets()}
+                            disabled={batchLoading || selectedIds.size === 0}
+                        >
+                            {batchLoading ? '转单中…' : `批量转工单${selectedIds.size ? `（已选 ${selectedIds.size}）` : '（先勾选任务）'}`}
+                        </button>
+                    ) : null}
+                </div>
+
                 <div className="task-search-card section-card">
                     <div className="task-search-top">
                         <div className="task-search-title-block">
-                            <h3>{activeTab === 'image' ? '图片任务检索' : '视频任务检索'}</h3>
-                            <p>{activeTab === 'image' ? '先按任务号、用户、状态和场景筛选，再决定是看详情、转异常工单，还是进入用户360继续跟进。' : '先按任务号、用户和状态缩小范围，再查看失败原因或转异常工单。'}</p>
+                            <h3>{activeTab === 'image' ? `${activeQueue.label} · 任务检索` : '视频任务检索'}</h3>
+                            <p>
+                                {activeTab === 'image'
+                                    ? '先按队列缩小范围，再用任务号、用户、场景过滤；失败任务可看详情、转异常工单或进用户360跟进。'
+                                    : '按任务号、用户和状态缩小范围，再查看失败原因或转异常工单。'}
+                            </p>
                         </div>
                         <div className="task-toolbar-right">
                             {activeTab === 'image' && (
@@ -423,36 +603,27 @@ const AITaskCenter: React.FC = () => {
                                 }}
                                 placeholder={activeTab === 'image' ? '搜索任务号、用户ID、用户名' : '搜索视频任务号、用户ID、用户名、提示词'}
                             />
-                            <select className="task-select" value={status} onChange={(event) => setStatus(event.target.value)}>
-                                <option value="all">全部状态</option>
-                                <option value="pending">待处理</option>
-                                <option value="running">处理中</option>
-                                <option value="processing">处理中</option>
-                                <option value="success">成功</option>
-                                <option value="failed">失败</option>
-                                <option value="queued">队列中</option>
-                                <option value="completed">已完成</option>
-                            </select>
+                            {queue === 'all' ? (
+                                <select className="task-select" value={status} onChange={(event) => setStatus(event.target.value)}>
+                                    <option value="all">全部状态</option>
+                                    <option value="pending">待处理</option>
+                                    <option value="running">处理中</option>
+                                    <option value="processing">处理中（旧值）</option>
+                                    <option value="success">成功</option>
+                                    <option value="failed">失败</option>
+                                </select>
+                            ) : null}
                             {activeTab === 'image' && (
                                 <select className="task-select" value={scene} onChange={(event) => setScene(event.target.value)}>
                                     <option value="all">全部场景</option>
-                                    <option value="ai_draw_single">单图生成</option>
-                                    <option value="ai_draw_multi">多图生成</option>
-                                    <option value="ai_chat_single">单轮聊天</option>
-                                    <option value="ai_chat_multi">多轮聊天</option>
-                                    <option value="ai_cost_doc">造价文档</option>
+                                    {Object.entries(sceneLabels).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                    ))}
                                 </select>
                             )}
                         </div>
                         <div className="task-toolbar-right compact-actions">
                             <button className="btn-primary" onClick={handleSearch}>查询任务</button>
-                        </div>
-                    </div>
-                    <div className="task-search-footer">
-                        <div className="task-filter-tags">
-                            {keyword.trim() ? <span className="task-filter-tag">关键词：{keyword.trim()}</span> : null}
-                            {status !== 'all' ? <span className="task-filter-tag">状态：{formatStatus(status).label}</span> : null}
-                            {activeTab === 'image' && scene !== 'all' ? <span className="task-filter-tag">场景：{scene}</span> : null}
                         </div>
                     </div>
                 </div>
@@ -463,33 +634,37 @@ const AITaskCenter: React.FC = () => {
 
                 <div className="task-summary-banner">
                     <div className="task-summary-banner-row">
-                        <span>当前筛选摘要</span>
-                        <strong>{summary.total_count} 条</strong>
+                        <span>{activeTab === 'image' ? `${activeQueue.label} · 共` : '当前筛选 · 共'}</span>
+                        <strong>{total} 条</strong>
                     </div>
                     <div className="task-summary-banner-meta">
-                        {getTaskFilterSummary({ tab: activeTab, keyword: keyword.trim(), status, scene })}
+                        {`失败 ${activeQueueCounts.failed} · 超时 ${activeQueueCounts.timeout} · 处理中 ${activeQueueCounts.running} · 今日新增 ${activeQueueCounts.today_new}（口径为全量队列计数，非当前筛选）`}
                     </div>
-                </div>
-
-                <div className="task-summary-grid">
-                    <div className="ai-task-summary-card"><span>任务总数</span><strong>{summary.total_count}</strong></div>
-                    <div className="ai-task-summary-card"><span>待处理</span><strong>{summary.pending_count}</strong></div>
-                    <div className="ai-task-summary-card"><span>处理中</span><strong>{summary.running_count}</strong></div>
-                    <div className="ai-task-summary-card danger"><span>失败任务</span><strong>{summary.failed_count}</strong></div>
                 </div>
 
                 <div className="task-table-container">
                     <table className="task-table">
                         <thead>
                             <tr>
+                                {activeTab === 'image' && queue === 'failed' ? (
+                                    <th className="task-check-cell">
+                                        <input
+                                            type="checkbox"
+                                            checked={list.length > 0 && selectedIds.size === list.length}
+                                            onChange={(event) => {
+                                                setSelectedIds(event.target.checked ? new Set(list.map((item) => item.id)) : new Set());
+                                            }}
+                                            title="全选当前页"
+                                        />
+                                    </th>
+                                ) : null}
                                 <th>任务号</th>
                                 <th>用户</th>
                                 <th>{activeTab === 'image' ? '场景 / 模型' : '模型 / 时长'}</th>
                                 <th>状态</th>
                                 <th>灵石</th>
-                                <th>{activeTab === 'image' ? '错误信息' : '提示词 / 错误信息'}</th>
+                                {activeTab === 'image' ? '错误信息' : '提示词 / 错误信息'}
                                 <th>创建时间</th>
-                                <th>更新时间</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -503,8 +678,19 @@ const AITaskCenter: React.FC = () => {
                                     const statusMeta = formatStatus(item.status);
                                     const longRunning = isLongRunningTask(item);
                                     const resolvedModel = resolveTaskModelText(item);
+                                    const degraded = activeTab === 'image' && isFallbackModel(resolvedModel);
+                                    const showCheck = activeTab === 'image' && queue === 'failed';
                                     return (
-                                        <tr key={item.task_no}>
+                                        <tr key={item.task_no} className={item.status === 'failed' ? 'task-row-failed' : longRunning ? 'task-row-timeout' : ''}>
+                                            {showCheck ? (
+                                                <td className="task-check-cell">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.has(item.id)}
+                                                        onChange={() => toggleSelected(item.id)}
+                                                    />
+                                                </td>
+                                            ) : null}
                                             <td><span className="task-no">{item.task_no}</span></td>
                                             <td>
                                                 <div className="user-cell">
@@ -517,8 +703,11 @@ const AITaskCenter: React.FC = () => {
                                             <td>
                                                 {activeTab === 'image' ? (
                                                     <div className="text-cell">
-                                                        <strong>{item.scene || '-'}</strong>
-                                                        <span>{resolvedModel}</span>
+                                                        <strong>{sceneLabel(item.scene)}</strong>
+                                                        <span>
+                                                            {resolvedModel}
+                                                            {degraded ? <em className="task-degrade-badge">降级</em> : null}
+                                                        </span>
                                                     </div>
                                                 ) : (
                                                     <div className="text-cell">
@@ -533,7 +722,10 @@ const AITaskCenter: React.FC = () => {
                                                     {longRunning ? <span className="risk-badge">超30分钟未完成</span> : null}
                                                 </div>
                                             </td>
-                                            <td>{item.stones_used}</td>
+                                            <td>
+                                                {item.stones_used}
+                                                {item.refunded_stones ? <span className="task-refund-tag">已退 {item.refunded_stones}</span> : null}
+                                            </td>
                                             <td>
                                                 <div className="text-cell">
                                                     {activeTab === 'video' && <strong>{item.prompt || '-'}</strong>}
@@ -541,7 +733,6 @@ const AITaskCenter: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td>{formatDateTime(item.created_at)}</td>
-                                            <td>{formatDateTime(item.updated_at)}</td>
                                             <td>
                                                 <div className="task-action-group">
                                                     <button className="btn-link" onClick={() => void handleViewDetail(item)}>查看详情</button>
@@ -601,7 +792,6 @@ const AITaskCenter: React.FC = () => {
                                                     <div><span>任务号</span><strong>{selectedDetail.task_no}</strong></div>
                                                     <div><span>任务类型</span><strong>{selectedDetail.type === 'video' ? '视频任务' : '图片任务'}</strong></div>
                                                     <div><span>用户ID</span><strong>{selectedDetail.user_id}</strong></div>
-                                                    <div><span>用户名</span><strong>{selectedTaskItem?.username || '-'}</strong></div>
                                                     <div><span>状态</span><strong>{formatStatus(selectedDetail.status).label}</strong></div>
                                                     <div><span>灵石消耗</span><strong>{selectedDetail.stones_used}</strong></div>
                                                     <div><span>创建时间</span><strong>{formatDateTime(selectedDetail.created_at)}</strong></div>
@@ -612,8 +802,8 @@ const AITaskCenter: React.FC = () => {
                                             <div className="task-detail-card">
                                                 <h4>{selectedDetail.type === 'video' ? '任务配置' : '任务上下文'}</h4>
                                                 <div className="task-detail-list">
-                                                    <div><span>场景</span><strong>{selectedDetail.scene || '-'}</strong></div>
-                                                    <div><span>模型</span><strong>{selectedResolvedModel}</strong></div>
+                                                    <div><span>场景</span><strong>{sceneLabel(selectedDetail.scene)}</strong></div>
+                                                    <div><span>模型</span><strong>{selectedResolvedModel}{isFallbackModel(selectedResolvedModel) ? '（降级承接）' : ''}</strong></div>
                                                     <div><span>调用接口</span><strong>{selectedDetail.api_endpoint || selectedExecutionMeta?.api_endpoint || '-'}</strong></div>
                                                     <div><span>原始状态</span><strong>{selectedDetail.raw_status || selectedDetail.status}</strong></div>
                                                     <div><span>分段数</span><strong>{selectedDetail.segment_count || 0}</strong></div>
@@ -697,6 +887,11 @@ const AITaskCenter: React.FC = () => {
                                 )}
                             </div>
                             <div className="modal-footer">
+                                {selectedTaskItem && selectedDetail?.type !== 'video' && selectedDetail?.status === 'failed' ? (
+                                    <button className="btn-secondary" onClick={() => void handleRetryTask()}>
+                                        重新执行（不扣费）
+                                    </button>
+                                ) : null}
                                 {selectedTaskItem && (
                                     <button
                                         className="btn-secondary"

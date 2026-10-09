@@ -1,0 +1,243 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+// AI 内容抽检（二期批次4a）：待审队列 + 通过/驳回 + 大图预览。配色走全局 --admin-* 变量。
+:where(.layout-content[data-admin-page="/ai-content-audits"]) {
+
+.ai-content-audits-page {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.aca-pagehead {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+
+    h1 { font-size: 19px; font-weight: 700; color: var(--admin-text); margin: 0; }
+    .aca-sub { font-size: 12px; color: var(--admin-text-muted); }
+}
+
+.aca-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.aca-status-tabs { display: flex; gap: 6px; }
+
+.aca-tab {
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface);
+    color: var(--admin-text-muted);
+    border-radius: 16px;
+    padding: 4px 13px;
+    font-size: 12.5px;
+    cursor: pointer;
+
+    &.on { background: var(--admin-accent); border-color: var(--admin-accent); color: #fff8ef; font-weight: 600; }
+    &.alert { border-color: #c0392b; color: #c0392b; }
+    &.alert.on { background: #c0392b; border-color: #c0392b; color: #fff; }
+}
+
+.aca-search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 320px;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    background: var(--admin-surface);
+
+    &:focus { outline: none; border-color: var(--admin-accent); }
+}
+
+.aca-btn {
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface);
+    color: var(--admin-text-muted);
+    border-radius: 8px;
+    padding: 5px 14px;
+    font-size: 12.5px;
+    cursor: pointer;
+
+    &.primary { background: var(--admin-accent); border-color: var(--admin-accent); color: #fff8ef; }
+    &.primary.danger { background: #c0392b; border-color: #c0392b; }
+    &.danger { color: #c0392b; border-color: #c0392b; }
+    &.sm { padding: 2px 10px; font-size: 11.5px; }
+    &:disabled { opacity: .55; cursor: default; }
+    &:hover:not(:disabled) { border-color: var(--admin-accent); color: var(--admin-accent); }
+    &.primary:hover:not(:disabled), &.danger:hover:not(:disabled) { color: inherit; filter: brightness(1.06); }
+}
+
+.aca-table-wrap {
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    box-shadow: var(--admin-shadow-soft);
+    overflow-x: auto;
+}
+
+.aca-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    th {
+        text-align: left;
+        font-size: 11.5px;
+        color: var(--admin-text-muted);
+        font-weight: 600;
+        padding: 10px;
+        background: var(--admin-surface-muted);
+        border-bottom: 1px solid var(--admin-border);
+        white-space: nowrap;
+    }
+
+    td {
+        padding: 10px;
+        border-bottom: 1px solid var(--admin-border);
+        vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--admin-surface-muted); }
+}
+
+.aca-thumb {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--admin-border);
+    cursor: zoom-in;
+    display: block;
+}
+
+.aca-mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.aca-dim { color: var(--admin-text-muted); font-size: 12px; }
+
+.aca-link {
+    border: none;
+    background: none;
+    color: var(--admin-accent);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+
+    &:hover { text-decoration: underline; }
+}
+
+.aca-scene-cell {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.4;
+    color: var(--admin-text);
+    small { font-size: 10.5px; color: var(--admin-text-muted); }
+}
+
+.aca-status {
+    display: inline-block;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 8px;
+
+    &.pending { background: #faf0da; color: #b97f1f; }
+    &.approved { background: #e6f3ec; color: #2f8f6b; }
+    &.rejected { background: #fbeae6; color: #c0392b; }
+}
+
+.aca-review-cell {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.4;
+    color: var(--admin-text);
+    small { font-size: 11px; color: var(--admin-text-muted); }
+}
+
+.aca-actions { display: flex; gap: 6px; }
+
+.aca-empty {
+    padding: 26px 0;
+    text-align: center;
+    color: var(--admin-text-muted);
+}
+
+.aca-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    font-size: 12.5px;
+    color: var(--admin-text-muted);
+}
+
+/* 弹窗与预览 */
+.aca-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(47, 36, 27, .4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+}
+
+.aca-modal {
+    width: 460px;
+    max-width: 92vw;
+    background: var(--admin-surface);
+    border-radius: var(--admin-radius-md);
+    box-shadow: var(--admin-shadow);
+}
+
+.aca-modal-head {
+    display: flex;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--admin-border);
+
+    h3 { font-size: 15px; margin: 0; color: var(--admin-text); }
+    .aca-modal-close { margin-left: auto; border: none; background: none; cursor: pointer; color: var(--admin-text-muted); font-size: 15px; }
+}
+
+.aca-modal-body {
+    padding: 14px 18px;
+
+    textarea {
+        width: 100%;
+        border: 1px solid var(--admin-border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+        resize: vertical;
+
+        &:focus { outline: none; border-color: var(--admin-accent); }
+    }
+}
+
+.aca-modal-hint { font-size: 11.5px; color: var(--admin-text-muted); margin: 8px 0 0; }
+
+.aca-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--admin-border);
+    background: var(--admin-surface-muted);
+}
+
+.aca-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 80vw;
+
+    img { max-width: 100%; max-height: 72vh; border-radius: 10px; box-shadow: var(--admin-shadow); }
+}
+
+} /* end scope */

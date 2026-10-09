@@ -33,6 +33,9 @@ const Opportunities = lazy(() => import('../pages/opportunities'));
 const CustomerManagement = lazy(() => import('../pages/customerManagement'));
 const ReportCenter = lazy(() => import('../pages/reportCenter'));
 const AITaskCenter = lazy(() => import('../pages/aiTaskCenter'));
+const AIOverview = lazy(() => import('../pages/aiOverview'));
+const AIPricing = lazy(() => import('../pages/aiPricing'));
+const AIContentAudits = lazy(() => import('../pages/aiContentAudits'));
 const AIConfig = lazy(() => import('../pages/ai-config'));
 const OSS = lazy(() => import('../pages/oss'));
 const Templates = lazy(() => import('../pages/templates'));
@@ -146,6 +149,24 @@ export const routes: AppRoute[] = [
         title: '报表导出中心',
         element: withSuspense(<ReportCenter />),
         icon: FiBarChart2,
+    },
+    {
+        path: '/ai-overview',
+        title: 'AI运营总览',
+        element: withSuspense(<AIOverview />),
+        icon: FiActivity,
+    },
+    {
+        path: '/ai-pricing',
+        title: 'AI定价与供应商',
+        element: withSuspense(<AIPricing />),
+        icon: FiDollarSign,
+    },
+    {
+        path: '/ai-content-audits',
+        title: 'AI内容抽检',
+        element: withSuspense(<AIContentAudits />),
+        icon: FiImage,
     },
     {
         path: '/ai-tasks',

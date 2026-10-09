@@ -46,6 +46,17 @@ export interface AIToolItem {
     style_presets: AIToolStylePreset[];
     created_at: string;
     updated_at: string;
+    // 运营数据（列表接口附带；仅成功任务计收入）
+    usage_7d?: number;
+    success_7d?: number;
+    failed_rate_7d?: number;
+    stones_7d?: number;
+    daily_series_7d?: number[];
+    // 草稿-发布分离（二期批次2）
+    has_draft?: boolean;      // 有草稿
+    draft_differs?: boolean;  // 草稿与线上不同（待发布）
+    is_draft?: boolean;       // 详情返回的是草稿态内容
+    latest_version_no?: number;
 }
 
 export interface AIToolListResponse {
@@ -83,6 +94,8 @@ export interface AIToolUpsertRequest {
     is_common?: boolean;
     preset_references?: AIToolPresetReference[];
     style_presets?: AIToolStylePreset[];
+    /** 草稿/发布备注：写入版本记录，不属于生效内容 */
+    note?: string;
 }
 
 export const getAIToolList = async (params?: AIToolListParams) => {
@@ -107,4 +120,61 @@ export const updateAITool = async (id: string, data: AIToolUpsertRequest) => {
 
 export const deleteAITool = async (id: string) => {
     await del(API_ENDPOINTS.AI_TOOLS.DELETE(id));
+};
+
+// ───────────── 草稿-发布分离（二期批次2） ─────────────
+
+export interface AIToolDiffItem {
+    field: string;
+    label: string;
+    kind: 'changed' | 'added' | 'removed';
+    before: string;
+    after: string;
+}
+
+export interface AIToolDiffResult {
+    has_draft: boolean;
+    items: AIToolDiffItem[];
+    draft_note?: string;
+    published_version_no?: number;
+}
+
+export interface AIToolVersionStats {
+    after: { total: number; success_rate: number };
+    before: { total: number; success_rate: number };
+}
+
+export interface AIToolVersion {
+    id: number;
+    version_no: number;
+    status: string;
+    note: string;
+    created_by: string;
+    created_at: string;
+    published_at?: string;
+    stats?: AIToolVersionStats;
+}
+
+/** 保存（PUT）现在写入草稿；此接口把当前草稿发布到线上 */
+export const publishAITool = async (id: string | number, note?: string) => {
+    const res = await post<{ version_no: number; published_at: string }>(API_ENDPOINTS.AI_TOOLS.PUBLISH(String(id)), { note: note || '' });
+    return res.data!;
+};
+
+/** 草稿与线上的差异（发布确认弹窗用） */
+export const getAIToolDiff = async (id: string | number) => {
+    const res = await get<AIToolDiffResult>(API_ENDPOINTS.AI_TOOLS.DIFF(String(id)));
+    return res.data!;
+};
+
+/** 版本列表（含每版发布前后 7 日效果对比） */
+export const getAIToolVersions = async (id: string | number) => {
+    const res = await get<AIToolVersion[]>(API_ENDPOINTS.AI_TOOLS.VERSIONS(String(id)));
+    return res.data || [];
+};
+
+/** 回滚到历史版本（= 用旧快照再发布一次，同样留痕） */
+export const rollbackAITool = async (id: string | number, versionId: number) => {
+    const res = await post<{ version_no: number; rolled_back_to: number }>(API_ENDPOINTS.AI_TOOLS.ROLLBACK(String(id)), { version_id: versionId });
+    return res.data!;
 };

@@ -41,7 +41,9 @@ export const platformSections: NavSection[] = [
             { path: '/user-workbench', label: '用户360工作台', icon: FiCompass },
             { path: '/recharge', label: '订单中心', icon: FiDollarSign },
             { path: '/virtualpay', label: '虚拟支付监控', icon: FiDollarSign },
+            { path: '/ai-overview', label: 'AI运营总览', icon: FiActivity },
             { path: '/ai-tasks', label: 'AI任务中心', icon: FiActivity },
+            { path: '/ai-content-audits', label: 'AI内容抽检', icon: FiImage },
             { path: '/support-tickets', label: '异常工单中心', icon: FiFileText },
         ],
     },
@@ -69,7 +71,7 @@ export const platformSections: NavSection[] = [
     {
         title: '低频配置',
         items: [
-            { path: '/ai-config', label: 'AI配置', icon: FiSettings },
+            // AI 配置已由「AI 运营 → 定价与供应商」承接（路由 /ai-config 保留可回滚，不再出现在导航）
             { path: '/ai-tools', label: 'AI工具管理', icon: FiLayers },
             { path: '/recharge-config', label: '充值配置', icon: FiDollarSign },
             { path: '/membership-plans', label: '会员计划', icon: FiDollarSign },
@@ -178,9 +180,14 @@ export const navGroups: NavGroup[] = [
     {
         id: 'ai', label: 'AI 运营', icon: FiActivity,
         pages: [
+            { path: '/ai-overview', label: '运营总览' },
             { path: '/ai-tasks', label: 'AI 任务中心' },
+            { path: '/ai-content-audits', label: '内容抽检' },
             { path: '/ai-tools', label: 'AI 工具管理' },
+            { path: '/ai-pricing', label: '定价与供应商' },
         ],
+        // 旧版配置页保留为回滚入口：不占 Tab，仅 ⌘K 搜索可达（稳定运行一周后可移除）
+        related: [{ path: '/ai-config', label: 'AI 配置（旧版）' }],
     },
     {
         id: 'content', label: '内容运营', icon: FiLayers,
@@ -216,8 +223,8 @@ export const navGroups: NavGroup[] = [
     },
     {
         id: 'settings', label: '系统设置', icon: FiSettings, pinned: true,
+        // AI 配置入口已迁至「AI 运营 → 定价与供应商」（/ai-config 路由保留可回滚）
         pages: [
-            { path: '/ai-config', label: 'AI 配置' },
             { path: '/oss', label: 'OSS 管理' },
             { path: '/logs', label: '操作审计' },
         ],

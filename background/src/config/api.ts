@@ -100,10 +100,24 @@ export const API_ENDPOINTS = {
         PRICING: '/api/v1/management/ai/pricing',
         API_CONFIG: '/api/v1/management/ai/api/config',
         API_CONFIG_TEST: '/api/v1/management/ai/api/config/test',
+        PRICING_OPS: '/api/v1/management/ai/pricing/ops',
+        PRICING_VERSIONS: '/api/v1/management/ai/pricing/versions',
+    },
+    // AI 运营总览
+    AI_OVERVIEW: {
+        OVERVIEW: '/api/v1/management/ai/overview',
+        OPS_SETTINGS: '/api/v1/management/ai/ops-settings',
+    },
+    // AI 内容抽检（二期批次4a）
+    AI_CONTENT_AUDITS: {
+        LIST: '/api/v1/management/ai/content-audits',
+        REVIEW: (id: string | number) => `/api/v1/management/ai/content-audits/${id}/review`,
     },
     AI_TASKS: {
         LIST: '/api/v1/management/ai/tasks',
         BACKFILL_MODELS: '/api/v1/management/ai/tasks/backfill-models',
+        BATCH_SUPPORT_TICKETS: '/api/v1/management/ai/tasks/batch-support-tickets',
+        RETRY: (id: string | number) => `/api/v1/management/ai/tasks/${id}/retry`,
         DETAIL: (id: string) => `/api/v1/management/ai/tasks/${id}`,
         SUPPORT_TICKET: (id: string) => `/api/v1/management/ai/tasks/${id}/support-ticket`,
         VIDEO_LIST: '/api/v1/management/ai/video-tasks',
@@ -174,6 +188,11 @@ export const API_ENDPOINTS = {
         DETAIL: (id: string) => `/api/v1/management/ai-tools/${id}`,
         UPDATE: (id: string) => `/api/v1/management/ai-tools/${id}`,
         DELETE: (id: string) => `/api/v1/management/ai-tools/${id}`,
+        // 草稿-发布分离（二期批次2）
+        PUBLISH: (id: string) => `/api/v1/management/ai-tools/${id}/publish`,
+        DIFF: (id: string) => `/api/v1/management/ai-tools/${id}/diff`,
+        VERSIONS: (id: string) => `/api/v1/management/ai-tools/${id}/versions`,
+        ROLLBACK: (id: string) => `/api/v1/management/ai-tools/${id}/rollback`,
     },
     // 充值配置管理
     RECHARGE_CONFIG: {
