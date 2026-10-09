@@ -9,7 +9,7 @@ import (
 )
 
 func TestRunningHubTextToImageConfigUsesNewAppAndNodeFields(t *testing.T) {
-	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{
 			RunningHubAPIKey:           "test-key",
 			RunningHubTextToImageAppID: "2049807115933499394",
@@ -46,7 +46,7 @@ func TestRunningHubTextToImageConfigUsesNewAppAndNodeFields(t *testing.T) {
 }
 
 func TestRunningHubImageToImageConfigUsesAppAndNodeFields(t *testing.T) {
-	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{
 			RunningHubAPIKey:            "test-key",
 			RunningHubImageToImageAppID: "2049809170538479617",
@@ -83,7 +83,7 @@ func TestRunningHubImageToImageConfigUsesAppAndNodeFields(t *testing.T) {
 }
 
 func TestRunningHubImageToImageBodyBuildSkipsGenericMultiImagePlaceholder(t *testing.T) {
-	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{
 			RunningHubAPIKey:            "test-key",
 			RunningHubImageToImageAppID: "2049809170538479617",

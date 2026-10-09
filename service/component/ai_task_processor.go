@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"service/safeerror"
 	"strings"
 	"sync"
@@ -33,36 +34,47 @@ const runningHubQueryEndpoint = "https://www.runninghub.cn/openapi/v2/query"
 
 // AITaskProcessor AI任务处理器
 type AITaskProcessor struct {
-	taskModel        *model.AITaskModel
-	apiConfigModel   *model.AIAPIConfigModel
-	userModel        *model.UserRedisModel
-	stoneRecordModel *model.StoneRecordModel
-	requestPool      *RequestPool
-	cfg              *config.Config
-	running          bool
-	stopChan         chan struct{}
-	wg               sync.WaitGroup
-	pollInterval     time.Duration
+	taskModel          *model.AITaskModel
+	apiConfigModel     *model.AIAPIConfigModel
+	userModel          *model.UserRedisModel
+	stoneRecordModel   *model.StoneRecordModel
+	supportTicketModel *model.SupportTicketModel
+	opsSettingsModel   *model.AIOpsSettingsModel
+	contentAuditModel  *model.AIContentAuditModel
+	requestPool        *RequestPool
+	cfg                *config.Config
+	running            bool
+	stopChan           chan struct{}
+	wg                 sync.WaitGroup
+	pollInterval       time.Duration
 }
 
-// NewAITaskProcessor 创建AI任务处理器
+// NewAITaskProcessor 创建AI任务处理器。
+// supportTicketModel / opsSettingsModel / contentAuditModel 可为 nil
+// （未注入则跳过告警、可配阈值与内容抽检，不影响任务执行）。
 func NewAITaskProcessor(
 	taskModel *model.AITaskModel,
 	apiConfigModel *model.AIAPIConfigModel,
 	userModel *model.UserRedisModel,
 	stoneRecordModel *model.StoneRecordModel,
+	supportTicketModel *model.SupportTicketModel,
+	opsSettingsModel *model.AIOpsSettingsModel,
+	contentAuditModel *model.AIContentAuditModel,
 	requestPool *RequestPool,
 	cfg *config.Config,
 ) *AITaskProcessor {
 	return &AITaskProcessor{
-		taskModel:        taskModel,
-		apiConfigModel:   apiConfigModel,
-		userModel:        userModel,
-		stoneRecordModel: stoneRecordModel,
-		requestPool:      requestPool,
-		cfg:              cfg,
-		stopChan:         make(chan struct{}),
-		pollInterval:     2 * time.Second, // 每2秒轮询一次
+		taskModel:          taskModel,
+		apiConfigModel:     apiConfigModel,
+		userModel:          userModel,
+		stoneRecordModel:   stoneRecordModel,
+		supportTicketModel: supportTicketModel,
+		opsSettingsModel:   opsSettingsModel,
+		contentAuditModel:  contentAuditModel,
+		requestPool:        requestPool,
+		cfg:                cfg,
+		stopChan:           make(chan struct{}),
+		pollInterval:       2 * time.Second, // 每2秒轮询一次
 	}
 }
 
@@ -76,6 +88,10 @@ func (p *AITaskProcessor) Start() {
 	p.running = true
 	p.wg.Add(1)
 	go p.pollLoop()
+	if p.supportTicketModel != nil {
+		p.wg.Add(1)
+		go p.supplierHealthLoop()
+	}
 	log.Println("[AITaskProcessor] 任务处理器已启动")
 }
 
@@ -105,6 +121,92 @@ func (p *AITaskProcessor) pollLoop() {
 		case <-ticker.C:
 			p.processPendingTasks()
 		}
+	}
+}
+
+// 供应商失败率告警：阈值与间隔来自 ai_ops_settings（后台可调，下个周期生效），
+// 读取失败回退默认值。同一模型存在未关闭告警工单时不重复创建。
+const supplierAlertBaseTick = time.Minute
+
+// supplierHealthLoop 按配置间隔检查各模型近1小时失败率，超阈值自动创建告警工单。
+// 基础 tick 1 分钟读一次设置，到配置间隔才真正执行检查（改小间隔后最多 1 分钟内生效）。
+func (p *AITaskProcessor) supplierHealthLoop() {
+	defer p.wg.Done()
+
+	ticker := time.NewTicker(supplierAlertBaseTick)
+	defer ticker.Stop()
+
+	lastRun := time.Time{}
+	for {
+		select {
+		case <-p.stopChan:
+			return
+		case <-ticker.C:
+			settings := p.loadAlertSettings()
+			if time.Since(lastRun) < time.Duration(settings.AlertIntervalMinutes)*time.Minute {
+				continue
+			}
+			lastRun = time.Now()
+			p.checkSupplierHealth(settings)
+		}
+	}
+}
+
+// loadAlertSettings 读取告警设置；模型不可用或读取失败一律回退默认值，绝不让告警链路停摆
+func (p *AITaskProcessor) loadAlertSettings() *model.AIOpsSettings {
+	if p.opsSettingsModel == nil {
+		return model.DefaultAIOpsSettings()
+	}
+	settings, err := p.opsSettingsModel.Get()
+	if err != nil || settings == nil {
+		return model.DefaultAIOpsSettings()
+	}
+	return settings
+}
+
+func (p *AITaskProcessor) checkSupplierHealth(settings *model.AIOpsSettings) {
+	stats, err := p.taskModel.ModelWindowStats(time.Now().Add(-time.Hour))
+	if err != nil {
+		log.Printf("[AITaskProcessor] 供应商健康检查查询失败: %v", err)
+		return
+	}
+	for _, stat := range stats {
+		if stat.Total < settings.AlertMinWindowCalls || stat.FailedRate <= settings.AlertFailedRate {
+			continue
+		}
+		sourceID := "model-" + stat.Model
+		exists, existsErr := p.supportTicketModel.ExistsOpenBySource(model.SupportTicketSourceTypeAIProviderAlert, sourceID)
+		if existsErr != nil {
+			log.Printf("[AITaskProcessor] 查询已有告警工单失败: model=%s, err=%v", stat.Model, existsErr)
+			continue
+		}
+		if exists {
+			continue
+		}
+		failedRatePercent := stat.FailedRate * 100
+		_, createErr := p.supportTicketModel.Create(&model.SupportTicketCreateInput{
+			Type:       "system",
+			SourceType: model.SupportTicketSourceTypeAIProviderAlert,
+			SourceID:   sourceID,
+			Title:      fmt.Sprintf("AI供应商失败率告警：%s（近1小时 %.1f%%）", stat.Model, failedRatePercent),
+			Content: fmt.Sprintf("模型 %s 近1小时调用 %d 次、失败 %d 次（失败率 %.1f%%，阈值 %.0f%%）。"+
+				"系统已按降级链自动切换；请到 AI 运营 → 定价与供应商 查看该渠道健康度并处置。",
+				stat.Model, stat.Total, stat.Failed, failedRatePercent, settings.AlertFailedRate*100),
+			Priority:  "high",
+			CreatedBy: "系统",
+			SourcePayload: map[string]interface{}{
+				"model":        stat.Model,
+				"window_total": stat.Total,
+				"window_failed": stat.Failed,
+				"failed_rate":  stat.FailedRate,
+			},
+		})
+		if createErr != nil {
+			log.Printf("[AITaskProcessor] 创建供应商告警工单失败: model=%s, err=%v", stat.Model, createErr)
+			continue
+		}
+		log.Printf("[AITaskProcessor] ⚠ 供应商失败率告警已生成工单: model=%s, window_total=%d, failed_rate=%.1f%%",
+			stat.Model, stat.Total, failedRatePercent)
 	}
 }
 
@@ -962,6 +1064,21 @@ func (p *AITaskProcessor) handleTaskResult(task *model.AITask, result *AITaskRes
 		if err := p.taskModel.UpdateStatusAndMetaByTaskNo(task.TaskNo, "success", string(resultJSON), "", result.UsedModel, result.APIEndpoint); err != nil {
 			log.Printf("[AITaskProcessor] ❌ 更新任务成功状态失败: %v", err)
 		} else {
+			// 二期（2026-10）：任务级成本落库（分）。units：绘画=出图张数，对话=1 次。
+			// 写失败不影响任务结果，只损失成本统计精度。
+			units := int64(generatedCount)
+			if task.Scene == "ai_chat_single" || task.Scene == "ai_chat_multi" {
+				units = 1
+			}
+			providerCode := strings.TrimSpace(result.ProviderCode)
+			if providerCode == "" {
+				providerCode = strings.TrimSpace(result.UsedModel)
+			}
+			if err := p.taskModel.UpdateExecutionCostByTaskNo(task.TaskNo, providerCode, model.AIModelUnitCostFen(result.UsedModel, units)); err != nil {
+				log.Printf("[AITaskProcessor] ⚠ 任务成本落库失败（不影响任务结果）: TaskNo=%s, err=%v", task.TaskNo, err)
+			}
+			// 内容抽检（4a）：按设置比例把成功结果抽入审核队列（fail-soft）
+			p.maybeSampleContentForAudit(task, result, generatedCount)
 			if settledStones != task.StonesUsed {
 				if err := p.taskModel.UpdateStonesUsedByTaskNo(task.TaskNo, settledStones); err != nil {
 					log.Printf("[AITaskProcessor] ❌ 更新任务实际扣费失败: %v", err)
@@ -1046,17 +1163,52 @@ var (
 	processorOnce         sync.Once
 )
 
+// maybeSampleContentForAudit 内容抽检（4a）：成功结果按设置比例随机抽入审核队列。
+// fail-soft：任何失败只记日志，绝不影响任务结果；抽检不拦截用户侧结果。
+func (p *AITaskProcessor) maybeSampleContentForAudit(task *model.AITask, result *AITaskResult, generatedCount int64) {
+	if p.contentAuditModel == nil || p.opsSettingsModel == nil || result == nil {
+		return
+	}
+	settings, err := p.opsSettingsModel.Get()
+	if err != nil || settings == nil {
+		settings = model.DefaultAIOpsSettings()
+	}
+	if !model.AIContentAuditSampled(settings.AuditEnabled, settings.AuditSampleRate, rand.Float64()) {
+		return
+	}
+	resultURL := strings.TrimSpace(result.ResultURL)
+	if resultURL == "" && len(result.ResultURLs) > 0 {
+		resultURL = strings.TrimSpace(result.ResultURLs[0])
+	}
+	if resultURL == "" {
+		return
+	}
+	if err := p.contentAuditModel.Create(&model.AIContentAudit{
+		TaskNo:    task.TaskNo,
+		TaskType:  "image",
+		UserID:    task.UserID,
+		Scene:     task.Scene,
+		Model:     result.UsedModel,
+		ResultURL: resultURL,
+	}); err != nil {
+		log.Printf("[AITaskProcessor] ⚠ 内容抽检入队失败（不影响任务结果）: TaskNo=%s, err=%v", task.TaskNo, err)
+	}
+}
+
 // InitAITaskProcessor 初始化全局AI任务处理器
 func InitAITaskProcessor(
 	taskModel *model.AITaskModel,
 	apiConfigModel *model.AIAPIConfigModel,
 	userModel *model.UserRedisModel,
 	stoneRecordModel *model.StoneRecordModel,
+	supportTicketModel *model.SupportTicketModel,
+	opsSettingsModel *model.AIOpsSettingsModel,
+	contentAuditModel *model.AIContentAuditModel,
 	requestPool *RequestPool,
 	cfg *config.Config,
 ) *AITaskProcessor {
 	processorOnce.Do(func() {
-		globalAITaskProcessor = NewAITaskProcessor(taskModel, apiConfigModel, userModel, stoneRecordModel, requestPool, cfg)
+		globalAITaskProcessor = NewAITaskProcessor(taskModel, apiConfigModel, userModel, stoneRecordModel, supportTicketModel, opsSettingsModel, contentAuditModel, requestPool, cfg)
 		globalAITaskProcessor.Start()
 	})
 	return globalAITaskProcessor

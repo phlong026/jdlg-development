@@ -435,25 +435,25 @@ func TestLaoZhangGPTImage2VipTemplateQuality(t *testing.T) {
 }
 
 func TestLaoZhangImageQualityFallback(t *testing.T) {
-	invalid := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	invalid := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{LaoZhangAPIKey: "k", LaoZhangImageQuality: "bogus"},
 	})
 	if got := invalid.laoZhangImageQuality(); got != "high" {
 		t.Fatalf("非法档位应回退 high, got %s", got)
 	}
-	valid := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	valid := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{LaoZhangAPIKey: "k", LaoZhangImageModel: "gpt-image-2.5-sunburst-vip", LaoZhangImageQuality: "xhigh"},
 	})
 	if got := valid.laoZhangImageQuality(); got != "xhigh" {
 		t.Fatalf("合法档位应透传, got %s", got)
 	}
-	previousModel := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	previousModel := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{LaoZhangImageModel: "gpt-image-2-vip", LaoZhangImageQuality: "xhigh"},
 	})
 	if got := previousModel.laoZhangImageQuality(); got != "high" {
 		t.Fatalf("GPT-Image-2 VIP 不支持 xhigh, got %s", got)
 	}
-	empty := NewAITaskProcessor(nil, nil, nil, nil, nil, &config.Config{
+	empty := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, &config.Config{
 		AI: config.AIConfig{LaoZhangAPIKey: "k"},
 	})
 	if got := empty.laoZhangImageQuality(); got != "high" {

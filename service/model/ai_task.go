@@ -17,6 +17,8 @@ type AITask struct {
 	Scene          string         `json:"scene" db:"scene"`
 	Model          sql.NullString `json:"model" db:"model"`
 	APIEndpoint    sql.NullString `json:"api_endpoint" db:"api_endpoint"`
+	ProviderCode   sql.NullString `json:"provider_code" db:"provider_code"` // 执行该任务的供应商编码（二期落库，历史为 NULL）
+	APICost        sql.NullInt64  `json:"api_cost" db:"api_cost"`           // API 成本估算，单位分（二期落库，历史为 NULL）
 	RequestPayload string         `json:"request_payload" db:"request_payload"` // JSON格式的请求数据
 	Status         string         `json:"status" db:"status"`                   // pending, running, success, failed
 	ResultPayload  sql.NullString `json:"-" db:"result_payload"`                // JSON格式的结果数据（可为NULL）
@@ -34,10 +36,11 @@ type AITaskManagementItem struct {
 	Scene        string    `json:"scene"`
 	Model        string    `json:"model"`
 	APIEndpoint  string    `json:"api_endpoint,omitempty"`
-	RequestPayload string  `json:"-"`
+	RequestPayload string   `json:"-"`
 	ResultPayload string   `json:"-"`
 	Status       string    `json:"status"`
 	StonesUsed   int64     `json:"stones_used"`
+	RefundedStones int64    `json:"refunded_stones"` // 结果载荷里的自动退款灵石（0=无退款）
 	ErrorMessage string    `json:"error_message"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -259,10 +262,10 @@ func (m *AITaskModel) CreateWithTx(tx *sql.Tx, task *AITask) error {
 // GetByID 根据ID获取任务
 func (m *AITaskModel) GetByID(id int64) (*AITask, error) {
 	task := &AITask{}
-	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
+	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, provider_code, api_cost, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
 	          FROM ai_tasks WHERE id = ?`
 	err := m.DB.QueryRow(query, id).Scan(
-		&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.RequestPayload, &task.Status,
+		&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.ProviderCode, &task.APICost, &task.RequestPayload, &task.Status,
 		&task.ResultPayload, &task.StonesUsed, &task.ErrorMessage, &task.CreatedAt, &task.UpdatedAt,
 	)
 	if err != nil {
@@ -274,10 +277,10 @@ func (m *AITaskModel) GetByID(id int64) (*AITask, error) {
 // GetByTaskNo 根据任务编号获取任务
 func (m *AITaskModel) GetByTaskNo(taskNo string) (*AITask, error) {
 	task := &AITask{}
-	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
+	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, provider_code, api_cost, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
 	          FROM ai_tasks WHERE task_no = ?`
 	err := m.DB.QueryRow(query, taskNo).Scan(
-		&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.RequestPayload, &task.Status,
+		&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.ProviderCode, &task.APICost, &task.RequestPayload, &task.Status,
 		&task.ResultPayload, &task.StonesUsed, &task.ErrorMessage, &task.CreatedAt, &task.UpdatedAt,
 	)
 	if err != nil {
@@ -362,7 +365,7 @@ func (m *AITaskModel) ClaimPendingTasks(limit int) ([]*AITask, error) {
 		}
 	}()
 
-	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
+	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, provider_code, api_cost, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
 	          FROM ai_tasks
 	          WHERE status = 'pending'
 	            AND scene NOT IN ('ai_cost_doc')
@@ -376,7 +379,7 @@ func (m *AITaskModel) ClaimPendingTasks(limit int) ([]*AITask, error) {
 	for rows.Next() {
 		task := &AITask{}
 		if err := rows.Scan(
-			&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.RequestPayload, &task.Status,
+			&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.ProviderCode, &task.APICost, &task.RequestPayload, &task.Status,
 			&task.ResultPayload, &task.StonesUsed, &task.ErrorMessage, &task.CreatedAt, &task.UpdatedAt,
 		); err != nil {
 			rows.Close()
@@ -421,7 +424,7 @@ func (m *AITaskModel) ClaimPendingTasks(limit int) ([]*AITask, error) {
 
 // GetPendingTasks 获取待处理的任务
 func (m *AITaskModel) GetPendingTasks(limit int) ([]*AITask, error) {
-	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
+	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, provider_code, api_cost, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
 	          FROM ai_tasks
 	          WHERE status = 'pending'
 	            AND scene NOT IN ('ai_cost_doc')
@@ -436,7 +439,7 @@ func (m *AITaskModel) GetPendingTasks(limit int) ([]*AITask, error) {
 	for rows.Next() {
 		task := &AITask{}
 		err := rows.Scan(
-			&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.RequestPayload, &task.Status,
+			&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.ProviderCode, &task.APICost, &task.RequestPayload, &task.Status,
 			&task.ResultPayload, &task.StonesUsed, &task.ErrorMessage, &task.CreatedAt, &task.UpdatedAt,
 		)
 		if err != nil {
@@ -451,7 +454,7 @@ func (m *AITaskModel) GetPendingTasks(limit int) ([]*AITask, error) {
 
 // GetByUserID 根据用户ID获取任务列表（分页）
 func (m *AITaskModel) GetByUserID(userID int64, limit, offset int) ([]*AITask, error) {
-	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
+	query := `SELECT id, task_no, user_id, tool_id, scene, model, api_endpoint, provider_code, api_cost, request_payload, status, result_payload, stones_used, error_message, created_at, updated_at 
 	          FROM ai_tasks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	rows, err := m.DB.Query(query, userID, limit, offset)
 	if err != nil {
@@ -463,7 +466,7 @@ func (m *AITaskModel) GetByUserID(userID int64, limit, offset int) ([]*AITask, e
 	for rows.Next() {
 		task := &AITask{}
 		err := rows.Scan(
-			&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.RequestPayload, &task.Status,
+			&task.ID, &task.TaskNo, &task.UserID, &task.ToolID, &task.Scene, &task.Model, &task.APIEndpoint, &task.ProviderCode, &task.APICost, &task.RequestPayload, &task.Status,
 			&task.ResultPayload, &task.StonesUsed, &task.ErrorMessage, &task.CreatedAt, &task.UpdatedAt,
 		)
 		if err != nil {
@@ -540,8 +543,19 @@ CREATE TABLE IF NOT EXISTS ai_tasks (
 	m.DB.Exec(`ALTER TABLE ai_tasks ADD COLUMN model VARCHAR(128) DEFAULT NULL`)
 	m.DB.Exec(`ALTER TABLE ai_tasks ADD COLUMN api_endpoint VARCHAR(255) DEFAULT NULL`)
 	m.DB.Exec(`ALTER TABLE ai_tasks ADD INDEX idx_tool_id (tool_id)`)
+	// 二期（2026-10）：任务级成本落库。历史行为 NULL（总览页按估算口径补），新任务结算时写入
+	m.DB.Exec(`ALTER TABLE ai_tasks ADD COLUMN provider_code VARCHAR(64) DEFAULT NULL`)
+	m.DB.Exec(`ALTER TABLE ai_tasks ADD COLUMN api_cost BIGINT UNSIGNED DEFAULT NULL`)
 
 	return nil
+}
+
+// UpdateExecutionCostByTaskNo 任务成功结算时写入执行供应商与成本（单位：分）
+func (m *AITaskModel) UpdateExecutionCostByTaskNo(taskNo string, providerCode string, apiCostFen int64) error {
+	_, err := m.DB.Exec(
+		`UPDATE ai_tasks SET provider_code = ?, api_cost = ? WHERE task_no = ?`,
+		providerCode, apiCostFen, taskNo)
+	return err
 }
 
 func (m *AITaskModel) buildManagementWhere(keyword, status, scene string) (string, []interface{}) {
@@ -638,6 +652,81 @@ func (m *AITaskModel) SummaryForManagement(keyword, status, scene string) (*AITa
 		return nil, err
 	}
 	return summary, nil
+}
+
+// extractRefundedStones 从结果载荷 JSON 里提取 refunded_stones（无退款/解析失败返回 0）
+func extractRefundedStones(resultPayload string) int64 {
+	payload := strings.TrimSpace(resultPayload)
+	if payload == "" || !strings.Contains(payload, "refunded_stones") {
+		return 0
+	}
+	var parsed struct {
+		RefundedStones int64 `json:"refunded_stones"`
+	}
+	if err := json.Unmarshal([]byte(payload), &parsed); err != nil {
+		return 0
+	}
+	return parsed.RefundedStones
+}
+
+// queueConditionForManagement 把运营队列（任务中心队列 Tab）翻译为 SQL 片段。
+// 队列口径与 QueueCounts 保持一致：failed=近7日失败；timeout=处理中超30分钟；
+// running=处理中/待处理；today=今日新增；all=全量。
+func queueConditionForManagement(queue string) (string, []interface{}) {
+	switch queue {
+	case "failed":
+		return " AND a.status = 'failed' AND a.created_at >= NOW() - INTERVAL 7 DAY", nil
+	case "timeout":
+		return " AND a.status IN ('pending', 'running', 'processing') AND a.updated_at < NOW() - INTERVAL 30 MINUTE", nil
+	case "running":
+		return " AND a.status IN ('pending', 'running', 'processing')", nil
+	case "today":
+		return " AND a.created_at >= CURDATE()", nil
+	default:
+		return "", nil
+	}
+}
+
+// ListForManagementQueue 按运营队列列出图片任务（在原检索条件上叠加队列过滤）。
+// 队列与状态筛选互斥：选了 failed/timeout/running 队列就由队列决定状态范围。
+func (m *AITaskModel) ListForManagementQueue(queue, keyword, status, scene string, limit, offset int) ([]*AITaskManagementItem, int64, error) {
+	effectiveStatus := status
+	switch queue {
+	case "failed", "timeout", "running":
+		effectiveStatus = "all"
+	}
+	whereSQL, args := m.buildManagementWhere(keyword, effectiveStatus, scene)
+	queueCond, queueArgs := queueConditionForManagement(queue)
+	whereSQL += queueCond
+	args = append(append([]interface{}{}, args...), queueArgs...)
+
+	countQuery := `SELECT COUNT(*) FROM ai_tasks a LEFT JOIN users u ON u.id = a.user_id` + whereSQL
+	var total int64
+	if err := m.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	queryArgs := append(append([]interface{}{}, args...), limit, offset)
+	query := `
+		SELECT a.id, a.task_no, a.user_id, COALESCE(u.username, ''), a.scene, COALESCE(a.model, ''), COALESCE(a.api_endpoint, ''), COALESCE(a.request_payload, ''), COALESCE(a.result_payload, ''), a.status, a.stones_used, COALESCE(a.error_message, ''), a.created_at, a.updated_at
+		FROM ai_tasks a
+		LEFT JOIN users u ON u.id = a.user_id` + whereSQL + `
+		ORDER BY a.created_at DESC
+		LIMIT ? OFFSET ?`
+	rows, err := m.DB.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	list := make([]*AITaskManagementItem, 0)
+	for rows.Next() {
+		item := &AITaskManagementItem{}
+		if err := rows.Scan(&item.ID, &item.TaskNo, &item.UserID, &item.Username, &item.Scene, &item.Model, &item.APIEndpoint, &item.RequestPayload, &item.ResultPayload, &item.Status, &item.StonesUsed, &item.ErrorMessage, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		item.RefundedStones = extractRefundedStones(item.ResultPayload)
+		list = append(list, item)
+	}
+	return list, total, rows.Err()
 }
 
 func (m *AITaskModel) BackfillResolvedExecutionMetaForSuccessTasks(limit int) (int, int, error) {

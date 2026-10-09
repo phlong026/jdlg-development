@@ -43,6 +43,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	designerReviewModel *model.DesignerReviewModel,
 	designerFollowModel *model.DesignerFollowModel,
 	buildingCodeDocumentModel *model.BuildingCodeDocumentModel,
+	contentAuditModel *model.AIContentAuditModel,
 	buildingCodeChatModel *model.BuildingCodeChatModel,
 	cfg *config.Config) func() {
 	reportContext, stopReports := context.WithCancel(context.Background())
@@ -170,7 +171,20 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterManagementAuditRoutes(managementAuth, managementAuditModel)
 		RegisterCRMManagementRoutes(managementAuth, userDBModel)
 		RegisterDashboardManagementRoutes(managementAuth, userDBModel, customerServiceModel)
-		RegisterAIManagementRoutes(managementAuth, pricingModel, apiConfigModel)
+		// AI 定价版本表（调价留痕）：建表 fail-soft，失败只影响留痕不影响调价主流程
+		pricingVersionModel := model.NewAIPricingVersionModel(userDBModel.DB)
+		if err := pricingVersionModel.InitTable(); err != nil {
+			log.Printf("[AI运营] 初始化定价版本表失败（调价将不留痕，请人工核查）: %v", err)
+		}
+		// AI 告警设置表：建表 fail-soft，失败则告警用默认阈值
+		aiOpsSettingsModel := model.NewAIOpsSettingsModel(userDBModel.DB)
+		if err := aiOpsSettingsModel.InitTable(); err != nil {
+			log.Printf("[AI运营] 初始化告警设置表失败（告警将使用默认阈值）: %v", err)
+		}
+		RegisterAIManagementRoutes(managementAuth, pricingModel, apiConfigModel, pricingVersionModel)
+		RegisterAIOverviewManagementRoutes(managementAuth, taskModel, videoTaskModel, pricingModel, pricingVersionModel, aiToolModel, supportTicketModel, aiOpsSettingsModel)
+		// 内容抽检（4a）：模型在 main.go 初始化并注入 processor；nil 安全（建表失败时接口返回空）
+		RegisterAIContentAuditManagementRoutes(managementAuth, contentAuditModel)
 		RegisterAITaskManagementRoutes(managementAuth, pricingModel, taskModel, videoTaskModel, supportTicketModel)
 		RegisterUserWorkbenchManagementRoutes(managementAuth, userDBModel, userModel, userProfileModel, stoneRecordModel, userOrderModel, userMembershipModel, taskModel, videoTaskModel, pricingModel)
 		RegisterOrderManagementRoutes(managementAuth, userOrderModel, userDBModel, certificationApplicationModel, userMembershipModel, supportTicketModel, wechatCoinCalibrationModel)

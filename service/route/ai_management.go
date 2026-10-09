@@ -23,6 +23,7 @@ type AIPricingRequest struct {
 	Scene       string                 `json:"scene" binding:"required"`
 	Stones      int64                  `json:"stones" binding:"required"`
 	ExtraConfig map[string]interface{} `json:"extra_config"`
+	Note        string                 `json:"note"` // 调价备注（写入版本记录，可空）
 }
 
 // validateAIEndpointSecurity 校验 AI 接口地址的安全性。
@@ -212,7 +213,7 @@ func probeAIEndpoint(ctx context.Context, config *model.AIAPIConfig) aiConfigTes
 	}
 }
 
-func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricingModel, apiConfigModel *model.AIAPIConfigModel) {
+func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricingModel, apiConfigModel *model.AIAPIConfigModel, pricingVersionModel *model.AIPricingVersionModel) {
 
 	ai := r.Group("/ai")
 	registerAIAPIConfigTestRoute(ai, apiConfigModel)
@@ -267,12 +268,36 @@ func RegisterAIManagementRoutes(r *gin.RouterGroup, pricingModel *model.AIPricin
 				},
 			}
 
+			// 调价留痕：先取旧值（Upsert 之后就是新值了），保存成功且定价变化时写版本记录。
+			// 版本表初始化失败或写入失败不阻塞保存主流程，只记日志。
+			var oldStones int64
+			var hasOld bool
+			if pricingVersionModel != nil {
+				if existing, getErr := pricingModel.GetByScene(req.Scene); getErr == nil && existing != nil {
+					oldStones, hasOld = existing.Stones, true
+				}
+			}
+
 			if err := pricingModel.Upsert(pricing); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "保存配置失败: " + err.Error(),
 				})
 				return
+			}
+
+			if pricingVersionModel != nil {
+				if hasOld && oldStones != req.Stones {
+					note := strings.TrimSpace(req.Note)
+					if len(note) > 200 {
+						note = note[:200]
+					}
+					if recordErr := pricingVersionModel.Record(req.Scene, oldStones, req.Stones, GetUsername(c), note); recordErr != nil {
+						fmt.Printf("[WARN] AI定价版本记录写入失败: scene=%s, err=%v\n", req.Scene, recordErr)
+					}
+				}
+			} else {
+				fmt.Printf("[WARN] AI定价版本模型不可用，本次调价未留痕: scene=%s\n", req.Scene)
 			}
 
 			c.JSON(http.StatusOK, gin.H{

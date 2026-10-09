@@ -368,3 +368,56 @@ func (m *AIVideoTaskModel) SummaryForManagement(keyword, status string) (totalCo
 	err = m.DB.QueryRow(query, queryArgs...).Scan(&totalCount, &queuedCount, &processingCount, &failedCount)
 	return
 }
+
+// videoQueueCondition 运营队列（任务中心队列 Tab）翻译为视频任务表的 SQL 片段。
+// 视频状态机：queued/processing/completed/failed；口径与 VideoQueueCounts 一致。
+func videoQueueCondition(queue string) (string, []interface{}) {
+	switch queue {
+	case "failed":
+		return " AND v.status = 'failed' AND v.created_at >= NOW() - INTERVAL 7 DAY", nil
+	case "timeout":
+		return " AND v.status IN ('queued', 'processing') AND v.updated_at < NOW() - INTERVAL 30 MINUTE", nil
+	case "running":
+		return " AND v.status IN ('queued', 'processing')", nil
+	case "today":
+		return " AND v.created_at >= CURDATE()", nil
+	default:
+		return "", nil
+	}
+}
+
+// ListForManagementQueue 按运营队列列出视频任务
+func (m *AIVideoTaskModel) ListForManagementQueue(queue, keyword string, limit, offset int) ([]*AIVideoTaskManagementItem, int64, error) {
+	whereSQL, args := m.buildManagementWhere(keyword, "all")
+	queueCond, queueArgs := videoQueueCondition(queue)
+	whereSQL += queueCond
+	args = append(append([]interface{}{}, args...), queueArgs...)
+
+	countQuery := `SELECT COUNT(*) FROM ai_video_tasks v LEFT JOIN users u ON u.id = v.user_id` + whereSQL
+	var total int64
+	if err := m.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	queryArgs := append(append([]interface{}{}, args...), limit, offset)
+	query := `
+		SELECT v.id, CONCAT('v', v.id), v.user_id, COALESCE(u.username, ''), v.model, v.prompt, v.status, v.segment_count, v.duration, v.resolution, COALESCE(v.error_message, ''), COALESCE(v.raw_error_message, ''), v.created_at, v.updated_at
+		FROM ai_video_tasks v
+		LEFT JOIN users u ON u.id = v.user_id` + whereSQL + `
+		ORDER BY v.created_at DESC
+		LIMIT ? OFFSET ?`
+	rows, err := m.DB.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	list := make([]*AIVideoTaskManagementItem, 0)
+	for rows.Next() {
+		item := &AIVideoTaskManagementItem{}
+		if err := rows.Scan(&item.ID, &item.TaskNo, &item.UserID, &item.Username, &item.Model, &item.Prompt, &item.Status, &item.SegmentCount, &item.Duration, &item.Resolution, &item.ErrorMessage, &item.RawErrorMessage, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		item.Status = NormalizeAIVideoStatus(item.Status)
+		list = append(list, item)
+	}
+	return list, total, rows.Err()
+}

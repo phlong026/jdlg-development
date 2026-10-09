@@ -70,7 +70,7 @@ func TestLiveImageSmoke(t *testing.T) {
 	}
 	cancelDB()
 
-	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, cfg)
+	processor := NewAITaskProcessor(nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 	runtimeConfig := processor.applyRuntimeAIDrawProviderDefaults(dbConfig, "ai_draw", false)
 	runtimeConfig = processor.normalizeRuntimeAIConfigData(runtimeConfig, "ai_draw", false)
 	if runtimeConfig == nil {

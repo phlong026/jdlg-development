@@ -417,8 +417,17 @@ func main() {
 	requestPool := component.InitRequestPoolAuto(cfg)
 	log.Printf("HTTP请求池初始化完成: %v", requestPool.GetStats())
 
-	// 16. 初始化AI任务处理器（自动轮询并处理待处理任务）
-	component.InitAITaskProcessor(taskModel, apiConfigModel, userModel, stoneRecordModel, requestPool, cfg)
+	// 16. 初始化AI任务处理器（自动轮询并处理待处理任务；含供应商失败率告警→工单，阈值后台可调）
+	aiOpsSettingsModel := model.NewAIOpsSettingsModel(db)
+	if err := aiOpsSettingsModel.InitTable(); err != nil {
+		log.Printf("[AI运营] 初始化告警设置表失败（告警将使用默认阈值）: %v", err)
+	}
+	contentAuditModel := model.NewAIContentAuditModel(db)
+	if err := contentAuditModel.InitTable(); err != nil {
+		log.Printf("[AI运营] 初始化内容抽检表失败（抽检将停用）: %v", err)
+		contentAuditModel = nil
+	}
+	component.InitAITaskProcessor(taskModel, apiConfigModel, userModel, stoneRecordModel, supportTicketModel, aiOpsSettingsModel, contentAuditModel, requestPool, cfg)
 	route.ResumePendingAIVideoTasks(videoTaskModel, userModel, pricingModel, stoneRecordModel, supportTicketModel, cfg)
 
 	// 7. 初始化Gin路由
@@ -439,7 +448,7 @@ func main() {
 	r.Use(sessions.Sessions("sessionid", store))
 
 	// 注册所有路由
-	stopReports := route.RegisterRoutes(r, authProcessor, codeSessionModel, userModel, pricingModel, taskModel, apiConfigModel, templateModel, inspirationModel, templateCategoryModel, templateSquareConfigModel, templateUnlockModel, templateLikeModel, templateCommentModel, templateShareModel, userProfileModel, stoneRecordModel, userOrderModel, inviteRelationModel, userInviteCodeModel, featuredCaseGroupModel, utilityToolModel, aiToolModel, rechargeConfigModel, membershipPlanModel, userMembershipModel, supportTicketModel, customerServiceModel, videoTaskModel, certificationApplicationModel, designerReviewModel, designerFollowModel, buildingCodeDocumentModel, buildingCodeChatModel, cfg)
+	stopReports := route.RegisterRoutes(r, authProcessor, codeSessionModel, userModel, pricingModel, taskModel, apiConfigModel, templateModel, inspirationModel, templateCategoryModel, templateSquareConfigModel, templateUnlockModel, templateLikeModel, templateCommentModel, templateShareModel, userProfileModel, stoneRecordModel, userOrderModel, inviteRelationModel, userInviteCodeModel, featuredCaseGroupModel, utilityToolModel, aiToolModel, rechargeConfigModel, membershipPlanModel, userMembershipModel, supportTicketModel, customerServiceModel, videoTaskModel, certificationApplicationModel, designerReviewModel, designerFollowModel, buildingCodeDocumentModel, contentAuditModel, buildingCodeChatModel, cfg)
 	defer stopReports()
 
 	// 8. 启动服务
