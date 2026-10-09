@@ -1,0 +1,68 @@
+[
+  {
+    "name": "advisor",
+    "beforeBytes": 192141,
+    "afterBytes": 141575,
+    "meanChannelDifference": 0.023663838704427082
+  },
+  {
+    "name": "calculator",
+    "beforeBytes": 188476,
+    "afterBytes": 141527,
+    "meanChannelDifference": 0.027779897054036457
+  },
+  {
+    "name": "ai-tools",
+    "beforeBytes": 180321,
+    "afterBytes": 136537,
+    "meanChannelDifference": 0.018185933430989582
+  },
+  {
+    "name": "villa",
+    "beforeBytes": 201156,
+    "afterBytes": 147290,
+    "meanChannelDifference": 0.030848185221354168
+  },
+  {
+    "name": "interior",
+    "beforeBytes": 184514,
+    "afterBytes": 142789,
+    "meanChannelDifference": 0.013430277506510416
+  },
+  {
+    "name": "courtyard",
+    "beforeBytes": 192733,
+    "afterBytes": 143785,
+    "meanChannelDifference": 0.028313954671223957
+  },
+  {
+    "name": "renovation",
+    "beforeBytes": 199372,
+    "afterBytes": 150200,
+    "meanChannelDifference": 0.022813161214192707
+  },
+  {
+    "name": "templates",
+    "beforeBytes": 185577,
+    "afterBytes": 144183,
+    "meanChannelDifference": 0.013140360514322916
+  },
+  {
+    "name": "ai-medallion",
+    "beforeBytes": 1372903,
+    "afterBytes": 254650,
+    "meanChannelDifference": 1.3676748240307517
+  },
+  {
+    "name": "ai-shell",
+    "beforeBytes": 924365,
+    "afterBytes": 381094,
+    "meanChannelDifference": 0.8095889377539103
+  },
+  {
+    "name": "estimate-shell",
+    "beforeBytes": 348081,
+    "afterBytes": 111757,
+    "meanChannelDifference": 0.7985713559838759
+  }
+]

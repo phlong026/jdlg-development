@@ -44,7 +44,7 @@ assert.equal(api, 'switchTab');
 selected.onOpenPage({ currentTarget: { dataset: { url: '/pages/aitools/aitools' } } });
 assert.equal(api, 'navigateTo');
 const markup = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/index/index.wxml'), 'utf8');
-for (const name of ['建房顾问', '造价测算', 'AI工具', '别墅设计', '装修设计', '庭院设计', '旧房翻新', '模板广场', '在线客服', '拍照上传', 'AI生图工具']) {
+for (const name of ['建房顾问', '造价测算', 'AI工具', '别墅设计', '装修设计', '庭院设计', '旧居翻新', '模板广场', '在线客服', '拍照上传', 'AI生图工具']) {
   assert.match(markup, new RegExp(`aria-label="${name}"`));
 }
 assert.match(markup, /bindchange="onQuickRegionChange"/);

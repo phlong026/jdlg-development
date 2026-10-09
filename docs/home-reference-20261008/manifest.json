@@ -1,7 +1,7 @@
 {
   "version": 1,
   "projectRelativePath": "../../miniprogram",
-  "sourceSnapshot": "2026-10-08 首页高清复刻",
+  "sourceSnapshot": "2026-10-09 首页精修",
   "testRollback": false,
   "files": [
     {
@@ -79,8 +79,8 @@
     {
       "path": "miniprogram/pages/index/index.scss",
       "role": "restore",
-      "afterSha256": "6f8e1f694bf3a5231e0a7055d63918e0c69e39e381ccc2fe545fd5f40c442366",
-      "afterSize": 23944,
+      "afterSha256": "c4c125808aeb6bab8535b2a8e31c71feaede7df2a6317983583d6caf4481f707",
+      "afterSize": 23635,
       "beforeSha256": "9784ca32ab15055bc8f9dce297a39e04f055364634eaf954357c977dfe8f5cff",
       "beforeSize": 18540
     },
@@ -95,16 +95,16 @@
     {
       "path": "miniprogram/pages/index/index.wxml",
       "role": "restore",
-      "afterSha256": "923fc1ec7056912f952fd657b0877eefc4354b85a0954b28eeecf37f9ae9701d",
-      "afterSize": 21252,
+      "afterSha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3",
+      "afterSize": 21487,
       "beforeSha256": "15fb1b15def24087a17114daf631a25594435dc947a2f47fb9b644d2077e4ce3",
       "beforeSize": 15837
     },
     {
       "path": "miniprogram/pages/index/index.wxss",
       "role": "restore",
-      "afterSha256": "329aff7578303e5db0371485ae6eb92d831cbae7d090fd48a9c6443679a54a32",
-      "afterSize": 19567,
+      "afterSha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495",
+      "afterSize": 19237,
       "beforeSha256": "eccc377c0cb81756e02c4d32bd52a18cb29eeb8ca77806fcf59964d8bc81804d",
       "beforeSize": 13782
     },
@@ -123,14 +123,26 @@
     {
       "path": "miniprogram/assets/home-reference/hd/advisor.png",
       "role": "remove",
-      "afterSha256": "3a43f9026b757c56f3f66485d72ccb163539caed5be2cbe8963d29df4989f6fc",
-      "afterSize": 71213
+      "afterSha256": "9a586d4a143bae4492887658c10adecaadafc87cbaf805caa97926d4a7ba4a58",
+      "afterSize": 87595
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/ai-medallion.png",
+      "role": "remove",
+      "afterSha256": "774049ac81aea665ada12f6c31f7c0ef2f6ad8ca065bbdde1e151a53c1b39a6b",
+      "afterSize": 75473
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/ai-shell.png",
+      "role": "remove",
+      "afterSha256": "9b58540c57469aeb44b76d7c940e5fb81462ca810927c1e5ddfda25e587169e0",
+      "afterSize": 381094
     },
     {
       "path": "miniprogram/assets/home-reference/hd/ai-tools.png",
       "role": "remove",
-      "afterSha256": "c83e7f00583cbef9802f96c938d403605fc1bddae6f7ac8b23463aaa50d48410",
-      "afterSize": 46998
+      "afterSha256": "15d7666f211fdbd1d4e2cef5987c89c66933ba6e3019fe0effce9cc8cdbd62d2",
+      "afterSize": 87857
     },
     {
       "path": "miniprogram/assets/home-reference/hd/backdrop.jpg",
@@ -159,8 +171,8 @@
     {
       "path": "miniprogram/assets/home-reference/hd/calculator.png",
       "role": "remove",
-      "afterSha256": "c849ada1a8cd44594813629958263daeb949d6d2aa678172653be6cb598d3b65",
-      "afterSize": 81555
+      "afterSha256": "16d9f9c24f0e876b423ce4b95d0cb951a82858cb36bda87825c9dd976a797fea",
+      "afterSize": 89953
     },
     {
       "path": "miniprogram/assets/home-reference/hd/camera.png",
@@ -177,14 +189,20 @@
     {
       "path": "miniprogram/assets/home-reference/hd/courtyard.png",
       "role": "remove",
-      "afterSha256": "8507d2ccc5ba10e9b6d09013562a8b73349f7c63e0a3c2a31e2f61b7dfbcc218",
-      "afterSize": 58915
+      "afterSha256": "b99b31e1af9b0dabc535daafeaa8a6fe61ca9beb9bcab71a3f242f3b69ae482b",
+      "afterSize": 90232
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/estimate-shell.png",
+      "role": "remove",
+      "afterSha256": "40150a5059cb4b549ac081124ff4d4dfcb4cba84fa0b58baa81a5fcf3c517421",
+      "afterSize": 111757
     },
     {
       "path": "miniprogram/assets/home-reference/hd/interior.png",
       "role": "remove",
-      "afterSha256": "3dfe2dd81d303425d314a13a8e65e3553fdf7dc5b184ca4ba8ea8ba8d3329f11",
-      "afterSize": 46945
+      "afterSha256": "179ebe04b906af0dcff98312f1eea3e051a636fe7a751bcb79390b3a63add16b",
+      "afterSize": 89481
     },
     {
       "path": "miniprogram/assets/home-reference/hd/location.png",
@@ -195,8 +213,8 @@
     {
       "path": "miniprogram/assets/home-reference/hd/renovation.png",
       "role": "remove",
-      "afterSha256": "65a2c682d79bc17964af1d2749eb521584c538e901a8f05e898c3fcfae50ac0a",
-      "afterSize": 57585
+      "afterSha256": "9e0e72c11d3d2d1a910a55e0aadf71c4f2d28046ce7b79d370efc25e81e3fe65",
+      "afterSize": 92800
     },
     {
       "path": "miniprogram/assets/home-reference/hd/ruler.png",
@@ -219,8 +237,8 @@
     {
       "path": "miniprogram/assets/home-reference/hd/templates.png",
       "role": "remove",
-      "afterSha256": "52c691712ad5eb482526f1137ed626a6da9bc14c571340100fbc5ddae540afb2",
-      "afterSize": 103906
+      "afterSha256": "64535362e6375b58be0a74f2b4d2acc6e4f0ce139139327f0f9f8b24e06a9fbd",
+      "afterSize": 90535
     },
     {
       "path": "miniprogram/assets/home-reference/hd/urban-building.png",
@@ -231,8 +249,8 @@
     {
       "path": "miniprogram/assets/home-reference/hd/villa.png",
       "role": "remove",
-      "afterSha256": "49aa589af40f196f7fa71e1d4448fa4f412900167a2c76e4ebfd31780565798e",
-      "afterSize": 60847
+      "afterSha256": "52e2b56a366fed5b3e5db659b80df28da7f734f584950352fdc2db96a23613c3",
+      "afterSize": 92387
     },
     {
       "path": "tests/aicost-form-share.test.js",
@@ -279,7 +297,7 @@
     {
       "path": "tests/home-reference.test.js",
       "role": "test-only",
-      "afterSha256": "561ebc88cf5e21925509eee2ad4e1f8ac0754eaa87cc752b24d9cf73a73185ce",
+      "afterSha256": "987860b4834e28df5bd66f13a7a4f756eba4e12ea7db8a9305491af14e2da79c",
       "afterSize": 3413
     },
     {

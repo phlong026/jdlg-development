@@ -35,19 +35,19 @@
           <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/courtyard.png" mode="aspectFit" aria-hidden="true" /></view>
           <text class="service-label">庭院设计</text>
         </view>
-        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/buildingreplacement/buildingreplacement" role="button" aria-label="旧房翻新">
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/buildingreplacement/buildingreplacement" role="button" aria-label="旧居翻新">
           <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/renovation.png" mode="aspectFit" aria-hidden="true" /></view>
-          <text class="service-label">旧房翻新</text>
+          <text class="service-label">旧居翻新</text>
         </view>
         <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">
           <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/templates.png" mode="aspectFit" aria-hidden="true" /></view>
           <text class="service-label">模板广场</text>
         </view>
       </view>
-      <view class="ai-panel"><view class="ai-panel-inner"></view></view>
-      <view class="hotspot ai-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="AI设计"><text>AI</text></view>
+      <image class="ai-panel" src="/assets/home-reference/hd/ai-shell.png" mode="scaleToFill" aria-hidden="true" />
+      <image class="hotspot ai-hotspot" src="/assets/home-reference/hd/ai-medallion.png" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="AI设计" />
       <text class="ai-title">拍照说需求 · 1分钟出方案</text>
-      <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="拍照上传"><image src="/assets/home-reference/hd/camera.png" mode="aspectFit" aria-hidden="true" /><text>拍照上传</text></view>
+      <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="拍照上传"><image src="/assets/home-reference/hd/camera.png" mode="scaleToFill" aria-hidden="true" /><text>拍照上传</text></view>
       <view class="ai-action-divider"></view>
       <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI生图工具"><image src="/assets/home-reference/hd/sparkles.png" mode="aspectFit" aria-hidden="true" /><text>AI生图工具</text></view>
       <view class="cost-panel"></view>
@@ -61,10 +61,10 @@
       <text class="cost-region-label">所在地区</text>
       <text class="cost-area-label">建筑面积</text>
       <picker class="quick-region" mode="multiSelector" range="{{quickRegionOptions}}" value="{{quickRegionIndex}}" bindcolumnchange="onQuickRegionColumnChange" bindchange="onQuickRegionChange" bindcancel="onQuickRegionCancel" aria-label="所在地区">
-        <view class="quick-region-hitbox"><image src="/assets/home-reference/hd/location.png" mode="aspectFit" aria-hidden="true" /><text class="quick-region-value {{quickRegionText ? 'quick-region-value--selected' : ''}}">{{quickRegionText || '请选择'}}</text><view class="field-chevron"></view></view>
+        <view class="quick-region-hitbox"><image src="/assets/home-reference/hd/location.png" mode="scaleToFill" aria-hidden="true" /><text class="quick-region-value {{quickRegionText ? 'quick-region-value--selected' : ''}}">{{quickRegionText || '请选择'}}</text><view class="field-chevron"></view></view>
       </picker>
       <view class="quick-area"><image src="/assets/home-reference/hd/ruler.png" mode="aspectFit" aria-hidden="true" /><input class="quick-area-input" type="digit" value="{{quickArea}}" placeholder="请输入" placeholder-class="quick-area-placeholder" bindinput="onQuickAreaInput" aria-label="建筑面积，平方米" /><text class="area-unit">m²</text></view>
-      <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算">立即估算</button>
+      <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算"><image class="estimate-button-art" src="/assets/home-reference/hd/estimate-shell.png" mode="scaleToFill" aria-hidden="true" /><text>立即估算</text></button>
       <view class="estimate-note"><text class="info-icon">i</text><text>估算结果仅供参考</text></view>
     </view>
   </view>

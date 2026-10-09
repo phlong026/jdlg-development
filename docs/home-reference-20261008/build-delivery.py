@@ -51,7 +51,7 @@ for source in test_paths:
     shutil.copy2(source, target)
     files.append({'path': relative.as_posix(), 'role': 'test-only', 'afterSha256': digest(target), 'afterSize': target.stat().st_size})
 
-manifest = {'version': 1, 'projectRelativePath': '../../miniprogram', 'sourceSnapshot': '2026-10-08 首页高清复刻', 'testRollback': False, 'files': files}
+manifest = {'version': 1, 'projectRelativePath': '../../miniprogram', 'sourceSnapshot': '2026-10-09 首页精修', 'testRollback': False, 'files': files}
 (delivery / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
 (delivery / 'source.diff').write_text(''.join(diff_parts))
 

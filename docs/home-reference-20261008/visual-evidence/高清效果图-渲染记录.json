@@ -1,10 +1,10 @@
 {
-  "exportedAt": "2026-10-08T15:13:50.045Z",
+  "exportedAt": "2026-10-09T02:30:16.758Z",
   "source": {
     "wxmlPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxml",
     "wxssPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxss",
-    "wxmlSha256": "923fc1ec7056912f952fd657b0877eefc4354b85a0954b28eeecf37f9ae9701d",
-    "wxssSha256": "329aff7578303e5db0371485ae6eb92d831cbae7d090fd48a9c6443679a54a32"
+    "wxmlSha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3",
+    "wxssSha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495"
   },
   "logicalViewport": {
     "width": 853,
@@ -110,6 +110,8 @@
     "/assets/home-reference/hd/courtyard.png",
     "/assets/home-reference/hd/renovation.png",
     "/assets/home-reference/hd/templates.png",
+    "/assets/home-reference/hd/ai-shell.png",
+    "/assets/home-reference/hd/ai-medallion.png",
     "/assets/home-reference/hd/camera.png",
     "/assets/home-reference/hd/sparkles.png",
     "/assets/home-reference/hd/cost-stat-v2.png",
@@ -117,6 +119,7 @@
     "/assets/home-reference/hd/urban-building.png",
     "/assets/home-reference/hd/location.png",
     "/assets/home-reference/hd/ruler.png",
+    "/assets/home-reference/hd/estimate-shell.png",
     "/assets/tabbar/首页导航栏@2x.png"
   ],
   "state": {

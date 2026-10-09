@@ -26,11 +26,11 @@
     "fail": 0
   },
   "nativePreview": {
-    "mode": "touristappid",
+    "mode": "formal AppID local simulator",
     "compileErrors": 0,
-    "warnings": 6,
-    "quickEstimate": "physical button click navigated and prefilled 福建 / 泉州, 320",
-    "formalAppId": "current account lacks developer permission"
+    "warnings": 4,
+    "quickEstimate": "早期实际物理点击成功；本轮 CUA 输入未可靠派发，当前回调及参数交接由27项测试覆盖",
+    "formalAppId": "local visual verification passed; real device unverified"
   },
   "render": {
     "width": 2559,
@@ -42,6 +42,20 @@
     "backgroundOpacity": 0.85,
     "removedSecondaryEntries": true,
     "nativeRemovedTextPresent": false,
-    "compileErrors": 0
-  }
+    "compileErrors": 0,
+    "fidelityAssets": 11,
+    "pickerContentHeightRpx": 66.58,
+    "pixelIdentical": false,
+    "approvedPaletteAndOriginalBrandAssetsRetained": true,
+    "aiBadgeRpx": {
+      "width": 94,
+      "height": 92.59,
+      "left": 327.56,
+      "top": 572.4
+    },
+    "serviceDiscBackground": "original radial-gradient(#fff8ef,#fcf2e6)",
+    "servicePanelWhiteOpacity": 0.22,
+    "servicePanelBorderWhiteOpacity": 0.5
+  },
+  "date": "2026-10-09"
 }

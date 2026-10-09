@@ -1,21 +1,21 @@
 [
   {
-    "file": "miniprogram/custom-tab-bar/index.js",
+    "file": "tests/aicost-home-prefill.test.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "miniprogram/pages/aicost/aicost.js",
+    "file": "tests/home-reference.test.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "miniprogram/pages/index/index.js",
+    "file": "tests/aicost-pricing.test.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "miniprogram/utils/costRegions.js",
+    "file": "tests/home-intro-popup.test.js",
     "exitCode": 0,
     "diagnostic": ""
   },
@@ -25,12 +25,12 @@
     "diagnostic": ""
   },
   {
-    "file": "tests/aicost-home-prefill.test.js",
+    "file": "tests/home-cost-allround-aicost.test.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "tests/aicost-pricing.test.js",
+    "file": "tests/home-smart-service-fixed.test.js",
     "exitCode": 0,
     "diagnostic": ""
   },
@@ -45,22 +45,22 @@
     "diagnostic": ""
   },
   {
-    "file": "tests/home-cost-allround-aicost.test.js",
+    "file": "miniprogram/custom-tab-bar/index.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "tests/home-intro-popup.test.js",
+    "file": "miniprogram/utils/costRegions.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "tests/home-reference.test.js",
+    "file": "miniprogram/pages/index/index.js",
     "exitCode": 0,
     "diagnostic": ""
   },
   {
-    "file": "tests/home-smart-service-fixed.test.js",
+    "file": "miniprogram/pages/aicost/aicost.js",
     "exitCode": 0,
     "diagnostic": ""
   }

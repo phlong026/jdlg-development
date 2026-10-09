@@ -1,0 +1,297 @@
+{
+  "tool": "built-in image_gen",
+  "jobs": [
+    {
+      "name": "advisor",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact speech bubble ring with a solid house and a rounded open doorway; preserve bubble tail, house roof and identical stroke weight. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-8bfcabd9-bcac-47f4-a1af-41a63155cf30.png"
+    },
+    {
+      "name": "calculator",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact green calculator with wide cream display and exactly 4 lower keys, two short horizontal green slots on left, gold and cream split keys on right. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-28dc232f-5368-4928-a3db-29bb08153b8a.png"
+    },
+    {
+      "name": "ai-tools",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact one large sage-green four-point sparkle and two small ochre sparkles on the right; same unequal rounded pointed arms. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-8365b147-6bd8-4025-bd15-94b36b3b4084.png"
+    },
+    {
+      "name": "villa",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact large main gabled two-story house, small left house and small right annex. Preserve every roof line and window opening. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-302986ee-2bf9-44a1-8e79-6e63699b3aaf.png"
+    },
+    {
+      "name": "interior",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact straight-on sofa with precisely two joined rounded backrest cushions, rounded two armrests and two short feet. Preserve white horizontal slot above seat. No extra cushions. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-a62cdc4f-8a99-4671-9a2b-7b19b5033eaa.png"
+    },
+    {
+      "name": "courtyard",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact green rounded five-lobed tree crown, ochre trunk merging into horizontal baseline, and small gold checker fence at right. Same topology and proportions. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-297243a1-51c3-452c-9cfb-3bbbc609d76d.png"
+    },
+    {
+      "name": "renovation",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exact green house outline with two circular refresh arrows inside. Same arrowheads, gaps and house outline. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-3415113b-b47d-469b-8b84-8e0b7443f6a9.png"
+    },
+    {
+      "name": "templates",
+      "prompt": "Use case: precise-object-edit / background-extraction. Edit target: attached crop from the user's exact homepage reference. Rebuild this one icon sharply at high resolution, preserving the target's EXACT silhouette, geometry, element positions, relative sizes and muted colors. Exactly four equal flat sage-green rounded squares in a 2 by 2 grid; same gaps and corner radii. Remove only the pale cream circular/paper background and the pale white halo so the artwork alone is on actual transparent alpha. Match the original subtle near-flat fill, crisp smooth contours, no 3D, no bevel, no thick shadow, no redesign or extra features. Keep the icon in precisely the same canvas placement and occupied proportion as input. Do not zoom, recenter, change green hue, add a badge or text. Production 1024px PNG cutout, clean antialiased edges.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-86a8a528-fc9f-4dd0-8053-71b957c60bed.png"
+    },
+    {
+      "name": "ai-medallion",
+      "prompt": "Use case: precise-object-edit. Edit target: attached exact crop. Reconstruct this SAME pearl-and-champagne circular AI medallion sharply at 1024px. Preserve exact circle diameter/canvas placement, subtle soft white rim, diffuse cream-gold luminosity, embossed bronze letters AI with exact proportions and position, gold richer at bottom-right, white at upper-left. Remove background OUTSIDE circular object to transparent alpha. Keep entire medallion including rim. No added hard outer line or cartoon coin, no dramatic reflective shine, no icon redesign. Exact reference restoration.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-5f632f15-5efc-4751-9103-88775fe7629b.png"
+    },
+    {
+      "name": "ai-shell",
+      "prompt": "Use case: precise-object-edit. Edit target: exact wide homepage CTA panel crop. Restore ONLY the reference panel background as a high-resolution transparent PNG asset, same wide 799:247 shape and exact framing. REMOVE ALL letters, the camera and sparkle icons, the vertical divider AND the partial round AI medallion at top-center. Keep the distinctive top-center shallow curved indentation that cradles the separate AI medallion. Preserve thin layered champagne outer rim, pearly inward white glow, broad softly blurred cream/white interior with faint satin folds and slight warm right side, exact silhouette. Outside panel transparent alpha. No straight top edge at center, no heavy borders, no flat regular pill substitute. No text or icons anywhere. Preserve original aspect ratio and occupancy.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-65dc133d-64f9-45c2-b16a-79d659bc0d64.png"
+    },
+    {
+      "name": "estimate-shell",
+      "prompt": "Use case: precise-object-edit. Edit target: exact long champagne-gold estimate button crop. Remove ONLY the white Chinese text 立即估算, seamlessly continuing its background. Recreate SAME long pill background at high resolution, same 727:83 proportions and framing, soft pale cream-gold at left, muted bronze toward right, irregular soft satin diagonal luminosity, delicate white-gold edge, tiny soft drop shadow. No uniform brown flat fill, no added text, no extra icons. Actual transparent outside the pill. Keep exact original hue, shape and extremely restrained shine.",
+      "path": "/Users/honor.pei/.codex/generated_images/01a11b91-abc6-7011-985c-511e0ee69664/exec-ad6bbbfb-b5a7-42ba-83a7-96c3c42c698d.png"
+    }
+  ],
+  "records": [
+    {
+      "name": "advisor",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 121,
+        "top": 116,
+        "width": 1028,
+        "height": 1008
+      },
+      "targetBounds": {
+        "left": 53,
+        "top": 46,
+        "width": 422,
+        "height": 414
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "calculator",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 232,
+        "top": 130,
+        "width": 790,
+        "height": 967
+      },
+      "targetBounds": {
+        "left": 95,
+        "top": 52,
+        "width": 322,
+        "height": 396
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "ai-tools",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 140,
+        "top": 152,
+        "width": 934,
+        "height": 923
+      },
+      "targetBounds": {
+        "left": 58,
+        "top": 64,
+        "width": 381,
+        "height": 375
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "villa",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 28,
+        "top": 148,
+        "width": 1173,
+        "height": 911
+      },
+      "targetBounds": {
+        "left": 4,
+        "top": 45,
+        "width": 489,
+        "height": 389
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "interior",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 115,
+        "top": 286,
+        "width": 1024,
+        "height": 736
+      },
+      "targetBounds": {
+        "left": 47,
+        "top": 116,
+        "width": 420,
+        "height": 306
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "courtyard",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 126,
+        "top": 74,
+        "width": 1068,
+        "height": 1101
+      },
+      "targetBounds": {
+        "left": 54,
+        "top": 28,
+        "width": 431,
+        "height": 454
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "renovation",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 94,
+        "top": 128,
+        "width": 1063,
+        "height": 1000
+      },
+      "targetBounds": {
+        "left": 41,
+        "top": 53,
+        "width": 431,
+        "height": 408
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "templates",
+      "source": [
+        1254,
+        1254
+      ],
+      "sourceBounds": {
+        "left": 198,
+        "top": 196,
+        "width": 858,
+        "height": 861
+      },
+      "targetBounds": {
+        "left": 73,
+        "top": 75,
+        "width": 364,
+        "height": 363
+      },
+      "delivery": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "ai-medallion",
+      "source": [
+        1263,
+        1246
+      ],
+      "sourceBounds": {
+        "left": 15,
+        "top": 11,
+        "width": 1231,
+        "height": 1199
+      },
+      "delivery": [
+        1024,
+        1009
+      ]
+    },
+    {
+      "name": "ai-shell",
+      "source": [
+        2173,
+        724
+      ],
+      "sourceBounds": {
+        "left": 4,
+        "top": 19,
+        "width": 2166,
+        "height": 676
+      },
+      "delivery": [
+        1598,
+        494
+      ]
+    },
+    {
+      "name": "estimate-shell",
+      "source": [
+        2172,
+        724
+      ],
+      "sourceBounds": {
+        "left": 1,
+        "top": 223,
+        "width": 2171,
+        "height": 255
+      },
+      "delivery": [
+        1454,
+        166
+      ]
+    }
+  ]
+}
