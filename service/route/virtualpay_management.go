@@ -295,6 +295,99 @@ func RegisterVirtualPayManagementRoutes(r *gin.RouterGroup, cfg *config.Config, 
 			"replayed": true,
 		}})
 	})
+
+	// 双账差额汇总（G3）：校准人数 / 差异人数 / 差异名单（按差额绝对值倒序，前 20）。
+	group.GET("/calibrations/summary", func(c *gin.Context) {
+		calModel := deps.WechatCoinCalibrationModel
+		if calModel == nil || calModel.DB == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "校准服务不可用"})
+			return
+		}
+		var calibratedUsers, diffUsers int64
+		if err := calModel.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(diff != 0), 0) FROM wechat_coin_calibrations`).Scan(&calibratedUsers, &diffUsers); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取校准汇总失败: " + err.Error()})
+			return
+		}
+		rows, err := calModel.DB.Query(`
+			SELECT c.user_id, COALESCE(u.username, ''), c.measured_balance, c.local_mirror, c.diff, c.order_no, c.calibrated_at
+			FROM wechat_coin_calibrations c
+			LEFT JOIN users u ON u.id = c.user_id
+			WHERE c.diff != 0
+			ORDER BY ABS(c.diff) DESC
+			LIMIT 20`)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取差异名单失败: " + err.Error()})
+			return
+		}
+		defer rows.Close()
+		diffs := make([]gin.H, 0)
+		for rows.Next() {
+			var userID, measured, mirror, diff int64
+			var username, orderNo string
+			var calibratedAt time.Time
+			if err := rows.Scan(&userID, &username, &measured, &mirror, &diff, &orderNo, &calibratedAt); err != nil {
+				continue
+			}
+			diffs = append(diffs, gin.H{
+				"user_id":          userID,
+				"username":         username,
+				"measured_balance": measured,
+				"local_mirror":     mirror,
+				"diff":             diff,
+				"order_no":         orderNo,
+				"calibrated_at":    calibratedAt,
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{
+			"calibrated_users": calibratedUsers,
+			"diff_users":       diffUsers,
+			"diffs":            diffs,
+		}})
+	})
+
+	// 立即校准（G3）：对近期有过代币充值的用户批量尝试实测。
+	// 受微信接口约束，离线用户（session_key 过期）无法实测自动跳过；
+	// 本操作只收窄"近期活跃用户"的差额盲区，不能替代补偿任务的持续对账。
+	group.POST("/calibrate", func(c *gin.Context) {
+		if deps.UserOrderModel == nil || deps.UserDBModel == nil || deps.SessionKeyModel == nil || deps.WechatCoinCalibrationModel == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "校准服务未初始化"})
+			return
+		}
+		userIDs, err := deps.UserOrderModel.ListRecentVirtualpayCoinUserIDs(300)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取校准用户失败: " + err.Error()})
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 120*time.Second)
+		defer cancel()
+		checked := 0
+		calibrated := 0
+		offline := 0
+		for _, userID := range userIDs {
+			if ctx.Err() != nil {
+				break
+			}
+			checked++
+			ok, _, err := calibrateUserBalance(ctx, cfg, deps, userID)
+			if err != nil {
+				log.Printf("[VirtualPay] 批量校准单用户失败（继续下一个）: userID=%d err=%v", userID, err)
+				continue
+			}
+			if ok {
+				calibrated++
+			} else {
+				offline++
+			}
+		}
+		var diffUsers int64
+		_ = deps.WechatCoinCalibrationModel.DB.QueryRow(`SELECT COALESCE(SUM(diff != 0), 0) FROM wechat_coin_calibrations`).Scan(&diffUsers)
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{
+			"checked":    checked,
+			"calibrated": calibrated,
+			"offline":    offline,
+			"diff_found": diffUsers,
+		}})
+	})
 }
 
 // buildVirtualPayRefundPreview 组装退款影响预览（T8）。

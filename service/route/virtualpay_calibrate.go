@@ -2,10 +2,12 @@ package route
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"service/component/virtualpay"
@@ -81,45 +83,99 @@ func calibrateWechatCoinAfterPaid(ctx context.Context, cfg *config.Config, deps 
 
 	log.Printf("[VirtualPay][资金] 双账差额: userID=%d orderNo=%s 微信实测=%d 本地镜像=%d 差额=%d",
 		meta.UserID, orderNo, resp.Balance, mirror, diff)
-	createFundDiffTicket(deps, meta, orderNo, mirror, resp.Balance, diff)
+	createFundDiffTicket(deps, meta.UserID, orderNo, mirror, resp.Balance, diff)
+}
+
+// calibrateUserBalance 对单个用户实测微信侧代币余额并落校准记录（管理端"立即校准"用）。
+//
+// 返回 calibrated=false 表示用户不满足实测条件（离线：session_key 已过期/不存在）。
+// 差额非零时同样落表并生成核对工单。
+func calibrateUserBalance(ctx context.Context, cfg *config.Config, deps VirtualPayDeps, userID int64) (bool, int64, error) {
+	if deps.UserDBModel == nil || deps.SessionKeyModel == nil || deps.WechatCoinCalibrationModel == nil || deps.UserOrderModel == nil {
+		return false, 0, errors.New("校准依赖未注入")
+	}
+	user, err := deps.UserDBModel.GetByID(userID)
+	if err != nil || user == nil || strings.TrimSpace(user.OpenID) == "" {
+		return false, 0, nil
+	}
+	sessionKey, err := deps.SessionKeyModel.GetSessionKey(user.OpenID)
+	if err != nil {
+		return false, 0, nil // 离线用户：静默跳过
+	}
+	mirror, err := deps.UserOrderModel.WechatCoinMirrorByUser(userID)
+	if err != nil {
+		return false, 0, fmt.Errorf("读本地镜像: %w", err)
+	}
+	accessToken, err := function.GetAccessToken(cfg.Wechat.AppID, cfg.Wechat.AppSecret)
+	if err != nil {
+		return false, 0, fmt.Errorf("取 access_token: %w", err)
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	resp, err := virtualpay.QueryUserBalance(queryCtx, accessToken, sessionKey, virtualpay.QueryUserBalanceRequest{
+		OpenID: user.OpenID,
+		UserIP: serverEgressIP(),
+		Env:    pickXPayEnv(cfg, ""),
+	})
+	if err != nil {
+		return false, 0, fmt.Errorf("query_user_balance: %w", err)
+	}
+	if resp.ErrCode != 0 {
+		return false, 0, fmt.Errorf("query_user_balance errcode=%d errmsg=%s", resp.ErrCode, resp.ErrMsg)
+	}
+	diff := resp.Balance - mirror
+	if upsertErr := deps.WechatCoinCalibrationModel.Upsert(&model.WechatCoinCalibration{
+		UserID:          userID,
+		MeasuredBalance: resp.Balance,
+		LocalMirror:     mirror,
+		Diff:            diff,
+		OrderNo:         "",
+	}); upsertErr != nil {
+		return true, diff, fmt.Errorf("写校准记录: %w", upsertErr)
+	}
+	if diff != 0 {
+		log.Printf("[VirtualPay][资金] 批量校准发现差额: userID=%d 微信实测=%d 本地镜像=%d 差额=%d", userID, resp.Balance, mirror, diff)
+		createFundDiffTicket(deps, userID, "", mirror, resp.Balance, diff)
+	}
+	return true, diff, nil
 }
 
 // createFundDiffTicket 为双账差额生成核对工单；每个用户只保留一张未关闭工单。
-func createFundDiffTicket(deps VirtualPayDeps, meta *model.VirtualPayOrderMeta, orderNo string, mirror, measured, diff int64) {
+func createFundDiffTicket(deps VirtualPayDeps, userID int64, orderNo string, mirror, measured, diff int64) {
 	if deps.SupportTicketModel == nil || deps.SupportTicketModel.DB == nil {
 		return
 	}
-	sourceID := strconv.FormatInt(meta.UserID, 10)
+	sourceID := strconv.FormatInt(userID, 10)
 	if existingID, err := deps.SupportTicketModel.GetLatestOpenTicketIDBySource("fund_diff", sourceID); err == nil {
-		log.Printf("[VirtualPay][资金] 用户已有未关闭差额工单 #%d，不重复创建: userID=%d", existingID, meta.UserID)
+		log.Printf("[VirtualPay][资金] 用户已有未关闭差额工单 #%d，不重复创建: userID=%d", existingID, userID)
 		return
 	}
 	content := fmt.Sprintf(
 		"微信实测代币余额 %d，本地镜像 %d，差额 %+d（实测-镜像）。\n"+
 			"常见原因：历史退款推送丢失、补偿任务落终态偏差、非虚拟支付来源灵石（邀请/签到/手工调整）影响。\n"+
-			"触发订单：%s。处理建议：核对用户最近退款单与灵石流水，必要时手工调账（须填原因，留审计）。",
+			"触发来源：%s。处理建议：核对用户最近退款单与灵石流水，必要时手工调账（须填原因，留审计）。",
 		measured, mirror, diff, orderNo)
 	if _, err := deps.SupportTicketModel.Create(&model.SupportTicketCreateInput{
-		UserID:     meta.UserID,
+		UserID:     userID,
 		Type:       "fund_diff",
 		SourceType: "fund_diff",
 		SourceID:   sourceID,
-		Title:      fmt.Sprintf("双账差额待核对：用户 %d（差 %+d 枚）", meta.UserID, diff),
+		Title:      fmt.Sprintf("双账差额待核对：用户 %d（差 %+d 枚）", userID, diff),
 		Content:    content,
 		Priority:   "high",
 		CreatedBy:  "system:coin_calibration",
 		SourcePayload: map[string]interface{}{
-			"user_id":          meta.UserID,
+			"user_id":          userID,
 			"order_no":         orderNo,
 			"measured_balance": measured,
 			"local_mirror":     mirror,
 			"diff":             diff,
 		},
 	}); err != nil {
-		log.Printf("[VirtualPay][资金] 差额工单创建失败，需人工关注: userID=%d err=%v", meta.UserID, err)
+		log.Printf("[VirtualPay][资金] 差额工单创建失败，需人工关注: userID=%d err=%v", userID, err)
 		return
 	}
-	log.Printf("[VirtualPay][资金] 差额工单已创建: userID=%d diff=%+d orderNo=%s", meta.UserID, diff, orderNo)
+	log.Printf("[VirtualPay][资金] 差额工单已创建: userID=%d diff=%+d orderNo=%s", userID, diff, orderNo)
 }
 
 // serverEgressIP 取服务器出口 IP（/xpay/query_user_balance 的 UserIP 参数）。

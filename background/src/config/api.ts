@@ -74,6 +74,7 @@ export const API_ENDPOINTS = {
     // 订单中心
     ORDERS: {
         LIST: '/api/v1/management/orders',
+        FUND_STATS: '/api/v1/management/orders/fund-stats',
         DETAIL: (id: string) => `/api/v1/management/orders/${id}`,
         SUPPORT_TICKET: (id: string) => `/api/v1/management/orders/${id}/support-ticket`,
         VIRTUAL_PAY_REFUND: (id: string) => `/api/v1/management/virtualpay/orders/${id}/refund`,
@@ -85,6 +86,8 @@ export const API_ENDPOINTS = {
         HEALTH: '/api/v1/management/virtualpay/health',
         LOGS: '/api/v1/management/virtualpay/logs',
         XPAY_LOG_REPLAY: (id: number) => `/api/v1/management/virtualpay/xpay-logs/${id}/replay`,
+        CALIBRATIONS_SUMMARY: '/api/v1/management/virtualpay/calibrations/summary',
+        CALIBRATE: '/api/v1/management/virtualpay/calibrate',
     },
     // 统计
     STATS: {

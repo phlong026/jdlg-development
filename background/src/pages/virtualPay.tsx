@@ -1,10 +1,14 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
-import { FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiRefreshCw, FiSearch, FiZap } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+    getCalibrationSummary,
     getVirtualPayHealth,
     getXPayLogs,
+    replayXPayLog,
+    runCalibration,
+    type CalibrationSummary,
     type VirtualPayHealth,
     type XPayMessageLogItem,
     type XPayLogSummary,
@@ -28,6 +32,9 @@ const VirtualPay: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [health, setHealth] = useState<VirtualPayHealth | null>(null);
+    const [calibration, setCalibration] = useState<CalibrationSummary | null>(null);
+    const [calibrating, setCalibrating] = useState(false);
+    const [replayingLogId, setReplayingLogId] = useState<number | null>(null);
     const [logs, setLogs] = useState<XPayMessageLogItem[]>([]);
     const [summary, setSummary] = useState<XPayLogSummary>(emptySummary);
     const [loading, setLoading] = useState(false);
@@ -41,7 +48,7 @@ const VirtualPay: React.FC = () => {
     const loadData = async (nextPage = page) => {
         setLoading(true);
         try {
-            const [healthData, logData] = await Promise.all([
+            const [healthData, logData, calibData] = await Promise.all([
                 getVirtualPayHealth(),
                 getXPayLogs({
                     keyword: keyword.trim(),
@@ -50,12 +57,17 @@ const VirtualPay: React.FC = () => {
                     page: nextPage,
                     page_size: pageSize,
                 }),
+                getCalibrationSummary().catch((error) => {
+                    console.error('加载校准汇总失败:', error);
+                    return null;
+                }),
             ]);
             setHealth(healthData);
             setLogs(logData.list || []);
             setSummary(logData.summary || emptySummary);
             setTotal(Number(logData.total || 0));
             setPage(Number(logData.page || nextPage));
+            if (calibData) setCalibration(calibData);
         } catch (error) {
             console.error('加载虚拟支付监控失败:', error);
             reportPageLoadError(error, '加载虚拟支付监控失败');
@@ -72,6 +84,39 @@ const VirtualPay: React.FC = () => {
 
     const handleSearch = () => {
         void loadData(1);
+    };
+
+    /** 立即校准（G3）：近期有过代币充值的用户批量实测，离线用户自动跳过 */
+    const handleCalibrate = async () => {
+        setCalibrating(true);
+        try {
+            const result = await runCalibration();
+            alert(`校准完成：检查 ${result.checked} 人，实测 ${result.calibrated} 人（离线跳过 ${result.offline} 人），当前差异用户 ${result.diff_found} 人。`);
+            await loadData(page);
+        } catch (error: any) {
+            console.error('批量校准失败:', error);
+            alert(error?.message || '批量校准失败');
+        } finally {
+            setCalibrating(false);
+        }
+    };
+
+    /** 重放推送（T6）：幂等，重放不会重复发货/重复退款 */
+    const handleReplay = async (item: XPayMessageLogItem) => {
+        if (!window.confirm(`确认重放这条推送？\n事件：${item.event}\n订单：${item.out_trade_no}\n\n处理函数均为幂等实现，重放不会重复发货或重复退款。`)) {
+            return;
+        }
+        setReplayingLogId(item.id);
+        try {
+            await replayXPayLog(item.id);
+            alert('重放成功，业务分发已重新执行。');
+            await loadData(page);
+        } catch (error: any) {
+            console.error('重放推送失败:', error);
+            alert(error?.message || '重放推送失败');
+        } finally {
+            setReplayingLogId(null);
+        }
     };
 
     return (
@@ -107,10 +152,50 @@ const VirtualPay: React.FC = () => {
                 <div className="virtual-pay-stats">
                     <div className="virtual-pay-stat-item"><span>虚拟支付订单</span><strong>{health?.order_summary?.total_virtualpay_orders || 0}</strong></div>
                     <div className="virtual-pay-stat-item"><span>待处理订单</span><strong>{health?.order_summary?.pending_orders || 0}</strong></div>
+                    <div className="virtual-pay-stat-item"><span>发货中</span><strong>{health?.order_summary?.delivering_orders || 0}</strong></div>
+                    <div className="virtual-pay-stat-item"><span>卡退款（&gt;10 分钟）</span><strong className={(health?.order_summary?.refunding_stuck_orders || 0) > 0 ? 'is-danger' : ''}>{health?.order_summary?.refunding_stuck_orders || 0}</strong></div>
                     <div className="virtual-pay-stat-item"><span>退款订单</span><strong>{health?.order_summary?.refunded_orders || 0}</strong></div>
                     <div className="virtual-pay-stat-item"><span>待上报道具发货</span><strong>{health?.order_summary?.unreported_goods_orders || 0}</strong></div>
                     <div className="virtual-pay-stat-item"><span>推送总数</span><strong>{summary.total_count}</strong></div>
                     <div className="virtual-pay-stat-item"><span>未处理推送</span><strong>{summary.unprocessed_count}</strong></div>
+                </div>
+
+                {/* 双账差额监控（G3 / D7）：微信侧实测 vs 本地镜像 */}
+                <div className="diff-card">
+                    <div className="diff-head">
+                        <div>
+                            <h3>双账差额监控</h3>
+                            <small>用户支付时顺路实测微信侧代币余额，与本地镜像比对；差额用户自动生成核对工单</small>
+                        </div>
+                        <button className="btn-calibrate" onClick={() => void handleCalibrate()} disabled={calibrating} title="对近期有过代币充值的用户批量实测；离线用户（session_key 过期）无法实测，自动跳过">
+                            <FiZap />
+                            {calibrating ? '校准中...' : '立即校准'}
+                        </button>
+                    </div>
+                    <div className="diff-body">
+                        <div className="diff-stat">
+                            <b>{calibration?.calibrated_users ?? '-'}</b>
+                            <span>已校准用户</span>
+                        </div>
+                        <div className="diff-stat">
+                            <b className={(calibration?.diff_users || 0) > 0 ? 'is-danger' : 'is-ok'}>{calibration?.diff_users ?? '-'}</b>
+                            <span>存在差异</span>
+                        </div>
+                        {calibration && calibration.diffs.length > 0 ? (
+                            <div className="diff-list">
+                                {calibration.diffs.slice(0, 5).map((item) => (
+                                    <button key={item.user_id} className="diff-row" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)} title="进入用户360">
+                                        <b>{item.username || `用户${item.user_id}`}</b>
+                                        <span>ID {item.user_id} · 微信实测 {item.measured_balance.toLocaleString('zh-CN')} / 镜像 {item.local_mirror.toLocaleString('zh-CN')}</span>
+                                        <em className={item.diff > 0 ? 'plus' : 'minus'}>{item.diff > 0 ? `+${item.diff}` : item.diff}</em>
+                                    </button>
+                                ))}
+                                {calibration.diffs.length > 5 && <div className="diff-more">仅显示前 5 条，共 {calibration.diffs.length > 20 ? 20 : calibration.diffs.length} 条差异记录，核对工单已生成</div>}
+                            </div>
+                        ) : (
+                            <div className="diff-empty">{calibration ? '暂无差异：已校准用户两侧账本一致' : '校准数据加载中...'}</div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="log-toolbar">
@@ -179,13 +264,25 @@ const VirtualPay: React.FC = () => {
                                     <td>{item.error_msg || '-'}</td>
                                     <td>{formatDateTime(item.created_at)}</td>
                                     <td>
-                                        <button
-                                            className="btn-mini"
-                                            title="跳转订单中心按订单号检索"
-                                            onClick={() => navigate(`/recharge?orderNo=${encodeURIComponent(item.out_trade_no)}`)}
-                                        >
-                                            订单
-                                        </button>
+                                        <div className="op-cell-inline">
+                                            <button
+                                                className="btn-mini"
+                                                title="跳转订单中心按订单号检索"
+                                                onClick={() => navigate(`/recharge?orderNo=${encodeURIComponent(item.out_trade_no)}`)}
+                                            >
+                                                订单
+                                            </button>
+                                            {!item.processed && (
+                                                <button
+                                                    className="btn-mini warn"
+                                                    disabled={replayingLogId === item.id}
+                                                    title="用推送原文重新执行业务分发（幂等，不会重复发货/退款）"
+                                                    onClick={() => void handleReplay(item)}
+                                                >
+                                                    {replayingLogId === item.id ? '重放中...' : '重放处理'}
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

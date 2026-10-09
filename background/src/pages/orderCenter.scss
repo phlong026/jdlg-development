@@ -865,3 +865,130 @@
     padding: 8px 12px;
   }
 }
+
+/* ============ 全站资金统计带（G1） ============ */
+.fund-kpi-band {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+
+  .stat-item {
+    background: #fffdf8;
+    border: 1px solid #e9dfd0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    cursor: default;
+  }
+
+  .stat-sub {
+    font-size: 11px;
+    color: #b3a48e;
+  }
+
+  .stat-item-action {
+    cursor: pointer;
+
+    &:hover {
+      border-color: #c0392b;
+      box-shadow: 0 1px 2px rgba(83, 62, 39, 0.05), 0 4px 16px rgba(83, 62, 39, 0.05);
+    }
+  }
+
+  .is-danger {
+    color: #c0392b;
+  }
+}
+
+@media (max-width: 1200px) {
+  .fund-kpi-band {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ============ 状态 Tab（G2） ============ */
+.status-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.status-tab {
+  border: 1px solid #e9dfd0;
+  background: #faf5ec;
+  color: #8a7a66;
+  border-radius: 16px;
+  padding: 3px 13px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover:not(:disabled) {
+    border-color: #a8642f;
+    color: #8c5024;
+  }
+
+  &.on {
+    background: #a8642f;
+    border-color: #a8642f;
+    color: #fff8ef;
+    font-weight: 600;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .status-tab-count {
+    font-size: 11px;
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ============ 日期快捷（G2） ============ */
+.date-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.date-chips-cap {
+  font-size: 12px;
+  color: #8a7a66;
+  margin-right: 2px;
+}
+
+.date-chip {
+  border: 1px solid #e9dfd0;
+  background: #faf5ec;
+  color: #8a7a66;
+  border-radius: 14px;
+  padding: 2px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    border-color: #a8642f;
+    color: #8c5024;
+  }
+
+  &.on {
+    background: #f4e5d3;
+    border-color: #a8642f;
+    color: #8c5024;
+    font-weight: 600;
+  }
+}

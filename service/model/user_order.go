@@ -717,6 +717,102 @@ func (m *UserOrderModel) WechatCoinMirrorByUser(userID int64) (int64, error) {
 	return mirrors[userID], nil
 }
 
+// OrderFundStats 管理端订单中心的全站资金统计带（与列表筛选无关的全局口径）。
+type OrderFundStats struct {
+	// 今日虚拟支付代币充值（仅统计已成功；元与灵石同源）
+	TodayRechargeFen    int64 `json:"today_recharge_fen"`
+	TodayRechargeCount  int64 `json:"today_recharge_count"`
+	TodayRechargeStones int64 `json:"today_recharge_stones"`
+	// 全站微信侧代币在账合计 = Σ成功充值 − Σ已退款（所有用户，本地镜像口径）
+	WechatMirrorTotal int64 `json:"wechat_mirror_total"`
+	// 全站本地灵石余额合计（小程序用户）
+	LocalStonesTotal int64 `json:"local_stones_total"`
+	// 待处理异常（口径同"仅看异常单"：失败+待处理+卡发货+卡退款）
+	ExceptionCount int64 `json:"exception_count"`
+}
+
+// FundStatsForManagement 全站资金统计。已本地消费 = WechatMirrorTotal − LocalStonesTotal
+// 由前端计算展示（净差额，含邀请/签到等非虚拟支付来源灵石的净影响）。
+func (m *UserOrderModel) FundStatsForManagement() (*OrderFundStats, error) {
+	stats := &OrderFundStats{}
+	err := m.DB.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(amount_fen), 0), COALESCE(SUM(amount), 0)
+		FROM user_orders
+		WHERE type = 'recharge' AND pay_channel = 'virtualpay' AND pay_mode = 'short_series_coin'
+		  AND status = 'success' AND created_at >= CURDATE()
+	`).Scan(&stats.TodayRechargeCount, &stats.TodayRechargeFen, &stats.TodayRechargeStones)
+	if err != nil {
+		return nil, err
+	}
+	err = m.DB.QueryRow(`
+		SELECT COALESCE(SUM(CASE WHEN status = 'success' THEN amount WHEN status = 'refunded' THEN -amount ELSE 0 END), 0)
+		FROM user_orders
+		WHERE type = 'recharge' AND pay_channel = 'virtualpay' AND pay_mode = 'short_series_coin'
+	`).Scan(&stats.WechatMirrorTotal)
+	if err != nil {
+		return nil, err
+	}
+	err = m.DB.QueryRow(`SELECT COALESCE(SUM(stones), 0) FROM users WHERE user_type = 'miniprogram'`).Scan(&stats.LocalStonesTotal)
+	if err != nil {
+		return nil, err
+	}
+	whereSQL, args := m.buildManagementWhere("", "all", "all", orderStatusFilterException, "all", "", "")
+	err = m.DB.QueryRow(`SELECT COUNT(*) FROM user_orders o LEFT JOIN users u ON u.id = o.user_id`+whereSQL, args...).Scan(&stats.ExceptionCount)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
+// StatusCountsForManagement 按当前筛选（忽略状态维度）统计各状态订单数，
+// 供订单中心状态 Tab 显示计数。status 传空即不含状态条件。
+func (m *UserOrderModel) StatusCountsForManagement(keyword, orderType, orderCategory, payChannel, startDate, endDate string) (map[string]int64, error) {
+	whereSQL, args := m.buildManagementWhere(keyword, orderType, orderCategory, "", payChannel, startDate, endDate)
+	rows, err := m.DB.Query(`SELECT o.status, COUNT(*) FROM user_orders o LEFT JOIN users u ON u.id = o.user_id`+whereSQL+` GROUP BY o.status`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int64)
+	for rows.Next() {
+		var status string
+		var n int64
+		if err := rows.Scan(&status, &n); err != nil {
+			return nil, err
+		}
+		counts[status] = n
+	}
+	return counts, rows.Err()
+}
+
+// ListRecentVirtualpayCoinUserIDs 最近有过虚拟支付代币充值的用户（批量顺路校准用），
+// 按最近充值时间倒序，只返回最少必要字段。
+func (m *UserOrderModel) ListRecentVirtualpayCoinUserIDs(limit int) ([]int64, error) {
+	if limit <= 0 {
+		limit = 300
+	}
+	rows, err := m.DB.Query(`
+		SELECT user_id, MAX(created_at) AS last_at
+		FROM user_orders
+		WHERE type = 'recharge' AND pay_channel = 'virtualpay' AND pay_mode = 'short_series_coin'
+		GROUP BY user_id
+		ORDER BY last_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // orderStatusFilterException 是管理端订单列表 status 参数的特殊取值。
 const (
 	// orderStatusFilterException "仅看异常单"：失败 + 待处理 + 卡单（见下两个阈值）。

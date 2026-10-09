@@ -34,6 +34,16 @@ export interface OrderSummary {
     pending_count: number;
 }
 
+/** 全站资金统计带（G1，与列表筛选无关的全局口径） */
+export interface OrderFundStats {
+    today_recharge_fen: number;
+    today_recharge_count: number;
+    today_recharge_stones: number;
+    wechat_mirror_total: number;
+    local_stones_total: number;
+    exception_count: number;
+}
+
 export interface OrderDetail {
     order: {
         id: number;
@@ -109,10 +119,16 @@ export const getOrderList = async (params?: OrderListParams) => {
     const res = await get<{
         list: OrderListItem[];
         summary: OrderSummary;
+        status_counts?: Record<string, number>;
         total: number;
         page: number;
         page_size: number;
     }>(API_ENDPOINTS.ORDERS.LIST, params);
+    return res.data!;
+};
+
+export const getOrderFundStats = async () => {
+    const res = await get<OrderFundStats>(API_ENDPOINTS.ORDERS.FUND_STATS);
     return res.data!;
 };
 

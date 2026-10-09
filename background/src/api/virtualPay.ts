@@ -72,3 +72,31 @@ export const replayXPayLog = async (id: number) => {
     const res = await post<{ id: number; event: string; order_no: string; replayed: boolean }>(API_ENDPOINTS.VIRTUAL_PAY.XPAY_LOG_REPLAY(id), {});
     return res.data!;
 };
+
+/** 双账差额名单条目（G3） */
+export interface CalibrationDiffItem {
+    user_id: number;
+    username: string;
+    measured_balance: number;
+    local_mirror: number;
+    diff: number;
+    order_no: string;
+    calibrated_at: string;
+}
+
+export interface CalibrationSummary {
+    calibrated_users: number;
+    diff_users: number;
+    diffs: CalibrationDiffItem[];
+}
+
+export const getCalibrationSummary = async () => {
+    const res = await get<CalibrationSummary>(API_ENDPOINTS.VIRTUAL_PAY.CALIBRATIONS_SUMMARY);
+    return res.data!;
+};
+
+/** 立即校准（G3）：对近期有过代币充值的用户批量实测，离线用户自动跳过 */
+export const runCalibration = async () => {
+    const res = await post<{ checked: number; calibrated: number; offline: number; diff_found: number }>(API_ENDPOINTS.VIRTUAL_PAY.CALIBRATE, {});
+    return res.data!;
+};

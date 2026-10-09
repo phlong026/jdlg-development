@@ -63,17 +63,38 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取订单汇总失败: " + err.Error()})
 			return
 		}
+		// 状态计数按当前筛选（忽略状态维度）统计，供状态 Tab 显示
+		statusCounts, err := userOrderModel.StatusCountsForManagement(keyword, orderType, orderCategory, payChannel, startDate, endDate)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取状态计数失败: " + err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"msg":  "success",
 			"data": gin.H{
-				"list":      list,
-				"summary":   summary,
-				"total":     total,
-				"page":      page,
-				"page_size": pageSize,
+				"list":          list,
+				"summary":       summary,
+				"status_counts": statusCounts,
+				"total":         total,
+				"page":          page,
+				"page_size":     pageSize,
 			},
 		})
+	})
+
+	// 全站资金统计带（G1）：与列表筛选无关的全局口径，供六张资金卡展示。
+	orders.GET("/fund-stats", func(c *gin.Context) {
+		if userOrderModel == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "订单服务不可用"})
+			return
+		}
+		stats, err := userOrderModel.FundStatsForManagement()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取资金统计失败: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": stats})
 	})
 
 	// 订单导出 CSV（B4）：复用列表的全部筛选条件，导出前 10000 条（上限防拖垮）。

@@ -9,10 +9,12 @@ import {
     createOrderSupportTicket,
     getRefundPreview,
     getOrderDetail,
+    getOrderFundStats,
     getOrderList,
     refundVirtualPayOrder,
     verifyRefundAgainstWechat,
     type OrderDetail,
+    type OrderFundStats,
     type OrderListItem,
     type OrderListParams,
     type OrderSummary,
@@ -160,6 +162,46 @@ const getFilterSummary = (params: {
 
 const formatNumber = (value?: number) => (typeof value === 'number' ? value.toLocaleString('zh-CN') : '-');
 
+const formatDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
+/** 日期快捷档位（G2）：与筛选日期输入双向同步 */
+const buildDateRangeByPreset = (preset: string): { start: string; end: string } => {
+    const today = new Date();
+    if (preset === 'today') return { start: formatDate(today), end: formatDate(today) };
+    if (preset === 'yesterday') {
+        const y = new Date(today.getTime() - 86400000);
+        return { start: formatDate(y), end: formatDate(y) };
+    }
+    if (preset === '7d') return { start: formatDate(new Date(today.getTime() - 6 * 86400000)), end: formatDate(today) };
+    if (preset === '30d') return { start: formatDate(new Date(today.getTime() - 29 * 86400000)), end: formatDate(today) };
+    return { start: '', end: '' };
+};
+
+const matchDatePreset = (range: { start: string; end: string }): string => {
+    for (const preset of ['today', 'yesterday', '7d', '30d']) {
+        const candidate = buildDateRangeByPreset(preset);
+        if (candidate.start === range.start && candidate.end === range.end) return preset;
+    }
+    return '';
+};
+
+/** 状态 Tab 定义（G2）：顺序即展示顺序，计数来自服务端按当前筛选聚合 */
+const STATUS_TABS: { value: string; label: string }[] = [
+    { value: 'all', label: '全部' },
+    { value: 'success', label: '成功' },
+    { value: 'pending', label: '待处理' },
+    { value: 'delivering', label: '发货中' },
+    { value: 'refunding', label: '退款中' },
+    { value: 'refunded', label: '已退款' },
+    { value: 'failed', label: '失败' },
+    { value: 'cancelled', label: '已取消' },
+];
+
 const OrderCenter: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -167,13 +209,16 @@ const OrderCenter: React.FC = () => {
     const [summary, setSummary] = useState<OrderSummary>(emptySummary);
     const [loading, setLoading] = useState(false);
     // 支持从其它页面带 orderNo 参数直达（如虚拟支付监控的"订单"跳转）：作为初始关键词检索
-    const [searchKeyword, setSearchKeyword] = useState(() => searchParams.get('orderNo') || '');
-    const [typeFilter, setTypeFilter] = useState('all');
-    const [categoryFilter, setCategoryFilter] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [payChannelFilter, setPayChannelFilter] = useState('all');
-    const [onlyExceptions, setOnlyExceptions] = useState(false);
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [searchKeyword, setSearchKeyword] = useState(() => searchParams.get('orderNo') || searchParams.get('kw') || '');
+    const [typeFilter, setTypeFilter] = useState(() => searchParams.get('type') || 'all');
+    const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('cat') || 'all');
+    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('st') || 'all');
+    const [payChannelFilter, setPayChannelFilter] = useState(() => searchParams.get('ch') || 'all');
+    const [onlyExceptions, setOnlyExceptions] = useState(() => searchParams.get('ex') === '1');
+    const [dateRange, setDateRange] = useState(() => ({ start: searchParams.get('s') || '', end: searchParams.get('e') || '' }));
+    const [datePreset, setDatePreset] = useState(() => matchDatePreset({ start: searchParams.get('s') || '', end: searchParams.get('e') || '' }));
+    const [fundStats, setFundStats] = useState<OrderFundStats | null>(null);
+    const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
     const [detailLogs, setDetailLogs] = useState<XPayMessageLogItem[]>([]);
@@ -203,18 +248,44 @@ const OrderCenter: React.FC = () => {
         ...overrides,
     });
 
+    // 筛选条件同步进 URL（G2）：刷新/转发不丢失；orderId 详情参数保持不动
+    const syncFiltersToUrl = (params: OrderListParams) => {
+        const next = new URLSearchParams();
+        const orderId = searchParams.get('orderId');
+        if (orderId) next.set('orderId', orderId);
+        if (params.keyword) next.set('kw', params.keyword);
+        if (params.type && params.type !== 'all') next.set('type', params.type);
+        if (params.order_category && params.order_category !== 'all') next.set('cat', params.order_category);
+        if (params.status && params.status !== 'all' && params.status !== 'exception') next.set('st', params.status);
+        if (params.pay_channel && params.pay_channel !== 'all') next.set('ch', params.pay_channel);
+        if (params.start_date) next.set('s', params.start_date);
+        if (params.end_date) next.set('e', params.end_date);
+        if (onlyExceptions) next.set('ex', '1');
+        setSearchParams(next, { replace: true });
+    };
+
     const loadOrders = async (params?: OrderListParams) => {
         setLoading(true);
         try {
-            const response = await getOrderList({
+            const effective: OrderListParams = {
                 page: currentPage,
                 page_size: pageSize,
                 ...params,
-            });
+            };
+            const [response] = await Promise.all([
+                getOrderList(effective),
+                // 全站资金统计与列表同刷（口径全局，不随筛选变化）
+                getOrderFundStats().then(setFundStats).catch((error) => {
+                    console.error('加载资金统计失败:', error);
+                    return null;
+                }),
+            ]);
             setRecords(response.list || []);
             setSummary(response.summary || emptySummary);
+            setStatusCounts(response.status_counts || {});
             setTotal(Number(response.total || 0));
             setCurrentPage(Number(response.page || params?.page || 1));
+            syncFiltersToUrl(effective);
         } catch (error) {
             console.error('加载订单中心失败:', error);
             reportPageLoadError(error, '加载订单中心失败');
@@ -284,8 +355,26 @@ const OrderCenter: React.FC = () => {
         setPayChannelFilter('all');
         setOnlyExceptions(false);
         setDateRange({ start: '', end: '' });
+        setDatePreset('');
         setCurrentPage(1);
         void loadOrders({ page: 1, page_size: pageSize, keyword: '', type: 'all', order_category: 'all', status: 'all', pay_channel: 'all', start_date: '', end_date: '' });
+    };
+
+    /** 状态 Tab 点击（G2）：仅看异常单模式下禁用 */
+    const handleStatusTabClick = (value: string) => {
+        if (onlyExceptions || value === statusFilter) return;
+        setStatusFilter(value);
+        setCurrentPage(1);
+        void loadOrders(buildOrderQueryParams({ page: 1, status: value }));
+    };
+
+    /** 日期快捷档位（G2） */
+    const handleDatePresetClick = (preset: string) => {
+        const range = buildDateRangeByPreset(preset);
+        setDatePreset(preset);
+        setDateRange(range);
+        setCurrentPage(1);
+        void loadOrders(buildOrderQueryParams({ page: 1, start_date: range.start, end_date: range.end }));
     };
 
     const handleViewDetail = async (record: OrderListItem) => {
@@ -405,6 +494,52 @@ const OrderCenter: React.FC = () => {
         void loadOrders(buildOrderQueryParams({ page }));
     };
 
+    // 对账单导出（G4）：把订单 + 资金视图 + 关联推送就地生成 CSV（含 BOM），财务核对单笔订单用
+    const handleExportStatement = () => {
+        if (!selectedDetail) return;
+        const o = selectedDetail.order;
+        const fv = selectedDetail.fund_view;
+        const rows: string[][] = [
+            ['项目', '内容'],
+            ['订单号', o.order_no],
+            ['用户', `${selectedDetail.user?.username || `用户${o.user_id}`}（ID ${o.user_id}）`],
+            ['业务类型', `${formatOrderType(o.type)} / ${formatOrderCategory(o.order_category)}`],
+            ['支付金额(元)', o.amount_fen > 0 ? (o.amount_fen / 100).toFixed(2) : '-'],
+            ['灵石变动', String(o.amount)],
+            ['支付通道', `${formatPayChannel(o.pay_channel)}${o.pay_mode ? ` · ${formatPayMode(o.pay_mode)}` : ''}`],
+            ['状态', formatStatus(o.status).label],
+            ['创建时间', formatDateTime(o.created_at)],
+            ['完成时间', formatDateTime(o.completed_at)],
+        ];
+        if (fv && typeof fv.wechat_mirror === 'number') {
+            rows.push(
+                ['— 资金视图 —', ''],
+                ['微信侧在账（镜像）', `${formatNumber(fv.wechat_mirror)} 枚`],
+                ['本地可用灵石', `${formatNumber(fv.local_stones)} 枚`],
+                ['已本地消费（净差额）', `${formatNumber(fv.consumed_net)} 枚`],
+            );
+            if (fv.calibrated_at) {
+                rows.push(['最近校准', `${formatDateTime(fv.calibrated_at)}（微信实测 ${formatNumber(fv.measured_balance)}，差额 ${formatNumber(fv.diff)}）`]);
+            }
+        }
+        rows.push(['— 关联推送 —', '']);
+        detailLogs.forEach((logItem) => {
+            rows.push([formatXPayEvent(logItem.event), `${logItem.processed ? '已处理' : '未处理'} · ${formatDateTime(logItem.created_at)}`]);
+        });
+        const csv = rows.map((cells) => cells.map((cell) => {
+            const text = String(cell ?? '');
+            const guarded = /^[=+\-@]/.test(text) ? `'${text}` : text;
+            return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+        }).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `对账单-${o.order_no}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
     const detailOrder = selectedDetail?.order;
 
     return (
@@ -448,16 +583,6 @@ const OrderCenter: React.FC = () => {
                                 <option value="service">设计服务</option>
                                 <option value="withdraw">提现</option>
                             </select>
-                            <select className="filter-select" value={statusFilter} disabled={onlyExceptions} title={onlyExceptions ? '“仅看异常单”已限定为失败、待处理与卡单，取消后可选其他状态' : undefined} onChange={(event) => setStatusFilter(event.target.value)}>
-                                <option value="all">全部状态</option>
-                                <option value="pending">待处理</option>
-                                <option value="delivering">发货中</option>
-                                <option value="success">成功</option>
-                                <option value="refunding">退款中</option>
-                                <option value="refunded">已退款</option>
-                                <option value="failed">失败</option>
-                                <option value="cancelled">已取消</option>
-                            </select>
                             <select className="filter-select" value={payChannelFilter} onChange={(event) => setPayChannelFilter(event.target.value)}>
                                 <option value="all">全部通道</option>
                                 <option value="virtualpay">虚拟支付</option>
@@ -467,13 +592,13 @@ const OrderCenter: React.FC = () => {
                                 type="date"
                                 className="filter-date"
                                 value={dateRange.start}
-                                onChange={(event) => setDateRange({ ...dateRange, start: event.target.value })}
+                                onChange={(event) => { setDateRange({ ...dateRange, start: event.target.value }); setDatePreset(''); }}
                             />
                             <input
                                 type="date"
                                 className="filter-date"
                                 value={dateRange.end}
-                                onChange={(event) => setDateRange({ ...dateRange, end: event.target.value })}
+                                onChange={(event) => { setDateRange({ ...dateRange, end: event.target.value }); setDatePreset(''); }}
                             />
                         </div>
                     </div>
@@ -535,23 +660,79 @@ const OrderCenter: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="order-center-stats">
+                {/* 全站资金统计带（G1）：口径全局，不随列表筛选变化；已消费 = 微信侧在账 − 本地可用 */}
+                <div className="order-center-stats fund-kpi-band">
                     <div className="stat-item">
-                        <span className="stat-label">订单总数</span>
-                        <span className="stat-value">{summary.total_count}</span>
+                        <span className="stat-label">今日充值（元）</span>
+                        <span className="stat-value">¥{(((fundStats?.today_recharge_fen) || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="stat-sub">{fundStats?.today_recharge_count || 0} 笔成功 · 虚拟支付</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">成功订单数</span>
-                        <span className="stat-value">{summary.success_count}</span>
+                        <span className="stat-label">今日到账灵石</span>
+                        <span className="stat-value">{formatNumber(fundStats?.today_recharge_stones)}</span>
+                        <span className="stat-sub">实时进入本地账本</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">待处理订单</span>
-                        <span className="stat-value">{summary.pending_count}</span>
+                        <span className="stat-label" title="全站用户的微信虚拟支付代币余额合计 = 累计成功充值 − 已退款（本地镜像口径）">微信侧代币在账</span>
+                        <span className="stat-value">{formatNumber(fundStats?.wechat_mirror_total)}</span>
+                        <span className="stat-sub">枚 · 资金押在微信账上</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">成功正向订单值</span>
-                        <span className="stat-value">{summary.success_amount}</span>
+                        <span className="stat-label">本地灵石流通</span>
+                        <span className="stat-value">{formatNumber(fundStats?.local_stones_total)}</span>
+                        <span className="stat-sub">用户当前可用合计</span>
                     </div>
+                    <div className="stat-item">
+                        <span className="stat-label" title="已本地消费 = 微信侧在账 − 本地可用，为净差额：含邀请/签到/手工调整等非虚拟支付来源灵石的净影响">已本地消费（净）</span>
+                        <span className="stat-value">{formatNumber((fundStats?.wechat_mirror_total || 0) - (fundStats?.local_stones_total || 0))}</span>
+                        <span className="stat-sub">两账净差额 · 悬停看口径</span>
+                    </div>
+                    <div className="stat-item stat-item-action" onClick={() => { if (!onlyExceptions) handleToggleExceptions(); }} role="button" title="点击查看全部异常单">
+                        <span className="stat-label">待处理异常</span>
+                        <span className="stat-value is-danger">{fundStats?.exception_count ?? '-'}</span>
+                        <span className="stat-sub">失败 + 待处理 + 卡发货/卡退款</span>
+                    </div>
+                </div>
+
+                {/* 状态 Tab（G2）：计数为当前筛选（忽略状态维度）下的各状态数量 */}
+                <div className="status-tabs" role="tablist">
+                    {STATUS_TABS.map((tab) => {
+                        const count = tab.value === 'all'
+                            ? Object.values(statusCounts).reduce((sum, n) => sum + (n || 0), 0)
+                            : (statusCounts[tab.value] || 0);
+                        const active = !onlyExceptions && statusFilter === tab.value;
+                        return (
+                            <button
+                                key={tab.value}
+                                role="tab"
+                                aria-selected={active}
+                                className={`status-tab ${active ? 'on' : ''}`}
+                                disabled={onlyExceptions && tab.value !== statusFilter}
+                                title={onlyExceptions ? '“仅看异常单”已限定为失败、待处理与卡单，取消后可切换状态' : undefined}
+                                onClick={() => handleStatusTabClick(tab.value)}
+                            >
+                                {tab.label}
+                                <span className="status-tab-count">{formatNumber(count)}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* 日期快捷（G2）：与起止日期输入双向同步 */}
+                <div className="date-chips">
+                    <span className="date-chips-cap">日期</span>
+                    {[{ key: 'today', label: '今天' }, { key: 'yesterday', label: '昨天' }, { key: '7d', label: '近 7 天' }, { key: '30d', label: '近 30 天' }].map((item) => (
+                        <button
+                            key={item.key}
+                            className={`date-chip ${datePreset === item.key ? 'on' : ''}`}
+                            onClick={() => handleDatePresetClick(item.key)}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                    {datePreset === '' && (dateRange.start || dateRange.end) ? (
+                        <button className="date-chip on" title="自定义区间，清空输入框即恢复全部">自定义</button>
+                    ) : null}
                 </div>
 
                 <div className="order-tip-card">
@@ -829,6 +1010,7 @@ const OrderCenter: React.FC = () => {
                                     </button>
                                 )}
                                 <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${detailOrder.user_id}`)}>进入用户360</button>
+                                <button className="btn-secondary" onClick={handleExportStatement} title="导出该订单的对账单 CSV（订单信息 + 资金视图 + 关联推送）">对账单</button>
                                 <span style={{ flex: 1 }}></span>
                                 <button className="btn-primary" onClick={handleCloseDetail}>关闭</button>
                             </div>

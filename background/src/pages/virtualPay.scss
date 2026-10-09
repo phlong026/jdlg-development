@@ -277,3 +277,174 @@
     border-color: #8b5e3c;
   }
 }
+
+/* ============ 双账差额监控（G3） ============ */
+.diff-card {
+  background: #fffdf8;
+  border: 1px solid #e9dfd0;
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+
+.diff-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e9dfd0;
+
+  h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #35291c;
+  }
+
+  small {
+    display: block;
+    font-size: 11.5px;
+    color: #b3a48e;
+    margin-top: 2px;
+  }
+
+  .btn-calibrate {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #a8642f;
+    background: #f4e5d3;
+    color: #8c5024;
+    border-radius: 8px;
+    padding: 5px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: #a8642f;
+      color: #fff8ef;
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.diff-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.diff-stat {
+  display: flex;
+  flex-direction: column;
+
+  b {
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    color: #35291c;
+
+    &.is-ok {
+      color: #2f8f6b;
+    }
+
+    &.is-danger {
+      color: #c0392b;
+    }
+  }
+
+  span {
+    font-size: 11.5px;
+    color: #b3a48e;
+  }
+}
+
+.diff-list {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diff-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e9dfd0;
+  background: #faf5ec;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+
+  &:hover {
+    border-color: #a8642f;
+  }
+
+  b {
+    color: #35291c;
+    flex-shrink: 0;
+  }
+
+  span {
+    color: #8a7a66;
+    flex: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  em {
+    font-style: normal;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+
+    &.plus {
+      color: #c0392b;
+    }
+
+    &.minus {
+      color: #2f8f6b;
+    }
+  }
+}
+
+.diff-more,
+.diff-empty {
+  font-size: 11.5px;
+  color: #b3a48e;
+  background: #faf5ec;
+  border: 1px dashed #e9dfd0;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.is-danger {
+  color: #c0392b;
+}
+
+.op-cell-inline {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-mini.warn {
+  color: #b97f1f;
+  border-color: #ecd9ac;
+
+  &:hover:not(:disabled) {
+    background: #faf0da;
+    border-color: #b97f1f;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
