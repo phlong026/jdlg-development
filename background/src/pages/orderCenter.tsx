@@ -749,6 +749,7 @@ const OrderCenter: React.FC = () => {
                                 <th>类型</th>
                                 <th>业务分类</th>
                                 <th>支付金额 / 订单数值</th>
+                                <th title="微信侧实际扣款金额（query_order 回读取证），与「支付金额」逐单对平">微信实付</th>
                                 <th title="该用户当前在微信虚拟支付账本中的代币余额（本地镜像 = 累计成功充值 − 已退款）">微信侧在账</th>
                                 <th>状态</th>
                                 <th>标题 / 描述</th>
@@ -760,7 +761,7 @@ const OrderCenter: React.FC = () => {
                         <tbody>
                             {records.length === 0 ? (
                                 <tr>
-                                    <td colSpan={11} className="empty-state">暂无订单记录</td>
+                                    <td colSpan={12} className="empty-state">暂无订单记录</td>
                                 </tr>
                             ) : (
                                 records.map((record) => {
@@ -800,6 +801,18 @@ const OrderCenter: React.FC = () => {
                                                     <strong>{formatAmountYuan(record.amount_fen)}</strong>
                                                     <span className={`order-value ${isNegativeOrderValue(record) ? 'negative' : 'positive'}`}>{formatOrderValue(record)}</span>
                                                 </div>
+                                            </td>
+                                            <td>
+                                                {record.wechat_paid_fen != null && record.wechat_paid_fen > 0 ? (
+                                                    <div className="paid-evidence-cell">
+                                                        <strong>{formatAmountYuan(record.wechat_paid_fen)}</strong>
+                                                        {record.wechat_pay_match === 'mismatch'
+                                                            ? <span className="match-badge is-bad">不一致</span>
+                                                            : <span className="match-badge is-ok">一致</span>}
+                                                    </div>
+                                                ) : (
+                                                    <span className="coin-mirror-na" title="尚未回读微信实付（旧通道订单或支付确认中）">—</span>
+                                                )}
                                             </td>
                                             <td>
                                                 {record.pay_channel === 'virtualpay' && record.pay_mode === 'short_series_coin' ? (
@@ -936,6 +949,32 @@ const OrderCenter: React.FC = () => {
                                                     : `最近校准 ${formatDateTime(selectedDetail.fund_view.calibrated_at)}：与微信实测一致（用户支付时顺路核对）`}
                                             </div>
                                         )}
+                                    </div>
+                                )}
+
+                                {selectedDetail.wechat_evidence && (
+                                    <div className="detail-section wechat-evidence-section">
+                                        <h4>
+                                            微信侧对账（实付证据）
+                                            {selectedDetail.wechat_evidence.amount_match === 'mismatch'
+                                                ? <span className="match-badge is-bad">实付不一致</span>
+                                                : selectedDetail.wechat_evidence.amount_match === 'match'
+                                                    ? <span className="match-badge is-ok">已对平</span>
+                                                    : <span className="match-badge">未比对该通道</span>}
+                                        </h4>
+                                        <div className="detail-grid">
+                                            <div className="info-row"><span className="info-label">我方应付</span><span className="info-value mono">{formatAmountYuan(detailOrder.amount_fen)}</span></div>
+                                            <div className="info-row"><span className="info-label">微信实付</span><span className="info-value mono">{formatAmountYuan(selectedDetail.wechat_evidence.paid_fee_fen ?? undefined)}</span></div>
+                                            <div className="info-row"><span className="info-label">微信支付单号</span><span className="info-value mono">{selectedDetail.wechat_evidence.wxpay_order_id || '-'}</span></div>
+                                            <div className="info-row"><span className="info-label">微信侧状态 / 核对时间</span><span className="info-value">{selectedDetail.wechat_evidence.wechat_state || '-'} · {formatDateTime(selectedDetail.wechat_evidence.queried_at)}</span></div>
+                                            {selectedDetail.wechat_evidence.refund_fee_fen != null && selectedDetail.wechat_evidence.refund_fee_fen > 0 && (
+                                                <div className="info-row"><span className="info-label">微信侧退款 / 剩余</span><span className="info-value mono">{formatAmountYuan(selectedDetail.wechat_evidence.refund_fee_fen)} / {formatAmountYuan(selectedDetail.wechat_evidence.left_fee_fen ?? undefined)}</span></div>
+                                            )}
+                                            {selectedDetail.wechat_evidence.sett_state != null && (
+                                                <div className="info-row"><span className="info-label">结算状态</span><span className="info-value">{['未开始', '结算中', '结算成功', '待结算'][selectedDetail.wechat_evidence.sett_state] ?? selectedDetail.wechat_evidence.sett_state}{selectedDetail.wechat_evidence.platform_fee_fen != null ? ` · 技术服务费 ${formatAmountYuan(selectedDetail.wechat_evidence.platform_fee_fen)}` : ''}</span></div>
+                                            )}
+                                        </div>
+                                        <div className="evidence-note">实付金额来自微信 query_order 回读（支付确认/补偿任务顺路取证），与"支付金额"不一致时已自动生成核对工单。</div>
                                     </div>
                                 )}
 

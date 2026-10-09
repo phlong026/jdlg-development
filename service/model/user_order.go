@@ -58,6 +58,11 @@ type OrderManagementItem struct {
 	// WechatCoinMirror 该订单用户的"微信侧代币在账"本地镜像（见 WechatCoinMirrorByUsers）。
 	// 仅列表接口按页批量填充；道具模式/消费类订单该值属于用户维度而非订单维度，前端需按列语义展示。
 	WechatCoinMirror int64      `json:"wechat_coin_mirror"`
+	// 微信侧实付证据（两方账拉通 R3）：列表 LEFT JOIN wechat_order_evidence 填充，
+	// 无证据（旧通道/未核对）为 nil/"unknown"。
+	WechatPaidFen    *int64     `json:"wechat_paid_fen"`
+	WechatPayMatch   string     `json:"wechat_pay_match"`
+	WxpayOrderID     string     `json:"wxpay_order_id"`
 	CompletedAt      *time.Time `json:"completed_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 }
@@ -881,9 +886,11 @@ func (m *UserOrderModel) ListForManagement(keyword, orderType, orderCategory, st
 		SELECT o.id, o.user_id, COALESCE(u.username, ''), o.designer_user_id, o.template_id, o.order_no, o.type, o.order_category,
 		       o.amount, o.status, o.review_status, o.title, o.description,
 		       COALESCE(o.pay_channel, 'wechatpay'), COALESCE(o.pay_mode, ''), COALESCE(o.product_id, ''), COALESCE(o.amount_fen, 0),
-		       COALESCE(o.deliver_reported, 0), COALESCE(o.deliver_report_attempts, 0), o.completed_at, o.created_at
+		       COALESCE(o.deliver_reported, 0), COALESCE(o.deliver_report_attempts, 0), o.completed_at, o.created_at,
+		       w.paid_fee_fen, COALESCE(w.amount_match, 'unknown'), COALESCE(w.wxpay_order_id, '')
 		FROM user_orders o
-		LEFT JOIN users u ON u.id = o.user_id` + whereSQL + `
+		LEFT JOIN users u ON u.id = o.user_id
+		LEFT JOIN wechat_order_evidence w ON w.order_no = o.order_no` + whereSQL + `
 		ORDER BY o.created_at DESC
 		LIMIT ? OFFSET ?`
 	rows, err := m.DB.Query(query, queryArgs...)
@@ -896,9 +903,15 @@ func (m *UserOrderModel) ListForManagement(keyword, orderType, orderCategory, st
 		item := &OrderManagementItem{}
 		var templateID sql.NullInt64
 		var completedAt sql.NullTime
+		var wechatPaidFen sql.NullInt64
 		if err := rows.Scan(&item.ID, &item.UserID, &item.Username, &item.DesignerUserID, &templateID, &item.OrderNo, &item.Type, &item.OrderCategory, &item.Amount, &item.Status, &item.ReviewStatus, &item.Title, &item.Description,
-			&item.PayChannel, &item.PayMode, &item.ProductID, &item.AmountFen, &item.DeliverReported, &item.DeliverReportAttempts, &completedAt, &item.CreatedAt); err != nil {
+			&item.PayChannel, &item.PayMode, &item.ProductID, &item.AmountFen, &item.DeliverReported, &item.DeliverReportAttempts, &completedAt, &item.CreatedAt,
+			&wechatPaidFen, &item.WechatPayMatch, &item.WxpayOrderID); err != nil {
 			return nil, 0, err
+		}
+		if wechatPaidFen.Valid {
+			v := wechatPaidFen.Int64
+			item.WechatPaidFen = &v
 		}
 		if templateID.Valid {
 			tid := templateID.Int64

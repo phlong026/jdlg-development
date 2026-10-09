@@ -992,3 +992,52 @@
     font-weight: 600;
   }
 }
+
+/* ============ 微信实付对账（R3） ============ */
+.paid-evidence-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  strong {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.match-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  width: fit-content;
+  background: var(--surface-2, #faf5ec);
+  color: #b3a48e;
+  border: 1px solid #e9dfd0;
+
+  &.is-ok {
+    background: #e6f3ec;
+    color: #2f8f6b;
+    border-color: #c8e5d8;
+  }
+
+  &.is-bad {
+    background: #fbeae6;
+    color: #c0392b;
+    border-color: #f0cfc7;
+  }
+}
+
+.wechat-evidence-section {
+  .evidence-note {
+    margin-top: 8px;
+    font-size: 11.5px;
+    color: #8a7a66;
+    background: #faf5ec;
+    border: 1px dashed #e9dfd0;
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+}

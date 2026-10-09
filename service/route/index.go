@@ -115,6 +115,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		sessionKeyModel := model.NewSessionKeyRedisModel(component.GetRedis())
 		wechatCoinCalibrationModel := model.NewWechatCoinCalibrationModel(component.GetDB())
 		pricingConfigModel := model.NewPricingConfigModel(component.GetDB())
+		wechatOrderEvidenceModel := model.NewWechatOrderEvidenceModel(component.GetDB())
 		virtualPayDeps := VirtualPayDeps{
 			UserDBModel:                userDBModel,
 			UserOrderModel:             userOrderModel,
@@ -128,6 +129,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 			WechatCoinCalibrationModel: wechatCoinCalibrationModel,
 			SupportTicketModel:         supportTicketModel,
 			PricingConfigModel:         pricingConfigModel,
+			WechatOrderEvidenceModel:   wechatOrderEvidenceModel,
 		}
 		if reportModule != nil {
 			virtualPayDeps.ReportService = reportModule.Service
@@ -189,7 +191,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterAIContentAuditManagementRoutes(managementAuth, contentAuditModel)
 		RegisterAITaskManagementRoutes(managementAuth, pricingModel, taskModel, videoTaskModel, supportTicketModel)
 		RegisterUserWorkbenchManagementRoutes(managementAuth, userDBModel, userModel, userProfileModel, stoneRecordModel, userOrderModel, userMembershipModel, taskModel, videoTaskModel, pricingModel)
-		RegisterOrderManagementRoutes(managementAuth, userOrderModel, userDBModel, certificationApplicationModel, userMembershipModel, supportTicketModel, wechatCoinCalibrationModel)
+		RegisterOrderManagementRoutes(managementAuth, userOrderModel, userDBModel, certificationApplicationModel, userMembershipModel, supportTicketModel, wechatCoinCalibrationModel, wechatOrderEvidenceModel)
 		RegisterPricingManagementRoutes(managementAuth, pricingConfigModel, cfg)
 		RegisterVirtualPayManagementRoutes(managementAuth, cfg, virtualPayDeps)
 		RegisterDesignerManagementRoutes(managementAuth, userDBModel, templateModel, userProfileModel, certificationApplicationModel, stoneRecordModel, userOrderModel, designerReviewModel, designerFollowModel)

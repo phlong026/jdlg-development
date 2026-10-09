@@ -25,6 +25,25 @@ export interface OrderListItem {
     created_at: string;
     /** 该用户"微信侧代币在账"本地镜像（T3，用户维度；道具/消费类订单前端按列语义展示） */
     wechat_coin_mirror?: number;
+    /** 微信实付金额（分）与比对结论（R3；无证据为 null/unknown） */
+    wechat_paid_fen?: number | null;
+    wechat_pay_match?: string;
+    wxpay_order_id?: string;
+}
+
+/** 微信侧实付证据（R3，逐单两方对平） */
+export interface WechatOrderEvidenceView {
+    wechat_state: string;
+    order_fee_fen?: number | null;
+    paid_fee_fen?: number | null;
+    refund_fee_fen?: number | null;
+    left_fee_fen?: number | null;
+    wxpay_order_id: string;
+    channel_order_id: string;
+    sett_state?: number | null;
+    platform_fee_fen?: number | null;
+    amount_match: string;
+    queried_at: string;
 }
 
 export interface OrderSummary {
@@ -87,6 +106,8 @@ export interface OrderDetail {
     } | null;
     /** 资金视图（T3）：仅虚拟支付代币用户返回 */
     fund_view?: OrderFundView;
+    /** 微信侧实付证据（R3）：已核对订单返回 */
+    wechat_evidence?: WechatOrderEvidenceView | null;
 }
 
 export interface OrderListParams {

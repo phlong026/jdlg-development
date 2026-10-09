@@ -174,6 +174,8 @@ func verifyRefundingOrderAgainstWechat(ctx context.Context, cfg *config.Config, 
 	if err != nil {
 		return "", err
 	}
+	// 顺路补证据（R2）：退款核对回包更新 refund_fee/left_fee（COALESCE 合并不冲旧值）
+	captureWechatOrderEvidence(deps, meta, orderNo, resp)
 	if resp.State == virtualpay.OrderStateRefund {
 		if err := SettleVirtualPayRefundCompleted(deps, orderNo); err != nil {
 			return resp.State, err

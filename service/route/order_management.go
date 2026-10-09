@@ -25,7 +25,7 @@ func supportTicketPriorityByOrderStatus(status string) string {
 	}
 }
 
-func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.UserOrderModel, userDBModel *model.UserModel, certificationModel *model.CertificationApplicationModel, userMembershipModel *model.UserMembershipModel, supportTicketModel *model.SupportTicketModel, wechatCoinCalibrationModel *model.WechatCoinCalibrationModel) {
+func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.UserOrderModel, userDBModel *model.UserModel, certificationModel *model.CertificationApplicationModel, userMembershipModel *model.UserMembershipModel, supportTicketModel *model.SupportTicketModel, wechatCoinCalibrationModel *model.WechatCoinCalibrationModel, wechatOrderEvidenceModel *model.WechatOrderEvidenceModel) {
 	orders := r.Group("/orders")
 
 	orders.GET("", func(c *gin.Context) {
@@ -123,7 +123,7 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 
 		var buf bytes.Buffer
 		buf.WriteString("\uFEFF") // Excel 直接打开不乱码
-		buf.WriteString("订单号,用户ID,用户名,类型,类别,标题,支付金额(元),灵石变动,状态,支付渠道,支付模式,创建时间,完成时间\n")
+		buf.WriteString("订单号,用户ID,用户名,类型,类别,标题,支付金额(元),微信实付(元),灵石变动,状态,支付渠道,支付模式,创建时间,完成时间,微信支付单号\n")
 		for _, o := range list {
 			// 文本列走 CSV 注入防护；数值/时间列是系统生成的受控值，保持原样（负数不能被引号转成文本）
 			textCells := []string{
@@ -145,16 +145,26 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 			if o.AmountFen > 0 {
 				amountYuan = fmt.Sprintf("%.2f", float64(o.AmountFen)/100)
 			}
+			wechatPaidYuan := ""
+			if o.WechatPaidFen != nil && *o.WechatPaidFen > 0 {
+				wechatPaidYuan = fmt.Sprintf("%.2f", float64(*o.WechatPaidFen)/100)
+			}
 			completedAt := ""
 			if o.CompletedAt != nil {
 				completedAt = o.CompletedAt.Format("2006-01-02 15:04:05")
 			}
-			// 列顺序与表头一致：文本列(已防护) + 数值列 + 时间列
-			cells := make([]string, 0, 13)
+			// 列顺序与表头一致：文本列(已防护) + 数值列 + 时间列 + 文本尾列
+			cells := make([]string, 0, 15)
 			cells = append(cells, textCells[:6]...)
-			cells = append(cells, amountYuan, strconv.FormatInt(o.Amount, 10))
+			cells = append(cells, amountYuan, wechatPaidYuan, strconv.FormatInt(o.Amount, 10))
 			cells = append(cells, textCells[6:]...)
 			cells = append(cells, completedAt)
+			// 微信支付单号来自微信侧回包，仍做注入防护
+			wxOrderID := o.WxpayOrderID
+			if strings.HasPrefix(wxOrderID, "=") || strings.HasPrefix(wxOrderID, "+") || strings.HasPrefix(wxOrderID, "-") || strings.HasPrefix(wxOrderID, "@") {
+				wxOrderID = "'" + wxOrderID
+			}
+			cells = append(cells, wxOrderID)
 			buf.WriteString(strings.Join(cells, ",") + "\n")
 		}
 
@@ -236,14 +246,34 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 				}
 			}
 		}
+		// 微信侧实付证据（R3）：两方账逐单对平的展示数据源
+		var evidencePayload gin.H
+		if wechatOrderEvidenceModel != nil {
+			if ev, evErr := wechatOrderEvidenceModel.GetByOrderNo(order.OrderNo); evErr == nil && ev != nil {
+				evidencePayload = gin.H{
+					"wechat_state":     ev.WechatState,
+					"order_fee_fen":    ev.OrderFeeFen,
+					"paid_fee_fen":     ev.PaidFeeFen,
+					"refund_fee_fen":   ev.RefundFeeFen,
+					"left_fee_fen":     ev.LeftFeeFen,
+					"wxpay_order_id":   ev.WxpayOrderID,
+					"channel_order_id": ev.ChannelOrderID,
+					"sett_state":       ev.SettState,
+					"platform_fee_fen": ev.PlatformFeeFen,
+					"amount_match":     ev.AmountMatch,
+					"queried_at":       ev.QueriedAt,
+				}
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
 			"msg":  "success",
 			"data": gin.H{
-				"order":      order,
-				"user":       userPayload,
-				"membership": membershipPayload,
-				"fund_view":  fundView,
+				"order":           order,
+				"user":            userPayload,
+				"membership":      membershipPayload,
+				"fund_view":       fundView,
+				"wechat_evidence": evidencePayload,
 			},
 		})
 	})

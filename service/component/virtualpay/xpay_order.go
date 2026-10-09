@@ -36,12 +36,16 @@ type QueryOrderRequest struct {
 // QueryOrderResponse /xpay/query_order 响应。
 //
 // 仅列出业务实际使用的字段，避免与文档每次更新都强耦合；新字段按需追加。
+// Raw 保留回包原文：微信订单证据（两方账拉通 R1）依赖原文做实付金额取证，
+// 字段解析在 model.ParseWechatOrderEvidence 中容错兼容两种回包结构。
 type QueryOrderResponse struct {
 	ErrCode int        `json:"errcode"`
 	ErrMsg  string     `json:"errmsg"`
 	State   OrderState `json:"state"`
 	// PayTime 订单支付完成时间（10 位 unix 秒）。仅 State=PAID 时有值。
 	PayTime int64 `json:"pay_time,omitempty"`
+	// Raw 回包原文。字段随 API 版本漂移，取证与排查以原文为准。
+	Raw []byte `json:"-"`
 }
 
 // QueryOrder 查询虚拟支付订单状态。
@@ -61,6 +65,7 @@ func QueryOrder(ctx context.Context, accessToken string, req QueryOrderRequest) 
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("virtualpay: parse query_order: %w", err)
 	}
+	resp.Raw = raw
 	return &resp, nil
 }
 

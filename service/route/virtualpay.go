@@ -252,6 +252,9 @@ func advanceVirtualPayOrder(ctx context.Context, cfg *config.Config, deps Virtua
 	if err != nil {
 		return "", fmt.Errorf("query_order: %w", err)
 	}
+	// 顺路存证（R2）：query_order 回包落 wechat_order_evidence 并比对实付 vs 应付；
+	// confirm/补偿/管理端推进三路共用本函数，天然全覆盖。旁路失败不影响主链路。
+	captureWechatOrderEvidence(deps, meta, meta.OrderNo, resp)
 
 	switch resp.State {
 	case virtualpay.OrderStatePaid:

@@ -243,6 +243,11 @@ func main() {
 		log.Fatalf("初始化 pricing_configs 表失败: %v", err)
 	}
 
+	// 10.8.4. 初始化微信订单实付证据表（两方账逐单对平 R1；纯增量建表，幂等）
+	if err := model.NewWechatOrderEvidenceModel(db).InitTable(); err != nil {
+		log.Fatalf("初始化 wechat_order_evidence 表失败: %v", err)
+	}
+
 	// 10.9. 初始化邀请关系表
 	inviteRelationModel := model.NewInviteRelationModel(db)
 	if err := inviteRelationModel.InitTable(); err != nil {

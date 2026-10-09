@@ -34,6 +34,8 @@ type VirtualPayDeps struct {
 	SupportTicketModel *model.SupportTicketModel
 	// PricingConfigModel 后台定价配置（充值档位下发/认证道具价格，定价配置化 P1）
 	PricingConfigModel *model.PricingConfigModel
+	// WechatOrderEvidenceModel 微信实付证据（两方账逐单对平 R1）
+	WechatOrderEvidenceModel *model.WechatOrderEvidenceModel
 }
 
 // ErrOrderNotFound 订单不存在。
