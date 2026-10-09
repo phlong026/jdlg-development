@@ -114,6 +114,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		xpayMessageLogModel := model.NewXPayMessageLogModel(component.GetDB())
 		sessionKeyModel := model.NewSessionKeyRedisModel(component.GetRedis())
 		wechatCoinCalibrationModel := model.NewWechatCoinCalibrationModel(component.GetDB())
+		pricingConfigModel := model.NewPricingConfigModel(component.GetDB())
 		virtualPayDeps := VirtualPayDeps{
 			UserDBModel:                userDBModel,
 			UserOrderModel:             userOrderModel,
@@ -126,6 +127,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 			SessionKeyModel:            sessionKeyModel,
 			WechatCoinCalibrationModel: wechatCoinCalibrationModel,
 			SupportTicketModel:         supportTicketModel,
+			PricingConfigModel:         pricingConfigModel,
 		}
 		if reportModule != nil {
 			virtualPayDeps.ReportService = reportModule.Service
@@ -147,7 +149,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 用户信息修改接口
 		RegisterUserProfileRoutes(miniprogram, codeSessionModel, userDBModel, userProfileModel)
 		// 充值配置接口（公开接口）
-		RegisterRechargeConfigRoutes(miniprogram, rechargeConfigModel, membershipPlanModel, cfg)
+		RegisterRechargeConfigRoutes(miniprogram, rechargeConfigModel, membershipPlanModel, pricingConfigModel, cfg)
 		RegisterMembershipRoutes(miniprogram, codeSessionModel, membershipPlanModel, userMembershipModel, userOrderModel)
 		RegisterAIToolRoutes(miniprogram, aiToolModel)
 		RegisterPublicCustomerServiceRoutes(miniprogram, customerServiceModel)
@@ -188,6 +190,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterAITaskManagementRoutes(managementAuth, pricingModel, taskModel, videoTaskModel, supportTicketModel)
 		RegisterUserWorkbenchManagementRoutes(managementAuth, userDBModel, userModel, userProfileModel, stoneRecordModel, userOrderModel, userMembershipModel, taskModel, videoTaskModel, pricingModel)
 		RegisterOrderManagementRoutes(managementAuth, userOrderModel, userDBModel, certificationApplicationModel, userMembershipModel, supportTicketModel, wechatCoinCalibrationModel)
+		RegisterPricingManagementRoutes(managementAuth, pricingConfigModel, cfg)
 		RegisterVirtualPayManagementRoutes(managementAuth, cfg, virtualPayDeps)
 		RegisterDesignerManagementRoutes(managementAuth, userDBModel, templateModel, userProfileModel, certificationApplicationModel, stoneRecordModel, userOrderModel, designerReviewModel, designerFollowModel)
 		RegisterBuildingCodeManagementRoutes(managementAuth, buildingCodeDocumentModel, cfg)

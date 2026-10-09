@@ -32,6 +32,8 @@ type VirtualPayDeps struct {
 	WechatCoinCalibrationModel *model.WechatCoinCalibrationModel
 	// SupportTicketModel 双账差额自动工单（T7）
 	SupportTicketModel *model.SupportTicketModel
+	// PricingConfigModel 后台定价配置（充值档位下发/认证道具价格，定价配置化 P1）
+	PricingConfigModel *model.PricingConfigModel
 }
 
 // ErrOrderNotFound 订单不存在。

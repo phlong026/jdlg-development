@@ -39,10 +39,10 @@ type prepareReq = prepareRequest
 func TestBuildOrder_RechargeAmountValidation(t *testing.T) {
 	cfg := newTestVirtualPayCfg()
 
-	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "recharge", AmountFen: 50}); err == nil {
+	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "recharge", AmountFen: 50}, nil); err == nil {
 		t.Fatal("amount < 100 fen should fail")
 	}
-	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "recharge", AmountFen: 199}); err == nil {
+	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "recharge", AmountFen: 199}, nil); err == nil {
 		t.Fatal("non-integer yuan amount should fail")
 	}
 }
@@ -54,7 +54,7 @@ func TestBuildOrder_RechargeAmountValidation(t *testing.T) {
 func TestBuildOrder_RechargeStoneCalc(t *testing.T) {
 	cfg := newTestVirtualPayCfg()
 
-	in, err := buildVirtualPayOrder(cfg, 42, &prepareReq{PlanType: "recharge", AmountFen: 10000})
+	in, err := buildVirtualPayOrder(cfg, 42, &prepareReq{PlanType: "recharge", AmountFen: 10000}, nil)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -77,21 +77,21 @@ func TestBuildOrder_RechargeStoneCalc(t *testing.T) {
 func TestBuildOrder_CertWhitelist(t *testing.T) {
 	cfg := newTestVirtualPayCfg()
 
-	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "unknown_product", ApplicationID: 1}); err == nil {
+	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "unknown_product", ApplicationID: 1}, nil); err == nil {
 		t.Fatal("unknown productId should fail")
 	}
 
-	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer"}); err == nil {
+	if _, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer"}, nil); err == nil {
 		t.Fatal("missing application_id should fail")
 	}
 
 	cfg2 := newTestVirtualPayCfg()
 	cfg2.VirtualPay.CertDesignerFen = 0
-	if _, err := buildVirtualPayOrder(cfg2, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer", ApplicationID: 1}); err == nil {
+	if _, err := buildVirtualPayOrder(cfg2, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer", ApplicationID: 1}, nil); err == nil {
 		t.Fatal("zero price should fail with explicit error")
 	}
 
-	in, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer", ApplicationID: 42})
+	in, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer", ApplicationID: 42}, nil)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -171,5 +171,76 @@ func TestBuildSignData_RejectsMissingOfferID(t *testing.T) {
 	_, err := buildVirtualPaySignData(cfg, 0, in, "")
 	if err == nil || !strings.Contains(err.Error(), "OfferID") {
 		t.Fatalf("expected OfferID error, got: %v", err)
+	}
+}
+
+// TestBuildOrder_CertPriceOverride 锁定后台定价配置的覆盖语义：
+// 覆盖表命中时用配置价，未命中回退 env 价——定价配置化 P1 的核心行为。
+func TestBuildOrder_CertPriceOverride(t *testing.T) {
+	cfg := newTestVirtualPayCfg()
+	overrides := map[string]int64{"cert_designer": 29900}
+
+	in, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "cert_designer", ApplicationID: 7}, overrides)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if in.AmountFen != 29900 {
+		t.Errorf("override price should win: got %d want 29900", in.AmountFen)
+	}
+
+	// 覆盖表缺项回退 env 价
+	in2, err := buildVirtualPayOrder(cfg, 1, &prepareReq{PlanType: "certification", ProductID: "cert_enterprise", ApplicationID: 7}, overrides)
+	if err != nil {
+		t.Fatalf("build fallback: %v", err)
+	}
+	if in2.AmountFen != 39900 {
+		t.Errorf("fallback price wrong: got %d want 39900", in2.AmountFen)
+	}
+}
+
+// TestValidatePricingData 锁定定价配置校验规则（白名单/整数元/去重/数量上限）。
+func TestValidatePricingData(t *testing.T) {
+	valid := &model.PricingData{
+		RechargePlans: []model.PricingRechargePlan{{Type: "basic", Title: "普通会员", AmountFen: 5000}},
+		CertPrices: []model.PricingCertPrice{
+			{ProductID: "cert_designer", PriceFen: 29900},
+			{ProductID: "cert_enterprise", PriceFen: 89900},
+		},
+	}
+	if err := model.ValidatePricingData(valid); err != nil {
+		t.Fatalf("valid config rejected: %v", err)
+	}
+
+	// 非整数元档位
+	bad := &model.PricingData{
+		RechargePlans: []model.PricingRechargePlan{{Title: "x", AmountFen: 5050}},
+		CertPrices:    valid.CertPrices,
+	}
+	if err := model.ValidatePricingData(bad); err == nil {
+		t.Fatal("non-integer-yuan plan should fail")
+	}
+
+	// 未知认证道具
+	bad2 := &model.PricingData{
+		RechargePlans: valid.RechargePlans,
+		CertPrices: []model.PricingCertPrice{
+			{ProductID: "cert_designer", PriceFen: 29900},
+			{ProductID: "cert_vip", PriceFen: 100},
+		},
+	}
+	if err := model.ValidatePricingData(bad2); err == nil {
+		t.Fatal("unknown cert product should fail")
+	}
+
+	// 重复金额档位
+	bad3 := &model.PricingData{
+		RechargePlans: []model.PricingRechargePlan{
+			{Title: "a", AmountFen: 5000},
+			{Title: "b", AmountFen: 5000},
+		},
+		CertPrices: valid.CertPrices,
+	}
+	if err := model.ValidatePricingData(bad3); err == nil {
+		t.Fatal("duplicate amount should fail")
 	}
 }

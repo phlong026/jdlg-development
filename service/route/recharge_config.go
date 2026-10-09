@@ -99,7 +99,7 @@ func attachMembershipBenefits(plans []RechargePlanItem, membershipPlanModel *mod
 }
 
 // RegisterRechargeConfigRoutes 注册小程序充值配置路由（公开接口）
-func RegisterRechargeConfigRoutes(r *gin.RouterGroup, rechargeConfigModel *model.RechargeConfigModel, membershipPlanModel *model.MembershipPlanModel, cfg *config.Config) {
+func RegisterRechargeConfigRoutes(r *gin.RouterGroup, rechargeConfigModel *model.RechargeConfigModel, membershipPlanModel *model.MembershipPlanModel, pricingModel *model.PricingConfigModel, cfg *config.Config) {
 	recharge := r.Group("/recharge")
 	{
 		// 获取当前启用的充值配置
@@ -107,7 +107,7 @@ func RegisterRechargeConfigRoutes(r *gin.RouterGroup, rechargeConfigModel *model
 			config, err := rechargeConfigModel.GetEnabled()
 			if err != nil {
 				defaultPaymentMode := resolveMiniprogramPaymentMode(cfg, "wechat_only")
-				plans := attachMembershipBenefits(getRechargePlanItems(), membershipPlanModel)
+				plans := attachMembershipBenefits(resolveRechargePlanItems(pricingModel, cfg), membershipPlanModel)
 				c.JSON(http.StatusOK, gin.H{
 					"code": 0,
 					"msg":  "success",
@@ -121,7 +121,7 @@ func RegisterRechargeConfigRoutes(r *gin.RouterGroup, rechargeConfigModel *model
 			}
 
 			paymentMode := resolveMiniprogramPaymentMode(cfg, config.PaymentMode)
-			plans := attachMembershipBenefits(getRechargePlanItems(), membershipPlanModel)
+			plans := attachMembershipBenefits(resolveRechargePlanItems(pricingModel, cfg), membershipPlanModel)
 
 			c.JSON(http.StatusOK, gin.H{
 				"code": 0,

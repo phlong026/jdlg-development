@@ -78,7 +78,13 @@ func RegisterVirtualPayRoutes(
 		var input *model.VirtualPayOrderInput
 		var err error
 		if req.PlanType != reportPlanType {
-			input, err = buildVirtualPayOrder(cfg, codeSession.UserID, &req)
+			// 认证道具价格优先取后台定价配置（30 秒缓存），未配置回退环境变量
+			certOverrides, priceErr := resolveCertPriceOverrides(deps.PricingConfigModel)
+			if priceErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取定价配置失败: " + priceErr.Error()})
+				return
+			}
+			input, err = buildVirtualPayOrder(cfg, codeSession.UserID, &req, certOverrides)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 				return
@@ -299,7 +305,11 @@ func reportVirtualPayGoodsDelivered(ctx context.Context, cfg *config.Config, dep
 // buildVirtualPayOrder 按入参校验并构造一条待落库的虚拟支付订单输入。
 //
 // 抽出独立函数便于阶段 2.2/2.3 的单测复用。本函数不接触网络与数据库。
-func buildVirtualPayOrder(cfg *config.Config, userID int64, req *prepareRequest) (*model.VirtualPayOrderInput, error) {
+//
+// certPriceOverrides 认证道具价格覆盖（后台定价配置，定价配置化 P1）：
+// nil 或缺项时回退 cfg 环境变量价。充值档位灵石始终按 CoinRatio 折算——
+// 微信代币模式实扣 = buyQuantity ÷ mp 后台比例，档位灵石不可偏离该公式（D1）。
+func buildVirtualPayOrder(cfg *config.Config, userID int64, req *prepareRequest, certPriceOverrides map[string]int64) (*model.VirtualPayOrderInput, error) {
 	switch req.PlanType {
 	case "recharge":
 		if req.AmountFen < 100 {
@@ -331,7 +341,15 @@ func buildVirtualPayOrder(cfg *config.Config, userID int64, req *prepareRequest)
 		if req.ApplicationID <= 0 {
 			return nil, errBadParam("缺少 application_id")
 		}
-		price := certProductPrice(cfg, req.ProductID)
+		price := int64(0)
+		if certPriceOverrides != nil {
+			if p, ok := certPriceOverrides[req.ProductID]; ok {
+				price = p
+			}
+		}
+		if price <= 0 {
+			price = certProductPrice(cfg, req.ProductID)
+		}
 		if price <= 0 {
 			return nil, errBadParam("认证道具单价未配置，请联系运营")
 		}

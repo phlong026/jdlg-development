@@ -89,6 +89,10 @@ export const API_ENDPOINTS = {
         CALIBRATIONS_SUMMARY: '/api/v1/management/virtualpay/calibrations/summary',
         CALIBRATE: '/api/v1/management/virtualpay/calibrate',
     },
+    // 定价配置（充值档位/认证道具价格）
+    PRICING: {
+        CONFIG: '/api/v1/management/pricing',
+    },
     // 统计
     STATS: {
         DASHBOARD_OVERVIEW: '/api/v1/management/dashboard/overview',

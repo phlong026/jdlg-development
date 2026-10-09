@@ -45,6 +45,7 @@ const VirtualPay = lazy(() => import('../pages/virtualPay'));
 const UtilityTools = lazy(() => import('../pages/utilityTools'));
 const AITools = lazy(() => import('../pages/aiTools'));
 const RechargeConfig = lazy(() => import('../pages/rechargeConfig'));
+const PricingConfig = lazy(() => import('../pages/pricingConfig'));
 const MembershipPlans = lazy(() => import('../pages/membershipPlans'));
 const MembershipOperations = lazy(() => import('../pages/membershipOperations'));
 const Certification = lazy(() => import('../pages/certification'));
@@ -226,6 +227,12 @@ export const routes: AppRoute[] = [
         path: '/recharge-config',
         title: '充值配置',
         element: withSuspense(<RechargeConfig />),
+        icon: FiDollarSign,
+    },
+    {
+        path: '/pricing-config',
+        title: '定价配置',
+        element: withSuspense(<PricingConfig />),
         icon: FiDollarSign,
     },
     {

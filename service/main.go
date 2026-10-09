@@ -238,6 +238,11 @@ func main() {
 		log.Fatalf("初始化 wechat_coin_calibrations 表失败: %v", err)
 	}
 
+	// 10.8.3. 初始化定价配置表（充值档位/认证道具价格，定价配置化 P1；纯增量建表，幂等）
+	if err := model.NewPricingConfigModel(db).InitTable(); err != nil {
+		log.Fatalf("初始化 pricing_configs 表失败: %v", err)
+	}
+
 	// 10.9. 初始化邀请关系表
 	inviteRelationModel := model.NewInviteRelationModel(db)
 	if err := inviteRelationModel.InitTable(); err != nil {

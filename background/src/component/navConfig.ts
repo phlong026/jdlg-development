@@ -74,6 +74,7 @@ export const platformSections: NavSection[] = [
             // AI 配置已由「AI 运营 → 定价与供应商」承接（路由 /ai-config 保留可回滚，不再出现在导航）
             { path: '/ai-tools', label: 'AI工具管理', icon: FiLayers },
             { path: '/recharge-config', label: '充值配置', icon: FiDollarSign },
+            { path: '/pricing-config', label: '定价配置', icon: FiDollarSign },
             { path: '/membership-plans', label: '会员计划', icon: FiDollarSign },
             { path: '/oss', label: 'OSS管理', icon: FiCloud },
             { path: '/utility-tools', label: '实用工具管理', icon: FiTool },
@@ -172,6 +173,7 @@ export const navGroups: NavGroup[] = [
         secondary: {
             label: '支付与会员配置',
             pages: [
+                { path: '/pricing-config', label: '定价配置' },
                 { path: '/recharge-config', label: '充值配置' },
                 { path: '/membership-plans', label: '会员计划' },
             ],
