@@ -3,16 +3,19 @@ page { overflow: visible; background: #ece4d9; }
 .pages { width: 100vw; min-height: 100vh; background: #ece4d9; overflow-x: hidden; box-sizing: border-box; }
 .home-canvas { position: relative; isolation: isolate; width: 750rpx; height: 1488.57rpx; color: #473720; font-family: "PingFang SC", sans-serif; background: linear-gradient(180deg, #e6daca, #ece4d9); }
 // 乘色保留暖米色底色，让山水纹理显现，避免米白图片冲淡整页配色。
-.home-backdrop { opacity: .85; mix-blend-mode: multiply; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.home-backdrop { opacity: .85; mix-blend-mode: multiply; position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.brand-backdrop { position: absolute; left: 0; top: 0; width: 750rpx; height: 349.06rpx; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, #000 84%, transparent 100%); }
+.brand-backdrop-image { display: block; width: 100%; height: 100%; pointer-events: none; }
+.brand-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to right, transparent 72%, rgba(249,245,237,.62) 100%); pointer-events: none; }
 .home-art-layer { position: absolute; left: 0; top: 105.51rpx; width: 750rpx; height: 1383.06rpx; }
 .home-art-layer > text, .home-art-layer > image, .home-art-layer > view, .home-art-layer > picker { position: absolute; box-sizing: border-box; }
-.brand-symbol { left: 54.51rpx; top: 40.45rpx; width: 158.26rpx; height: 131.89rpx; }
-.brand-copy { left: 224.21rpx; top: 70.34rpx; width: 224.21rpx; height: 94.08rpx; display: flex; flex-direction: column; color: #9a8170; }
-.brand-name { display: block; width: 188rpx; height: 47rpx; }
-.brand-en { display: block; width: 188rpx; height: 37rpx; margin-top: 2rpx; }
-.brand-slogan { left: 51.00rpx; top: 177.61rpx; width: 422.04rpx; height: 24.62rpx; display: flex; align-items: center; gap: 22rpx; }
-.brand-slogan text { font-size: 19rpx; letter-spacing: 13rpx; white-space: nowrap; }
-.slogan-line { width: 31rpx; height: 1rpx; background: #8c9091; flex-shrink: 0; }
+.brand-symbol { left: 38.69rpx; top: -43.96rpx; width: 108.15rpx; height: 90.56rpx; }
+.brand-copy { left: 165.30rpx; top: -21.98rpx; width: 165.30rpx; height: 72.98rpx; display: flex; flex-direction: column; color: #9a8170; }
+.brand-name { display: block; width: 150.35rpx; height: 37.81rpx; }
+.brand-en { display: block; width: 150.35rpx; height: 29.89rpx; margin-top: 1.76rpx; }
+.brand-slogan { left: 34.29rpx; top: 61.55rpx; width: 360.49rpx; height: 24.62rpx; display: flex; align-items: center; gap: 16.71rpx; }
+.brand-slogan text { font-size: 17.59rpx; letter-spacing: 10.55rpx; white-space: nowrap; }
+.slogan-line { width: 26.38rpx; height: 1rpx; background: #8c9091; flex-shrink: 0; }
 .hotspot { position: absolute; z-index: 6; }
 .smart-service-float { left: 598.77rpx; top: 78.25rpx; width: 98.48rpx; height: 131.01rpx; display: flex; flex-direction: column; align-items: center; font-size: 21rpx; line-height: 28rpx; }
 .customer-icon { width: 97rpx; height: 97rpx; margin-bottom: 5rpx; }

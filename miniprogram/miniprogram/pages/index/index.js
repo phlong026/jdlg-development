@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // index.ts
 // 获取应用实例
 const asset_1 = require("../../utils/asset");
+const homeAssets_1 = require("../../utils/homeAssets");
 const costRegions_1 = require("../../utils/costRegions");
 const reportNavigation_1 = require("../../utils/reportNavigation");
 const perf_1 = require("../../utils/perf");
@@ -38,6 +39,7 @@ Page({
         quickProvince: '',
         quickCity: '',
         quickArea: '',
+        homeAssets: homeAssets_1.HOME_ASSETS,
         defaultCoverImage: (0, asset_1.resolveAssetPath)('/assets/images/home.jpg'),
         introLogoImage: (0, asset_1.resolveAssetPath)('/assets/home/intro-logo.png'),
         mascotBouncing: false,

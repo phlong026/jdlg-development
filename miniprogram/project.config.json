@@ -53,6 +53,14 @@
       {
         "type": "file",
         "value": "assets/smart-service-mascot.png"
+      },
+      {
+        "type": "folder",
+        "value": "assets/home-reference"
+      },
+      {
+        "type": "file",
+        "value": "assets/smart-service-icon.png"
       }
     ],
     "include": []

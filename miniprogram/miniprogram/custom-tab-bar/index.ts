@@ -1,8 +1,4 @@
-const DEFAULT_TABBAR_IMAGE = '/assets/tabbar/未选中态@2x.png'
-const HOME_TABBAR_IMAGE = '/assets/tabbar/首页导航栏@2x.png'
-const TEMPLATE_TABBAR_IMAGE = '/assets/tabbar/模板广场导航栏@2x.png'
-const DESIGNER_TABBAR_IMAGE = '/assets/tabbar/设计师导航栏@2x.png'
-const MY_TABBAR_IMAGE = '/assets/tabbar/我的导航栏@2x.png'
+import { HOME_ASSETS } from '../utils/homeAssets'
 
 export {}
 
@@ -43,11 +39,11 @@ Component({
   data: {
     current: getStoredTabBarCurrent(),
     tabs: TABS,
-    defaultTabbarImage: DEFAULT_TABBAR_IMAGE,
-    homeTabbarImage: HOME_TABBAR_IMAGE,
-    templateTabbarImage: TEMPLATE_TABBAR_IMAGE,
-    designerTabbarImage: DESIGNER_TABBAR_IMAGE,
-    myTabbarImage: MY_TABBAR_IMAGE
+    defaultTabbarImage: HOME_ASSETS.defaultTabbar,
+    homeTabbarImage: HOME_ASSETS.homeTabbar,
+    templateTabbarImage: HOME_ASSETS.templateTabbar,
+    designerTabbarImage: HOME_ASSETS.designerTabbar,
+    myTabbarImage: HOME_ASSETS.myTabbar
   },
 
   lifetimes: {

@@ -6,7 +6,11 @@ const source = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/index/
 let config, route, toast, api;
 vm.runInNewContext(source, {
   exports: {},
-  require: name => name.endsWith('costRegions') ? require('../miniprogram/utils/costRegions.js') : ({ resolveAssetPath: p => p }),
+  require: name => {
+    if (name.endsWith('costRegions')) return require('../miniprogram/utils/costRegions.js');
+    if (name.endsWith('homeAssets')) return require('../miniprogram/utils/homeAssets.js');
+    return { resolveAssetPath: p => p };
+  },
   Page: value => { config = value; },
   wx: { navigateTo: options => { api = 'navigateTo'; route = options.url; }, switchTab: options => { api = 'switchTab'; route = options.url; }, showToast: options => { toast = options.title; } },
   console,
@@ -51,9 +55,11 @@ assert.match(markup, /bindchange="onQuickRegionChange"/);
 assert.match(markup, /bindinput="onQuickAreaInput"/);
 assert.match(markup, /bindtap="onQuickEstimate"/);
 assert.doesNotMatch(markup, /home-art\.png|project-rural\.png|project-urban\.png/);
-for (const name of ['advisor', 'calculator', 'ai-tools', 'villa', 'interior', 'courtyard', 'renovation', 'templates']) {
-  assert.match(markup, new RegExp(`/assets/home-reference/hd/${name}\\.png`));
+for (const name of ['advisor', 'calculator', 'aiTools', 'villa', 'interior', 'courtyard', 'renovation', 'templates']) {
+  assert.match(markup, new RegExp(`src="\\{\\{homeAssets\\.${name}\\}\\}"`));
 }
+assert.equal(Object.keys(selected.data.homeAssets).length, 29);
+assert.match(selected.data.homeAssets.brandScene, /^https:\/\/static\.jiadilingguang\.com\/assets\/home-releases\/20261010-b52afc7c12b5\//);
 assert.match(markup, /placeholder="请输入"/);
 assert.match(markup, /quickRegionText \|\| '请选择'/);
 assert.match(markup, /<button class="hotspot quick-estimate"[^>]*bindtap="onQuickEstimate"/);

@@ -1,6 +1,7 @@
 // index.ts
 // 获取应用实例
 import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset'
+import { HOME_ASSETS } from '../../utils/homeAssets'
 import { cityOptionsMap } from '../../utils/costRegions'
 import { resumeReportAfterLogin } from '../../utils/reportNavigation'
 import { getPageCache, prefetchImages, setPageCache } from '../../utils/perf'
@@ -47,6 +48,7 @@ Page({
     quickProvince: '',
     quickCity: '',
     quickArea: '',
+    homeAssets: HOME_ASSETS,
     defaultCoverImage: resolveAssetPath('/assets/images/home.jpg'),
     introLogoImage: resolveAssetPath('/assets/home/intro-logo.png'),
     mascotBouncing: false,
