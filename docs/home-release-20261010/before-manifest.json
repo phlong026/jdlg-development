@@ -1,0 +1,154 @@
+{
+  "baseCommit": "6408d98",
+  "files": [
+    {
+      "path": "miniprogram/pages/index/index.wxml",
+      "sha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3"
+    },
+    {
+      "path": "miniprogram/pages/index/index.scss",
+      "sha256": "c4c125808aeb6bab8535b2a8e31c71feaede7df2a6317983583d6caf4481f707"
+    },
+    {
+      "path": "miniprogram/pages/index/index.wxss",
+      "sha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495"
+    },
+    {
+      "path": "miniprogram/pages/index/index.ts",
+      "sha256": "0059895df43b52aa057744225f4b3cf6b228a2e6a47e321618598fd764c74dcc"
+    },
+    {
+      "path": "miniprogram/pages/index/index.js",
+      "sha256": "9f59cb7030289a436315af78abad992093e5aa3ab07f7dd3ba2caca660aa6451"
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.ts",
+      "sha256": "1c1bb47ec564c4a00565257ce46d0e5bfe8193781e9fa9b0b4358813a48ae51b"
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.js",
+      "sha256": "8e86a642e8b5680e47c88dda3ff2cdd4a24a85da1927fd16540777f385d7e65a"
+    },
+    {
+      "path": "project.config.json",
+      "sha256": "1425c122de4d5158ee04afb177528f1d6bc20a091edf9b244ba4df227bb1e1f6"
+    },
+    {
+      "path": "tests/aicost-home-prefill.test.js",
+      "sha256": "cf12578025ae5f513792332bfd4e1064d8f88bddb76fbe72b46ca3e0375fedee"
+    },
+    {
+      "path": "tests/report-questionnaire.test.js",
+      "sha256": "0d1c4efe50ed5d29b77129792b92715074758243aea91fd985f9fcff4b6e3b06"
+    },
+    {
+      "path": "tests/customer-service-action-placement.test.js",
+      "sha256": "3ea24b02b37200351e853be8a5b874a05e2425fd5a80cc0abb08238873ee4b96"
+    },
+    {
+      "path": "tests/customer-service-knowledge.test.js",
+      "sha256": "515f55150e887454a263076b6ff30564b1b7e82a25424c9e65ab197277646fec"
+    },
+    {
+      "path": "tests/home-reference.test.js",
+      "sha256": "987860b4834e28df5bd66f13a7a4f756eba4e12ea7db8a9305491af14e2da79c"
+    },
+    {
+      "path": "tests/report-api.test.js",
+      "sha256": "719c90aafcb28c4b8d610c2581b45817d799209b0a2ef1f00db0e1940da27642"
+    },
+    {
+      "path": "tests/favorites-v1.test.js",
+      "sha256": "d1b690ced15533b0ed85503aa8cec46c887b6dfc30048d14190880735928a544"
+    },
+    {
+      "path": "tests/aicost-pricing.test.js",
+      "sha256": "d96c4d5314d75db313b86f1b15f902ccc08f6f2b18b8009655bbbe38078986fa"
+    },
+    {
+      "path": "tests/template-detail-cache-scope.test.js",
+      "sha256": "891e6f201d7dd97dc115e03199e2837a10bc66aafb5635fd7d9da10f97163173"
+    },
+    {
+      "path": "tests/home-intro-popup.test.js",
+      "sha256": "0e34dc90304494201bd3a78cd53a8ae1282a8e48fc0b2ea7653df1d01566ab23"
+    },
+    {
+      "path": "tests/generatehistory-thumbnail.test.js",
+      "sha256": "75587f3cc1c5372b1abdc9cb838567535c6eb7b8541c986ab88acedfb5ee7c46"
+    },
+    {
+      "path": "tests/aicost-form-share.test.js",
+      "sha256": "e179b541d3db4b78ec4f9b313472f32031fec867c4efd96f629f4d82c5f37860"
+    },
+    {
+      "path": "tests/home-cost-allround-aicost.test.js",
+      "sha256": "9a008d760741608ec17ab0d3dc7aab0ff5da1b794baf7760e10f13e6a6ef21dc"
+    },
+    {
+      "path": "tests/generatedetails-customer-service-conversion.test.js",
+      "sha256": "d94df223496ac63442cbb13a22c541947f32851ae9ebaefc8a66f09b42194117"
+    },
+    {
+      "path": "tests/newminnantool-real-api-required.test.js",
+      "sha256": "c18a43cd85c1d5ce513ec90c24d9fbdb7c0da2ac4c36ffbe40a2f27fa6e5414f"
+    },
+    {
+      "path": "tests/customer-service-composer-layout.test.js",
+      "sha256": "99bc0c23bd2938cf4c6df4e42db00df41df61544d8cadafc239bd7db349bb5ab"
+    },
+    {
+      "path": "tests/home-smart-service-fixed.test.js",
+      "sha256": "93dca9318ba48d1ae9e48fd77770d49bf79f399bb2f8c8c5cd9f2397580b956c"
+    },
+    {
+      "path": "tests/template-original-task-fallback.test.js",
+      "sha256": "7f57d637ffea5495feb1ed66950602d8ddb93e7dade0792cf9b38a0dec8d87d9"
+    },
+    {
+      "path": "tests/report-runtime.js",
+      "sha256": "f05982ec29a2148a560a9b3ac65ea540a796f095ed37934a79110921ac600000"
+    },
+    {
+      "path": "tests/report-template.test.js",
+      "sha256": "3b2749a2072d5692854a844f6cc0ac1460cf6d99d81263cacdfee94db3a25955"
+    },
+    {
+      "path": "tests/report-flow.test.js",
+      "sha256": "984166618aa3e792dca0c4a2bb456e6de4b991c01aa23dee74d679b35a801f24"
+    },
+    {
+      "path": "tests/report-document.test.js",
+      "sha256": "308081526c50395c1635c99c12704cbc5b82b37811ddd88391c7f83d9c1cee07"
+    },
+    {
+      "path": "tests/report-landing.test.js",
+      "sha256": "c561040ad74b87b5e01625345d0365cced6a0ab46ed19d0b1c32ee8cc809ab3b"
+    },
+    {
+      "path": "tests/favorites-expanded.test.js",
+      "sha256": "9fda4f3c938a2940aa3023b59622355bdd1772f199ea314e47963afb8ffbe461"
+    },
+    {
+      "path": "tests/report-reader.test.js",
+      "sha256": "25381237b5e26b30547963da91f07d3138c5284d272198e6d00ba5455efae00a"
+    },
+    {
+      "path": "tests/aicost-report.test.js",
+      "sha256": "faae522e6d9239694fbce33a231db6cdc467265f402bf2a5152a947f01d0cc55"
+    },
+    {
+      "path": "tests/report-layout.test.js",
+      "sha256": "34b2dae541a008faed9d18faee7d8eb653c9b4c52efec5097376ed09d3d632f8"
+    },
+    {
+      "path": "tests/cost-estimate-share-image.test.js",
+      "sha256": "fd62b43e446fbd4c06bbcb6cb470fde9744d205cefd87abe1202c49700d3736f"
+    },
+    {
+      "path": "tests/currentPageSelection.test.js",
+      "sha256": "b67701fa7a26d1c3f8bf730cc6634586348b9d5f5282166a51ddfe0cc9b09ab4"
+    }
+  ],
+  "baselineCommit": "fb043f9eeae8e70e23b363601a97b1b1be32a085"
+}

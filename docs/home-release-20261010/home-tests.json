@@ -1,0 +1,37 @@
+[
+  {
+    "name": "home-cloud-header-release.test.js",
+    "exitCode": 0,
+    "output": "Home release uses immutable cloud assets while preserving interactions and non-header geometry\n"
+  },
+  {
+    "name": "home-reference.test.js",
+    "exitCode": 0,
+    "output": "Home reference navigation, project selection, region, validation and estimate handoff passed\n"
+  },
+  {
+    "name": "home-smart-service-fixed.test.js",
+    "exitCode": 0,
+    "output": "Customer service remains in the hero; cancelled secondary entries and placeholder copy are absent\n"
+  },
+  {
+    "name": "home-cost-allround-aicost.test.js",
+    "exitCode": 0,
+    "output": "Existing home entry and design tabs, native form, report layout and service route passed\n"
+  },
+  {
+    "name": "home-intro-popup.test.js",
+    "exitCode": 0,
+    "output": "home intro popup checks passed\n"
+  },
+  {
+    "name": "aicost-home-prefill.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: homepage quick estimate prefills a supported region and positive building area\nok 1 - homepage quick estimate prefills a supported region and positive building area\n  ---\n  duration_ms: 2.109084\n  ...\n# Subtest: supported non-default region updates picker options and indices together\nok 2 - supported non-default region updates picker options and indices together\n  ---\n  duration_ms: 0.45925\n  ...\n# Subtest: direct navigation without query preserves every default\nok 3 - direct navigation without query preserves every default\n  ---\n  duration_ms: 0.390167\n  ...\n# Subtest: unsupported region and invalid building area are ignored independently\nok 4 - unsupported region and invalid building area are ignored independently\n  ---\n  duration_ms: 1.639375\n  ...\n# Subtest: non-finite and empty areas do not overwrite the blank form field\nok 5 - non-finite and empty areas do not overwrite the blank form field\n  ---\n  duration_ms: 1.325125\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 12.96775\n"
+  },
+  {
+    "name": "currentPageSelection.test.js",
+    "exitCode": 0,
+    "output": "currentPageSelection tests passed\n"
+  }
+]

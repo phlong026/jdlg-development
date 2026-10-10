@@ -1,0 +1,73 @@
+{
+  "recordedAt": "2026-10-10T03:16:24.151856+00:00",
+  "appId": "wx94fdc48861913ede",
+  "developerVersion": "7.2.9",
+  "description": "首页品牌区改版，静态图片迁移云存储，保留旧首页回退",
+  "upload": {
+    "status": "succeeded",
+    "tool": "WeChat DevTools official CLI",
+    "exitCode": 0,
+    "log": "wechat-upload.log",
+    "info": "upload-info.json",
+    "reviewSubmitted": false,
+    "publicReleasePublished": false
+  },
+  "git": {
+    "branch": "feat/home-header-cloud-release-20261010",
+    "homepageBaselineCommit": "fb043f9eeae8e70e23b363601a97b1b1be32a085",
+    "homepageReleaseCommit": "a823ced62e7544a67dcf4bf8a06f91d042aa95ef",
+    "remotePushed": false
+  },
+  "assets": {
+    "releaseId": "20261010-b52afc7c12b5",
+    "prefix": "assets/home-releases/20261010-b52afc7c12b5",
+    "domain": "https://static.jiadilingguang.com",
+    "bucket": "jiadilingguangcos-1393500756",
+    "region": "ap-chongqing",
+    "count": 29,
+    "bytes": 4121760,
+    "publicSha256Verified": 29,
+    "overwrotePreviousKeys": false
+  },
+  "packageSize": {
+    "totalBytes": 2556590,
+    "mainBytes": 1462218
+  },
+  "rollback": {
+    "archive": "旧首页完整备份-20261010.zip",
+    "archiveSha256": "ed585f78eb356cc75a2967dfe4794f2439511cb3d782351aeb69e1a009ee66b8",
+    "script": "rollback.cjs",
+    "isolatedRestoreVerified": true,
+    "isolatedGitRevertVerified": true,
+    "backendRollbackRequiresAnotherCodeUpload": true
+  },
+  "verification": {
+    "homepageTestFilesPassed": 7,
+    "allTestFiles": 29,
+    "allTestFilesPassed": 27,
+    "preexistingFailedTestFiles": [
+      "customer-service-action-placement.test.js",
+      "customer-service-knowledge.test.js"
+    ],
+    "nativePreviewCompiled": true,
+    "nativeSimulatorVisuallyChecked": true,
+    "realDeviceAcceptanceCompleted": false,
+    "dependencyVulnerabilities": 0,
+    "dependenciesAdded": false,
+    "secretsFound": 0
+  },
+  "changedFiles": [
+    "miniprogram/miniprogram/pages/index/index.wxml",
+    "miniprogram/miniprogram/pages/index/index.scss",
+    "miniprogram/miniprogram/pages/index/index.wxss",
+    "miniprogram/miniprogram/pages/index/index.ts",
+    "miniprogram/miniprogram/pages/index/index.js",
+    "miniprogram/miniprogram/utils/homeAssets.ts",
+    "miniprogram/miniprogram/utils/homeAssets.js",
+    "miniprogram/miniprogram/custom-tab-bar/index.ts",
+    "miniprogram/miniprogram/custom-tab-bar/index.js",
+    "miniprogram/project.config.json",
+    "miniprogram/tests/home-reference.test.js",
+    "miniprogram/tests/home-cloud-header-release.test.js"
+  ]
+}

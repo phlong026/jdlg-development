@@ -1,0 +1,6 @@
+{
+  "releaseCommit": "a823ced62e7544a67dcf4bf8a06f91d042aa95ef",
+  "reversePatchApplies": true,
+  "isolatedGitRevertClean": true,
+  "baselineCommit": "fb043f9eeae8e70e23b363601a97b1b1be32a085"
+}

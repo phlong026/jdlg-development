@@ -1,0 +1,43 @@
+
+┌───────────────────────────────────┬────────────┬─────────────┐
+│              (index)              │    size    │ size (Byte) │
+├───────────────────────────────────┼────────────┼─────────────┤
+│               TOTAL               │  '2.4 MB'  │   2556590   │
+│               main                │  '1.4 MB'  │   1462218   │
+│         /pages/adminhome/         │  '471 B'   │     471     │
+│        /pages/adminlogin/         │  '493 B'   │     493     │
+│      /pages/allrounddesign/       │ '41.1 KB'  │    42097    │
+│    /pages/buildingreplacement/    │ '18.3 KB'  │    18759    │
+│           /pages/chat/            │ '34.5 KB'  │    35285    │
+│          /pages/checkin/          │ '23.5 KB'  │    24050    │
+│       /pages/designerhome/        │ '81.9 KB'  │    83844    │
+│      /pages/generatedetails/      │ '104.8 KB' │   107297    │
+│      /pages/generatehistory/      │ '37.0 KB'  │    37919    │
+│      /pages/Identityauthen/       │ '20.6 KB'  │    21071    │
+│       /pages/Invitefriends/       │ '209.0 KB' │   213966    │
+│      /pages/lingshidetails/       │ '16.2 KB'  │    16633    │
+│       /pages/messagecenter/       │  '1.3 KB'  │    1345     │
+│        /pages/myfavorites/        │ '25.2 KB'  │    25845    │
+│ /pages/myInformationmodification/ │ '36.0 KB'  │    36871    │
+│          /pages/myplan/           │ '29.8 KB'  │    30534    │
+│        /pages/orderdetail/        │ '15.9 KB'  │    16309    │
+│      /pages/ordermanagement/      │ '40.0 KB'  │    40972    │
+│   /pages/Parentchildcreativity/   │ '23.7 KB'  │    24314    │
+│          /pages/release/          │ '57.2 KB'  │    58573    │
+│          /pages/report/           │ '73.4 KB'  │    75203    │
+│     /pages/ruralvilladesign/      │ '27.4 KB'  │    28058    │
+│   /pages/templatesquaredetails/   │ '64.4 KB'  │    65917    │
+│        /pages/topupcenter/        │ '51.0 KB'  │    52179    │
+│          /pages/wallet/           │ '21.9 KB'  │    22467    │
+│      /pages/withdrawcenter/       │ '13.6 KB'  │    13900    │
+└───────────────────────────────────┴────────────┴─────────────┘
+
+
+- 初始化
+
+✔ IDE 已启动，HTTP 服务地址 http://127.0.0.1:20523
+- 准备中
+- 获取 AppID () 权限信息
+✔ 使用 AppID: wx94fdc48861913ede
+- 上传
+✔ upload
