@@ -107,6 +107,14 @@
 
 .layout-content[data-admin-page='/ai-overview'] {
   .aio-mobile-label { display: none; }
+  // Desktop split cards can also be narrower than the viewport breakpoint.
+  .aio-grid-main { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+  .aio-rank-head { grid-template-columns: minmax(88px, 1.5fr) minmax(0, 3.4fr); }
+  .aio-rank-head > :last-child { text-align: right; }
+  .aio-rank-row {
+    grid-template-columns: minmax(88px, 1.5fr) minmax(16px, 1fr) minmax(0, .7fr) minmax(0, .7fr) minmax(0, 1fr);
+  }
+  .aio-rank-num, .aio-rank-rate, .aio-rank-stones { min-width: 0; overflow-wrap: anywhere; }
   .aio-kpi, .aio-card, .aio-prov-card,
   .aio-rank-name, .aio-tool-name { min-width: 0; overflow-wrap: anywhere; }
   .aio-card-head, .aio-legend, .aio-prov-foot, .aio-alert-line { flex-wrap: wrap; }
@@ -127,6 +135,10 @@
   }
 }
 
+
+@media (max-width: 1100px) {
+  .layout-content[data-admin-page='/ai-overview'] .aio-grid-main { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 640px) {
   .layout-content[data-admin-page='/dashboard'] {
@@ -249,5 +261,26 @@
     font-weight: 400;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+}
+
+// Interactive KPI cards retain their visual layout and gain native keyboard activation.
+.layout-content[data-admin-page='/ai-overview'] button.aio-kpi,
+.layout-content[data-admin-page='/recharge'] button.stat-item-action {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  &:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 3px;
+  }
+}
+.layout-content[data-admin-page='/ai-overview'] button.aio-kpi {
+  transition: transform .15s, box-shadow .15s;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--admin-shadow);
   }
 }

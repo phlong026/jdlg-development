@@ -71,3 +71,12 @@ test('mobile list actions stay reachable without dropping financial or status co
     assert.match(source, /查看详情|用户360|用户详情/);
   }
 });
+
+
+test('AI split-card ranks shrink above the mobile breakpoint rather than keeping fixed column widths', () => {
+  const css = compile('src/responsive-priority.scss');
+  const rules = [];
+  css.walkRules(rule => { if (rule.selector.includes('.aio-rank-row') && rule.parent.type === 'root') rules.push(rule.toString()); });
+  assert.ok(rules.some(rule => rule.includes('minmax(88px, 1.5fr)') && rule.includes('minmax(16px, 1fr)')));
+  assert.ok(rules.every(rule => !rule.includes('130px 1fr 52px 56px 70px')));
+});

@@ -1,5 +1,5 @@
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     backfillAITaskModels,
@@ -178,11 +178,14 @@ const isLongRunningTask = (item: AITaskItem) => {
 
 const formatQuickActionTimestamp = () => new Date().toLocaleString('zh-CN');
 
+type TaskDetailTarget = { type: 'image' | 'video'; id: string };
+
 const AITaskCenter: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [activeTab, setActiveTab] = useState<'image' | 'video'>('image');
+    const [activeTab, setActiveTab] = useState<'image' | 'video'>(() => searchParams.get('tab') === 'video' ? 'video' : 'image');
     const [queue, setQueue] = useState<AITaskQueue>(() => {
+        if (searchParams.get('status') && searchParams.get('status') !== 'all') return 'all';
         const fromUrl = searchParams.get('queue');
         return queueTabs.some((tab) => tab.key === fromUrl) ? (fromUrl as AITaskQueue) : 'failed';
     });
@@ -196,11 +199,22 @@ const AITaskCenter: React.FC = () => {
     const [batchLoading, setBatchLoading] = useState(false);
     const [loading, setLoading] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
+    const [detailTarget, setDetailTarget] = useState<TaskDetailTarget | null>(null);
+    const [detailActionBusy, setDetailActionBusy] = useState(false);
+    const mounted = useRef(true);
+    const detailRequestId = useRef(0);
+    const listRequestId = useRef(0);
+    const listTargetType = useRef(activeTab);
+    const detailTargetRef = useRef<TaskDetailTarget | null>(null);
+    const detailActionInFlight = useRef(false);
+    const ticketRequests = useRef(new Set<string>());
+    const renderedDetailRequestId = detailRequestId.current;
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedDetail, setSelectedDetail] = useState<AITaskDetail | null>(null);
     const [selectedTaskItem, setSelectedTaskItem] = useState<AITaskItem | null>(null);
     const [keyword, setKeyword] = useState('');
-    const [status, setStatus] = useState('all');
+    const [status, setStatus] = useState(() => searchParams.get('status') || 'all');
     const [scene, setScene] = useState('all');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
@@ -210,6 +224,86 @@ const AITaskCenter: React.FC = () => {
     const [quickActionFeedback, setQuickActionFeedback] = useState('');
     const [backfillLoading, setBackfillLoading] = useState(false);
     const [backfillFeedback, setBackfillFeedback] = useState('');
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            detailRequestId.current += 1;
+            listRequestId.current += 1;
+            detailTargetRef.current = null;
+        };
+    }, []);
+
+    const resetTaskDetail = () => {
+        detailRequestId.current += 1;
+        detailTargetRef.current = null;
+        setDetailTarget(null);
+        setShowDetailModal(false);
+        setSelectedDetail(null);
+        setSelectedTaskItem(null);
+        setDetailLoading(false);
+        setDetailError('');
+        setQuickActionFeedback('');
+    };
+
+    const isCurrentTaskDetail = () => Boolean(
+        mounted.current && selectedDetail && selectedTaskItem && !detailLoading && !detailError
+        && renderedDetailRequestId === detailRequestId.current
+        && detailTargetRef.current?.type === selectedDetail.type
+        && detailTargetRef.current?.id === String(selectedDetail.id)
+        && selectedTaskItem.id === selectedDetail.id
+    );
+
+    const isCurrentTaskRequest = (requestId: number, target: TaskDetailTarget) => (
+        mounted.current && requestId === detailRequestId.current
+        && detailTargetRef.current?.type === target.type && detailTargetRef.current?.id === target.id
+    );
+
+    const startDetailAction = () => {
+        if (!isCurrentTaskDetail() || detailActionInFlight.current) return null;
+        detailActionInFlight.current = true;
+        setDetailActionBusy(true);
+        setQuickActionFeedback('');
+        return { requestId: detailRequestId.current, target: detailTargetRef.current!, item: selectedTaskItem!, detail: selectedDetail! };
+    };
+
+    const finishDetailAction = () => {
+        detailActionInFlight.current = false;
+        if (mounted.current) setDetailActionBusy(false);
+    };
+
+    // 图片与视频的 ID 可相同，详情与后续动作必须共同绑定 (type, id)。
+    const loadTaskDetail = async (target: TaskDetailTarget, item?: AITaskItem) => {
+        const requestPage = window.location.pathname;
+        const requestId = ++detailRequestId.current;
+        detailTargetRef.current = target;
+        setDetailTarget(target);
+        setSelectedTaskItem(item || null);
+        setSelectedDetail(null);
+        setDetailError('');
+        setQuickActionFeedback('');
+        setShowDetailModal(true);
+        setDetailLoading(true);
+        try {
+            const detail = target.type === 'image'
+                ? await getAITaskDetail(target.id)
+                : await getAIVideoTaskDetail(target.id);
+            if (!isCurrentTaskRequest(requestId, target)) return;
+            if (!detail || String(detail.id) !== target.id || detail.type !== target.type) {
+                throw new Error('返回的任务详情与当前任务类型或编号不一致，请重新加载');
+            }
+            setSelectedDetail(detail);
+            setSelectedTaskItem({ ...detail, username: item?.username || '', error_message: detail.error_message || '' });
+            reportPageLoadRecovered('加载任务详情失败', requestPage);
+        } catch (error: any) {
+            if (!isCurrentTaskRequest(requestId, target)) return;
+            console.error('加载任务详情失败:', error);
+            setDetailError(error?.message || '加载任务详情失败，请重新加载');
+        } finally {
+            if (isCurrentTaskRequest(requestId, target)) setDetailLoading(false);
+        }
+    };
 
     const selectedExecutionMeta = parseExecutionMeta(selectedDetail?.result_payload);
     const selectedResolvedModel = resolveTaskModelText(selectedDetail, selectedDetail?.result_payload);
@@ -227,6 +321,10 @@ const AITaskCenter: React.FC = () => {
         nextPage = page,
         nextPageSize = pageSize,
     ) => {
+        const requestId = ++listRequestId.current;
+        // 切到另一种任务时先移除旧类型的行，避免加载期间用新类型操作旧列表。
+        if (listTargetType.current !== tab) setList([]);
+        listTargetType.current = tab;
         setLoading(true);
         try {
             const recoveryPage = window.location.pathname;
@@ -241,6 +339,7 @@ const AITaskCenter: React.FC = () => {
             const response = tab === 'image'
                 ? await getAITaskList(params)
                 : await getAIVideoTaskList(params);
+            if (!mounted.current || requestId !== listRequestId.current || listTargetType.current !== tab) return;
             setList(response.list || []);
             setSummary(response.summary || emptySummary);
             if (response.queues) {
@@ -255,15 +354,16 @@ const AITaskCenter: React.FC = () => {
             setPageSize(response.page_size || nextPageSize);
             reportPageLoadRecovered("加载AI任务中心失败", recoveryPage);
         } catch (error) {
+            if (!mounted.current || requestId !== listRequestId.current || listTargetType.current !== tab) return;
             console.error('加载AI任务中心失败:', error);
             reportPageLoadError(error, '加载AI任务中心失败');
         } finally {
-            setLoading(false);
+            if (mounted.current && requestId === listRequestId.current) setLoading(false);
         }
     };
 
     useEffect(() => {
-        void loadData('image', queue, '', 'all', 'all', 1, 20);
+        void loadData(activeTab, queue, '', status, 'all', 1, 20);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [queue]);
 
@@ -277,7 +377,7 @@ const AITaskCenter: React.FC = () => {
             setActiveTab(tab);
             changed = true;
         }
-        if (queueParam && queueTabs.some((t) => t.key === queueParam) && queueParam !== queue) {
+        if (queueParam && (!statusParam || statusParam === 'all') && queueTabs.some((t) => t.key === queueParam) && queueParam !== queue) {
             setQueue(queueParam as AITaskQueue);
             return; // queue 变化由上面的 effect 处理
         }
@@ -287,50 +387,22 @@ const AITaskCenter: React.FC = () => {
             void loadData(tab === 'video' ? 'video' : 'image', 'all', keyword, statusParam, scene, 1, pageSize);
             changed = true;
         }
+        if (changed && (!statusParam || statusParam === 'all' || statusParam === status)) {
+            void loadData(tab === 'video' ? 'video' : 'image', queue, keyword, status, scene, 1, pageSize);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
     useEffect(() => {
         const taskId = searchParams.get('taskId');
-        const tab = searchParams.get('tab') === 'video' ? 'video' : 'image';
+        const type = searchParams.get('tab') === 'video' ? 'video' : 'image';
         if (!taskId) {
+            if (detailTargetRef.current) resetTaskDetail();
             return;
         }
-        if (selectedDetail?.id && String(selectedDetail.id) === taskId && selectedDetail.type === tab) {
-            return;
-        }
-        void (async () => {
-            try {
-                const detail = tab === 'image'
-                    ? await getAITaskDetail(taskId)
-                    : await getAIVideoTaskDetail(taskId);
-                setSelectedDetail(detail);
-                setSelectedTaskItem((prev) => prev && prev.id === detail.id ? prev : {
-                    id: detail.id,
-                    task_no: detail.task_no,
-                    user_id: detail.user_id,
-                    username: '',
-                    scene: detail.scene,
-                    model: detail.model,
-                    api_endpoint: detail.api_endpoint,
-                    prompt: detail.prompt,
-                    status: detail.status,
-                    raw_status: detail.raw_status,
-                    stones_used: detail.stones_used,
-                    error_message: detail.error_message || '',
-                    segment_count: detail.segment_count,
-                    duration: detail.duration,
-                    resolution: detail.resolution,
-                    created_at: detail.created_at,
-                    updated_at: detail.updated_at,
-                });
-                setQuickActionFeedback('');
-                setShowDetailModal(true);
-            } catch (error) {
-                console.error('按来源打开任务详情失败:', error);
-            }
-        })();
-    }, [searchParams, selectedDetail?.id, selectedDetail?.type]);
+        if (detailTargetRef.current?.id === taskId && detailTargetRef.current.type === type) return;
+        void loadTaskDetail({ id: taskId, type });
+    }, [searchParams]);
 
     const pickQueue = (nextQueue: AITaskQueue) => {
         if (nextQueue === queue) return;
@@ -376,6 +448,11 @@ const AITaskCenter: React.FC = () => {
         if (tab === activeTab) {
             return;
         }
+        resetTaskDetail();
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('taskId');
+        nextParams.set('tab', tab);
+        setSearchParams(nextParams);
         setBackfillFeedback('');
         setSelectedIds(new Set());
         setActiveTab(tab);
@@ -383,86 +460,87 @@ const AITaskCenter: React.FC = () => {
     };
 
     const handleBackfillModels = async () => {
+        const listGeneration = listRequestId.current;
         setBackfillLoading(true);
         setBackfillFeedback('');
         try {
             const result = await backfillAITaskModels(500);
+            if (!mounted.current) return;
             const summaryText = `本次检查 ${result.inspected_count} 条成功图片任务，回填 ${result.updated_count} 条模型/接口信息。`;
-            setBackfillFeedback(summaryText);
+            const canRefreshImageList = listTargetType.current === 'image' && listGeneration === listRequestId.current;
+            if (canRefreshImageList) setBackfillFeedback(summaryText);
             alert(summaryText);
-            await loadData('image', queue, keyword, status, scene, page, pageSize);
+            // 回填可能晚于切换类型/筛选；只刷新它开始时仍在查看的图片列表。
+            if (canRefreshImageList) await loadData('image', queue, keyword, status, scene, page, pageSize);
         } catch (error) {
+            if (!mounted.current) return;
             console.error('回填历史任务模型失败:', error);
             alert('回填历史任务模型失败');
         } finally {
-            setBackfillLoading(false);
+            if (mounted.current) setBackfillLoading(false);
         }
     };
 
-    const handleViewDetail = async (item: AITaskItem) => {
-        setSelectedTaskItem(item);
-        setSelectedDetail(null);
-        setQuickActionFeedback('');
-        setShowDetailModal(true);
-        setDetailLoading(true);
-        try {
-            const recoveryPage = window.location.pathname;
-            const detail = activeTab === 'image'
-                ? await getAITaskDetail(String(item.id))
-                : await getAIVideoTaskDetail(String(item.id));
-            setSelectedDetail(detail);
-            const nextParams = new URLSearchParams(searchParams);
-            nextParams.set('tab', activeTab);
-            nextParams.set('taskId', String(item.id));
-            setSearchParams(nextParams);
-            reportPageLoadRecovered("加载任务详情失败", recoveryPage);
-        } catch (error) {
-            console.error('加载任务详情失败:', error);
-            reportPageLoadError(error, '加载任务详情失败');
-            setShowDetailModal(false);
-        } finally {
-            setDetailLoading(false);
-        }
+    const handleViewDetail = (item: AITaskItem) => {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set('tab', activeTab);
+        nextParams.set('taskId', String(item.id));
+        setSearchParams(nextParams);
+        void loadTaskDetail({ type: activeTab, id: String(item.id) }, item);
     };
 
     const handleCloseDetail = () => {
-        setShowDetailModal(false);
-        setSelectedDetail(null);
-        setSelectedTaskItem(null);
-        setQuickActionFeedback('');
+        resetTaskDetail();
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete('taskId');
         setSearchParams(nextParams);
     };
 
-    const handleCreateSupportTicket = async (item: Pick<AITaskItem, 'id' | 'task_no'>, taskType: 'image' | 'video') => {
+    const handleCreateSupportTicket = async (item: Pick<AITaskItem, 'id' | 'task_no'>, taskType: 'image' | 'video', detailGeneration?: number) => {
         const actionKey = `${taskType}-${item.id}`;
+        if (ticketRequests.current.has(actionKey)) return;
+        const target = { type: taskType, id: String(item.id) };
+        if (detailGeneration !== undefined && !isCurrentTaskRequest(detailGeneration, target)) return;
+        ticketRequests.current.add(actionKey);
         setCreatingTicketKey(actionKey);
         try {
             const result = taskType === 'image'
                 ? await createAITaskSupportTicket(String(item.id))
                 : await createAIVideoTaskSupportTicket(String(item.id));
+            if (!mounted.current || (detailGeneration !== undefined && !isCurrentTaskRequest(detailGeneration, target))) return;
             alert(result.existed ? `该任务已有未关闭工单 #${result.id}，现在带你去工单中心继续跟进。` : `已为任务 ${item.task_no} 创建异常工单 #${result.id}。`);
             navigate('/support-tickets');
-        } catch (error) {
+        } catch (error: any) {
+            if (!mounted.current || (detailGeneration !== undefined && !isCurrentTaskRequest(detailGeneration, target))) return;
             console.error('创建任务异常工单失败:', error);
-            alert('创建任务异常工单失败');
+            if (detailGeneration !== undefined) setQuickActionFeedback(`创建任务异常工单失败：${error?.message || '请重试'}`);
+            else alert('创建任务异常工单失败');
         } finally {
-            setCreatingTicketKey(null);
+            ticketRequests.current.delete(actionKey);
+            if (mounted.current) setCreatingTicketKey((current) => current === actionKey ? null : current);
+        }
+    };
+
+    const handleCreateDetailSupportTicket = async () => {
+        const context = startDetailAction();
+        if (!context) return;
+        try {
+            await handleCreateSupportTicket(context.item, context.target.type, context.requestId);
+        } finally {
+            finishDetailAction();
         }
     };
 
     const handleQuickDisposition = async (label: '已排查' | '已补偿' | '已回访') => {
-        if (!selectedTaskItem) {
-            return;
-        }
-        const taskType: 'image' | 'video' = selectedDetail?.type === 'video' ? 'video' : 'image';
-        const actionKey = `${label}-${taskType}-${selectedTaskItem.id}`;
+        const context = startDetailAction();
+        if (!context) return;
+        const { target, item, requestId } = context;
+        const actionKey = `${label}-${target.type}-${item.id}`;
         setQuickActionKey(actionKey);
         try {
-            const createResult = taskType === 'image'
-                ? await createAITaskSupportTicket(String(selectedTaskItem.id))
-                : await createAIVideoTaskSupportTicket(String(selectedTaskItem.id));
+            const createResult = target.type === 'image'
+                ? await createAITaskSupportTicket(String(item.id))
+                : await createAIVideoTaskSupportTicket(String(item.id));
             const ticket = await getSupportTicketDetail(String(createResult.id));
             const appendedLine = `[${formatQuickActionTimestamp()}] ${label}：来自AI任务中心快捷处理`;
             const mergedNote = ticket.resolution_note?.trim()
@@ -472,12 +550,14 @@ const AITaskCenter: React.FC = () => {
             if (ticket.status === 'open') {
                 await updateSupportTicketStatus(String(ticket.id), 'in_progress');
             }
-            setQuickActionFeedback(`${label}已同步到工单 #${ticket.id}，并写入当前处理备注。`);
-        } catch (error) {
+            if (isCurrentTaskRequest(requestId, target)) setQuickActionFeedback(`${label}已同步到工单 #${ticket.id}，并写入当前处理备注。`);
+        } catch (error: any) {
+            if (!isCurrentTaskRequest(requestId, target)) return;
             console.error(`执行${label}失败:`, error);
-            alert(`${label}失败`);
+            setQuickActionFeedback(`${label}失败：${error?.message || '请重试'}`);
         } finally {
-            setQuickActionKey(null);
+            if (mounted.current) setQuickActionKey(null);
+            finishDetailAction();
         }
     };
 
@@ -525,18 +605,24 @@ const AITaskCenter: React.FC = () => {
     };
 
     const handleRetryTask = async () => {
-        if (!selectedTaskItem || selectedDetail?.type === 'video') return;
-        if (!window.confirm(`重新执行任务 ${selectedTaskItem.task_no}？\n\n将以当前启用配置重新入队，不重复扣费（管理员补偿动作）。`)) {
+        if (!isCurrentTaskDetail() || selectedDetail?.type !== 'image' || selectedDetail.status !== 'failed' || detailActionInFlight.current) return;
+        if (!window.confirm(`重新执行任务 ${selectedTaskItem!.task_no}？\n\n将以当前启用配置重新入队，不重复扣费（管理员补偿动作）。`)) {
             return;
         }
+        const context = startDetailAction();
+        if (!context) return;
         try {
-            const result = await retryAITask(selectedTaskItem.id);
+            const result = await retryAITask(context.item.id);
+            if (!isCurrentTaskRequest(context.requestId, context.target)) return;
             alert(`重试任务已入队：${result.new_task_no}（不重复扣费），稍后可在队列中查看进度。`);
             handleCloseDetail();
             void loadData(activeTab, queue, keyword, status, scene, 1, pageSize);
         } catch (error: any) {
+            if (!isCurrentTaskRequest(context.requestId, context.target)) return;
             console.error('重新执行失败:', error);
-            alert(`重新执行失败: ${error?.message || '未知错误'}`);
+            setQuickActionFeedback(`重新执行失败：${error?.message || '未知错误'}`);
+        } finally {
+            finishDetailAction();
         }
     };
 
@@ -675,7 +761,7 @@ const AITaskCenter: React.FC = () => {
                         <tbody>
                             {list.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="empty-state">暂无任务记录</td>
+                                    <td colSpan={activeTab === 'image' && queue === 'failed' ? 9 : 8} className="empty-state">暂无任务记录</td>
                                 </tr>
                             ) : (
                                 list.map((item) => {
@@ -784,9 +870,12 @@ const AITaskCenter: React.FC = () => {
                             </div>
                             <div className="modal-body">
                                 {detailLoading ? (
-                                    <div className="empty-state slim">正在加载任务详情...</div>
-                                ) : !selectedDetail ? (
-                                    <div className="empty-state slim">暂无任务详情</div>
+                                    <div className="empty-state slim" role="status">正在加载任务详情...</div>
+                                ) : detailError || !selectedDetail ? (
+                                    <div className="empty-state slim" role="alert">
+                                        <p>加载任务详情失败：{detailError || '未取得当前任务详情'}</p>
+                                        <button className="btn-secondary" onClick={() => { if (detailTarget) void loadTaskDetail(detailTarget); }}>重新加载</button>
+                                    </div>
                                 ) : (
                                     <div className="task-detail-body">
                                         <div className="task-detail-grid">
@@ -833,13 +922,13 @@ const AITaskCenter: React.FC = () => {
                                         <div className="task-detail-card full-width quick-action-card">
                                             <h4>快捷处理动作</h4>
                                             <div className="quick-action-list">
-                                                <button className="btn-secondary" onClick={() => void handleQuickDisposition('已排查')} disabled={quickActionKey !== null}>
+                                                <button className="btn-secondary" onClick={() => void handleQuickDisposition('已排查')} disabled={!isCurrentTaskDetail() || detailActionBusy || quickActionKey !== null}>
                                                     {quickActionKey === `已排查-${selectedDetail.type}-${selectedDetail.id}` ? '处理中...' : '标记已排查'}
                                                 </button>
-                                                <button className="btn-secondary" onClick={() => void handleQuickDisposition('已补偿')} disabled={quickActionKey !== null}>
+                                                <button className="btn-secondary" onClick={() => void handleQuickDisposition('已补偿')} disabled={!isCurrentTaskDetail() || detailActionBusy || quickActionKey !== null}>
                                                     {quickActionKey === `已补偿-${selectedDetail.type}-${selectedDetail.id}` ? '处理中...' : '标记已补偿'}
                                                 </button>
-                                                <button className="btn-secondary" onClick={() => void handleQuickDisposition('已回访')} disabled={quickActionKey !== null}>
+                                                <button className="btn-secondary" onClick={() => void handleQuickDisposition('已回访')} disabled={!isCurrentTaskDetail() || detailActionBusy || quickActionKey !== null}>
                                                     {quickActionKey === `已回访-${selectedDetail.type}-${selectedDetail.id}` ? '处理中...' : '标记已回访'}
                                                 </button>
                                             </div>
@@ -892,21 +981,21 @@ const AITaskCenter: React.FC = () => {
                                 )}
                             </div>
                             <div className="modal-footer">
-                                {selectedTaskItem && selectedDetail?.type !== 'video' && selectedDetail?.status === 'failed' ? (
-                                    <button className="btn-secondary" onClick={() => void handleRetryTask()}>
+                                {isCurrentTaskDetail() && selectedDetail?.type === 'image' && selectedDetail.status === 'failed' ? (
+                                    <button className="btn-secondary" onClick={() => void handleRetryTask()} disabled={detailActionBusy}>
                                         重新执行（不扣费）
                                     </button>
                                 ) : null}
-                                {selectedTaskItem && (
+                                {isCurrentTaskDetail() && selectedTaskItem && selectedDetail && (
                                     <button
                                         className="btn-secondary"
-                                        onClick={() => void handleCreateSupportTicket(selectedTaskItem, selectedDetail?.type === 'video' ? 'video' : 'image')}
-                                        disabled={creatingTicketKey === `${selectedDetail?.type === 'video' ? 'video' : 'image'}-${selectedTaskItem.id}`}
+                                        onClick={() => void handleCreateDetailSupportTicket()}
+                                        disabled={detailActionBusy || creatingTicketKey === `${selectedDetail.type}-${selectedTaskItem.id}`}
                                     >
-                                        {creatingTicketKey === `${selectedDetail?.type === 'video' ? 'video' : 'image'}-${selectedTaskItem.id}` ? '转单中...' : '转异常工单'}
+                                        {creatingTicketKey === `${selectedDetail.type}-${selectedTaskItem.id}` ? '转单中...' : '转异常工单'}
                                     </button>
                                 )}
-                                {selectedTaskItem ? <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${selectedTaskItem.user_id}`)}>查看用户详情</button> : null}
+                                {isCurrentTaskDetail() && selectedTaskItem ? <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${selectedTaskItem.user_id}`)}>查看用户详情</button> : null}
                                 <button className="btn-secondary" onClick={() => navigate('/support-tickets')}>去工单中心</button>
                                 <button className="btn-primary" onClick={handleCloseDetail}>关闭</button>
                             </div>

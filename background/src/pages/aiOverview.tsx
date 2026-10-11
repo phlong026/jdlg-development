@@ -217,11 +217,11 @@ const AIOverview: React.FC = () => {
             ) : null}
 
             <div className="aio-kpi-band">
-                <div className="aio-kpi" role="button" tabIndex={0} onClick={() => navigate('/ai-tasks')}>
+                <button type="button" className="aio-kpi" onClick={() => navigate('/ai-tasks')}>
                     <span>今日调用</span>
                     <b>{(todayKPI?.total ?? 0).toLocaleString()}</b>
                     <small>{delta ? `环比昨日 ${delta.text}` : '昨日无任务或持平'}</small>
-                </div>
+                </button>
                 <div className="aio-kpi">
                     <span>任务成功率</span>
                     <b>{todayKPI ? formatPercent(todayKPI.success_rate) : '—'}</b>
@@ -246,11 +246,11 @@ const AIOverview: React.FC = () => {
                     <b>{todayKPI?.margin_rate != null ? formatPercent(todayKPI.margin_rate) : '—'}</b>
                     <small>（收入 − 成本）÷ 收入</small>
                 </div>
-                <div className={`aio-kpi ${pendingAnomalies > 0 ? 'bad' : ''}`} role="button" tabIndex={0} onClick={() => navigate('/ai-tasks?queue=failed')}>
+                <button type="button" className={`aio-kpi ${pendingAnomalies > 0 ? 'bad' : ''}`} onClick={() => navigate('/ai-tasks?queue=failed')}>
                     <span>待处理图片异常</span>
                     <b>{pendingAnomalies}</b>
                     <small>失败 {imageQueues?.failed ?? 0} · 超时 {imageQueues?.timeout ?? 0} · 查看异常任务</small>
-                </div>
+                </button>
             </div>
 
             <div className="aio-grid-main">

@@ -7,6 +7,7 @@ import Topbar from './topbar';
 import SubNav from './SubNav';
 import SubNavCards from './SubNavCards';
 import CommandPalette from './CommandPalette';
+import { installAdminDialogKeyboard } from './adminDialogKeyboard';
 import { useManagementSession } from './ManagementSession';
 import { locate, searchablePages, visibleGroups } from './navConfig';
 import { readNavMode, saveNavMode, type NavMode } from './navMode';
@@ -64,6 +65,11 @@ const AdminLayout: React.FC = () => {
         };
         window.addEventListener('admin-page-load-error', report);
         return () => window.removeEventListener('admin-page-load-error', report);
+    }, [pathname]);
+
+    useEffect(() => {
+        const root = contentRef.current;
+        if (root) return installAdminDialogKeyboard(root);
     }, [pathname]);
 
     useEffect(() => {

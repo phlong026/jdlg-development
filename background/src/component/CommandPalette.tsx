@@ -21,16 +21,43 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ open, items, onClose })
     const [query, setQuery] = useState('');
     const [index, setIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
+    const closeRef = useRef(onClose);
+    closeRef.current = onClose;
 
     useEffect(() => {
         if (!open) return;
         setQuery('');
         setIndex(0);
-        inputRef.current?.focus();
-        const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [open, onClose]);
+        const previous = document.activeElement as HTMLElement | null;
+        inputRef.current?.focus({ preventScroll: true });
+        const onKey = (event: KeyboardEvent) => {
+            if (event.isComposing) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                closeRef.current();
+            } else if (event.key === 'Tab') {
+                const panel = inputRef.current?.closest('.cmdk-panel');
+                const items = Array.from(panel?.querySelectorAll<HTMLElement>('input, button') || [])
+                    .filter(item => !item.matches(':disabled') && item.tabIndex >= 0 && item.getClientRects().length > 0);
+                const first = items[0], last = items[items.length - 1];
+                if (event.shiftKey && (document.activeElement === first || !panel?.contains(document.activeElement))) {
+                    event.preventDefault(); last?.focus({ preventScroll: true });
+                } else if (!event.shiftKey && (document.activeElement === last || !panel?.contains(document.activeElement))) {
+                    event.preventDefault(); first?.focus({ preventScroll: true });
+                }
+                event.stopPropagation();
+            }
+        };
+        // This is above dialogs and the mobile sidebar. One Escape closes one layer.
+        window.addEventListener('keydown', onKey, true);
+        return () => {
+            window.removeEventListener('keydown', onKey, true);
+            if (previous?.isConnected && !previous.matches(':disabled') && previous.getClientRects().length) {
+                previous.focus({ preventScroll: true });
+            }
+        };
+    }, [open]);
 
     const list = useMemo(() => {
         const q = query.trim().toLowerCase();

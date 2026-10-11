@@ -1,5 +1,5 @@
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiClock, FiEye, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
@@ -11,6 +11,7 @@ import {
     reviewCertification,
     type CertificationApplication,
     type CertificationDetailResponse,
+    type CertificationRevealFields,
     type CertificationStats,
 } from '../api/certification';
 import './certification.scss';
@@ -58,10 +59,39 @@ const Certification: React.FC = () => {
     const [drawerApp, setDrawerApp] = useState<CertificationApplication | null>(null);
     const [detail, setDetail] = useState<CertificationDetailResponse | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [revealed, setRevealed] = useState<{ real_name?: string; id_card_no?: string; credit_code?: string; legal_person?: string } | null>(null);
+    const [detailError, setDetailError] = useState('');
+    const [revealed, setRevealed] = useState<CertificationRevealFields | null>(null);
     const [revealing, setRevealing] = useState(false);
+    const [revealError, setRevealError] = useState('');
     const [adminRemark, setAdminRemark] = useState('');
     const [reviewSubmitting, setReviewSubmitting] = useState<'approve' | 'reject' | null>(null);
+    const [reviewError, setReviewError] = useState('');
+    const mounted = useRef(true);
+    const detailRequestId = useRef(0);
+    const revealRequestId = useRef(0);
+    const drawerTargetId = useRef<number | null>(null);
+    const revealBusy = useRef(false);
+    const reviewBusy = useRef(false);
+    const renderedDetailRequestId = detailRequestId.current;
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            detailRequestId.current += 1;
+            revealRequestId.current += 1;
+            drawerTargetId.current = null;
+        };
+    }, []);
+
+    const isCurrentCertification = () => Boolean(
+        mounted.current && drawerApp && detail && !detailLoading && !detailError
+        && renderedDetailRequestId === detailRequestId.current
+        && drawerTargetId.current === drawerApp.id
+        && detail.application?.id === drawerApp.id
+        && (!detail.user || detail.user.id === detail.application.user_id)
+        && (!revealed || revealed.id === drawerApp.id)
+    );
 
     const queueParams = useCallback((q: QueueKey): { status?: string; overdue?: boolean } => {
         switch (q) {
@@ -133,62 +163,104 @@ const Certification: React.FC = () => {
 
     const openDrawer = async (app: CertificationApplication) => {
         const requestPage = window.location.pathname;
+        const requestId = ++detailRequestId.current;
+        drawerTargetId.current = app.id;
+        revealRequestId.current += 1;
+        revealBusy.current = false;
         setDrawerApp(app);
         setDetail(null);
+        setDetailError('');
         setRevealed(null);
+        setRevealing(false);
+        setRevealError('');
+        setReviewError('');
         setAdminRemark('');
         setDetailLoading(true);
         try {
-            setDetail(await getCertificationDetail(String(app.id)));
+            const data = await getCertificationDetail(String(app.id));
+            if (!mounted.current || requestId !== detailRequestId.current || drawerTargetId.current !== app.id) return;
+            if (!data || data.application?.id !== app.id || (data.user && data.user.id !== data.application.user_id)) {
+                throw new Error('返回的认证材料与当前申请不一致，请重新加载');
+            }
+            setDetail(data);
+            setDrawerApp(data.application);
             reportPageLoadRecovered('加载认证详情失败', requestPage);
-        } catch (e) {
+        } catch (e: any) {
+            if (!mounted.current || requestId !== detailRequestId.current) return;
             console.error('加载详情失败:', e);
-            reportPageLoadError(e, '加载认证详情失败');
+            setDetailError(e?.message || '加载认证详情失败，请重新加载');
         } finally {
-            setDetailLoading(false);
+            if (mounted.current && requestId === detailRequestId.current) setDetailLoading(false);
         }
     };
 
     const closeDrawer = () => {
+        detailRequestId.current += 1;
+        revealRequestId.current += 1;
+        drawerTargetId.current = null;
+        revealBusy.current = false;
         setDrawerApp(null);
         setDetail(null);
+        setDetailLoading(false);
+        setDetailError('');
         setRevealed(null);
+        setRevealing(false);
+        setRevealError('');
+        setReviewError('');
         setAdminRemark('');
     };
 
     const handleReveal = async () => {
         const requestPage = window.location.pathname;
-        if (!drawerApp) return;
+        if (!isCurrentCertification() || revealBusy.current) return;
+        const targetId = drawerApp!.id;
+        const detailGeneration = detailRequestId.current;
+        const requestId = ++revealRequestId.current;
+        revealBusy.current = true;
+        setRevealError('');
         setRevealing(true);
         try {
-            const data = await revealCertificationFields(String(drawerApp.id));
-            if (data) setRevealed(data);
+            const data = await revealCertificationFields(String(targetId));
+            if (!mounted.current || detailGeneration !== detailRequestId.current || requestId !== revealRequestId.current || drawerTargetId.current !== targetId) return;
+            if (!data || data.id !== targetId) throw new Error('返回的完整材料与当前申请不一致，请重试');
+            setRevealed(data);
             reportPageLoadRecovered('查看完整材料失败', requestPage);
         } catch (e: any) {
+            if (!mounted.current || detailGeneration !== detailRequestId.current || requestId !== revealRequestId.current) return;
             console.error('查看完整材料失败:', e);
-            reportPageLoadError(e, '查看完整材料失败');
+            setRevealError(e?.message || '查看完整材料失败，请重试');
         } finally {
-            setRevealing(false);
+            if (mounted.current && requestId === revealRequestId.current) {
+                revealBusy.current = false;
+                setRevealing(false);
+            }
         }
     };
 
     const submitReview = async (action: 'approve' | 'reject') => {
         const requestPage = window.location.pathname;
-        if (!drawerApp) return;
+        if (!isCurrentCertification() || drawerApp?.status !== 'pending_review' || reviewBusy.current) return;
         if (action === 'reject' && !adminRemark.trim()) {
             return; // 拒绝必须填原因（按钮已禁用，双保险）
         }
+        const targetId = drawerApp.id;
+        const requestId = detailRequestId.current;
+        reviewBusy.current = true;
+        setReviewError('');
         setReviewSubmitting(action);
         try {
-            await reviewCertification(String(drawerApp.id), action, adminRemark.trim() || undefined);
+            await reviewCertification(String(targetId), action, adminRemark.trim() || undefined);
+            if (!mounted.current) return;
             reportPageLoadRecovered('审核操作失败', requestPage);
-            closeDrawer();
+            if (requestId === detailRequestId.current && drawerTargetId.current === targetId) closeDrawer();
             refreshAll();
         } catch (e: any) {
+            if (!mounted.current || requestId !== detailRequestId.current || drawerTargetId.current !== targetId) return;
             console.error('审核失败:', e);
-            reportPageLoadError(e, '审核操作失败');
+            setReviewError(e?.message || '审核操作失败，请重试');
         } finally {
-            setReviewSubmitting(null);
+            reviewBusy.current = false;
+            if (mounted.current) setReviewSubmitting(null);
         }
     };
 
@@ -333,8 +405,8 @@ const Certification: React.FC = () => {
                                             ? (app.company_name || '-')
                                             : (revealedSubject(app) || '-');
                                         const subjectSub = app.type === 'enterprise'
-                                            ? (revealed?.credit_code || app.credit_code || '统一社会信用代码待补')
-                                            : (revealed?.id_card_no || app.id_card_no || '证件号待提交');
+                                            ? (app.credit_code || '统一社会信用代码待补')
+                                            : (app.id_card_no || '证件号待提交');
                                         return (
                                             <tr
                                                 key={app.id}
@@ -423,7 +495,12 @@ const Certification: React.FC = () => {
                         </div>
                         <div className="cert-drawer-body">
                             {detailLoading ? (
-                                <div className="table-loading">加载中...</div>
+                                <div className="table-loading" role="status">加载中...</div>
+                            ) : detailError || !detail ? (
+                                <div className="table-loading" role="alert">
+                                    <p>加载认证详情失败：{detailError || '未取得当前申请材料'}</p>
+                                    <button className="btn-secondary" onClick={() => void openDrawer(drawerApp)}>重新加载</button>
+                                </div>
                             ) : (
                                 <>
                                     <div className="cert-sect">
@@ -441,6 +518,7 @@ const Certification: React.FC = () => {
                                                 </button>
                                             </span>
                                         </div>
+                                        {revealError && <div role="alert">查看完整材料失败：{revealError}</div>}
                                         <div className="kv"><span className="k">申请身份</span><span className="v">{drawerApp.identity_type || '-'}</span></div>
                                         {drawerApp.extra_docs_remark && (
                                             <div className="kv"><span className="k">其他证件说明</span><span className="v">{drawerApp.extra_docs_remark}</span></div>
@@ -483,6 +561,7 @@ const Certification: React.FC = () => {
                                     )}
                                 </>
                             )}
+                            {reviewError && <div role="alert">审核操作失败：{reviewError}</div>}
                         </div>
                         {drawerApp.status === 'pending_review' && (
                             <div className="cert-drawer-foot">
@@ -490,7 +569,7 @@ const Certification: React.FC = () => {
                                 <button
                                     className="btn-reject"
                                     onClick={() => submitReview('reject')}
-                                    disabled={reviewSubmitting != null || !adminRemark.trim()}
+                                    disabled={!isCurrentCertification() || reviewSubmitting != null || !adminRemark.trim()}
                                     title={adminRemark.trim() ? '' : '拒绝必须填写原因'}
                                 >
                                     拒绝
@@ -498,7 +577,7 @@ const Certification: React.FC = () => {
                                 <button
                                     className="btn-approve"
                                     onClick={() => submitReview('approve')}
-                                    disabled={reviewSubmitting != null}
+                                    disabled={!isCurrentCertification() || reviewSubmitting != null}
                                 >
                                     {reviewSubmitting === 'approve' ? '提交中...' : '通过认证'}
                                 </button>

@@ -764,11 +764,11 @@ const OrderCenter: React.FC = () => {
                         <span className="stat-value">{formatNumber((fundStats?.wechat_mirror_total || 0) - (fundStats?.local_stones_total || 0))}</span>
                         <span className="stat-sub">两账净差额 · 点击查看口径</span>
                     </div>
-                    <div className="stat-item stat-item-action" onClick={() => { if (!onlyExceptions) handleToggleExceptions(); }} role="button" title="点击查看全部异常单">
+                    <button type="button" className="stat-item stat-item-action" onClick={() => { if (!onlyExceptions) handleToggleExceptions(); }} title="点击查看全部异常单">
                         <span className="stat-label">待处理异常</span>
                         <span className="stat-value is-danger">{fundStats?.exception_count ?? '-'}</span>
                         <span className="stat-sub">失败 + 待处理 + 卡发货/卡退款</span>
-                    </div>
+                    </button>
                 </div>
 
                 {/* 状态 Tab（G2）：计数为当前筛选（忽略状态维度）下的各状态数量 */}
