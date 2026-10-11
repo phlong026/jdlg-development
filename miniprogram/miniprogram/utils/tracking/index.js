@@ -6,7 +6,7 @@ const STORAGE = 'share_tracking_queue_v1';
 const CONSENT = 'share_tracking_consent_v1';
 const CONSENT_CHOICE = 'share_tracking_consent_choice_v1';
 let sdk, config = { enabled: false }, installed = false, instance = '', timer;
-let consentPage = null, consentRequest = null, consentChoice = null, consentRevision = 0;
+let consentPage = null, consentRequest = null, consentChoice = null, consentRevision = 0, entryInvalidation = 0;
 const safely = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
 function id() { return 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); }
 function mono() { const performance = wx.getPerformance && wx.getPerformance(); return performance && typeof performance.now === 'function' ? performance.now() : null; }
@@ -40,14 +40,14 @@ function enabledConsent() {
 }
 function refreshConfig() {
   return api.request('/config').then(value => {
-    config = value || {enabled:false}; const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
+    config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++; const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
     return config;
   }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });
 }
 function setConsent(accepted) {
   accepted=accepted===true;
   if (accepted && (config.enabled!==true || !config.consent_version || !config.privacy_notice)) return false;
-  consentRevision++;
+  consentRevision++; if(accepted!==true)entryInvalidation++;
   const previous=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null) || safely(()=>wx.getStorageSync(CONSENT),null) || {};
   consentChoice={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,at:new Date().toISOString()};
   safely(()=>wx.setStorageSync(CONSENT_CHOICE,consentChoice));
@@ -208,9 +208,10 @@ function install() {
     };}); return NativeApp(wrapped);
   };
 }
-function resolvePageOptions(page, options) {
+function resolvePageOptions(page, options, applyAttribution = true) {
  page.__trackingOptions=options;
- const s=getSDK(),p=s&&s.get(page);if(p)p.share=options.st||'';
+ const s=getSDK(),p=s&&s.get(page);if(p&&applyAttribution)p.share=options.st||'';
  updateReady(page);
 }
-module.exports={install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+function captureEntryValidity(){const revision=entryInvalidation,account=safely(()=>String(wx.getStorageSync('token')||''),'');return()=>revision===entryInvalidation&&account===safely(()=>String(wx.getStorageSync('token')||''),'');}
+module.exports={captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};

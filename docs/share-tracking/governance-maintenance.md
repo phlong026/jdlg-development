@@ -47,3 +47,7 @@ The signed-in favorite-to-tracking binding and real MySQL/Redis business path st
 Unit tests in `service/tracking/governance_test.go` exercise default-disabled purge, nonmutating preview, exact cutoffs, owner isolation, tombstone/audit/content preservation, reviewed-plan drift, policy/date/permission rejection, actor/scope binding and finite diagnostics. `aggregates_test.go` covers duplicates, late/out-of-order facts, midnight and exact-range clipping, retained-metric survival, legacy cutoff handling, post-expiry identity, deletion tombstones and honest snapshot errors. `review_test.go`, `service_test.go` and `route/share_tracking_test.go` cover capability separation, CRM evidence, deletion isolation, intent and HTTP restrictions.
 
 The latest completed full Go check recorded 437 passed test/subtest results, 5 explicit integration skips and no failures; see `rollout-and-verification.md` for commands, version, log path and exclusions. The admin governance suite checks permission-specific controls, exact targets, dirty/pending guards, late responses, deliberate deletion confirmation and truthful result handling. No live database, CRM call, deployed schedule, backup expiry, production cleanup, load target or restore drill has been tested or run.
+
+## 大租户安全预算
+
+目标访客的CRM、人工修正和删除按确切身份及关联会话下推，不以缩小owner范围来绕过完整删除授权检查。读取旧记录时同时识别JSON中的entry/session/share依赖；任何失败整笔回滚。累计超过20,000条或32MiB原始payload时返回422，不能把未完成删除报告为completed。全租户保留期计划/清理与诊断仍可能触发同一防护，需有界维护方案与真实环境验证；当前没有自动分批清理或后台作业承诺。

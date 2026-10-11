@@ -100,7 +100,7 @@ func TestDailySummaryRetentionScopeIdentityAndDeletion(t *testing.T) {
 	}
 	f := Filter{Start: at.Add(-time.Hour), End: s.Now().Add(time.Nanosecond), AsOf: s.Now()}
 	facts, expired, e := s.summaryFacts(r, scope, f)
-	if e != nil || len(facts) != 1 || len(expired) != 2 || facts[0].Visible != 10000 || !facts[0].Count {
+	if e != nil || len(facts) != 1 || len(expired) != 1 || facts[0].Visible != 10000 || !facts[0].Count {
 		t.Fatalf("%+v %v %v", facts, expired, e)
 	}
 	link := record("identity", "session-owner-a", "owner-a", at.Add(time.Hour), map[string]string{"original_visitor_key": "a:alice", "visitor_key": "u:42"})

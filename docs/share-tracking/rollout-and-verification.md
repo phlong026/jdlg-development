@@ -2,16 +2,16 @@
 
 ## 证据版本与结论
 
-记录时间：2026-10-11 UTC（对应Asia/Shanghai 2026-10-12）。执行者：开发分支自动化验证。分支feat/share-visit-tracking-20261012；本轮固定阶段命名 integrated-safety-ui-sdk，父提交 f73b9c16d9965332d1934299b392469a41810fe6。发布manifest关联本阶段本地commit与远程完整tree；后续SQL查询下推阶段须另行复测。
+记录时间：2026-10-11 UTC（对应Asia/Shanghai 2026-10-12）。执行者：开发分支自动化验证。分支feat/share-visit-tracking-20261012；本轮固定阶段命名 bounded-query-privacy-reader，父提交 8e723e58270d2efc5d8f5f92515fd3e4e26c6b0e，对应远程父阶段07debc9f9ecf3400417f5ab9d1ec42f02c58abf3。发布manifest关联本阶段本地commit与远程完整tree。
 
 已实现并有离线自动证据，不等于17项AT全部验收通过。生产采集、迁移、清理、部署及合并均未执行。
 
 ## 本轮已完成检查
 
-- 后台：在background执行npm test以及npm run build；499项通过，0失败，另TypeScript、路由一致性和生产构建通过。包括原469项和新增30项；本轮构建含治理界面及富文本。原始日志：/tmp/share-integrated-admin.log。
-- 小程序聚焦：在miniprogram执行npm run test:tracking以及npm run check:tracking；114/114通过，TS/JS源产物一致。覆盖SDK、真实页面就绪/动作回调、阅读页及视频计量单元。日志：/tmp/share-integrated-mini.log。这里的“真实页面回调”指执行仓库原页面JS配合模拟wx及数据，不是真机或生产接口。
-- 小程序全量：node --test tests/*.test.js，共198项，193通过、2失败、3跳过。失败仍为固定基线已有tests/customer-service-action-placement.test.js、tests/customer-service-knowledge.test.js，未修改客服业务或断言来掩盖失败。全量不是全绿；日志：/tmp/share-integrated-mini-all.log。
-- 服务端：在service执行go test -json ./...，已完成全源码包编译及测试；468条通过、5条跳过、0失败。此计数按含Test的JSON终态记录统计，包含子测试，不是468个顶层测试函数；无测试文件的包不计作这5条跳过。日志：/tmp/share-integrated-go.jsonl。
+- 后台：在background执行npm test以及npm run build；499项通过，0失败，另TypeScript、路由一致性和生产构建通过。包括原469项和新增30项；本轮构建含治理界面及富文本。原始日志：/tmp/share-final-admin.log。
+- 小程序聚焦：在miniprogram执行npm run test:tracking以及npm run check:tracking；127/127通过，TS/JS源产物一致。覆盖SDK、真实页面就绪/动作回调、阅读页及视频计量单元。日志：/tmp/share-final-mini.log。这里的“真实页面回调”指执行仓库原页面JS配合模拟wx及数据，不是真机或生产接口。
+- 小程序全量：node --test tests/*.test.js，共211项，206通过、2失败、3跳过。失败仍为固定基线已有tests/customer-service-action-placement.test.js、tests/customer-service-knowledge.test.js，未修改客服业务或断言来掩盖失败。全量不是全绿；日志：/tmp/share-final-mini-all.log。
+- 服务端：在service执行go test -json ./...，已完成全源码包编译及测试；518条通过、5条跳过、0失败。此计数按含Test的JSON终态记录统计，包含子测试，不是518个顶层测试函数；无测试文件的包不计作这5条跳过。日志：/tmp/share-final-go.jsonl。
 - Go跳过项：TestActualGeneratorAndPythonRenderer缺REPORT_PDF_PYTHON/REPORT_PDF_FONT；TestUserBanFlowAndListFilters缺隔离USER_BAN_TEST_DSN；TestDispatchPendingPersistsAttemptAndPreservesSettledDownstream及TestCleanupRetainsPendingAndFailedEvents缺WECOM_EVENT_INBOX_TEST_DSN；TestWecomIdentityMySQLFlow缺CRM_IDENTITY_TEST_DSN。没有把跳过写成成功或真实数据库证据。
 - Chromium在当前执行环境被系统socket权限拒绝，受审重试仍失败。background/e2e/share_tracking.py已准备320/375/390/768/1024/1440宽度及交互回归，使用明确合成API fixture；未取得截图，未通过浏览器视觉验收，未将脚本存在或Node断言当作截图证据。
 
@@ -58,4 +58,12 @@ raw 90天、summary及支持记录180天是待批准建议，DefaultRetentionPol
 
 任何未验项继续标为待验；代码提交、备份或推送不等于生产发布批准。
 
-本阶段另通过 go test -race ./tracking ./route；日志 /tmp/share-integrated-race.log。Go统计包含新增实际路由权限子测试。原CRLF源文件维持行尾，差异检查使用 git -c core.whitespace=cr-at-eol diff --check。
+本阶段另通过 go test -race ./tracking ./route；日志 /tmp/share-final-race.log。Go统计包含新增实际路由权限子测试。原CRLF源文件维持行尾，差异检查使用 git -c core.whitespace=cr-at-eol diff --check。
+
+## 安全下推与第二轮阅读页复核
+
+本轮包含 scoped SQL、目标身份隐私依赖下推、两个索引及可重复升级脚本。接口测试在禁止全量List的仓库中与原内存口径对照；累计读数/字节超限422回滚，不返回部分统计。20,001条无关数据不阻碍小目标CRM/删除；超大目标及全租户保留清理/诊断仍可能超预算，需另行批准的有界维护流程。参见 service/docs/TRACKING_QUERY_BOUNDS.md。
+
+阅读页补13项真实模块集成回归；旧阶段的st复活及迟到scene覆盖已由红转绿验证，普通同页重试保留尚未消费的有效首次入口。127项跟踪测试包括原SDK、真实动作、空闲/异步、同意和阅读页入口套件。
+
+本轮另执行 go vet ./tracking ./route，通过无诊断；日志 /tmp/share-final-vet.log。修改后全量前端构建及小程序回归已重跑。真实浏览器、MySQL、企微、CRM及微信设备仍未接通，不声称端到端或SLO通过。

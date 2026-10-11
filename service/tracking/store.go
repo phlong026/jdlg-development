@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,7 @@ type sqlRepo struct {
 	ctx    context.Context
 	tx     *sql.Tx
 	tenant string
+	budget readBudget
 }
 
 func (s *SQLStore) Transaction(ctx context.Context, tenant string, fn func(Repository) error) error {
@@ -44,44 +46,202 @@ func (s *SQLStore) Transaction(ctx context.Context, tenant string, fn func(Repos
 	if e = tx.QueryRowContext(ctx, "SELECT tenant_id FROM tracking_tenant_lock WHERE tenant_id=? FOR UPDATE", tenant).Scan(&locked); e != nil {
 		return e
 	}
-	if e = fn(&sqlRepo{ctx, tx, tenant}); e != nil {
+	repo := &sqlRepo{ctx: ctx, tx: tx, tenant: tenant}
+	if e = fn(repo); e != nil {
 		return e
+	}
+	if repo.budget.err != nil {
+		return repo.budget.err
 	}
 	return tx.Commit()
 }
 func (r *sqlRepo) Get(kind, id string) (Record, error) {
+	if r.budget.err != nil {
+		return Record{}, r.budget.err
+	}
 	var v Record
 	var b []byte
 	var at string
-	e := r.tx.QueryRowContext(r.ctx, `SELECT kind,record_id,owner_id,visitor_key,session_id,content_id,share_id,DATE_FORMAT(occurred_at,'%Y-%m-%d %H:%i:%s.%f'),payload FROM tracking_records WHERE tenant_id=? AND kind=? AND record_id=?`, r.tenant, kind, id).Scan(&v.Kind, &v.ID, &v.Owner, &v.Visitor, &v.Session, &v.Content, &v.Share, &at, &b)
+	e := r.tx.QueryRowContext(r.ctx, `SELECT kind,record_id,owner_id,visitor_key,session_id,content_id,share_id,DATE_FORMAT(occurred_at,'%Y-%m-%d %H:%i:%s.%f'),CASE WHEN OCTET_LENGTH(payload)<=? THEN payload ELSE NULL END FROM tracking_records WHERE tenant_id=? AND kind=? AND record_id=?`, maxQueryPayloadBytes, r.tenant, kind, id).Scan(&v.Kind, &v.ID, &v.Owner, &v.Visitor, &v.Session, &v.Content, &v.Share, &at, &b)
 	if e == sql.ErrNoRows {
 		return v, ErrNotFound
 	}
-	v.At, _ = time.ParseInLocation("2006-01-02 15:04:05.999999", at, time.UTC)
+	if e != nil {
+		return v, e
+	}
+	if b == nil {
+		return v, r.budget.reject()
+	}
+	v.At, e = time.ParseInLocation("2006-01-02 15:04:05.999999", at, time.UTC)
+	if e != nil {
+		return v, e
+	}
 	v.Tenant = r.tenant
 	v.Payload = b
-	return v, e
+	return v, r.budget.consume(v)
 }
 func (r *sqlRepo) List(kind string) ([]Record, error) {
-	rows, e := r.tx.QueryContext(r.ctx, `SELECT kind,record_id,owner_id,visitor_key,session_id,content_id,share_id,DATE_FORMAT(occurred_at,'%Y-%m-%d %H:%i:%s.%f'),payload FROM tracking_records WHERE tenant_id=? AND kind=? ORDER BY occurred_at,record_id`, r.tenant, kind)
-	if e != nil {
-		return nil, e
+	return r.ListScoped(kind, RecordQuery{})
+}
+
+const recordColumns = `r.kind,r.record_id,r.owner_id,r.visitor_key,r.session_id,r.content_id,r.share_id,DATE_FORMAT(r.occurred_at,'%Y-%m-%d %H:%i:%s.%f'),CASE WHEN OCTET_LENGTH(r.payload)<=? THEN r.payload ELSE NULL END`
+
+// Legacy kinds keep their authoritative relationship fields in JSON. These
+// expressions are fixed server strings, shared by filtering and identity joins.
+func recordSessionColumn(kind string) string {
+	switch kind {
+	case "entry", "session":
+		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.session_id'))"
+	case "identity":
+		return "r.record_id"
+	case "view_binding":
+		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.session'))"
+	default:
+		return "r.session_id"
+	}
+}
+func recordVisitorColumn(kind string) string {
+	switch kind {
+	case "entry", "session", "identity":
+		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.visitor_key'))"
+	case "share":
+		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.sharer_id'))"
+	case "daily_summary":
+		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.original_visitor_key'))"
+	default:
+		return "r.visitor_key"
+	}
+}
+func recordShareColumn(kind string) string {
+	switch kind {
+	case "share", "share_request":
+		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.share_id'))"
+	default:
+		return "r.share_id"
+	}
+}
+
+// buildScopedQuery only interpolates fixed column names. Every caller value,
+// including limits, is bound. Identity aliases remain tenant/session scoped.
+func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []any) {
+	where := []string{"r.tenant_id=?", "r.kind=?"}
+	args := []any{maxQueryPayloadBytes, tenant, kind}
+	addIn := func(column string, values []string) {
+		if values == nil {
+			return
+		}
+		if len(values) == 0 {
+			where = append(where, "1=0")
+			return
+		}
+		where = append(where, column+" IN ("+strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")+")")
+		for _, value := range values {
+			args = append(args, value)
+		}
+	}
+	addIn("r.owner_id", q.Owners)
+	addIn("r.record_id", q.IDs)
+	addIn(recordSessionColumn(kind), q.Sessions)
+	addIn(recordShareColumn(kind), q.Shares)
+	if q.Content != "" {
+		column := "r.content_id"
+		if kind == "content" || kind == "legacy_catalog" {
+			column = "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.content_id'))"
+		}
+		where = append(where, column+"=?")
+		args = append(args, q.Content)
+	}
+	if q.View != "" {
+		path := "$.page_view_id"
+		if kind == "daily_summary" {
+			path = "$.page_view.page_view_id"
+		}
+		where = append(where, "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'"+path+"'))=?")
+		args = append(args, q.View)
+	}
+	stamp := func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05.999999") }
+	if !q.AtFrom.IsZero() {
+		where = append(where, "r.occurred_at>=?")
+		args = append(args, stamp(q.AtFrom.Truncate(time.Microsecond)))
+	}
+	if !q.AtBefore.IsZero() {
+		where = append(where, "r.occurred_at<?")
+		args = append(args, stamp(ceilMicrosecond(q.AtBefore)))
+	}
+	if !q.AtThrough.IsZero() {
+		where = append(where, "r.occurred_at<=?")
+		args = append(args, stamp(q.AtThrough))
+	}
+	if q.VisitorKeys != nil {
+		if len(q.VisitorKeys) == 0 {
+			where = append(where, "1=0")
+		} else {
+			original := recordVisitorColumn(kind)
+			slots := strings.TrimSuffix(strings.Repeat("?,", len(q.VisitorKeys)), ",")
+			direct := original + " IN (" + slots + ")"
+			copies := 2
+			if kind == "daily_summary" {
+				// Persisted projected identity is an additional candidate for
+				// deletion; snapshot reads still resolve OriginalVisitor.
+				direct += " OR r.visitor_key IN (" + slots + ")"
+				copies++
+			}
+			clause := "(" + direct + " OR EXISTS (SELECT 1 FROM tracking_records identity_link WHERE identity_link.tenant_id=r.tenant_id AND identity_link.kind='identity' AND identity_link.record_id=" + recordSessionColumn(kind) + " AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.original_visitor_key'))=" + original + " AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.visitor_key')) LIKE 'u:%' AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.visitor_key')) IN (" + slots + ")"
+			for i := 0; i < copies; i++ {
+				for _, key := range q.VisitorKeys {
+					args = append(args, key)
+				}
+			}
+			if !q.IdentityAsOf.IsZero() {
+				clause += " AND identity_link.occurred_at<=?"
+				args = append(args, stamp(q.IdentityAsOf))
+			}
+			where = append(where, clause+"))")
+		}
+	}
+	args = append(args, limit)
+	return "SELECT " + recordColumns + " FROM tracking_records r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.occurred_at,r.record_id LIMIT ?", args
+}
+func (r *sqlRepo) ListScoped(kind string, q RecordQuery) ([]Record, error) {
+	if queryHasNoRows(q) {
+		return []Record{}, nil
+	}
+	if r.budget.err != nil {
+		return nil, r.budget.err
+	}
+	query, args := buildScopedQuery(r.tenant, kind, q, maxQueryRecords-r.budget.rows+1)
+	rows, err := r.tx.QueryContext(r.ctx, query, args...)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 	out := []Record{}
 	for rows.Next() {
-		var v Record
-		var b []byte
+		var row Record
 		var at string
-		if e = rows.Scan(&v.Kind, &v.ID, &v.Owner, &v.Visitor, &v.Session, &v.Content, &v.Share, &at, &b); e != nil {
-			return nil, e
+		var payload []byte
+		if err = rows.Scan(&row.Kind, &row.ID, &row.Owner, &row.Visitor, &row.Session, &row.Content, &row.Share, &at, &payload); err != nil {
+			return nil, err
 		}
-		v.At, _ = time.ParseInLocation("2006-01-02 15:04:05.999999", at, time.UTC)
-		v.Tenant = r.tenant
-		v.Payload = b
-		out = append(out, v)
+		row.Payload = payload
+		// Oversized JSON is never returned by the database into Go memory.
+		if row.Payload == nil {
+			return nil, r.budget.reject()
+		}
+		row.At, err = time.ParseInLocation("2006-01-02 15:04:05.999999", at, time.UTC)
+		if err != nil {
+			return nil, err
+		}
+		row.Tenant = r.tenant
+		if err = r.budget.consume(row); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
 	}
-	return out, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 func (r *sqlRepo) write(v Record, upsert bool) error {
 	if v.At.IsZero() {
@@ -113,28 +273,7 @@ func record(kind, id, owner string, at time.Time, v any) Record {
 	return Record{Kind: kind, ID: id, Owner: owner, At: at, Payload: marshal(v)}
 }
 
-// ListSession uses the tenant/session index for bounded projection rebuilds.
+// ListSession uses the tenant/session index and the same fail-closed budget.
 func (r *sqlRepo) ListSession(kind, session string) ([]Record, error) {
-	rows, e := r.tx.QueryContext(r.ctx, `SELECT kind,record_id,owner_id,visitor_key,session_id,content_id,share_id,DATE_FORMAT(occurred_at,'%Y-%m-%d %H:%i:%s.%f'),payload FROM tracking_records WHERE tenant_id=? AND session_id=? AND kind=? ORDER BY occurred_at,record_id`, r.tenant, session, kind)
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	out := []Record{}
-	for rows.Next() {
-		var v Record
-		var at string
-		var b []byte
-		if e = rows.Scan(&v.Kind, &v.ID, &v.Owner, &v.Visitor, &v.Session, &v.Content, &v.Share, &at, &b); e != nil {
-			return nil, e
-		}
-		v.At, e = time.ParseInLocation("2006-01-02 15:04:05.999999", at, time.UTC)
-		if e != nil {
-			return nil, e
-		}
-		v.Tenant = r.tenant
-		v.Payload = b
-		out = append(out, v)
-	}
-	return out, rows.Err()
+	return r.ListScoped(kind, RecordQuery{Sessions: []string{session}})
 }

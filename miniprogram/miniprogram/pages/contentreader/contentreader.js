@@ -5,18 +5,25 @@ const {createVideoTracker}=require('../../utils/tracking/video');
 const ROUTE='pages/contentreader/contentreader';
 Page({
  data:{loading:true,error:'',content:null,contentReady:false,media:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false},
- onLoad(options){this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.loadContent();},
+ onLoad(options){this.entryGeneration=1;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.loadContent();},
  onShow(){this.pageVisible=true;tracking.block(this,false);if(this.hasShown)this.loadContent();this.hasShown=true;this.syncPlayerVisibility();},
- onHide(){this.pageVisible=false;this.syncPlayerVisibility();this.pausePlayers();},
+ onHide(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;this.pageVisible=false;this.syncPlayerVisibility();this.pausePlayers();},
  onUnload(){this.loadSequence=(this.loadSequence||0)+1;this.pageVisible=false;this.pausePlayers();this.observers.forEach(o=>o.disconnect());this.observers=[];},
- acceptExternalEntry(options){this.options=options||{};this.setData({content:null,contentReady:false,loading:true});this.loadContent();},
+ acceptExternalEntry(options){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=true;this.options=options||{};this.setData({content:null,contentReady:false,loading:true});this.loadContent();},
  async loadContent(){
   const sequence=(this.loadSequence||0)+1;this.loadSequence=sequence;
+  const entryGeneration=this.entryGeneration,entryValid=tracking.captureEntryValidity?tracking.captureEntryValidity():()=>true;
   this.pausePlayers();this.setData({loading:true,error:'',contentReady:false});
   try{
-   this.options=await api.resolveReaderOptions(this.options);
+   const resolvedOptions=await api.resolveReaderOptions(this.options);
    if(sequence!==this.loadSequence)return;
-   tracking.resolvePageOptions(this,this.options);
+   this.options={...resolvedOptions};
+   if(entryGeneration!==this.entryGeneration||this.entryAttributionAllowed===false||!entryValid())delete this.options.st;
+   tracking.resolvePageOptions(this,this.options,this.boundEntryGeneration!==entryGeneration);
+   this.boundEntryGeneration=entryGeneration;
+   // Only a newly observed external entry may supply attribution. Ordinary
+   // foreground content revalidation must not replay a revoked/consumed token.
+   this.options={...this.options};delete this.options.st;delete this.options.scene;
    const id=String(this.options.content_id||''),version=Number(this.options.content_version);
    if(!/^[A-Za-z0-9_-]{8,128}$/.test(id)||!Number.isInteger(version)||version<1)throw new Error('内容入口不完整');
    const configuration=await tracking.refreshConfig();
@@ -32,7 +39,7 @@ Page({
   }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
  },
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},
- declineTracking(){tracking.setConsent(false);this.setData({consented:false});},
+ declineTracking(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;tracking.setConsent(false);this.setData({consented:false});},
  observePlayers(){
   this.observers.forEach(o=>o.disconnect());this.observers=[];
   this.playerGeneration=(this.playerGeneration||0)+1;this.players={};this.playerVisible={};

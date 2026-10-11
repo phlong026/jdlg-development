@@ -2,8 +2,6 @@ package tracking
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -13,12 +11,16 @@ import (
 func privateOwner(r Repository, scope Scope, key string) (string, error) {
 	owners := map[string]bool{}
 	for _, kind := range []string{"event", "daily_summary", "crm", "intent_override"} {
-		rows, e := r.List(kind)
+		rows, e := scopedRecords(r, kind, RecordQuery{Owners: permittedOwners(scope, ""), VisitorKeys: []string{key}})
 		if e != nil {
 			return "", e
 		}
 		for _, row := range rows {
-			if resolvedVisitor(r, row) == key && scope.Allows(row.Owner) {
+			visitor, err := privacyVisitor(r, row)
+			if err != nil {
+				return "", err
+			}
+			if visitor == key && scope.Allows(row.Owner) {
 				owners[row.Owner] = true
 			}
 		}
@@ -45,7 +47,7 @@ func (s *Service) LinkCRM(ctx context.Context, scope Scope, key, customer, busin
 	if s.VerifyCRM == nil {
 		return fail(403, "CRM业务关系验证尚未接入")
 	}
-	return s.transaction(ctx, func(r Repository) error {
+	return s.queryTransaction(ctx, func(r Repository) error {
 		owner, e := privateOwner(r, scope, key)
 		if e != nil {
 			return e
@@ -68,7 +70,7 @@ func (s *Service) UnlinkCRM(ctx context.Context, scope Scope, key string) error 
 	if !scope.CRM {
 		return fail(403, "无映射权限")
 	}
-	return s.transaction(ctx, func(r Repository) error {
+	return s.queryTransaction(ctx, func(r Repository) error {
 		owner, e := privateOwner(r, scope, key)
 		if e != nil {
 			return e
@@ -91,7 +93,7 @@ func (s *Service) OverrideIntent(ctx context.Context, scope Scope, key, level, r
 	if !scope.Rules || !trim(reason, 500) || !expires.After(s.Now()) || expires.After(s.Now().AddDate(0, 0, 30)) || (level != "high" && level != "medium" && level != "low" && level != "unknown") {
 		return fail(403, "规则修正未授权或参数无效")
 	}
-	return s.transaction(ctx, func(r Repository) error {
+	return s.queryTransaction(ctx, func(r Repository) error {
 		owner, e := privateOwner(r, scope, key)
 		if e != nil {
 			return e
@@ -111,117 +113,24 @@ func (s *Service) DeleteVisitor(ctx context.Context, scope Scope, key, reason st
 	if !scope.Delete || !trim(reason, 500) {
 		return fail(403, "需要专门删除权限和原因")
 	}
-	return s.transaction(ctx, func(r Repository) error {
-		sessions := map[string]bool{}
-		eventIDs, viewIDs, sequenceIDs, shareIDs := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
-		found := false
-		// Resolve before deleting identity links. Original anonymous aliases are not
-		// global aliases of this account: shared-device history must remain separate.
-		for _, kind := range []string{"event", "entry", "session", "business", "share", "daily_summary", "summary_state"} {
-			rows, e := r.List(kind)
-			if e != nil {
-				return e
-			}
-			for _, row := range rows {
-				if kind == "entry" || kind == "session" {
-					var en Entry
-					if json.Unmarshal(row.Payload, &en) != nil {
-						return ErrUnavailable
-					}
-					row.Visitor, row.Session = en.Visitor, en.Session
-				}
-				if kind == "share" {
-					var sh Share
-					if json.Unmarshal(row.Payload, &sh) != nil {
-						return ErrUnavailable
-					}
-					row.Visitor = sh.Sharer
-					if sh.Sharer == key {
-						shareIDs[sh.ID] = true
-					}
-				}
-				if resolvedVisitor(r, row) != key {
-					continue
-				}
-				if !scope.Allows(row.Owner) {
-					return fail(403, "删除需覆盖该账号全部授权范围")
-				}
-				found = true
-				if kind == "event" {
-					var ev Event
-					if json.Unmarshal(row.Payload, &ev) != nil {
-						return ErrUnavailable
-					}
-					eventIDs[row.ID] = true
-					viewIDs[ev.View] = true
-					sequenceIDs[hash(ev.View+":"+ev.Segment+":"+ev.Player+":"+strconv.Itoa(ev.Seq))] = true
-				}
-				if row.Session != "" {
-					sessions[row.Session] = true
-				}
-			}
+	return s.queryTransaction(ctx, func(r Repository) error {
+		plan, e := planVisitorDeletion(r, scope, key)
+		if e != nil {
+			return e
 		}
-		if !found {
-			return fail(404, "访客不可访问")
-		}
+		// Resolve all identities, dependencies and owners before mutating anything.
+		// Tombstones, removals and audit still commit in the same transaction.
 		if e := r.Put(record("deletion", key, "", s.Now(), map[string]any{"deleted_at": s.Now()})); e != nil {
 			return e
 		}
-		for session := range sessions {
+		for session := range plan.sessions {
 			if e := r.Put(record("deletion_session", session, "", s.Now(), map[string]any{"deleted_at": s.Now()})); e != nil {
 				return e
 			}
 		}
-		for _, kind := range []string{"event", "entry", "session", "identity", "crm", "intent_override", "business", "event_hash", "sequence", "view_binding", "share", "share_request", "daily_summary", "summary_state"} {
-			rows, e := r.List(kind)
-			if e != nil {
+		for _, row := range plan.rows {
+			if e := r.Remove(row.Kind, row.ID); e != nil {
 				return e
-			}
-			for _, row := range rows {
-				remove := row.Visitor == key || sessions[row.Session] || ((kind == "identity" || kind == "session") && sessions[row.ID]) || ((kind == "crm" || kind == "intent_override") && row.ID == key)
-				if kind == "entry" || kind == "session" {
-					var en Entry
-					if json.Unmarshal(row.Payload, &en) != nil {
-						return ErrUnavailable
-					}
-					remove = en.Visitor == key || sessions[en.Session]
-				}
-				if kind == "event_hash" {
-					remove = eventIDs[row.ID]
-				}
-				if kind == "sequence" {
-					remove = sequenceIDs[row.ID]
-				}
-				if kind == "view_binding" {
-					var binding map[string]string
-					if json.Unmarshal(row.Payload, &binding) != nil {
-						return ErrUnavailable
-					}
-					remove = viewIDs[row.ID] || sessions[binding["session"]]
-				}
-				if kind == "share" {
-					var sh Share
-					if json.Unmarshal(row.Payload, &sh) != nil {
-						return ErrUnavailable
-					}
-					remove = shareIDs[sh.ID]
-				}
-				if kind == "share_request" {
-					var req map[string]any
-					if json.Unmarshal(row.Payload, &req) != nil {
-						return ErrUnavailable
-					}
-					id, _ := req["share_id"].(string)
-					remove = shareIDs[id]
-				}
-				if remove {
-					if !scope.Allows(row.Owner) {
-						return fail(403, "删除需覆盖该账号全部授权范围")
-					}
-					if e = r.Remove(kind, row.ID); e != nil {
-						return e
-					}
-				}
 			}
 		}
 		// Do not copy the free-text request or deleted identity into the audit log.

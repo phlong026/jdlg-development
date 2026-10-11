@@ -4,11 +4,30 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// Query reads retain the existing tenant transaction/lock and fail closed even
+// if a legacy optional metadata lookup ignores a budget error.
+func (s *Service) queryTransaction(ctx context.Context, fn func(Repository) error) error {
+	return s.transaction(ctx, func(r Repository) error {
+		bounded := boundedQueryRepository(r).(*queryRepository)
+		err := fn(bounded)
+		if bounded.budget.err != nil {
+			return bounded.budget.err
+		}
+		return err
+	})
+}
+
+type factSelection struct {
+	Visitors, Sessions []string
+	View               string
+}
 
 type factView struct {
 	PageView
@@ -139,34 +158,56 @@ func hasFlag(e Event, f string) bool {
 	return false
 }
 func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error) {
+	return s.factsSelected(r, scope, f, factSelection{})
+}
+func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, error) {
 	if !scope.View {
 		return nil, fail(403, "无访问记录查看权限")
 	}
-	retained, expired, e := s.summaryFacts(r, scope, f)
+	retained, expired, e := s.summaryFactsSelected(r, scope, f, selection)
 	if e != nil {
 		return nil, e
 	}
-	rows, e := r.List("event")
+	owners := permittedOwners(scope, f.Owner)
+	// All accepted visible segments are <= 15 seconds. Include segments ending
+	// after End that overlap the requested window; never discard the earlier PV.
+	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf})
 	if e != nil {
 		return nil, e
 	}
-	// Preload bounded query metadata once rather than issuing identity/tombstone
-	// reads per event. SQL predicate pushdown and persistent aggregates remain a release gate.
+	sessions := []string{}
+	seenSessions := map[string]bool{}
+	for _, row := range candidates {
+		if !seenSessions[row.Session] {
+			sessions = append(sessions, row.Session)
+			seenSessions[row.Session] = true
+		}
+	}
+	// Read the complete authorized session, not just the candidate material or
+	// view. Session-wide overlap deduplication depends on the other page views.
+	rows, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: sessions, AtThrough: f.AsOf})
+	if e != nil {
+		return nil, e
+	}
 	identities, deleted, deletedSessions := map[string]Record{}, map[string]bool{}, map[string]bool{}
-	for _, kind := range []string{"identity", "deletion", "deletion_session"} {
-		metadata, err := r.List(kind)
+	for _, session := range sessions {
+		rec, err := r.Get("identity", session)
+		if err == nil {
+			identities[session] = rec
+		} else if !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		dead, err := tombstoned(r, "deletion_session", session)
 		if err != nil {
 			return nil, err
 		}
-		for _, row := range metadata {
-			switch kind {
-			case "identity":
-				identities[row.ID] = row
-			case "deletion":
-				deleted[row.ID] = true
-			case "deletion_session":
-				deletedSessions[row.ID] = true
-			}
+		deletedSessions[session] = dead
+		state, err := decode[summaryState](r, "summary_state", session)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		if state.RawExpired {
+			expired[session] = true
 		}
 	}
 	versions := map[string]string{}
@@ -192,7 +233,17 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 				visitor = value["visitor_key"]
 			}
 		}
-		if deletedSessions[row.Session] || deleted[visitor] {
+
+		dead, checked := deleted[visitor]
+		if !checked {
+			var err error
+			dead, err = tombstoned(r, "deletion", visitor)
+			if err != nil {
+				return nil, err
+			}
+			deleted[visitor] = dead
+		}
+		if deletedSessions[row.Session] || dead {
 			continue
 		}
 
@@ -289,7 +340,7 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 	}
 	out := append([]factView{}, retained...)
 	for _, v := range views {
-		if (v.Count || v.Visible > 0) && (f.Content == "" || v.Content == f.Content) {
+		if (v.Count || v.Visible > 0) && (f.Content == "" || v.Content == f.Content) && includes(selection.Visitors, v.Visitor) && (selection.View == "" || v.ID == selection.View) {
 			out = append(out, *v)
 		}
 	}
@@ -311,17 +362,17 @@ type intentFacts struct {
 	crm       map[string]Record
 }
 
-func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time) (intentFacts, error) {
+func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time, visitors []string) (intentFacts, error) {
 	data := intentFacts{views: map[string][]factView{}, business: map[string][]Record{}, overrides: map[string]Record{}, crm: map[string]Record{}}
 	if s.Config.IntentEnabled {
-		facts, e := s.facts(r, scope, Filter{Start: now.AddDate(0, 0, -30), End: now.Add(time.Nanosecond), AsOf: now})
+		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -30), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors})
 		if e != nil {
 			return data, e
 		}
 		for _, v := range facts {
 			data.views[v.Visitor] = append(data.views[v.Visitor], v)
 		}
-		business, e := r.List("business")
+		business, e := scopedRecords(r, "business", RecordQuery{Owners: permittedOwners(scope, ""), AtFrom: now.AddDate(0, 0, -30), AtThrough: now, VisitorKeys: visitors, IdentityAsOf: now})
 		if e != nil {
 			return data, e
 		}
@@ -332,7 +383,7 @@ func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time) (int
 			key := resolvedVisitorAt(r, b, now)
 			data.business[key] = append(data.business[key], b)
 		}
-		overrides, e := r.List("intent_override")
+		overrides, e := scopedRecords(r, "intent_override", RecordQuery{Owners: permittedOwners(scope, ""), AtThrough: now, VisitorKeys: visitors, IdentityAsOf: now})
 		if e != nil {
 			return data, e
 		}
@@ -343,7 +394,7 @@ func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time) (int
 		}
 	}
 	if scope.CRM {
-		rows, e := r.List("crm")
+		rows, e := scopedRecords(r, "crm", RecordQuery{Owners: permittedOwners(scope, ""), AtThrough: now, VisitorKeys: visitors, IdentityAsOf: now})
 		if e != nil {
 			return data, e
 		}
@@ -443,7 +494,7 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.transaction(ctx, func(r Repository) error {
+	err = s.queryTransaction(ctx, func(r Repository) error {
 		facts, e := s.facts(r, scope, f)
 		if e != nil {
 			return e
@@ -477,7 +528,7 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			ss[v.Visitor][v.Session] = true
 		}
 		effective := ownerScope(scope, f.Owner)
-		intentData, e := s.loadIntentFacts(r, effective, f.AsOf)
+		intentData, e := s.loadIntentFacts(r, effective, f.AsOf, visitorKeys(by))
 		if e != nil {
 			return e
 		}
@@ -596,12 +647,12 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.transaction(ctx, func(r Repository) error {
-		rows, e := r.List("content")
+	err = s.queryTransaction(ctx, func(r Repository) error {
+		rows, e := scopedRecords(r, "content", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id})
 		if e != nil {
 			return e
 		}
-		legacyRows, err := r.List("legacy_catalog")
+		legacyRows, err := scopedRecords(r, "legacy_catalog", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id})
 		if err != nil {
 			return err
 		}
@@ -626,7 +677,11 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 		}
 		facts := []factView{}
 		if scope.View {
-			facts, e = s.facts(r, scope, f)
+			metricsFilter := f
+			if id != "" && metricsFilter.Content == "" {
+				metricsFilter.Content = id
+			}
+			facts, e = s.facts(r, scope, metricsFilter)
 			if e != nil {
 				return e
 			}
@@ -707,21 +762,29 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.transaction(ctx, func(r Repository) error {
-		base := f
-		base.Content = ""
-		all, e := s.facts(r, scope, base)
+	err = s.queryTransaction(ctx, func(r Repository) error {
+		all, e := s.factsSelected(r, scope, f, factSelection{Visitors: []string{key}})
 		if e != nil {
 			return e
 		}
 		selected := map[string]bool{}
+		sessions := []string{}
 		for _, v := range all {
-			if v.Visitor == key && (f.Content == "" || v.Content == f.Content) {
+			if v.Visitor == key && !selected[v.Session] {
 				selected[v.Session] = true
+				sessions = append(sessions, v.Session)
 			}
 		}
 		if len(selected) == 0 {
 			return fail(404, "访客记录不可访问")
+		}
+		if f.Related && f.Content != "" {
+			base := f
+			base.Content = ""
+			all, e = s.factsSelected(r, scope, base, factSelection{Visitors: []string{key}, Sessions: sessions})
+			if e != nil {
+				return e
+			}
 		}
 		by := map[string]*Session{}
 		for _, v := range all {
@@ -781,8 +844,8 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.transaction(ctx, func(r Repository) error {
-		facts, e := s.facts(r, scope, f)
+	err = s.queryTransaction(ctx, func(r Repository) error {
+		facts, e := s.factsSelected(r, scope, f, factSelection{View: id})
 		if e != nil {
 			return e
 		}
@@ -807,4 +870,13 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 		return fail(404, "页面访问不可访问")
 	})
 	return out, err
+}
+
+func visitorKeys(by map[string]*Visitor) []string {
+	keys := make([]string, 0, len(by))
+	for key := range by {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

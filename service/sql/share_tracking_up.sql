@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS tracking_records (
  INDEX tracking_visitor_time(tenant_id,visitor_key,occurred_at),
  INDEX tracking_content_time(tenant_id,content_id,occurred_at),
  INDEX tracking_share_time(tenant_id,share_id,occurred_at),
- INDEX tracking_session(tenant_id,session_id,kind)
+ INDEX tracking_session(tenant_id,session_id,kind),
+ INDEX tracking_session_time(tenant_id,kind,session_id,occurred_at,record_id),
+ INDEX tracking_scope_content_time(tenant_id,kind,owner_id,content_id,occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- Immutable kind=event rows use INSERT only. kind=sequence contains interval fingerprints.
 -- kind=deletion is retained independently to reject replay after personal data deletion.

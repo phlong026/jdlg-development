@@ -31,7 +31,7 @@ type summaryState struct {
 var businessTimezone = time.FixedZone("Asia/Shanghai", 28800)
 
 // SessionRecordLister optionally pushes session filtering into the database.
-// The fallback scans a tenant: no production throughput is claimed.
+// All implementations enforce a fail-closed read budget.
 type SessionRecordLister interface {
 	ListSession(kind, session string) ([]Record, error)
 }
@@ -40,17 +40,7 @@ func sessionRecords(r Repository, kind, session string) ([]Record, error) {
 	if indexed, ok := r.(SessionRecordLister); ok {
 		return indexed.ListSession(kind, session)
 	}
-	rows, e := r.List(kind)
-	if e != nil {
-		return nil, e
-	}
-	out := []Record{}
-	for _, row := range rows {
-		if row.Session == session {
-			out = append(out, row)
-		}
-	}
-	return out, nil
+	return scopedRecords(r, kind, RecordQuery{Sessions: []string{session}})
 }
 func tombstoned(r Repository, kind, id string) (bool, error) {
 	_, e := r.Get(kind, id)
@@ -325,25 +315,29 @@ func (s *Service) PrepareSummaryRetention(r Repository, removed []Record, now ti
 	return nil
 }
 
-// summaryFacts returns all expired session IDs for excluding their raw rows.
+// summaryFacts returns expired sessions in the authorized, relevant buckets.
 func (s *Service) summaryFacts(r Repository, scope Scope, f Filter) ([]factView, map[string]bool, error) {
+	return s.summaryFactsSelected(r, scope, f, factSelection{})
+}
+func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, map[string]bool, error) {
 	expired := map[string]bool{}
-	states, e := r.List("summary_state")
+	rows, e := scopedRecords(r, "daily_summary", RecordQuery{Owners: permittedOwners(scope, f.Owner), Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: businessDay(f.Start), AtBefore: businessDay(f.End.Add(-time.Nanosecond)).AddDate(0, 0, 1)})
 	if e != nil {
 		return nil, nil, e
 	}
-	for _, row := range states {
-		var state summaryState
-		if json.Unmarshal(row.Payload, &state) != nil {
-			return nil, nil, ErrUnavailable
+	checked := map[string]bool{}
+	for _, row := range rows {
+		if checked[row.Session] {
+			continue
+		}
+		checked[row.Session] = true
+		state, err := decode[summaryState](r, "summary_state", row.Session)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return nil, nil, err
 		}
 		if state.RawExpired {
 			expired[row.Session] = true
 		}
-	}
-	rows, e := r.List("daily_summary")
-	if e != nil {
-		return nil, nil, e
 	}
 	by := map[string]*factView{}
 	for _, row := range rows {
@@ -366,6 +360,9 @@ func (s *Service) summaryFacts(r Repository, scope Scope, f Filter) ([]factView,
 		}
 		row.Visitor = x.OriginalVisitor
 		visitor := resolvedVisitorAt(r, row, f.AsOf)
+		if !includes(selection.Visitors, visitor) {
+			continue
+		}
 		dead, e = tombstoned(r, "deletion", visitor)
 		if e != nil {
 			return nil, nil, e

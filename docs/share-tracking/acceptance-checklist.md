@@ -6,11 +6,11 @@
 
 ## 本轮证据索引
 
-- 验证日期：2026-10-11 UTC / Asia/Shanghai 2026-10-12；验证者为开发分支自动化，尚无真实设备验收人。工作树基于f73b9c16d9965332d1934299b392469a41810fe6，最终提交及后续改动复测须继续关联。
-- S：service下go test -json ./...；468条pass、5条skip、0fail（含子测试）；/tmp/share-go-final.jsonl。测试文件：tracking/service_test.go、review_test.go、governance_test.go、aggregates_test.go、legacy_test.go、richtext_test.go，route/share_tracking_test.go、share_tracking_legacy_test.go。
-- A：background下npm test及npm run build；499项pass，TypeScript、路由检查和构建通过；/tmp/share-admin-final.log。相关套件：scripts/share-tracking.test.mjs和share-tracking-governance.test.mjs。
-- M：miniprogram下npm run test:tracking及npm run check:tracking；114/114pass、TS/JS一致；/tmp/share-mini-final.log。套件：tests/share-tracking.test.js及observed-content-actions.test.js。
-- 全量小程序198项：152pass、2项固定基线客服fail、3skip；/tmp/share-mini-all-final.log。失败不因分享模块聚焦通过而消失，详见rollout-and-verification.md。
+- 验证日期：2026-10-11 UTC / Asia/Shanghai 2026-10-12；验证者为开发分支自动化，尚无真实设备验收人。最终安全收敛阶段基于8e723e58270d2efc5d8f5f92515fd3e4e26c6b0e；本文件所在提交与发布manifest关联最终快照。
+- S：service下go test -json ./...；518条pass、5条skip、0fail（含子测试）；/tmp/share-final-go.jsonl。测试文件：tracking/service_test.go、review_security_test.go、governance_test.go、aggregates_test.go、legacy_test.go、richtext_test.go、scoped_query_test.go、scoped_sql_test.go、privacy_scoped_test.go，route/share_tracking_test.go、share_tracking_legacy_test.go。
+- A：background下npm test及npm run build；499项pass，TypeScript、路由检查和构建通过；/tmp/share-final-admin.log。相关套件：scripts/share-tracking.test.mjs和share-tracking-governance.test.mjs。
+- M：miniprogram下npm run test:tracking及npm run check:tracking；127/127pass、TS/JS一致；/tmp/share-final-mini.log。套件：tests/share-tracking.test.js、observed-content-actions.test.js、tracking-idle.test.js、tracking-consent.test.js、tracking-reader-entry.test.js。
+- 全量小程序211项：206pass、2项固定基线客服fail、3skip；/tmp/share-final-mini-all.log。失败不因分享模块聚焦通过而消失，详见rollout-and-verification.md。
 - V：background/e2e/share_tracking.py为合成API fixture的浏览器脚本。Chromium socket权限阻塞，未获得六宽度截图，V不是已通过证据。所有微信/视频真机证据缺失；MySQL、Redis、真实CRM及生产等价负载未运行。
 - 上述日志为本次环境临时证据，交付需与最终提交归档；S/A/M的内存、模拟网络、源码/DOM测试不等于真实端到端联调。以下每项都保留原验收标准，并只注明实际覆盖。
 
@@ -238,7 +238,7 @@
 
 ## 回归与证据目录约定
 
-- 保留原后台469项基线及本轮499项实际结果；Go本轮468项含子测试，不与旧“后端23项”局部基线直接相减。小程序两项固定失败、三项跳过及Go五项集成跳过必须随交付披露。
+- 保留原后台469项基线及本轮499项实际结果；Go本轮518项含子测试，不与旧“后端23项”局部基线直接相减。小程序两项固定失败、三项跳过及Go五项集成跳过必须随交付披露。
 - 新计量单元测试、Go HTTP负向测试、SDK生命周期与离线队列测试、UI状态/键盘/响应式测试分别记录。
 - 每项证据至少包括代码提交、命令/响应、结果、范围限制；必要时脱敏事件/SQL对账、录屏/截图。
 - 不将开发fixture、无数据库的handler单测或静态源码断言写成真实端到端业务验收。
