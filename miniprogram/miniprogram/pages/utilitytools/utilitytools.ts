@@ -8,6 +8,7 @@ Page({
    * 页面的初始数据
    */
   data: {
+    contentReady: false,
     currentCategory: 'all', // all, local_norm, faq, video_tutorial
     tools: [] as any[],
     loading: false,
@@ -40,7 +41,7 @@ Page({
    * 加载工具列表
    */
   async loadTools() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, contentReady: false });
     try {
       const category = this.data.currentCategory === 'all' ? '' : this.data.currentCategory;
       const url = `${UTILITY_TOOLS_API_BASE_URL}/api/v1/miniprogram/utility-tools${category ? `?category=${category}` : ''}`;
@@ -72,6 +73,7 @@ Page({
 
       this.setData({
         tools: res.list || [],
+        contentReady: Array.isArray(res.list),
         loading: false,
       });
     } catch (error: any) {

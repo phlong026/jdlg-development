@@ -26,7 +26,7 @@ type RetentionPlan struct {
 }
 
 var rawRetentionKinds = []string{"event", "event_hash", "sequence", "view_binding", "entry", "rate"}
-var summaryRetentionKinds = []string{"session", "identity", "business", "crm", "intent_override", "share", "share_request"}
+var summaryRetentionKinds = []string{"session", "identity", "business", "crm", "intent_override", "share", "share_request", "daily_summary", "summary_state"}
 
 func (s *Service) retentionAllowed(scope Scope, p RetentionPolicy, raw, summary time.Time) error {
 	if e := s.authorized(scope); e != nil {
@@ -116,6 +116,9 @@ func (s *Service) PurgeExpired(ctx context.Context, scope Scope, p RetentionPoli
 		}
 		if plan.ReviewDigest != reviewed.ReviewDigest {
 			return fail(409, "维护计划已变化，请重新试运行并审核")
+		}
+		if e = s.PrepareSummaryRetention(r, rows, s.Now(), reviewed.SummaryBefore); e != nil {
+			return e
 		}
 		for _, row := range rows {
 			if e = r.Remove(row.Kind, row.ID); e != nil {

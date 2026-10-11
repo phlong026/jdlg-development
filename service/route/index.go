@@ -71,7 +71,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	{
 		// 用户DB模型（共用）
 		userDBModel := model.NewUserModel(component.GetDB())
-		RegisterTrackingRoutes(v1, userDBModel, codeSessionModel)
+		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel)
 		userFavoriteModel := model.NewUserFavoriteModel(component.GetDB())
 		_ = userFavoriteModel.InitTable()
 		setSharedTemplateSquareConfigModel(templateSquareConfigModel)
@@ -148,7 +148,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 模板接口（公开接口，部分需要token验证）
 		RegisterTemplateRoutes(miniprogram, templateModel, templateCategoryModel, templateSquareConfigModel, templateUnlockModel, templateLikeModel, templateCommentModel, templateShareModel, codeSessionModel, userModel, pricingModel, stoneRecordModel, userOrderModel, userProfileModel, userMembershipModel, userDBModel, featuredCaseGroupModel, taskModel, aiToolModel)
 		RegisterInspirationRoutes(miniprogram, inspirationModel)
-		RegisterFavoriteRoutes(miniprogram, codeSessionModel, userFavoriteModel, templateLikeModel, templateModel, inspirationModel, aiToolModel, userProfileModel, userDBModel)
+		RegisterFavoriteRoutes(miniprogram, codeSessionModel, userFavoriteModel, templateLikeModel, templateModel, inspirationModel, aiToolModel, userProfileModel, userDBModel, trackingService)
 		// 用户信息修改接口
 		RegisterUserProfileRoutes(miniprogram, codeSessionModel, userDBModel, userProfileModel)
 		// 充值配置接口（公开接口）

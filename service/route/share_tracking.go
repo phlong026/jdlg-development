@@ -134,10 +134,28 @@ func trackingFilter(c *gin.Context) (tracking.Filter, error) {
 	}
 	return f, nil
 }
-func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel) {
+
+// Private annotations can target one authorized owner without changing the
+// authenticated scope. Identity deletion must continue to use the complete scope.
+func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (tracking.Scope, error) {
+	owners, supplied := c.Request.URL.Query()["owner"]
+	if !supplied {
+		return scope, nil
+	}
+	if len(owners) != 1 || owners[0] == "" {
+		return scope, &tracking.Error{Status: 400, Message: "请选择单一归属范围"}
+	}
+	if !scope.Allows(owners[0]) {
+		return scope, &tracking.Error{Status: 403, Message: "归属范围未授权"}
+	}
+	scope.Owners = []string{owners[0]}
+	return scope, nil
+}
+func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
 	svc := tracking.New(&tracking.SQLStore{DB: users.DB}, cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
+	svc.ResolveLegacy = makeTrackingLegacyResolver(users.DB)
 	// This is a separate capability group, not an implicit platform-admin data grant.
 	mg := v1.Group("/management/tracking")
 	mg.Use(AuthRequired, func(c *gin.Context) {
@@ -184,17 +202,16 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			trackingResponse(c, nil, e)
 			return
 		}
-		sum := sha256.Sum256([]byte(c.Param("id") + ":" + strconv.Itoa(version)))
-		key := hex.EncodeToString(sum[:])
+		key := trackingCodeCacheKey(cfg.Tenant, sc(c).Actor, c.Param("id"), version, os.Getenv("TRACKING_WECHAT_ENV"), svc.Now())
 		name := filepath.Join(root, "code-"+key)
-		if bytes, e := os.ReadFile(name); e == nil {
-			c.Header("Cache-Control", "private, no-store")
-			c.Data(200, http.DetectContentType(bytes), bytes)
-			return
-		}
 		share, e := svc.CreateShare(c.Request.Context(), tracking.ShareInput{Route: "pages/contentreader/contentreader", Content: c.Param("id"), Version: version, Key: "qr-" + key}, "", sc(c).Actor)
 		if e != nil {
 			trackingResponse(c, nil, e)
+			return
+		}
+		if bytes, e := os.ReadFile(name); e == nil {
+			c.Header("Cache-Control", "private, no-store")
+			c.Data(200, http.DetectContentType(bytes), bytes)
 			return
 		}
 		wx := config.Get().Wechat
@@ -362,11 +379,21 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		e := svc.LinkCRM(c.Request.Context(), sc(c), in.Visitor, in.Customer, in.Number, in.Basis)
+		scope, e := trackingPrivateMutationScope(c, sc(c))
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		e = svc.LinkCRM(c.Request.Context(), scope, in.Visitor, in.Customer, in.Number, in.Basis)
 		trackingResponse(c, gin.H{"linked": e == nil}, e)
 	})
 	mg.DELETE("/identity-links/:id", func(c *gin.Context) {
-		e := svc.UnlinkCRM(c.Request.Context(), sc(c), c.Param("id"))
+		scope, e := trackingPrivateMutationScope(c, sc(c))
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		e = svc.UnlinkCRM(c.Request.Context(), scope, c.Param("id"))
 		trackingResponse(c, gin.H{"unlinked": e == nil}, e)
 	})
 	mg.POST("/intent-overrides", func(c *gin.Context) {
@@ -379,7 +406,12 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		e := svc.OverrideIntent(c.Request.Context(), sc(c), in.Visitor, in.Level, in.Reason, in.Expires)
+		scope, e := trackingPrivateMutationScope(c, sc(c))
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		e = svc.OverrideIntent(c.Request.Context(), scope, in.Visitor, in.Level, in.Reason, in.Expires)
 		trackingResponse(c, gin.H{"updated": e == nil}, e)
 	})
 	mg.POST("/deletions", func(c *gin.Context) {
@@ -394,8 +426,14 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, gin.H{"status": "completed"}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
-	pub.GET("/share-entry", func(c *gin.Context) {
-		v, e := svc.ResolveShare(c.Request.Context(), c.Query("scene"))
+	pub.POST("/share-entry", func(c *gin.Context) {
+		var in struct {
+			Scene string `json:"scene"`
+		}
+		if !trackingBind(c, &in) {
+			return
+		}
+		v, e := svc.ResolveShare(c.Request.Context(), in.Scene)
 		trackingResponse(c, v, e)
 	})
 	pub.GET("/config", func(c *gin.Context) {
@@ -410,6 +448,9 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
 		var selected *tracking.Scope
 		if e == nil {
+			if !checkWecomSession(c, users.DB) {
+				return
+			}
 			selected = &scope
 		}
 		serveTrackingMedia(c, svc, selected)
@@ -448,6 +489,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.CreateShare(c.Request.Context(), in, c.GetHeader("X-Tracking-Token"), GetTokenUserID(c))
 		trackingResponse(c, v, e)
 	})
+	return svc
 }
 func trackingEntryRateLimit() gin.HandlerFunc {
 	var mu sync.Mutex
@@ -481,4 +523,11 @@ func trackingEntryRateLimit() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// Daily generations expire well before the associated 30-day share token.
+// Actor/tenant/environment isolation prevents cached codes borrowing attribution.
+func trackingCodeCacheKey(tenant string, actor int64, content string, version int, environment string, now time.Time) string {
+	sum := sha256.Sum256([]byte(tenant + ":" + strconv.FormatInt(actor, 10) + ":" + content + ":" + strconv.Itoa(version) + ":" + environment + ":" + now.UTC().Format("2006-01-02")))
+	return hex.EncodeToString(sum[:])
 }

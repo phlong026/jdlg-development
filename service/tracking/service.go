@@ -12,10 +12,11 @@ import (
 )
 
 type Service struct {
-	VerifyCRM func(context.Context, Scope, string, string, string) error
-	Store     Store
-	Config    Config
-	Now       func() time.Time
+	ResolveLegacy func(string, int64) (LegacyMetadata, error)
+	VerifyCRM     func(context.Context, Scope, string, string, string) error
+	Store         Store
+	Config        Config
+	Now           func() time.Time
 }
 
 func New(store Store, cfg Config) *Service {
@@ -55,6 +56,19 @@ func (s *Service) available(r Repository, route, content string, version int) er
 		return e
 	}
 	if route != "pages/contentreader/contentreader" {
+		if LegacyRoute(route) {
+			_, err := s.resolveLegacy(route, content)
+			if err != nil {
+				return err
+			}
+			if version <= 0 {
+				return fail(404, "原内容版本无效")
+			}
+			return nil
+		}
+		if content != "" {
+			return fail(400, "此页面不接受内容标识")
+		}
 		return nil
 	}
 	if _, e := r.Get("content_revoked", content); e == nil {
@@ -85,6 +99,15 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		return out, fail(400, "客户端随机标识无效")
 	}
 	e := s.transaction(ctx, func(r Repository) error {
+		var legacy Content
+		if LegacyRoute(in.Route) {
+			var err error
+			legacy, err = s.resolveLegacy(in.Route, in.Content)
+			if err != nil {
+				return err
+			}
+			in.Version = legacy.Version
+		}
 		if e := s.available(r, in.Route, in.Content, in.Version); e != nil {
 			return e
 		}
@@ -117,6 +140,18 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		out = Entry{Route: in.Route, Content: in.Content, Version: in.Version, Session: opaque(), Visitor: visitor, Anonymous: anon, Account: account, Client: in.Client, Owner: owner, Share: share, Started: now, LastActive: now, Expires: now.Add(72 * time.Hour), Accessible: true, Self: self}
 		if in.Previous != "" && in.ShareToken == "" {
 			old, err := s.entry(r, in.Previous)
+			linked := false
+			if err == nil {
+				existing, lookup := decode[map[string]string](r, "identity", old.Session)
+				if lookup == nil {
+					linked = true
+					if existing["visitor_key"] != visitor {
+						err = fail(409, "访问会话已关联其他身份")
+					}
+				} else if !errors.Is(lookup, ErrNotFound) {
+					return lookup
+				}
+			}
 			if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == account {
 				out.Session = old.Session
 				out.Started = old.Started
@@ -129,12 +164,19 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 				out.Share = old.Share
 				out.Owner = old.Owner
 				out.OriginalVisitor = old.Visitor
-				if e := r.Put(record("identity", old.Session, old.Owner, now, map[string]string{"visitor_key": visitor, "original_visitor_key": old.Visitor})); e != nil {
-					return e
+				if !linked {
+					if e := r.Put(record("identity", old.Session, old.Owner, now, map[string]string{"visitor_key": visitor, "original_visitor_key": old.Visitor})); e != nil {
+						return e
+					}
+					if e := audit(r, old.Owner, "identity_link", account, old.Session, now, map[string]string{"source": "verified_same_client_session"}); e != nil {
+						return e
+					}
 				}
-				if e := audit(r, old.Owner, "identity_link", account, old.Session, now, map[string]string{"source": "verified_same_client_session"}); e != nil {
-					return e
-				}
+			}
+		}
+		if legacy.ID != "" {
+			if err := saveLegacy(r, legacy, out.Owner, now); err != nil {
+				return err
 			}
 		}
 		token := opaque()
@@ -146,6 +188,11 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		session.Session = out.Session
 		if e := r.Put(session); e != nil {
 			return e
+		}
+		if out.OriginalVisitor != "" {
+			if e := s.RebuildSessionSummaries(r, out.Session, now); e != nil {
+				return e
+			}
 		}
 		out.Token = token
 		return nil
@@ -171,6 +218,17 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 		return out, fail(400, "缺少幂等标识")
 	}
 	e := s.transaction(ctx, func(r Repository) error {
+		var legacy Content
+		if LegacyRoute(in.Route) {
+			var err error
+			legacy, err = s.resolveLegacy(in.Route, in.Content)
+			if err != nil {
+				return err
+			}
+			if in.Version != legacy.Version {
+				return fail(409, "原内容已更新，请重新进入页面后分享")
+			}
+		}
 		if e := s.available(r, in.Route, in.Content, in.Version); e != nil {
 			return e
 		}
@@ -190,12 +248,20 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 		if account > 0 {
 			visitor = "u:" + strconv.FormatInt(account, 10)
 		}
+		if _, err := r.Get("deletion", visitor); err == nil {
+			return fail(410, "访问记录已删除")
+		}
 		if owner == "" {
 			return fail(503, "归属未配置")
 		}
 		if in.Route == "pages/contentreader/contentreader" {
 			c, _ := decode[Content](r, "content", in.Content)
 			owner = c.Owner
+		}
+		if legacy.ID != "" {
+			if err := saveLegacy(r, legacy, owner, now); err != nil {
+				return err
+			}
 		}
 		key := hash(visitor + ":" + in.Key)
 		finger := hash(string(marshal(in)))
@@ -240,6 +306,9 @@ func (s *Service) validateEvent(r Repository, en Entry, e *Event) error {
 	allowed := map[string]bool{"page_view": true, "page_end": true, "visible_segment": true, "share_intent": true, "content_click": true, "image_open": true, "outbound_click": true, "scroll_depth": true, "video_state": true, "video_progress": true}
 	if !allowed[e.Type] {
 		return fail(400, "不支持的客户端事件")
+	}
+	if e.SourceChannel != "" && e.SourceChannel != "app_message" && e.SourceChannel != "timeline" {
+		return fail(400, "来源渠道无效")
 	}
 	if e.Monotonic < 0 || e.Seq < 0 || len(e.Component) > 80 || len(e.Action) > 80 || len(e.Target) > 128 || len(e.Media) > 128 || len(e.SDK) > 40 {
 		return fail(400, "事件字段超限")
@@ -394,7 +463,7 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			}
 			if e.Previous != "" {
 				prev, perr := decode[map[string]string](r, "view_binding", e.Previous)
-				if perr != nil || prev["session"] != en.Session {
+				if !validID(e.Previous) || e.Previous == e.View || (perr == nil && prev["session"] != en.Session) || (perr != nil && !errors.Is(perr, ErrNotFound)) {
 					res.Reason = "previous_page_view_invalid"
 					out = append(out, res)
 					continue
@@ -444,6 +513,9 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			}
 			res.Status = "accepted"
 			out = append(out, res)
+		}
+		if err = s.RebuildSessionSummaries(r, en.Session, now); err != nil {
+			return err
 		}
 		en.LastActive = now
 		if err = r.Put(record("entry", hash(token), en.Owner, now, en)); err != nil {
@@ -516,8 +588,29 @@ func (s *Service) ResolveShare(ctx context.Context, token string) (map[string]an
 		if e = s.available(r, sh.Route, sh.Content, sh.Version); e != nil {
 			return e
 		}
+		if LegacyRoute(sh.Route) {
+			current, err := s.resolveLegacy(sh.Route, sh.Content)
+			if err != nil {
+				return err
+			}
+			if current.Version != sh.Version {
+				return fail(404, "原内容已更新，分享归因已失效")
+			}
+		}
 		out = map[string]any{"route_key": sh.Route, "content_id": sh.Content, "content_version": sh.Version, "share_token": token}
 		return nil
 	})
 	return out, err
+}
+
+// An out-of-order predecessor remains a hint until its same-session binding arrives.
+func resolvedPrevious(r Repository, session, previous string) string {
+	if previous == "" {
+		return ""
+	}
+	binding, err := decode[map[string]string](r, "view_binding", previous)
+	if err != nil || binding["session"] != session {
+		return ""
+	}
+	return previous
 }

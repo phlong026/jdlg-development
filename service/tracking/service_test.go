@@ -374,3 +374,74 @@ func TestRecordsMarshalDoesNotPersistCredential(t *testing.T) {
 		return nil
 	})
 }
+func TestVerifiedFavoriteEvidenceAndDuplicateCap(t *testing.T) {
+	s, scope := fixture(t)
+	first := enter(t, s, 8)
+	accept(t, s, first, ev(s, first, "favorite-pv1", "page_view", s.Now()))
+	second := enter(t, s, 8)
+	pv := ev(s, second, "favorite-pv2", "page_view", s.Now())
+	pv.View = "favorite-view2"
+	accept(t, s, second, pv)
+	if e := s.ConfirmFavorite(context.Background(), second.Token, 99, "template", 4); e == nil {
+		t.Fatal("account spoof favorite")
+	}
+	if e := s.ConfirmFavorite(context.Background(), second.Token, 8, "template", 4); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.ConfirmFavorite(context.Background(), second.Token, 8, "template", 4); e != nil {
+		t.Fatal(e)
+	}
+	out, e := s.Visitors(context.Background(), scope, Filter{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	v := out.Items.([]Visitor)[0]
+	if v.Intent.Level != "medium" {
+		t.Fatal(v.Intent)
+	}
+	_ = s.transaction(context.Background(), func(r Repository) error {
+		rows, e := r.List("business")
+		if e != nil {
+			return e
+		}
+		if len(rows) != 1 {
+			t.Fatal("duplicate favorite overcount", len(rows))
+		}
+		return nil
+	})
+}
+
+func TestSourceChannelRejectsArbitraryPayload(t *testing.T) {
+	s, _ := fixture(t)
+	en := enter(t, s, 0)
+	event := ev(s, en, "channel-invalid-0001", "page_view", s.Now())
+	event.SourceChannel = "untrusted-personal-field"
+	result := accept(t, s, en, event)
+	if result[0].Status != "rejected" {
+		t.Fatalf("unexpected result %#v", result)
+	}
+}
+
+func TestOutOfOrderNavigationPredecessorReconciles(t *testing.T) {
+	s, scope := fixture(t)
+	en := enter(t, s, 0)
+	second := ev(s, en, "event-second-0001", "page_view", s.Now())
+	second.View = "view-second-0001"
+	second.Previous = "view-first-0001"
+	if got := accept(t, s, en, second); got[0].Status != "accepted" {
+		t.Fatal(got)
+	}
+	before, e := s.Events(context.Background(), scope, second.View, Filter{})
+	if e != nil || before.Items.([]Event)[0].Previous != "" {
+		t.Fatalf("unverified edge exposed: %#v %v", before, e)
+	}
+	first := ev(s, en, "event-first-0001", "page_view", s.Now().Add(-time.Second))
+	first.View = second.Previous
+	if got := accept(t, s, en, first); got[0].Status != "accepted" {
+		t.Fatal(got)
+	}
+	after, e := s.Events(context.Background(), scope, second.View, Filter{})
+	if e != nil || after.Items.([]Event)[0].Previous != first.View {
+		t.Fatalf("edge not reconciled: %#v %v", after, e)
+	}
+}

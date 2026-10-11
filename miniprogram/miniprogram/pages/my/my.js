@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const parameter_1 = require("../../utils/parameter");
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const asset_1 = require("../../utils/asset");
+const trackingConsent = require('../../utils/tracking/index');
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
 const PAGE_BACKGROUND_TOP = '#e6daca';
@@ -153,6 +154,8 @@ Page({
         lastCertificationRefreshTime: 0,
         lastCertificationRefreshToken: '',
         certificationRefreshInterval: CERTIFICATION_REFRESH_INTERVAL,
+        trackingConsented: false,
+        trackingConsentBusy: false,
     },
     /**
      * 生命周期函数--监听页面加载
@@ -182,12 +185,35 @@ Page({
         });
     },
     onShow() {
+        this.syncTrackingConsent();
+        trackingConsent.refreshConfig().then(() => this.syncTrackingConsent());
         this.syncWindowBackground();
         this.syncTabBar();
         this.loadUserData();
         if (this.isLoggedIn()) {
             this.loadCertificationStatus();
         }
+    },
+    syncTrackingConsent() {
+        this.setData({ trackingConsented: trackingConsent.consented() });
+    },
+    async onTrackingConsentTap() {
+        if (this.data.trackingConsentBusy) return;
+        this.setData({ trackingConsentBusy: true });
+        try {
+            const chosen = await trackingConsent.showConsentChoices(this);
+            if (!chosen && !trackingConsent.config().enabled) {
+                wx.showToast({ title: '访问分析未启用，仍可撤回同意', icon: 'none' });
+            }
+        } finally {
+            this.syncTrackingConsent();
+            this.setData({ trackingConsentBusy: false });
+        }
+    },
+    onWithdrawTrackingConsent() {
+        trackingConsent.setConsent(false);
+        this.syncTrackingConsent();
+        wx.showToast({ title: '已撤回，不影响阅读和分享', icon: 'none' });
     },
     /**
      * 初始化设备ID

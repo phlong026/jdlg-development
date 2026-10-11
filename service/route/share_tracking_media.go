@@ -42,6 +42,11 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		return
 	}
 	defer c.Request.MultipartForm.RemoveAll()
+	owner := c.PostForm("owner_id")
+	if !scope.Allows(owner) {
+		trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "请选择已授权媒体归属"})
+		return
+	}
 	rights := c.PostForm("rights")
 	if rights != "own" && rights != "authorized" {
 		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "请声明媒体权属"})
@@ -121,7 +126,7 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 	if len(asset.Title) > 200 {
 		asset.Title = "已上传媒体"
 	}
-	e = s.AddMedia(c.Request.Context(), scope, asset, scope.Owners[0])
+	e = s.AddMedia(c.Request.Context(), scope, asset, owner)
 	if e != nil {
 		_ = os.Remove(filepath.Join(root, id))
 	}

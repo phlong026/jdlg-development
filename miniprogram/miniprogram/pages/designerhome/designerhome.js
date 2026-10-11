@@ -108,6 +108,7 @@ function buildAvatarManageHint(isSelfHomepage, expanded) {
 }
 Page({
     data: {
+      contentReady: false,
         userId: 0,
         isSelfHomepage: false,
         loading: true,
@@ -328,7 +329,7 @@ Page({
             wx.stopPullDownRefresh();
             return;
         }
-        this.setData({ loading: true });
+        this.setData({ loading: true, contentReady: false });
         try {
             const data = await new Promise((resolve, reject) => {
                 wx.request({
@@ -383,6 +384,7 @@ Page({
             });
             this.setData({
                 loading: false,
+                contentReady: !!data.profile && typeof data.profile.name === 'string' && !!data.profile.name.trim(),
                 profile: {
                     name: String(data?.profile?.name || '设计师主页'),
                     avatar: normalizeImageUrl(String(data?.profile?.avatar || '')),

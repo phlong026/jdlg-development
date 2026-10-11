@@ -29,9 +29,9 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if f.End.IsZero() {
 		f.End = f.AsOf.Add(time.Nanosecond)
 	}
-	days := s.Config.RawDays
+	days := s.Config.RetentionDays
 	if days <= 0 {
-		days = 90
+		days = 180
 	}
 	earliest := f.AsOf.AddDate(0, 0, -days)
 	if f.Start.IsZero() || f.Start.Before(earliest) {
@@ -142,6 +142,10 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 	if !scope.View {
 		return nil, fail(403, "无访问记录查看权限")
 	}
+	retained, expired, e := s.summaryFacts(r, scope, f)
+	if e != nil {
+		return nil, e
+	}
 	rows, e := r.List("event")
 	if e != nil {
 		return nil, e
@@ -172,6 +176,9 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 		Record
 	}{}
 	for _, row := range rows {
+		if expired[row.Session] {
+			continue
+		}
 		if !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) {
 			continue
 		}
@@ -228,11 +235,12 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 				versions[key] = title
 			}
 		}
-		views[ev.View] = &factView{PageView: PageView{ID: ev.View, Route: ev.Route, Title: title, Content: ev.Event.Content, Version: ev.Version, Previous: ev.Previous, Share: ev.Event.Share, Started: ev.Occurred, Flags: []string{"incomplete"}}, Visitor: ev.Record.Visitor, Owner: ev.Owner, Session: ev.Record.Session, Count: within(ev.Occurred, f), Last: ev.Occurred, events: []Event{}}
+		views[ev.View] = &factView{PageView: PageView{ID: ev.View, Route: ev.Route, Title: title, Content: ev.Event.Content, Version: ev.Version, Previous: resolvedPrevious(r, ev.Record.Session, ev.Previous), Share: ev.Event.Share, Started: ev.Occurred, Flags: []string{"incomplete"}}, Visitor: ev.Record.Visitor, Owner: ev.Owner, Session: ev.Record.Session, Count: within(ev.Occurred, f), Last: ev.Occurred, events: []Event{}}
 	}
 	covered := map[string][]interval{}
 	for _, x := range events {
 		ev := x.Event
+		ev.Previous = resolvedPrevious(r, x.Record.Session, ev.Previous)
 		v := views[ev.View]
 		if v == nil || v.Session != x.Record.Session || v.Visitor != x.Record.Visitor || v.Owner != x.Record.Owner {
 			continue
@@ -279,7 +287,7 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 			}
 		}
 	}
-	out := []factView{}
+	out := append([]factView{}, retained...)
 	for _, v := range views {
 		if (v.Count || v.Visible > 0) && (f.Content == "" || v.Content == f.Content) {
 			out = append(out, *v)
@@ -306,7 +314,7 @@ type intentFacts struct {
 func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time) (intentFacts, error) {
 	data := intentFacts{views: map[string][]factView{}, business: map[string][]Record{}, overrides: map[string]Record{}, crm: map[string]Record{}}
 	if s.Config.IntentEnabled {
-		facts, e := s.facts(r, scope, Filter{Start: now.AddDate(0, 0, -30), End: now, AsOf: now})
+		facts, e := s.facts(r, scope, Filter{Start: now.AddDate(0, 0, -30), End: now.Add(time.Nanosecond), AsOf: now})
 		if e != nil {
 			return data, e
 		}
@@ -389,6 +397,16 @@ func (s *Service) intent(scope Scope, key string, now time.Time, data intentFact
 				}
 				in.Level = "high"
 				in.Reasons = []string{"服务端已确认" + action + "，时间 " + b.At.UTC().Format(time.RFC3339) + "；需人工核实"}
+				break
+			}
+		}
+	}
+	if in.Level == "low" && len(sessions) >= 2 {
+		for _, b := range business {
+			var detail map[string]string
+			if json.Unmarshal(b.Payload, &detail) == nil && detail["action"] == "favorite" {
+				in.Level = "medium"
+				in.Reasons = []string{"近30天跨至少两个会话复访，并有服务端确认的收藏；仅供跟进参考"}
 				break
 			}
 		}
@@ -583,6 +601,29 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 		if e != nil {
 			return e
 		}
+		legacyRows, err := r.List("legacy_catalog")
+		if err != nil {
+			return err
+		}
+		// A source may be shared into several authorized owner scopes. Show one
+		// material card with scoped aggregate facts, not duplicate totals.
+		latestLegacy := map[string]Record{}
+		for _, row := range legacyRows {
+			if !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) {
+				continue
+			}
+			var c Content
+			if json.Unmarshal(row.Payload, &c) != nil {
+				return ErrUnavailable
+			}
+			old, ok := latestLegacy[c.ID]
+			if !ok || row.At.After(old.At) || (row.At.Equal(old.At) && row.ID < old.ID) {
+				latestLegacy[c.ID] = row
+			}
+		}
+		for _, row := range latestLegacy {
+			rows = append(rows, row)
+		}
 		facts := []factView{}
 		if scope.View {
 			facts, e = s.facts(r, scope, f)
@@ -605,12 +646,15 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 		}
 		items := []Content{}
 		for _, row := range rows {
-			if !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) || (id != "" && row.ID != id) {
+			if !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) || (id != "" && row.ID != id && row.Kind != "legacy_catalog") {
 				continue
 			}
 			var c Content
 			if json.Unmarshal(row.Payload, &c) != nil {
 				return ErrUnavailable
+			}
+			if id != "" && c.ID != id {
+				continue
 			}
 			c.PageViews, c.VisibleMS, c.LastVisit = 0, 0, nil
 			summary := summaries[c.ID]
@@ -745,6 +789,11 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 		for _, v := range facts {
 			if v.ID != id {
 				continue
+			}
+			for _, flag := range v.Flags {
+				if flag == "raw_events_expired" {
+					return fail(410, "原始事件已按保留期清除，仅保留汇总")
+				}
 			}
 			sortEvents(v.events)
 			start, end, cursor, e := paginate(f, len(v.events))

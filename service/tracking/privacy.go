@@ -12,13 +12,15 @@ import (
 // tenant-wide identity or choose the first row from a mixed-owner query.
 func privateOwner(r Repository, scope Scope, key string) (string, error) {
 	owners := map[string]bool{}
-	rows, e := r.List("event")
-	if e != nil {
-		return "", e
-	}
-	for _, row := range rows {
-		if resolvedVisitor(r, row) == key && scope.Allows(row.Owner) {
-			owners[row.Owner] = true
+	for _, kind := range []string{"event", "daily_summary", "crm", "intent_override"} {
+		rows, e := r.List(kind)
+		if e != nil {
+			return "", e
+		}
+		for _, row := range rows {
+			if resolvedVisitor(r, row) == key && scope.Allows(row.Owner) {
+				owners[row.Owner] = true
+			}
 		}
 	}
 	if len(owners) == 0 {
@@ -115,7 +117,7 @@ func (s *Service) DeleteVisitor(ctx context.Context, scope Scope, key, reason st
 		found := false
 		// Resolve before deleting identity links. Original anonymous aliases are not
 		// global aliases of this account: shared-device history must remain separate.
-		for _, kind := range []string{"event", "entry", "session", "business", "share"} {
+		for _, kind := range []string{"event", "entry", "session", "business", "share", "daily_summary", "summary_state"} {
 			rows, e := r.List(kind)
 			if e != nil {
 				return e
@@ -170,7 +172,7 @@ func (s *Service) DeleteVisitor(ctx context.Context, scope Scope, key, reason st
 				return e
 			}
 		}
-		for _, kind := range []string{"event", "entry", "session", "identity", "crm", "intent_override", "business", "event_hash", "sequence", "view_binding", "share", "share_request"} {
+		for _, kind := range []string{"event", "entry", "session", "identity", "crm", "intent_override", "business", "event_hash", "sequence", "view_binding", "share", "share_request", "daily_summary", "summary_state"} {
 			rows, e := r.List(kind)
 			if e != nil {
 				return e

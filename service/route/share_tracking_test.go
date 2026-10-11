@@ -6,6 +6,7 @@ import (
 	"service/tracking"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTrackingStrictBodyRejectsClientIdentity(t *testing.T) {
@@ -87,6 +88,19 @@ func TestTrackingCRMTargetRequiresCanonicalAccessibleCustomer(t *testing.T) {
 	}{{`{"code":0,"data":{"customer":{"id":"C1","customerNumber":"B1","mergedInto":null}}}`, true}, {`{"code":0,"data":{"customer":{"id":"C2","customerNumber":"B1"}}}`, false}, {`{"code":0,"data":{"customer":{"id":"C1","customerNumber":"B2"}}}`, false}, {`{"code":0,"data":{"customer":{"id":"C1","customerNumber":"B1","mergedInto":"C2"}}}`, false}, {`{"code":0,"data":{"customer":{"id":"C1","customerNumber":"B1","lifecycle":"deleted"}}}`, false}, {`{"data":{"customer":{"id":"C1","customerNumber":"B1"}}}`, false}, {`{`, false}} {
 		if validTrackingCRMTarget([]byte(tc.body), "C1", "B1") != tc.want {
 			t.Fatal(tc)
+		}
+	}
+}
+
+func TestTrackingCodeCacheRenewsAndIsolatesAttribution(t *testing.T) {
+	now := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
+	key := trackingCodeCacheKey("org", 1, "content", 1, "release", now)
+	if key != trackingCodeCacheKey("org", 1, "content", 1, "release", now.Add(time.Hour)) {
+		t.Fatal("same generation unstable")
+	}
+	for _, other := range []string{trackingCodeCacheKey("org", 1, "content", 1, "release", now.Add(31*24*time.Hour)), trackingCodeCacheKey("org", 2, "content", 1, "release", now), trackingCodeCacheKey("other", 1, "content", 1, "release", now), trackingCodeCacheKey("org", 1, "content", 1, "trial", now)} {
+		if key == other {
+			t.Fatal("unsafe cache reuse")
 		}
 	}
 }

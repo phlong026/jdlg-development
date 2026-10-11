@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"context"
 	"github.com/gin-gonic/gin"
 	"service/model"
+	"service/tracking"
 )
 
 type favoriteRequest struct {
@@ -24,7 +26,7 @@ type favoriteRef struct {
 }
 
 // Supported target_type values: template, ai_tool, designer, inspiration.
-func RegisterFavoriteRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSessionRedisModel, userFavoriteModel *model.UserFavoriteModel, templateLikeModel *model.TemplateLikeModel, templateModel *model.TemplateModel, inspirationModel *model.InspirationAssetModel, aiToolModel *model.AIToolModel, userProfileModel *model.UserProfileModel, userDBModel *model.UserModel) {
+func RegisterFavoriteRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSessionRedisModel, userFavoriteModel *model.UserFavoriteModel, templateLikeModel *model.TemplateLikeModel, templateModel *model.TemplateModel, inspirationModel *model.InspirationAssetModel, aiToolModel *model.AIToolModel, userProfileModel *model.UserProfileModel, userDBModel *model.UserModel, trackingServices ...*tracking.Service) {
 	favorites := r.Group("/favorites")
 	favorites.Use(TokenAuthRequired(codeSessionModel))
 	{
@@ -116,6 +118,15 @@ func RegisterFavoriteRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 						_ = templateModel.IncrementLikeCount(req.TargetID)
 					}
 				}
+			}
+			if userFavoriteModel != nil && len(trackingServices) > 0 && trackingServices[0] != nil && c.GetHeader("X-Tracking-Token") != "" {
+				service, token, account, kind, target := trackingServices[0], c.GetHeader("X-Tracking-Token"), userID, req.TargetType, req.TargetID
+				// Telemetry cannot turn an already committed favorite into a failed business request.
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+					defer cancel()
+					_ = service.ConfirmFavorite(ctx, token, account, kind, target)
+				}()
 			}
 			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "收藏成功", "data": gin.H{"favorited": true}})
 		})

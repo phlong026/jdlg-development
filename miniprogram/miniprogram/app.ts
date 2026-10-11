@@ -1,3 +1,5 @@
+// Unified fail-open tracking; feature flag and independent consent default off.
+require('./utils/tracking/index').install();
 // app.ts
 import { blockUnsafeText, initPromptReview } from './utils/promptReview';
 
@@ -45,9 +47,9 @@ App<IAppOption>({
     // 扫码进入：scene 为邀请码；从分享链接进入：query.invite_code。登录时会读取并完成绑定
     const scene = options?.scene
     const query = options?.query || {}
-    if (scene != null && scene !== '') {
+    if (options?.path !== 'pages/contentreader/contentreader' && scene != null && scene !== '') {
       wx.setStorageSync('pending_invite_code', String(scene))
-    } else if (query.invite_code) {
+    } else if (options?.path !== 'pages/contentreader/contentreader' && query.invite_code) {
       wx.setStorageSync('pending_invite_code', query.invite_code)
     }
 

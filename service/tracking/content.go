@@ -19,6 +19,11 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 	if !trim(in.Title, 80) || !trim(in.Body, 100000) || len(in.SourceNote) > 2000 || (in.SourceURL != "" && !safeURL(in.SourceURL)) || (in.Rights != "own" && in.Rights != "authorized") || !scope.Allows(in.Owner) || len(in.MediaIDs) > 50 {
 		return out, fail(400, "标题正文权属或归属无效")
 	}
+	body, format, err := normalizeBody(in.Body, in.BodyFormat)
+	if err != nil {
+		return out, err
+	}
+	in.Body, in.BodyFormat = body, format
 	e := s.transaction(ctx, func(r Repository) error {
 		now := s.Now()
 		revision := 1
@@ -67,7 +72,7 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 			}
 			media = append(media, a)
 		}
-		out = Content{ID: id, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+		out = Content{ID: id, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
 		if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
 			return e
 		}

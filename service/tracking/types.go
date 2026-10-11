@@ -94,6 +94,9 @@ type Asset struct {
 	Title  string `json:"title,omitempty"`
 }
 type Content struct {
+	ReadOnly    bool       `json:"read_only,omitempty"`
+	Route       string     `json:"route_key,omitempty"`
+	VersionMode string     `json:"version_mode,omitempty"`
 	ID          string     `json:"content_id"`
 	Version     int        `json:"version"`
 	Revision    int        `json:"revision"`
@@ -103,6 +106,7 @@ type Content struct {
 	Cover       *Asset     `json:"cover,omitempty"`
 	Media       []Asset    `json:"media"`
 	Body        string     `json:"body"`
+	BodyFormat  string     `json:"body_format"`
 	SourceURL   string     `json:"source_url,omitempty"`
 	SourceNote  string     `json:"source_note,omitempty"`
 	Rights      string     `json:"rights"`
@@ -115,6 +119,7 @@ type Content struct {
 type Draft struct {
 	Title      string   `json:"title"`
 	Body       string   `json:"body"`
+	BodyFormat string   `json:"body_format"`
 	SourceURL  string   `json:"source_url"`
 	SourceNote string   `json:"source_note"`
 	Rights     string   `json:"rights"`

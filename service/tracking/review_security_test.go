@@ -308,3 +308,72 @@ func TestReviewVisitorIntentDoesNotRescanPerVisitor(t *testing.T) {
 		t.Fatalf("per-visitor repeated full scan: %+v", calls)
 	}
 }
+
+func TestDeletedLoginCannotCreateNewShares(t *testing.T) {
+	s, scope := fixture(t)
+	en := enter(t, s, 1)
+	accept(t, s, en, ev(s, en, "delete-share-view1", "page_view", s.Now()))
+	if e := s.DeleteVisitor(context.Background(), scope, "u:1", "request"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := s.CreateShare(context.Background(), ShareInput{Route: en.Route, Key: "new-share-request"}, en.Token, 1); e == nil {
+		t.Fatal("deleted account recreated share history")
+	}
+}
+func TestPrivateAnnotationsRemainRemovableAfterRawRetention(t *testing.T) {
+	s, scope := fixture(t)
+	en := enter(t, s, 1)
+	accept(t, s, en, ev(s, en, "retained-view-0001", "page_view", s.Now()))
+	if e := s.transaction(context.Background(), func(r Repository) error {
+		rows, _ := r.List("event")
+		for _, row := range rows {
+			if e := r.Remove(row.Kind, row.ID); e != nil {
+				return e
+			}
+		}
+		owner, e := privateOwner(r, scope, "u:1")
+		if e != nil {
+			return e
+		}
+		if owner != "owner-a" {
+			t.Fatal(owner)
+		}
+		return nil
+	}); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestAnonymousLinkCannotBeReassignedByReplayedCredential(t *testing.T) {
+	s, _ := fixture(t)
+	en := enter(t, s, 0)
+	input := EntryInput{Route: en.Route, Client: en.Client, Anonymous: en.Anonymous, Consent: "v1", Previous: en.Token}
+	a, e := s.Enter(context.Background(), input, 11)
+	if e != nil {
+		t.Fatal(e)
+	}
+	again, e := s.Enter(context.Background(), input, 11)
+	if e != nil || again.Session != a.Session {
+		t.Fatal("same-account retry", e)
+	}
+	b, e := s.Enter(context.Background(), input, 12)
+	if e != nil || b.Session == a.Session {
+		t.Fatal("cross-account reuse", e)
+	}
+	logout, e := s.Enter(context.Background(), input, 0)
+	if e != nil || logout.Session == a.Session {
+		t.Fatal("anonymous replay rejoined identified session", e)
+	}
+	if e := s.transaction(context.Background(), func(r Repository) error {
+		identity, e := decode[map[string]string](r, "identity", en.Session)
+		if e != nil {
+			return e
+		}
+		if identity["visitor_key"] != "u:11" {
+			t.Fatal(identity)
+		}
+		return nil
+	}); e != nil {
+		t.Fatal(e)
+	}
+}

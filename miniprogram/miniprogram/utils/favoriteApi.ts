@@ -57,7 +57,7 @@ function request<T>(options: {
     wx.request({
       url: `${API_BASE_URL}${signedPath}`,
       method: options.method,
-      header: headers,
+      header: (() => { try { const tracking = require('./tracking/index'); const sdk = tracking.getSDK(); const ctx = tracking.consented() && sdk && sdk.context(); return options.method === 'POST' && ctx && ctx.entry_token ? { ...headers, 'X-Tracking-Token': ctx.entry_token } : headers; } catch (_) { return headers; } })(),
       data: body,
       success: (res) => {
         const response = (res.data || {}) as any;

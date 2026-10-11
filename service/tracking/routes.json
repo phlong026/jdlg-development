@@ -171,8 +171,8 @@
   },
   "pages/designerhome/designerhome": {
     "Title": "pages/designerhome/designerhome",
-    "Type": "excluded",
-    "Public": false
+    "Type": "detail",
+    "Public": true
   },
   "pages/myInformationmodification/myInformationmodification": {
     "Title": "pages/myInformationmodification/myInformationmodification",

@@ -112,3 +112,29 @@ func decode[T any](r Repository, kind, id string) (T, error) {
 func record(kind, id, owner string, at time.Time, v any) Record {
 	return Record{Kind: kind, ID: id, Owner: owner, At: at, Payload: marshal(v)}
 }
+
+// ListSession uses the tenant/session index for bounded projection rebuilds.
+func (r *sqlRepo) ListSession(kind, session string) ([]Record, error) {
+	rows, e := r.tx.QueryContext(r.ctx, `SELECT kind,record_id,owner_id,visitor_key,session_id,content_id,share_id,DATE_FORMAT(occurred_at,'%Y-%m-%d %H:%i:%s.%f'),payload FROM tracking_records WHERE tenant_id=? AND session_id=? AND kind=? ORDER BY occurred_at,record_id`, r.tenant, session, kind)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []Record{}
+	for rows.Next() {
+		var v Record
+		var at string
+		var b []byte
+		if e = rows.Scan(&v.Kind, &v.ID, &v.Owner, &v.Visitor, &v.Session, &v.Content, &v.Share, &at, &b); e != nil {
+			return nil, e
+		}
+		v.At, e = time.ParseInLocation("2006-01-02 15:04:05.999999", at, time.UTC)
+		if e != nil {
+			return nil, e
+		}
+		v.Tenant = r.tenant
+		v.Payload = b
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

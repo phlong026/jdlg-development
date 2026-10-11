@@ -1,0 +1,218 @@
+// @ts-nocheck
+'use strict';
+const { createTracker, HEARTBEAT } = require('./core');
+const api = require('./api');
+const routes = require('./routes');
+const STORAGE = 'share_tracking_queue_v1';
+const CONSENT = 'share_tracking_consent_v1';
+const CONSENT_CHOICE = 'share_tracking_consent_choice_v1';
+let sdk, config = { enabled: false }, installed = false, instance = '', timer;
+let consentPage = null, consentRequest = null, consentChoice = null, consentRevision = 0;
+const safely = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
+function id() { return 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); }
+function mono() { const performance = wx.getPerformance && wx.getPerformance(); return performance && typeof performance.now === 'function' ? performance.now() : null; }
+function anonymousInstance() {
+  // Stored random installation handle only; never device identifiers, fingerprint, location or account-derived ID.
+  let value = safely(() => wx.getStorageSync('share_tracking_instance_v1'), '');
+  if (value) return Promise.resolve(value);
+  if (!wx.getRandomValues) return Promise.reject(new Error('随机标识能力不可用'));
+  return new Promise((resolve, reject) => wx.getRandomValues({ length: 24, success(result) {
+    value = Array.from(new Uint8Array(result.randomValues)).map(x => x.toString(16).padStart(2, '0')).join('');
+    safely(() => wx.setStorageSync('share_tracking_instance_v1', value)); resolve(value);
+  }, fail: reject }));
+}
+function getSDK() {
+  if (sdk) return sdk;
+  if (mono() == null) return null; // Never substitute user-adjustable wall time for duration.
+  sdk = createTracker({ wall: Date.now, mono, id, random: Math.random,
+    account: () => safely(() => String(wx.getStorageSync('token') || ''), ''),
+    loadDiagnostics:()=>wx.getStorageSync(STORAGE+'_diagnostics'),saveDiagnostics:value=>wx.setStorageSync(STORAGE+'_diagnostics',value),
+    load: () => wx.getStorageSync(STORAGE), save: queue => wx.setStorageSync(STORAGE, queue),
+    async entry(body) { if (!instance) instance = await anonymousInstance(); return api.request('/entry','POST', { ...body, client_instance: instance, anonymous_id: instance }, undefined, true); },
+    send: (body, credential) => api.request('/events/batch','POST',body,credential,false)
+  });
+  return sdk;
+}
+function enabledConsent() {
+  const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
+  if(choice) return choice.accepted===true && choice.version===config.consent_version && choice.notice===config.privacy_notice ? choice.version : '';
+  const accepted = safely(() => wx.getStorageSync(CONSENT), null);
+  return accepted && accepted.version === config.consent_version && config.privacy_notice ? accepted.version : '';
+}
+function refreshConfig() {
+  return api.request('/config').then(value => {
+    config = value || {enabled:false}; const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
+    return config;
+  }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });
+}
+function setConsent(accepted) {
+  accepted=accepted===true;
+  if (accepted && (config.enabled!==true || !config.consent_version || !config.privacy_notice)) return false;
+  consentRevision++;
+  const previous=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null) || safely(()=>wx.getStorageSync(CONSENT),null) || {};
+  consentChoice={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,at:new Date().toISOString()};
+  safely(()=>wx.setStorageSync(CONSENT_CHOICE,consentChoice));
+  safely(() => accepted ? wx.setStorageSync(CONSENT,{version:config.consent_version,at:new Date().toISOString()}) : wx.removeStorageSync(CONSENT));
+  const s=getSDK(); if (s) s.configure(config.enabled===true,accepted ? config.consent_version : ''); return true;
+}
+// A versioned, optional choice on every collectable public route. Page business
+// lifecycle callbacks never await this promise; declining leaves reading/sharing intact.
+function consentPublicPage(page) {
+  const policy=routes.policy(page&&page.route);
+  return policy.collect && !(policy.excludeSelf&&page.data&&page.data.isSelfHomepage);
+}
+function showConsentChoices(page, manual=false) {
+  if(!manual && !consentPublicPage(page)) return Promise.resolve(false);
+  if(consentRequest) return consentRequest;
+  const request=refreshConfig().then(value=>{
+    const target=manual?page:consentPage;
+    if(!target || target.__trackingConsentVisible!==true || (!manual&&!consentPublicPage(target)))return false;
+    if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
+    const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
+    if(!manual && (enabledConsent() || (choice&&choice.version===value.consent_version&&(choice.notice===value.privacy_notice||(!choice.notice&&choice.accepted===false)))))return false;
+    const version=value.consent_version, notice=value.privacy_notice, revision=consentRevision;
+    return new Promise(resolve=>{
+      // Pass the complete configured notice, without truncation or implicit consent.
+      try { wx.showModal({title:'访问分析（可选）',
+        content:'告知版本：'+version+'\n\n'+notice+'\n\n拒绝不影响阅读、分享或其他功能。可随时在“我的 → 访问分析隐私”撤回或重新选择。未同意前不采集访问分析。',
+        showCancel:true,confirmText:'同意分析',cancelText:'不同意',
+        success(result){
+          if(target.__trackingConsentVisible!==true || (!manual&&!consentPublicPage(target)) || revision!==consentRevision || version!==config.consent_version || notice!==config.privacy_notice || config.enabled!==true){resolve(false);return;}
+          if(result.confirm!==true && result.cancel!==true){resolve(false);return;}
+          const accepted=result.confirm===true;
+          setConsent(accepted);
+          safely(()=>{if(target.data&&Object.prototype.hasOwnProperty.call(target.data,'consented'))target.setData({consented:accepted});});
+          resolve(true);
+        },fail(){resolve(false);}
+      }); } catch (_) {resolve(false);}
+    });
+  }).catch(()=>false);
+  consentRequest=request;
+  request.then(()=>{if(consentRequest===request)consentRequest=null;});
+  return request;
+}
+function consentPageVisible(page,visible) {
+  page.__trackingConsentVisible=visible;
+  if(visible){consentPage=page;showConsentChoices(page);}
+  else if(consentPage===page)consentPage=null;
+}
+function splitPath(path, fallback) {
+  const parts=String(path || ('/'+fallback)).split('?'); const query={};
+  (parts[1]||'').split('&').filter(Boolean).forEach(pair => { const index=pair.indexOf('='); try {query[decodeURIComponent(index<0?pair:pair.slice(0,index))]=decodeURIComponent(index<0?'':pair.slice(index+1));}catch(_){} });
+  return {route:parts[0].replace(/^\//,''),query};
+}
+function appendToken(value, token) {
+  // Preserve business query byte-for-byte. Only replace this SDK's own tracking parameter.
+  const cleaned=String(value||'').replace(/([?&])st=[^&]*(&?)/g,(_,lead,tail)=>tail?lead:'').replace(/[?&]$/,'');
+  return cleaned+(cleaned.includes('?')?'&':'?')+'st='+encodeURIComponent(token);
+}
+async function prepareShare(page, original, channel, cacheKey) {
+  const s=getSDK(), state=s && s.get(page);
+  const accountAtStart=safely(()=>String(wx.getStorageSync('token')||''),'');
+  if (!s || !s.diagnostics().enabled) return original;
+  const sourceRoute=state ? state.route : String(page.route||'').replace(/^\//,'');
+  const target=splitPath(channel==='timeline'?'/'+sourceRoute+'?'+(original.query||''):original.path,sourceRoute);
+  if (!routes.policy(target.route).collect) return original;
+  const content=routes.binding(target.route,target.query);
+  let context=state && state.context;
+  try {
+    if(!context){if(!instance)instance=await anonymousInstance();context=await api.request('/entry','POST',{route_key:target.route,content_id:content.id,content_version:content.version,client_instance:instance,anonymous_id:instance,consent_version:enabledConsent()},undefined,true);}
+    if(!context.entry_token)return original;
+    let version=content.version || (state && state.route===target.route && state.content.id===content.id ? context.content_version : 0);
+    if(content.id && !version){const targetEntry=await api.request('/entry','POST',{route_key:target.route,content_id:content.id,client_instance:instance,anonymous_id:instance,consent_version:enabledConsent()},undefined,true);version=targetEntry.content_version;}
+    const share=await api.request('/shares','POST',{route_key:target.route,content_id:content.id,content_version:version,
+      parent_share_id:context.share_id || undefined,channel,idempotency_key:id()},context.entry_token,true);
+    if (!share.share_token || accountAtStart!==safely(()=>String(wx.getStorageSync('token')||''),'') || !s.diagnostics().enabled || (state && (s.get(page)!==state || state.context!==context))) return original;
+    const cacheState=state || (page.__trackingShareState=page.__trackingShareState||{shareCache:{}});
+    if(cacheKey) { cacheState.shareIds=cacheState.shareIds||{}; cacheState.shareIds[cacheKey]={id:share.share_id,context,route:state?state.route:target.route,content:state?state.content:content,expires:share.expires_at ? Date.parse(share.expires_at):Date.now()+300000}; }
+    s.shareIntent(context,state?state.route:target.route,state?state.content:content,share.share_id,channel);
+    return channel==='timeline' ? { ...original,query:appendToken('?'+(original.query||''),share.share_token).replace(/^\?/,'') } : {...original,path:appendToken(original.path||'/'+state.route,share.share_token)};
+  } catch (_) { return original; }
+}
+function updateReady(page) {
+  const s=getSDK(); if (!s || !s.get(page)) return;
+  s.ready(page,routes.ready(page.route,page.data||{},page.__trackingRendered),routes.binding(page.route,page.__trackingOptions||{}));
+}
+function wrapPage(definition) {
+  const result={...definition};
+  const invoke=(name,page,args)=>typeof definition[name]==='function'?definition[name].apply(page,args):undefined;
+  result.onLoad=function(options) {
+    safely(() => {
+      this.__trackingOptions=options||{};
+      const route=String(this.route||'').replace(/^\//,''); if (!routes.policy(route).collect) return;
+      const s=getSDK(); if (!s) return; s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+      const original=this.setData;
+      this.setData=function(data,callback) {
+        return original.call(this,data,()=>{ safely(()=>updateReady(this)); if(callback)callback.call(this); });
+      };
+    });
+    return invoke('onLoad',this,arguments);
+  };
+  result.onReady=function() { const output=invoke('onReady',this,arguments); safely(()=>{this.__trackingRendered=true; updateReady(this);}); return output; };
+  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{const s=getSDK();if(s)s.show(this);updateReady(this);consentPageVisible(this,true);}); return output; };
+  result.onHide=function() { safely(()=>{consentPageVisible(this,false);if(sdk)sdk.hide(this,false);}); return invoke('onHide',this,arguments); };
+  result.onUnload=function() { safely(()=>{consentPageVisible(this,false);if(sdk)sdk.hide(this,true);}); return invoke('onUnload',this,arguments); };
+  if (typeof definition.onShareAppMessage==='function') result.onShareAppMessage=function() {
+    const original=invoke('onShareAppMessage',this,arguments);
+    if (!original || typeof original!=='object' || !sdk || !sdk.diagnostics().enabled) return original;
+    // Original callback executes once. Preserve original synchronous fallback, title/image and original promise semantics.
+    return {...original,promise:Promise.resolve(original.promise || {}).then(value=>new Promise(resolve=>{
+      const fallback={...original,...value}; const timeout=setTimeout(()=>resolve(fallback),1800);
+      prepareShare(this,fallback,'app_message').then(result=>{clearTimeout(timeout);resolve(result);},()=>{clearTimeout(timeout);resolve(fallback);});
+    })).catch(()=>original)};
+  };
+  if (typeof definition.onShareTimeline==='function') result.onShareTimeline=function() {
+    const original=invoke('onShareTimeline',this,arguments);
+    if (!original || !sdk || !sdk.diagnostics().enabled) return original;
+    // Timeline has no reliable async completion. No invented delivery status; first call remains un-attributed.
+    const state=sdk.get(this)||(this.__trackingShareState=this.__trackingShareState||{shareCache:{}}), key=JSON.stringify(original);
+    const cached=state.shareCache[key], meta=state.shareIds&&state.shareIds[key];
+    if(cached&&meta&&meta.expires>Date.now()){sdk.shareIntent(meta.context,meta.route,meta.content,meta.id,'timeline');return cached;}
+    prepareShare(this,original,'timeline',key).then(value=>{if((sdk.get(this)||this.__trackingShareState)===state)state.shareCache[key]=value;});
+    return original;
+  };
+  // Preserve each business callback's receiver, arguments, return value and
+  // exceptions. Analytics failures must never block an existing action.
+  const actions=new Set([].concat(...Object.keys(routes.OBSERVED_ACTIONS).map(route=>routes.OBSERVED_ACTIONS[route])));
+  actions.forEach(name=>{
+    if(typeof definition[name]!=='function')return;
+    result[name]=function(){
+      safely(()=>{
+        if(!sdk || !sdk.diagnostics().enabled)return;
+        const action=routes.observedAction(this.route,name,this,arguments[0]);
+        if(action)sdk.emit(this,action.type,action.extra);
+      });
+      return invoke(name,this,arguments);
+    };
+  });
+  return result;
+}
+function install() {
+  if (installed) return; installed=true;
+  const NativePage=Page; Page=function(definition){return NativePage(wrapPage(definition));};
+  const NativeApp=App; App=function(definition){
+    const wrapped={...definition};
+    ['onLaunch','onShow','onHide'].forEach(name=>{wrapped[name]=function(options){
+      safely(()=>{
+        const s=getSDK();
+        if(name==='onLaunch') { refreshConfig(); if (!timer) {timer=setInterval(()=>safely(()=>sdk && sdk.tick()),HEARTBEAT);} if(wx.onNetworkStatusChange)wx.onNetworkStatusChange(status=>{if(status.isConnected&&sdk)sdk.flush();}); }
+        if(name==='onShow'){
+          if(options&&options.path==='pages/contentreader/contentreader'&&options.query&&(options.query.scene||options.query.content_id)&&typeof getCurrentPages==='function'){
+            const pages=getCurrentPages(),page=pages[pages.length-1];
+            if(page&&page.route===options.path&&typeof page.acceptExternalEntry==='function')page.acceptExternalEntry(options.query);
+          }
+          if(s)s.appShow(options);
+        }
+        if(name==='onHide'&&s)s.appHide();
+      });
+      return typeof definition[name]==='function'?definition[name].apply(this,arguments):undefined;
+    };}); return NativeApp(wrapped);
+  };
+}
+function resolvePageOptions(page, options) {
+ page.__trackingOptions=options;
+ const s=getSDK(),p=s&&s.get(page);if(p)p.share=options.st||'';
+ updateReady(page);
+}
+module.exports={install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+export {};

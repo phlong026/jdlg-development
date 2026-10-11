@@ -253,7 +253,7 @@ function requestListApi<T>(path: string, data?: Record<string, unknown>): Promis
           resolve(null);
           return;
         }
-        resolve(response.data || {});
+        resolve(response.data && Array.isArray(response.data.list) ? response.data : null);
       },
       fail: () => {
         resolve(null);
@@ -641,6 +641,7 @@ Page({
   imageSizeLoadingKeys: new Set<string>(),
 
   data: {
+    contentReady: false,
     navSafeTop: 0,
     navBarHeight: 96,
     navContentHeight: 44,
@@ -961,6 +962,7 @@ Page({
       this.syncWaterfallCards([]);
       this.setData({
         loading: false,
+        contentReady: false,
         hasMore: false,
         resultSummaryText: '模板广场分类配置不可用',
         emptyTipText: '请先在管理端配置一级、二级、三级标签',
@@ -1027,6 +1029,7 @@ Page({
         this.warmLeadingCards(cachedEntry.cards, 2);
         this.setData({
           loading: false,
+          contentReady: true,
           page: cachedEntry.nextPage,
           hasMore: cachedEntry.hasMore,
           resultSummaryText: buildSummaryText(currentMainLabel, currentThirdLabel || currentSubLabel, keyword),
@@ -1038,6 +1041,7 @@ Page({
 
     this.setData({
       loading: true,
+      contentReady: false,
       resultSummaryText: buildSummaryText(currentMainLabel, currentThirdLabel || currentSubLabel, keyword),
       emptyTipText: keyword ? buildSearchEmptyTip(currentMainLabel, keyword) : buildEmptyTip(currentMainLabel, currentSubLabel),
     });
@@ -1059,6 +1063,7 @@ Page({
           }
           this.setData({
             loading: false,
+            contentReady: false,
             hasMore: false,
             resultSummaryText: '模板或灵感接口暂时不可用',
             emptyTipText: '加载失败，请稍后重试',
@@ -1082,6 +1087,7 @@ Page({
         }
         this.setData({
           loading: false,
+          contentReady: false,
           hasMore: false,
           resultSummaryText: '模板接口暂时不可用',
           emptyTipText: '加载失败，请稍后重试',
@@ -1111,6 +1117,7 @@ Page({
 
     this.setData({
       loading: false,
+      contentReady: true,
       page: requestPage + 1,
       hasMore: nextHasMore,
       resultSummaryText: buildSummaryText(currentMainLabel, currentThirdLabel || currentSubLabel, keyword),
