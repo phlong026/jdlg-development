@@ -1,5 +1,5 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FiActivity, FiClock, FiFileText, FiRefreshCw, FiSearch, FiUserCheck, FiX } from 'react-icons/fi';
 import {
@@ -17,8 +17,9 @@ import {
     type CustomerServiceEventItem,
 } from '../api/customerLeads';
 import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
-import { publishLeadOverview } from '../component/leadOverviewStore';
+import { getLeadOverviewSession, isLeadOverviewSessionCurrent, publishLeadOverview } from '../component/leadOverviewStore';
 import CustomerLeadHub from './customerLeadHub';
+import { useManagementSession } from '../component/ManagementSession';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -135,6 +136,19 @@ const getNextActionText = (lead: CustomerLeadItem | null) => {
 // embedded：嵌在客户管理页的一个栏目里时，队列用页内卡片切换、不读写地址；
 // 单独打开（/customer-leads）时队列由地址 ?queue= 决定，切换入口在顶部子导航条，?user_id= 可只看某个用户的线索。
 const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ readOnly=false, embedded=false }) => {
+    const session = useManagementSession();
+    // /me.crmEnabled is the global takeover switch, not this account's CRM access.
+    // Missing/failed session checks must never reopen the legacy write endpoints.
+    const sessionReady = !session.loading && !session.error && !!session.user;
+    const canWrite = !readOnly && !session.crmLoading && sessionReady && session.user?.scope === 'platform_admin' && session.user.crmEnabled === false;
+    const canOpenCustomers = sessionReady && !session.crmLoading && !!session.crmContext;
+    const writeAllowed = useRef(canWrite);
+    writeAllowed.current = canWrite;
+    const writeBlockedText = !sessionReady || session.user?.crmEnabled === undefined
+        ? '会话或客户接入状态尚未确认，暂不能修改线索。请重新检查会话。'
+        : session.user.crmEnabled
+            ? '小程序线索已由统一客户档案接管，旧线索仅供查看；跟进与归属请在客户档案中处理。'
+            : '当前页面仅可查看线索，暂不能修改跟进与归属。';
     const [params, setParams] = useSearchParams();
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
     const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -159,6 +173,26 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [batchMode, setBatchMode] = useState(false);
     const [actionForm, setActionForm] = useState<ActionForm>(defaultAction);
     const [savingAction, setSavingAction] = useState(false);
+    const [loadError, setLoadError] = useState('');
+    const [saveNotice, setSaveNotice] = useState('');
+    const listRequest = useRef(0), detailRequest = useRef(0), actionSequence = useRef(0), saving = useRef(false);
+    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, session.user?.id]);
+    const queryIdentity = useRef(queryKey);
+    // Invalidate old responses during render, before the replacement effect runs.
+    if (queryIdentity.current !== queryKey) { queryIdentity.current = queryKey; listRequest.current++; }
+    const latestLoad = useRef<(afterSave?: boolean) => Promise<boolean>>(async () => false);
+    const actionEpoch = actionSequence.current;
+    const alive = useRef(true);
+    useEffect(() => { alive.current = true; return () => { alive.current = false; listRequest.current++; detailRequest.current++; actionSequence.current++; }; }, []);
+
+    useEffect(() => {
+        actionSequence.current++;
+        detailRequest.current++;
+        setActionTarget(null);
+        setBatchMode(false);
+        setActionForm(defaultAction);
+        setSelectedIds([]);
+    }, [canWrite, session.user?.id]);
 
     const selectedItems = useMemo(() => list.filter((item) => selectedIds.includes(item.id)), [list, selectedIds]);
     const activeLead = detail?.lead || null;
@@ -167,8 +201,14 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const activeIntentAnalysis = detail?.intent_analysis || null;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-    const loadData = async () => {
+    const loadData = async (afterSave = false) => {
+        if (queryIdentity.current !== queryKey) return false;
+        const request = ++listRequest.current;
+        const sessionTicket = getLeadOverviewSession();
+        const current = () => alive.current && queryIdentity.current === queryKey && request === listRequest.current && isLeadOverviewSessionCurrent(sessionTicket);
+        if (!current()) return false;
         setLoading(true);
+        setLoadError('');
         try {
             const params = {
                 page,
@@ -184,23 +224,31 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 getCustomerLeadOverview(),
                 getCustomerLeadList(params),
             ]);
+            if (!current()) return false;
             const nextOverview = { ...defaultOverview, ...overviewData };
             setOverview(nextOverview);
             setUpdatedAt(new Date());
-            publishLeadOverview(nextOverview as unknown as Record<string, number>);
+            publishLeadOverview(nextOverview as unknown as Record<string, number>, sessionTicket);
             setList(listData.list || []);
             setTotal(listData.total || 0);
             setSelectedIds((ids) => ids.filter((id) => (listData.list || []).some((item) => item.id === id)));
+            return true;
         } catch (error) {
-            reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
+            if (current()) {
+                setLoadError(error instanceof Error ? error.message : '加载客服线索失败');
+                if (!afterSave) reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
+            }
+            return false;
         } finally {
-            setLoading(false);
+            if (current()) setLoading(false);
         }
     };
 
+    latestLoad.current = loadData;
+
     useEffect(() => {
-        loadData();
-    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter]);
+        latestLoad.current();
+    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, session.user?.id]);
 
     // 切换队列 / 用户过滤时回到第一页并清空勾选
     useEffect(() => {
@@ -228,22 +276,31 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const handleViewDetail = async (item: CustomerLeadItem) => {
+        if (saving.current) return;
+        const request = ++detailRequest.current;
+        setDetail(null);
         setDetailLoading(true);
         try {
             const data = await getCustomerLeadDetail(String(item.id));
-            setDetail(data);
+            if (request === detailRequest.current) setDetail(data);
         } catch (error) {
-            reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索详情失败');
+            if (request === detailRequest.current) reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索详情失败');
         } finally {
-            setDetailLoading(false);
+            if (request === detailRequest.current) setDetailLoading(false);
         }
     };
 
     const handleCloseDetail = () => {
+        if (saving.current) return;
+        detailRequest.current++;
+        setDetailLoading(false);
         setDetail(null);
     };
 
     const openAction = (item?: CustomerLeadItem) => {
+        if (!writeAllowed.current || saving.current) return;
+        actionSequence.current++;
+        setSaveNotice('');
         const lead = item || activeLead || null;
         setActionTarget(lead);
         setBatchMode(!lead);
@@ -255,53 +312,65 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
         });
     };
 
-    const closeAction = () => {
+    const resetAction = () => {
+        actionSequence.current++;
         setActionTarget(null);
         setBatchMode(false);
         setActionForm(defaultAction);
     };
 
+    const closeAction = () => { if (!saving.current) resetAction(); };
+
     const saveAction = async () => {
-        if (!actionForm.remark.trim()) {
-            window.alert('请填写本次跟进记录，方便后续同事接手');
-            return;
-        }
+        if (!writeAllowed.current || saving.current || actionEpoch !== actionSequence.current) return;
+        if (!actionForm.remark.trim()) { window.alert('请填写本次跟进记录，方便后续同事接手'); return; }
+        if (batchMode && selectedIds.length === 0) { window.alert('请先选择要批量处理的线索'); return; }
+        if (!batchMode && !actionTarget && !activeLead) return;
         const payload = buildActionPayload(actionForm);
+        const sessionTicket = getLeadOverviewSession();
+        const detailEpoch = detailRequest.current;
+        saving.current = true;
         setSavingAction(true);
         try {
-            if(readOnly){alert("请在统一客户档案中处理跟进与归属");return}
-            if (batchMode) {
-                if (selectedIds.length === 0) {
-                    window.alert('请先选择要批量处理的线索');
-                    return;
-                }
-                await batchUpdateCustomerLeads(selectedIds, payload);
-                setSelectedIds([]);
-            } else if (actionTarget) {
-                await updateCustomerLeadStatus(String(actionTarget.id), payload);
-                if (activeLead?.id === actionTarget.id) {
-                    const latest = await getCustomerLeadDetail(String(actionTarget.id));
-                    setDetail(latest);
-                }
-            } else if (activeLead) {
-                await createCustomerLeadFollowup(String(activeLead.id), payload);
-                const latest = await getCustomerLeadDetail(String(activeLead.id));
-                setDetail(latest);
-            }
-            closeAction();
-            await loadData();
+            // Only a failed write leaves the editor open. A later read can never
+            // turn an acknowledged write into another submit opportunity.
+            if (batchMode) await batchUpdateCustomerLeads(selectedIds, payload);
+            else if (actionTarget) await updateCustomerLeadStatus(String(actionTarget.id), payload);
+            else if (activeLead) await createCustomerLeadFollowup(String(activeLead.id), payload);
         } catch (error) {
-            window.alert(error instanceof Error ? error.message : '保存客服线索跟进失败');
-        } finally {
+            if (actionEpoch === actionSequence.current && isLeadOverviewSessionCurrent(sessionTicket)) window.alert(error instanceof Error ? error.message : '保存客服线索跟进失败');
+            saving.current = false;
+            if (alive.current) setSavingAction(false);
+            return;
+        }
+        if (!alive.current || !isLeadOverviewSessionCurrent(sessionTicket)) { saving.current = false; return; }
+        if (actionEpoch === actionSequence.current) resetAction();
+        setSelectedIds([]);
+        setSaveNotice('跟进已保存，正在读取最新数据。');
+        let detailRead = true;
+        try {
+            if (activeLead && (activeLead.id === actionTarget?.id || !actionTarget)) {
+                const latest = await getCustomerLeadDetail(String(activeLead.id));
+                if (detailEpoch === detailRequest.current && isLeadOverviewSessionCurrent(sessionTicket)) setDetail(latest);
+            }
+        } catch { detailRead = false; }
+        if (!alive.current || !isLeadOverviewSessionCurrent(sessionTicket)) { saving.current = false; return; }
+        const refreshedQuery = queryIdentity.current;
+        const listRead = await latestLoad.current(true);
+        if (alive.current && isLeadOverviewSessionCurrent(sessionTicket)) {
+            setSaveNotice(detailRead && (listRead || refreshedQuery !== queryIdentity.current) ? '跟进已保存。' : '跟进已保存，但最新数据读取失败。请刷新读取，无需重复提交。');
             setSavingAction(false);
         }
+        saving.current = false;
     };
 
     const toggleSelected = (id: number) => {
+        if (!writeAllowed.current) return;
         setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
     };
 
     const toggleSelectPage = () => {
+        if (!writeAllowed.current) return;
         if (selectedIds.length === list.length) {
             setSelectedIds([]);
             return;
@@ -312,6 +381,16 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     return (
         <>
             <div className="customer-lead-page">
+                {saveNotice && <section className="customer-lead-panel" role="status">{saveNotice}</section>}
+                {loadError && <section className="customer-lead-panel" role="alert">读取失败：{loadError}。{updatedAt ? '当前显示上次成功读取的数据。' : '统计与列表尚未确认。'}<button type="button" disabled={loading} onClick={resetToFirstPage}>重新读取</button></section>}
+                <p>全平台小程序线索概览，不随下方队列、用户或搜索条件变化。待处理为新线索与跟进中；高意向仅计待处理线索；今日新增按服务端统计日期计算。</p>
+                {!canWrite && <section className="customer-lead-panel" role="status">
+                    <p>{writeBlockedText}</p>
+                    {canOpenCustomers ? <Link className="customer-lead-btn" to="/customer-management?tab=customers">前往客户档案列表</Link> : <>
+                        {session.user?.crmEnabled && <p>{session.crmError || '当前账号的客户访问尚未就绪，请重新检查；仍不可用时联系系统管理员。'}</p>}
+                        <button type="button" className="customer-lead-btn secondary" disabled={session.loading || session.crmLoading} onClick={session.refresh}>重新检查会话与客户权限</button>
+                    </>}
+                </section>}
                 {embedded ? (
                 <>
                 <div className="customer-lead-hero">
@@ -325,7 +404,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </button>
                 </div>
 
-                <div className="customer-lead-stats">
+                {updatedAt ? <div className="customer-lead-stats">
                     <div className="customer-lead-stat">
                         <FiClockIcon />
                         <span>待处理</span>
@@ -338,19 +417,19 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </div>
                     <div className="customer-lead-stat">
                         <FiUserCheckIcon />
-                        <span>高意向</span>
-                        <strong>{overview.high_intent_count}</strong>
+                        <span>待跟进高意向</span>
+                        <strong>{overview.high_todo_count ?? '待确认'}</strong>
                     </div>
                     <div className="customer-lead-stat danger">
                         <FiActivityIcon />
                         <span>超时未跟进</span>
                         <strong>{overview.overdue_count || 0}</strong>
                     </div>
-                </div>
+                </div> : <p>{loading ? '正在读取线索统计…' : '线索统计尚未确认'}</p>}
                 </>
-                ) : (
+                ) : updatedAt ? (
                     <CustomerLeadHub overview={overview} loading={loading} updatedAt={updatedAt} onRefresh={resetToFirstPage} />
-                )}
+                ) : <section className="customer-lead-panel">{loading ? '正在读取线索统计…' : '线索统计尚未确认'}<button type="button" disabled={loading} onClick={resetToFirstPage}>刷新</button></section>}
 
                 {userIdFilter > 0 && (
                     <div className="customer-lead-userfilter" role="status">
@@ -442,7 +521,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     {selectedIds.length > 0 ? (
                         <div className="customer-lead-batchbar">
                             <span>已选择 {selectedIds.length} 条线索</span>
-                            <button type="button" className="customer-lead-btn" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction()}>
+                            <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction()}>
                                 批量处理
                             </button>
                             <button type="button" className="customer-lead-btn secondary" onClick={() => setSelectedIds([])}>
@@ -456,7 +535,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <thead>
                                 <tr>
                                     <th className="checkbox-cell">
-                                        <input type="checkbox" checked={list.length > 0 && selectedIds.length === list.length} onChange={toggleSelectPage} />
+                                        <input type="checkbox" disabled={!canWrite} checked={list.length > 0 && selectedIds.length === list.length} onChange={toggleSelectPage} />
                                     </th>
                                     <th>用户</th>
                                     <th>需求与联系方式</th>
@@ -471,7 +550,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                 {list.map((item) => (
                                     <tr key={item.id}>
                                         <td className="checkbox-cell">
-                                            <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
+                                            <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
                                         </td>
                                         <td>
                                             <strong>{getDisplayName(item)}</strong>
@@ -507,7 +586,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                                 <button type="button" className="customer-lead-link" onClick={() => void handleViewDetail(item)}>
                                                     详情
                                                 </button>
-                                                <button type="button" className="customer-lead-link" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction(item)}>
+                                                <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>
                                                     跟进
                                                 </button>
                                             </div>
@@ -540,7 +619,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <h3>线索详情</h3>
                                     <p>{activeLead ? `${getDisplayName(activeLead)} · ${getNextActionText(activeLead)}` : '正在加载线索详情'}</p>
                                 </div>
-                                <button type="button" className="customer-lead-modal-close" onClick={handleCloseDetail}>
+                                <button type="button" className="customer-lead-modal-close" disabled={savingAction} aria-disabled={savingAction} onClick={handleCloseDetail}>
                                     <FiXIcon />
                                 </button>
                             </div>
@@ -553,7 +632,8 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <div className="customer-lead-next-action">
                                             <strong>{getNextActionText(activeLead)}</strong>
                                             <span>{detail?.summary || '暂无客户摘要。'}</span>
-                                            <button type="button" className="customer-lead-btn" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction(activeLead)}>记录跟进</button>
+                                            <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(activeLead)}>记录跟进</button>
+                                            {!canWrite && canOpenCustomers && <Link to="/customer-management?tab=customers">前往客户档案列表处理</Link>}
                                         </div>
                                     </section>
 
@@ -646,7 +726,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </div>
                 ) : null}
 
-                {!readOnly&&(actionTarget || batchMode) ? (
+                {canWrite && (actionTarget || batchMode) ? (
                     <div className="customer-lead-modal-overlay" onClick={closeAction}>
                         <div className="customer-lead-action-modal" onClick={(event) => event.stopPropagation()}>
                             <div className="customer-lead-modal-header">
@@ -654,7 +734,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <h3>{batchMode ? `批量处理 ${selectedIds.length} 条线索` : `跟进 ${actionTarget ? getDisplayName(actionTarget) : ''}`}</h3>
                                     <p>填写记录后，其他同事能直接接上，不用重新翻聊天上下文。</p>
                                 </div>
-                                <button type="button" className="customer-lead-modal-close" onClick={closeAction}>
+                                <button type="button" className="customer-lead-modal-close" disabled={savingAction} aria-disabled={savingAction} onClick={closeAction}>
                                     <FiXIcon />
                                 </button>
                             </div>
@@ -687,7 +767,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <textarea value={actionForm.remark} onChange={(event) => setActionForm((form) => ({ ...form, remark: event.target.value }))} rows={5} placeholder="例如：已电话沟通，用户关心三层新中式造价，约明天下午发初步预算。" />
                                 </label>
                                 <div className="customer-lead-action-footer">
-                                    <button type="button" className="customer-lead-btn secondary" onClick={closeAction}>取消</button>
+                                    <button type="button" className="customer-lead-btn secondary" disabled={savingAction} onClick={closeAction}>取消</button>
                                     <button type="button" className="customer-lead-btn" disabled={savingAction} onClick={() => void saveAction()}>
                                         保存跟进
                                     </button>

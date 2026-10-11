@@ -67,12 +67,14 @@ const REVIEW_SENTIMENT_MAP: Record<string, string> = {
     negative: '差评',
 };
 
-const defaultSummary: DesignerManagementListSummary = {
-    total_designers: 0,
-    public_designers: 0,
-    approved_designers: 0,
-    designers_with_works: 0,
-    service_enabled_designers: 0,
+const PAGE_SIZE = 20;
+
+type DesignerListScope = {
+    page: number;
+    keyword: string;
+    certification_status: string;
+    visible: string;
+    service_state: 'all' | 'enabled' | 'paused';
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -91,14 +93,25 @@ const getDesignerDisplayName = (item?: DesignerManagementItem | DesignerManageme
 const DesignerCenter: React.FC = () => {
     const navigate = useNavigate();
     const initialKeyword = new URLSearchParams(window.location.search).get('keyword') || '';
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [listError, setListError] = useState('');
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState<number | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
     const [items, setItems] = useState<DesignerManagementItem[]>([]);
-    const [summary, setSummary] = useState<DesignerManagementListSummary>(defaultSummary);
+    const [summary, setSummary] = useState<Partial<DesignerManagementListSummary> | null>(null);
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<DesignerManagementDetail | null>(null);
     const [detailError, setDetailError] = useState('');
+    const [actionError, setActionError] = useState('');
+    const mounted = useRef(false);
+    const listRequestId = useRef(0);
+    const listReady = useRef(false);
+    const listScope = useRef<DesignerListScope>({
+        page: 1, keyword: initialKeyword, certification_status: 'all', visible: 'all', service_state: 'all',
+    });
+    const currentDetail = useRef<DesignerManagementDetail | null>(null);
     const selectedIdRef = useRef<number | null>(null);
     const detailRequestId = useRef(0);
     const actionInFlight = useRef(false);
@@ -108,51 +121,103 @@ const DesignerCenter: React.FC = () => {
     const [visible, setVisible] = useState('all');
     const [serviceState, setServiceState] = useState<'all' | 'enabled' | 'paused'>('all');
 
+    // Handlers from a previous list render must not operate on replacement results.
+    const renderedListRequestId = listRequestId.current;
+
     const selectDesigner = (id: number | null) => {
         if (selectedIdRef.current === id) return;
         selectedIdRef.current = id;
         detailRequestId.current += 1;
         setSelectedId(id);
+        currentDetail.current = null;
         setDetail(null);
         setDetailError('');
+        setActionError('');
         setDetailLoading(id !== null);
     };
 
     const loadList = async () => {
+        if (!mounted.current) return false;
+        const scope = listScope.current;
+        const requestId = ++listRequestId.current;
         const requestPage = window.location.pathname;
+        const isCurrentRequest = () => mounted.current && requestId === listRequestId.current && scope === listScope.current;
+        listReady.current = false;
         setLoading(true);
+        setListError('');
+        setItems([]);
+        setSummary(null);
+        setTotal(null);
         try {
-            const response = await getDesignerManagementList({
-                page: 1,
-                page_size: 20,
-                keyword,
-                certification_status: certificationStatus,
-                visible,
-                service_state: serviceState,
-            });
-            setItems(response.list || []);
-            setSummary(response.summary || defaultSummary);
-            reportPageLoadRecovered('加载设计师列表失败', requestPage);
-            if (response.list?.length) {
-                const current = selectedIdRef.current;
-                selectDesigner(current && response.list.some((item) => item.user_id === current)
-                    ? current
-                    : response.list[0].user_id);
-            } else {
-                selectDesigner(null);
+            const response = await getDesignerManagementList({ page_size: PAGE_SIZE, ...scope });
+            if (!isCurrentRequest()) return false;
+            const nextTotal = Number.isFinite(response.total) && response.total >= 0 ? response.total : null;
+            const lastPage = nextTotal === null ? scope.page : Math.max(1, Math.ceil(nextTotal / PAGE_SIZE));
+            if (scope.page > lastPage) {
+                changeListScope({ page: lastPage });
+                return false;
             }
+            const nextItems = response.list || [];
+            setItems(nextItems);
+            setTotal(nextTotal);
+            setSummary(response.summary || null);
+            listReady.current = true;
+            reportPageLoadRecovered('加载设计师列表失败', requestPage);
+            const current = selectedIdRef.current;
+            const selectedItem = nextItems.find((item) => item.user_id === current) || nextItems[0];
+            const displayedDetail = currentDetail.current;
+            const shouldReloadDetail = selectedItem?.user_id === current && (
+                !displayedDetail
+                || (typeof selectedItem.designer_visible === 'boolean' && selectedItem.designer_visible !== (displayedDetail.profile?.designer_visible === true))
+                || (typeof selectedItem.service_enabled === 'boolean' && selectedItem.service_enabled !== (displayedDetail.profile?.service_enabled === true))
+            );
+            selectDesigner(selectedItem?.user_id ?? null);
+            // A same-ID refresh must not re-enable writes from superseded status values.
+            // Also replace any pending detail request that predates the refreshed list.
+            if (shouldReloadDetail && selectedItem) void loadDetail(selectedItem.user_id);
+            return true;
         } catch (error) {
+            if (!isCurrentRequest()) return false;
+            setItems([]);
+            setSummary(null);
+            setTotal(null);
+            selectDesigner(null);
+            setListError('设计师列表加载失败，请重试。');
             console.error('加载设计师列表失败:', error);
             reportPageLoadError(error, '加载设计师列表失败');
+            return false;
         } finally {
-            setLoading(false);
+            if (isCurrentRequest()) setLoading(false);
         }
     };
 
+    const changeListScope = (patch: Partial<DesignerListScope>) => {
+        if (!mounted.current) return false;
+        const next = { ...listScope.current, ...patch, page: patch.page ?? 1 };
+        if (Object.keys(next).every((key) => next[key as keyof DesignerListScope] === listScope.current[key as keyof DesignerListScope])) return false;
+        // Invalidate synchronously, before React renders or the next effect starts.
+        listScope.current = next;
+        listRequestId.current += 1;
+        listReady.current = false;
+        setItems([]);
+        setSummary(null);
+        setTotal(null);
+        setListError('');
+        setLoading(true);
+        selectDesigner(null);
+        setPage(next.page);
+        setKeyword(next.keyword);
+        setCertificationStatus(next.certification_status);
+        setVisible(next.visible);
+        setServiceState(next.service_state);
+        return true;
+    };
+
     const loadDetail = async (id: number) => {
-        if (selectedIdRef.current !== id) return;
+        if (!mounted.current || !listReady.current || selectedIdRef.current !== id) return;
         const requestId = ++detailRequestId.current;
-        const isCurrentRequest = () => requestId === detailRequestId.current && selectedIdRef.current === id;
+        const isCurrentRequest = () => mounted.current && requestId === detailRequestId.current && selectedIdRef.current === id;
+        currentDetail.current = null;
         setDetail(null);
         setDetailError('');
         setDetailLoading(true);
@@ -160,6 +225,7 @@ const DesignerCenter: React.FC = () => {
             const response = await getDesignerManagementDetail(id);
             if (!isCurrentRequest()) return;
             if (response.user_id !== id) throw new Error('设计师详情与所选用户不一致');
+            currentDetail.current = response;
             setDetail(response);
         } catch (error) {
             if (!isCurrentRequest()) return;
@@ -171,8 +237,19 @@ const DesignerCenter: React.FC = () => {
     };
 
     useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            listReady.current = false;
+            listRequestId.current += 1;
+            detailRequestId.current += 1;
+            currentDetail.current = null;
+        };
+    }, []);
+
+    useEffect(() => {
         void loadList();
-    }, [keyword, certificationStatus, visible, serviceState]);
+    }, [page, keyword, certificationStatus, visible, serviceState]);
 
     useEffect(() => {
         if (!selectedId) {
@@ -188,80 +265,97 @@ const DesignerCenter: React.FC = () => {
             {
                 key: 'total',
                 title: '设计师总数',
-                value: summary.total_designers,
+                value: summary?.total_designers ?? '—',
                 icon: FiUsersIcon,
             },
             {
                 key: 'public',
                 title: '已公开主页',
-                value: summary.public_designers,
+                value: summary?.public_designers ?? '—',
                 icon: FiEyeIcon,
             },
             {
                 key: 'approved',
                 title: '认证已通过',
-                value: summary.approved_designers,
+                value: summary?.approved_designers ?? '—',
                 icon: FiCheckCircleIcon,
             },
             {
                 key: 'works',
                 title: '已有作品设计师',
-                value: summary.designers_with_works,
+                value: summary?.designers_with_works ?? '—',
                 icon: FiImageIcon,
             },
             {
                 key: 'service',
                 title: '接单中',
-                value: summary.service_enabled_designers ?? 0,
+                value: summary?.service_enabled_designers ?? '—',
                 icon: FiZapIcon,
             },
         ];
     }, [summary]);
 
+    const handlePageChange = (nextPage: number) => {
+        if (!mounted.current || !listReady.current || renderedListRequestId !== listRequestId.current || total === null) return;
+        const boundedPage = Math.min(Math.max(1, nextPage), Math.max(1, Math.ceil(total / PAGE_SIZE)));
+        changeListScope({ page: boundedPage });
+    };
+
     const handleSearch = () => {
-        setKeyword(keywordInput.trim());
+        if (!changeListScope({ keyword: keywordInput.trim() })) void loadList();
     };
 
     const handleReset = () => {
+        if (!mounted.current) return;
         setKeywordInput('');
-        setKeyword('');
-        setCertificationStatus('all');
-        setVisible('all');
-        setServiceState('all');
+        if (!changeListScope({ keyword: '', certification_status: 'all', visible: 'all', service_state: 'all' })) void loadList();
     };
 
-    const handleToggleVisibility = async (item: Pick<DesignerManagementItem, 'user_id' | 'designer_visible'>) => {
-        if (item.user_id !== selectedIdRef.current || detail?.user_id !== item.user_id || actionLoadingId !== null || actionInFlight.current) return;
+    const updateDesigner = async (id: number, update: () => Promise<void>, failureMessage: string) => {
+        if (
+            !mounted.current || !listReady.current || renderedListRequestId !== listRequestId.current
+            || id !== selectedIdRef.current || detail?.user_id !== id || currentDetail.current !== detail
+            || actionLoadingId !== null || actionInFlight.current
+        ) return;
+        const scope = listScope.current;
+        const detailVersion = detailRequestId.current;
+        const isCurrentTarget = () => mounted.current && scope === listScope.current && selectedIdRef.current === id && detailVersion === detailRequestId.current;
         actionInFlight.current = true;
-        setActionLoadingId(item.user_id);
+        setActionError('');
+        setActionLoadingId(id);
         try {
-            await updateDesignerVisibility(item.user_id, !item.designer_visible);
-            await loadList();
-            await loadDetail(item.user_id);
+            await update();
+            if (!mounted.current) return;
+            // Read the latest filters, never those captured by the write's old render.
+            const refreshScope = listScope.current;
+            const refreshSelection = selectedIdRef.current;
+            const refreshDetailVersion = detailRequestId.current;
+            const refreshed = await loadList();
+            if (
+                refreshed && mounted.current && refreshScope === listScope.current
+                && refreshSelection === id && selectedIdRef.current === id
+                && refreshDetailVersion === detailRequestId.current
+            ) await loadDetail(id);
         } catch (error) {
-            console.error('更新设计师展示状态失败:', error);
-            alert('更新设计师展示状态失败');
+            if (!isCurrentTarget()) return;
+            console.error(failureMessage, error);
+            setActionError(`${failureMessage}，请重试。`);
         } finally {
-            actionInFlight.current = false;
-            setActionLoadingId(null);
+            if (mounted.current) {
+                actionInFlight.current = false;
+                setActionLoadingId(null);
+            }
         }
     };
 
-    const handleToggleService = async (item: Pick<DesignerManagementItem, 'user_id' | 'service_enabled'>) => {
-        if (item.user_id !== selectedIdRef.current || detail?.user_id !== item.user_id || actionLoadingId !== null || actionInFlight.current) return;
-        actionInFlight.current = true;
-        setActionLoadingId(item.user_id);
-        try {
-            await updateDesignerServiceStatus(item.user_id, !item.service_enabled);
-            await loadList();
-            await loadDetail(item.user_id);
-        } catch (error) {
-            console.error('更新设计师接单状态失败:', error);
-            alert('更新设计师接单状态失败');
-        } finally {
-            actionInFlight.current = false;
-            setActionLoadingId(null);
-        }
+    const handleToggleVisibility = (item: Pick<DesignerManagementItem, 'user_id' | 'designer_visible'>) => {
+        const { user_id: id, designer_visible: visible } = item;
+        return updateDesigner(id, () => updateDesignerVisibility(id, !visible), '更新设计师展示状态失败');
+    };
+
+    const handleToggleService = (item: Pick<DesignerManagementItem, 'user_id' | 'service_enabled'>) => {
+        const { user_id: id, service_enabled: enabled } = item;
+        return updateDesigner(id, () => updateDesignerServiceStatus(id, !enabled), '更新设计师接单状态失败');
     };
 
     const renderWorkCard = (item: DesignerManagementWorkItem) => {
@@ -311,6 +405,7 @@ const DesignerCenter: React.FC = () => {
                                 <FiSearchIcon className="management-search-searchicon" />
                                 <input
                                     className="management-search-input"
+                                    aria-label="设计师关键词"
                                     value={keywordInput}
                                     onChange={(e) => setKeywordInput(e.target.value)}
                                     onKeyDown={(e) => {
@@ -321,7 +416,7 @@ const DesignerCenter: React.FC = () => {
                                     placeholder="搜昵称、用户名、服务标题、擅长方向"
                                 />
                             </div>
-                            <select className="management-search-select" value={certificationStatus} onChange={(e) => setCertificationStatus(e.target.value)}>
+                            <select className="management-search-select" aria-label="认证状态" value={certificationStatus} onChange={(e) => changeListScope({ certification_status: e.target.value })}>
                                 <option value="all">全部认证状态</option>
                                 <option value="approved">已通过</option>
                                 <option value="pending_review">待审核</option>
@@ -329,7 +424,7 @@ const DesignerCenter: React.FC = () => {
                                 <option value="pending_payment">待支付</option>
                                 <option value="none">未申请</option>
                             </select>
-                            <select className="management-search-select" value={visible} onChange={(e) => setVisible(e.target.value)}>
+                            <select className="management-search-select" aria-label="主页公开状态" value={visible} onChange={(e) => changeListScope({ visible: e.target.value })}>
                                 <option value="all">全部公开状态</option>
                                 <option value="public">已公开</option>
                                 <option value="hidden">已隐藏</option>
@@ -337,7 +432,8 @@ const DesignerCenter: React.FC = () => {
                             <select
                                 className="management-search-select"
                                 value={serviceState}
-                                onChange={(e) => setServiceState(e.target.value as 'all' | 'enabled' | 'paused')}
+                                aria-label="接单状态"
+                                onChange={(e) => changeListScope({ service_state: e.target.value as 'all' | 'enabled' | 'paused' })}
                             >
                                 <option value="all">全部接单状态</option>
                                 <option value="enabled">接单中</option>
@@ -349,7 +445,7 @@ const DesignerCenter: React.FC = () => {
                     summary={(
                         <>
                             <div>
-                                当前设计师 <strong>{items.length}</strong> 位
+                                当前页设计师 <strong>{loading ? '加载中' : listError ? '暂不可用' : items.length}</strong>{!loading && !listError ? ' 位' : ''}
                             </div>
                             <div className="management-search-tags">
                                 {keyword ? <span className="management-search-tag">关键词：{keyword}</span> : null}
@@ -361,6 +457,7 @@ const DesignerCenter: React.FC = () => {
                     )}
                 />
 
+                <div className="designer-summary-heading">全局设计师统计（不随筛选条件变化）</div>
                 <div className="designer-summary-grid">
                     {summaryCards.map((card) => {
                         const Icon = card.icon;
@@ -368,23 +465,36 @@ const DesignerCenter: React.FC = () => {
                             <div key={card.key} className="designer-summary-card section-card">
                                 <div className="designer-summary-icon"><Icon /></div>
                                 <div className="designer-summary-title">{card.title}</div>
-                                <div className="designer-summary-value">{card.value}</div>
+                                <div className="designer-summary-value" aria-label={`${card.title}：${card.value === '—' ? '暂不可用' : card.value}`}>{card.value}</div>
                             </div>
                         );
                     })}
                 </div>
 
+                {summaryCards.some((card) => card.value === '—') && (
+                    <div className="designer-summary-status" role="status">{loading ? '统计加载中...' : '“—”表示暂未获取统计数据。'}</div>
+                )}
+
                 <div className="designer-center-grid">
                     <div className="designer-list-panel section-card">
-                        <div className="designer-list">
-                            {items.length === 0 ? (
+                        <div className="designer-list" aria-busy={loading}>
+                            {loading ? (
+                                <div className="designer-empty" role="status">设计师列表加载中...</div>
+                            ) : listError ? (
+                                <div className="designer-empty designer-load-error" role="alert">
+                                    <p>{listError}</p>
+                                    <button className="btn-secondary" onClick={() => void loadList()}>重试列表</button>
+                                </div>
+                            ) : items.length === 0 ? (
                                 <div className="designer-empty">当前没有符合条件的设计师。</div>
                             ) : (
                                 items.map((item) => (
                                     <button
                                         key={item.user_id}
                                         className={`designer-list-item ${selectedId === item.user_id ? 'active' : ''}`}
-                                        onClick={() => selectDesigner(item.user_id)}
+                                        onClick={() => {
+                                            if (mounted.current && listReady.current && renderedListRequestId === listRequestId.current) selectDesigner(item.user_id);
+                                        }}
                                     >
                                         <div className="designer-list-main">
                                             <div className="designer-avatar-wrap">
@@ -408,6 +518,13 @@ const DesignerCenter: React.FC = () => {
                                     </button>
                                 ))
                             )}
+                        </div>
+                        <div className="designer-pagination" aria-label="设计师列表分页">
+                            <span>{loading ? '分页加载中...' : listError || total === null ? '总数暂不可用' : `共 ${total} 位 · 第 ${page} / ${Math.max(1, Math.ceil(total / PAGE_SIZE))} 页`}</span>
+                            <div className="designer-pagination-actions">
+                                <button className="btn-secondary" onClick={() => handlePageChange(page - 1)} disabled={loading || !!listError || total === null || page <= 1}>上一页</button>
+                                <button className="btn-secondary" onClick={() => handlePageChange(page + 1)} disabled={loading || !!listError || total === null || page >= Math.max(1, Math.ceil(total / PAGE_SIZE))}>下一页</button>
+                            </div>
                         </div>
                     </div>
 
@@ -449,7 +566,7 @@ const DesignerCenter: React.FC = () => {
                                                 user_id: detail.user_id,
                                                 designer_visible: detail.profile?.designer_visible === true,
                                             })}
-                                            disabled={actionLoadingId !== null}
+                                            disabled={loading || actionLoadingId !== null}
                                         >
                                             {actionLoadingId === detail.user_id ? '提交中...' : detail.profile?.designer_visible ? '下架主页' : '上架主页'}
                                         </button>
@@ -459,12 +576,14 @@ const DesignerCenter: React.FC = () => {
                                                 user_id: detail.user_id,
                                                 service_enabled: detail.profile?.service_enabled === true,
                                             })}
-                                            disabled={actionLoadingId !== null}
+                                            disabled={loading || actionLoadingId !== null}
                                         >
                                             {actionLoadingId === detail.user_id ? '提交中...' : detail.profile?.service_enabled ? '暂停接单' : '恢复接单'}
                                         </button>
                                     </div>
                                 </div>
+
+                                {actionError && <div className="designer-action-error" role="alert">{actionError}</div>}
 
                                 <div className="designer-stat-grid">
                                     <div className="designer-stat-box"><FiImageIcon /><span>作品 {detail.stats.total_works}</span></div>

@@ -51,17 +51,17 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
             <section className="lead-hub-card">
                 <header className="lead-hub-card-head">
                     <h2>线索简报</h2>
-                    <span className="lead-hub-period">今天</span>
+                    <span className="lead-hub-period">全量概览</span>
                     <button type="button" className="lead-hub-refresh" onClick={onRefresh} disabled={loading}>
                         <FiRefreshCw />
                         刷新
                     </button>
                 </header>
                 <div className="lead-hub-figures">
-                    <div><span>新增线索</span><strong>{overview.today_new_count || 0}</strong></div>
+                    <div><span>今日新增</span><strong>{overview.today_new_count || 0}</strong></div>
                     <div><span>待处理</span><strong>{overview.todo_count || 0}</strong></div>
                     {/* 与「高意向」队列同口径（只算还要跟进的），否则简报和 Tab 角标对不上 */}
-                    <div><span>高意向</span><strong>{overview.high_todo_count || 0}</strong></div>
+                    <div><span>待跟进高意向</span><strong>{overview.high_todo_count ?? '待确认'}</strong></div>
                     <div><span>超时未跟进</span><strong className={overview.overdue_count ? 'is-alert' : ''}>{overview.overdue_count || 0}</strong></div>
                 </div>
             </section>

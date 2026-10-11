@@ -5,10 +5,12 @@ const managedPages = new Set([
     '/membership-operations', '/recharge', '/virtualpay', '/pricing-config',
     '/recharge-config', '/membership-plans', '/ai-overview', '/ai-tasks',
     '/ai-content-audits', '/ai-tools', '/ai-pricing', '/ai-config',
+    '/templates', '/inspirations', '/support-tickets', '/utility-tools', '/oss',
+    '/customer-leads', '/customer-management',
 ]);
 
-const panelSelector = '.modal-content, .cert-drawer, .order-drawer, .aip-modal, .aca-modal, .aca-preview';
-const closeSelector = '.modal-close, .cert-drawer-close, .drawer-close, .aip-modal-close, .aca-modal-close';
+const panelSelector = '.modal-content, .cert-drawer, .order-drawer, .aip-modal, .aca-modal, .aca-preview, .customer-lead-modal, .customer-lead-action-modal';
+const closeSelector = '.modal-close, .cert-drawer-close, .drawer-close, .aip-modal-close, .aca-modal-close, .customer-lead-modal-close';
 const focusSelector = 'a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]';
 
 type SavedAttribute = { element: HTMLElement; name: string; value: string | null };
@@ -78,9 +80,13 @@ export function installAdminDialogKeyboard(root: HTMLElement): () => void {
         if (syncing) return;
         syncing = true;
         try {
-            const panels = Array.from(root.querySelectorAll<HTMLElement>(panelSelector)).filter(available);
+            // CRM drawers own their keyboard handlers; include them only when deciding
+            // which layer is above us, never to install attributes or close behavior.
+            const layers = Array.from(root.querySelectorAll<HTMLElement>(panelSelector + ', .crm-drawer')).filter(available);
             // Stable sorting preserves DOM paint order for equal-z-index modals.
-            panels.sort((left, right) => level(left) - level(right));
+            layers.sort((left, right) => level(left) - level(right));
+            const panels = layers.filter(panel => !panel.closest('.crm-drawer'));
+            const selfManagedTop = layers.length > 0 && !!layers[layers.length - 1].closest('.crm-drawer');
             for (const panel of panels) {
                 if (states.has(panel)) continue;
                 const state: DialogState = { returnFocus: panel.contains(lastFocused) ? null : lastFocused, attributes: [] };
@@ -97,7 +103,7 @@ export function installAdminDialogKeyboard(root: HTMLElement): () => void {
                 }
             }
             const previous = top;
-            top = panels[panels.length - 1] || null;
+            top = selfManagedTop ? null : panels[panels.length - 1] || null;
             const hasPalette = paletteVisible();
             for (const panel of panels) setAttribute(states.get(panel)!, panel, 'aria-modal', String(panel === top && !hasPalette));
             if (hasPalette) {
@@ -105,6 +111,10 @@ export function installAdminDialogKeyboard(root: HTMLElement): () => void {
                 paletteOpen = true;
                 // The palette owns Escape and initial focus. Do not move focus or
                 // consume keys while it is above these dialogs (z-index: 1500).
+            } else if (selfManagedTop) {
+                // Do not pull focus out of a self-managed report form or drawer.
+                paletteOpen = false;
+                paletteReturn = null;
             } else {
                 const restore = paletteOpen ? paletteReturn : previous && previous !== top ? returnTarget(previous) : null;
                 paletteOpen = false;

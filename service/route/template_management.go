@@ -381,86 +381,20 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 			})
 		})
 
-		// 更新模板
-		templates.PUT("/:id", func(c *gin.Context) {
-			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"code": 400,
-					"msg":  "无效的模板ID",
-				})
-				return
-			}
-
-			var req TemplateRequest
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"code": 400,
-					"msg":  FormatValidationError("参数错误: " + err.Error()),
-				})
-				return
-			}
-
-			template, err := templateModel.GetByID(id)
-			if err != nil {
-				c.JSON(http.StatusNotFound, gin.H{
-					"code": 404,
-					"msg":  "模板不存在",
-				})
-				return
-			}
-
-			template.Name = req.Name
-			template.Category = req.Category
-			template.MainTab = req.MainTab
-			template.SubTab = req.SubTab
-			template.ThirdTab = req.ThirdTab
-			template.Description = req.Description
-			template.Thumbnail = req.Thumbnail
-			template.PreviewURL = req.PreviewURL
-			template.Images = req.Images
-			template.Price = req.Price
-			template.IsFree = req.IsFree
-			template.Status = req.Status
-			template.PublishScope = req.PublishScope
-			template.RejectReason = req.RejectReason
-			template.SourceType = req.SourceType
-			if err := validateTemplateTabAssignment(templateSquareConfigModel, template.MainTab, template.SubTab, template.ThirdTab); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"code": 400,
-					"msg":  err.Error(),
-				})
-				return
-			}
-			if err := validateTemplatePrimaryImage(template); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"code": 400,
-					"msg":  err.Error(),
-				})
-				return
-			}
-			if err := generateTemplateDerivedImages(context.Background(), template, templateVariantNamespace(template)); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "生成模板衍生图失败: " + err.Error(),
-				})
-				return
-			}
-
-			if err := templateModel.Update(template); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "更新模板失败: " + err.Error(),
-				})
-				return
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"code": 0,
-				"msg":  "更新成功",
-				"data": template,
-			})
-		})
+		// 更新模板：省略字段保留当前值，相关字段按组做并发检查。
+		templates.PUT("/:id", newTemplateUpdateHandler(templateModel,
+			func(template *model.Template) error {
+				return validateTemplateTabAssignment(templateSquareConfigModel, template.MainTab, template.SubTab, template.ThirdTab)
+			},
+			validateTemplatePrimaryImage,
+			func(template *model.Template) error {
+				if err := generateTemplateDerivedImages(context.Background(), template, templateVariantNamespace(template)); err != nil {
+					return err
+				}
+				model.PopulateTemplateImageMetadata(template)
+				return nil
+			},
+		))
 
 		// 移动模板到指定分类
 		templates.PATCH("/:id/category", func(c *gin.Context) {
@@ -675,7 +609,7 @@ func RegisterTemplateManagementRoutes(r *gin.RouterGroup, templateModel *model.T
 				if page < 1 {
 					page = 1
 				}
-			pageSize = clampManagementPageSize(pageSize)
+				pageSize = clampManagementPageSize(pageSize)
 				offset := (page - 1) * pageSize
 
 				groups, err := featuredCaseGroupModel.List(pageSize, offset)

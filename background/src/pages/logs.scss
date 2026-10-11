@@ -397,8 +397,6 @@
   font-size: 12px;
   color: #6b7280;
 }
-}
-
 // 操作审计页：接口路径列（等宽字体便于阅读，超长省略）
 .audit-path {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
@@ -408,4 +406,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
 }

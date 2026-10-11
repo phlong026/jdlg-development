@@ -1,0 +1,223 @@
+// Remaining operational pages. Explicit route roots also win over later lazy CSS.
+// No financial/status columns are hidden; only verified action columns are sticky.
+
+.layout-content[data-admin-page='/templates'],
+.layout-content[data-admin-page='/utility-tools'],
+.layout-content[data-admin-page='/inspirations'],
+.layout-content[data-admin-page='/designer-center'],
+.layout-content[data-admin-page='/support-tickets'],
+.layout-content[data-admin-page='/risk-control'],
+.layout-content[data-admin-page='/distribution'],
+.layout-content[data-admin-page='/content-analytics'],
+.layout-content[data-admin-page='/report-center'],
+.layout-content[data-admin-page='/oss'],
+.layout-content[data-admin-page='/logs'],
+.layout-content[data-admin-page='/opportunities'] {
+  .stat-card, .stat-item, .designer-summary-card, .designer-stat-box,
+  .summary-chip, .section-card, .template-card { min-width: 0; max-width: 100%; }
+  .stat-value, .stat-label, .stat-desc, .designer-summary-value,
+  .designer-summary-title, .designer-stat-box span, .summary-chip span,
+  .summary-chip strong, .toolbar-summary, .management-search-tag {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .toolbar-left, .toolbar-right, .toolbar-actions, .search-box,
+  .designer-search-box, .designer-filter-row, .management-search-panel__actions,
+  .management-search-panel__controls { min-width: 0; max-width: 100%; }
+  input:not([type='checkbox']):not([type='radio']), select, textarea {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+  }
+  button, .upload-trigger, .upload-label, .btn-text-link, .btn-link {
+    min-width: 44px;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .upload-trigger, .upload-label, a.btn-text-link, a.btn-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .risk-table-container, .support-table-container, .distribution-table-container,
+  .analytics-table-container, .report-table-container, .oss-table-container, .logs-table-container {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .pagination, .pagination-controls, .pagination-info { min-width: 0; flex-wrap: wrap; gap: 8px; overflow-wrap: anywhere; }
+}
+
+// Give long paths their own wrapping cell, while retaining a usable table at tablet widths.
+.layout-content[data-admin-page='/oss'] {
+  .upload-label { border: 0; }
+  .oss-table { min-width: 980px; }
+  .file-name, .file-path { max-width: 24rem; overflow-wrap: anywhere; }
+}
+.layout-content[data-admin-page='/logs'] {
+  .logs-table-panel { padding: 16px; background: var(--admin-surface); border-radius: 8px; }
+  .logs-table-container { padding: 0; box-shadow: none; }
+  .logs-table { min-width: 980px; }
+}
+.layout-content[data-admin-page='/report-center'] .summary-chip { flex: 1 1 160px; }
+.layout-content[data-admin-page='/designer-center'] {
+  .designer-list-title, .designer-list-subtitle, .designer-detail-name,
+  .designer-info-value, .designer-work-title { overflow-wrap: anywhere; }
+  .designer-search-box input { flex: 1; min-width: 0; }
+  .designer-search-icon, .designer-stat-box svg { flex-shrink: 0; }
+}
+.layout-content[data-admin-page='/templates'] {
+  .templates-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+  .featured-group-item, .featured-group-header, .featured-group-meta,
+  .featured-group-actions, .featured-meta, .image-upload-group { flex-wrap: wrap; gap: 12px; }
+  .featured-group-content, .case-info, .case-info span, .tab-config-block { min-width: 0; overflow-wrap: anywhere; }
+  .case-item { min-width: 0; max-width: 100%; flex: 1 1 200px; }
+  .case-thumbnail { flex-shrink: 0; }
+  .template-name, .template-description { overflow-wrap: anywhere; }
+  .template-thumbnail:focus-within .template-overlay { opacity: 1; }
+}
+.layout-content[data-admin-page='/inspirations'] {
+  .item-header h4, .item-description, .upload-hint { min-width: 0; overflow-wrap: anywhere; }
+  .image-upload-group { flex-wrap: wrap; }
+}
+.layout-content[data-admin-page='/opportunities'] .opportunities-card a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+
+// The body alone scrolls; header, cancel/save and close remain reachable on short screens.
+.layout-content[data-admin-page='/templates'],
+.layout-content[data-admin-page='/utility-tools'],
+.layout-content[data-admin-page='/inspirations'],
+.layout-content[data-admin-page='/support-tickets'],
+.layout-content[data-admin-page='/oss'] {
+  .modal-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow: hidden !important; // Overrides the shared mobile sheet's whole-dialog scrolling.
+  }
+  .modal-header, .modal-footer { flex-shrink: 0; gap: 10px; }
+  .modal-header { padding-top: max(16px, env(safe-area-inset-top)); }
+  .modal-header h2, .modal-header h3 { min-width: 0; overflow-wrap: anywhere; }
+  .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+  }
+  .modal-footer { flex-wrap: wrap; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .modal-close { flex-shrink: 0; width: 44px; height: 44px; }
+}
+
+// Cover the 769–960px interval as well: the shared search component otherwise
+// sets every individual field to min-width:100%, even when two fields fit.
+@media (max-width: 960px) {
+  .layout-content[data-admin-page='/templates'],
+  .layout-content[data-admin-page='/utility-tools'],
+  .layout-content[data-admin-page='/inspirations'],
+  .layout-content[data-admin-page='/designer-center'],
+  .layout-content[data-admin-page='/support-tickets'],
+  .layout-content[data-admin-page='/risk-control'],
+  .layout-content[data-admin-page='/distribution'],
+  .layout-content[data-admin-page='/content-analytics'],
+  .layout-content[data-admin-page='/report-center'],
+  .layout-content[data-admin-page='/oss'],
+  .layout-content[data-admin-page='/logs'],
+  .layout-content[data-admin-page='/opportunities'] {
+    .management-search-panel .management-search-panel__controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .management-search-panel__controls > * { min-width: 0; width: 100%; }
+    .management-search-searchbox, .management-search-panel__controls > button { grid-column: 1 / -1; }
+    .management-search-panel__actions { flex-wrap: wrap; }
+    .management-search-panel__actions > button { flex: 1 1 140px; width: auto; }
+    .report-toolbar { align-items: stretch; }
+    .report-toolbar > input, .report-toolbar > select { flex: 1 1 160px; }
+  }
+}
+
+@media (max-width: 768px) {
+  .layout-content[data-admin-page='/templates'],
+  .layout-content[data-admin-page='/utility-tools'],
+  .layout-content[data-admin-page='/inspirations'],
+  .layout-content[data-admin-page='/designer-center'],
+  .layout-content[data-admin-page='/support-tickets'],
+  .layout-content[data-admin-page='/risk-control'],
+  .layout-content[data-admin-page='/distribution'],
+  .layout-content[data-admin-page='/content-analytics'],
+  .layout-content[data-admin-page='/report-center'],
+  .layout-content[data-admin-page='/oss'],
+  .layout-content[data-admin-page='/logs'],
+  .layout-content[data-admin-page='/opportunities'] {
+    .stat-value, .designer-summary-value { font-size: clamp(20px, 5.5vw, 28px); }
+  }
+  .layout-content[data-admin-page='/templates'] .modal-content,
+  .layout-content[data-admin-page='/utility-tools'] .modal-content,
+  .layout-content[data-admin-page='/inspirations'] .modal-content,
+  .layout-content[data-admin-page='/support-tickets'] .modal-content,
+  .layout-content[data-admin-page='/oss'] .modal-content {
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top))) !important;
+  }
+  .layout-content[data-admin-page='/templates'] {
+    .templates-grid, .readonly-info-grid { grid-template-columns: minmax(0, 1fr); }
+    .featured-group-item { flex-direction: column; align-items: stretch; }
+    .featured-group-actions { width: 100%; }
+  }
+
+  .layout-content[data-admin-page='/risk-control'] .risk-table,
+  .layout-content[data-admin-page='/support-tickets'] .support-table,
+  .layout-content[data-admin-page='/oss'] .oss-table {
+    th:last-child, td:last-child:not([colspan]) {
+      position: sticky;
+      right: 0;
+      z-index: 1;
+      width: 128px;
+      min-width: 128px;
+      max-width: 128px;
+      background: var(--admin-surface);
+      box-shadow: -3px 0 6px rgba(47, 36, 27, .08);
+      white-space: normal;
+    }
+    .table-action-stack, .action-buttons, .action-group { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+    .table-action-stack > button, .action-group > button { width: 100%; }
+  }
+}
+
+@media (max-width: 560px) {
+  .layout-content[data-admin-page='/templates'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/utility-tools'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/inspirations'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/designer-center'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/support-tickets'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/risk-control'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/distribution'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/content-analytics'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/report-center'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/oss'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/logs'] .management-search-panel .management-search-panel__controls,
+  .layout-content[data-admin-page='/opportunities'] .management-search-panel .management-search-panel__controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (hover: none) {
+  .layout-content[data-admin-page='/templates'] .template-overlay { opacity: 1; }
+}
+
+.layout-content[data-admin-page='/utility-tools'] {
+  .tool-header { min-width: 0; max-width: 100%; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  .tool-header h4 { min-width: 0; max-width: 100%; flex: 1 1 auto; overflow-wrap: anywhere; }
+  .tool-header .tool-status { flex-shrink: 0; }
+  .tool-preview { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+}

@@ -1,4 +1,4 @@
-import { get } from '../utils/request';
+import { request } from '../utils/request';
 import { API_ENDPOINTS } from '../config/api';
 
 export interface ContentAnalyticsOverview {
@@ -65,50 +65,44 @@ export interface ContentAnalyticsListParams {
     keyword?: string;
 }
 
-export const getContentAnalyticsOverview = async () => {
-    const response = await get<ContentAnalyticsOverview>(API_ENDPOINTS.CONTENT_ANALYTICS.OVERVIEW);
-    if (!response.data) {
-        throw new Error('获取内容运营分析概览失败');
+const overviewFields: (keyof ContentAnalyticsOverview)[] = [
+    'total_templates', 'published_templates', 'total_downloads', 'total_unlocks',
+    'total_interactions', 'week_new_templates', 'featured_case_group_count',
+];
+
+export const getContentAnalyticsOverview = async (signal?: AbortSignal) => {
+    const response = await request<ContentAnalyticsOverview>(API_ENDPOINTS.CONTENT_ANALYTICS.OVERVIEW, { method: 'GET', signal });
+    const data = response.data;
+    if (!data || overviewFields.some(field => !Number.isSafeInteger(data[field]) || data[field] < 0)) {
+        throw new Error('内容运营分析概览数据不完整，请重试');
     }
-    return response.data;
+    return data;
 };
 
-export const getContentAnalyticsDownloadRanking = async (params?: ContentAnalyticsListParams) => {
-    const response = await get<ContentAnalyticsListResponse<ContentAnalyticsTemplateItem>>(API_ENDPOINTS.CONTENT_ANALYTICS.DOWNLOAD_RANKING, params as Record<string, any>);
-    if (!response.data) {
-        throw new Error('获取模板下载排行失败');
+const getAnalyticsList = async <T>(endpoint: string, label: string, params?: ContentAnalyticsListParams, signal?: AbortSignal) => {
+    const response = await request<ContentAnalyticsListResponse<T>>(endpoint, { method: 'GET', params, signal });
+    const data = response.data;
+    // The service returns an array, including [] for an empty result. Missing
+    // lists must remain an error rather than becoming a believable empty table.
+    if (!data || !Array.isArray(data.list) || !Number.isSafeInteger(data.total) || data.total < 0 ||
+        !Number.isSafeInteger(data.page) || data.page < 1 || !Number.isSafeInteger(data.page_size) || data.page_size < 1 ||
+        data.list.some(item => !item || typeof item !== 'object' || Array.isArray(item))) {
+        throw new Error(`${label}数据不完整，请重试`);
     }
-    return response.data;
+    return data;
 };
 
-export const getContentAnalyticsEngagementRanking = async (params?: ContentAnalyticsListParams) => {
-    const response = await get<ContentAnalyticsListResponse<ContentAnalyticsTemplateItem>>(API_ENDPOINTS.CONTENT_ANALYTICS.ENGAGEMENT_RANKING, params as Record<string, any>);
-    if (!response.data) {
-        throw new Error('获取互动排行失败');
-    }
-    return response.data;
-};
+export const getContentAnalyticsDownloadRanking = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
+    getAnalyticsList<ContentAnalyticsTemplateItem>(API_ENDPOINTS.CONTENT_ANALYTICS.DOWNLOAD_RANKING, '模板下载排行', params, signal);
 
-export const getContentAnalyticsNewTemplates = async (params?: ContentAnalyticsListParams) => {
-    const response = await get<ContentAnalyticsListResponse<ContentAnalyticsTemplateItem>>(API_ENDPOINTS.CONTENT_ANALYTICS.NEW_TEMPLATES, params as Record<string, any>);
-    if (!response.data) {
-        throw new Error('获取新上架模板表现失败');
-    }
-    return response.data;
-};
+export const getContentAnalyticsEngagementRanking = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
+    getAnalyticsList<ContentAnalyticsTemplateItem>(API_ENDPOINTS.CONTENT_ANALYTICS.ENGAGEMENT_RANKING, '互动排行', params, signal);
 
-export const getContentAnalyticsLowConversion = async (params?: ContentAnalyticsListParams) => {
-    const response = await get<ContentAnalyticsListResponse<ContentAnalyticsTemplateItem>>(API_ENDPOINTS.CONTENT_ANALYTICS.LOW_CONVERSION, params as Record<string, any>);
-    if (!response.data) {
-        throw new Error('获取低转化模板失败');
-    }
-    return response.data;
-};
+export const getContentAnalyticsNewTemplates = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
+    getAnalyticsList<ContentAnalyticsTemplateItem>(API_ENDPOINTS.CONTENT_ANALYTICS.NEW_TEMPLATES, '新创建模板表现', params, signal);
 
-export const getContentAnalyticsFeaturedCases = async (params?: ContentAnalyticsListParams) => {
-    const response = await get<ContentAnalyticsListResponse<ContentAnalyticsFeaturedCaseItem>>(API_ENDPOINTS.CONTENT_ANALYTICS.FEATURED_CASES, params as Record<string, any>);
-    if (!response.data) {
-        throw new Error('获取精选案例观察失败');
-    }
-    return response.data;
-};
+export const getContentAnalyticsLowConversion = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
+    getAnalyticsList<ContentAnalyticsTemplateItem>(API_ENDPOINTS.CONTENT_ANALYTICS.LOW_CONVERSION, '低转化模板', params, signal);
+
+export const getContentAnalyticsFeaturedCases = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
+    getAnalyticsList<ContentAnalyticsFeaturedCaseItem>(API_ENDPOINTS.CONTENT_ANALYTICS.FEATURED_CASES, '精选案例观察', params, signal);

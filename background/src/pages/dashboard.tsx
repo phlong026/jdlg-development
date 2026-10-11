@@ -585,7 +585,7 @@ const Dashboard: React.FC = () => {
                             <h3>最近访问用户</h3>
                         </div>
                         {recentUsers.length === 0 ? (
-                            <div className="dash-empty">最近没有打开过用户 360。</div>
+                            <div className="dash-empty">最近没有打开过用户详情。</div>
                         ) : (
                             <div className="dash-recent-list">
                                 {recentUsers.slice(0, 5).map(item => (

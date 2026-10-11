@@ -394,4 +394,18 @@
     cursor: not-allowed;
   }
 }
+
+.oss-load-error {
+  padding: 16px;
+  margin-bottom: 16px;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+.oss-container button:disabled,
+.oss-container input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 }

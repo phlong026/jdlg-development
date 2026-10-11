@@ -44,7 +44,11 @@ export interface UtilityToolCreateRequest {
 
 // 获取实用工具内容列表
 export const getUtilityToolList = async (params?: UtilityToolListParams) => {
-    const res = await get<UtilityToolListResponse>(API_ENDPOINTS.UTILITY_TOOLS.LIST, params as Record<string, any>);
+    const res = await get<UtilityToolListResponse>(API_ENDPOINTS.UTILITY_TOOLS.LIST, {
+        ...params,
+        // The management route accepts 1/0, not the strings true/false.
+        is_published: params?.is_published === undefined ? undefined : params.is_published ? 1 : 0,
+    });
     return res.data!;
 };
 

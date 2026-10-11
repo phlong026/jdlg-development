@@ -1,23 +1,31 @@
 import { useSyncExternalStore } from 'react';
 
-// 线索页加载数据后把"各队列数量"发布到这里，子导航条的队列 Tab 订阅它显示角标。
-// 这样角标不用再多发一次请求，也会随页面里的操作（分配、跟进）一起刷新。
+// Counts belong to one verified session. A late request from a previous login
+// must not repopulate the navigation after logout or a permission refresh.
 type Counts = Record<string, number>;
-
+type LeadOverviewSession = Readonly<{ generation: number; userId: number | null }>;
+let session: LeadOverviewSession = { generation: 0, userId: null };
 let counts: Counts = {};
 const listeners = new Set<() => void>();
+const notify = () => listeners.forEach(listener => listener());
 
-export function publishLeadOverview(next: Counts): void {
+export function resetLeadOverviewSession(userId: number | null = null): void {
+    session = { generation: session.generation + 1, userId };
+    counts = {};
+    notify();
+}
+export const getLeadOverviewSession = (): LeadOverviewSession => session;
+export const isLeadOverviewSessionCurrent = (request: LeadOverviewSession): boolean => request === session && session.userId !== null;
+
+export function publishLeadOverview(next: Counts, request: LeadOverviewSession): void {
+    if (!isLeadOverviewSessionCurrent(request)) return;
     counts = { ...next };
-    listeners.forEach((listener) => listener());
+    notify();
 }
 
 export function useLeadOverviewCounts(): Counts {
     return useSyncExternalStore(
-        (listener) => {
-            listeners.add(listener);
-            return () => listeners.delete(listener);
-        },
+        listener => { listeners.add(listener); return () => listeners.delete(listener); },
         () => counts,
     );
 }

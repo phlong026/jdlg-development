@@ -223,6 +223,52 @@
     padding: 28px 16px;
 }
 
+.risk-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.risk-load-error {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #b91c1c;
+    overflow-wrap: anywhere;
+}
+
+.risk-unknown-source {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.risk-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.risk-pagination-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    button {
+        min-height: 44px;
+    }
+}
+
+button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 @media (max-width: 960px) {
     .risk-toolbar {
         flex-direction: column;
