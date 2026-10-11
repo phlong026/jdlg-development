@@ -17,7 +17,7 @@ import {
     type CustomerServiceEventItem,
 } from '../api/customerLeads';
 import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
-import { publishLeadOverview } from '../component/leadOverviewStore';
+import { getLeadOverviewSession, isLeadOverviewSessionCurrent, publishLeadOverview } from '../component/leadOverviewStore';
 import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
 import './customerLeads.scss';
@@ -173,8 +173,21 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [batchMode, setBatchMode] = useState(false);
     const [actionForm, setActionForm] = useState<ActionForm>(defaultAction);
     const [savingAction, setSavingAction] = useState(false);
+    const [loadError, setLoadError] = useState('');
+    const [saveNotice, setSaveNotice] = useState('');
+    const listRequest = useRef(0), detailRequest = useRef(0), actionSequence = useRef(0), saving = useRef(false);
+    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, session.user?.id]);
+    const queryIdentity = useRef(queryKey);
+    // Invalidate old responses during render, before the replacement effect runs.
+    if (queryIdentity.current !== queryKey) { queryIdentity.current = queryKey; listRequest.current++; }
+    const latestLoad = useRef<(afterSave?: boolean) => Promise<boolean>>(async () => false);
+    const actionEpoch = actionSequence.current;
+    const alive = useRef(true);
+    useEffect(() => { alive.current = true; return () => { alive.current = false; listRequest.current++; detailRequest.current++; actionSequence.current++; }; }, []);
 
     useEffect(() => {
+        actionSequence.current++;
+        detailRequest.current++;
         setActionTarget(null);
         setBatchMode(false);
         setActionForm(defaultAction);
@@ -188,8 +201,14 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const activeIntentAnalysis = detail?.intent_analysis || null;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-    const loadData = async () => {
+    const loadData = async (afterSave = false) => {
+        if (queryIdentity.current !== queryKey) return false;
+        const request = ++listRequest.current;
+        const sessionTicket = getLeadOverviewSession();
+        const current = () => alive.current && queryIdentity.current === queryKey && request === listRequest.current && isLeadOverviewSessionCurrent(sessionTicket);
+        if (!current()) return false;
         setLoading(true);
+        setLoadError('');
         try {
             const params = {
                 page,
@@ -205,23 +224,31 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 getCustomerLeadOverview(),
                 getCustomerLeadList(params),
             ]);
+            if (!current()) return false;
             const nextOverview = { ...defaultOverview, ...overviewData };
             setOverview(nextOverview);
             setUpdatedAt(new Date());
-            publishLeadOverview(nextOverview as unknown as Record<string, number>);
+            publishLeadOverview(nextOverview as unknown as Record<string, number>, sessionTicket);
             setList(listData.list || []);
             setTotal(listData.total || 0);
             setSelectedIds((ids) => ids.filter((id) => (listData.list || []).some((item) => item.id === id)));
+            return true;
         } catch (error) {
-            reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
+            if (current()) {
+                setLoadError(error instanceof Error ? error.message : '加载客服线索失败');
+                if (!afterSave) reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索失败');
+            }
+            return false;
         } finally {
-            setLoading(false);
+            if (current()) setLoading(false);
         }
     };
 
+    latestLoad.current = loadData;
+
     useEffect(() => {
-        loadData();
-    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter]);
+        latestLoad.current();
+    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, session.user?.id]);
 
     // 切换队列 / 用户过滤时回到第一页并清空勾选
     useEffect(() => {
@@ -249,23 +276,29 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const handleViewDetail = async (item: CustomerLeadItem) => {
+        const request = ++detailRequest.current;
+        setDetail(null);
         setDetailLoading(true);
         try {
             const data = await getCustomerLeadDetail(String(item.id));
-            setDetail(data);
+            if (request === detailRequest.current) setDetail(data);
         } catch (error) {
-            reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索详情失败');
+            if (request === detailRequest.current) reportPageLoadError(error, error instanceof Error ? error.message : '加载客服线索详情失败');
         } finally {
-            setDetailLoading(false);
+            if (request === detailRequest.current) setDetailLoading(false);
         }
     };
 
     const handleCloseDetail = () => {
+        detailRequest.current++;
+        setDetailLoading(false);
         setDetail(null);
     };
 
     const openAction = (item?: CustomerLeadItem) => {
         if (!writeAllowed.current) return;
+        actionSequence.current++;
+        setSaveNotice('');
         const lead = item || activeLead || null;
         setActionTarget(lead);
         setBatchMode(!lead);
@@ -278,45 +311,53 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const closeAction = () => {
+        actionSequence.current++;
         setActionTarget(null);
         setBatchMode(false);
         setActionForm(defaultAction);
     };
 
     const saveAction = async () => {
-        if (!writeAllowed.current || savingAction) return;
-        if (!actionForm.remark.trim()) {
-            window.alert('请填写本次跟进记录，方便后续同事接手');
-            return;
-        }
+        if (!writeAllowed.current || saving.current || actionEpoch !== actionSequence.current) return;
+        if (!actionForm.remark.trim()) { window.alert('请填写本次跟进记录，方便后续同事接手'); return; }
+        if (batchMode && selectedIds.length === 0) { window.alert('请先选择要批量处理的线索'); return; }
+        if (!batchMode && !actionTarget && !activeLead) return;
         const payload = buildActionPayload(actionForm);
+        const sessionTicket = getLeadOverviewSession();
+        const detailEpoch = detailRequest.current;
+        saving.current = true;
         setSavingAction(true);
         try {
-            if (batchMode) {
-                if (selectedIds.length === 0) {
-                    window.alert('请先选择要批量处理的线索');
-                    return;
-                }
-                await batchUpdateCustomerLeads(selectedIds, payload);
-                setSelectedIds([]);
-            } else if (actionTarget) {
-                await updateCustomerLeadStatus(String(actionTarget.id), payload);
-                if (activeLead?.id === actionTarget.id) {
-                    const latest = await getCustomerLeadDetail(String(actionTarget.id));
-                    setDetail(latest);
-                }
-            } else if (activeLead) {
-                await createCustomerLeadFollowup(String(activeLead.id), payload);
-                const latest = await getCustomerLeadDetail(String(activeLead.id));
-                setDetail(latest);
-            }
-            closeAction();
-            await loadData();
+            // Only a failed write leaves the editor open. A later read can never
+            // turn an acknowledged write into another submit opportunity.
+            if (batchMode) await batchUpdateCustomerLeads(selectedIds, payload);
+            else if (actionTarget) await updateCustomerLeadStatus(String(actionTarget.id), payload);
+            else if (activeLead) await createCustomerLeadFollowup(String(activeLead.id), payload);
         } catch (error) {
-            window.alert(error instanceof Error ? error.message : '保存客服线索跟进失败');
-        } finally {
+            if (actionEpoch === actionSequence.current && isLeadOverviewSessionCurrent(sessionTicket)) window.alert(error instanceof Error ? error.message : '保存客服线索跟进失败');
+            saving.current = false;
+            if (alive.current) setSavingAction(false);
+            return;
+        }
+        if (!alive.current || !isLeadOverviewSessionCurrent(sessionTicket)) { saving.current = false; return; }
+        if (actionEpoch === actionSequence.current) closeAction();
+        setSelectedIds([]);
+        setSaveNotice('跟进已保存，正在读取最新数据。');
+        let detailRead = true;
+        try {
+            if (activeLead && (activeLead.id === actionTarget?.id || !actionTarget)) {
+                const latest = await getCustomerLeadDetail(String(activeLead.id));
+                if (detailEpoch === detailRequest.current && isLeadOverviewSessionCurrent(sessionTicket)) setDetail(latest);
+            }
+        } catch { detailRead = false; }
+        if (!alive.current || !isLeadOverviewSessionCurrent(sessionTicket)) { saving.current = false; return; }
+        const refreshedQuery = queryIdentity.current;
+        const listRead = await latestLoad.current(true);
+        if (alive.current && isLeadOverviewSessionCurrent(sessionTicket)) {
+            setSaveNotice(detailRead && (listRead || refreshedQuery !== queryIdentity.current) ? '跟进已保存。' : '跟进已保存，但最新数据读取失败。请刷新读取，无需重复提交。');
             setSavingAction(false);
         }
+        saving.current = false;
     };
 
     const toggleSelected = (id: number) => {
@@ -336,6 +377,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     return (
         <>
             <div className="customer-lead-page">
+                {saveNotice && <section className="customer-lead-panel" role="status">{saveNotice}</section>}
+                {loadError && <section className="customer-lead-panel" role="alert">读取失败：{loadError}。{updatedAt ? '当前显示上次成功读取的数据。' : '统计与列表尚未确认。'}<button type="button" disabled={loading} onClick={resetToFirstPage}>重新读取</button></section>}
+                <p>全平台小程序线索概览，不随下方队列、用户或搜索条件变化。待处理为新线索与跟进中；高意向仅计待处理线索；今日新增按服务端统计日期计算。</p>
                 {!canWrite && <section className="customer-lead-panel" role="status">
                     <p>{writeBlockedText}</p>
                     {canOpenCustomers ? <Link className="customer-lead-btn" to="/customer-management?tab=customers">前往客户档案列表</Link> : <>
@@ -356,7 +400,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </button>
                 </div>
 
-                <div className="customer-lead-stats">
+                {updatedAt ? <div className="customer-lead-stats">
                     <div className="customer-lead-stat">
                         <FiClockIcon />
                         <span>待处理</span>
@@ -369,19 +413,19 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </div>
                     <div className="customer-lead-stat">
                         <FiUserCheckIcon />
-                        <span>高意向</span>
-                        <strong>{overview.high_intent_count}</strong>
+                        <span>待跟进高意向</span>
+                        <strong>{overview.high_todo_count ?? '待确认'}</strong>
                     </div>
                     <div className="customer-lead-stat danger">
                         <FiActivityIcon />
                         <span>超时未跟进</span>
                         <strong>{overview.overdue_count || 0}</strong>
                     </div>
-                </div>
+                </div> : <p>{loading ? '正在读取线索统计…' : '线索统计尚未确认'}</p>}
                 </>
-                ) : (
+                ) : updatedAt ? (
                     <CustomerLeadHub overview={overview} loading={loading} updatedAt={updatedAt} onRefresh={resetToFirstPage} />
-                )}
+                ) : <section className="customer-lead-panel">{loading ? '正在读取线索统计…' : '线索统计尚未确认'}<button type="button" disabled={loading} onClick={resetToFirstPage}>刷新</button></section>}
 
                 {userIdFilter > 0 && (
                     <div className="customer-lead-userfilter" role="status">

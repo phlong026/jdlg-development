@@ -176,7 +176,7 @@ export const getFeaturedTemplates = async (limit?: number) => {
 export interface FeaturedCaseGroup {
     id: number;
     name: string;
-    display_mode: 'comparison' | 'side_by_side' | 'normal';
+    display_mode: string;
     case1_id: number;
     case2_id: number;
     case1_label: string;

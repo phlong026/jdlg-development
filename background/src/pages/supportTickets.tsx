@@ -1,5 +1,5 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useState } from 'react';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertCircle, FiClipboard, FiRefreshCw, FiSearch, FiTool } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
@@ -22,16 +22,6 @@ const FiRefreshCwIcon = FiRefreshCw as unknown as React.ComponentType<any>;
 const FiClipboardIcon = FiClipboard as unknown as React.ComponentType<any>;
 const FiAlertCircleIcon = FiAlertCircle as unknown as React.ComponentType<any>;
 const FiToolIcon = FiTool as unknown as React.ComponentType<any>;
-
-const defaultOverview: SupportTicketOverview = {
-    total_count: 0,
-    open_count: 0,
-    in_progress_count: 0,
-    closed_count: 0,
-    high_priority_count: 0,
-    today_count: 0,
-    overdue_count: 0,
-};
 
 const typeLabelMap: Record<string, string> = {
     complaint: '用户投诉',
@@ -92,6 +82,11 @@ const getSourceTarget = (item?: SupportTicketItem | null) => {
     return null;
 };
 
+const failureMessage = (error: unknown, fallback: string) => {
+    const message = (error as { message?: unknown } | null)?.message;
+    return typeof message === 'string' && message ? message : fallback;
+};
+
 const parseSourcePayload = (value?: string) => {
     if (!value) {
         return null;
@@ -103,6 +98,18 @@ const parseSourcePayload = (value?: string) => {
     }
 };
 
+const sourceStatusLabel = (value: unknown) => {
+    const labels: Record<string, string> = { pending: '待处理', queued: '待处理', running: '处理中', processing: '处理中',
+        success: '成功', completed: '成功', failed: '失败', cancelled: '已取消', delivering: '发货中', refunding: '退款中', refunded: '已退款' };
+    return value ? labels[String(value)] || '其他状态（见排障信息）' : '-';
+};
+const sourceTypeLabel = (value: unknown, category = false) => {
+    const labels: Record<string, string> = category
+        ? { recharge: '充值', ai: 'AI生成', template: '模板', certification: '认证', withdraw: '提现', service: '设计服务', report: '建房报告', enterprise_recharge: '企业充值' }
+        : { recharge: '充值', consume: 'AI消费', culture: '内容消费', withdraw: '提现', certification: '认证费', report: '建房报告', image: '图片任务', video: '视频任务' };
+    return value ? labels[String(value)] || '其他类型（见排障信息）' : '-';
+};
+
 const getSourceSummaryItems = (item?: SupportTicketItem | null) => {
     if (!item) {
         return [] as Array<{ label: string; value: string }>;
@@ -111,20 +118,19 @@ const getSourceSummaryItems = (item?: SupportTicketItem | null) => {
     if (item.source_type === 'order') {
         return [
             { label: '订单号', value: String(payload?.order_no || item.source_id || '-') },
-            { label: '订单状态', value: String(payload?.status || '-') },
-            { label: '订单类型', value: String(payload?.type || '-') },
-            { label: '业务分类', value: String(payload?.order_category || '-') },
-            { label: '订单数值', value: payload?.amount !== undefined && payload?.amount !== null ? String(payload.amount) : '-' },
+            { label: '订单状态', value: sourceStatusLabel(payload?.status) },
+            { label: '订单类型', value: sourceTypeLabel(payload?.type) },
+            { label: '业务分类', value: sourceTypeLabel(payload?.order_category, true) },
+            { label: '订单数值（单位待核实）', value: payload?.amount !== undefined && payload?.amount !== null ? String(payload.amount) : '-' },
         ].filter((entry) => entry.value && entry.value !== '-');
     }
     if (item.source_type === 'task') {
         return [
             { label: '任务号', value: String(payload?.task_no || item.source_id || '-') },
-            { label: '任务类型', value: String(payload?.task_type || '-') },
-            { label: '任务状态', value: String(payload?.status || payload?.raw_status || '-') },
-            { label: '场景/模型', value: String(payload?.scene || payload?.model || '-') },
+            { label: '任务类型', value: sourceTypeLabel(payload?.task_type) },
+            { label: '任务状态', value: sourceStatusLabel(payload?.status || payload?.raw_status) },
+            { label: '业务场景', value: String(payload?.scene_label || '-') },
             { label: '错误信息', value: String(payload?.error_message || '-') },
-            { label: '原始错误', value: String(payload?.raw_error_message || '-') },
         ].filter((entry) => entry.value && entry.value !== '-');
     }
     return [] as Array<{ label: string; value: string }>;
@@ -132,146 +138,242 @@ const getSourceSummaryItems = (item?: SupportTicketItem | null) => {
 
 const SupportTickets: React.FC = () => {
     const navigate = useNavigate();
-    const [overview, setOverview] = useState<SupportTicketOverview>(defaultOverview);
+    const [overview, setOverview] = useState<SupportTicketOverview | null>(null);
     const [list, setList] = useState<SupportTicketItem[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [notice, setNotice] = useState('');
     const [searchInput, setSearchInput] = useState('');
     const [keyword, setKeyword] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const pageSize = 20;
     const [detail, setDetail] = useState<SupportTicketItem | null>(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [createSubmitting, setCreateSubmitting] = useState(false);
-    const [createForm, setCreateForm] = useState({ user_id: '', type: 'complaint', title: '', content: '', priority: 'medium' });
+    const emptyCreateForm = { user_id: '', type: 'complaint', title: '', content: '', priority: 'medium' };
+    const [createForm, setCreateForm] = useState(emptyCreateForm);
     const [resolutionNote, setResolutionNote] = useState('');
     const [resolutionSubmitting, setResolutionSubmitting] = useState(false);
+    const [pendingIds, setPendingIds] = useState<number[]>([]);
+    const [syncing, setSyncing] = useState(false);
+    const mounted = useRef(true);
+    const listRequest = useRef(0);
+    const renderedListRequest = listRequest.current;
+    const readyIds = useRef<number[]>([]);
+    const scope = JSON.stringify([page, keyword, statusFilter, typeFilter, sourceTypeFilter, refreshKey]);
+    const scopeRef = useRef(scope);
+    scopeRef.current = scope;
+    const ticketLocks = useRef(new Set<number>());
+    const detailSession = useRef(0);
+    const detailRequest = useRef(0);
+    const detailTarget = useRef<number | null>(null);
+    const detailReady = useRef(false);
+    const renderedDetailSession = detailSession.current;
+    const noteDraft = useRef({ value: '', baseline: '', revision: 0 });
+    const createLock = useRef(false);
+    const createSession = useRef(0);
+    const renderedCreateSession = createSession.current;
+    const createVisible = useRef(false);
+    const syncLock = useRef(false);
+    const loadLatest = useRef<() => Promise<void>>(async () => {});
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            listRequest.current += 1;
+            detailSession.current += 1;
+            detailRequest.current += 1;
+            readyIds.current = [];
+            createSession.current += 1; createVisible.current = false;
+        };
+    }, []);
 
     const loadData = async () => {
+        if (!mounted.current) return;
+        const request = ++listRequest.current;
+        const requestScope = scope;
+        readyIds.current = [];
         setLoading(true);
+        setLoadError('');
+        const current = () => mounted.current && request === listRequest.current && requestScope === scopeRef.current;
         try {
             const [overviewData, listData] = await Promise.all([
                 getSupportTicketOverview(),
-                getSupportTicketList({ page: 1, page_size: 20, keyword, status: statusFilter, type: typeFilter, source_type: sourceTypeFilter }),
+                getSupportTicketList({ page, page_size: pageSize, keyword, status: statusFilter, type: typeFilter, source_type: sourceTypeFilter }),
             ]);
+            if (!current()) return;
+            if (!Number.isFinite(listData.total) || listData.total < 0 || (listData.list !== null && !Array.isArray(listData.list))) {
+                throw new Error('工单列表返回格式异常');
+            }
+            const lastPage = Math.max(1, Math.ceil(listData.total / pageSize));
+            if (page > lastPage) { listRequest.current += 1; setPage(lastPage); return; }
             setOverview(overviewData);
-            setList(listData.list || []);
+            const items = listData.list || [];
+            setList(items);
+            setTotal(listData.total);
+            readyIds.current = items.map(item => item.id);
+            reportPageLoadRecovered('加载工单中心失败');
         } catch (error) {
-            console.error('加载工单中心失败:', error);
+            if (!current()) return;
+            setList([]);
+            setOverview(null);
+            setLoadError('工单未能加载，请重试。');
             reportPageLoadError(error, '加载工单中心失败');
         } finally {
-            setLoading(false);
+            if (current()) setLoading(false);
         }
     };
+    loadLatest.current = loadData;
+    useEffect(() => { void loadData(); }, [page, keyword, statusFilter, typeFilter, sourceTypeFilter, refreshKey]);
 
-    useEffect(() => {
-        void loadData();
-    }, [keyword, statusFilter, typeFilter, sourceTypeFilter]);
-
-    const handleReset = () => {
-        setSearchInput('');
-        setKeyword('');
-        setStatusFilter('all');
-        setTypeFilter('all');
-        setSourceTypeFilter('all');
+    const changeScope = (change: () => void, resetPage = true) => {
+        if (!mounted.current) return;
+        listRequest.current += 1;
+        readyIds.current = [];
+        setList([]);
+        setLoading(true);
+        setLoadError('');
+        if (resetPage) setPage(1);
+        setRefreshKey(value => value + 1);
+        change();
     };
-
+    const handleReset = () => changeScope(() => {
+        setSearchInput(''); setKeyword(''); setStatusFilter('all'); setTypeFilter('all'); setSourceTypeFilter('all');
+    });
+    const editNote = (value: string) => {
+        noteDraft.current = { ...noteDraft.current, value, revision: noteDraft.current.revision + 1 };
+        setResolutionNote(value);
+    };
+    const dirtyNote = () => noteDraft.current.value !== noteDraft.current.baseline;
+    const canLeaveDetail = () => detailTarget.current === null || (!ticketLocks.current.has(detailTarget.current)
+        && (!dirtyNote() || window.confirm('处理备注尚未保存，确定放弃这些修改吗？')));
+    const closeDetail = () => {
+        if (renderedDetailSession !== detailSession.current || !canLeaveDetail()) return;
+        detailSession.current += 1; detailRequest.current += 1; detailTarget.current = null; detailReady.current = false;
+        setShowDetailModal(false); setDetailError('');
+    };
+    const readDetail = async (id: number, session: number) => {
+        if (!mounted.current || session !== detailSession.current || id !== detailTarget.current) return;
+        const request = ++detailRequest.current;
+        const current = () => mounted.current && detailSession.current === session && detailTarget.current === id && detailRequest.current === request;
+        detailReady.current = false;
+        setDetailLoading(true); setDetailError('');
+        try {
+            const fresh = await getSupportTicketDetail(String(id));
+            if (!current()) return;
+            if (fresh.id !== id) throw new Error('返回的工单与请求对象不一致，请重新读取');
+            setDetail(fresh);
+            detailReady.current = true;
+            // Assignment/status/read-back must never erase an unsaved note.
+            if (!dirtyNote()) {
+                const value = fresh.resolution_note || '';
+                noteDraft.current = { value, baseline: value, revision: noteDraft.current.revision + 1 };
+                setResolutionNote(value);
+            }
+        } catch (error) {
+            if (current()) setDetailError(`${failureMessage(error, '最新工单详情暂时无法读取')}。已保存的操作不会撤回，请重新读取。`);
+        } finally {
+            if (current()) setDetailLoading(false);
+        }
+    };
+    const handleViewDetail = async (item: SupportTicketItem) => {
+        if (!mounted.current || !readyIds.current.includes(item.id) || !canLeaveDetail()) return;
+        const session = ++detailSession.current;
+        detailTarget.current = item.id;
+        const value = item.resolution_note || '';
+        noteDraft.current = { value, baseline: value, revision: noteDraft.current.revision + 1 };
+        setResolutionNote(value); setDetail(item); setShowDetailModal(true);
+        await readDetail(item.id, session);
+    };
+    const targetAllowed = (id: number) => detailTarget.current === id
+        ? detailReady.current : readyIds.current.includes(id);
+    const mutateTicket = async (item: SupportTicketItem, operation: () => Promise<void>, message: string, savedNote?: { value: string; revision: number }) => {
+        const fromDetail = showDetailModal && detail?.id === item.id;
+        const originCurrent = fromDetail
+            ? renderedDetailSession === detailSession.current && detailTarget.current === item.id
+            : renderedListRequest === listRequest.current && scope === scopeRef.current;
+        if (!mounted.current || !originCurrent || !targetAllowed(item.id) || ticketLocks.current.has(item.id)) return;
+        ticketLocks.current.add(item.id);
+        setPendingIds([...ticketLocks.current]);
+        const session = detailTarget.current === item.id ? detailSession.current : null;
+        if (savedNote) setResolutionSubmitting(true);
+        try {
+            await operation();
+            if (!mounted.current) return;
+            setNotice(`工单 ${item.id}：${message}`);
+            if (session !== null && session === detailSession.current && detailTarget.current === item.id) {
+                if (savedNote) {
+                    // Only acknowledge the submitted snapshot; later typing stays dirty.
+                    const unchanged = noteDraft.current.revision === savedNote.revision;
+                    noteDraft.current = { ...noteDraft.current, baseline: savedNote.value,
+                        value: unchanged ? savedNote.value : noteDraft.current.value };
+                    if (unchanged) setResolutionNote(savedNote.value);
+                }
+                await readDetail(item.id, session);
+            }
+            await loadLatest.current();
+        } catch (error) {
+            if (mounted.current) setNotice(`工单 ${item.id}：${failureMessage(error, '操作未完成')}。原输入已保留，请核实后重试。`);
+        } finally {
+            ticketLocks.current.delete(item.id);
+            if (mounted.current) { setPendingIds([...ticketLocks.current]); if (savedNote) setResolutionSubmitting(false); }
+        }
+    };
+    const handleAssign = (item: SupportTicketItem) => mutateTicket(item, () => assignSupportTicket(String(item.id)), '已分配给当前处理人。');
+    const handleUpdateStatus = (item: SupportTicketItem, status: string) => mutateTicket(item, () => updateSupportTicketStatus(String(item.id), status), '状态已更新。');
+    const handleSaveResolutionNote = () => {
+        if (!detail || detailTarget.current !== detail.id || renderedDetailSession !== detailSession.current) return;
+        const saved = { value: noteDraft.current.value.trim(), revision: noteDraft.current.revision };
+        return mutateTicket(detail, () => updateSupportTicketResolutionNote(String(detail.id), saved.value), '处理备注已保存。', saved);
+    };
     const handleSync = async () => {
+        if (!mounted.current || syncLock.current) return;
+        syncLock.current = true; setSyncing(true);
         try {
             const createdCount = await syncSupportTicketSystemExceptions();
-            alert(`同步完成，本次新增 ${createdCount} 条系统工单`);
-            await loadData();
+            if (!mounted.current) return;
+            setNotice(`同步完成，本次新增 ${createdCount} 条系统工单。`);
+            await loadLatest.current();
         } catch (error) {
-            console.error('同步系统异常工单失败:', error);
-            alert('同步系统异常工单失败');
-        }
+            if (mounted.current) setNotice(`${failureMessage(error, '同步系统异常工单未完成')}。请核实后重试。`);
+        } finally { syncLock.current = false; if (mounted.current) setSyncing(false); }
     };
-
-    const handleAssign = async (item: SupportTicketItem) => {
-        try {
-            await assignSupportTicket(String(item.id));
-            await loadData();
-            if (showDetailModal && detail?.id === item.id) {
-                const fresh = await getSupportTicketDetail(String(item.id));
-                setDetail(fresh);
-                setResolutionNote(fresh.resolution_note || '');
-            }
-        } catch (error) {
-            console.error('分配工单失败:', error);
-            alert('分配工单失败');
-        }
+    const openCreate = () => {
+        if (createLock.current) return;
+        createSession.current += 1; createVisible.current = true; setShowCreateModal(true);
     };
-
-    const handleUpdateStatus = async (item: SupportTicketItem, status: string) => {
-        try {
-            await updateSupportTicketStatus(String(item.id), status);
-            await loadData();
-            if (showDetailModal && detail?.id === item.id) {
-                const fresh = await getSupportTicketDetail(String(item.id));
-                setDetail(fresh);
-                setResolutionNote(fresh.resolution_note || '');
-            }
-        } catch (error) {
-            console.error('更新工单状态失败:', error);
-            alert('更新工单状态失败');
-        }
+    const closeCreate = () => {
+        if (createLock.current || renderedCreateSession !== createSession.current) return;
+        createSession.current += 1; createVisible.current = false; setShowCreateModal(false);
     };
-
-    const handleViewDetail = async (item: SupportTicketItem) => {
-        try {
-            const detailData = await getSupportTicketDetail(String(item.id));
-            setDetail(detailData);
-            setResolutionNote(detailData.resolution_note || '');
-            setShowDetailModal(true);
-        } catch (error) {
-            console.error('获取工单详情失败:', error);
-            reportPageLoadError(error, '获取工单详情失败');
-        }
-    };
-
-    const handleSaveResolutionNote = async () => {
-        if (!detail) {
-            return;
-        }
-        setResolutionSubmitting(true);
-        try {
-            await updateSupportTicketResolutionNote(String(detail.id), resolutionNote.trim());
-            const fresh = await getSupportTicketDetail(String(detail.id));
-            setDetail(fresh);
-            setResolutionNote(fresh.resolution_note || '');
-            await loadData();
-        } catch (error) {
-            console.error('保存工单处理备注失败:', error);
-            alert('保存工单处理备注失败');
-        } finally {
-            setResolutionSubmitting(false);
-        }
-    };
-
     const handleCreate = async () => {
-        if (!createForm.title.trim()) {
-            alert('请先填写工单标题');
-            return;
+        if (!mounted.current || createLock.current || !createVisible.current || renderedCreateSession !== createSession.current) return;
+        if (!createForm.title.trim()) { setNotice('请先填写工单标题。'); return; }
+        if (createForm.user_id.trim() && (!Number.isSafeInteger(Number(createForm.user_id)) || Number(createForm.user_id) <= 0)) {
+            setNotice('用户编号应为有效的正整数，未关联用户时可留空。'); return;
         }
-        setCreateSubmitting(true);
+        const session = createSession.current;
+        const payload = { user_id: createForm.user_id.trim() ? Number(createForm.user_id) : undefined,
+            type: createForm.type, title: createForm.title.trim(), content: createForm.content.trim(), priority: createForm.priority };
+        createLock.current = true; setCreateSubmitting(true);
         try {
-            await createSupportTicket({
-                user_id: createForm.user_id.trim() ? Number(createForm.user_id) : undefined,
-                type: createForm.type,
-                title: createForm.title.trim(),
-                content: createForm.content.trim(),
-                priority: createForm.priority,
-            });
-            setShowCreateModal(false);
-            setCreateForm({ user_id: '', type: 'complaint', title: '', content: '', priority: 'medium' });
-            await loadData();
+            const id = await createSupportTicket(payload);
+            if (!mounted.current) return;
+            setNotice(`工单 ${id} 已创建。`);
+            if (session === createSession.current) { setShowCreateModal(false); setCreateForm(emptyCreateForm); createSession.current += 1; createVisible.current = false; }
+            await loadLatest.current();
         } catch (error) {
-            console.error('创建工单失败:', error);
-            alert('创建工单失败');
-        } finally {
-            setCreateSubmitting(false);
-        }
+            if (mounted.current && session === createSession.current) setNotice(`${failureMessage(error, '暂未确认创建结果')}。输入已保留，请先刷新列表核实是否已创建，再决定是否重试。`);
+        } finally { createLock.current = false; if (mounted.current) setCreateSubmitting(false); }
     };
 
     const detailSourceTarget = getSourceTarget(detail);
@@ -289,13 +391,13 @@ const SupportTickets: React.FC = () => {
                                 <FiRefreshCwIcon />
                                 {loading ? '刷新中...' : '刷新'}
                             </button>
-                            <button className="btn-secondary" onClick={() => setShowCreateModal(true)}>
+                            <button className="btn-secondary" onClick={openCreate}>
                                 <FiClipboardIcon />
                                 新建工单
                             </button>
-                            <button className="btn-primary" onClick={handleSync}>
+                            <button className="btn-primary" onClick={handleSync} disabled={syncing}>
                                 <FiToolIcon />
-                                同步异常
+                                {syncing ? '同步中...' : '同步异常'}
                             </button>
                         </>
                     )}
@@ -311,40 +413,42 @@ const SupportTickets: React.FC = () => {
                                     onChange={(e) => setSearchInput(e.target.value)}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
-                                            setKeyword(searchInput.trim());
+                                            changeScope(() => setKeyword(searchInput.trim()));
                                         }
                                     }}
                                 />
                             </div>
-                            <select className="management-search-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                                <option value="all">全部状态</option>
+                            <select className="management-search-select" value={statusFilter} onChange={(e) => changeScope(() => setStatusFilter(e.target.value))}>
+                                <option value="all">全部状态 / 队列</option>
+                                <option value="today">今日新增队列</option>
+                                <option value="overdue">超48小时待处理队列</option>
                                 <option value="open">待处理</option>
                                 <option value="in_progress">处理中</option>
                                 <option value="closed">已关闭</option>
                             </select>
-                            <select className="management-search-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                            <select className="management-search-select" value={typeFilter} onChange={(e) => changeScope(() => setTypeFilter(e.target.value))}>
                                 <option value="all">全部类型</option>
                                 <option value="complaint">用户投诉</option>
                                 <option value="order">异常订单</option>
                                 <option value="task">失败任务</option>
                             </select>
-                            <select className="management-search-select" value={sourceTypeFilter} onChange={(e) => setSourceTypeFilter(e.target.value)}>
+                            <select className="management-search-select" value={sourceTypeFilter} onChange={(e) => changeScope(() => setSourceTypeFilter(e.target.value))}>
                                 <option value="all">全部来源</option>
                                 <option value="manual">人工录入</option>
                                 <option value="order">订单同步</option>
                                 <option value="task">任务同步</option>
                             </select>
-                            <button className="btn-primary" onClick={() => setKeyword(searchInput.trim())}>搜索工单</button>
+                            <button className="btn-primary" onClick={() => changeScope(() => setKeyword(searchInput.trim()))}>搜索工单</button>
                         </>
                     )}
                     summary={(
                         <>
                             <div>
-                                当前工单 <strong>{list.length}</strong> 条
+                                匹配工单 <strong>{loading || loadError ? '—' : total}</strong> 条，本页 <strong>{loading || loadError ? '—' : list.length}</strong> 条
                             </div>
                             <div className="management-search-tags">
                                 {keyword ? <span className="management-search-tag">关键词：{keyword}</span> : null}
-                                {statusFilter !== 'all' ? <span className="management-search-tag">状态：{statusLabelMap[statusFilter] || statusFilter}</span> : null}
+                                {statusFilter !== 'all' ? <span className="management-search-tag">状态：{({ today: '今日新增', overdue: '超48小时待处理', ...statusLabelMap } as Record<string, string>)[statusFilter] || statusFilter}</span> : null}
                                 {typeFilter !== 'all' ? <span className="management-search-tag">类型：{typeLabelMap[typeFilter] || typeFilter}</span> : null}
                                 {sourceTypeFilter !== 'all' ? <span className="management-search-tag">来源：{sourceTypeLabelMap[sourceTypeFilter] || sourceTypeFilter}</span> : null}
                             </div>
@@ -352,22 +456,24 @@ const SupportTickets: React.FC = () => {
                     )}
                 />
 
+                {notice ? <div className="support-feedback" role="status">{notice}</div> : null}
+                <p className="support-scope-note">以下概览为全部工单，不随列表筛选变化；今日与超时队列以服务端时间为准。</p>
                 {/* 队列筛选条（B2）：对齐销售线索页的模式，客服上班先看队列而不是先想筛选条件 */}
-                <div className="ticket-queues" role="tablist" aria-label="工单队列">
+                <div className="ticket-queues" role="group" aria-label="工单队列">
                     {([
-                        { key: 'open', label: '待处理', count: overview.open_count, todo: true },
-                        { key: 'in_progress', label: '处理中', count: overview.in_progress_count, todo: false },
-                        { key: 'today', label: '今日新增', count: overview.today_count, todo: false },
-                        { key: 'overdue', label: '超48小时', count: overview.overdue_count, todo: true },
-                        { key: 'all', label: '全部工单', count: overview.total_count, todo: false },
+                        { key: 'open', label: '待处理', count: overview?.open_count, todo: true },
+                        { key: 'in_progress', label: '处理中', count: overview?.in_progress_count, todo: false },
+                        { key: 'today', label: '今日新增', count: overview?.today_count, todo: false },
+                        { key: 'overdue', label: '超48小时', count: overview?.overdue_count, todo: true },
+                        { key: 'all', label: '全部工单', count: overview?.total_count, todo: false },
                     ] as const).map((queue) => (
                         <button
                             key={queue.key}
-                            className={`ticket-queue-tab ${statusFilter === queue.key ? 'active' : ''} ${queue.todo && queue.count > 0 ? 'is-todo' : ''}`}
-                            onClick={() => setStatusFilter(queue.key)}
+                            className={`ticket-queue-tab ${statusFilter === queue.key ? 'active' : ''} ${queue.todo && (queue.count ?? 0) > 0 ? 'is-todo' : ''}`}
+                            onClick={() => changeScope(() => setStatusFilter(queue.key))} aria-pressed={statusFilter === queue.key}
                         >
                             {queue.label}
-                            <span className="ticket-queue-count">{queue.count}</span>
+                            <span className="ticket-queue-count">{queue.count ?? '—'}</span>
                         </button>
                     ))}
                 </div>
@@ -376,22 +482,22 @@ const SupportTickets: React.FC = () => {
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiClipboardIcon /></div>
                         <div className="stat-label">工单总数</div>
-                        <div className="stat-value">{overview.total_count}</div>
+                        <div className="stat-value">{overview?.total_count ?? '—'}</div>
                     </div>
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiAlertCircleIcon /></div>
                         <div className="stat-label">待处理 / 处理中</div>
-                        <div className="stat-value">{overview.open_count} / {overview.in_progress_count}</div>
+                        <div className="stat-value">{overview?.open_count ?? '—'} / {overview?.in_progress_count ?? '—'}</div>
                     </div>
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiToolIcon /></div>
                         <div className="stat-label">高优先级</div>
-                        <div className="stat-value">{overview.high_priority_count}</div>
+                        <div className="stat-value">{overview?.high_priority_count ?? '—'}</div>
                     </div>
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiRefreshCwIcon /></div>
                         <div className="stat-label">已关闭</div>
-                        <div className="stat-value">{overview.closed_count}</div>
+                        <div className="stat-value">{overview?.closed_count ?? '—'}</div>
                     </div>
                 </div>
 
@@ -411,7 +517,11 @@ const SupportTickets: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {list.length === 0 ? (
+                                {loading ? (
+                                    <tr><td colSpan={8} className="empty-state" role="status">正在加载工单...</td></tr>
+                                ) : loadError ? (
+                                    <tr><td colSpan={8} className="empty-state" role="alert">{loadError}<button className="btn-inline" onClick={() => void loadLatest.current()}>重试加载</button></td></tr>
+                                ) : list.length === 0 ? (
                                     <tr>
                                         <td colSpan={8} className="empty-state">暂无工单数据</td>
                                     </tr>
@@ -448,9 +558,9 @@ const SupportTickets: React.FC = () => {
                                             <div className="action-group">
                                                 <button className="btn-inline" onClick={() => void handleViewDetail(item)}>详情</button>
                                                 {getSourceTarget(item) ? <button className="btn-inline" onClick={() => navigate(getSourceTarget(item)!.path)}>{getSourceTarget(item)!.label}</button> : null}
-                                                {!item.assignee_name && item.status !== 'closed' ? <button className="btn-inline" onClick={() => void handleAssign(item)}>分配给我</button> : null}
-                                                {item.status === 'open' ? <button className="btn-inline" onClick={() => void handleUpdateStatus(item, 'in_progress')}>开始处理</button> : null}
-                                                {item.status !== 'closed' ? <button className="btn-inline danger" onClick={() => void handleUpdateStatus(item, 'closed')}>关闭</button> : null}
+                                                {!item.assignee_name && item.status !== 'closed' ? <button className="btn-inline" onClick={() => void handleAssign(item)} disabled={pendingIds.includes(item.id)}>分配给我</button> : null}
+                                                {item.status === 'open' ? <button className="btn-inline" onClick={() => void handleUpdateStatus(item, 'in_progress')} disabled={pendingIds.includes(item.id)}>开始处理</button> : null}
+                                                {item.status !== 'closed' ? <button className="btn-inline danger" onClick={() => void handleUpdateStatus(item, 'closed')} disabled={pendingIds.includes(item.id)}>关闭</button> : null}
                                             </div>
                                         </td>
                                     </tr>
@@ -460,21 +570,27 @@ const SupportTickets: React.FC = () => {
                     </div>
                 </div>
 
+                <div className="support-pagination" aria-label="工单分页">
+                    <span>第 {page} / {Math.max(1, Math.ceil(total / pageSize))} 页，每页 {pageSize} 条</span>
+                    <button className="btn-secondary" disabled={loading || !!loadError || page <= 1} onClick={() => changeScope(() => setPage(page - 1), false)}>上一页</button>
+                    <button className="btn-secondary" disabled={loading || !!loadError || page * pageSize >= total} onClick={() => changeScope(() => setPage(page + 1), false)}>下一页</button>
+                </div>
+
                 {showCreateModal ? (
-                    <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+                    <div className="modal-overlay" onClick={closeCreate}>
                         <div className="modal-content support-modal" role="dialog" aria-modal="true" aria-labelledby="support-create-title" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
-                                <h3 id="support-create-title">新建投诉工单</h3>
-                                <button className="modal-close" onClick={() => setShowCreateModal(false)} aria-label="关闭新建工单">✕</button>
+                                <h3 id="support-create-title">新建工单</h3>
+                                <button className="modal-close" onClick={closeCreate} disabled={createSubmitting} aria-label="关闭新建工单">✕</button>
                             </div>
                             <div className="modal-body support-form">
                                 <label>
-                                    <span>用户ID</span>
-                                    <input value={createForm.user_id} onChange={(e) => setCreateForm((prev) => ({ ...prev, user_id: e.target.value }))} placeholder="可不填" />
+                                    <span>用户编号</span>
+                                    <input value={createForm.user_id} disabled={createSubmitting} onChange={(e) => setCreateForm((prev) => ({ ...prev, user_id: e.target.value }))} placeholder="可不填" />
                                 </label>
                                 <label>
                                     <span>工单类型</span>
-                                    <select value={createForm.type} onChange={(e) => setCreateForm((prev) => ({ ...prev, type: e.target.value }))}>
+                                    <select value={createForm.type} disabled={createSubmitting} onChange={(e) => setCreateForm((prev) => ({ ...prev, type: e.target.value }))}>
                                         <option value="complaint">用户投诉</option>
                                         <option value="order">异常订单</option>
                                         <option value="task">失败任务</option>
@@ -482,11 +598,11 @@ const SupportTickets: React.FC = () => {
                                 </label>
                                 <label>
                                     <span>标题</span>
-                                    <input value={createForm.title} onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="例如：用户反馈付款后未到账" />
+                                    <input value={createForm.title} disabled={createSubmitting} onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="例如：用户反馈付款后未到账" />
                                 </label>
                                 <label>
                                     <span>优先级</span>
-                                    <select value={createForm.priority} onChange={(e) => setCreateForm((prev) => ({ ...prev, priority: e.target.value }))}>
+                                    <select value={createForm.priority} disabled={createSubmitting} onChange={(e) => setCreateForm((prev) => ({ ...prev, priority: e.target.value }))}>
                                         <option value="high">高优先级</option>
                                         <option value="medium">中优先级</option>
                                         <option value="low">低优先级</option>
@@ -494,11 +610,11 @@ const SupportTickets: React.FC = () => {
                                 </label>
                                 <label className="full">
                                     <span>内容说明</span>
-                                    <textarea value={createForm.content} onChange={(e) => setCreateForm((prev) => ({ ...prev, content: e.target.value }))} rows={5} placeholder="把用户反馈、订单信息、异常现象写清楚" />
+                                    <textarea value={createForm.content} disabled={createSubmitting} onChange={(e) => setCreateForm((prev) => ({ ...prev, content: e.target.value }))} rows={5} placeholder="把用户反馈、订单信息、异常现象写清楚" />
                                 </label>
                             </div>
                             <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowCreateModal(false)}>取消</button>
+                                <button className="btn-secondary" onClick={closeCreate} disabled={createSubmitting}>取消</button>
                                 <button className="btn-primary" onClick={() => void handleCreate()} disabled={createSubmitting}>{createSubmitting ? '提交中...' : '创建工单'}</button>
                             </div>
                         </div>
@@ -506,13 +622,15 @@ const SupportTickets: React.FC = () => {
                 ) : null}
 
                 {showDetailModal && detail ? (
-                    <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
+                    <div className="modal-overlay" onClick={closeDetail}>
                         <div className="modal-content support-modal" role="dialog" aria-modal="true" aria-labelledby="support-detail-title" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3 id="support-detail-title">工单详情</h3>
-                                <button className="modal-close" onClick={() => setShowDetailModal(false)} aria-label="关闭工单详情">✕</button>
+                                <button className="modal-close" onClick={closeDetail} disabled={pendingIds.includes(detail.id)} aria-label="关闭工单详情">✕</button>
                             </div>
                             <div className="modal-body detail-stack">
+                                {detailLoading ? <p role="status">正在读取最新工单...</p> : null}
+                                {detailError ? <div role="alert">{detailError}<button className="btn-inline" onClick={() => void readDetail(detail.id, detailSession.current)}>重新读取详情</button></div> : null}
                                 <div className="detail-block">
                                     <strong>{detail.title}</strong>
                                     <span>{detail.content || '暂无内容说明'}</span>
@@ -540,29 +658,30 @@ const SupportTickets: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : null}
-                                <div className="detail-block">
-                                    <label>来源载荷</label>
+                                <details className="detail-block">
+                                    <summary>排障信息（原始记录）</summary>
                                     <pre>{detail.source_payload || '暂无'}</pre>
-                                </div>
+                                </details>
                                 <div className="detail-block">
                                     <label>处理备注</label>
                                     <textarea
                                         className="detail-note-textarea"
                                         value={resolutionNote}
-                                        onChange={(e) => setResolutionNote(e.target.value)}
+                                        onChange={(e) => editNote(e.target.value)}
+                                        disabled={detailLoading || !!detailError}
                                         rows={4}
                                         placeholder="记录处理过程、补偿结果、结论说明，方便后续追踪"
                                     />
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                {detailSourceTarget ? <button className="btn-secondary" onClick={() => navigate(detailSourceTarget.path)}>{detailSourceTarget.label}</button> : null}
-                                <button className="btn-secondary" onClick={() => void handleSaveResolutionNote()} disabled={resolutionSubmitting}>
+                                {detailSourceTarget ? <button className="btn-secondary" onClick={() => { if (canLeaveDetail()) navigate(detailSourceTarget.path); }}>{detailSourceTarget.label}</button> : null}
+                                <button className="btn-secondary" onClick={() => void handleSaveResolutionNote()} disabled={pendingIds.includes(detail.id) || detailLoading || !!detailError}>
                                     {resolutionSubmitting ? '保存中...' : '保存备注'}
                                 </button>
-                                {!detail.assignee_name && detail.status !== 'closed' ? <button className="btn-secondary" onClick={() => void handleAssign(detail)}>分配给我</button> : null}
-                                {detail.status === 'open' ? <button className="btn-secondary" onClick={() => void handleUpdateStatus(detail, 'in_progress')}>开始处理</button> : null}
-                                {detail.status !== 'closed' ? <button className="btn-primary" onClick={() => void handleUpdateStatus(detail, 'closed')}>关闭工单</button> : null}
+                                {!detail.assignee_name && detail.status !== 'closed' ? <button className="btn-secondary" onClick={() => void handleAssign(detail)} disabled={pendingIds.includes(detail.id) || detailLoading || !!detailError}>分配给我</button> : null}
+                                {detail.status === 'open' ? <button className="btn-secondary" onClick={() => void handleUpdateStatus(detail, 'in_progress')} disabled={pendingIds.includes(detail.id) || detailLoading || !!detailError}>开始处理</button> : null}
+                                {detail.status !== 'closed' ? <button className="btn-primary" onClick={() => void handleUpdateStatus(detail, 'closed')} disabled={pendingIds.includes(detail.id) || detailLoading || !!detailError}>关闭工单</button> : null}
                             </div>
                         </div>
                     </div>

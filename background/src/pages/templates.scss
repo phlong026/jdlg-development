@@ -1077,4 +1077,14 @@
     padding: 11px 12px;
   }
 }
+.modal-body { min-width: 0; border: 0; margin: 0; }
+.tab-config-grid { border: 0; padding: 0; margin: 0; min-width: 0; }
+.template-feedback { color: #596579; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.template-feedback[role="alert"] { color: #b42318; }
+.template-feedback button { margin-left: 12px; }
+.template-pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.template-meta { margin: 12px 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
+.template-meta dt { color: #667085; }
+.template-meta dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+
 }

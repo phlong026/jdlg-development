@@ -26,6 +26,7 @@ import {
     type TabConfigItem,
     type FeaturedCaseGroup,
 } from '../api/templates';
+import { useLocation } from 'react-router-dom';
 import './templates.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -41,7 +42,7 @@ interface Template {
     id: string;
     name: string;
     category: string;
-    // 鍙岄噸 Tab 褰掔被
+    // 标签归属。
     mainTab?: string;
     subTab?: string;
     thirdTab?: string;
@@ -71,7 +72,7 @@ const defaultForm = {
     mainTab: '',
     subTab: '',
     thirdTab: '',
-    // 涓婁紶鍚庣殑鍥剧墖URL鍒楄〃锛堝鍥撅級锛岀1寮犻粯璁や綔涓虹缉鐣ュ浘/涓婚瑙?
+    // 上传图片 URL，首张用作缩略图与主预览图。
     imageUrls: [] as string[],
     price: 0,
     isFree: true,
@@ -104,6 +105,8 @@ const formatImageMeta = (width?: number, height?: number) => {
     return `${normalizedWidth / divisor}:${normalizedHeight / divisor} / ${normalizedWidth}×${normalizedHeight}`;
 };
 
+const isFeaturedDisplayMode = (value: string): value is 'comparison' | 'side_by_side' | 'normal' => ['comparison', 'side_by_side', 'normal'].includes(value);
+
 type TabConfigSaveState = 'idle' | 'editing' | 'saving' | 'saved' | 'invalid' | 'error';
 
 const getChildTabsByParent = (items: TabConfigItem[], parentValue: string) => {
@@ -115,7 +118,23 @@ const getChildTabsByParent = (items: TabConfigItem[], parentValue: string) => {
 };
 
 const Templates: React.FC = () => {
-    const initialKeyword = new URLSearchParams(window.location.search).get('keyword') || '';
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const initialKeyword = queryParams.get('keyword') || '';
+    const requestedTemplateId = queryParams.get('templateId');
+    const linkedTemplateReadRef = useRef(0);
+    const linkedTargetRef = useRef(requestedTemplateId);
+    if (linkedTargetRef.current !== requestedTemplateId) {
+        linkedTargetRef.current = requestedTemplateId;
+        linkedTemplateReadRef.current += 1;
+    }
+    const renderedLinkedRequest = linkedTemplateReadRef.current;
+    const isCurrentLinkedTarget = (id: string | null) => id !== null && linkedTargetRef.current === id &&
+        new URLSearchParams(window.location.search).get('templateId') === id;
+    const [linkedStateTarget, setLinkedStateTarget] = useState<string | null>(null);
+    const [linkedTemplate, setLinkedTemplate] = useState<Template | null>(null);
+    const [linkedTemplateLoading, setLinkedTemplateLoading] = useState(false);
+    const [linkedTemplateError, setLinkedTemplateError] = useState('');
     const [templates, setTemplates] = useState<Template[]>([]);
     const [categories, setCategories] = useState<TemplateCategoryItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -123,25 +142,60 @@ const Templates: React.FC = () => {
     const [searchKeyword, setSearchKeyword] = useState(initialKeyword);
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [templatePage, setTemplatePage] = useState(1);
+    const [templateTotal, setTemplateTotal] = useState(0);
+    const [templatesError, setTemplatesError] = useState('');
+    const [templatesLoaded, setTemplatesLoaded] = useState(false);
+    const templatePageSize = 20;
+    const templateReadRef = useRef(0);
+    const templateQueryRef = useRef({ page: templatePage, category: categoryFilter, status: statusFilter });
+    templateQueryRef.current = { page: templatePage, category: categoryFilter, status: statusFilter };
+    const lastTemplateQueryRef = useRef('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [showMoveCategoryModal, setShowMoveCategoryModal] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [moveTargetTemplate, setMoveTargetTemplate] = useState<Template | null>(null);
+    const moveSessionRef = useRef(0);
+    const renderedMoveSession = moveSessionRef.current;
+    const closeMoveCategory = () => {
+        moveSessionRef.current += 1;
+        setShowMoveCategoryModal(false);
+        setMoveTargetTemplate(null);
+    };
+    const dismissMoveCategory = () => {
+        if (renderedMoveSession === moveSessionRef.current) closeMoveCategory();
+    };
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const templateWritesRef = useRef(new Set<string>());
+    const beginTemplateWrite = (id: string) => {
+        if (templateWritesRef.current.has(id)) return false;
+        templateWritesRef.current.add(id);
+        setActionLoading(id);
+        return true;
+    };
+    const endTemplateWrite = (id: string) => {
+        templateWritesRef.current.delete(id);
+        setActionLoading(current => current === id ? null : current);
+    };
     const [addFormData, setAddFormData] = useState<typeof defaultForm>(defaultForm);
     const [editFormData, setEditFormData] = useState<typeof defaultForm>(defaultForm);
     const editInitialFormRef = useRef<typeof defaultForm | null>(null);
     const addUploadRef = useRef<HTMLInputElement>(null);
     const editUploadRef = useRef<HTMLInputElement>(null);
     const editorSessionRef = useRef(0);
+    const editorLinkedTargetRef = useRef<string | null>(null);
+    const renderedEditorSession = editorSessionRef.current;
+    const renderedEditorLinkedTarget = editorLinkedTargetRef.current;
     const savePendingRef = useRef(false);
+    const [editorSaving, setEditorSaving] = useState(false);
     const uploadPendingRef = useRef(false);
     const [uploading, setUploading] = useState(false);
 
     const closeTemplateEditor = () => {
         editorSessionRef.current += 1;
+        editorLinkedTargetRef.current = null;
         setShowAddModal(false);
         setShowEditModal(false);
         setSelectedTemplate(null);
@@ -150,7 +204,21 @@ const Templates: React.FC = () => {
         setUploading(false);
     };
 
+    const isCurrentEditor = (mode: 'add' | 'edit') => renderedEditorSession === editorSessionRef.current &&
+        (mode === 'add' ? showAddModal : showEditModal) &&
+        (!renderedEditorLinkedTarget || isCurrentLinkedTarget(renderedEditorLinkedTarget));
+    const dismissTemplateEditor = () => {
+        if (renderedEditorSession === editorSessionRef.current) closeTemplateEditor();
+    };
+    const updateAddForm = (update: React.SetStateAction<typeof defaultForm>) => {
+        if (isCurrentEditor('add')) setAddFormData(update);
+    };
+    const updateEditForm = (update: React.SetStateAction<typeof defaultForm>) => {
+        if (isCurrentEditor('edit')) setEditFormData(update);
+    };
+
     const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, mode: 'add' | 'edit') => {
+        if (!isCurrentEditor(mode)) return;
         const input = event.currentTarget;
         const files = Array.from(input.files || []);
         input.value = '';
@@ -202,17 +270,36 @@ const Templates: React.FC = () => {
     const [tabConfigSaveMessage, setTabConfigSaveMessage] = useState('');
     const tabConfigLoadedRef = useRef(false);
     const lastSavedTabConfigRef = useRef('');
+    const tabConfigLoadPromiseRef = useRef<Promise<boolean> | null>(null);
+    const tabConfigSavePromiseRef = useRef<Promise<boolean> | null>(null);
+    const tabDraftRef = useRef({ mainTabs, subTabs, thirdTabs });
+    tabDraftRef.current = { mainTabs, subTabs, thirdTabs };
+    const [tabConfigLoading, setTabConfigLoading] = useState(false);
     const [featuredGroupSectionOpen, setFeaturedGroupSectionOpen] = useState(false);
     const [featuredGroups, setFeaturedGroups] = useState<FeaturedCaseGroup[]>([]);
     const [loadingFeaturedGroups, setLoadingFeaturedGroups] = useState(false);
+    const [featuredGroupsError, setFeaturedGroupsError] = useState('');
+    const [featuredGroupsLoaded, setFeaturedGroupsLoaded] = useState(false);
+    const featuredGroupReadRef = useRef(0);
+    const featuredGroupWriteRef = useRef(false);
+    const [featuredGroupSaving, setFeaturedGroupSaving] = useState(false);
+    const featuredEditorSessionRef = useRef(0);
+    const renderedFeaturedSession = featuredEditorSessionRef.current;
+    const featuredOptionsReadRef = useRef(0);
+    const featuredOptionsPendingRef = useRef(false);
+    const [featuredOptions, setFeaturedOptions] = useState<Template[]>([]);
+    const [featuredOptionsPage, setFeaturedOptionsPage] = useState(0);
+    const [featuredOptionsTotal, setFeaturedOptionsTotal] = useState(0);
+    const [featuredOptionsLoading, setFeaturedOptionsLoading] = useState(false);
+    const [featuredOptionsError, setFeaturedOptionsError] = useState('');
     const [showFeaturedGroupModal, setShowFeaturedGroupModal] = useState(false);
     const [selectedFeaturedGroup, setSelectedFeaturedGroup] = useState<FeaturedCaseGroup | null>(null);
     const [featuredGroupForm, setFeaturedGroupForm] = useState({
         name: '',
-        display_mode: 'comparison' as 'comparison' | 'side_by_side' | 'normal',
+        display_mode: 'comparison' as string,
         case1_id: '',
         case2_id: '',
-        case1_label: '鐪熷疄',
+        case1_label: '真实',
         case2_label: 'AI',
         sort_order: 0,
     });
@@ -221,7 +308,7 @@ const Templates: React.FC = () => {
         id: String(t.id),
         name: t.name,
         category: t.category,
-        // 鍚庣瀛楁 main_tab / sub_tab 鏄犲皠鍒板墠绔?Template 缁撴瀯
+        // 后端标签字段映射到页面结构。
         mainTab: (t as any).main_tab || '',
         subTab: (t as any).sub_tab || '',
         thirdTab: (t as any).third_tab || '',
@@ -236,20 +323,64 @@ const Templates: React.FC = () => {
         isFeatured: t.is_featured ?? false,
         downloadCount: t.download_count || 0,
         status: t.status,
-        publishScope: t.publish_scope || 'square',
+        publishScope: t.publish_scope,
         rejectReason: t.reject_reason || '',
-        sourceType: t.source_type || 'admin_upload',
+        sourceType: t.source_type,
         creator: t.creator || '',
         createdAt: t.created_at,
         updatedAt: t.updated_at,
     });
+
+    const loadLinkedTemplate = useCallback(async () => {
+        if (requestedTemplateId !== linkedTargetRef.current ||
+            new URLSearchParams(window.location.search).get('templateId') !== requestedTemplateId) return;
+        const request = ++linkedTemplateReadRef.current;
+        setLinkedStateTarget(requestedTemplateId);
+        setLinkedTemplate(null);
+        setLinkedTemplateError('');
+        if (requestedTemplateId === null) {
+            setLinkedTemplateLoading(false);
+            return;
+        }
+        if (!/^[1-9]\d*$/.test(requestedTemplateId) || !Number.isSafeInteger(Number(requestedTemplateId))) {
+            setLinkedTemplateLoading(false);
+            setLinkedTemplateError('链接中的 templateId 必须是可精确表示的正整数，请检查来源链接');
+            return;
+        }
+        setLinkedTemplateLoading(true);
+        try {
+            const detail = await getTemplateDetail(requestedTemplateId);
+            if (request !== linkedTemplateReadRef.current || !isCurrentLinkedTarget(requestedTemplateId)) return;
+            if (String(detail?.id) !== requestedTemplateId) throw new Error('返回的模板 ID 与链接不一致，未打开其他模板');
+            setLinkedTemplate(convertTemplate(detail));
+        } catch (error: any) {
+            if (request !== linkedTemplateReadRef.current || !isCurrentLinkedTarget(requestedTemplateId)) return;
+            setLinkedTemplateError(`无法加载指定模板 #${requestedTemplateId}：${error?.message || '读取失败'}`);
+        } finally {
+            if (request === linkedTemplateReadRef.current && isCurrentLinkedTarget(requestedTemplateId)) setLinkedTemplateLoading(false);
+        }
+    }, [requestedTemplateId]);
+
+    useEffect(() => {
+        if (editorLinkedTargetRef.current && !isCurrentLinkedTarget(editorLinkedTargetRef.current)) closeTemplateEditor();
+        void loadLinkedTemplate();
+        return () => { linkedTemplateReadRef.current += 1; };
+    }, [loadLinkedTemplate]);
+
+    useEffect(() => () => {
+        editorSessionRef.current += 1;
+        templateReadRef.current += 1;
+        featuredGroupReadRef.current += 1;
+        featuredEditorSessionRef.current += 1;
+        featuredOptionsReadRef.current += 1;
+    }, []);
 
     const loadCategories = useCallback(async () => {
         try {
             const list = await getTemplateCategories();
             setCategories(list);
         } catch (e) {
-            console.error('鍔犺浇鍒嗙被澶辫触:', e);
+            console.error('加载分类失败:', e);
         }
     }, []);
 
@@ -347,24 +478,41 @@ const Templates: React.FC = () => {
         return '';
     }, []);
 
-    const loadTabConfig = useCallback(async () => {
-        try {
-            const cfg = await getTemplateTabConfig();
-            const nextMainTabs = Array.isArray(cfg?.main_tabs) ? cfg.main_tabs.map(t => ({ ...t })) : [];
-            const nextSubTabs = Array.isArray(cfg?.sub_tabs) ? cfg.sub_tabs.map(t => ({ ...t, parent: t.parent || '' })) : [];
-            const nextThirdTabs = Array.isArray(cfg?.third_tabs) ? cfg.third_tabs.map(t => ({ ...t, parent: t.parent || '' })) : [];
-            lastSavedTabConfigRef.current = serializeTabConfig(nextMainTabs, nextSubTabs, nextThirdTabs);
-            tabConfigLoadedRef.current = true;
-            setMainTabs(nextMainTabs);
-            setSubTabs(nextSubTabs);
-            setThirdTabs(nextThirdTabs);
-            setTabConfigSaveState('idle');
-            setTabConfigSaveMessage('');
-        } catch (e) {
-            console.error('鍔犺浇 Tab 閰嶇疆澶辫触:', e);
-            setTabConfigSaveState('error');
-            setTabConfigSaveMessage('鍔犺浇 Tab 閰嶇疆澶辫触锛岃绋嶅悗閲嶈瘯');
-        }
+    const loadTabConfig = useCallback((): Promise<boolean> => {
+        // Opening a modal must not replace a dirty local configuration draft.
+        if (tabConfigLoadedRef.current) return Promise.resolve(true);
+        if (tabConfigLoadPromiseRef.current) return tabConfigLoadPromiseRef.current;
+        setTabConfigLoading(true);
+        const request = (async () => {
+            try {
+                const cfg = await getTemplateTabConfig();
+                if (!cfg || !Array.isArray(cfg.main_tabs) || !Array.isArray(cfg.sub_tabs) || !Array.isArray(cfg.third_tabs)) {
+                    throw new Error('标签配置响应不完整，未覆盖本地草稿');
+                }
+                const nextMainTabs = Array.isArray(cfg?.main_tabs) ? cfg.main_tabs.map(t => ({ ...t })) : [];
+                const nextSubTabs = Array.isArray(cfg?.sub_tabs) ? cfg.sub_tabs.map(t => ({ ...t, parent: t.parent || '' })) : [];
+                const nextThirdTabs = Array.isArray(cfg?.third_tabs) ? cfg.third_tabs.map(t => ({ ...t, parent: t.parent || '' })) : [];
+                lastSavedTabConfigRef.current = serializeTabConfig(nextMainTabs, nextSubTabs, nextThirdTabs);
+                tabDraftRef.current = { mainTabs: nextMainTabs, subTabs: nextSubTabs, thirdTabs: nextThirdTabs };
+                tabConfigLoadedRef.current = true;
+                setMainTabs(nextMainTabs);
+                setSubTabs(nextSubTabs);
+                setThirdTabs(nextThirdTabs);
+                setTabConfigSaveState('idle');
+                setTabConfigSaveMessage('');
+                return true;
+            } catch (error: any) {
+                setTabConfigSaveState('error');
+                setTabConfigSaveMessage(error?.message || '加载标签配置失败，请重试');
+                return false;
+            } finally {
+                setTabConfigLoading(false);
+
+            }
+        })();
+        tabConfigLoadPromiseRef.current = request;
+        void request.finally(() => { if (tabConfigLoadPromiseRef.current === request) tabConfigLoadPromiseRef.current = null; });
+        return request;
     }, [serializeTabConfig]);
 
     const updateMainTabLabel = useCallback((index: number, label: string) => {
@@ -382,7 +530,7 @@ const Templates: React.FC = () => {
     const removeMainTab = useCallback((index: number) => {
         if (mainTabs.length <= 1) {
             setTabConfigSaveState('invalid');
-            setTabConfigSaveMessage('鑷冲皯淇濈暀涓€涓竴绾ab');
+            setTabConfigSaveMessage('至少保留一个一级标签');
             return;
         }
         const removedValue = (mainTabs[index]?.value || '').trim();
@@ -416,7 +564,7 @@ const Templates: React.FC = () => {
     const addSubTab = useCallback(() => {
         if (!mainTabs.length) {
             setTabConfigSaveState('invalid');
-            setTabConfigSaveMessage('璇峰厛淇濈暀鑷冲皯涓€涓竴绾ab锛屽啀鏂板浜岀骇Tab');
+            setTabConfigSaveMessage('请先保留至少一个一级标签，再新增二级标签');
             return;
         }
         const defaultParent = mainTabs.find(item => (item.value || '').trim())?.value || mainTabs[0]?.value || '';
@@ -426,69 +574,108 @@ const Templates: React.FC = () => {
     const addThirdTab = useCallback(() => {
         if (!subTabs.length) {
             setTabConfigSaveState('invalid');
-            setTabConfigSaveMessage('鐠囧嘲鍘涙穱婵堟殌閼峰啿鐨稉鈧稉顏冪癌缁绢湚ab閿涘苯鍟€閺傛澘顤冩稉澶岄獓Tab');
+            setTabConfigSaveMessage('请先保留至少一个二级标签，再新增三级标签');
             return;
         }
         const defaultParent = subTabs.find(item => (item.value || '').trim())?.value || subTabs[0]?.value || '';
         setThirdTabs(prev => [...prev, { label: '', value: '', parent: defaultParent }]);
     }, [subTabs]);
 
-    const handleSaveTabConfig = useCallback(async (options?: { silent?: boolean }) => {
-        const validationError = getTabConfigValidationError(mainTabs, subTabs, thirdTabs);
-        if (validationError) {
-            setTabConfigSaveState('invalid');
-            setTabConfigSaveMessage(validationError);
-            if (!options?.silent) {
-                alert(validationError);
-            }
-            return false;
-        }
-
-        setTabConfigSaving(true);
-        setTabConfigSaveState('saving');
-        setTabConfigSaveMessage(options?.silent ? '姝ｅ湪鑷姩淇濆瓨...' : '姝ｅ湪淇濆瓨...');
-        try {
-            const payload = normalizeTabConfig(mainTabs, subTabs, thirdTabs);
-            await putTemplateTabConfig(payload);
-            lastSavedTabConfigRef.current = serializeTabConfig(mainTabs, subTabs, thirdTabs);
-            setTabConfigSaveState('saved');
-            setTabConfigSaveMessage(options?.silent ? '已自动保存' : '保存成功');
-            if (!options?.silent) {
-                alert('保存成功');
-            }
-            return true;
-        } catch (e: any) {
-            const message = e?.message || '保存失败';
+    const handleSaveTabConfig = useCallback((options?: { silent?: boolean }): Promise<boolean> => {
+        if (!tabConfigLoadedRef.current) {
             setTabConfigSaveState('error');
-            setTabConfigSaveMessage(message);
-            if (!options?.silent) {
-                alert(message);
-            }
-            return false;
-        } finally {
-            setTabConfigSaving(false);
+            setTabConfigSaveMessage('请先成功加载标签配置，再保存修改');
+            return Promise.resolve(false);
         }
-    }, [getTabConfigValidationError, mainTabs, normalizeTabConfig, serializeTabConfig, subTabs, thirdTabs]);
+        if (tabConfigSavePromiseRef.current) return tabConfigSavePromiseRef.current;
+        const request = (async () => {
+            setTabConfigSaving(true);
+            try {
+                while (true) {
+                    const draft = tabDraftRef.current;
+                    const error = getTabConfigValidationError(draft.mainTabs, draft.subTabs, draft.thirdTabs);
+                    if (error) {
+                        setTabConfigSaveState('invalid');
+                        setTabConfigSaveMessage(error);
+                        return false;
+                    }
+                    const payload = normalizeTabConfig(draft.mainTabs, draft.subTabs, draft.thirdTabs);
+                    const serialized = JSON.stringify(payload);
+                    if (serialized === lastSavedTabConfigRef.current) {
+                        setTabConfigSaveState('saved');
+                        setTabConfigSaveMessage('最新标签配置已保存');
+                        return true;
+                    }
+                    setTabConfigSaveState('saving');
+                    setTabConfigSaveMessage('正在保存标签配置...');
+                    await putTemplateTabConfig(payload);
+                    lastSavedTabConfigRef.current = serialized;
+                    const latest = tabDraftRef.current;
+                    if (serializeTabConfig(latest.mainTabs, latest.subTabs, latest.thirdTabs) === serialized) {
+                        setTabConfigSaveState('saved');
+                        setTabConfigSaveMessage(options?.silent ? '已自动保存' : '保存成功');
+                        return true;
+                    }
+                    // One request at a time. Coalesce intermediate edits and
+                    // persist only the newest draft after the current request.
+                    setTabConfigSaveState('editing');
+                    setTabConfigSaveMessage('已有新修改，正在保存最新草稿...');
+                }
+            } catch (error: any) {
+                setTabConfigSaveState('error');
+                setTabConfigSaveMessage(error?.message || '保存失败，草稿已保留，请重试');
+                return false;
+            } finally {
+                setTabConfigSaving(false);
+
+            }
+        })();
+        tabConfigSavePromiseRef.current = request;
+        void request.finally(() => { if (tabConfigSavePromiseRef.current === request) tabConfigSavePromiseRef.current = null; });
+        return request;
+    }, [getTabConfigValidationError, normalizeTabConfig, serializeTabConfig]);
 
     const loadTemplates = useCallback(async () => {
-        setLoading(true);
-        try {
-            const params: any = { page: 1, page_size: 500 };
-            if (categoryFilter !== 'all') params.category = categoryFilter;
-            if (statusFilter !== 'all') params.status = statusFilter;
-            const res = await getTemplateList(params);
-            const list = (res?.list || []).map(convertTemplate);
-            setTemplates(list);
-        } catch (error) {
-            console.error('鍔犺浇妯℃澘鍒楄〃澶辫触:', error);
-            reportPageLoadError(error, '加载模板列表失败');
-        } finally {
-            setLoading(false);
+        const request = ++templateReadRef.current;
+        const query = { ...templateQueryRef.current };
+        const queryKey = JSON.stringify(query);
+        if (lastTemplateQueryRef.current !== queryKey) {
+            setTemplates([]);
+            setTemplatesLoaded(false);
         }
-    }, [categoryFilter, statusFilter]);
+        setLoading(true);
+        setTemplatesError('');
+        try {
+            const params: any = { page: query.page, page_size: templatePageSize };
+            if (query.category !== 'all') params.category = query.category;
+            if (query.status !== 'all') params.status = query.status;
+            const res = await getTemplateList(params);
+            if (request !== templateReadRef.current || queryKey !== JSON.stringify(templateQueryRef.current)) return null;
+            if (!Array.isArray(res?.list) || !Number.isSafeInteger(res?.total) || res.total < 0) {
+                throw new Error('模板列表响应缺少有效列表或总数，请重试');
+            }
+            const total = res.total;
+            const lastPage = Math.max(1, Math.ceil(total / templatePageSize));
+            if (query.page > lastPage) {
+                setTemplatePage(lastPage);
+                return null;
+            }
+            setTemplates((res?.list || []).map(convertTemplate));
+            setTemplateTotal(total);
+            setTemplatesLoaded(true);
+            lastTemplateQueryRef.current = queryKey;
+            return true;
+        } catch (error: any) {
+            if (request !== templateReadRef.current || queryKey !== JSON.stringify(templateQueryRef.current)) return null;
+            setTemplatesError(error?.message || '加载模板列表失败');
+            return false;
+        } finally {
+            if (request === templateReadRef.current) setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        // 鍔犺浇鍒嗙被鍜屽弻閲?Tab 閰嶇疆锛岀‘淇濇坊鍔?缂栬緫寮圭獥鏈夊彲閫夌殑涓€绾?浜岀骇 Tab
+        // 加载分类和标签选项。
         loadCategories();
         loadTabConfig();
     }, [loadCategories, loadTabConfig]);
@@ -508,7 +695,7 @@ const Templates: React.FC = () => {
             return;
         }
         setTabConfigSaveState('editing');
-        setTabConfigSaveMessage('妫€娴嬪埌淇敼锛屾鍦ㄥ噯澶囪嚜鍔ㄤ繚瀛?..');
+        setTabConfigSaveMessage(tabConfigSavePromiseRef.current ? '已有新修改，将在当前保存完成后继续保存' : '检测到修改，准备自动保存...');
         const timer = window.setTimeout(() => {
             void handleSaveTabConfig({ silent: true });
         }, 800);
@@ -517,7 +704,7 @@ const Templates: React.FC = () => {
 
     useEffect(() => {
         loadTemplates();
-    }, [loadTemplates]);
+    }, [loadTemplates, templatePage, categoryFilter, statusFilter]);
 
     const filteredTemplates = templates.filter(template => {
         const matchKeyword = !searchKeyword ||
@@ -535,6 +722,7 @@ const Templates: React.FC = () => {
         setSearchKeyword('');
         setCategoryFilter('all');
         setStatusFilter('all');
+        setTemplatePage(1);
     };
 
     const getStatusLabel = (status: string) => {
@@ -549,13 +737,16 @@ const Templates: React.FC = () => {
     };
 
     const getPublishScopeLabel = (publishScope?: string) => {
-        return publishScope === 'homepage_only' ? '仅首页展示' : '首页 + 模板广场';
+        if (publishScope === 'homepage_only') return '仅首页展示';
+        if (publishScope === 'square') return '首页 + 模板广场';
+        return publishScope ? `未知去向（${publishScope}）` : '未提供';
     };
 
     const getSourceTypeLabel = (sourceType?: string) => {
-        if (sourceType === 'album_upload') return '鐩稿唽涓婁紶';
-        if (sourceType === 'ai_generated') return 'AI鐢熸垚鍙戝竷';
-        return '鍚庡彴鍒涘缓';
+        if (sourceType === 'album_upload') return '相册上传';
+        if (sourceType === 'ai_generated') return 'AI 生成发布';
+        if (sourceType === 'admin_upload') return '后台创建';
+        return sourceType ? `未知来源（${sourceType}）` : '未提供';
     };
 
     const getCategoryLabel = (categoryId: string) => {
@@ -563,19 +754,21 @@ const Templates: React.FC = () => {
         return cat ? cat.name : categoryId;
     };
 
-    const handleEdit = async (template: Template) => {
-        if (savePendingRef.current) return;
+    const handleEdit = async (template: Template, linkedTargetId?: string) => {
+        if (linkedTargetId && (template.id !== linkedTargetId || !isCurrentLinkedTarget(linkedTargetId))) return;
+        if (savePendingRef.current || templateWritesRef.current.has(template.id)) return;
         closeTemplateEditor();
+        editorLinkedTargetRef.current = linkedTargetId || null;
         const session = editorSessionRef.current;
         try {
             if (!mainTabs.length || !subTabs.length) {
                 await loadTabConfig();
             }
+            if (session !== editorSessionRef.current || (linkedTargetId && !isCurrentLinkedTarget(linkedTargetId))) return;
             const detail = await getTemplateDetail(template.id);
-            if (session !== editorSessionRef.current) return;
-            // 杩樺師宸叉湁鍥剧墖锛?
-            // 1锛変紭鍏堜粠 detail.images 瑙ｆ瀽锛堝瓧绗︿覆鏁扮粍鎴栧璞℃暟缁勶級锛?
-            // 2锛夊鏋滄病鏈?images锛屼絾鏈?thumbnail/preview_url锛屽垯鐢ㄥ畠浠ˉ涓€寮狅紝閬垮厤缂栬緫鏃舵妸鑰佸浘鐗囨竻绌恒€?
+            if (session !== editorSessionRef.current || (linkedTargetId && !isCurrentLinkedTarget(linkedTargetId))) return;
+            if (String(detail?.id) !== template.id) throw new Error('返回的模板 ID 与选择对象不一致');
+            // 兼容 images 的字符串/对象数组；为空时回退已有封面。
             const existedImageUrls: string[] = (() => {
                 const urls: string[] = [];
                 if (detail.images) {
@@ -627,8 +820,9 @@ const Templates: React.FC = () => {
             setSelectedTemplate(detailTemplate);
             setShowEditModal(true);
         } catch (e) {
+            if (session !== editorSessionRef.current || (linkedTargetId && !isCurrentLinkedTarget(linkedTargetId))) return;
             console.error(e);
-            reportPageLoadError(e, '鑾峰彇璇︽儏澶辫触');
+            reportPageLoadError(e, '获取模板详情失败');
         }
     };
 
@@ -641,6 +835,7 @@ const Templates: React.FC = () => {
     };
 
     const handleSaveEdit = async () => {
+        if (!isCurrentEditor('edit')) return;
         if (!selectedTemplate || !editInitialFormRef.current || savePendingRef.current || uploadPendingRef.current) return;
         if (!editFormData.name.trim()) {
             alert('请填写名称');
@@ -666,13 +861,15 @@ const Templates: React.FC = () => {
             closeTemplateEditor();
             return;
         }
+        if (!beginTemplateWrite(selectedTemplate.id)) return;
         savePendingRef.current = true;
+        setEditorSaving(true);
         const session = editorSessionRef.current;
-        setActionLoading(selectedTemplate.id);
         try {
             const updated = await updateTemplate(selectedTemplate.id, patch);
             if (updated) {
                 setTemplates(items => items.map(item => item.id === selectedTemplate.id ? convertTemplate(updated) : item));
+                setLinkedTemplate(item => item?.id === String(updated.id) ? convertTemplate(updated) : item);
             }
             if (session === editorSessionRef.current) closeTemplateEditor();
             if (!updated) {
@@ -683,22 +880,25 @@ const Templates: React.FC = () => {
             alert(error?.message || '更新失败');
         } finally {
             savePendingRef.current = false;
-            setActionLoading(null);
+            setEditorSaving(false);
+            endTemplateWrite(selectedTemplate.id);
         }
     };
 
     const handleAddTemplate = async () => {
+        if (!isCurrentEditor('add')) return;
         if (savePendingRef.current || uploadPendingRef.current) return;
         if (!addFormData.name.trim()) {
             alert('请填写名称');
             return;
         }
         savePendingRef.current = true;
+        setEditorSaving(true);
         const session = editorSessionRef.current;
         setActionLoading('add');
         try {
             const { thumbnail, previewUrl, images } = buildImageFields(addFormData.imageUrls);
-            // 鍒嗙被锛氫笉鍐嶅崟鐙€夋嫨锛岄粯璁や娇鐢ㄧ涓€涓垎绫?
+            // 新模板沿用第一分类，未配置时默认 villa。
             const category = categories[0]?.id || 'villa';
             await createTemplate({
                 name: addFormData.name,
@@ -720,74 +920,86 @@ const Templates: React.FC = () => {
             alert(e?.message || '创建失败');
         } finally {
             savePendingRef.current = false;
+            setEditorSaving(false);
             setActionLoading(null);
         }
+    };
+
+    const refreshAfterTemplateWrite = async (message: string) => {
+        const refreshed = await loadTemplates();
+        if (refreshed === false) setTemplatesError(`${message}，但列表刷新失败，请重新加载`);
     };
 
     const handleDelete = async (templateId: string) => {
-        if (!window.confirm('确定要删除这个模板吗？此操作不可恢复。')) return;
-        setActionLoading(templateId);
+        if (templateWritesRef.current.has(templateId) || !window.confirm('确定要删除这个模板吗？此操作不可恢复。')) return;
+        if (!beginTemplateWrite(templateId)) return;
         try {
             await deleteTemplate(templateId);
-            setTemplates(templates.filter(t => t.id !== templateId));
-        } catch (error) {
-            console.error('鍒犻櫎澶辫触:', error);
-            alert('删除失败');
+        } catch (error: any) {
+            alert(error?.message || '删除失败');
+            return;
         } finally {
-            setActionLoading(null);
+            endTemplateWrite(templateId);
         }
+        setTemplates(items => items.filter(item => item.id !== templateId));
+        await refreshAfterTemplateWrite('模板已删除');
     };
 
     const handleApprove = async (template: Template) => {
-        setActionLoading(template.id);
+        if (!beginTemplateWrite(template.id)) return;
         try {
             await updateTemplateStatus(template.id, 'published');
-            setTemplates(templates.map(t => t.id === template.id ? { ...t, status: 'published', rejectReason: '' } : t));
-            if (selectedTemplate?.id === template.id) setSelectedTemplate({ ...selectedTemplate, status: 'published', rejectReason: '' });
-        } catch (error) {
-            console.error('瀹℃牳閫氳繃澶辫触:', error);
-            alert('操作失败');
+        } catch (error: any) {
+            alert(error?.message || '审核通过失败');
+            return;
         } finally {
-            setActionLoading(null);
+            endTemplateWrite(template.id);
         }
+        setTemplates(items => items.map(item => item.id === template.id ? { ...item, status: 'published', rejectReason: '' } : item));
+        setSelectedTemplate(item => item?.id === template.id ? { ...item, status: 'published', rejectReason: '' } : item);
+        await refreshAfterTemplateWrite('模板已审核通过');
     };
 
     const handleReject = async (template: Template) => {
+        if (templateWritesRef.current.has(template.id)) return;
         const rejectReason = window.prompt('请输入拒绝原因（会回传给设计师）', template.rejectReason || '');
-        if (rejectReason === null) {
-            return;
-        }
-        setActionLoading(template.id);
+        if (rejectReason === null || !beginTemplateWrite(template.id)) return;
         try {
             await updateTemplateStatus(template.id, 'rejected', rejectReason);
-            setTemplates(templates.map(t => t.id === template.id ? { ...t, status: 'rejected', rejectReason } : t));
-            if (selectedTemplate?.id === template.id) setSelectedTemplate({ ...selectedTemplate, status: 'rejected', rejectReason });
-        } catch (error) {
-            console.error('瀹℃牳鎷掔粷澶辫触:', error);
-            alert('操作失败');
+        } catch (error: any) {
+            alert(error?.message || '审核拒绝失败');
+            return;
         } finally {
-            setActionLoading(null);
+            endTemplateWrite(template.id);
         }
+        setTemplates(items => items.map(item => item.id === template.id ? { ...item, status: 'rejected', rejectReason } : item));
+        setSelectedTemplate(item => item?.id === template.id ? { ...item, status: 'rejected', rejectReason } : item);
+        await refreshAfterTemplateWrite('模板已拒绝');
     };
 
     const handleMoveCategory = (template: Template) => {
+        if (templateWritesRef.current.has(template.id)) return;
+        moveSessionRef.current += 1;
         setMoveTargetTemplate(template);
         setShowMoveCategoryModal(true);
     };
 
     const confirmMoveCategory = async (categoryId: string) => {
-        if (!moveTargetTemplate) return;
-        setActionLoading(moveTargetTemplate.id);
+        if (!showMoveCategoryModal || renderedMoveSession !== moveSessionRef.current) return;
+        if (!moveTargetTemplate || !beginTemplateWrite(moveTargetTemplate.id)) return;
+        const id = moveTargetTemplate.id;
+        const session = moveSessionRef.current;
         try {
-            await updateTemplateCategory(moveTargetTemplate.id, categoryId);
-            setTemplates(templates.map(t => t.id === moveTargetTemplate.id ? { ...t, category: categoryId } : t));
-            setShowMoveCategoryModal(false);
-            setMoveTargetTemplate(null);
-        } catch (e: any) {
-            alert(e?.message || '移动失败');
+            await updateTemplateCategory(id, categoryId);
+        } catch (error: any) {
+            alert(error?.message || '移动失败');
+            return;
         } finally {
-            setActionLoading(null);
+            endTemplateWrite(id);
         }
+        setTemplates(items => items.map(item => item.id === id ? { ...item, category: categoryId } : item));
+        if (session === moveSessionRef.current) closeMoveCategory();
+        await refreshAfterTemplateWrite('模板分类已更新');
     };
 
     const handleAddCategory = async () => {
@@ -819,126 +1031,194 @@ const Templates: React.FC = () => {
     };
 
     const handleSetFeatured = async (template: Template, isFeatured: boolean) => {
-        setActionLoading(template.id);
+        if (!beginTemplateWrite(template.id)) return;
         try {
             await setTemplateFeatured(template.id, isFeatured);
-            await loadTemplates();
-        } catch (e: any) {
-            alert(e?.message || '操作失败');
+        } catch (error: any) {
+            alert(error?.message || '精选设置失败');
+            return;
         } finally {
-            setActionLoading(null);
+            endTemplateWrite(template.id);
         }
+        setTemplates(items => items.map(item => item.id === template.id ? { ...item, isFeatured } : item));
+        await refreshAfterTemplateWrite('精选状态已更新');
     };
 
     const loadFeaturedGroups = useCallback(async () => {
+        const request = ++featuredGroupReadRef.current;
         setLoadingFeaturedGroups(true);
+        setFeaturedGroupsError('');
         try {
             const res = await getFeaturedCaseGroups(1, 100);
-            setFeaturedGroups(Array.isArray(res?.list) ? res.list : []);
-        } catch (e: any) {
-            console.error('鍔犺浇绮鹃€夋渚嬬粍澶辫触:', e);
-            reportPageLoadError(e, e?.message || '鍔犺浇绮鹃€夋渚嬬粍澶辫触');
-            setFeaturedGroups([]); // 鍑洪敊鏃惰缃负绌烘暟缁?
+            if (request !== featuredGroupReadRef.current) return null;
+            if (!Array.isArray(res?.list)) throw new Error('案例组列表响应不完整，请重试');
+            setFeaturedGroups(res.list);
+            setFeaturedGroupsLoaded(true);
+            return true;
+        } catch (error: any) {
+            if (request !== featuredGroupReadRef.current) return null;
+            setFeaturedGroupsError(error?.message || '加载精选案例组失败');
+            return false;
         } finally {
-            setLoadingFeaturedGroups(false);
+            if (request === featuredGroupReadRef.current) setLoadingFeaturedGroups(false);
         }
     }, []);
 
-    const handleCreateFeaturedGroup = async () => {
-        if (!featuredGroupForm.name.trim() || !featuredGroupForm.case1_id) {
-            alert('请填写组名称并选择第一个案例');
-            return;
-        }
-        if (featuredGroupForm.display_mode !== 'normal' && !featuredGroupForm.case2_id) {
-            alert('对比模式和并排模式需要选择两个案例');
-            return;
-        }
-        setActionLoading('create-group');
+    const loadFeaturedOptions = async (page = 1, session = featuredEditorSessionRef.current) => {
+        if (session !== featuredEditorSessionRef.current || featuredOptionsPendingRef.current) return;
+        const request = ++featuredOptionsReadRef.current;
+        featuredOptionsPendingRef.current = true;
+        setFeaturedOptionsLoading(true);
+        setFeaturedOptionsError('');
         try {
-            await createFeaturedCaseGroup({
-                name: featuredGroupForm.name,
-                display_mode: featuredGroupForm.display_mode,
-                case1_id: parseInt(featuredGroupForm.case1_id, 10),
-                case2_id: featuredGroupForm.case2_id ? parseInt(featuredGroupForm.case2_id, 10) : undefined,
-                case1_label: featuredGroupForm.case1_label,
-                case2_label: featuredGroupForm.case2_label,
-                sort_order: featuredGroupForm.sort_order,
-            });
-            setShowFeaturedGroupModal(false);
-            setFeaturedGroupForm({
-                name: '',
-                display_mode: 'comparison',
-                case1_id: '',
-                case2_id: '',
-                case1_label: '鐪熷疄',
-                case2_label: 'AI',
-                sort_order: 0,
-            });
-            await loadFeaturedGroups();
-        } catch (e: any) {
-            alert(e?.message || '创建失败');
+            // This catalog is independent of the main grid's filters and page.
+            const res = await getTemplateList({ status: 'published', page, page_size: 100 });
+            if (request !== featuredOptionsReadRef.current || session !== featuredEditorSessionRef.current) return;
+            if (!Array.isArray(res?.list) || !Number.isSafeInteger(res?.total) || res.total < 0) {
+                throw new Error('案例选项响应缺少有效列表或总数，请重试');
+            }
+            const list = res.list.map(convertTemplate);
+            setFeaturedOptions(items => page === 1 ? list : Array.from(new Map([...items, ...list].map(item => [item.id, item])).values()));
+            setFeaturedOptionsPage(page);
+            setFeaturedOptionsTotal(res.total);
+        } catch (error: any) {
+            if (request !== featuredOptionsReadRef.current || session !== featuredEditorSessionRef.current) return;
+            setFeaturedOptionsError(error?.message || '加载已发布案例失败');
         } finally {
-            setActionLoading(null);
+            if (request === featuredOptionsReadRef.current && session === featuredEditorSessionRef.current) {
+                featuredOptionsPendingRef.current = false;
+                setFeaturedOptionsLoading(false);
+            }
         }
     };
 
-    const handleUpdateFeaturedGroup = async () => {
-        if (!selectedFeaturedGroup) return;
+    const closeFeaturedGroupEditor = () => {
+        featuredEditorSessionRef.current += 1;
+        featuredOptionsReadRef.current += 1;
+        featuredOptionsPendingRef.current = false;
+        setShowFeaturedGroupModal(false);
+        setSelectedFeaturedGroup(null);
+        setFeaturedOptionsLoading(false);
+    };
+
+    const dismissFeaturedGroupEditor = () => {
+        if (renderedFeaturedSession === featuredEditorSessionRef.current) closeFeaturedGroupEditor();
+    };
+    const updateFeaturedForm = (update: React.SetStateAction<typeof featuredGroupForm>) => {
+        if (showFeaturedGroupModal && renderedFeaturedSession === featuredEditorSessionRef.current) setFeaturedGroupForm(update);
+    };
+
+    const openFeaturedGroupEditor = (group?: FeaturedCaseGroup) => {
+        if (featuredGroupWriteRef.current) return;
+        closeFeaturedGroupEditor();
+        setSelectedFeaturedGroup(group || null);
+        setFeaturedGroupForm({
+            name: group?.name || '',
+            display_mode: group ? group.display_mode ?? '' : 'comparison',
+            case1_id: group?.case1_id ? String(group.case1_id) : '',
+            case2_id: group?.case2_id ? String(group.case2_id) : '',
+            case1_label: group ? group.case1_label ?? '' : '真实',
+            case2_label: group ? group.case2_label ?? '' : 'AI',
+            sort_order: group?.sort_order ?? 0,
+        });
+        setFeaturedOptions([]);
+        setFeaturedOptionsPage(0);
+        setFeaturedOptionsTotal(0);
+        setFeaturedOptionsError('');
+        setShowFeaturedGroupModal(true);
+        void loadFeaturedOptions(1, featuredEditorSessionRef.current);
+    };
+
+    const featuredOptionEntries = (() => {
+        const options = new Map(featuredOptions.map(item => [item.id, { id: item.id, label: item.name }]));
+        for (const id of [featuredGroupForm.case1_id, featuredGroupForm.case2_id]) {
+            if (!id || options.has(id)) continue;
+            const existing = selectedFeaturedGroup?.case1_id === Number(id) ? selectedFeaturedGroup.case1 :
+                selectedFeaturedGroup?.case2_id === Number(id) ? selectedFeaturedGroup.case2 : undefined;
+            options.set(id, { id, label: existing ? `${existing.name}（当前已选，${getStatusLabel(existing.status).label}）` : `当前案例 #${id}（未加载或不可用）` });
+        }
+        return Array.from(options.values());
+    })();
+
+    const handleSaveFeaturedGroup = async () => {
+        if (!showFeaturedGroupModal || renderedFeaturedSession !== featuredEditorSessionRef.current || featuredGroupWriteRef.current) return;
         if (!featuredGroupForm.name.trim() || !featuredGroupForm.case1_id) {
             alert('请填写组名称并选择第一个案例');
+            return;
+        }
+        if (!isFeaturedDisplayMode(featuredGroupForm.display_mode)) {
+            alert('当前显示模式不受支持，请明确选择一个受支持的模式后再保存');
             return;
         }
         if (featuredGroupForm.display_mode !== 'normal' && !featuredGroupForm.case2_id) {
             alert('对比模式和并排模式需要选择两个案例');
             return;
         }
-        setActionLoading('update-group');
+        const case1 = Number(featuredGroupForm.case1_id);
+        const case2 = featuredGroupForm.case2_id ? Number(featuredGroupForm.case2_id) : undefined;
+        if (!Number.isSafeInteger(case1) || case1 <= 0 || (case2 !== undefined && (!Number.isSafeInteger(case2) || case2 <= 0))) {
+            alert('案例 ID 无效，请重新选择');
+            return;
+        }
+        featuredGroupWriteRef.current = true;
+        setFeaturedGroupSaving(true);
+        const session = featuredEditorSessionRef.current;
+        const groupId = selectedFeaturedGroup?.id;
+        setActionLoading(groupId ? 'update-group' : 'create-group');
+        const payload = {
+            name: featuredGroupForm.name,
+            display_mode: featuredGroupForm.display_mode,
+            case1_id: case1,
+            // Keep an existing second case even when normal mode hides it.
+            case2_id: case2,
+            case1_label: featuredGroupForm.case1_label,
+            case2_label: featuredGroupForm.case2_label,
+            sort_order: featuredGroupForm.sort_order,
+        };
         try {
-            await updateFeaturedCaseGroup(String(selectedFeaturedGroup.id), {
-                name: featuredGroupForm.name,
-                display_mode: featuredGroupForm.display_mode,
-                case1_id: parseInt(featuredGroupForm.case1_id, 10),
-                case2_id: featuredGroupForm.case2_id ? parseInt(featuredGroupForm.case2_id, 10) : undefined,
-                case1_label: featuredGroupForm.case1_label,
-                case2_label: featuredGroupForm.case2_label,
-                sort_order: featuredGroupForm.sort_order,
-            });
-            setShowFeaturedGroupModal(false);
-            setSelectedFeaturedGroup(null);
-            await loadFeaturedGroups();
-        } catch (e: any) {
-            alert(e?.message || '更新失败');
+            if (groupId) await updateFeaturedCaseGroup(String(groupId), payload);
+            else await createFeaturedCaseGroup(payload);
+        } catch (error: any) {
+            alert(error?.message || '保存案例组失败');
+            return;
         } finally {
+            featuredGroupWriteRef.current = false;
+            setFeaturedGroupSaving(false);
             setActionLoading(null);
         }
+        if (session === featuredEditorSessionRef.current) closeFeaturedGroupEditor();
+        // The write is committed. A refresh failure has its own feedback and
+        // must never invite the user to repeat a successful create/update.
+        const refreshed = await loadFeaturedGroups();
+        if (refreshed === false) setFeaturedGroupsError('案例组已保存，但列表刷新失败，请重试加载');
     };
 
     const handleDeleteFeaturedGroup = async (groupId: number) => {
-        if (!window.confirm('确定要删除这个精选案例组吗？')) return;
+        if (featuredGroupWriteRef.current || !window.confirm('确定要删除这个精选案例组吗？')) return;
+        featuredGroupWriteRef.current = true;
+        setFeaturedGroupSaving(true);
         setActionLoading(`group-${groupId}`);
         try {
             await deleteFeaturedCaseGroup(String(groupId));
-            await loadFeaturedGroups();
-        } catch (e: any) {
-            alert(e?.message || '删除失败');
+        } catch (error: any) {
+            alert(error?.message || '删除失败');
+            return;
         } finally {
+            featuredGroupWriteRef.current = false;
+            setFeaturedGroupSaving(false);
             setActionLoading(null);
         }
+        setFeaturedGroups(items => items.filter(item => item.id !== groupId));
+        const refreshed = await loadFeaturedGroups();
+        if (refreshed === false) setFeaturedGroupsError('案例组已删除，但列表刷新失败，请重试加载');
     };
 
-    const openEditFeaturedGroup = (group: FeaturedCaseGroup) => {
-        if (!group) return;
-        setSelectedFeaturedGroup(group);
-        setFeaturedGroupForm({
-            name: group.name || '',
-            display_mode: group.display_mode || 'comparison',
-            case1_id: String(group.case1_id || ''),
-            case2_id: String(group.case2_id || ''),
-            case1_label: group.case1_label || '鐪熷疄',
-            case2_label: group.case2_label || 'AI',
-            sort_order: group.sort_order || 0,
-        });
-        setShowFeaturedGroupModal(true);
+    const linkedStateMatchesTarget = linkedStateTarget === requestedTemplateId && isCurrentLinkedTarget(requestedTemplateId);
+    const visibleLinkedTemplate = linkedStateMatchesTarget && linkedTemplate?.id === requestedTemplateId ? linkedTemplate : null;
+    const openLinkedTemplateEditor = () => {
+        if (!visibleLinkedTemplate || renderedLinkedRequest !== linkedTemplateReadRef.current ||
+            !isCurrentLinkedTarget(requestedTemplateId) || visibleLinkedTemplate.id !== requestedTemplateId) return;
+        return handleEdit(visibleLinkedTemplate, requestedTemplateId);
     };
 
     return (
@@ -948,7 +1228,7 @@ const Templates: React.FC = () => {
                     <div className="templates-toolbar-top">
                         <div className="toolbar-title-block">
                             <h3>模板检索与内容运营</h3>
-                            <p>先按关键词、分类和状态缩小范围，再决定是做模板审核、分类整理，还是调整首页精选案例与标签结构。</p>
+                            <p>分类与状态筛选覆盖全部模板；关键词仅检索当前页。可审核模板、整理分类，或配置首页精选案例与标签。</p>
                         </div>
                         <div className="toolbar-actions management-actions">
                             <button className="btn-secondary" onClick={() => { setFeaturedGroupSectionOpen(!featuredGroupSectionOpen); if (!featuredGroupSectionOpen) loadFeaturedGroups(); }}>
@@ -981,7 +1261,7 @@ const Templates: React.FC = () => {
                             <FiSearchIcon className="search-icon" />
                             <input
                                 type="text"
-                                placeholder="搜索模板名称或描述..."
+                                placeholder="仅搜索本页模板名称或描述..."
                                 value={searchInput}
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={(e) => {
@@ -996,7 +1276,7 @@ const Templates: React.FC = () => {
                             <select
                                 className="filter-select"
                                 value={categoryFilter}
-                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                onChange={(e) => { setCategoryFilter(e.target.value); setTemplatePage(1); }}
                             >
                                 <option value="all">全部分类</option>
                                 {categories.map((c) => (
@@ -1006,7 +1286,7 @@ const Templates: React.FC = () => {
                             <select
                                 className="filter-select"
                                 value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
+                                onChange={(e) => { setStatusFilter(e.target.value); setTemplatePage(1); }}
                             >
                                 <option value="all">全部状态</option>
                                 <option value="pending">待审核</option>
@@ -1019,22 +1299,37 @@ const Templates: React.FC = () => {
                     </div>
                     <div className="templates-toolbar-footer">
                         <div className="toolbar-summary">
-                            当前显示 <strong>{filteredTemplates.length}</strong> / {templates.length} 个模板
-                            {searchKeyword ? <span className="summary-tag">关键词：{searchKeyword}</span> : null}
+                            {templatesLoaded ? <>本页显示 <strong>{filteredTemplates.length}</strong> / {templates.length} 个；筛选结果共 {templateTotal} 个模板</> : '模板列表尚未成功加载'}
+                            {searchKeyword ? <span className="summary-tag">本页关键词：{searchKeyword}</span> : null}
                             {categoryFilter !== 'all' ? <span className="summary-tag">分类：{getCategoryLabel(categoryFilter)}</span> : null}
                             {statusFilter !== 'all' ? <span className="summary-tag">状态：{getStatusLabel(statusFilter).label}</span> : null}
                         </div>
                         <div className="toolbar-actions search-actions">
                             <button className="btn-secondary" onClick={handleResetSearch}>重置筛选</button>
-                            <button className="btn-primary" onClick={handleSearch}>搜索模板</button>
+                            <button className="btn-primary" onClick={handleSearch}>搜索本页</button>
                         </div>
                     </div>
                 </div>
 
+                {requestedTemplateId !== null && (
+                    <section className="section-card linked-template" aria-label="指定模板定位" aria-live="polite">
+                        <h4>指定模板 #{requestedTemplateId}</h4>
+                        {(!linkedStateMatchesTarget || linkedTemplateLoading) && <p>正在按 ID 读取模板详情...</p>}
+                        {linkedStateMatchesTarget && linkedTemplateError && <p role="alert">{linkedTemplateError}</p>}
+                        {visibleLinkedTemplate && <>
+                            <p>{visibleLinkedTemplate.name} · {getStatusLabel(visibleLinkedTemplate.status).label} · {getCategoryLabel(visibleLinkedTemplate.category)}</p>
+                            <p>{visibleLinkedTemplate.description || '暂无说明'}</p>
+                            <button className="btn-primary" onClick={openLinkedTemplateEditor} disabled={templateWritesRef.current.has(visibleLinkedTemplate.id) || editorSaving}>编辑指定模板</button>
+                        </>}
+                        {!linkedTemplateLoading && <button className="btn-secondary" onClick={loadLinkedTemplate}>{linkedTemplateError ? '重新加载指定模板' : '刷新指定模板'}</button>}
+                        <p className="template-feedback">按 ID 定位，不受下方列表筛选或分页影响。此处只读取信息，点击编辑后再保存才会修改。</p>
+                    </section>
+                )}
+
                 {tabConfigSectionOpen && (
                     <div className="section-card tab-config-management">
                         <h4>模板广场标签配置（小程序与发布页统一读取）</h4>
-                        <div className="tab-config-grid">
+                        <fieldset className="tab-config-grid" disabled={!tabConfigLoadedRef.current || tabConfigLoading}>
                             <div className="tab-config-block">
                                 <h5>一级标签（main_tabs）</h5>
                                 {mainTabs.map((t, i) => (
@@ -1132,12 +1427,13 @@ const Templates: React.FC = () => {
                                     新增三级标签
                                 </button>
                             </div>
-                        </div>
+                        </fieldset>
                         <div className="tab-config-footer">
+                            {!tabConfigLoadedRef.current && <button className="btn-secondary" onClick={() => loadTabConfig()} disabled={tabConfigLoading}>{tabConfigLoading ? '正在加载标签...' : '重新加载标签配置'}</button>}
                             <span style={{ fontSize: 12, color: tabConfigSaveState === 'error' || tabConfigSaveState === 'invalid' ? '#d14343' : tabConfigSaveState === 'saved' ? '#2f7a4d' : '#666' }}>
                                 {tabConfigSaveMessage || '修改后将自动保存'}
                             </span>
-                            <button className="btn-primary" onClick={() => { void handleSaveTabConfig(); }} disabled={tabConfigSaving}>
+                            <button className="btn-primary" onClick={() => { void handleSaveTabConfig(); }} disabled={tabConfigSaving || tabConfigLoading || !tabConfigLoadedRef.current}>
                                 {tabConfigSaving ? '保存中...' : '保存标签配置'}
                             </button>
                         </div>
@@ -1148,17 +1444,18 @@ const Templates: React.FC = () => {
                     <div className="section-card featured-group-management">
                         <div className="section-header">
                             <h4>首页精选案例组管理</h4>
-                            <button className="btn-primary btn-sm" onClick={() => { setSelectedFeaturedGroup(null); setFeaturedGroupForm({ name: '', display_mode: 'comparison', case1_id: '', case2_id: '', case1_label: '真实', case2_label: 'AI', sort_order: 0 }); setShowFeaturedGroupModal(true); }}>
+                            <button className="btn-primary btn-sm" disabled={featuredGroupSaving} onClick={() => openFeaturedGroupEditor()}>
                                 <FiPlusIcon /> 新建案例组
                             </button>
                         </div>
                         <p className="section-desc">案例组会显示在小程序首页的精选案例区域，每组可配置 1-2 个案例，支持对比、并排和普通模式。</p>
+                        {featuredGroupsError && <div className="template-feedback" role="alert">{featuredGroupsError}<button className="btn-secondary" onClick={loadFeaturedGroups}>重新加载案例组</button></div>}
                         {loadingFeaturedGroups ? (
                             <div className="loading-state">加载中...</div>
                         ) : (
                             <div className="featured-group-list">
                                 {!featuredGroups || featuredGroups.length === 0 ? (
-                                    <div className="empty-state">暂无精选案例组</div>
+                                    <div className="empty-state">{featuredGroupsLoaded && !featuredGroupsError ? '暂无精选案例组' : '案例组列表尚未成功加载'}</div>
                                 ) : (
                                     featuredGroups.map((group) => {
                                         if (!group) return null;
@@ -1167,7 +1464,7 @@ const Templates: React.FC = () => {
                                                 <div className="featured-group-content">
                                                     <div className="featured-group-header">
                                                         <h5>{group.name || '未命名案例组'}</h5>
-                                                        <span className="group-mode-badge">{group.display_mode === 'comparison' ? '对比模式' : group.display_mode === 'side_by_side' ? '并排模式' : '普通模式'}</span>
+                                                        <span className="group-mode-badge">{group.display_mode === 'comparison' ? '对比模式' : group.display_mode === 'side_by_side' ? '并排模式' : group.display_mode === 'normal' ? '普通模式' : `未知模式（${group.display_mode || '未提供'}）`}</span>
                                                     </div>
                                                     <div className="featured-group-cases">
                                                         <div className="case-item">
@@ -1203,13 +1500,13 @@ const Templates: React.FC = () => {
                                                     </div>
                                                 </div>
                                                 <div className="featured-group-actions">
-                                                    <button className="btn-action btn-edit" onClick={() => openEditFeaturedGroup(group)} title="编辑">
+                                                    <button className="btn-action btn-edit" onClick={() => openFeaturedGroupEditor(group)} disabled={featuredGroupSaving} title="编辑">
                                                         <FiEditIcon size={14} />
                                                     </button>
                                                     <button
                                                         className="btn-action btn-delete"
                                                         onClick={() => handleDeleteFeaturedGroup(group.id)}
-                                                        disabled={actionLoading === `group-${group.id}`}
+                                                        disabled={featuredGroupSaving}
                                                         title="删除"
                                                     >
                                                         <FiTrash2Icon size={14} />
@@ -1265,29 +1562,31 @@ const Templates: React.FC = () => {
 
                 <div className="templates-stats">
                     <div className="stat-item">
-                        <span className="stat-label">模板总数</span>
-                        <span className="stat-value">{templates.length}</span>
+                        <span className="stat-label">筛选结果总数</span>
+                        <span className="stat-value">{templatesLoaded ? templateTotal : '—'}</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">待审核</span>
-                        <span className="stat-value">{templates.filter(t => t.status === 'pending').length}</span>
+                        <span className="stat-label">本页待审核</span>
+                        <span className="stat-value">{templatesLoaded ? templates.filter(t => t.status === 'pending').length : '—'}</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">已发布</span>
-                        <span className="stat-value">{templates.filter(t => t.status === 'published').length}</span>
+                        <span className="stat-label">本页已发布</span>
+                        <span className="stat-value">{templatesLoaded ? templates.filter(t => t.status === 'published').length : '—'}</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">总下载量</span>
-                        <span className="stat-value">{templates.reduce((sum, t) => sum + t.downloadCount, 0)}</span>
+                        <span className="stat-label">本页下载量</span>
+                        <span className="stat-value">{templatesLoaded ? templates.reduce((sum, t) => sum + t.downloadCount, 0) : '—'}</span>
                     </div>
                 </div>
 
+                <p className="template-feedback">关键词搜索仅覆盖本页；当前接口未提供全库关键词检索。</p>
+                {templatesError && <div className="template-feedback" role="alert">{templatesError}{templatesLoaded ? '，当前显示上次加载的数据。' : '，尚不能确认列表为空。'}<button className="btn-secondary" onClick={loadTemplates}>重新加载模板</button></div>}
                 {loading ? (
                     <div className="loading-state">加载中...</div>
                 ) : (
                     <div className="templates-grid">
                         {filteredTemplates.length === 0 ? (
-                            <div className="empty-state">暂无模板数据</div>
+                            <div className="empty-state">{templatesError ? '当前模板列表未能加载' : searchKeyword ? '本页没有匹配的模板，可翻页继续查找' : '当前筛选下暂无模板数据'}</div>
                         ) : (
                             filteredTemplates.map((template) => (
                                 <div key={template.id} className="template-card">
@@ -1311,14 +1610,21 @@ const Templates: React.FC = () => {
                                         {template.rejectReason ? (
                                             <p className="template-description">拒绝原因：{template.rejectReason}</p>
                                         ) : null}
+                                        <dl className="template-meta">
+                                            <div><dt>分类</dt><dd>{getCategoryLabel(template.category) || '未提供'}</dd></div>
+                                            <div><dt>去向</dt><dd>{getPublishScopeLabel(template.publishScope)}</dd></div>
+                                            <div><dt>来源</dt><dd>{getSourceTypeLabel(template.sourceType)}</dd></div>
+                                            <div><dt>尺寸</dt><dd>{formatImageMeta(template.imageWidth, template.imageHeight)}</dd></div>
+                                            <div><dt>下载</dt><dd>{template.downloadCount}</dd></div>
+                                        </dl>
                                         <div className="template-footer">
                                             <div className="template-actions">
                                                 {template.status === 'pending' && (
                                                     <>
-                                                        <button className="btn-action btn-approve" onClick={() => handleApprove(template)} disabled={actionLoading === template.id} title="通过">
+                                                        <button className="btn-action btn-approve" onClick={() => handleApprove(template)} disabled={templateWritesRef.current.has(template.id)} title="通过">
                                                             <FiCheckIcon size={14} /> 通过
                                                         </button>
-                                                        <button className="btn-action btn-reject" onClick={() => handleReject(template)} disabled={actionLoading === template.id} title="拒绝">
+                                                        <button className="btn-action btn-reject" onClick={() => handleReject(template)} disabled={templateWritesRef.current.has(template.id)} title="拒绝">
                                                             <FiXIcon size={14} /> 拒绝
                                                         </button>
                                                     </>
@@ -1327,19 +1633,19 @@ const Templates: React.FC = () => {
                                                     <button
                                                         className={`btn-action ${template.isFeatured ? 'btn-featured-active' : 'btn-featured'}`}
                                                         onClick={() => handleSetFeatured(template, !template.isFeatured)}
-                                                        disabled={actionLoading === template.id}
+                                                        disabled={templateWritesRef.current.has(template.id)}
                                                         title={template.isFeatured ? '取消精选' : '设为精选'}
                                                     >
                                                         {template.isFeatured ? '已精选' : '设为精选'}
                                                     </button>
                                                 )}
-                                                <button className="btn-action btn-move" onClick={() => handleMoveCategory(template)} title="移动分类">
+                                                <button className="btn-action btn-move" onClick={() => handleMoveCategory(template)} disabled={templateWritesRef.current.has(template.id)} title="移动分类">
                                                     <FiFolderIcon size={14} />
                                                 </button>
-                                                <button className="btn-action btn-edit" onClick={() => handleEdit(template)} title="编辑">
+                                                <button className="btn-action btn-edit" onClick={() => handleEdit(template)} disabled={templateWritesRef.current.has(template.id)} title="编辑">
                                                     <FiEditIcon size={14} />
                                                 </button>
-                                                <button className="btn-action btn-delete" onClick={() => handleDelete(template.id)} disabled={actionLoading === template.id} title="删除">
+                                                <button className="btn-action btn-delete" onClick={() => handleDelete(template.id)} disabled={templateWritesRef.current.has(template.id)} title="删除">
                                                     <FiTrash2Icon size={14} />
                                                 </button>
                                             </div>
@@ -1351,18 +1657,24 @@ const Templates: React.FC = () => {
                     </div>
                 )}
 
-                {/* 娣诲姞妯℃澘寮圭獥 */}
+                <nav className="template-pagination" aria-label="模板分页">
+                    <button className="btn-secondary" disabled={loading || templatePage <= 1} onClick={() => setTemplatePage(page => Math.max(1, page - 1))}>上一页模板</button>
+                    <span>第 {templatePage} / {templatesLoaded ? Math.max(1, Math.ceil(templateTotal / templatePageSize)) : '—'} 页，每页 {templatePageSize} 条</span>
+                    <button className="btn-secondary" disabled={loading || !templatesLoaded || templatePage * templatePageSize >= templateTotal} onClick={() => setTemplatePage(page => page + 1)}>下一页模板</button>
+                </nav>
+
+                {/* 新增模板弹窗 */}
                 {showAddModal && (
-                    <div className="modal-overlay" onClick={closeTemplateEditor}>
+                    <div className="modal-overlay" onClick={dismissTemplateEditor}>
                         <div className="modal-content modal-form" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>添加模板</h3>
-                                <button className="modal-close" onClick={closeTemplateEditor}>×</button>
+                                <button className="modal-close" onClick={dismissTemplateEditor}>×</button>
                             </div>
-                            <div className="modal-body">
+                            <fieldset className="modal-body" disabled={editorSaving}>
                                 <div className="form-group">
                                     <label>名称 *</label>
-                                    <input className="form-input" value={addFormData.name} onChange={(e) => setAddFormData(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
+                                    <input className="form-input" value={addFormData.name} onChange={(e) => updateAddForm(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
                                 </div>
                                 {/* 分类由系统根据配置自动处理，这里不再单独选择 */}
                                 <div className="form-row">
@@ -1370,7 +1682,7 @@ const Templates: React.FC = () => {
                                         <label>一级标签（可选）</label>
                                         <select className="form-input" value={addFormData.mainTab} onChange={(e) => {
                                             const mainTabValue = e.target.value;
-                                            setAddFormData(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
+                                            updateAddForm(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
                                         }}>
                                             <option value="">不设置（仅分类）</option>
                                             {mainTabs.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -1378,7 +1690,7 @@ const Templates: React.FC = () => {
                                     </div>
                                     <div className="form-group">
                                         <label>二级标签（可选）</label>
-                                        <select className="form-input" value={addFormData.subTab} onChange={(e) => setAddFormData(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!addFormData.mainTab}>
+                                        <select className="form-input" value={addFormData.subTab} onChange={(e) => updateAddForm(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!addFormData.mainTab}>
                                             <option value="">不设置（仅父标签）</option>
                                             {addFormData.mainTab && getChildTabsByParent(subTabs, addFormData.mainTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                         </select>
@@ -1386,14 +1698,14 @@ const Templates: React.FC = () => {
                                 </div>
                                 <div className="form-group">
                                     <label>三级Tab（可选）</label>
-                                    <select className="form-input" value={addFormData.thirdTab} onChange={(e) => setAddFormData(f => ({ ...f, thirdTab: e.target.value }))} disabled={!addFormData.subTab || getChildTabsByParent(thirdTabs, addFormData.subTab).length === 0}>
+                                    <select className="form-input" value={addFormData.thirdTab} onChange={(e) => updateAddForm(f => ({ ...f, thirdTab: e.target.value }))} disabled={!addFormData.subTab || getChildTabsByParent(thirdTabs, addFormData.subTab).length === 0}>
                                         <option value="">不设置（仅二级Tab）</option>
                                         {addFormData.subTab && getChildTabsByParent(thirdTabs, addFormData.subTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group">
                                     <label>描述</label>
-                                    <textarea className="form-input" rows={3} value={addFormData.description} onChange={(e) => setAddFormData(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
+                                    <textarea className="form-input" rows={3} value={addFormData.description} onChange={(e) => updateAddForm(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
                                 </div>
                                 <div className="form-group">
                                     <label>模板图片（支持多图）</label>
@@ -1403,8 +1715,8 @@ const Templates: React.FC = () => {
                                         <button
                                             type="button"
                                             className="btn-secondary"
-                                            disabled={uploading || actionLoading === 'add'}
-                                            onClick={() => addUploadRef.current?.click()}
+                                            disabled={uploading || editorSaving}
+                                            onClick={() => { if (isCurrentEditor('add')) addUploadRef.current?.click(); }}
                                         >
                                             选择图片并上传
                                         </button>
@@ -1425,7 +1737,7 @@ const Templates: React.FC = () => {
                                                             type="button"
                                                             className="btn-action btn-delete"
                                                             onClick={() =>
-                                                                setAddFormData(f => ({
+                                                                updateAddForm(f => ({
                                                                     ...f,
                                                                     imageUrls: (f.imageUrls || []).filter((_, i) => i !== idx),
                                                                 }))
@@ -1442,44 +1754,44 @@ const Templates: React.FC = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>价格（灵石）</label>
-                                        <input type="number" className="form-input" value={addFormData.price || ''} onChange={(e) => setAddFormData(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
+                                        <input type="number" className="form-input" value={addFormData.price || ''} onChange={(e) => updateAddForm(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
                                     </div>
                                     <div className="form-group form-group-inline">
                                         <label>
-                                            <input type="checkbox" checked={addFormData.isFree} onChange={(e) => setAddFormData(f => ({ ...f, isFree: e.target.checked }))} />
+                                            <input type="checkbox" checked={addFormData.isFree} onChange={(e) => updateAddForm(f => ({ ...f, isFree: e.target.checked }))} />
                                             免费
                                         </label>
                                     </div>
                                     <div className="form-group">
                                         <label>状态</label>
-                                        <select className="form-input" value={addFormData.status} onChange={(e) => setAddFormData(f => ({ ...f, status: e.target.value }))}>
+                                        <select className="form-input" value={addFormData.status} onChange={(e) => updateAddForm(f => ({ ...f, status: e.target.value }))}>
                                             <option value="draft">草稿</option>
                                             <option value="published">已发布</option>
                                             <option value="archived">已归档</option>
                                         </select>
                                     </div>
                                 </div>
-                            </div>
+                            </fieldset>
                             <div className="modal-footer">
-                                <button className="btn-secondary" onClick={closeTemplateEditor}>取消</button>
-                                <button className="btn-primary" onClick={handleAddTemplate} disabled={uploading || actionLoading === 'add'}>保存</button>
+                                <button className="btn-secondary" onClick={dismissTemplateEditor}>取消</button>
+                                <button className="btn-primary" onClick={handleAddTemplate} disabled={uploading || editorSaving}>保存</button>
                             </div>
                         </div>
                     </div>
                 )}
 
                 {/* 编辑模板弹窗 */}
-                {showEditModal && selectedTemplate && (
-                    <div className="modal-overlay" onClick={closeTemplateEditor}>
+                {showEditModal && selectedTemplate && (!renderedEditorLinkedTarget || isCurrentLinkedTarget(renderedEditorLinkedTarget)) && (
+                    <div className="modal-overlay" onClick={dismissTemplateEditor}>
                         <div className="modal-content modal-form" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>编辑模板</h3>
-                                <button className="modal-close" onClick={closeTemplateEditor}>×</button>
+                                <button className="modal-close" onClick={dismissTemplateEditor}>×</button>
                             </div>
-                            <div className="modal-body">
+                            <fieldset className="modal-body" disabled={templateWritesRef.current.has(selectedTemplate.id)}>
                                 <div className="form-group">
                                     <label>名称 *</label>
-                                    <input className="form-input" value={editFormData.name} onChange={(e) => setEditFormData(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
+                                    <input className="form-input" value={editFormData.name} onChange={(e) => updateEditForm(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
                                 </div>
                                 {/* 分类由系统根据配置自动处理，这里不再单独选择 */}
                                 <div className="form-row">
@@ -1487,7 +1799,7 @@ const Templates: React.FC = () => {
                                         <label>一级标签（可选）</label>
                                         <select className="form-input" value={editFormData.mainTab} onChange={(e) => {
                                             const mainTabValue = e.target.value;
-                                            setEditFormData(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
+                                            updateEditForm(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
                                         }}>
                                             <option value="">不设置（仅分类）</option>
                                             {mainTabs.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -1495,7 +1807,7 @@ const Templates: React.FC = () => {
                                     </div>
                                     <div className="form-group">
                                         <label>二级标签（可选）</label>
-                                        <select className="form-input" value={editFormData.subTab} onChange={(e) => setEditFormData(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!editFormData.mainTab}>
+                                        <select className="form-input" value={editFormData.subTab} onChange={(e) => updateEditForm(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!editFormData.mainTab}>
                                             <option value="">不设置（仅父标签）</option>
                                             {editFormData.mainTab && getChildTabsByParent(subTabs, editFormData.mainTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                         </select>
@@ -1503,14 +1815,14 @@ const Templates: React.FC = () => {
                                 </div>
                                 <div className="form-group">
                                     <label>三级Tab（可选）</label>
-                                    <select className="form-input" value={editFormData.thirdTab} onChange={(e) => setEditFormData(f => ({ ...f, thirdTab: e.target.value }))} disabled={!editFormData.subTab || getChildTabsByParent(thirdTabs, editFormData.subTab).length === 0}>
+                                    <select className="form-input" value={editFormData.thirdTab} onChange={(e) => updateEditForm(f => ({ ...f, thirdTab: e.target.value }))} disabled={!editFormData.subTab || getChildTabsByParent(thirdTabs, editFormData.subTab).length === 0}>
                                         <option value="">不设置（仅二级Tab）</option>
                                         {editFormData.subTab && getChildTabsByParent(thirdTabs, editFormData.subTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group">
                                     <label>描述</label>
-                                    <textarea className="form-input" rows={3} value={editFormData.description} onChange={(e) => setEditFormData(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
+                                    <textarea className="form-input" rows={3} value={editFormData.description} onChange={(e) => updateEditForm(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
                                 </div>
                                 <div className="readonly-info-panel">
                                     <div className="readonly-info-title">运营信息</div>
@@ -1540,6 +1852,7 @@ const Templates: React.FC = () => {
                                             <span className="readonly-info-value">{selectedTemplate.creator || '-'}</span>
                                         </div>
                                     </div>
+                                    {selectedTemplate.rejectReason && <p className="template-feedback">拒绝原因：{selectedTemplate.rejectReason}</p>}
                                 </div>
                                 <div className="form-group">
                                     <label>模板图片（支持多图）</label>
@@ -1549,8 +1862,8 @@ const Templates: React.FC = () => {
                                         <button
                                             type="button"
                                             className="btn-secondary"
-                                            disabled={uploading || actionLoading === selectedTemplate.id}
-                                            onClick={() => editUploadRef.current?.click()}
+                                            disabled={uploading || editorSaving || templateWritesRef.current.has(selectedTemplate.id)}
+                                            onClick={() => { if (isCurrentEditor('edit')) editUploadRef.current?.click(); }}
                                         >
                                             选择图片并上传
                                         </button>
@@ -1571,7 +1884,7 @@ const Templates: React.FC = () => {
                                                             type="button"
                                                             className="btn-action btn-delete"
                                                             onClick={() =>
-                                                                setEditFormData(f => ({
+                                                                updateEditForm(f => ({
                                                                     ...f,
                                                                     imageUrls: (f.imageUrls || []).filter((_, i) => i !== idx),
                                                                 }))
@@ -1588,17 +1901,18 @@ const Templates: React.FC = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>价格（灵石）</label>
-                                        <input type="number" className="form-input" value={editFormData.price || ''} onChange={(e) => setEditFormData(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
+                                        <input type="number" className="form-input" value={editFormData.price || ''} onChange={(e) => updateEditForm(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
                                     </div>
                                     <div className="form-group form-group-inline">
                                         <label>
-                                            <input type="checkbox" checked={editFormData.isFree} onChange={(e) => setEditFormData(f => ({ ...f, isFree: e.target.checked }))} />
+                                            <input type="checkbox" checked={editFormData.isFree} onChange={(e) => updateEditForm(f => ({ ...f, isFree: e.target.checked }))} />
                                             免费
                                         </label>
                                     </div>
                                     <div className="form-group">
                                         <label>状态</label>
-                                        <select className="form-input" value={editFormData.status} onChange={(e) => setEditFormData(f => ({ ...f, status: e.target.value }))}>
+                                        <select className="form-input" value={editFormData.status} onChange={(e) => updateEditForm(f => ({ ...f, status: e.target.value }))}>
+                                            {!['draft', 'pending', 'published', 'archived'].includes(selectedTemplate.status) && <option value={selectedTemplate.status}>{getStatusLabel(selectedTemplate.status).label || '未知状态'}（当前）</option>}
                                             <option value="draft">草稿</option>
                                             <option value="pending">待审核</option>
                                             <option value="published">已发布</option>
@@ -1606,22 +1920,22 @@ const Templates: React.FC = () => {
                                         </select>
                                     </div>
                                 </div>
-                            </div>
+                            </fieldset>
                             <div className="modal-footer">
-                                <button className="btn-secondary" onClick={closeTemplateEditor}>取消</button>
-                                <button className="btn-primary" onClick={handleSaveEdit} disabled={uploading || actionLoading === selectedTemplate.id}>保存</button>
+                                <button className="btn-secondary" onClick={dismissTemplateEditor}>取消</button>
+                                <button className="btn-primary" onClick={handleSaveEdit} disabled={uploading || editorSaving || templateWritesRef.current.has(selectedTemplate.id)}>保存</button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* 绉诲姩鍒嗙被寮圭獥 */}
+                {/* 移动分类弹窗 */}
                 {showMoveCategoryModal && moveTargetTemplate && (
-                    <div className="modal-overlay" onClick={() => setShowMoveCategoryModal(false)}>
+                    <div className="modal-overlay" onClick={dismissMoveCategory}>
                         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>移动“{moveTargetTemplate.name}”到分类</h3>
-                                <button className="modal-close" onClick={() => setShowMoveCategoryModal(false)}>×</button>
+                                <button className="modal-close" onClick={dismissMoveCategory}>×</button>
                             </div>
                             <div className="modal-body">
                                 <p className="modal-hint">点击目标分类完成移动。</p>
@@ -1631,7 +1945,7 @@ const Templates: React.FC = () => {
                                             key={c.id}
                                             className="btn-secondary"
                                             onClick={() => confirmMoveCategory(c.id)}
-                                            disabled={actionLoading === moveTargetTemplate.id}
+                                            disabled={templateWritesRef.current.has(moveTargetTemplate.id)}
                                         >
                                             {c.name}
                                         </button>
@@ -1645,21 +1959,21 @@ const Templates: React.FC = () => {
                     </div>
                 )}
 
-                {/* 绮鹃€夋渚嬬粍缂栬緫寮圭獥 */}
+                {/* 精选案例组编辑弹窗 */}
                 {showFeaturedGroupModal && (
-                    <div className="modal-overlay" onClick={() => setShowFeaturedGroupModal(false)}>
+                    <div className="modal-overlay" onClick={dismissFeaturedGroupEditor}>
                         <div className="modal-content modal-form" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>{selectedFeaturedGroup ? '编辑精选案例组' : '新建精选案例组'}</h3>
-                                <button className="modal-close" onClick={() => setShowFeaturedGroupModal(false)}>×</button>
+                                <button className="modal-close" onClick={dismissFeaturedGroupEditor}>×</button>
                             </div>
-                            <div className="modal-body">
+                            <fieldset className="modal-body" disabled={featuredGroupSaving}>
                                 <div className="form-group">
                                     <label>组名称 *</label>
                                     <input
                                         className="form-input"
                                         value={featuredGroupForm.name}
-                                        onChange={(e) => setFeaturedGroupForm(f => ({ ...f, name: e.target.value }))}
+                                        onChange={(e) => updateFeaturedForm(f => ({ ...f, name: e.target.value }))}
                                         placeholder="例如：真实场景 vs AI 设计"
                                     />
                                 </div>
@@ -1668,8 +1982,9 @@ const Templates: React.FC = () => {
                                     <select
                                         className="form-input"
                                         value={featuredGroupForm.display_mode}
-                                        onChange={(e) => setFeaturedGroupForm(f => ({ ...f, display_mode: e.target.value as any }))}
+                                        onChange={(e) => updateFeaturedForm(f => ({ ...f, display_mode: e.target.value }))}
                                     >
+                                        {!isFeaturedDisplayMode(featuredGroupForm.display_mode) && <option value={featuredGroupForm.display_mode}>未知模式（{featuredGroupForm.display_mode || '未提供'}），请明确选择</option>}
                                         <option value="comparison">对比模式（真实 vs AI）</option>
                                         <option value="side_by_side">并排模式（真实和 AI）</option>
                                         <option value="normal">普通模式（单个案例）</option>
@@ -1680,12 +1995,10 @@ const Templates: React.FC = () => {
                                     <select
                                         className="form-input"
                                         value={featuredGroupForm.case1_id}
-                                        onChange={(e) => setFeaturedGroupForm(f => ({ ...f, case1_id: e.target.value }))}
+                                        onChange={(e) => updateFeaturedForm(f => ({ ...f, case1_id: e.target.value }))}
                                     >
                                         <option value="">请选择案例</option>
-                                        {templates.filter(t => t.status === 'published').map(t => (
-                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                        ))}
+                                        {featuredOptionEntries.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                                     </select>
                                 </div>
                                 {featuredGroupForm.display_mode !== 'normal' && (
@@ -1694,22 +2007,27 @@ const Templates: React.FC = () => {
                                         <select
                                             className="form-input"
                                             value={featuredGroupForm.case2_id}
-                                            onChange={(e) => setFeaturedGroupForm(f => ({ ...f, case2_id: e.target.value }))}
+                                            onChange={(e) => updateFeaturedForm(f => ({ ...f, case2_id: e.target.value }))}
                                         >
                                             <option value="">请选择案例</option>
-                                            {templates.filter(t => t.status === 'published' && t.id !== featuredGroupForm.case1_id).map(t => (
-                                                <option key={t.id} value={t.id}>{t.name}</option>
-                                            ))}
+                                            {featuredOptionEntries.filter(item => item.id !== featuredGroupForm.case1_id || item.id === featuredGroupForm.case2_id).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                                         </select>
                                     </div>
                                 )}
+                                <div className="template-feedback" aria-live="polite">
+                                    <p>案例选项独立读取已发布模板，不受主列表分类、状态或页码影响。当前已选 ID 会保留。</p>
+                                    {featuredOptionsError && <p role="alert">{featuredOptionsError}</p>}
+                                    <span>{featuredOptionsLoading ? '正在加载案例...' : `已加载 ${featuredOptions.length} / ${featuredOptionsTotal} 个已发布案例`}</span>
+                                    {featuredOptionsError ? <button type="button" className="btn-secondary" onClick={() => loadFeaturedOptions(featuredOptionsPage ? featuredOptionsPage + 1 : 1, renderedFeaturedSession)} disabled={featuredOptionsLoading}>重试加载案例</button> : featuredOptions.length < featuredOptionsTotal && <button type="button" className="btn-secondary" onClick={() => loadFeaturedOptions(featuredOptionsPage + 1, renderedFeaturedSession)} disabled={featuredOptionsLoading}>加载更多案例</button>}
+                                    {featuredGroupForm.display_mode === 'normal' && featuredGroupForm.case2_id && <p>普通模式保留现有第二案例 #{featuredGroupForm.case2_id}，不会自动清空。</p>}
+                                </div>
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>第一个案例标签</label>
                                         <input
                                             className="form-input"
                                             value={featuredGroupForm.case1_label}
-                                            onChange={(e) => setFeaturedGroupForm(f => ({ ...f, case1_label: e.target.value }))}
+                                            onChange={(e) => updateFeaturedForm(f => ({ ...f, case1_label: e.target.value }))}
                                             placeholder="例如：真实"
                                         />
                                     </div>
@@ -1719,7 +2037,7 @@ const Templates: React.FC = () => {
                                             <input
                                                 className="form-input"
                                                 value={featuredGroupForm.case2_label}
-                                                onChange={(e) => setFeaturedGroupForm(f => ({ ...f, case2_label: e.target.value }))}
+                                                onChange={(e) => updateFeaturedForm(f => ({ ...f, case2_label: e.target.value }))}
                                                 placeholder="例如：AI"
                                             />
                                         </div>
@@ -1731,19 +2049,19 @@ const Templates: React.FC = () => {
                                         type="number"
                                         className="form-input"
                                         value={featuredGroupForm.sort_order}
-                                        onChange={(e) => setFeaturedGroupForm(f => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
+                                        onChange={(e) => updateFeaturedForm(f => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
                                         placeholder="数字越小越靠前"
                                     />
                                 </div>
-                            </div>
+                            </fieldset>
                             <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowFeaturedGroupModal(false)}>取消</button>
+                                <button className="btn-secondary" onClick={dismissFeaturedGroupEditor}>取消</button>
                                 <button
                                     className="btn-primary"
-                                    onClick={selectedFeaturedGroup ? handleUpdateFeaturedGroup : handleCreateFeaturedGroup}
-                                    disabled={actionLoading === 'create-group' || actionLoading === 'update-group'}
+                                    onClick={handleSaveFeaturedGroup}
+                                    disabled={featuredGroupSaving}
                                 >
-                                    {actionLoading === 'create-group' || actionLoading === 'update-group' ? '保存中...' : '保存'}
+                                    {featuredGroupSaving ? '保存中...' : '保存'}
                                 </button>
                             </div>
                         </div>
