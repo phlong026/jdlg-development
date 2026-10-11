@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useMemo, useState, useEffect } from 'react';
 import { FiSave, FiPlus, FiEdit, FiTrash2, FiSettings, FiX, FiClipboard, FiSearch } from 'react-icons/fi';
 import { getAIPricingList, saveAIPricing, getAIAPIConfigList, saveAIAPIConfig, type AIPricing, type AIAPIConfig } from '../api/ai';
@@ -114,8 +114,10 @@ const AIConfig: React.FC = () => {
 
     const loadPricings = async () => {
         try {
+            const recoveryPage = window.location.pathname;
             const data = await getAIPricingList();
             setPricings(data);
+            reportPageLoadRecovered("加载计费配置失败", recoveryPage);
         } catch (error) {
             console.error('加载计费配置失败:', error);
             reportPageLoadError(error, '加载计费配置失败');
@@ -124,8 +126,10 @@ const AIConfig: React.FC = () => {
 
     const loadAPIConfigs = async () => {
         try {
+            const recoveryPage = window.location.pathname;
             const data = await getAIAPIConfigList();
             setApiConfigs(data);
+            reportPageLoadRecovered("加载API配置失败", recoveryPage);
         } catch (error) {
             console.error('加载API配置失败:', error);
             reportPageLoadError(error, '加载API配置失败');

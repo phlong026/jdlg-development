@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -78,11 +78,11 @@ interface TaskQueueTab {
 }
 
 const queueTabs: TaskQueueTab[] = [
-    { key: 'failed', label: '失败待处理', help: '近7日失败任务（系统已自动退款，待人工排查/转工单）', alert: true },
+    { key: 'failed', label: '失败待处理', help: '近7日失败任务，可排查原因、核对已退灵石或转工单', alert: true },
     { key: 'timeout', label: '超时未完成', help: '处理中但超过30分钟未出结果', alert: true },
     { key: 'running', label: '处理中', help: '排队与执行中的任务' },
     { key: 'today', label: '今日新增', help: '今天进入系统的全部任务' },
-    { key: 'all', label: '全部任务', help: '完整任务池（可用筛选器缩小范围）' },
+    { key: 'all', label: '全部任务', help: '全部任务记录，可按条件筛选' },
 ];
 
 const formatDateTime = (value?: string) => {
@@ -229,6 +229,7 @@ const AITaskCenter: React.FC = () => {
     ) => {
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const params = {
                 keyword: nextKeyword,
                 status: nextQueue === 'all' ? nextStatus : 'all',
@@ -252,6 +253,7 @@ const AITaskCenter: React.FC = () => {
             setTotal(response.total || 0);
             setPage(response.page || nextPage);
             setPageSize(response.page_size || nextPageSize);
+            reportPageLoadRecovered("加载AI任务中心失败", recoveryPage);
         } catch (error) {
             console.error('加载AI任务中心失败:', error);
             reportPageLoadError(error, '加载AI任务中心失败');
@@ -404,6 +406,7 @@ const AITaskCenter: React.FC = () => {
         setShowDetailModal(true);
         setDetailLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const detail = activeTab === 'image'
                 ? await getAITaskDetail(String(item.id))
                 : await getAIVideoTaskDetail(String(item.id));
@@ -412,6 +415,7 @@ const AITaskCenter: React.FC = () => {
             nextParams.set('tab', activeTab);
             nextParams.set('taskId', String(item.id));
             setSearchParams(nextParams);
+            reportPageLoadRecovered("加载任务详情失败", recoveryPage);
         } catch (error) {
             console.error('加载任务详情失败:', error);
             reportPageLoadError(error, '加载任务详情失败');
@@ -577,7 +581,7 @@ const AITaskCenter: React.FC = () => {
                             <h3>{activeTab === 'image' ? `${activeQueue.label} · 任务检索` : '视频任务检索'}</h3>
                             <p>
                                 {activeTab === 'image'
-                                    ? '先按队列缩小范围，再用任务号、用户、场景过滤；失败任务可看详情、转异常工单或进用户360跟进。'
+                                    ? '按任务状态、任务号、用户或场景查找。失败任务可查看原因、转工单，或进入用户详情跟进。'
                                     : '按任务号、用户和状态缩小范围，再查看失败原因或转异常工单。'}
                             </p>
                         </div>
@@ -608,7 +612,7 @@ const AITaskCenter: React.FC = () => {
                                     <option value="all">全部状态</option>
                                     <option value="pending">待处理</option>
                                     <option value="running">处理中</option>
-                                    <option value="processing">处理中（旧值）</option>
+                                    <option value="processing">处理中（历史任务）</option>
                                     <option value="success">成功</option>
                                     <option value="failed">失败</option>
                                 </select>
@@ -638,7 +642,7 @@ const AITaskCenter: React.FC = () => {
                         <strong>{total} 条</strong>
                     </div>
                     <div className="task-summary-banner-meta">
-                        {`失败 ${activeQueueCounts.failed} · 超时 ${activeQueueCounts.timeout} · 处理中 ${activeQueueCounts.running} · 今日新增 ${activeQueueCounts.today_new}（口径为全量队列计数，非当前筛选）`}
+                        {`全部任务统计：失败 ${activeQueueCounts.failed} · 超时 ${activeQueueCounts.timeout} · 处理中 ${activeQueueCounts.running} · 今日新增 ${activeQueueCounts.today_new}（不受当前筛选影响）`}
                     </div>
                 </div>
 
@@ -663,7 +667,7 @@ const AITaskCenter: React.FC = () => {
                                 <th>{activeTab === 'image' ? '场景 / 模型' : '模型 / 时长'}</th>
                                 <th>状态</th>
                                 <th>灵石</th>
-                                <th>{activeTab === 'image' ? '错误信息' : '提示词 / 错误信息'}</th>
+                                <th>{activeTab === 'image' ? '异常说明' : '生成要求 / 异常说明'}</th>
                                 <th>创建时间</th>
                                 <th>操作</th>
                             </tr>
@@ -706,13 +710,13 @@ const AITaskCenter: React.FC = () => {
                                                         <strong>{sceneLabel(item.scene)}</strong>
                                                         <span>
                                                             {resolvedModel}
-                                                            {degraded ? <em className="task-degrade-badge">降级</em> : null}
+                                                            {degraded ? <em className="task-degrade-badge">备用服务</em> : null}
                                                         </span>
                                                     </div>
                                                 ) : (
                                                     <div className="text-cell">
                                                         <strong>{item.model || '-'}</strong>
-                                                        <span>{item.duration ? `${item.duration}秒` : '时长待回填'} / {item.resolution || '分辨率待回填'}</span>
+                                                        <span>{item.duration ? `${item.duration}秒` : '暂未记录时长'} / {item.resolution || '暂未记录分辨率'}</span>
                                                     </div>
                                                 )}
                                             </td>
@@ -729,7 +733,7 @@ const AITaskCenter: React.FC = () => {
                                             <td>
                                                 <div className="text-cell">
                                                     {activeTab === 'video' && <strong>{item.prompt || '-'}</strong>}
-                                                    <span>{item.error_message || '无异常'}</span>
+                                                    <span>{item.error_message || '暂无异常说明'}</span>
                                                 </div>
                                             </td>
                                             <td>{formatDateTime(item.created_at)}</td>
@@ -743,7 +747,7 @@ const AITaskCenter: React.FC = () => {
                                                     >
                                                         {creatingTicketKey === `${activeTab}-${item.id}` ? '转单中...' : '转异常工单'}
                                                     </button>
-                                                    <button className="btn-link" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>进入用户360</button>
+                                                    <button className="btn-link" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>查看用户详情</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -800,65 +804,29 @@ const AITaskCenter: React.FC = () => {
                                             </div>
 
                                             <div className="task-detail-card">
-                                                <h4>{selectedDetail.type === 'video' ? '任务配置' : '任务上下文'}</h4>
+                                                <h4>生成信息</h4>
                                                 <div className="task-detail-list">
                                                     <div><span>场景</span><strong>{sceneLabel(selectedDetail.scene)}</strong></div>
-                                                    <div><span>模型</span><strong>{selectedResolvedModel}{isFallbackModel(selectedResolvedModel) ? '（降级承接）' : ''}</strong></div>
-                                                    <div><span>调用接口</span><strong>{selectedDetail.api_endpoint || selectedExecutionMeta?.api_endpoint || '-'}</strong></div>
-                                                    <div><span>原始状态</span><strong>{selectedDetail.raw_status || selectedDetail.status}</strong></div>
+                                                    <div><span>模型</span><strong>{selectedResolvedModel}{isFallbackModel(selectedResolvedModel) ? '（备用服务）' : ''}</strong></div>
                                                     <div><span>分段数</span><strong>{selectedDetail.segment_count || 0}</strong></div>
                                                     <div><span>时长</span><strong>{selectedDetail.duration ? `${selectedDetail.duration} 秒` : '-'}</strong></div>
                                                     <div><span>分辨率</span><strong>{selectedDetail.resolution || '-'}</strong></div>
-                                                    <div><span>外部任务ID</span><strong>{selectedDetail.external_id || '-'}</strong></div>
                                                     <div><span>结果地址</span><strong>{selectedDetail.oss_url || '-'}</strong></div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {selectedExecutionMeta ? (
-                                            <div className="task-detail-card full-width execution-meta-card">
-                                                <h4>执行链路</h4>
-                                                <div className="task-detail-list">
-                                                    <div><span>最终模型</span><strong>{selectedExecutionMeta.used_model || selectedResolvedModel}</strong></div>
-                                                    <div><span>最终接口</span><strong>{selectedExecutionMeta.api_endpoint || selectedDetail.api_endpoint || '-'}</strong></div>
-                                                    <div><span>尝试模型</span><strong>{selectedExecutionMeta.attempted_models?.filter(Boolean).join(' / ') || '-'}</strong></div>
-                                                    <div><span>尝试接口</span><strong>{selectedExecutionMeta.attempted_endpoints?.filter(Boolean).join(' / ') || '-'}</strong></div>
-                                                </div>
-                                            </div>
-                                        ) : null}
-
                                         {selectedDetail.prompt ? (
                                             <div className="task-detail-card full-width">
-                                                <h4>提示词</h4>
+                                                <h4>生成要求</h4>
                                                 <pre className="payload-block">{selectedDetail.prompt}</pre>
                                             </div>
                                         ) : null}
 
                                         {selectedDetail.error_message ? (
                                             <div className="task-detail-card full-width danger-card">
-                                                <h4>错误信息</h4>
+                                                <h4>异常说明</h4>
                                                 <pre className="payload-block">{selectedDetail.error_message}</pre>
-                                            </div>
-                                        ) : null}
-
-                                        {selectedDetail.raw_error_message && selectedDetail.raw_error_message !== selectedDetail.error_message ? (
-                                            <div className="task-detail-card full-width danger-card">
-                                                <h4>原始错误信息</h4>
-                                                <pre className="payload-block">{selectedDetail.raw_error_message}</pre>
-                                            </div>
-                                        ) : null}
-
-                                        {selectedDetail.request_payload ? (
-                                            <div className="task-detail-card full-width">
-                                                <h4>请求载荷</h4>
-                                                <pre className="payload-block">{formatPayload(selectedDetail.request_payload)}</pre>
-                                            </div>
-                                        ) : null}
-
-                                        {selectedDetail.result_payload ? (
-                                            <div className="task-detail-card full-width">
-                                                <h4>结果载荷</h4>
-                                                <pre className="payload-block">{formatPayload(selectedDetail.result_payload)}</pre>
                                             </div>
                                         ) : null}
 
@@ -883,6 +851,43 @@ const AITaskCenter: React.FC = () => {
                                                 <div className="action-feedback-text">{quickActionFeedback}</div>
                                             </div>
                                         ) : null}
+                                        <details key={`${selectedDetail.type}-${selectedDetail.id}`} className="task-detail-card full-width execution-meta-card">
+                                            <summary>技术诊断详情（排查问题时查看）</summary>
+                                            <div className="task-detail-list">
+                                                <div><span>原始状态</span><strong>{selectedDetail.raw_status || selectedDetail.status}</strong></div>
+                                                <div><span>调用接口</span><strong>{selectedDetail.api_endpoint || selectedExecutionMeta?.api_endpoint || '-'}</strong></div>
+                                                <div><span>外部任务ID</span><strong>{selectedDetail.external_id || '-'}</strong></div>
+                                            </div>
+                                            {selectedExecutionMeta ? (
+                                                <div className="task-detail-card">
+                                                    <h4>服务执行记录</h4>
+                                                    <div className="task-detail-list">
+                                                        <div><span>最终模型</span><strong>{selectedExecutionMeta.used_model || selectedResolvedModel}</strong></div>
+                                                        <div><span>最终接口</span><strong>{selectedExecutionMeta.api_endpoint || selectedDetail.api_endpoint || '-'}</strong></div>
+                                                        <div><span>尝试模型</span><strong>{selectedExecutionMeta.attempted_models?.filter(Boolean).join(' / ') || '-'}</strong></div>
+                                                        <div><span>尝试接口</span><strong>{selectedExecutionMeta.attempted_endpoints?.filter(Boolean).join(' / ') || '-'}</strong></div>
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                            {selectedDetail.raw_error_message && selectedDetail.raw_error_message !== selectedDetail.error_message ? (
+                                                <div className="task-detail-card danger-card">
+                                                    <h4>原始错误信息</h4>
+                                                    <pre className="payload-block">{selectedDetail.raw_error_message}</pre>
+                                                </div>
+                                            ) : null}
+                                            {selectedDetail.request_payload ? (
+                                                <div className="task-detail-card">
+                                                    <h4>请求记录</h4>
+                                                    <pre className="payload-block">{formatPayload(selectedDetail.request_payload)}</pre>
+                                                </div>
+                                            ) : null}
+                                            {selectedDetail.result_payload ? (
+                                                <div className="task-detail-card">
+                                                    <h4>返回记录</h4>
+                                                    <pre className="payload-block">{formatPayload(selectedDetail.result_payload)}</pre>
+                                                </div>
+                                            ) : null}
+                                        </details>
                                     </div>
                                 )}
                             </div>
@@ -901,7 +906,7 @@ const AITaskCenter: React.FC = () => {
                                         {creatingTicketKey === `${selectedDetail?.type === 'video' ? 'video' : 'image'}-${selectedTaskItem.id}` ? '转单中...' : '转异常工单'}
                                     </button>
                                 )}
-                                {selectedTaskItem ? <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${selectedTaskItem.user_id}`)}>进入用户360</button> : null}
+                                {selectedTaskItem ? <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${selectedTaskItem.user_id}`)}>查看用户详情</button> : null}
                                 <button className="btn-secondary" onClick={() => navigate('/support-tickets')}>去工单中心</button>
                                 <button className="btn-primary" onClick={handleCloseDetail}>关闭</button>
                             </div>

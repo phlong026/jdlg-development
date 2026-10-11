@@ -1,5 +1,5 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
+import { reportPageLoadRecovered } from '../utils/pageLoadError';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FiAlertCircle,
@@ -50,6 +50,13 @@ interface PendingItem {
 }
 
 type DetailTabKey = 'membership' | 'orders' | 'tasks' | 'stones' | 'risk';
+type UserModuleKey = 'wechat' | 'certifications' | 'summary';
+type ModuleLoadState = 'idle' | 'loading' | 'success' | 'error';
+const USER_MODULE_LABELS: Record<UserModuleKey, string> = {
+    wechat: '手机号授权与下载权限',
+    certifications: '认证资料',
+    summary: '会员、订单、任务、灵石流水与风险信息',
+};
 
 const RECENT_USERS_STORAGE_KEY = 'user-workbench-recent-users';
 
@@ -181,6 +188,16 @@ const UserWorkbench: React.FC = () => {
     const [certifications, setCertifications] = useState<CertificationApplication[]>([]);
     const [workbenchSummary, setWorkbenchSummary] = useState<UserWorkbenchSummary | null>(null);
     const [activeDetailTab, setActiveDetailTab] = useState<DetailTabKey>('orders');
+    const [userLoadError, setUserLoadError] = useState('');
+    const [moduleStates, setModuleStates] = useState<Record<UserModuleKey, ModuleLoadState>>({ wechat: 'idle', certifications: 'idle', summary: 'idle' });
+    const userRequestId = useRef(0);
+    const selectedUserIdRef = useRef('');
+    const actionLocks = useRef(new Set<string>());
+    const moduleRequestIds = useRef<Record<UserModuleKey, number>>({ wechat: 0, certifications: 0, summary: 0 });
+    const userStonesKnown = typeof selectedUser?.stones === 'number' && Number.isFinite(selectedUser.stones);
+    const isCurrentUser = (id: string, requestId = userRequestId.current) => selectedUserIdRef.current === id && userRequestId.current === requestId;
+
+    useEffect(() => () => { userRequestId.current += 1; }, []);
 
     const [showStonesModal, setShowStonesModal] = useState(false);
     const [stonesMode, setStonesMode] = useState<'set' | 'adjust'>('adjust');
@@ -194,6 +211,8 @@ const UserWorkbench: React.FC = () => {
     const [enterpriseWechatVerifiedAtText, setEnterpriseWechatVerifiedAtText] = useState('');
     const [enterpriseWechatLoading, setEnterpriseWechatLoading] = useState(false);
     const [enterpriseWechatSaving, setEnterpriseWechatSaving] = useState(false);
+    const [enterpriseWechatError, setEnterpriseWechatError] = useState('');
+    const wechatDetailRequestId = useRef(0);
 
     const [showAccountSecurityModal, setShowAccountSecurityModal] = useState(false);
     const [accountUsername, setAccountUsername] = useState('');
@@ -204,6 +223,9 @@ const UserWorkbench: React.FC = () => {
     const [showCertificationDetailModal, setShowCertificationDetailModal] = useState(false);
     const [certificationDetail, setCertificationDetail] = useState<CertificationDetailResponse | null>(null);
     const [certificationDetailLoading, setCertificationDetailLoading] = useState(false);
+    const [certificationDetailError, setCertificationDetailError] = useState('');
+    const [certificationDetailTarget, setCertificationDetailTarget] = useState<CertificationApplication | null>(null);
+    const certificationDetailRequestId = useRef(0);
 
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [reviewTarget, setReviewTarget] = useState<CertificationApplication | null>(null);
@@ -253,38 +275,77 @@ const UserWorkbench: React.FC = () => {
         localStorage.setItem(RECENT_USERS_STORAGE_KEY, JSON.stringify(next));
     };
 
-    const loadWorkbenchUser = async (userId: string) => {
-        setLoading(true);
+    const loadUserModule = async (module: UserModuleKey, id = selectedUserIdRef.current, requestId = userRequestId.current) => {
+        if (!id || !isCurrentUser(id, requestId)) return;
+        const moduleRequestId = ++moduleRequestIds.current[module];
+        const isCurrent = () => isCurrentUser(id, requestId) && moduleRequestIds.current[module] === moduleRequestId;
+        setModuleStates((current) => ({ ...current, [module]: 'loading' }));
         try {
-            const detail = await getUserDetail(String(userId));
-            if (!detail) {
-                alert('未找到该用户');
-                return;
+            if (module === 'wechat') {
+                const result = await getUserEnterpriseWechatVerification(id);
+                if (!isCurrent()) return;
+                if (!result || String(result.user_id) !== id) throw new Error('未返回当前用户的手机号授权资料');
+                setEnterpriseWechatVerified(!!result.enterprise_wechat_verified);
+                setEnterpriseWechatContact(result.enterprise_wechat_contact || '');
+                setEnterpriseWechatVerifiedAtText(result.enterprise_wechat_verified_at || '');
+            } else if (module === 'certifications') {
+                const result = await getCertificationList({ limit: 100, offset: 0 });
+                if (!isCurrent()) return;
+                if (!result || !Array.isArray(result.list)) throw new Error('未返回认证资料');
+                setCertifications(sortCertifications(result.list.filter((item) => String(item.user_id) === id)));
+            } else {
+                const result = await getUserWorkbenchSummary(id);
+                if (!isCurrent()) return;
+                if (!result || !result.stone_summary || !result.device_risk || !Array.isArray(result.recent_orders) || !Array.isArray(result.recent_tasks) || !Array.isArray(result.stone_records)) throw new Error('未返回完整用户摘要');
+                setWorkbenchSummary(result);
             }
+            setModuleStates((current) => ({ ...current, [module]: 'success' }));
+        } catch (error) {
+            if (!isCurrent()) return;
+            console.error(`加载${USER_MODULE_LABELS[module]}失败:`, error);
+            setModuleStates((current) => ({ ...current, [module]: 'error' }));
+        }
+    };
+
+    const loadWorkbenchUser = async (userId: string) => {
+        const id = String(userId);
+        const requestPage = window.location.pathname;
+        const requestId = ++userRequestId.current;
+        selectedUserIdRef.current = id;
+        setLoading(true);
+        setUserLoadError('');
+        setSelectedUser(null);
+        setWorkbenchSummary(null);
+        setCertifications([]);
+        setModuleStates({ wechat: 'idle', certifications: 'idle', summary: 'idle' });
+        setShowStonesModal(false);
+        setShowEnterpriseWechatModal(false);
+        setShowAccountSecurityModal(false);
+        setShowCertificationDetailModal(false);
+        setShowReviewModal(false);
+        setReviewTarget(null);
+        setCertificationDetail(null);
+        setStonesLoading(false);
+        setEnterpriseWechatSaving(false);
+        setAccountSecuritySaving(false);
+        setReviewSubmitting(false);
+        try {
+            const detail = await getUserDetail(id);
+            if (!isCurrentUser(id, requestId)) return;
+            if (!detail || String(detail.id) !== id) throw new Error('未获取到所选用户资料');
             setSelectedUser(detail);
             setSearchResults([]);
-            setSearchKeyword(String(detail.id));
+            setSearchKeyword(id);
             setActiveDetailTab('orders');
             persistRecentUsers(detail);
-
-            const [wechatDetail, certRes, summaryRes] = await Promise.all([
-                getUserEnterpriseWechatVerification(String(detail.id)).catch(() => null),
-                getCertificationList({ limit: 100, offset: 0 }).catch(() => ({ list: [], total: 0 })),
-                getUserWorkbenchSummary(String(detail.id)).catch(() => null),
-            ]);
-
-            setEnterpriseWechatVerified(!!wechatDetail?.enterprise_wechat_verified);
-            setEnterpriseWechatContact(wechatDetail?.enterprise_wechat_contact || '');
-            setEnterpriseWechatVerifiedAtText(wechatDetail?.enterprise_wechat_verified_at || '');
-            setWorkbenchSummary(summaryRes);
-            setCertifications(
-                sortCertifications((certRes.list || []).filter((item) => String(item.user_id) === String(detail.id)))
-            );
+            reportPageLoadRecovered('加载用户失败', requestPage);
+            await Promise.all((['wechat', 'certifications', 'summary'] as UserModuleKey[]).map((module) => loadUserModule(module, id, requestId)));
         } catch (error: any) {
-            console.error('加载用户360工作台失败:', error);
-            reportPageLoadError(error, error?.message || '加载用户失败');
+            if (!isCurrentUser(id, requestId)) return;
+            console.error('加载用户详情失败:', error);
+            setUserLoadError(`用户 ${id} 的资料未加载，请重试。`);
         } finally {
-            setLoading(false);
+            if (isCurrentUser(id, requestId)) setLoading(false);
         }
     };
 
@@ -314,7 +375,7 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleRefresh = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
         await loadWorkbenchUser(String(selectedUser.id));
     };
 
@@ -323,7 +384,7 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleCopyUserId = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
         try {
             await navigator.clipboard.writeText(String(selectedUser.id));
             alert('用户ID已复制');
@@ -334,7 +395,7 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleOpenStonesModal = () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id)) || !userStonesKnown) return;
         setStonesMode('adjust');
         setStonesValue('');
         setStonesRemark('');
@@ -347,7 +408,9 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleStonesSubmit = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
+        const requestId = userRequestId.current;
+        const isCurrent = () => isCurrentUser(String(selectedUser.id), requestId);
         const value = parseInt(stonesValue, 10);
         if (Number.isNaN(value)) {
             alert('请输入有效数字');
@@ -361,6 +424,9 @@ const UserWorkbench: React.FC = () => {
             alert('调整数量不能为0');
             return;
         }
+        const actionKey = 'handleStonesSubmit:' + selectedUser.id;
+        if (actionLocks.current.has(actionKey)) return;
+        actionLocks.current.add(actionKey);
         setStonesLoading(true);
         try {
             if (stonesMode === 'set') {
@@ -374,37 +440,51 @@ const UserWorkbench: React.FC = () => {
                     remark: stonesRemark.trim() || undefined,
                 });
             }
+            if (!isCurrent()) return;
             alert('灵石已更新');
             setShowStonesModal(false);
             await loadWorkbenchUser(String(selectedUser.id));
         } catch (error: any) {
+            if (!isCurrent()) return;
             console.error('更新灵石失败:', error);
             alert(error?.message || '更新灵石失败');
         } finally {
-            setStonesLoading(false);
+            actionLocks.current.delete(actionKey);
+            if (isCurrent()) setStonesLoading(false);
         }
     };
 
     const handleOpenEnterpriseWechatModal = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
+        const id = String(selectedUser.id);
+        const requestId = userRequestId.current;
+        const detailRequestId = ++wechatDetailRequestId.current;
+        moduleRequestIds.current.wechat += 1;
+        setModuleStates((current) => ({ ...current, wechat: 'loading' }));
+        const isCurrent = () => isCurrentUser(id, requestId) && wechatDetailRequestId.current === detailRequestId;
         setShowEnterpriseWechatModal(true);
         setEnterpriseWechatLoading(true);
+        setEnterpriseWechatError('');
         try {
-            const detail = await getUserEnterpriseWechatVerification(String(selectedUser.id));
-            setEnterpriseWechatVerified(!!detail?.enterprise_wechat_verified);
-            setEnterpriseWechatContact(detail?.enterprise_wechat_contact || '');
-            setEnterpriseWechatVerifiedAtText(detail?.enterprise_wechat_verified_at || '');
+            const detail = await getUserEnterpriseWechatVerification(id);
+            if (!isCurrent()) return;
+            if (!detail || String(detail.user_id) !== id) throw new Error('授权资料与所选用户不一致');
+            setEnterpriseWechatVerified(!!detail.enterprise_wechat_verified);
+            setEnterpriseWechatContact(detail.enterprise_wechat_contact || '');
+            setEnterpriseWechatVerifiedAtText(detail.enterprise_wechat_verified_at || '');
+            setModuleStates((current) => ({ ...current, wechat: 'success' }));
         } catch (error: any) {
+            if (!isCurrent()) return;
             console.error('获取手机号授权状态失败:', error);
-            reportPageLoadError(error, error?.message || '获取手机号授权状态失败');
-            setShowEnterpriseWechatModal(false);
+            setEnterpriseWechatError('授权资料未加载，请重试后再修改。');
+            setModuleStates((current) => ({ ...current, wechat: 'error' }));
         } finally {
-            setEnterpriseWechatLoading(false);
+            if (isCurrent()) setEnterpriseWechatLoading(false);
         }
     };
 
     const handleOpenAccountSecurityModal = () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
         setAccountUsername(selectedUser.username || '');
         setAccountPassword('');
         setAccountPasswordConfirm('');
@@ -412,7 +492,9 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleAccountSecuritySubmit = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
+        const requestId = userRequestId.current;
+        const isCurrent = () => isCurrentUser(String(selectedUser.id), requestId);
         const username = accountUsername.trim();
         const password = accountPassword;
         const passwordConfirm = accountPasswordConfirm;
@@ -440,63 +522,89 @@ const UserWorkbench: React.FC = () => {
             alert('请至少修改用户名或输入新密码');
             return;
         }
+        const actionKey = 'handleAccountSecuritySubmit:' + selectedUser.id;
+        if (actionLocks.current.has(actionKey)) return;
+        actionLocks.current.add(actionKey);
         setAccountSecuritySaving(true);
         try {
             await updateUser(String(selectedUser.id), {
                 username,
                 password: passwordChanged ? password : undefined,
             });
+            if (!isCurrent()) return;
             alert(passwordChanged ? '账号信息和登录密码已更新' : '登录用户名已更新');
             setShowAccountSecurityModal(false);
             await loadWorkbenchUser(String(selectedUser.id));
         } catch (error: any) {
+            if (!isCurrent()) return;
             console.error('更新账号与安全信息失败:', error);
             alert(error?.message || '更新账号与安全信息失败');
         } finally {
-            setAccountSecuritySaving(false);
+            actionLocks.current.delete(actionKey);
+            if (isCurrent()) setAccountSecuritySaving(false);
         }
     };
 
     const handleEnterpriseWechatSubmit = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || !isCurrentUser(String(selectedUser.id))) return;
+        if (enterpriseWechatLoading || enterpriseWechatError) return;
+        const requestId = userRequestId.current;
+        const isCurrent = () => isCurrentUser(String(selectedUser.id), requestId);
         const contact = enterpriseWechatContact.trim();
         if (enterpriseWechatVerified && !contact) {
             alert('已授权状态必须填写手机号');
             return;
         }
+        const actionKey = 'handleEnterpriseWechatSubmit:' + selectedUser.id;
+        if (actionLocks.current.has(actionKey)) return;
+        actionLocks.current.add(actionKey);
         setEnterpriseWechatSaving(true);
         try {
             await updateUserEnterpriseWechatVerification(String(selectedUser.id), {
                 verified: enterpriseWechatVerified,
                 contact,
             });
+            if (!isCurrent()) return;
             alert('下载权限状态已更新');
             setShowEnterpriseWechatModal(false);
             await loadWorkbenchUser(String(selectedUser.id));
         } catch (error: any) {
+            if (!isCurrent()) return;
             console.error('保存手机号授权状态失败:', error);
             alert(error?.message || '保存手机号授权状态失败');
         } finally {
-            setEnterpriseWechatSaving(false);
+            actionLocks.current.delete(actionKey);
+            if (isCurrent()) setEnterpriseWechatSaving(false);
         }
     };
 
     const openCertificationDetail = async (application: CertificationApplication) => {
+        const id = String(application.user_id);
+        if (!isCurrentUser(id)) return;
+        const requestId = userRequestId.current;
+        const detailRequestId = ++certificationDetailRequestId.current;
+        const isCurrent = () => isCurrentUser(id, requestId) && certificationDetailRequestId.current === detailRequestId;
+        setCertificationDetailTarget(application);
+        setCertificationDetailError('');
         setShowCertificationDetailModal(true);
         setCertificationDetailLoading(true);
         setCertificationDetail(null);
         try {
             const detail = await getCertificationDetail(String(application.id));
-            setCertificationDetail(detail || null);
+            if (!isCurrent()) return;
+            if (!detail || String(detail.application.user_id) !== id || detail.application.id !== application.id) throw new Error('认证资料与所选用户不一致');
+            setCertificationDetail(detail);
         } catch (error: any) {
+            if (!isCurrent()) return;
             console.error('获取认证详情失败:', error);
-            reportPageLoadError(error, error?.message || '获取认证详情失败');
+            setCertificationDetailError('认证详情未加载，请重试。');
         } finally {
-            setCertificationDetailLoading(false);
+            if (isCurrent()) setCertificationDetailLoading(false);
         }
     };
 
     const handleOpenCertification = async () => {
+        if (moduleStates.certifications !== 'success') { void loadUserModule('certifications'); return; }
         if (activeCertification) {
             await openCertificationDetail(activeCertification);
             return;
@@ -509,6 +617,7 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleOpenReview = (application: CertificationApplication, action: 'approve' | 'reject') => {
+        if (String(application.user_id) !== selectedUserIdRef.current) return;
         setReviewTarget(application);
         setReviewAction(action);
         setAdminRemark('');
@@ -516,26 +625,34 @@ const UserWorkbench: React.FC = () => {
     };
 
     const handleSubmitReview = async () => {
-        if (!reviewTarget || !selectedUser) return;
+        if (!reviewTarget || !selectedUser || !isCurrentUser(String(selectedUser.id)) || String(reviewTarget.user_id) !== String(selectedUser.id)) return;
+        const requestId = userRequestId.current;
+        const isCurrent = () => isCurrentUser(String(selectedUser.id), requestId);
+        const actionKey = 'handleSubmitReview:' + selectedUser.id;
+        if (actionLocks.current.has(actionKey)) return;
+        actionLocks.current.add(actionKey);
         setReviewSubmitting(true);
         try {
             await reviewCertification(String(reviewTarget.id), reviewAction, adminRemark.trim() || undefined);
+            if (!isCurrent()) return;
             alert(reviewAction === 'approve' ? '已通过认证' : '已拒绝认证');
             setShowReviewModal(false);
             setShowCertificationDetailModal(false);
             await loadWorkbenchUser(String(selectedUser.id));
         } catch (error: any) {
+            if (!isCurrent()) return;
             console.error('提交审核失败:', error);
             alert(error?.message || '提交审核失败');
         } finally {
-            setReviewSubmitting(false);
+            actionLocks.current.delete(actionKey);
+            if (isCurrent()) setReviewSubmitting(false);
         }
     };
 
     const pendingItems = useMemo<PendingItem[]>(() => {
         if (!selectedUser) return [];
         const items: PendingItem[] = [];
-        if (!enterpriseWechatVerified) {
+        if (moduleStates.wechat === 'success' && !enterpriseWechatVerified) {
             items.push({
                 key: 'wechat',
                 title: '下载权限待核验',
@@ -547,7 +664,7 @@ const UserWorkbench: React.FC = () => {
                 },
             });
         }
-        if (actionableCertification) {
+        if (moduleStates.certifications === 'success' && actionableCertification) {
             items.push({
                 key: 'certification',
                 title: '认证申请待处理',
@@ -559,7 +676,7 @@ const UserWorkbench: React.FC = () => {
                 },
             });
         }
-        if ((selectedUser.stones || 0) <= 0) {
+        if (userStonesKnown && selectedUser.stones <= 0) {
             items.push({
                 key: 'stones',
                 title: '灵石余额不足',
@@ -570,9 +687,19 @@ const UserWorkbench: React.FC = () => {
             });
         }
         return items.slice(0, 3);
-    }, [actionableCertification, enterpriseWechatVerified, selectedUser]);
+    }, [actionableCertification, enterpriseWechatVerified, selectedUser, moduleStates.wechat, moduleStates.certifications, userStonesKnown]);
 
     const summaryCards = useMemo(() => {
+        if (moduleStates.summary !== 'success') {
+            return ['任务摘要', '订单摘要', '会员摘要'].map((title) => ({
+                key: title, title,
+                value: moduleStates.summary === 'loading' ? '加载中…' : '未加载',
+                description: '相关资料未加载，暂时无法判断当前状态。',
+                actionLabel: '重新加载摘要',
+                disabled: moduleStates.summary === 'loading',
+                onClick: () => void loadUserModule('summary'),
+            }));
+        }
         const recentTasks = workbenchSummary?.recent_tasks || [];
         const recentOrders = workbenchSummary?.recent_orders || [];
         const stoneSummary = workbenchSummary?.stone_summary;
@@ -616,7 +743,7 @@ const UserWorkbench: React.FC = () => {
                 onClick: () => navigate('/recharge'),
             },
         ];
-    }, [navigate, workbenchSummary]);
+    }, [navigate, workbenchSummary, moduleStates.summary]);
 
     return (
         <>
@@ -636,14 +763,20 @@ const UserWorkbench: React.FC = () => {
                     )}
                 </div>
 
-                {!selectedUser && (
+                {userLoadError ? (
+                    <div className="section-card empty-panel" role="alert">
+                        <p>{userLoadError}</p>
+                        <button className="btn-secondary" onClick={() => void loadWorkbenchUser(selectedUserIdRef.current)}>重新加载用户</button>
+                    </div>
+                ) : null}
+                {!selectedUser && !loading && !userLoadError && (
                     <div className="section-card entry-guidance-card">
                         <div className="empty-hero-icon">
                             <FiUser />
                         </div>
                         <div className="entry-guidance-content">
-                            <h3>用户360是单用户处理页，不是后台找人首页</h3>
-                            <p>推荐你从“后台总控台”的异常队列，或者“用户账号”列表点击某个用户进入。只有临时快速找人时，才使用下面的辅助搜索。</p>
+                            <h3>选择用户，查看详情并处理问题</h3>
+                            <p>从总控台的待处理事项或用户账号列表进入，也可以在下方直接搜索用户。</p>
                             <div className="entry-guidance-actions">
                                 <button className="btn-secondary" onClick={() => navigate('/dashboard')}>返回总控台</button>
                                 <button className="btn-primary" onClick={() => navigate('/users')}>进入用户账号</button>
@@ -655,8 +788,8 @@ const UserWorkbench: React.FC = () => {
                 <div className="section-card search-panel">
                     <div className="section-head compact">
                         <div>
-                            <h2>{selectedUser ? '快速切换用户（辅助）' : '临时快速找人（辅助）'}</h2>
-                            <p>{selectedUser ? '当前已经在单用户处理页中，如需切换别的用户，可在这里快速跳转。' : '支持按用户ID、用户名、手机号或企微联系方式快速定位用户。'}</p>
+                            <h2>{selectedUser ? '切换用户' : '查找用户'}</h2>
+                            <p>{selectedUser ? '输入用户信息，切换到另一位用户的详情。' : '支持按用户ID、用户名、手机号或企微联系方式快速定位用户。'}</p>
                         </div>
                     </div>
                     <div className="search-row">
@@ -718,8 +851,8 @@ const UserWorkbench: React.FC = () => {
 
                 {!selectedUser ? (
                     <div className="section-card empty-panel compact-empty-panel">
-                        <h3>还没有进入具体用户</h3>
-                        <p>你可以返回总控台看待处理队列，或回到用户账号列表点击某个用户进入用户360。</p>
+                        <h3>{loading ? '正在加载所选用户…' : userLoadError ? '用户资料未加载' : '尚未选择用户'}</h3>
+                        {!loading && !userLoadError ? <p>你可以返回总控台看待处理队列，或回到用户账号列表点击某个用户进入用户详情。</p> : null}
                     </div>
                 ) : (
                     <>
@@ -741,15 +874,15 @@ const UserWorkbench: React.FC = () => {
                                     <div className="status-tag-list">
                                         <span className="status-tag warm">
                                             <FiZap />
-                                            灵石 {selectedUser.stones || 0}
+                                            灵石 {userStonesKnown ? selectedUser.stones : '未加载'}
                                         </span>
                                         <span className={`status-tag ${enterpriseWechatVerified ? 'success' : 'warning'}`}>
                                             {enterpriseWechatVerified ? <FiCheckCircle /> : <FiClock />}
-                                            {enterpriseWechatVerified ? '企微已验证' : '下载权限待核验'}
+                                            {moduleStates.wechat !== 'success' ? '下载权限未加载' : enterpriseWechatVerified ? '企微已验证' : '下载权限待核验'}
                                         </span>
                                         <span className={`status-tag ${activeCertification?.status === 'pending_review' || activeCertification?.status === 'pending_payment' ? 'danger' : activeCertification ? 'success' : 'neutral'}`}>
                                             {activeCertification?.status === 'pending_review' || activeCertification?.status === 'pending_payment' ? <FiAlertCircle /> : <FiShield />}
-                                            {activeCertification
+                                            {moduleStates.certifications !== 'success' ? '认证资料未加载' : activeCertification
                                                     ? CERT_STATUS_MAP[activeCertification.status] || activeCertification.status
                                                     : '暂无认证'}
                                         </span>
@@ -768,6 +901,12 @@ const UserWorkbench: React.FC = () => {
                             </div>
                         </div>
 
+                        {(['wechat', 'certifications', 'summary'] as UserModuleKey[]).filter((module) => moduleStates[module] === 'error').map((module) => (
+                            <div key={module} className="section-card" role="alert">
+                                <p>{USER_MODULE_LABELS[module]}未加载，暂时无法判断。其他已加载资料仍可查看。</p>
+                                <button className="btn-secondary" onClick={() => void loadUserModule(module)}>重新加载{USER_MODULE_LABELS[module]}</button>
+                            </div>
+                        ))}
                         <div className="content-grid">
                             <div className="content-main">
                                 <div className="section-card">
@@ -780,7 +919,7 @@ const UserWorkbench: React.FC = () => {
                                     {pendingItems.length === 0 ? (
                                         <div className="empty-inline success-state">
                                             <FiCheckCircle />
-                                            当前没有紧急待处理事项，用户状态整体正常。
+                                            {moduleStates.wechat === 'success' && moduleStates.certifications === 'success' && moduleStates.summary === 'success' && userStonesKnown ? '当前没有紧急待处理事项。' : '部分资料尚未加载，暂时无法判断全部待处理事项。'}
                                         </div>
                                     ) : (
                                         <div className="pending-list">
@@ -826,6 +965,12 @@ const UserWorkbench: React.FC = () => {
                                     <button className={`detail-tab-button ${activeDetailTab === 'risk' ? 'active' : ''}`} onClick={() => setActiveDetailTab('risk')}>风险信息</button>
                                 </div>
 
+                                {moduleStates.summary !== 'success' ? (
+                                    <div className="section-card detail-section-card">
+                                        <p>{moduleStates.summary === 'loading' ? '相关资料加载中…' : '相关资料未加载，无法查看金额、灵石流水、会员权益或风险状态。'}</p>
+                                        <button className="btn-secondary" disabled={moduleStates.summary === 'loading'} onClick={() => void loadUserModule('summary')}>重新加载详情资料</button>
+                                    </div>
+                                ) : <>
                                 {activeDetailTab === 'membership' && (
                                     <div className="section-card detail-section-card">
                                         <div className="section-head compact">
@@ -953,7 +1098,7 @@ const UserWorkbench: React.FC = () => {
                                         <div className="risk-card-header">
                                             <strong>当前风险等级</strong>
                                             <span className={`risk-level-pill ${workbenchSummary?.device_risk?.risk_level || 'low'}`}>
-                                                {RISK_LEVEL_MAP[workbenchSummary?.device_risk?.risk_level || 'low']}
+                                                {moduleStates.summary !== 'success' ? '风险信息未加载' : RISK_LEVEL_MAP[workbenchSummary?.device_risk?.risk_level || 'low']}
                                             </span>
                                         </div>
                                         {(workbenchSummary?.device_risk?.risk_tags || []).length > 0 ? (
@@ -970,7 +1115,7 @@ const UserWorkbench: React.FC = () => {
                                             <div className="detail-list-row"><span>首次绑定时间</span><strong>{formatDateTime(workbenchSummary?.device_risk?.device_bind_time)}</strong></div>
                                             <div className="detail-list-row"><span>最近换绑时间</span><strong>{formatDateTime(workbenchSummary?.device_risk?.last_device_change_time)}</strong></div>
                                             <div className="detail-list-row"><span>同设备账号数</span><strong>{workbenchSummary?.device_risk?.same_device_account_count || 0}</strong></div>
-                                            <div className="detail-list-row"><span>密码状态</span><strong>{workbenchSummary?.device_risk?.has_password ? '已设置' : '未设置'}</strong></div>
+                                            <div className="detail-list-row"><span>密码状态</span><strong>{moduleStates.summary !== 'success' ? '未加载' : workbenchSummary?.device_risk?.has_password ? '已设置' : '未设置'}</strong></div>
                                         </div>
                                         {(workbenchSummary?.device_risk?.same_device_other_users || []).length > 0 && (
                                             <div className="risk-peer-list">
@@ -990,6 +1135,7 @@ const UserWorkbench: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
+                                </>}
                             </div>
 
                             <div className="content-side">
@@ -1001,7 +1147,7 @@ const UserWorkbench: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="action-grid">
-                                        <button className="action-button primary" onClick={handleOpenStonesModal}>
+                                        <button className="action-button primary" onClick={handleOpenStonesModal} disabled={!userStonesKnown}>
                                             <FiZap />
                                             <span>调整灵石</span>
                                         </button>
@@ -1034,17 +1180,17 @@ const UserWorkbench: React.FC = () => {
                                         </div>
                                         <div className="account-security-row">
                                             <span>登录密码</span>
-                                            <strong>{workbenchSummary?.device_risk?.has_password ? '已设置' : '未设置'}</strong>
+                                            <strong>{moduleStates.summary !== 'success' ? '未加载' : workbenchSummary?.device_risk?.has_password ? '已设置' : '未设置'}</strong>
                                         </div>
                                         <div className="account-security-row">
                                             <span>手机号授权状态</span>
-                                            <strong>{enterpriseWechatVerified && enterpriseWechatContact ? `${enterpriseWechatContact}（已授权）` : '未授权'}</strong>
+                                            <strong>{moduleStates.wechat !== 'success' ? '未加载' : enterpriseWechatVerified && enterpriseWechatContact ? `${enterpriseWechatContact}（已授权）` : '未授权'}</strong>
                                         </div>
                                         <div className="account-security-row align-start">
                                             <span>账号风险提示</span>
                                             <div className="account-security-risk-block">
                                                 <span className={`risk-level-pill ${workbenchSummary?.device_risk?.risk_level || 'low'}`}>
-                                                    {RISK_LEVEL_MAP[workbenchSummary?.device_risk?.risk_level || 'low']}
+                                                    {moduleStates.summary !== 'success' ? '风险信息未加载' : RISK_LEVEL_MAP[workbenchSummary?.device_risk?.risk_level || 'low']}
                                                 </span>
                                                 {(workbenchSummary?.device_risk?.risk_tags || []).length > 0 ? (
                                                     <div className="account-security-risk-tags">
@@ -1053,7 +1199,7 @@ const UserWorkbench: React.FC = () => {
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <span className="account-security-risk-empty">当前没有明显风险标签</span>
+                                                    <span className="account-security-risk-empty">{moduleStates.summary !== 'success' ? '风险信息未加载，暂时无法判断' : '当前没有明显风险标签'}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -1074,7 +1220,7 @@ const UserWorkbench: React.FC = () => {
                                 <div className="section-card compact-note-card">
                                     <div className="section-head compact">
                                         <div>
-                                            <h3>当前主页面字段摘要</h3>
+                                            <h3>本页信息与操作</h3>
                                         </div>
                                     </div>
                                     <div className="mini-field-list">
@@ -1104,11 +1250,11 @@ const UserWorkbench: React.FC = () => {
                                         <div className="summary-banner-row">
                                             <span>用户：{getUserDisplayName(selectedUser)}</span>
                                             <span className={`risk-level-pill ${workbenchSummary?.device_risk?.risk_level || 'low'}`}>
-                                                {RISK_LEVEL_MAP[workbenchSummary?.device_risk?.risk_level || 'low']}
+                                                {moduleStates.summary !== 'success' ? '风险信息未加载' : RISK_LEVEL_MAP[workbenchSummary?.device_risk?.risk_level || 'low']}
                                             </span>
                                         </div>
                                         <div className="summary-banner-meta">用户ID：{selectedUser.id}</div>
-                                        <div className="summary-banner-meta">手机号授权：{enterpriseWechatVerified && enterpriseWechatContact ? enterpriseWechatContact : '未授权'}</div>
+                                        <div className="summary-banner-meta">手机号授权：{moduleStates.wechat !== 'success' ? '未加载' : enterpriseWechatVerified && enterpriseWechatContact ? enterpriseWechatContact : '未授权'}</div>
                                     </div>
                                     <div className="form-group">
                                         <label>登录用户名</label>
@@ -1168,6 +1314,11 @@ const UserWorkbench: React.FC = () => {
                             <div className="modal-body">
                                 {certificationDetailLoading ? (
                                     <div className="empty-inline">正在加载认证详情...</div>
+                                ) : certificationDetailError ? (
+                                    <div className="empty-inline" role="alert">
+                                        <p>{certificationDetailError}</p>
+                                        <button className="btn-secondary" onClick={() => certificationDetailTarget && void openCertificationDetail(certificationDetailTarget)}>重新加载认证详情</button>
+                                    </div>
                                 ) : certificationDetail ? (
                                     <div className="detail-info-list">
                                         <div className="info-row">
@@ -1291,6 +1442,11 @@ const UserWorkbench: React.FC = () => {
                             <div className="modal-body">
                                 {enterpriseWechatLoading ? (
                                     <div className="empty-inline">正在加载授权状态...</div>
+                                ) : enterpriseWechatError ? (
+                                    <div className="empty-inline" role="alert">
+                                        <p>{enterpriseWechatError}</p>
+                                        <button className="btn-secondary" onClick={() => void handleOpenEnterpriseWechatModal()}>重新加载授权资料</button>
+                                    </div>
                                 ) : (
                                     <div className="enterprise-wechat-form">
                                         <div className="summary-banner">
@@ -1339,7 +1495,7 @@ const UserWorkbench: React.FC = () => {
                                 <button
                                     className="btn-primary"
                                     onClick={handleEnterpriseWechatSubmit}
-                                    disabled={enterpriseWechatLoading || enterpriseWechatSaving}
+                                    disabled={enterpriseWechatLoading || enterpriseWechatSaving || !!enterpriseWechatError}
                                 >
                                     {enterpriseWechatSaving ? '保存中...' : '保存权限状态'}
                                 </button>
@@ -1362,7 +1518,7 @@ const UserWorkbench: React.FC = () => {
                                     <div className="summary-banner">
                                         <div className="summary-banner-row">
                                             <span>用户：{getUserDisplayName(selectedUser)}</span>
-                                            <span className="highlight-number">当前灵石 {selectedUser.stones || 0}</span>
+                                            <span className="highlight-number">当前灵石 {userStonesKnown ? selectedUser.stones : '未加载'}</span>
                                         </div>
                                     </div>
                                     <div className="form-group">

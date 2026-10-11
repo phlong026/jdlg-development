@@ -87,7 +87,7 @@ export const routes: AppRoute[] = [
     },
     {
         path: '/user-workbench',
-        title: '用户360工作台',
+        title: '用户详情',
         element: withSuspense(<UserWorkbench />),
         icon: FiCompass,
     },

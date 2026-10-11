@@ -1,5 +1,5 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAIOverview, getAIOpsSettings, getAIPricingOpsList, getAIPricingVersions, saveAIOpsSettings, type AIOpsSettings, type AIPricingOpsItem, type AIPricingVersion, type AIOverviewData } from '../api/aiOverview';
 import { getAIAPIConfigList, saveAIAPIConfig, saveAIPricing, testAIAPIConfig, type AIAPIConfig, type AIAPIConfigTestResult } from '../api/ai';
@@ -30,33 +30,56 @@ const marginTone = (rate: number) => {
 /** 调价弹窗：新定价 + 备注，提交前展示影响摘要并需二次确认（后端自动留痕） */
 const AdjustPricingModal: React.FC<{
     item: AIPricingOpsItem;
+    initialStones?: number;
     onClose: () => void;
     onSaved: (message: string) => void;
-}> = ({ item, onClose, onSaved }) => {
-    const [stones, setStones] = useState(item.stones);
+}> = ({ item, initialStones, onClose, onSaved }) => {
+    const [stonesInput, setStonesInput] = useState(String(initialStones ?? item.stones));
     const [note, setNote] = useState('');
-    const [confirming, setConfirming] = useState(false);
+    const [confirmation, setConfirmation] = useState<{ scene: string; oldStones: number; stones: number; note: string } | null>(null);
+    const saveInFlight = useRef(false);
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
+    const currentTarget = useRef({ scene: item.scene, stones: item.stones });
+    currentTarget.current = { scene: item.scene, stones: item.stones };
     const [saving, setSaving] = useState(false);
+    const stones = Number(stonesInput);
+    const validStones = stonesInput.trim() !== '' && Number.isSafeInteger(stones) && stones >= 0;
     const changed = stones !== item.stones;
+    const confirming = confirmation?.scene === item.scene && confirmation.oldStones === item.stones && confirmation.stones === stones && confirmation.note === note;
+    useEffect(() => {
+        setStonesInput(String(initialStones ?? item.stones));
+        setNote('');
+        setConfirmation(null);
+    }, [item.scene, item.stones, initialStones]);
+    const close = () => { if (!saving && !saveInFlight.current) onClose(); };
 
     const handleSave = async () => {
+        if (saveInFlight.current || saving || !confirming || !validStones || !changed || currentTarget.current.scene !== item.scene || currentTarget.current.stones !== item.stones) return;
+        saveInFlight.current = true;
         setSaving(true);
         try {
             await saveAIPricing({ scene: item.scene, stones, note: note.trim() || undefined });
-            onSaved(`已${changed ? `调整 ${item.label} 定价：${item.stones} → ${stones} 灵石，并写入版本记录` : '保存（定价未变化，不留版本）'}`);
+            if (!mounted.current || currentTarget.current.scene !== item.scene || currentTarget.current.stones !== item.stones) return;
+            onSaved(`已调整 ${item.label} 定价：${item.stones} → ${stones} 灵石，并写入版本记录`);
         } catch (error: any) {
+            if (!mounted.current || currentTarget.current.scene !== item.scene || currentTarget.current.stones !== item.stones) return;
             alert(`保存失败: ${error?.message || '未知错误'}`);
         } finally {
-            setSaving(false);
+            saveInFlight.current = false;
+            if (mounted.current) setSaving(false);
         }
     };
 
     return (
-        <div className="aip-modal-overlay" onClick={onClose}>
+        <div className="aip-modal-overlay" onClick={close}>
             <div className="aip-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="aip-modal-head">
                     <h3>调整定价 · {item.label}</h3>
-                    <button type="button" className="aip-modal-close" onClick={onClose}>✕</button>
+                    <button type="button" className="aip-modal-close" onClick={close} disabled={saving} aria-label="关闭调价窗口">✕</button>
                 </div>
                 <div className="aip-modal-body">
                     <div className="aip-form-row">
@@ -64,20 +87,26 @@ const AdjustPricingModal: React.FC<{
                         <b>{item.stones} 灵石</b>
                     </div>
                     <div className="aip-form-row">
-                        <label>新定价（灵石）*</label>
+                        <label htmlFor="aip-new-stones">新定价（灵石）*</label>
                         <input
+                            id="aip-new-stones"
                             type="number"
                             min={0}
-                            value={stones}
-                            onChange={(event) => setStones(Number(event.target.value) || 0)}
+                            step={1}
+                            value={stonesInput}
+                            aria-invalid={!validStones}
+                            aria-describedby={!validStones ? "aip-price-error" : undefined}
+                            onChange={(event) => { setStonesInput(event.target.value); setConfirmation(null); }}
                             disabled={saving}
                         />
                     </div>
+                    {!validStones ? <div id="aip-price-error" className="aip-context-warn" role="alert">请输入大于或等于 0 的有效整数。</div> : null}
                     <div className="aip-form-row">
-                        <label>调价备注</label>
+                        <label htmlFor="aip-price-note">调价备注</label>
                         <input
+                            id="aip-price-note"
                             value={note}
-                            onChange={(event) => setNote(event.target.value)}
+                            onChange={(event) => { setNote(event.target.value); setConfirmation(null); }}
                             placeholder="如：成本上涨 / 促销促活（会写入版本记录）"
                             disabled={saving}
                         />
@@ -86,30 +115,32 @@ const AdjustPricingModal: React.FC<{
                         <div>近 7 日调用 <b>{item.usage_7d.toLocaleString()}</b> 次 · 收入 <b>{item.stones_revenue_7d.toLocaleString()}</b> 灵石</div>
                         <div>当前估算毛利率 <b>{formatPercent(item.margin_rate)}</b>（成本口径：{formatYuan(item.cost_yuan_est)} / 7 日估算）</div>
                         <div className="aip-context-warn">
-                            {changed
+                            {!validStones
+                                ? '请先填写有效定价，再确认调价。'
+                                : changed
                                 ? `确认后立即生效并留痕（操作人与新旧值），回滚 = 用旧值 ${item.stones} 再调一次。`
-                                : '定价未变化，保存不会产生新版本记录。'}
+                                : '定价未变化，无需保存；备注仅随调价写入新的版本记录。'}
                         </div>
                     </div>
                 </div>
                 <div className="aip-modal-foot">
-                    <button type="button" className="aip-btn" onClick={onClose} disabled={saving}>取消</button>
-                    {confirming ? (
-                        <button type="button" className="aip-btn primary danger" onClick={() => void handleSave()} disabled={saving || !changed}>
+                    <button type="button" className="aip-btn" onClick={close} disabled={saving}>{validStones && !changed ? '关闭' : '取消'}</button>
+                    {(!validStones || changed) && (confirming ? (
+                        <button type="button" className="aip-btn primary danger" onClick={() => void handleSave()} disabled={saving || !validStones || !changed}>
                             {saving ? '保存中…' : `二次确认：改为 ${stones} 灵石`}
                         </button>
                     ) : (
-                        <button type="button" className="aip-btn primary" onClick={() => setConfirming(true)} disabled={saving}>
-                            {changed ? '下一步（确认调价）' : '保存'}
+                        <button type="button" className="aip-btn primary" onClick={() => setConfirmation({ scene: item.scene, oldStones: item.stones, stones, note })} disabled={saving || !validStones || !changed}>
+                            下一步（确认调价）
                         </button>
-                    )}
+                    ))}
                 </div>
             </div>
         </div>
     );
 };
 
-/** 调价历史弹窗：版本链 + 一键回滚（回滚本身也是一次调价，同样留痕） */
+/** 调价历史弹窗：版本链 + 确认回滚（回滚本身也是一次调价，同样留痕） */
 const PricingHistoryModal: React.FC<{
     scene: string;
     label: string;
@@ -117,17 +148,21 @@ const PricingHistoryModal: React.FC<{
     onRollback: (stones: number) => void;
 }> = ({ scene, label, onClose, onRollback }) => {
     const [versions, setVersions] = useState<AIPricingVersion[] | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
+        setVersions(null);
+        setLoadFailed(false);
         getAIPricingVersions(scene)
             .then((list) => { if (!cancelled) setVersions(list); })
             .catch((error) => {
                 console.error('加载调价历史失败:', error);
-                if (!cancelled) setVersions([]);
+                if (!cancelled) setLoadFailed(true);
             });
         return () => { cancelled = true; };
-    }, [scene]);
+    }, [scene, loadAttempt]);
 
     return (
         <div className="aip-modal-overlay" onClick={onClose}>
@@ -137,8 +172,13 @@ const PricingHistoryModal: React.FC<{
                     <button type="button" className="aip-modal-close" onClick={onClose}>✕</button>
                 </div>
                 <div className="aip-modal-body">
-                    {versions === null ? (
-                        <div className="aip-empty">加载中…</div>
+                    {loadFailed ? (
+                        <div className="aip-empty" role="alert">
+                            <p>调价历史加载失败，暂时无法确认历史记录。请重试。</p>
+                            <button type="button" className="aip-btn" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>重新加载</button>
+                        </div>
+                    ) : versions === null ? (
+                        <div className="aip-empty" role="status">加载中…</div>
                     ) : versions.length === 0 ? (
                         <div className="aip-empty">该场景还没有调价记录（初始定价不产生版本）</div>
                     ) : (
@@ -208,7 +248,7 @@ const AIPricing: React.FC = () => {
     const [overview, setOverview] = useState<AIOverviewData | null>(null);
     const [apiConfigs, setApiConfigs] = useState<AIAPIConfig[]>([]);
     const [loading, setLoading] = useState(false);
-    const [adjusting, setAdjusting] = useState<AIPricingOpsItem | null>(null);
+    const [adjusting, setAdjusting] = useState<{ item: AIPricingOpsItem; initialStones?: number } | null>(null);
     const [historyScene, setHistoryScene] = useState<{ scene: string; label: string } | null>(null);
     const [feedback, setFeedback] = useState('');
     /** 告警设置（供应商管理页）：processor 每分钟读取，保存后下个周期生效 */
@@ -311,7 +351,7 @@ const AIPricing: React.FC = () => {
             {activeTab === 'pricing' ? (
                 <>
                     <div className="aip-notice">
-                        调价需<b>二次确认并自动留痕</b>（操作人 / 旧值 / 新值），支持一键回滚到任意历史版本。
+                        调价需<b>二次确认并自动留痕</b>（操作人 / 旧值 / 新值），可从历史记录发起回滚，确认后生效。
                         毛利率 =（灵石收入折元 − API 成本估算）÷ 收入，按 10 灵石 = ¥1 折算；成本为模型单价估算口径，非财务数据。
                     </div>
                     {lowMarginRows.length > 0 ? (
@@ -361,7 +401,7 @@ const AIPricing: React.FC = () => {
                                         </td>
                                         <td>
                                             <div className="aip-op-links">
-                                                <button type="button" className="aip-link" onClick={() => { setFeedback(''); setAdjusting(item); }}>调价</button>
+                                                <button type="button" className="aip-link" onClick={() => { setFeedback(''); setAdjusting({ item }); }}>调价</button>
                                                 <button type="button" className="aip-link" onClick={() => setHistoryScene({ scene: item.scene, label: item.label })}>历史</button>
                                             </div>
                                         </td>
@@ -531,7 +571,9 @@ const AIPricing: React.FC = () => {
 
             {adjusting ? (
                 <AdjustPricingModal
-                    item={adjusting}
+                    key={`${adjusting.item.scene}:${adjusting.item.stones}:${adjusting.initialStones ?? adjusting.item.stones}`}
+                    item={adjusting.item}
+                    initialStones={adjusting.initialStones}
                     onClose={() => setAdjusting(null)}
                     onSaved={(message) => {
                         setAdjusting(null);
@@ -551,7 +593,7 @@ const AIPricing: React.FC = () => {
                         setFeedback(`回滚已发起：请在新弹窗中确认改为 ${stones} 灵石（回滚同样留痕）`);
                         const target = pricingList.find((item) => item.scene === historyScene.scene);
                         if (target) {
-                            setAdjusting({ ...target, stones });
+                            setAdjusting({ item: target, initialStones: stones });
                         }
                     }}
                 />

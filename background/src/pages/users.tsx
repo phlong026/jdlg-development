@@ -1,5 +1,5 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useCallback, useEffect, useState } from 'react';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FiEye, FiSearch } from 'react-icons/fi';
 import {
@@ -93,6 +93,9 @@ const Users: React.FC = () => {
     const [banMode, setBanMode] = useState<'ban' | 'unban'>('ban');
     const [banReason, setBanReason] = useState('');
     const [banSubmitting, setBanSubmitting] = useState(false);
+    const [banError, setBanError] = useState('');
+    const banRequestId = useRef(0);
+    const renderedBanRequestId = banRequestId.current;
 
     // 账号合并向导（只读预检）
     const [showMergeModal, setShowMergeModal] = useState(false);
@@ -100,6 +103,14 @@ const Users: React.FC = () => {
     const [mergeToId, setMergeToId] = useState('');
     const [mergePrecheck, setMergePrecheck] = useState<UserMergePrecheck | null>(null);
     const [mergeLoading, setMergeLoading] = useState(false);
+    const [mergeError, setMergeError] = useState('');
+    const mergeRequestId = useRef(0);
+    const renderedMergeRequestId = mergeRequestId.current;
+
+    useEffect(() => () => {
+        banRequestId.current += 1;
+        mergeRequestId.current += 1;
+    }, []);
 
     const convertRow = (apiUser: ApiUser): UserRow => ({
         id: String(apiUser.id),
@@ -148,12 +159,14 @@ const Users: React.FC = () => {
 
     useEffect(() => {
         const load = async () => {
+            const requestPage = window.location.pathname;
             setLoading(true);
             try {
                 const response = await getUserList(buildListParams());
                 setRows(response.list.map(convertRow));
                 setTotal(response.total || 0);
                 setRevealedPhones({});
+                reportPageLoadRecovered('加载用户列表失败', requestPage);
             } catch (error) {
                 console.error('加载用户列表失败:', error);
                 reportPageLoadError(error, '加载用户列表失败');
@@ -220,6 +233,7 @@ const Users: React.FC = () => {
     const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
 
     const handleRevealPhone = async (row: UserRow) => {
+        const requestPage = window.location.pathname;
         if (revealedPhones[row.id]) {
             setRevealedPhones((prev) => {
                 const next = { ...prev };
@@ -230,6 +244,7 @@ const Users: React.FC = () => {
         }
         try {
             const data = await revealUserPhone(row.id);
+            reportPageLoadRecovered('查看完整手机号失败', requestPage);
             if (data) {
                 const full = data.phone || data.enterprise_wechat_contact || '';
                 if (full) {
@@ -243,13 +258,25 @@ const Users: React.FC = () => {
     };
 
     const openBanModal = (row: UserRow, mode: 'ban' | 'unban') => {
+        banRequestId.current += 1;
+        setBanError('');
+        setBanSubmitting(false);
         setBanTarget(row);
         setBanMode(mode);
         setBanReason('');
     };
 
+    const closeBanModal = () => {
+        banRequestId.current += 1;
+        setBanTarget(null);
+        setBanError('');
+        setBanSubmitting(false);
+    };
+
     const submitBan = async () => {
-        if (!banTarget) return;
+        if (!banTarget || banSubmitting || renderedBanRequestId !== banRequestId.current || (banMode === 'ban' && !banReason.trim())) return;
+        const requestId = ++banRequestId.current;
+        setBanError('');
         setBanSubmitting(true);
         try {
             if (banMode === 'ban') {
@@ -257,13 +284,15 @@ const Users: React.FC = () => {
             } else {
                 await unbanUser(banTarget.id, banReason.trim());
             }
-            setBanTarget(null);
+            if (requestId === banRequestId.current) setBanTarget(null);
             refresh();
-        } catch (error) {
+        } catch (error: any) {
             console.error('封禁/解封失败:', error);
-            reportPageLoadError(error, banMode === 'ban' ? '封禁失败' : '解封失败');
+            if (requestId === banRequestId.current) {
+                setBanError(`${banMode === 'ban' ? '封禁失败' : '解封失败'}：${error?.message || '请稍后重试'}`);
+            }
         } finally {
-            setBanSubmitting(false);
+            if (requestId === banRequestId.current) setBanSubmitting(false);
         }
     };
 
@@ -277,21 +306,39 @@ const Users: React.FC = () => {
         setPage(1);
     };
 
+    const openMergeModal = () => {
+        mergeRequestId.current += 1;
+        setMergeError('');
+        setMergeLoading(false);
+        setMergePrecheck(null);
+        setShowMergeModal(true);
+    };
+
+    const closeMergeModal = () => {
+        mergeRequestId.current += 1;
+        setMergeError('');
+        setMergeLoading(false);
+        setShowMergeModal(false);
+    };
+
     const runMergePrecheck = async () => {
         const from = mergeFromId.trim();
         const to = mergeToId.trim();
-        if (!from || !to) {
+        if (!from || !to || mergeLoading || renderedMergeRequestId !== mergeRequestId.current) {
             return;
         }
+        const requestId = ++mergeRequestId.current;
+        setMergeError('');
         setMergeLoading(true);
         setMergePrecheck(null);
         try {
-            setMergePrecheck(await getUserMergePrecheck(from, to));
+            const result = await getUserMergePrecheck(from, to);
+            if (requestId === mergeRequestId.current) setMergePrecheck(result);
         } catch (error: any) {
             console.error('合并预检失败:', error);
-            reportPageLoadError(error, '合并预检失败');
+            if (requestId === mergeRequestId.current) setMergeError(`合并预检失败：${error?.message || '请稍后重试'}`);
         } finally {
-            setMergeLoading(false);
+            if (requestId === mergeRequestId.current) setMergeLoading(false);
         }
     };
 
@@ -358,12 +405,12 @@ const Users: React.FC = () => {
                 <div className="toolbar-top">
                     <div className="toolbar-title-block">
                         <h3>用户检索与账号管理</h3>
-                        <p>找人、筛人、看账号状态与风险信号；订单、灵石、认证等单用户处理请进入用户360工作台。以下统计为全库真实口径。</p>
+                        <p>找人、筛人、看账号状态与风险信号；订单、灵石、认证等单用户处理请进入用户详情。以下统计为全库真实口径。</p>
                     </div>
                     <div className="toolbar-actions">
                         <button
                             className="btn-secondary"
-                            onClick={() => { setShowMergeModal(true); setMergePrecheck(null); }}
+                            onClick={openMergeModal}
                             title="两个账号的资产对照与冲突预检（执行走 DBA 受控流程）"
                         >
                             账号合并预检
@@ -546,9 +593,9 @@ const Users: React.FC = () => {
                                                 <button
                                                     className="btn-action btn-enter-workbench"
                                                     onClick={() => navigate(`/user-workbench?userId=${row.id}`)}
-                                                    title="进入用户360工作台"
+                                                    title="进入用户详情"
                                                 >
-                                                    360
+                                                    用户详情
                                                 </button>
                                                 {banned ? (
                                                     <button className="btn-action btn-unban" onClick={() => openBanModal(row, 'unban')} title="解封该账号">
@@ -593,11 +640,11 @@ const Users: React.FC = () => {
 
             {/* 封禁/解封确认弹窗 */}
             {banTarget && (
-                <div className="modal-overlay" onClick={() => setBanTarget(null)}>
+                <div className="modal-overlay" onClick={closeBanModal}>
                     <div className="modal-content ban-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>{banMode === 'ban' ? '封禁账号' : '解封账号'}</h3>
-                            <button className="modal-close" onClick={() => setBanTarget(null)}>✕</button>
+                            <button className="modal-close" onClick={closeBanModal}>✕</button>
                         </div>
                         <div className="modal-body">
                             <div className="ban-user-bar">
@@ -606,6 +653,7 @@ const Users: React.FC = () => {
                                     <span className="ban-warn">余额 ✦{banTarget.stones.toLocaleString()} 将被冻结（数据保留，解封后恢复）</span>
                                 )}
                             </div>
+                            {banError ? <div className="ban-tip" role="alert">{banError}</div> : null}
                             {banMode === 'ban' ? (
                                 <>
                                     <div className="form-group">
@@ -614,6 +662,7 @@ const Users: React.FC = () => {
                                             className="form-input"
                                             rows={3}
                                             value={banReason}
+                                            disabled={banSubmitting}
                                             onChange={(e) => setBanReason(e.target.value)}
                                             placeholder="例如：同设备批量注册刷签到 / 违规内容 / 资金风控"
                                         />
@@ -630,6 +679,7 @@ const Users: React.FC = () => {
                                             className="form-input"
                                             rows={2}
                                             value={banReason}
+                                            disabled={banSubmitting}
                                             onChange={(e) => setBanReason(e.target.value)}
                                             placeholder="例如：已与用户核实，误判解除"
                                         />
@@ -641,7 +691,7 @@ const Users: React.FC = () => {
                             )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setBanTarget(null)}>取消</button>
+                            <button className="btn-secondary" onClick={closeBanModal}>取消</button>
                             <button
                                 className={banMode === 'ban' ? 'btn-danger-solid' : 'btn-primary'}
                                 onClick={submitBan}
@@ -655,26 +705,27 @@ const Users: React.FC = () => {
             )}
             {/* 账号合并预检弹窗 */}
             {showMergeModal && (
-                <div className="modal-overlay" onClick={() => setShowMergeModal(false)}>
+                <div className="modal-overlay" onClick={closeMergeModal}>
                     <div className="modal-content merge-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>账号合并预检</h3>
-                            <button className="modal-close" onClick={() => setShowMergeModal(false)}>✕</button>
+                            <button className="modal-close" onClick={closeMergeModal}>✕</button>
                         </div>
                         <div className="modal-body">
                             <div className="merge-inputs">
                                 <div className="form-group">
                                     <label>源账号 ID（被合并、将被冻结）</label>
-                                    <input className="form-input" value={mergeFromId} onChange={(e) => setMergeFromId(e.target.value)} placeholder="例如 25" />
+                                    <input className="form-input" value={mergeFromId} disabled={mergeLoading} onChange={(e) => { setMergeFromId(e.target.value); setMergePrecheck(null); setMergeError(''); }} placeholder="例如 25" />
                                 </div>
                                 <div className="form-group">
                                     <label>主账号 ID（资产并入、保留登录）</label>
-                                    <input className="form-input" value={mergeToId} onChange={(e) => setMergeToId(e.target.value)} placeholder="例如 13" />
+                                    <input className="form-input" value={mergeToId} disabled={mergeLoading} onChange={(e) => { setMergeToId(e.target.value); setMergePrecheck(null); setMergeError(''); }} placeholder="例如 13" />
                                 </div>
                                 <button className="btn-primary" onClick={runMergePrecheck} disabled={mergeLoading || !mergeFromId.trim() || !mergeToId.trim()}>
                                     {mergeLoading ? '预检中...' : '开始预检'}
                                 </button>
                             </div>
+                            {mergeError ? <div className="ban-tip" role="alert">{mergeError}</div> : null}
                             {mergePrecheck && (
                                 <div className="merge-result">
                                     <div className="admin-table-region"><table className="merge-compare">
@@ -717,7 +768,7 @@ const Users: React.FC = () => {
                             )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setShowMergeModal(false)}>关闭</button>
+                            <button className="btn-secondary" onClick={closeMergeModal}>关闭</button>
                         </div>
                     </div>
                 </div>

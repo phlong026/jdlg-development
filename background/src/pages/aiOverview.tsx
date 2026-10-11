@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAIOverview, type AIOverviewData, type AIOverviewScene, type AIOverviewSupplier } from '../api/aiOverview';
@@ -86,7 +86,6 @@ const SceneRankRow: React.FC<{ scene: AIOverviewScene; maxTotal: number }> = ({ 
     <div className="aio-rank-row">
         <div className="aio-rank-name">
             <span>{scene.label}</span>
-            <code>{scene.scene}</code>
         </div>
         <div className="aio-rank-bar-wrap" aria-hidden="true"><div className="aio-rank-bar" style={{ width: `${Math.max(2, (scene.total / maxTotal) * 100)}%` }} /></div>
         <span className="aio-rank-num"><span className="aio-mobile-label">调用量</span>{scene.total.toLocaleString()}</span>
@@ -121,20 +120,24 @@ const SupplierCard: React.FC<{ supplier: AIOverviewSupplier; onManage: () => voi
 const AIOverview: React.FC = () => {
     const navigate = useNavigate();
     const [data, setData] = useState<AIOverviewData | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [refreshVersion, setRefreshVersion] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
+        setLoadError(false);
+        setData(null);
         getAIOverview()
-            .then((res) => { if (!cancelled) setData(res); })
+            .then((res) => { if (!cancelled) { setData(res); reportPageLoadRecovered('加载AI运营总览失败'); } })
             .catch((error) => {
                 console.error('加载AI运营总览失败:', error);
-                reportPageLoadError(error, '加载AI运营总览失败');
+                if (!cancelled) { setLoadError(true); reportPageLoadError(error, '加载AI运营总览失败'); }
             })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, []);
+    }, [refreshVersion]);
 
     const imageQueues = data?.queues?.image;
     const pendingAnomalies = imageQueues ? imageQueues.failed + imageQueues.timeout : 0;
@@ -155,7 +158,7 @@ const AIOverview: React.FC = () => {
         lines.push(['今日调用', todayKPI?.total ?? ''].map(esc).join(','));
         lines.push(['今日成功率', todayKPI ? formatPercent(todayKPI.success_rate) : ''].map(esc).join(','));
         lines.push(['今日灵石收入', todayKPI?.stones_revenue ?? ''].map(esc).join(','));
-        lines.push(['今日API成本估算(元)', todayKPI?.cost_yuan?.toFixed(2) ?? ''].map(esc).join(','));
+        lines.push(['今日服务成本估算(元)', todayKPI?.cost_yuan?.toFixed(2) ?? ''].map(esc).join(','));
         lines.push(['今日毛利率', todayKPI?.margin_rate != null ? formatPercent(todayKPI.margin_rate) : ''].map(esc).join(','));
         lines.push(['成本口径', data.kpi.cost_note].map(esc).join(','));
         lines.push('');
@@ -183,15 +186,21 @@ const AIOverview: React.FC = () => {
         <div className="ai-overview-page">
             <div className="aio-pagehead">
                 <h1>AI 运营总览</h1>
-                <span className="aio-sub">调用量 · 成功率 · 收入与成本 · 供应商健康度 —— 数据为任务表实时聚合</span>
+                <span className="aio-sub">查看 AI 使用情况、收入成本与服务运行情况，及时处理异常任务。</span>
                 <button type="button" className="aio-refresh" onClick={() => void handleExportCSV()} disabled={!data}>
                     导出周报 CSV
                 </button>
-                <button type="button" className="aio-refresh" onClick={() => navigate(0)} disabled={loading}>
+                <button type="button" className="aio-refresh" onClick={() => setRefreshVersion((version) => version + 1)} disabled={loading}>
                     {loading ? '刷新中…' : '刷新'}
                 </button>
             </div>
 
+            {!data ? (
+                <div className="section-card aio-empty" role={loadError ? 'alert' : 'status'}>
+                    {loadError ? 'AI 运营数据未能加载，请重试。当前无法判断调用量、收入或异常数量。' : '正在加载 AI 运营数据…'}
+                    {loadError && <button type="button" className="aio-refresh" onClick={() => setRefreshVersion((version) => version + 1)}>重新加载</button>}
+                </div>
+            ) : <>
             {data?.alerts?.length ? (
                 <div className="aio-alert-strip">
                     <span className="aio-alert-icon">⚠</span>
@@ -224,12 +233,12 @@ const AIOverview: React.FC = () => {
                     <small>≈ {formatYuan((todayKPI?.stones_revenue ?? 0) / 10)}（10 灵石 = ¥1）</small>
                 </div>
                 <div className="aio-kpi warn">
-                    <span>今日 API 成本</span>
+                    <span>今日服务成本</span>
                     <b>{formatYuan(todayKPI?.cost_yuan ?? 0)}</b>
                     <small>
                         {data?.kpi.cost_landed_ratio != null && data.kpi.cost_landed_ratio > 0
-                            ? `${Math.round(data.kpi.cost_landed_ratio * 100)}% 来自任务级落库，其余估算`
-                            : '按模型单价估算（落库成本上线后自动切换）'}
+                            ? `${Math.round(data.kpi.cost_landed_ratio * 100)}% 使用任务记录成本，其余按模型单价估算`
+                            : '按模型单价估算'}
                     </small>
                 </div>
                 <div className="aio-kpi">
@@ -238,9 +247,9 @@ const AIOverview: React.FC = () => {
                     <small>（收入 − 成本）÷ 收入</small>
                 </div>
                 <div className={`aio-kpi ${pendingAnomalies > 0 ? 'bad' : ''}`} role="button" tabIndex={0} onClick={() => navigate('/ai-tasks?queue=failed')}>
-                    <span>待处理异常</span>
+                    <span>待处理图片异常</span>
                     <b>{pendingAnomalies}</b>
-                    <small>失败 {imageQueues?.failed ?? 0} · 超时 {imageQueues?.timeout ?? 0} · 点击进队列</small>
+                    <small>失败 {imageQueues?.failed ?? 0} · 超时 {imageQueues?.timeout ?? 0} · 查看异常任务</small>
                 </div>
             </div>
 
@@ -280,7 +289,7 @@ const AIOverview: React.FC = () => {
             <section className="section-card aio-card">
                 <div className="aio-card-head">
                     <h3>供应商健康度（近 7 日）</h3>
-                    <button type="button" className="aio-link-btn" onClick={() => navigate('/ai-pricing?tab=provider')}>管理供应商与降级链</button>
+                    <button type="button" className="aio-link-btn" onClick={() => navigate('/ai-pricing?tab=provider')}>管理供应商与备用服务</button>
                 </div>
                 <div className="aio-prov-grid">
                     {data?.suppliers?.length ? (
@@ -293,19 +302,19 @@ const AIOverview: React.FC = () => {
                 </div>
                 {data?.chain?.length ? (
                     <div className="aio-chain">
-                        <b>生图降级链</b>
+                        <b>图片生成服务顺序</b>
                         {data.chain.map((node, index) => (
                             <React.Fragment key={node.model}>
                                 {index > 0 ? <span className="aio-chain-arrow">→</span> : null}
                                 <span className="aio-chain-node">
                                     {node.provider_name}
                                     {node.role !== 'primary' && data.fallback_out_7d > 0 ? (
-                                        <em>（近7日降级承接见上方卡片）</em>
+                                        <em>（近7日备用服务使用情况见上方）</em>
                                     ) : null}
                                 </span>
                             </React.Fragment>
                         ))}
-                        <span className="aio-chain-note">主力失败自动切换备用；顺序由后端执行链路决定，本页只读展示</span>
+                        <span className="aio-chain-note">主力服务失败时，系统按此顺序尝试备用服务。</span>
                     </div>
                 ) : null}
             </section>
@@ -313,8 +322,8 @@ const AIOverview: React.FC = () => {
             <div className="aio-grid-eq">
                 <section className="section-card aio-card">
                     <div className="aio-card-head">
-                        <h3>失败 Top 原因（近 7 日）</h3>
-                        <button type="button" className="aio-link-btn" onClick={() => navigate('/ai-tasks?queue=failed')}>失败队列</button>
+                        <h3>主要失败原因（近 7 日）</h3>
+                        <button type="button" className="aio-link-btn" onClick={() => navigate('/ai-tasks?queue=failed')}>查看失败任务</button>
                     </div>
                     {data?.fail_reasons?.length ? (
                         data.fail_reasons.map((reason) => (
@@ -327,12 +336,12 @@ const AIOverview: React.FC = () => {
                     ) : (
                         <div className="aio-empty">近 7 日无失败任务 🎉</div>
                     )}
-                    <div className="aio-foot-note">失败任务已由系统自动退还灵石（全额或按张）。</div>
+                    <div className="aio-foot-note">失败任务的退款情况与已退灵石金额，请在任务列表中核对。</div>
                 </section>
 
                 <section className="section-card aio-card">
                     <div className="aio-card-head">
-                        <h3>工具热度 Top 5（近 7 日）</h3>
+                        <h3>热门工具前 5 名（近 7 日）</h3>
                         <button type="button" className="aio-link-btn" onClick={() => navigate('/ai-tools')}>全部工具</button>
                     </div>
                     {data?.tools_top?.length ? (
@@ -350,6 +359,7 @@ const AIOverview: React.FC = () => {
             </div>
 
             <div className="aio-foot-note">{data?.kpi.cost_note}。调价入口见「定价与供应商」，失败任务处理见「AI 任务中心」队列。</div>
+            </>}
         </div>
     );
 };

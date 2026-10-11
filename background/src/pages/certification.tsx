@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiClock, FiEye, FiRefreshCw, FiSearch } from 'react-icons/fi';
@@ -75,6 +75,7 @@ const Certification: React.FC = () => {
     }, []);
 
     const loadList = useCallback(async () => {
+        const requestPage = window.location.pathname;
         setLoading(true);
         try {
             const res = await getCertificationList({
@@ -85,6 +86,7 @@ const Certification: React.FC = () => {
             });
             setList(res.list);
             setTotal(res.total);
+            reportPageLoadRecovered('加载认证列表失败', requestPage);
         } catch (e) {
             console.error('加载列表失败:', e);
             reportPageLoadError(e, '加载认证列表失败');
@@ -130,6 +132,7 @@ const Certification: React.FC = () => {
     };
 
     const openDrawer = async (app: CertificationApplication) => {
+        const requestPage = window.location.pathname;
         setDrawerApp(app);
         setDetail(null);
         setRevealed(null);
@@ -137,6 +140,7 @@ const Certification: React.FC = () => {
         setDetailLoading(true);
         try {
             setDetail(await getCertificationDetail(String(app.id)));
+            reportPageLoadRecovered('加载认证详情失败', requestPage);
         } catch (e) {
             console.error('加载详情失败:', e);
             reportPageLoadError(e, '加载认证详情失败');
@@ -153,11 +157,13 @@ const Certification: React.FC = () => {
     };
 
     const handleReveal = async () => {
+        const requestPage = window.location.pathname;
         if (!drawerApp) return;
         setRevealing(true);
         try {
             const data = await revealCertificationFields(String(drawerApp.id));
             if (data) setRevealed(data);
+            reportPageLoadRecovered('查看完整材料失败', requestPage);
         } catch (e: any) {
             console.error('查看完整材料失败:', e);
             reportPageLoadError(e, '查看完整材料失败');
@@ -167,6 +173,7 @@ const Certification: React.FC = () => {
     };
 
     const submitReview = async (action: 'approve' | 'reject') => {
+        const requestPage = window.location.pathname;
         if (!drawerApp) return;
         if (action === 'reject' && !adminRemark.trim()) {
             return; // 拒绝必须填原因（按钮已禁用，双保险）
@@ -174,6 +181,7 @@ const Certification: React.FC = () => {
         setReviewSubmitting(action);
         try {
             await reviewCertification(String(drawerApp.id), action, adminRemark.trim() || undefined);
+            reportPageLoadRecovered('审核操作失败', requestPage);
             closeDrawer();
             refreshAll();
         } catch (e: any) {
@@ -369,9 +377,9 @@ const Certification: React.FC = () => {
                                                             <button
                                                                 className="btn-action btn-enter-workbench"
                                                                 onClick={() => openUserWorkbench(app.user_id)}
-                                                                title="进入用户360核查"
+                                                                title="进入用户详情核查"
                                                             >
-                                                                360
+                                                                用户详情
                                                             </button>
                                                         )}
                                                     </div>
@@ -454,7 +462,7 @@ const Certification: React.FC = () => {
                                             <div className="kv"><span className="k">用户</span><span className="v">ID {detail.user.id} · {detail.user.username}</span></div>
                                             <div className="kv"><span className="k">可提现</span><span className="v">{detail.user.can_withdraw ? '已开通' : '未开通（通过后自动开通）'}</span></div>
                                             <div className="drawer-links">
-                                                <button className="btn-secondary" onClick={() => openUserWorkbench(detail.user!.id)}>用户 360</button>
+                                                <button className="btn-secondary" onClick={() => openUserWorkbench(detail.user!.id)}>用户详情</button>
                                             </div>
                                         </div>
                                     )}

@@ -1,5 +1,5 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     FiCheckCircle,
     FiChevronRight,
@@ -98,13 +98,28 @@ const DesignerCenter: React.FC = () => {
     const [summary, setSummary] = useState<DesignerManagementListSummary>(defaultSummary);
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [detail, setDetail] = useState<DesignerManagementDetail | null>(null);
+    const [detailError, setDetailError] = useState('');
+    const selectedIdRef = useRef<number | null>(null);
+    const detailRequestId = useRef(0);
+    const actionInFlight = useRef(false);
     const [keywordInput, setKeywordInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
     const [certificationStatus, setCertificationStatus] = useState('all');
     const [visible, setVisible] = useState('all');
     const [serviceState, setServiceState] = useState<'all' | 'enabled' | 'paused'>('all');
 
-    const loadList = async (nextSelectedId?: number | null) => {
+    const selectDesigner = (id: number | null) => {
+        if (selectedIdRef.current === id) return;
+        selectedIdRef.current = id;
+        detailRequestId.current += 1;
+        setSelectedId(id);
+        setDetail(null);
+        setDetailError('');
+        setDetailLoading(id !== null);
+    };
+
+    const loadList = async () => {
+        const requestPage = window.location.pathname;
         setLoading(true);
         try {
             const response = await getDesignerManagementList({
@@ -117,18 +132,14 @@ const DesignerCenter: React.FC = () => {
             });
             setItems(response.list || []);
             setSummary(response.summary || defaultSummary);
-            if (typeof nextSelectedId === 'number') {
-                setSelectedId(nextSelectedId);
-            } else if (response.list?.length) {
-                setSelectedId((current) => {
-                    if (current && response.list.some((item) => item.user_id === current)) {
-                        return current;
-                    }
-                    return response.list[0].user_id;
-                });
+            reportPageLoadRecovered('加载设计师列表失败', requestPage);
+            if (response.list?.length) {
+                const current = selectedIdRef.current;
+                selectDesigner(current && response.list.some((item) => item.user_id === current)
+                    ? current
+                    : response.list[0].user_id);
             } else {
-                setSelectedId(null);
-                setDetail(null);
+                selectDesigner(null);
             }
         } catch (error) {
             console.error('加载设计师列表失败:', error);
@@ -139,15 +150,23 @@ const DesignerCenter: React.FC = () => {
     };
 
     const loadDetail = async (id: number) => {
+        if (selectedIdRef.current !== id) return;
+        const requestId = ++detailRequestId.current;
+        const isCurrentRequest = () => requestId === detailRequestId.current && selectedIdRef.current === id;
+        setDetail(null);
+        setDetailError('');
         setDetailLoading(true);
         try {
             const response = await getDesignerManagementDetail(id);
+            if (!isCurrentRequest()) return;
+            if (response.user_id !== id) throw new Error('设计师详情与所选用户不一致');
             setDetail(response);
         } catch (error) {
+            if (!isCurrentRequest()) return;
             console.error('加载设计师详情失败:', error);
-            reportPageLoadError(error, '加载设计师详情失败');
+            setDetailError('设计师详情加载失败，请重试。');
         } finally {
-            setDetailLoading(false);
+            if (isCurrentRequest()) setDetailLoading(false);
         }
     };
 
@@ -161,11 +180,8 @@ const DesignerCenter: React.FC = () => {
             return;
         }
         void loadDetail(selectedId);
+        return () => { detailRequestId.current += 1; };
     }, [selectedId]);
-
-    const selectedListItem = useMemo(() => {
-        return items.find((item) => item.user_id === selectedId) || null;
-    }, [items, selectedId]);
 
     const summaryCards = useMemo(() => {
         return [
@@ -214,30 +230,36 @@ const DesignerCenter: React.FC = () => {
         setServiceState('all');
     };
 
-    const handleToggleVisibility = async (item: DesignerManagementItem) => {
+    const handleToggleVisibility = async (item: Pick<DesignerManagementItem, 'user_id' | 'designer_visible'>) => {
+        if (item.user_id !== selectedIdRef.current || detail?.user_id !== item.user_id || actionLoadingId !== null || actionInFlight.current) return;
+        actionInFlight.current = true;
         setActionLoadingId(item.user_id);
         try {
             await updateDesignerVisibility(item.user_id, !item.designer_visible);
-            await loadList(item.user_id);
+            await loadList();
             await loadDetail(item.user_id);
         } catch (error) {
             console.error('更新设计师展示状态失败:', error);
             alert('更新设计师展示状态失败');
         } finally {
+            actionInFlight.current = false;
             setActionLoadingId(null);
         }
     };
 
-    const handleToggleService = async (item: DesignerManagementItem) => {
+    const handleToggleService = async (item: Pick<DesignerManagementItem, 'user_id' | 'service_enabled'>) => {
+        if (item.user_id !== selectedIdRef.current || detail?.user_id !== item.user_id || actionLoadingId !== null || actionInFlight.current) return;
+        actionInFlight.current = true;
         setActionLoadingId(item.user_id);
         try {
             await updateDesignerServiceStatus(item.user_id, !item.service_enabled);
-            await loadList(item.user_id);
+            await loadList();
             await loadDetail(item.user_id);
         } catch (error) {
             console.error('更新设计师接单状态失败:', error);
             alert('更新设计师接单状态失败');
         } finally {
+            actionInFlight.current = false;
             setActionLoadingId(null);
         }
     };
@@ -277,7 +299,7 @@ const DesignerCenter: React.FC = () => {
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
-                            <button className="btn-secondary" onClick={() => void loadList(selectedId)} disabled={loading}>
+                            <button className="btn-secondary" onClick={() => void loadList()} disabled={loading}>
                                 <FiRefreshCwIcon />
                                 {loading ? '刷新中...' : '刷新'}
                             </button>
@@ -362,7 +384,7 @@ const DesignerCenter: React.FC = () => {
                                     <button
                                         key={item.user_id}
                                         className={`designer-list-item ${selectedId === item.user_id ? 'active' : ''}`}
-                                        onClick={() => setSelectedId(item.user_id)}
+                                        onClick={() => selectDesigner(item.user_id)}
                                     >
                                         <div className="designer-list-main">
                                             <div className="designer-avatar-wrap">
@@ -394,8 +416,13 @@ const DesignerCenter: React.FC = () => {
                             <div className="designer-empty">请先从左侧选择一个设计师。</div>
                         ) : detailLoading ? (
                             <div className="designer-empty">设计师详情加载中...</div>
-                        ) : !detail ? (
-                            <div className="designer-empty">未获取到设计师详情。</div>
+                        ) : detailError ? (
+                            <div className="designer-empty" role="alert">
+                                <p>{detailError}</p>
+                                <button className="btn-secondary" onClick={() => void loadDetail(selectedId)}>重新加载</button>
+                            </div>
+                        ) : !detail || detail.user_id !== selectedId ? (
+                            <div className="designer-empty">未获取到当前设计师详情。</div>
                         ) : (
                             <>
                                 <div className="designer-detail-head">
@@ -413,41 +440,26 @@ const DesignerCenter: React.FC = () => {
                                     </div>
                                     <div className="designer-detail-actions">
                                         <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${detail.user_id}`)}>
-                                            查看用户360
+                                            查看用户详情
                                             <FiChevronRightIcon />
                                         </button>
                                         <button
                                             className={detail.profile?.designer_visible ? 'btn-warning' : 'btn-primary'}
-                                            onClick={() => void handleToggleVisibility(selectedListItem || {
+                                            onClick={() => void handleToggleVisibility({
                                                 user_id: detail.user_id,
-                                                username: detail.username,
                                                 designer_visible: detail.profile?.designer_visible === true,
-                                                can_withdraw: detail.can_withdraw,
-                                                total_works: detail.stats.total_works,
-                                                follow_count: detail.stats.follow_count,
-                                                review_count: detail.stats.review_count,
-                                                positive_review_count: detail.stats.positive_review_count,
-                                                negative_review_count: detail.stats.negative_review_count,
-                                            } as DesignerManagementItem)}
-                                            disabled={actionLoadingId === detail.user_id}
+                                            })}
+                                            disabled={actionLoadingId !== null}
                                         >
                                             {actionLoadingId === detail.user_id ? '提交中...' : detail.profile?.designer_visible ? '下架主页' : '上架主页'}
                                         </button>
                                         <button
                                             className={detail.profile?.service_enabled ? 'btn-warning' : 'btn-primary'}
-                                            onClick={() => void handleToggleService(selectedListItem || {
+                                            onClick={() => void handleToggleService({
                                                 user_id: detail.user_id,
-                                                username: detail.username,
                                                 service_enabled: detail.profile?.service_enabled === true,
-                                                designer_visible: detail.profile?.designer_visible === true,
-                                                can_withdraw: detail.can_withdraw,
-                                                total_works: detail.stats.total_works,
-                                                follow_count: detail.stats.follow_count,
-                                                review_count: detail.stats.review_count,
-                                                positive_review_count: detail.stats.positive_review_count,
-                                                negative_review_count: detail.stats.negative_review_count,
-                                            } as DesignerManagementItem)}
-                                            disabled={actionLoadingId === detail.user_id}
+                                            })}
+                                            disabled={actionLoadingId !== null}
                                         >
                                             {actionLoadingId === detail.user_id ? '提交中...' : detail.profile?.service_enabled ? '暂停接单' : '恢复接单'}
                                         </button>

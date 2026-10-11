@@ -225,3 +225,29 @@
     }
   }
 }
+
+// Financial definitions remain available by touch and keyboard, not hover alone.
+.layout-content[data-admin-page='/recharge'] .finance-help {
+  min-width: 0;
+  white-space: normal;
+  summary {
+    min-height: 32px;
+    padding: 4px 0;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 2px;
+  }
+  p {
+    max-width: 34rem;
+    margin: 6px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    font-weight: 400;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

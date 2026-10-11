@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FiSearch, FiPlus, FiEdit, FiTrash2, FiLayers, FiHome, FiImage, FiCompass } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
@@ -153,6 +153,7 @@ const AITools: React.FC = () => {
     const loadTools = useCallback(async () => {
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const params: Record<string, any> = { page: 1, page_size: 100 };
             if (categoryFilter !== 'all') params.category = categoryFilter;
             if (searchKeyword) params.keyword = searchKeyword;
@@ -160,6 +161,7 @@ const AITools: React.FC = () => {
             const res = await getAIToolList(params);
             setTools(res?.list || []);
             setTotal(res?.total || 0);
+            reportPageLoadRecovered("加载 AI 工具列表失败", recoveryPage);
         } catch (error) {
             console.error('加载 AI 工具列表失败:', error);
             reportPageLoadError(error, '加载 AI 工具列表失败');

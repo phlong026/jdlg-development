@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle, FiClock, FiRefreshCw, FiSearch, FiShield, FiUsers, FiZap } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
@@ -54,6 +54,7 @@ const MembershipOperations: React.FC = () => {
     const [permissionState, setPermissionState] = useState('all');
 
     const loadData = async () => {
+        const requestPage = window.location.pathname;
         setLoading(true);
         try {
             const [overviewData, usersData] = await Promise.all([
@@ -68,6 +69,7 @@ const MembershipOperations: React.FC = () => {
             ]);
             setOverview(overviewData);
             setUsers(usersData.list || []);
+            reportPageLoadRecovered('加载会员运营页失败', requestPage);
         } catch (error) {
             console.error('加载会员运营页失败:', error);
             reportPageLoadError(error, '加载会员运营页失败');
@@ -159,7 +161,7 @@ const MembershipOperations: React.FC = () => {
             <div className="membership-operations-page">
                 <ManagementSearchPanel
                     title="会员检索与权益排查"
-                    description="先按用户、会员状态和下载权限缩小范围，再进入用户360或订单中心核查来源订单与权限异常。"
+                    description="先按用户、会员状态和下载权限缩小范围，再进入用户详情或订单中心核查来源订单与权限异常。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
@@ -305,7 +307,7 @@ const MembershipOperations: React.FC = () => {
                                                 </td>
                                                 <td>
                                                     <div className="table-actions">
-                                                        <button className="btn-link" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>用户360</button>
+                                                        <button className="btn-link" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>用户详情</button>
                                                         <button className="btn-link" onClick={() => navigate('/recharge')}>订单中心</button>
                                                         {permissionIssue && (
                                                             <button

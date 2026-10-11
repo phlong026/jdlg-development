@@ -1,5 +1,5 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch,
     FiDownload,
 } from 'react-icons/fi';
@@ -205,6 +205,8 @@ const STATUS_TABS: { value: string; label: string }[] = [
 const OrderCenter: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    const latestSearchParams = useRef(searchParams);
+    latestSearchParams.current = searchParams;
     const [records, setRecords] = useState<OrderListItem[]>([]);
     const [summary, setSummary] = useState<OrderSummary>(emptySummary);
     const [loading, setLoading] = useState(false);
@@ -221,17 +223,87 @@ const OrderCenter: React.FC = () => {
     const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
+    const detailRequestId = useRef(0);
+    const detailTargetId = useRef<string | null>(null);
     const [detailLogs, setDetailLogs] = useState<XPayMessageLogItem[]>([]);
     const [creatingTicketOrderId, setCreatingTicketOrderId] = useState<number | null>(null);
     const [refundingOrderId, setRefundingOrderId] = useState<number | null>(null);
+    const refundSubmitting = useRef(false);
     const [actingOrderId, setActingOrderId] = useState<number | null>(null);
     // 退款确认弹窗（T8）：先取影响预览，确认后才真正发起退款
+    const [refundPreviewOpen, setRefundPreviewOpen] = useState(false);
+    const [refundPreviewOrder, setRefundPreviewOrder] = useState<Pick<OrderListItem, 'id' | 'order_no'> | null>(null);
     const [refundPreview, setRefundPreview] = useState<RefundPreview | null>(null);
     const [refundPreviewLoading, setRefundPreviewLoading] = useState(false);
+    const [refundPreviewError, setRefundPreviewError] = useState('');
+    const refundPreviewRequestId = useRef(0);
+    const refundPreviewTargetId = useRef<number | null>(null);
+    const renderedRefundPreviewRequestId = refundPreviewRequestId.current;
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(DEFAULT_PAGE_SIZE);
     const [total, setTotal] = useState(0);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    // 关闭只作废预览请求，不取消或触发实际退款。
+    const resetRefundPreview = () => {
+        refundPreviewRequestId.current += 1;
+        refundPreviewTargetId.current = null;
+        setRefundPreviewOpen(false);
+        setRefundPreviewOrder(null);
+        setRefundPreview(null);
+        setRefundPreviewLoading(false);
+        setRefundPreviewError('');
+    };
+
+    const closeRefundPreview = () => {
+        if (refundingOrderId || refundSubmitting.current) return;
+        resetRefundPreview();
+    };
+
+    useEffect(() => () => {
+        // 卸载后不得由迟到的详情/预览成功、失败或 finally 回写状态。
+        detailRequestId.current += 1;
+        detailTargetId.current = null;
+        refundPreviewRequestId.current += 1;
+        refundPreviewTargetId.current = null;
+    }, []);
+
+    const resetOrderDetail = () => {
+        detailRequestId.current += 1;
+        detailTargetId.current = null;
+        resetRefundPreview();
+        setShowDetailModal(false);
+        setSelectedDetail(null);
+        setDetailLogs([]);
+        setDetailLoading(false);
+        setDetailError('');
+    };
+
+    // 列表、URL 与退款后刷新共用一条加载路径，响应必须仍属于当前详情。
+    const loadOrderDetail = async (orderId: string) => {
+        const requestId = ++detailRequestId.current;
+        detailTargetId.current = orderId;
+        resetRefundPreview();
+        setSelectedDetail(null);
+        setDetailLogs([]);
+        setDetailError('');
+        setDetailLoading(true);
+        setShowDetailModal(true);
+        try {
+            const detail = await getOrderDetail(orderId);
+            if (requestId !== detailRequestId.current || detailTargetId.current !== orderId) return;
+            if (String(detail?.order?.id) !== orderId) throw new Error('返回的订单详情与当前订单不一致，请重新加载');
+            setSelectedDetail(detail);
+        } catch (error: any) {
+            if (requestId !== detailRequestId.current || detailTargetId.current !== orderId) return;
+            console.error('加载订单详情失败:', error);
+            setDetailError(error?.message || '加载订单详情失败，请重新加载');
+        } finally {
+            if (requestId === detailRequestId.current) setDetailLoading(false);
+        }
+    };
 
     const buildOrderQueryParams = (overrides?: Partial<OrderListParams>): OrderListParams => ({
         keyword: searchKeyword.trim(),
@@ -251,7 +323,8 @@ const OrderCenter: React.FC = () => {
     // 筛选条件同步进 URL（G2）：刷新/转发不丢失；orderId 详情参数保持不动
     const syncFiltersToUrl = (params: OrderListParams) => {
         const next = new URLSearchParams();
-        const orderId = searchParams.get('orderId');
+        // 列表/退款刷新可能晚于详情切换，保留最新 URL 的目标，不能恢复旧详情。
+        const orderId = latestSearchParams.current.get('orderId');
         if (orderId) next.set('orderId', orderId);
         if (params.keyword) next.set('kw', params.keyword);
         if (params.type && params.type !== 'all') next.set('type', params.type);
@@ -301,21 +374,12 @@ const OrderCenter: React.FC = () => {
     useEffect(() => {
         const orderId = searchParams.get('orderId');
         if (!orderId) {
+            if (detailTargetId.current !== null) resetOrderDetail();
             return;
         }
-        if (selectedDetail?.order?.id && String(selectedDetail.order.id) === orderId) {
-            return;
-        }
-        void (async () => {
-            try {
-                const detail = await getOrderDetail(orderId);
-                setSelectedDetail(detail);
-                setShowDetailModal(true);
-            } catch (error) {
-                console.error('按来源打开订单详情失败:', error);
-            }
-        })();
-    }, [searchParams, selectedDetail?.order?.id]);
+        if (detailTargetId.current === orderId) return;
+        void loadOrderDetail(orderId);
+    }, [searchParams]);
 
     // 详情抽屉打开时拉取该订单的微信推送日志（关联记录，一次轻量查询）
     useEffect(() => {
@@ -377,24 +441,15 @@ const OrderCenter: React.FC = () => {
         void loadOrders(buildOrderQueryParams({ page: 1, start_date: range.start, end_date: range.end }));
     };
 
-    const handleViewDetail = async (record: OrderListItem) => {
-        try {
-            const detail = await getOrderDetail(String(record.id));
-            setSelectedDetail(detail);
-            setShowDetailModal(true);
-            const nextParams = new URLSearchParams(searchParams);
-            nextParams.set('orderId', String(record.id));
-            setSearchParams(nextParams);
-        } catch (error) {
-            console.error('加载订单详情失败:', error);
-            reportPageLoadError(error, '加载订单详情失败');
-        }
+    const handleViewDetail = (record: OrderListItem) => {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set('orderId', String(record.id));
+        setSearchParams(nextParams);
+        void loadOrderDetail(String(record.id));
     };
 
     const handleCloseDetail = () => {
-        setShowDetailModal(false);
-        setSelectedDetail(null);
-        setDetailLogs([]);
+        resetOrderDetail();
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete('orderId');
         setSearchParams(nextParams);
@@ -416,38 +471,54 @@ const OrderCenter: React.FC = () => {
 
     // 退款（T8）：先取影响预览（扣回灵石/余额/会员回收计划），用户在弹窗中确认后才执行
     const openRefundPreview = async (order: Pick<OrderListItem, 'id' | 'order_no'>) => {
+        if (refundSubmitting.current) return;
+        const requestId = ++refundPreviewRequestId.current;
+        refundPreviewTargetId.current = order.id;
+        setRefundPreviewOpen(true);
+        setRefundPreviewOrder(order);
         setRefundPreviewLoading(true);
         setRefundPreview(null);
+        setRefundPreviewError('');
         try {
             const preview = await getRefundPreview(String(order.id));
+            if (requestId !== refundPreviewRequestId.current) return;
+            if (preview?.order_id !== order.id) throw new Error('返回的退款预览与当前订单不一致，请重新加载');
             setRefundPreview(preview);
         } catch (error: any) {
+            if (requestId !== refundPreviewRequestId.current) return;
             console.error('获取退款影响预览失败:', error);
-            alert(error?.message || '获取退款影响预览失败');
+            setRefundPreviewError(error?.message || '获取退款影响预览失败，请重试');
         } finally {
-            setRefundPreviewLoading(false);
+            if (requestId === refundPreviewRequestId.current) setRefundPreviewLoading(false);
         }
     };
 
     const handleConfirmRefund = async () => {
-        if (!refundPreview) return;
+        if (!refundPreview || refundSubmitting.current) return;
+        // 旧弹窗保存的回调不可提交；当前响应还需在最终提交前再核对订单归属。
+        if (renderedRefundPreviewRequestId !== refundPreviewRequestId.current) return;
+        if (!refundPreviewOrder || refundPreviewOrder.id !== refundPreviewTargetId.current) return;
+        if (refundPreview.order_id !== refundPreviewTargetId.current) {
+            setRefundPreview(null);
+            setRefundPreviewError('退款预览与当前订单不一致，请重新加载');
+            return;
+        }
         const orderId = refundPreview.order_id;
         const reason = window.prompt('请填写退款原因（记入审计日志）', '运营后台退款');
         if (reason === null) return;
+        refundSubmitting.current = true;
         setRefundingOrderId(orderId);
         try {
             const result = await refundVirtualPayOrder(String(orderId), reason);
             alert(`退款已提交：${result.order_no}\n扣回灵石：${result.refund_amount}\n余额：${result.old_stones} → ${result.new_stones}\n微信确认退款后，本单授予的会员将自动回收。`);
-            setRefundPreview(null);
+            resetRefundPreview();
             await loadOrders(buildOrderQueryParams());
-            if (selectedDetail?.order?.id === orderId) {
-                const detail = await getOrderDetail(String(orderId));
-                setSelectedDetail(detail);
-            }
+            if (detailTargetId.current === String(orderId)) await loadOrderDetail(String(orderId));
         } catch (error: any) {
             console.error('虚拟支付退款失败:', error);
             alert(error?.message || '虚拟支付退款失败');
         } finally {
+            refundSubmitting.current = false;
             setRefundingOrderId(null);
         }
     };
@@ -673,7 +744,10 @@ const OrderCenter: React.FC = () => {
                         <span className="stat-sub">实时进入本地账本</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label" title="全站用户的微信虚拟支付代币余额合计 = 累计成功充值 − 已退款（本地镜像口径）">微信侧代币在账</span>
+                        <details className="finance-help">
+                            <summary className="stat-label">微信侧代币在账 · 口径说明</summary>
+                            <p>全站用户的微信虚拟支付代币余额合计 = 累计成功充值 − 已退款（本地镜像口径）</p>
+                        </details>
                         <span className="stat-value">{formatNumber(fundStats?.wechat_mirror_total)}</span>
                         <span className="stat-sub">枚 · 资金押在微信账上</span>
                     </div>
@@ -683,9 +757,12 @@ const OrderCenter: React.FC = () => {
                         <span className="stat-sub">用户当前可用合计</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label" title="已本地消费 = 微信侧在账 − 本地可用，为净差额：含邀请/签到/手工调整等非虚拟支付来源灵石的净影响">已本地消费（净）</span>
+                        <details className="finance-help">
+                            <summary className="stat-label">已本地消费（净）· 口径说明</summary>
+                            <p>已本地消费 = 微信侧在账 − 本地可用，为净差额：含邀请/签到/手工调整等非虚拟支付来源灵石的净影响</p>
+                        </details>
                         <span className="stat-value">{formatNumber((fundStats?.wechat_mirror_total || 0) - (fundStats?.local_stones_total || 0))}</span>
-                        <span className="stat-sub">两账净差额 · 悬停看口径</span>
+                        <span className="stat-sub">两账净差额 · 点击查看口径</span>
                     </div>
                     <div className="stat-item stat-item-action" onClick={() => { if (!onlyExceptions) handleToggleExceptions(); }} role="button" title="点击查看全部异常单">
                         <span className="stat-label">待处理异常</span>
@@ -749,8 +826,18 @@ const OrderCenter: React.FC = () => {
                                 <th>类型</th>
                                 <th>业务分类</th>
                                 <th>支付金额 / 订单数值</th>
-                                <th title="微信侧实际扣款金额（query_order 回读取证），与「支付金额」逐单对平">微信实付</th>
-                                <th title="该用户当前在微信虚拟支付账本中的代币余额（本地镜像 = 累计成功充值 − 已退款）">微信侧在账</th>
+                                <th>
+                                    <details className="finance-help">
+                                        <summary>微信实付</summary>
+                                        <p>微信侧实际扣款金额（query_order 回读取证），与「支付金额」逐单对平</p>
+                                    </details>
+                                </th>
+                                <th>
+                                    <details className="finance-help">
+                                        <summary>微信侧在账</summary>
+                                        <p>该用户当前在微信虚拟支付账本中的代币余额（本地镜像 = 累计成功充值 − 已退款）</p>
+                                    </details>
+                                </th>
                                 <th>状态</th>
                                 <th>标题 / 描述</th>
                                 <th>创建时间</th>
@@ -811,12 +898,18 @@ const OrderCenter: React.FC = () => {
                                                             : <span className="match-badge is-ok">一致</span>}
                                                     </div>
                                                 ) : (
-                                                    <span className="coin-mirror-na" title="尚未回读微信实付（旧通道订单或支付确认中）">—</span>
+                                                    <details className="finance-help">
+                                                        <summary className="coin-mirror-na" aria-label="微信实付未回读，查看说明">—</summary>
+                                                        <p>尚未回读微信实付（旧通道订单或支付确认中）</p>
+                                                    </details>
                                                 )}
                                             </td>
                                             <td>
                                                 {record.pay_channel === 'virtualpay' && record.pay_mode === 'short_series_coin' ? (
-                                                    <span className="coin-mirror" title="该用户微信侧代币余额（本地镜像）">{formatNumber(record.wechat_coin_mirror)} 枚</span>
+                                                    <details className="finance-help">
+                                                        <summary className="coin-mirror">{formatNumber(record.wechat_coin_mirror)} 枚</summary>
+                                                        <p>该用户微信侧代币余额（本地镜像）</p>
+                                                    </details>
                                                 ) : (
                                                     <span className="coin-mirror-na">—</span>
                                                 )}
@@ -899,7 +992,7 @@ const OrderCenter: React.FC = () => {
                     <button className="btn-secondary" onClick={() => handlePageChange(currentPage + 1)} disabled={loading || currentPage >= totalPages}>下一页</button>
                 </div>
 
-                {showDetailModal && selectedDetail && detailOrder && (
+                {showDetailModal && (
                     <>
                         <div className="drawer-overlay" onClick={handleCloseDetail}></div>
                         <aside className="order-drawer" role="dialog" aria-label="订单详情">
@@ -907,24 +1000,31 @@ const OrderCenter: React.FC = () => {
                                 <div>
                                     <h3>
                                         订单详情
-                                        <span className={`status-badge ${formatStatus(detailOrder.status).className}`}>{formatStatus(detailOrder.status).label}</span>
+                                        {detailOrder && <span className={`status-badge ${formatStatus(detailOrder.status).className}`}>{formatStatus(detailOrder.status).label}</span>}
                                     </h3>
-                                    <div className="drawer-subtitle">{detailOrder.order_no} · 创建于 {formatDateTime(detailOrder.created_at)}</div>
+                                    <div className="drawer-subtitle">{detailOrder ? `${detailOrder.order_no} · 创建于 ${formatDateTime(detailOrder.created_at)}` : `订单 ID ${detailTargetId.current || '-'}`}</div>
                                 </div>
                                 <button className="drawer-close" onClick={handleCloseDetail}>✕</button>
                             </div>
                             <div className="drawer-body">
+                                {detailLoading ? (
+                                    <div className="detail-empty" role="status">正在加载订单详情...</div>
+                                ) : detailError ? (
+                                    <div className="detail-empty" role="alert">
+                                        <p>加载订单详情失败：{detailError}</p>
+                                        <button className="btn-secondary" onClick={() => { if (detailTargetId.current) void loadOrderDetail(detailTargetId.current); }}>重新加载</button>
+                                    </div>
+                                ) : selectedDetail && detailOrder ? (
+                                <>
                                 {selectedDetail.fund_view && (
                                     <div className="fund-view-card">
                                         <div className="fund-view-title">
                                             资金视图 · 充值与微信虚拟支付账本
-                                            <span
-                                                className="fund-view-legend"
-                                                title="微信侧在账 = 本地镜像（累计成功充值 − 已退款）；本地可用 = 用户当前灵石余额；已消费 = 两账净差额，含邀请/签到/手工调整等非虚拟支付来源灵石的净影响"
-                                            >
-                                                口径说明
-                                            </span>
                                         </div>
+                                        <details className="finance-help">
+                                            <summary>口径说明</summary>
+                                            <p>微信侧在账 = 本地镜像（累计成功充值 − 已退款）；本地可用 = 用户当前灵石余额；已消费 = 两账净差额，含邀请/签到/手工调整等非虚拟支付来源灵石的净影响</p>
+                                        </details>
                                         <div className="fund-view-grid">
                                             <div className="fund-item">
                                                 <span className="fund-k">微信侧在账</span>
@@ -1030,8 +1130,12 @@ const OrderCenter: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+                                </>
+                                ) : null}
                             </div>
                             <div className="drawer-footer">
+                                {selectedDetail && detailOrder && (
+                                <>
                                 <button
                                     className="btn-secondary"
                                     onClick={() => void handleCreateSupportTicket(detailOrder)}
@@ -1050,6 +1154,8 @@ const OrderCenter: React.FC = () => {
                                 )}
                                 <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${detailOrder.user_id}`)}>进入用户360</button>
                                 <button className="btn-secondary" onClick={handleExportStatement} title="导出该订单的对账单 CSV（订单信息 + 资金视图 + 关联推送）">对账单</button>
+                                </>
+                                )}
                                 <span style={{ flex: 1 }}></span>
                                 <button className="btn-primary" onClick={handleCloseDetail}>关闭</button>
                             </div>
@@ -1058,17 +1164,22 @@ const OrderCenter: React.FC = () => {
                 )}
 
                 {/* 退款确认弹窗（T8）：展示全部影响后再执行 */}
-                {(refundPreview || refundPreviewLoading) && (
-                    <div className="modal-overlay" onClick={() => { if (!refundingOrderId) setRefundPreview(null); }}>
-                        <div className="modal-content refund-preview-modal" onClick={(event) => event.stopPropagation()}>
+                {refundPreviewOpen && (
+                    <div className="modal-overlay" onClick={closeRefundPreview}>
+                        <div className="modal-content refund-preview-modal" role="dialog" aria-modal="true" aria-labelledby="refund-preview-title" onClick={(event) => event.stopPropagation()}>
                             <div className="modal-header">
-                                <h3>退款确认{refundPreview ? ` · ${refundPreview.order_no}` : ''}</h3>
-                                <button className="modal-close" onClick={() => { if (!refundingOrderId) setRefundPreview(null); }}>✕</button>
+                                <h3 id="refund-preview-title">退款确认{refundPreviewOrder ? ` · ${refundPreviewOrder.order_no}` : ''}</h3>
+                                <button className="modal-close" onClick={closeRefundPreview} disabled={!!refundingOrderId} aria-label="关闭退款预览">✕</button>
                             </div>
                             <div className="modal-body">
-                                {refundPreviewLoading || !refundPreview ? (
-                                    <div className="detail-empty">正在获取退款影响清单...</div>
-                                ) : (
+                                {refundPreviewLoading ? (
+                                    <div className="detail-empty" role="status">正在获取退款影响清单...</div>
+                                ) : refundPreviewError ? (
+                                    <div className="detail-empty" role="alert">
+                                        <p>获取退款影响预览失败：{refundPreviewError}</p>
+                                        <button className="btn-secondary" onClick={() => { if (refundPreviewOrder) void openRefundPreview(refundPreviewOrder); }}>重新加载</button>
+                                    </div>
+                                ) : refundPreview ? (
                                     <>
                                         <ul className="refund-impact-list">
                                             <li>
@@ -1092,14 +1203,14 @@ const OrderCenter: React.FC = () => {
                                         </ul>
                                         <div className="refund-impact-note">微信退款"超时不代表失败"：提交后订单进入"退款中"，由补偿任务按微信侧真实状态自动收尾；卡超 10 分钟会出现"核对微信侧"按钮。</div>
                                     </>
-                                )}
+                                ) : null}
                             </div>
                             <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setRefundPreview(null)} disabled={!!refundingOrderId}>取消</button>
+                                <button className="btn-secondary" onClick={closeRefundPreview} disabled={!!refundingOrderId}>取消</button>
                                 <button
                                     className="btn-primary"
                                     onClick={() => void handleConfirmRefund()}
-                                    disabled={refundPreviewLoading || !refundPreview || !refundPreview.sufficient || !!refundingOrderId}
+                                    disabled={refundPreviewLoading || !refundPreview || refundPreview.order_id !== refundPreviewOrder?.id || !refundPreview.sufficient || !!refundingOrderId}
                                 >
                                     {refundingOrderId ? '退款提交中...' : '确认发起退款'}
                                 </button>
