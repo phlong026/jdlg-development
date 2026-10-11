@@ -1,0 +1,292 @@
+{
+  "pages/index/index": {
+    "Title": "pages/index/index",
+    "Type": "home",
+    "Public": true
+  },
+  "pages/customerservice/customerservice": {
+    "Title": "pages/customerservice/customerservice",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/my/my": {
+    "Title": "pages/my/my",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/template/template": {
+    "Title": "pages/template/template",
+    "Type": "list",
+    "Public": true
+  },
+  "pages/aitools/aitools": {
+    "Title": "pages/aitools/aitools",
+    "Type": "catalog",
+    "Public": true
+  },
+  "pages/aitooldetail/aitooldetail": {
+    "Title": "pages/aitooldetail/aitooldetail",
+    "Type": "detail",
+    "Public": true
+  },
+  "pages/aitoolworkbench/aitoolworkbench": {
+    "Title": "pages/aitoolworkbench/aitoolworkbench",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/specadvisor/specadvisor": {
+    "Title": "pages/specadvisor/specadvisor",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/buildingcodedocs/buildingcodedocs": {
+    "Title": "pages/buildingcodedocs/buildingcodedocs",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/newminnantool/newminnantool": {
+    "Title": "pages/newminnantool/newminnantool",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/distribution/distribution": {
+    "Title": "pages/distribution/distribution",
+    "Type": "list",
+    "Public": true
+  },
+  "pages/voicecall/voicecall": {
+    "Title": "pages/voicecall/voicecall",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/login/login": {
+    "Title": "pages/login/login",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/passwordrecovery/passwordrecovery": {
+    "Title": "pages/passwordrecovery/passwordrecovery",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/phonebind/phonebind": {
+    "Title": "pages/phonebind/phonebind",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/privacy/privacy": {
+    "Title": "pages/privacy/privacy",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/aigenerate/aigenerate": {
+    "Title": "pages/aigenerate/aigenerate",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/generateprogress/generateprogress": {
+    "Title": "pages/generateprogress/generateprogress",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/inspirationdetail/inspirationdetail": {
+    "Title": "pages/inspirationdetail/inspirationdetail",
+    "Type": "detail",
+    "Public": true
+  },
+  "pages/templatepreview/templatepreview": {
+    "Title": "pages/templatepreview/templatepreview",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/settings/settings": {
+    "Title": "pages/settings/settings",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/aicost/aicost": {
+    "Title": "pages/aicost/aicost",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/aicostresult/aicostresult": {
+    "Title": "pages/aicostresult/aicostresult",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/utilitytools/utilitytools": {
+    "Title": "pages/utilitytools/utilitytools",
+    "Type": "list",
+    "Public": true
+  },
+  "pages/utilitytooldetail/utilitytooldetail": {
+    "Title": "pages/utilitytooldetail/utilitytooldetail",
+    "Type": "detail",
+    "Public": true
+  },
+  "pages/aivideo/aivideo": {
+    "Title": "pages/aivideo/aivideo",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/real/real": {
+    "Title": "pages/real/real",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/report/landing": {
+    "Title": "pages/report/landing",
+    "Type": "landing",
+    "Public": true
+  },
+  "pages/report/questionnaire": {
+    "Title": "pages/report/questionnaire",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/report/preview": {
+    "Title": "pages/report/preview",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/report/delivery": {
+    "Title": "pages/report/delivery",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/generatedetails/generatedetails": {
+    "Title": "pages/generatedetails/generatedetails",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/Invitefriends/Invitefriends": {
+    "Title": "pages/Invitefriends/Invitefriends",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/chat/chat": {
+    "Title": "pages/chat/chat",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/designerhome/designerhome": {
+    "Title": "pages/designerhome/designerhome",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/myInformationmodification/myInformationmodification": {
+    "Title": "pages/myInformationmodification/myInformationmodification",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/templatesquaredetails/templatesquaredetails": {
+    "Title": "pages/templatesquaredetails/templatesquaredetails",
+    "Type": "detail",
+    "Public": true
+  },
+  "pages/myplan/myplan": {
+    "Title": "pages/myplan/myplan",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/myfavorites/myfavorites": {
+    "Title": "pages/myfavorites/myfavorites",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/ordermanagement/ordermanagement": {
+    "Title": "pages/ordermanagement/ordermanagement",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/wallet/wallet": {
+    "Title": "pages/wallet/wallet",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/ruralvilladesign/ruralvilladesign": {
+    "Title": "pages/ruralvilladesign/ruralvilladesign",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/Parentchildcreativity/Parentchildcreativity": {
+    "Title": "pages/Parentchildcreativity/Parentchildcreativity",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/topupcenter/topupcenter": {
+    "Title": "pages/topupcenter/topupcenter",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/allrounddesign/allrounddesign": {
+    "Title": "pages/allrounddesign/allrounddesign",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/release/release": {
+    "Title": "pages/release/release",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/release/designerworkpublish": {
+    "Title": "pages/release/designerworkpublish",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/buildingreplacement/buildingreplacement": {
+    "Title": "pages/buildingreplacement/buildingreplacement",
+    "Type": "form",
+    "Public": true
+  },
+  "pages/checkin/checkin": {
+    "Title": "pages/checkin/checkin",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/Identityauthen/Identityauthen": {
+    "Title": "pages/Identityauthen/Identityauthen",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/generatehistory/generatehistory": {
+    "Title": "pages/generatehistory/generatehistory",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/lingshidetails/lingshidetails": {
+    "Title": "pages/lingshidetails/lingshidetails",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/orderdetail/orderdetail": {
+    "Title": "pages/orderdetail/orderdetail",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/messagecenter/messagecenter": {
+    "Title": "pages/messagecenter/messagecenter",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/adminlogin/adminlogin": {
+    "Title": "pages/adminlogin/adminlogin",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/adminhome/adminhome": {
+    "Title": "pages/adminhome/adminhome",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/withdrawcenter/withdrawcenter": {
+    "Title": "pages/withdrawcenter/withdrawcenter",
+    "Type": "excluded",
+    "Public": false
+  },
+  "pages/contentreader/contentreader": {
+    "Title": "pages/contentreader/contentreader",
+    "Type": "owned-content",
+    "Public": true
+  }
+}
