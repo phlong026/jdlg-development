@@ -10,7 +10,8 @@
   "scripts": {
     "build:tracking": "node scripts/build-tracking.js",
     "check:tracking": "node scripts/build-tracking.js --check",
-    "test:tracking": "node --test tests/share-tracking.test.js tests/observed-content-actions.test.js tests/tracking-idle.test.js tests/tracking-consent.test.js tests/tracking-reader-entry.test.js"
+    "check:tracking-routes": "node scripts/check-tracking-routes.js",
+    "test:tracking": "node --test tests/share-tracking.test.js tests/observed-content-actions.test.js tests/tracking-idle.test.js tests/tracking-consent.test.js tests/tracking-reader-entry.test.js tests/tracking-routes.test.js"
   },
   "devDependencies": {
     "miniprogram-api-typings": "^2.8.3-1"
