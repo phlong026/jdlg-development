@@ -1,0 +1,266 @@
+{
+  "assets": [
+    {
+      "property": "backdrop",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/backdrop.jpg",
+      "status": 0,
+      "bytes": 96894,
+      "sha256": "81167400d04bcca8af476e0b902819079248d506168d3dcfa2801ddb2ce62bda",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "brandSymbol",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-symbol-old.png",
+      "status": 0,
+      "bytes": 144716,
+      "sha256": "192c617b242fde203eb546965dbceed752949a64ed8967950ecddbd9ea4c6e0d",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "brandName",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-name-old.png",
+      "status": 0,
+      "bytes": 15922,
+      "sha256": "5c3c47a788cea6aaf29ead7fa1f2665744e7fcf89d37b2774a0df3b1de6e5c0c",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "brandEnglish",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-en-old.png",
+      "status": 0,
+      "bytes": 9272,
+      "sha256": "323f1361c8ddedfb68f6cc9dba81d39607c229898254d53de6b683d4cb4761f8",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "advisor",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/advisor.png",
+      "status": 0,
+      "bytes": 87595,
+      "sha256": "9a586d4a143bae4492887658c10adecaadafc87cbaf805caa97926d4a7ba4a58",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "calculator",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/calculator.png",
+      "status": 0,
+      "bytes": 89953,
+      "sha256": "16d9f9c24f0e876b423ce4b95d0cb951a82858cb36bda87825c9dd976a797fea",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "aiTools",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-tools.png",
+      "status": 0,
+      "bytes": 87857,
+      "sha256": "15d7666f211fdbd1d4e2cef5987c89c66933ba6e3019fe0effce9cc8cdbd62d2",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "villa",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/villa.png",
+      "status": 0,
+      "bytes": 92387,
+      "sha256": "52e2b56a366fed5b3e5db659b80df28da7f734f584950352fdc2db96a23613c3",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "interior",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/interior.png",
+      "status": 0,
+      "bytes": 89481,
+      "sha256": "179ebe04b906af0dcff98312f1eea3e051a636fe7a751bcb79390b3a63add16b",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "courtyard",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/courtyard.png",
+      "status": 0,
+      "bytes": 90232,
+      "sha256": "b99b31e1af9b0dabc535daafeaa8a6fe61ca9beb9bcab71a3f242f3b69ae482b",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "renovation",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/renovation.png",
+      "status": 0,
+      "bytes": 92800,
+      "sha256": "9e0e72c11d3d2d1a910a55e0aadf71c4f2d28046ce7b79d370efc25e81e3fe65",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "templates",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/templates.png",
+      "status": 0,
+      "bytes": 90535,
+      "sha256": "64535362e6375b58be0a74f2b4d2acc6e4f0ce139139327f0f9f8b24e06a9fbd",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "aiPanel",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-shell.png",
+      "status": 0,
+      "bytes": 381094,
+      "sha256": "9b58540c57469aeb44b76d7c940e5fb81462ca810927c1e5ddfda25e587169e0",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "aiOrb",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-medallion.png",
+      "status": 0,
+      "bytes": 75473,
+      "sha256": "774049ac81aea665ada12f6c31f7c0ef2f6ad8ca065bbdde1e151a53c1b39a6b",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "camera",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/camera.png",
+      "status": 0,
+      "bytes": 35700,
+      "sha256": "74338c24a6d4619efa8860c8529364e8ea9e45ddcee4af9468928980de7a4768",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "sparkles",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/sparkles.png",
+      "status": 0,
+      "bytes": 31834,
+      "sha256": "424842926a2cb1d50c8f4f09df19fd40479660ff3de3bbec2281ec31e5cfa572",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "costStats",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/cost-stat-v2.png",
+      "status": 0,
+      "bytes": 63905,
+      "sha256": "20aeece529560cfa2319b88b0145656a566cc7654f7926feee39c66eb54cc397",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "ruralVilla",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/rural-villa.png",
+      "status": 0,
+      "bytes": 43117,
+      "sha256": "d75a9590a1433f213cca69456f2602dd0c1af65e0939a6c262720f2c93229608",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "urbanBuilding",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/urban-building.png",
+      "status": 0,
+      "bytes": 45818,
+      "sha256": "695dd6cc5f7a6b80f913b46981e1b3a4e0717b8cbae931f43656f33b6a856aa3",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "location",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/location.png",
+      "status": 0,
+      "bytes": 28544,
+      "sha256": "a7d0af1ad64b50705819f4fb4d19d1a0b12d26532bf46654122319e0bd471714",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "ruler",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ruler.png",
+      "status": 0,
+      "bytes": 39622,
+      "sha256": "c2a575fc8d107dbeae2bba8a3e2e311a891b6d0f766cb5a48441a784d9da98a6",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "estimateButton",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/estimate-shell.png",
+      "status": 0,
+      "bytes": 111757,
+      "sha256": "40150a5059cb4b549ac081124ff4d4dfcb4cba84fa0b58baa81a5fcf3c517421",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "customerService",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/smart-service-icon.png",
+      "status": 0,
+      "bytes": 17185,
+      "sha256": "3c35107b4ab0703b6f74dad6c3f976fb67f45a388b84de5bd383efac510717b9",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "brandScene",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/brand-scene.png",
+      "status": 0,
+      "bytes": 2136554,
+      "sha256": "37b7125a5bf02f9da13c4ce0308098f15d421b3939cd927e0422ec782054434d",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "defaultTabbar",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/未选中态@2x.png",
+      "status": 0,
+      "bytes": 24136,
+      "sha256": "8226e2596a8a5a6096f083c534172300a002dc62621f57c29a66f5ca5ba8abc2",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "homeTabbar",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/首页导航栏@2x.png",
+      "status": 0,
+      "bytes": 24559,
+      "sha256": "5f622e9c6dffc734dd359a441d793d9b0abc62c8821aa61ba444eabe51190a5c",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "templateTabbar",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/模板广场导航栏@2x.png",
+      "status": 0,
+      "bytes": 25005,
+      "sha256": "b0243b4fa4d7c6b15e7457348c6d6ae7d415b56a69e8fc7d4a654f47389251ec",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "designerTabbar",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/设计师导航栏@2x.png",
+      "status": 0,
+      "bytes": 24865,
+      "sha256": "bf4064ceca5cdf6ba0ae390c18b43d92e0c293c569ec2c263ef230600146b936",
+      "match": true,
+      "error": null
+    },
+    {
+      "property": "myTabbar",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/我的导航栏@2x.png",
+      "status": 0,
+      "bytes": 24948,
+      "sha256": "64491099a1b95db339ec751e835b1aeb89c880b25ff451f07b47313664342a41",
+      "match": true,
+      "error": null
+    }
+  ],
+  "passed": true
+}

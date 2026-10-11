@@ -1,0 +1,121 @@
+<view class="spec-page">
+  <wxs src="./specadvisor.wxs" module="util" />
+  <navigation-bar background="transparent">
+    <view slot="center" class="nav-title">建规快查</view>
+    <view slot="right" class="nav-action" bindtap="onNewChat" wx:if="{{chatStarted}}">
+      <text class="nav-action-text">新对话</text>
+    </view>
+  </navigation-bar>
+
+  <view class="network-banner" wx:if="{{!networkOk}}">
+    <text>网络连接异常，请检查后重试</text>
+  </view>
+
+  <!-- 顶部背景图（从CDN加载水墨风格背景） -->
+  <image class="hero-bg-image" wx:if="{{!chatStarted}}" src="https://static.jiadilingguang.com/assets/specadvisor/bg-ink.png" mode="aspectFill" />
+
+  <view class="hero-panel" wx:if="{{!chatStarted}}">
+    <view class="ai-badge">AI</view>
+    <text class="hero-title">想查看哪条建筑规范？</text>
+    <text class="hero-subtitle">可以问条文依据、消防疏散、楼梯尺度、审图要点</text>
+
+    <view class="prompt-grid">
+      <view class="prompt-chip" wx:for="{{quickPrompts}}" wx:key="text" bindtap="onPromptTap" data-text="{{item.text}}">
+        <image class="prompt-icon-img" src="{{item.iconSrc}}" mode="aspectFit" />
+        <text>{{item.text}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="chat-section">
+    <scroll-view class="chat-scroll" scroll-y scroll-into-view="{{scrollIntoView}}">
+      <view class="message-list">
+        <block wx:for="{{messages}}" wx:key="id" wx:for-item="item" wx:for-index="mi">
+          <view class="time-separator" wx:if="{{util.showTimeSeparator(messages, mi)}}">
+            <text>{{util.formatTime(item.createdAt)}}</text>
+          </view>
+          <view
+            class="message-item {{item.role === 'user' ? 'message-user' : 'message-ai'}}"
+            id="msg-{{item.id}}"
+          >
+            <image class="message-avatar" wx:if="{{item.role === 'ai' && util.showAvatar(messages, mi)}}" src="/assets/icons/specadvisor/icon-advisor-avatar.svg" mode="aspectFit" />
+            <view class="avatar-placeholder" wx:elif="{{item.role === 'ai'}}"></view>
+            <view class="message-bubble" data-id="{{item.id}}" bindlongpress="onCopyMessage">
+              <text wx:if="{{item.role === 'user'}}" class="message-text">{{item.content}}</text>
+              <view wx:else class="message-rich">
+                <wemark md="{{item.content}}" type="wemark" />
+                <view class="source-chip" wx:if="{{item.sourceText}}" data-id="{{item.id}}" catchtap="onSourceChipTap">
+                  <image class="source-icon" src="/assets/icons/specadvisor/icon-source.svg" mode="aspectFit" />
+                  <text>{{item.sourceText}}</text>
+                  <text class="source-chip-arrow" wx:if="{{item.quotes && item.quotes.length > 0}}">›</text>
+                </view>
+                <view class="retry-btn" wx:if="{{item.isError}}" data-id="{{item.id}}" catchtap="onRetry">
+                  <text>↻ 重试</text>
+                </view>
+                <view class="regenerate-btn" wx:if="{{!item.isError && item.id !== 'welcome' && item.content}}" data-id="{{item.id}}" catchtap="onRegenerate">
+                  <text>↻ 重新生成</text>
+                </view>
+                <view class="ai-disclaimer" wx:if="{{!item.isError && item.id !== 'welcome' && item.content && !item.quotes}}">
+                  <text>内容由 AI 生成，仅供参考</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </block>
+
+        <view class="thinking-row" wx:if="{{loading}}" id="msg-thinking">
+          <image class="message-avatar" src="/assets/icons/specadvisor/icon-advisor-avatar.svg" mode="aspectFit" />
+          <view class="thinking-bubble">
+            <text class="thinking-dot">●</text>
+            <text class="thinking-dot">●</text>
+            <text class="thinking-dot">●</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="input-safe-area">
+    <view class="input-bar">
+      <view class="input-plus" bindtap="onAddTap">
+        <t-icon name="add" size="34rpx" color="#8a694e" />
+      </view>
+      <textarea
+        class="question-input"
+        value="{{inputText}}"
+        placeholder="请输入规范问题、条文依据或审图要点"
+        placeholder-class="question-placeholder"
+        auto-height
+        maxlength="-1"
+        cursor-spacing="20"
+        confirm-type="send"
+        confirm-hold
+        adjust-position="{{true}}"
+        bindinput="onInput"
+        bindconfirm="onSend"
+      />
+      <view class="send-btn {{loading ? 'send-btn-loading' : (inputText ? 'send-btn-active' : '')}}" bindtap="onSend">
+        <view wx:if="{{loading}}" class="send-loading-spinner"></view>
+        <image wx:else class="send-icon" src="/assets/icons/specadvisor/icon-send.svg" mode="aspectFit" />
+      </view>
+    </view>
+  </view>
+
+  <!-- 引用条文面板 -->
+  <view class="quotes-mask" wx:if="{{quotesPanelVisible}}" bindtap="onCloseQuotesPanel"></view>
+  <view class="quotes-panel {{quotesPanelVisible ? 'quotes-panel-show' : ''}}">
+    <view class="quotes-header">
+      <text class="quotes-title">引用条文（{{quotesPanelData.length}} 条）</text>
+      <view class="quotes-close" bindtap="onCloseQuotesPanel">×</view>
+    </view>
+    <scroll-view class="quotes-scroll" scroll-y>
+      <view class="quote-item" wx:for="{{quotesPanelData}}" wx:key="index" wx:for-item="quote" wx:for-index="qi">
+        <view class="quote-source" wx:if="{{quote.sourceName || quote.source_name}}">
+          《{{quote.sourceName || quote.source_name}}》
+        </view>
+        <view class="quote-text" wx:if="{{quote.q}}">{{quote.q}}</view>
+        <view class="quote-text quote-answer" wx:if="{{quote.a}}">{{quote.a}}</view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

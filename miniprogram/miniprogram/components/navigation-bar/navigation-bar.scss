@@ -1,0 +1,78 @@
+/* 统一导航栏组件样式 */
+.uni-nav {
+  width: 750rpx;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 20;
+}
+
+.uni-nav-inner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.uni-nav-side {
+  flex-shrink: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+/* 返回按钮热区 72rpx × 72rpx，默认暖棕渐变底 */
+.uni-nav-back {
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 16rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(180deg, #b79066 0%, #9f7550 100%);
+  box-shadow: 0 8rpx 20rpx rgba(113, 80, 63, 0.16);
+}
+
+.uni-nav-back--active {
+  opacity: 0.5;
+}
+
+.uni-nav-chevron {
+  width: 20rpx;
+  height: 20rpx;
+  border-left: 5rpx solid #fffaf2;
+  border-bottom: 5rpx solid #fffaf2;
+  transform: translateX(4rpx) rotate(45deg);
+}
+
+/* 标题区域 */
+.uni-nav-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  overflow: hidden;
+}
+
+.uni-nav-title-main {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uni-nav-title-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "projectRelativePath": "../../miniprogram",
+  "sourceSnapshot": "2026-10-09 首页精修",
+  "testRollback": false,
+  "files": [
+    {
+      "path": "miniprogram/custom-tab-bar/index.js",
+      "role": "restore",
+      "afterSha256": "8e86a642e8b5680e47c88dda3ff2cdd4a24a85da1927fd16540777f385d7e65a",
+      "afterSize": 3326,
+      "beforeSha256": "8e86a642e8b5680e47c88dda3ff2cdd4a24a85da1927fd16540777f385d7e65a",
+      "beforeSize": 3326
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.scss",
+      "role": "restore",
+      "afterSha256": "9c3ce9c84e0a79a0fbd99f3e6ef7711c16772175ccb9212e684f42a98f5db8e5",
+      "afterSize": 682,
+      "beforeSha256": "9c3ce9c84e0a79a0fbd99f3e6ef7711c16772175ccb9212e684f42a98f5db8e5",
+      "beforeSize": 682
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.ts",
+      "role": "restore",
+      "afterSha256": "1c1bb47ec564c4a00565257ce46d0e5bfe8193781e9fa9b0b4358813a48ae51b",
+      "afterSize": 2817,
+      "beforeSha256": "1c1bb47ec564c4a00565257ce46d0e5bfe8193781e9fa9b0b4358813a48ae51b",
+      "beforeSize": 2817
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.wxml",
+      "role": "restore",
+      "afterSha256": "49c6744f9bded65a7cc9638259eaccd015f342e6e057ce28b59882ce9a3ba9cb",
+      "afterSize": 627,
+      "beforeSha256": "5b65e2c6d3b08ff87a1e346cf71e6c97feb09d14b78bd9dd728cdf37dbbd02ba",
+      "beforeSize": 540
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.wxss",
+      "role": "restore",
+      "afterSha256": "11564201a46d91deaa3a1517bded4e005c18ffbe59b1bedde60fda143945a348",
+      "afterSize": 724,
+      "beforeSha256": "11564201a46d91deaa3a1517bded4e005c18ffbe59b1bedde60fda143945a348",
+      "beforeSize": 724
+    },
+    {
+      "path": "miniprogram/pages/aicost/aicost.js",
+      "role": "restore",
+      "afterSha256": "4b9d3e77deec124ce8a438d78d37c00248c592f87859b533b967ba7879a9ba71",
+      "afterSize": 14541,
+      "beforeSha256": "5090392197b5ae6e52f68787a5e0c58dac4e5828f40e0c2a10e0068465029063",
+      "beforeSize": 14589
+    },
+    {
+      "path": "miniprogram/pages/aicost/aicost.ts",
+      "role": "restore",
+      "afterSha256": "9c66081e34c4075ead51eecae8a2bfa2fc3cb0424fa0c39f8339f734ca3237c8",
+      "afterSize": 13834,
+      "beforeSha256": "b8432dd8176e94a266ff6e1c71e02c04018cec42572fcb63f2605900ac77656d",
+      "beforeSize": 13981
+    },
+    {
+      "path": "miniprogram/pages/index/index.js",
+      "role": "restore",
+      "afterSha256": "9f59cb7030289a436315af78abad992093e5aa3ab07f7dd3ba2caca660aa6451",
+      "afterSize": 20820,
+      "beforeSha256": "1c4aa740a1f65ecbbc61e0a2ae37f3b21f4b14932580c88ebc15a624eecf4b34",
+      "beforeSize": 17605
+    },
+    {
+      "path": "miniprogram/pages/index/index.json",
+      "role": "restore",
+      "afterSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "afterSize": 2,
+      "beforeSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "beforeSize": 2
+    },
+    {
+      "path": "miniprogram/pages/index/index.scss",
+      "role": "restore",
+      "afterSha256": "c4c125808aeb6bab8535b2a8e31c71feaede7df2a6317983583d6caf4481f707",
+      "afterSize": 23635,
+      "beforeSha256": "9784ca32ab15055bc8f9dce297a39e04f055364634eaf954357c977dfe8f5cff",
+      "beforeSize": 18540
+    },
+    {
+      "path": "miniprogram/pages/index/index.ts",
+      "role": "restore",
+      "afterSha256": "0059895df43b52aa057744225f4b3cf6b228a2e6a47e321618598fd764c74dcc",
+      "afterSize": 17510,
+      "beforeSha256": "143754fdd093027af7aa35142d5fceda264022e82cbb7b1583c2f019ecdef8ea",
+      "beforeSize": 15123
+    },
+    {
+      "path": "miniprogram/pages/index/index.wxml",
+      "role": "restore",
+      "afterSha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3",
+      "afterSize": 21487,
+      "beforeSha256": "15fb1b15def24087a17114daf631a25594435dc947a2f47fb9b644d2077e4ce3",
+      "beforeSize": 15837
+    },
+    {
+      "path": "miniprogram/pages/index/index.wxss",
+      "role": "restore",
+      "afterSha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495",
+      "afterSize": 19237,
+      "beforeSha256": "eccc377c0cb81756e02c4d32bd52a18cb29eeb8ca77806fcf59964d8bc81804d",
+      "beforeSize": 13782
+    },
+    {
+      "path": "miniprogram/utils/costRegions.ts",
+      "role": "remove",
+      "afterSha256": "d64fd4ccac38b209e8364ddab5dcf7228573e1c7dd489229ea79ece71fc6569e",
+      "afterSize": 1214
+    },
+    {
+      "path": "miniprogram/utils/costRegions.js",
+      "role": "remove",
+      "afterSha256": "f99c78763b816a170472fd4dc6dfe0355b1acd9b4a4473e528d4010670f8f199",
+      "afterSize": 1333
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/advisor.png",
+      "role": "remove",
+      "afterSha256": "9a586d4a143bae4492887658c10adecaadafc87cbaf805caa97926d4a7ba4a58",
+      "afterSize": 87595
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/ai-medallion.png",
+      "role": "remove",
+      "afterSha256": "774049ac81aea665ada12f6c31f7c0ef2f6ad8ca065bbdde1e151a53c1b39a6b",
+      "afterSize": 75473
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/ai-shell.png",
+      "role": "remove",
+      "afterSha256": "9b58540c57469aeb44b76d7c940e5fb81462ca810927c1e5ddfda25e587169e0",
+      "afterSize": 381094
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/ai-tools.png",
+      "role": "remove",
+      "afterSha256": "15d7666f211fdbd1d4e2cef5987c89c66933ba6e3019fe0effce9cc8cdbd62d2",
+      "afterSize": 87857
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/backdrop.jpg",
+      "role": "remove",
+      "afterSha256": "81167400d04bcca8af476e0b902819079248d506168d3dcfa2801ddb2ce62bda",
+      "afterSize": 96894
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/brand-en-old.png",
+      "role": "remove",
+      "afterSha256": "323f1361c8ddedfb68f6cc9dba81d39607c229898254d53de6b683d4cb4761f8",
+      "afterSize": 9272
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/brand-name-old.png",
+      "role": "remove",
+      "afterSha256": "5c3c47a788cea6aaf29ead7fa1f2665744e7fcf89d37b2774a0df3b1de6e5c0c",
+      "afterSize": 15922
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/brand-symbol-old.png",
+      "role": "remove",
+      "afterSha256": "192c617b242fde203eb546965dbceed752949a64ed8967950ecddbd9ea4c6e0d",
+      "afterSize": 144716
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/calculator.png",
+      "role": "remove",
+      "afterSha256": "16d9f9c24f0e876b423ce4b95d0cb951a82858cb36bda87825c9dd976a797fea",
+      "afterSize": 89953
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/camera.png",
+      "role": "remove",
+      "afterSha256": "74338c24a6d4619efa8860c8529364e8ea9e45ddcee4af9468928980de7a4768",
+      "afterSize": 35700
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/cost-stat-v2.png",
+      "role": "remove",
+      "afterSha256": "20aeece529560cfa2319b88b0145656a566cc7654f7926feee39c66eb54cc397",
+      "afterSize": 63905
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/courtyard.png",
+      "role": "remove",
+      "afterSha256": "b99b31e1af9b0dabc535daafeaa8a6fe61ca9beb9bcab71a3f242f3b69ae482b",
+      "afterSize": 90232
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/estimate-shell.png",
+      "role": "remove",
+      "afterSha256": "40150a5059cb4b549ac081124ff4d4dfcb4cba84fa0b58baa81a5fcf3c517421",
+      "afterSize": 111757
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/interior.png",
+      "role": "remove",
+      "afterSha256": "179ebe04b906af0dcff98312f1eea3e051a636fe7a751bcb79390b3a63add16b",
+      "afterSize": 89481
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/location.png",
+      "role": "remove",
+      "afterSha256": "a7d0af1ad64b50705819f4fb4d19d1a0b12d26532bf46654122319e0bd471714",
+      "afterSize": 28544
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/renovation.png",
+      "role": "remove",
+      "afterSha256": "9e0e72c11d3d2d1a910a55e0aadf71c4f2d28046ce7b79d370efc25e81e3fe65",
+      "afterSize": 92800
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/ruler.png",
+      "role": "remove",
+      "afterSha256": "c2a575fc8d107dbeae2bba8a3e2e311a891b6d0f766cb5a48441a784d9da98a6",
+      "afterSize": 39622
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/rural-villa.png",
+      "role": "remove",
+      "afterSha256": "d75a9590a1433f213cca69456f2602dd0c1af65e0939a6c262720f2c93229608",
+      "afterSize": 43117
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/sparkles.png",
+      "role": "remove",
+      "afterSha256": "424842926a2cb1d50c8f4f09df19fd40479660ff3de3bbec2281ec31e5cfa572",
+      "afterSize": 31834
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/templates.png",
+      "role": "remove",
+      "afterSha256": "64535362e6375b58be0a74f2b4d2acc6e4f0ce139139327f0f9f8b24e06a9fbd",
+      "afterSize": 90535
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/urban-building.png",
+      "role": "remove",
+      "afterSha256": "695dd6cc5f7a6b80f913b46981e1b3a4e0717b8cbae931f43656f33b6a856aa3",
+      "afterSize": 45818
+    },
+    {
+      "path": "miniprogram/assets/home-reference/hd/villa.png",
+      "role": "remove",
+      "afterSha256": "52e2b56a366fed5b3e5db659b80df28da7f734f584950352fdc2db96a23613c3",
+      "afterSize": 92387
+    },
+    {
+      "path": "tests/aicost-form-share.test.js",
+      "role": "test-only",
+      "afterSha256": "e179b541d3db4b78ec4f9b313472f32031fec867c4efd96f629f4d82c5f37860",
+      "afterSize": 2678
+    },
+    {
+      "path": "tests/aicost-home-prefill.test.js",
+      "role": "test-only",
+      "afterSha256": "cf12578025ae5f513792332bfd4e1064d8f88bddb76fbe72b46ca3e0375fedee",
+      "afterSize": 3091
+    },
+    {
+      "path": "tests/aicost-pricing.test.js",
+      "role": "test-only",
+      "afterSha256": "d96c4d5314d75db313b86f1b15f902ccc08f6f2b18b8009655bbbe38078986fa",
+      "afterSize": 5100
+    },
+    {
+      "path": "tests/aicost-report.test.js",
+      "role": "test-only",
+      "afterSha256": "faae522e6d9239694fbce33a231db6cdc467265f402bf2a5152a947f01d0cc55",
+      "afterSize": 8818
+    },
+    {
+      "path": "tests/cost-estimate-share-image.test.js",
+      "role": "test-only",
+      "afterSha256": "fd62b43e446fbd4c06bbcb6cb470fde9744d205cefd87abe1202c49700d3736f",
+      "afterSize": 8631
+    },
+    {
+      "path": "tests/home-cost-allround-aicost.test.js",
+      "role": "test-only",
+      "afterSha256": "9a008d760741608ec17ab0d3dc7aab0ff5da1b794baf7760e10f13e6a6ef21dc",
+      "afterSize": 4686
+    },
+    {
+      "path": "tests/home-intro-popup.test.js",
+      "role": "test-only",
+      "afterSha256": "0e34dc90304494201bd3a78cd53a8ae1282a8e48fc0b2ea7653df1d01566ab23",
+      "afterSize": 2893
+    },
+    {
+      "path": "tests/home-reference.test.js",
+      "role": "test-only",
+      "afterSha256": "987860b4834e28df5bd66f13a7a4f756eba4e12ea7db8a9305491af14e2da79c",
+      "afterSize": 3413
+    },
+    {
+      "path": "tests/home-smart-service-fixed.test.js",
+      "role": "test-only",
+      "afterSha256": "93dca9318ba48d1ae9e48fd77770d49bf79f399bb2f8c8c5cd9f2397580b956c",
+      "afterSize": 1090
+    }
+  ]
+}

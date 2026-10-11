@@ -1,0 +1,19 @@
+{
+  "dryRun": {
+    "exitCode": 0,
+    "output": "预演回退：/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-soft-rollback-ut7c_ke1\nrestore miniprogram/miniprogram/pages/index/index.wxml\nrestore miniprogram/miniprogram/pages/index/index.scss\nrestore miniprogram/miniprogram/pages/index/index.wxss\nrestore miniprogram/miniprogram/pages/index/index.ts\nrestore miniprogram/miniprogram/pages/index/index.js\nrestore miniprogram/tests/home-cloud-header-release.test.js\nremove miniprogram/tests/home-safe-area-layout.test.js\n全部哈希校验通过；未修改文件。添加 --apply 才执行回退。\n"
+  },
+  "apply": {
+    "exitCode": 0,
+    "output": "执行回退：/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-soft-rollback-ut7c_ke1\nrestore miniprogram/miniprogram/pages/index/index.wxml\nrestore miniprogram/miniprogram/pages/index/index.scss\nrestore miniprogram/miniprogram/pages/index/index.wxss\nrestore miniprogram/miniprogram/pages/index/index.ts\nrestore miniprogram/miniprogram/pages/index/index.js\nrestore miniprogram/tests/home-cloud-header-release.test.js\nremove miniprogram/tests/home-safe-area-layout.test.js\n7.2.9 首页源码已恢复；云端资源保留，其他页面未修改。\n"
+  },
+  "exactRestore": true,
+  "laterEditProtection": {
+    "exitCode": 1,
+    "output": "回退失败：文件已变更，停止回退：miniprogram/miniprogram/pages/index/index.wxml\n"
+  },
+  "laterEditZeroWrites": true,
+  "liveSourceUnchanged": true,
+  "afterBrandBackgroundCleaning": true,
+  "afterSoftTransparency": true
+}

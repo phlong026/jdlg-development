@@ -1,0 +1,88 @@
+.layout-subnav {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #eee4d7;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
+}
+
+.subnav-tab,
+.subnav-back,
+.subnav-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  min-height: 44px;
+  font-size: 14px;
+  color: #8a6f55;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+
+  &:hover { color: #8b5e3c; }
+}
+
+.subnav-tab {
+  position: relative;
+  font-weight: 500;
+
+  &.active {
+    color: #7a5335;
+    font-weight: 600;
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: -1px;
+      height: 2px;
+      border-radius: 2px;
+      background: #8b5e3c;
+    }
+  }
+}
+
+.subnav-spacer { flex: 1; }
+
+// 队列 Tab 上的待办数量
+.subnav-badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.subnav-back { padding-left: 0; margin-right: 8px; }
+
+.subnav-entry {
+  align-self: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #e0d2bf;
+  border-radius: 10px;
+  color: #5b4a3b;
+
+  &:hover { border-color: #8b5e3c; background: #f6eee3; }
+}
+
+@media (max-width: 640px) {
+  .layout-subnav { padding: 0 12px; }
+}
+
+// 二级页面包屑：分组（可点）/ 当前页（不可点）
+.subnav-breadcrumb { display: inline-flex; align-items: center; gap: 8px; }
+.subnav-crumb-sep { color: #c9b8a8; }
+.subnav-crumb-current { font-size: 14px; color: #5f4632; font-weight: 600; }

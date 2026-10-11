@@ -1,0 +1,57 @@
+<!--pages/utilitytooldetail/utilitytooldetail.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="{{tool.title || '实用工具'}}" background="#e6daca" />
+
+  <!-- 内容区域 -->
+  <view class="content" wx:if="{{!loading && tool}}">
+    <!-- 视频教程 -->
+    <view class="video-section" wx:if="{{tool.category === 'video_tutorial' && tool.video_url}}">
+      <video 
+        class="video-player"
+        src="{{tool.video_url}}"
+        controls
+        show-center-play-btn
+        poster="{{tool.cover_image}}"
+      ></video>
+    </view>
+
+    <!-- 封面图（非视频） -->
+    <view class="cover-section" wx:if="{{tool.cover_image && tool.category !== 'video_tutorial'}}">
+      <image class="cover-image" src="{{tool.cover_image}}" mode="aspectFill"></image>
+    </view>
+
+    <!-- 内容主体 -->
+    <view class="main-content">
+      <view class="content-title">{{tool.title}}</view>
+      
+      <!-- 本地规范 - 文件下载 -->
+      <view class="file-section" wx:if="{{tool.category === 'local_norm' && tool.file_url}}">
+        <button class="download-btn" bindtap="downloadFile">
+          <text>📄 下载文件</text>
+        </button>
+      </view>
+
+      <!-- 内容文本 -->
+      <view class="content-text" wx:if="{{tool.content}}">
+        <rich-text nodes="{{tool.content}}"></rich-text>
+      </view>
+
+      <!-- 元信息 -->
+      <view class="meta-info">
+        <text class="meta-item">查看 {{tool.view_count || 0}}</text>
+        <text class="meta-item">{{tool.updated_at}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+
+  <!-- 错误状态 -->
+  <view class="error-state" wx:if="{{!loading && !tool}}">
+    <text>内容不存在或已删除</text>
+  </view>
+</view>

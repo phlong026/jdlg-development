@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/target
+**/dist
+**/.env
+**/.env.*
+phase1/backups
+phase1/test-output
+frontEnd
+img
+pic

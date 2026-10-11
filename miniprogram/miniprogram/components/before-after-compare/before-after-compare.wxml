@@ -1,0 +1,26 @@
+<view
+  class="before-after-compare"
+  style="height: {{computedHeight}};"
+  catchtouchstart="onTouchStart"
+  catchtouchmove="onTouchMove"
+  catchtouchend="onTouchEnd"
+  bindtap="onImageTap"
+>
+  <image class="before-after-image before-after-base" src="{{afterImage}}" mode="aspectFill" binderror="onImageError" bindload="onImageLoaded" />
+
+  <view class="before-after-overlay" style="width: {{dividerPercent}}%;">
+    <image class="before-after-image before-after-overlay-img" src="{{beforeImage}}" mode="aspectFill" style="{{containerWidth > 0 ? 'width:' + containerWidth + 'px' : ''}}" binderror="onImageError" />
+  </view>
+
+  <view class="before-after-divider" style="left: {{dividerPercent}}%;">
+    <view class="before-after-divider-line"></view>
+    <view class="before-after-divider-handle">
+      <view class="before-after-divider-arrow left"></view>
+      <view class="before-after-divider-arrow right"></view>
+    </view>
+  </view>
+
+  <view class="before-after-label before" wx:if="{{!imageError && dividerPercent > 15}}">{{beforeLabel}}</view>
+  <view class="before-after-label after" wx:if="{{!imageError && dividerPercent < 85}}">{{afterLabel}}</view>
+  <view class="before-after-error" wx:if="{{imageError}}">图片加载失败</view>
+</view>

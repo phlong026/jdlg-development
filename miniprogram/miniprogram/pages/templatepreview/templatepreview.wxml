@@ -1,0 +1,48 @@
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar background="#e6daca" />
+
+  <!-- 主要内容区域 -->
+  <view class="main-content">
+    <!-- 模板名称 -->
+    <view class="template-title-wrap" wx:if="{{title}}">
+      <text class="template-title">{{title}}</text>
+    </view>
+    <!-- 图片展示 -->
+    <view class="main-image-wrapper" wx:if="{{imageUrl}}" style="height: {{imageHeight || 500}}px;">
+      <image
+        class="main-image"
+        src="{{imageUrl}}"
+        mode="aspectFit"
+        bindtap="onPreviewImage"
+      />
+    </view>
+  </view>
+
+  <!-- 底部信息区域 -->
+  <view class="bottom-section">
+    <view class="prompt-card">
+      <view class="section-head">
+        <text class="section-title">提示词内容</text>
+        <text class="section-badge">{{readOnly ? '作品预览' : '预览'}}</text>
+      </view>
+      <text class="prompt-content">{{description || '这里将展示你在模板广场中的简介效果。'}}</text>
+    </view>
+    <view class="meta-card">
+      <text class="meta-label">生成时间</text>
+      <text class="date">{{createdAt || '预览状态'}}</text>
+    </view>
+  </view>
+
+  <!-- 底部操作栏 -->
+  <view class="bottom-nav">
+    <view class="nav-input-wrapper">
+      <text class="usage-count">{{readOnly ? '仅查看，不会修改作品' : '预览中，不会真正发布'}}</text>
+    </view>
+    <view class="nav-actions">
+      <button class="action-btn secondary" bindtap="onBack">{{readOnly ? '返回列表' : '返回修改'}}</button>
+      <button class="action-btn primary" bindtap="onConfirm">{{readOnly ? '完成' : '确认发布'}}</button>
+    </view>
+  </view>
+</view>
+

@@ -1,0 +1,44 @@
+.page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f6efe7 0%, #f9f5ef 100%);
+  color: #5d4731;
+}
+
+.content {
+  width: 694rpx;
+  margin: 24rpx auto 0;
+}
+
+.empty-card {
+  min-height: 720rpx;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18rpx 36rpx rgba(143, 110, 74, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18rpx;
+  padding: 48rpx;
+  text-align: center;
+}
+
+.empty-badge {
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  background: rgba(183, 144, 102, 0.14);
+  color: #8f6e4a;
+  font-size: 22rpx;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #6a5134;
+}
+
+.empty-desc {
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #9a8264;
+}

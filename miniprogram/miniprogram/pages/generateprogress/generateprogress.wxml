@@ -1,0 +1,25 @@
+<view class="page">
+  <view class="page-content">
+    <!-- 统一导航栏 -->
+    <navigation-bar title="生成效果图" background="#e6daca" />
+
+    <view class="progress-tabs" wx:if="{{showSceneTabs}}">
+      <view class="progress-tab {{activeTab === 'exterior' ? 'active' : ''}}" bindtap="onSelectTab" data-tab="exterior">
+        <text>外立面</text>
+      </view>
+      <view class="progress-tab {{activeTab === 'interior' ? 'active' : ''}}" bindtap="onSelectTab" data-tab="interior">
+        <text>室内</text>
+      </view>
+    </view>
+    <view class="tabs-divider" wx:if="{{showSceneTabs}}"></view>
+
+    <view class="progress-card">
+      <view class="loading-spinner">
+        <view wx:for="{{spinnerItems}}" wx:key="index" class="spinner-bar spinner-bar-{{item}}"></view>
+      </view>
+      <text class="progress-text">{{loadingText}}</text>
+    </view>
+  </view>
+
+  <custom-tabbar current="{{-1}}"></custom-tabbar>
+</view>

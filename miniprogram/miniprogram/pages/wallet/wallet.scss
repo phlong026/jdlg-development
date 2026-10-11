@@ -1,0 +1,672 @@
+/* pages/wallet/wallet.wxss */
+
+.page {
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #0f172a;
+  color: #ffffff;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 顶部余额卡片 */
+.balance-card {
+  margin: 24rpx 24rpx 16rpx;
+  padding: 22rpx 22rpx 20rpx;
+  border-radius: 26rpx;
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), transparent 60%),
+    radial-gradient(circle at bottom right, rgba(52, 211, 153, 0.3), transparent 55%),
+    linear-gradient(145deg, #020617, #020617);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 20rpx 46rpx rgba(15, 23, 42, 0.9);
+
+  .balance-header {
+    display: flex;
+    flex-direction: column;
+
+    .recharge-text {
+      display: flex;
+      justify-content: space-between;
+
+      .balance-label {
+        font-size: 24rpx;
+        color: #e5e7eb;
+      }
+
+      .ratio-tag {
+        display: flex;
+        align-items: center;
+        gap: 8rpx;
+        padding: 4rpx 12rpx;
+        border-radius: 999rpx;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid rgba(125, 211, 252, 0.8);
+
+        .ratio-text {
+          font-size: 22rpx;
+          color: #dbeafe;
+        }
+      }
+    }
+
+    .recharge-com {
+      display: flex;
+      justify-content: space-between;
+      ;
+    }
+
+    .balance-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8rpx;
+
+      .balance-title-right {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12rpx;
+
+        .recharge-btn {
+          padding: 20rpx 50rpx;
+          border-radius: 20rpx;
+          border: 1px solid rgba(125, 211, 252, 0.8);
+          background: rgba(15, 23, 42, 0.92);
+          font-size: 22rpx;
+          color: #bfdbfe;
+        }
+      }
+    }
+
+    .balance-value-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10rpx;
+      margin-top: 6rpx;
+
+      .balance-value {
+        font-size: 44rpx;
+        font-weight: 700;
+        color: #f9fafb;
+      }
+    }
+
+    .balance-rmb-row {
+      margin-top: 8rpx;
+      display: flex;
+      align-items: baseline;
+      gap: 10rpx;
+
+      .rmb-label {
+        font-size: 22rpx;
+        color: #cbd5f5;
+      }
+
+      .rmb-value {
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #fbbf24;
+      }
+    }
+  }
+
+  .balance-footer {
+    margin-top: 16rpx;
+    padding-top: 12rpx;
+    border-top: 1px dashed rgba(148, 163, 184, 0.6);
+    display: flex;
+    gap: 16rpx;
+
+    .footer-item {
+      flex: 1;
+
+      .footer-label {
+        font-size: 22rpx;
+        color: #9ca3af;
+      }
+
+      .footer-value {
+        margin-top: 4rpx;
+        font-size: 24rpx;
+        font-weight: 600;
+
+        &.plus {
+          color: #4ade80;
+        }
+
+        &.minus {
+          color: #f97373;
+        }
+      }
+    }
+  }
+}
+
+/* 认证中心入口 */
+.cert-entry-section {
+  padding: 16rpx 24rpx 0;
+}
+
+.cert-entry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 20rpx;
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  box-shadow: 0 14rpx 26rpx rgba(15, 23, 42, 0.85);
+}
+
+.cert-entry-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.cert-entry-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.cert-entry-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.cert-entry-desc {
+  font-size: 22rpx;
+  color: #9ca3af;
+}
+
+.section {
+  padding: 4rpx 24rpx 0;
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10rpx;
+
+    .section-title {
+      font-size: 26rpx;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .section-subtitle {
+      font-size: 22rpx;
+      color: #9ca3af;
+    }
+
+    .section-extra {
+      display: flex;
+      align-items: center;
+      gap: 4rpx;
+
+      .extra-text {
+        font-size: 22rpx;
+        color: #9ca3af;
+      }
+    }
+  }
+}
+
+/* 提现中心 */
+.designer-section {
+  margin-top: 8rpx;
+}
+
+.withdraw-card {
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  padding: 18rpx 18rpx 16rpx;
+  border: 1px solid rgba(31, 41, 55, 0.9);
+  box-shadow: 0 16rpx 32rpx rgba(15, 23, 42, 0.85);
+
+  .withdraw-info-row {
+    display: flex;
+    gap: 14rpx;
+
+    .withdraw-amount-block {
+      flex: 1;
+
+      .withdraw-label {
+        font-size: 22rpx;
+        color: #9ca3af;
+      }
+
+      .withdraw-value-row {
+        margin-top: 6rpx;
+        display: flex;
+        align-items: center;
+        gap: 8rpx;
+
+        .withdraw-value {
+          font-size: 28rpx;
+          font-weight: 600;
+          color: #f9fafb;
+        }
+      }
+    }
+  }
+
+  .withdraw-actions {
+    margin-top: 16rpx;
+    display: flex;
+    gap: 10rpx;
+
+    .withdraw-btn {
+      flex: 1;
+      height: 68rpx;
+      border-radius: 999rpx;
+      font-size: 24rpx;
+      font-weight: 500;
+      border: none;
+
+      &.primary {
+        background: linear-gradient(135deg, #34d399, #22c55e);
+        color: #022c22;
+        box-shadow: 0 10rpx 24rpx rgba(34, 197, 94, 0.6);
+      }
+
+      &.secondary {
+        background: rgba(15, 23, 42, 0.9);
+        color: #e5e7eb;
+        border: 1px solid rgba(148, 163, 184, 0.9);
+      }
+    }
+  }
+}
+
+/* 提现金额选项 */
+.withdraw-options {
+  margin-top: 16rpx;
+
+  .withdraw-options-label {
+    font-size: 22rpx;
+    color: #e5e7eb;
+    margin-bottom: 8rpx;
+  }
+
+  .withdraw-options-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10rpx;
+
+    .withdraw-option-item {
+      flex: 0 0 calc(33.33% - 8rpx);
+      height: 64rpx;
+      border-radius: 16rpx;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: rgba(15, 23, 42, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .withdraw-option-value {
+        font-size: 24rpx;
+        color: #e5e7eb;
+      }
+
+      &.active {
+        border-color: rgba(52, 211, 153, 0.9);
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.25), rgba(21, 128, 61, 0.15));
+
+        .withdraw-option-value {
+          color: #bbf7d0;
+          font-weight: 600;
+        }
+      }
+    }
+  }
+
+  .withdraw-options-tip {
+    margin-top: 8rpx;
+    font-size: 20rpx;
+    color: #9ca3af;
+    line-height: 1.5;
+  }
+}
+
+/* 提现提示卡片（普通用户） */
+.tip-section {
+  margin-top: 12rpx;
+}
+
+.tip-card {
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  padding: 18rpx 18rpx 16rpx;
+  border: 1px solid rgba(37, 99, 235, 0.8);
+  box-shadow: 0 16rpx 32rpx rgba(15, 23, 42, 0.85);
+
+  .tip-header {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    margin-bottom: 6rpx;
+
+    .tip-title {
+      font-size: 24rpx;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+  }
+
+  .tip-desc {
+    font-size: 22rpx;
+    color: #9ca3af;
+    line-height: 1.6;
+    margin-bottom: 12rpx;
+  }
+
+  .tip-btn {
+    width: 100%;
+    height: 64rpx;
+    border-radius: 999rpx;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+    font-size: 24rpx;
+    font-weight: 500;
+    border: none;
+  }
+}
+
+/* 通用列表卡片和记录项 */
+.list-card {
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  padding: 4rpx 4rpx 8rpx;
+  border: 1px solid rgba(31, 41, 55, 0.9);
+  box-shadow: 0 14rpx 26rpx rgba(15, 23, 42, 0.85);
+  margin-bottom: 16rpx;
+
+  .list-header {
+    padding: 10rpx 14rpx 0;
+
+    .list-title {
+      font-size: 24rpx;
+      font-weight: 500;
+      color: #e5e7eb;
+    }
+  }
+
+  .empty {
+    padding: 26rpx 0 20rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    gap: 6rpx;
+
+    .empty-text {
+      font-size: 22rpx;
+    }
+  }
+}
+
+.record-item {
+  padding: 14rpx 14rpx 8rpx;
+  border-bottom: 1px solid rgba(31, 41, 55, 0.9);
+
+  .record-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .record-left {
+      display: flex;
+      align-items: center;
+      gap: 12rpx;
+
+      .record-icon {
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 18rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &.consume {
+          background: rgba(248, 113, 113, 0.16);
+        }
+
+        &.recharge {
+          background: rgba(52, 211, 153, 0.16);
+        }
+
+        &.checkin {
+          background: rgba(250, 204, 21, 0.16);
+        }
+
+        &.task {
+          background: rgba(96, 165, 250, 0.16);
+        }
+
+        &.withdraw-icon {
+          background: rgba(52, 211, 153, 0.16);
+        }
+      }
+
+      .record-info {
+        display: flex;
+        flex-direction: column;
+
+        .record-title {
+          font-size: 24rpx;
+          font-weight: 500;
+          color: #f9fafb;
+        }
+
+        .record-subtitle {
+          margin-top: 4rpx;
+          font-size: 20rpx;
+          color: #9ca3af;
+        }
+      }
+    }
+
+    .record-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4rpx;
+
+      .record-amount {
+        font-size: 24rpx;
+        font-weight: 600;
+
+        &.plus {
+          color: #4ade80;
+        }
+
+        &.minus {
+          color: #f97373;
+        }
+      }
+
+      .record-time {
+        font-size: 20rpx;
+        color: #6b7280;
+      }
+    }
+  }
+}
+
+.page {
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+  color: #5e412f;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+}
+
+.balance-card {
+  margin: 0 24rpx 18rpx;
+  background: linear-gradient(135deg, rgba(241, 217, 184, 0.98) 0%, rgba(245, 229, 205, 0.92) 52%, rgba(220, 187, 149, 0.98) 100%);
+  border: 1px solid rgba(173, 141, 103, 0.2);
+  box-shadow: 0 16rpx 34rpx rgba(113, 80, 63, 0.1);
+
+  .balance-header {
+    .recharge-text {
+      .balance-label {
+        color: #8c7553;
+      }
+
+      .ratio-tag {
+        background: rgba(247, 241, 232, 0.76);
+        border: 1px solid rgba(176, 155, 130, 0.42);
+
+        .ratio-text {
+          color: #8b633f;
+        }
+      }
+    }
+
+    .balance-value-row {
+      .balance-value {
+        color: #6f5637;
+      }
+    }
+
+    .balance-rmb-row {
+      .rmb-label {
+        color: #8c7553;
+      }
+
+      .rmb-value {
+        color: #9f734b;
+      }
+    }
+
+    .balance-title-row {
+      .balance-title-right {
+        .recharge-btn {
+          border-color: rgba(169, 133, 91, 0.72);
+          background: linear-gradient(135deg, #cfad85 0%, #b68d63 100%);
+          color: #fffaf2;
+        }
+      }
+    }
+  }
+
+  .balance-footer {
+    border-top: 1px dashed rgba(169, 133, 91, 0.45);
+
+    .footer-item {
+      .footer-label {
+        color: #8c7553;
+      }
+    }
+  }
+}
+
+.cert-entry-card,
+.withdraw-card,
+.tip-card,
+.list-card {
+  background: linear-gradient(180deg, rgba(247, 241, 232, 0.92) 0%, rgba(239, 231, 220, 0.86) 100%);
+  border: 1px solid rgba(176, 155, 130, 0.24);
+  box-shadow: 0 14rpx 28rpx rgba(113, 80, 63, 0.08);
+}
+
+.cert-entry-title,
+.section .section-header .section-title,
+.list-card .list-header .list-title,
+.tip-card .tip-header .tip-title,
+.record-item .record-main .record-left .record-info .record-title {
+  color: #5e412f;
+}
+
+.cert-entry-desc,
+.section .section-header .section-subtitle,
+.section .section-header .section-extra .extra-text,
+.tip-card .tip-desc,
+.list-card .empty .empty-text,
+.record-item .record-main .record-left .record-info .record-subtitle,
+.record-item .record-main .record-right .record-time {
+  color: #9b8466;
+}
+
+.withdraw-card {
+  .withdraw-info-row {
+    .withdraw-amount-block {
+      .withdraw-label {
+        color: #8c7553;
+      }
+
+      .withdraw-value-row {
+        .withdraw-value {
+          color: #6f5637;
+        }
+      }
+    }
+  }
+
+  .withdraw-options {
+    .withdraw-options-label,
+    .withdraw-options-tip {
+      color: #8c7553;
+    }
+
+    .withdraw-options-grid {
+      .withdraw-option-item {
+        border: 1px solid rgba(190, 169, 145, 0.85);
+        background: rgba(247, 241, 232, 0.78);
+
+        .withdraw-option-value {
+          color: #6f5637;
+        }
+
+        &.active {
+          border-color: rgba(169, 133, 91, 0.72);
+          background: linear-gradient(135deg, rgba(232, 206, 171, 0.92), rgba(220, 187, 149, 0.78));
+
+          .withdraw-option-value {
+            color: #8b633f;
+          }
+        }
+      }
+    }
+  }
+
+  .withdraw-actions {
+    .withdraw-btn {
+      &.primary {
+        background: linear-gradient(135deg, #cfad85 0%, #b68d63 100%);
+        color: #fffaf2;
+        box-shadow: 0 10rpx 24rpx rgba(169, 133, 91, 0.24);
+      }
+
+      &.secondary {
+        background: rgba(247, 241, 232, 0.84);
+        color: #8c7553;
+        border: 1px solid rgba(190, 169, 145, 0.88);
+      }
+    }
+  }
+}
+
+.tip-card {
+  .tip-btn {
+    background: linear-gradient(135deg, #cfad85 0%, #b68d63 100%);
+    color: #fffaf2;
+  }
+}
+
+.record-item {
+  border-bottom: 1px solid rgba(188, 168, 145, 0.55);
+
+  .record-main {
+    .record-right {
+      .record-amount.plus {
+        color: #5c8851;
+      }
+
+      .record-amount.minus {
+        color: #b06158;
+      }
+    }
+  }
+}

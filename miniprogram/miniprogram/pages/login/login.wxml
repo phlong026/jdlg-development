@@ -1,0 +1,254 @@
+<!--pages/login/login.wxml-->
+<view class="page">
+  <!-- 主登录页 -->
+  <view class="login-landing">
+    <view
+      class="page-nav"
+      style="padding-top: {{navSafeTop}}px; height: {{navBarHeight}}px;"
+    >
+      <view class="page-nav-inner" style="height: {{navContentHeight}}px;">
+        <view class="page-nav-side" style="width: {{navSideWidth}}px;">
+          <view class="page-back" bindtap="goBack" hover-class="page-back--active">
+            <t-icon name="chevron-left" size="64rpx" color="#5e412f" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="brand-section">
+      <image class="brand-logo" src="{{logoImage}}" mode="aspectFit" />
+    </view>
+
+    <view class="main-action">
+      <button
+        class="primary-login-btn wechat-primary"
+        bindtap="handleWechatLogin"
+        disabled="{{loading || !agreedPrivacy}}"
+      >
+        {{loading ? '登录中...' : '微信一键登录/注册'}}
+      </button>
+
+      <view class="agreement-row">
+        <view class="agreement-check {{agreedPrivacy ? 'checked' : ''}}" bindtap="toggleAgreement">
+          <text wx:if="{{agreedPrivacy}}">✓</text>
+        </view>
+        <view class="agreement-copy">
+          <text>我已阅读并同意</text>
+          <text class="agreement-link" bindtap="openUserAgreement">《用户协议》</text>
+          <text> & </text>
+          <text class="agreement-link" bindtap="openPrivacyPolicy">《隐私政策》</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="other-login-section">
+      <view class="other-login-divider">
+        <view class="divider-line"></view>
+        <text class="divider-text">其他登录方式</text>
+        <view class="divider-line"></view>
+      </view>
+      <view class="other-login-list">
+        <view class="other-login-item" bindtap="openPhoneLogin">
+          <view class="other-login-icon phone-icon">
+            <t-icon name="phone-locked" size="52rpx" color="#5e412f" />
+          </view>
+          <text class="other-login-label">手机登录</text>
+        </view>
+        <view class="other-login-item" bindtap="openPasswordLogin">
+          <view class="other-login-icon account-icon">
+            <t-icon name="user-password" size="52rpx" color="#5e412f" />
+          </view>
+          <text class="other-login-label">账号登录</text>
+        </view>
+        <view class="other-login-item" bindtap="openEnterpriseLogin">
+          <view class="other-login-icon enterprise-icon">
+            <t-icon name="verify" size="52rpx" color="#2563eb" />
+          </view>
+          <text class="other-login-label">企业登录</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部登录模态框 -->
+  <view
+    class="login-sheet-mask {{loginSheetVisible ? 'is-visible' : ''}}"
+    wx:if="{{loginPanel}}"
+    catchtouchmove="true"
+    bindtap="closeLoginPanel"
+  >
+    <view
+      class="login-sheet {{loginSheetVisible ? 'is-show' : ''}}"
+      catchtap=""
+      catchtouchmove=""
+    >
+      <view class="sheet-handle"></view>
+      <view class="sheet-header">
+        <text class="sheet-title">{{loginPanelTitle}}</text>
+        <view class="sheet-close" bindtap="closeLoginPanel">×</view>
+      </view>
+
+      <view class="sheet-body">
+        <!-- 手机登录 -->
+        <block wx:if="{{loginPanel === 'phone'}}">
+          <view class="form-group">
+            <view class="input-wrapper">
+              <t-icon name="call" size="40rpx" color="#b79066" />
+              <input
+                class="form-input"
+                type="number"
+                maxlength="11"
+                placeholder="请输入手机号"
+                placeholder-class="input-placeholder"
+                value="{{phone}}"
+                bindinput="onPhoneInput"
+                disabled="{{loading}}"
+              />
+            </view>
+          </view>
+          <view class="form-group">
+            <view class="input-wrapper sms-input-wrapper">
+              <t-icon name="lock-on" size="40rpx" color="#b79066" />
+              <input
+                class="form-input"
+                type="number"
+                maxlength="6"
+                placeholder="请输入验证码"
+                placeholder-class="input-placeholder"
+                value="{{smsCode}}"
+                bindinput="onSmsCodeInput"
+                disabled="{{loading}}"
+              />
+              <view
+                class="sms-send-btn {{smsCountdown > 0 || !phone || phone.length !== 11 ? 'disabled' : ''}}"
+                bindtap="sendSmsCode"
+              >
+                <text>{{smsCountdown > 0 ? smsCountdown + 's' : '获取验证码'}}</text>
+              </view>
+            </view>
+          </view>
+          <button
+            class="sheet-login-btn"
+            bindtap="handlePhoneLogin"
+            disabled="{{loading || !phone || !smsCode || !agreedPrivacy}}"
+          >
+            {{loading ? '登录中...' : '登录/注册'}}
+          </button>
+        </block>
+
+        <!-- 账号登录 -->
+        <block wx:if="{{loginPanel === 'password'}}">
+          <view class="form-group">
+            <view class="input-wrapper">
+              <t-icon name="user" size="40rpx" color="#b79066" />
+              <input
+                class="form-input"
+                type="text"
+                placeholder="请输入用户名"
+                placeholder-class="input-placeholder"
+                value="{{username}}"
+                bindinput="onUsernameInput"
+                disabled="{{loading}}"
+              />
+            </view>
+          </view>
+          <view class="form-group">
+            <view class="input-wrapper">
+              <t-icon name="lock-on" size="40rpx" color="#b79066" />
+              <input
+                class="form-input"
+                type="password"
+                placeholder="请输入密码"
+                placeholder-class="input-placeholder"
+                value="{{password}}"
+                bindinput="onPasswordInput"
+                password="{{true}}"
+                disabled="{{loading}}"
+              />
+            </view>
+          </view>
+          <button
+            class="sheet-login-btn"
+            bindtap="handlePasswordLogin"
+            disabled="{{loading || !username || !password || !agreedPrivacy}}"
+          >
+            {{loading ? '登录中...' : '登录'}}
+          </button>
+          <view class="login-extra-row">
+            <text class="login-extra-link" bindtap="goToPasswordRecovery">忘记密码</text>
+          </view>
+        </block>
+
+        <!-- 企业登录 -->
+        <block wx:if="{{loginPanel === 'enterprise'}}">
+          <view class="form-group">
+            <view class="input-wrapper">
+              <t-icon name="shop" size="40rpx" color="#b79066" />
+              <input
+                class="form-input"
+                type="text"
+                placeholder="请输入企业账号"
+                placeholder-class="input-placeholder"
+                value="{{username}}"
+                bindinput="onUsernameInput"
+                disabled="{{loading}}"
+              />
+            </view>
+          </view>
+          <view class="form-group">
+            <view class="input-wrapper">
+              <t-icon name="lock-on" size="40rpx" color="#b79066" />
+              <input
+                class="form-input"
+                type="password"
+                placeholder="请输入企业密码"
+                placeholder-class="input-placeholder"
+                value="{{password}}"
+                bindinput="onPasswordInput"
+                password="{{true}}"
+                disabled="{{loading}}"
+              />
+            </view>
+          </view>
+          <button
+            class="sheet-login-btn"
+            bindtap="handlePasswordLogin"
+            disabled="{{loading || !username || !password || !agreedPrivacy}}"
+          >
+            {{loading ? '登录中...' : '登录'}}
+          </button>
+          <view class="login-extra-row">
+            <text class="login-extra-link" bindtap="goToPasswordRecovery">忘记密码</text>
+          </view>
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <!-- 身份选择弹窗（新注册用户） -->
+  <view class="identity-popup-mask" wx:if="{{identityPopupVisible}}" catchtouchmove="" catchtap="skipIdentity">
+    <view class="identity-popup" catchtap="">
+      <text class="identity-popup-title">选择您的身份</text>
+      <text class="identity-popup-desc">请选择您的身份以继续使用</text>
+      <view class="identity-options">
+        <view
+          class="identity-option-card"
+          wx:for="{{identityOptions}}"
+          wx:key="index"
+          data-identity="{{item}}"
+          bindtap="onIdentitySelect"
+        >
+          <text class="identity-option-text">{{item}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 加载遮罩 -->
+  <view class="loading-mask" wx:if="{{loading}}">
+    <view class="loading-content">
+      <view class="loading-spinner"></view>
+      <text class="loading-text">登录中...</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,692 @@
+/* pages/chat/chat.wxss */
+.page {
+  width: 100vw;
+  height: 100vh;
+  background-color: #1a1f33;
+  display: flex;
+  flex-direction: column;
+
+  // 主内容区域
+  .chat-content {
+    flex: 1;
+    background-color: #1a1f33;
+    overflow-y: auto;
+    padding: 20rpx;
+    position: relative;
+
+    .chat-cost-banner {
+      margin-bottom: 24rpx;
+      padding: 18rpx 22rpx;
+      border-radius: 22rpx;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+      gap: 8rpx;
+
+      .chat-cost-title {
+        font-size: 26rpx;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.92);
+        font-weight: 600;
+      }
+
+      .chat-cost-desc {
+        font-size: 22rpx;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.56);
+      }
+    }
+  }
+
+  // 消息列表
+  .message-list {
+    display: flex;
+    flex-direction: column;
+    gap: 30rpx;
+    padding-bottom: 40rpx;
+
+    .message-item {
+      display: flex;
+      gap: 20rpx;
+      align-items: flex-start;
+
+      &.user-message {
+        flex-direction: row-reverse;
+
+        .message-bubble {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 20rpx 20rpx 4rpx 20rpx;
+        }
+      }
+
+      &.ai-message {
+        .message-bubble {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 20rpx 20rpx 20rpx 4rpx;
+        }
+      }
+
+      .message-avatar {
+        width: 60rpx;
+        height: 60rpx;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32rpx;
+        flex-shrink: 0;
+      }
+
+      .message-bubble {
+        max-width: 70%;
+        padding: 20rpx 24rpx;
+        word-wrap: break-word;
+
+        .message-text {
+          font-size: 28rpx;
+          color: #fff;
+          line-height: 1.6;
+          display: block;
+          margin-bottom: 8rpx;
+        }
+
+        // AI消息内容区域（Markdown渲染）
+        .ai-content {
+          margin-bottom: 8rpx;
+          color: #fff;
+        }
+
+        // 等待豆包首个 SSE 回复时的提示与加载
+        .ai-waiting-first {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16rpx;
+          min-height: 120rpx;
+          margin-bottom: 8rpx;
+
+          .ai-waiting-loader {
+            font-size: 40rpx;
+            line-height: 1;
+            letter-spacing: 8rpx;
+            color: rgba(255, 255, 255, 0.72);
+          }
+
+          .ai-waiting-text {
+            font-size: 28rpx;
+            color: rgba(255, 255, 255, 0.9);
+          }
+
+          .ai-waiting-hint {
+            font-size: 24rpx;
+            color: rgba(255, 255, 255, 0.5);
+          }
+        }
+
+        .message-time {
+          font-size: 20rpx;
+          color: rgba(255, 255, 255, 0.5);
+          display: block;
+        }
+      }
+    }
+  }
+
+  // wemark Markdown样式覆盖（深色主题适配）
+  .ai-message .message-bubble {
+    .ai-content {
+      // 基础文本颜色
+      .wemark_wrapper {
+        color: #fff;
+        margin: 0;
+        font-size: 28rpx;
+        line-height: 1.6;
+      }
+
+      // 标题样式
+      .wemark_block_h1,
+      .wemark_block_h2,
+      .wemark_block_h3,
+      .wemark_block_h4,
+      .wemark_block_h5,
+      .wemark_block_h6 {
+        color: #fff;
+        margin: 16rpx 0;
+      }
+
+      .wemark_block_h1 {
+        font-size: 36rpx;
+        text-align: left;
+      }
+
+      .wemark_block_h2 {
+        font-size: 32rpx;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        padding-bottom: 8rpx;
+      }
+
+      .wemark_block_h3 {
+        font-size: 30rpx;
+      }
+
+      // 段落
+      .wemark_block_p {
+        color: #fff;
+        margin: 12rpx 0;
+      }
+
+      // 引用块
+      .wemark_block_blockquote_p {
+        background: rgba(255, 255, 255, 0.1);
+        border-left: 4rpx solid #4a90e2;
+        padding: 12rpx 16rpx;
+        margin: 12rpx 0;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      // 代码块
+      .wemark_block_code {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8rpx;
+        padding: 16rpx;
+        color: #e0e0e0;
+        font-size: 24rpx;
+        overflow-x: auto;
+      }
+
+      // 行内代码
+      .wemark_inline_code {
+        background: rgba(0, 0, 0, 0.3);
+        color: #f8b500;
+        padding: 4rpx 8rpx;
+        border-radius: 4rpx;
+        font-size: 26rpx;
+      }
+
+      // 表格
+      .wemark_block_table {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8rpx;
+        overflow: hidden;
+        margin: 12rpx 0;
+      }
+
+      .wemark_inline_table_th {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.2);
+        font-weight: 600;
+      }
+
+      .wemark_inline_table_td {
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      // 链接
+      .wemark_inline_link {
+        color: #4a90e2;
+        text-decoration: underline;
+      }
+
+      // 粗体、斜体、删除线
+      .wemark_inline_strong,
+      .wemark_inline_em,
+      .wemark_inline_strong_em,
+      .wemark_inline_deleted {
+        color: #fff;
+      }
+
+      .wemark_inline_strong {
+        font-weight: 600;
+      }
+
+      // 列表
+      .wemark_block_ul_li_p,
+      .wemark_block_ol_li_p {
+        color: #fff;
+        margin: 8rpx 0;
+      }
+
+      // 图片
+      .wemark_inline_image {
+        border-radius: 8rpx;
+        margin: 12rpx 0;
+      }
+
+      // 普通文本
+      .wemark_inline_text {
+        color: #fff;
+      }
+    }
+  }
+
+  // 空状态
+  .empty-chat {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 400rpx;
+
+    .empty-text {
+      font-size: 28rpx;
+      color: rgba(255, 255, 255, 0.5);
+    }
+  }
+
+  // 生成提示词区域
+  .generate-prompt-section {
+    position: sticky;
+    bottom: 0;
+    padding: 20rpx;
+
+    .generate-btn {
+      width: 100%;
+      padding: 24rpx;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 50rpx;
+      font-size: 32rpx;
+      font-weight: 600;
+      box-shadow: 0 8rpx 20rpx rgba(102, 126, 234, 0.3);
+
+      &:active {
+        transform: scale(0.98);
+      }
+    }
+  }
+
+  // 模式选择弹窗
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4rpx);
+
+    .modal-content {
+      width: 90%;
+      max-width: 600rpx;
+      background: #1a1f33;
+      border-radius: 30rpx;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.5);
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 40rpx 30rpx 30rpx;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+        .modal-title {
+          font-size: 36rpx;
+          font-weight: bold;
+          color: #fff;
+        }
+
+        .modal-close {
+          width: 50rpx;
+          height: 50rpx;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 40rpx;
+          color: rgba(255, 255, 255, 0.6);
+          border-radius: 50%;
+          transition: background 0.2s;
+
+          &:active {
+            background: rgba(255, 255, 255, 0.1);
+          }
+        }
+      }
+
+      .modal-body {
+        padding: 30rpx;
+
+        .mode-option {
+          display: flex;
+          align-items: center;
+          gap: 20rpx;
+          padding: 30rpx;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 20rpx;
+          margin-bottom: 20rpx;
+          transition: all 0.3s;
+
+          &:active {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(0.98);
+          }
+
+          .mode-icon {
+            font-size: 60rpx;
+            flex-shrink: 0;
+          }
+
+          .mode-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8rpx;
+
+            .mode-title {
+              font-size: 32rpx;
+              font-weight: 600;
+              color: #fff;
+            }
+
+            .mode-desc {
+              font-size: 24rpx;
+              color: rgba(255, 255, 255, 0.6);
+              line-height: 1.5;
+            }
+          }
+
+          .mode-arrow {
+            font-size: 40rpx;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 300;
+          }
+        }
+      }
+    }
+  }
+
+  // 底部操作栏
+  .bottom-bar {
+    background-color: #1a1f33;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 20rpx 30rpx;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 20rpx);
+
+    // 快速操作按钮
+    .quick-actions {
+      display: flex;
+      gap: 15rpx;
+      margin-bottom: 20rpx;
+      overflow-x: auto;
+
+      .quick-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 8rpx;
+        padding: 15rpx 20rpx;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20rpx;
+        flex-shrink: 0;
+        min-width: 120rpx;
+
+        .action-icon {
+          font-size: 32rpx;
+          color: #4a90e2;
+        }
+
+        .action-text {
+          font-size: 22rpx;
+          color: rgba(255, 255, 255, 0.8);
+        }
+      }
+    }
+
+    // 主输入区域
+    .input-area {
+      display: flex;
+      align-items: center;
+      gap: 15rpx;
+      border-radius: 50rpx;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 0 20rpx;
+
+      .text-input {
+        flex: 1;
+        height: 80rpx;
+        font-size: 28rpx;
+        color: #fff;
+        padding: 0 20rpx;
+      }
+
+      .voice-input-btn {
+        flex: 1;
+        padding: 25rpx 40rpx;
+        text-align: center;
+
+        text {
+          font-size: 28rpx;
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        &:active {
+          background: rgba(255, 255, 255, 0.15);
+        }
+      }
+
+      .input-actions {
+        display: flex;
+        gap: 15rpx;
+        align-items: center;
+
+        .input-icon-btn {
+          min-width: 80rpx;
+          height: 80rpx;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 15rpx;
+          border-radius: 50rpx;
+          transition: background 0.2s;
+
+          &:active {
+            background: rgba(255, 255, 255, 0.15);
+          }
+
+          .icon {
+            font-size: 28rpx;
+            color: #fff;
+            font-weight: 500;
+          }
+        }
+      }
+    }
+  }
+}
+
+.page {
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+}
+
+.page .chat-content {
+  background: transparent;
+  padding: 24rpx;
+}
+
+.page .message-list .message-item.user-message {
+  .message-avatar {
+    background: linear-gradient(180deg, #b79066 0%, #9f7550 100%);
+    box-shadow: 0 8rpx 16rpx rgba(169, 133, 91, 0.18);
+  }
+
+  .message-bubble {
+    background: linear-gradient(135deg, #c8a679 0%, #a9855b 100%);
+    box-shadow: 0 12rpx 24rpx rgba(113, 80, 63, 0.14);
+  }
+}
+
+.page .message-list .message-item.ai-message {
+  .message-avatar {
+    background: linear-gradient(180deg, #ceb89f 0%, #b99572 100%);
+    box-shadow: 0 8rpx 16rpx rgba(113, 80, 63, 0.12);
+  }
+
+  .message-bubble {
+    background: rgba(255, 248, 239, 0.92);
+    border: 1px solid rgba(188, 168, 145, 0.4);
+    box-shadow: 0 10rpx 22rpx rgba(113, 80, 63, 0.08);
+  }
+}
+
+.page .message-list .message-item .message-bubble {
+  .message-time {
+    color: rgba(94, 65, 47, 0.5);
+  }
+
+  .ai-content {
+    color: #5e412f;
+  }
+
+  .ai-waiting-first {
+    .ai-waiting-loader {
+      color: rgba(94, 65, 47, 0.55);
+    }
+
+    .ai-waiting-text {
+      color: #5e412f;
+    }
+
+    .ai-waiting-hint {
+      color: rgba(94, 65, 47, 0.58);
+    }
+  }
+}
+
+.page .ai-message .message-bubble {
+  .message-text {
+    color: #5e412f;
+  }
+
+  .ai-content {
+    color: #5e412f;
+  }
+
+  .ai-content .wemark_block_h2 {
+    border-bottom: 1px solid rgba(188, 168, 145, 0.55);
+  }
+
+  .ai-content .wemark_block_blockquote_p {
+    background: rgba(236, 228, 217, 0.95);
+    border-left: 4rpx solid #c8a679;
+    color: #6f5945;
+  }
+
+  .ai-content .wemark_block_code,
+  .ai-content .wemark_inline_code,
+  .ai-content .wemark_inline_table_th {
+    background: rgba(236, 228, 217, 0.95);
+    color: #6f5945;
+    border-color: rgba(188, 168, 145, 0.45);
+  }
+
+  .ai-content .wemark_inline_code,
+  .ai-content .wemark_inline_link {
+    color: #a9855b;
+  }
+}
+
+.page .empty-chat .empty-text {
+  color: rgba(94, 65, 47, 0.55);
+}
+
+.page .generate-prompt-section {
+  padding: 20rpx 0;
+
+  .generate-btn {
+    background: linear-gradient(135deg, #c8a679 0%, #a9855b 100%);
+    color: #fffaf2;
+    box-shadow: 0 12rpx 28rpx rgba(113, 80, 63, 0.18);
+  }
+}
+
+.page .modal-overlay {
+  background: rgba(70, 54, 38, 0.28);
+
+  .modal-content {
+    background: linear-gradient(180deg, #fbf4ea 0%, #f4e7d6 100%);
+    border: 1px solid rgba(188, 168, 145, 0.45);
+    box-shadow: 0 24rpx 60rpx rgba(113, 80, 63, 0.16);
+
+    .modal-header {
+      border-bottom: 1px solid rgba(188, 168, 145, 0.42);
+
+      .modal-title {
+        color: #5e412f;
+      }
+
+      .modal-close {
+        color: rgba(94, 65, 47, 0.62);
+      }
+    }
+
+    .modal-body .mode-option {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(188, 168, 145, 0.35);
+
+      &:active {
+        background: rgba(236, 228, 217, 0.9);
+      }
+
+      .mode-content {
+        .mode-title {
+          color: #5e412f;
+        }
+
+        .mode-desc {
+          color: rgba(94, 65, 47, 0.62);
+        }
+      }
+    }
+  }
+}
+
+.page .bottom-bar {
+  background: rgba(236, 228, 217, 0.96);
+  border-top: 1px solid rgba(188, 168, 145, 0.45);
+  box-shadow: 0 -10rpx 24rpx rgba(113, 80, 63, 0.08);
+
+  .quick-actions .quick-action-btn {
+    background: rgba(255, 255, 255, 0.76);
+    border: 1px solid rgba(188, 168, 145, 0.35);
+
+    .action-text {
+      color: #6f5945;
+    }
+  }
+
+  .input-area {
+    background: rgba(255, 255, 255, 0.84);
+    border: 1px solid rgba(188, 168, 145, 0.38);
+
+    .text-input {
+      color: #5e412f;
+    }
+
+    .voice-input-btn {
+      text {
+        color: #6f5945;
+      }
+    }
+
+    .input-actions .input-icon-btn {
+      .icon {
+        color: #8c7553;
+      }
+    }
+  }
+}

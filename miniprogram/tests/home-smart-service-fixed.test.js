@@ -1,0 +1,13 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '..');
+const markup = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.wxml'), 'utf8');
+const styles = fs.readFileSync(path.join(root, 'miniprogram/pages/index/index.scss'), 'utf8');
+const hero = markup.slice(markup.indexOf('<view class="home-canvas">'), markup.indexOf('<view class="content">'));
+assert.match(hero, /class="hotspot smart-service-float"[^>]*bindtap="onMascotTap"[^>]*aria-label="在线客服"/);
+assert.doesNotMatch(markup, /smart-service-fixed-layer/);
+assert.match(styles, /\.hotspot\s*{[^}]*position:\s*absolute/);
+assert.doesNotMatch(markup, /每日签到|邀请好友|先想清楚怎么住|再决定怎么建|梳理建房方向/);
+assert.doesNotMatch(markup, /home-secondary-actions|building-report-entry|pages\/checkin\/checkin|pages\/Invitefriends\/Invitefriends|pages\/report\/landing/);
+console.log('Customer service remains in the hero; cancelled secondary entries and placeholder copy are absent');

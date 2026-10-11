@@ -1,0 +1,260 @@
+diff --git a/miniprogram/miniprogram/utils/costEstimateShareImage.ts b/miniprogram/miniprogram/utils/costEstimateShareImage.ts
+index 60b0e0c..537ac38 100644
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.ts
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.ts
+@@ -39,7 +39,7 @@ function buildCacheKey(card: CostEstimateShareCard): string {
+ }
+
+ function canvasToDataURL(canvas: any): string {
+-  return String(canvas.toDataURL('image/jpeg', 0.92) || '').trim();
++  return String(canvas.toDataURL('image/jpeg', 0.98) || '').trim();
+ }
+
+ function loadCanvasImage(canvas: any, source: string): Promise<any> {
+@@ -91,32 +91,12 @@ async function writeImage(cacheKey: string, dataUrl: string): Promise<string> {
+ }
+
+ function drawCardHouseImage(ctx: any, image: any) {
+-  // Keep the roof below the decorative frame; fade the scene edges without washing out the villa.
+-  ctx.drawImage(image, 398, 60, 570, 570);
+-  const leftBlend = ctx.createLinearGradient(398, 0, 650, 0);
+-  leftBlend.addColorStop(0, '#f5ecdd');
+-  leftBlend.addColorStop(0.45, 'rgba(245, 236, 221, 0.98)');
+-  leftBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+-  ctx.fillStyle = leftBlend;
+-  ctx.fillRect(398, 60, 252, 570);
+-
+-  const rightBlend = ctx.createLinearGradient(940, 0, 968, 0);
+-  rightBlend.addColorStop(0, 'rgba(245, 236, 221, 0)');
+-  rightBlend.addColorStop(1, '#f5ecdd');
+-  ctx.fillStyle = rightBlend;
+-  ctx.fillRect(940, 60, 28, 570);
+-
+-  const topBlend = ctx.createLinearGradient(0, 60, 0, 95);
+-  topBlend.addColorStop(0, '#f5ecdd');
+-  topBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+-  ctx.fillStyle = topBlend;
+-  ctx.fillRect(398, 60, 570, 35);
+-
+-  const groundBlend = ctx.createLinearGradient(0, 550, 0, 630);
+-  groundBlend.addColorStop(0, 'rgba(239, 224, 198, 0)');
+-  groundBlend.addColorStop(1, '#efe0c6');
+-  ctx.fillStyle = groundBlend;
+-  ctx.fillRect(0, 550, CARD_WIDTH, 80);
++  // Keep the original image unobscured; text may overlap without fading the architecture.
++  ctx.save();
++  drawRoundedRect(ctx, 34, 40, 932, 570, 16);
++  ctx.clip();
++  ctx.drawImage(image, 396, 40, 570, 570);
++  ctx.restore();
+ }
+
+ function drawCardFrame(ctx: any) {
+@@ -150,27 +130,32 @@ function drawCardText(ctx: any, card: CostEstimateShareCard) {
+
+   ctx.fillStyle = '#806032';
+   ctx.font = '700 52px sans-serif';
++  // Outline only the overlapping text instead of obscuring the photo behind it.
++  ctx.strokeStyle = '#fffaf0';
++  ctx.lineWidth = 3;
++  ctx.strokeText('万元', 76 + amountWidth, 308);
+   ctx.fillText('万元', 76 + amountWidth, 308);
+
+   ctx.fillStyle = '#866232';
+   const areaText = `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`;
+   fitText(ctx, areaText, 500, 36, 480);
++  ctx.strokeText(areaText, 62, 400);
+   ctx.fillText(areaText, 62, 400);
+   const specificationText = `${card.structureType} · ${card.windowStandard}门窗`;
+   fitText(ctx, specificationText, 500, 34, 480);
++  ctx.strokeText(specificationText, 62, 456);
+   ctx.fillText(specificationText, 62, 456);
+ }
+
+ function drawCallToAction(ctx: any) {
+   const button = ctx.createLinearGradient(54, 650, 946, 766);
+-  // Sampled from the homepage AI badge's champagne highlight, middle and lower gold.
+-  button.addColorStop(0, '#eaceb5');
+-  button.addColorStop(0.5, '#d5a073');
+-  button.addColorStop(1, '#cd8b55');
++  button.addColorStop(0, '#e7b48c');
++  button.addColorStop(0.5, '#c58b57');
++  button.addColorStop(1, '#a75d25');
+   ctx.fillStyle = button;
+   drawRoundedRect(ctx, 54, 650, 892, 116, 58);
+   ctx.fill();
+-  ctx.fillStyle = '#75513d';
++  ctx.fillStyle = '#fffaf0';
+   ctx.font = '600 44px sans-serif';
+   const label = '点击查看测算报告';
+   const textWidth = ctx.measureText(label).width;
+@@ -181,7 +166,7 @@ function drawCallToAction(ctx: any) {
+   ctx.moveTo(arrowX, 692);
+   ctx.lineTo(arrowX + 16, 707);
+   ctx.lineTo(arrowX, 722);
+-  ctx.strokeStyle = '#75513d';
++  ctx.strokeStyle = '#fffaf0';
+   ctx.lineWidth = 5;
+   ctx.stroke();
+ }
+diff --git a/miniprogram/miniprogram/utils/costEstimateShareImage.js b/miniprogram/miniprogram/utils/costEstimateShareImage.js
+index 6b432b8..91e2bd1 100644
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.js
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.js
+@@ -29,7 +29,7 @@ function buildCacheKey(card) {
+     return [card.totalCost, card.city, card.buildingArea, card.structureType, card.windowStandard].join('|');
+ }
+ function canvasToDataURL(canvas) {
+-    return String(canvas.toDataURL('image/jpeg', 0.92) || '').trim();
++    return String(canvas.toDataURL('image/jpeg', 0.98) || '').trim();
+ }
+ function loadCanvasImage(canvas, source) {
+     return new Promise((resolve, reject) => {
+@@ -78,29 +78,12 @@ async function writeImage(cacheKey, dataUrl) {
+     return filePath;
+ }
+ function drawCardHouseImage(ctx, image) {
+-    // Keep the roof below the decorative frame; fade the scene edges without washing out the villa.
+-    ctx.drawImage(image, 398, 60, 570, 570);
+-    const leftBlend = ctx.createLinearGradient(398, 0, 650, 0);
+-    leftBlend.addColorStop(0, '#f5ecdd');
+-    leftBlend.addColorStop(0.45, 'rgba(245, 236, 221, 0.98)');
+-    leftBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+-    ctx.fillStyle = leftBlend;
+-    ctx.fillRect(398, 60, 252, 570);
+-    const rightBlend = ctx.createLinearGradient(940, 0, 968, 0);
+-    rightBlend.addColorStop(0, 'rgba(245, 236, 221, 0)');
+-    rightBlend.addColorStop(1, '#f5ecdd');
+-    ctx.fillStyle = rightBlend;
+-    ctx.fillRect(940, 60, 28, 570);
+-    const topBlend = ctx.createLinearGradient(0, 60, 0, 95);
+-    topBlend.addColorStop(0, '#f5ecdd');
+-    topBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+-    ctx.fillStyle = topBlend;
+-    ctx.fillRect(398, 60, 570, 35);
+-    const groundBlend = ctx.createLinearGradient(0, 550, 0, 630);
+-    groundBlend.addColorStop(0, 'rgba(239, 224, 198, 0)');
+-    groundBlend.addColorStop(1, '#efe0c6');
+-    ctx.fillStyle = groundBlend;
+-    ctx.fillRect(0, 550, CARD_WIDTH, 80);
++    // Keep the original image unobscured; text may overlap without fading the architecture.
++    ctx.save();
++    drawRoundedRect(ctx, 34, 40, 932, 570, 16);
++    ctx.clip();
++    ctx.drawImage(image, 396, 40, 570, 570);
++    ctx.restore();
+ }
+ function drawCardFrame(ctx) {
+     ctx.strokeStyle = '#d8c29e';
+@@ -128,25 +111,30 @@ function drawCardText(ctx, card) {
+     ctx.fillText(amount, 62, 308);
+     ctx.fillStyle = '#806032';
+     ctx.font = '700 52px sans-serif';
++    // Outline only the overlapping text instead of obscuring the photo behind it.
++    ctx.strokeStyle = '#fffaf0';
++    ctx.lineWidth = 3;
++    ctx.strokeText('万元', 76 + amountWidth, 308);
+     ctx.fillText('万元', 76 + amountWidth, 308);
+     ctx.fillStyle = '#866232';
+     const areaText = `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`;
+     fitText(ctx, areaText, 500, 36, 480);
++    ctx.strokeText(areaText, 62, 400);
+     ctx.fillText(areaText, 62, 400);
+     const specificationText = `${card.structureType} · ${card.windowStandard}门窗`;
+     fitText(ctx, specificationText, 500, 34, 480);
++    ctx.strokeText(specificationText, 62, 456);
+     ctx.fillText(specificationText, 62, 456);
+ }
+ function drawCallToAction(ctx) {
+     const button = ctx.createLinearGradient(54, 650, 946, 766);
+-    // Sampled from the homepage AI badge's champagne highlight, middle and lower gold.
+-    button.addColorStop(0, '#eaceb5');
+-    button.addColorStop(0.5, '#d5a073');
+-    button.addColorStop(1, '#cd8b55');
++    button.addColorStop(0, '#e7b48c');
++    button.addColorStop(0.5, '#c58b57');
++    button.addColorStop(1, '#a75d25');
+     ctx.fillStyle = button;
+     drawRoundedRect(ctx, 54, 650, 892, 116, 58);
+     ctx.fill();
+-    ctx.fillStyle = '#75513d';
++    ctx.fillStyle = '#fffaf0';
+     ctx.font = '600 44px sans-serif';
+     const label = '点击查看测算报告';
+     const textWidth = ctx.measureText(label).width;
+@@ -157,7 +145,7 @@ function drawCallToAction(ctx) {
+     ctx.moveTo(arrowX, 692);
+     ctx.lineTo(arrowX + 16, 707);
+     ctx.lineTo(arrowX, 722);
+-    ctx.strokeStyle = '#75513d';
++    ctx.strokeStyle = '#fffaf0';
+     ctx.lineWidth = 5;
+     ctx.stroke();
+ }
+diff --git a/miniprogram/tests/cost-estimate-share-image.test.js b/miniprogram/tests/cost-estimate-share-image.test.js
+index 5cfb09d..4665163 100644
+--- a/miniprogram/tests/cost-estimate-share-image.test.js
++++ b/miniprogram/tests/cost-estimate-share-image.test.js
+@@ -44,7 +44,8 @@ function loadShareImageHelper() {
+           beginPath() {}, moveTo() {}, lineTo() {}, arcTo() {}, closePath() {},
+           fill() {}, stroke() { strokes.push({ color: this.strokeStyle, width: this.lineWidth }); }, save() {}, restore() {}, clip() { clips.push(true); }, fillRect() {},
+           drawImage(...args) { imageCalls.push(args); },
+-          fillText(text, x, y) { textCalls.push({ text, x, y, font: this.font }); },
++          fillText(text, x, y) { textCalls.push({ text, x, y, font: this.font, color: this.fillStyle }); },
++          strokeText() {},
+         };
+         return {
+           getContext() { return ctx; },
+@@ -79,7 +80,7 @@ test('share card exports a JPEG and returns the local image path to WeChat', asy
+   });
+
+   assert.equal(helper.calls.length, 1);
+-  assert.deepEqual(helper.calls[0], { type: 'image/jpeg', quality: 0.92 });
++  assert.deepEqual(helper.calls[0], { type: 'image/jpeg', quality: 0.98 });
+   assert.equal(imageUrl.startsWith('wxfile://user-data/cost-estimate-share/'), true);
+   assert.equal(helper.writes.length, 1);
+   assert.equal(helper.writes[0].data, 'c2hhcmUtY2FyZA==');
+@@ -91,7 +92,7 @@ test('share card exports a JPEG and returns the local image path to WeChat', asy
+   assert.equal(helper.textCalls.some((item) => item.text === '建房造价测算'), true);
+   const button = helper.textCalls.find((item) => item.text === '点击查看测算报告');
+   assert.ok(Number(button.font.match(/(\d+)px/)[1]) >= 42);
+-  assert.equal(helper.clips.length, 0, 'villa must blend into the scene without a photo frame');
++  assert.equal(helper.clips.length, 1, 'clip to the shared decorative panel rather than a separate photo frame');
+   assert.equal(helper.imageCalls[0].length, 5, 'draw the entire villa rather than cropping its source');
+   assert.equal(helper.imageCalls[0][3], helper.imageCalls[0][4]);
+ });
+@@ -109,15 +110,19 @@ test('price and unit stay separated within the text column for different amount
+   }
+ });
+
+-test('refined card keeps the smaller villa inset, gold frame and home AI button palette', async () => {
++test('villa stays fully clear without any translucent image overlays', async () => {
+   const helper = loadShareImageHelper();
+   await helper.prepare({ totalCost: '59.51万元', city: '泉州', buildingArea: '360㎡', structureType: '框架结构', windowStandard: '标准型' });
+   const [, x, y, width, height] = helper.imageCalls[0];
+   assert.ok(width <= 580 && height === width, 'villa should be scaled down without distortion');
+-  assert.ok(y >= 50 && x + width <= 970, 'leave room above the roof and beside the image');
++  assert.equal(y, 40, 'align the clear sky with the shared panel');
++  assert.ok(x + width <= 970, 'keep the image within the panel');
+   assert.ok(y + height <= 640, 'villa ground should end before the button');
+   assert.ok(helper.strokes.some(item => item.color === '#d8c29e' && item.width <= 2), 'restore a fine gold frame');
+-  assert.ok(helper.gradients.some(item => item.stops.some(stop => stop.color === '#eaceb5') && item.stops.some(stop => stop.color === '#cd8b55')), 'use the palette sampled from the home AI button');
++  const blends = helper.gradients.filter(item => item.stops.some(stop => stop.color.includes('rgba(')));
++  assert.equal(blends.length, 0, 'do not wash out any part of the villa');
++  const button = helper.textCalls.find(item => item.text === '点击查看测算报告');
++  assert.equal(button.color, '#fffaf0', 'use white text as in the supplied reference');
+   const title = helper.textCalls.find(item => item.text === '建房造价测算');
+   const parameter = helper.textCalls.find(item => item.text.includes('建筑面积'));
+   const amount = helper.textCalls.find(item => item.text === '59.51');
+diff --git a/miniprogram/tests/aicost-report.test.js b/miniprogram/tests/aicost-report.test.js
+index 5e65356..26d5542 100644
+--- a/miniprogram/tests/aicost-report.test.js
++++ b/miniprogram/tests/aicost-report.test.js
+@@ -117,7 +117,6 @@ test('share cover uses the supplied villa visual without a line-art fallback', (
+   assert.match(source, /建房造价测算/);
+   assert.match(source, /点击查看测算报告/);
+   assert.doesNotMatch(source, /点击查看完整测算报告/);
+-  assert.match(source, /toDataURL\('image\/jpeg', 0\.92\)/);
+ });
+
+ test('a partially estimated report labels both total and unit price clearly', () => {

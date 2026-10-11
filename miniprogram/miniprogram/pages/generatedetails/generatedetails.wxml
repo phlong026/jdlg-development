@@ -1,0 +1,588 @@
+﻿<!--pages/generatedetails/generatedetails.wxml-->
+<view class="page">
+  <view class="page-shell">
+    <!-- 统一导航栏 -->
+    <navigation-bar title="生成效果图" background="#e6daca" />
+
+    <view class="result-tabs" wx:if="{{showSceneTabs && (loading || taskData.taskKind === 'image')}}">
+      <view class="result-tab {{activeTab === 'exterior' ? 'active' : ''}}" bindtap="onSelectResultTab" data-tab="exterior">
+        <text>外立面</text>
+      </view>
+      <view class="result-tab {{activeTab === 'interior' ? 'active' : ''}}" bindtap="onSelectResultTab" data-tab="interior">
+        <text>室内</text>
+      </view>
+    </view>
+    <view class="result-tabs-divider" wx:if="{{showSceneTabs && (loading || taskData.taskKind === 'image')}}"></view>
+
+    <view class="loading-container" wx:if="{{loading}}">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <view class="content" wx:else>
+      <block wx:if="{{taskData.taskKind === 'image'}}">
+        <view class="result-card">
+          <view class="result-card-inner">
+            <view class="result-tool-info" wx:if="{{taskData.toolName}}">
+              <text class="result-tool-label">AI工具：</text>
+              <text class="result-tool-name">{{taskData.toolName}}</text>
+            </view>
+            <text class="result-summary">{{resultSummary}}</text>
+            <view class="result-gallery {{resultRevealActive ? 'reveal' : ''}}" wx:if="{{taskData.status === 'success' && taskData.resultImages && taskData.resultImages.length}}">
+              <swiper
+                class="result-gallery-swiper"
+                current="{{currentResultImageIndex}}"
+                bindchange="onResultSwiperChange"
+                indicator-dots="{{taskData.resultImages.length > 1}}"
+                circular="{{taskData.resultImages.length > 1}}"
+              >
+                <swiper-item wx:for="{{taskData.resultImages}}" wx:key="index">
+                  <view class="result-gallery-slide">
+                    <image
+                      class="result-gallery-image"
+                      src="{{item}}"
+                      mode="aspectFill"
+                      lazy-load
+                      data-index="{{index}}"
+                      bindtap="previewResultImage"
+                      show-menu-by-longpress="false"
+                    />
+                  </view>
+                </swiper-item>
+              </swiper>
+              <view class="result-gallery-meta">
+                <view class="result-gallery-meta-top">
+                  <text class="result-gallery-meta-title">{{currentResultImageInfo.title}}</text>
+                  <text class="result-gallery-meta-index">{{currentResultImageIndex + 1}} / {{taskData.resultImages.length}}</text>
+                </view>
+                <text class="result-gallery-meta-desc">{{currentResultImageInfo.subtitle}}</text>
+              </view>
+            </view>
+            <view class="result-state generating" wx:elif="{{taskData.status === 'pending' || taskData.status === 'processing'}}">
+              <view class="result-progress-panel">
+                <view class="result-progress-top">
+                  <view>
+                    <text class="result-progress-title">{{taskData.status === 'pending' ? '任务排队中' : '正在生成效果图'}}</text>
+                    <text class="result-progress-desc">{{loadingStageText}}</text>
+                  </view>
+                  <text class="result-progress-percent">{{visualProgressPercent}}%</text>
+                </view>
+                <view class="result-progress-track">
+                  <view class="result-progress-fill" style="width: {{visualProgressPercent}}%;"></view>
+                </view>
+                <view class="result-progress-stages">
+                  <view class="result-progress-stage {{visualProgressPercent >= 10 ? 'active' : ''}}">已提交</view>
+                  <view class="result-progress-stage {{visualProgressPercent >= 30 ? 'active' : ''}}">分析中</view>
+                  <view class="result-progress-stage {{visualProgressPercent >= 60 ? 'active' : ''}}">生成中</view>
+                  <view class="result-progress-stage {{visualProgressPercent >= 88 ? 'active' : ''}}">整理结果</view>
+                </view>
+                <view class="result-progress-preview">
+                  <view class="result-progress-preview-frame">
+                    <view class="result-progress-preview-grid"></view>
+                    <view class="result-progress-preview-orb orb-left"></view>
+                    <view class="result-progress-preview-orb orb-right"></view>
+                    <view class="result-progress-preview-focus"></view>
+                    <view class="result-progress-preview-scan"></view>
+                    <view class="result-progress-preview-glow"></view>
+                    <view class="result-progress-preview-chip chip-left"></view>
+                    <view class="result-progress-preview-chip chip-right"></view>
+                  </view>
+                  <view class="result-progress-preview-meta">
+                    <view class="result-progress-preview-line line-lg"></view>
+                    <view class="result-progress-preview-line line-md"></view>
+                    <view class="result-progress-preview-line line-sm"></view>
+                  </view>
+                </view>
+                <view class="result-progress-tips">
+                  <text>生成完成后会直接在这里展示效果图</text>
+                  <text>你可以返回上一页重新调整描述或参考图</text>
+                </view>
+              </view>
+            </view>
+            <view class="result-state failed" wx:elif="{{taskData.status === 'failed'}}">
+              <t-icon name="close-circle" size="88rpx" color="#c48357" />
+              <text class="result-state-text">{{taskData.error_message || '这次生成没有成功，请调整内容后再试一次。'}}</text>
+            </view>
+            <view class="result-state" wx:else>
+              <t-icon name="image-error" size="88rpx" color="#c7b8a4" />
+              <text class="result-state-text">暂无可展示图片</text>
+            </view>
+          </view>
+        </view>
+      </block>
+
+    <!-- 视频类：用 video 组件播放，无链接时占位 -->
+    <block wx:elif="{{taskData.taskKind === 'video'}}">
+      <view class="video-section">
+        <video
+          wx:if="{{taskData.status === 'success' && taskData.imageUrl}}"
+          class="video-player"
+          src="{{taskData.imageUrl}}"
+          controls
+          show-center-play-btn
+          object-fit="contain"
+        />
+        <view class="longpress-tip" wx:if="{{taskData.status === 'success' && taskData.imageUrl}}">
+          <t-icon name="info-circle" size="28rpx" />
+          <text>请使用下方下载按钮保存视频</text>
+        </view>
+        <view class="video-placeholder" wx:else>
+          <t-icon name="play-circle" size="120rpx" color="#b79066" />
+          <text class="video-placeholder-text">视频任务</text>
+          <text class="video-placeholder-status">{{taskData.status === 'success' ? '暂无播放地址' : taskData.status === 'failed' ? '生成失败' : '生成中...'}}</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- AI造价类：无主图，仅任务信息 + Excel 下载 -->
+    <block wx:elif="{{taskData.taskKind === 'cost_doc'}}">
+      <view class="cost-doc-section">
+        <view class="cost-doc-icon-wrap">
+          <t-icon name="file-excel" size="100rpx" color="#a9855b" />
+        </view>
+        <text class="cost-doc-title">造价测算表</text>
+        <text class="cost-doc-desc" wx:if="{{taskData.status === 'success'}}">Excel 已生成，复制链接到浏览器中下载</text>
+        <text class="cost-doc-desc" wx:elif="{{taskData.status === 'pending' || taskData.status === 'processing'}}">正在生成中...</text>
+        <text class="cost-doc-desc" wx:else>生成失败或未完成</text>
+      </view>
+    </block>
+
+    <view>
+    <view class="info-section compact-generating" wx:if="{{taskData.taskKind === 'image' && (taskData.status === 'pending' || taskData.status === 'processing')}}">
+      <view class="info-card compact">
+        <view class="info-title">任务概览</view>
+        <view class="info-row">
+          <text class="info-label">任务编号</text>
+          <text class="info-value">{{taskData.task_no}}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">当前状态</text>
+          <view class="status-badge {{taskData.status}}">
+            <text>{{statusText}}</text>
+          </view>
+        </view>
+        <view class="info-row">
+          <text class="info-label">计划生成</text>
+          <text class="info-value">{{taskData.requested_count || 1}} 张</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">预计消耗</text>
+          <text class="info-value stones">{{taskData.stones_used}} 灵石</text>
+        </view>
+      </view>
+    </view>
+    <view class="info-section" wx:else>
+      <view class="info-card">
+        <view class="info-title">任务信息</view>
+
+        <view class="info-row">
+          <text class="info-label">任务编号</text>
+          <text class="info-value">{{taskData.task_no}}</text>
+        </view>
+
+        <view class="info-row">
+          <text class="info-label">场景类型</text>
+          <text class="info-value">{{taskData.sceneText}}</text>
+        </view>
+
+        <view class="info-row">
+          <text class="info-label">状态</text>
+          <view class="status-badge {{taskData.status}}">
+            <text>{{statusText}}</text>
+          </view>
+        </view>
+
+        <view class="info-row" wx:if="{{taskData.taskKind === 'image'}}">
+          <text class="info-label">计划生成</text>
+          <text class="info-value">{{taskData.requested_count || 1}} 张</text>
+        </view>
+
+        <view class="info-row" wx:if="{{taskData.taskKind === 'image'}}">
+          <text class="info-label">成功生成</text>
+          <text class="info-value">{{taskData.generated_count || 0}} 张</text>
+        </view>
+
+        <view class="info-row" wx:if="{{taskData.taskKind === 'image' && taskData.refunded_image_count > 0}}">
+          <text class="info-label">已退图片数</text>
+          <text class="info-value refund">{{taskData.refunded_image_count}} 张</text>
+        </view>
+
+        <view class="info-row" wx:if="{{taskData.taskKind === 'image' && taskData.refunded_stones > 0}}">
+          <text class="info-label">已退回灵石</text>
+          <text class="info-value refund">{{taskData.refunded_stones}} 灵石</text>
+        </view>
+
+        <view class="info-row">
+          <text class="info-label">实际消耗</text>
+          <text class="info-value stones">{{taskData.stones_used}} 灵石</text>
+        </view>
+
+        <view class="info-row">
+          <text class="info-label">创建时间</text>
+          <text class="info-value">{{taskData.createdAtText}}</text>
+        </view>
+
+        <view class="info-row" wx:if="{{durationText}}">
+          <text class="info-label">生成耗时</text>
+          <text class="info-value">{{durationText}}</text>
+        </view>
+      </view>
+
+      <!-- 参考图（仅图片类） -->
+      <view class="info-card" wx:if="{{taskData.taskKind === 'image' && taskData.reference_image_urls && taskData.reference_image_urls.length}}">
+        <view class="info-title">参考图（{{taskData.reference_image_urls.length}}张）</view>
+        <view class="reference-image-wrap {{taskData.reference_image_urls.length === 1 ? 'single' : taskData.reference_image_urls.length === 2 ? 'double' : 'triple'}}">
+          <image
+            wx:for="{{taskData.reference_image_urls}}"
+            wx:key="index"
+            class="reference-image"
+            src="{{item}}"
+            mode="aspectFill"
+            lazy-load
+            data-index="{{index}}"
+            bindtap="previewReferenceImage"
+          />
+        </view>
+      </view>
+
+      <!-- 提示词（图片类/视频类，可复制、再次生成） -->
+      <view class="info-card" wx:if="{{(taskData.taskKind === 'image' || taskData.taskKind === 'video') && (taskData.user_prompt || taskData.prompt)}}">
+        <view class="info-title">提示词</view>
+        <view class="prompt-content">
+          <text>{{taskData.user_prompt || taskData.prompt}}</text>
+        </view>
+        <view class="prompt-actions">
+          <view class="copy-btn" bindtap="copyPrompt">
+            <text>复制</text>
+          </view>
+          <view class="continue-btn" bindtap="regenerate">
+            <text>再次生成</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- AI造价：Excel 下载链接 -->
+      <view class="info-card excel-card" wx:if="{{taskData.taskKind === 'cost_doc'}}">
+        <view class="info-title">Excel 测算表</view>
+        <view class="excel-desc" wx:if="{{taskData.status === 'success' && taskData.excel_url}}">
+          <text>复制下方链接到浏览器中打开即可下载 Excel 文件。</text>
+        </view>
+        <view class="excel-actions" wx:if="{{taskData.status === 'success' && taskData.excel_url}}">
+          <view class="copy-excel-btn" bindtap="copyExcelLink">
+            <text>复制下载链接</text>
+          </view>
+        </view>
+        <view class="excel-desc" wx:elif="{{taskData.status === 'success' && !taskData.excel_url}}">
+          <text>链接加载中…</text>
+        </view>
+      </view>
+
+      <!-- 失败提示 -->
+      <view class="info-card error-card" wx:if="{{taskData.status === 'failed' && taskData.error_message}}">
+        <view class="info-title">温馨提示</view>
+        <view class="error-content">
+          <text>{{taskData.error_message}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 操作按钮：图片类（成功时） -->
+    <view class="action-section" wx:if="{{taskData.taskKind === 'image' && taskData.status === 'success' && taskData.imageUrl}}">
+      <view class="download-guide-card">
+          <view class="download-guide-copy">
+            <text class="download-guide-title">下载保存</text>
+            <text class="download-guide-desc">所有图片下载都需先完成企业微信验证并留下电话号码，验证通过后可保存对应图片。</text>
+          </view>
+          <view class="download-guide-badge {{enterpriseWechatVerified && enterpriseWechatContact ? 'verified' : 'pending'}}">
+            <text>{{enterpriseWechatVerified && enterpriseWechatContact ? '已开通保存权限' : '待验证保存权限'}}</text>
+          </view>
+        </view>
+        <view class="download-options">
+          <view class="download-option download-option-4k" bindtap="saveImage">
+            <view class="download-option-top">
+              <view class="download-option-icon deep">
+                <t-icon name="scan" size="40rpx" color="#ffffff" />
+              </view>
+              <view class="download-option-texts">
+                <text class="download-option-title">扫码验证后下载图片</text>
+                <text class="download-option-subtitle">点击后会先校验企微状态，未验证时展示二维码，已验证时直接保存当前图片</text>
+              </view>
+            </view>
+            <view class="download-option-points">
+              <text>{{enterpriseWechatVerified && enterpriseWechatContact ? '已通过企业微信验证' : '需先完成企业微信验证并留下电话号码'}}</text>
+              <text wx:if="{{enterpriseWechatVerifiedAtText}}">验证时间：{{enterpriseWechatVerifiedAtText}}</text>
+            </view>
+          </view>
+        </view>
+      <view class="customer-service-result-card">
+        <view class="customer-service-result-copy">
+          <text class="customer-service-result-title">继续完善这套方案</text>
+          <text class="customer-service-result-desc">把当前效果图、需求和任务号带给建房顾问，继续优化户型、外观、造价和落地施工。</text>
+        </view>
+        <view class="customer-service-result-actions">
+          <view class="customer-service-result-action primary" data-action="consult" bindtap="onOpenCustomerServiceForResult">咨询建房顾问</view>
+          <view class="customer-service-result-action" data-action="layout" bindtap="onOpenCustomerServiceForResult">调整户型布局</view>
+          <view class="customer-service-result-action" data-action="facade" bindtap="onOpenCustomerServiceForResult">优化建筑外观</view>
+          <view class="customer-service-result-action" data-action="cost" bindtap="onOpenCustomerServiceForResult">精准测算造价</view>
+          <view class="customer-service-result-action" data-action="wechat" bindtap="onOpenCustomerServiceForResult">添加微信获取完整方案</view>
+        </view>
+      </view>
+      <view class="action-btn primary" bindtap="regenerate">
+        <text>再次生成</text>
+      </view>
+      <view class="action-btn primary" bindtap="publishToSquare">
+        <text>发布到模板广场</text>
+      </view>
+      <button class="action-btn secondary action-btn-share" open-type="share">
+        <text>分享作品</text>
+      </button>
+    </view>
+
+    <!-- 操作按钮：视频类（成功时可下载、再次生成） -->
+    <view class="action-section" wx:if="{{taskData.taskKind === 'video' && taskData.status === 'success'}}">
+      <view class="action-btn primary" bindtap="downloadVideo" wx:if="{{taskData.imageUrl}}">
+        <text>下载视频</text>
+      </view>
+      <view class="action-btn primary" bindtap="regenerate">
+        <text>再次生成</text>
+      </view>
+    </view>
+
+    <!-- 操作按钮：AI造价类（成功时仅复制链接，主操作已在卡片内） -->
+    <view class="action-section" wx:if="{{taskData.taskKind === 'cost_doc' && taskData.status === 'success' && taskData.excel_url}}">
+      <view class="action-btn primary" bindtap="copyExcelLink">
+        <text>复制 Excel 下载链接</text>
+      </view>
+    </view>
+
+    <!-- 再次生成按钮（失败时，图片/视频类） -->
+    <view class="action-section" wx:if="{{(taskData.taskKind === 'image' || taskData.taskKind === 'video') && taskData.status === 'failed'}}">
+      <view class="action-btn primary" bindtap="regenerate">
+        <text>再次生成</text>
+      </view>
+    </view>
+
+    <!-- AI造价失败时 -->
+    <view class="action-section" wx:if="{{taskData.taskKind === 'cost_doc' && taskData.status === 'failed'}}">
+      <view class="action-btn primary" bindtap="goBack">
+        <text>返回</text>
+      </view>
+    </view>
+
+    <custom-tabbar current="{{-1}}"></custom-tabbar>
+
+    <!-- 图片预览弹窗 -->
+    <view class="image-preview-modal" wx:if="{{showImagePreviewModal}}" bindtap="closeImagePreviewModal">
+      <view class="image-preview-content" catchtap="onImagePreviewContentTap">
+        <view class="image-preview-header">
+          <text class="image-preview-title">{{previewImageMode === 'qrcode' ? '企业微信二维码' : (previewImageMode === 'reference' ? '参考图预览' : '效果图预览')}}</text>
+          <view class="image-preview-close" bindtap="closeImagePreviewModal">
+            <t-icon name="close" size="40rpx" color="#f7eadb" />
+          </view>
+        </view>
+        <swiper
+          class="image-preview-swiper"
+          current="{{previewImageIndex}}"
+          bindchange="onPreviewSwiperChange"
+          indicator-dots="{{previewImageUrls.length > 1}}"
+          circular="{{previewImageUrls.length > 1}}"
+        >
+          <swiper-item wx:for="{{previewImageUrls}}" wx:key="index">
+            <view class="image-preview-slide">
+              <image class="image-preview-image" src="{{item}}" mode="aspectFit" show-menu-by-longpress="{{previewImageMode === 'qrcode'}}" />
+            </view>
+          </swiper-item>
+        </swiper>
+        <view class="image-preview-index" wx:if="{{previewImageUrls.length > 1}}">
+          <text>{{previewImageIndex + 1}} / {{previewImageUrls.length}}</text>
+        </view>
+        <view class="image-preview-meta">
+          <text class="image-preview-meta-title">{{currentPreviewImageInfo.title}}</text>
+          <text class="image-preview-meta-desc">{{currentPreviewImageInfo.subtitle}}</text>
+        </view>
+        <view class="image-preview-actions" wx:if="{{previewImageMode === 'result'}}">
+          <view class="image-preview-btn primary" bindtap="saveCurrentPreviewImage">扫码验证后下载当前图片</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 发布弹窗：仅通过关闭按钮/取消关闭，避免误触遮罩导致弹窗消失 -->
+    <view class="publish-modal" wx:if="{{showPublishModal}}" catchtap="onPublishModalMaskTap">
+      <view class="publish-content" catchtap="onPublishContentTap">
+        <view class="publish-header">
+          <text class="publish-title">发布到模板广场</text>
+          <view class="publish-close" bindtap="closePublishModal">
+            <t-icon name="close" size="40rpx" />
+          </view>
+        </view>
+        <view class="publish-body">
+          <view class="form-group">
+            <text class="form-label">模板名称 *</text>
+            <input
+              class="form-input"
+              value="{{publishForm.name}}"
+              bindinput="onPublishInput"
+              data-field="name"
+              placeholder="给你的作品起个名字"
+              maxlength="50"
+            />
+          </view>
+          <view class="form-group">
+            <text class="form-label">模板描述</text>
+            <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}"
+              class="form-textarea"
+              value="{{publishForm.description}}"
+              bindinput="onPublishInput"
+              data-field="description"
+              placeholder="描述一下你的作品"
+              maxlength="500"
+            />
+          </view>
+          <view class="form-group">
+            <text class="form-label">一级分类 *</text>
+            <view class="tab-row">
+              <picker
+                mode="selector"
+                range="{{mainTabs}}"
+                range-key="label"
+                value="{{mainTabIndex}}"
+                bindchange="onMainTabChange"
+              >
+                <view class="picker-value">
+                  <text>{{mainTabIndex >= 0 ? mainTabs[mainTabIndex].label : '选择一级Tab'}}</text>
+                  <t-icon name="chevron-down" size="32rpx" />
+                </view>
+              </picker>
+            </view>
+            <text class="form-hint">一级分类已按模板广场最终定稿版固定为：场景 / 风格 / 灵感。</text>
+          </view>
+          <view class="form-group" wx:if="{{subTabs.length > 0}}">
+            <text class="form-label">二级分类 *</text>
+            <view class="tab-row">
+              <picker
+                mode="selector"
+                range="{{subTabs}}"
+                range-key="label"
+                value="{{subTabIndex}}"
+                bindchange="onSubTabChange"
+              >
+                <view class="picker-value">
+                  <text>{{subTabIndex >= 0 ? subTabs[subTabIndex].label : '选择二级分类'}}</text>
+                  <t-icon name="chevron-down" size="32rpx" />
+                </view>
+              </picker>
+            </view>
+            <text class="form-hint">二级分类用于更精确地进入对应细分类目。</text>
+          </view>
+          <view class="form-group" wx:if="{{thirdTabs.length > 0}}">
+            <text class="form-label">三级分类 *</text>
+            <view class="tab-row">
+              <picker
+                mode="selector"
+                range="{{thirdTabs}}"
+                range-key="label"
+                value="{{thirdTabIndex}}"
+                bindchange="onThirdTabChange"
+              >
+                <view class="picker-value">
+                  <text>{{thirdTabIndex >= 0 ? thirdTabs[thirdTabIndex].label : '选择三级分类'}}</text>
+                  <t-icon name="chevron-down" size="32rpx" />
+                </view>
+              </picker>
+            </view>
+            <text class="form-hint">三级分类用于在二级分类下进一步细分展示。</text>
+          </view>
+          <view class="form-group">
+            <text class="form-label">收费方式</text>
+            <view class="publish-charge-row">
+              <view
+                class="charge-option {{publishForm.isFree ? 'active' : ''}}"
+                data-free="true"
+                bindtap="onChargeTypeChange"
+              >免费</view>
+              <view
+                class="charge-option {{!publishForm.isFree ? 'active' : ''}}"
+                data-free="false"
+                bindtap="onChargeTypeChange"
+              >付费</view>
+            </view>
+          </view>
+          <view class="form-group price-row" wx:if="{{!publishForm.isFree}}">
+            <text class="form-label">所需灵石</text>
+            <input
+              class="form-input price-input"
+              type="number"
+              value="{{publishForm.price}}"
+              bindinput="onPriceInput"
+              placeholder="别人查看/下载时扣除的灵石数"
+              min="1"
+            />
+            <text class="form-hint">别人点击查看或下载时将扣除相应灵石，并计入您的账户</text>
+          </view>
+        </view>
+        <view class="publish-footer">
+          <view class="publish-btn cancel" bindtap="closePublishModal">取消</view>
+          <view class="publish-btn cancel" bindtap="previewPublish">预览</view>
+          <view class="publish-btn confirm" bindtap="submitPublish">发布</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="enterprise-modal" wx:if="{{showEnterpriseWechatModal}}" bindtap="closeEnterpriseWechatModal">
+      <view class="enterprise-content" catchtap="onEnterpriseWechatContentTap">
+        <view class="enterprise-header">
+          <view>
+            <text class="enterprise-title">下载{{pendingDownloadType === 'video' ? '视频' : '图片'}}</text>
+            <text class="enterprise-subtitle">长按识别企业微信二维码添加咨询，或直接授权微信手机号，系统会自动继续下载当前{{pendingDownloadType === 'video' ? '视频' : '图片'}}。</text>
+          </view>
+          <view class="enterprise-close" bindtap="closeEnterpriseWechatModal">
+            <t-icon name="close" size="40rpx" color="#7a6853" />
+          </view>
+        </view>
+        <view class="enterprise-body">
+          <view class="enterprise-status {{enterpriseWechatVerified ? 'verified' : 'pending'}}">
+            <text class="enterprise-status-title">{{enterpriseWechatVerified ? '下载保存权限已开通' : '当前还未完成下载验证'}}</text>
+            <text class="enterprise-status-desc" wx:if="{{enterpriseWechatVerifiedAtText}}">已验证时间：{{enterpriseWechatVerifiedAtText}}</text>
+            <text class="enterprise-status-desc" wx:elif="{{enterpriseWechatAutoChecking}}">已开启自动检测，识别二维码并留资后会自动继续下载</text>
+            <text class="enterprise-status-desc" wx:elif="{{enterpriseWechatBindStatus === 'pending'}}">长按二维码识别后完成添加和留资，系统会自动检查结果</text>
+          </view>
+          <view class="enterprise-qrcode-wrap {{enterpriseWechatQRCodeUrl ? '' : 'empty'}}">
+            <image
+              wx:if="{{enterpriseWechatQRCodeUrl}}"
+              class="enterprise-qrcode"
+              src="{{enterpriseWechatQRCodeUrl}}"
+              mode="aspectFit"
+              show-menu-by-longpress="true"
+              bindtap="previewEnterpriseWechatQRCode"
+            />
+            <view class="enterprise-qrcode-placeholder" wx:else>
+              <t-icon name="image-error" size="84rpx" color="#c8b89f" />
+              <text>{{enterpriseWechatConfigLoading ? '二维码加载中...' : '暂未配置企业微信二维码'}}</text>
+            </view>
+          </view>
+          <view class="enterprise-steps">
+            <view class="enterprise-step-item">
+              <text class="enterprise-step-index">1</text>
+              <text class="enterprise-step-text">长按二维码识别，或点开大图后长按识别</text>
+            </view>
+            <view class="enterprise-step-item">
+              <text class="enterprise-step-index">2</text>
+              <text class="enterprise-step-text">添加企业微信后返回本页，或直接点击下方按钮授权微信手机号</text>
+            </view>
+            <view class="enterprise-step-item">
+              <text class="enterprise-step-index">3</text>
+              <text class="enterprise-step-text">回到这里后系统会自动检查，完成后自动继续下载当前{{pendingDownloadType === 'video' ? '视频' : '图片'}}</text>
+            </view>
+          </view>
+          <text class="enterprise-tip">{{enterpriseWechatTip}}</text>
+        </view>
+        <view class="enterprise-footer">
+          <view class="enterprise-btn secondary" bindtap="saveEnterpriseWechatQRCode">保存二维码</view>
+          <view class="enterprise-btn primary" wx:if="{{enterpriseWechatVerified && enterpriseWechatContact}}" bindtap="continuePendingEnterpriseWechatDownload">继续下载当前{{pendingDownloadType === 'video' ? '视频' : '图片'}}</view>
+          <button class="enterprise-btn primary enterprise-btn-button" wx:else open-type="getPhoneNumber" bindgetphonenumber="onEnterpriseWechatPhoneAuth" loading="{{enterpriseWechatPhoneSubmitting}}">授权手机号并继续下载</button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>
+</view>
+</view>

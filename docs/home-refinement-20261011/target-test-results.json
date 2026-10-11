@@ -1,0 +1,42 @@
+[
+  {
+    "test": "aicost-home-prefill.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: homepage quick estimate prefills a supported region and positive building area\nok 1 - homepage quick estimate prefills a supported region and positive building area\n  ---\n  duration_ms: 3.140709\n  ...\n# Subtest: supported non-default region updates picker options and indices together\nok 2 - supported non-default region updates picker options and indices together\n  ---\n  duration_ms: 0.868375\n  ...\n# Subtest: direct navigation without query preserves every default\nok 3 - direct navigation without query preserves every default\n  ---\n  duration_ms: 0.907625\n  ...\n# Subtest: unsupported region and invalid building area are ignored independently\nok 4 - unsupported region and invalid building area are ignored independently\n  ---\n  duration_ms: 2.808375\n  ...\n# Subtest: non-finite and empty areas do not overwrite the blank form field\nok 5 - non-finite and empty areas do not overwrite the blank form field\n  ---\n  duration_ms: 2.301208\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 23.44925\n"
+  },
+  {
+    "test": "currentPageSelection.test.js",
+    "exitCode": 0,
+    "output": "currentPageSelection tests passed\n"
+  },
+  {
+    "test": "home-cloud-header-release.test.js",
+    "exitCode": 0,
+    "output": "Home release uses immutable cloud assets while preserving interactions and non-header geometry\n"
+  },
+  {
+    "test": "home-cost-allround-aicost.test.js",
+    "exitCode": 0,
+    "output": "Existing home entry and design tabs, native form, report layout and service route passed\n"
+  },
+  {
+    "test": "home-intro-popup.test.js",
+    "exitCode": 0,
+    "output": "home intro popup checks passed\n"
+  },
+  {
+    "test": "home-reference.test.js",
+    "exitCode": 0,
+    "output": "Home reference navigation, project selection, region, validation and estimate handoff passed\n"
+  },
+  {
+    "test": "home-safe-area-layout.test.js",
+    "exitCode": 0,
+    "output": "Home status-bar clearance, service order, privacy entry and protected content passed\n"
+  },
+  {
+    "test": "home-smart-service-fixed.test.js",
+    "exitCode": 0,
+    "output": "Customer service remains in the hero; cancelled secondary entries and placeholder copy are absent\n"
+  }
+]

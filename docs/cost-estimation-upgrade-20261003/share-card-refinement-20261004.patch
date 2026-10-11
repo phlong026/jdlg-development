@@ -1,0 +1,341 @@
+diff --git a/miniprogram/miniprogram/utils/costEstimateShareImage.ts b/miniprogram/miniprogram/utils/costEstimateShareImage.ts
+index b7467fe..60b0e0c 100644
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.ts
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.ts
+@@ -91,26 +91,39 @@ async function writeImage(cacheKey: string, dataUrl: string): Promise<string> {
+ }
+
+ function drawCardHouseImage(ctx: any, image: any) {
+-  // Preserve the complete square villa image; blend its edges into the poster instead of framing it.
+-  ctx.drawImage(image, 350, 0, 650, 650);
+-  const leftBlend = ctx.createLinearGradient(350, 0, 670, 0);
++  // Keep the roof below the decorative frame; fade the scene edges without washing out the villa.
++  ctx.drawImage(image, 398, 60, 570, 570);
++  const leftBlend = ctx.createLinearGradient(398, 0, 650, 0);
+   leftBlend.addColorStop(0, '#f5ecdd');
+-  leftBlend.addColorStop(0.38, 'rgba(245, 236, 221, 0.97)');
++  leftBlend.addColorStop(0.45, 'rgba(245, 236, 221, 0.98)');
+   leftBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+   ctx.fillStyle = leftBlend;
+-  ctx.fillRect(0, 0, 670, 650);
++  ctx.fillRect(398, 60, 252, 570);
+
+-  const topBlend = ctx.createLinearGradient(0, 0, 0, 110);
++  const rightBlend = ctx.createLinearGradient(940, 0, 968, 0);
++  rightBlend.addColorStop(0, 'rgba(245, 236, 221, 0)');
++  rightBlend.addColorStop(1, '#f5ecdd');
++  ctx.fillStyle = rightBlend;
++  ctx.fillRect(940, 60, 28, 570);
++
++  const topBlend = ctx.createLinearGradient(0, 60, 0, 95);
+   topBlend.addColorStop(0, '#f5ecdd');
+   topBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+   ctx.fillStyle = topBlend;
+-  ctx.fillRect(350, 0, 650, 110);
++  ctx.fillRect(398, 60, 570, 35);
+
+-  const groundBlend = ctx.createLinearGradient(0, 560, 0, 650);
++  const groundBlend = ctx.createLinearGradient(0, 550, 0, 630);
+   groundBlend.addColorStop(0, 'rgba(239, 224, 198, 0)');
+   groundBlend.addColorStop(1, '#efe0c6');
+   ctx.fillStyle = groundBlend;
+-  ctx.fillRect(0, 560, CARD_WIDTH, 90);
++  ctx.fillRect(0, 550, CARD_WIDTH, 80);
++}
++
++function drawCardFrame(ctx: any) {
++  ctx.strokeStyle = '#d8c29e';
++  ctx.lineWidth = 1.5;
++  drawRoundedRect(ctx, 34, 40, 932, 570, 16);
++  ctx.stroke();
+ }
+
+ function fitText(ctx: any, text: string, weight: number, fontSize: number, maxWidth: number): number {
+@@ -125,39 +138,40 @@ function fitText(ctx: any, text: string, weight: number, fontSize: number, maxWi
+ function drawCardText(ctx: any, card: CostEstimateShareCard) {
+   const amount = cleanAmount(card.totalCost);
+   ctx.fillStyle = '#866232';
+-  ctx.font = '700 50px sans-serif';
+-  ctx.fillText('建房造价测算', 62, 148);
++  ctx.font = '700 44px sans-serif';
++  ctx.fillText('建房造价测算', 62, 166);
+
+-  ctx.font = '700 62px sans-serif';
++  ctx.font = '700 52px sans-serif';
+   const unitWidth = ctx.measureText('万元').width;
+
+   ctx.fillStyle = '#e64b3c';
+-  const amountWidth = fitText(ctx, amount, 800, 148, 520 - unitWidth - 14);
+-  ctx.fillText(amount, 62, 316);
++  const amountWidth = fitText(ctx, amount, 800, 132, 480 - unitWidth - 14);
++  ctx.fillText(amount, 62, 308);
+
+   ctx.fillStyle = '#806032';
+-  ctx.font = '700 62px sans-serif';
+-  ctx.fillText('万元', 76 + amountWidth, 316);
++  ctx.font = '700 52px sans-serif';
++  ctx.fillText('万元', 76 + amountWidth, 308);
+
+   ctx.fillStyle = '#866232';
+   const areaText = `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`;
+-  fitText(ctx, areaText, 600, 42, 520);
+-  ctx.fillText(areaText, 62, 405);
++  fitText(ctx, areaText, 500, 36, 480);
++  ctx.fillText(areaText, 62, 400);
+   const specificationText = `${card.structureType} · ${card.windowStandard}门窗`;
+-  fitText(ctx, specificationText, 600, 40, 520);
+-  ctx.fillText(specificationText, 62, 467);
++  fitText(ctx, specificationText, 500, 34, 480);
++  ctx.fillText(specificationText, 62, 456);
+ }
+
+ function drawCallToAction(ctx: any) {
+-  const button = ctx.createLinearGradient(42, 0, 958, 0);
+-  button.addColorStop(0, '#b48d40');
+-  button.addColorStop(0.5, '#c2a05a');
+-  button.addColorStop(1, '#a58238');
++  const button = ctx.createLinearGradient(54, 650, 946, 766);
++  // Sampled from the homepage AI badge's champagne highlight, middle and lower gold.
++  button.addColorStop(0, '#eaceb5');
++  button.addColorStop(0.5, '#d5a073');
++  button.addColorStop(1, '#cd8b55');
+   ctx.fillStyle = button;
+-  drawRoundedRect(ctx, 42, 644, 916, 124, 62);
++  drawRoundedRect(ctx, 54, 650, 892, 116, 58);
+   ctx.fill();
+-  ctx.fillStyle = '#fffaf0';
+-  ctx.font = '500 48px sans-serif';
++  ctx.fillStyle = '#75513d';
++  ctx.font = '600 44px sans-serif';
+   const label = '点击查看测算报告';
+   const textWidth = ctx.measureText(label).width;
+   const textX = (CARD_WIDTH - textWidth - 56) / 2;
+@@ -167,7 +181,7 @@ function drawCallToAction(ctx: any) {
+   ctx.moveTo(arrowX, 692);
+   ctx.lineTo(arrowX + 16, 707);
+   ctx.lineTo(arrowX, 722);
+-  ctx.strokeStyle = '#fffaf0';
++  ctx.strokeStyle = '#75513d';
+   ctx.lineWidth = 5;
+   ctx.stroke();
+ }
+@@ -180,7 +194,7 @@ async function createShareImage(card: CostEstimateShareCard): Promise<string> {
+   const ctx = canvas?.getContext('2d');
+   if (!canvas || !ctx) return '';
+
+-  const background = ctx.createLinearGradient(0, 560, 0, 650);
++  const background = ctx.createLinearGradient(0, 550, 0, 630);
+   background.addColorStop(0, '#f5ecdd');
+   background.addColorStop(1, '#efe0c6');
+   ctx.fillStyle = background;
+@@ -188,6 +202,7 @@ async function createShareImage(card: CostEstimateShareCard): Promise<string> {
+
+   const houseImage = await loadBundledHouseImage(canvas);
+   drawCardHouseImage(ctx, houseImage);
++  drawCardFrame(ctx);
+   drawCardText(ctx, card);
+   drawCallToAction(ctx);
+
+diff --git a/miniprogram/miniprogram/utils/costEstimateShareImage.js b/miniprogram/miniprogram/utils/costEstimateShareImage.js
+index 50dda12..6b432b8 100644
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.js
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.js
+@@ -78,24 +78,35 @@ async function writeImage(cacheKey, dataUrl) {
+     return filePath;
+ }
+ function drawCardHouseImage(ctx, image) {
+-    // Preserve the complete square villa image; blend its edges into the poster instead of framing it.
+-    ctx.drawImage(image, 350, 0, 650, 650);
+-    const leftBlend = ctx.createLinearGradient(350, 0, 670, 0);
++    // Keep the roof below the decorative frame; fade the scene edges without washing out the villa.
++    ctx.drawImage(image, 398, 60, 570, 570);
++    const leftBlend = ctx.createLinearGradient(398, 0, 650, 0);
+     leftBlend.addColorStop(0, '#f5ecdd');
+-    leftBlend.addColorStop(0.38, 'rgba(245, 236, 221, 0.97)');
++    leftBlend.addColorStop(0.45, 'rgba(245, 236, 221, 0.98)');
+     leftBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+     ctx.fillStyle = leftBlend;
+-    ctx.fillRect(0, 0, 670, 650);
+-    const topBlend = ctx.createLinearGradient(0, 0, 0, 110);
++    ctx.fillRect(398, 60, 252, 570);
++    const rightBlend = ctx.createLinearGradient(940, 0, 968, 0);
++    rightBlend.addColorStop(0, 'rgba(245, 236, 221, 0)');
++    rightBlend.addColorStop(1, '#f5ecdd');
++    ctx.fillStyle = rightBlend;
++    ctx.fillRect(940, 60, 28, 570);
++    const topBlend = ctx.createLinearGradient(0, 60, 0, 95);
+     topBlend.addColorStop(0, '#f5ecdd');
+     topBlend.addColorStop(1, 'rgba(245, 236, 221, 0)');
+     ctx.fillStyle = topBlend;
+-    ctx.fillRect(350, 0, 650, 110);
+-    const groundBlend = ctx.createLinearGradient(0, 560, 0, 650);
++    ctx.fillRect(398, 60, 570, 35);
++    const groundBlend = ctx.createLinearGradient(0, 550, 0, 630);
+     groundBlend.addColorStop(0, 'rgba(239, 224, 198, 0)');
+     groundBlend.addColorStop(1, '#efe0c6');
+     ctx.fillStyle = groundBlend;
+-    ctx.fillRect(0, 560, CARD_WIDTH, 90);
++    ctx.fillRect(0, 550, CARD_WIDTH, 80);
++}
++function drawCardFrame(ctx) {
++    ctx.strokeStyle = '#d8c29e';
++    ctx.lineWidth = 1.5;
++    drawRoundedRect(ctx, 34, 40, 932, 570, 16);
++    ctx.stroke();
+ }
+ function fitText(ctx, text, weight, fontSize, maxWidth) {
+     ctx.font = `${weight} ${fontSize}px sans-serif`;
+@@ -108,34 +119,35 @@ function fitText(ctx, text, weight, fontSize, maxWidth) {
+ function drawCardText(ctx, card) {
+     const amount = cleanAmount(card.totalCost);
+     ctx.fillStyle = '#866232';
+-    ctx.font = '700 50px sans-serif';
+-    ctx.fillText('建房造价测算', 62, 148);
+-    ctx.font = '700 62px sans-serif';
++    ctx.font = '700 44px sans-serif';
++    ctx.fillText('建房造价测算', 62, 166);
++    ctx.font = '700 52px sans-serif';
+     const unitWidth = ctx.measureText('万元').width;
+     ctx.fillStyle = '#e64b3c';
+-    const amountWidth = fitText(ctx, amount, 800, 148, 520 - unitWidth - 14);
+-    ctx.fillText(amount, 62, 316);
++    const amountWidth = fitText(ctx, amount, 800, 132, 480 - unitWidth - 14);
++    ctx.fillText(amount, 62, 308);
+     ctx.fillStyle = '#806032';
+-    ctx.font = '700 62px sans-serif';
+-    ctx.fillText('万元', 76 + amountWidth, 316);
++    ctx.font = '700 52px sans-serif';
++    ctx.fillText('万元', 76 + amountWidth, 308);
+     ctx.fillStyle = '#866232';
+     const areaText = `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`;
+-    fitText(ctx, areaText, 600, 42, 520);
+-    ctx.fillText(areaText, 62, 405);
++    fitText(ctx, areaText, 500, 36, 480);
++    ctx.fillText(areaText, 62, 400);
+     const specificationText = `${card.structureType} · ${card.windowStandard}门窗`;
+-    fitText(ctx, specificationText, 600, 40, 520);
+-    ctx.fillText(specificationText, 62, 467);
++    fitText(ctx, specificationText, 500, 34, 480);
++    ctx.fillText(specificationText, 62, 456);
+ }
+ function drawCallToAction(ctx) {
+-    const button = ctx.createLinearGradient(42, 0, 958, 0);
+-    button.addColorStop(0, '#b48d40');
+-    button.addColorStop(0.5, '#c2a05a');
+-    button.addColorStop(1, '#a58238');
++    const button = ctx.createLinearGradient(54, 650, 946, 766);
++    // Sampled from the homepage AI badge's champagne highlight, middle and lower gold.
++    button.addColorStop(0, '#eaceb5');
++    button.addColorStop(0.5, '#d5a073');
++    button.addColorStop(1, '#cd8b55');
+     ctx.fillStyle = button;
+-    drawRoundedRect(ctx, 42, 644, 916, 124, 62);
++    drawRoundedRect(ctx, 54, 650, 892, 116, 58);
+     ctx.fill();
+-    ctx.fillStyle = '#fffaf0';
+-    ctx.font = '500 48px sans-serif';
++    ctx.fillStyle = '#75513d';
++    ctx.font = '600 44px sans-serif';
+     const label = '点击查看测算报告';
+     const textWidth = ctx.measureText(label).width;
+     const textX = (CARD_WIDTH - textWidth - 56) / 2;
+@@ -145,7 +157,7 @@ function drawCallToAction(ctx) {
+     ctx.moveTo(arrowX, 692);
+     ctx.lineTo(arrowX + 16, 707);
+     ctx.lineTo(arrowX, 722);
+-    ctx.strokeStyle = '#fffaf0';
++    ctx.strokeStyle = '#75513d';
+     ctx.lineWidth = 5;
+     ctx.stroke();
+ }
+@@ -157,13 +169,14 @@ async function createShareImage(card) {
+     const ctx = canvas?.getContext('2d');
+     if (!canvas || !ctx)
+         return '';
+-    const background = ctx.createLinearGradient(0, 560, 0, 650);
++    const background = ctx.createLinearGradient(0, 550, 0, 630);
+     background.addColorStop(0, '#f5ecdd');
+     background.addColorStop(1, '#efe0c6');
+     ctx.fillStyle = background;
+     ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
+     const houseImage = await loadBundledHouseImage(canvas);
+     drawCardHouseImage(ctx, houseImage);
++    drawCardFrame(ctx);
+     drawCardText(ctx, card);
+     drawCallToAction(ctx);
+     return writeImage(buildCacheKey(card), canvasToDataURL(canvas));
+diff --git a/miniprogram/tests/cost-estimate-share-image.test.js b/miniprogram/tests/cost-estimate-share-image.test.js
+index 621ca1d..5cfb09d 100644
+--- a/miniprogram/tests/cost-estimate-share-image.test.js
++++ b/miniprogram/tests/cost-estimate-share-image.test.js
+@@ -14,6 +14,8 @@ function loadShareImageHelper() {
+   const textCalls = [];
+   const imageCalls = [];
+   const clips = [];
++  const strokes = [];
++  const gradients = [];
+   const context = {
+     exports: {},
+     console: { warn() {} },
+@@ -32,11 +34,15 @@ function loadShareImageHelper() {
+       },
+       createOffscreenCanvas() {
+         const ctx = {
+-          createLinearGradient() { return { addColorStop() {} }; },
++          createLinearGradient(...coordinates) {
++            const gradient = { coordinates, stops: [], addColorStop(offset, color) { this.stops.push({ offset, color }); } };
++            gradients.push(gradient);
++            return gradient;
++          },
+           font: '',
+           measureText(value) { return { width: value.length * Number(this.font.match(/(\d+)px/)[1]) * 0.6 }; },
+           beginPath() {}, moveTo() {}, lineTo() {}, arcTo() {}, closePath() {},
+-          fill() {}, stroke() {}, save() {}, restore() {}, clip() { clips.push(true); }, fillRect() {},
++          fill() {}, stroke() { strokes.push({ color: this.strokeStyle, width: this.lineWidth }); }, save() {}, restore() {}, clip() { clips.push(true); }, fillRect() {},
+           drawImage(...args) { imageCalls.push(args); },
+           fillText(text, x, y) { textCalls.push({ text, x, y, font: this.font }); },
+         };
+@@ -59,7 +65,7 @@ function loadShareImageHelper() {
+     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+   }).outputText;
+   vm.runInNewContext(source, context);
+-  return { prepare: context.exports.prepareCostEstimateShareImage, writes, calls, imageSources, textCalls, imageCalls, clips };
++  return { prepare: context.exports.prepareCostEstimateShareImage, writes, calls, imageSources, textCalls, imageCalls, clips, strokes, gradients };
+ }
+
+ test('share card exports a JPEG and returns the local image path to WeChat', async () => {
+@@ -80,11 +86,11 @@ test('share card exports a JPEG and returns the local image path to WeChat', asy
+   assert.equal(helper.imageSources[0], '/assets/images/cost-estimate-share-house.jpg', 'load from the package root before trying a page-relative path');
+   const amount = helper.textCalls.find((item) => item.text === '71.17');
+   const unit = helper.textCalls.find((item) => item.text === '万元');
+-  assert.ok(Number(amount.font.match(/(\d+)px/)[1]) >= 130);
++  assert.ok(Number(amount.font.match(/(\d+)px/)[1]) >= 120);
+   assert.equal(unit.x > amount.x + '71.17'.length * Number(amount.font.match(/(\d+)px/)[1]) * 0.6, true);
+   assert.equal(helper.textCalls.some((item) => item.text === '建房造价测算'), true);
+   const button = helper.textCalls.find((item) => item.text === '点击查看测算报告');
+-  assert.ok(Number(button.font.match(/(\d+)px/)[1]) >= 48);
++  assert.ok(Number(button.font.match(/(\d+)px/)[1]) >= 42);
+   assert.equal(helper.clips.length, 0, 'villa must blend into the scene without a photo frame');
+   assert.equal(helper.imageCalls[0].length, 5, 'draw the entire villa rather than cropping its source');
+   assert.equal(helper.imageCalls[0][3], helper.imageCalls[0][4]);
+@@ -102,3 +108,20 @@ test('price and unit stay separated within the text column for different amount
+     assert.ok(unit.x + unitWidth <= 582, 'price must not run into the building');
+   }
+ });
++
++test('refined card keeps the smaller villa inset, gold frame and home AI button palette', async () => {
++  const helper = loadShareImageHelper();
++  await helper.prepare({ totalCost: '59.51万元', city: '泉州', buildingArea: '360㎡', structureType: '框架结构', windowStandard: '标准型' });
++  const [, x, y, width, height] = helper.imageCalls[0];
++  assert.ok(width <= 580 && height === width, 'villa should be scaled down without distortion');
++  assert.ok(y >= 50 && x + width <= 970, 'leave room above the roof and beside the image');
++  assert.ok(y + height <= 640, 'villa ground should end before the button');
++  assert.ok(helper.strokes.some(item => item.color === '#d8c29e' && item.width <= 2), 'restore a fine gold frame');
++  assert.ok(helper.gradients.some(item => item.stops.some(stop => stop.color === '#eaceb5') && item.stops.some(stop => stop.color === '#cd8b55')), 'use the palette sampled from the home AI button');
++  const title = helper.textCalls.find(item => item.text === '建房造价测算');
++  const parameter = helper.textCalls.find(item => item.text.includes('建筑面积'));
++  const amount = helper.textCalls.find(item => item.text === '59.51');
++  assert.ok(Number(title.font.match(/(\d+)px/)[1]) <= 44);
++  assert.ok(Number(parameter.font.match(/(\d+)px/)[1]) <= 36);
++  assert.ok(Number(amount.font.match(/(\d+)px/)[1]) <= 134);
++});

@@ -1,0 +1,127 @@
+<view class="page {{isEditMode ? 'page-edit-mode' : ''}}">
+  <navigation-bar wx:if="{{!isEditMode}}" title="我的收藏" background="#f6efe7" />
+
+  <view class="edit-fixed-header" wx:if="{{isEditMode}}">
+    <navigation-bar title="我的收藏" background="#f6efe7" />
+    <view class="manage-toolbar" wx:if="{{!loading && items.length > 0}}">
+      <view class="manage-toolbar-action is-left" bindtap="onToggleEditMode">
+        <text>取消</text>
+      </view>
+      <view class="manage-toolbar-title">
+        <text>已选择 {{selectedKeys.length}} 项</text>
+      </view>
+      <view class="manage-toolbar-action is-right" bindtap="onToggleSelectAll">
+        <text>{{selectAll ? '取消全选' : '全选当前页'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="content">
+    <scroll-view class="favorite-tabs" wx:if="{{!isEditMode}}" scroll-x enable-flex>
+      <view class="favorite-tab {{currentType === item.value ? 'favorite-tab-active' : ''}}" wx:for="{{favoriteTabs}}" wx:key="value" bindtap="onFavoriteTabTap" data-type="{{item.value}}">
+        {{item.label}}
+      </view>
+    </scroll-view>
+
+    <view class="search-bar" wx:if="{{!isEditMode}}">
+      <view class="search-input-wrap">
+        <view class="search-icon"></view>
+        <input class="search-input" placeholder="搜索标题、作者或标签" value="{{searchInputValue}}" bindinput="onSearchInput" bindconfirm="onSearchConfirm" confirm-type="search" />
+        <view class="search-clear" wx:if="{{searchInputValue}}" bindtap="onSearchClear">清空</view>
+      </view>
+      <view class="search-btn" bindtap="onSearchConfirm">搜索</view>
+    </view>
+
+    <view class="favorite-overview" wx:if="{{!isEditMode && !loading && items.length > 0}}">
+      <view class="favorite-overview-copy">
+        <text class="favorite-overview-title">共 {{total || items.length}} 条收藏</text>
+        <text class="favorite-overview-desc">可进入管理记录批量选择和删除收藏内容</text>
+      </view>
+      <view class="favorite-manage-btn" bindtap="onToggleEditMode">
+        <text>管理记录</text>
+      </view>
+    </view>
+
+    <view class="loading-wrap" wx:if="{{loading}}">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <view class="empty-wrap" wx:elif="{{!items.length}}">
+      <image class="empty-image" src="{{defaultImage}}" mode="aspectFill" />
+      <text class="empty-title">{{searchKeyword ? '未找到相关收藏' : '暂无收藏内容'}}</text>
+      <text class="empty-desc">{{emptyText}}</text>
+    </view>
+
+    <view class="card-list" wx:elif="{{!isEditMode}}">
+      <view class="favorite-card" wx:for="{{items}}" wx:key="key" bindtap="onFavoriteCardTap" data-target-type="{{item.targetType}}" data-target-id="{{item.targetId}}">
+        <image class="favorite-image" src="{{item.image}}" mode="aspectFill" />
+        <view class="favorite-body">
+          <view class="favorite-head">
+            <view class="favorite-title-wrap">
+              <text class="favorite-type">{{item.typeLabel}}</text>
+              <text class="favorite-title">{{item.title}}</text>
+            </view>
+            <text class="favorite-price">{{item.badgeText}}</text>
+          </view>
+          <text class="favorite-author" wx:if="{{item.author}}">{{item.author}}</text>
+          <text class="favorite-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+          <view class="favorite-tags" wx:if="{{item.tags.length}}">
+            <text class="favorite-tag" wx:for="{{item.tags}}" wx:key="*this">{{item}}</text>
+          </view>
+          <view class="favorite-meta" wx:if="{{item.metaTexts.length}}">
+            <text class="favorite-meta-text" wx:for="{{item.metaTexts}}" wx:key="*this">{{item}}</text>
+          </view>
+          <view class="favorite-actions">
+            <view class="favorite-remove {{removingKey === item.key ? 'favorite-remove-disabled' : ''}}" catchtap="removeFavorite" data-target-type="{{item.targetType}}" data-target-id="{{item.targetId}}">
+              {{removingKey === item.key ? '取消中' : '取消收藏'}}
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="load-more" wx:if="{{loadingMore}}">加载更多收藏...</view>
+      <view class="load-more load-more-end" wx:elif="{{!hasMore && items.length}}">已加载全部收藏</view>
+    </view>
+
+    <view class="manage-content" wx:else>
+      <view class="manage-summary">
+        <text class="manage-summary-text">共 {{total || items.length}} 条收藏</text>
+      </view>
+
+      <view class="manage-grid">
+        <view
+          class="manage-card"
+          wx:for="{{items}}"
+          wx:key="key"
+          catchtap="onToggleSelect"
+          data-key="{{item.key}}"
+        >
+          <view class="manage-card-media">
+            <image class="manage-card-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+            <view class="manage-select-indicator {{selectedMap[item.key] ? 'checked' : ''}}">
+              <text wx:if="{{selectedMap[item.key]}}" class="manage-select-check">✓</text>
+            </view>
+            <view class="manage-type-tag">
+              <text>{{item.typeLabel}}</text>
+            </view>
+          </view>
+          <view class="manage-card-body">
+            <text class="manage-card-title">{{item.title}}</text>
+            <text class="manage-card-meta">{{item.badgeText}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="load-more" wx:if="{{loadingMore}}">加载更多收藏...</view>
+      <view class="load-more load-more-end" wx:elif="{{!hasMore && items.length}}">已加载全部收藏</view>
+    </view>
+  </view>
+
+  <view class="batch-action-bar" wx:if="{{isEditMode}}">
+    <view class="batch-selection-count">
+      <text>已选 {{selectedKeys.length}} 项</text>
+    </view>
+    <view class="batch-delete-btn {{selectedKeys.length > 0 ? 'active' : 'disabled'}}" bindtap="onBatchRemove">
+      <text>删除所选{{selectedKeys.length > 0 ? ' (' + selectedKeys.length + ')' : ''}}</text>
+    </view>
+  </view>
+</view>

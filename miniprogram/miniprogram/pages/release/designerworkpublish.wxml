@@ -1,0 +1,92 @@
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="{{editMode ? '编辑发布作品' : '上传设计作品'}}" subtitle="{{editMode ? '调整作品信息后重新提交审核' : '先上传到主页，可选同步到模板广场'}}" background="#e6daca" />
+
+  <view class="content">
+    <view class="panel-card hero-card">
+      <text class="panel-title">发布说明</text>
+      <text class="panel-desc">设计师可以先把真实作品上传到个人主页展示。如果你想让更多用户看到，也可以选择同步发布到模板广场。所有作品都会先进入审核。</text>
+    </view>
+
+    <view class="panel-card">
+      <text class="panel-title">作品信息</text>
+      <view class="form-item">
+        <text class="form-label">作品标题</text>
+        <input class="form-input" placeholder="例如：庭院餐吧夜景方案" value="{{form.name}}" bindinput="onNameInput" maxlength="40" />
+      </view>
+      <view class="form-item">
+        <text class="form-label">作品描述</text>
+        <textarea confirm-hold="{{true}}" class="form-textarea" placeholder="简单介绍作品亮点、适合人群、设计思路" value="{{form.description}}" bindinput="onDescriptionInput" maxlength="300" adjust-position="{{false}}" cursor-spacing="140" disable-default-padding="{{true}}" show-confirm-bar="{{false}}" />
+      </view>
+      <view class="form-item">
+        <text class="form-label">一级分类</text>
+        <picker mode="selector" range="{{mainTabs}}" range-key="label" value="{{mainTabIndex}}" bindchange="onMainTabChange">
+          <view class="picker-field">{{mainTabIndex >= 0 ? mainTabs[mainTabIndex].label : '请选择一级分类'}}</view>
+        </picker>
+      </view>
+      <view class="form-item" wx:if="{{subTabs.length}}">
+        <text class="form-label">二级分类</text>
+        <picker mode="selector" range="{{subTabs}}" range-key="label" value="{{subTabIndex}}" bindchange="onSubTabChange">
+          <view class="picker-field">{{subTabIndex >= 0 ? subTabs[subTabIndex].label : '请选择二级分类'}}</view>
+        </picker>
+      </view>
+      <view class="form-item" wx:if="{{thirdTabs.length}}">
+        <text class="form-label">三级分类</text>
+        <picker mode="selector" range="{{thirdTabs}}" range-key="label" value="{{thirdTabIndex}}" bindchange="onThirdTabChange">
+          <view class="picker-field">{{thirdTabIndex >= 0 ? thirdTabs[thirdTabIndex].label : '请选择三级分类'}}</view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="panel-card">
+      <view class="panel-title-row">
+        <text class="panel-title">作品图片</text>
+        <text class="panel-tip">最多 9 张，第一张可作为封面</text>
+      </view>
+      <view class="upload-grid">
+        <view class="upload-tile upload-trigger" bindtap="chooseImages" wx:if="{{imageUrls.length < 9}}">
+          <t-icon name="add" size="52rpx" color="#b79066" />
+          <text class="upload-trigger-text">上传图片</text>
+        </view>
+        <view class="upload-tile upload-preview" wx:for="{{imageUrls}}" wx:key="*this">
+          <image class="upload-image" src="{{item}}" mode="aspectFill" bindtap="onPreviewImage" data-url="{{item}}" />
+          <view class="upload-cover-badge {{coverIndex === index ? 'active' : ''}}" bindtap="onSetCover" data-index="{{index}}">{{coverIndex === index ? '封面' : '设为封面'}}</view>
+          <view class="upload-remove" bindtap="onRemoveImage" data-index="{{index}}">×</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="panel-card">
+      <text class="panel-title">展示范围</text>
+      <view class="scope-options">
+        <view class="scope-option {{form.publishScope === 'homepage_only' ? 'active' : ''}}" bindtap="onScopeTap" data-value="homepage_only">
+          <text class="scope-title">仅主页展示</text>
+          <text class="scope-desc">只在你的设计师主页展示，不进入模板广场。</text>
+        </view>
+        <view class="scope-option {{form.publishScope === 'square' ? 'active' : ''}}" bindtap="onScopeTap" data-value="square">
+          <text class="scope-title">主页 + 模板广场</text>
+          <text class="scope-desc">审核通过后，同时出现在你的主页和模板广场。</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="panel-card">
+      <text class="panel-title">价格设置</text>
+      <view class="price-row">
+        <view>
+          <text class="form-label">免费展示</text>
+          <text class="panel-tip">如果关闭，将按模板逻辑收取灵石</text>
+        </view>
+        <switch checked="{{form.isFree}}" color="#b68d63" bindchange="onFreeSwitchChange" />
+      </view>
+      <view class="form-item" wx:if="{{!form.isFree}}">
+        <text class="form-label">灵石价格</text>
+        <input class="form-input" type="number" placeholder="至少 1 灵石" value="{{form.price}}" bindinput="onPriceInput" />
+      </view>
+    </view>
+
+    <view class="submit-bar">
+      <view class="submit-btn" bindtap="onSubmit">{{saving ? (editMode ? '保存中...' : '提交中...') : (editMode ? '保存修改' : '提交审核')}}</view>
+    </view>
+  </view>
+</view>

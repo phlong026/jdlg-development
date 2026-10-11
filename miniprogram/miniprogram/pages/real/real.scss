@@ -1,0 +1,276 @@
+/* pages/real/real.scss 资质认证 - 与身份认证一致深色风格 */
+.page {
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #0f172a;
+  color: #ffffff;
+  padding-bottom: calc(80rpx + env(safe-area-inset-bottom));
+}
+
+/* 状态条（深色卡片） */
+.status-bar {
+  margin: 24rpx 24rpx 0;
+  padding: 24rpx;
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  box-shadow: 0 14rpx 28rpx rgba(15, 23, 42, 0.85);
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12rpx 0;
+  font-size: 28rpx;
+}
+
+.status-row + .status-row {
+  border-top: 1rpx solid rgba(55, 65, 81, 0.6);
+}
+
+.status-label {
+  color: #9ca3af;
+}
+
+.status-value {
+  color: #e5e7eb;
+  font-weight: 500;
+}
+
+.status-value.highlight {
+  color: #38bdf8;
+}
+
+.continue-pay-box {
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid rgba(55, 65, 81, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.continue-pay-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.continue-pay-desc {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: rgba(229, 231, 235, 0.82);
+}
+
+.continue-pay-btn {
+  width: 100%;
+  height: 76rpx;
+  line-height: 76rpx;
+  border-radius: 999rpx;
+  border: none;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 500;
+  box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.36);
+}
+
+/* Tab（深色风格） */
+.tabs {
+  display: flex;
+  margin: 24rpx 24rpx 0;
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  overflow: hidden;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 28rpx;
+  font-size: 30rpx;
+  color: #9ca3af;
+  transition: all 0.2s;
+}
+
+.tab-item.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  font-weight: 500;
+  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.4);
+}
+
+.fee-hint {
+  margin: 20rpx 24rpx 0;
+  padding: 20rpx 24rpx;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fef3c7;
+  font-size: 26rpx;
+  border-radius: 12rpx;
+  line-height: 1.5;
+}
+
+/* 表单（深色卡片） */
+.form-section {
+  margin: 24rpx 24rpx 0;
+  padding: 0 24rpx 24rpx;
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  box-shadow: 0 14rpx 28rpx rgba(15, 23, 42, 0.85);
+}
+
+.form-item {
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid rgba(55, 65, 81, 0.6);
+}
+
+.form-label {
+  display: block;
+  font-size: 28rpx;
+  color: #e5e7eb;
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  width: 100%;
+  height: 72rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  color: #f9fafb;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12rpx;
+  box-sizing: border-box;
+}
+
+.form-textarea {
+  width: 100%;
+  min-height: 120rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  color: #f9fafb;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12rpx;
+  box-sizing: border-box;
+}
+
+.picker-value {
+  height: 72rpx;
+  line-height: 72rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12rpx;
+  color: #e5e7eb;
+}
+
+/* 提交按钮（与身份认证主按钮一致） */
+.submit-wrap {
+  margin: 48rpx 24rpx 0;
+}
+
+.submit-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 500;
+  border-radius: 999rpx;
+  border: none;
+  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.5);
+}
+
+.submit-btn[disabled] {
+  opacity: 0.7;
+}
+
+.page {
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+  color: #5e412f;
+}
+
+.status-bar,
+.form-section {
+  background: linear-gradient(180deg, rgba(247, 241, 232, 0.92) 0%, rgba(239, 231, 220, 0.86) 100%);
+  border: 1px solid rgba(176, 155, 130, 0.24);
+  box-shadow: 0 14rpx 28rpx rgba(113, 80, 63, 0.08);
+}
+
+.status-row + .status-row,
+.form-item {
+  border-color: rgba(188, 168, 145, 0.42);
+}
+
+.status-label,
+.fee-hint,
+.tab-item,
+.picker-value {
+  color: #8c7553;
+}
+
+.status-value,
+.form-label,
+.form-input,
+.form-textarea,
+.picker-value {
+  color: #5e412f;
+}
+
+.status-value.highlight {
+  color: #a9855b;
+}
+
+.continue-pay-box {
+  border-top-color: rgba(188, 168, 145, 0.42);
+}
+
+.continue-pay-title {
+  color: #5e412f;
+}
+
+.continue-pay-desc {
+  color: rgba(94, 65, 47, 0.72);
+}
+
+.continue-pay-btn {
+  background: linear-gradient(180deg, #cfad85 0%, #b68d63 100%);
+  box-shadow: 0 10rpx 24rpx rgba(113, 80, 63, 0.16);
+}
+
+.tabs {
+  margin: 24rpx 24rpx 0;
+  background: rgba(247, 241, 232, 0.82);
+  border: 1px solid rgba(190, 169, 145, 0.88);
+
+  .tab-item.active {
+    background: linear-gradient(135deg, #cfad85 0%, #b68d63 100%);
+    color: #fffaf2;
+    box-shadow: 0 10rpx 24rpx rgba(169, 133, 91, 0.2);
+  }
+}
+
+.fee-hint {
+  background: rgba(252, 246, 220, 0.94);
+  border: 1px solid rgba(216, 183, 106, 0.48);
+  color: #a47b2d;
+}
+
+.form-input,
+.form-textarea,
+.picker-value {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(188, 168, 145, 0.38);
+}
+
+.submit-btn {
+  background: linear-gradient(180deg, #c8a679 0%, #a9855b 100%);
+  box-shadow: 0 10rpx 24rpx rgba(113, 80, 63, 0.18);
+}

@@ -1,0 +1,20 @@
+<view class="tabbar-placeholder"></view>
+<view class="tabbar-shell">
+  <view class="tabbar">
+    <image
+      class="tabbar-background"
+      src="{{current === 0 ? homeTabbarImage : current === 1 ? templateTabbarImage : current === 2 ? designerTabbarImage : current === 3 ? myTabbarImage : defaultTabbarImage}}"
+      mode="scaleToFill"
+    />
+
+    <view class="tabbar-hitbox-layer">
+      <view
+        class="tabbar-hitbox"
+        wx:for="{{tabs}}"
+        wx:key="index"
+        bindtap="switchTab"
+        data-index="{{item.index}}"
+      ></view>
+    </view>
+  </view>
+</view>

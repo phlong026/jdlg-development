@@ -1,0 +1,109 @@
+<view class="page">
+  <navigation-bar title="新闽派工具" background="#e8dece" />
+
+  <view class="content">
+    <view class="mode-tabs">
+      <view class="mode-tab {{activeMode === 'text_to_image' ? 'active' : ''}}" bindtap="onSelectMode" data-mode="text_to_image">
+        <text>文生图</text>
+      </view>
+      <view class="mode-tab {{activeMode === 'image_to_image' ? 'active' : ''}}" bindtap="onSelectMode" data-mode="image_to_image">
+        <text>图生图</text>
+      </view>
+    </view>
+
+    <view class="section-card upload-card" wx:if="{{activeMode === 'image_to_image'}}">
+      <view class="upload-card-inner">
+        <view class="upload-item">
+          <text class="upload-title">原图</text>
+          <view class="upload-box {{originalImageUrl ? 'has-image' : ''}}" bindtap="onTapUploadImage" data-target="original" data-url="{{originalImageUrl}}">
+            <image wx:if="{{originalImageUrl}}" class="upload-preview" src="{{originalImageUrl}}" mode="aspectFill" />
+            <text wx:else class="upload-plus">{{uploadingOriginal ? '上传中' : '+'}}</text>
+          </view>
+          <view wx:if="{{originalImageUrl}}" class="upload-remove" bindtap="onRemoveUploadImage" data-target="original">移除</view>
+        </view>
+        <view class="upload-item">
+          <text class="upload-title">参考图</text>
+          <view class="upload-box {{referenceImageUrl ? 'has-image' : ''}}" bindtap="onTapUploadImage" data-target="reference" data-url="{{referenceImageUrl}}">
+            <image wx:if="{{referenceImageUrl}}" class="upload-preview" src="{{referenceImageUrl}}" mode="aspectFill" />
+            <text wx:else class="upload-plus">{{uploadingReference ? '上传中' : '+'}}</text>
+          </view>
+          <view wx:if="{{referenceImageUrl}}" class="upload-remove" bindtap="onRemoveUploadImage" data-target="reference">移除</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card prompt-card">
+      <view class="prompt-card-inner">
+        <view class="prompt-title-row">
+          <text class="prompt-title">{{activeMode === 'image_to_image' ? '改造要求' : '画面描述'}}</text>
+          <view class="ai-optimize-btn {{optimizingPrompt ? 'loading' : ''}}" bindtap="onOptimizePrompt">
+            <text class="ai-optimize-text">{{optimizingPrompt ? '优化中...' : 'AI优化'}}</text>
+          </view>
+        </view>
+        <view class="prompt-input-wrap">
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}"
+            class="prompt-input"
+            auto-height
+            value="{{promptText}}"
+            maxlength="1200"
+            placeholder="{{activeMode === 'image_to_image' ? '描述参考图风格如何应用到原图，需保留哪些结构、角度和光影' : (tool.promptPlaceholder || '描述建筑场景、视角、材质、光影和氛围')}}"
+            placeholder-style="color: rgba(159, 151, 140, 0.72);"
+            bindinput="onPromptInput"
+          />
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card orientation-card" wx:if="{{activeMode === 'text_to_image'}}">
+      <view class="orientation-card-inner">
+        <text class="orientation-title">画幅</text>
+        <view class="canvas-row">
+          <view wx:for="{{canvasOptions}}" wx:key="key" class="canvas-option {{selectedCanvasKey === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="onSelectCanvas">
+            <view class="canvas-icon canvas-icon-{{item.key}}"></view>
+            <text class="canvas-label">{{item.label}}</text>
+            <text class="canvas-size">{{item.desc}}</text>
+          </view>
+        </view>
+
+        <view class="custom-size-row" wx:if="{{selectedCanvasKey === 'custom'}}">
+          <view class="custom-size-field">
+            <text>宽</text>
+            <input type="number" value="{{customWidth}}" placeholder="848" data-field="width" bindinput="onCustomDimensionInput" />
+          </view>
+          <view class="custom-size-split">×</view>
+          <view class="custom-size-field">
+            <text>高</text>
+            <input type="number" value="{{customHeight}}" placeholder="1280" data-field="height" bindinput="onCustomDimensionInput" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card generate-count-card">
+      <view class="generate-count-header">
+        <text class="generate-count-title">生成张数</text>
+        <text class="generate-count-price" wx:if="{{pricingLoaded}}">单张 {{unitCost}} 灵石，合计 {{currentCost}} 灵石</text>
+        <text class="generate-count-price muted" wx:elif="{{pricingError}}">计费暂不可用</text>
+      </view>
+      <view class="generate-count-segment">
+        <view wx:for="{{generateCountOptions}}" wx:key="*this" class="generate-count-option {{selectedGenerateCount === item ? 'active' : ''}}" data-count="{{item}}" bindtap="onSelectGenerateCount">
+          <text>{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card generate-card">
+      <view class="generate-actions">
+        <view class="generate-action generate-action-image {{generating || loadingTool || !pricingLoaded || unitCost <= 0 ? 'disabled' : ''}}" bindtap="onStartCreate">
+          <text class="generate-action-title">{{generating ? '生成中' : '开始生成'}}</text>
+          <text class="generate-action-price" wx:if="{{pricingLoaded}}">{{currentCost}}灵石</text>
+          <text class="generate-action-price" wx:elif="{{pricingLoading}}">获取计费中</text>
+          <text class="generate-action-price" wx:else>计费暂不可用</text>
+        </view>
+      </view>
+      <view class="generate-tip" wx:if="{{bottomTipText}}">{{bottomTipText}}</view>
+    </view>
+  </view>
+
+  <intercept-modal />
+</view>

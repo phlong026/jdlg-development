@@ -1,0 +1,144 @@
+<!--pages/aivideo/aivideo.wxml-->
+<view class="page">
+  <image class="page-bg" src="{{pageBgImage}}" mode="widthFix" />
+
+  <view class="page-shell">
+    <!-- 统一导航栏 -->
+    <navigation-bar background="#e6daca" />
+  </view>
+
+  <view class="content">
+    <view class="section-card frames-card">
+      <view class="section-card-inner frame-grid">
+        <view class="frame-panel">
+          <view class="frame-preview-wrap" wx:if="{{startFramePreview}}">
+            <image class="frame-image" src="{{startFramePreview}}" mode="aspectFill" bindtap="onSelectStartFrame" />
+            <view class="frame-overlay"></view>
+            <view class="frame-tag">
+              <view class="frame-tag-dot"></view>
+              <text>首帧</text>
+            </view>
+            <view class="frame-delete" catchtap="onDeleteStartFrame">
+              <t-icon name="close" size="30rpx" color="#ffffff" />
+            </view>
+          </view>
+          <view class="frame-empty" wx:else bindtap="onSelectStartFrame">
+            <view class="frame-empty-icon">
+              <t-icon name="add" size="70rpx" color="#d29a60" />
+            </view>
+            <text class="frame-empty-title">上传首帧</text>
+            <text class="frame-empty-subtitle">点击上传开始画面</text>
+          </view>
+        </view>
+
+        <view class="frame-panel">
+          <view class="frame-preview-wrap" wx:if="{{endFramePreview}}">
+            <image class="frame-image" src="{{endFramePreview}}" mode="aspectFill" bindtap="onSelectEndFrame" />
+            <view class="frame-overlay"></view>
+            <view class="frame-tag">
+              <view class="frame-tag-dot"></view>
+              <text>尾帧</text>
+            </view>
+            <view class="frame-delete" catchtap="onDeleteEndFrame">
+              <t-icon name="close" size="30rpx" color="#ffffff" />
+            </view>
+          </view>
+          <view class="frame-empty" wx:else bindtap="onSelectEndFrame">
+            <view class="frame-empty-icon">
+              <t-icon name="add" size="70rpx" color="#d29a60" />
+            </view>
+            <text class="frame-empty-title">上传尾帧</text>
+            <text class="frame-empty-subtitle">点击上传结束画面</text>
+          </view>
+        </view>
+      </view>
+      <view class="frames-tip-row">
+        <text class="frames-tip">建议两张图主体、空间和风格保持一致，生成出来的过渡会更自然。</text>
+      </view>
+    </view>
+
+    <view class="section-card prompt-card">
+      <view class="section-card-inner prompt-card-inner">
+        <view class="prompt-title-row">
+          <text class="section-title">提示词</text>
+          <view class="ai-optimize-btn {{optimizingPrompt ? 'loading' : ''}}" bindtap="onOptimizePrompt">
+            <text class="ai-optimize-text">{{optimizingPrompt ? '优化中...' : 'AI优化'}}</text>
+          </view>
+        </view>
+        <view class="prompt-input-wrap">
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="prompt-input" value="{{prompt}}" bindinput="onPromptInput" placeholder="例如：镜头从客厅缓慢推进到阳台，午后阳光逐渐洒入室内，空间保持现代奶油风。" placeholder-style="color: rgba(146, 125, 101, 0.66); line-height: 1.8;" maxlength="999999" />
+        </view>
+        <view class="prompt-tip-box">
+          <text class="prompt-tip-title">建议写清</text>
+          <text class="prompt-tip">镜头运动、空间氛围、光线变化、材质细节或人物动作，这样首尾帧之间的过渡会更自然。</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card ratio-card">
+      <view class="section-card-inner">
+        <text class="section-title">画面方向</text>
+        <view class="ratio-row">
+          <view
+            class="ratio-option {{ratio === item.value ? 'active' : ''}}"
+            wx:for="{{ratioOptions}}"
+            wx:key="value"
+            bindtap="onRatioChange"
+            data-ratio="{{item.value}}"
+          >
+            <view class="ratio-icon ratio-icon-{{item.icon}}"></view>
+            <text class="ratio-label">{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card duration-card">
+      <view class="section-card-inner">
+        <text class="section-title">视频时长</text>
+        <view class="duration-row">
+          <view
+            class="duration-option-card {{duration === item.value ? 'active' : ''}}"
+            wx:for="{{durationOptions}}"
+            wx:key="value"
+            bindtap="onDurationSelect"
+            data-duration="{{item.value}}"
+          >
+            <text class="duration-option-value">{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="submit-section">
+      <view class="submit-btn {{canSubmit ? '' : 'disabled'}}" bindtap="onSubmit">
+        <text class="submit-title" wx:if="{{uploading}}">上传中...</text>
+        <text class="submit-title" wx:elif="{{generating}}">生成中...</text>
+        <text class="submit-title" wx:else>生成视频</text>
+        <text class="submit-subtitle">{{submitTip}}</text>
+      </view>
+    </view>
+
+    <view class="result-section" wx:if="{{resultStatus || resultUrl}}">
+      <text class="section-title">生成结果</text>
+      <view wx:if="{{resultUrl}}" class="result-video-wrap">
+        <video class="result-video" src="{{resultUrl}}" controls show-center-play-btn />
+        <view class="result-actions">
+          <view class="result-btn" bindtap="onReset">再生成一个</view>
+          <view class="result-btn secondary" bindtap="onOpenGenerateHistory">查看生成记录</view>
+        </view>
+      </view>
+      <view wx:elif="{{resultStatus}}" class="result-status">
+        <text>{{resultStatus}}</text>
+        <text class="result-status-detail" wx:if="{{resultStatusDetail}}">{{resultStatusDetail}}</text>
+        <view class="result-actions">
+          <view class="result-btn secondary" bindtap="onOpenGenerateHistory">查看生成记录</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <custom-tabbar current="{{-1}}"></custom-tabbar>
+
+  <intercept-modal />
+</view>

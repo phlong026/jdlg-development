@@ -1,0 +1,583 @@
+page {
+  min-height: 100%;
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+}
+
+.aitoolworkbench-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+}
+
+.aitoolworkbench-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400rpx;
+  color: #8f6b49;
+  font-size: 28rpx;
+}
+
+.aitoolworkbench-content {
+  width: 706rpx;
+  margin: 0 auto;
+  padding: 12rpx 0 calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.aitoolworkbench-info-card {
+  padding: 28rpx 24rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(160deg, #8f6b49 0%, #c69b73 100%);
+  box-shadow: 0 12rpx 28rpx rgba(113, 87, 59, 0.12);
+  margin-bottom: 24rpx;
+  color: #fffdf8;
+}
+
+.category-architecture {
+  background: linear-gradient(160deg, #8f6b49 0%, #c69b73 100%);
+}
+
+.category-interior {
+  background: linear-gradient(160deg, #8a715f 0%, #d7b79b 100%);
+}
+
+.category-landscape {
+  background: linear-gradient(160deg, #6f7d58 0%, #b4c392 100%);
+}
+
+.category-planning {
+  background: linear-gradient(160deg, #5d6b7a 0%, #8a9ab8 100%);
+}
+
+.aitoolworkbench-info-meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.aitoolworkbench-info-category {
+  font-size: 20rpx;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.aitoolworkbench-info-common {
+  font-size: 18rpx;
+  font-weight: 600;
+  padding: 4rpx 12rpx;
+  border-radius: 12rpx;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.aitoolworkbench-info-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 8rpx;
+}
+
+.aitoolworkbench-info-desc {
+  font-size: 22rpx;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.aitoolworkbench-title {
+  font-size: 40rpx;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #4f4131;
+}
+
+.aitoolworkbench-subtitle {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #7b6b5a;
+}
+
+.aitoolworkbench-panel,
+.aitoolworkbench-action-panel {
+  margin-top: 20rpx;
+  padding: 28rpx;
+  border-radius: 28rpx;
+  background: rgba(251, 248, 243, 0.96);
+  box-shadow: 0 10rpx 24rpx rgba(113, 87, 59, 0.05);
+}
+
+.aitoolworkbench-panel-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #4f4131;
+}
+
+.aitoolworkbench-upload-card {
+  margin-top: 18rpx;
+  min-height: 220rpx;
+  padding: 28rpx;
+  border-radius: 24rpx;
+  border: 2rpx dashed rgba(191, 161, 129, 0.72);
+  background: rgba(245, 237, 227, 0.9);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.aitoolworkbench-upload-icon {
+  width: 74rpx;
+  height: 74rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #d6b48b 0%, #b88e61 100%);
+  color: #fffaf3;
+  font-size: 42rpx;
+}
+
+.aitoolworkbench-upload-title {
+  margin-top: 18rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #4f4131;
+}
+
+.aitoolworkbench-upload-desc {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: #7b6b5a;
+}
+
+.aitoolworkbench-upload-single {
+  margin-top: 18rpx;
+}
+
+.aitoolworkbench-upload-empty {
+  min-height: 240rpx;
+  border-radius: 24rpx;
+  border: 2rpx dashed rgba(191, 161, 129, 0.72);
+  background: rgba(245, 237, 227, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.aitoolworkbench-upload-plus {
+  color: #d99957;
+  font-size: 64rpx;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.aitoolworkbench-upload-hint {
+  color: #9a7a55;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.aitoolworkbench-upload-preview {
+  width: 100%;
+  height: 240rpx;
+  margin-top: 20rpx;
+  border-radius: 22rpx;
+  display: block;
+}
+
+.aitoolworkbench-upload-actions {
+  width: 100%;
+  margin-top: 18rpx;
+  display: flex;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.aitoolworkbench-upload-action {
+  min-width: 152rpx;
+  height: 56rpx;
+  padding: 0 18rpx;
+  border-radius: 28rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1rpx solid rgba(193, 168, 141, 0.5);
+  color: #6d5a48;
+  font-size: 22rpx;
+  box-sizing: border-box;
+}
+
+.aitoolworkbench-upload-action.danger {
+  color: #a56452;
+}
+
+.aitoolworkbench-reference-grid {
+  margin-top: 18rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14rpx;
+}
+
+.aitoolworkbench-reference-card {
+  position: relative;
+  padding: 12rpx;
+  border-radius: 24rpx;
+  background: rgba(244, 236, 226, 0.9);
+  border: 2rpx solid rgba(201, 184, 164, 0.34);
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.aitoolworkbench-reference-card.selected {
+  border-color: rgba(224, 154, 79, 0.9);
+  background: linear-gradient(180deg, rgba(255, 241, 225, 0.95) 0%, rgba(247, 225, 195, 0.9) 100%);
+  box-shadow: 0 10rpx 18rpx rgba(130, 93, 57, 0.12);
+}
+
+.aitoolworkbench-reference-media {
+  position: relative;
+  width: 100%;
+  height: 226rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  background: rgba(255, 250, 244, 0.78);
+}
+
+.aitoolworkbench-reference-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.aitoolworkbench-reference-image-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(214, 196, 176, 0.3);
+  color: #8a7a6a;
+  font-size: 48rpx;
+  font-weight: 700;
+}
+
+.aitoolworkbench-reference-check {
+  position: absolute;
+  right: 16rpx;
+  top: 16rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #d6b48b 0%, #b88e61 100%);
+  color: #fffaf3;
+  font-size: 26rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(130, 93, 57, 0.25);
+}
+
+.aitoolworkbench-style-item.active {
+  background: linear-gradient(180deg, rgba(214, 180, 139, 0.22) 0%, rgba(184, 142, 97, 0.24) 100%);
+  border-color: rgba(177, 128, 82, 0.78);
+  box-shadow: 0 10rpx 18rpx rgba(130, 93, 57, 0.08);
+}
+
+.aitoolworkbench-reference-title {
+  margin-top: 10rpx;
+  min-height: 62rpx;
+  padding: 0 4rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.aitoolworkbench-reference-name {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #6f5a45;
+  line-height: 1.34;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aitoolworkbench-reference-mode {
+  margin-top: 6rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: rgba(139, 113, 86, 0.1);
+  color: #8a7157;
+  font-size: 18rpx;
+  line-height: 1.4;
+}
+
+.aitoolworkbench-reference-desc {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: #796857;
+}
+
+.aitoolworkbench-reference-tip {
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid rgba(201, 184, 164, 0.28);
+  font-size: 20rpx;
+  line-height: 1.7;
+  color: #8a7765;
+}
+
+.aitoolworkbench-reference-desc,
+.aitoolworkbench-reference-tip {
+  display: none;
+}
+
+.aitoolworkbench-style-list {
+  margin-top: 18rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.aitoolworkbench-style-item {
+  min-width: 160rpx;
+  height: 58rpx;
+  padding: 0 20rpx;
+  border-radius: 29rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(244, 236, 226, 0.9);
+  border: 1rpx solid rgba(201, 184, 164, 0.34);
+  color: #7b6856;
+  font-size: 22rpx;
+  box-sizing: border-box;
+}
+
+.aitoolworkbench-textarea {
+  width: 100%;
+  min-height: 264rpx;
+  max-height: 400rpx;
+  margin-top: 18rpx;
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: rgba(245, 237, 227, 0.9);
+  box-sizing: border-box;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #4f4131;
+}
+
+.aitoolworkbench-textarea-placeholder {
+  color: #9a8a79;
+}
+
+.aitoolworkbench-prompt-tip {
+  margin-top: 14rpx;
+  font-size: 20rpx;
+  line-height: 1.7;
+  color: #8a7a69;
+}
+
+.aitoolworkbench-primary-btn {
+  width: 100%;
+  height: 88rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #c69b73 0%, #a87c53 100%);
+  color: #fffaf3;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
+}
+
+.aitoolworkbench-bottom-tip {
+  margin-top: 16rpx;
+  text-align: center;
+  font-size: 21rpx;
+  line-height: 1.7;
+  color: #8a7a69;
+}
+
+.aitoolworkbench-upload-summary {
+  margin-top: 16rpx;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: #8a7765;
+}
+
+.aitoolworkbench-upload-status {
+  margin-top: 16rpx;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(82, 59, 41, 0.84);
+  color: #fff7e2;
+  font-size: 22rpx;
+  text-align: center;
+}
+
+.aitoolworkbench-panel-desc {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: #8a7765;
+}
+
+.aitoolworkbench-parameter-block {
+  margin-top: 20rpx;
+}
+
+.aitoolworkbench-parameter-label {
+  color: #7a6450;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.aitoolworkbench-canvas-row,
+.aitoolworkbench-quality-row {
+  margin-top: 16rpx;
+  display: flex;
+  gap: 16rpx;
+}
+
+.aitoolworkbench-canvas-option,
+.aitoolworkbench-quality-option {
+  flex: 1;
+  border-radius: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.aitoolworkbench-canvas-option {
+  height: 88rpx;
+  flex-direction: column;
+  gap: 8rpx;
+  background: rgba(255, 255, 255, 0.34);
+  border: 2rpx solid rgba(214, 199, 180, 0.7);
+}
+
+.aitoolworkbench-canvas-icon {
+  border: 2rpx solid #bda88f;
+  border-radius: 8rpx;
+}
+
+.aitoolworkbench-canvas-icon.canvas-landscape {
+  width: 28rpx;
+  height: 16rpx;
+}
+
+.aitoolworkbench-canvas-icon.canvas-square {
+  width: 20rpx;
+  height: 20rpx;
+}
+
+.aitoolworkbench-canvas-icon.canvas-portrait {
+  width: 16rpx;
+  height: 28rpx;
+}
+
+.aitoolworkbench-canvas-text {
+  color: #a28e78;
+  font-size: 22rpx;
+  font-weight: 500;
+}
+
+.aitoolworkbench-canvas-option.active {
+  border-color: rgba(224, 154, 79, 0.72);
+  background: rgba(255, 241, 225, 0.78);
+}
+
+.aitoolworkbench-canvas-option.active .aitoolworkbench-canvas-icon {
+  border-color: #d99957;
+}
+
+.aitoolworkbench-canvas-option.active .aitoolworkbench-canvas-text {
+  color: #f39a35;
+  font-weight: 600;
+}
+
+.quality-block {
+  margin-top: 24rpx;
+}
+
+.aitoolworkbench-quality-option {
+  height: 68rpx;
+  background: rgba(255, 255, 255, 0.34);
+  border: 2rpx solid rgba(214, 199, 180, 0.7);
+}
+
+.aitoolworkbench-quality-text {
+  color: #a28e78;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.aitoolworkbench-quality-option.active {
+  border-color: rgba(224, 154, 79, 0.72);
+  background: rgba(255, 241, 225, 0.78);
+}
+
+.aitoolworkbench-quality-option.active .aitoolworkbench-quality-text {
+  color: #f39a35;
+}
+
+.aitoolworkbench-generate-count-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.aitoolworkbench-generate-count-price {
+  color: #a07f5c;
+  font-size: 22rpx;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.aitoolworkbench-generate-count-segment {
+  margin-top: 18rpx;
+  display: flex;
+  align-items: center;
+  padding: 8rpx;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.54);
+  border: 2rpx solid rgba(214, 199, 180, 0.7);
+}
+
+.aitoolworkbench-generate-count-option {
+  flex: 1;
+  height: 76rpx;
+  border-radius: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a856d;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.aitoolworkbench-generate-count-option.active {
+  background: linear-gradient(180deg, #f7d9ad 0%, #eec88f 100%);
+  color: #8a633f;
+  box-shadow: 0 8rpx 16rpx rgba(176, 128, 79, 0.16);
+}

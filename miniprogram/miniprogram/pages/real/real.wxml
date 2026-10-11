@@ -1,0 +1,111 @@
+<!--pages/real/real.wxml 资质认证：个人认证 / 企业认证 与身份认证一致深色风格 -->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="资质认证" subtitle="个人认证 2 元 · 企业认证 5 元，提交时支付" background="#e6daca" />
+
+  <!-- 状态条：有工单时展示工单号与阶段 -->
+  <view class="status-bar" wx:if="{{applicationId > 0}}">
+    <view class="status-row">
+      <text class="status-label">工单号</text>
+      <text class="status-value">{{applicationId}}</text>
+    </view>
+    <view class="status-row" wx:if="{{pendingOrderNo}}">
+      <text class="status-label">待支付订单号</text>
+      <text class="status-value">{{pendingOrderNo}}</text>
+    </view>
+    <view class="status-row" wx:if="{{pendingAmountText}}">
+      <text class="status-label">待支付金额</text>
+      <text class="status-value">￥{{pendingAmountText}}</text>
+    </view>
+    <view class="status-row" wx:if="{{stageSystem}}">
+      <text class="status-label">系统审核阶段</text>
+      <text class="status-value">{{stageSystem}}</text>
+    </view>
+    <view class="status-row" wx:if="{{stageAdmin}}">
+      <text class="status-label">管理员审核阶段</text>
+      <text class="status-value">{{stageAdmin}}</text>
+    </view>
+    <view class="status-row" wx:if="{{stage}}">
+      <text class="status-label">当前状态</text>
+      <text class="status-value highlight">{{stage}}</text>
+    </view>
+    <view class="continue-pay-box" wx:if="{{status === 'pending_payment' && canContinuePay}}">
+      <text class="continue-pay-title">你有一笔未完成的认证支付</text>
+      <text class="continue-pay-desc">继续支付后，认证将进入管理员审核。</text>
+      <button class="continue-pay-btn" disabled="{{loading}}" bindtap="continuePay">
+        {{loading ? '处理中...' : '继续支付认证费'}}
+      </button>
+    </view>
+  </view>
+
+  <!-- Tab：个人认证 / 企业认证 -->
+  <view class="tabs">
+    <view class="tab-item {{tab === 'designer' ? 'active' : ''}}" data-tab="designer" bindtap="switchTab">个人认证</view>
+    <view class="tab-item {{tab === 'enterprise' ? 'active' : ''}}" data-tab="enterprise" bindtap="switchTab">企业认证</view>
+  </view>
+
+  <!-- 费用说明 -->
+  <view class="fee-hint">{{feeHint}}</view>
+
+  <!-- 个人认证表单 -->
+  <view class="form-section" wx:if="{{tab === 'designer'}}">
+    <view class="form-item">
+      <text class="form-label">姓名</text>
+      <input class="form-input" placeholder="请输入真实姓名" value="{{realName}}" bindinput="onRealNameInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">身份证号</text>
+      <input class="form-input" placeholder="请输入身份证号" value="{{idCardNo}}" bindinput="onIdCardNoInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">认证身份</text>
+      <picker mode="selector" range="{{identityOptions}}" value="{{identityTypeIndex}}" bindchange="onIdentityPickerChange">
+        <view class="picker-value">{{identityOptions[identityTypeIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="form-label">其他证件（选填）</text>
+      <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" placeholder="如：施工队证件、设计师证等" value="{{extraDocsRemark}}" bindinput="onExtraDocsInput" />
+    </view>
+  </view>
+
+  <!-- 企业认证表单 -->
+  <view class="form-section" wx:if="{{tab === 'enterprise'}}">
+    <view class="form-item">
+      <text class="form-label">企业名称</text>
+      <input class="form-input" placeholder="请输入企业全称" value="{{companyName}}" bindinput="onCompanyNameInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">统一社会信用代码</text>
+      <input class="form-input" placeholder="请输入统一社会信用代码" value="{{creditCode}}" bindinput="onCreditCodeInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">法人姓名</text>
+      <input class="form-input" placeholder="请输入法人姓名" value="{{legalPerson}}" bindinput="onLegalPersonInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">真实姓名</text>
+      <input class="form-input" placeholder="经办人/申请人姓名" value="{{realName}}" bindinput="onRealNameInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">身份证号</text>
+      <input class="form-input" placeholder="请输入身份证号" value="{{idCardNo}}" bindinput="onIdCardNoInput" />
+    </view>
+    <view class="form-item">
+      <text class="form-label">认证身份</text>
+      <picker mode="selector" range="{{enterpriseIdentityOptions}}" value="{{enterpriseIdentityIndex}}" bindchange="onEnterpriseIdentityPickerChange">
+        <view class="picker-value">{{enterpriseIdentityOptions[enterpriseIdentityIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="form-label">其他证件（选填）</text>
+      <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" placeholder="如：营业执照等" value="{{extraDocsRemark}}" bindinput="onExtraDocsInput" />
+    </view>
+  </view>
+
+  <view class="submit-wrap">
+    <button class="submit-btn" disabled="{{loading}}" bindtap="submit">
+      {{loading ? '处理中...' : (status === 'pending_payment' && canContinuePay ? '继续支付认证费' : (tab === 'designer' ? '提交并支付 2 元' : '提交并支付 5 元'))}}
+    </button>
+  </view>
+</view>

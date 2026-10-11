@@ -1,0 +1,38 @@
+{
+  "fullSourceDiffReviewed": true,
+  "protectedWxssRulesUnchanged": true,
+  "wxssChangedSelectors": [
+    ".brand-backdrop::after",
+    ".brand-symbol",
+    ".brand-copy",
+    ".brand-name",
+    ".brand-en",
+    ".brand-slogan",
+    ".brand-slogan text",
+    ".slogan-line",
+    ".cost-title",
+    ".estimate-note"
+  ],
+  "wxssAddedSelectors": [
+    ".privacy-link",
+    ".brand-header > image,.brand-header > view",
+    ".brand-header",
+    ".brand-header::before"
+  ],
+  "existingEventHandlersReused": true,
+  "newDependencies": false,
+  "rollbackLiveHashesMatch": true,
+  "scope": "approved homepage changes only",
+  "remainingRisks": [
+    "真实手机未验收",
+    "两个客服测试在旧版本也失败",
+    "本轮没有新增室内装修计价模型"
+  ],
+  "brandCleanupOnly": true,
+  "previousCommitStyleRulesUnchanged": true,
+  "recordedAt": "2026-10-11T12:19:36.527506+00:00",
+  "afterSoftTransparency": true,
+  "brandScrimMaxOpacity": 0.76,
+  "brandScrimWidthRpx": 520,
+  "brandScrimHeightRpx": 205
+}

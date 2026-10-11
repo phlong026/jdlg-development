@@ -1,0 +1,31 @@
+%% name: image-task
+sequenceDiagram
+    participant page as 生成页面
+    participant api as AI 路由
+    participant balance as Redis 余额
+    participant db as MySQL
+    participant worker as 任务扫描与请求池
+    participant vendor as AI 供应商
+    participant files as COS
+    page->>api: scene、输入、工具或模板标识
+    api->>db: 读取计价和服务端提示词配置
+    api->>balance: Lua 原子检查并扣费
+    balance-->>api: 扣费成功
+    api->>db: 事务写任务、消费流水和订单
+    alt 数据库写入失败
+        api->>balance: 尝试退回扣费
+        api-->>page: 提交失败
+    else 创建成功
+        api-->>page: task_no
+        worker->>db: 锁定 pending 并改为 processing
+        worker->>vendor: 请求生成，必要时切换候选通道
+        vendor-->>worker: 图片结果或失败
+        worker->>files: 保存原图、水印图和缩略图
+        opt 部分出图或全部失败
+            worker->>balance: 尝试退回未交付部分
+        end
+        worker->>db: 写结果、模型信息和最终状态
+        page->>api: 按任务号轮询
+        api->>db: 查任务并检查归属
+        api-->>page: 状态、展示结果、结算信息
+    end

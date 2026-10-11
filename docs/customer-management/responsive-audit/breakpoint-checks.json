@@ -1,0 +1,30 @@
+[
+  {
+    "cards": "grid",
+    "mobile": true,
+    "overflow": 0,
+    "table": "none",
+    "width": 768
+  },
+  {
+    "cards": "grid",
+    "mobile": true,
+    "overflow": 0,
+    "table": "none",
+    "width": 770
+  },
+  {
+    "cards": "none",
+    "mobile": true,
+    "overflow": 0,
+    "table": "block",
+    "width": 1024
+  },
+  {
+    "cards": "grid",
+    "mobile": false,
+    "overflow": 0,
+    "table": "none",
+    "width": 1026
+  }
+]

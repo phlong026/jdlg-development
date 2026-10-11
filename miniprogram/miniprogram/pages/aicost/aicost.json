@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
+  "navigationBarTitleText": "免费计算建房报价",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": false
+}

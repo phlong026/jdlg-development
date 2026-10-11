@@ -1,0 +1,144 @@
+<!--pages/template/template.wxml - 模板广场，双层 Tab + 双列网格，深色主题 -->
+<view class="template-page">
+  <view class="template-page-content">
+    <!-- 统一导航栏 -->
+    <navigation-bar title="模板广场" back="{{false}}" background="#e6daca" />
+
+    <view class="template-header">
+      <view class="template-search-bar">
+        <view class="template-search-field">
+          <view class="template-search-icon"></view>
+          <input
+            class="template-search-input"
+            placeholder="搜索模板关键词"
+            placeholder-class="template-search-placeholder"
+            value="{{searchInputValue}}"
+            bindinput="onSearchInput"
+            confirm-type="search"
+            bindconfirm="onSearchConfirm"
+          />
+          <view class="template-search-clear" wx:if="{{searchKeyword || searchInputValue}}" bindtap="onSearchClear">清空</view>
+        </view>
+      </view>
+
+      <view class="template-tabs-sticky" style="top: {{navBarHeight}}px;">
+        <view class="template-main-tabs">
+          <view
+            class="template-main-tab-item {{currentMainTabIndex === index ? 'active' : ''}}"
+            wx:for="{{mainTabs}}"
+            wx:key="value"
+            bindtap="onMainTabTap"
+            data-index="{{index}}"
+          >
+            <text class="template-main-tab-text">{{item.label}}</text>
+            <view class="template-main-tab-line" wx:if="{{currentMainTabIndex === index}}"></view>
+          </view>
+        </view>
+
+        <scroll-view class="template-sub-tabs" scroll-x="true" enhanced="true" show-scrollbar="false">
+          <view class="template-sub-tabs-inner">
+            <view
+              class="template-sub-tab-item {{currentSubTabIndex === index ? 'active' : ''}}"
+              wx:for="{{subTabs}}"
+              wx:key="value"
+              bindtap="onSubTabTap"
+              data-index="{{index}}"
+            >
+              <text class="template-sub-tab-text">{{item.label}}</text>
+            </view>
+          </view>
+        </scroll-view>
+
+        <scroll-view wx:if="{{thirdTabs.length > 0}}" class="template-third-tabs" scroll-x="true" enhanced="true" show-scrollbar="false">
+          <view class="template-sub-tabs-inner">
+            <view
+              class="template-third-tab-item {{currentThirdTabIndex === index ? 'active' : ''}}"
+              wx:for="{{thirdTabs}}"
+              wx:key="value"
+              bindtap="onThirdTabTap"
+              data-index="{{index}}"
+            >
+              <text class="template-third-tab-text">{{item.label}}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <view class="template-panel-shell">
+      <view class="template-list-shell">
+        <view class="template-result-summary" wx:if="{{resultSummaryText}}">
+          <text class="template-result-summary-text">{{resultSummaryText}}</text>
+        </view>
+
+        <view class="template-waterfall" wx:if="{{displayCards.length > 0}}">
+          <view class="template-column">
+            <view
+              class="template-card"
+              wx:for="{{leftColumnCards}}"
+              wx:key="cardKey"
+              bindtap="onCardTap"
+              data-id="{{item.id}}"
+              data-target-type="{{item.targetType}}"
+              data-local-demo="{{item.localDemo}}"
+            >
+              <view class="template-card-media" style="height: {{item.mediaHeightRpx || 320}}rpx;">
+                <image class="template-card-image" src="{{item.image}}" mode="aspectFit" lazy-load />
+              </view>
+              <view class="template-card-badge" wx:if="{{item.tags.length > 0}}">{{item.tags[0]}}</view>
+              <view class="template-card-overlay">
+                <view class="template-title-text">{{item.displayTitle}}</view>
+              </view>
+            </view>
+          </view>
+
+          <view class="template-column">
+            <view
+              class="template-card"
+              wx:for="{{rightColumnCards}}"
+              wx:key="cardKey"
+              bindtap="onCardTap"
+              data-id="{{item.id}}"
+              data-target-type="{{item.targetType}}"
+              data-local-demo="{{item.localDemo}}"
+            >
+              <view class="template-card-media" style="height: {{item.mediaHeightRpx || 320}}rpx;">
+                <image class="template-card-image" src="{{item.image}}" mode="aspectFit" lazy-load />
+              </view>
+              <view class="template-card-badge" wx:if="{{item.tags.length > 0}}">{{item.tags[0]}}</view>
+              <view class="template-card-overlay">
+                <view class="template-title-text">{{item.displayTitle}}</view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="template-waterfall template-waterfall-skeleton" wx:elif="{{loading}}">
+          <view class="template-column">
+            <view class="template-card template-card-skeleton" wx:for="{{skeletonCards}}" wx:for-item="skeletonItem" wx:key="*this">
+              <view class="template-card-skeleton-image {{index % 2 === 0 ? 'is-tall' : 'is-medium'}}"></view>
+              <view class="template-card-skeleton-overlay">
+                <view class="template-card-skeleton-line is-title"></view>
+                <view class="template-card-skeleton-line"></view>
+              </view>
+            </view>
+          </view>
+
+          <view class="template-column">
+            <view class="template-card template-card-skeleton" wx:for="{{skeletonCards}}" wx:for-item="skeletonItem" wx:key="*this">
+              <view class="template-card-skeleton-image {{index % 2 === 0 ? 'is-medium' : 'is-tall'}}"></view>
+              <view class="template-card-skeleton-overlay">
+                <view class="template-card-skeleton-line is-title"></view>
+                <view class="template-card-skeleton-line"></view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="load-more" wx:if="{{loading && displayCards.length > 0}}">加载中...</view>
+        <view class="load-more" wx:elif="{{!hasMore && displayCards.length > 0}}">没有更多了</view>
+        <view class="empty-tip" wx:if="{{!loading && displayCards.length === 0}}">{{emptyTipText}}</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,37 @@
+/**app.wxss**/
+scroll-view {
+  /* 禁止滚动条显示 */
+  overflow: auto;
+}
+/* 隐藏垂直+水平滚动条，直接加在 page 或目标 view 上 */
+page {
+  overflow: auto;
+}
+
+
+/* AI优化提示词按钮 - 全局样式 */
+.prompt-title-row,
+.aitoolworkbench-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-optimize-btn {
+  display: flex;
+  align-items: center;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #f0e6d6, #e8d5b8);
+  border: 1rpx solid rgba(140, 117, 83, 0.3);
+}
+
+.ai-optimize-btn.loading {
+  opacity: 0.6;
+}
+
+.ai-optimize-text {
+  font-size: 22rpx;
+  color: #8c7553;
+  font-weight: 500;
+}

@@ -1,0 +1,149 @@
+<view class="aitoolworkbench-page">
+  <navigation-bar title="开始使用" background="#e6daca" />
+
+  <view class="aitoolworkbench-loading" wx:if="{{loadingTool}}">
+    <text>工具信息加载中...</text>
+  </view>
+
+  <view class="aitoolworkbench-content" wx:if="{{tool}}">
+    <view class="aitoolworkbench-info-card category-{{tool.category}}" wx:if="{{!useMinimalPresentation}}">
+      <view class="aitoolworkbench-info-meta">
+        <text class="aitoolworkbench-info-category">{{categoryLabel}}</text>
+        <text class="aitoolworkbench-info-common" wx:if="{{tool.common}}">常用</text>
+      </view>
+      <view class="aitoolworkbench-info-title">{{tool.name}}</view>
+      <view class="aitoolworkbench-info-desc">{{tool.shortDescription}}</view>
+    </view>
+
+    <view class="aitoolworkbench-panel">
+      <view class="aitoolworkbench-panel-title">上传待处理图片</view>
+      <view class="aitoolworkbench-upload-single">
+        <image
+          wx:if="{{uploadedOriginalImageUrl}}"
+          class="aitoolworkbench-upload-preview"
+          src="{{uploadedOriginalImageUrl}}"
+          mode="aspectFit"
+          bindtap="onPreviewOriginal"
+        />
+        <view wx:else class="aitoolworkbench-upload-empty" bindtap="onUploadOriginal">
+          <text class="aitoolworkbench-upload-plus">+</text>
+          <text class="aitoolworkbench-upload-hint">上传待处理图片</text>
+        </view>
+        <view class="aitoolworkbench-upload-actions" wx:if="{{uploadedOriginalImageUrl}}">
+          <view class="aitoolworkbench-upload-action" bindtap="onUploadOriginal">换图</view>
+          <view class="aitoolworkbench-upload-action danger" bindtap="onDeleteOriginal">删除</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="aitoolworkbench-panel" wx:if="{{visualStyleOptions.length > 0}}">
+      <view class="aitoolworkbench-panel-title">参考风格</view>
+      <view class="aitoolworkbench-panel-desc">选择一个风格方向，系统会结合风格提示和你的补充要求生成；标记为图像参考的风格会同时参考示例图。</view>
+      <view class="aitoolworkbench-reference-grid">
+        <view
+          class="aitoolworkbench-reference-card {{selectedStyleOptionKey === item.key ? 'selected' : ''}}"
+          wx:for="{{visualStyleOptions}}"
+          wx:key="key"
+          data-key="{{item.key}}"
+          bindtap="onSelectStyle"
+        >
+          <view class="aitoolworkbench-reference-media">
+            <image
+              wx:if="{{item.imageUrl}}"
+              class="aitoolworkbench-reference-image"
+              src="{{item.imageUrl}}"
+              mode="aspectFill"
+              lazy-load
+            />
+            <view wx:else class="aitoolworkbench-reference-image-fallback">
+              <text>{{item.name[0]}}</text>
+            </view>
+          </view>
+          <view class="aitoolworkbench-reference-title">
+            <view class="aitoolworkbench-reference-name">{{item.name}}</view>
+            <view class="aitoolworkbench-reference-mode">{{item.modeLabel}}</view>
+          </view>
+          <view class="aitoolworkbench-reference-check" wx:if="{{selectedStyleOptionKey === item.key}}">✓</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="aitoolworkbench-panel">
+      <view class="aitoolworkbench-panel-title">生成参数</view>
+      <view class="aitoolworkbench-parameter-block">
+        <view class="aitoolworkbench-parameter-label">画面比例</view>
+        <view class="aitoolworkbench-canvas-row">
+          <view
+            class="aitoolworkbench-canvas-option {{selectedCanvas === item.value ? 'active' : ''}}"
+            wx:for="{{canvasOptions}}"
+            wx:key="value"
+            bindtap="onSelectCanvas"
+            data-value="{{item.value}}"
+          >
+            <view class="aitoolworkbench-canvas-icon canvas-{{item.value === '16:9' ? 'landscape' : item.value === '1:1' ? 'square' : 'portrait'}}"></view>
+            <text class="aitoolworkbench-canvas-text">{{item.size}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="aitoolworkbench-parameter-block quality-block">
+        <view class="aitoolworkbench-parameter-label">清晰度</view>
+        <view class="aitoolworkbench-quality-row">
+          <view
+            class="aitoolworkbench-quality-option {{selectedQuality === item.value ? 'active' : ''}}"
+            wx:for="{{qualityOptions}}"
+            wx:key="value"
+            bindtap="onSelectQuality"
+            data-value="{{item.value}}"
+          >
+            <text class="aitoolworkbench-quality-text">{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="aitoolworkbench-panel">
+      <view class="aitoolworkbench-generate-count-header">
+        <view class="aitoolworkbench-panel-title">生成张数</view>
+        <view class="aitoolworkbench-generate-count-price">单张 {{currentUnitCost}} 灵石，合计 {{currentCost}} 灵石</view>
+      </view>
+      <view class="aitoolworkbench-generate-count-segment">
+        <view
+          class="aitoolworkbench-generate-count-option {{selectedGenerateCount === item ? 'active' : ''}}"
+          wx:for="{{generateCountOptions}}"
+          wx:key="*this"
+          bindtap="onSelectGenerateCount"
+          data-count="{{item}}"
+        >
+          <text>{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="aitoolworkbench-panel">
+      <view class="aitoolworkbench-panel-title-row">
+        <view class="aitoolworkbench-panel-title">提示词输入区</view>
+        <view class="ai-optimize-btn {{optimizingPrompt ? 'loading' : ''}}" bindtap="onOptimizePrompt">
+          <text class="ai-optimize-text">{{optimizingPrompt ? '优化中...' : 'AI优化'}}</text>
+        </view>
+      </view>
+      <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}"
+        class="aitoolworkbench-textarea"
+        auto-height
+        placeholder="{{tool.promptPlaceholder}}"
+        placeholder-class="aitoolworkbench-textarea-placeholder"
+        value="{{promptText}}"
+        bindinput="onPromptInput"
+        maxlength="300"
+      />
+      <view class="aitoolworkbench-prompt-tip">系统会结合工具规则、所选风格和你的补充要求生成；标记为图像参考的风格会同时参考示例图。</view>
+    </view>
+
+    <view class="aitoolworkbench-action-panel">
+      <button class="aitoolworkbench-primary-btn" bindtap="onStartCreate" loading="{{generating}}" disabled="{{generating || uploadingOriginal}}">开始创作</button>
+      <view class="aitoolworkbench-bottom-tip">{{bottomTipText}}</view>
+    </view>
+  </view>
+
+  <intercept-modal />
+</view>

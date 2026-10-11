@@ -1,0 +1,23 @@
+%% name: core-data
+erDiagram
+    direction LR
+    USERS ||--o| USER_PROFILES : "扩展资料"
+    USERS ||--o{ USER_IDENTITIES : "手机号等身份"
+    USERS ||--o{ CODE_SESSIONS : "业务会话"
+    USERS ||--o{ AI_TASKS : "图片与部分文档任务"
+    AI_TOOLS ||--o{ AI_TASKS : "可选工具来源"
+    USERS ||--o{ AI_VIDEO_TASKS : "视频任务"
+    USERS ||--o{ USER_ORDERS : "业务交易"
+    USERS ||--o{ STONE_RECORDS : "灵石流水"
+    USERS ||--o| USER_MEMBERSHIPS : "当前权益"
+    MEMBERSHIP_PLANS ||--o{ USER_MEMBERSHIPS : "可选套餐关联"
+    USERS ||--o{ TEMPLATES : "发布作品"
+    TEMPLATES ||--o{ TEMPLATE_UNLOCKS : "付费使用授权"
+    USERS ||--o{ TEMPLATE_UNLOCKS : "购买授权"
+    USERS ||--o{ USER_FAVORITES : "多类型收藏"
+    USERS ||--o{ CERTIFICATION_APPLICATIONS : "认证申请"
+    USERS ||--o{ BUILDING_REPORTS : "建房报告"
+    BUILDING_REPORTS ||--o| REPORT_WECOM_TICKETS : "所属用户的交付绑定票据"
+    USERS ||--o{ CUSTOMER_LEADS : "服务需求"
+    CUSTOMER_LEADS ||--o{ CUSTOMER_LEAD_FOLLOWUPS : "运营跟进"
+    CUSTOMER_LEADS |o--o{ CUSTOMER_SERVICE_EVENTS : "可选线索关联"

@@ -1,0 +1,35 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HOME_ASSETS = void 0;
+const asset_1 = require("./asset");
+exports.HOME_ASSETS = Object.freeze({
+    backdrop: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/backdrop.jpg'),
+    brandSymbol: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-symbol-old.png'),
+    brandName: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-name-old.png'),
+    brandEnglish: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-en-old.png'),
+    advisor: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/advisor.png'),
+    calculator: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/calculator.png'),
+    aiTools: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-tools.png'),
+    villa: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/villa.png'),
+    interior: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/interior.png'),
+    courtyard: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/courtyard.png'),
+    renovation: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/renovation.png'),
+    templates: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/templates.png'),
+    aiPanel: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-shell.png'),
+    aiOrb: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-medallion.png'),
+    camera: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/camera.png'),
+    sparkles: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/sparkles.png'),
+    costStats: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/cost-stat-v2.png'),
+    ruralVilla: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/rural-villa.png'),
+    urbanBuilding: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/urban-building.png'),
+    location: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/location.png'),
+    ruler: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ruler.png'),
+    estimateButton: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/estimate-shell.png'),
+    customerService: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/smart-service-icon.png'),
+    brandScene: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/brand-scene.png'),
+    defaultTabbar: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/未选中态@2x.png'),
+    homeTabbar: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/首页导航栏@2x.png'),
+    templateTabbar: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/模板广场导航栏@2x.png'),
+    designerTabbar: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/设计师导航栏@2x.png'),
+    myTabbar: (0, asset_1.resolveAssetPath)('https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/我的导航栏@2x.png'),
+});

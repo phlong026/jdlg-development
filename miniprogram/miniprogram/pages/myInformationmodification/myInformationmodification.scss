@@ -1,0 +1,631 @@
+/* pages/myInformationmodification/myInformationmodification.scss 与身份认证一致深色风格 */
+.page {
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #0f172a;
+  color: #ffffff;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 200rpx 0;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+  color: #38bdf8;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  margin-top: 24rpx;
+  font-size: 28rpx;
+  color: #9ca3af;
+}
+
+/* 内容区域 */
+.content {
+  padding: 0 24rpx 48rpx;
+}
+
+/* 头像区域 */
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 0 32rpx;
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 160rpx;
+  height: 160rpx;
+}
+
+.avatar {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  border: 6rpx solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.9);
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.avatar-edit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 48rpx;
+  height: 48rpx;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid #0f172a;
+}
+
+.avatar-tip {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #9ca3af;
+}
+
+/* 信息列表（卡片风格与身份认证一致） */
+.info-list {
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  overflow: hidden;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  box-shadow: 0 14rpx 28rpx rgba(15, 23, 42, 0.85);
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx;
+  border-bottom: 1rpx solid rgba(55, 65, 81, 0.6);
+
+  &:has(.info-main) {
+    align-items: flex-start;
+  }
+}
+
+.info-item.clickable {
+  position: relative;
+}
+
+.info-item.clickable:active {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.info-label {
+  font-size: 30rpx;
+  color: #e5e7eb;
+  font-weight: 500;
+}
+
+.info-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding-right: 24rpx;
+}
+
+.info-help-text {
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8c7553;
+}
+
+.info-value {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.value-text {
+  font-size: 28rpx;
+  color: #d1d5db;
+}
+
+.value-text.set {
+  color: #4ade80;
+}
+
+.value-text.not-set {
+  color: #9ca3af;
+}
+
+.value-text.disabled {
+  color: #6b7280;
+}
+
+.value-text.device-id {
+  font-family: monospace;
+  font-size: 24rpx;
+  color: #d1d5db;
+}
+
+.value-text.small {
+  font-size: 24rpx;
+}
+
+.edit-btn {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.designer-save-btn::after {
+  border: none;
+}
+
+/* 编辑区域 */
+.info-edit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.info-edit-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.edit-input {
+  flex: 1;
+  min-height: 84rpx;
+  padding: 0 24rpx;
+  background: #fffaf2;
+  border: 1px solid rgba(191, 160, 120, 0.6);
+  border-radius: 18rpx;
+  font-size: 28rpx;
+  color: #5f4b32;
+  box-sizing: border-box;
+}
+
+.edit-input-placeholder {
+  color: rgba(140, 117, 83, 0.72);
+}
+
+.edit-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.edit-helper-text,
+.edit-count-text {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8c7553;
+}
+
+.edit-helper-text {
+  flex: 1;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+}
+
+.action-btn {
+  min-width: 132rpx;
+  min-height: 72rpx;
+  padding: 14rpx 28rpx;
+  font-size: 26rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.action-btn.cancel {
+  color: #9ca3af;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.action-btn.save {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.5);
+
+  &.disabled {
+    opacity: 0.72;
+  }
+}
+
+/* 提示区域（与 Identityauthen tips-section 一致） */
+.tips-section {
+  margin-top: 24rpx;
+  padding: 12rpx 0 0;
+}
+
+.designer-migration-card,
+.designer-card {
+  margin-top: 24rpx;
+  padding: 28rpx;
+  background: rgba(15, 23, 42, 0.96);
+  border-radius: 22rpx;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  box-shadow: 0 14rpx 28rpx rgba(15, 23, 42, 0.85);
+}
+
+.designer-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-bottom: 24rpx;
+}
+
+.designer-card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.designer-card-subtitle {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.designer-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
+}
+
+.designer-form-label {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #e5e7eb;
+}
+
+.designer-input,
+.designer-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  padding: 18rpx 24rpx;
+  border-radius: 16rpx;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: #f9fafb;
+}
+
+.designer-input {
+  height: 84rpx;
+  line-height: 48rpx;
+}
+
+.designer-textarea {
+  height: 220rpx;
+  min-height: 200rpx;
+  line-height: 42rpx;
+  overflow-y: auto;
+}
+
+.designer-textarea-short {
+  height: 152rpx;
+  min-height: 132rpx;
+}
+
+.designer-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 16rpx 0 8rpx;
+}
+
+.designer-switch-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.designer-switch-desc {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.designer-save-btn {
+  margin-top: 8rpx;
+  width: 100%;
+  height: 88rpx;
+  padding: 0;
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 600;
+  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  margin-bottom: 8rpx;
+}
+
+.tip-text {
+  flex: 1;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #9ca3af;
+}
+
+/* 退出登录（次要按钮风格） */
+.logout-section {
+  margin-top: 48rpx;
+  padding: 0;
+}
+
+.logout-btn {
+  width: 100%;
+  height: 88rpx;
+  background: rgba(15, 23, 42, 0.96);
+  color: #f87171;
+  font-size: 32rpx;
+  font-weight: 500;
+  border-radius: 999rpx;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-btn::after {
+  border: none;
+}
+
+/* 弹窗（深色风格） */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  width: 640rpx;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 24rpx;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx;
+  border-bottom: 1rpx solid rgba(55, 65, 81, 0.9);
+}
+
+.modal-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.modal-close {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-body {
+  padding: 32rpx;
+}
+
+.form-item {
+  margin-bottom: 28rpx;
+}
+
+.form-label {
+  display: block;
+  font-size: 28rpx;
+  color: #e5e7eb;
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  padding: 0 24rpx;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #f9fafb;
+  box-sizing: border-box;
+}
+
+.form-tip {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #a37d58;
+
+  &.success {
+    color: #7a8b55;
+  }
+}
+
+.modal-footer {
+  display: flex;
+  padding: 24rpx 32rpx 32rpx;
+  gap: 24rpx;
+}
+
+.modal-btn {
+  flex: 1;
+  height: 80rpx;
+  font-size: 30rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.modal-btn::after {
+  border: none;
+}
+
+.modal-btn.cancel {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  color: #e5e7eb;
+}
+
+.modal-btn.confirm {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.5);
+
+  &[disabled] {
+    opacity: 0.68;
+    box-shadow: none;
+  }
+}
+
+.modal-btn.confirm[loading] {
+  opacity: 0.7;
+}
+
+.page {
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+  color: #5e412f;
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.loading-text,
+.avatar-tip,
+.section-title,
+.tip-text,
+.designer-card-subtitle,
+.designer-switch-desc,
+.value-text.not-set,
+.value-text.disabled {
+  color: #8c7553;
+}
+
+.avatar {
+  border: 6rpx solid rgba(255, 255, 255, 0.46);
+  box-shadow: 0 10rpx 24rpx rgba(142, 111, 73, 0.12);
+  background: #d9c9b4;
+}
+
+.avatar-edit,
+.action-btn.save,
+.designer-save-btn,
+.modal-btn.confirm {
+  background: linear-gradient(135deg, #cfad85 0%, #b68d63 100%);
+  box-shadow: 0 10rpx 24rpx rgba(169, 133, 91, 0.24);
+}
+
+.info-list,
+.designer-card,
+.modal-content {
+  background: linear-gradient(180deg, rgba(247, 241, 232, 0.92) 0%, rgba(239, 231, 220, 0.86) 100%);
+  border: 1px solid rgba(176, 155, 130, 0.24);
+  box-shadow: 0 14rpx 28rpx rgba(113, 80, 63, 0.08);
+}
+
+.info-item {
+  border-bottom: 1rpx solid rgba(188, 168, 145, 0.55);
+
+  &.clickable:active {
+    background: rgba(244, 235, 224, 0.78);
+  }
+}
+
+.info-label,
+.designer-card-title,
+.designer-form-label,
+.modal-title,
+.form-label {
+  color: #5e412f;
+}
+
+.value-text,
+.value-text.device-id,
+.value-text.small,
+.designer-input,
+.designer-textarea,
+.form-input {
+  color: #6f5637;
+}
+
+.edit-input,
+.designer-input,
+.designer-textarea,
+.form-input {
+  background: rgba(255, 250, 244, 0.88);
+  border: 1px solid rgba(190, 169, 145, 0.72);
+}
+
+.action-btn.cancel,
+.modal-btn.cancel {
+  background: rgba(247, 241, 232, 0.92);
+  border: 1px solid rgba(190, 169, 145, 0.9);
+  color: #8c7553;
+}
+
+.logout-btn {
+  background: rgba(247, 241, 232, 0.92);
+  color: #b06158;
+  border: 1px solid rgba(214, 137, 126, 0.68);
+}
+
+.modal-mask {
+  background: rgba(58, 39, 27, 0.26);
+}

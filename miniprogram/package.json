@@ -1,0 +1,19 @@
+{
+  "name": "miniprogram-ts-sass-quickstart",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {},
+  "devDependencies": {
+    "miniprogram-api-typings": "^2.8.3-1"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "miniprogram-sm-crypto": "^0.4.0",
+    "tdesign-miniprogram": "^1.15.3"
+  }
+}

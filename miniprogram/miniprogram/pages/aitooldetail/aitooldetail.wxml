@@ -1,0 +1,56 @@
+<view class="aitooldetail-page">
+  <navigation-bar title="工具详情" background="#e6daca" />
+
+  <view class="aitooldetail-content" wx:if="{{tool}}">
+    <view class="aitooldetail-hero category-{{tool.category}}" wx:if="{{!useMinimalPresentation}}">
+      <view class="aitooldetail-meta-row">
+        <text class="aitooldetail-category">{{categoryLabel}}</text>
+        <text class="aitooldetail-common" wx:if="{{tool.common}}">常用工具</text>
+      </view>
+      <view class="aitooldetail-title">{{tool.name}}</view>
+      <view class="aitooldetail-subtitle">{{tool.shortDescription}}</view>
+    </view>
+
+    <view class="aitooldetail-section">
+      <view class="aitooldetail-section-title">工具说明</view>
+      <view class="aitooldetail-section-desc">{{tool.detailDescription}}</view>
+    </view>
+
+    <view class="aitooldetail-demo-card">
+      <view class="aitooldetail-demo-title">效果演示</view>
+      <view class="aitooldetail-compare-shell" wx:if="{{tool.detailBeforeImage && tool.detailAfterImage}}">
+        <before-after-compare beforeImage="{{tool.detailBeforeImage}}" afterImage="{{tool.detailAfterImage}}" beforeLabel="改造前" afterLabel="改造后" height="auto" />
+      </view>
+      <view class="aitooldetail-demo-empty" wx:else>
+        <view class="aitooldetail-demo-grid">
+          <view class="aitooldetail-demo-block before">
+            <text class="aitooldetail-demo-label">Before</text>
+            <text class="aitooldetail-demo-text">原图 / 草图 / 方案底图</text>
+          </view>
+          <view class="aitooldetail-demo-block after">
+            <text class="aitooldetail-demo-label">After</text>
+            <text class="aitooldetail-demo-text">更完整的表达、更清晰的效果方向</text>
+          </view>
+        </view>
+        <view class="aitooldetail-demo-empty-tip">当前工具暂未配置真实前后对比图，后台补充后这里会自动显示可拖拽对比效果。</view>
+      </view>
+    </view>
+
+    <view class="aitooldetail-section" wx:if="{{highlights.length > 0}}">
+      <view class="aitooldetail-section-title">{{usageTipsTitle}}</view>
+      <view class="aitooldetail-highlight-list">
+        <view class="aitooldetail-highlight-item" wx:for="{{highlights}}" wx:key="*this">
+          <view class="aitooldetail-highlight-dot"></view>
+          <text class="aitooldetail-highlight-text">{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="aitooldetail-bottom-bar">
+      <button class="aitooldetail-favorite-btn {{isFavorited ? 'active' : ''}}" bindtap="toggleFavorite">
+        {{favoriteLoading ? '处理中' : (isFavorited ? '已收藏' : '收藏')}}
+      </button>
+      <button class="aitooldetail-start-btn" bindtap="onStartUse">开始使用</button>
+    </view>
+  </view>
+</view>

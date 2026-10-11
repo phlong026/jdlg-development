@@ -1,0 +1,445 @@
+<!--pages/settings/settings.wxml-->
+<view class="page {{darkMode ? 'dark-mode' : 'light-mode'}}">
+  <view class="page-glow page-glow-left"></view>
+  <view class="page-glow page-glow-right"></view>
+  <navigation-bar title="设置" subtitle="账号 · 隐私 · 关于" background="#e6daca" />
+
+  <scroll-view
+    class="content-scroll"
+    scroll-y
+    enhanced
+    show-scrollbar="false"
+    scroll-into-view="{{scrollIntoView}}"
+    scroll-with-animation
+  >
+    <view class="content">
+      <!-- 账号与安全 -->
+      <view class="section-card">
+        <view class="section-header">
+          <view class="section-heading">
+            <text class="section-kicker">账户</text>
+            <text class="section-title">账号与安全</text>
+          </view>
+          <text class="section-meta">4项</text>
+        </view>
+        <view class="section-body">
+          <view class="setting-item" bindtap="goToProfile">
+            <view class="item-left">
+              <view class="item-icon-wrap warm">
+                <text class="item-icon">人</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">个人资料</text>
+                <text class="item-desc">修改昵称、头像等基础信息</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <picker mode="selector" range="{{identityOptions}}" value="{{identityTypeIndex}}" bindchange="onIdentityPickerChange">
+            <view class="setting-item">
+              <view class="item-left">
+                <view class="item-icon-wrap warm">
+                  <text class="item-icon">身</text>
+                </view>
+                <view class="item-texts">
+                  <text class="item-title">我的身份</text>
+                  <text class="item-desc">用于内容匹配和服务推荐，不影响下载权益</text>
+                </view>
+              </view>
+              <view class="item-tail">
+                <text class="item-extra identity-extra {{identityType ? '' : 'empty'}}">{{identityType || '请选择'}}</text>
+                <text class="item-arrow">›</text>
+              </view>
+            </view>
+          </picker>
+
+          <view class="setting-item" bindtap="goToPasswordSecurity">
+            <view class="item-left">
+              <view class="item-icon-wrap accent">
+                <text class="item-icon">锁</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">修改登录密码</text>
+                <text class="item-desc">修改用户名、登录密码和账号安全信息</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="goToPasswordRecovery">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">找</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">忘记密码找回</text>
+                <text class="item-desc">通过微信手机号验证后重置登录密码</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 隐私管理 -->
+      <view class="section-card" id="privacy-section">
+        <view class="section-header">
+          <view class="section-heading">
+            <text class="section-kicker">隐私</text>
+            <text class="section-title">隐私管理</text>
+          </view>
+          <text class="section-meta">16项</text>
+        </view>
+        <view class="section-body">
+          <view class="privacy-toolbar">
+            <text class="privacy-toolbar-title">权限管理</text>
+            <view class="privacy-toolbar-btn" bindtap="onCloseAllPermissions">一键关闭</view>
+          </view>
+
+          <view
+            class="setting-item"
+            wx:for="{{permissionItems}}"
+            wx:key="key"
+            bindtap="onPermissionSwitchTap"
+          >
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">权</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">{{item.label}}</text>
+                <text class="item-desc">{{item.desc}}</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <switch
+                class="item-switch"
+                checked="{{item.enabled}}"
+                color="#a9855b"
+                disabled="{{true}}"
+              />
+            </view>
+          </view>
+
+          <view class="setting-item">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">享</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">数据共享</text>
+                <text class="item-desc">用于服务优化与功能体验提升</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <switch
+                class="item-switch"
+                checked="{{dataSharingEnabled}}"
+                color="#a9855b"
+                bindchange="onToggleDataSharing"
+              />
+            </view>
+          </view>
+
+          <view class="setting-item">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">荐</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">个性化推荐</text>
+                <text class="item-desc">根据使用习惯优化模板与内容推荐</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <switch
+                class="item-switch"
+                checked="{{recommendationEnabled}}"
+                color="#a9855b"
+                bindchange="onToggleRecommendation"
+              />
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onViewPersonalInfo">
+            <view class="item-left">
+              <view class="item-icon-wrap warm">
+                <text class="item-icon">阅</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">查阅个人信息</text>
+                <text class="item-desc">查看当前账号已收集的基础资料</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onCopyPersonalInfo">
+            <view class="item-left">
+              <view class="item-icon-wrap warm">
+                <text class="item-icon">复</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">复制个人信息</text>
+                <text class="item-desc">一键复制账号资料摘要</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="goToProfile">
+            <view class="item-left">
+              <view class="item-icon-wrap warm">
+                <text class="item-icon">改</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">更正个人信息</text>
+                <text class="item-desc">前往资料页修改昵称、头像等信息</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onDownloadPersonalPackage">
+            <view class="item-left">
+              <view class="item-icon-wrap accent">
+                <text class="item-icon">包</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">打包下载个人信息</text>
+                <text class="item-desc">生成摘要并复制到剪贴板保存</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onOpenGenerateHistory">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">图</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">历史生成图纸/视频</text>
+                <text class="item-desc">查看 AI 生成图纸、视频等历史记录</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onOpenOrderRecords">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">单</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">订单与造价账单</text>
+                <text class="item-desc">查看订单记录、造价相关账单</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onOpenWalletRecords">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">账</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">灵石消费明细</text>
+                <text class="item-desc">查看充值、消费与账单流水</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onOpenDeleteRequest">
+            <view class="item-left">
+              <view class="item-icon-wrap danger">
+                <text class="item-icon danger">删</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title danger">删除个人信息申请</text>
+                <text class="item-desc">提交后由客服审核处理</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onOpenDeactivateRequest">
+            <view class="item-left">
+              <view class="item-icon-wrap danger">
+                <text class="item-icon danger">销</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title danger">注销账号申请</text>
+                <text class="item-desc">提交账号注销申请并等待审核</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 协议与缓存 -->
+      <view class="section-card">
+        <view class="section-header">
+          <view class="section-heading">
+            <text class="section-kicker">安全</text>
+            <text class="section-title">协议与缓存</text>
+          </view>
+          <text class="section-meta">3项</text>
+        </view>
+        <view class="section-body">
+          <view class="setting-item" bindtap="onClearCache">
+            <view class="item-left">
+              <view class="item-icon-wrap light-danger">
+                <text class="item-icon danger">清</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">清理缓存</text>
+                <text class="item-desc">释放本地缓存空间</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-extra">{{cacheSize}}</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onViewPrivacy">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">盾</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">隐私政策</text>
+                <text class="item-desc">了解数据收集和使用规则</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+
+          <view class="setting-item" bindtap="onViewLlmAgreement">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">模</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">大模型使用协议</text>
+                <text class="item-desc">了解 AI 大模型服务使用规则</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-arrow">›</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 关于 -->
+      <view class="section-card">
+        <view class="section-header">
+          <view class="section-heading">
+            <text class="section-kicker">品牌</text>
+            <text class="section-title">关于</text>
+          </view>
+          <text class="section-meta">1项</text>
+        </view>
+        <view class="section-body">
+          <view class="setting-item" bindtap="onViewAbout">
+            <view class="item-left">
+              <view class="item-icon-wrap warm">
+                <text class="item-icon">关</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">关于甲第灵光</text>
+                <text class="item-desc">甲第灵光（福建）科技有限公司</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <text class="item-extra">v{{version}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 个人信息查阅 -->
+  <view class="privacy-modal-mask" wx:if="{{personalInfoVisible}}" catchtouchmove="true" bindtap="closePersonalInfo">
+    <view class="privacy-modal" catchtap="" catchtouchmove="">
+      <view class="privacy-modal-header">
+        <text class="privacy-modal-title">个人信息查阅</text>
+        <view class="privacy-modal-close" bindtap="closePersonalInfo">×</view>
+      </view>
+      <scroll-view class="privacy-modal-scroll" scroll-y enhanced show-scrollbar="false">
+        <view class="privacy-info-item" wx:for="{{personalInfoItems}}" wx:key="label">
+          <text class="privacy-info-label">{{item.label}}</text>
+          <text class="privacy-info-value">{{item.value}}</text>
+        </view>
+      </scroll-view>
+      <view class="privacy-modal-actions">
+        <button class="privacy-modal-btn secondary" bindtap="onCopyPersonalInfo">复制信息</button>
+        <button class="privacy-modal-btn primary" bindtap="goToProfile">去更正</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 删除/注销申请 -->
+  <view class="privacy-modal-mask" wx:if="{{accountRequestVisible}}" catchtouchmove="true" bindtap="closeAccountRequest">
+    <view class="privacy-modal privacy-modal-form" catchtap="" catchtouchmove="">
+      <view class="privacy-modal-header">
+        <text class="privacy-modal-title">{{accountRequestType === 'delete' ? '删除个人信息申请' : '注销账号申请'}}</text>
+        <view class="privacy-modal-close" bindtap="closeAccountRequest">×</view>
+      </view>
+      <text class="privacy-modal-desc">
+        请填写申请说明，提交后客服将在 1-3 个工作日内处理。你也可以发送邮件至 service@jiadilingguang.com。
+      </text>
+      <textarea
+        class="privacy-request-input"
+        placeholder="请说明申请原因，便于我们尽快处理"
+        placeholder-class="privacy-request-placeholder"
+        maxlength="300"
+        value="{{accountRequestReason}}"
+        bindinput="onAccountRequestInput"
+      />
+      <view class="privacy-modal-actions">
+        <button class="privacy-modal-btn secondary" bindtap="closeAccountRequest">取消</button>
+        <button
+          class="privacy-modal-btn primary"
+          bindtap="onSubmitAccountRequest"
+          loading="{{accountRequestSubmitting}}"
+          disabled="{{accountRequestSubmitting}}"
+        >
+          提交申请
+        </button>
+      </view>
+    </view>
+  </view>
+</view>

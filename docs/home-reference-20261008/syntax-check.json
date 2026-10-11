@@ -1,0 +1,67 @@
+[
+  {
+    "file": "tests/aicost-home-prefill.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/home-reference.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/aicost-pricing.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/home-intro-popup.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/aicost-form-share.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/home-cost-allround-aicost.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/home-smart-service-fixed.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/aicost-report.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "tests/cost-estimate-share-image.test.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "miniprogram/custom-tab-bar/index.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "miniprogram/utils/costRegions.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "miniprogram/pages/index/index.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  },
+  {
+    "file": "miniprogram/pages/aicost/aicost.js",
+    "exitCode": 0,
+    "diagnostic": ""
+  }
+]

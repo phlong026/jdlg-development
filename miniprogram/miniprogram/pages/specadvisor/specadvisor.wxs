@@ -1,0 +1,44 @@
+// 判断当前 AI 消息是否需要显示头像（上一条不是 AI 时显示）
+function showAvatar(messages, index) {
+  if (!messages || index < 0 || index >= messages.length) return false
+  if (messages[index].role !== 'ai') return false
+  if (index === 0) return true
+  return messages[index - 1].role !== 'ai'
+}
+
+// 是否在该消息前显示时间分隔线（首条之后，与上一条间隔超过5分钟则显示）
+function showTimeSeparator(messages, index) {
+  if (!messages || index <= 0 || index >= messages.length) return false
+  var current = messages[index]
+  if (!current.createdAt) return false
+  var prev = messages[index - 1]
+  if (!prev.createdAt) return true
+  return (current.createdAt - prev.createdAt) >= 5 * 60 * 1000
+}
+
+// 把时间戳格式化为「HH:mm」或「昨天 HH:mm」或「M月D日 HH:mm」
+function formatTime(ts) {
+  if (!ts) return ''
+  var d = getDate(ts)
+  var hour = d.getHours()
+  var minute = d.getMinutes()
+  var hh = hour < 10 ? '0' + hour : '' + hour
+  var mm = minute < 10 ? '0' + minute : '' + minute
+  var now = getDate()
+  var sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  if (sameDay) {
+    return hh + ':' + mm
+  }
+  var yesterday = getDate(now.getTime() - 86400000)
+  var isYesterday = d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate()
+  if (isYesterday) {
+    return '昨天 ' + hh + ':' + mm
+  }
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hh + ':' + mm
+}
+
+module.exports = {
+  showAvatar: showAvatar,
+  showTimeSeparator: showTimeSeparator,
+  formatTime: formatTime,
+}

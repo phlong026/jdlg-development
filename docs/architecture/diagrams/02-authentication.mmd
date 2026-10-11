@@ -1,0 +1,20 @@
+%% name: authentication
+sequenceDiagram
+    participant mini as 小程序
+    participant auth as Go 登录策略
+    participant wx as 微信平台
+    participant db as MySQL
+    participant cache as Redis
+    participant api as 受保护业务接口
+    mini->>auth: code、设备信息、可选邀请码
+    auth->>wx: code2session
+    wx-->>auth: openid、unionid
+    auth->>db: 查找或创建账号，建立业务会话
+    auth->>cache: 缓存会话
+    auth-->>mini: 加密业务会话的 token
+    mini->>api: token 与签名请求头
+    api->>api: 验证签名、请求体、路径和时间窗口
+    api->>cache: 查询会话及封禁状态
+    cache-->>api: user_id
+    api->>db: 按用户归属执行请求
+    api-->>mini: 业务结果

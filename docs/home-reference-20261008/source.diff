@@ -1,0 +1,894 @@
+--- a/miniprogram/custom-tab-bar/index.wxml
++++ b/miniprogram/custom-tab-bar/index.wxml
+@@ -13,6 +13,8 @@
+         wx:key="index"
+         bindtap="switchTab"
+         data-index="{{item.index}}"
++        role="button"
++        aria-label="{{item.index === 3 ? '我的' : item.text}}"
+       ></view>
+     </view>
+   </view>
+--- a/miniprogram/pages/aicost/aicost.js
++++ b/miniprogram/pages/aicost/aicost.js
+@@ -2,33 +2,12 @@
+ Object.defineProperty(exports, "__esModule", { value: true });
+ // pages/aicost/aicost.ts
+ const costEstimateShareImage_1 = require("../../utils/costEstimateShareImage");
++const costRegions_1 = require("../../utils/costRegions");
+ const RESULT_STORAGE_KEY = 'aicostEstimateResult';
+-const cityOptionsMap = {
+-    福建: ['泉州', '漳州', '厦门', '福州', '莆田', '龙岩', '三明', '南平', '宁德'],
+-    广东: ['广州', '深圳', '汕头', '潮州', '佛山', '东莞', '惠州', '珠海'],
+-    浙江: ['杭州', '宁波', '温州', '绍兴', '金华', '台州'],
+-    江西: ['南昌', '赣州', '九江', '上饶', '宜春'],
+-    湖南: ['长沙', '株洲', '湘潭', '岳阳', '衡阳'],
+-    湖北: ['武汉', '宜昌', '襄阳', '荆州', '黄石'],
+-    江苏: ['南京', '苏州', '无锡', '常州', '南通'],
+-    上海: ['上海'],
+-    安徽: ['合肥', '芜湖', '安庆', '黄山', '阜阳'],
+-    山东: ['济南', '青岛', '烟台', '潍坊', '临沂'],
+-    四川: ['成都', '绵阳', '德阳', '宜宾', '泸州'],
+-    重庆: ['重庆'],
+-    云南: ['昆明', '大理', '丽江', '曲靖', '玉溪'],
+-    贵州: ['贵阳', '遵义', '安顺', '毕节', '黔南'],
+-    广西: ['南宁', '桂林', '柳州', '北海', '玉林'],
+-    海南: ['海口', '三亚', '儋州', '琼海'],
+-    北京: ['北京'],
+-    天津: ['天津'],
+-    河北: ['石家庄', '唐山', '保定', '邯郸', '廊坊'],
+-    河南: ['郑州', '洛阳', '开封', '新乡', '南阳'],
+-};
+ function getCityOptions(province) {
+-    return cityOptionsMap[province] || cityOptionsMap.福建;
+-}
+-const provinceOptions = Object.keys(cityOptionsMap);
++    return costRegions_1.cityOptionsMap[province] || costRegions_1.cityOptionsMap.福建;
++}
++const provinceOptions = Object.keys(costRegions_1.cityOptionsMap);
+ const defaultCityOptions = getCityOptions('福建');
+ function toPositiveNumber(value) {
+     const num = Number(String(value || '').trim());
+@@ -128,14 +107,35 @@
+         provinceOptions,
+         cityOptions: defaultCityOptions,
+         regionOptions: [provinceOptions, defaultCityOptions],
+-        cityOptionsMap,
++        cityOptionsMap: costRegions_1.cityOptionsMap,
+         roofOptions: ['平屋顶', '坡屋顶', '组合屋顶', '燕尾脊'],
+         basementOptions: ['无地下室', '半地下室', '全地下室'],
+         decorationOptions: ['经济型', '标准型', '品质型'],
+         facadeOptions: ['涂料外墙', '真石漆', '陶瓷砖外墙', '石材外墙', '铝板/金属外立面'],
+         foundationOptions: ['独立基础', '条形基础', '筏板基础', '桩基础'],
+     },
+-    onLoad() {
++    onLoad(options = {}) {
++        const updates = {};
++        const provinceIndex = provinceOptions.indexOf(options.province || '');
++        const cityOptions = provinceIndex >= 0 ? getCityOptions(provinceOptions[provinceIndex]) : [];
++        const cityIndex = cityOptions.indexOf(options.city || '');
++        if (provinceIndex >= 0 && cityIndex >= 0) {
++            const province = provinceOptions[provinceIndex];
++            updates.province = province;
++            updates.provinceIndex = provinceIndex;
++            updates.city = cityOptions[cityIndex];
++            updates.cityIndex = cityIndex;
++            updates.cityOptions = cityOptions;
++            updates.regionOptions = [provinceOptions, cityOptions];
++            updates.regionIndex = [provinceIndex, cityIndex];
++        }
++        const buildingArea = String(options.buildingArea || '').trim();
++        if (toPositiveNumber(buildingArea)) {
++            updates.buildingArea = buildingArea;
++        }
++        if (Object.keys(updates).length > 0) {
++            this.setData(updates);
++        }
+     },
+     onShareAppMessage() {
+         const title = '10秒估算建房报价 平台大数据，造价更精准';
+--- a/miniprogram/pages/aicost/aicost.ts
++++ b/miniprogram/pages/aicost/aicost.ts
+@@ -1,5 +1,6 @@
+ // pages/aicost/aicost.ts
+ import { prepareCostEstimateShareImage } from '../../utils/costEstimateShareImage';
++import { cityOptionsMap } from '../../utils/costRegions';
+ 
+ type CostBreakdownItem = {
+   name: string;
+@@ -11,29 +12,6 @@
+ };
+ 
+ const RESULT_STORAGE_KEY = 'aicostEstimateResult';
+-const cityOptionsMap: Record<string, string[]> = {
+-  福建: ['泉州', '漳州', '厦门', '福州', '莆田', '龙岩', '三明', '南平', '宁德'],
+-  广东: ['广州', '深圳', '汕头', '潮州', '佛山', '东莞', '惠州', '珠海'],
+-  浙江: ['杭州', '宁波', '温州', '绍兴', '金华', '台州'],
+-  江西: ['南昌', '赣州', '九江', '上饶', '宜春'],
+-  湖南: ['长沙', '株洲', '湘潭', '岳阳', '衡阳'],
+-  湖北: ['武汉', '宜昌', '襄阳', '荆州', '黄石'],
+-  江苏: ['南京', '苏州', '无锡', '常州', '南通'],
+-  上海: ['上海'],
+-  安徽: ['合肥', '芜湖', '安庆', '黄山', '阜阳'],
+-  山东: ['济南', '青岛', '烟台', '潍坊', '临沂'],
+-  四川: ['成都', '绵阳', '德阳', '宜宾', '泸州'],
+-  重庆: ['重庆'],
+-  云南: ['昆明', '大理', '丽江', '曲靖', '玉溪'],
+-  贵州: ['贵阳', '遵义', '安顺', '毕节', '黔南'],
+-  广西: ['南宁', '桂林', '柳州', '北海', '玉林'],
+-  海南: ['海口', '三亚', '儋州', '琼海'],
+-  北京: ['北京'],
+-  天津: ['天津'],
+-  河北: ['石家庄', '唐山', '保定', '邯郸', '廊坊'],
+-  河南: ['郑州', '洛阳', '开封', '新乡', '南阳'],
+-};
+-
+ function getCityOptions(province: string): string[] {
+   return cityOptionsMap[province] || cityOptionsMap.福建;
+ }
+@@ -163,7 +141,31 @@
+     foundationOptions: ['独立基础', '条形基础', '筏板基础', '桩基础'],
+   },
+ 
+-  onLoad() {
++  onLoad(options: Record<string, string | undefined> = {}) {
++    const updates: Record<string, unknown> = {};
++    const provinceIndex = provinceOptions.indexOf(options.province || '');
++    const cityOptions = provinceIndex >= 0 ? getCityOptions(provinceOptions[provinceIndex]) : [];
++    const cityIndex = cityOptions.indexOf(options.city || '');
++
++    if (provinceIndex >= 0 && cityIndex >= 0) {
++      const province = provinceOptions[provinceIndex];
++      updates.province = province;
++      updates.provinceIndex = provinceIndex;
++      updates.city = cityOptions[cityIndex];
++      updates.cityIndex = cityIndex;
++      updates.cityOptions = cityOptions;
++      updates.regionOptions = [provinceOptions, cityOptions];
++      updates.regionIndex = [provinceIndex, cityIndex];
++    }
++
++    const buildingArea = String(options.buildingArea || '').trim();
++    if (toPositiveNumber(buildingArea)) {
++      updates.buildingArea = buildingArea;
++    }
++
++    if (Object.keys(updates).length > 0) {
++      this.setData(updates);
++    }
+   },
+ 
+   onShareAppMessage() {
+--- a/miniprogram/pages/index/index.js
++++ b/miniprogram/pages/index/index.js
+@@ -3,6 +3,7 @@
+ // index.ts
+ // 获取应用实例
+ const asset_1 = require("../../utils/asset");
++const costRegions_1 = require("../../utils/costRegions");
+ const reportNavigation_1 = require("../../utils/reportNavigation");
+ const perf_1 = require("../../utils/perf");
+ const enterpriseWechat_1 = require("../../utils/enterpriseWechat");
+@@ -29,17 +30,16 @@
+         enterpriseWechatCustomerServiceCorpId: enterpriseWechat_1.DEFAULT_CUSTOMER_SERVICE_CORP_ID,
+         enterpriseWechatCustomerServiceUrl: enterpriseWechat_1.DEFAULT_CUSTOMER_SERVICE_URL,
+         enterpriseWechatConfigLoading: false,
+-        heroBgImage: (0, asset_1.resolveAssetPath)('/assets/home/logo+背景图.png'),
+-        coreEntryImage: (0, asset_1.resolveAssetPath)('/assets/home/核心输入区.png'),
+-        dailyCheckinImage: (0, asset_1.resolveAssetPath)('/assets/home/每日签到.png'),
+-        inviteFriendImage: (0, asset_1.resolveAssetPath)('/assets/home/邀请好友.png'),
+-        ruralVillaImage: (0, asset_1.resolveAssetPath)('/assets/home/乡村别墅.png'),
+-        cityRenewalImage: (0, asset_1.resolveAssetPath)('/assets/home/城市更新.png'),
+-        parentWorkshopImage: (0, asset_1.resolveAssetPath)('/assets/home/亲子工坊.png'),
+-        allRoundDesignImage: (0, asset_1.resolveAssetPath)('/assets/home/综合设计.png'),
++        quickProjectType: 'rural_villa',
++        quickRegionOptions: [Object.keys(costRegions_1.cityOptionsMap), costRegions_1.cityOptionsMap.福建],
++        quickRegionIndex: [0, 0],
++        quickRegionConfirmedIndex: [0, 0],
++        quickRegionText: '',
++        quickProvince: '',
++        quickCity: '',
++        quickArea: '',
+         defaultCoverImage: (0, asset_1.resolveAssetPath)('/assets/images/home.jpg'),
+         introLogoImage: (0, asset_1.resolveAssetPath)('/assets/home/intro-logo.png'),
+-        smartServiceMascotImage: '/assets/smart-service-icon.png',
+         mascotBouncing: false,
+     },
+     syncTabBar() {
+@@ -68,7 +68,13 @@
+         if (!url) {
+             return;
+         }
+-        wx.navigateTo({
++        const tabPaths = [
++            '/pages/index/index',
++            '/pages/template/template',
++            '/pages/distribution/distribution',
++            '/pages/my/my',
++        ];
++        const options = {
+             url,
+             fail: () => {
+                 wx.showToast({
+@@ -76,7 +82,78 @@
+                     icon: 'none',
+                 });
+             },
+-        });
++        };
++        if (tabPaths.includes(url.split('?')[0])) {
++            wx.switchTab(Object.assign(Object.assign({}, options), { url: url.split('?')[0] }));
++        }
++        else {
++            wx.navigateTo(options);
++        }
++    },
++    onQuickProjectChange(e) {
++        const type = e.currentTarget.dataset.type;
++        if (type === 'rural_villa' || type === 'urban_renewal') {
++            this.setData({ quickProjectType: type });
++        }
++    },
++    onQuickRegionColumnChange(e) {
++        const { column, value } = e.detail;
++        const indices = [...this.data.quickRegionIndex];
++        indices[column] = value;
++        if (column === 0) {
++            const province = Object.keys(costRegions_1.cityOptionsMap)[value];
++            if (!province)
++                return;
++            indices[1] = 0;
++            this.setData({
++                quickRegionOptions: [Object.keys(costRegions_1.cityOptionsMap), costRegions_1.cityOptionsMap[province]],
++                quickRegionIndex: indices,
++            });
++        }
++        else {
++            this.setData({ quickRegionIndex: indices });
++        }
++    },
++    onQuickRegionChange(e) {
++        var _a;
++        const indices = e.detail.value;
++        const province = Object.keys(costRegions_1.cityOptionsMap)[indices[0]];
++        const city = (_a = costRegions_1.cityOptionsMap[province]) === null || _a === void 0 ? void 0 : _a[indices[1]];
++        if (!province || !city)
++            return;
++        this.setData({
++            quickProvince: province,
++            quickCity: city,
++            quickRegionText: `${province} / ${city}`,
++            quickRegionIndex: indices,
++            quickRegionConfirmedIndex: indices,
++            quickRegionOptions: [Object.keys(costRegions_1.cityOptionsMap), costRegions_1.cityOptionsMap[province]],
++        });
++    },
++    onQuickRegionCancel() {
++        const indices = this.data.quickRegionConfirmedIndex;
++        const province = Object.keys(costRegions_1.cityOptionsMap)[indices[0]];
++        this.setData({
++            quickRegionIndex: indices,
++            quickRegionOptions: [Object.keys(costRegions_1.cityOptionsMap), costRegions_1.cityOptionsMap[province]],
++        });
++    },
++    onQuickAreaInput(e) {
++        this.setData({ quickArea: e.detail.value });
++    },
++    onQuickEstimate() {
++        if (!this.data.quickRegionText) {
++            wx.showToast({ title: '请选择所在地区', icon: 'none' });
++            return;
++        }
++        const area = Number(String(this.data.quickArea).trim());
++        if (!Number.isFinite(area) || area <= 0) {
++            wx.showToast({ title: '请输入有效的建筑面积', icon: 'none' });
++            return;
++        }
++        // 复用完整造价表单补齐占地、楼层和结构参数，不推导用户尚未提供的成本条件。
++        const url = `/pages/aicost/aicost?source=home_quick_estimate&projectType=${this.data.quickProjectType}&province=${encodeURIComponent(this.data.quickProvince)}&city=${encodeURIComponent(this.data.quickCity)}&buildingArea=${area}`;
++        this.onOpenPage({ currentTarget: { dataset: { url } } });
+     },
+     showHomeIntroPopupOnce() {
+         try {
+@@ -181,20 +258,20 @@
+     prefetchFeaturedGroups(groups) {
+         const cases = [];
+         (Array.isArray(groups) ? groups : []).forEach((group) => {
+-            if (group?.case1) {
++            if (group === null || group === void 0 ? void 0 : group.case1) {
+                 cases.push(group.case1);
+             }
+-            if (group?.case2) {
++            if (group === null || group === void 0 ? void 0 : group.case2) {
+                 cases.push(group.case2);
+             }
+         });
+         const uniqueCases = cases.filter((item, index, list) => {
+-            const id = Number(item?.id || 0);
+-            return id > 0 && list.findIndex((candidate) => Number(candidate?.id || 0) === id) === index;
++            const id = Number((item === null || item === void 0 ? void 0 : item.id) || 0);
++            return id > 0 && list.findIndex((candidate) => Number((candidate === null || candidate === void 0 ? void 0 : candidate.id) || 0) === id) === index;
+         });
+         void (0, perf_1.prefetchImages)(uniqueCases.map((item) => (0, asset_1.normalizeCosUrl)(item.thumbnail || item.preview_url || '')), 2);
+         uniqueCases.slice(0, 2).forEach((item) => {
+-            const templateId = Number(item?.id || 0);
++            const templateId = Number((item === null || item === void 0 ? void 0 : item.id) || 0);
+             const cacheKey = buildPublicTemplateDetailCacheKey(templateId);
+             if (!templateId || (0, perf_1.getPageCache)(cacheKey) || featuredDetailPrefetching.has(templateId)) {
+                 return;
+@@ -204,8 +281,8 @@
+                 url: `${API_BASE_URL}/api/v1/miniprogram/templates/${templateId}`,
+                 method: 'GET',
+                 success: (response) => {
+-                    const body = response?.data || {};
+-                    if (response?.statusCode === 200 && body.code === 0 && body.data) {
++                    const body = (response === null || response === void 0 ? void 0 : response.data) || {};
++                    if ((response === null || response === void 0 ? void 0 : response.statusCode) === 200 && body.code === 0 && body.data) {
+                         (0, perf_1.setPageCache)(cacheKey, body.data, TEMPLATE_DETAIL_CACHE_TTL);
+                         void (0, perf_1.prefetchImages)([(0, asset_1.normalizeCosUrl)(body.data.preview_url || ''), (0, asset_1.normalizeCosUrl)(body.data.thumbnail || '')], 2);
+                     }
+--- a/miniprogram/pages/index/index.scss
++++ b/miniprogram/pages/index/index.scss
+@@ -1,167 +1,71 @@
+ /**index.scss**/
+-.building-report-entry {
+-  padding: 30rpx; margin: 0 0 32rpx; border: 1rpx solid #cfbda4;
+-  border-radius: 24rpx; background: #f9f3e8; color: #71543e;
+-  &__title { display: block; font-size: 31rpx; font-weight: 600; line-height: 1.7; }
+-  &__copy { display: block; font-size: 24rpx; line-height: 1.8; margin-top: 12rpx; }
+-}
+-page {
+-  overflow: visible;
+-}
+-
+-.pages {
+-  width: 100vw;
+-  min-height: 100vh;
+-  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+-  overflow-x: hidden;
+-  box-sizing: border-box;
+-}
+-
+-.home-canvas {
+-  position: relative;
+-  width: 750rpx;
+-  height: 1640rpx;
+-}
+-
+-.bg-image,
+-.smart-service-float,
+-.daily-checkin,
+-.invite-friend,
+-.core-entry,
+-.service-card {
+-  position: absolute;
+-  display: block;
+-}
+-
+-.bg-image {
+-  left: 0;
+-  top: 0;
+-  width: 750rpx;
+-  height: 1640rpx;
+-}
+-
+-.daily-checkin {
+-  left: 512rpx;
+-  top: 228rpx;
+-  width: 99rpx;
+-  height: 133rpx;
+-  z-index: 5;
+-}
+-
+-.invite-friend {
+-  left: 635rpx;
+-  top: 228rpx;
+-  width: 101rpx;
+-  height: 133rpx;
+-  z-index: 5;
+-}
+-
+-
+-.core-entry {
+-  left: 20rpx;
+-  top: 675rpx;
+-  width: 710rpx;
+-  height: 367rpx;
+-  z-index: 4;
+-}
+-
+-.hotspot {
+-  position: absolute;
+-  z-index: 6;
+-  background: transparent;
+-}
+-
+-.ai-hotspot {
+-  left: 310rpx;
+-  top: 646rpx;
+-  width: 130rpx;
+-  height: 130rpx;
+-  border-radius: 65rpx;
+-  z-index: 7;
+-}
+-
+-.photo-hotspot {
+-  left: 48rpx;
+-  top: 770rpx;
+-  width: 300rpx;
+-  height: 170rpx;
+-  border-radius: 42rpx;
+-}
+-
+-.voice-hotspot {
+-  left: 354rpx;
+-  top: 770rpx;
+-  width: 310rpx;
+-  height: 170rpx;
+-  border-radius: 42rpx;
+-}
+-
+-.service-card {
+-  width: 339rpx;
+-  height: 164rpx;
+-  z-index: 4;
+-  top: 1067rpx;
+-}
+-
+-.rural-card {
+-  left: 27rpx;
+-  top: 1067rpx;
+-}
+-
+-.city-card {
+-  left: 385rpx;
+-  top: 1067rpx;
+-}
+-
+-.parent-card {
+-  left: 27rpx;
+-  top: 1250rpx;
+-}
+-
+-.cost-card {
+-  overflow: hidden;
+-  box-sizing: border-box;
+-  border: 1rpx solid #d5cbbc;
+-  border-radius: 24rpx;
+-  background: linear-gradient(180deg, #f2efe8, #eee7dc);
+-  box-shadow: 0 2rpx 4rpx rgba(91, 69, 47, 0.08);
+-}
+-
+-.cost-card-art {
+-  height: 104rpx;
+-  overflow: hidden;
+-
+-}
+-
+-.cost-card-image {
+-  display: block;
+-  width: 339rpx;
+-  height: 164rpx;
+-}
+-
+-.cost-card-label {
+-  position: absolute;
+-  left: 0;
+-  right: 0;
+-  bottom: 28rpx;
+-  color: #73583f;
+-  font-size: 28rpx;
+-  line-height: 1.2;
+-  text-align: center;
+-}
+-
+-.all-card {
+-  left: 385rpx;
+-  top: 1250rpx;
+-}
+-
+-.content {
+-  position: relative;
+-  margin-top: -120rpx;
+-  min-height: 960rpx;
+-  padding: 0 30rpx calc(220rpx + env(safe-area-inset-bottom));
+-  box-sizing: border-box;
+-}
++page { overflow: visible; background: #ece4d9; }
++.pages { width: 100vw; min-height: 100vh; background: #ece4d9; overflow-x: hidden; box-sizing: border-box; }
++.home-canvas { position: relative; isolation: isolate; width: 750rpx; height: 1488.57rpx; color: #473720; font-family: "PingFang SC", sans-serif; background: linear-gradient(180deg, #e6daca, #ece4d9); }
++// 乘色保留暖米色底色，让山水纹理显现，避免米白图片冲淡整页配色。
++.home-backdrop { opacity: .85; mix-blend-mode: multiply; position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
++.home-art-layer { position: absolute; left: 0; top: 105.51rpx; width: 750rpx; height: 1383.06rpx; }
++.home-art-layer > text, .home-art-layer > image, .home-art-layer > view, .home-art-layer > picker { position: absolute; box-sizing: border-box; }
++.brand-symbol { left: 54.51rpx; top: 40.45rpx; width: 158.26rpx; height: 131.89rpx; }
++.brand-copy { left: 224.21rpx; top: 70.34rpx; width: 224.21rpx; height: 94.08rpx; display: flex; flex-direction: column; color: #9a8170; }
++.brand-name { display: block; width: 188rpx; height: 47rpx; }
++.brand-en { display: block; width: 188rpx; height: 37rpx; margin-top: 2rpx; }
++.brand-slogan { left: 51.00rpx; top: 177.61rpx; width: 422.04rpx; height: 24.62rpx; display: flex; align-items: center; gap: 22rpx; }
++.brand-slogan text { font-size: 19rpx; letter-spacing: 13rpx; white-space: nowrap; }
++.slogan-line { width: 31rpx; height: 1rpx; background: #8c9091; flex-shrink: 0; }
++.hotspot { position: absolute; z-index: 6; }
++.smart-service-float { left: 598.77rpx; top: 78.25rpx; width: 98.48rpx; height: 131.01rpx; display: flex; flex-direction: column; align-items: center; font-size: 21rpx; line-height: 28rpx; }
++.customer-icon { width: 97rpx; height: 97rpx; margin-bottom: 5rpx; }
++.service-panel { left: 33.41rpx; top: 243.55rpx; width: 685.81rpx; height: 326.20rpx; border: 1rpx solid rgba(255,255,255,.50); border-radius: 21rpx; background: rgba(255,255,255,.22); }
++.service-grid { left: 22.86rpx; top: 258.50rpx; width: 703.40rpx; height: 305.98rpx; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); z-index: 6; }
++.service-entry { display: flex; flex-direction: column; align-items: center; min-width: 0; }
++.service-icon-disc { width: 108rpx; height: 108rpx; border-radius: 50%; background: radial-gradient(circle at 44% 36%, #fff8ef, #fcf2e6); display: flex; align-items: center; justify-content: center; }
++.service-icon { width: 108rpx; height: 108rpx; border-radius: 50%; }
++.service-label { display: block; font-size: 21.65rpx; line-height: 31rpx; margin-top: 2rpx; white-space: nowrap; color: #28282b; }
++.ai-panel { left: 23.74rpx; top: 607.56rpx; width: 702.52rpx; height: 217.17rpx; }
++
++.ai-hotspot { left: 327.56rpx; top: 572.40rpx; width: 94rpx; height: 92.59rpx; }
++.ai-title { left: 99.36rpx; top: 678.84rpx; width: 550.41rpx; height: 57.15rpx; color: #593e24; font-size: 43.45rpx; font-weight: 600; line-height: 54rpx; text-align: center; white-space: nowrap; z-index: 3; }
++.photo-hotspot, .voice-hotspot { display: flex; align-items: center; justify-content: center; gap: 15rpx; color: #4b321e; font-size: 27rpx; white-space: nowrap; }
++.photo-hotspot { left: 153.87rpx; top: 742.09rpx; width: 182.00rpx; height: 51.88rpx; }
++.voice-hotspot { left: 394.78rpx; top: 742.09rpx; width: 196.95rpx; height: 51.88rpx; }
++.photo-hotspot image { position: relative; top: -3rpx; width: 50rpx; height: 53rpx; }
++.photo-hotspot { gap: 10rpx; }
++.voice-hotspot image { width: 38rpx; height: 38rpx; }
++.ai-action-divider { left: 365.77rpx; top: 751.76rpx; width: 1.76rpx; height: 31.65rpx; background: #9a8878; }
++.cost-panel { left: 29.02rpx; top: 847.60rpx; width: 691.09rpx; height: 511.72rpx; border-radius: 21rpx; border: 1rpx solid #fff; background: rgba(255,255,255,.68); box-shadow: 0 3rpx 8rpx rgba(151,127,103,.14), inset 0 0 0 3rpx rgba(255,255,255,.38); }
++.cost-stat-icon { left: 53.63rpx; top: 873.09rpx; width: 73.86rpx; height: 72.98rpx; border-radius: 50%; border: 1rpx solid #e1c39f; background: linear-gradient(135deg,#fffefa,#f4ebdf); box-shadow: 0 3rpx 8rpx rgba(140,117,83,.18); display: flex; align-items: center; justify-content: center; }
++.cost-stat-bars { width: 50rpx; height: 50rpx; }
++.cost-title { left: 144.20rpx; top: 872.22rpx; width: 193.43rpx; height: 50.12rpx; color: #50381f; font-size: 39rpx; font-weight: 600; line-height: 46rpx; }
++.cost-copy { left: 144.20rpx; top: 923.21rpx; width: 527.55rpx; height: 32.53rpx; color: #81828e; font-size: 22.85rpx; line-height: 30rpx; white-space: nowrap; }
++.cost-form-panel { left: 34.29rpx; top: 964.54rpx; width: 680.54rpx; height: 391.27rpx; border-radius: 22rpx; background: rgba(255,255,255,.91); }
++.cost-project-label { left: 56.27rpx; top: 980.36rpx; width: 175.85rpx; height: 26.38rpx; font-size: 24rpx; line-height: 29rpx; color: #28282b; }
++.quick-project { z-index: 7; border: 1rpx solid #dedee3; border-radius: 11rpx; display: flex; align-items: center; justify-content: center; gap: 18rpx; background: linear-gradient(135deg,#fdfdfd,#f7f7f9); font-size: 25rpx; color: #28282b; }
++.quick-project--rural { left: 55.39rpx; top: 1012.02rpx; width: 313.01rpx; height: 67.70rpx; }
++.quick-project--urban { left: 385.11rpx; top: 1012.02rpx; width: 309.50rpx; height: 67.70rpx; }
++.quick-project--selected { border-color: #e8b48a; background: linear-gradient(135deg,#fffcf8,#f5eee6); color: #4a3019; }
++.quick-project image { width: 43rpx; height: 43rpx; }
++.cost-region-label { left: 56.27rpx; top: 1099.94rpx; width: 175.85rpx; height: 26.38rpx; font-size: 24rpx; line-height: 29rpx; color: #28282b; }
++.cost-area-label { left: 385.11rpx; top: 1099.94rpx; width: 175.85rpx; height: 26.38rpx; font-size: 24rpx; line-height: 29rpx; color: #28282b; }
++.quick-region { left: 55.39rpx; top: 1131.59rpx; width: 313.01rpx; height: 68.58rpx; z-index: 7; border: 1rpx solid #e0e0e6; border-radius: 11rpx; background: linear-gradient(135deg,#fff,#f8f8fa); }
++.quick-region-hitbox { height: 66.58rpx; box-sizing: border-box; display: flex; align-items: center; padding: 0 20rpx; gap: 6rpx; }
++.quick-region-hitbox image { width: 43rpx; height: 35rpx; transform: translateX(-8rpx); flex-shrink: 0; }
++.quick-region-value { flex: 1; min-width: 0; color: #a2a2ad; font-size: 24rpx; line-height: 32rpx; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
++.quick-region-value--selected { color: #292825; }
++.field-chevron { width: 11rpx; height: 11rpx; border-top: 1.5rpx solid #222; border-right: 1.5rpx solid #222; transform: rotate(45deg); }
++.quick-area { left: 385.11rpx; top: 1131.59rpx; width: 309.50rpx; height: 68.58rpx; z-index: 7; border: 1rpx solid #e0e0e6; border-radius: 11rpx; background: linear-gradient(135deg,#fff,#f8f8fa); display: flex; align-items: center; padding: 0 20rpx; gap: 17rpx; }
++.quick-area image { width: 33rpx; height: 37rpx; flex-shrink: 0; }
++.quick-area-input { flex: 1; min-width: 0; height: 100%; color: #292825; font-size: 24rpx; }
++.quick-area-placeholder { color: #a2a2ad; }
++.area-unit { font-size: 25rpx; white-space: nowrap; }
++.quick-estimate { left: 55.39rpx; top: 1224.79rpx; width: 639.21rpx; height: 72.98rpx; border: 0; border-radius: 70rpx; background: transparent; color: #fff; font-size: 31rpx; display: flex; align-items: center; justify-content: center; overflow: visible; box-shadow: 0 5rpx 12rpx rgba(139,110,78,.16); }
++.estimate-button-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
++.quick-estimate > text { position: relative; pointer-events: none; font: inherit; }
++.estimate-note { left: 249.71rpx; top: 1313.60rpx; width: 250.59rpx; height: 30.77rpx; display: flex; align-items: center; justify-content: center; gap: 9rpx; color: #787b83; font-size: 20rpx; }
++.home-art-layer .quick-estimate { width: 639.21rpx; max-width: none; margin: 0; padding: 0; line-height: normal; box-sizing: border-box; font-weight: 400; font-family: inherit; }
++.quick-estimate::after { border: 0; }
++.info-icon { width: 19rpx; height: 19rpx; border: 1.5rpx solid #787b83; border-radius: 50%; font: 16rpx/19rpx Georgia, serif; text-align: center; }
++.content { position: relative; margin-top: 0; padding: 30rpx 30rpx calc(180rpx + env(safe-area-inset-bottom)); box-sizing: border-box; }
+ 
+ .case-section {
+   margin-bottom: 40rpx;
+@@ -618,43 +522,6 @@
+   line-height: 22rpx;
+ }
+ 
+-/* ====== 智能客服悬浮吉祥物图标 ====== */
+-.smart-service-float {
+-  left: 34rpx;
+-  top: 228rpx;
+-  width: 101rpx;
+-  height: 108rpx;
+-  z-index: 5;
+-  transform: scale(1);
+-  transform-origin: center;
+-}
+-
+-.smart-service-float__img {
+-  width: 100%;
+-  height: 100%;
+-  filter: drop-shadow(0 8rpx 16rpx rgba(94, 65, 47, 0.18));
+-}
+-
+-/* 弹跳动画态：以右下角为支点逆时针旋转-60度弹出 */
+-.smart-service-float--bounce {
+-  animation: mascot-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+-}
+-
+-@keyframes mascot-bounce {
+-  0% {
+-    transform: scale(1);
+-  }
+-  50% {
+-    transform: scale(0.94);
+-  }
+-  75% {
+-    transform: scale(1.04);
+-  }
+-  100% {
+-    transform: scale(1);
+-  }
+-}
+-
+ .contact-popup,
+ .wechat-popup {
+   width: 100%;
+--- a/miniprogram/pages/index/index.ts
++++ b/miniprogram/pages/index/index.ts
+@@ -1,6 +1,7 @@
+ // index.ts
+ // 获取应用实例
+ import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset'
++import { cityOptionsMap } from '../../utils/costRegions'
+ import { resumeReportAfterLogin } from '../../utils/reportNavigation'
+ import { getPageCache, prefetchImages, setPageCache } from '../../utils/perf'
+ import {
+@@ -38,17 +39,16 @@
+     enterpriseWechatCustomerServiceCorpId: DEFAULT_CUSTOMER_SERVICE_CORP_ID,
+     enterpriseWechatCustomerServiceUrl: DEFAULT_CUSTOMER_SERVICE_URL,
+     enterpriseWechatConfigLoading: false,
+-    heroBgImage: resolveAssetPath('/assets/home/logo+背景图.png'),
+-    coreEntryImage: resolveAssetPath('/assets/home/核心输入区.png'),
+-    dailyCheckinImage: resolveAssetPath('/assets/home/每日签到.png'),
+-    inviteFriendImage: resolveAssetPath('/assets/home/邀请好友.png'),
+-    ruralVillaImage: resolveAssetPath('/assets/home/乡村别墅.png'),
+-    cityRenewalImage: resolveAssetPath('/assets/home/城市更新.png'),
+-    parentWorkshopImage: resolveAssetPath('/assets/home/亲子工坊.png'),
+-    allRoundDesignImage: resolveAssetPath('/assets/home/综合设计.png'),
++    quickProjectType: 'rural_villa',
++    quickRegionOptions: [Object.keys(cityOptionsMap), cityOptionsMap.福建],
++    quickRegionIndex: [0, 0],
++    quickRegionConfirmedIndex: [0, 0],
++    quickRegionText: '',
++    quickProvince: '',
++    quickCity: '',
++    quickArea: '',
+     defaultCoverImage: resolveAssetPath('/assets/images/home.jpg'),
+     introLogoImage: resolveAssetPath('/assets/home/intro-logo.png'),
+-    smartServiceMascotImage: '/assets/smart-service-icon.png',
+     mascotBouncing: false,
+   },
+   syncTabBar() {
+@@ -78,7 +78,13 @@
+       return;
+     }
+ 
+-    wx.navigateTo({
++    const tabPaths = [
++      '/pages/index/index',
++      '/pages/template/template',
++      '/pages/distribution/distribution',
++      '/pages/my/my',
++    ];
++    const options = {
+       url,
+       fail: () => {
+         wx.showToast({
+@@ -86,7 +92,73 @@
+           icon: 'none',
+         });
+       },
+-    });
++    };
++    if (tabPaths.includes(url.split('?')[0])) {
++      wx.switchTab({ ...options, url: url.split('?')[0] });
++    } else {
++      wx.navigateTo(options);
++    }
++  },
++  onQuickProjectChange(e: any) {
++    const type = e.currentTarget.dataset.type;
++    if (type === 'rural_villa' || type === 'urban_renewal') {
++      this.setData({ quickProjectType: type });
++    }
++  },
++  onQuickRegionColumnChange(e: any) {
++    const { column, value } = e.detail;
++    const indices = [...this.data.quickRegionIndex];
++    indices[column] = value;
++    if (column === 0) {
++      const province = Object.keys(cityOptionsMap)[value];
++      if (!province) return;
++      indices[1] = 0;
++      this.setData({
++        quickRegionOptions: [Object.keys(cityOptionsMap), cityOptionsMap[province]],
++        quickRegionIndex: indices,
++      });
++    } else {
++      this.setData({ quickRegionIndex: indices });
++    }
++  },
++  onQuickRegionChange(e: any) {
++    const indices = e.detail.value as number[];
++    const province = Object.keys(cityOptionsMap)[indices[0]];
++    const city = cityOptionsMap[province]?.[indices[1]];
++    if (!province || !city) return;
++    this.setData({
++      quickProvince: province,
++      quickCity: city,
++      quickRegionText: `${province} / ${city}`,
++      quickRegionIndex: indices,
++      quickRegionConfirmedIndex: indices,
++      quickRegionOptions: [Object.keys(cityOptionsMap), cityOptionsMap[province]],
++    });
++  },
++  onQuickRegionCancel() {
++    const indices = this.data.quickRegionConfirmedIndex;
++    const province = Object.keys(cityOptionsMap)[indices[0]];
++    this.setData({
++      quickRegionIndex: indices,
++      quickRegionOptions: [Object.keys(cityOptionsMap), cityOptionsMap[province]],
++    });
++  },
++  onQuickAreaInput(e: any) {
++    this.setData({ quickArea: e.detail.value });
++  },
++  onQuickEstimate() {
++    if (!this.data.quickRegionText) {
++      wx.showToast({ title: '请选择所在地区', icon: 'none' });
++      return;
++    }
++    const area = Number(String(this.data.quickArea).trim());
++    if (!Number.isFinite(area) || area <= 0) {
++      wx.showToast({ title: '请输入有效的建筑面积', icon: 'none' });
++      return;
++    }
++    // 复用完整造价表单补齐占地、楼层和结构参数，不推导用户尚未提供的成本条件。
++    const url = `/pages/aicost/aicost?source=home_quick_estimate&projectType=${this.data.quickProjectType}&province=${encodeURIComponent(this.data.quickProvince)}&city=${encodeURIComponent(this.data.quickCity)}&buildingArea=${area}`;
++    this.onOpenPage({ currentTarget: { dataset: { url } } });
+   },
+   showHomeIntroPopupOnce() {
+     try {
+--- a/miniprogram/pages/index/index.wxml
++++ b/miniprogram/pages/index/index.wxml
+@@ -1,31 +1,74 @@
+ <!--index.wxml-->
+ <view class="pages">
+   <view class="home-canvas">
+-    <image class="bg-image" src="{{heroBgImage}}" mode="scaleToFill" />
+-    <view class="smart-service-float {{mascotBouncing ? 'smart-service-float--bounce' : ''}}" bindtap="onMascotTap">
+-      <image class="smart-service-float__img" src="{{smartServiceMascotImage}}" mode="aspectFit" />
+-    </view>
+-    <image class="daily-checkin" src="{{dailyCheckinImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/checkin/checkin?source=index" />
+-    <image class="invite-friend" src="{{inviteFriendImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/Invitefriends/Invitefriends?source=index" />
+-
+-    <image class="core-entry" src="{{coreEntryImage}}" mode="scaleToFill" />
+-    <view class="hotspot ai-hotspot" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor"></view>
+-    <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index"></view>
+-    <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools"></view>
+-
+-    <image class="service-card rural-card" src="{{ruralVillaImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&showSceneTabs=1&tab=exterior" />
+-    <image class="service-card city-card" src="{{cityRenewalImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=urban_renewal&showSceneTabs=0" />
+-    <view class="service-card parent-card cost-card" bindtap="onOpenPage" data-url="/pages/aicost/aicost">
+-      <view class="cost-card-art"><image class="cost-card-image" src="{{parentWorkshopImage}}" mode="scaleToFill" /></view>
+-      <text class="cost-card-label">造价测算</text>
+-    </view>
+-    <image class="service-card all-card" src="{{allRoundDesignImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/allrounddesign/allrounddesign" />
++    <image class="home-backdrop" src="/assets/home-reference/hd/backdrop.jpg" mode="scaleToFill" aria-hidden="true" />
++    <view class="home-art-layer">
++      <image class="brand-symbol" src="/assets/home-reference/hd/brand-symbol-old.png" mode="aspectFit" aria-hidden="true" />
++      <view class="brand-copy"><image class="brand-name" src="/assets/home-reference/hd/brand-name-old.png" mode="aspectFit" aria-label="甲第灵光" /><image class="brand-en" src="/assets/home-reference/hd/brand-en-old.png" mode="aspectFit" aria-label="ArchLight" /></view>
++      <view class="brand-slogan"><view class="slogan-line"></view><text>让理想家园触手可及</text><view class="slogan-line"></view></view>
++      <view class="hotspot smart-service-float" bindtap="onMascotTap" role="button" aria-label="在线客服">
++        <image class="customer-icon" src="/assets/smart-service-icon.png" mode="aspectFit" aria-hidden="true" /><text>在线客服</text>
++      </view>
++      <view class="service-panel"></view>
++      <view class="service-grid">
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/advisor.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">建房顾问</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aicost/aicost" role="button" aria-label="造价测算">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/calculator.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">造价测算</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI工具">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/ai-tools.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">AI工具</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=exterior" role="button" aria-label="别墅设计">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/villa.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">别墅设计</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=interior" role="button" aria-label="装修设计">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/interior.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">装修设计</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=courtyard&amp;prompt=庭院景观设计" role="button" aria-label="庭院设计">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/courtyard.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">庭院设计</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/buildingreplacement/buildingreplacement" role="button" aria-label="旧居翻新">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/renovation.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">旧居翻新</text>
++        </view>
++        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">
++          <view class="service-icon-disc"><image class="service-icon" src="/assets/home-reference/hd/templates.png" mode="aspectFit" aria-hidden="true" /></view>
++          <text class="service-label">模板广场</text>
++        </view>
++      </view>
++      <image class="ai-panel" src="/assets/home-reference/hd/ai-shell.png" mode="scaleToFill" aria-hidden="true" />
++      <image class="hotspot ai-hotspot" src="/assets/home-reference/hd/ai-medallion.png" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="AI设计" />
++      <text class="ai-title">拍照说需求 · 1分钟出方案</text>
++      <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="拍照上传"><image src="/assets/home-reference/hd/camera.png" mode="scaleToFill" aria-hidden="true" /><text>拍照上传</text></view>
++      <view class="ai-action-divider"></view>
++      <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI生图工具"><image src="/assets/home-reference/hd/sparkles.png" mode="aspectFit" aria-hidden="true" /><text>AI生图工具</text></view>
++      <view class="cost-panel"></view>
++      <view class="cost-stat-icon"><image class="cost-stat-bars" src="/assets/home-reference/hd/cost-stat-v2.png" mode="aspectFit" aria-hidden="true" /></view>
++      <text class="cost-title">智能造价</text>
++      <text class="cost-copy">快速估算项目造价，合理规划您的理想之家</text>
++      <view class="cost-form-panel"></view>
++      <text class="cost-project-label">项目类型</text>
++      <view class="quick-project quick-project--rural {{quickProjectType === 'rural_villa' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="rural_villa" role="button" aria-label="乡村别墅" aria-pressed="{{quickProjectType === 'rural_villa'}}"><image src="/assets/home-reference/hd/rural-villa.png" mode="aspectFit" aria-hidden="true" /><text>乡村别墅</text></view>
++      <view class="quick-project quick-project--urban {{quickProjectType === 'urban_renewal' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="urban_renewal" role="button" aria-label="城市更新" aria-pressed="{{quickProjectType === 'urban_renewal'}}"><image src="/assets/home-reference/hd/urban-building.png" mode="aspectFit" aria-hidden="true" /><text>城市更新</text></view>
++      <text class="cost-region-label">所在地区</text>
++      <text class="cost-area-label">建筑面积</text>
++      <picker class="quick-region" mode="multiSelector" range="{{quickRegionOptions}}" value="{{quickRegionIndex}}" bindcolumnchange="onQuickRegionColumnChange" bindchange="onQuickRegionChange" bindcancel="onQuickRegionCancel" aria-label="所在地区">
++        <view class="quick-region-hitbox"><image src="/assets/home-reference/hd/location.png" mode="scaleToFill" aria-hidden="true" /><text class="quick-region-value {{quickRegionText ? 'quick-region-value--selected' : ''}}">{{quickRegionText || '请选择'}}</text><view class="field-chevron"></view></view>
++      </picker>
++      <view class="quick-area"><image src="/assets/home-reference/hd/ruler.png" mode="aspectFit" aria-hidden="true" /><input class="quick-area-input" type="digit" value="{{quickArea}}" placeholder="请输入" placeholder-class="quick-area-placeholder" bindinput="onQuickAreaInput" aria-label="建筑面积，平方米" /><text class="area-unit">m²</text></view>
++      <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算"><image class="estimate-button-art" src="/assets/home-reference/hd/estimate-shell.png" mode="scaleToFill" aria-hidden="true" /><text>立即估算</text></button>
++      <view class="estimate-note"><text class="info-icon">i</text><text>估算结果仅供参考</text></view>
++    </view>
+   </view>
+   <view class="content">
+-    <view class="building-report-entry" bindtap="onOpenPage" data-url="/pages/report/landing" role="button" aria-label="开始我的建房报告">
+-      <text class="building-report-entry__title">先想清楚怎么住，再决定怎么建</text>
+-      <text class="building-report-entry__copy">从您家的情况出发，梳理建房方向 →</text>
+-    </view>
+     <view class="case-section" wx:if="{{featuredGroups && featuredGroups.length > 0}}">
+       <text class="case-title">精选案例对比</text>
+       <view class="featured-groups">
+--- a/miniprogram/pages/index/index.wxss
++++ b/miniprogram/pages/index/index.wxss
+@@ -1 +1 @@
+-page{overflow:visible}.pages{width:100vw;min-height:100vh;background:linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);overflow-x:hidden;box-sizing:border-box}.home-canvas{position:relative;width:750rpx;height:1640rpx}.bg-image,.smart-service-float,.daily-checkin,.invite-friend,.core-entry,.service-card{position:absolute;display:block}.bg-image{left:0;top:0;width:750rpx;height:1640rpx}.daily-checkin{left:512rpx;top:228rpx;width:99rpx;height:133rpx;z-index:5}.invite-friend{left:635rpx;top:228rpx;width:101rpx;height:133rpx;z-index:5}.core-entry{left:20rpx;top:675rpx;width:710rpx;height:367rpx;z-index:4}.hotspot{position:absolute;z-index:6;background:rgba(0,0,0,0)}.ai-hotspot{left:310rpx;top:646rpx;width:130rpx;height:130rpx;border-radius:65rpx;z-index:7}.photo-hotspot{left:48rpx;top:770rpx;width:300rpx;height:170rpx;border-radius:42rpx}.voice-hotspot{left:354rpx;top:770rpx;width:310rpx;height:170rpx;border-radius:42rpx}.service-card{width:339rpx;height:164rpx;z-index:4;top:1067rpx}.rural-card{left:27rpx;top:1067rpx}.city-card{left:385rpx;top:1067rpx}.parent-card{left:27rpx;top:1250rpx}.all-card{left:385rpx;top:1250rpx}.content{position:relative;margin-top:-120rpx;min-height:960rpx;padding:0 30rpx calc(220rpx + env(safe-area-inset-bottom));box-sizing:border-box}.case-section{margin-bottom:40rpx}.case-section .case-title{display:block;font-size:32rpx;color:#5e412f;margin-bottom:30rpx;font-weight:600}.case-section .case-comparison{display:flex;gap:20rpx;margin-bottom:30rpx;position:relative}.case-section .case-comparison .case-card{flex:1;min-width:0;width:50%}.case-section .case-side-by-side{display:flex;gap:20rpx;margin-bottom:30rpx}.case-section .case-side-by-side .case-card{flex:1;min-width:0;width:50%}.case-normal{margin-bottom:30rpx}.featured-groups{display:flex;flex-direction:column;gap:30rpx;margin-bottom:30rpx}.featured-group .case-card .case-item{background:hsla(0,0%,100%,.72);border:1px solid rgba(172,156,143,.35);border-radius:20rpx;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8rpx 24rpx rgba(94,65,47,.08)}.featured-group .case-card .case-item .case-image-wrapper{position:relative;width:100%}.featured-group .case-card .case-item .case-image-wrapper .case-label{position:absolute;top:0;left:0;background:rgba(94,65,47,.8);color:#fff;padding:8rpx 20rpx;border-radius:20rpx 0 8rpx 0;font-size:24rpx;z-index:10}.featured-group .case-card .case-item .case-image-wrapper .case-image{width:100%;height:auto;display:block}.featured-group .case-card .case-item .case-content{padding:20rpx;display:flex;flex-direction:column;gap:8rpx}.featured-group .case-card .case-item .case-content .case-item-title{font-size:28rpx;color:#5e412f;font-weight:600}.featured-group .case-card .case-item .case-content .case-item-desc{font-size:24rpx;color:rgba(94,65,47,.78);line-height:1.5;overflow:hidden;text-overflow:ellipsis;max-height:72rpx}.case-section-skeleton{min-height:780rpx}.skeleton-block,.skeleton-card,.skeleton-action{position:relative;overflow:hidden;background:linear-gradient(90deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0.38) 100%);background-size:200% 100%;animation:skeleton-loading 1.4s ease-in-out infinite}.skeleton-title{width:220rpx;height:36rpx;border-radius:18rpx;margin-bottom:30rpx}.skeleton-groups{gap:24rpx}.skeleton-group-row{display:flex;gap:20rpx}.skeleton-card{flex:1;min-width:0;height:260rpx;border-radius:24rpx}.skeleton-card-wide{width:100%;flex:none;height:220rpx}.skeleton-action{min-height:98rpx}@keyframes skeleton-loading{0%{background-position:200% 0}100%{background-position:-200% 0}}.vs-divider{position:absolute;left:50%;top:150rpx;transform:translateX(-50%);background:rgba(94,65,47,.9);color:#fff;padding:10rpx 20rpx;border-radius:30rpx;font-size:24rpx;font-weight:bold;z-index:15;border:2rpx solid hsla(0,0%,100%,.4)}.case-actions{display:flex;gap:20rpx}.case-actions .action-btn{flex:1;background:linear-gradient(180deg, #c8a679 0%, #a9855b 100%);border:2rpx solid hsla(0,0%,100%,.35);border-radius:20rpx;padding:20rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10rpx;box-shadow:0 10rpx 20rpx rgba(113,80,63,.18)}.case-actions .action-btn text{color:#fff;font-size:24rpx}.popup-mask{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(46,31,20,.42);display:flex;align-items:center;justify-content:center;padding:40rpx;box-sizing:border-box;z-index:999}.home-intro-popup{position:relative;width:100%;max-width:630rpx;padding:0 40rpx 40rpx;border-radius:68rpx;background:linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);border:2rpx solid #cdbda6;box-shadow:0 24rpx 60rpx rgba(94,65,47,.28);box-sizing:border-box;overflow:hidden}.home-intro-bg-decor{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;opacity:.5;background:linear-gradient(105deg, rgba(255, 248, 237, 0.7) 0%, transparent 35%),linear-gradient(85deg, transparent 50%, rgba(255, 248, 237, 0.5) 70%, transparent 90%)}.home-intro-logo-wrap{position:relative;z-index:2;display:flex;justify-content:center;padding-top:28rpx;margin-bottom:16rpx}.home-intro-logo-img{width:82rpx;height:104rpx;opacity:.85}.home-intro-close{position:absolute;top:60rpx;right:42rpx;width:50rpx;height:50rpx;z-index:10;display:flex;align-items:center;justify-content:center}.home-intro-close-icon{font-size:36rpx;color:#8d5735;font-weight:700;line-height:1}.home-intro-title-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:10rpx;margin-bottom:32rpx}.home-intro-title{font-size:36rpx;color:#5e412f;font-weight:700;line-height:1.25;text-align:center}.home-intro-subtitle{font-size:22rpx;color:#866f5f;line-height:1.65;text-align:center}.home-intro-list{position:relative;z-index:2;display:flex;flex-direction:column;gap:20rpx;margin-bottom:32rpx}.home-intro-item{border-radius:36rpx;background:linear-gradient(180deg, #f1e7db 0%, #dbccb9 100%);border:3rpx solid #d7cdc3;padding:7rpx}.home-intro-item-active{opacity:.88;transform:scale(0.99)}.home-intro-item-inner{display:flex;align-items:flex-start;gap:20rpx;padding:22rpx 24rpx;border-radius:31rpx;background:linear-gradient(93deg, #f8f5f0 44%, #f5ebe2 82%);border:1rpx solid rgba(215,205,195,.6)}.home-intro-icon{width:60rpx;height:60rpx;min-width:60rpx;border-radius:23rpx;background:linear-gradient(155deg, #fcf8ed 26%, #c17032 83%);box-shadow:inset -7rpx -12rpx 19rpx #ffeecb;display:flex;align-items:center;justify-content:center;flex-shrink:0}.home-intro-icon-text{font-size:22rpx;font-weight:700;color:#8d5735}.home-intro-texts{flex:1;min-width:0;display:flex;flex-direction:column;gap:6rpx}.home-intro-item-title{font-size:28rpx;color:#5e412f;font-weight:700;line-height:1.3}.home-intro-item-desc{font-size:22rpx;color:#9e9e9e;line-height:1.6}.home-intro-actions{position:relative;z-index:2;display:flex;gap:16rpx;margin-bottom:24rpx}.home-intro-primary,.home-intro-secondary{flex:1;height:75rpx;border-radius:38rpx;display:flex;align-items:center;justify-content:center;font-size:26rpx;font-weight:900;box-sizing:border-box}.home-intro-primary{background:linear-gradient(90deg, #d8b796 0%, #c09062 100%);color:#fff7e2;box-shadow:inset -28rpx -19rpx 38rpx #b26a10,inset 23rpx 27rpx 30rpx rgba(211,146,44,.7)}.home-intro-primary-active{opacity:.85}.home-intro-secondary{background:linear-gradient(90deg, #d8b796 0%, #c09062 100%);color:#9e6f43;border:2rpx solid rgba(215,205,195,.6);box-shadow:inset -28rpx -19rpx 38rpx #e7c89f,inset 23rpx 27rpx 30rpx rgba(247,238,226,.7);text-shadow:0 0 15rpx hsla(0,0%,100%,.8)}.home-intro-secondary-active{opacity:.85}.home-intro-service{position:relative;z-index:2;height:48rpx;display:flex;align-items:center;justify-content:center;gap:8rpx}.home-intro-service-icon{font-size:24rpx;color:#8a694e}.home-intro-service-text{font-size:22rpx;color:#8a694e;line-height:22rpx}.smart-service-float{left:34rpx;top:228rpx;width:101rpx;height:108rpx;z-index:5;transform:scale(1);transform-origin:center}.smart-service-float__img{width:100%;height:100%;filter:drop-shadow(0 8rpx 16rpx rgba(94, 65, 47, 0.18))}.smart-service-float--bounce{animation:mascot-bounce .4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards}@keyframes mascot-bounce{0%{transform:scale(1)}50%{transform:scale(0.94)}75%{transform:scale(1.04)}100%{transform:scale(1)}}.contact-popup,.wechat-popup{width:100%;background:linear-gradient(180deg, #fbf5ee 0%, #f2e6d8 100%);border-radius:32rpx;box-shadow:0 24rpx 60rpx rgba(94,65,47,.22);border:2rpx solid rgba(181,145,108,.2);box-sizing:border-box}.contact-popup{max-width:620rpx;padding:36rpx 32rpx 28rpx}.wechat-popup{max-width:660rpx;padding:36rpx 32rpx 32rpx}.popup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:26rpx}.popup-header-main{flex:1;display:flex;flex-direction:column;gap:8rpx;padding-right:20rpx}.popup-title{font-size:34rpx;line-height:48rpx;color:#5e412f;font-weight:600}.popup-subtitle{font-size:22rpx;line-height:1.6;color:rgba(94,65,47,.68)}.popup-close{width:52rpx;height:52rpx;border-radius:26rpx;background:rgba(201,173,142,.2);color:#8d6f56;display:flex;align-items:center;justify-content:center;font-size:34rpx;line-height:1}.supplier-option{display:flex;align-items:center;gap:24rpx;padding:24rpx;border-radius:24rpx;background:hsla(0,0%,100%,.72);border:2rpx solid rgba(196,165,131,.22);box-shadow:0 10rpx 24rpx rgba(94,65,47,.08)}.supplier-option+.supplier-option{margin-top:20rpx}.supplier-option-contact{position:relative;overflow:hidden}.supplier-option-icon{width:80rpx;height:80rpx;border-radius:40rpx;display:flex;align-items:center;justify-content:center;font-size:34rpx;font-weight:600;color:#fff;flex-shrink:0}.supplier-phone-icon{background:linear-gradient(180deg, #caa16d 0%, #b27b46 100%)}.supplier-wechat-icon{background:linear-gradient(180deg, #7ac96f 0%, #45a35a 100%)}.supplier-option-content{flex:1;display:flex;flex-direction:column;gap:6rpx}.supplier-option-right{display:flex;align-items:center;gap:12rpx;flex-shrink:0}.supplier-option-badge{padding:10rpx 16rpx;border-radius:999rpx;font-size:20rpx;font-weight:600;line-height:1}.supplier-option-badge.warm{background:rgba(202,161,109,.16);color:#a3703f}.supplier-option-badge.green{background:rgba(88,185,105,.16);color:#3f9951}.supplier-option-arrow{font-size:34rpx;line-height:1;color:rgba(138,105,78,.55)}.supplier-contact-trigger{position:absolute;top:0;right:0;bottom:0;left:0;margin:0;padding:0;border:0;background:rgba(0,0,0,0);color:rgba(0,0,0,0);opacity:0;z-index:3}.supplier-option-title{font-size:30rpx;color:#5e412f;font-weight:600}.supplier-option-desc{font-size:24rpx;color:rgba(94,65,47,.78)}.supplier-contact-tip{margin-top:20rpx;padding:18rpx 22rpx;border-radius:18rpx;background:rgba(201,173,142,.12);border:1px solid rgba(189,154,119,.2)}.supplier-contact-tip text{font-size:24rpx;color:#8a694e;line-height:1.6}.supplier-option-contact{position:relative;overflow:hidden}.supplier-option-contact-btn{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;margin:0;padding:0;border:none;background:rgba(0,0,0,0)}.supplier-option-contact-btn::after{border:none}.supplier-chat-icon{background:linear-gradient(180deg, #4facfe 0%, #3b82f6 100%)}.supplier-ai-icon{background:linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%)}.supplier-option-disabled{opacity:.55}.supplier-option-badge.muted{background:rgba(138,105,78,.12);color:#8a694e}.supplier-contact-helper{margin-top:18rpx;padding:18rpx 22rpx;border-radius:18rpx;background:hsla(0,0%,100%,.58);border:1px solid rgba(189,154,119,.18);display:flex;align-items:center;justify-content:space-between;gap:16rpx}.supplier-contact-helper-text{flex:1;font-size:24rpx;color:#8a694e;line-height:1.5}.supplier-contact-helper-arrow{font-size:30rpx;line-height:1;color:rgba(138,105,78,.58)}.wechat-summary-card{display:flex;align-items:center;gap:18rpx;margin-bottom:22rpx;padding:20rpx 22rpx;border-radius:22rpx;background:hsla(0,0%,100%,.74);border:1px solid rgba(181,145,108,.18)}.wechat-summary-icon{width:74rpx;height:74rpx;border-radius:37rpx;background:linear-gradient(180deg, #6fc865 0%, #43a75a 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-size:34rpx;font-weight:700;flex-shrink:0}.wechat-summary-content{display:flex;flex-direction:column;gap:6rpx}.wechat-summary-title{font-size:28rpx;color:#5e412f;font-weight:600}.wechat-summary-desc{font-size:22rpx;line-height:1.6;color:rgba(94,65,47,.72)}.wechat-qrcode-wrapper{width:100%;min-height:560rpx;border-radius:28rpx;background:hsla(0,0%,100%,.9);display:flex;align-items:center;justify-content:center;padding:24rpx;box-sizing:border-box;border:2rpx dashed rgba(190,157,123,.35)}.wechat-qrcode-image{width:100%;height:520rpx}.wechat-qrcode-placeholder{display:flex;flex-direction:column;align-items:center;gap:16rpx;text-align:center;padding:40rpx}.wechat-qrcode-placeholder-title{font-size:30rpx;color:#5e412f;font-weight:600}.wechat-qrcode-placeholder-desc{font-size:24rpx;color:rgba(94,65,47,.74);line-height:1.6}.wechat-service-tip{margin-top:24rpx;padding:18rpx 22rpx;border-radius:18rpx;background:rgba(201,173,142,.12);border:1px solid rgba(189,154,119,.2);display:flex;flex-direction:column;gap:8rpx}.wechat-service-tip-text{font-size:24rpx;color:#7a5d46;line-height:1.7}.wechat-service-contact{font-size:24rpx;color:#5e412f;font-weight:600}.wechat-popup-footer{display:flex;gap:20rpx;margin-top:28rpx}.wechat-footer-btn{flex:1;height:84rpx;border-radius:22rpx;display:flex;align-items:center;justify-content:center;font-size:28rpx;font-weight:600}.wechat-footer-btn.secondary{background:rgba(201,173,142,.14);color:#8a694e;border:2rpx solid rgba(189,154,119,.25)}.wechat-footer-btn.primary{background:linear-gradient(180deg, #c8a679 0%, #a9855b 100%);color:#fff;box-shadow:0 12rpx 26rpx rgba(113,80,63,.18)}
++page{overflow:visible;background:#ece4d9}.pages{width:100vw;min-height:100vh;background:#ece4d9;overflow-x:hidden;box-sizing:border-box}.home-canvas{position:relative;isolation:isolate;width:750rpx;height:1488.57rpx;color:#473720;font-family:"PingFang SC",sans-serif;background:linear-gradient(180deg, #e6daca, #ece4d9)}.home-backdrop{opacity:.85;mix-blend-mode:multiply;position:absolute;left:0;top:0;width:100%;height:100%}.home-art-layer{position:absolute;left:0;top:105.51rpx;width:750rpx;height:1383.06rpx}.home-art-layer>text,.home-art-layer>image,.home-art-layer>view,.home-art-layer>picker{position:absolute;box-sizing:border-box}.brand-symbol{left:54.51rpx;top:40.45rpx;width:158.26rpx;height:131.89rpx}.brand-copy{left:224.21rpx;top:70.34rpx;width:224.21rpx;height:94.08rpx;display:flex;flex-direction:column;color:#9a8170}.brand-name{display:block;width:188rpx;height:47rpx}.brand-en{display:block;width:188rpx;height:37rpx;margin-top:2rpx}.brand-slogan{left:51rpx;top:177.61rpx;width:422.04rpx;height:24.62rpx;display:flex;align-items:center;gap:22rpx}.brand-slogan text{font-size:19rpx;letter-spacing:13rpx;white-space:nowrap}.slogan-line{width:31rpx;height:1rpx;background:#8c9091;flex-shrink:0}.hotspot{position:absolute;z-index:6}.smart-service-float{left:598.77rpx;top:78.25rpx;width:98.48rpx;height:131.01rpx;display:flex;flex-direction:column;align-items:center;font-size:21rpx;line-height:28rpx}.customer-icon{width:97rpx;height:97rpx;margin-bottom:5rpx}.service-panel{left:33.41rpx;top:243.55rpx;width:685.81rpx;height:326.2rpx;border:1rpx solid hsla(0,0%,100%,.5);border-radius:21rpx;background:hsla(0,0%,100%,.22)}.service-grid{left:22.86rpx;top:258.5rpx;width:703.4rpx;height:305.98rpx;display:grid;grid-template-columns:repeat(4, 1fr);grid-template-rows:repeat(2, 1fr);z-index:6}.service-entry{display:flex;flex-direction:column;align-items:center;min-width:0}.service-icon-disc{width:108rpx;height:108rpx;border-radius:50%;background:radial-gradient(circle at 44% 36%, #fff8ef, #fcf2e6);display:flex;align-items:center;justify-content:center}.service-icon{width:108rpx;height:108rpx;border-radius:50%}.service-label{display:block;font-size:21.65rpx;line-height:31rpx;margin-top:2rpx;white-space:nowrap;color:#28282b}.ai-panel{left:23.74rpx;top:607.56rpx;width:702.52rpx;height:217.17rpx}.ai-hotspot{left:327.56rpx;top:572.4rpx;width:94rpx;height:92.59rpx}.ai-title{left:99.36rpx;top:678.84rpx;width:550.41rpx;height:57.15rpx;color:#593e24;font-size:43.45rpx;font-weight:600;line-height:54rpx;text-align:center;white-space:nowrap;z-index:3}.photo-hotspot,.voice-hotspot{display:flex;align-items:center;justify-content:center;gap:15rpx;color:#4b321e;font-size:27rpx;white-space:nowrap}.photo-hotspot{left:153.87rpx;top:742.09rpx;width:182rpx;height:51.88rpx}.voice-hotspot{left:394.78rpx;top:742.09rpx;width:196.95rpx;height:51.88rpx}.photo-hotspot image{position:relative;top:-3rpx;width:50rpx;height:53rpx}.photo-hotspot{gap:10rpx}.voice-hotspot image{width:38rpx;height:38rpx}.ai-action-divider{left:365.77rpx;top:751.76rpx;width:1.76rpx;height:31.65rpx;background:#9a8878}.cost-panel{left:29.02rpx;top:847.6rpx;width:691.09rpx;height:511.72rpx;border-radius:21rpx;border:1rpx solid #fff;background:hsla(0,0%,100%,.68);box-shadow:0 3rpx 8rpx rgba(151,127,103,.14),inset 0 0 0 3rpx hsla(0,0%,100%,.38)}.cost-stat-icon{left:53.63rpx;top:873.09rpx;width:73.86rpx;height:72.98rpx;border-radius:50%;border:1rpx solid #e1c39f;background:linear-gradient(135deg, #fffefa, #f4ebdf);box-shadow:0 3rpx 8rpx rgba(140,117,83,.18);display:flex;align-items:center;justify-content:center}.cost-stat-bars{width:50rpx;height:50rpx}.cost-title{left:144.2rpx;top:872.22rpx;width:193.43rpx;height:50.12rpx;color:#50381f;font-size:39rpx;font-weight:600;line-height:46rpx}.cost-copy{left:144.2rpx;top:923.21rpx;width:527.55rpx;height:32.53rpx;color:#81828e;font-size:22.85rpx;line-height:30rpx;white-space:nowrap}.cost-form-panel{left:34.29rpx;top:964.54rpx;width:680.54rpx;height:391.27rpx;border-radius:22rpx;background:hsla(0,0%,100%,.91)}.cost-project-label{left:56.27rpx;top:980.36rpx;width:175.85rpx;height:26.38rpx;font-size:24rpx;line-height:29rpx;color:#28282b}.quick-project{z-index:7;border:1rpx solid #dedee3;border-radius:11rpx;display:flex;align-items:center;justify-content:center;gap:18rpx;background:linear-gradient(135deg, #fdfdfd, #f7f7f9);font-size:25rpx;color:#28282b}.quick-project--rural{left:55.39rpx;top:1012.02rpx;width:313.01rpx;height:67.7rpx}.quick-project--urban{left:385.11rpx;top:1012.02rpx;width:309.5rpx;height:67.7rpx}.quick-project--selected{border-color:#e8b48a;background:linear-gradient(135deg, #fffcf8, #f5eee6);color:#4a3019}.quick-project image{width:43rpx;height:43rpx}.cost-region-label{left:56.27rpx;top:1099.94rpx;width:175.85rpx;height:26.38rpx;font-size:24rpx;line-height:29rpx;color:#28282b}.cost-area-label{left:385.11rpx;top:1099.94rpx;width:175.85rpx;height:26.38rpx;font-size:24rpx;line-height:29rpx;color:#28282b}.quick-region{left:55.39rpx;top:1131.59rpx;width:313.01rpx;height:68.58rpx;z-index:7;border:1rpx solid #e0e0e6;border-radius:11rpx;background:linear-gradient(135deg, #fff, #f8f8fa)}.quick-region-hitbox{height:66.58rpx;box-sizing:border-box;display:flex;align-items:center;padding:0 20rpx;gap:6rpx}.quick-region-hitbox image{width:43rpx;height:35rpx;transform:translateX(-8rpx);flex-shrink:0}.quick-region-value{flex:1;min-width:0;color:#a2a2ad;font-size:24rpx;line-height:32rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.quick-region-value--selected{color:#292825}.field-chevron{width:11rpx;height:11rpx;border-top:1.5rpx solid #222;border-right:1.5rpx solid #222;transform:rotate(45deg)}.quick-area{left:385.11rpx;top:1131.59rpx;width:309.5rpx;height:68.58rpx;z-index:7;border:1rpx solid #e0e0e6;border-radius:11rpx;background:linear-gradient(135deg, #fff, #f8f8fa);display:flex;align-items:center;padding:0 20rpx;gap:17rpx}.quick-area image{width:33rpx;height:37rpx;flex-shrink:0}.quick-area-input{flex:1;min-width:0;height:100%;color:#292825;font-size:24rpx}.quick-area-placeholder{color:#a2a2ad}.area-unit{font-size:25rpx;white-space:nowrap}.quick-estimate{left:55.39rpx;top:1224.79rpx;width:639.21rpx;height:72.98rpx;border:0;border-radius:70rpx;background:rgba(0,0,0,0);color:#fff;font-size:31rpx;display:flex;align-items:center;justify-content:center;overflow:visible;box-shadow:0 5rpx 12rpx rgba(139,110,78,.16)}.estimate-button-art{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.quick-estimate>text{position:relative;pointer-events:none;font:inherit}.estimate-note{left:249.71rpx;top:1313.6rpx;width:250.59rpx;height:30.77rpx;display:flex;align-items:center;justify-content:center;gap:9rpx;color:#787b83;font-size:20rpx}.home-art-layer .quick-estimate{width:639.21rpx;max-width:none;margin:0;padding:0;line-height:normal;box-sizing:border-box;font-weight:400;font-family:inherit}.quick-estimate::after{border:0}.info-icon{width:19rpx;height:19rpx;border:1.5rpx solid #787b83;border-radius:50%;font:16rpx/19rpx Georgia,serif;text-align:center}.content{position:relative;margin-top:0;padding:30rpx 30rpx calc(180rpx + env(safe-area-inset-bottom));box-sizing:border-box}.case-section{margin-bottom:40rpx}.case-section .case-title{display:block;font-size:32rpx;color:#5e412f;margin-bottom:30rpx;font-weight:600}.case-section .case-comparison{display:flex;gap:20rpx;margin-bottom:30rpx;position:relative}.case-section .case-comparison .case-card{flex:1;min-width:0;width:50%}.case-section .case-side-by-side{display:flex;gap:20rpx;margin-bottom:30rpx}.case-section .case-side-by-side .case-card{flex:1;min-width:0;width:50%}.case-normal{margin-bottom:30rpx}.featured-groups{display:flex;flex-direction:column;gap:30rpx;margin-bottom:30rpx}.featured-group .case-card .case-item{background:hsla(0,0%,100%,.72);border:1px solid rgba(172,156,143,.35);border-radius:20rpx;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8rpx 24rpx rgba(94,65,47,.08)}.featured-group .case-card .case-item .case-image-wrapper{position:relative;width:100%}.featured-group .case-card .case-item .case-image-wrapper .case-label{position:absolute;top:0;left:0;background:rgba(94,65,47,.8);color:#fff;padding:8rpx 20rpx;border-radius:20rpx 0 8rpx 0;font-size:24rpx;z-index:10}.featured-group .case-card .case-item .case-image-wrapper .case-image{width:100%;height:auto;display:block}.featured-group .case-card .case-item .case-content{padding:20rpx;display:flex;flex-direction:column;gap:8rpx}.featured-group .case-card .case-item .case-content .case-item-title{font-size:28rpx;color:#5e412f;font-weight:600}.featured-group .case-card .case-item .case-content .case-item-desc{font-size:24rpx;color:rgba(94,65,47,.78);line-height:1.5;overflow:hidden;text-overflow:ellipsis;max-height:72rpx}.case-section-skeleton{min-height:780rpx}.skeleton-block,.skeleton-card,.skeleton-action{position:relative;overflow:hidden;background:linear-gradient(90deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0.38) 100%);background-size:200% 100%;animation:skeleton-loading 1.4s ease-in-out infinite}.skeleton-title{width:220rpx;height:36rpx;border-radius:18rpx;margin-bottom:30rpx}.skeleton-groups{gap:24rpx}.skeleton-group-row{display:flex;gap:20rpx}.skeleton-card{flex:1;min-width:0;height:260rpx;border-radius:24rpx}.skeleton-card-wide{width:100%;flex:none;height:220rpx}.skeleton-action{min-height:98rpx}@keyframes skeleton-loading{0%{background-position:200% 0}100%{background-position:-200% 0}}.vs-divider{position:absolute;left:50%;top:150rpx;transform:translateX(-50%);background:rgba(94,65,47,.9);color:#fff;padding:10rpx 20rpx;border-radius:30rpx;font-size:24rpx;font-weight:bold;z-index:15;border:2rpx solid hsla(0,0%,100%,.4)}.case-actions{display:flex;gap:20rpx}.case-actions .action-btn{flex:1;background:linear-gradient(180deg, #c8a679 0%, #a9855b 100%);border:2rpx solid hsla(0,0%,100%,.35);border-radius:20rpx;padding:20rpx;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10rpx;box-shadow:0 10rpx 20rpx rgba(113,80,63,.18)}.case-actions .action-btn text{color:#fff;font-size:24rpx}.popup-mask{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(46,31,20,.42);display:flex;align-items:center;justify-content:center;padding:40rpx;box-sizing:border-box;z-index:999}.home-intro-popup{position:relative;width:100%;max-width:630rpx;padding:0 40rpx 40rpx;border-radius:68rpx;background:linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);border:2rpx solid #cdbda6;box-shadow:0 24rpx 60rpx rgba(94,65,47,.28);box-sizing:border-box;overflow:hidden}.home-intro-bg-decor{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;opacity:.5;background:linear-gradient(105deg, rgba(255, 248, 237, 0.7) 0%, transparent 35%),linear-gradient(85deg, transparent 50%, rgba(255, 248, 237, 0.5) 70%, transparent 90%)}.home-intro-logo-wrap{position:relative;z-index:2;display:flex;justify-content:center;padding-top:28rpx;margin-bottom:16rpx}.home-intro-logo-img{width:82rpx;height:104rpx;opacity:.85}.home-intro-close{position:absolute;top:60rpx;right:42rpx;width:50rpx;height:50rpx;z-index:10;display:flex;align-items:center;justify-content:center}.home-intro-close-icon{font-size:36rpx;color:#8d5735;font-weight:700;line-height:1}.home-intro-title-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:10rpx;margin-bottom:32rpx}.home-intro-title{font-size:36rpx;color:#5e412f;font-weight:700;line-height:1.25;text-align:center}.home-intro-subtitle{font-size:22rpx;color:#866f5f;line-height:1.65;text-align:center}.home-intro-list{position:relative;z-index:2;display:flex;flex-direction:column;gap:20rpx;margin-bottom:32rpx}.home-intro-item{border-radius:36rpx;background:linear-gradient(180deg, #f1e7db 0%, #dbccb9 100%);border:3rpx solid #d7cdc3;padding:7rpx}.home-intro-item-active{opacity:.88;transform:scale(0.99)}.home-intro-item-inner{display:flex;align-items:flex-start;gap:20rpx;padding:22rpx 24rpx;border-radius:31rpx;background:linear-gradient(93deg, #f8f5f0 44%, #f5ebe2 82%);border:1rpx solid rgba(215,205,195,.6)}.home-intro-icon{width:60rpx;height:60rpx;min-width:60rpx;border-radius:23rpx;background:linear-gradient(155deg, #fcf8ed 26%, #c17032 83%);box-shadow:inset -7rpx -12rpx 19rpx #ffeecb;display:flex;align-items:center;justify-content:center;flex-shrink:0}.home-intro-icon-text{font-size:22rpx;font-weight:700;color:#8d5735}.home-intro-texts{flex:1;min-width:0;display:flex;flex-direction:column;gap:6rpx}.home-intro-item-title{font-size:28rpx;color:#5e412f;font-weight:700;line-height:1.3}.home-intro-item-desc{font-size:22rpx;color:#9e9e9e;line-height:1.6}.home-intro-actions{position:relative;z-index:2;display:flex;gap:16rpx;margin-bottom:24rpx}.home-intro-primary,.home-intro-secondary{flex:1;height:75rpx;border-radius:38rpx;display:flex;align-items:center;justify-content:center;font-size:26rpx;font-weight:900;box-sizing:border-box}.home-intro-primary{background:linear-gradient(90deg, #d8b796 0%, #c09062 100%);color:#fff7e2;box-shadow:inset -28rpx -19rpx 38rpx #b26a10,inset 23rpx 27rpx 30rpx rgba(211,146,44,.7)}.home-intro-primary-active{opacity:.85}.home-intro-secondary{background:linear-gradient(90deg, #d8b796 0%, #c09062 100%);color:#9e6f43;border:2rpx solid rgba(215,205,195,.6);box-shadow:inset -28rpx -19rpx 38rpx #e7c89f,inset 23rpx 27rpx 30rpx rgba(247,238,226,.7);text-shadow:0 0 15rpx hsla(0,0%,100%,.8)}.home-intro-secondary-active{opacity:.85}.home-intro-service{position:relative;z-index:2;height:48rpx;display:flex;align-items:center;justify-content:center;gap:8rpx}.home-intro-service-icon{font-size:24rpx;color:#8a694e}.home-intro-service-text{font-size:22rpx;color:#8a694e;line-height:22rpx}.contact-popup,.wechat-popup{width:100%;background:linear-gradient(180deg, #fbf5ee 0%, #f2e6d8 100%);border-radius:32rpx;box-shadow:0 24rpx 60rpx rgba(94,65,47,.22);border:2rpx solid rgba(181,145,108,.2);box-sizing:border-box}.contact-popup{max-width:620rpx;padding:36rpx 32rpx 28rpx}.wechat-popup{max-width:660rpx;padding:36rpx 32rpx 32rpx}.popup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:26rpx}.popup-header-main{flex:1;display:flex;flex-direction:column;gap:8rpx;padding-right:20rpx}.popup-title{font-size:34rpx;line-height:48rpx;color:#5e412f;font-weight:600}.popup-subtitle{font-size:22rpx;line-height:1.6;color:rgba(94,65,47,.68)}.popup-close{width:52rpx;height:52rpx;border-radius:26rpx;background:rgba(201,173,142,.2);color:#8d6f56;display:flex;align-items:center;justify-content:center;font-size:34rpx;line-height:1}.supplier-option{display:flex;align-items:center;gap:24rpx;padding:24rpx;border-radius:24rpx;background:hsla(0,0%,100%,.72);border:2rpx solid rgba(196,165,131,.22);box-shadow:0 10rpx 24rpx rgba(94,65,47,.08)}.supplier-option+.supplier-option{margin-top:20rpx}.supplier-option-contact{position:relative;overflow:hidden}.supplier-option-icon{width:80rpx;height:80rpx;border-radius:40rpx;display:flex;align-items:center;justify-content:center;font-size:34rpx;font-weight:600;color:#fff;flex-shrink:0}.supplier-phone-icon{background:linear-gradient(180deg, #caa16d 0%, #b27b46 100%)}.supplier-wechat-icon{background:linear-gradient(180deg, #7ac96f 0%, #45a35a 100%)}.supplier-option-content{flex:1;display:flex;flex-direction:column;gap:6rpx}.supplier-option-right{display:flex;align-items:center;gap:12rpx;flex-shrink:0}.supplier-option-badge{padding:10rpx 16rpx;border-radius:999rpx;font-size:20rpx;font-weight:600;line-height:1}.supplier-option-badge.warm{background:rgba(202,161,109,.16);color:#a3703f}.supplier-option-badge.green{background:rgba(88,185,105,.16);color:#3f9951}.supplier-option-arrow{font-size:34rpx;line-height:1;color:rgba(138,105,78,.55)}.supplier-contact-trigger{position:absolute;top:0;right:0;bottom:0;left:0;margin:0;padding:0;border:0;background:rgba(0,0,0,0);color:rgba(0,0,0,0);opacity:0;z-index:3}.supplier-option-title{font-size:30rpx;color:#5e412f;font-weight:600}.supplier-option-desc{font-size:24rpx;color:rgba(94,65,47,.78)}.supplier-contact-tip{margin-top:20rpx;padding:18rpx 22rpx;border-radius:18rpx;background:rgba(201,173,142,.12);border:1px solid rgba(189,154,119,.2)}.supplier-contact-tip text{font-size:24rpx;color:#8a694e;line-height:1.6}.supplier-option-contact{position:relative;overflow:hidden}.supplier-option-contact-btn{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;margin:0;padding:0;border:none;background:rgba(0,0,0,0)}.supplier-option-contact-btn::after{border:none}.supplier-chat-icon{background:linear-gradient(180deg, #4facfe 0%, #3b82f6 100%)}.supplier-ai-icon{background:linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%)}.supplier-option-disabled{opacity:.55}.supplier-option-badge.muted{background:rgba(138,105,78,.12);color:#8a694e}.supplier-contact-helper{margin-top:18rpx;padding:18rpx 22rpx;border-radius:18rpx;background:hsla(0,0%,100%,.58);border:1px solid rgba(189,154,119,.18);display:flex;align-items:center;justify-content:space-between;gap:16rpx}.supplier-contact-helper-text{flex:1;font-size:24rpx;color:#8a694e;line-height:1.5}.supplier-contact-helper-arrow{font-size:30rpx;line-height:1;color:rgba(138,105,78,.58)}.wechat-summary-card{display:flex;align-items:center;gap:18rpx;margin-bottom:22rpx;padding:20rpx 22rpx;border-radius:22rpx;background:hsla(0,0%,100%,.74);border:1px solid rgba(181,145,108,.18)}.wechat-summary-icon{width:74rpx;height:74rpx;border-radius:37rpx;background:linear-gradient(180deg, #6fc865 0%, #43a75a 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-size:34rpx;font-weight:700;flex-shrink:0}.wechat-summary-content{display:flex;flex-direction:column;gap:6rpx}.wechat-summary-title{font-size:28rpx;color:#5e412f;font-weight:600}.wechat-summary-desc{font-size:22rpx;line-height:1.6;color:rgba(94,65,47,.72)}.wechat-qrcode-wrapper{width:100%;min-height:560rpx;border-radius:28rpx;background:hsla(0,0%,100%,.9);display:flex;align-items:center;justify-content:center;padding:24rpx;box-sizing:border-box;border:2rpx dashed rgba(190,157,123,.35)}.wechat-qrcode-image{width:100%;height:520rpx}.wechat-qrcode-placeholder{display:flex;flex-direction:column;align-items:center;gap:16rpx;text-align:center;padding:40rpx}.wechat-qrcode-placeholder-title{font-size:30rpx;color:#5e412f;font-weight:600}.wechat-qrcode-placeholder-desc{font-size:24rpx;color:rgba(94,65,47,.74);line-height:1.6}.wechat-service-tip{margin-top:24rpx;padding:18rpx 22rpx;border-radius:18rpx;background:rgba(201,173,142,.12);border:1px solid rgba(189,154,119,.2);display:flex;flex-direction:column;gap:8rpx}.wechat-service-tip-text{font-size:24rpx;color:#7a5d46;line-height:1.7}.wechat-service-contact{font-size:24rpx;color:#5e412f;font-weight:600}.wechat-popup-footer{display:flex;gap:20rpx;margin-top:28rpx}.wechat-footer-btn{flex:1;height:84rpx;border-radius:22rpx;display:flex;align-items:center;justify-content:center;font-size:28rpx;font-weight:600}.wechat-footer-btn.secondary{background:rgba(201,173,142,.14);color:#8a694e;border:2rpx solid rgba(189,154,119,.25)}.wechat-footer-btn.primary{background:linear-gradient(180deg, #c8a679 0%, #a9855b 100%);color:#fff;box-shadow:0 12rpx 26rpx rgba(113,80,63,.18)}
+--- a/miniprogram/utils/costRegions.ts
++++ b/miniprogram/utils/costRegions.ts
+@@ -0,0 +1,22 @@
++export const cityOptionsMap: Record<string, string[]> = {
++  福建: ['泉州', '漳州', '厦门', '福州', '莆田', '龙岩', '三明', '南平', '宁德'],
++  广东: ['广州', '深圳', '汕头', '潮州', '佛山', '东莞', '惠州', '珠海'],
++  浙江: ['杭州', '宁波', '温州', '绍兴', '金华', '台州'],
++  江西: ['南昌', '赣州', '九江', '上饶', '宜春'],
++  湖南: ['长沙', '株洲', '湘潭', '岳阳', '衡阳'],
++  湖北: ['武汉', '宜昌', '襄阳', '荆州', '黄石'],
++  江苏: ['南京', '苏州', '无锡', '常州', '南通'],
++  上海: ['上海'],
++  安徽: ['合肥', '芜湖', '安庆', '黄山', '阜阳'],
++  山东: ['济南', '青岛', '烟台', '潍坊', '临沂'],
++  四川: ['成都', '绵阳', '德阳', '宜宾', '泸州'],
++  重庆: ['重庆'],
++  云南: ['昆明', '大理', '丽江', '曲靖', '玉溪'],
++  贵州: ['贵阳', '遵义', '安顺', '毕节', '黔南'],
++  广西: ['南宁', '桂林', '柳州', '北海', '玉林'],
++  海南: ['海口', '三亚', '儋州', '琼海'],
++  北京: ['北京'],
++  天津: ['天津'],
++  河北: ['石家庄', '唐山', '保定', '邯郸', '廊坊'],
++  河南: ['郑州', '洛阳', '开封', '新乡', '南阳'],
++};
+--- a/miniprogram/utils/costRegions.js
++++ b/miniprogram/utils/costRegions.js
+@@ -0,0 +1,25 @@
++"use strict";
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.cityOptionsMap = void 0;
++exports.cityOptionsMap = {
++    福建: ['泉州', '漳州', '厦门', '福州', '莆田', '龙岩', '三明', '南平', '宁德'],
++    广东: ['广州', '深圳', '汕头', '潮州', '佛山', '东莞', '惠州', '珠海'],
++    浙江: ['杭州', '宁波', '温州', '绍兴', '金华', '台州'],
++    江西: ['南昌', '赣州', '九江', '上饶', '宜春'],
++    湖南: ['长沙', '株洲', '湘潭', '岳阳', '衡阳'],
++    湖北: ['武汉', '宜昌', '襄阳', '荆州', '黄石'],
++    江苏: ['南京', '苏州', '无锡', '常州', '南通'],
++    上海: ['上海'],
++    安徽: ['合肥', '芜湖', '安庆', '黄山', '阜阳'],
++    山东: ['济南', '青岛', '烟台', '潍坊', '临沂'],
++    四川: ['成都', '绵阳', '德阳', '宜宾', '泸州'],
++    重庆: ['重庆'],
++    云南: ['昆明', '大理', '丽江', '曲靖', '玉溪'],
++    贵州: ['贵阳', '遵义', '安顺', '毕节', '黔南'],
++    广西: ['南宁', '桂林', '柳州', '北海', '玉林'],
++    海南: ['海口', '三亚', '儋州', '琼海'],
++    北京: ['北京'],
++    天津: ['天津'],
++    河北: ['石家庄', '唐山', '保定', '邯郸', '廊坊'],
++    河南: ['郑州', '洛阳', '开封', '新乡', '南阳'],
++};

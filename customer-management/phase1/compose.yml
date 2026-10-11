@@ -1,0 +1,42 @@
+name: iyque-phase1
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: iyque_phase1
+      MYSQL_USER: crm
+      MYSQL_PASSWORD: ${CRM_DB_PASSWORD:?请配置 CRM_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请配置 MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_bin"]
+    volumes: ["database:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  app:
+    build:
+      context: ..
+      dockerfile: phase1/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db: {condition: service_healthy}
+    ports: ["127.0.0.1:${CRM_PORT:-8087}:8080"]
+    environment:
+      CRM_DB_URL: jdbc:mysql://db:3306/iyque_phase1?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+      CRM_DB_USER: crm
+      CRM_DB_PASSWORD: ${CRM_DB_PASSWORD:?请配置 CRM_DB_PASSWORD}
+      CRM_ADMIN_PASSWORD: ${CRM_ADMIN_PASSWORD:?请配置 CRM_ADMIN_PASSWORD}
+      CRM_SECURE_COOKIE: ${CRM_SECURE_COOKIE:-true}
+      # 独立应用形态：显式开启自带登录（统一后台部署不使用本 compose，见宝塔版上线手册）
+      CRM_STANDALONE_ENABLED: ${CRM_STANDALONE_ENABLED:-true}
+      CRM_DEMO: "false"
+      WECOM_CORP_ID: ${WECOM_CORP_ID:-}
+      WECOM_CONTACT_SECRET: ${WECOM_CONTACT_SECRET:-}
+      WECOM_CALLBACK_TOKEN: ${WECOM_CALLBACK_TOKEN:-}
+      WECOM_CALLBACK_AES_KEY: ${WECOM_CALLBACK_AES_KEY:-}
+      TZ: Asia/Shanghai
+volumes:
+  database:

@@ -1,0 +1,46 @@
+server:
+  port: 8080
+  compression:
+    enabled: true
+  error:
+    include-message: never
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
+  datasource:
+    url: ${CRM_DB_URL:jdbc:mysql://localhost:3306/iyque_phase1?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${CRM_DB_USER:crm}
+    password: ${CRM_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+  jackson:
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+  flyway:
+    enabled: true
+crm:
+  notify:
+    enabled: ${WECOM_NOTIFY_ENABLED:false}
+    secret: ${WECOM_NOTIFY_SECRET:}
+    agent-id: ${WECOM_NOTIFY_AGENT_ID:0}
+  # 默认关闭独立登录（fail-closed）：统一后台部署不应开启；本地演示需显式设置 CRM_STANDALONE_ENABLED=true
+  standalone-enabled: ${CRM_STANDALONE_ENABLED:false}
+  bridge:
+    key: ${CRM_BRIDGE_KEY:}
+    key-id: ${CRM_BRIDGE_KEY_ID:v1}
+    audience: ${CRM_BRIDGE_AUDIENCE:}
+  admin-password: ${CRM_ADMIN_PASSWORD}
+  demo: ${CRM_DEMO:false}
+  secure-cookie: ${CRM_SECURE_COOKIE:true}
+  wecom:
+    corp-id: ${WECOM_CORP_ID:}
+    secret: ${WECOM_CONTACT_SECRET:}
+    token: ${WECOM_CALLBACK_TOKEN:}
+    aes-key: ${WECOM_CALLBACK_AES_KEY:}

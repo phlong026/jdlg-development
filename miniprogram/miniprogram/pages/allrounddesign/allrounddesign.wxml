@@ -1,0 +1,272 @@
+<!--pages/allrounddesign/allrounddesign.wxml-->
+<view class="page">
+  <navigation-bar title="综合设计" background="#e8dece" />
+
+  <view class="content">
+    <view class="main-tabs">
+      <view
+        class="tab-item {{activeTab === item.value ? 'active' : ''}}"
+        wx:for="{{tabs}}"
+        wx:key="value"
+        bindtap="onTabSwitch"
+        data-value="{{item.value}}"
+      >
+        <text>{{item.label}}</text>
+      </view>
+    </view>
+
+    <view class="section-card upload-card" wx:if="{{activeTab === 'style'}}">
+      <view class="upload-card-surface {{styleOriginalImage ? 'has-images' : ''}}">
+        <view class="upload-card-header">
+          <view class="upload-card-title-wrap">
+            <text class="upload-card-title">上传原图</text>
+            <text class="upload-card-subtitle">保留主要内容和构图，只转换视觉风格</text>
+          </view>
+          <view class="upload-card-badge"><text>必传</text></view>
+        </view>
+        <view class="upload-card-empty" wx:if="{{!styleOriginalImage}}" bindtap="onUploadStyleOriginal">
+          <view class="upload-card-icon"><text class="upload-card-plus">+</text></view>
+          <text class="upload-copy-title">点击添加图片</text>
+          <text class="upload-copy-subtitle">建议上传清晰的建筑、空间或产品图片</text>
+        </view>
+        <view class="single-image-wrap" wx:else>
+          <image class="single-image" src="{{styleOriginalImage}}" mode="aspectFill" bindtap="onPreviewImage" data-url="{{styleOriginalImage}}" />
+          <view class="image-delete" bindtap="onDeleteStyleOriginal">
+            <t-icon name="close" size="24rpx" color="#ffffff" />
+          </view>
+          <view class="image-reupload" bindtap="onUploadStyleOriginal"><text>换图</text></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card prompt-form-card" wx:if="{{activeTab === 'poster'}}">
+      <view class="form-card-inner">
+        <view class="form-row">
+          <text class="form-label">海报主题</text>
+          <input class="form-input" value="{{posterTheme}}" bindinput="onPosterThemeInput" placeholder="如：活动招募、节日祝福、方案发布" />
+        </view>
+        <view class="form-row">
+          <text class="form-label">文字内容</text>
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" value="{{posterText}}" bindinput="onPosterTextInput" maxlength="200" placeholder="需要出现在海报上的标题、卖点或说明" />
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card prompt-form-card" wx:if="{{activeTab === 'cultural'}}">
+      <view class="form-card-inner">
+        <view class="form-row">
+          <text class="form-label">产品类型</text>
+          <input class="form-input" value="{{productType}}" bindinput="onProductTypeInput" placeholder="如：杯子、帆布袋、贴纸、摆件" />
+        </view>
+        <view class="form-row">
+          <text class="form-label">设计要求</text>
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" value="{{productRequirements}}" bindinput="onProductRequirementsInput" maxlength="500" placeholder="说明想体现的文化元素、图案方向或使用场景" />
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{activeTab === 'parentWorkshop'}}">
+      <view class="section-card style-card">
+        <view class="style-card-header">
+          <text class="style-card-title">亲子用途</text>
+          <text class="style-summary">已选：{{parentDesignTypeLabel}}</text>
+        </view>
+        <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+          <view class="style-scroll-inner">
+            <view class="style-option {{parentDesignType === item.value ? 'active' : ''}}" wx:for="{{parentDesignTypes}}" wx:key="value" bindtap="onSelectParentType" data-value="{{item.value}}" data-label="{{item.label}}">
+              <view class="style-option-body">
+                <text class="style-option-name">{{item.label}}</text>
+                <text class="style-option-subtitle">{{item.subtitle}}</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="section-card style-card">
+        <view class="style-card-header">
+          <text class="style-card-title">亲子原型</text>
+          <text class="style-summary">已选：{{parentPrototypeLabel}}</text>
+        </view>
+        <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+          <view class="style-scroll-inner">
+            <view class="style-option {{parentPrototype === item.value ? 'active' : ''}}" wx:for="{{parentPrototypes}}" wx:key="value" bindtap="onSelectParentPrototype" data-value="{{item.value}}" data-label="{{item.label}}">
+              <view class="style-option-body">
+                <text class="style-option-name">{{item.label}}</text>
+                <text class="style-option-subtitle">{{item.subtitle}}</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="section-card prompt-form-card">
+        <view class="form-card-inner">
+          <view class="form-row">
+            <text class="form-label">创作主题</text>
+            <input class="form-input" value="{{parentTheme}}" bindinput="onParentThemeInput" placeholder="如：鼓浪屿小房子、儿童节手作、地标贴纸" />
+          </view>
+          <view class="form-row">
+            <text class="form-label">设计要求</text>
+            <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" value="{{parentRequirements}}" bindinput="onParentRequirementsInput" maxlength="300" placeholder="说明亲子使用方式、画面元素、颜色或想出现的文字" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card reference-card" wx:if="{{activeTab === 'poster' || activeTab === 'cultural' || activeTab === 'parentWorkshop'}}">
+      <view class="upload-card-surface has-images">
+        <view class="upload-card-header">
+          <view class="upload-card-title-wrap">
+            <text class="upload-card-title">参考图</text>
+            <text class="upload-card-subtitle">可选，最多上传6张，用于参考风格、元素和构图</text>
+          </view>
+          <view class="upload-card-badge"><text>可选</text></view>
+        </view>
+        <view class="uploaded-images" wx:if="{{activeTab === 'poster' && posterReferenceImages.length}}">
+          <view class="image-item" wx:for="{{posterReferenceImages}}" wx:key="index">
+            <image class="upload-image" src="{{item}}" mode="aspectFill" bindtap="onPreviewImage" data-url="{{item}}" data-urls="{{posterReferenceImages}}" />
+            <view class="image-delete" catchtap="onDeletePosterReferenceImage" data-index="{{index}}"><t-icon name="close" size="24rpx" color="#ffffff" /></view>
+          </view>
+        </view>
+        <view class="uploaded-images" wx:elif="{{activeTab === 'cultural' && culturalReferenceImages.length}}">
+          <view class="image-item" wx:for="{{culturalReferenceImages}}" wx:key="index">
+            <image class="upload-image" src="{{item}}" mode="aspectFill" bindtap="onPreviewImage" data-url="{{item}}" data-urls="{{culturalReferenceImages}}" />
+            <view class="image-delete" catchtap="onDeleteCulturalReferenceImage" data-index="{{index}}"><t-icon name="close" size="24rpx" color="#ffffff" /></view>
+          </view>
+        </view>
+        <view class="uploaded-images" wx:elif="{{activeTab === 'parentWorkshop' && parentReferenceImages.length}}">
+          <view class="image-item" wx:for="{{parentReferenceImages}}" wx:key="index">
+            <image class="upload-image" src="{{item}}" mode="aspectFill" bindtap="onPreviewImage" data-url="{{item}}" data-urls="{{parentReferenceImages}}" />
+            <view class="image-delete" catchtap="onDeleteParentReferenceImage" data-index="{{index}}"><t-icon name="close" size="24rpx" color="#ffffff" /></view>
+          </view>
+        </view>
+        <view class="reference-add" wx:if="{{activeTab === 'poster'}}" bindtap="onUploadPosterReference"><text>+ 添加参考图</text></view>
+        <view class="reference-add" wx:elif="{{activeTab === 'cultural'}}" bindtap="onUploadCulturalReference"><text>+ 添加参考图</text></view>
+        <view class="reference-add" wx:else bindtap="onUploadParentReference"><text>+ 添加参考图</text></view>
+      </view>
+    </view>
+
+    <view class="section-card style-card" wx:if="{{activeTab === 'style'}}">
+      <view class="style-card-header">
+        <text class="style-card-title">目标风格</text>
+        <text class="style-summary">已选：{{targetStyle}}</text>
+      </view>
+      <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+        <view class="style-scroll-inner">
+          <view class="style-option {{targetStyle === item.value ? 'active' : ''}}" wx:for="{{styleOptions}}" wx:key="value" bindtap="onSelectTargetStyle" data-value="{{item.value}}">
+            <view class="style-option-body">
+              <text class="style-option-name">{{item.label}}</text>
+              <text class="style-option-subtitle">{{item.subtitle}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="section-card style-card" wx:if="{{activeTab === 'poster'}}">
+      <view class="style-card-header">
+        <text class="style-card-title">海报风格</text>
+        <text class="style-summary">已选：{{posterStyle}}</text>
+      </view>
+      <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+        <view class="style-scroll-inner">
+          <view class="style-option {{posterStyle === item.value ? 'active' : ''}}" wx:for="{{posterStyleOptions}}" wx:key="value" bindtap="onSelectPosterStyle" data-value="{{item.value}}">
+            <view class="style-option-body">
+              <text class="style-option-name">{{item.label}}</text>
+              <text class="style-option-subtitle">{{item.subtitle}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="section-card style-card" wx:if="{{activeTab === 'cultural'}}">
+      <view class="style-card-header">
+        <text class="style-card-title">文创风格</text>
+        <text class="style-summary">已选：{{culturalStyle}}</text>
+      </view>
+      <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+        <view class="style-scroll-inner">
+          <view class="style-option {{culturalStyle === item.value ? 'active' : ''}}" wx:for="{{culturalStyleOptions}}" wx:key="value" bindtap="onSelectCulturalStyle" data-value="{{item.value}}">
+            <view class="style-option-body">
+              <text class="style-option-name">{{item.label}}</text>
+              <text class="style-option-subtitle">{{item.subtitle}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="section-card style-card" wx:if="{{activeTab === 'parentWorkshop'}}">
+      <view class="style-card-header">
+        <text class="style-card-title">亲子风格</text>
+        <text class="style-summary">已选：{{parentStyleLabel}}</text>
+      </view>
+      <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+        <view class="style-scroll-inner">
+          <view class="style-option {{parentStyle === item.value ? 'active' : ''}}" wx:for="{{parentStyleOptions}}" wx:key="value" bindtap="onSelectParentStyle" data-value="{{item.value}}" data-label="{{item.label}}">
+            <view class="style-option-body">
+              <text class="style-option-name">{{item.label}}</text>
+              <text class="style-option-subtitle">{{item.subtitle}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="section-card orientation-card">
+      <view class="orientation-card-inner">
+        <text class="orientation-title">画面设置</text>
+        <view class="orientation-row canvas-row">
+          <view class="canvas-option {{selectedCanvas === item.value ? 'active' : ''}}" wx:for="{{canvasOptions}}" wx:key="value" bindtap="onSelectCanvas" data-value="{{item.value}}">
+            <view class="canvas-icon canvas-icon-{{item.value === '16:9' ? 'landscape' : item.value === '1:1' ? 'square' : 'portrait'}}"></view>
+            <text class="canvas-label">{{item.size}}</text>
+          </view>
+        </view>
+        <view class="orientation-row quality-row">
+          <view class="quality-option {{selectedQuality === item.value ? 'active' : ''}}" wx:for="{{qualityOptions}}" wx:key="value" bindtap="onSelectQuality" data-value="{{item.value}}">
+            <text class="quality-label">{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card generate-count-card">
+      <view class="generate-count-header">
+        <text class="generate-count-title">生成张数</text>
+        <text class="generate-count-price">单张 {{currentUnitCost}} 灵石，合计 {{currentCost}} 灵石</text>
+      </view>
+      <view class="generate-count-segment">
+        <view class="generate-count-option {{selectedGenerateCount === item ? 'active' : ''}}" wx:for="{{generateCountOptions}}" wx:key="*this" bindtap="onSelectGenerateCount" data-count="{{item}}">
+          <text>{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card prompt-card">
+      <view class="prompt-card-inner">
+        <view class="prompt-title-row">
+          <text class="prompt-title">补充几句（选填）</text>
+          <view class="ai-optimize-btn {{optimizingPrompt ? 'loading' : ''}}" bindtap="onOptimizePrompt">
+            <text class="ai-optimize-text">{{optimizingPrompt ? '优化中...' : 'AI优化'}}</text>
+          </view>
+        </view>
+        <view class="prompt-input-wrap">
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="prompt-input" value="{{promptText}}" bindinput="onPromptInput" maxlength="-1" placeholder="补充你希望强化的画面细节、用途或限制" placeholder-style="color: rgba(159, 151, 140, 0.72);" />
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card generate-card">
+      <view class="generate-action {{generating ? 'disabled' : ''}}" bindtap="onGenerateDesign">
+        <text class="generate-action-title">{{generating ? '提交中' : '开始生成'}}</text>
+        <text class="generate-action-price">{{currentCost}}灵石</text>
+      </view>
+    </view>
+  </view>
+
+  <custom-tabbar current="{{-1}}"></custom-tabbar>
+
+  <intercept-modal />
+</view>

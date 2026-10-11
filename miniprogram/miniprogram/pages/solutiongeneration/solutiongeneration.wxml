@@ -1,0 +1,52 @@
+<!--pages/solutiongeneration/solutiongeneration.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="方案生成中" background="#e6daca" />
+
+  <view class="content">
+    <!-- 进度状态卡片 -->
+    <view class="progress-card">
+      <text class="progress-text">方案生成中, 预计1分钟</text>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{progress}}%"></view>
+      </view>
+    </view>
+
+    <!-- Tab导航 -->
+    <view class="tab-navigation">
+      <view class="tab-item {{activeTab === item.value ? 'active' : ''}}" 
+            wx:for="{{tabs}}" 
+            wx:key="index"
+            bindtap="onTabSwitch"
+            data-value="{{item.value}}">
+        {{item.label}}
+      </view>
+    </view>
+
+    <!-- 主图片展示区域 -->
+    <view class="image-display">
+      <image class="solution-image" src="{{solutionImage}}" mode="aspectFill" />
+    </view>
+
+    <!-- 警告通知卡片 -->
+    <view class="warning-card">
+      <view class="warning-icon">
+        <t-icon name="error-circle" size="48rpx" color="#d37a74" />
+      </view>
+      <view class="warning-content">
+        <text class="warning-title">通规標示!</text>
+        <text class="warning-text">请注意相关规范要求，确保设计方案符合标准。</text>
+      </view>
+    </view>
+
+    <!-- 底部操作按钮 -->
+    <view class="action-buttons">
+      <view class="action-btn primary" bindtap="onConfirm">
+        <text>确认生成 (免费300灵石)</text>
+      </view>
+      <view class="action-btn secondary" bindtap="onExport">
+        <text>导出相册</text>
+      </view>
+    </view>
+  </view>
+</view>

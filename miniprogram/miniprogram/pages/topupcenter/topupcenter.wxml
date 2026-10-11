@@ -1,0 +1,183 @@
+<!--pages/topupcenter/topupcenter.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="充值中心" background="#e6daca" />
+
+  <view class="content">
+    <!-- 充值申项卡片 -->
+    <view class="section-card recharge-card">
+      <view class="section-heading">
+        <view class="section-heading-main">
+          <text class="section-title">充值金额</text>
+          <text class="section-subtitle">充值后灵石自动到账，钻石会员定制套餐请联系客服</text>
+        </view>
+        <view class="section-chip">
+          <text>1 元 = 10 灵石</text>
+        </view>
+      </view>
+      <view class="plan-list">
+        <view
+          class="plan-item {{selectedRecharge === item.type ? 'active' : ''}} {{item.recommended ? 'recommended' : ''}} {{item.custom ? 'plan-item-custom' : ''}}"
+          wx:for="{{rechargePlans}}"
+          wx:key="type"
+          bindtap="onSelectRecharge"
+          data-type="{{item.type}}"
+        >
+          <block wx:if="{{!item.custom}}">
+            <text wx:if="{{item.recommended}}" class="plan-ribbon">推荐</text>
+            <text class="plan-name">{{item.title}}</text>
+            <view class="plan-price">
+              <text class="price-symbol">￥</text>
+              <text class="price-value">{{item.amountText}}</text>
+            </view>
+            <view class="plan-footer">
+              <text class="plan-extra">支付后自动到账</text>
+              <view class="plan-state">
+                <text>{{selectedRecharge === item.type ? '当前已选' : '点击选择'}}</text>
+              </view>
+            </view>
+          </block>
+          <block wx:else>
+            <view class="custom-plan-header">
+              <view class="custom-plan-title-wrap">
+                <text class="plan-name custom-plan-name-primary">{{item.title}}</text>
+                <text class="custom-plan-caption">定制套餐，与客服联系</text>
+              </view>
+              <view class="custom-plan-tag">
+                <text>自定义</text>
+              </view>
+            </view>
+            <view class="custom-plan-input-wrap {{selectedRecharge === item.type ? 'active' : ''}}" catchtap="noop">
+              <view class="custom-plan-amount-box">
+                <text class="custom-plan-amount-prefix">￥</text>
+                <input class="custom-plan-amount-input" type="digit" placeholder="请输入整数金额" placeholder-class="custom-plan-amount-placeholder" value="{{customRechargeAmountInput}}" bindinput="onCustomRechargeAmountInput" bindfocus="onCustomRechargeFocus" />
+                <text class="custom-plan-amount-suffix">元</text>
+              </view>
+              <text class="custom-plan-remark">企业级客户充值需大于{{enterpriseRechargeMinAmount}}元，支付后联系客服确认到账。</text>
+            </view>
+          </block>
+        </view>
+      </view>
+    </view>
+
+    <!-- 支付方式 -->
+    <view class="section-card payment-card">
+      <text class="section-title">支付方式</text>
+      <view class="payment-list">
+        <view
+          class="payment-item {{selectedPaymentMethod === item.key ? 'active' : ''}} {{item.enabled ? '' : 'disabled'}}"
+          wx:for="{{paymentMethods}}"
+          wx:key="key"
+          bindtap="onSelectPayment"
+          data-key="{{item.key}}"
+        >
+          <view class="payment-icon payment-icon-{{item.key}}">
+            <image class="payment-icon-image" src="{{item.icon}}" mode="aspectFit" />
+          </view>
+          <view class="payment-texts">
+            <text class="payment-label">{{item.label}}</text>
+            <text wx:if="{{item.badgeText}}" class="payment-subnote">（{{item.badgeText}}）</text>
+          </view>
+          <text wx:if="{{selectedPaymentMethod === item.key && item.enabled}}" class="payment-badge">已选择</text>
+        </view>
+      </view>
+      <text class="payment-hint">{{selectedPlan.custom ? '钻石会员支持自定义金额支付；定制套餐与灵石到账请联系客服确认。' : paymentHintText}}</text>
+    </view>
+
+    <!-- 充石使用卡片 -->
+    <view class="section-card history-card">
+      <view class="section-header">
+        <text class="section-title">充值记录</text>
+        <text class="section-action" bindtap="onOpenWalletRecords">查看全部</text>
+      </view>
+      <view wx:if="{{rechargeRecords.length}}" class="history-list">
+        <view class="history-item" wx:for="{{rechargeRecords}}" wx:key="id">
+          <view class="history-main">
+            <text class="history-time">{{item.time}}</text>
+            <text class="history-title">{{item.title}}</text>
+          </view>
+          <text class="history-amount {{item.amountClass}}">{{item.amountText}}</text>
+        </view>
+      </view>
+      <view wx:else class="history-empty">
+        <text>{{recordEmptyText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 立即充值按钮 -->
+  <view class="bottom-action">
+    <view class="bottom-action-text">
+      <text class="bottom-caption">{{selectedRecharge ? (selectedPlan.custom ? '钻石会员' : selectedPlan.title) : '请选择充值方案'}}</text>
+      <text class="bottom-amount">{{selectedRecharge ? (selectedPlan.custom ? (selectedPlan.amount ? '待支付 ￥' + selectedPlan.amountText : '请输入金额') : '待支付 ￥' + selectedPlan.amountText) : '当前无待支付金额'}}</text>
+      <text class="bottom-stones">{{selectedRecharge ? (selectedPlan.custom ? '定制套餐与到账请联系客服确认' : '支付后自动到账') : '支付成功后会自动清空当前选择'}}</text>
+    </view>
+    <button class="bottom-pay-btn {{selectedPlan.custom ? 'enterprise' : ''}} {{(!selectedRecharge || (selectedPlan.custom && !selectedPlan.amount)) ? 'disabled' : ''}}" bindtap="onRecharge" disabled="{{!selectedRecharge || (selectedPlan.custom && !selectedPlan.amount)}}">立即支付</button>
+  </view>
+
+  <view class="enterprise-popup-mask" wx:if="{{enterpriseContactPopupVisible}}" catchtouchmove="noop">
+    <view class="enterprise-popup">
+      <view class="enterprise-popup-header">
+        <view>
+          <text class="enterprise-popup-title">企业微信联系</text>
+          <text class="enterprise-popup-subtitle">钻石会员 / 定制套餐 / 专属方案</text>
+        </view>
+        <view class="enterprise-popup-close" bindtap="closeEnterpriseContactPopup">
+          <t-icon name="close" size="36rpx" color="#7a5d3d" />
+        </view>
+      </view>
+      <view class="enterprise-popup-body">
+        <text class="enterprise-popup-tip">{{enterpriseWechatTip}}</text>
+        <text class="enterprise-popup-contact" wx:if="{{supplierPhone}}">联系电话：{{supplierPhone}}</text>
+        <image wx:if="{{supplierWechatQrAvailable && supplierWechatQr}}" class="enterprise-popup-qrcode" src="{{supplierWechatQr}}" mode="aspectFit" binderror="onWechatQrcodeError" show-menu-by-longpress="true" />
+        <view wx:elif="{{enterpriseWechatConfigLoading}}" class="enterprise-popup-placeholder">
+          <text>企业微信二维码加载中...</text>
+        </view>
+        <view wx:else class="enterprise-popup-placeholder">
+          <text>暂未配置企业微信二维码，请稍后重试</text>
+        </view>
+      </view>
+      <!-- 在线客服 -->
+      <view class="supplier-option supplier-option-contact">
+        <view class="supplier-option-icon supplier-chat-icon">💬</view>
+        <view class="supplier-option-content">
+          <text class="supplier-option-title">在线客服</text>
+          <text class="supplier-option-desc">在线消息咨询</text>
+        </view>
+        <view class="supplier-option-right">
+          <text class="supplier-option-badge green">立即咨询</text>
+          <text class="supplier-option-arrow">›</text>
+        </view>
+        <button class="supplier-option-contact-btn" open-type="contact" bindcontact="onNativeContactSuccess"></button>
+      </view>
+
+      <!-- 电话咨询 -->
+      <view class="supplier-option" bindtap="onCallSupplier">
+        <view class="supplier-option-icon supplier-phone-icon">☎</view>
+        <view class="supplier-option-content">
+          <text class="supplier-option-title">电话咨询</text>
+          <text class="supplier-option-desc">{{supplierPhone}}</text>
+        </view>
+        <view class="supplier-option-right">
+          <text class="supplier-option-badge warm">立即联系</text>
+          <text class="supplier-option-arrow">›</text>
+        </view>
+      </view>
+
+      <!-- 智能客服（企微客服，失败弹二维码） -->
+      <view class="supplier-option" bindtap="onSmartServiceTap">
+        <view class="supplier-option-icon supplier-ai-icon">🤖</view>
+        <view class="supplier-option-content">
+          <text class="supplier-option-title">智能客服</text>
+          <text class="supplier-option-desc">AI 智能问答</text>
+        </view>
+        <view class="supplier-option-right">
+          <text class="supplier-option-badge green">立即体验</text>
+          <text class="supplier-option-arrow">›</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <custom-tabbar current="{{-1}}" bind:switch="onTabSwitch"></custom-tabbar>
+</view>

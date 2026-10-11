@@ -1,0 +1,56 @@
+<!--pages/aicostresult/aicostresult.wxml-->
+<view class="page">
+  <navigation-bar title="造价测算报告" background="#e6daca" />
+  <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="report-card basic-card">
+      <view class="card-title"><view class="title-mark"></view><text>基础信息</text></view>
+      <view class="basic-grid">
+        <view class="basic-item {{item.fullWidth ? 'full-width' : ''}}" wx:for="{{basicInfo}}" wx:key="label">
+          <text class="basic-label">{{item.label}}</text>
+          <text class="basic-value">{{item.value}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="report-card estimate-card">
+      <view class="card-title"><view class="title-mark"></view><text>主要工程造价测算</text></view>
+      <view class="total-row">
+        <view class="total-main"><text class="total-label">{{totalLabel}}</text><text class="total-amount">{{estimatedTotalCost}}</text></view>
+        <view class="unit-main"><text class="unit-label">{{unitLabel}}</text><text class="unit-value">{{estimatedUnitCost}}</text></view>
+      </view>
+      <view class="summary-list">
+        <view class="summary-item" wx:for="{{costBreakdown}}" wx:key="name">
+          <text class="summary-name">{{item.name}}</text>
+          <text class="summary-amount {{item.estimable ? '' : 'pending'}}">{{item.amountText}}</text>
+        </view>
+      </view>
+      <view class="action-row">
+        <button class="detail-btn" bindtap="onViewCostDetails">{{showCostDetails ? '收起费用明细' : '查看费用明细'}}</button>
+        <button class="contact-btn" bindtap="onContactService">联系设计师优化</button>
+      </view>
+      <view class="designer-tip">一户一档，可由设计师进一步深化方案。</view>
+    </view>
+
+    <view class="report-card detail-panel" wx:if="{{showCostDetails}}">
+      <view class="card-title compact-title"><view class="title-mark"></view><text>费用明细</text></view>
+      <view class="cost-chart">
+        <view class="breakdown-item" wx:for="{{costBreakdown}}" wx:key="name">
+          <view class="breakdown-main">
+            <text class="breakdown-name">{{item.name}}</text>
+            <text class="breakdown-amount {{item.estimable ? '' : 'pending'}}">{{item.amountText}}</text>
+          </view>
+          <view class="chart-bar" wx:if="{{item.estimable}}"><view class="chart-bar-fill" style="width: {{item.percent}}%; background: {{item.color}};"></view></view>
+          <view class="chart-meta">
+            <text wx:if="{{item.estimable}}">{{item.percent}}%</text><text wx:else>需结合图纸核算</text>
+            <text class="chart-note">{{item.note}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="plain-notes" wx:if="{{dynamicNotes.length}}">
+        <view class="plain-note" wx:for="{{dynamicNotes}}" wx:key="*this">· {{item}}</view>
+      </view>
+      <view class="breakdown-tip">室内装修另计。</view>
+    </view>
+    <view class="report-disclaimer">以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认。</view>
+  </scroll-view>
+</view>

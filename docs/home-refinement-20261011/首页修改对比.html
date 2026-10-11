@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>甲第灵光 · 首页修改对比</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; color: #50381f; background: #f6f1e9; font: 16px/1.7 system-ui, sans-serif; }
+  h1 { margin: 0 0 8px; font-size: 26px; }
+  p { margin: 0 0 24px; }
+  main { max-width: 1000px; margin: auto; }
+  .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+  figure { margin: 0; }
+  figcaption { margin: 0 0 12px; font-size: 20px; font-weight: 600; }
+  .phone { position: relative; width: 100%; aspect-ratio: 430 / 932; overflow: hidden; border-radius: 28px; background: #fff; box-shadow: 0 8px 30px #50381f20; }
+  .phone img { position: absolute; max-width: none; }
+  .before img { width: 376%; left: -249.2%; top: -15.59%; }
+  .after img { width: 367.65%; left: -256.03%; top: -12.30%; }
+  a { color: #836548; }
+  .original { display: block; margin-top: 12px; }
+  footer { margin-top: 28px; }
+  @media (max-width: 640px) { body { padding: 20px; } .comparison { gap: 16px; } figcaption { font-size: 16px; } }
+</style>
+<main>
+  <h1>甲第灵光 · 首页修改对比</h1>
+  <p>Logo、品牌名和 slogan 同步放大，品牌背景透明、柔和过渡，保留别墅；安全距离、八宫格排序与报价文案已更新。原色调、高清素材和 AI 胶囊保留。</p>
+  <div class="comparison">
+    <figure>
+      <figcaption>修改前 · 7.2.9 首页</figcaption>
+      <div class="phone before"><img src="微信模拟器-修改前.png" alt="修改前微信模拟器首页"></div>
+      <a class="original" href="微信模拟器-修改前.png">查看原始完整截图</a>
+    </figure>
+    <figure>
+      <figcaption>修改后 · 本地新版</figcaption>
+      <div class="phone after"><img src="微信模拟器-修改后-iPhone15ProMax.png" alt="修改后微信模拟器首页"></div>
+      <a class="original" href="微信模拟器-修改后-iPhone15ProMax.png">查看原始完整截图</a>
+    </figure>
+  </div>
+  <footer><a href="README.md">修改与回退说明</a> · <a href="微信模拟器-修改后-iPhone8.png">小屏效果</a> · <a href="预览二维码.png">真机预览二维码</a></footer>
+</main>
+</html>

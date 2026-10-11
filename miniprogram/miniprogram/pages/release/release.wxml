@@ -1,0 +1,256 @@
+<!--pages/release/release.wxml-->
+<view class="page {{isManageMode ? 'page-manage-mode' : ''}}">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="我的发布" subtitle="作品数据 · 收益概览" background="#e6daca" />
+
+  <!-- 顶部统计卡片 -->
+  <view class="summary-card">
+    <view class="summary-header">
+      <view>
+        <text class="summary-title">发布概览</text>
+        <text class="summary-subtitle">创作影响力与作品经营数据</text>
+      </view>
+    </view>
+    <view class="influence-row">
+      <view class="summary-item">
+        <text class="summary-label">粉丝</text>
+        <text class="summary-value">{{fansCount}}</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-label">获赞</text>
+        <text class="summary-value">{{receivedLikes}}</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-label">关注</text>
+        <text class="summary-value">{{followingCount}}</text>
+      </view>
+    </view>
+    <view class="business-grid">
+      <view class="business-line">
+        <view class="summary-item">
+          <text class="summary-label">作品</text>
+          <text class="summary-mini-value">{{totalWorks}}</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-label">曝光</text>
+          <text class="summary-mini-value">{{totalViews}}</text>
+        </view>
+      </view>
+      <view class="business-line">
+        <view class="summary-item">
+          <text class="summary-label">累计收益</text>
+          <text class="summary-mini-value highlight">{{totalIncome}} 灵石</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-label">本月收益</text>
+          <text class="summary-mini-value">{{monthIncome}} 灵石</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 筛选与时间段 -->
+  <view class="filter-bar">
+    <view class="filter-left">
+      <view
+        class="filter-tag {{currentTab === 'works' ? 'active' : ''}}"
+        data-tab="works"
+        bindtap="onTabChange"
+      >
+        <text>作品数据</text>
+      </view>
+      <view
+        class="filter-tag {{currentTab === 'income' ? 'active' : ''}}"
+        data-tab="income"
+        bindtap="onTabChange"
+      >
+        <text>收益明细</text>
+      </view>
+    </view>
+    <view class="filter-right">
+      <view
+        wx:if="{{currentTab === 'works' && works.length > 0}}"
+        class="manage-tag {{isManageMode ? 'active' : ''}}"
+        bindtap="onToggleManageMode"
+      >
+        <text>{{isManageMode ? '完成' : '管理'}}</text>
+      </view>
+      <view
+        wx:if="{{!isManageMode}}"
+        class="time-tag {{currentRange === '7d' ? 'active' : ''}}"
+        data-range="7d"
+        bindtap="onRangeChange"
+      >
+        <text>近7天</text>
+      </view>
+      <view
+        wx:if="{{!isManageMode}}"
+        class="time-tag {{currentRange === '30d' ? 'active' : ''}}"
+        data-range="30d"
+        bindtap="onRangeChange"
+      >
+        <text>近30天</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 内容区 -->
+  <view class="content">
+    <!-- 作品数据列表 -->
+    <scroll-view
+      wx:if="{{currentTab === 'works'}}"
+      class="list-scroll"
+      scroll-y="true"
+      lower-threshold="60"
+      bindscrolltolower="onReachBottom"
+    >
+      <view class="empty" wx:if="{{works.length === 0}}">
+        <t-icon name="invisible" size="72rpx" color="#8c7553" />
+        <text class="empty-title">暂无发布作品</text>
+        <text class="empty-desc">先上传到主页展示，审核通过后可选同步到模板广场</text>
+        <view class="empty-action" bindtap="onCreateWork">立即上传</view>
+      </view>
+
+      <view
+        class="work-item"
+        wx:if="{{!isManageMode}}"
+        wx:for="{{works}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        style="transform: translateX({{swipedWorkId === item.id ? '-126rpx' : '0'}})"
+        bindtouchstart="onWorkTouchStart"
+        bindtouchmove="onWorkTouchMove"
+        bindtouchend="onWorkTouchEnd"
+      >
+        <image
+          class="work-cover"
+          src="{{item.cover}}"
+          mode="aspectFill"
+        />
+        <view class="work-info">
+          <view class="work-title-row">
+            <text class="work-title">{{item.title}}</text>
+            <text class="work-status {{item.status}}">{{item.statusText}}</text>
+          </view>
+          <text class="work-desc">{{item.desc}}</text>
+          <view class="work-badges">
+            <text class="work-badge">{{item.publishScopeText}}</text>
+            <text class="work-badge">{{item.sourceTypeText}}</text>
+          </view>
+          <text class="work-reject-reason" wx:if="{{item.rejectReason}}">拒绝原因：{{item.rejectReason}}</text>
+          <view class="work-metrics">
+            <view class="metric">
+              <t-icon name="browse" size="28rpx" color="#b79066" />
+              <text class="metric-text">{{item.views}} 浏览</text>
+            </view>
+            <view class="metric">
+              <t-icon name="heart" size="28rpx" color="#d37a74" />
+              <text class="metric-text">{{item.likes}} 喜欢</text>
+            </view>
+            <view class="metric">
+              <t-icon name="money" size="28rpx" color="#a9855b" />
+              <text class="metric-text">{{item.income}} 灵石</text>
+            </view>
+          </view>
+          <view class="work-footer">
+            <text class="work-time">{{item.time}}</text>
+            <view class="work-actions">
+              <view class="action-btn" bindtap="onViewWork" data-id="{{item.id}}" data-cover="{{item.cover}}" data-can-view-detail="{{item.canViewDetail}}">
+                <text>{{item.viewActionText}}</text>
+              </view>
+              <view class="action-btn" bindtap="onEditWork" data-id="{{item.id}}">
+                <text>编辑</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        <view class="inline-delete-action" catchtap="onDeleteWork" data-id="{{item.id}}" data-title="{{item.title}}">
+          <t-icon name="delete" size="32rpx" color="#fffaf2" />
+          <text>删除</text>
+        </view>
+      </view>
+
+      <view class="manage-panel" wx:if="{{isManageMode}}">
+        <view class="manage-toolbar">
+          <text class="manage-count">已选择 {{selectedIds.length}} 项</text>
+          <view class="manage-select-all" bindtap="onToggleSelectAll">
+            <text>{{selectAll ? '取消全选' : '全选'}}</text>
+          </view>
+        </view>
+        <view class="manage-grid">
+          <view
+            class="manage-card {{selectedMap[item.id] ? 'selected' : ''}}"
+            wx:for="{{works}}"
+            wx:key="id"
+            catchtap="onToggleSelect"
+            data-id="{{item.id}}"
+          >
+            <view class="manage-card-media">
+              <image src="{{item.cover}}" mode="aspectFill" />
+              <view class="manage-select-indicator {{selectedMap[item.id] ? 'checked' : ''}}">
+                <text wx:if="{{selectedMap[item.id]}}">✓</text>
+              </view>
+              <text class="manage-status {{item.status}}">{{item.statusText}}</text>
+            </view>
+            <view class="manage-card-body">
+              <text class="manage-card-title">{{item.title}}</text>
+              <text class="manage-card-meta">{{item.time}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 收益明细列表 -->
+    <scroll-view
+      wx:elif="{{currentTab === 'income'}}"
+      class="list-scroll"
+      scroll-y="true"
+      lower-threshold="60"
+      bindscrolltolower="onReachBottom"
+    >
+      <view class="empty" wx:if="{{incomeRecords.length === 0}}">
+        <t-icon name="invisible" size="72rpx" color="#8c7553" />
+        <text class="empty-title">暂无收益记录</text>
+        <text class="empty-desc">当用户付费使用你的模板后，会在这里看到收益明细</text>
+      </view>
+
+      <view
+        class="income-item"
+        wx:for="{{incomeRecords}}"
+        wx:key="id"
+      >
+        <view class="income-main">
+          <view class="income-left">
+            <view class="income-icon">
+              <t-icon name="money" size="32rpx" color="#a9855b" />
+            </view>
+            <view class="income-info">
+              <text class="income-title">{{item.title}}</text>
+              <text class="income-subtitle">{{item.source}}</text>
+            </view>
+          </view>
+          <view class="income-right">
+            <text class="income-amount">+{{item.amount}} 灵石</text>
+            <text class="income-time">{{item.time}}</text>
+          </view>
+        </view>
+        <view class="income-extra" wx:if="{{item.remark}}">
+          <text class="income-remark">{{item.remark}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+  <view class="batch-action-bar" wx:if="{{isManageMode}}">
+    <view class="batch-selection-count">
+      <text>已选 {{selectedIds.length}} 项</text>
+    </view>
+    <view class="batch-delete-btn {{selectedIds.length > 0 ? 'active' : 'disabled'}}" bindtap="onBatchDeleteWorks">
+      <text>删除所选{{selectedIds.length > 0 ? ' (' + selectedIds.length + ')' : ''}}</text>
+    </view>
+  </view>
+  <view class="floating-upload-btn" wx:if="{{!isManageMode}}" bindtap="onCreateWork">
+    <t-icon name="add" size="38rpx" color="#fffaf2" />
+    <text class="floating-upload-text">上传</text>
+  </view>
+</view>

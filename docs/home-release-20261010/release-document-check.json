@@ -1,0 +1,8 @@
+{
+  "releaseFiles": 61,
+  "jsonFilesParsed": 17,
+  "currentCodeMatchesUploadSnapshot": true,
+  "previewAndUploadSizesMatch": true,
+  "knownCredentialLeakFindings": [],
+  "rollbackJavaScriptSyntax": "passed"
+}

@@ -1,0 +1,433 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+// AI 运营总览（2026-10 改版新增）：KPI 带 / 趋势图 / 场景分布 / 供应商健康度 / 失败原因。
+// 全部配色走全局 --admin-* 变量。
+:where(.layout-content[data-admin-page="/ai-overview"]) {
+
+.ai-overview-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ───────── 页头 ───────── */
+.aio-pagehead {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+
+    h1 {
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--admin-text);
+        margin: 0;
+    }
+
+    .aio-sub {
+        font-size: 12px;
+        color: var(--admin-text-muted);
+    }
+
+    .aio-refresh {
+        margin-left: auto;
+        border: 1px solid var(--admin-border);
+        background: var(--admin-surface);
+        color: var(--admin-text-muted);
+        border-radius: 8px;
+        padding: 4px 12px;
+        font-size: 12px;
+        cursor: pointer;
+
+        &:hover { color: var(--admin-accent); border-color: var(--admin-accent); }
+        &:disabled { opacity: .6; cursor: default; }
+    }
+}
+
+/* ───────── 告警条 ───────── */
+.aio-alert-strip {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #fbeae6;
+    border: 1px solid #ecc7bd;
+    border-radius: var(--admin-radius-md);
+    padding: 10px 14px;
+    font-size: 13px;
+
+    .aio-alert-icon { color: #c0392b; font-size: 15px; line-height: 1.4; }
+    b { color: #c0392b; }
+
+    .aio-alert-line {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 2px 0;
+    }
+
+    .aio-alert-time { font-size: 11px; color: var(--admin-text-muted); }
+
+    .aio-alert-go {
+        margin-left: auto;
+        flex-shrink: 0;
+        align-self: center;
+        border: 1px solid #c0392b;
+        color: #c0392b;
+        background: transparent;
+        border-radius: 8px;
+        padding: 4px 12px;
+        font-size: 12px;
+        cursor: pointer;
+
+        &:hover { background: #c0392b; color: #fff; }
+    }
+}
+
+/* ───────── KPI 带 ───────── */
+.aio-kpi-band {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+
+    @media (max-width: 1100px) { grid-template-columns: repeat(3, 1fr); }
+}
+
+.aio-kpi {
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-md);
+    padding: 12px 14px;
+    box-shadow: var(--admin-shadow-soft);
+
+    &[role='button'] { cursor: pointer; transition: transform .15s, box-shadow .15s; }
+    &[role='button']:hover { transform: translateY(-1px); box-shadow: var(--admin-shadow); }
+
+    span { font-size: 12px; color: var(--admin-text-muted); }
+    b { display: block; font-size: 22px; font-weight: 700; margin-top: 3px; color: var(--admin-text); font-variant-numeric: tabular-nums; }
+    small { display: block; font-size: 11px; color: var(--admin-text-muted); margin-top: 3px; }
+
+    &.warn b { color: #b97f1f; }
+    &.bad b { color: #c0392b; }
+}
+
+/* ───────── 卡片通用 ───────── */
+.aio-card {
+    padding: 16px 18px;
+}
+
+.aio-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+
+    h3 { font-size: 14px; font-weight: 700; margin: 0; color: var(--admin-text); }
+}
+
+.aio-link-btn {
+    margin-left: auto;
+    border: none;
+    background: none;
+    color: var(--admin-accent);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+
+    &:hover { text-decoration: underline; }
+}
+
+.aio-empty {
+    padding: 24px 0;
+    text-align: center;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+}
+
+.aio-foot-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--admin-text-muted);
+}
+
+/* ───────── 布局 ───────── */
+.aio-grid-main {
+    display: grid;
+    grid-template-columns: 7fr 5fr;
+    gap: 14px;
+
+    @media (max-width: 1100px) { grid-template-columns: 1fr; }
+}
+
+.aio-grid-eq {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+
+    @media (max-width: 1100px) { grid-template-columns: 1fr; }
+}
+
+/* ───────── 趋势图 ───────── */
+.aio-trend-svg {
+    width: 100%;
+    display: block;
+
+    .aio-grid { stroke: var(--admin-border); stroke-width: 1; }
+    .aio-axis { font-size: 9px; fill: var(--admin-text-muted); }
+    .aio-bar { fill: var(--admin-accent); opacity: .85; }
+    .aio-bar.today { opacity: 1; }
+    .aio-rate-line { fill: none; stroke: #4a7fb5; stroke-width: 2; stroke-linejoin: round; }
+    .aio-rate-dot { fill: #4a7fb5; }
+}
+
+.aio-legend {
+    display: flex;
+    gap: 14px;
+    font-size: 11.5px;
+    color: var(--admin-text-muted);
+    margin-left: auto;
+
+    i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    i.bar { background: var(--admin-accent); }
+    i.line { background: #4a7fb5; border-radius: 50%; height: 4px; width: 12px; vertical-align: 1px; }
+}
+
+/* ───────── 场景分布 ───────── */
+.aio-rank-head {
+    display: grid;
+    grid-template-columns: 130px 1fr 52px 56px 70px;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--admin-text-muted);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--admin-border);
+}
+
+.aio-rank-row {
+    display: grid;
+    grid-template-columns: 130px 1fr 52px 56px 70px;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--admin-border);
+
+    &:last-of-type { border-bottom: none; }
+}
+
+.aio-rank-name {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+    font-size: 12.5px;
+    color: var(--admin-text);
+
+    code { font-size: 10px; color: var(--admin-text-muted); }
+}
+
+.aio-rank-bar-wrap {
+    background: var(--admin-bg);
+    border-radius: 5px;
+    height: 16px;
+    overflow: hidden;
+}
+
+.aio-rank-bar {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--admin-accent), #c98a55);
+
+    &.alt { background: linear-gradient(90deg, #b06fb3, #caa1cc); }
+}
+
+.aio-rank-num {
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.aio-rank-rate {
+    font-size: 12px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+
+    &.good { color: #2f8f6b; font-weight: 600; }
+    &.mid { color: #b97f1f; font-weight: 600; }
+    &.bad { color: #c0392b; font-weight: 600; }
+}
+
+.aio-rank-stones {
+    font-size: 12px;
+    color: var(--admin-text-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.aio-video-note {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--admin-border);
+    font-size: 11.5px;
+    color: var(--admin-text-muted);
+}
+
+/* ───────── 供应商健康度 ───────── */
+.aio-prov-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+
+    @media (max-width: 1100px) { grid-template-columns: 1fr; }
+}
+
+.aio-prov-card {
+    border: 1px solid var(--admin-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--admin-surface);
+    position: relative;
+
+    &.primary { border-color: var(--admin-accent); box-shadow: 0 0 0 1px rgba(139, 94, 60, .12); }
+    &.alerting { border-color: #c0392b; box-shadow: 0 0 0 1px rgba(192, 57, 43, .12); }
+
+    h4 {
+        font-size: 13px;
+        margin: 6px 0 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        color: var(--admin-text);
+
+        small {
+            font-size: 10.5px;
+            font-weight: 400;
+            color: var(--admin-text-muted);
+            background: var(--admin-bg);
+            border-radius: 4px;
+            padding: 1px 6px;
+        }
+    }
+}
+
+.aio-prov-tags { display: flex; gap: 6px; }
+
+.aio-prov-tag {
+    font-size: 10.5px;
+    border-radius: 9px;
+    padding: 1px 9px;
+    font-weight: 600;
+    background: var(--admin-bg);
+    color: var(--admin-text-muted);
+    border: 1px solid var(--admin-border);
+
+    &.main { background: var(--admin-accent); color: #fff8ef; border-color: var(--admin-accent); }
+    &.alert { background: #fbeae6; color: #c0392b; border-color: #ecc7bd; }
+}
+
+.aio-prov-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    text-align: center;
+
+    span { font-size: 10.5px; color: var(--admin-text-muted); display: block; }
+    b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--admin-text); }
+
+    b.good { color: #2f8f6b; }
+    b.mid { color: #b97f1f; }
+    b.bad { color: #c0392b; }
+}
+
+.aio-prov-foot {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--admin-border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .aio-prov-note { font-size: 11px; color: var(--admin-text-muted); }
+    .aio-link-btn { position: static; }
+}
+
+/* ───────── 降级链 ───────── */
+.aio-chain {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    background: var(--admin-bg);
+    border: 1px dashed var(--admin-border);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 12px;
+    color: var(--admin-text-muted);
+    flex-wrap: wrap;
+
+    b { color: var(--admin-text); font-size: 11.5px; }
+}
+
+.aio-chain-node {
+    background: var(--admin-surface);
+    border: 1px solid var(--admin-border);
+    border-radius: 14px;
+    padding: 2px 10px;
+    font-size: 11.5px;
+    color: var(--admin-text);
+
+    em { font-style: normal; color: var(--admin-text-muted); font-size: 10.5px; }
+}
+
+.aio-chain-arrow { color: var(--admin-text-muted); }
+.aio-chain-note { margin-left: auto; font-size: 11px; }
+
+/* ───────── 失败原因 ───────── */
+.aio-fail-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--admin-border);
+    font-size: 12.5px;
+
+    &:last-of-type { border-bottom: none; }
+}
+
+.aio-fail-name { width: 110px; color: var(--admin-text); flex-shrink: 0; }
+
+.aio-fail-bar-wrap {
+    flex: 1;
+    background: var(--admin-bg);
+    border-radius: 5px;
+    height: 13px;
+    overflow: hidden;
+}
+
+.aio-fail-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #c0392b, #dd8177);
+    border-radius: 5px;
+}
+
+.aio-fail-count {
+    width: 56px;
+    text-align: right;
+    color: var(--admin-text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+}
+
+/* ───────── 工具热度 ───────── */
+.aio-tool-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 60px;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--admin-border);
+
+    &:last-of-type { border-bottom: none; }
+}
+
+.aio-tool-name { font-size: 12.5px; color: var(--admin-text); }
+
+} /* end scope */

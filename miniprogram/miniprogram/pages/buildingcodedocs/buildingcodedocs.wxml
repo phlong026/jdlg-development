@@ -1,0 +1,44 @@
+<view class="docs-page">
+  <navigation-bar background="#f6efe6">
+    <view slot="center" class="nav-title">规范资料</view>
+  </navigation-bar>
+
+  <view class="header">
+    <view class="badge">建规快查</view>
+    <text class="title">上传规范文件</text>
+    <text class="subtitle">支持 PDF、DOCX、TXT、MD，单个文件不超过 50MB</text>
+  </view>
+
+  <view class="notice">
+    <text>上传后将用于全站 AI 问答，请勿上传私密资料或无权共享的文件。</text>
+  </view>
+
+  <view class="upload-card" bindtap="onChooseFile">
+    <view class="upload-text">
+      <text class="upload-title">{{uploading ? '正在上传并导入知识库' : '选择规范文件'}}</text>
+      <text class="upload-desc">一期默认为公共资料，后续可切换为私有资料</text>
+    </view>
+    <view class="upload-arrow">›</view>
+  </view>
+
+  <view class="section-title">我的上传</view>
+  <view class="empty" wx:if="{{!loading && docs.length === 0}}">
+    <text>还没有上传规范资料</text>
+  </view>
+
+  <view class="doc-list" wx:else>
+    <view class="doc-item" wx:for="{{docs}}" wx:key="id">
+      <view class="doc-icon">{{item.file_type}}</view>
+      <view class="doc-main">
+        <text class="doc-title">{{item.title || item.file_name}}</text>
+        <text class="doc-meta">{{item.file_name}} · {{item.size_text}}</text>
+        <view class="doc-status status-{{item.index_status}}">
+          <text>{{item.status_text}}</text>
+        </view>
+      </view>
+      <view class="doc-delete" data-id="{{item.id}}" bindtap="onDeleteTap">
+        <t-icon name="delete" size="30rpx" color="#a68c75" />
+      </view>
+    </view>
+  </view>
+</view>

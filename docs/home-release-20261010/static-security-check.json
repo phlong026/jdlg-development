@@ -1,0 +1,24 @@
+{
+  "javascriptSyntaxFiles": [
+    "miniprogram/miniprogram/utils/homeAssets.js",
+    "miniprogram/miniprogram/pages/index/index.js",
+    "miniprogram/miniprogram/custom-tab-bar/index.js",
+    "miniprogram/tests/home-reference.test.js",
+    "miniprogram/tests/home-cloud-header-release.test.js",
+    "docs/home-release-20261010/rollback.cjs"
+  ],
+  "secretScanFiles": [
+    "miniprogram/miniprogram/pages/index/index.ts",
+    "miniprogram/miniprogram/pages/index/index.js",
+    "miniprogram/miniprogram/pages/index/index.scss",
+    "miniprogram/miniprogram/pages/index/index.wxss",
+    "miniprogram/miniprogram/pages/index/index.wxml",
+    "miniprogram/miniprogram/custom-tab-bar/index.ts",
+    "miniprogram/miniprogram/custom-tab-bar/index.js",
+    "miniprogram/miniprogram/utils/homeAssets.ts",
+    "miniprogram/miniprogram/utils/homeAssets.js",
+    "miniprogram/project.config.json"
+  ],
+  "secretFindings": [],
+  "dependenciesAdded": false
+}

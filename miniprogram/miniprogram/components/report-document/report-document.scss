@@ -1,0 +1,22 @@
+.report-document {
+  padding: 36rpx;
+  background: #faf6ee;
+  border: 1rpx solid #d7c4a6;
+  border-radius: 24rpx;
+  color: #654b39;
+}
+.eyebrow, .title, .description { display: block; }
+.eyebrow { color: #7c8b75; font-size: 22rpx; letter-spacing: 2rpx; }
+.title { margin-top: 18rpx; font-size: 36rpx; font-weight: 600; line-height: 1.45; }
+.description { margin-top: 22rpx; font-size: 27rpx; line-height: 1.8; color: #827260; }
+.open-button {
+  margin-top: 30rpx;
+  color: #fffaf1;
+  background: #967454;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+}
+.open-button[disabled] { background: #d7c9b6; color: #675340; }
+.retry { background: transparent; color: #795937; font-size: 26rpx; margin-top: 14rpx; }
+.retry::after { border-color: #d7c4a6; border-radius: 16rpx; }
+.error { margin-top: 24rpx; font-size: 24rpx; line-height: 1.6; color: #8c513f; }

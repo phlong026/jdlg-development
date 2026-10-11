@@ -1,0 +1,39 @@
+# 本地联调专用：MySQL + Redis。
+# 只监听 127.0.0.1；口令是仅本地使用的占位值，不对应任何线上账号。
+name: jdlg-local
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: jdlg-local-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: jdlg_local_only
+      MYSQL_DATABASE: jiadilinguang
+    # 不覆盖排序规则：保持 MySQL 8 默认（utf8mb4_0900_ai_ci），所有表一致。
+    # 曾经加过 --collation-server，导致建库与后续建表的排序规则混用，触发 Illegal mix of collations。
+    command:
+      - --character-set-server=utf8mb4
+      - --default-time-zone=+08:00
+    ports:
+      - "127.0.0.1:13306:3306"
+    volumes:
+      - jdlg_local_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h127.0.0.1", "-uroot", "-pjdlg_local_only", "--silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  redis:
+    image: redis:7-alpine
+    container_name: jdlg-local-redis
+    ports:
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  jdlg_local_mysql:

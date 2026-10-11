@@ -1,0 +1,12 @@
+{
+  "usingComponents": {
+    "t-icon": "/components/tdesign-miniprogram/icon/icon",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
+  "navigationStyle": "custom",
+  "disableScroll": true,
+  "enablePullDownRefresh": false,
+  "backgroundColor": "#ece4d9",
+  "backgroundColorTop": "#ece4d9",
+  "backgroundColorBottom": "#ece4d9"
+}

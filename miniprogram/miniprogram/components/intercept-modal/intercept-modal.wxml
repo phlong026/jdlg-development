@@ -1,0 +1,16 @@
+<view
+  wx:if="{{visible}}"
+  class="intercept-modal-mask"
+  catchtouchmove="true"
+  bindtap="onMaskTap"
+>
+  <view class="intercept-modal" catchtap="stopPropagation">
+    <view class="intercept-modal-header">
+      <view class="intercept-modal-icon">!</view>
+      <text class="intercept-modal-title">{{title}}</text>
+    </view>
+    <text class="intercept-modal-message">{{message}}</text>
+    <text class="intercept-modal-hint">{{hint}}</text>
+    <button class="intercept-modal-btn" bindtap="onConfirm">我知道了</button>
+  </view>
+</view>

@@ -1,0 +1,75 @@
+{
+  "baselineCommit": "fb043f9eeae8e70e23b363601a97b1b1be32a085",
+  "releaseId": "20261010-b52afc7c12b5",
+  "files": [
+    {
+      "path": "miniprogram/pages/index/index.wxml",
+      "role": "restore",
+      "beforeSha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3",
+      "afterSha256": "3d7604cb21076353ef3df6db566385f91fb35d5ab55dee716aca0b9769ea3f06"
+    },
+    {
+      "path": "miniprogram/pages/index/index.scss",
+      "role": "restore",
+      "beforeSha256": "c4c125808aeb6bab8535b2a8e31c71feaede7df2a6317983583d6caf4481f707",
+      "afterSha256": "5d1cf5ab6ec689bf3bb002daa60d80a2f637f2106fc6a263097492c967d5d3c2"
+    },
+    {
+      "path": "miniprogram/pages/index/index.wxss",
+      "role": "restore",
+      "beforeSha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495",
+      "afterSha256": "b45ff364e8a4d8493a66d937db48d5c706b4f8ee22e34928a46c331844145ced"
+    },
+    {
+      "path": "miniprogram/pages/index/index.ts",
+      "role": "restore",
+      "beforeSha256": "0059895df43b52aa057744225f4b3cf6b228a2e6a47e321618598fd764c74dcc",
+      "afterSha256": "6a9b48cb93d803ab5b42574da24359dcd72ae32e8415272a015b892fdfefd322"
+    },
+    {
+      "path": "miniprogram/pages/index/index.js",
+      "role": "restore",
+      "beforeSha256": "9f59cb7030289a436315af78abad992093e5aa3ab07f7dd3ba2caca660aa6451",
+      "afterSha256": "eff89ba701c357b3da2d31e2f059576fed62f094183bffaa3dbea83447331546"
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.ts",
+      "role": "restore",
+      "beforeSha256": "1c1bb47ec564c4a00565257ce46d0e5bfe8193781e9fa9b0b4358813a48ae51b",
+      "afterSha256": "03153adef785abea5053c8b6ad8e62998678237ba9cd20c05e17a62aaaf4d7bc"
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.js",
+      "role": "restore",
+      "beforeSha256": "8e86a642e8b5680e47c88dda3ff2cdd4a24a85da1927fd16540777f385d7e65a",
+      "afterSha256": "2f6464d2e8c61db0a65035320d8973dc8005bd6b6899c1c4548f25dac7024b57"
+    },
+    {
+      "path": "project.config.json",
+      "role": "restore",
+      "beforeSha256": "1425c122de4d5158ee04afb177528f1d6bc20a091edf9b244ba4df227bb1e1f6",
+      "afterSha256": "cf1bc225542b0607570bcea6cf6f74c6983bf30113adb6a0abbb910b6f2ded5c"
+    },
+    {
+      "path": "tests/home-reference.test.js",
+      "role": "restore",
+      "beforeSha256": "987860b4834e28df5bd66f13a7a4f756eba4e12ea7db8a9305491af14e2da79c",
+      "afterSha256": "1b98d821fc69eacd8ea430f1a27d2fa0c9f7dd1557c5cdfaa82e26450423eaee"
+    },
+    {
+      "path": "miniprogram/utils/homeAssets.ts",
+      "role": "remove",
+      "afterSha256": "47e5f63ae4df16bd965ab0cb1e2a032cc0d4ebcda1f46ddd2343431adf725ce3"
+    },
+    {
+      "path": "miniprogram/utils/homeAssets.js",
+      "role": "remove",
+      "afterSha256": "77aefee182af61cd500b70f1f996849e8332acdb503391a05757786b65d867c6"
+    },
+    {
+      "path": "tests/home-cloud-header-release.test.js",
+      "role": "remove",
+      "afterSha256": "adb953725d93e8e17f98c45179d2eb8b3018f62f96a794b899817da0131514eb"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="订单详情" subtitle="查看本次订单的完整信息" background="#e6daca" />
+
+  <view class="content" wx:if="{{loading}}">
+    <view class="loading-state">
+      <t-icon name="loading" size="68rpx" color="#8c7553" class="loading-icon" />
+      <text class="loading-text">加载中...</text>
+    </view>
+  </view>
+
+  <view class="content" wx:elif="{{order}}">
+    <view class="detail-card hero-card">
+      <view class="hero-top">
+        <view class="hero-info">
+          <text class="hero-title">{{order.title}}</text>
+          <text class="hero-subtitle">{{order.description}}</text>
+        </view>
+        <view class="status-badge {{order.status}}">
+          <text>{{order.statusText}}</text>
+        </view>
+      </view>
+      <view class="amount-block">
+        <text class="amount-label">订单金额</text>
+        <text class="amount-value {{order.amount > 0 ? 'plus' : 'minus'}}">
+          {{order.amount > 0 ? '+' : ''}}￥{{order.amountText}}
+        </text>
+      </view>
+      <view class="continue-pay-panel" wx:if="{{order.canContinuePay}}">
+        <text class="continue-pay-title">这笔认证订单还没有完成支付</text>
+        <text class="continue-pay-desc">点击下面按钮后，可继续拉起微信支付完成认证。</text>
+        <button class="continue-pay-btn" disabled="{{payLoading}}" bindtap="continuePay">
+          {{payLoading ? '处理中...' : '继续支付'}}
+        </button>
+      </view>
+    </view>
+
+    <view class="detail-card">
+      <view class="section-title">基础信息</view>
+      <view class="detail-row">
+        <text class="detail-label">订单编号</text>
+        <view class="detail-inline-actions">
+          <text class="detail-value mono">{{order.orderNo}}</text>
+          <view class="copy-btn" bindtap="copyOrderNo">
+            <text>复制</text>
+          </view>
+        </view>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">订单类型</text>
+        <text class="detail-value">{{order.typeText}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">订单分类</text>
+        <text class="detail-value">{{order.orderCategoryText || order.orderCategory || '未分类'}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">评价状态</text>
+        <text class="detail-value review-status {{order.reviewStatus}}">{{order.reviewStatusText}}</text>
+      </view>
+    </view>
+
+    <view class="detail-card">
+      <view class="section-title">时间信息</view>
+      <view class="detail-row">
+        <text class="detail-label">创建时间</text>
+        <text class="detail-value">{{order.createdAt || '暂无'}}</text>
+      </view>
+      <view class="detail-row">
+        <text class="detail-label">完成时间</text>
+        <text class="detail-value">{{order.completedAt || '暂无'}}</text>
+      </view>
+    </view>
+
+    <view class="detail-card" wx:if="{{order.description}}">
+      <view class="section-title">订单说明</view>
+      <text class="detail-description">{{order.description}}</text>
+    </view>
+  </view>
+
+  <view class="content" wx:else>
+    <view class="empty-state">
+      <t-icon name="error-circle" size="74rpx" color="#b06158" />
+      <text class="empty-title">订单详情加载失败</text>
+      <text class="empty-desc">请返回后重试</text>
+    </view>
+  </view>
+</view>

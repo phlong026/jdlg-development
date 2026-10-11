@@ -1,0 +1,298 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/customerservice/customerservice",
+    "pages/my/my",
+    "pages/template/template",
+    "pages/aitools/aitools",
+    "pages/aitooldetail/aitooldetail",
+    "pages/aitoolworkbench/aitoolworkbench",
+    "pages/specadvisor/specadvisor",
+    "pages/buildingcodedocs/buildingcodedocs",
+    "pages/newminnantool/newminnantool",
+    "pages/distribution/distribution",
+    "pages/voicecall/voicecall",
+    "pages/login/login",
+    "pages/passwordrecovery/passwordrecovery",
+    "pages/phonebind/phonebind",
+    "pages/privacy/privacy",
+    "pages/aigenerate/aigenerate",
+    "pages/generateprogress/generateprogress",
+    "pages/inspirationdetail/inspirationdetail",
+    "pages/templatepreview/templatepreview",
+    "pages/settings/settings",
+    "pages/aicost/aicost",
+    "pages/aicostresult/aicostresult",
+    "pages/utilitytools/utilitytools",
+    "pages/utilitytooldetail/utilitytooldetail",
+    "pages/aivideo/aivideo",
+    "pages/real/real"
+  ],
+  "subPackages": [
+    {
+      "root": "pages/report",
+      "pages": ["landing", "questionnaire", "preview", "delivery"]
+    },
+    {
+      "root": "pages/generatedetails",
+      "pages": [
+        "generatedetails"
+      ]
+    },
+    {
+      "root": "pages/Invitefriends",
+      "pages": [
+        "Invitefriends"
+      ]
+    },
+    {
+      "root": "pages/chat",
+      "pages": [
+        "chat"
+      ]
+    },
+    {
+      "root": "pages/designerhome",
+      "pages": [
+        "designerhome"
+      ]
+    },
+    {
+      "root": "pages/myInformationmodification",
+      "pages": [
+        "myInformationmodification"
+      ]
+    },
+    {
+      "root": "pages/templatesquaredetails",
+      "pages": [
+        "templatesquaredetails"
+      ]
+    },
+    {
+      "root": "pages/myplan",
+      "pages": [
+        "myplan"
+      ]
+    },
+    {
+      "root": "pages/myfavorites",
+      "pages": [
+        "myfavorites"
+      ]
+    },
+    {
+      "root": "pages/ordermanagement",
+      "pages": [
+        "ordermanagement"
+      ]
+    },
+    {
+      "root": "pages/wallet",
+      "pages": [
+        "wallet"
+      ]
+    },
+    {
+      "root": "pages/ruralvilladesign",
+      "pages": [
+        "ruralvilladesign"
+      ]
+    },
+    {
+      "root": "pages/Parentchildcreativity",
+      "pages": [
+        "Parentchildcreativity"
+      ]
+    },
+    {
+      "root": "pages/topupcenter",
+      "pages": [
+        "topupcenter"
+      ]
+    },
+    {
+      "root": "pages/allrounddesign",
+      "pages": [
+        "allrounddesign"
+      ]
+    },
+    {
+      "root": "pages/release",
+      "pages": [
+        "release",
+        "designerworkpublish"
+      ]
+    },
+    {
+      "root": "pages/buildingreplacement",
+      "pages": [
+        "buildingreplacement"
+      ]
+    },
+    {
+      "root": "pages/checkin",
+      "pages": [
+        "checkin"
+      ]
+    },
+    {
+      "root": "pages/Identityauthen",
+      "pages": [
+        "Identityauthen"
+      ]
+    },
+    {
+      "root": "pages/generatehistory",
+      "pages": [
+        "generatehistory"
+      ]
+    },
+    {
+      "root": "pages/lingshidetails",
+      "pages": [
+        "lingshidetails"
+      ]
+    },
+    {
+      "root": "pages/orderdetail",
+      "pages": [
+        "orderdetail"
+      ]
+    },
+    {
+      "root": "pages/messagecenter",
+      "pages": [
+        "messagecenter"
+      ]
+    },
+    {
+      "root": "pages/adminlogin",
+      "pages": [
+        "adminlogin"
+      ]
+    },
+    {
+      "root": "pages/adminhome",
+      "pages": [
+        "adminhome"
+      ]
+    },
+    {
+      "root": "pages/withdrawcenter",
+      "pages": [
+        "withdrawcenter"
+      ]
+    }
+  ],
+  "tabBar": {
+    "custom": true,
+    "color": "#8c7f71",
+    "selectedColor": "#5e412f",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "assets/tabbar/未选中态@2x.png",
+        "selectedIconPath": "assets/tabbar/首页导航栏@2x.png"
+      },
+      {
+        "pagePath": "pages/template/template",
+        "text": "模板广场",
+        "iconPath": "assets/tabbar/未选中态@2x.png",
+        "selectedIconPath": "assets/tabbar/模板广场导航栏@2x.png"
+      },
+      {
+        "pagePath": "pages/distribution/distribution",
+        "text": "设计师中心",
+        "iconPath": "assets/tabbar/未选中态@2x.png",
+        "selectedIconPath": "assets/tabbar/设计师导航栏@2x.png"
+      },
+      {
+        "pagePath": "pages/my/my",
+        "text": "我",
+        "iconPath": "assets/tabbar/未选中态@2x.png",
+        "selectedIconPath": "assets/tabbar/我的导航栏@2x.png"
+      }
+    ]
+  },
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "all",
+      "packages": [
+        "pages/chat",
+        "pages/topupcenter",
+        "pages/Invitefriends",
+        "pages/checkin"
+      ]
+    },
+    "pages/template/template": {
+      "network": "all",
+      "packages": [
+        "pages/templatesquaredetails",
+        "pages/release"
+      ]
+    },
+    "pages/distribution/distribution": {
+      "network": "all",
+      "packages": [
+        "pages/designerhome"
+      ]
+    },
+    "pages/my/my": {
+      "network": "all",
+      "packages": [
+        "pages/wallet",
+        "pages/ordermanagement",
+        "pages/myInformationmodification",
+        "pages/Identityauthen",
+        "pages/lingshidetails",
+        "pages/myplan",
+        "pages/myfavorites",
+        "pages/messagecenter",
+        "pages/adminlogin",
+        "pages/adminhome",
+        "pages/withdrawcenter",
+        "pages/Invitefriends"
+      ]
+    },
+    "pages/aigenerate/aigenerate": {
+      "network": "all",
+      "packages": [
+        "pages/generatedetails",
+        "pages/generatehistory"
+      ]
+    },
+    "pages/aivideo/aivideo": {
+      "network": "all",
+      "packages": [
+        "pages/generatedetails"
+      ]
+    },
+    "pages/generateprogress/generateprogress": {
+      "network": "all",
+      "packages": [
+        "pages/generatedetails"
+      ]
+    }
+  },
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationStyle": "custom"
+  },
+  "style": "v2",
+  "rendererOptions": {
+    "skyline": {
+      "defaultDisplayBlock": true,
+      "defaultContentBox": true,
+      "disableABTest": true,
+      "sdkVersionBegin": "3.0.0",
+      "sdkVersionEnd": "15.255.255"
+    }
+  },
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

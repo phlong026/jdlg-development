@@ -1,0 +1,9 @@
+{
+  "usingComponents": {
+    "t-icon": "/components/tdesign-miniprogram/icon/icon",
+    "wemark": "../../components/wemark/wemark",
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "intercept-modal": "/components/intercept-modal/intercept-modal"
+  },
+  "navigationStyle": "custom"
+}

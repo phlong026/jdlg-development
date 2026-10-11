@@ -1,0 +1,132 @@
+// Shared sizing rules; page styles retain their own typography and colors.
+.layout-content {
+  .page-load-error {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    margin-bottom: 16px; padding: 16px; border: 1px solid #e5bc91; border-radius: 12px;
+    background: #fff8ef; color: #784b22; overflow-wrap: anywhere;
+    > div { flex: 1 1 240px; min-width: 0; }
+    p { margin: 6px 0; line-height: 1.6; }
+    small { line-height: 1.6; }
+    button { min-height: 44px; border: 1px solid #d5b794; border-radius: 8px; padding: 8px 14px; background: white; color: inherit; cursor: pointer; }
+  }
+  .section-card, .section-header, .risk-section, .risk-grid,
+  .designer-layout, .designer-list-panel, .designer-detail-panel,
+  .config-section, .config-card, .form-group, .detail-section { min-width: 0; }
+  .section-header { flex-wrap: wrap; }
+  .section-header > div { min-width: 0; }
+  .toolbar-left, .toolbar-right, .toolbar-actions { min-width: 0; flex-wrap: wrap; }
+  .search-box { min-width: 0; }
+  .modal-overlay { z-index: 1400; padding: 20px; overflow-y: auto; overscroll-behavior: contain; }
+  .modal-content {
+    min-width: 0;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .modal-header { gap: 12px; }
+  .modal-header h2, .modal-header h3 { min-width: 0; overflow-wrap: anywhere; }
+  .modal-close { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+  .modal-body { min-width: 0; }
+  .modal-footer { gap: 10px; flex-wrap: wrap; }
+  .info-value, .detail-value { min-width: 0; overflow-wrap: anywhere; }
+  img, video { max-width: 100%; }
+  pre { max-width: 100%; overflow: auto; }
+}
+
+@media (max-width: 768px) {
+  .layout-content {
+    .oss-toolbar, .utility-tools-toolbar, .log-toolbar,
+    .virtual-pay-toolbar, .config-toolbar { flex-direction: column; align-items: stretch; }
+    .search-box { width: 100%; max-width: none; min-width: 0; }
+    .log-toolbar .search-box { min-width: 0; }
+    .management-search-panel { padding: 14px; }
+    .management-search-panel .management-search-panel__actions { gap: 8px; }
+    .management-search-panel .management-search-panel__actions > button { width: auto; flex: 1 1 120px; }
+    .management-search-panel .management-search-panel__controls {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px;
+    }
+    .management-search-panel__controls .management-search-searchbox,
+    .management-search-panel__controls > button { grid-column: 1 / -1; }
+    .management-search-panel__controls > select,
+    .management-search-panel__controls > input { min-width: 0; width: 100%; }
+    .risk-stats-grid > .stat-card, .report-stats-grid > .stat-card,
+    .support-stats-grid > .stat-card { padding: 16px; }
+    .filters { flex-wrap: wrap; }
+    .section-header { align-items: flex-start; }
+    .section-header > div { flex: 1 1 100%; }
+    .form-row { flex-wrap: wrap; }
+    .form-row > *, .form-grid > *, .detail-grid > * { min-width: 0; max-width: 100%; }
+    .form-row > .form-group { flex-basis: 100%; }
+    .modal-footer { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+    .modal-body .form-row, .modal-body .form-grid { gap: 14px; }
+    .customer-lead-action-modal { max-height: 92dvh; overflow-y: auto; }
+    .customer-lead-modal, .customer-lead-action-modal { width: 100%; min-width: 0; }
+    .health-overview { flex-wrap: wrap; }
+    .info-row { flex-wrap: wrap; }
+    .info-row .info-value { text-align: left; }
+    .templates-grid { grid-template-columns: minmax(0, 1fr); }
+    input:not([type='checkbox']):not([type='radio']), select, textarea { font-size: 16px; }
+    input[type='checkbox'], input[type='radio'] { flex-shrink: 0; }
+    button { min-height: 44px; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-sidebar { transition: none; }
+}
+
+// ---- 筛选行的断点细分（覆盖 App.scss 旧全局"768 以下全部纵排"规则）----
+// App.scss 在 ≤768 把 .filters 强制 column+stretch，平板宽度下每个下拉全宽独占一行，
+// 首屏被筛选器占满（订单中心尤甚）。768 宽度足够横排 2~3 列，恢复横向 wrap；
+// 更窄的屏幕（≤560）再回到纵排全宽（触屏更易点按）。
+@media (max-width: 768px) {
+  .layout-content .filters {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+  }
+  .layout-content .filters > * {
+    width: auto !important;
+    flex: 0 1 auto !important;
+  }
+  .layout-content .filters > select,
+  .layout-content .filters > input,
+  .layout-content .filters > .filter-select,
+  .layout-content .filters > .filter-date {
+    flex: 1 1 180px !important;
+    min-width: 0;
+  }
+  .layout-content .filters > .search-box {
+    flex: 1 1 100% !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .layout-content .filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .layout-content .filters > * {
+    width: 100% !important;
+  }
+  /* 与 768 块同特异性且更晚声明：column 布局里 flex-basis 会作用成高度，
+     必须清掉 768 块的 flex:1 1 180px，否则 select 被撑成 180px 高的大块 */
+  .layout-content .filters > select,
+  .layout-content .filters > input,
+  .layout-content .filters > .filter-select,
+  .layout-content .filters > .filter-date,
+  .layout-content .filters > .search-box {
+    flex: 0 0 auto !important;
+  }
+}
+
+// 工单队列条：窄屏允许横向滚动而不折行（折行会把队列挤成三行）
+@media (max-width: 560px) {
+  .ticket-queues {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ticket-queue-tab { flex-shrink: 0; }
+}

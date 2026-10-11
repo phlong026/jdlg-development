@@ -1,0 +1,91 @@
+--- a/miniprogram/miniprogram/pages/index/index.wxml
++++ b/miniprogram/miniprogram/pages/index/index.wxml
+@@ -18 +18,4 @@
+-    <image class="service-card parent-card" src="{{parentWorkshopImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aicost/aicost" />
++    <view class="service-card parent-card cost-card" bindtap="onOpenPage" data-url="/pages/aicost/aicost">
++      <view class="cost-card-art"><image class="cost-card-image" src="{{parentWorkshopImage}}" mode="scaleToFill" /></view>
++      <text class="cost-card-label">造价测算</text>
++    </view>
+--- a/miniprogram/miniprogram/pages/index/index.scss
++++ b/miniprogram/miniprogram/pages/index/index.scss
+@@ -118,0 +119,32 @@
++}
++
++.cost-card {
++  overflow: hidden;
++  box-sizing: border-box;
++  border: 1rpx solid #d5cbbc;
++  border-radius: 24rpx;
++  background: linear-gradient(180deg, #f2efe8, #eee7dc);
++  box-shadow: 0 2rpx 4rpx rgba(91, 69, 47, 0.08);
++}
++
++.cost-card-art {
++  height: 104rpx;
++  overflow: hidden;
++
++}
++
++.cost-card-image {
++  display: block;
++  width: 339rpx;
++  height: 164rpx;
++}
++
++.cost-card-label {
++  position: absolute;
++  left: 0;
++  right: 0;
++  bottom: 28rpx;
++  color: #73583f;
++  font-size: 28rpx;
++  line-height: 1.2;
++  text-align: center;
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.wxml
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.wxml
+@@ -5,2 +4,0 @@
+-    <view class="report-title">工程造价测算报告</view>
+-
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.scss
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.scss
+@@ -21,9 +20,0 @@
+-.report-title {
+-  padding: 14rpx 0 28rpx;
+-  color: #563b2a;
+-  font-size: 42rpx;
+-  font-weight: 800;
+-  letter-spacing: 2rpx;
+-  text-align: center;
+-}
+-
+@@ -143,0 +135,3 @@
++  display: flex;
++  flex-wrap: wrap;
++  justify-content: space-between;
+@@ -151,6 +145,9 @@
+-  min-height: 64rpx;
+-  display: flex;
+-  align-items: center;
+-  justify-content: space-between;
+-  gap: 20rpx;
+-  padding: 0 18rpx;
++  width: 48%;
++  min-height: 108rpx;
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  justify-content: center;
++  gap: 10rpx;
++  box-sizing: border-box;
++  padding: 16rpx 18rpx;
+--- a/miniprogram/tests/aicost-report.test.js
++++ b/miniprogram/tests/aicost-report.test.js
+@@ -150 +150,2 @@
+-  assert.match(wxml, /工程造价测算报告/);
++  assert.match(wxml, /navigation-bar title="造价测算报告"/);
++  assert.doesNotMatch(wxml, /class="report-title"/);
+--- a/miniprogram/tests/home-cost-allround-aicost.test.js
++++ b/miniprogram/tests/home-cost-allround-aicost.test.js
+@@ -28 +28 @@
+-assert.doesNotMatch(indexWxml, /cost-entry-label/, 'home cost entry should not render an extra text overlay');
++assert.match(indexWxml, /cost-card-label">造价测算/, 'home cost entry should use the current name');

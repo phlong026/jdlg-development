@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-09",
+  "projectPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "previewMode": "正式 AppID 本地微信开发者工具",
+  "formalLoaded": true,
+  "compile": [
+    "0",
+    "4"
+  ],
+  "correctRenovationLabel": true,
+  "removedTextAbsent": true,
+  "latestRevision": "整块八宫格面板白色56%降低至22%，边框50%；图标圆底恢复；AI球体94rpx",
+  "freshPhysicalEstimateClick": "本轮CUA输入未可靠派发；27项相关测试通过；早期物理点击证据保留",
+  "screenshotWindowMatchesProject": true,
+  "realDeviceVerified": false,
+  "published": false
+}

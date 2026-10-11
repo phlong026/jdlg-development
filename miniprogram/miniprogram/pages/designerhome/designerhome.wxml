@@ -1,0 +1,307 @@
+<view class="page">
+  <view class="page-content">
+    <!-- 统一导航栏 -->
+    <navigation-bar title="设计师主页" background="#e6daca" />
+
+    <view class="content">
+      <view class="profile-hero-card">
+        <view class="designer-profile-card">
+          <view class="designer-profile-main">
+            <view class="designer-avatar-shell {{isSelfHomepage ? 'designer-avatar-shell-clickable' : ''}}" bindtap="onAvatarTap">
+              <image wx:if="{{profile.avatar}}" class="designer-avatar" src="{{profile.avatar}}" mode="aspectFill" lazy-load />
+              <view wx:else class="designer-avatar designer-avatar-fallback">
+                <view class="designer-avatar-head"></view>
+                <view class="designer-avatar-body"></view>
+              </view>
+            </view>
+            <view class="designer-profile-info">
+              <view class="designer-profile-name-row">
+                <text class="designer-profile-name">{{profile.name}}</text>
+                <text class="designer-profile-cert" wx:if="{{profile.certStatusLabel}}">{{profile.certStatusLabel}}</text>
+              </view>
+              <view class="designer-profile-chip-row">
+                <view class="designer-profile-chip">
+                  <text class="designer-profile-chip-text">{{profile.experienceText}}</text>
+                </view>
+                <view class="designer-profile-chip designer-profile-chip-clickable" bindtap="onPreviewText" data-title="专业身份" data-content="{{profile.title}}">
+                  <text class="designer-profile-chip-text">{{profile.title}}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+          <text class="designer-profile-desc designer-profile-desc-clickable" bindtap="onPreviewText" data-title="设计师简介" data-content="{{profile.bioText}}">{{profile.bioText}}</text>
+          <view class="designer-avatar-manage-hint" wx:if="{{avatarManageHint}}">
+            <text class="designer-avatar-manage-hint-text">{{avatarManageHint}}</text>
+          </view>
+          <view class="profile-action-row" wx:if="{{!isSelfHomepage || showProfileOverviewSections}}">
+            <view wx:if="{{!isSelfHomepage}}" class="profile-action-button profile-action-button-secondary" bindtap="onToggleFollowDesigner">
+              <text class="profile-action-button-text-secondary">{{isFollowed ? '已关注设计师' : '关注设计师'}}</text>
+            </view>
+            <view wx:if="{{!isSelfHomepage}}" class="profile-action-button profile-action-button-secondary {{isFavorited ? 'profile-action-button-favorited' : ''}}" bindtap="toggleFavorite">
+              <text class="profile-action-button-text-secondary">{{favoriteLoading ? '处理中' : (isFavorited ? '已收藏' : '收藏')}}</text>
+            </view>
+            <view wx:if="{{!isSelfHomepage}}" class="profile-action-button profile-action-button-primary" bindtap="onConsultDesigner">
+              <text class="profile-action-button-text-primary">咨询设计师</text>
+            </view>
+            <view wx:if="{{isSelfHomepage}}" class="profile-action-button profile-action-button-secondary" bindtap="onEditDesignerProfile">
+              <text class="profile-action-button-text-secondary">编辑主页资料</text>
+            </view>
+            <view wx:if="{{isSelfHomepage}}" class="profile-action-button profile-action-button-primary" bindtap="onEditDesignerService">
+              <text class="profile-action-button-text-primary">编辑服务配置</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="self-manage-card" wx:if="{{isSelfHomepage && showProfileOverviewSections}}">
+          <view class="designer-section-title-row specialty-title-row">
+            <view class="designer-section-line"></view>
+            <text class="designer-section-title">设计师主页管理</text>
+          </view>
+          <text class="self-manage-desc">设计师简介、擅长方向、服务报价、服务说明和认证资料，统一从这里进入管理。</text>
+          <view class="self-manage-row">
+            <view class="self-manage-btn self-manage-btn-secondary" bindtap="onEditDesignerProfile">
+              <text class="self-manage-btn-text-secondary">编辑主页资料</text>
+            </view>
+            <view class="self-manage-btn self-manage-btn-primary" bindtap="onOpenDesignerCertification">
+              <text class="self-manage-btn-text-primary">认证管理</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="specialty-card" wx:if="{{showProfileOverviewSections}}">
+          <view class="designer-section-title-row specialty-title-row">
+            <view class="designer-section-line"></view>
+            <text class="designer-section-title">擅长方向</text>
+          </view>
+          <view class="specialty-tags" wx:if="{{specialtyTags.length}}">
+            <text class="specialty-tag" wx:for="{{specialtyTags}}" wx:key="*this">{{item}}</text>
+          </view>
+          <text class="designer-profile-desc specialty-desc" wx:if="{{!specialtyTags.length}}">{{profile.specialtiesText || '暂未完善擅长方向'}}</text>
+        </view>
+
+        <view class="stats-card" wx:if="{{showProfileOverviewSections}}">
+          <view class="stats-item">
+            <text class="stats-value">{{stats.totalWorks}}</text>
+            <text class="stats-label">作品数量</text>
+          </view>
+          <view class="stats-divider"></view>
+          <view class="stats-item">
+            <text class="stats-value">{{stats.totalOrders}}</text>
+            <text class="stats-label">累计订单</text>
+          </view>
+          <view class="stats-divider"></view>
+          <view class="stats-item">
+            <text class="stats-value">{{stats.totalEarningsText}}</text>
+            <text class="stats-label">累计收益</text>
+          </view>
+        </view>
+
+        <view class="service-summary-card" wx:if="{{showProfileOverviewSections}}">
+          <view class="designer-section-title-row service-summary-title-row">
+            <view class="designer-section-line"></view>
+            <text class="designer-section-title">服务概览</text>
+          </view>
+          <view class="service-summary-metrics">
+            <view class="service-summary-metric">
+              <text class="service-summary-metric-label">服务状态</text>
+              <text class="service-summary-metric-value">{{serviceConfig.serviceEnabled ? '可承接' : '暂未开启'}}</text>
+            </view>
+            <view class="service-summary-metric">
+              <text class="service-summary-metric-label">服务费用</text>
+              <text class="service-summary-metric-value">{{serviceConfig.feeText}}</text>
+            </view>
+            <view class="service-summary-metric service-summary-metric-clickable" bindtap="onPreviewText" data-title="服务类型" data-content="{{serviceConfig.serviceType}}">
+              <text class="service-summary-metric-label">服务类型</text>
+              <text class="service-summary-metric-value">{{serviceConfig.serviceTypeCompact}}</text>
+            </view>
+          </view>
+          <view class="service-summary-brief service-summary-brief-clickable" bindtap="onPreviewText" data-title="服务简介" data-content="{{serviceConfig.serviceIntro || serviceConfig.serviceIntroBrief}}">
+            <text class="service-summary-brief-label">服务简介</text>
+            <text class="service-summary-brief-text">{{serviceConfig.serviceIntroBrief}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="designer-panel-card">
+        <view class="designer-panel-tabs">
+          <view class="designer-panel-tab {{currentTopTab === 'works' ? 'active' : ''}}" bindtap="onTopTabTap" data-tab="works">
+            <text class="designer-panel-tab-text">作品</text>
+            <view class="designer-panel-tab-line" wx:if="{{currentTopTab === 'works'}}"></view>
+          </view>
+          <view class="designer-panel-tab {{currentTopTab === 'service' ? 'active' : ''}}" bindtap="onTopTabTap" data-tab="service">
+            <text class="designer-panel-tab-text">工作服务</text>
+            <view class="designer-panel-tab-line" wx:if="{{currentTopTab === 'service'}}"></view>
+          </view>
+        </view>
+
+        <view class="designer-panel-shell" wx:if="{{currentTopTab === 'works'}}">
+          <view class="designer-works-columns" wx:if="{{worksLeft.length || worksRight.length}}">
+            <view class="designer-works-column">
+              <view class="designer-work-card" wx:for="{{worksLeft}}" wx:key="id" bindtap="onWorkTap" data-id="{{item.id}}" data-publish-scope="{{item.publishScope}}" data-image="{{item.image}}">
+                <image class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+                <view class="designer-work-body">
+                  <text class="designer-work-title">{{item.title}}</text>
+                  <view class="designer-work-tags" wx:if="{{item.tags.length}}">
+                    <text class="designer-work-tag" wx:for="{{item.tags}}" wx:key="*this">{{item}}</text>
+                  </view>
+                  <view class="designer-work-meta">
+                    <text class="designer-work-meta-text">{{item.viewsText}} 浏览</text>
+                    <text class="designer-work-meta-text">{{item.likesText}} 点赞</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            <view class="designer-works-column">
+              <view class="designer-work-card" wx:for="{{worksRight}}" wx:key="id" bindtap="onWorkTap" data-id="{{item.id}}" data-publish-scope="{{item.publishScope}}" data-image="{{item.image}}">
+                <image class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+                <view class="designer-work-body">
+                  <text class="designer-work-title">{{item.title}}</text>
+                  <view class="designer-work-tags" wx:if="{{item.tags.length}}">
+                    <text class="designer-work-tag" wx:for="{{item.tags}}" wx:key="*this">{{item}}</text>
+                  </view>
+                  <view class="designer-work-meta">
+                    <text class="designer-work-meta-text">{{item.viewsText}} 浏览</text>
+                    <text class="designer-work-meta-text">{{item.likesText}} 点赞</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+          <view class="designer-load-more" wx:if="{{worksHasMore}}" bindtap="onLoadMoreWorks">
+            <text class="designer-load-more-text">查看更多作品（还可展开 {{allWorks.length - visibleWorkCount}} 个）</text>
+          </view>
+          <view class="designer-empty-tip" wx:if="{{!worksLeft.length && !worksRight.length}}">该设计师暂时还没有公开作品</view>
+        </view>
+
+        <view class="designer-service-card" wx:if="{{currentTopTab === 'service'}}">
+          <view class="designer-section-title-row">
+            <view class="designer-section-line"></view>
+            <text class="designer-section-title">服务配置</text>
+          </view>
+          <view class="designer-service-row">
+            <text class="designer-service-label">服务状态</text>
+            <text class="designer-service-value">{{serviceConfig.serviceEnabled ? '已开启' : '未开启'}}</text>
+          </view>
+          <view class="designer-service-row">
+            <text class="designer-service-label">服务类型</text>
+            <text class="designer-service-value">{{serviceConfig.serviceType}}</text>
+          </view>
+          <view class="designer-service-row">
+            <text class="designer-service-label">创建时间</text>
+            <text class="designer-service-value">{{serviceConfig.createdAtText}}</text>
+          </view>
+          <view class="designer-service-row">
+            <text class="designer-service-label">累计赚取</text>
+            <text class="designer-service-value">{{serviceConfig.totalEarningsText}}</text>
+          </view>
+          <view class="designer-service-row">
+            <text class="designer-service-label">本月收益</text>
+            <text class="designer-service-value">{{serviceConfig.monthEarningsText}}</text>
+          </view>
+          <view class="designer-service-row">
+            <text class="designer-service-label">累计订单</text>
+            <text class="designer-service-value">{{serviceConfig.totalOrders}}</text>
+          </view>
+        </view>
+
+        <view class="designer-review-card">
+          <view class="designer-section-title-row designer-review-header">
+            <view class="designer-section-line"></view>
+            <text class="designer-section-title">用户评价</text>
+          </view>
+          <view class="designer-review-tabs">
+            <view class="designer-review-tab {{currentReviewTab === 'positive' ? 'active' : ''}}" bindtap="onReviewTabTap" data-tab="positive">
+              <text class="designer-review-tab-text">积极评价 {{reviewSummary.positiveCount}}</text>
+            </view>
+            <view class="designer-review-tab {{currentReviewTab === 'negative' ? 'active' : ''}}" bindtap="onReviewTabTap" data-tab="negative">
+              <text class="designer-review-tab-text">负面评价 {{reviewSummary.negativeCount}}</text>
+            </view>
+          </view>
+          <view class="designer-review-list" wx:if="{{filteredReviews.length}}">
+          <view class="designer-review-item" wx:for="{{filteredReviews}}" wx:key="id">
+            <view class="designer-review-avatar-shell">
+              <image wx:if="{{item.avatar}}" class="designer-review-avatar" src="{{item.avatar}}" mode="aspectFill" lazy-load />
+              <view wx:else class="designer-review-avatar designer-review-avatar-fallback">{{item.avatarText}}</view>
+            </view>
+            <view class="designer-review-content">
+              <view class="designer-review-top">
+                <text class="designer-review-name">{{item.name}}</text>
+                <text class="designer-review-date">{{item.dateText}}</text>
+              </view>
+              <view class="designer-review-stars">
+                <view class="designer-review-star {{star ? 'active' : ''}}" wx:for="{{item.stars}}" wx:for-item="star" wx:key="index"></view>
+              </view>
+              <view class="designer-review-related" wx:if="{{item.relatedTitle}}" bindtap="onReviewRelatedTap" data-id="{{item.relatedWorkId}}" data-label="{{item.relatedLabel}}">
+                <text class="designer-review-related-label">{{item.relatedLabel}}</text>
+                <text class="designer-review-related-title">{{item.relatedTitle}}</text>
+              </view>
+              <text class="designer-review-text">{{item.content}}</text>
+            </view>
+          </view>
+          </view>
+          <view class="designer-review-empty" wx:else>
+            <view class="designer-review-empty-card">
+              <view class="designer-review-empty-icon"></view>
+              <view class="designer-review-empty-copy">
+                <text class="designer-review-empty-title">暂无评价数据</text>
+                <text class="designer-review-empty-desc">这位设计师暂时还没有公开评价，后续有真实服务评价后会展示在这里。</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="popup-mask" wx:if="{{contactPopupVisible}}" bindtap="closeContactPopup">
+      <view class="contact-popup" catchtap="noop">
+        <view class="popup-header">
+          <view class="popup-header-main">
+            <text class="popup-title">咨询设计师</text>
+            <text class="popup-subtitle">选择更适合你的沟通方式，快速获得帮助</text>
+          </view>
+          <view class="popup-close" bindtap="closeContactPopup">×</view>
+        </view>
+
+        <!-- 在线客服 -->
+        <view class="supplier-option supplier-option-contact">
+          <view class="supplier-option-icon supplier-chat-icon">💬</view>
+          <view class="supplier-option-content">
+            <text class="supplier-option-title">在线客服</text>
+            <text class="supplier-option-desc">在线消息咨询</text>
+          </view>
+          <view class="supplier-option-right">
+            <text class="supplier-option-badge green">立即咨询</text>
+            <text class="supplier-option-arrow">›</text>
+          </view>
+          <button class="supplier-option-contact-btn" open-type="contact" bindcontact="onNativeContactSuccess"></button>
+        </view>
+
+        <!-- 电话咨询 -->
+        <view class="supplier-option" bindtap="onCallSupplier">
+          <view class="supplier-option-icon supplier-phone-icon">☎</view>
+          <view class="supplier-option-content">
+            <text class="supplier-option-title">电话咨询</text>
+            <text class="supplier-option-desc">{{supplierPhone}}</text>
+          </view>
+          <view class="supplier-option-right">
+            <text class="supplier-option-badge warm">立即联系</text>
+            <text class="supplier-option-arrow">›</text>
+          </view>
+        </view>
+
+        <!-- 智能客服（企微客服，失败弹二维码） -->
+        <view class="supplier-option" bindtap="onSmartServiceTap">
+          <view class="supplier-option-icon supplier-ai-icon">🤖</view>
+          <view class="supplier-option-content">
+            <text class="supplier-option-title">智能客服</text>
+            <text class="supplier-option-desc">AI 智能问答</text>
+          </view>
+          <view class="supplier-option-right">
+            <text class="supplier-option-badge green">立即体验</text>
+            <text class="supplier-option-arrow">›</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

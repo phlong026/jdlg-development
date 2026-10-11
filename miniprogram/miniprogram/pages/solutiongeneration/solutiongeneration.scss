@@ -1,0 +1,271 @@
+/* pages/solutiongeneration/solutiongeneration.wxss */
+.page {
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #1a1f33;
+  padding-bottom: 40rpx;
+
+  .content {
+    padding: 0 30rpx;
+    padding-top: 12rpx;
+
+    // 进度状态卡片
+    .progress-card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20rpx;
+      padding: 30rpx;
+      margin-bottom: 30rpx;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+
+      .progress-text {
+        display: block;
+        font-size: 28rpx;
+        color: #fff;
+        margin-bottom: 20rpx;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8rpx;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4rpx;
+        overflow: hidden;
+
+        .progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #4a90e2, #357abd);
+          border-radius: 4rpx;
+          transition: width 0.3s ease;
+        }
+      }
+    }
+
+    // Tab导航
+    .tab-navigation {
+      display: flex;
+      gap: 30rpx;
+      margin-bottom: 30rpx;
+      padding-bottom: 20rpx;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+      .tab-item {
+        font-size: 28rpx;
+        color: rgba(255, 255, 255, 0.5);
+        padding-bottom: 10rpx;
+        position: relative;
+        transition: color 0.3s;
+
+        &.active {
+          color: #fff;
+          font-weight: 500;
+
+          &::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4rpx;
+            background: #4a90e2;
+            border-radius: 2rpx;
+          }
+        }
+      }
+    }
+
+    // 主图片展示区域
+    .image-display {
+      width: 100%;
+      margin-bottom: 30rpx;
+      border-radius: 20rpx;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+
+      .solution-image {
+        width: 100%;
+        min-height: 500rpx;
+        display: block;
+      }
+    }
+
+    // 警告通知卡片
+    .warning-card {
+      background: linear-gradient(135deg, #dc3545, #c82333);
+      border-radius: 20rpx;
+      padding: 25rpx;
+      margin-bottom: 30rpx;
+      display: flex;
+      align-items: flex-start;
+      gap: 20rpx;
+
+      .warning-icon {
+        width: 50rpx;
+        height: 50rpx;
+        background: #fff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+
+        text {
+          font-size: 32rpx;
+          color: #dc3545;
+          font-weight: bold;
+        }
+      }
+
+      .warning-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 10rpx;
+
+        .warning-title {
+          font-size: 30rpx;
+          font-weight: bold;
+          color: #fff;
+        }
+
+        .warning-text {
+          font-size: 24rpx;
+          color: rgba(255, 255, 255, 0.9);
+          line-height: 1.5;
+        }
+      }
+    }
+
+    // 底部操作按钮
+    .action-buttons {
+      display: flex;
+      gap: 20rpx;
+
+      .action-btn {
+        padding: 25rpx;
+        border-radius: 50rpx;
+        text-align: center;
+        font-size: 28rpx;
+
+        &.primary {
+          width: 60%;
+          background: rgba(74, 144, 226, 0.2);
+          border: 1px solid #4a90e2;
+          color: #fff;
+
+          text {
+            color: #fff;
+          }
+        }
+
+        &.secondary {
+          width: 40%;
+          background: rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          color: #fff;
+
+          text {
+            color: #fff;
+          }
+        }
+      }
+    }
+  }
+}
+
+.page {
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+}
+
+.page .content {
+  padding: 0 24rpx;
+  padding-top: 12rpx;
+}
+
+.page .content .progress-card,
+.page .content .image-display {
+  background: linear-gradient(180deg, rgba(255, 248, 239, 0.94) 0%, rgba(245, 235, 224, 0.9) 100%);
+  border: 1px solid rgba(188, 168, 145, 0.34);
+  box-shadow: 0 14rpx 28rpx rgba(113, 80, 63, 0.08);
+}
+
+.page .content .progress-card {
+  .progress-text {
+    color: #5e412f;
+  }
+
+  .progress-bar {
+    background: rgba(188, 168, 145, 0.28);
+
+    .progress-fill {
+      background: linear-gradient(90deg, #c8a679 0%, #a9855b 100%);
+    }
+  }
+}
+
+.page .content .tab-navigation {
+  border-bottom: 1px solid rgba(188, 168, 145, 0.35);
+
+  .tab-item {
+    color: #8c7553;
+
+    &.active {
+      color: #5e412f;
+
+      &::after {
+        background: #b79066;
+      }
+    }
+  }
+}
+
+.page .content .image-display {
+  background: rgba(255, 248, 239, 0.9);
+}
+
+.page .content .warning-card {
+  background: linear-gradient(180deg, rgba(253, 244, 232, 0.96) 0%, rgba(249, 234, 221, 0.92) 100%);
+  border: 1px solid rgba(214, 137, 126, 0.42);
+  box-shadow: 0 12rpx 24rpx rgba(176, 97, 88, 0.08);
+
+  .warning-icon {
+    background: rgba(255, 255, 255, 0.8);
+
+    text {
+      color: #d37a74;
+    }
+  }
+
+  .warning-content {
+    .warning-title {
+      color: #8f514c;
+    }
+
+    .warning-text {
+      color: #9b6a63;
+    }
+  }
+}
+
+.page .content .action-buttons {
+  .action-btn {
+    &.primary {
+      background: linear-gradient(135deg, #c8a679 0%, #a9855b 100%);
+      border: 1px solid rgba(169, 133, 91, 0.5);
+      color: #fffaf2;
+
+      text {
+        color: #fffaf2;
+      }
+    }
+
+    &.secondary {
+      background: rgba(255, 255, 255, 0.84);
+      border: 1px solid rgba(188, 168, 145, 0.4);
+      color: #6f5945;
+
+      text {
+        color: #6f5945;
+      }
+    }
+  }
+}

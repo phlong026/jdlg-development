@@ -1,0 +1,5 @@
+{
+  "usingComponents": {
+    "t-icon": "/components/tdesign-miniprogram/icon/icon"
+  }
+}

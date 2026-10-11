@@ -1,0 +1,153 @@
+<!--pages/distribution/distribution.wxml-->
+<view class="page">
+  <view class="page-content">
+    <!-- 统一导航栏 -->
+    <navigation-bar title="设计师中心" background="#e6daca" />
+
+    <view class="content">
+      <view class="tabs-card">
+        <view class="filter-copy">
+          <text class="filter-title">搜索设计师</text>
+          <text class="filter-desc">参考模板广场的搜索方式，这里可以按设计师姓名、方向和特征标签筛选。</text>
+        </view>
+        <view class="designer-search-bar">
+          <input
+            class="designer-search-input"
+            placeholder="搜设计师姓名、擅长方向或代表作品"
+            placeholder-class="designer-search-placeholder"
+            value="{{searchInputValue}}"
+            bindinput="onSearchInput"
+            confirm-type="search"
+            bindconfirm="onSearchConfirm"
+          />
+          <view class="designer-search-btn" bindtap="onSearchConfirm">搜索</view>
+          <view class="designer-search-clear" wx:if="{{searchKeyword || searchInputValue}}" bindtap="onSearchClear">清空</view>
+        </view>
+        <view class="main-tabs designer-main-tabs">
+          <view class="main-tab-item {{currentTabIndex === index ? 'active' : ''}}" wx:for="{{tabs}}" wx:key="value" bindtap="onMainTabTap" data-index="{{index}}">
+            <text class="main-tab-text">{{item.label}}</text>
+            <view class="main-tab-line" wx:if="{{currentTabIndex === index}}"></view>
+          </view>
+        </view>
+        <view class="trait-filter-row">
+          <view class="trait-filter-chip {{selectedTrait === item ? 'active' : ''}}" wx:for="{{traitFilters}}" wx:key="*this" bindtap="onTraitFilterTap" data-index="{{index}}">
+            <text class="trait-filter-chip-text">{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="feed-toolbar simple-feed-toolbar">
+        <view class="feed-toolbar-copy">
+          <text class="feed-toolbar-title">设计师列表</text>
+          <text class="feed-toolbar-desc">当前方向：{{currentCategoryLabel}} · {{designerCountText}} 位设计师</text>
+        </view>
+      </view>
+
+      <view class="designer-result-summary" wx:if="{{resultSummaryText}}">
+        <text class="designer-result-summary-text">{{resultSummaryText}}</text>
+      </view>
+
+      <view class="designer-list" wx:if="{{designerCards.length}}">
+        <view class="designer-person-card" wx:for="{{designerCards}}" wx:key="designerUserId">
+          <view class="designer-person-top">
+            <view class="designer-person-main">
+              <view class="designer-person-avatar-shell">
+                <image wx:if="{{item.designerAvatar}}" class="designer-person-avatar" src="{{item.designerAvatar}}" mode="aspectFill" lazy-load></image>
+                <view wx:else class="designer-person-avatar designer-person-avatar-fallback">{{item.designerAvatarText}}</view>
+              </view>
+
+              <view class="designer-person-copy">
+                <view class="designer-person-head">
+                  <text class="designer-person-name">{{item.designerName}}</text>
+                  <text class="designer-person-badge">已入驻</text>
+                </view>
+                <text class="designer-person-title">{{item.designerTitle}}</text>
+                <view class="designer-person-tags" wx:if="{{item.tags.length}}">
+                  <text class="designer-person-tag" wx:for="{{item.tags}}" wx:key="*this">{{item}}</text>
+                </view>
+                <view class="designer-traits" wx:if="{{item.designerTraits.length}}">
+                  <text class="designer-trait" wx:for="{{item.designerTraits}}" wx:key="*this">{{item}}</text>
+                </view>
+              </view>
+            </view>
+            <view class="designer-person-side">
+              <view class="designer-person-action designer-person-action-primary" bindtap="onDesignerTap" data-user-id="{{item.designerUserId}}">查看主页</view>
+            </view>
+          </view>
+
+          <view class="designer-person-work" bindtap="onWorkTap" data-id="{{item.id}}" data-user-id="{{item.designerUserId}}" data-publish-scope="{{item.publishScope}}">
+            <view class="designer-person-work-cover {{item.placeholderToneClass}}">
+              <image wx:if="{{item.workImage}}" class="designer-person-work-image" src="{{item.workImage}}" mode="aspectFill" lazy-load></image>
+              <view wx:else class="designer-person-work-cover-frame">
+                <view class="designer-person-work-cover-top">
+                  <view class="designer-person-work-cover-dots">
+                    <view class="designer-person-work-cover-dot"></view>
+                    <view class="designer-person-work-cover-dot"></view>
+                    <view class="designer-person-work-cover-dot"></view>
+                  </view>
+                  <text class="designer-person-work-cover-badge">{{currentCategoryLabel}}</text>
+                </view>
+                <view class="designer-person-work-cover-body">
+                  <view class="designer-person-work-cover-window"></view>
+                  <text class="designer-person-work-cover-text">{{item.workPlaceholderText}}</text>
+                </view>
+                <view class="designer-person-work-cover-bottom">
+                  <text class="designer-person-work-cover-caption">概念方案预览</text>
+                </view>
+              </view>
+            </view>
+            <view class="designer-person-work-copy">
+              <text class="designer-person-work-title">代表作品：{{item.title}}</text>
+              <view class="designer-person-work-meta">
+                <text class="designer-person-work-meta-text">{{item.likesText}} 点赞</text>
+                <text class="designer-person-work-meta-text">{{item.viewsText}} 浏览</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="designer-list designer-list-skeleton" wx:elif="{{loading}}">
+        <view class="designer-person-card designer-person-card-skeleton" wx:for="{{skeletonCards}}" wx:key="*this">
+          <view class="designer-person-top">
+            <view class="designer-person-main">
+              <view class="designer-person-avatar-shell">
+                <view class="designer-person-avatar designer-skeleton-block"></view>
+              </view>
+              <view class="designer-person-copy">
+                <view class="designer-skeleton-line is-name"></view>
+                <view class="designer-skeleton-line is-subtitle"></view>
+                <view class="designer-skeleton-chip-row">
+                  <view class="designer-skeleton-chip"></view>
+                  <view class="designer-skeleton-chip"></view>
+                </view>
+              </view>
+            </view>
+            <view class="designer-person-side">
+              <view class="designer-person-action designer-skeleton-block"></view>
+            </view>
+          </view>
+
+          <view class="designer-person-work designer-person-work-skeleton">
+            <view class="designer-person-work-cover designer-skeleton-block designer-work-cover-skeleton"></view>
+            <view class="designer-person-work-copy">
+              <view class="designer-skeleton-line is-work-title"></view>
+              <view class="designer-skeleton-line is-work-meta"></view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="empty-card" wx:elif="{{!loading}}">
+        <view class="empty-icon"></view>
+        <view class="empty-copy">
+          <text class="empty-title">暂时还没有符合条件的设计师</text>
+          <text class="empty-desc">你可以切换方向、特征标签，或者换个关键词继续搜索</text>
+        </view>
+      </view>
+
+      <view class="load-more" wx:if="{{loading && designerCards.length > 0}}">加载中...</view>
+      <view class="load-more" wx:elif="{{!hasMore && designerCards.length > 0}}">已经到底了，去看看设计师主页吧</view>
+    </view>
+  </view>
+</view>

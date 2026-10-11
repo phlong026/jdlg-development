@@ -1,0 +1,252 @@
+.layout-topbar {
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.05);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-menu-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  svg {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+@media (max-width: 1024px) {
+  .layout-topbar {
+    padding: 0 12px;
+  }
+
+  .topbar-right {
+    gap: 6px;
+  }
+
+  .topbar-icon-btn:nth-child(2),
+  .topbar-icon-btn:nth-child(3),
+  .topbar-icon-btn:nth-child(4),
+  .topbar-icon-btn:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .layout-topbar {
+    height: auto;
+    min-height: 56px;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+    flex: 1;
+  }
+
+  .topbar-username {
+    display: none;
+  }
+
+  .topbar-user {
+    padding-right: 4px;
+  }
+}
+
+.topbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  > span { overflow: hidden; text-overflow: ellipsis; }
+
+  .topbar-title-icon {
+    flex-shrink: 0;
+    font-size: 18px;
+    color: #4b5563;
+  }
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  svg {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+  padding: 4px 8px 4px 4px;
+  border-radius: 6px;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.topbar-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.topbar-username {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.topbar-user-icon {
+  font-size: 16px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
+  z-index: 1000;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.user-menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: white;
+  text-align: left;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+  border-radius: 4px;
+
+  &:hover {
+    background: #f9fafb;
+  }
+
+  svg {
+    font-size: 16px;
+    color: #6b7280;
+  }
+}
+
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-width: 190px;
+  padding: 0 10px;
+  border: 1px solid #e0d2bf;
+  border-radius: 10px;
+  background: #fcfaf7;
+  color: #8a6f55;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { border-color: #8b5e3c; color: #7a5335; }
+
+  .topbar-search-text { flex: 1; text-align: left; }
+
+  kbd {
+    font: 11px/1 ui-monospace, Menlo, monospace;
+    padding: 3px 6px;
+    border: 1px solid #e0d2bf;
+    border-radius: 6px;
+    background: #fff;
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar-search { min-width: 0; padding: 0 9px; .topbar-search-text, kbd { display: none; } }
+}

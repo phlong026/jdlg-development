@@ -1,0 +1,58 @@
+<!--pages/phonebind/phonebind.wxml-->
+<view class="page">
+  <navigation-bar title="绑定手机号" background="#e6daca" />
+
+  <view class="content">
+    <view class="form-card">
+      <view class="form-tip" wx:if="{{boundPhone}}">
+        <text>当前已绑定：{{boundPhone}}</text>
+      </view>
+
+      <view class="form-group">
+        <view class="input-wrapper">
+          <t-icon name="call" size="40rpx" color="#b79066" />
+          <input
+            class="form-input"
+            type="number"
+            maxlength="11"
+            placeholder="请输入手机号"
+            placeholder-class="input-placeholder"
+            value="{{phone}}"
+            bindinput="onPhoneInput"
+            disabled="{{loading}}"
+          />
+        </view>
+      </view>
+
+      <view class="form-group">
+        <view class="input-wrapper sms-input-wrapper">
+          <t-icon name="lock-on" size="40rpx" color="#b79066" />
+          <input
+            class="form-input"
+            type="number"
+            maxlength="6"
+            placeholder="请输入验证码"
+            placeholder-class="input-placeholder"
+            value="{{smsCode}}"
+            bindinput="onSmsCodeInput"
+            disabled="{{loading}}"
+          />
+          <view
+            class="sms-send-btn {{smsCountdown > 0 || !phone || phone.length !== 11 ? 'disabled' : ''}}"
+            bindtap="sendSmsCode"
+          >
+            <text>{{smsCountdown > 0 ? smsCountdown + 's' : '获取验证码'}}</text>
+          </view>
+        </view>
+      </view>
+
+      <button
+        class="bind-button"
+        bindtap="handleBind"
+        disabled="{{loading || !phone || !smsCode}}"
+      >
+        {{loading ? '绑定中...' : '确认绑定'}}
+      </button>
+    </view>
+  </view>
+</view>

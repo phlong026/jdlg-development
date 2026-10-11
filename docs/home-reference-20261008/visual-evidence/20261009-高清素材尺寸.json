@@ -1,0 +1,57 @@
+[
+  {
+    "name": "advisor",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "calculator",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "ai-tools",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "villa",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "interior",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "courtyard",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "renovation",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "templates",
+    "width": 384,
+    "height": 384
+  },
+  {
+    "name": "ai-medallion",
+    "width": 512,
+    "height": 512
+  },
+  {
+    "name": "ai-shell",
+    "width": 1598,
+    "height": 494
+  },
+  {
+    "name": "estimate-shell",
+    "width": 1454,
+    "height": 166
+  }
+]

@@ -1,0 +1,2994 @@
+{
+  "date": "2026-09-10",
+  "scope": "Static source inventory; excludes vendored dependencies and runtime validation",
+  "counts": {
+    "miniprogram_main_pages": 27,
+    "miniprogram_subpackages": 26,
+    "miniprogram_total_pages": 57,
+    "admin_routes_including_login": 25,
+    "route_registration_statements": 267,
+    "distinct_declared_business_tables": 47,
+    "go_test_files": 36,
+    "miniprogram_test_files": 19
+  },
+  "pages": [
+    {
+      "package": "主包",
+      "page": "pages/index/index"
+    },
+    {
+      "package": "主包",
+      "page": "pages/customerservice/customerservice"
+    },
+    {
+      "package": "主包",
+      "page": "pages/my/my"
+    },
+    {
+      "package": "主包",
+      "page": "pages/template/template"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aitools/aitools"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aitooldetail/aitooldetail"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aitoolworkbench/aitoolworkbench"
+    },
+    {
+      "package": "主包",
+      "page": "pages/specadvisor/specadvisor"
+    },
+    {
+      "package": "主包",
+      "page": "pages/buildingcodedocs/buildingcodedocs"
+    },
+    {
+      "package": "主包",
+      "page": "pages/newminnantool/newminnantool"
+    },
+    {
+      "package": "主包",
+      "page": "pages/distribution/distribution"
+    },
+    {
+      "package": "主包",
+      "page": "pages/voicecall/voicecall"
+    },
+    {
+      "package": "主包",
+      "page": "pages/login/login"
+    },
+    {
+      "package": "主包",
+      "page": "pages/passwordrecovery/passwordrecovery"
+    },
+    {
+      "package": "主包",
+      "page": "pages/phonebind/phonebind"
+    },
+    {
+      "package": "主包",
+      "page": "pages/privacy/privacy"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aigenerate/aigenerate"
+    },
+    {
+      "package": "主包",
+      "page": "pages/generateprogress/generateprogress"
+    },
+    {
+      "package": "主包",
+      "page": "pages/inspirationdetail/inspirationdetail"
+    },
+    {
+      "package": "主包",
+      "page": "pages/templatepreview/templatepreview"
+    },
+    {
+      "package": "主包",
+      "page": "pages/settings/settings"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aicost/aicost"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aicostresult/aicostresult"
+    },
+    {
+      "package": "主包",
+      "page": "pages/utilitytools/utilitytools"
+    },
+    {
+      "package": "主包",
+      "page": "pages/utilitytooldetail/utilitytooldetail"
+    },
+    {
+      "package": "主包",
+      "page": "pages/aivideo/aivideo"
+    },
+    {
+      "package": "主包",
+      "page": "pages/real/real"
+    },
+    {
+      "package": "pages/report",
+      "page": "pages/report/landing"
+    },
+    {
+      "package": "pages/report",
+      "page": "pages/report/questionnaire"
+    },
+    {
+      "package": "pages/report",
+      "page": "pages/report/preview"
+    },
+    {
+      "package": "pages/report",
+      "page": "pages/report/delivery"
+    },
+    {
+      "package": "pages/generatedetails",
+      "page": "pages/generatedetails/generatedetails"
+    },
+    {
+      "package": "pages/Invitefriends",
+      "page": "pages/Invitefriends/Invitefriends"
+    },
+    {
+      "package": "pages/chat",
+      "page": "pages/chat/chat"
+    },
+    {
+      "package": "pages/designerhome",
+      "page": "pages/designerhome/designerhome"
+    },
+    {
+      "package": "pages/myInformationmodification",
+      "page": "pages/myInformationmodification/myInformationmodification"
+    },
+    {
+      "package": "pages/templatesquaredetails",
+      "page": "pages/templatesquaredetails/templatesquaredetails"
+    },
+    {
+      "package": "pages/myplan",
+      "page": "pages/myplan/myplan"
+    },
+    {
+      "package": "pages/myfavorites",
+      "page": "pages/myfavorites/myfavorites"
+    },
+    {
+      "package": "pages/ordermanagement",
+      "page": "pages/ordermanagement/ordermanagement"
+    },
+    {
+      "package": "pages/wallet",
+      "page": "pages/wallet/wallet"
+    },
+    {
+      "package": "pages/ruralvilladesign",
+      "page": "pages/ruralvilladesign/ruralvilladesign"
+    },
+    {
+      "package": "pages/Parentchildcreativity",
+      "page": "pages/Parentchildcreativity/Parentchildcreativity"
+    },
+    {
+      "package": "pages/topupcenter",
+      "page": "pages/topupcenter/topupcenter"
+    },
+    {
+      "package": "pages/allrounddesign",
+      "page": "pages/allrounddesign/allrounddesign"
+    },
+    {
+      "package": "pages/release",
+      "page": "pages/release/release"
+    },
+    {
+      "package": "pages/release",
+      "page": "pages/release/designerworkpublish"
+    },
+    {
+      "package": "pages/buildingreplacement",
+      "page": "pages/buildingreplacement/buildingreplacement"
+    },
+    {
+      "package": "pages/checkin",
+      "page": "pages/checkin/checkin"
+    },
+    {
+      "package": "pages/Identityauthen",
+      "page": "pages/Identityauthen/Identityauthen"
+    },
+    {
+      "package": "pages/generatehistory",
+      "page": "pages/generatehistory/generatehistory"
+    },
+    {
+      "package": "pages/lingshidetails",
+      "page": "pages/lingshidetails/lingshidetails"
+    },
+    {
+      "package": "pages/orderdetail",
+      "page": "pages/orderdetail/orderdetail"
+    },
+    {
+      "package": "pages/messagecenter",
+      "page": "pages/messagecenter/messagecenter"
+    },
+    {
+      "package": "pages/adminlogin",
+      "page": "pages/adminlogin/adminlogin"
+    },
+    {
+      "package": "pages/adminhome",
+      "page": "pages/adminhome/adminhome"
+    },
+    {
+      "package": "pages/withdrawcenter",
+      "page": "pages/withdrawcenter/withdrawcenter"
+    }
+  ],
+  "admin_routes": [
+    {
+      "path": "/login",
+      "title": "登录",
+      "line": 64
+    },
+    {
+      "path": "/dashboard",
+      "title": "后台总控台",
+      "line": 70
+    },
+    {
+      "path": "/users",
+      "title": "用户管理",
+      "line": 76
+    },
+    {
+      "path": "/user-workbench",
+      "title": "用户360工作台",
+      "line": 82
+    },
+    {
+      "path": "/designer-center",
+      "title": "设计师中心",
+      "line": 88
+    },
+    {
+      "path": "/certification",
+      "title": "资质认证与审核",
+      "line": 94
+    },
+    {
+      "path": "/logs",
+      "title": "日志管理",
+      "line": 100
+    },
+    {
+      "path": "/distribution",
+      "title": "分销邀请中心",
+      "line": 106
+    },
+    {
+      "path": "/content-analytics",
+      "title": "内容运营分析",
+      "line": 112
+    },
+    {
+      "path": "/risk-control",
+      "title": "风控台",
+      "line": 118
+    },
+    {
+      "path": "/support-tickets",
+      "title": "异常工单中心",
+      "line": 124
+    },
+    {
+      "path": "/customer-leads",
+      "title": "客服线索工作台",
+      "line": 130
+    },
+    {
+      "path": "/report-center",
+      "title": "报表导出中心",
+      "line": 136
+    },
+    {
+      "path": "/ai-tasks",
+      "title": "AI任务中心",
+      "line": 142
+    },
+    {
+      "path": "/ai-config",
+      "title": "AI配置",
+      "line": 148
+    },
+    {
+      "path": "/oss",
+      "title": "OSS管理",
+      "line": 154
+    },
+    {
+      "path": "/templates",
+      "title": "模板广场管理",
+      "line": 160
+    },
+    {
+      "path": "/inspirations",
+      "title": "灵感素材审核",
+      "line": 166
+    },
+    {
+      "path": "/recharge",
+      "title": "订单中心",
+      "line": 172
+    },
+    {
+      "path": "/virtualpay",
+      "title": "虚拟支付监控",
+      "line": 178
+    },
+    {
+      "path": "/utility-tools",
+      "title": "实用工具管理",
+      "line": 184
+    },
+    {
+      "path": "/ai-tools",
+      "title": "AI工具管理",
+      "line": 190
+    },
+    {
+      "path": "/recharge-config",
+      "title": "充值配置",
+      "line": 196
+    },
+    {
+      "path": "/membership-plans",
+      "title": "会员计划",
+      "line": 202
+    },
+    {
+      "path": "/membership-operations",
+      "title": "用户会员运营",
+      "line": 208
+    }
+  ],
+  "route_declarations": [
+    {
+      "file": "service/route/ai.go",
+      "line": 412,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/pricing"
+    },
+    {
+      "file": "service/route/ai.go",
+      "line": 467,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/draw"
+    },
+    {
+      "file": "service/route/ai.go",
+      "line": 472,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/chat"
+    },
+    {
+      "file": "service/route/ai.go",
+      "line": 477,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/generate-prompt"
+    },
+    {
+      "file": "service/route/ai.go",
+      "line": 482,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/upload-reference-image"
+    },
+    {
+      "file": "service/route/ai.go",
+      "line": 771,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/task/status"
+    },
+    {
+      "file": "service/route/ai_chat_stream.go",
+      "line": 55,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/chat/stream"
+    },
+    {
+      "file": "service/route/ai_cost.go",
+      "line": 16,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/cost/calculate"
+    },
+    {
+      "file": "service/route/ai_cost_doc.go",
+      "line": 68,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/cost/doc"
+    },
+    {
+      "file": "service/route/ai_intent_stream.go",
+      "line": 41,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/intent/stream"
+    },
+    {
+      "file": "service/route/ai_management.go",
+      "line": 53,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/pricing"
+    },
+    {
+      "file": "service/route/ai_management.go",
+      "line": 71,
+      "group": "ai",
+      "method": "POST",
+      "path_suffix": "/pricing"
+    },
+    {
+      "file": "service/route/ai_management.go",
+      "line": 119,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/api/config"
+    },
+    {
+      "file": "service/route/ai_management.go",
+      "line": 172,
+      "group": "ai",
+      "method": "POST",
+      "path_suffix": "/api/config"
+    },
+    {
+      "file": "service/route/ai_prompt_optimize.go",
+      "line": 69,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/prompt/optimize"
+    },
+    {
+      "file": "service/route/ai_task_info.go",
+      "line": 17,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/ai/task/:task_id/info"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 25,
+      "group": "ai",
+      "method": "POST",
+      "path_suffix": "/tasks/backfill-models"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 56,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/tasks"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 89,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/tasks/:id"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 124,
+      "group": "ai",
+      "method": "POST",
+      "path_suffix": "/tasks/:id/support-ticket"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 181,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/video-tasks"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 235,
+      "group": "ai",
+      "method": "GET",
+      "path_suffix": "/video-tasks/:id"
+    },
+    {
+      "file": "service/route/ai_task_management.go",
+      "line": 272,
+      "group": "ai",
+      "method": "POST",
+      "path_suffix": "/video-tasks/:id/support-ticket"
+    },
+    {
+      "file": "service/route/ai_tool.go",
+      "line": 75,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/ai_tool.go",
+      "line": 122,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": "/code/:code"
+    },
+    {
+      "file": "service/route/ai_tool.go",
+      "line": 146,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/ai_tool_management.go",
+      "line": 215,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/ai_tool_management.go",
+      "line": 262,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/ai_tool_management.go",
+      "line": 276,
+      "group": "tools",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/ai_tool_management.go",
+      "line": 304,
+      "group": "tools",
+      "method": "PUT",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/ai_tool_management.go",
+      "line": 346,
+      "group": "tools",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/ai_video.go",
+      "line": 1063,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/video/create"
+    },
+    {
+      "file": "service/route/ai_video.go",
+      "line": 1066,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/video/generate-prompts"
+    },
+    {
+      "file": "service/route/ai_video.go",
+      "line": 1069,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/ai/video/poll/:id"
+    },
+    {
+      "file": "service/route/ai_video.go",
+      "line": 1072,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/ai/video/query/:id"
+    },
+    {
+      "file": "service/route/allround_design.go",
+      "line": 18,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/allround-design"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 37,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/building-code-documents"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 40,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/building-code-documents/upload"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 43,
+      "group": "r",
+      "method": "DELETE",
+      "path_suffix": "/building-code-documents/:id"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 46,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/building-code/chat"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 53,
+      "group": "group",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 62,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/:id/approve"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 73,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/:id/reject"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 88,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/:id/disable"
+    },
+    {
+      "file": "service/route/building_code.go",
+      "line": 91,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/:id/reindex"
+    },
+    {
+      "file": "service/route/building_replacement.go",
+      "line": 18,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/building-replacement"
+    },
+    {
+      "file": "service/route/certification.go",
+      "line": 26,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/certification/apply"
+    },
+    {
+      "file": "service/route/certification.go",
+      "line": 161,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/certification/continue-pay"
+    },
+    {
+      "file": "service/route/certification.go",
+      "line": 281,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/certification/status"
+    },
+    {
+      "file": "service/route/certification_management.go",
+      "line": 16,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/certification-applications"
+    },
+    {
+      "file": "service/route/certification_management.go",
+      "line": 41,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/certification-applications/:id"
+    },
+    {
+      "file": "service/route/certification_management.go",
+      "line": 66,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/certification-applications/:id/review"
+    },
+    {
+      "file": "service/route/content_analytics_management.go",
+      "line": 467,
+      "group": "contentAnalytics",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/content_analytics_management.go",
+      "line": 480,
+      "group": "contentAnalytics",
+      "method": "GET",
+      "path_suffix": "/download-ranking"
+    },
+    {
+      "file": "service/route/content_analytics_management.go",
+      "line": 494,
+      "group": "contentAnalytics",
+      "method": "GET",
+      "path_suffix": "/engagement-ranking"
+    },
+    {
+      "file": "service/route/content_analytics_management.go",
+      "line": 508,
+      "group": "contentAnalytics",
+      "method": "GET",
+      "path_suffix": "/new-templates"
+    },
+    {
+      "file": "service/route/content_analytics_management.go",
+      "line": 522,
+      "group": "contentAnalytics",
+      "method": "GET",
+      "path_suffix": "/low-conversion"
+    },
+    {
+      "file": "service/route/content_analytics_management.go",
+      "line": 536,
+      "group": "contentAnalytics",
+      "method": "GET",
+      "path_suffix": "/featured-cases"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 46,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/events"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 88,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/leads"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 166,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/events/anonymous"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 209,
+      "group": "leads",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 222,
+      "group": "leads",
+      "method": "GET",
+      "path_suffix": "/funnel"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 235,
+      "group": "leads",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 258,
+      "group": "leads",
+      "method": "POST",
+      "path_suffix": "/batch"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 311,
+      "group": "leads",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 362,
+      "group": "leads",
+      "method": "POST",
+      "path_suffix": "/:id/followups"
+    },
+    {
+      "file": "service/route/customer_service.go",
+      "line": 420,
+      "group": "leads",
+      "method": "POST",
+      "path_suffix": "/:id/status"
+    },
+    {
+      "file": "service/route/dashboard_management.go",
+      "line": 68,
+      "group": "dashboard",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/dashboard_management.go",
+      "line": 165,
+      "group": "dashboard",
+      "method": "GET",
+      "path_suffix": "/trends"
+    },
+    {
+      "file": "service/route/dashboard_management.go",
+      "line": 238,
+      "group": "dashboard",
+      "method": "GET",
+      "path_suffix": "/todos"
+    },
+    {
+      "file": "service/route/designer_management.go",
+      "line": 176,
+      "group": "designers",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/designer_management.go",
+      "line": 305,
+      "group": "designers",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/designer_management.go",
+      "line": 490,
+      "group": "designers",
+      "method": "PATCH",
+      "path_suffix": "/:id/visibility"
+    },
+    {
+      "file": "service/route/designer_management.go",
+      "line": 518,
+      "group": "designers",
+      "method": "PATCH",
+      "path_suffix": "/:id/service-status"
+    },
+    {
+      "file": "service/route/distribution_management.go",
+      "line": 307,
+      "group": "distribution",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/distribution_management.go",
+      "line": 320,
+      "group": "distribution",
+      "method": "GET",
+      "path_suffix": "/inviters"
+    },
+    {
+      "file": "service/route/distribution_management.go",
+      "line": 354,
+      "group": "distribution",
+      "method": "GET",
+      "path_suffix": "/rewards"
+    },
+    {
+      "file": "service/route/favorite.go",
+      "line": 31,
+      "group": "favorites",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/favorite.go",
+      "line": 71,
+      "group": "favorites",
+      "method": "GET",
+      "path_suffix": "/status"
+    },
+    {
+      "file": "service/route/favorite.go",
+      "line": 87,
+      "group": "favorites",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/favorite.go",
+      "line": 122,
+      "group": "favorites",
+      "method": "DELETE",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/index.go",
+      "line": 57,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/ping"
+    },
+    {
+      "file": "service/route/inspiration.go",
+      "line": 91,
+      "group": "inspirations",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/inspiration.go",
+      "line": 134,
+      "group": "inspirations",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/inspiration_management.go",
+      "line": 17,
+      "group": "inspirations",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/inspiration_management.go",
+      "line": 60,
+      "group": "inspirations",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/inspiration_management.go",
+      "line": 74,
+      "group": "inspirations",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/inspiration_management.go",
+      "line": 128,
+      "group": "inspirations",
+      "method": "PUT",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/inspiration_management.go",
+      "line": 186,
+      "group": "inspirations",
+      "method": "PATCH",
+      "path_suffix": "/:id/status"
+    },
+    {
+      "file": "service/route/inspiration_management.go",
+      "line": 212,
+      "group": "inspirations",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 38,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/login"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 96,
+      "group": "auth",
+      "method": "GET",
+      "path_suffix": "/me"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 110,
+      "group": "auth",
+      "method": "POST",
+      "path_suffix": "/logout"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 128,
+      "group": "user",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 205,
+      "group": "user",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 281,
+      "group": "user",
+      "method": "GET",
+      "path_suffix": "/:id/enterprise-wechat"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 317,
+      "group": "user",
+      "method": "PUT",
+      "path_suffix": "/:id/enterprise-wechat"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 376,
+      "group": "user",
+      "method": "PUT",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 555,
+      "group": "user",
+      "method": "PUT",
+      "path_suffix": "/:id/stones"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 637,
+      "group": "user",
+      "method": "POST",
+      "path_suffix": "/:id/stones/adjust"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 751,
+      "group": "auth",
+      "method": "GET",
+      "path_suffix": "/cos/sts"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 800,
+      "group": "oss",
+      "method": "GET",
+      "path_suffix": "/files"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 870,
+      "group": "oss",
+      "method": "POST",
+      "path_suffix": "/upload"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 969,
+      "group": "oss",
+      "method": "DELETE",
+      "path_suffix": "/files/:id"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 1013,
+      "group": "oss",
+      "method": "POST",
+      "path_suffix": "/files/batch"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 1068,
+      "group": "logs",
+      "method": "GET",
+      "path_suffix": "/config"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 1089,
+      "group": "logs",
+      "method": "POST",
+      "path_suffix": "/config"
+    },
+    {
+      "file": "service/route/management.go",
+      "line": 1117,
+      "group": "logs",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/membership.go",
+      "line": 134,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/membership/plans"
+    },
+    {
+      "file": "service/route/membership.go",
+      "line": 153,
+      "group": "user",
+      "method": "GET",
+      "path_suffix": "/membership"
+    },
+    {
+      "file": "service/route/membership_management.go",
+      "line": 14,
+      "group": "membership",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/membership_management.go",
+      "line": 30,
+      "group": "membership",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/membership_management.go",
+      "line": 48,
+      "group": "membership",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/membership_management.go",
+      "line": 102,
+      "group": "membership",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/membership_operations_management.go",
+      "line": 244,
+      "group": "membership",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/membership_operations_management.go",
+      "line": 275,
+      "group": "membership",
+      "method": "GET",
+      "path_suffix": "/users"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 35,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/login"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 132,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/login/password"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 216,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/sms/send"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 248,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/login/phone"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 340,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/me"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1362,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/phone/bind"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1430,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/wecom/enterprise-wechat/callback"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1501,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/designers"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1563,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/designers/:id/homepage"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1583,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/designers/:id/follow"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1606,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/designers/:id/follow"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1632,
+      "group": "r",
+      "method": "DELETE",
+      "path_suffix": "/user/designers/:id/follow"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1656,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/stones"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1687,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/stones/summary"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1728,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/stones/details"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1807,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/templates/summary"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1866,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/templates"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 1964,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/templates/income"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2015,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/designer-works"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2114,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/designer-center"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2134,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/templates/detail/:id"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2197,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/templates/batch-delete"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2293,
+      "group": "r",
+      "method": "PUT",
+      "path_suffix": "/user/templates/:id"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2479,
+      "group": "r",
+      "method": "DELETE",
+      "path_suffix": "/user/templates/:id"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2532,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/orders/summary"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2566,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/orders"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2659,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/orders/:id"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2715,
+      "group": "r",
+      "method": "DELETE",
+      "path_suffix": "/user/orders/:id"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2762,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/orders/:id/cancel"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2809,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/orders/:id/review"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2910,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/invite/info"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 2945,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/invite/bind"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3009,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/invite/qrcode"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3061,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/invite/poster"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3113,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/invite/records"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3161,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/recharge"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3203,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/tasks"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3291,
+      "group": "r",
+      "method": "DELETE",
+      "path_suffix": "/user/tasks/:task_no"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3336,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/ai/download-config"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3395,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/ai/wecom/verify-phone"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3469,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/ai/task/download-original"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3544,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/ai/task/download-original-file"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3618,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/user/ai/video/download-original"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3664,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/user/ai/video/download-original-file"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3706,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/logout"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3721,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/test-params"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3940,
+      "group": "r",
+      "method": "GET",
+      "path_suffix": "/checkin/status"
+    },
+    {
+      "file": "service/route/miniprogram.go",
+      "line": 3974,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/checkin"
+    },
+    {
+      "file": "service/route/order_management.go",
+      "line": 28,
+      "group": "orders",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/order_management.go",
+      "line": 76,
+      "group": "orders",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/order_management.go",
+      "line": 137,
+      "group": "orders",
+      "method": "POST",
+      "path_suffix": "/:id/support-ticket"
+    },
+    {
+      "file": "service/route/parent_child_design.go",
+      "line": 18,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/parent-child-design"
+    },
+    {
+      "file": "service/route/recharge_config.go",
+      "line": 106,
+      "group": "recharge",
+      "method": "GET",
+      "path_suffix": "/config"
+    },
+    {
+      "file": "service/route/recharge_config_management.go",
+      "line": 15,
+      "group": "recharge",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/recharge_config_management.go",
+      "line": 35,
+      "group": "recharge",
+      "method": "GET",
+      "path_suffix": "/:payment_mode"
+    },
+    {
+      "file": "service/route/recharge_config_management.go",
+      "line": 54,
+      "group": "recharge",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/recharge_config_management.go",
+      "line": 103,
+      "group": "recharge",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 223,
+      "group": "public",
+      "method": "GET",
+      "path_suffix": "/reports/config"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 239,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 260,
+      "group": "group",
+      "method": "GET",
+      "path_suffix": "/recent"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 268,
+      "group": "group",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 297,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/:id/retry"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 305,
+      "group": "group",
+      "method": "GET",
+      "path_suffix": "/:id/document"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 326,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/:id/wecom"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 340,
+      "group": "v1",
+      "method": "GET",
+      "path_suffix": "/wecom/reports/callback"
+    },
+    {
+      "file": "service/route/report.go",
+      "line": 341,
+      "group": "v1",
+      "method": "POST",
+      "path_suffix": "/wecom/reports/callback"
+    },
+    {
+      "file": "service/route/report_center_management.go",
+      "line": 411,
+      "group": "reports",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/report_center_management.go",
+      "line": 424,
+      "group": "reports",
+      "method": "GET",
+      "path_suffix": "/reports"
+    },
+    {
+      "file": "service/route/report_center_management.go",
+      "line": 442,
+      "group": "reports",
+      "method": "GET",
+      "path_suffix": "/export"
+    },
+    {
+      "file": "service/route/risk_control_management.go",
+      "line": 374,
+      "group": "risk",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/risk_control_management.go",
+      "line": 387,
+      "group": "risk",
+      "method": "GET",
+      "path_suffix": "/device-groups"
+    },
+    {
+      "file": "service/route/risk_control_management.go",
+      "line": 401,
+      "group": "risk",
+      "method": "GET",
+      "path_suffix": "/device-changes"
+    },
+    {
+      "file": "service/route/risk_control_management.go",
+      "line": 415,
+      "group": "risk",
+      "method": "GET",
+      "path_suffix": "/alerts"
+    },
+    {
+      "file": "service/route/risk_control_management.go",
+      "line": 429,
+      "group": "risk",
+      "method": "GET",
+      "path_suffix": "/users"
+    },
+    {
+      "file": "service/route/rural_villa_design.go",
+      "line": 24,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/ai/rural-villa-design"
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 33,
+      "group": "tickets",
+      "method": "GET",
+      "path_suffix": "/overview"
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 46,
+      "group": "tickets",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 67,
+      "group": "tickets",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 89,
+      "group": "tickets",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 122,
+      "group": "tickets",
+      "method": "POST",
+      "path_suffix": "/:id/assign"
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 145,
+      "group": "tickets",
+      "method": "POST",
+      "path_suffix": "/:id/status"
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 169,
+      "group": "tickets",
+      "method": "POST",
+      "path_suffix": "/:id/resolution-note"
+    },
+    {
+      "file": "service/route/support_ticket_management.go",
+      "line": 193,
+      "group": "tickets",
+      "method": "POST",
+      "path_suffix": "/sync-system-exceptions"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 508,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 608,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/categories"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 629,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/featured"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 712,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/tab-config"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 764,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/search"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 840,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/liked-ids"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 860,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/favorites"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 917,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 961,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/:id/comments"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1007,
+      "group": "templates",
+      "method": "POST",
+      "path_suffix": "/:id/share"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1047,
+      "group": "templatesAuth",
+      "method": "GET",
+      "path_suffix": "/:id/original-task"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1052,
+      "group": "templatesAuth",
+      "method": "GET",
+      "path_suffix": "/:id/detail"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1092,
+      "group": "templatesAuth",
+      "method": "POST",
+      "path_suffix": "/:id/generate"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1136,
+      "group": "templatesAuth",
+      "method": "POST",
+      "path_suffix": "/:id/comments"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1212,
+      "group": "templatesAuth",
+      "method": "POST",
+      "path_suffix": "/:id/unlock"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1291,
+      "group": "templatesAuth",
+      "method": "POST",
+      "path_suffix": "/:id/download"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1361,
+      "group": "templatesAuth",
+      "method": "GET",
+      "path_suffix": "/:id/download-file"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1435,
+      "group": "templates",
+      "method": "POST",
+      "path_suffix": "/:id/use"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1455,
+      "group": "templatesAuth",
+      "method": "POST",
+      "path_suffix": "/:id/like"
+    },
+    {
+      "file": "service/route/template.go",
+      "line": 1507,
+      "group": "templatesAuth",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 36,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/tab-config"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 84,
+      "group": "templates",
+      "method": "PUT",
+      "path_suffix": "/tab-config"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 166,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/categories"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 183,
+      "group": "templates",
+      "method": "POST",
+      "path_suffix": "/categories"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 212,
+      "group": "templates",
+      "method": "DELETE",
+      "path_suffix": "/categories/:id"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 239,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 284,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 311,
+      "group": "templates",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 387,
+      "group": "templates",
+      "method": "PUT",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 468,
+      "group": "templates",
+      "method": "PATCH",
+      "path_suffix": "/:id/category"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 519,
+      "group": "templates",
+      "method": "PATCH",
+      "path_suffix": "/:id/status"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 572,
+      "group": "templates",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 597,
+      "group": "templates",
+      "method": "PATCH",
+      "path_suffix": "/:id/featured"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 644,
+      "group": "templates",
+      "method": "GET",
+      "path_suffix": "/featured"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 675,
+      "group": "featuredGroups",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 750,
+      "group": "featuredGroups",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 804,
+      "group": "featuredGroups",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 877,
+      "group": "featuredGroups",
+      "method": "PUT",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/template_management.go",
+      "line": 966,
+      "group": "featuredGroups",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 73,
+      "group": "r",
+      "method": "POST",
+      "path_suffix": "/profile/password/recover"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 184,
+      "group": "profile",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 265,
+      "group": "profile",
+      "method": "PUT",
+      "path_suffix": "/nickname"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 311,
+      "group": "profile",
+      "method": "PUT",
+      "path_suffix": "/identity"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 343,
+      "group": "profile",
+      "method": "PUT",
+      "path_suffix": "/avatar"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 387,
+      "group": "profile",
+      "method": "GET",
+      "path_suffix": "/designer"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 422,
+      "group": "profile",
+      "method": "PUT",
+      "path_suffix": "/designer"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 481,
+      "group": "profile",
+      "method": "PUT",
+      "path_suffix": "/designer/service-config"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 530,
+      "group": "profile",
+      "method": "POST",
+      "path_suffix": "/password"
+    },
+    {
+      "file": "service/route/user_profile.go",
+      "line": 619,
+      "group": "profile",
+      "method": "PUT",
+      "path_suffix": "/password"
+    },
+    {
+      "file": "service/route/user_workbench_management.go",
+      "line": 69,
+      "group": "users",
+      "method": "GET",
+      "path_suffix": "/:id/workbench"
+    },
+    {
+      "file": "service/route/utility_tool.go",
+      "line": 15,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/utility_tool.go",
+      "line": 45,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/utility_tool_management.go",
+      "line": 15,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/utility_tool_management.go",
+      "line": 65,
+      "group": "tools",
+      "method": "GET",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/utility_tool_management.go",
+      "line": 92,
+      "group": "tools",
+      "method": "POST",
+      "path_suffix": ""
+    },
+    {
+      "file": "service/route/utility_tool_management.go",
+      "line": 138,
+      "group": "tools",
+      "method": "PUT",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/utility_tool_management.go",
+      "line": 200,
+      "group": "tools",
+      "method": "DELETE",
+      "path_suffix": "/:id"
+    },
+    {
+      "file": "service/route/virtualpay.go",
+      "line": 60,
+      "group": "miniprogramAuth",
+      "method": "POST",
+      "path_suffix": "/virtualpay/prepare"
+    },
+    {
+      "file": "service/route/virtualpay.go",
+      "line": 162,
+      "group": "miniprogramAuth",
+      "method": "POST",
+      "path_suffix": "/virtualpay/confirm"
+    },
+    {
+      "file": "service/route/virtualpay_management.go",
+      "line": 57,
+      "group": "group",
+      "method": "GET",
+      "path_suffix": "/health"
+    },
+    {
+      "file": "service/route/virtualpay_management.go",
+      "line": 92,
+      "group": "group",
+      "method": "GET",
+      "path_suffix": "/logs"
+    },
+    {
+      "file": "service/route/virtualpay_management.go",
+      "line": 140,
+      "group": "group",
+      "method": "POST",
+      "path_suffix": "/orders/:id/refund"
+    },
+    {
+      "file": "service/route/wechatpay.go",
+      "line": 52,
+      "group": "miniprogramAuth",
+      "method": "POST",
+      "path_suffix": "/wechatpay/jsapi/prepay"
+    },
+    {
+      "file": "service/route/wechatpay.go",
+      "line": 154,
+      "group": "miniprogramAuth",
+      "method": "POST",
+      "path_suffix": "/wechatpay/withdraw"
+    },
+    {
+      "file": "service/route/wechatpay.go",
+      "line": 270,
+      "group": "v1",
+      "method": "POST",
+      "path_suffix": "/wechatpay/notify"
+    },
+    {
+      "file": "service/route/wxmsg.go",
+      "line": 128,
+      "group": "v1",
+      "method": "GET",
+      "path_suffix": "/wxmsg/push"
+    },
+    {
+      "file": "service/route/wxmsg.go",
+      "line": 151,
+      "group": "v1",
+      "method": "POST",
+      "path_suffix": "/wxmsg/push"
+    }
+  ],
+  "table_declarations": {
+    "ai_api_config": [
+      {
+        "file": "service/model/ai_api_config.go",
+        "line": 278
+      }
+    ],
+    "ai_pricing": [
+      {
+        "file": "service/model/ai_pricing.go",
+        "line": 130
+      }
+    ],
+    "ai_tasks": [
+      {
+        "file": "service/model/ai_task.go",
+        "line": 509
+      }
+    ],
+    "ai_tools": [
+      {
+        "file": "service/model/ai_tool.go",
+        "line": 188
+      }
+    ],
+    "ai_video_tasks": [
+      {
+        "file": "service/model/ai_video_task.go",
+        "line": 264
+      }
+    ],
+    "building_code_chat_messages": [
+      {
+        "file": "service/model/building_code_chat.go",
+        "line": 50
+      }
+    ],
+    "building_code_chat_sessions": [
+      {
+        "file": "service/model/building_code_chat.go",
+        "line": 40
+      }
+    ],
+    "building_code_documents": [
+      {
+        "file": "service/model/building_code_document.go",
+        "line": 54
+      }
+    ],
+    "building_reports": [
+      {
+        "file": "service/sql/report_module_up.sql",
+        "line": 1
+      }
+    ],
+    "certification_applications": [
+      {
+        "file": "service/model/certification_application.go",
+        "line": 109
+      }
+    ],
+    "checkin_records": [
+      {
+        "file": "service/model/checkin.go",
+        "line": 107
+      }
+    ],
+    "code_sessions": [
+      {
+        "file": "service/model/code_session.go",
+        "line": 108
+      },
+      {
+        "file": "service/model/code_session_redis.go",
+        "line": 317
+      }
+    ],
+    "customer_lead_followups": [
+      {
+        "file": "service/model/customer_service.go",
+        "line": 257
+      }
+    ],
+    "customer_leads": [
+      {
+        "file": "service/model/customer_service.go",
+        "line": 218
+      }
+    ],
+    "customer_service_events": [
+      {
+        "file": "service/model/customer_service.go",
+        "line": 279
+      }
+    ],
+    "designer_follows": [
+      {
+        "file": "service/model/designer_follow.go",
+        "line": 21
+      }
+    ],
+    "designer_reviews": [
+      {
+        "file": "service/model/designer_review.go",
+        "line": 32
+      }
+    ],
+    "enterprise_wechat_bind_tickets": [
+      {
+        "file": "service/model/enterprise_wechat_bind_ticket.go",
+        "line": 34
+      }
+    ],
+    "featured_case_groups": [
+      {
+        "file": "service/model/featured_case_group.go",
+        "line": 35
+      }
+    ],
+    "inspiration_assets": [
+      {
+        "file": "service/model/inspiration_asset.go",
+        "line": 41
+      }
+    ],
+    "invite_relations": [
+      {
+        "file": "service/model/invite_relation.go",
+        "line": 31
+      }
+    ],
+    "invite_rewards": [
+      {
+        "file": "service/model/invite_reward.go",
+        "line": 32
+      }
+    ],
+    "log_config": [
+      {
+        "file": "service/model/log_config.go",
+        "line": 75
+      }
+    ],
+    "logs": [
+      {
+        "file": "service/model/logs.go",
+        "line": 160
+      }
+    ],
+    "membership_plans": [
+      {
+        "file": "service/model/membership_plan.go",
+        "line": 37
+      }
+    ],
+    "oss_files": [
+      {
+        "file": "service/model/oss_file.go",
+        "line": 197
+      }
+    ],
+    "recharge_config": [
+      {
+        "file": "service/model/recharge_config.go",
+        "line": 53
+      }
+    ],
+    "report_wecom_tickets": [
+      {
+        "file": "service/sql/report_wecom_up.sql",
+        "line": 2
+      }
+    ],
+    "stone_records": [
+      {
+        "file": "service/model/stone_record.go",
+        "line": 38
+      }
+    ],
+    "support_tickets": [
+      {
+        "file": "service/model/support_ticket.go",
+        "line": 71
+      }
+    ],
+    "template_categories": [
+      {
+        "file": "service/model/template_category.go",
+        "line": 25
+      }
+    ],
+    "template_comments": [
+      {
+        "file": "service/model/template_comment.go",
+        "line": 30
+      }
+    ],
+    "template_download_records": [
+      {
+        "file": "service/component/download_limiter.go",
+        "line": 127
+      }
+    ],
+    "template_likes": [
+      {
+        "file": "service/model/template_like.go",
+        "line": 29
+      }
+    ],
+    "template_shares": [
+      {
+        "file": "service/model/template_share.go",
+        "line": 28
+      }
+    ],
+    "template_square_config": [
+      {
+        "file": "service/model/template_square_config.go",
+        "line": 38
+      }
+    ],
+    "template_unlocks": [
+      {
+        "file": "service/model/template_unlock.go",
+        "line": 18
+      }
+    ],
+    "templates": [
+      {
+        "file": "service/model/template.go",
+        "line": 83
+      }
+    ],
+    "user_favorites": [
+      {
+        "file": "service/model/user_favorite.go",
+        "line": 49
+      }
+    ],
+    "user_identities": [
+      {
+        "file": "service/model/user_identity.go",
+        "line": 30
+      }
+    ],
+    "user_invite_codes": [
+      {
+        "file": "service/model/user_invite_code.go",
+        "line": 36
+      }
+    ],
+    "user_memberships": [
+      {
+        "file": "service/model/user_membership.go",
+        "line": 53
+      }
+    ],
+    "user_orders": [
+      {
+        "file": "service/model/user_order.go",
+        "line": 86
+      }
+    ],
+    "user_profiles": [
+      {
+        "file": "service/model/user_profile.go",
+        "line": 79
+      }
+    ],
+    "users": [
+      {
+        "file": "service/model/user.go",
+        "line": 319
+      }
+    ],
+    "utility_tools": [
+      {
+        "file": "service/model/utility_tool.go",
+        "line": 38
+      }
+    ],
+    "xpay_message_logs": [
+      {
+        "file": "service/model/xpay_message_log.go",
+        "line": 55
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "path": "service/go.mod",
+      "line": 3,
+      "symbol": "go 1.24.1"
+    },
+    {
+      "path": "miniprogram/package.json",
+      "line": 14,
+      "symbol": "\"dependencies\""
+    },
+    {
+      "path": "background/package.json",
+      "line": 16,
+      "symbol": "\"dependencies\""
+    },
+    {
+      "path": "miniprogram/miniprogram/app.json",
+      "line": 2,
+      "symbol": "\"pages\""
+    },
+    {
+      "path": "background/src/routes/index.tsx",
+      "line": 62,
+      "symbol": "export const routes"
+    },
+    {
+      "path": "service/main.go",
+      "line": 50,
+      "symbol": "func main()"
+    },
+    {
+      "path": "service/route/index.go",
+      "line": 14,
+      "symbol": "func RegisterRoutes"
+    },
+    {
+      "path": "service/component/database.go",
+      "line": 17,
+      "symbol": "func InitMySQL"
+    },
+    {
+      "path": "service/component/report_pdf.go",
+      "line": 54,
+      "symbol": "func (commandReportPDFRunner) Run"
+    },
+    {
+      "path": "miniprogram/miniprogram/app.ts",
+      "line": 40,
+      "symbol": "onLaunch"
+    },
+    {
+      "path": "miniprogram/miniprogram/utils/perf.ts",
+      "line": 6,
+      "symbol": "const pageCacheStore"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/template/template.ts",
+      "line": 639,
+      "symbol": "requestSerial:"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/generateprogress/generateprogress.ts",
+      "line": 7,
+      "symbol": "function getTaskStatusPollDelay"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/chat/chat.ts",
+      "line": 405,
+      "symbol": "enableChunked: true"
+    },
+    {
+      "path": "service/processor/auth_strategy.go",
+      "line": 9,
+      "symbol": "type AuthStrategy interface"
+    },
+    {
+      "path": "service/processor/wechat_auth.go",
+      "line": 83,
+      "symbol": "func (s *WechatAuthStrategy) Login"
+    },
+    {
+      "path": "service/processor/phone_auth.go",
+      "line": 49,
+      "symbol": "func (s *PhoneAuthStrategy) Login"
+    },
+    {
+      "path": "service/route/middleware.go",
+      "line": 16,
+      "symbol": "func AuthRequired"
+    },
+    {
+      "path": "service/route/middleware.go",
+      "line": 63,
+      "symbol": "func TokenAuthRequired"
+    },
+    {
+      "path": "service/route/miniprogram.go",
+      "line": 101,
+      "symbol": "SetUserSession(c, result.User.ID"
+    },
+    {
+      "path": "background/src/api/auth.ts",
+      "line": 23,
+      "symbol": "tokenUtils.setToken"
+    },
+    {
+      "path": "service/route/ai.go",
+      "line": 567,
+      "symbol": "func handleAIRequest"
+    },
+    {
+      "path": "service/model/ai_task.go",
+      "line": 350,
+      "symbol": "func (m *AITaskModel) ClaimPendingTasks"
+    },
+    {
+      "path": "service/component/ai_task_processor.go",
+      "line": 100,
+      "symbol": "func (p *AITaskProcessor) processPendingTasks"
+    },
+    {
+      "path": "service/component/ai_task_processor.go",
+      "line": 815,
+      "symbol": "func (p *AITaskProcessor) handleTaskResult"
+    },
+    {
+      "path": "service/component/requests.go",
+      "line": 86,
+      "symbol": "func CalculateOptimalPoolSize"
+    },
+    {
+      "path": "service/component/requests.go",
+      "line": 1117,
+      "symbol": "func (p *RequestPool) executeImageTaskWithFallbacks"
+    },
+    {
+      "path": "service/route/ai.go",
+      "line": 241,
+      "symbol": "func enrichAIToolPayload"
+    },
+    {
+      "path": "service/route/ai_tool.go",
+      "line": 28,
+      "symbol": "func buildAIToolPublicResponse"
+    },
+    {
+      "path": "service/route/ai_video.go",
+      "line": 100,
+      "symbol": "type aiVideoProviderAdapter interface"
+    },
+    {
+      "path": "service/route/ai_video.go",
+      "line": 940,
+      "symbol": "func StartAIVideoTaskMonitor"
+    },
+    {
+      "path": "service/route/ai_video.go",
+      "line": 978,
+      "symbol": "func ResumePendingAIVideoTasks"
+    },
+    {
+      "path": "service/route/ai_video.go",
+      "line": 676,
+      "symbol": "func markAIVideoTaskFailed"
+    },
+    {
+      "path": "service/route/ai_video.go",
+      "line": 1604,
+      "symbol": "func runContinuousVideoChain"
+    },
+    {
+      "path": "service/model/ai_video_status.go",
+      "line": 36,
+      "symbol": "func EffectiveAIVideoStatus"
+    },
+    {
+      "path": "service/component/video_watermark.go",
+      "line": 87,
+      "symbol": "func ConcatVideos"
+    },
+    {
+      "path": "service/route/ai_chat_stream.go",
+      "line": 60,
+      "symbol": "func handleChatStream"
+    },
+    {
+      "path": "service/route/ai_intent_stream.go",
+      "line": 46,
+      "symbol": "func handleIntentStream"
+    },
+    {
+      "path": "service/route/customer_service.go",
+      "line": 44,
+      "symbol": "func RegisterCustomerServiceRoutes"
+    },
+    {
+      "path": "service/model/customer_service.go",
+      "line": 25,
+      "symbol": "type CustomerLead struct"
+    },
+    {
+      "path": "service/route/building_code.go",
+      "line": 200,
+      "symbol": "func handleBuildingCodeChat"
+    },
+    {
+      "path": "service/route/building_code.go",
+      "line": 361,
+      "symbol": "func importBuildingCodeToFastGPT"
+    },
+    {
+      "path": "service/route/template.go",
+      "line": 119,
+      "symbol": "func buildTemplateGeneratePayload"
+    },
+    {
+      "path": "service/route/template.go",
+      "line": 404,
+      "symbol": "func resolveTemplateDownloadAccess"
+    },
+    {
+      "path": "service/route/template.go",
+      "line": 1212,
+      "symbol": "templatesAuth.POST(\"/:id/unlock\""
+    },
+    {
+      "path": "service/component/download_limiter.go",
+      "line": 31,
+      "symbol": "func (dl *DownloadLimiter) CheckDownloadAccess"
+    },
+    {
+      "path": "service/model/user_favorite.go",
+      "line": 47,
+      "symbol": "func (m *UserFavoriteModel) InitTable"
+    },
+    {
+      "path": "service/route/favorite.go",
+      "line": 173,
+      "symbol": "func collectFavoriteRefs"
+    },
+    {
+      "path": "service/route/certification.go",
+      "line": 25,
+      "symbol": "func RegisterCertificationRoutes"
+    },
+    {
+      "path": "service/route/certification_management.go",
+      "line": 14,
+      "symbol": "func RegisterCertificationManagementRoutes"
+    },
+    {
+      "path": "service/route/wechatpay.go",
+      "line": 60,
+      "symbol": "if cfg.VirtualPay.Enabled"
+    },
+    {
+      "path": "service/model/user_redis.go",
+      "line": 90,
+      "symbol": "func (m *UserRedisModel) DeductStones"
+    },
+    {
+      "path": "service/model/user_redis.go",
+      "line": 174,
+      "symbol": "func (m *UserRedisModel) syncStonesToMySQL"
+    },
+    {
+      "path": "miniprogram/miniprogram/utils/virtualpay.ts",
+      "line": 42,
+      "symbol": "export async function requestVirtualPay"
+    },
+    {
+      "path": "service/route/virtualpay_apply.go",
+      "line": 54,
+      "symbol": "func applyVirtualPayOrderSuccess"
+    },
+    {
+      "path": "service/route/virtualpay_compensate.go",
+      "line": 94,
+      "symbol": "func (vc *VirtualPayCompensator) tick"
+    },
+    {
+      "path": "service/model/user_order.go",
+      "line": 366,
+      "symbol": "func (m *UserOrderModel) MarkVirtualPayPendingExpired"
+    },
+    {
+      "path": "service/model/user_membership.go",
+      "line": 27,
+      "symbol": "type UserMembership struct"
+    },
+    {
+      "path": "service/model/invite_reward.go",
+      "line": 10,
+      "symbol": "type InviteReward struct"
+    },
+    {
+      "path": "service/route/ai_cost.go",
+      "line": 51,
+      "symbol": "func handleAICostCalculate"
+    },
+    {
+      "path": "service/route/ai_cost_doc.go",
+      "line": 155,
+      "symbol": "func runCostDocPipeline"
+    },
+    {
+      "path": "service/report/content.go",
+      "line": 105,
+      "symbol": "func MarshalInput"
+    },
+    {
+      "path": "service/report/content.go",
+      "line": 118,
+      "symbol": "func (g *Generator) BuildPreview"
+    },
+    {
+      "path": "service/report/mysql_store.go",
+      "line": 192,
+      "symbol": "func (s *MySQLStore) Claim"
+    },
+    {
+      "path": "service/report/service.go",
+      "line": 159,
+      "symbol": "func (s *Service) GetDownloadURL"
+    },
+    {
+      "path": "service/route/report.go",
+      "line": 42,
+      "symbol": "func NewReportModule"
+    },
+    {
+      "path": "service/reportwecom/service.go",
+      "line": 91,
+      "symbol": "func (s *Service) verifyIdentity"
+    },
+    {
+      "path": "background/src/App.tsx",
+      "line": 9,
+      "symbol": "<BrowserRouter basename=\"/admin\">"
+    },
+    {
+      "path": "background/vite.config.ts",
+      "line": 10,
+      "symbol": "base: '/admin/'"
+    },
+    {
+      "path": "background/src/component/ProtectedRoute.tsx",
+      "line": 14,
+      "symbol": "const checkAuth"
+    },
+    {
+      "path": "background/src/component/bookmark.tsx",
+      "line": 36,
+      "symbol": "export const BookmarkProvider"
+    },
+    {
+      "path": "background/src/utils/request.ts",
+      "line": 70,
+      "symbol": "window.location.href"
+    },
+    {
+      "path": "service/route/user_workbench_management.go",
+      "line": 67,
+      "symbol": "func RegisterUserWorkbenchManagementRoutes"
+    },
+    {
+      "path": "service/route/report_center_management.go",
+      "line": 409,
+      "symbol": "func RegisterReportCenterManagementRoutes"
+    },
+    {
+      "path": "service/model/support_ticket.go",
+      "line": 139,
+      "symbol": "func (m *SupportTicketModel) ExistsOpenBySource"
+    },
+    {
+      "path": "service/function/password.go",
+      "line": 9,
+      "symbol": "func HashPassword"
+    },
+    {
+      "path": "service/main.go",
+      "line": 21,
+      "symbol": "func createDefaultAdmin"
+    },
+    {
+      "path": "service/route/virtualpay.go",
+      "line": 215,
+      "symbol": "func advanceVirtualPayOrder"
+    },
+    {
+      "path": "service/route/ai_cost_doc.go",
+      "line": 113,
+      "symbol": "StonesUsed: 0"
+    },
+    {
+      "path": "service/model/user_redis.go",
+      "line": 34,
+      "symbol": "func (m *UserRedisModel) LoadStonesFromMySQL"
+    }
+  ],
+  "diagrams": [
+    {
+      "name": "01-architecture",
+      "mmd": "diagrams/01-architecture.mmd",
+      "svg": "diagrams/01-architecture.svg"
+    },
+    {
+      "name": "02-authentication",
+      "mmd": "diagrams/02-authentication.mmd",
+      "svg": "diagrams/02-authentication.svg"
+    },
+    {
+      "name": "03-image-task",
+      "mmd": "diagrams/03-image-task.mmd",
+      "svg": "diagrams/03-image-task.svg"
+    },
+    {
+      "name": "04-configurable-tools",
+      "mmd": "diagrams/04-configurable-tools.mmd",
+      "svg": "diagrams/04-configurable-tools.svg"
+    },
+    {
+      "name": "05-video-task",
+      "mmd": "diagrams/05-video-task.mmd",
+      "svg": "diagrams/05-video-task.svg"
+    },
+    {
+      "name": "06-customer-service",
+      "mmd": "diagrams/06-customer-service.mmd",
+      "svg": "diagrams/06-customer-service.svg"
+    },
+    {
+      "name": "07-content-access",
+      "mmd": "diagrams/07-content-access.mmd",
+      "svg": "diagrams/07-content-access.svg"
+    },
+    {
+      "name": "08-virtual-payment",
+      "mmd": "diagrams/08-virtual-payment.mmd",
+      "svg": "diagrams/08-virtual-payment.svg"
+    },
+    {
+      "name": "09-report-state",
+      "mmd": "diagrams/09-report-state.mmd",
+      "svg": "diagrams/09-report-state.svg"
+    },
+    {
+      "name": "10-management",
+      "mmd": "diagrams/10-management.mmd",
+      "svg": "diagrams/10-management.svg"
+    },
+    {
+      "name": "11-core-data",
+      "mmd": "diagrams/11-core-data.mmd",
+      "svg": "diagrams/11-core-data.svg"
+    },
+    {
+      "name": "12-reusable-target",
+      "mmd": "diagrams/12-reusable-target.mmd",
+      "svg": "diagrams/12-reusable-target.svg"
+    }
+  ]
+}

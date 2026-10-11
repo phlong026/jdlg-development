@@ -1,0 +1,261 @@
+﻿<!--pages/templatesquaredetails/templatesquaredetails.wxml-->
+<view class="page">
+  <view class="top-bg-fill"></view>
+  <!-- 统一导航栏 -->
+  <navigation-bar title="模板详情" background="#e6daca" color="#473720" />
+
+  <view class="hero-section">
+    <view class="hero-shell">
+      <view class="hero-gallery" wx:if="{{imageList && imageList.length}}">
+        <swiper
+          class="hero-swiper"
+          current="{{currentImageIndex}}"
+          circular="{{imageList.length > 1}}"
+          indicator-dots="{{imageList.length > 1}}"
+          bindchange="onSwiperChange"
+          style="height: {{heroHeight}}px;"
+        >
+          <swiper-item wx:for="{{imageList}}" wx:key="index">
+            <image
+              class="hero-image"
+              src="{{item}}"
+              mode="aspectFit"
+              lazy-load
+              data-index="{{index}}"
+              bindtap="onPreviewImage"
+            />
+          </swiper-item>
+        </swiper>
+        <view class="hero-engagement">
+          <view class="hero-engagement-item hero-favorite-item {{isLiked ? 'hero-favorite-active' : ''}}" bindtap="onLike">
+            <text class="hero-symbol-icon {{isLiked ? 'liked' : ''}}">♥</text>
+            <text>{{isLiked ? '已收藏' : '收藏'}}</text>
+            <text>{{likeCount || 0}}</text>
+          </view>
+          <view class="hero-engagement-item" bindtap="onComment">
+            <view class="hero-comment-icon"></view>
+            <text>{{commentCount || 0}}</text>
+          </view>
+        </view>
+        <view class="hero-index" wx:if="{{imageList.length > 1}}">
+          <text>{{currentImageIndex + 1}} / {{imageList.length}}</text>
+        </view>
+      </view>
+
+      <view class="hero-empty" wx:else>
+        <text>暂无效果图</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="content-section">
+    <view class="headline-card">
+      <text class="headline-kicker">精选案例模板</text>
+      <view class="headline-top">
+        <view class="headline-main">
+          <text class="template-title">{{templateName || '模板详情'}}</text>
+        </view>
+        <view class="status-badge {{isExhibitionTemplate ? 'display' : (isFree || unlocked ? 'active' : 'locked')}}">
+          <text>{{statusBadgeText}}</text>
+        </view>
+      </view>
+
+      <view class="action-stack promoted">
+        <button class="action-btn primary {{selectedAction === 'make_same' ? 'selected' : ''}}" bindtap="onMakeSame">
+          <text>{{primaryActionText}}</text>
+        </button>
+        <view class="action-row secondary-actions">
+          <button class="action-btn secondary share" open-type="share" bindtap="clearActionSelection">
+            <text>分享</text>
+          </button>
+          <button class="action-btn secondary download" bindtap="onDownloadTemplateImage">
+            <text>下载</text>
+          </button>
+        </view>
+        <view class="action-support-row">
+          <text class="action-hint">{{primaryActionHint}}</text>
+          <view class="download-state inline {{canDownloadImages ? 'active' : 'locked'}}">
+            <text>{{canDownloadImages ? '已开通下载' : '下载需验证'}}</text>
+          </view>
+        </view>
+        <view class="cta-display-tip" wx:if="{{isExhibitionTemplate}}">
+          <text>当前为灵感展示模板。可先转发收藏，后续作为参考生成同款方案。</text>
+        </view>
+      </view>
+
+      <view class="headline-meta">
+        <text class="meta-item">发布时间 {{postDate || '刚刚发布'}}</text>
+        <text class="meta-item">使用 {{usageCount || 0}}</text>
+        <text class="meta-item">分享 {{shareCount || 0}}</text>
+      </view>
+
+      <view wx:if="{{templateDesc || noteContent}}" class="template-desc-block">
+        <text class="template-desc">{{templateDesc || noteContent}}</text>
+      </view>
+
+      <view class="download-card compact">
+        <view class="download-card-header">
+          <view class="download-card-main">
+            <text class="download-card-title">下载资格</text>
+            <text class="download-card-desc">{{downloadActionHint}}</text>
+          </view>
+          <view class="download-state {{canDownloadImages ? 'active' : 'locked'}}">
+            <text>{{canDownloadImages ? '已开通' : '需验证'}}</text>
+          </view>
+        </view>
+        <view class="download-condition-row">
+          <view class="download-condition-item {{token ? 'done' : 'todo'}}">
+            <text class="download-condition-dot"></text>
+            <text>已登录</text>
+          </view>
+          <view class="download-condition-item {{userPhoneVerified ? 'done' : 'todo'}}">
+            <text class="download-condition-dot"></text>
+            <text>手机号验证</text>
+          </view>
+          <view class="download-condition-item {{userRechargeMember ? 'done' : 'todo'}}">
+            <text class="download-condition-dot"></text>
+            <text>下载会员</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="designer-card" bindtap="onDesignerTap" wx:if="{{userInfo.userId}}">
+      <view class="designer-badge">
+        <view class="designer-badge-dot"></view>
+        <text>设计师背书</text>
+      </view>
+      <view class="designer-card-main">
+        <view class="designer-avatar-shell">
+          <image wx:if="{{userInfo.avatar}}" class="designer-avatar" src="{{userInfo.avatar}}" mode="aspectFill" lazy-load />
+          <view wx:else class="designer-avatar designer-avatar-fallback">{{userInfo.avatarText}}</view>
+        </view>
+        <view class="designer-info">
+          <view class="designer-name-row">
+            <text class="designer-name">{{userInfo.name}}</text>
+            <text class="designer-verified" wx:if="{{userInfo.certStatusLabel}}">{{userInfo.certStatusLabel}}</text>
+          </view>
+          <text class="designer-title">{{userInfo.title}}</text>
+          <text class="designer-summary">该模板由设计师整理发布，可进入主页查看更多作品与灵感案例。</text>
+        </view>
+        <view class="designer-cta">
+          <text class="designer-link">查看主页</text>
+          <text class="designer-arrow">></text>
+        </view>
+      </view>
+    </view>
+
+    <view class="comment-card">
+      <view class="section-header">
+        <view>
+          <text class="section-title">评论区</text>
+          <text class="section-subtitle">看看别人怎么评价这套模板</text>
+        </view>
+        <view class="comment-write-btn" bindtap="onComment">
+          <text>写评论</text>
+        </view>
+      </view>
+      <view class="comment-loading" wx:if="{{commentsLoading}}">
+        <text>评论加载中...</text>
+      </view>
+      <view class="comment-list" wx:elif="{{localComments.length}}">
+        <view class="comment-item" wx:for="{{localComments}}" wx:key="id">
+          <view class="comment-avatar-wrap">
+            <image wx:if="{{item.userAvatar}}" class="comment-avatar" src="{{item.userAvatar}}" mode="aspectFill" lazy-load />
+            <view wx:else class="comment-avatar comment-avatar-fallback">{{item.userAvatarText}}</view>
+          </view>
+          <view class="comment-body">
+            <view class="comment-head">
+              <text class="comment-name">{{item.userName}}</text>
+              <text class="comment-time">{{item.createdAt}}</text>
+            </view>
+            <text class="comment-content">{{item.content}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="comment-empty" wx:else>
+        <text class="comment-empty-title">还没有评论</text>
+        <text class="comment-empty-desc">你可以做第一个留言的人，帮助别人判断这套模板是否适合做同款。</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="comment-modal" wx:if="{{showCommentModal}}" catchtap="closeCommentModal">
+    <view class="comment-modal-content" catchtap="noop">
+      <view class="comment-modal-header">
+        <text class="comment-modal-title">写评论</text>
+        <view class="comment-modal-close" bindtap="closeCommentModal">关闭</view>
+      </view>
+      <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}"
+        class="comment-textarea"
+        value="{{commentDraft}}"
+        placeholder="说说你觉得这套模板适合什么场景，或者你想怎么做同款..."
+        maxlength="300"
+        bindinput="onCommentInput"
+      />
+      <view class="comment-modal-footer">
+        <view class="comment-cancel-btn" bindtap="closeCommentModal">取消</view>
+        <view class="comment-submit-btn" bindtap="submitComment">发布评论</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="enterprise-modal" wx:if="{{showEnterpriseWechatModal}}" bindtap="closeEnterpriseWechatModal">
+    <view class="enterprise-content" catchtap="onEnterpriseWechatContentTap">
+      <view class="enterprise-header">
+        <view>
+          <text class="enterprise-title">下载当前图片</text>
+          <text class="enterprise-subtitle">长按识别企业微信二维码添加咨询，或直接授权微信手机号，系统会自动继续下载当前模板图片。</text>
+        </view>
+        <view class="enterprise-close" bindtap="closeEnterpriseWechatModal">
+          <text class="enterprise-close-text">×</text>
+        </view>
+      </view>
+      <view class="enterprise-body">
+        <view class="enterprise-status {{enterpriseWechatVerified ? 'verified' : 'pending'}}">
+          <text class="enterprise-status-title">{{enterpriseWechatVerified ? '下载保存权限已开通' : '当前还未完成下载验证'}}</text>
+          <text class="enterprise-status-desc" wx:if="{{enterpriseWechatVerifiedAtText}}">已验证时间：{{enterpriseWechatVerifiedAtText}}</text>
+          <text class="enterprise-status-desc" wx:elif="{{enterpriseWechatAutoChecking}}">已开启自动检测，识别二维码并留资后会自动继续下载</text>
+          <text class="enterprise-status-desc" wx:elif="{{enterpriseWechatBindStatus === 'pending'}}">长按二维码识别后完成添加和留资，再返回这里刷新状态</text>
+        </view>
+        <view class="enterprise-qrcode-wrap {{enterpriseWechatQRCodeUrl ? '' : 'empty'}}">
+          <image
+            wx:if="{{enterpriseWechatQRCodeUrl}}"
+            class="enterprise-qrcode"
+            src="{{enterpriseWechatQRCodeUrl}}"
+            mode="aspectFit"
+            show-menu-by-longpress="true"
+            bindtap="previewEnterpriseWechatQRCode"
+          />
+          <view class="enterprise-qrcode-placeholder" wx:else>
+            <text class="enterprise-placeholder-icon">图</text>
+            <text>{{enterpriseWechatConfigLoading ? '二维码加载中...' : '暂未配置企业微信二维码'}}</text>
+          </view>
+        </view>
+        <view class="enterprise-steps">
+          <view class="enterprise-step-item">
+            <text class="enterprise-step-index">1</text>
+            <text class="enterprise-step-text">长按二维码识别，或点开大图后长按识别</text>
+          </view>
+          <view class="enterprise-step-item">
+            <text class="enterprise-step-index">2</text>
+            <text class="enterprise-step-text">添加企业微信并留下手机号，或直接点击下方按钮授权微信手机号</text>
+          </view>
+          <view class="enterprise-step-item">
+            <text class="enterprise-step-index">3</text>
+            <text class="enterprise-step-text">完成后点击“我已完成，刷新状态”，通过后可继续下载当前图片</text>
+          </view>
+        </view>
+        <view class="enterprise-refresh-btn" bindtap="refreshEnterpriseWechatVerification">
+          <text>我已完成，刷新状态</text>
+        </view>
+        <text class="enterprise-tip">{{enterpriseWechatTip}}</text>
+      </view>
+      <view class="enterprise-footer">
+        <view class="enterprise-btn secondary" bindtap="saveEnterpriseWechatQRCode">保存二维码</view>
+        <view class="enterprise-btn primary" wx:if="{{enterpriseWechatVerified && enterpriseWechatContact}}" bindtap="continuePendingTemplateDownload">继续下载当前图片</view>
+        <button class="enterprise-btn primary enterprise-btn-button" wx:else open-type="getPhoneNumber" bindgetphonenumber="onEnterpriseWechatPhoneAuth" loading="{{enterpriseWechatPhoneSubmitting}}">授权手机号并继续下载</button>
+      </view>
+    </view>
+  </view>
+</view>

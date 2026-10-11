@@ -1,0 +1,230 @@
+<!--pages/Identityauthen/Identityauthen.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="身份认证" subtitle="提升账号可信度与专业度" background="#e6daca" />
+
+  <!-- 顶部概览 -->
+  <view class="summary-card">
+    <view class="summary-header">
+      <view class="summary-tag">
+        <t-icon name="shield" size="32rpx" color="#b79066" />
+        <text class="summary-tag-text">认证中心</text>
+      </view>
+      <text class="summary-status">{{summaryText}}</text>
+    </view>
+    <view class="summary-body">
+      <text class="summary-line summary-line-strong">完成多项认证后，将在个人主页与作品中展示「认证标识」，更易获得业主信任。</text>
+      <text class="summary-line">认证信息仅用于平台审核，不会对外泄露。</text>
+    </view>
+  </view>
+
+  <!-- 认证详情（仅在有实名信息时展示，姓名和证件号均已脱敏） -->
+  <view class="section" wx:if="{{certRealNameMasked || certIDCardMasked}}">
+    <view class="section-title-row">
+      <text class="section-title">当前实名信息</text>
+      <text class="section-tip">仅本人可见，已做隐私脱敏</text>
+    </view>
+    <view class="auth-card detail-card">
+      <view class="detail-card-header">
+        <view class="detail-card-badge">
+          <text>认证信息</text>
+        </view>
+        <text class="detail-card-tip">仅用于平台审核存档，不对外展示完整信息</text>
+      </view>
+      <view class="detail-grid">
+        <view class="detail-item">
+          <text class="detail-label">姓名 / 主体</text>
+          <text class="detail-value">{{certRealNameMasked}}</text>
+        </view>
+        <view class="detail-item" wx:if="{{certIdentityType}}">
+          <text class="detail-label">认证身份</text>
+          <text class="detail-value">{{certIdentityType}}</text>
+        </view>
+        <view class="detail-item" wx:if="{{certIDCardMasked}}">
+          <text class="detail-label">证件号</text>
+          <text class="detail-value">{{certIDCardMasked}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 认证列表 -->
+  <view class="section">
+    <view class="section-title-row">
+      <text class="section-title">个人认证</text>
+      <text class="section-tip">完善个人身份信息</text>
+    </view>
+
+    <!-- 实名认证 -->
+    <view class="auth-card">
+      <view class="auth-header">
+        <view class="auth-icon designer">
+          <t-icon name="user-circle" size="40rpx" color="#ffffff" />
+        </view>
+        <view class="auth-title-wrap">
+          <text class="auth-title">实名认证</text>
+          <text class="auth-desc">验证身份证信息，提升账号可信度</text>
+        </view>
+        <view class="auth-status {{realNameStatus === '已认证' ? 'status-success' : 'status-pending'}}">
+          <text class="status-dot"></text>
+          <text class="status-text">{{realNameStatus}}</text>
+        </view>
+      </view>
+      <view class="auth-footer">
+        <view class="auth-tags">
+          <text class="auth-tag">身份核验</text>
+          <text class="auth-tag">账号安全</text>
+        </view>
+        <button
+          class="auth-btn {{realNameStatus === '已认证' ? 'btn-secondary' : 'btn-primary'}}"
+          bindtap="onRealNameTap"
+        >
+          {{realNameStatus === '已认证' ? '查看实名信息' : '去认证'}}
+        </button>
+      </view>
+    </view>
+
+    <!-- 设计师认证 -->
+    <view class="auth-card">
+      <view class="auth-header">
+        <view class="auth-icon design">
+          <t-icon name="palette" size="40rpx" color="#ffffff" />
+        </view>
+        <view class="auth-title-wrap">
+          <text class="auth-title">设计师身份认证</text>
+          <text class="auth-desc">提交从业证明，获得「认证设计师」标识</text>
+        </view>
+        <view class="auth-status {{designerStatusClass}}">
+          <text class="status-dot"></text>
+          <text class="status-text">{{designerStatusText}}</text>
+        </view>
+      </view>
+      <view class="auth-footer">
+        <view class="auth-tags">
+          <text class="auth-tag">展示专业资质</text>
+          <text class="auth-tag">优先推荐</text>
+        </view>
+        <button
+          class="auth-btn {{designerStatus === 'approved' ? 'btn-secondary' : 'btn-primary'}}"
+          bindtap="onDesignerTap"
+        >
+          {{designerStatus === 'approved' ? '查看认证资料' : (designerStatus === 'review' ? '查看进度' : '去认证')}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 机构与团队认证 -->
+  <view class="section">
+    <view class="section-title-row">
+      <text class="section-title">机构与团队认证</text>
+      <text class="section-tip">适用于施工队 / 工作室 / 企业</text>
+    </view>
+
+    <!-- 施工队认证 -->
+    <view class="auth-card">
+      <view class="auth-header">
+        <view class="auth-icon team">
+          <t-icon name="home" size="40rpx" color="#ffffff" />
+        </view>
+        <view class="auth-title-wrap">
+          <text class="auth-title">施工队认证</text>
+          <text class="auth-desc">提交团队与项目案例，展示施工能力</text>
+        </view>
+        <view class="auth-status {{contractorStatusClass}}">
+          <text class="status-dot"></text>
+          <text class="status-text">{{contractorStatusText}}</text>
+        </view>
+      </view>
+      <view class="auth-footer">
+        <view class="auth-tags">
+          <text class="auth-tag">团队展示</text>
+          <text class="auth-tag">工程经验</text>
+        </view>
+        <button
+          class="auth-btn {{contractorStatus === 'approved' ? 'btn-secondary' : 'btn-primary'}}"
+          bindtap="onContractorTap"
+        >
+          {{contractorStatus === 'approved' ? '查看认证资料' : (contractorStatus === 'review' ? '查看进度' : '去认证')}}
+        </button>
+      </view>
+    </view>
+
+    <!-- 企业/机构认证 -->
+    <view class="auth-card">
+      <view class="auth-header">
+        <view class="auth-icon company">
+          <t-icon name="building" size="40rpx" color="#ffffff" />
+        </view>
+        <view class="auth-title-wrap">
+          <text class="auth-title">企业 / 机构认证</text>
+          <text class="auth-desc">适用于设计公司、装饰公司等机构主体</text>
+        </view>
+        <view class="auth-status {{companyStatusClass}}">
+          <text class="status-dot"></text>
+          <text class="status-text">{{companyStatusText}}</text>
+        </view>
+      </view>
+      <view class="auth-footer">
+        <view class="auth-tags">
+          <text class="auth-tag">营业执照</text>
+          <text class="auth-tag">官方认证</text>
+        </view>
+        <button
+          class="auth-btn {{companyStatus === 'approved' ? 'btn-secondary' : 'btn-primary'}}"
+          bindtap="onCompanyTap"
+        >
+          {{companyStatus === 'approved' ? '查看认证资料' : (companyStatus === 'review' ? '查看进度' : '去认证')}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <view class="section" wx:if="{{false}}">
+    <view class="section-title-row">
+      <text class="section-title">提现功能</text>
+      <text class="section-tip">完成认证后可开通</text>
+    </view>
+    <view class="auth-card withdraw-entry-card">
+      <view class="withdraw-entry-main">
+        <view class="withdraw-entry-copy">
+          <text class="withdraw-entry-title">当前可提现金额</text>
+          <text class="withdraw-entry-amount">￥{{withdrawRmbAmount}}</text>
+          <text class="withdraw-entry-desc">设计师认证或机构认证通过后，可在这里统一查看提现开通状态，并进入提现中心。</text>
+        </view>
+        <view class="auth-status {{canWithdraw ? 'status-success' : ''}}">
+          <text class="status-dot"></text>
+          <text class="status-text">{{canWithdraw ? '已开通' : '未开通'}}</text>
+        </view>
+      </view>
+      <view class="auth-footer withdraw-entry-footer">
+        <view class="auth-tags">
+          <text class="auth-tag">10 灵石 = 1 元</text>
+          <text class="auth-tag">微信提现</text>
+        </view>
+        <button
+          class="auth-btn {{canWithdraw ? 'btn-primary' : 'btn-secondary'}}"
+          bindtap="onWithdrawEntryTap"
+        >
+          {{canWithdraw ? '进入提现中心' : '认证后开通'}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部提示 -->
+  <view class="tips-section">
+    <view class="tip-row">
+      <t-icon name="info-circle" size="28rpx" color="#8c7553" />
+      <text class="tip-text">认证信息仅用于平台审核，不会用于其他用途。</text>
+    </view>
+    <view class="tip-row">
+      <t-icon name="info-circle" size="28rpx" color="#8c7553" />
+      <text class="tip-text">提交认证后，预计 1-3 个工作日内完成审核。</text>
+    </view>
+    <view class="tip-row">
+      <t-icon name="info-circle" size="28rpx" color="#8c7553" />
+      <text class="tip-text">如需加急或协助，请联系平台客服。</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,85 @@
+<!--pages/utilitytools/utilitytools.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="实用工具" background="#e6daca" />
+
+  <!-- 内容区域 -->
+  <view class="content">
+    <!-- 分类标签 -->
+    <view class="category-tabs">
+      <view 
+        class="category-tab {{currentCategory === 'all' ? 'active' : ''}}"
+        bindtap="switchCategory"
+        data-category="all"
+      >
+        全部
+      </view>
+      <view 
+        class="category-tab {{currentCategory === 'local_norm' ? 'active' : ''}}"
+        bindtap="switchCategory"
+        data-category="local_norm"
+      >
+        本地规范
+      </view>
+      <view 
+        class="category-tab {{currentCategory === 'faq' ? 'active' : ''}}"
+        bindtap="switchCategory"
+        data-category="faq"
+      >
+        FAQ
+      </view>
+      <view 
+        class="category-tab {{currentCategory === 'video_tutorial' ? 'active' : ''}}"
+        bindtap="switchCategory"
+        data-category="video_tutorial"
+      >
+        视频教程
+      </view>
+    </view>
+
+    <!-- 工具列表 -->
+    <view class="tools-list" wx:if="{{!loading && tools.length > 0}}">
+      <view 
+        class="tool-item"
+        wx:for="{{tools}}"
+        wx:key="id"
+        bindtap="onToolTap"
+        data-id="{{item.id}}"
+      >
+        <view class="tool-icon-wrapper">
+          <image 
+            wx:if="{{item.category === 'video_tutorial' && item.cover_image}}"
+            class="tool-cover"
+            src="{{item.cover_image}}"
+            mode="aspectFill"
+          />
+          <view class="tool-icon {{item.category}}">
+            <text wx:if="{{item.category === 'local_norm'}}">📄</text>
+            <text wx:if="{{item.category === 'faq'}}">❓</text>
+            <text wx:if="{{item.category === 'video_tutorial'}}">▶</text>
+          </view>
+        </view>
+        <view class="tool-content">
+          <view class="tool-title">{{item.title}}</view>
+          <view class="tool-preview" wx:if="{{item.content}}">
+            {{item.content}}
+          </view>
+          <view class="tool-meta">
+            <text class="meta-item">查看 {{item.view_count || 0}}</text>
+          </view>
+        </view>
+        <view class="tool-arrow">›</view>
+      </view>
+    </view>
+
+    <!-- 加载状态 -->
+    <view class="loading-state" wx:if="{{loading}}">
+      <text>加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{!loading && tools.length === 0}}">
+      <text>暂无内容</text>
+    </view>
+  </view>
+</view>

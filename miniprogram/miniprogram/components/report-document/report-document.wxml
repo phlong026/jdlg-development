@@ -1,0 +1,19 @@
+<view class="report-document">
+  <text class="eyebrow">甲第灵光 · 家庭建房规划</text>
+  <text class="title">{{title}}</text>
+  <block wx:if="{{status === 'loading'}}">
+    <text class="description">{{mode === 'full' ? '你的完整报告正在准备中，完成后即可查看。' : '正在整理你的家庭与建房需求，请稍候。'}}</text>
+  </block>
+  <block wx:elif="{{status === 'ready'}}">
+    <text class="description">{{mode === 'full' ? '三种选择，逐页比较。打开 PDF，可放大图纸并保存报告。' : '先看看对你家需求的理解，是否说到了你在意的地方。'}}</text>
+    <button class="open-button" bindtap="openReport" loading="{{busy}}" disabled="{{busy}}">{{busy ? '正在打开' : (mode === 'full' ? '查看完整报告' : '查看前四页')}}</button>
+  </block>
+  <block wx:else>
+    <text class="description">报告暂时无法加载，请稍后重试。</text>
+    <button class="retry" bindtap="retry">重新加载</button>
+  </block>
+  <view wx:if="{{error}}" class="error">
+    <text>{{error}}</text>
+    <button class="retry" bindtap="retry">刷新报告链接</button>
+  </view>
+</view>

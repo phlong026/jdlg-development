@@ -1,0 +1,32 @@
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="{{pageTitle}}" subtitle="更新日期 {{updateDate}}" background="#e6daca" />
+
+  <scroll-view class="content-scroll" scroll-y enhanced show-scrollbar="false">
+    <view class="content">
+      <view class="hero-card">
+        <text class="hero-title">{{heroTitle}}</text>
+        <text class="hero-desc">{{heroDesc}}</text>
+        <text class="hero-tip" wx:if="{{from === 'login' && loginTip}}">{{loginTip}}</text>
+      </view>
+
+      <view class="policy-card" wx:for="{{sections}}" wx:key="title">
+        <text class="section-title">{{item.title}}</text>
+        <view class="section-list">
+          <view class="section-item" wx:for="{{item.items}}" wx:key="*this">
+            <text class="section-dot"></text>
+            <text class="section-text">{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="policy-card contact-card">
+        <text class="section-title">{{contactSectionTitle}}</text>
+        <view class="contact-item" wx:for="{{contactItems}}" wx:key="label">
+          <text class="contact-label">{{item.label}}</text>
+          <text class="contact-value">{{item.value}}</text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

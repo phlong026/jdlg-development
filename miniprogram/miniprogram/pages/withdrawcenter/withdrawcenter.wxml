@@ -1,0 +1,95 @@
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="提现中心" subtitle="{{canWithdraw ? '认证设计师 / 机构可申请微信提现' : '完成认证后即可开通提现能力'}}" background="#e6daca" />
+
+  <view class="section designer-section">
+    <view class="tip-card">
+      <view class="tip-header">
+        <t-icon name="wallet" size="32rpx" color="#b79066" />
+        <text class="tip-title">{{canWithdraw ? '提现资格已开通' : '提现资格说明'}}</text>
+      </view>
+      <text class="tip-desc">{{canWithdraw ? '当前可按 10 灵石 ≈ 1 元人民币发起微信提现，请确认可提现余额后再提交。' : '当前仅认证设计师或机构可使用提现功能；完成认证后，这里会自动开通。'}}</text>
+      <button wx:if="{{canWithdraw}}" class="tip-btn" bindtap="onWithdrawRules">查看提现说明</button>
+      <button wx:else class="tip-btn" bindtap="goToCertification">去认证中心</button>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="withdraw-card">
+      <view class="withdraw-info-row">
+        <view class="withdraw-amount-block">
+          <text class="withdraw-label">可提现余额</text>
+          <view class="withdraw-value-row">
+            <text class="withdraw-value">{{loading ? '--' : rmbAmount}} 元</text>
+          </view>
+        </view>
+        <view class="withdraw-amount-block">
+          <text class="withdraw-label">灵石余额</text>
+          <view class="withdraw-value-row">
+            <text class="withdraw-value">{{loading ? '--' : stones}} 灵石</text>
+          </view>
+        </view>
+        <view class="withdraw-amount-block">
+          <text class="withdraw-label">冻结金额</text>
+          <view class="withdraw-value-row">
+            <text class="withdraw-value">{{loading ? '--' : frozenAmount}} 元</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="withdraw-options">
+        <text class="withdraw-options-label">选择提现金额</text>
+        <view class="withdraw-options-grid">
+          <view
+            wx:for="{{withdrawOptions}}"
+            wx:key="*this"
+            class="withdraw-option-item {{selectedWithdrawAmount === item ? 'active' : ''}}"
+            bindtap="onSelectWithdrawAmount"
+            data-amount="{{item}}"
+          >
+            <text class="withdraw-option-value">{{item}} 元</text>
+          </view>
+        </view>
+        <text class="withdraw-options-tip">当前按 10 灵石折算 1 元人民币，1 小时内累计提现金额不得超过 1000 元。</text>
+      </view>
+
+      <view class="withdraw-actions">
+        <button class="withdraw-btn primary" bindtap="onWithdraw" loading="{{loading}}" disabled="{{loading}}">{{canWithdraw ? '立即提现' : '暂不可提现'}}</button>
+        <button class="withdraw-btn secondary" bindtap="onWithdrawRules">提现说明</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="list-card">
+      <view class="list-header">
+        <text class="list-title">提现记录</text>
+      </view>
+
+      <block wx:if="{{withdrawRecords.length}}">
+        <view class="record-item" wx:for="{{withdrawRecords}}" wx:key="id">
+          <view class="record-main">
+            <view class="record-left">
+              <view class="record-icon">
+                <t-icon name="wallet" size="28rpx" color="#b79066" />
+              </view>
+              <view class="record-info">
+                <text class="record-title">{{item.title}}</text>
+                <text class="record-subtitle">{{item.statusText}}</text>
+              </view>
+            </view>
+            <view class="record-right">
+              <text class="record-amount">{{item.amount}} 元</text>
+              <text class="record-time">{{item.time}}</text>
+            </view>
+          </view>
+        </view>
+      </block>
+
+      <view wx:else class="empty">
+        <t-icon name="time" size="40rpx" color="#b79066" />
+        <text class="empty-text">{{withdrawRecordEmptyText}}</text>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,301 @@
+--- a/miniprogram/miniprogram/pages/aicost/aicost.ts
++++ b/miniprogram/miniprogram/pages/aicost/aicost.ts
+@@ -1,4 +1,5 @@
+ // pages/aicost/aicost.ts
++import { prepareCostEstimateShareImage } from '../../utils/costEstimateShareImage';
+
+ type CostBreakdownItem = {
+   name: string;
+@@ -166,10 +167,22 @@
+   },
+
+   onShareAppMessage() {
++    const city = this.data.city;
++    const area = Number(this.data.buildingArea);
++    const buildingArea = Number.isFinite(area) && area > 0 ? `${area}㎡` : '';
++    const title = `${city}${buildingArea}建房要花多少钱？测测建房预算`;
++    const path = '/pages/aicost/aicost';
+     return {
+-      title: '造价测算 · 快速估算建房价格',
+-      path: '/pages/aicost/aicost',
+-    };
++      title,
++      path,
++      // The form has no estimate yet; never reuse a previous report's price.
++      promise: prepareCostEstimateShareImage({
++        city,
++        buildingArea,
++        structureType: this.data.structureType,
++        windowStandard: this.data.windowStandard,
++      }).then((imageUrl) => imageUrl ? { title, path, imageUrl } : { title, path }),
++    } as any;
+   },
+
+   onFootprintAreaInput(e: any) {
+--- a/miniprogram/miniprogram/pages/aicost/aicost.js
++++ b/miniprogram/miniprogram/pages/aicost/aicost.js
+@@ -1,5 +1,7 @@
+ "use strict";
++Object.defineProperty(exports, "__esModule", { value: true });
+ // pages/aicost/aicost.ts
++const costEstimateShareImage_1 = require("../../utils/costEstimateShareImage");
+ const RESULT_STORAGE_KEY = 'aicostEstimateResult';
+ const cityOptionsMap = {
+     福建: ['泉州', '漳州', '厦门', '福州', '莆田', '龙岩', '三明', '南平', '宁德'],
+@@ -136,9 +138,21 @@
+     onLoad() {
+     },
+     onShareAppMessage() {
++        const city = this.data.city;
++        const area = Number(this.data.buildingArea);
++        const buildingArea = Number.isFinite(area) && area > 0 ? `${area}㎡` : '';
++        const title = `${city}${buildingArea}建房要花多少钱？测测建房预算`;
++        const path = '/pages/aicost/aicost';
+         return {
+-            title: '造价测算 · 快速估算建房价格',
+-            path: '/pages/aicost/aicost',
++            title,
++            path,
++            // The form has no estimate yet; never reuse a previous report's price.
++            promise: (0, costEstimateShareImage_1.prepareCostEstimateShareImage)({
++                city,
++                buildingArea,
++                structureType: this.data.structureType,
++                windowStandard: this.data.windowStandard,
++            }).then((imageUrl) => imageUrl ? { title, path, imageUrl } : { title, path }),
+         };
+     },
+     onFootprintAreaInput(e) {
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.ts
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.ts
+@@ -6,7 +6,7 @@
+ ];
+
+ export type CostEstimateShareCard = {
+-  totalCost: string;
++  totalCost?: string;
+   city: string;
+   buildingArea: string;
+   structureType: string;
+@@ -121,24 +121,30 @@
+ }
+
+ function drawCardText(ctx: any, card: CostEstimateShareCard) {
+-  const amount = cleanAmount(card.totalCost);
+   ctx.fillStyle = '#704416';
+   ctx.font = '700 46px sans-serif';
+   ctx.fillText('建房造价测算', 62, 166);
+
+-  ctx.font = '700 52px sans-serif';
+-  const unitWidth = ctx.measureText('万元').width;
+-
+-  ctx.fillStyle = '#e62c12';
+-  const amountWidth = fitText(ctx, amount, 800, 132, 480 - unitWidth - 14);
+-  ctx.fillText(amount, 62, 308);
++  if (card.totalCost) {
++    const amount = cleanAmount(card.totalCost);
++    ctx.font = '700 52px sans-serif';
++    const unitWidth = ctx.measureText('万元').width;
++    ctx.fillStyle = '#e62c12';
++    const amountWidth = fitText(ctx, amount, 800, 132, 480 - unitWidth - 14);
++    ctx.fillText(amount, 62, 308);
++    ctx.fillStyle = '#704416';
++    ctx.font = '700 52px sans-serif';
++    ctx.fillText('万元', 76 + amountWidth, 308);
++  } else {
++    ctx.fillStyle = '#e62c12';
++    fitText(ctx, '测测建房预算', 700, 64, 480);
++    ctx.fillText('测测建房预算', 62, 308);
++  }
+
+   ctx.fillStyle = '#704416';
+-  ctx.font = '700 52px sans-serif';
+-  ctx.fillText('万元', 76 + amountWidth, 308);
+-
+-  ctx.fillStyle = '#704416';
+-  const areaText = `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`;
++  const areaText = card.buildingArea
++    ? `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`
++    : `${card.city} · 填写参数即可测算`;
+   fitText(ctx, areaText, 500, 36, 480);
+   ctx.fillText(areaText, 62, 426);
+   const specificationText = `${card.structureType} · ${card.windowStandard}门窗`;
+@@ -146,7 +152,7 @@
+   ctx.fillText(specificationText, 62, 486);
+ }
+
+-function drawCallToAction(ctx: any) {
++function drawCallToAction(ctx: any, label: string) {
+   const button = ctx.createLinearGradient(54, 650, 946, 766);
+   // Match the confirmed reference's warm gold button and white label.
+   button.addColorStop(0, '#e8b18b');
+@@ -157,7 +163,6 @@
+   ctx.fill();
+   ctx.fillStyle = '#ffffff';
+   ctx.font = '600 44px sans-serif';
+-  const label = '点击查看测算报告';
+   const textWidth = ctx.measureText(label).width;
+   const textX = (CARD_WIDTH - textWidth - 56) / 2;
+   ctx.fillText(label, textX, 723);
+@@ -191,7 +196,7 @@
+   drawCardHouseImage(ctx, houseImage);
+   drawCardFrame(ctx);
+   drawCardText(ctx, card);
+-  drawCallToAction(ctx);
++  drawCallToAction(ctx, card.totalCost ? '点击查看测算报告' : '点击测算建房预算');
+
+   return writeImage(buildCacheKey(card), canvasToDataURL(canvas));
+ }
+--- a/miniprogram/miniprogram/utils/costEstimateShareImage.js
++++ b/miniprogram/miniprogram/utils/costEstimateShareImage.js
+@@ -105,27 +105,36 @@
+     return ctx.measureText(text).width;
+ }
+ function drawCardText(ctx, card) {
+-    const amount = cleanAmount(card.totalCost);
+     ctx.fillStyle = '#704416';
+     ctx.font = '700 46px sans-serif';
+     ctx.fillText('建房造价测算', 62, 166);
+-    ctx.font = '700 52px sans-serif';
+-    const unitWidth = ctx.measureText('万元').width;
+-    ctx.fillStyle = '#e62c12';
+-    const amountWidth = fitText(ctx, amount, 800, 132, 480 - unitWidth - 14);
+-    ctx.fillText(amount, 62, 308);
++    if (card.totalCost) {
++        const amount = cleanAmount(card.totalCost);
++        ctx.font = '700 52px sans-serif';
++        const unitWidth = ctx.measureText('万元').width;
++        ctx.fillStyle = '#e62c12';
++        const amountWidth = fitText(ctx, amount, 800, 132, 480 - unitWidth - 14);
++        ctx.fillText(amount, 62, 308);
++        ctx.fillStyle = '#704416';
++        ctx.font = '700 52px sans-serif';
++        ctx.fillText('万元', 76 + amountWidth, 308);
++    }
++    else {
++        ctx.fillStyle = '#e62c12';
++        fitText(ctx, '测测建房预算', 700, 64, 480);
++        ctx.fillText('测测建房预算', 62, 308);
++    }
+     ctx.fillStyle = '#704416';
+-    ctx.font = '700 52px sans-serif';
+-    ctx.fillText('万元', 76 + amountWidth, 308);
+-    ctx.fillStyle = '#704416';
+-    const areaText = `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`;
++    const areaText = card.buildingArea
++        ? `${card.city} · 建筑面积${card.buildingArea.replace(/\s/g, '')}`
++        : `${card.city} · 填写参数即可测算`;
+     fitText(ctx, areaText, 500, 36, 480);
+     ctx.fillText(areaText, 62, 426);
+     const specificationText = `${card.structureType} · ${card.windowStandard}门窗`;
+     fitText(ctx, specificationText, 500, 34, 480);
+     ctx.fillText(specificationText, 62, 486);
+ }
+-function drawCallToAction(ctx) {
++function drawCallToAction(ctx, label) {
+     const button = ctx.createLinearGradient(54, 650, 946, 766);
+     // Match the confirmed reference's warm gold button and white label.
+     button.addColorStop(0, '#e8b18b');
+@@ -136,7 +145,6 @@
+     ctx.fill();
+     ctx.fillStyle = '#ffffff';
+     ctx.font = '600 44px sans-serif';
+-    const label = '点击查看测算报告';
+     const textWidth = ctx.measureText(label).width;
+     const textX = (CARD_WIDTH - textWidth - 56) / 2;
+     ctx.fillText(label, textX, 723);
+@@ -167,7 +175,7 @@
+     drawCardHouseImage(ctx, houseImage);
+     drawCardFrame(ctx);
+     drawCardText(ctx, card);
+-    drawCallToAction(ctx);
++    drawCallToAction(ctx, card.totalCost ? '点击查看测算报告' : '点击测算建房预算');
+     return writeImage(buildCacheKey(card), canvasToDataURL(canvas));
+ }
+ function prepareCostEstimateShareImage(card) {
+--- a/miniprogram/tests/cost-estimate-share-image.test.js
++++ b/miniprogram/tests/cost-estimate-share-image.test.js
+@@ -133,3 +133,14 @@
+   assert.ok(Number(title.font.match(/(\d+)px/)[1]) <= 46);
+   assert.ok(Number(parameter.font.match(/(\d+)px/)[1]) <= 36);
+ });
++
++test('unestimated form card invites a calculation without showing an amount or unit', async () => {
++  const helper = loadShareImageHelper();
++  await helper.prepare({ city: '泉州', buildingArea: '', structureType: '框架结构', windowStandard: '标准型' });
++  const labels = helper.textCalls.map(item => item.text);
++  assert.ok(labels.includes('测测建房预算'));
++  assert.ok(labels.includes('点击测算建房预算'));
++  assert.ok(labels.includes('泉州 · 填写参数即可测算'));
++  assert.ok(!labels.includes('万元'));
++  assert.ok(!labels.some(label => label.includes('建筑面积') || label.includes('--')));
++});
+--- a/miniprogram/tests/aicost-pricing.test.js
++++ b/miniprogram/tests/aicost-pricing.test.js
+@@ -5,7 +5,7 @@
+ const source = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicost/aicost.js'), 'utf8');
+ function form(overrides = {}, storageFails = false) {
+   let config, saved, toast, route;
+-  vm.runInNewContext(source, { Page: p => { config = p; }, wx: {
++  vm.runInNewContext(source, { exports: {}, require: () => ({ prepareCostEstimateShareImage: async () => '' }), Page: p => { config = p; }, wx: {
+     showToast: p => { toast = p.title; },
+     setStorageSync: (key, value) => { if (storageFails) throw new Error('storage full'); saved = value; },
+     navigateTo: p => { route = p.url; },
+--- /dev/null
++++ b/miniprogram/tests/aicost-form-share.test.js
+@@ -0,0 +1,55 @@
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++const assert = require('node:assert/strict');
++const { test } = require('node:test');
++const ts = require('./report-runtime')('typescript');
++
++function formShare(overrides = {}, cover = 'wxfile://form-share.jpg') {
++  let definition;
++  const cards = [];
++  const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicost/aicost.ts'), 'utf8'), {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
++  }).outputText;
++  vm.runInNewContext(code, {
++    exports: {},
++    Page(value) { definition = value; },
++    require() { return { prepareCostEstimateShareImage: async card => { cards.push(card); return cover; } }; },
++    wx: { getStorageSync() { throw new Error('must not reuse an earlier estimate'); } },
++  });
++  const page = { ...definition, data: { ...definition.data, ...overrides } };
++  return { share: page.onShareAppMessage(), cards };
++}
++
++test('blank form shares the same poster without calculating or claiming a price', async () => {
++  const { share, cards } = formShare();
++  assert.equal(share.title, '泉州建房要花多少钱？测测建房预算');
++  assert.equal(share.path, '/pages/aicost/aicost');
++  const result = await share.promise;
++  assert.equal(result.imageUrl, 'wxfile://form-share.jpg');
++  assert.equal(result.title, share.title);
++  assert.equal(result.path, share.path);
++  assert.equal(cards[0].totalCost, undefined);
++  assert.equal(cards[0].buildingArea, '');
++});
++
++test('partially filled form shares valid area and selected options but never a price', async () => {
++  const { share, cards } = formShare({ city: '厦门', buildingArea: '440', footprintArea: '', structureType: '钢结构', windowStandard: '品质型' });
++  await share.promise;
++  assert.equal(share.title, '厦门440㎡建房要花多少钱？测测建房预算');
++  assert.equal(cards[0].buildingArea, '440㎡');
++  assert.equal(cards[0].structureType, '钢结构');
++  assert.equal(cards[0].windowStandard, '品质型');
++  assert.equal(cards[0].totalCost, undefined);
++});
++
++test('invalid area is omitted and unavailable cover retains the correct title and form route', async () => {
++  for (const buildingArea of ['0', '-5', 'abc', 'Infinity']) {
++    const { share, cards } = formShare({ buildingArea }, '');
++    const result = await share.promise;
++    assert.equal(cards[0].buildingArea, '');
++    assert.equal(result.title, share.title);
++    assert.equal(result.path, '/pages/aicost/aicost');
++    assert.equal(result.imageUrl, undefined);
++  }
++});

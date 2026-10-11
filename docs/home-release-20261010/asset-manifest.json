@@ -1,0 +1,301 @@
+{
+  "releaseId": "20261010-b52afc7c12b5",
+  "assetPrefix": "assets/home-releases/20261010-b52afc7c12b5",
+  "baseCommit": "6408d98",
+  "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "staging": "/tmp/jdlg-home-cloud-20261010-b52afc7c12b5",
+  "assets": [
+    {
+      "property": "backdrop",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/backdrop.jpg",
+      "relative": "hd/backdrop.jpg",
+      "sha256": "81167400d04bcca8af476e0b902819079248d506168d3dcfa2801ddb2ce62bda",
+      "size": 96894,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/backdrop.jpg",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/backdrop.jpg"
+    },
+    {
+      "property": "brandSymbol",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/brand-symbol-old.png",
+      "relative": "hd/brand-symbol-old.png",
+      "sha256": "192c617b242fde203eb546965dbceed752949a64ed8967950ecddbd9ea4c6e0d",
+      "size": 144716,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/brand-symbol-old.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-symbol-old.png"
+    },
+    {
+      "property": "brandName",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/brand-name-old.png",
+      "relative": "hd/brand-name-old.png",
+      "sha256": "5c3c47a788cea6aaf29ead7fa1f2665744e7fcf89d37b2774a0df3b1de6e5c0c",
+      "size": 15922,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/brand-name-old.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-name-old.png"
+    },
+    {
+      "property": "brandEnglish",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/brand-en-old.png",
+      "relative": "hd/brand-en-old.png",
+      "sha256": "323f1361c8ddedfb68f6cc9dba81d39607c229898254d53de6b683d4cb4761f8",
+      "size": 9272,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/brand-en-old.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/brand-en-old.png"
+    },
+    {
+      "property": "advisor",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/advisor.png",
+      "relative": "hd/advisor.png",
+      "sha256": "9a586d4a143bae4492887658c10adecaadafc87cbaf805caa97926d4a7ba4a58",
+      "size": 87595,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/advisor.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/advisor.png"
+    },
+    {
+      "property": "calculator",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/calculator.png",
+      "relative": "hd/calculator.png",
+      "sha256": "16d9f9c24f0e876b423ce4b95d0cb951a82858cb36bda87825c9dd976a797fea",
+      "size": 89953,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/calculator.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/calculator.png"
+    },
+    {
+      "property": "aiTools",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/ai-tools.png",
+      "relative": "hd/ai-tools.png",
+      "sha256": "15d7666f211fdbd1d4e2cef5987c89c66933ba6e3019fe0effce9cc8cdbd62d2",
+      "size": 87857,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/ai-tools.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-tools.png"
+    },
+    {
+      "property": "villa",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/villa.png",
+      "relative": "hd/villa.png",
+      "sha256": "52e2b56a366fed5b3e5db659b80df28da7f734f584950352fdc2db96a23613c3",
+      "size": 92387,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/villa.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/villa.png"
+    },
+    {
+      "property": "interior",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/interior.png",
+      "relative": "hd/interior.png",
+      "sha256": "179ebe04b906af0dcff98312f1eea3e051a636fe7a751bcb79390b3a63add16b",
+      "size": 89481,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/interior.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/interior.png"
+    },
+    {
+      "property": "courtyard",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/courtyard.png",
+      "relative": "hd/courtyard.png",
+      "sha256": "b99b31e1af9b0dabc535daafeaa8a6fe61ca9beb9bcab71a3f242f3b69ae482b",
+      "size": 90232,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/courtyard.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/courtyard.png"
+    },
+    {
+      "property": "renovation",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/renovation.png",
+      "relative": "hd/renovation.png",
+      "sha256": "9e0e72c11d3d2d1a910a55e0aadf71c4f2d28046ce7b79d370efc25e81e3fe65",
+      "size": 92800,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/renovation.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/renovation.png"
+    },
+    {
+      "property": "templates",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/templates.png",
+      "relative": "hd/templates.png",
+      "sha256": "64535362e6375b58be0a74f2b4d2acc6e4f0ce139139327f0f9f8b24e06a9fbd",
+      "size": 90535,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/templates.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/templates.png"
+    },
+    {
+      "property": "aiPanel",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/ai-shell.png",
+      "relative": "hd/ai-shell.png",
+      "sha256": "9b58540c57469aeb44b76d7c940e5fb81462ca810927c1e5ddfda25e587169e0",
+      "size": 381094,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/ai-shell.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-shell.png"
+    },
+    {
+      "property": "aiOrb",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/ai-medallion.png",
+      "relative": "hd/ai-medallion.png",
+      "sha256": "774049ac81aea665ada12f6c31f7c0ef2f6ad8ca065bbdde1e151a53c1b39a6b",
+      "size": 75473,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/ai-medallion.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ai-medallion.png"
+    },
+    {
+      "property": "camera",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/camera.png",
+      "relative": "hd/camera.png",
+      "sha256": "74338c24a6d4619efa8860c8529364e8ea9e45ddcee4af9468928980de7a4768",
+      "size": 35700,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/camera.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/camera.png"
+    },
+    {
+      "property": "sparkles",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/sparkles.png",
+      "relative": "hd/sparkles.png",
+      "sha256": "424842926a2cb1d50c8f4f09df19fd40479660ff3de3bbec2281ec31e5cfa572",
+      "size": 31834,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/sparkles.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/sparkles.png"
+    },
+    {
+      "property": "costStats",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/cost-stat-v2.png",
+      "relative": "hd/cost-stat-v2.png",
+      "sha256": "20aeece529560cfa2319b88b0145656a566cc7654f7926feee39c66eb54cc397",
+      "size": 63905,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/cost-stat-v2.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/cost-stat-v2.png"
+    },
+    {
+      "property": "ruralVilla",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/rural-villa.png",
+      "relative": "hd/rural-villa.png",
+      "sha256": "d75a9590a1433f213cca69456f2602dd0c1af65e0939a6c262720f2c93229608",
+      "size": 43117,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/rural-villa.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/rural-villa.png"
+    },
+    {
+      "property": "urbanBuilding",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/urban-building.png",
+      "relative": "hd/urban-building.png",
+      "sha256": "695dd6cc5f7a6b80f913b46981e1b3a4e0717b8cbae931f43656f33b6a856aa3",
+      "size": 45818,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/urban-building.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/urban-building.png"
+    },
+    {
+      "property": "location",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/location.png",
+      "relative": "hd/location.png",
+      "sha256": "a7d0af1ad64b50705819f4fb4d19d1a0b12d26532bf46654122319e0bd471714",
+      "size": 28544,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/location.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/location.png"
+    },
+    {
+      "property": "ruler",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/ruler.png",
+      "relative": "hd/ruler.png",
+      "sha256": "c2a575fc8d107dbeae2bba8a3e2e311a891b6d0f766cb5a48441a784d9da98a6",
+      "size": 39622,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/ruler.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/ruler.png"
+    },
+    {
+      "property": "estimateButton",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/home-reference/hd/estimate-shell.png",
+      "relative": "hd/estimate-shell.png",
+      "sha256": "40150a5059cb4b549ac081124ff4d4dfcb4cba84fa0b58baa81a5fcf3c517421",
+      "size": 111757,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/hd/estimate-shell.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/hd/estimate-shell.png"
+    },
+    {
+      "property": "customerService",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/smart-service-icon.png",
+      "relative": "smart-service-icon.png",
+      "sha256": "3c35107b4ab0703b6f74dad6c3f976fb67f45a388b84de5bd383efac510717b9",
+      "size": 17185,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/smart-service-icon.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/smart-service-icon.png"
+    },
+    {
+      "property": "brandScene",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/需求文档/首页视觉方案/20261008-用户确认复刻/品牌背景/品牌区别墅庭院底图-20261009.png",
+      "relative": "brand-scene.png",
+      "sha256": "37b7125a5bf02f9da13c4ce0308098f15d421b3939cd927e0422ec782054434d",
+      "size": 2136554,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/brand-scene.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/brand-scene.png"
+    },
+    {
+      "property": "defaultTabbar",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/tabbar/未选中态@2x.png",
+      "relative": "tabbar/未选中态@2x.png",
+      "sha256": "8226e2596a8a5a6096f083c534172300a002dc62621f57c29a66f5ca5ba8abc2",
+      "size": 24136,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/tabbar/未选中态@2x.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/未选中态@2x.png"
+    },
+    {
+      "property": "homeTabbar",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/tabbar/首页导航栏@2x.png",
+      "relative": "tabbar/首页导航栏@2x.png",
+      "sha256": "5f622e9c6dffc734dd359a441d793d9b0abc62c8821aa61ba444eabe51190a5c",
+      "size": 24559,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/tabbar/首页导航栏@2x.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/首页导航栏@2x.png"
+    },
+    {
+      "property": "templateTabbar",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/tabbar/模板广场导航栏@2x.png",
+      "relative": "tabbar/模板广场导航栏@2x.png",
+      "sha256": "b0243b4fa4d7c6b15e7457348c6d6ae7d415b56a69e8fc7d4a654f47389251ec",
+      "size": 25005,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/tabbar/模板广场导航栏@2x.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/模板广场导航栏@2x.png"
+    },
+    {
+      "property": "designerTabbar",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/tabbar/设计师导航栏@2x.png",
+      "relative": "tabbar/设计师导航栏@2x.png",
+      "sha256": "bf4064ceca5cdf6ba0ae390c18b43d92e0c293c569ec2c263ef230600146b936",
+      "size": 24865,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/tabbar/设计师导航栏@2x.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/设计师导航栏@2x.png"
+    },
+    {
+      "property": "myTabbar",
+      "source": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/assets/tabbar/我的导航栏@2x.png",
+      "relative": "tabbar/我的导航栏@2x.png",
+      "sha256": "64491099a1b95db339ec751e835b1aeb89c880b25ff451f07b47313664342a41",
+      "size": 24948,
+      "key": "assets/home-releases/20261010-b52afc7c12b5/tabbar/我的导航栏@2x.png",
+      "url": "https://static.jiadilingguang.com/assets/home-releases/20261010-b52afc7c12b5/tabbar/我的导航栏@2x.png"
+    }
+  ],
+  "backupFiles": [
+    {
+      "path": "miniprogram/pages/index/index.wxml",
+      "sha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3"
+    },
+    {
+      "path": "miniprogram/pages/index/index.scss",
+      "sha256": "c4c125808aeb6bab8535b2a8e31c71feaede7df2a6317983583d6caf4481f707"
+    },
+    {
+      "path": "miniprogram/pages/index/index.wxss",
+      "sha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495"
+    },
+    {
+      "path": "miniprogram/pages/index/index.ts",
+      "sha256": "0059895df43b52aa057744225f4b3cf6b228a2e6a47e321618598fd764c74dcc"
+    },
+    {
+      "path": "miniprogram/pages/index/index.js",
+      "sha256": "9f59cb7030289a436315af78abad992093e5aa3ab07f7dd3ba2caca660aa6451"
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.ts",
+      "sha256": "1c1bb47ec564c4a00565257ce46d0e5bfe8193781e9fa9b0b4358813a48ae51b"
+    },
+    {
+      "path": "miniprogram/custom-tab-bar/index.js",
+      "sha256": "8e86a642e8b5680e47c88dda3ff2cdd4a24a85da1927fd16540777f385d7e65a"
+    }
+  ],
+  "baselineCommit": "fb043f9eeae8e70e23b363601a97b1b1be32a085"
+}

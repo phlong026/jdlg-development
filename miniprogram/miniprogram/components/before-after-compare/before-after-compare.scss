@@ -1,0 +1,128 @@
+.before-after-compare {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 28rpx;
+  background: linear-gradient(180deg, #efe6db 0%, #e2d4c4 100%);
+  box-shadow: inset 0 0 0 1rpx rgba(142, 112, 83, 0.08);
+}
+
+.before-after-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.before-after-base {
+  position: absolute;
+  inset: 0;
+}
+
+.before-after-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.before-after-overlay-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  min-width: 100%;
+}
+
+.before-after-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.before-after-divider-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4rpx;
+  transform: translateX(-50%);
+  background: rgba(255, 250, 243, 0.96);
+  box-shadow: 0 0 0 1rpx rgba(142, 112, 83, 0.14);
+}
+
+.before-after-divider-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 76rpx;
+  height: 76rpx;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 250, 243, 0.96);
+  box-shadow: 0 10rpx 20rpx rgba(113, 87, 59, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.before-after-divider-arrow {
+  width: 0;
+  height: 0;
+  border-top: 10rpx solid transparent;
+  border-bottom: 10rpx solid transparent;
+}
+
+.before-after-divider-arrow.left {
+  border-right: 14rpx solid #9d7550;
+}
+
+.before-after-divider-arrow.right {
+  border-left: 14rpx solid #9d7550;
+}
+
+.before-after-label {
+  position: absolute;
+  top: 20rpx;
+  height: 44rpx;
+  padding: 0 18rpx;
+  border-radius: 22rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
+  z-index: 4;
+  backdrop-filter: blur(12rpx);
+}
+
+.before-after-label.before {
+  left: 20rpx;
+  background: rgba(255, 250, 243, 0.9);
+  color: #7d6248;
+}
+
+.before-after-label.after {
+  right: 20rpx;
+  background: rgba(86, 61, 36, 0.76);
+  color: #fffaf3;
+}
+
+.before-after-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #9a836b;
+  background: rgba(239, 230, 219, 0.92);
+  z-index: 5;
+  border-radius: 28rpx;
+}

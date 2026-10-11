@@ -1,0 +1,180 @@
+<!--pages/Parentchildcreativity/Parentchildcreativity.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="亲子创意工坊" background="#e6daca">
+    <view slot="right" class="top-bar-right">
+      <t-icon name="more" size="40rpx" color="#6f5945" />
+      <t-icon name="circle" size="40rpx" color="#6f5945" />
+    </view>
+  </navigation-bar>
+
+  <!-- 渐变头部横幅 -->
+  <view class="header-banner">
+    <t-icon name="cloud" size="80rpx" color="rgba(255, 255, 255, 0.3)" class="cloud cloud-left" />
+    <t-icon name="cloud" size="80rpx" color="rgba(255, 255, 255, 0.3)" class="cloud cloud-right" />
+    <view class="banner-content">
+      <text class="banner-title">亲子创意工坊</text>
+      <view class="checkin-btn" bindtap="onDailyCheckin">
+        <text>每日签到领灵石</text>
+      </view>
+    </view>
+    <view class="buildings-illustration">
+      <t-icon name="home" size="60rpx" color="#fff" />
+    </view>
+  </view>
+
+  <!-- 主内容区域 -->
+  <view class="content-card">
+    <!-- 选择原型 -->
+    <view class="section">
+      <text class="section-title">选择原型</text>
+      <view class="option-group">
+        <view class="option-btn {{selectedPrototype === item.value ? 'active' : ''}}"
+              wx:for="{{prototypes}}"
+              wx:key="index"
+              bindtap="onSelectPrototype"
+              data-value="{{item.value}}">
+          {{item.label}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 设计风格 -->
+    <view class="section">
+      <text class="section-title">设计风格</text>
+      <view class="option-group">
+        <view class="option-btn {{selectedStyle === item.value ? 'active' : ''}}"
+              wx:for="{{styles}}"
+              wx:key="index"
+              bindtap="onSelectStyle"
+              data-value="{{item.value}}">
+          {{item.label}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 选择生成类型 -->
+    <view class="section">
+      <text class="section-title">选择生成类型</text>
+      <view class="option-group">
+        <view class="option-btn {{selectedType === item.value ? 'active' : ''}}"
+              wx:for="{{designTypes}}"
+              wx:key="index"
+              bindtap="onSelectType"
+              data-value="{{item.value}}">
+          <t-icon name="{{item.icon}}" size="32rpx" />
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 玩偶设计 -->
+    <view class="section" wx:if="{{selectedType === 'doll'}}">
+      <text class="section-title">玩偶设计</text>
+      <view class="form-item">
+        <text class="form-label">玩偶主题</text>
+        <input class="form-input" value="{{dollTheme}}" bindinput="onDollThemeInput" placeholder="如：小兔子、小熊、小猫咪..." />
+      </view>
+      <view class="form-item">
+        <text class="form-label">设计要求</text>
+        <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" value="{{dollRequirements}}" bindinput="onDollRequirementsInput" placeholder="描述你想要的玩偶特点..." maxlength="200" />
+      </view>
+      <view class="upload-btn" bindtap="onUploadDollReference">
+        <t-icon name="upload" size="36rpx" color="#6f5945" />
+        <text>上传参考图（可选）</text>
+      </view>
+      <view class="uploaded-images" wx:if="{{dollReferenceImages.length > 0}}">
+        <view class="image-item" wx:for="{{dollReferenceImages}}" wx:key="index">
+          <image class="uploaded-image" src="{{item}}" mode="aspectFill" />
+          <view class="image-delete" bindtap="onDeleteDollReferenceImage" data-index="{{index}}">×</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 海报设计 -->
+    <view class="section" wx:if="{{selectedType === 'poster'}}">
+      <text class="section-title">可爱海报设计</text>
+      <view class="form-item">
+        <text class="form-label">海报主题</text>
+        <input class="form-input" value="{{posterTheme}}" bindinput="onPosterThemeInput" placeholder="如：生日派对、节日祝福..." />
+      </view>
+      <view class="form-item">
+        <text class="form-label">文字内容</text>
+        <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" value="{{posterText}}" bindinput="onPosterTextInput" placeholder="输入海报上的文字..." maxlength="100" />
+      </view>
+      <view class="upload-btn" bindtap="onUploadPosterReference">
+        <t-icon name="upload" size="36rpx" color="#6f5945" />
+        <text>上传参考图（可选）</text>
+      </view>
+      <view class="uploaded-images" wx:if="{{posterReferenceImages.length > 0}}">
+        <view class="image-item" wx:for="{{posterReferenceImages}}" wx:key="index">
+          <image class="uploaded-image" src="{{item}}" mode="aspectFill" />
+          <view class="image-delete" bindtap="onDeletePosterReferenceImage" data-index="{{index}}">×</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 文创设计 -->
+    <view class="section" wx:if="{{selectedType === 'cultural'}}">
+      <text class="section-title">文创设计</text>
+      <view class="form-item">
+        <text class="form-label">产品类型</text>
+        <input class="form-input" value="{{culturalProductType}}" bindinput="onCulturalProductTypeInput" placeholder="如：T恤、杯子、书包..." />
+      </view>
+      <view class="form-item">
+        <text class="form-label">设计要求</text>
+        <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="form-textarea" value="{{culturalRequirements}}" bindinput="onCulturalRequirementsInput" placeholder="描述你想要的文创设计..." maxlength="200" />
+      </view>
+      <view class="upload-btn" bindtap="onUploadCulturalReference">
+        <t-icon name="upload" size="36rpx" color="#6f5945" />
+        <text>上传参考图（可选）</text>
+      </view>
+      <view class="uploaded-images" wx:if="{{culturalReferenceImages.length > 0}}">
+        <view class="image-item" wx:for="{{culturalReferenceImages}}" wx:key="index">
+          <image class="uploaded-image" src="{{item}}" mode="aspectFill" />
+          <view class="image-delete" bindtap="onDeleteCulturalReferenceImage" data-index="{{index}}">×</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 生成结果展示 -->
+    <view class="result-section" wx:if="{{generatedImages.length > 0}}">
+      <text class="section-title">生成的作品</text>
+      <view class="result-grid">
+        <view class="result-item" wx:for="{{generatedImages}}" wx:key="index">
+          <image class="result-image" src="{{item}}" mode="aspectFill" />
+          <view class="result-actions">
+            <view class="result-action-btn" bindtap="onSaveImage" data-index="{{index}}">
+              <t-icon name="download" size="32rpx" />
+              <text>保存</text>
+            </view>
+            <view class="result-action-btn" bindtap="onShareImage" data-index="{{index}}">
+              <t-icon name="share" size="32rpx" />
+              <text>分享</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- AI生成按钮 -->
+    <view class="generate-button-wrapper">
+      <button class="generate-button" bindtap="onGenerate" disabled="{{generating || !canGenerate}}">
+        {{generating ? '生成中...' : 'AI生成创意设计'}}
+      </button>
+    </view>
+
+    <!-- 底部操作按钮 -->
+    <view class="bottom-actions">
+      <view class="bottom-btn secondary" bindtap="onShowcase">
+        <text>晒作品</text>
+      </view>
+      <view class="bottom-btn primary" bindtap="onPublish">
+        <text>发布到模板广场</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部导航栏 -->
+  <custom-tabbar current="{{-1}}" bind:switch="onTabSwitch"></custom-tabbar>
+</view>

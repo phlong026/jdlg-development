@@ -1,0 +1,179 @@
+<!--pages/checkin/checkin.wxml-->
+<view class="checkin-container">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="每日签到" background="#e6daca" />
+
+  <view class="hero-card">
+    <view class="hero-orb hero-orb-left"></view>
+    <view class="hero-orb hero-orb-right"></view>
+    <view class="hero-badge-row">
+      <view class="hero-badge-main">每日福利</view>
+      <view class="hero-badge-sub">{{heroBadgeSubText}}</view>
+    </view>
+    <view class="hero-main">
+      <view class="hero-medal">
+        <text class="hero-medal-day">{{checkedToday ? currentConsecutiveDays : currentConsecutiveDays + 1}}</text>
+        <text class="hero-medal-label">DAY</text>
+      </view>
+      <view class="hero-copy">
+        <text class="hero-title">连续签到领灵石</text>
+        <text class="hero-subtitle">{{checkedToday ? '今天的签到奖励已到账，明天继续签到可领取' : '今天完成签到后，可领取'}} <text class="hero-subtitle-strong">{{checkedToday ? nextReward : todayReward}} 灵石</text> {{checkedToday ? '奖励。' : '奖励。'}}</text>
+        <view class="hero-tags">
+          <view class="hero-tag warm">
+            <t-icon name="gift" size="28rpx" color="#a9855b" />
+            <text>今日 +{{todayReward}}</text>
+          </view>
+          <view class="hero-tag soft">
+            <t-icon name="time" size="28rpx" color="#7c6751" />
+            <text>连签 {{currentConsecutiveDays}} 天</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="hero-footer">
+      <view class="hero-footer-item">
+        <text class="hero-footer-label">稳定奖励</text>
+        <text class="hero-footer-value">40 灵石 / 天</text>
+      </view>
+      <view class="hero-footer-divider"></view>
+      <view class="hero-footer-item">
+        <text class="hero-footer-label">当前状态</text>
+        <text class="hero-footer-value {{checkedToday ? 'done' : 'pending'}}">{{checkedToday ? '已完成签到' : '待领取奖励'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="overview-card">
+    <view class="overview-top">
+      <view class="overview-badge {{checkedToday ? 'done' : 'pending'}}">{{checkedToday ? '今日已签到' : '今日待签到'}}</view>
+      <text class="overview-streak">已连续签到 {{currentConsecutiveDays}} 天</text>
+    </view>
+    <view class="overview-title">保持连续签到，奖励会一路提升</view>
+    <view class="overview-desc">完成第 7 天签到后进入稳定奖励阶段，之后每天都可以固定获得 40 灵石。</view>
+    <view class="overview-grid">
+      <view class="overview-item primary">
+        <text class="overview-item-label">今日奖励</text>
+        <view class="overview-item-value-row">
+          <text class="overview-item-value">+{{todayReward}}</text>
+          <text class="overview-item-unit">灵石</text>
+        </view>
+      </view>
+      <view class="overview-item">
+        <text class="overview-item-label">明日奖励</text>
+        <view class="overview-item-value-row">
+          <text class="overview-item-value">+{{nextReward}}</text>
+          <text class="overview-item-unit">灵石</text>
+        </view>
+      </view>
+    </view>
+    <view class="overview-progress">
+      <view class="overview-progress-track">
+        <view class="overview-progress-fill" style="width: {{progressPercent}}%;"></view>
+      </view>
+      <text class="overview-progress-text">{{progressText}}</text>
+    </view>
+  </view>
+
+  <!-- 第一个奖励进度条 -->
+  <view class="progress-section">
+    <view class="section-head">
+      <text class="section-title">基础奖励阶段</text>
+      <text class="section-tag">第 1 - 4 天</text>
+    </view>
+    <view class="progress-bar">
+      <view 
+        class="progress-node {{item.completed ? 'completed' : ''}} {{item.current ? 'current' : ''}}" 
+        wx:for="{{firstProgress}}" 
+        wx:key="day"
+        wx:for-item="item"
+        wx:for-index="index"
+      >
+        <view class="node-icon">
+          <view class="icon-inner {{item.completed ? 'completed-icon' : 'pending-icon'}}">
+            <t-icon name="gift" size="42rpx" color="#b58a59" />
+          </view>
+        </view>
+        <view class="node-line {{item.completed ? 'completed-line' : 'pending-line'}}" wx:if="{{index < firstProgress.length - 1}}"></view>
+        <view class="node-label">
+          <text class="day-text">第{{item.day}}天</text>
+          <text class="reward-text">{{item.reward}}灵石</text>
+          <text class="current-tag" wx:if="{{item.current}}">今日待领</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 第二个奖励进度条 -->
+  <view class="progress-section">
+    <view class="section-head">
+      <text class="section-title">冲刺奖励阶段</text>
+      <text class="section-tag">第 5 - 7 天</text>
+    </view>
+    <view class="progress-bar">
+      <view 
+        class="progress-node {{item.completed ? 'completed' : ''}} {{item.current ? 'current' : ''}}" 
+        wx:for="{{secondProgress}}" 
+        wx:key="day"
+        wx:for-item="item"
+        wx:for-index="index"
+      >
+        <view class="node-icon">
+          <view class="icon-inner {{item.completed ? 'completed-icon' : 'pending-icon'}}">
+            <t-icon name="gift" size="42rpx" color="#b58a59" />
+          </view>
+        </view>
+        <view class="node-line {{item.completed ? 'completed-line' : 'pending-line'}}" wx:if="{{index < secondProgress.length - 1}}"></view>
+        <view class="node-label">
+          <text class="day-text">第{{item.day}}天</text>
+          <text class="reward-text">{{item.reward}}灵石</text>
+          <text class="current-tag" wx:if="{{item.current}}">今日待领</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 立即签到按钮 -->
+  <view class="checkin-button-wrapper">
+    <button 
+      class="checkin-button {{canCheckin ? '' : 'disabled'}}" 
+      bindtap="onCheckin"
+      disabled="{{!canCheckin || loading}}"
+    >
+      {{loading ? '签到中...' : (checkedToday ? '今日已签到，明天再来' : '立即签到')}}
+    </button>
+  </view>
+
+  <view class="checkin-result-card" wx:if="{{checkinResultVisible}}">
+    <view class="checkin-result-header">
+      <view>
+        <text class="checkin-result-title">签到成功</text>
+        <text class="checkin-result-subtitle">今天的奖励已经到账，明天记得继续来领。</text>
+      </view>
+      <view class="checkin-result-close" bindtap="closeCheckinResult">
+        <t-icon name="close" size="34rpx" color="#8c7553" />
+      </view>
+    </view>
+    <view class="checkin-result-body">
+      <view class="checkin-result-item primary">
+        <text class="checkin-result-label">本次到账</text>
+        <text class="checkin-result-value">+{{lastCheckinReward}}</text>
+        <text class="checkin-result-unit">灵石</text>
+      </view>
+      <view class="checkin-result-item">
+        <text class="checkin-result-label">连续签到</text>
+        <text class="checkin-result-value small">{{lastCheckinDays}} 天</text>
+        <text class="checkin-result-unit">继续保持</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 签到规则说明 -->
+  <view class="rules-section">
+    <view class="rules-box">
+      <text class="rules-title">签到规则</text>
+      <text class="rules-text">1. 连续签到奖励依次为 5 / 10 / 20 / 25 / 30 / 35 / 40 灵石。</text>
+      <text class="rules-text">2. 第 7 天及以后保持连续签到，每天固定获得 40 灵石。</text>
+      <text class="rules-text">3. 如果中途断签，将从第 1 天奖励重新开始计算。</text>
+    </view>
+  </view>
+</view>

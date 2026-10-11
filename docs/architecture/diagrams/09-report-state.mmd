@@ -1,0 +1,23 @@
+%% name: report-state
+stateDiagram-v2
+    [*] --> previewQueued: 规范化问卷并幂等创建
+    previewQueued --> previewGenerating: Worker 获取租约
+    previewGenerating --> previewReady: 保存预览快照及可选 PDF
+    previewGenerating --> previewQueued: 未达重试上限的失败
+    previewReady --> fullQueued: 服务端验证支付并冻结方案包
+    fullQueued --> fullGenerating: Worker 获取租约
+    fullGenerating --> ready: 上传私有 PDF 并保存结果
+    fullGenerating --> fullQueued: 未达重试上限的失败
+    previewGenerating --> failed: 达重试上限
+    fullGenerating --> failed: 达重试上限
+    failed --> previewQueued: 手动重试预览阶段
+    failed --> fullQueued: 已支付且重试完整阶段
+    ready --> downloadable: 同时完成真实企微联系人绑定
+    state "preview_queued" as previewQueued
+    state "preview_generating" as previewGenerating
+    state "preview_ready" as previewReady
+    state "full_queued" as fullQueued
+    state "full_generating" as fullGenerating
+    state "ready" as ready
+    state "failed" as failed
+    state "具备完整下载权限：派生状态" as downloadable

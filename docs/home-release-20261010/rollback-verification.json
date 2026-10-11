@@ -1,0 +1,8 @@
+{
+  "guardRejectsLaterEdits": true,
+  "guardWritesNothing": true,
+  "dryRunWritesNothing": true,
+  "applyRestoresOriginalHashes": true,
+  "fixture": "/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-rollback-xq2lxzrk",
+  "restored": 9
+}

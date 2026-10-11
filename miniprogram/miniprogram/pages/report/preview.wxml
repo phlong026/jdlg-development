@@ -1,0 +1,40 @@
+<view class="report-page">
+  <text class="eyebrow">甲第灵光 · 您家的建房方向</text>
+  <view class="card" wx:if="{{!sections.length}}"><text class="page-title">{{statusLabel || '正在读取您的报告'}}</text><text class="body">先把一家人的需要理清楚。生成完成后，内容会自动出现在这里。</text></view>
+  <block wx:if="{{sections.length === 4}}">
+    <block wx:if="{{modern}}">
+      <view class="card" wx:for="{{sections}}" wx:for-item="section" wx:key="number">
+        <text class="eyebrow">0{{section.number}} / 04 · 您家的建房方向</text>
+        <text class="section-title">{{section.title}}</text><text class="body">{{section.subtitle}}</text>
+        <view class="text-block" wx:for="{{section.blocks}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view>
+        <view class="value-row" wx:for="{{section.priorities}}" wx:key="title"><text class="number">0{{index + 1}}</text><view><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view></view>
+        <view class="inset" wx:for="{{section.table}}" wx:for-item="row" wx:key="index"><text class="body" wx:for="{{row}}" wx:for-item="cell" wx:key="index">{{cell}}</text></view>
+        <view class="text-block" wx:for="{{section.actions}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view>
+        <text class="body" wx:if="{{section.note}}">{{section.note}}</text><text class="caption" wx:if="{{section.disclaimer}}">{{section.disclaimer}}</text>
+        <view class="inset" wx:if="{{houseReport && section.number === 4}}"><text class="item-title">确认本次设计输入</text><view class="text-block" wx:for="{{houseInputs}}" wx:key="index"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view></view>
+      </view>
+      <view class="card" wx:if="{{!report.paid}}"><text class="section-title">{{report.confirmed ? '需求已确认' : '这些内容是否准确？'}}</text><text class="body" wx:if="{{prioritySummary}}">您的优先顺序：{{prioritySummary}}</text><block wx:if="{{needsConfirmation}}"><view class="choices"><button wx:for="{{confirmationOptions}}" wx:key="value" class="choice {{confirmationChoice === item.value ? 'selected' : ''}}" data-choice="{{item.value}}" bindtap="chooseConfirmation">{{item.label}}</button></view><button class="primary" bindtap="confirm" disabled="{{!confirmationChoice || confirming}}" loading="{{confirming}}">确认需求，查看购买条件</button><text class="caption">确认不会扣费。若核心信息有误，请先重新填写，再购买。</text></block></view>
+    </block>
+    <block wx:else>
+    <view class="report-cover"><text class="eyebrow">01 / 04 · 您家的建房计划</text><text class="page-title">{{sections[0].title}}</text><text class="hero-copy">{{sections[0].subtitle}}</text><view class="divider" /><text class="item-title">{{facts.region}} · {{facts.family}}</text><text class="body">{{facts.goal}}</text><view class="facts-grid"><view><text class="metric">{{facts.width_m}} × {{facts.depth_m}}</text><text class="caption">宅基地参考尺寸 / 米</text></view><view><text class="metric">{{facts.floors}} 层 · {{facts.bedrooms}} 卧</text><text class="caption">您的空间愿望</text></view></view><text class="caption">报告编号 {{id}}</text></view>
+    <view class="card"><text class="eyebrow">02 / 04 · 判断依据</text><text class="section-title">{{sections[1].title}}</text><text class="body">{{sections[1].subtitle}}</text><view class="text-block" wx:for="{{sections[1].blocks}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view><view class="inset"><text class="item-title">还需要核实</text><text class="body" wx:for="{{missing}}" wx:key="*this">· {{item}}</text></view></view>
+    <view class="card"><text class="eyebrow">03 / 04 · 家庭与宅基地</text><text class="section-title">{{sections[2].title}}</text><text class="body">{{sections[2].subtitle}}</text><view class="inset"><text class="body">常住成员：{{facts.residents}}
+偏好风格：{{facts.style}}
+计划投入：{{facts.budget_wan}} 万元 / {{facts.budget_scope}}
+最在意：{{facts.priorities}}</text></view><view class="text-block" wx:for="{{sections[2].blocks}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view></view>
+    <view class="card"><text class="eyebrow">04 / 04 · 优先解决的问题</text><text class="section-title">{{sections[3].title}}</text><text class="body">{{sections[3].subtitle}}</text><view class="text-block" wx:for="{{sections[3].blocks}}" wx:key="title"><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view><view class="value-row" wx:for="{{sections[3].priorities}}" wx:key="title"><text class="number">0{{index + 1}}</text><view><text class="item-title">{{item.title}}</text><text class="body">{{item.body}}</text></view></view></view>
+    </block>
+    <view class="card purchase" wx:if="{{modern && !report.paid}}"><text class="eyebrow">把需求变成可讨论的方案</text><text class="section-title">{{houseReport ? '为您家生成图文并茂的整屋报告' : '进一步比较适合您家的建房方向'}}</text><text class="body" wx:if="{{houseReport}}">根据已确认的家庭与宅基地信息，生成整屋概念方案、逐层平面、体量与外观方向，并附方案比较、预算边界、设计需求和行动清单。完整报告页数随楼层与方案内容变化。</text><text class="body" wx:else>依据您确认的需求，继续展开方向比较、预算口径、设计需求和行动清单。</text><button class="primary" loading="{{paying}}" disabled="{{!canPurchase || paying || confirming}}" bindtap="pay">{{canPurchase ? '购买完整建房报告 · ¥' + price : report.confirmed ? '暂未开放购买' : '请先确认上方需求'}}</button><text class="caption" wx:if="{{paymentBlockHint}}">{{paymentBlockHint}}</text><text class="caption">支付后后台异步制作。购买账号可直接领取，企业微信用于接收入口和后续沟通。图示为概念参考，需后续实测与专业设计深化。</text></view>
+    <view class="card purchase" wx:elif="{{!report.paid}}"><text class="eyebrow">接下来，把方向放进具体方案里</text><text class="section-title">不是再多看几张漂亮图片，
+而是比较哪一种更适合您家。</text><text class="body">完整报告会继续展开：
+· 三种概念方案的分层平面、正立面与体量参考
+· 每种方案得到什么，又要放弃什么
+· 方案横向比较、预算配置与下一步资料清单</text><text class="caption">方案基于审核素材匹配，需后续现场核实与设计深化；不等同于为您定制的施工图。</text><button class="primary" loading="{{paying}}" disabled="{{!report.can_pay || paying}}" bindtap="pay">{{report.can_pay ? '查看完整建房报告 · ¥' + price : '完整方案暂未开放购买'}}</button><text class="caption" wx:if="{{paymentBlockHint}}">{{paymentBlockHint}}</text><text class="caption">付费后制作 14 页 PDF；添加企业微信，接收本人专属领取入口。</text></view>
+    <button wx:else class="primary" bindtap="delivery">查看完整报告的交付进度</button>
+    <button wx:if="{{report.preview_pdf_available}}" class="secondary" bindtap="document">另存前四部分为 PDF</button>
+  </block>
+  <view class="inset" wx:if="{{contactSupport}}"><text class="body">{{deliveryHint}}</text><text class="caption">报告编号 {{id}}</text></view>
+  <view class="error" wx:if="{{error}}">{{error}}</view><button class="secondary" wx:if="{{error || !sections.length}}" bindtap="refresh">刷新报告状态</button><button wx:if="{{canRetry}}" class="primary" loading="{{paying}}" bindtap="retry">重试生成</button>
+  <report-document wx:if="{{showDocument}}" title="您的建房方向 · 前四部分" mode="preview" status="{{documentStatus}}" document-url="{{documentURL}}" bind:refresh="document" />
+  <text class="caption">报告用于前期沟通。审批、结构安全、地勘及最终造价须由当地具备资质的专业人员核实。</text>
+</view>

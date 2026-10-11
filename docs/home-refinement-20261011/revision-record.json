@@ -1,0 +1,23 @@
+{
+  "baselineCommit": "f7caa200750ccd313265bd72d5b2d6cacc15eec5",
+  "branch": "fix/home-safe-area-layout-20261011",
+  "localRevision": "品牌整体放大20%，局部透明渐变突出品牌并保留别墅；首页其他已确认调整保持",
+  "backendDeveloperVersion": "7.2.9",
+  "uploadedThisRevision": false,
+  "submittedReview": false,
+  "published": false,
+  "cloudImagesChanged": false,
+  "retainedCloudAssetCount": 29,
+  "previewSuccess": true,
+  "previewMainBytes": 1463558,
+  "previewTotalBytes": 2557930,
+  "realDeviceAcceptance": false,
+  "rollbackVerificationPassed": true,
+  "homepageTestsPassed": 8,
+  "fullTestFiles": 30,
+  "fullTestPassed": 28,
+  "knownPreexistingFailures": [
+    "customer-service-action-placement.test.js",
+    "customer-service-knowledge.test.js"
+  ]
+}

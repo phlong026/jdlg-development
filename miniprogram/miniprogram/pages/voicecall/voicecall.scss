@@ -1,0 +1,139 @@
+/* pages/voicecall/voicecall.wxss */
+.page {
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(180deg, #FFEEEE 0%, #EEDDFF 30%, #DDEEFF 70%, #CCEEFF 100%);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  // 主内容区域
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60rpx 30rpx;
+    position: relative;
+
+    // 中央头像
+    .avatar-container {
+      width: 500rpx;
+      height: 500rpx;
+      border-radius: 50%;
+      background: #fff;
+      padding: 10rpx;
+      box-shadow: 0 10rpx 50rpx rgba(0, 0, 0, 0.1);
+      margin-bottom: 60rpx;
+
+      .avatar-image {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+      }
+    }
+
+
+  }
+
+  // 底部控制栏
+  .control-bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 40rpx;
+    padding: 40rpx 30rpx;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 40rpx);
+
+    &-top {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+
+      // 语音指示器
+      .voice-indicator {
+        display: flex;
+        align-items: center;
+        gap: 15rpx;
+        margin-bottom: 30rpx;
+
+        .dot {
+          width: 12rpx;
+          height: 12rpx;
+          background: #555;
+          border-radius: 50%;
+          animation: pulse 1.5s infinite;
+        }
+
+        .dot-second {
+          animation-delay: 0.2s;
+        }
+
+        .dot-third {
+          animation-delay: 0.4s;
+        }
+      }
+
+      // 状态文本
+      .status-text {
+        font-size: 28rpx;
+        color: #666;
+        text-align: center;
+      }
+    }
+
+    &-bottom {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+
+      .control-btn {
+        flex: 1;
+        width: 100rpx;
+        height: 100rpx;
+        max-width: 100rpx;
+        background: #E8E8E8;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4rpx 15rpx rgba(0, 0, 0, 0.1);
+        margin: 10rpx;
+
+        .icon {
+          font-size: 48rpx;
+          color: #333;
+          font-weight: 300;
+        }
+
+        &.end-call {
+          background: #FF0000;
+
+          .icon {
+            color: #fff;
+            font-weight: bold;
+            font-size: 52rpx;
+          }
+        }
+      }
+    }
+  }
+}
+
+// 动画
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}

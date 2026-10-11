@@ -1,0 +1,244 @@
+<!--pages/generatehistory/generatehistory.wxml-->
+<view class="page {{isEditMode ? 'page-edit-mode' : ''}}">
+  <navigation-bar wx:if="{{!isEditMode}}" title="生成历史" background="#e6daca"></navigation-bar>
+
+  <view class="edit-fixed-header" wx:if="{{isEditMode}}">
+    <navigation-bar title="生成历史" background="#e6daca"></navigation-bar>
+    <view class="manage-toolbar" wx:if="{{!loading && list.length > 0}}">
+      <view class="manage-toolbar-action is-left" bindtap="onToggleEditMode">
+        <text>取消</text>
+      </view>
+      <view class="manage-toolbar-title">
+        <text>已选择 {{selectedIds.length}} 项</text>
+      </view>
+      <view class="manage-toolbar-action is-right" bindtap="onToggleSelectAll">
+        <text>{{selectAll ? '取消全选' : '全选当前页'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="page-overview" wx:if="{{!loading && list.length > 0 && !isEditMode}}">
+    <view class="page-overview-copy">
+      <text class="page-overview-eyebrow">最近生成</text>
+      <text class="page-overview-title">共 {{total || list.length}} 条记录</text>
+      <text class="page-overview-desc">点击卡片查看完整结果，左滑可以删除记录</text>
+    </view>
+    <view class="page-toolbar-action" bindtap="onToggleEditMode">
+      <text>管理记录</text>
+    </view>
+  </view>
+
+  <view class="draft-card" wx:if="{{hasLocalDraft && !isEditMode}}" bindtap="onContinueLocalDraft">
+    <view class="draft-card-main">
+      <view class="draft-card-icon">
+        <t-icon name="edit-1" size="38rpx" color="#8a5a2f" />
+      </view>
+      <view class="draft-card-copy">
+        <text class="draft-card-label">本机草稿</text>
+        <text class="draft-card-title">{{localDraft.draftTitle}}</text>
+        <text class="draft-card-meta">{{localDraft.draftMeta}}{{localDraft.draftTimeText ? ' · ' + localDraft.draftTimeText : ''}}</text>
+      </view>
+    </view>
+    <view class="draft-card-actions">
+      <view class="draft-card-action secondary" catchtap="onDiscardLocalDraft">丢弃</view>
+      <view class="draft-card-action primary" catchtap="onContinueLocalDraft">继续编辑</view>
+    </view>
+  </view>
+
+  <view class="tool-filter" wx:if="{{hasAITools && !isEditMode}}">
+    <text class="filter-label">AI工具：</text>
+    <view class="filter-options">
+      <view
+        class="filter-option {{selectedToolId === '' ? 'active' : ''}}"
+        bindtap="onFilterByTool"
+        data-id=""
+      >
+        <text>全部</text>
+      </view>
+      <view
+        class="filter-option {{selectedToolId === item.id ? 'active' : ''}}"
+        wx:for="{{availableTools}}"
+        wx:key="id"
+        bindtap="onFilterByTool"
+        data-id="{{item.id}}"
+      >
+        <text>{{item.name}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="loading-container" wx:if="{{loading && !list.length}}">
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <view class="empty-container" wx:elif="{{!loading && !list.length}}">
+    <t-icon name="image" size="120rpx" color="#8c7553" />
+    <text class="empty-text">暂无生成记录</text>
+    <view class="empty-btn" bindtap="goToGenerate">去生成</view>
+  </view>
+
+  <view class="history-list" wx:elif="{{!isEditMode}}">
+    <view
+      class="swipe-container"
+      wx:for="{{list}}"
+      wx:key="id"
+    >
+      <view
+        class="swipe-content"
+        style="transform: translateX({{swipedItemId === item.task_no ? '-160rpx' : '0'}})"
+        bindtouchstart="onTouchStart"
+        bindtouchmove="onTouchMove"
+        bindtouchend="onTouchEnd"
+        data-id="{{item.task_no}}"
+        data-item="{{item}}"
+        bindtap="onItemClick"
+      >
+        <view class="item-main">
+          <view class="item-thumbnail">
+            <image
+              wx:if="{{item.displayThumbnailUrl}}"
+              src="{{item.displayThumbnailUrl}}"
+              mode="aspectFit"
+              lazy-load
+            />
+            <view class="no-image" wx:else>
+              <t-icon name="image" size="60rpx" color="#9b8466" />
+            </view>
+            <view class="status-tag {{item.status}}">
+              <text wx:if="{{item.status === 'pending'}}">等待中</text>
+              <text wx:elif="{{item.status === 'processing'}}">生成中</text>
+              <text wx:elif="{{item.status === 'success'}}">已完成</text>
+              <text wx:elif="{{item.status === 'failed'}}">失败</text>
+            </view>
+          </view>
+
+          <view class="item-info">
+            <view class="item-header">
+              <view class="item-title-group">
+                <text class="item-title">{{item.sceneText}}</text>
+                <view class="item-tool-badge" wx:if="{{item.tool_name}}">
+                  <text>{{item.tool_name}}</text>
+                </view>
+              </view>
+              <view class="item-detail-entry" catchtap="goToDetail" data-item="{{item}}">
+                <text>详情</text>
+                <t-icon name="chevron-right" size="32rpx" color="#72573b" />
+              </view>
+            </view>
+
+            <view class="item-metrics">
+              <view class="metric-pill">
+                <text class="metric-pill-label">消耗</text>
+                <text class="metric-pill-value">{{item.stones_used}} 灵石</text>
+              </view>
+              <view class="metric-pill muted">
+                <text class="metric-pill-label">时间</text>
+                <text class="metric-pill-value">{{item.createdAtText}}</text>
+              </view>
+            </view>
+
+            <view class="ref-image-wrap" wx:if="{{item.referencePreviewUrls && item.referencePreviewUrls.length}}">
+              <text class="ref-label">参考图</text>
+              <view class="ref-thumb-list">
+                <image
+                  class="ref-thumb"
+                  wx:for="{{item.referencePreviewUrls}}"
+                  wx:key="index"
+                  wx:for-item="refImage"
+                  src="{{refImage}}"
+                  mode="aspectFill"
+                />
+                <view class="ref-thumb ref-thumb-more" wx:if="{{item.referenceOverflowCount > 0}}">
+                  <text>+{{item.referenceOverflowCount}}</text>
+                </view>
+              </view>
+            </view>
+
+            <view class="excel-link-wrap" wx:if="{{item.scene === 'ai_cost_doc' && item.excel_url}}">
+              <text class="excel-link-tip">Excel 已生成，复制链接到浏览器下载</text>
+              <view class="copy-excel-btn" catchtap="onCopyExcelLink" data-item="{{item}}">复制下载链接</view>
+            </view>
+            <view class="excel-link-wrap pending" wx:elif="{{item.scene === 'ai_cost_doc' && item.status === 'success' && !item.excel_url}}">
+              <text class="excel-link-tip">链接加载中...</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="swipe-action" catchtap="onDelete" data-item="{{item}}">
+        <t-icon name="delete" size="36rpx" color="#fff" />
+        <text class="swipe-action-text">删除</text>
+      </view>
+    </view>
+
+    <view class="load-more" wx:if="{{hasMore}}">
+      <text wx:if="{{loadingMore}}" class="load-more-text">加载中...</text>
+      <text wx:else class="load-more-text">上拉加载更多</text>
+    </view>
+
+    <view class="no-more" wx:elif="{{list.length > 0}}">
+      <text>没有更多了</text>
+    </view>
+  </view>
+
+  <view class="manage-content" wx:else>
+    <view class="manage-summary">
+      <text class="manage-summary-text">共 {{total || list.length}} 条记录</text>
+    </view>
+
+    <view class="manage-grid">
+      <view
+        class="manage-card"
+        wx:for="{{list}}"
+        wx:key="id"
+        catchtap="onToggleSelect"
+        data-id="{{item.task_no}}"
+      >
+        <view class="manage-card-media">
+          <image
+            wx:if="{{item.displayThumbnailUrl}}"
+            src="{{item.displayThumbnailUrl}}"
+            mode="aspectFit"
+            lazy-load
+          />
+          <view class="manage-no-image" wx:else>
+            <t-icon name="image" size="52rpx" color="#9b8466" />
+          </view>
+          <view class="manage-select-indicator {{selectedMap[item.task_no] ? 'checked' : ''}}">
+            <text wx:if="{{selectedMap[item.task_no]}}" class="manage-select-check">✓</text>
+          </view>
+          <view class="manage-status-tag {{item.status}}">
+            <text wx:if="{{item.status === 'pending'}}">等待中</text>
+            <text wx:elif="{{item.status === 'processing'}}">生成中</text>
+            <text wx:elif="{{item.status === 'success'}}">已完成</text>
+            <text wx:elif="{{item.status === 'failed'}}">失败</text>
+          </view>
+        </view>
+
+        <view class="manage-card-body">
+          <text class="manage-card-title">{{item.sceneText}}</text>
+          <text class="manage-card-meta" wx:if="{{item.tool_name}}">{{item.tool_name}}</text>
+          <text class="manage-card-meta">{{item.createdAtText}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="load-more" wx:if="{{hasMore}}">
+      <text wx:if="{{loadingMore}}" class="load-more-text">加载中...</text>
+      <text wx:else class="load-more-text">上拉加载更多</text>
+    </view>
+
+    <view class="no-more" wx:elif="{{list.length > 0}}">
+      <text>没有更多了</text>
+    </view>
+  </view>
+
+  <view class="batch-action-bar" wx:if="{{isEditMode}}">
+    <view class="batch-selection-count">
+      <text>已选 {{selectedIds.length}} 项</text>
+    </view>
+    <view class="batch-delete-btn {{selectedIds.length > 0 ? 'active' : 'disabled'}}" bindtap="onBatchDelete">
+      <text>删除所选{{selectedIds.length > 0 ? ' (' + selectedIds.length + ')' : ''}}</text>
+    </view>
+  </view>
+</view>

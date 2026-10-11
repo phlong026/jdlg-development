@@ -1,0 +1,217 @@
+<view class="page">
+  <navigation-bar title="AI建房顾问" background="#dcc7ad" />
+
+  <scroll-view
+    class="message-list {{demandFormVisible ? 'collecting' : ''}}"
+    scroll-y
+    scroll-with-animation="{{true}}"
+    scroll-into-view="{{scrollIntoView}}"
+  >
+    <view class="message-item {{item.role}}" wx:for="{{messages}}" wx:key="id">
+      <view class="message-bubble">
+        <view wx:if="{{!item.content && aiStreamingMessageId === item.id}}" class="typing-indicator">
+          <view class="typing-dot"></view>
+          <view class="typing-dot"></view>
+          <view class="typing-dot"></view>
+        </view>
+        <text wx:else>{{item.content}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{consultationPlan.visible}}" class="plan-card" bindtap="onPlanCardTap">
+      <image wx:if="{{consultationPlan.imageUrl}}" class="plan-card-image" src="{{consultationPlan.imageUrl}}" mode="aspectFill" />
+      <view class="plan-card-content">
+        <text class="plan-card-title">已带入这套方案</text>
+        <text class="plan-card-summary">{{consultationPlan.summary}}</text>
+        <text class="plan-card-meta">点击查看方案详情</text>
+      </view>
+    </view>
+
+    <view wx:if="{{demandSummaryVisible}}" class="demand-summary-card">
+      <view class="demand-summary-head">
+        <text class="demand-summary-title">已为你整理好建房需求</text>
+        <text class="demand-summary-edit" bindtap="onContinueDemandSupplement">继续补充</text>
+      </view>
+      <text class="demand-summary-text">{{demandSummary}}</text>
+      <text class="demand-summary-value">可直接生成方案，也可交给设计老师继续深化。</text>
+      <view class="demand-summary-actions">
+        <view class="demand-summary-btn" bindtap="goGenerate">一键生成专属方案</view>
+        <view class="demand-summary-btn secondary" bindtap="handoffHuman">对接设计老师</view>
+      </view>
+    </view>
+
+    <view wx:if="{{demandSummaryVisible && (styleReferenceLoading || styleReferenceList.length > 0)}}" class="style-reference-card">
+      <view class="style-reference-head">
+        <view>
+          <text class="style-reference-title">选择{{matchedStyleLabel}}点赞前 8 参考图</text>
+          <text class="style-reference-subtitle">参考图优先决定外观风格，文字需求只补充层数、尺寸和功能。</text>
+        </view>
+      </view>
+      <view class="style-reference-tabs">
+        <view
+          wx:for="{{styleReferenceTabs}}"
+          wx:key="value"
+          class="style-reference-tab {{matchedStyleValue === item.value ? 'active' : ''}}"
+          data-value="{{item.value}}"
+          bindtap="onStyleReferenceTabTap"
+        >{{item.label}}</view>
+      </view>
+      <view wx:if="{{styleReferenceLoading}}" class="style-reference-loading">正在匹配模板广场风格图...</view>
+      <view wx:elif="{{styleReferenceEmptyText}}" class="style-reference-empty">{{styleReferenceEmptyText}}</view>
+      <scroll-view wx:else class="style-reference-scroll" scroll-x enhanced="{{true}}" show-scrollbar="{{false}}">
+        <view class="style-reference-list">
+          <view
+            wx:for="{{styleReferenceList}}"
+            wx:key="id"
+            class="style-reference-item {{selectedStyleReference && selectedStyleReference.id === item.id ? 'active' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onStyleReferenceTap"
+          >
+            <image class="style-reference-image" src="{{item.imageUrl}}" mode="aspectFill" />
+            <text class="style-reference-name">{{item.title}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view wx:if="{{demandFormVisible}}" class="demand-card">
+      <view class="demand-header">
+        <view>
+          <text class="demand-title">建房需求采集</text>
+          <text class="demand-subtitle">第 {{demandStep}} 步 / 共 4 步，只需补充关键内容。</text>
+        </view>
+        <view class="demand-close" bindtap="closeDemandCollector">暂不填写</view>
+      </view>
+
+      <block wx:if="{{demandStep === 1}}">
+        <view class="demand-field">
+        <text class="demand-label">建筑层数</text>
+        <view class="demand-options">
+          <view
+            wx:for="{{floorOptions}}"
+            wx:key="*this"
+            class="demand-option {{demandForm.floors === item ? 'active' : ''}}"
+            bindtap="onDemandOptionTap"
+            data-field="floors"
+            data-value="{{item}}"
+          >{{item}}</view>
+        </view>
+        </view>
+
+        <view class="demand-field">
+        <text class="demand-label">建筑风格</text>
+        <view class="demand-options">
+          <view
+            wx:for="{{styleOptions}}"
+            wx:key="*this"
+            class="demand-option {{demandForm.style === item ? 'active' : ''}}"
+            bindtap="onDemandOptionTap"
+            data-field="style"
+            data-value="{{item}}"
+          >{{item}}</view>
+        </view>
+        </view>
+      </block>
+
+      <block wx:elif="{{demandStep === 2}}">
+        <view class="demand-grid">
+          <view class="demand-field compact">
+            <text class="demand-label">宅基地面宽</text>
+            <input class="demand-input" type="digit" value="{{demandForm.landWidth}}" placeholder="如 12" data-field="landWidth" cursor-spacing="140" confirm-hold="{{true}}" bindinput="onDemandInput" />
+          </view>
+          <view class="demand-field compact">
+            <text class="demand-label">宅基地进深</text>
+            <input class="demand-input" type="digit" value="{{demandForm.landDepth}}" placeholder="如 15" data-field="landDepth" cursor-spacing="140" confirm-hold="{{true}}" bindinput="onDemandInput" />
+          </view>
+        </view>
+      </block>
+
+      <block wx:elif="{{demandStep === 3}}">
+        <view class="demand-field">
+          <text class="demand-label">房间/功能需求</text>
+          <input class="demand-input" value="{{demandForm.rooms}}" placeholder="如 4房2厅、老人房、车库、露台" data-field="rooms" cursor-spacing="140" confirm-hold="{{true}}" bindinput="onDemandInput" />
+        </view>
+      </block>
+
+      <block wx:elif="{{demandStep === 4}}">
+        <view class="demand-field">
+          <text class="demand-label">宅基地状态</text>
+          <view class="demand-options">
+            <view
+              wx:for="{{landStatusOptions}}"
+              wx:key="*this"
+              class="demand-option {{demandForm.hasLand === item ? 'active' : ''}}"
+              bindtap="onDemandOptionTap"
+              data-field="hasLand"
+              data-value="{{item}}"
+            >{{item}}</view>
+          </view>
+        </view>
+        <view class="demand-field">
+          <text class="demand-label">计划动工时间</text>
+          <view class="demand-options">
+            <view
+              wx:for="{{startTimeOptions}}"
+              wx:key="*this"
+              class="demand-option {{demandForm.startTime === item ? 'active' : ''}}"
+              bindtap="onDemandOptionTap"
+              data-field="startTime"
+              data-value="{{item}}"
+            >{{item}}</view>
+          </view>
+        </view>
+        <view class="demand-field">
+          <text class="demand-label">所在地区</text>
+          <input class="demand-input" value="{{demandForm.region}}" placeholder="如 福建泉州" data-field="region" cursor-spacing="140" confirm-hold="{{true}}" bindinput="onDemandInput" />
+        </view>
+      </block>
+
+      <view class="demand-footer">
+        <view class="demand-submit secondary" bindtap="onDemandStepPrev">{{demandStep === 1 ? '收起' : '上一步'}}</view>
+        <view class="demand-submit" bindtap="onDemandStepNext">{{demandStep === 4 ? '整理需求' : '下一步'}}</view>
+      </view>
+    </view>
+    <view id="{{scrollAnchorId}}" class="message-bottom-anchor"></view>
+  </scroll-view>
+
+  <view wx:if="{{!demandFormVisible}}" class="bottom-panel {{demandSummaryVisible ? 'summary-mode' : ''}}" style="bottom: {{keyboardHeight}}px;">
+    <view class="quick-actions">
+      <view class="quick-action" wx:for="{{quickActions}}" wx:key="key" bindtap="onQuickAction" data-key="{{item.key}}">
+        <text class="quick-action-title">{{item.label}}</text>
+      </view>
+    </view>
+
+    <view class="input-panel">
+      <view class="composer-shell">
+        <textarea
+          class="service-input"
+          value="{{inputText}}"
+          auto-height
+          placeholder="{{aiStreaming ? 'AI 正在回复中...' : '继续补充一句需求'}}"
+          disabled="{{aiStreaming}}"
+          maxlength="300"
+          adjust-position="{{false}}"
+          confirm-hold="{{true}}"
+          cursor-spacing="140"
+          disable-default-padding="{{true}}"
+          show-confirm-bar="{{false}}"
+          bindfocus="onComposerFocus"
+          bindblur="onComposerBlur"
+          bindkeyboardheightchange="onKeyboardHeightChange"
+          bindinput="onInput"
+        />
+        <view class="composer-toolbar">
+          <view class="composer-add" bindtap="onComposerAdd">
+            <text>+</text>
+          </view>
+          <view class="composer-action send {{inputText && !aiStreaming ? 'active' : 'disabled'}}" bindtap="onSend">
+            <image class="composer-send-icon" src="/assets/icons/send-plane.svg" mode="aspectFit" />
+          </view>
+        </view>
+      </view>
+      <text wx:if="{{liveIntentHint}}" class="intent-hint">{{liveIntentHint}}</text>
+    </view>
+  </view>
+
+  <intercept-modal />
+</view>

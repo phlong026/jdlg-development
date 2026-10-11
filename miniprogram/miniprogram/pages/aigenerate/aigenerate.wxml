@@ -1,0 +1,279 @@
+<!--pages/aigenerate/aigenerate.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="生成效果图" background="#e8dece" />
+
+  <view class="content">
+    <view class="scene-tabs" wx:if="{{showSceneTabs}}">
+      <view class="scene-tab {{selectedSceneTab === 'exterior' ? 'active' : ''}}" bindtap="onSelectSceneTab" data-tab="exterior">
+        <text>外立面</text>
+      </view>
+      <view class="scene-tab {{selectedSceneTab === 'interior' ? 'active' : ''}}" bindtap="onSelectSceneTab" data-tab="interior">
+        <text>室内</text>
+      </view>
+    </view>
+
+    <view class="section-card upload-card">
+      <view class="upload-card-surface {{uploadedImages.length > 0 || useFixedSlots ? 'has-images' : ''}}">
+        <view class="upload-card-header">
+          <view class="upload-card-title-wrap">
+            <text class="upload-card-title">{{useFixedSlots ? '做同款图片槽位' : (uploadedImages.length > 0 ? '参考图预览' : '上传参考图')}}</text>
+            <text class="upload-card-subtitle" wx:if="{{useFixedSlots}}">固定顺序：原1、原2、参1、参2、参3、参4</text>
+            <text class="upload-card-subtitle" wx:elif="{{uploadedImages.length > 0}}">已上传 {{uploadedImages.length}} / 6 张</text>
+            <text class="upload-card-subtitle" wx:else>支持拍照或相册上传</text>
+          </view>
+          <view class="upload-card-badge">
+            <text>{{useFixedSlots ? '固定6槽位' : '最多6张'}}</text>
+          </view>
+        </view>
+        <block wx:if="{{useFixedSlots}}">
+          <view class="slot-section">
+            <view class="slot-section-header">
+              <text class="slot-section-title">原始图</text>
+              <text class="slot-section-subtitle">原1必传，原2可选；缺少原1时不能开始生成</text>
+            </view>
+            <view class="uploaded-images original-uploaded-images fixed-slot-grid">
+              <view class="image-item fixed-slot-item {{originalImages[item] ? '' : 'slot-empty'}}" wx:for="{{originalSlotIndices}}" wx:key="*this" bindtap="onOriginalSlotTap" data-index="{{item}}" data-scope="original">
+                <image wx:if="{{originalImages[item]}}" class="upload-image" src="{{originalImages[item]}}" mode="aspectFill" />
+                <view wx:else class="slot-empty-content">
+                  <text class="slot-empty-plus">+</text>
+                  <text class="slot-empty-text">{{item === 0 ? '上传原1' : '上传原2（可选）'}}</text>
+                </view>
+                <view class="slot-chip">
+                  <text>{{originalSlotLabels[item]}}</text>
+                </view>
+                <view class="image-preview-tip" wx:if="{{originalImages[item]}}">
+                  <text>双击预览</text>
+                </view>
+                <view class="image-reupload" wx:if="{{originalImages[item]}}" catchtap="onUploadOriginalImage" data-index="{{item}}">
+                  <text>换图</text>
+                </view>
+              </view>
+            </view>
+          </view>
+          <view class="slot-section reference-slot-section">
+            <view class="slot-section-header">
+              <text class="slot-section-title">参考图</text>
+              <text class="slot-section-subtitle">模板图默认落在这里，长按缩略图可调整参图顺序</text>
+            </view>
+            <view class="uploaded-images reference-uploaded-images fixed-slot-grid {{referenceImages.length > 3 ? 'multi-row' : ''}}">
+              <view class="image-item fixed-slot-item {{referenceImages[item] ? (referenceImages.length > 3 ? 'compact' : '') : 'slot-empty'}} {{draggingImageIndex === item ? 'dragging' : ''}} {{dragOverImageIndex === item && draggingImageIndex !== item ? 'drag-over' : ''}}" wx:for="{{referenceSlotIndices}}" wx:key="*this" bindtap="onReferenceSlotTap" bindlongpress="onImageLongPress" bindtouchmove="onImageDragMove" bindtouchend="onImageDragEnd" bindtouchcancel="onImageDragEnd" data-index="{{item}}" data-type="reference" data-scope="reference">
+                <image wx:if="{{referenceImages[item]}}" class="upload-image" src="{{referenceImages[item]}}" mode="aspectFill" />
+                <view wx:else class="slot-empty-content">
+                  <text class="slot-empty-plus">+</text>
+                  <text class="slot-empty-text">上传{{referenceSlotLabels[item]}}</text>
+                </view>
+                <view class="slot-chip">
+                  <text>{{referenceSlotLabels[item]}}</text>
+                </view>
+                <view class="image-preview-tip" wx:if="{{referenceImages[item]}}">
+                  <text>{{draggingImageIndex === item ? '拖动中' : '双击预览'}}</text>
+                </view>
+                <view class="image-delete" wx:if="{{referenceImages[item]}}" catchtap="onDeleteImage" data-index="{{item}}" data-type="reference">
+                  <t-icon name="close" size="24rpx" color="#ffffff" />
+                </view>
+              </view>
+            </view>
+          </view>
+          <view class="upload-card-footer-tip" wx:if="{{!uploadingRefs}}">
+            <text>生成时会按“原1、原2（可选）、参1、参2、参3、参4”的固定顺序提交给模型</text>
+          </view>
+        </block>
+        <view class="upload-card-empty" wx:elif="{{uploadedImages.length === 0}}" bindtap="onUploadImage">
+          <view class="upload-card-icon">
+            <text class="upload-card-plus">+</text>
+          </view>
+          <text class="upload-copy-title">点击添加图片</text>
+          <text class="upload-copy-subtitle">最多上传6张，保留你想参考的风格与结构</text>
+        </view>
+        <view class="uploaded-images {{uploadedImages.length > 3 ? 'multi-row' : ''}}" wx:else>
+          <view class="image-item {{uploadedImages.length > 3 ? 'compact' : ''}} {{draggingImageIndex === index ? 'dragging' : ''}} {{dragOverImageIndex === index && draggingImageIndex !== index ? 'drag-over' : ''}}" wx:for="{{uploadedImages}}" wx:key="index" bindtap="onPreviewImageTap" bindlongpress="onImageLongPress" bindtouchmove="onImageDragMove" bindtouchend="onImageDragEnd" bindtouchcancel="onImageDragEnd" data-index="{{index}}">
+            <image class="upload-image" src="{{item}}" mode="aspectFill" />
+            <view class="image-preview-tip">
+              <text>{{draggingImageIndex === index ? '拖动中' : '双击预览'}}</text>
+            </view>
+            <view class="image-delete" catchtap="onDeleteImage" data-index="{{index}}">
+              <t-icon name="close" size="24rpx" color="#ffffff" />
+            </view>
+          </view>
+          <view class="image-item image-item-add {{uploadedImages.length > 3 ? 'compact' : ''}}" wx:if="{{uploadedImages.length < 6}}" catchtap="onUploadImage">
+            <view class="image-item-add-inner">
+              <text class="image-item-add-plus">+</text>
+              <text class="image-item-add-text">继续添加</text>
+            </view>
+          </view>
+        </view>
+        <view class="upload-card-footer-tip" wx:if="{{uploadedImages.length > 0 && !uploadingRefs}}">
+          <text>支持最多6张参考图，长按可拖动调整顺序，双击缩略图可放大，右上角可删除</text>
+        </view>
+      </view>
+      <view class="upload-status" wx:if="{{uploadingRefs}}">
+        <text>{{useFixedSlots ? '图片上传中...' : '参考图上传中...'}}</text>
+      </view>
+    </view>
+
+    <view class="section-card style-card">
+      <view class="style-card-header">
+        <text class="style-card-title">选个风格（可选）</text>
+        <text class="style-summary">已选：{{selectedStyle || '不限定'}}</text>
+      </view>
+      <scroll-view class="style-scroll" scroll-x enhanced show-scrollbar="false">
+        <view class="style-scroll-inner">
+          <view
+            class="style-option {{!selectedStyle ? 'active' : ''}}"
+            bindtap="onSelectStyle"
+            data-style=""
+          >
+            <view class="style-option-body">
+              <text class="style-option-name">不指定</text>
+              <text class="style-option-subtitle">交给 AI 自由发挥</text>
+            </view>
+          </view>
+          <view
+            class="style-option {{selectedStyle === item.name ? 'active' : ''}}"
+            wx:for="{{styleOptions}}"
+            wx:key="name"
+            bindtap="onSelectStyle"
+            data-style="{{item.name}}"
+          >
+            <view class="style-option-body">
+              <text class="style-option-name">{{item.name}}</text>
+              <text class="style-option-subtitle">{{item.subtitle}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="section-card orientation-card">
+      <view class="orientation-card-inner">
+        <text class="orientation-title">画面方向</text>
+
+        <view class="orientation-row canvas-row">
+          <view
+            class="canvas-option {{selectedCanvas === item.value ? 'active' : ''}}"
+            wx:for="{{canvasOptions}}"
+            wx:key="value"
+            bindtap="onSelectCanvas"
+            data-value="{{item.value}}"
+          >
+            <view class="canvas-icon canvas-icon-{{item.value === '16:9' ? 'landscape' : item.value === '1:1' ? 'square' : 'portrait'}}"></view>
+            <text class="canvas-label">{{item.size}}</text>
+          </view>
+        </view>
+
+        <view class="orientation-row quality-row">
+          <view
+            class="quality-option {{selectedQuality === item.value ? 'active' : ''}}"
+            wx:for="{{qualityOptions}}"
+            wx:key="value"
+            bindtap="onSelectQuality"
+            data-value="{{item.value}}"
+          >
+            <text class="quality-label">{{item.label}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card generate-count-card">
+      <view class="generate-count-header">
+        <text class="generate-count-title">生成张数</text>
+        <text class="generate-count-price">单张 {{currentUnitCost}} 灵石，合计 {{currentCost}} 灵石</text>
+      </view>
+      <view class="generate-count-segment">
+        <view
+          class="generate-count-option {{selectedGenerateCount === item ? 'active' : ''}}"
+          wx:for="{{generateCountOptions}}"
+          wx:key="*this"
+          bindtap="onSelectGenerateCount"
+          data-count="{{item}}"
+        >
+          <text>{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card prompt-card">
+      <view class="prompt-card-inner">
+        <view class="prompt-title-row">
+          <text class="prompt-title">补充几句(选填)</text>
+          <view class="ai-optimize-btn {{optimizingPrompt ? 'loading' : ''}}" bindtap="onOptimizePrompt">
+            <text class="ai-optimize-text">{{optimizingPrompt ? '优化中...' : 'AI优化'}}</text>
+          </view>
+        </view>
+        <view class="prompt-input-wrap">
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}"
+            class="prompt-input"
+            auto-height
+            value="{{promptText}}"
+            bindinput="onPromptInput"
+
+            maxlength="-1"
+            placeholder="例:三层，白墙灰瓦，带院子"
+            placeholder-style="color: rgba(159, 151, 140, 0.72);"
+          />
+        </view>
+      </view>
+    </view>
+
+    <view class="section-card generate-card">
+      <view class="generate-actions">
+        <view class="generate-action generate-action-image {{generating ? 'disabled' : ''}}" bindtap="onGenerate">
+          <text class="generate-action-title">图像生成</text>
+          <text class="generate-action-price">{{currentCost}}灵石</text>
+        </view>
+        <view class="generate-action generate-action-video" bindtap="onOpenVideoPage">
+          <text class="generate-action-title">视频生成</text>
+          <text class="generate-action-price">{{videoCost}}灵石</text>
+        </view>
+      </view>
+    </view>
+
+  </view>
+
+  <custom-tabbar current="{{-1}}"></custom-tabbar>
+
+  <!-- 生成结果模态框 -->
+  <view wx:if="{{showResultModal}}" class="result-modal-mask" catchtouchmove="true">
+    <view class="result-modal">
+      <view class="result-header">
+        <text class="result-title">生成结果预览</text>
+        <view class="result-close" bindtap="closeResultModal">
+          <t-icon name="close" size="40rpx" color="#8c7553" />
+        </view>
+      </view>
+      <view class="result-body">
+        <image class="result-image" src="{{resultImageUrl}}" mode="widthFix" />
+      </view>
+      <view class="result-footer">
+        <view class="result-btn" bindtap="onResultRegenerate">
+          <text>重新生成</text>
+        </view>
+        <view class="result-btn" bindtap="onResultSaveTemplate">
+          <text>保存模板</text>
+        </view>
+        <view class="result-btn primary" bindtap="onResultSaveAlbum">
+          <text>前往下载</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 生成进度模态框 -->
+  <view wx:if="{{showProgressModal}}" class="result-modal-mask" catchtouchmove="true">
+    <view class="result-modal">
+      <view class="result-header">
+        <text class="result-title">正在生成...</text>
+      </view>
+      <view class="result-body progress-body">
+        <view class="progress-bar-bg">
+          <view class="progress-bar-fill" style="width: {{progressPercent}}%;"></view>
+        </view>
+        <text class="progress-text">{{progressPercent}}%</text>
+      </view>
+    </view>
+  </view>
+
+  <intercept-modal />
+</view>

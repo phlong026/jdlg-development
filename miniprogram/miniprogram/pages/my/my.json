@@ -1,0 +1,9 @@
+{
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
+  "navigationStyle": "custom",
+  "backgroundColor": "#ece4d9",
+  "backgroundColorTop": "#e6daca",
+  "backgroundColorBottom": "#ece4d9"
+}

@@ -1,0 +1,191 @@
+--- a/miniprogram/miniprogram/pages/aicost/aicost.ts
++++ b/miniprogram/miniprogram/pages/aicost/aicost.ts
+@@ -59,2 +59,3 @@
+-  '独立基础': 650, '条形基础': 650 * (125000 / 75000), '筏板基础': 650,
+-};
++  '独立基础': 650, '条形基础': 900, '筏板基础': 1200,
++};
++const basementPrices: Record<string, number> = { '无地下室': 0, '半地下室': 850, '全地下室': 1700 };
+@@ -76,0 +78 @@
++  basementType: string;
+@@ -84 +86 @@
+-  const { footprintArea, buildingArea, foundationType, structureType, roofType, facadeStyle, windowStandard } = input;
++  const { footprintArea, buildingArea, foundationType, structureType, roofType, facadeStyle, windowStandard, basementType } = input;
+@@ -100 +102,7 @@
+-  const totalCost = breakdown.reduce((sum, item) => sum + item.amount, 0);
++  if (basementPrices[basementType] > 0) {
++    breakdown.push({ name: '地下室工程', amount: Math.round(footprintArea * basementPrices[basementType]),
++      note: '不同地下室因方案不同，价格不同。', estimable: true });
++  }
++  // 分项与总价统一按九折展示，保留到分，避免明细和总价使用不同口径。
++  const discountedBreakdown = breakdown.map(item => ({ ...item, amount: Math.round(item.amount * 90) / 100 }));
++  const totalCost = Math.round(discountedBreakdown.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+@@ -106 +114 @@
+-    breakdown: breakdown.map(item => ({ ...item,
++    breakdown: discountedBreakdown.map(item => ({ ...item,
+@@ -295 +303,2 @@
+-      !facadePrices[data.facadeStyle] || !windowPrices[data.windowStandard]) error = '请重新选择建筑参数';
++      !facadePrices[data.facadeStyle] || !windowPrices[data.windowStandard] ||
++      basementPrices[data.basementType] === undefined) error = '请重新选择建筑参数';
+@@ -301 +310 @@
+-      footprintArea, buildingArea, foundationType: data.foundationType,
++      footprintArea, buildingArea, foundationType: data.foundationType, basementType: data.basementType,
+@@ -324 +333 @@
+-        version: 2,
++        version: 3,
+--- a/miniprogram/miniprogram/pages/aicost/aicost.js
++++ b/miniprogram/miniprogram/pages/aicost/aicost.js
+@@ -0,0 +1 @@
++"use strict";
+@@ -43,2 +44,3 @@
+-    '独立基础': 650, '条形基础': 650 * (125000 / 75000), '筏板基础': 650,
+-};
++    '独立基础': 650, '条形基础': 900, '筏板基础': 1200,
++};
++const basementPrices = { '无地下室': 0, '半地下室': 850, '全地下室': 1700 };
+@@ -57 +59 @@
+-    const { footprintArea, buildingArea, foundationType, structureType, roofType, facadeStyle, windowStandard } = input;
++    const { footprintArea, buildingArea, foundationType, structureType, roofType, facadeStyle, windowStandard, basementType } = input;
+@@ -73 +75,7 @@
+-    const totalCost = breakdown.reduce((sum, item) => sum + item.amount, 0);
++    if (basementPrices[basementType] > 0) {
++        breakdown.push({ name: '地下室工程', amount: Math.round(footprintArea * basementPrices[basementType]),
++            note: '不同地下室因方案不同，价格不同。', estimable: true });
++    }
++    // 分项与总价统一按九折展示，保留到分，避免明细和总价使用不同口径。
++    const discountedBreakdown = breakdown.map(item => ({ ...item, amount: Math.round(item.amount * 90) / 100 }));
++    const totalCost = Math.round(discountedBreakdown.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
+@@ -79 +87 @@
+-        breakdown: breakdown.map(item => ({ ...item,
++        breakdown: discountedBreakdown.map(item => ({ ...item,
+@@ -248 +256,2 @@
+-            !facadePrices[data.facadeStyle] || !windowPrices[data.windowStandard])
++            !facadePrices[data.facadeStyle] || !windowPrices[data.windowStandard] ||
++            basementPrices[data.basementType] === undefined)
+@@ -255 +264 @@
+-            footprintArea, buildingArea, foundationType: data.foundationType,
++            footprintArea, buildingArea, foundationType: data.foundationType, basementType: data.basementType,
+@@ -278 +287 @@
+-                version: 2,
++                version: 3,
+--- a/miniprogram/miniprogram/pages/aicost/aicost.scss
++++ b/miniprogram/miniprogram/pages/aicost/aicost.scss
+@@ -41 +41 @@
+-  padding: 24rpx 28rpx;
++  padding: 18rpx 28rpx;
+@@ -46 +46 @@
+-  padding: 28rpx 28rpx 8rpx;
++  padding: 18rpx 28rpx 8rpx;
+@@ -57 +57 @@
+-  margin-bottom: 32rpx;
++  margin-bottom: 20rpx;
+@@ -71 +71 @@
+-  margin-bottom: 24rpx;
++  margin-bottom: 16rpx;
+@@ -76 +76 @@
+-  margin-bottom: 32rpx;
++  margin-bottom: 20rpx;
+@@ -90 +90 @@
+-  margin-bottom: 12rpx;
++  margin-bottom: 8rpx;
+@@ -105 +105 @@
+-  height: 104rpx;
++  height: 88rpx;
+@@ -115 +115 @@
+-  min-height: 104rpx;
++  min-height: 88rpx;
+@@ -120 +120 @@
+-  height: 104rpx;
++  height: 88rpx;
+@@ -129 +129 @@
+-    height: 100rpx;
++    height: 84rpx;
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.ts
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.ts
+@@ -31 +31 @@
+-const RESULT_SCHEMA_VERSION = 2;
++const RESULT_SCHEMA_VERSION = 3;
+@@ -63 +63 @@
+-    && Array.isArray(value.costBreakdown) && value.costBreakdown.length === 6 && value.costBreakdown.every(isCostBreakdownItem)
++    && Array.isArray(value.costBreakdown) && (value.costBreakdown.length === 6 || value.costBreakdown.length === 7) && value.costBreakdown.every(isCostBreakdownItem)
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.js
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.js
+@@ -6 +6 @@
+-const RESULT_SCHEMA_VERSION = 2;
++const RESULT_SCHEMA_VERSION = 3;
+@@ -38 +38 @@
+-        && Array.isArray(value.costBreakdown) && value.costBreakdown.length === 6 && value.costBreakdown.every(isCostBreakdownItem)
++        && Array.isArray(value.costBreakdown) && (value.costBreakdown.length === 6 || value.costBreakdown.length === 7) && value.costBreakdown.every(isCostBreakdownItem)
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.scss
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.scss
+@@ -74 +74 @@
+-  flex: 0 0 auto;
++  flex: 0 0 156rpx;
+@@ -85 +85 @@
+-  text-align: right;
++  text-align: left;
+--- a/miniprogram/tests/aicost-pricing.test.js
++++ b/miniprogram/tests/aicost-pricing.test.js
+@@ -19,4 +19,4 @@
+-assert.equal(normal.saved.version, 2);
+-assert.equal(normal.saved.estimatedTotalCost, '58.36万元');
+-assert.equal(normal.saved.estimatedUnitCost, '1823.75元/㎡');
+-assert.deepEqual(Array.from(normal.saved.costBreakdown, i => i.amount), [78000, 235200, 59200, 60800, 137600, 12800]);
++assert.equal(normal.saved.version, 3);
++assert.equal(normal.saved.estimatedTotalCost, '52.52万元');
++assert.equal(normal.saved.estimatedUnitCost, '1641.38元/㎡');
++assert.deepEqual(Array.from(normal.saved.costBreakdown, i => i.amount), [70200, 211680, 53280, 54720, 123840, 11520]);
+@@ -27,3 +27,3 @@
+-assert.equal(form({ foundationType: '条形基础' }).saved.costBreakdown[0].amount, 130000);
+-assert.equal(form({ foundationType: '筏板基础' }).saved.costBreakdown[0].amount, 78000);
+-assert.equal(form({ roofType: '燕尾脊' }).saved.costBreakdown[2].amount, 64838);
++assert.equal(form({ foundationType: '条形基础' }).saved.costBreakdown[0].amount, 97200);
++assert.equal(form({ foundationType: '筏板基础' }).saved.costBreakdown[0].amount, 129600);
++assert.equal(form({ roofType: '燕尾脊' }).saved.costBreakdown[2].amount, 58354.2);
+@@ -31 +31 @@
+-  assert.equal(form({ structureType }).saved.costBreakdown[1].amount, 320 * price);
++  assert.equal(form({ structureType }).saved.costBreakdown[1].amount, 320 * price * 0.9);
+@@ -34 +34 @@
+-  assert.equal(form({ roofType }).saved.costBreakdown[2].amount, 320 * price);
++  assert.equal(form({ roofType }).saved.costBreakdown[2].amount, 320 * price * 0.9);
+@@ -37 +37 @@
+-  assert.equal(form({ facadeStyle }).saved.costBreakdown[4].amount, 320 * price);
++  assert.equal(form({ facadeStyle }).saved.costBreakdown[4].amount, 320 * price * 0.9);
+@@ -39,2 +39,2 @@
+-assert.equal(form({ windowStandard: '系统窗高档' }).saved.costBreakdown[3].amount, 80000);
+-assert.equal(form({ city: '上海', buildingStyle: '欧式', basementType: '全地下室', decorationStyle: '品质型' }).saved.estimatedTotalCost, normal.saved.estimatedTotalCost);
++assert.equal(form({ windowStandard: '系统窗高档' }).saved.costBreakdown[3].amount, 72000);
++assert.equal(form({ city: '上海', buildingStyle: '欧式', decorationStyle: '品质型' }).saved.estimatedTotalCost, normal.saved.estimatedTotalCost);
+@@ -46 +46 @@
+-assert.equal(pile.estimatedTotalCost, '50.56万元');
++assert.equal(pile.estimatedTotalCost, '45.50万元');
+@@ -54,0 +55,11 @@
++
++for (const [basementType, cost, total] of [['半地下室', 91800, '61.70万元'], ['全地下室', 183600, '70.88万元']]) {
++  const report = form({ basementType }).saved;
++  assert.equal(report.costBreakdown.length, 7);
++  assert.equal(report.costBreakdown[6].name, '地下室工程');
++  assert.equal(report.costBreakdown[6].amount, cost);
++  assert.equal(report.estimatedTotalCost, total);
++  const sum = report.costBreakdown.reduce((acc, item) => acc + item.amount, 0);
++  assert.equal(report.estimatedUnitCost, `${(sum / 320).toFixed(2)}元/㎡`);
++}
++assert.equal(form({ basementType: '未知' }).saved, undefined);
+--- a/miniprogram/tests/aicost-report.test.js
++++ b/miniprogram/tests/aicost-report.test.js
+@@ -55 +55 @@
+-  version: 2,
++  version: 3,
+@@ -157 +157 @@
+-  assert.match(js, /RESULT_SCHEMA_VERSION\s*=\s*2/);
++  assert.match(js, /RESULT_SCHEMA_VERSION\s*=\s*3/);
+@@ -159,0 +160,9 @@
++
++test('report accepts basement as a seventh cost item and rejects previous pricing', () => {
++  const h = createHarness({ ...currentResult, costBreakdown: [...currentResult.costBreakdown, { name: '地下室工程', amount: 183600, amountText: '18.36万元', percent: 26, note: '不同地下室因方案不同，价格不同。', estimable: true }] });
++  h.page.onLoad();
++  assert.equal(h.page.data.costBreakdown.length, 7);
++  const old = createHarness({ ...currentResult, version: 2 });
++  old.page.onLoad();
++  assert.equal(old.navigatedBack, 1);
++});

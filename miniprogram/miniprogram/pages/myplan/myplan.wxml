@@ -1,0 +1,214 @@
+<!--pages/myplan/myplan.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="我的方案" subtitle="管理发布到模板广场的内容" background="#e6daca" />
+
+  <!-- 顶部统计 -->
+  <view class="summary-card">
+    <view class="summary-row">
+      <view class="summary-item">
+        <text class="summary-label">已发布方案</text>
+        <view class="summary-value-row">
+          <t-icon name="image" size="40rpx" color="#b79066" />
+          <text class="summary-value">{{totalPlans}}</text>
+        </view>
+      </view>
+      <view class="summary-item">
+        <text class="summary-label">总浏览量</text>
+        <view class="summary-value-row">
+          <t-icon name="browse" size="40rpx" color="#c39a6b" />
+          <text class="summary-value">{{totalViews}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 分类筛选 -->
+  <view class="filter-bar">
+    <view
+      class="filter-tag {{currentCategory === 'all' ? 'active' : ''}}"
+      data-category="all"
+      bindtap="onCategoryTap"
+    >
+      <text>全部分类</text>
+    </view>
+    <view
+      class="filter-tag {{currentCategory === item.value ? 'active' : ''}}"
+      wx:for="{{categories}}"
+      wx:key="value"
+      data-category="{{item.value}}"
+      bindtap="onCategoryTap"
+    >
+      <text>{{item.label}}</text>
+    </view>
+  </view>
+
+  <!-- 内容区 -->
+  <view class="content">
+    <!-- 加载中 -->
+    <view class="loading" wx:if="{{loading}}">
+      <t-icon name="loading" size="64rpx" color="#8c7553" class="loading-icon" />
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:elif="{{!loading && groupedPlans.length === 0}}">
+      <t-icon name="invisible" size="80rpx" color="#8c7553" />
+      <text class="empty-title">暂无发布方案</text>
+      <text class="empty-desc">去生成页面发布你的第一个方案吧</text>
+    </view>
+
+    <!-- 分组列表 -->
+    <scroll-view
+      wx:else
+      class="list-scroll"
+      scroll-y="true"
+      lower-threshold="60"
+      bindscrolltolower="onReachBottom"
+    >
+      <view
+        class="category-group"
+        wx:for="{{groupedPlans}}"
+        wx:key="category"
+      >
+        <view class="group-header">
+          <view class="group-title-row">
+            <t-icon name="folder" size="32rpx" color="#b79066" />
+            <text class="group-title">{{item.categoryName}}</text>
+            <text class="group-count">({{item.plans.length}})</text>
+          </view>
+        </view>
+
+        <view class="plans-grid">
+          <view
+            class="plan-card"
+            wx:for="{{item.plans}}"
+            wx:for-item="plan"
+            wx:key="id"
+          >
+            <image
+              class="plan-cover"
+              src="{{plan.thumbnail || plan.preview_url}}"
+              mode="aspectFill"
+              bindtap="onViewPlan"
+              data-id="{{plan.id}}"
+            />
+            <view class="plan-info">
+              <view class="plan-title-row">
+                <text class="plan-title">{{plan.name}}</text>
+                <view class="plan-status {{plan.status}}">
+                  <text class="status-text">{{plan.statusText}}</text>
+                </view>
+              </view>
+              <text class="plan-desc">{{plan.description}}</text>
+              <view class="plan-metrics">
+                <view class="metric">
+                  <t-icon name="browse" size="24rpx" color="#c39a6b" />
+                  <text class="metric-text">{{plan.download_count}} 下载</text>
+                </view>
+                <view class="metric">
+                  <t-icon name="heart" size="24rpx" color="#d37a74" />
+                  <text class="metric-text">{{plan.like_count}} 喜欢</text>
+                </view>
+              </view>
+              <view class="plan-actions">
+                <view class="action-btn" bindtap="onPreviewPlan" data-id="{{plan.id}}">
+                  <text>预览</text>
+                </view>
+                <view class="action-btn" bindtap="onEditPlan" data-id="{{plan.id}}">
+                  <text>编辑</text>
+                </view>
+                <view class="action-btn" bindtap="onSharePlan" data-id="{{plan.id}}">
+                  <text>分享</text>
+                </view>
+                <view class="action-btn" bindtap="onExportPlan" data-id="{{plan.id}}">
+                  <text>导出</text>
+                </view>
+                <view class="action-btn danger" bindtap="onDeletePlan" data-id="{{plan.id}}">
+                  <text>删除</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载更多 -->
+      <view class="load-more" wx:if="{{hasMore && !loadingMore}}">
+        <text class="load-more-text">上滑加载更多</text>
+      </view>
+      <view class="load-more" wx:if="{{loadingMore}}">
+        <t-icon name="loading" size="40rpx" color="#8c7553" class="loading-icon" />
+        <text class="load-more-text">正在加载...</text>
+      </view>
+      <view class="load-more" wx:if="{{!hasMore && groupedPlans.length > 0}}">
+        <text class="load-more-text">已加载全部方案</text>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 编辑方案弹窗 -->
+  <view wx:if="{{showEditModal}}" class="publish-modal-mask" bindtap="closeEditModal">
+    <view class="publish-modal" catchtap="noop">
+      <view class="publish-header">
+        <text class="publish-title">编辑方案</text>
+      </view>
+      <view class="publish-body">
+        <view class="form-group">
+          <text class="form-label">方案名称</text>
+          <input
+            class="form-input"
+            type="text"
+            value="{{editForm.name}}"
+            data-field="name"
+            bindinput="onEditInput"
+            placeholder="输入方案名称"
+            maxlength="50"
+          />
+        </view>
+        <view class="form-group">
+          <text class="form-label">方案简介</text>
+          <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}"
+            class="form-textarea"
+            value="{{editForm.description}}"
+            data-field="description"
+            bindinput="onEditInput"
+            placeholder="描述一下你的方案"
+            maxlength="500"
+          />
+        </view>
+        <view class="form-group">
+          <text class="form-label">收费方式</text>
+          <view class="publish-charge-row">
+            <view
+              class="charge-option {{editForm.isFree ? 'active' : ''}}"
+              data-free="true"
+              bindtap="onEditChargeTypeChange"
+            >免费</view>
+            <view
+              class="charge-option {{!editForm.isFree ? 'active' : ''}}"
+              data-free="false"
+              bindtap="onEditChargeTypeChange"
+            >付费</view>
+          </view>
+        </view>
+        <view class="form-group price-row" wx:if="{{!editForm.isFree}}">
+          <text class="form-label">所需灵石</text>
+          <input
+            class="form-input price-input"
+            type="number"
+            value="{{editForm.price}}"
+            bindinput="onEditPriceInput"
+            placeholder="别人查看/下载时扣除的灵石数"
+            min="1"
+          />
+        </view>
+      </view>
+      <view class="publish-footer">
+        <view class="publish-btn cancel" bindtap="closeEditModal">取消</view>
+        <view class="publish-btn cancel" bindtap="onPreviewPlan" data-id="{{editingPlanId}}">预览</view>
+        <view class="publish-btn confirm" bindtap="submitEdit">保存</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,86 @@
+<view class="aitools-page">
+  <navigation-bar title="AI工具选择库" background="#e6daca" />
+
+  <view class="aitools-content">
+    <view class="aitools-search-shell">
+      <view class="aitools-search-field">
+        <view class="aitools-search-icon"></view>
+        <input
+          class="aitools-search-input"
+          placeholder="搜索AI图像工具"
+          placeholder-class="aitools-search-placeholder"
+          value="{{searchInputValue}}"
+          bindinput="onSearchInput"
+          bindconfirm="onSearchConfirm"
+          confirm-type="search"
+        />
+        <view class="aitools-search-clear" wx:if="{{searchInputValue || searchKeyword}}" bindtap="onSearchClear">清空</view>
+      </view>
+    </view>
+
+    <scroll-view class="aitools-category-scroll" scroll-x="true" enhanced="true" show-scrollbar="false">
+      <view class="aitools-category-list">
+        <view
+          class="aitools-category-item {{currentCategory === item.value ? 'active' : ''}}"
+          wx:for="{{categories}}"
+          wx:key="value"
+          data-category="{{item.value}}"
+          bindtap="onCategoryTap"
+        >
+          <text class="aitools-category-text">{{item.label}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="aitools-summary">{{summaryText}}</view>
+
+    <view class="aitools-waterfall" wx:if="{{displayTools.length > 0}}">
+      <view class="aitools-column">
+        <view class="aitools-card" wx:for="{{leftColumnTools}}" wx:key="id" data-id="{{item.id}}" bindtap="onToolTap">
+          <view class="aitools-card-cover category-{{item.category}}">
+            <image
+              wx:if="{{item.listCoverImage}}"
+              class="aitools-card-cover-image"
+              src="{{item.listCoverImage}}"
+              mode="widthFix"
+            />
+            <view class="aitools-card-cover-overlay">
+              <view class="aitools-card-topline">
+                <text class="aitools-card-badge">{{item.tags[0]}}</text>
+                <text class="aitools-card-common" wx:if="{{item.common}}">常用</text>
+              </view>
+              <view class="aitools-card-cover-title">{{item.name}}</view>
+              <view class="aitools-card-cover-subtitle">{{item.shortDescription}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="aitools-column">
+        <view class="aitools-card" wx:for="{{rightColumnTools}}" wx:key="id" data-id="{{item.id}}" bindtap="onToolTap">
+          <view class="aitools-card-cover category-{{item.category}}">
+            <image
+              wx:if="{{item.listCoverImage}}"
+              class="aitools-card-cover-image"
+              src="{{item.listCoverImage}}"
+              mode="widthFix"
+            />
+            <view class="aitools-card-cover-overlay">
+              <view class="aitools-card-topline">
+                <text class="aitools-card-badge">{{item.tags[0]}}</text>
+                <text class="aitools-card-common" wx:if="{{item.common}}">常用</text>
+              </view>
+              <view class="aitools-card-cover-title">{{item.name}}</view>
+              <view class="aitools-card-cover-subtitle">{{item.shortDescription}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="aitools-empty" wx:else>
+      <view class="aitools-empty-title">暂未找到匹配工具</view>
+      <view class="aitools-empty-desc">{{emptyText}}</view>
+    </view>
+  </view>
+</view>

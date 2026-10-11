@@ -1,0 +1,148 @@
+<!--pages/chat/chat.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar background="#e6daca">
+    <view slot="center" class="title-section" bindtap="onTitleTap">
+      <view class="title-row">
+        <text class="page-title">{{conversationTitle || '新对话'}}</text>
+        <t-icon name="chevron-right" size="32rpx" color="#8c7553" />
+      </view>
+      <text class="page-subtitle">内容由AI生成</text>
+    </view>
+  </navigation-bar>
+
+  <!-- 选择模式弹窗 -->
+  <view class="modal-overlay" wx:if="{{showModeModal}}" bindtap="closeModeModal">
+    <view class="modal-content" catchtap="stopPropagation">
+      <view class="modal-header">
+        <text class="modal-title">选择生成方式</text>
+        <view class="modal-close" bindtap="closeModeModal">
+          <t-icon name="close" size="40rpx" color="#8c7553" />
+        </view>
+      </view>
+      <view class="modal-body">
+        <view class="mode-option" bindtap="selectMode" data-mode="direct">
+          <t-icon name="flashlight" size="48rpx" color="#b79066" />
+          <view class="mode-content">
+            <text class="mode-title">直接生成图片</text>
+            <text class="mode-desc">立即根据输入内容生成设计方案</text>
+          </view>
+          <t-icon name="chevron-right" size="32rpx" color="#8c7553" />
+        </view>
+        <view class="mode-option" bindtap="selectMode" data-mode="chat">
+          <t-icon name="chat" size="48rpx" color="#b79066" />
+          <view class="mode-content">
+            <text class="mode-title">和AI聊灵感</text>
+            <text class="mode-desc">与AI深入交流，自动生成优化后的提示词</text>
+          </view>
+          <t-icon name="chevron-right" size="32rpx" color="#8c7553" />
+        </view>
+        <view class="mode-option" bindtap="selectMode" data-mode="video">
+          <t-icon name="video" size="48rpx" color="#b79066" />
+          <view class="mode-content">
+            <text class="mode-title">生成视频</text>
+            <text class="mode-desc">根据设计方案生成视频展示</text>
+          </view>
+          <t-icon name="chevron-right" size="32rpx" color="#8c7553" />
+        </view>
+        <view class="mode-option" bindtap="selectMode" data-mode="cost">
+          <t-icon name="money" size="48rpx" color="#b79066" />
+          <view class="mode-content">
+            <text class="mode-title">生成造价</text>
+            <text class="mode-desc">自动计算设计方案的成本预算</text>
+          </view>
+          <t-icon name="chevron-right" size="32rpx" color="#8c7553" />
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 主内容区域 -->
+  <view class="chat-content">
+    <view class="chat-cost-banner" wx:if="{{mode === 'chat'}}">
+      <text class="chat-cost-title">当前对话预计消耗 {{chatCost}} 灵石 / 次</text>
+      <text class="chat-cost-desc">按后端 ai_chat_single 口径扣费</text>
+    </view>
+
+    <!-- 消息列表 -->
+    <view class="message-list" wx:if="{{messages.length > 0}}">
+      <view 
+        class="message-item {{item.role === 'user' ? 'user-message' : 'ai-message'}}"
+        wx:for="{{messages}}"
+        wx:key="id"
+        wx:for-item="item"
+      >
+        <view class="message-avatar">
+          <t-icon wx:if="{{item.role === 'user'}}" name="user" size="48rpx" color="#fff" />
+          <t-icon wx:else name="robot" size="48rpx" color="#6f5945" />
+        </view>
+        <view class="message-bubble">
+          <!-- 用户消息直接显示文本 -->
+          <text wx:if="{{item.role === 'user'}}" class="message-text">{{item.content}}</text>
+          <!-- AI 等待首包：提示文案 + 加载动画 -->
+          <view wx:elif="{{item.role === 'ai' && !item.content && item.id === streamingMessageId}}" class="ai-waiting-first">
+            <text class="ai-waiting-loader">...</text>
+            <text class="ai-waiting-text">甲第灵光正在思考中...</text>
+            <text class="ai-waiting-hint">首次响应可能需要几秒，请稍候</text>
+          </view>
+          <!-- AI消息使用wemark渲染Markdown -->
+          <view wx:else class="ai-content">
+            <wemark md="{{item.content}}" type="wemark" />
+          </view>
+          <text class="message-time">{{item.time}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-chat" wx:if="{{messages.length === 0 && !showModeModal}}">
+      <text class="empty-text">开始与AI对话吧</text>
+    </view>
+
+    <!-- 生成提示词按钮（聊天模式下显示） -->
+    <view class="generate-prompt-section" wx:if="{{mode === 'chat' && messages.length > 0}}">
+      <button class="generate-btn" bindtap="generatePromptFromChat">
+        根据对话生成提示词
+      </button>
+    </view>
+  </view>
+
+  <!-- 底部操作栏 -->
+  <view class="bottom-bar">
+    <!-- 快速操作按钮 -->
+    <view class="quick-actions" wx:if="{{mode !== 'chat'}}">
+      <view class="quick-action-btn" 
+            wx:for="{{quickActions}}" 
+            wx:key="index"
+            bindtap="onQuickAction"
+            data-index="{{index}}">
+        <t-icon name="{{item.icon}}" size="40rpx" color="#8c7553" />
+        <text class="action-text">{{item.text}}</text>
+      </view>
+    </view>
+
+    <!-- 主输入区域 -->
+    <view class="input-area">
+      <input 
+        class="text-input"
+        type="text"
+        placeholder="{{mode === 'chat' ? '输入消息...' : '输入需求...'}}"
+        placeholder-style="{{mode === 'chat' ? 'color: rgba(255, 255, 255, 0.5);' : 'color: rgba(111, 89, 69, 0.5);'}}"
+        value="{{inputText}}"
+        bindinput="onInputChange"
+        bindconfirm="onSendMessage"
+        confirm-type="send"
+      />
+      <view class="input-actions">
+        <view class="input-icon-btn" bindtap="onSendMessage" wx:if="{{inputText}}">
+          <text class="icon">发送</text>
+        </view>
+        <view class="input-icon-btn" bindtap="onAdd">
+          <t-icon name="add" size="40rpx" color="#8c7553" />
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <intercept-modal />
+</view>

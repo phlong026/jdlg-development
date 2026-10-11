@@ -1,0 +1,88 @@
+<!--pages/wallet/wallet.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="我的钱包" subtitle="灵石余额 · 最近明细 · 去充值" background="#e6daca" />
+
+  <!-- 顶部余额卡片 -->
+  <view class="balance-card">
+    <view class="balance-header">
+      <view class="recharge-text">
+        <text class="balance-label">可用灵石</text>
+        <view class="ratio-tag">
+          <t-icon name="swap" size="28rpx" color="#a9855b" />
+          <text class="ratio-text">10 灵石 = 1 元</text>
+        </view>
+      </view>
+      <view class="recharge-com">
+      <view class="alance-title-left">
+        <view class="balance-value-row">
+          <t-icon name="gift" size="52rpx" color="#b79066" />
+          <text class="balance-value">{{stones}}</text>
+        </view>
+        <view class="balance-rmb-row">
+          <text class="rmb-label">折合人民币</text>
+          <text class="rmb-value">￥{{rmbAmount}}</text>
+        </view>
+      </view>
+      <view class="balance-title-row">
+        <view class="balance-title-right">
+          <view class="recharge-btn" bindtap="goToTopupCenter">
+            <text>去充值</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    </view>
+    <view class="balance-footer">
+      <view class="footer-item">
+        <text class="footer-label">近30天获得</text>
+        <text class="footer-value plus">+{{recentGain}}</text>
+      </view>
+      <view class="footer-item">
+        <text class="footer-label">近30天消耗</text>
+        <text class="footer-value minus">-{{recentConsume}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 灵石明细（所有用户可见） -->
+  <view class="section">
+    <view class="section-header">
+      <text class="section-title">最近灵石明细</text>
+      <view class="section-extra" bindtap="goToStoneDetails">
+        <text class="extra-text">查看全部</text>
+        <t-icon name="chevron-right" size="28rpx" color="#8c7553" />
+      </view>
+    </view>
+
+    <view class="list-card">
+      <view class="empty" wx:if="{{records.length === 0}}">
+        <t-icon name="invisible" size="60rpx" color="#8c7553" />
+        <text class="empty-text">暂无灵石记录</text>
+      </view>
+
+      <view class="record-item" wx:for="{{records}}" wx:key="id">
+        <view class="record-main">
+          <view class="record-left">
+            <view class="record-icon {{item.type}}">
+              <t-icon wx:if="{{item.type === 'consume'}}" name="edit" size="36rpx" color="#d37a74" />
+              <t-icon wx:elif="{{item.type === 'recharge'}}" name="money" size="36rpx" color="#b79066" />
+              <t-icon wx:elif="{{item.type === 'checkin'}}" name="calendar" size="36rpx" color="#c39a6b" />
+              <t-icon wx:else name="gift" size="36rpx" color="#b79066" />
+            </view>
+            <view class="record-info">
+              <text class="record-title">{{item.title}}</text>
+              <text class="record-subtitle">{{item.desc}}</text>
+            </view>
+          </view>
+          <view class="record-right">
+            <text class="record-amount {{item.amountClass}}">
+              {{item.amountText}}
+            </text>
+            <text class="record-time">{{item.time}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

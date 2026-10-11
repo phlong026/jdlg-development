@@ -1,0 +1,12 @@
+[
+  {
+    "test": "customer-service-action-placement.test.js",
+    "baselineExitCode": 1,
+    "output": "node:fs:448\n    return binding.readFileUtf8(path, stringToFlags(options.flag));\n                   ^\n\nError: ENOENT: no such file or directory, open '/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-baseline-tests-bk9w1ebm/miniprogram/miniprogram/assets/icons/send-plane.svg'\n    at Object.readFileSync (node:fs:448:20)\n    at read (/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-baseline-tests-bk9w1ebm/miniprogram/tests/customer-service-action-placement.test.js:8:13)\n    at Object.<anonymous> (/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-baseline-tests-bk9w1ebm/miniprogram/tests/customer-service-action-placement.test.js:14:18)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)\n    at node:internal/main/run_main_module:28:49 {\n  errno: -2,\n  code: 'ENOENT',\n  syscall: 'open',\n  path: '/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-baseline-tests-bk9w1ebm/miniprogram/miniprogram/assets/icons/send-plane.svg'\n}\n\nNode.js v20.20.2\n"
+  },
+  {
+    "test": "customer-service-knowledge.test.js",
+    "baselineExitCode": 1,
+    "output": "node:internal/assert/utils:281\n    throw err;\n    ^\n\nAssertionError [ERR_ASSERTION]: customer service page should call matchKnowledge\n    at Object.<anonymous> (/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-home-baseline-tests-bk9w1ebm/miniprogram/tests/customer-service-knowledge.test.js:49:8)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)\n    at node:internal/main/run_main_module:28:49 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '=='\n}\n\nNode.js v20.20.2\n"
+  }
+]

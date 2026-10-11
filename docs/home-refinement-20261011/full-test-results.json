@@ -1,0 +1,152 @@
+[
+  {
+    "test": "aicost-form-share.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: blank form shares the same poster without calculating or claiming a price\nok 1 - blank form shares the same poster without calculating or claiming a price\n  ---\n  duration_ms: 112.93525\n  ...\n# Subtest: form invitation does not present unfinished or default selections as report facts\nok 2 - form invitation does not present unfinished or default selections as report facts\n  ---\n  duration_ms: 36.046792\n  ...\n# Subtest: unavailable cover retains the invitation title and form route\nok 3 - unavailable cover retains the invitation title and form route\n  ---\n  duration_ms: 41.480042\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 208.847\n"
+  },
+  {
+    "test": "aicost-home-prefill.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: homepage quick estimate prefills a supported region and positive building area\nok 1 - homepage quick estimate prefills a supported region and positive building area\n  ---\n  duration_ms: 3.140709\n  ...\n# Subtest: supported non-default region updates picker options and indices together\nok 2 - supported non-default region updates picker options and indices together\n  ---\n  duration_ms: 0.868375\n  ...\n# Subtest: direct navigation without query preserves every default\nok 3 - direct navigation without query preserves every default\n  ---\n  duration_ms: 0.907625\n  ...\n# Subtest: unsupported region and invalid building area are ignored independently\nok 4 - unsupported region and invalid building area are ignored independently\n  ---\n  duration_ms: 2.808375\n  ...\n# Subtest: non-finite and empty areas do not overwrite the blank form field\nok 5 - non-finite and empty areas do not overwrite the blank form field\n  ---\n  duration_ms: 2.301208\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 23.44925\n"
+  },
+  {
+    "test": "aicost-pricing.test.js",
+    "exitCode": 0,
+    "output": "Six-part pricing, all tiers, derived rates, snapshots, partial estimates and validation passed\n"
+  },
+  {
+    "test": "aicost-report.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: report loads the complete version 2 estimate snapshot\nok 1 - report loads the complete version 2 estimate snapshot\n  ---\n  duration_ms: 74.709667\n  ...\n# Subtest: report share keeps the dynamic title and path when its cover finishes asynchronously\nok 2 - report share keeps the dynamic title and path when its cover finishes asynchronously\n  ---\n  duration_ms: 19.574291\n  ...\n# Subtest: share cover uses the supplied villa visual without a line-art fallback\nok 3 - share cover uses the supplied villa visual without a line-art fallback\n  ---\n  duration_ms: 3.192625\n  ...\n# Subtest: a partially estimated report labels both total and unit price clearly\nok 4 - a partially estimated report labels both total and unit price clearly\n  ---\n  duration_ms: 17.545875\n  ...\n# Subtest: report rejects a version 2 cache with missing rows or malformed items\nok 5 - report rejects a version 2 cache with missing rows or malformed items\n  ---\n  duration_ms: 32.148417\n  ...\n# Subtest: report rejects old or unreadable cache and asks for a fresh estimate\nok 6 - report rejects old or unreadable cache and asks for a fresh estimate\n  ---\n  duration_ms: 23.785708\n  ...\n# Subtest: cost details toggle without changing the estimate snapshot\nok 7 - cost details toggle without changing the estimate snapshot\n  ---\n  duration_ms: 12.516708\n  ...\n# Subtest: report template keeps the warm two-card layout and designer conversion entry\nok 8 - report template keeps the warm two-card layout and designer conversion entry\n  ---\n  duration_ms: 6.148709\n  ...\n# Subtest: report accepts basement as a seventh cost item and rejects previous pricing\nok 9 - report accepts basement as a seventh cost item and rejects previous pricing\n  ---\n  duration_ms: 41.845792\n  ...\n# Subtest: report rejects the previous window price version\nok 10 - report rejects the previous window price version\n  ---\n  duration_ms: 18.602375\n  ...\n1..10\n# tests 10\n# suites 0\n# pass 10\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 279.87075\n"
+  },
+  {
+    "test": "cost-estimate-share-image.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: share card exports a JPEG and returns the local image path to WeChat\nok 1 - share card exports a JPEG and returns the local image path to WeChat\n  ---\n  duration_ms: 64.132125\n  ...\n# Subtest: price and unit stay separated within the text column for different amount lengths\nok 2 - price and unit stay separated within the text column for different amount lengths\n  ---\n  duration_ms: 55.880958\n  ...\n# Subtest: reference card keeps the villa sharp with only a left transition and white CTA\nok 3 - reference card keeps the villa sharp with only a left transition and white CTA\n  ---\n  duration_ms: 16.893166\n  ...\n# Subtest: unestimated form card uses a question placeholder without claiming a price\nok 4 - unestimated form card uses a question placeholder without claiming a price\n  ---\n  duration_ms: 14.177459\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 166.372541\n"
+  },
+  {
+    "test": "currentPageSelection.test.js",
+    "exitCode": 0,
+    "output": "currentPageSelection tests passed\n"
+  },
+  {
+    "test": "customer-service-action-placement.test.js",
+    "exitCode": 1,
+    "output": "node:assert:768\n    throw err;\n    ^\n\nAssertionError [ERR_ASSERTION]: demand summary card should not include designer handoff\n    at Object.<anonymous> (/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/tests/customer-service-action-placement.test.js:22:8)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)\n    at node:internal/main/run_main_module:28:49 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: '<view wx:if=\"{{demandSummaryVisible}}\" class=\"demand-summary-card\">\\n' +\n    '      <view class=\"demand-summary-head\">\\n' +\n    '        <text class=\"demand-summary-title\">已为你整理好建房需求</text>\\n' +\n    '        <text class=\"demand-summary-edit\" bindtap=\"onContinueDemandSupplement\">继续补充</text>\\n' +\n    '      </view>\\n' +\n    '      <text class=\"demand-summary-text\">{{demandSummary}}</text>\\n' +\n    '      <text class=\"demand-summary-value\">可直接生成方案，也可交给设计老师继续深化。</text>\\n' +\n    '      <view class=\"demand-summary-actions\">\\n' +\n    '        <view class=\"demand-summary-btn\" bindtap=\"goGenerate\">一键生成专属方案</view>\\n' +\n    '        <view class=\"demand-summary-btn secondary\" bindtap=\"handoffHuman\">对接设计老师</view>\\n' +\n    '      </view>',\n  expected: /对接设计老师/,\n  operator: 'doesNotMatch'\n}\n\nNode.js v20.20.2\n"
+  },
+  {
+    "test": "customer-service-composer-layout.test.js",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "test": "customer-service-knowledge.test.js",
+    "exitCode": 1,
+    "output": "node:internal/assert/utils:281\n    throw err;\n    ^\n\nAssertionError [ERR_ASSERTION]: customer service page should call matchKnowledge\n    at Object.<anonymous> (/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/tests/customer-service-knowledge.test.js:49:8)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)\n    at node:internal/main/run_main_module:28:49 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '=='\n}\n\nNode.js v20.20.2\n"
+  },
+  {
+    "test": "favorites-expanded.test.js",
+    "exitCode": 0,
+    "output": "expanded favorites checks passed\n"
+  },
+  {
+    "test": "favorites-v1.test.js",
+    "exitCode": 0,
+    "output": "favorites V1 checks passed\n"
+  },
+  {
+    "test": "generatedetails-customer-service-conversion.test.js",
+    "exitCode": 0,
+    "output": "generatedetails customer service conversion checks passed\n"
+  },
+  {
+    "test": "generatehistory-thumbnail.test.js",
+    "exitCode": 0,
+    "output": "generate history thumbnail checks passed\n"
+  },
+  {
+    "test": "home-cloud-header-release.test.js",
+    "exitCode": 0,
+    "output": "Home release uses immutable cloud assets while preserving interactions and non-header geometry\n"
+  },
+  {
+    "test": "home-cost-allround-aicost.test.js",
+    "exitCode": 0,
+    "output": "Existing home entry and design tabs, native form, report layout and service route passed\n"
+  },
+  {
+    "test": "home-intro-popup.test.js",
+    "exitCode": 0,
+    "output": "home intro popup checks passed\n"
+  },
+  {
+    "test": "home-reference.test.js",
+    "exitCode": 0,
+    "output": "Home reference navigation, project selection, region, validation and estimate handoff passed\n"
+  },
+  {
+    "test": "home-safe-area-layout.test.js",
+    "exitCode": 0,
+    "output": "Home status-bar clearance, service order, privacy entry and protected content passed\n"
+  },
+  {
+    "test": "home-smart-service-fixed.test.js",
+    "exitCode": 0,
+    "output": "Customer service remains in the hero; cancelled secondary entries and placeholder copy are absent\n"
+  },
+  {
+    "test": "newminnantool-real-api-required.test.js",
+    "exitCode": 0,
+    "output": "new minnan template-square generation checks passed\n"
+  },
+  {
+    "test": "report-api.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: asynchronous 202 house creation returns the report identity\nok 1 - asynchronous 202 house creation returns the report identity\n  ---\n  duration_ms: 159.870542\n  ...\n# Subtest: public house questions do not require login while customer reports remain private\nok 2 - public house questions do not require login while customer reports remain private\n  ---\n  duration_ms: 36.331292\n  ...\n# Subtest: private PDF signatures include the exact query required by the server middleware\nok 3 - private PDF signatures include the exact query required by the server middleware\n  ---\n  duration_ms: 33.346375\n  ...\n# Subtest: the existing V5 question endpoint is public\nok 4 - the existing V5 question endpoint is public\n  ---\n  duration_ms: 37.540875\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 302.978416\n"
+  },
+  {
+    "test": "report-document.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: PDF stays a PDF: successful download opens the system document viewer once\nok 1 - PDF stays a PDF: successful download opens the system document viewer once\n  ---\n  duration_ms: 87.52975\n  ...\n# Subtest: expired links request refresh and never open an error body as PDF\nok 2 - expired links request refresh and never open an error body as PDF\n  ---\n  duration_ms: 24.959833\n  ...\n# Subtest: unmount or changed document prevents a late download opening the wrong report\nok 3 - unmount or changed document prevents a late download opening the wrong report\n  ---\n  duration_ms: 71.225583\n  ...\n# Subtest: loading and non-HTTPS links cannot start a download\nok 4 - loading and non-HTTPS links cannot start a download\n  ---\n  duration_ms: 20.785084\n  ...\n# Subtest: download and viewer failures are visible without exposing the private URL\nok 5 - download and viewer failures are visible without exposing the private URL\n  ---\n  duration_ms: 12.018875\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 238.873292\n"
+  },
+  {
+    "test": "report-flow.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: five steps collect decisions, not fabricated site facts\nok 1 - five steps collect decisions, not fabricated site facts\n  ---\n  duration_ms: 193.491583\n  ...\n# Subtest: a phone reading has four ordered sections, not fourteen squeezed PDF sheets\nok 2 - a phone reading has four ordered sections, not fourteen squeezed PDF sheets\n  ---\n  duration_ms: 101.334\n  ...\n# Subtest: payment callback never grants PDF access: server paid, bound and ready all required\nok 3 - payment callback never grants PDF access: server paid, bound and ready all required\n  ---\n  duration_ms: 92.1915\n  ...\n# Subtest: house form builds server input without losing priorities, rooms or unknown budget\nok 4 - house form builds server input without losing priorities, rooms or unknown budget\n  ---\n  duration_ms: 56.641833\n  ...\n# Subtest: modern reports have four matching preview blocks and optional enterprise binding\nok 5 - modern reports have four matching preview blocks and optional enterprise binding\n  ---\n  duration_ms: 35.179417\n  ...\n# Subtest: house optional perspective text matches server minimum length without losing user input\nok 6 - house optional perspective text matches server minimum length without losing user input\n  ---\n  duration_ms: 52.624583\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 585.145917\n"
+  },
+  {
+    "test": "report-landing.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: a paid recent report resumes delivery instead of asking for another purchase\nok 1 - a paid recent report resumes delivery instead of asking for another purchase\n  ---\n  duration_ms: 81.092042\n  ...\n# Subtest: an account change discards late report data and a first-time customer sees no error\nok 2 - an account change discards late report data and a first-time customer sees no error\n  ---\n  duration_ms: 29.768333\n  ...\n# Subtest: logged-out visitors do not request private report history\nok 3 - logged-out visitors do not request private report history\n  ---\n  duration_ms: 22.256042\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 155.026541\n"
+  },
+  {
+    "test": "report-layout.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: report actions fill the phone column instead of inheriting WeChat fixed button width\nok 1 - report actions fill the phone column instead of inheriting WeChat fixed button width\n  ---\n  duration_ms: 117.871084\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 153.681375\n"
+  },
+  {
+    "test": "report-questionnaire.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: questionnaire preserves priority selection order because recommendation weights depend on it\nok 1 - questionnaire preserves priority selection order because recommendation weights depend on it\n  ---\n  duration_ms: 320.910791\n  ...\n# Subtest: login interruption keeps the draft, while successful idempotent submission removes it\nok 2 - login interruption keeps the draft, while successful idempotent submission removes it\n  ---\n  duration_ms: 151.844833\n  ...\n# Subtest: invalid earlier steps and missing consent cannot create paid or preview work\nok 3 - invalid earlier steps and missing consent cannot create paid or preview work\n  ---\n  duration_ms: 116.452209\n  ...\n# Subtest: login returns only to allowlisted native report paths and rejects expired returns\nok 4 - login returns only to allowlisted native report paths and rejects expired returns\n  ---\n  duration_ms: 27.923541\n  ...\n# Subtest: enabled house questionnaire collects actual controls and submits the new protocol\nok 5 - enabled house questionnaire collects actual controls and submits the new protocol\n  ---\n  duration_ms: 135.352208\n  ...\n# Subtest: house draft resumes separately and rejects invalid rooms before a request\nok 6 - house draft resumes separately and rejects invalid rooms before a request\n  ---\n  duration_ms: 94.099958\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 893.997708\n"
+  },
+  {
+    "test": "report-reader.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: hide and unload discard actual late network responses and cancel polling\nok 1 - hide and unload discard actual late network responses and cancel polling\n  ---\n  duration_ms: 264.947875\n  ...\n# Subtest: successful payment-sheet result with unconfirmed backend never unlocks PDF\nok 2 - successful payment-sheet result with unconfirmed backend never unlocks PDF\n  ---\n  duration_ms: 61.131458\n  ...\n# Subtest: cancelled payment does not navigate and can be retried\nok 3 - cancelled payment does not navigate and can be retried\n  ---\n  duration_ms: 42.124583\n  ...\n# Subtest: unexpected payment failure stays visible and releases the retry button\nok 4 - unexpected payment failure stays visible and releases the retry button\n  ---\n  duration_ms: 43.7635\n  ...\n# Subtest: failed refresh is visible and a subsequent refresh recovers\nok 5 - failed refresh is visible and a subsequent refresh recovers\n  ---\n  duration_ms: 43.622542\n  ...\n# Subtest: verified existing contact response does not require a new QR code\nok 6 - verified existing contact response does not require a new QR code\n  ---\n  duration_ms: 43.453792\n  ...\n# Subtest: delivery copy must not say a failed or unpaid PDF is still being produced\nok 7 - delivery copy must not say a failed or unpaid PDF is still being produced\n  ---\n  duration_ms: 116.199042\n  ...\n# Subtest: house confirmation posts the frozen identity then obtains payment eligibility from server\nok 8 - house confirmation posts the frozen identity then obtains payment eligibility from server\n  ---\n  duration_ms: 30.395291\n  ...\n# Subtest: uncertain image submissions expose support and cannot retry from the reader\nok 9 - uncertain image submissions expose support and cannot retry from the reader\n  ---\n  duration_ms: 48.555041\n  ...\n# Subtest: paid-ready house PDF opens without enterprise binding and never promises fourteen pages\nok 10 - paid-ready house PDF opens without enterprise binding and never promises fourteen pages\n  ---\n  duration_ms: 37.553042\n  ...\n# Subtest: leaving confirmation releases busy state without allowing an old completion to affect a newer attempt\nok 11 - leaving confirmation releases busy state without allowing an old completion to affect a newer attempt\n  ---\n  duration_ms: 36.865458\n  ...\n# Subtest: modern generation continues polling beyond five minutes and stops when hidden or ready\nok 12 - modern generation continues polling beyond five minutes and stops when hidden or ready\n  ---\n  duration_ms: 55.74\n  ...\n# Subtest: house confirmation exposes required rooms and core design constraints from frozen facts\nok 13 - house confirmation exposes required rooms and core design constraints from frozen facts\n  ---\n  duration_ms: 47.831833\n  ...\n# Subtest: server omits unrestricted room floor and preserves neighbor facts in confirmation\nok 14 - server omits unrestricted room floor and preserves neighbor facts in confirmation\n  ---\n  duration_ms: 27.945625\n  ...\n# Subtest: transient polling errors recover and authorization errors stop requests\nok 15 - transient polling errors recover and authorization errors stop requests\n  ---\n  duration_ms: 61.892708\n  ...\n# Subtest: modern payment reasons show customer copy rather than internal codes\nok 16 - modern payment reasons show customer copy rather than internal codes\n  ---\n  duration_ms: 72.211334\n  ...\n1..16\n# tests 16\n# suites 0\n# pass 16\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1042.841208\n"
+  },
+  {
+    "test": "report-template.test.js",
+    "exitCode": 0,
+    "output": "TAP version 13\n# Subtest: compiled house preview renders blocks, requirements and confirmation without legacy promises\nok 1 - compiled house preview renders blocks, requirements and confirmation without legacy promises\n  ---\n  duration_ms: 28.097084\n  ...\n# Subtest: compiled questionnaire exposes every new input through actual page handlers\nok 2 - compiled questionnaire exposes every new input through actual page handlers\n  ---\n  duration_ms: 77.086917\n  ...\n# Subtest: compiled landing and delivery use content-driven pages only for modern reports\nok 3 - compiled landing and delivery use content-driven pages only for modern reports\n  ---\n  duration_ms: 38.821958\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 155.992417\n"
+  },
+  {
+    "test": "template-detail-cache-scope.test.js",
+    "exitCode": 0,
+    "output": "template detail cache scope checks passed\n"
+  },
+  {
+    "test": "template-original-task-fallback.test.js",
+    "exitCode": 0,
+    "output": "template original-task fallback checks passed\n"
+  }
+]

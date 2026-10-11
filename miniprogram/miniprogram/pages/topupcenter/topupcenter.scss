@@ -1,0 +1,999 @@
+/* pages/topupcenter/topupcenter.wxss */
+.page {
+  position: relative;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+  overflow-x: hidden;
+  padding-bottom: calc(340rpx + env(safe-area-inset-bottom));
+
+  .content {
+    width: 694rpx;
+    margin: 0 auto;
+    padding: 18rpx 0 calc(246rpx + env(safe-area-inset-bottom));
+    box-sizing: border-box;
+
+    .section-card {
+      background: linear-gradient(180deg, rgba(247, 244, 238, 0.98) 0%, rgba(241, 235, 226, 0.96) 100%);
+      border-radius: 40rpx;
+      padding: 34rpx 28rpx;
+      margin-bottom: 24rpx;
+      box-sizing: border-box;
+      border: 1rpx solid rgba(220, 205, 188, 0.85);
+      box-shadow:
+        0 16rpx 38rpx rgba(107, 83, 57, 0.08),
+        inset 0 1rpx 0 rgba(255, 255, 255, 0.62);
+    }
+
+    .section-title {
+      display: block;
+      font-size: 36rpx;
+      font-weight: 600;
+      color: #53413f;
+      margin-bottom: 28rpx;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24rpx;
+
+      .section-title {
+        margin-bottom: 0;
+      }
+    }
+
+    .section-action {
+      font-size: 24rpx;
+      color: #9a7c5d;
+      padding: 10rpx 0;
+    }
+
+    // 充值申项卡片
+    .recharge-card {
+      .section-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20rpx;
+        margin-bottom: 28rpx;
+      }
+
+      .section-heading-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .section-subtitle {
+        display: block;
+        margin-top: 10rpx;
+        font-size: 22rpx;
+        line-height: 1.5;
+        color: #a18668;
+      }
+
+      .section-chip {
+        flex-shrink: 0;
+        min-width: 150rpx;
+        height: 56rpx;
+        padding: 0 18rpx;
+        border-radius: 999rpx;
+        background: rgba(255, 248, 238, 0.92);
+        border: 1rpx solid rgba(208, 184, 156, 0.72);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 6rpx 18rpx rgba(165, 129, 88, 0.08);
+
+        text {
+          font-size: 22rpx;
+          line-height: 1;
+          color: #946f49;
+          font-weight: 600;
+        }
+      }
+
+      .plan-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18rpx;
+      }
+
+      .plan-item {
+        position: relative;
+        width: calc((100% - 36rpx) / 3);
+        min-height: 324rpx;
+        border-radius: 30rpx;
+        padding: 30rpx 18rpx 24rpx;
+        box-sizing: border-box;
+        border: 2rpx solid rgba(215, 196, 175, 0.96);
+        background: linear-gradient(180deg, rgba(251, 245, 237, 0.98) 0%, rgba(240, 228, 214, 0.96) 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        overflow: hidden;
+        box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.72);
+        transition: all 0.2s ease;
+
+        &.active {
+          background: linear-gradient(180deg, rgba(255, 250, 244, 1) 0%, rgba(237, 222, 201, 0.98) 100%);
+          border-color: #c9a57d;
+          box-shadow:
+            0 14rpx 34rpx rgba(141, 112, 76, 0.14),
+            inset 0 1rpx 0 rgba(255, 255, 255, 0.88);
+          transform: translateY(-2rpx);
+        }
+
+        &.plan-item-custom {
+          width: 100%;
+          min-height: 0;
+          padding: 28rpx 24rpx 24rpx;
+          align-items: stretch;
+          text-align: left;
+          background: linear-gradient(135deg, rgba(250, 241, 228, 0.98) 0%, rgba(243, 232, 214, 0.98) 52%, rgba(250, 245, 237, 0.98) 100%);
+
+          &.active {
+            border-color: #d0a678;
+            box-shadow:
+              0 16rpx 38rpx rgba(170, 126, 81, 0.14),
+              inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+          }
+        }
+      }
+
+      .plan-ribbon {
+        position: absolute;
+        top: 14rpx;
+        right: -14rpx;
+        min-width: 96rpx;
+        height: 38rpx;
+        line-height: 38rpx;
+        padding: 0 14rpx;
+        border-radius: 20rpx 20rpx 0 20rpx;
+        text-align: center;
+        font-size: 20rpx;
+        color: #fffaf2;
+        background: linear-gradient(90deg, #c59a6f 0%, #bf8f65 100%);
+        transform: rotate(8deg);
+        box-shadow: 0 8rpx 18rpx rgba(170, 126, 81, 0.2);
+      }
+
+      .plan-name {
+        font-size: 30rpx;
+        line-height: 1.2;
+        color: #635242;
+        font-weight: 600;
+        margin-top: 12rpx;
+        margin-bottom: 26rpx;
+      }
+
+      .plan-caption {
+        font-size: 22rpx;
+        line-height: 1;
+        color: #b49b84;
+        margin-bottom: 18rpx;
+      }
+
+      .plan-membership-benefit {
+        min-height: 32rpx;
+        font-size: 20rpx;
+        line-height: 1.4;
+        color: #b17a49;
+        margin-bottom: 12rpx;
+      }
+
+      .plan-price {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        margin-bottom: 20rpx;
+
+        .price-symbol {
+          font-size: 28rpx;
+          line-height: 1.1;
+          color: #8f7559;
+          margin-bottom: 6rpx;
+        }
+
+        .price-value {
+          font-size: 54rpx;
+          line-height: 1;
+          color: #8f7559;
+          font-weight: 600;
+          letter-spacing: -1rpx;
+        }
+      }
+
+      .plan-footer {
+        margin-top: auto;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18rpx;
+      }
+
+      .plan-extra {
+        min-height: 32rpx;
+        font-size: 22rpx;
+        line-height: 1.4;
+        color: #8c7a65;
+      }
+
+      .plan-state {
+        min-width: 136rpx;
+        height: 52rpx;
+        padding: 0 18rpx;
+        border-radius: 999rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(229, 215, 199, 0.7);
+        box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
+
+        text {
+          font-size: 22rpx;
+          line-height: 1;
+          color: #a29177;
+          font-weight: 500;
+        }
+      }
+
+      .plan-item.active .plan-state {
+        background: linear-gradient(90deg, #c7a07a 0%, #c09169 100%);
+        box-shadow: 0 10rpx 20rpx rgba(181, 137, 95, 0.18);
+
+        text {
+          color: #ffffff;
+        }
+      }
+
+      .custom-plan-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20rpx;
+        margin-bottom: 18rpx;
+      }
+
+      .custom-plan-title-wrap {
+        flex: 1;
+        min-width: 0;
+
+        .plan-name {
+          margin: 0;
+        }
+      }
+
+      .custom-plan-name-row {
+        display: flex;
+        align-items: baseline;
+        gap: 14rpx;
+        flex-wrap: wrap;
+      }
+
+      .custom-plan-name-primary {
+        margin: 0;
+        margin-bottom: 0;
+        color: #635242;
+      }
+
+      .custom-plan-member-level {
+        font-size: 34rpx;
+        line-height: 1.2;
+        color: #d66a5d;
+        font-weight: 700;
+      }
+
+      .custom-plan-caption {
+        display: block;
+        margin-top: 10rpx;
+        font-size: 24rpx;
+        line-height: 1.4;
+        color: #b08860;
+        font-weight: 500;
+      }
+
+      .custom-plan-caption-highlight {
+        color: #ef6a64;
+        font-weight: 600;
+      }
+
+      .custom-plan-tag {
+        flex-shrink: 0;
+        min-width: 138rpx;
+        height: 76rpx;
+        padding: 0 22rpx;
+        box-sizing: border-box;
+        border-radius: 26rpx;
+        border: 2rpx solid rgba(227, 209, 184, 0.92);
+        background: rgba(255, 255, 255, 0.94);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10rpx 22rpx rgba(174, 137, 96, 0.08);
+
+        text {
+          font-size: 30rpx;
+          line-height: 1;
+          color: #b16a48;
+          font-weight: 600;
+        }
+      }
+
+      .custom-plan-input-wrap {
+        display: block;
+        min-height: 0;
+        padding: 0;
+        margin-bottom: 0;
+        border-radius: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+
+        &.active {
+          box-shadow: none;
+        }
+      }
+
+      .custom-plan-contact-copy {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12rpx;
+      }
+
+      .custom-plan-contact-title {
+        font-size: 30rpx;
+        line-height: 1.3;
+        color: #6f5945;
+        font-weight: 600;
+      }
+
+      .custom-plan-contact-desc {
+        font-size: 23rpx;
+        line-height: 1.6;
+        color: #a0805f;
+      }
+
+      .custom-plan-input-side {
+        width: 240rpx;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16rpx;
+      }
+
+      .custom-plan-amount-box {
+        width: 100%;
+        height: 110rpx;
+        border-radius: 28rpx;
+        border: 2rpx solid rgba(214, 190, 163, 0.9);
+        background: rgba(255, 255, 255, 0.94);
+        display: flex;
+        align-items: center;
+        padding: 0 28rpx;
+        box-sizing: border-box;
+        box-shadow:
+          inset 0 2rpx 10rpx rgba(255, 255, 255, 0.86),
+          0 8rpx 18rpx rgba(171, 137, 96, 0.08);
+      }
+
+      .custom-plan-amount-prefix {
+        flex-shrink: 0;
+        font-size: 34rpx;
+        line-height: 1;
+        color: #8f6d4e;
+        font-weight: 600;
+        margin-right: 18rpx;
+      }
+
+      .custom-plan-amount-input {
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        font-size: 34rpx;
+        color: #5d4835;
+        font-weight: 500;
+      }
+
+      .custom-plan-amount-placeholder {
+        color: #b9a28a;
+        font-size: 32rpx;
+        font-weight: 400;
+      }
+
+      .custom-plan-amount-suffix {
+        flex-shrink: 0;
+        font-size: 34rpx;
+        line-height: 1;
+        color: #8f6d4e;
+        font-weight: 600;
+        margin-left: 18rpx;
+      }
+
+      .custom-plan-contact-badge {
+        width: 100%;
+        height: 64rpx;
+        padding: 0 18rpx;
+        border-radius: 999rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(90deg, #c7a07a 0%, #c09169 100%);
+        box-shadow: 0 10rpx 24rpx rgba(181, 137, 95, 0.16);
+
+        text {
+          font-size: 24rpx;
+          line-height: 1;
+          color: #ffffff;
+          font-weight: 600;
+        }
+      }
+
+      .custom-plan-remark {
+        display: block;
+        margin-top: 14rpx;
+        font-size: 22rpx;
+        line-height: 1.6;
+        color: #b06b45;
+      }
+    }
+
+    // 精石收藏卡片
+    .payment-card {
+      .payment-list {
+        display: flex;
+        gap: 20rpx;
+      }
+
+      .payment-item {
+        flex: 1;
+        min-height: 104rpx;
+        border-radius: 22rpx;
+        border: 3rpx solid #e8e7e2;
+        background: #faf7f2;
+        display: flex;
+        align-items: center;
+        gap: 16rpx;
+        padding: 0 22rpx;
+        box-sizing: border-box;
+
+        &.active {
+          background: linear-gradient(73deg, #f8f1eb 0%, #f2e6d6 100%);
+          border-color: #d6c5bb;
+        }
+
+        &.disabled {
+          opacity: 0.84;
+        }
+      }
+
+      .payment-icon {
+        width: 60rpx;
+        height: 60rpx;
+        border-radius: 18rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .payment-icon-image {
+        width: 60rpx;
+        height: 60rpx;
+        display: block;
+      }
+
+      .payment-icon-wechat {
+        background: transparent;
+      }
+
+      .payment-icon-alipay {
+        background: transparent;
+      }
+
+      .payment-texts {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6rpx;
+      }
+
+      .payment-label {
+        font-size: 28rpx;
+        line-height: 1.2;
+        color: #4b3f2f;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .payment-subnote {
+        font-size: 20rpx;
+        line-height: 1.2;
+        color: #ab9581;
+      }
+
+      .payment-badge {
+        font-size: 20rpx;
+        color: #8f704e;
+        padding: 8rpx 14rpx;
+        border-radius: 999rpx;
+        background: rgba(255, 247, 235, 0.9);
+        flex-shrink: 0;
+      }
+
+      .payment-badge-disabled {
+        color: #ab9581;
+        background: rgba(232, 231, 226, 0.95);
+      }
+
+      .payment-hint {
+        display: block;
+        margin-top: 18rpx;
+        font-size: 22rpx;
+        line-height: 1.6;
+        color: #9a7c5d;
+      }
+    }
+
+    .membership-card {
+      .membership-header {
+        align-items: center;
+        margin-bottom: 20rpx;
+      }
+
+      .membership-tag {
+        flex-shrink: 0;
+        min-width: 120rpx;
+        height: 48rpx;
+        padding: 0 18rpx;
+        border-radius: 999rpx;
+        background: rgba(255, 246, 233, 0.95);
+        border: 1rpx solid rgba(212, 177, 135, 0.66);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22rpx;
+        color: #a46f41;
+      }
+
+      .membership-summary {
+        padding: 24rpx;
+        border-radius: 28rpx;
+        background: linear-gradient(135deg, rgba(255, 250, 244, 0.96) 0%, rgba(243, 232, 216, 0.96) 100%);
+        border: 1rpx solid rgba(215, 194, 170, 0.72);
+        display: flex;
+        flex-direction: column;
+        gap: 12rpx;
+      }
+
+      .membership-title {
+        font-size: 32rpx;
+        line-height: 1.3;
+        color: #5c4631;
+        font-weight: 600;
+      }
+
+      .membership-hint {
+        font-size: 24rpx;
+        line-height: 1.6;
+        color: #967657;
+      }
+
+      .membership-extra {
+        font-size: 22rpx;
+        line-height: 1.4;
+        color: #a0886d;
+      }
+    }
+
+    .history-card {
+      .history-list {
+        border-top: 1rpx solid rgba(210, 196, 178, 0.72);
+      }
+
+      .history-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 26rpx 0;
+        border-bottom: 1rpx solid rgba(210, 196, 178, 0.72);
+      }
+
+      .history-main {
+        flex: 1;
+        min-width: 0;
+        padding-right: 20rpx;
+        display: flex;
+        flex-direction: column;
+        gap: 10rpx;
+      }
+
+      .history-time {
+        font-size: 24rpx;
+        line-height: 1.2;
+        color: #9e9e9e;
+      }
+
+      .history-title {
+        font-size: 26rpx;
+        line-height: 1.3;
+        color: #7a6855;
+      }
+
+      .history-amount {
+        font-size: 28rpx;
+        line-height: 1.2;
+        font-weight: 600;
+      }
+
+      .income {
+        color: #765e3c;
+      }
+
+      .expense {
+        color: #575549;
+      }
+
+      .history-empty {
+        padding: 48rpx 0 24rpx;
+        text-align: center;
+
+        text {
+          font-size: 24rpx;
+          color: #a79583;
+        }
+      }
+    }
+  }
+
+  // 立即充值按钮
+  .bottom-action {
+    position: fixed;
+    left: 22rpx;
+    right: 22rpx;
+    bottom: calc(122rpx + env(safe-area-inset-bottom));
+    min-height: 122rpx;
+    padding: 18rpx 18rpx 18rpx 28rpx;
+    box-sizing: border-box;
+    border-radius: 32rpx;
+    background: rgba(246, 242, 236, 0.98);
+    border: 1rpx solid rgba(214, 198, 179, 0.72);
+    box-shadow:
+      0 18rpx 44rpx rgba(90, 64, 40, 0.14),
+      inset 0 1rpx 0 rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 190;
+  }
+
+  .bottom-action-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+  }
+
+  .bottom-caption {
+    font-size: 22rpx;
+    line-height: 1.2;
+    color: #a0886d;
+  }
+
+  .bottom-amount {
+    font-size: 32rpx;
+    line-height: 1.2;
+    color: #4c3a2a;
+    font-weight: 600;
+  }
+
+  .bottom-membership {
+    font-size: 22rpx;
+    line-height: 1.2;
+    color: #b06f45;
+  }
+
+  .bottom-stones {
+    font-size: 22rpx;
+    line-height: 1.2;
+    color: #9f866a;
+  }
+
+  .bottom-pay-btn {
+    margin: 0;
+    width: 246rpx;
+    height: 78rpx;
+    line-height: 78rpx;
+    padding: 0;
+    border: none;
+    border-radius: 999rpx;
+    background: linear-gradient(90deg, #c6a07b 0%, #c08f63 100%);
+    color: #ffffff;
+    font-size: 28rpx;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12rpx 26rpx rgba(181, 137, 95, 0.24);
+
+    &.enterprise {
+      background: linear-gradient(90deg, #b7865c 0%, #9c6d47 100%);
+    }
+
+    &.disabled {
+      background: linear-gradient(90deg, #d9cec1 0%, #d3c6b8 100%);
+      color: #9e8f7d;
+      box-shadow: none;
+    }
+
+    &::after {
+      border: none;
+    }
+
+    &:active {
+      opacity: 0.88;
+      transform: scale(0.98);
+    }
+  }
+
+  .enterprise-popup-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 260;
+    background: rgba(54, 38, 24, 0.42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32rpx;
+    box-sizing: border-box;
+  }
+
+  .enterprise-popup {
+    width: 100%;
+    max-width: 640rpx;
+    border-radius: 36rpx;
+    padding: 32rpx;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, rgba(251, 246, 239, 0.99) 0%, rgba(241, 232, 220, 0.99) 100%);
+    box-shadow: 0 20rpx 48rpx rgba(90, 64, 40, 0.18);
+  }
+
+  .enterprise-popup-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24rpx;
+  }
+
+  .enterprise-popup-title {
+    display: block;
+    font-size: 34rpx;
+    line-height: 1.2;
+    color: #533f2f;
+    font-weight: 700;
+  }
+
+  .enterprise-popup-subtitle {
+    display: block;
+    margin-top: 10rpx;
+    font-size: 22rpx;
+    line-height: 1.5;
+    color: #a0805f;
+  }
+
+  .enterprise-popup-close {
+    width: 56rpx;
+    height: 56rpx;
+    border-radius: 999rpx;
+    background: rgba(255, 255, 255, 0.74);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .enterprise-popup-body {
+    margin-top: 28rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .enterprise-popup-tip,
+  .enterprise-popup-contact {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 24rpx;
+    line-height: 1.7;
+    color: #7e6449;
+  }
+
+  .enterprise-popup-contact {
+    margin-top: 10rpx;
+    font-weight: 600;
+    color: #5c4530;
+  }
+
+  .enterprise-popup-qrcode,
+  .enterprise-popup-placeholder {
+    margin-top: 28rpx;
+    width: 360rpx;
+    height: 360rpx;
+    border-radius: 28rpx;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1rpx solid rgba(217, 196, 173, 0.72);
+    box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.78);
+  }
+
+  .enterprise-popup-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24rpx;
+    box-sizing: border-box;
+
+    text {
+      font-size: 24rpx;
+      line-height: 1.6;
+      color: #9a8064;
+      text-align: center;
+    }
+  }
+
+  /* 联系选项卡片样式 */
+  .supplier-option {
+    display: flex;
+    align-items: center;
+    gap: 24rpx;
+    padding: 24rpx;
+    border-radius: 24rpx;
+    background: rgba(255, 255, 255, 0.72);
+    border: 2rpx solid rgba(196, 165, 131, 0.22);
+    box-shadow: 0 10rpx 24rpx rgba(94, 65, 47, 0.08);
+  }
+
+  .supplier-option + .supplier-option {
+    margin-top: 16rpx;
+  }
+
+  .supplier-option-contact {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .supplier-option-contact-btn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  .supplier-option-contact-btn::after {
+    border: none;
+  }
+
+  .supplier-option-icon {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: 40rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34rpx;
+    font-weight: 600;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .supplier-phone-icon {
+    background: linear-gradient(180deg, #caa16d 0%, #b27b46 100%);
+  }
+
+  .supplier-chat-icon {
+    background: linear-gradient(180deg, #4facfe 0%, #3b82f6 100%);
+  }
+
+  .supplier-ai-icon {
+    background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+  }
+
+  .supplier-option-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+  }
+
+  .supplier-option-title {
+    font-size: 30rpx;
+    color: #5e412f;
+    font-weight: 600;
+  }
+
+  .supplier-option-desc {
+    font-size: 24rpx;
+    color: rgba(94, 65, 47, 0.78);
+  }
+
+  .supplier-option-right {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    flex-shrink: 0;
+  }
+
+  .supplier-option-badge {
+    padding: 10rpx 16rpx;
+    border-radius: 999rpx;
+    font-size: 20rpx;
+    font-weight: 600;
+    line-height: 1;
+
+    &.warm {
+      background: rgba(202, 161, 109, 0.16);
+      color: #a3703f;
+    }
+
+    &.green {
+      background: rgba(88, 185, 105, 0.16);
+      color: #3f9951;
+    }
+
+    &.muted {
+      background: rgba(138, 105, 78, 0.12);
+      color: #8a694e;
+    }
+  }
+
+  .supplier-option-arrow {
+    font-size: 34rpx;
+    line-height: 1;
+    color: rgba(138, 105, 78, 0.55);
+  }
+
+  .supplier-option-disabled {
+    opacity: 0.55;
+  }
+
+  .enterprise-popup-actions {
+    margin-top: 18rpx;
+    display: flex;
+    gap: 18rpx;
+  }
+
+  .enterprise-popup-btn {
+    flex: 1;
+    height: 84rpx;
+    line-height: 84rpx;
+    border: none;
+    border-radius: 22rpx;
+    background: linear-gradient(90deg, #c6a07b 0%, #c08f63 100%);
+    color: #ffffff;
+    font-size: 28rpx;
+    font-weight: 600;
+
+    &.secondary {
+      background: rgba(255, 255, 255, 0.72);
+      color: #7f6549;
+      border: 1rpx solid rgba(208, 184, 156, 0.72);
+    }
+
+    &::after {
+      border: none;
+    }
+  }
+}

@@ -1,0 +1,167 @@
+<!--pages/lingshidetails/lingshidetails.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="灵石明细" subtitle="查看消耗 · 充值 · 签到获得" background="#e6daca" />
+
+  <!-- 顶部统计卡片 -->
+  <view class="summary-card">
+    <view class="summary-row">
+      <view class="summary-item">
+        <text class="summary-label">当前灵石</text>
+        <view class="summary-value-row">
+          <t-icon name="gift" size="40rpx" color="#b79066" />
+          <text class="summary-value">{{balance}}</text>
+        </view>
+      </view>
+      <view class="summary-item">
+        <text class="summary-label">近30天消耗</text>
+        <view class="summary-value-row">
+          <t-icon name="chart-bar" size="40rpx" color="#d37a74" />
+          <text class="summary-value minus">-{{recentConsume}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="summary-row">
+      <view class="summary-item">
+        <text class="summary-label">近30天获得</text>
+        <view class="summary-value-row">
+          <t-icon name="trending-up" size="40rpx" color="#a9855b" />
+          <text class="summary-value plus">+{{recentGain}}</text>
+        </view>
+      </view>
+      <view class="summary-item">
+        <text class="summary-label">签到累计</text>
+        <view class="summary-value-row">
+          <t-icon name="calendar" size="40rpx" color="#c39a6b" />
+          <text class="summary-value plus">+{{checkinTotal}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 筛选标签 -->
+  <view class="filter-bar">
+    <view
+      class="filter-tag {{currentType === 'all' ? 'active' : ''}}"
+      data-type="all"
+      bindtap="onFilterTap"
+    >
+      <text>全部</text>
+    </view>
+    <view
+      class="filter-tag {{currentType === 'consume' ? 'active' : ''}}"
+      data-type="consume"
+      bindtap="onFilterTap"
+    >
+      <text>消耗</text>
+    </view>
+    <view
+      class="filter-tag {{currentType === 'recharge' ? 'active' : ''}}"
+      data-type="recharge"
+      bindtap="onFilterTap"
+    >
+      <text>充值</text>
+    </view>
+    <view
+      class="filter-tag {{currentType === 'checkin' ? 'active' : ''}}"
+      data-type="checkin"
+      bindtap="onFilterTap"
+    >
+      <text>签到</text>
+    </view>
+    <view
+      class="filter-tag {{currentType === 'task' ? 'active' : ''}}"
+      data-type="task"
+      bindtap="onFilterTap"
+    >
+      <text>任务/活动</text>
+    </view>
+  </view>
+
+  <!-- 列表区域 -->
+  <view class="content">
+    <!-- 加载中 -->
+    <view class="loading" wx:if="{{loading}}">
+      <t-icon name="loading" size="64rpx" color="#8c7553" class="loading-icon" />
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:elif="{{!loading && records.length === 0}}">
+      <t-icon name="invisible" size="80rpx" color="#8c7553" />
+      <text class="empty-title">暂无灵石记录</text>
+      <text class="empty-desc">去体验 AI 生成、签到或充值即可获得灵石</text>
+    </view>
+
+    <!-- 明细列表 -->
+    <scroll-view
+      wx:else
+      class="list"
+      scroll-y="true"
+      lower-threshold="60"
+      bindscrolltolower="onReachBottom"
+    >
+      <view
+        class="item"
+        wx:for="{{records}}"
+        wx:key="id"
+      >
+        <view class="item-main">
+          <view class="item-left">
+            <view class="item-icon {{item.type}}">
+              <t-icon
+                wx:if="{{item.type === 'consume'}}"
+                name="edit"
+                size="40rpx"
+                color="#d37a74"
+              />
+              <t-icon
+                wx:elif="{{item.type === 'recharge'}}"
+                name="money"
+                size="40rpx"
+                color="#a9855b"
+              />
+              <t-icon
+                wx:elif="{{item.type === 'checkin'}}"
+                name="calendar"
+                size="40rpx"
+                color="#c39a6b"
+              />
+              <t-icon
+                wx:else
+                name="gift"
+                size="40rpx"
+                color="#b79066"
+              />
+            </view>
+            <view class="item-info">
+              <text class="item-title">{{item.title}}</text>
+              <text class="item-subtitle">{{item.desc}}</text>
+            </view>
+          </view>
+          <view class="item-right">
+            <text class="item-amount {{item.amountClass}}">
+              {{item.amountText}}
+            </text>
+            <text class="item-time">{{item.time}}</text>
+          </view>
+        </view>
+        <view class="item-extra" wx:if="{{item.remark}}">
+          <text class="item-remark">{{item.remark}}</text>
+        </view>
+      </view>
+
+      <!-- 加载更多 -->
+      <view class="load-more" wx:if="{{hasMore && !loadingMore}}">
+        <text class="load-more-text">上滑加载更多</text>
+      </view>
+      <view class="load-more" wx:if="{{loadingMore}}">
+        <t-icon name="loading" size="40rpx" color="#8c7553" class="loading-icon" />
+        <text class="load-more-text">正在加载...</text>
+      </view>
+      <view class="load-more" wx:if="{{!hasMore && records.length > 0}}">
+        <text class="load-more-text">已加载全部记录</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

@@ -1,0 +1,158 @@
+<!--pages/aicost/aicost.wxml-->
+<view class="page">
+  <navigation-bar title="造价测算" background="#e6daca" style="flex-shrink: 0;" />
+
+  <view class="cost-scroll-wrap">
+    <scroll-view class="content-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="form-section">
+        <view class="section-title">基础地区信息</view>
+        <view class="section-content">
+          <view class="form-group">
+            <view class="form-row">
+              <view class="form-item">
+                <text class="form-label">所在地区</text>
+                <picker mode="multiSelector" range="{{regionOptions}}" value="{{regionIndex}}" bindcolumnchange="onRegionColumnChange" bindchange="onRegionChange" bindcancel="onRegionCancel">
+                  <view class="form-select">
+                    <text class="select-text">{{province}} / {{city}}</text>
+                  </view>
+                </picker>
+              </view>
+            </view>
+          </view>
+
+          <view class="form-group">
+            <view class="form-group-title">面积参数</view>
+            <view class="form-row">
+              <view class="form-item half">
+                <text class="form-label">建筑占地面积</text>
+                <view class="form-input-group">
+                  <input class="form-input" type="digit" value="{{footprintArea}}" bindinput="onFootprintAreaInput" placeholder="如 120" />
+                  <text class="form-unit">㎡</text>
+                </view>
+              </view>
+              <view class="form-item half">
+                <text class="form-label">总建筑面积</text>
+                <view class="form-input-group">
+                  <input class="form-input" type="digit" value="{{buildingArea}}" bindinput="onBuildingAreaInput" placeholder="如 320" />
+                  <text class="form-unit">㎡</text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="form-group">
+            <view class="form-group-title">楼层参数</view>
+            <view class="form-row">
+              <view class="form-item half">
+                <text class="form-label">楼层数</text>
+                <view class="form-input-group">
+                  <input class="form-input" type="number" value="{{floorCount}}" bindinput="onFloorCountInput" placeholder="3" />
+                  <text class="form-unit">层</text>
+                </view>
+              </view>
+              <view class="form-item half">
+                <text class="form-label">首层高度</text>
+                <view class="form-input-group">
+                  <input class="form-input" type="digit" value="{{firstFloorHeight}}" bindinput="onFirstFloorHeightInput" placeholder="3.6" />
+                  <text class="form-unit">m</text>
+                </view>
+              </view>
+            </view>
+
+            <view class="form-row">
+              <view class="form-item half" wx:if="{{hasUpperFloorHeight}}">
+                <text class="form-label">其他楼层高度</text>
+                <view class="form-input-group">
+                  <input class="form-input" type="digit" value="{{upperFloorHeight}}" bindinput="onUpperFloorHeightInput" placeholder="3.3" />
+                  <text class="form-unit">m</text>
+                </view>
+              </view>
+              <view class="form-item half">
+                <text class="form-label">地下室形式</text>
+                <picker mode="selector" range="{{basementOptions}}" value="{{basementIndex}}" data-field="basementType" data-options="basementOptions" data-index-field="basementIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{basementType}}</text>
+                  </view>
+                </picker>
+              </view>
+            </view>
+          </view>
+
+          <view class="form-group">
+            <view class="form-group-title">建筑核心属性 / 外观装修标准</view>
+            <view class="form-row">
+              <view class="form-item half">
+                <text class="form-label">建筑风格</text>
+                <picker mode="selector" range="{{buildingStyleOptions}}" value="{{buildingStyleIndex}}" data-field="buildingStyle" data-options="buildingStyleOptions" data-index-field="buildingStyleIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{buildingStyle}}</text>
+                  </view>
+                </picker>
+              </view>
+              <view class="form-item half">
+                <text class="form-label">结构形式</text>
+                <picker mode="selector" range="{{structureOptions}}" value="{{structureIndex}}" data-field="structureType" data-options="structureOptions" data-index-field="structureIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{structureType}}</text>
+                  </view>
+                </picker>
+              </view>
+            </view>
+
+            <view class="form-row">
+              <view class="form-item half">
+                <text class="form-label">屋顶形式</text>
+                <picker mode="selector" range="{{roofOptions}}" value="{{roofIndex}}" data-field="roofType" data-options="roofOptions" data-index-field="roofIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{roofType}}</text>
+                  </view>
+                </picker>
+              </view>
+              <view class="form-item half">
+                <text class="form-label">外立面样式</text>
+                <picker mode="selector" range="{{facadeOptions}}" value="{{facadeIndex}}" data-field="facadeStyle" data-options="facadeOptions" data-index-field="facadeIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{facadeStyle}}</text>
+                  </view>
+                </picker>
+              </view>
+            </view>
+
+            <view class="form-row">
+              <view class="form-item half">
+                <text class="form-label">建筑基础</text>
+                <picker mode="selector" range="{{foundationOptions}}" value="{{foundationIndex}}" data-field="foundationType" data-options="foundationOptions" data-index-field="foundationIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{foundationType}}</text>
+                  </view>
+                </picker>
+              </view>
+              <view class="form-item half">
+                <text class="form-label">装修标准</text>
+                <picker mode="selector" range="{{decorationOptions}}" value="{{decorationIndex}}" data-field="decorationStyle" data-options="decorationOptions" data-index-field="decorationIndex" bindchange="onOptionChange">
+                  <view class="form-select">
+                    <text class="select-text">{{decorationStyle}}</text>
+                  </view>
+                </picker>
+              </view>
+            </view>
+            <view class="form-row">
+              <view class="form-item half">
+                <text class="form-label">门窗标准</text>
+                <picker mode="selector" range="{{windowOptions}}" value="{{windowIndex}}" data-field="windowStandard" data-options="windowOptions" data-index-field="windowIndex" bindchange="onOptionChange">
+                  <view class="form-select"><text class="select-text">{{windowStandard}}</text></view>
+                </picker>
+              </view>
+              <view class="form-item half"></view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+    </scroll-view>
+  </view>
+
+  <view class="bottom-action">
+    <button class="submit-btn" bindtap="onEstimateCost">生成参考造价</button>
+  </view>
+</view>

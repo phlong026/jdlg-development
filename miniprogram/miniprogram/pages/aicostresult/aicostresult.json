@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
+  "navigationBarTitleText": "造价结果",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": false
+}

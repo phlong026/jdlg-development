@@ -1,0 +1,1489 @@
+package route
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"path/filepath"
+	"service/component"
+	"service/config"
+	"service/function"
+	"service/model"
+	"service/processor"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
+
+// abs 返回整数的绝对值
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func generateAdminUploadObjectKey(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	return fmt.Sprintf("admin_uploads/%s%s", uuid.New().String(), ext)
+}
+
+// 管理端单次灵石操作的资金护栏上限：防手滑多打一个零造成不可逆的大额变动
+const (
+	maxAdminAdjustStones int64 = 10000  // 单次增减上限
+	maxAdminSetStones    int64 = 100000 // 直接设置的目标余额上限
+)
+
+// rollbackStonesDelta 按增量回滚一次灵石设置（newStones → oldStones 的逆操作）。
+// 用 Add/Deduct 原子增量而非 SetStones 绝对值覆盖：回滚窗口内的并发扣减/充值不会被冲掉。
+// DeductStones 余额不足时返回错误，由调用方以 [资金][严重] 告警人工介入。
+func rollbackStonesDelta(userRedisModel *model.UserRedisModel, userID, oldStones, newStones int64) error {
+	inverse := oldStones - newStones
+	if inverse == 0 {
+		return nil
+	}
+	if inverse > 0 {
+		return userRedisModel.AddStones(userID, inverse)
+	}
+	return userRedisModel.DeductStones(userID, -inverse)
+}
+
+// createAdminStonesRecord 写管理端灵石流水。返回错误而不是吞掉：
+// 余额已变而流水缺失会让对账无从下手，调用方必须回滚或明示人工介入。
+func createAdminStonesRecord(stoneRecordModel *model.StoneRecordModel, userID int64, recordType string, delta int64, sceneDesc, remark string) error {
+	if stoneRecordModel == nil {
+		return nil
+	}
+	return stoneRecordModel.Create(userID, recordType, delta, sceneDesc, remark)
+}
+
+// clampManagementPageSize 管理端列表 pageSize 的统一钳制（P2-1）：
+// 无上限的 page_size 会被传 100000 之类的大值拖垮 DB 与响应内存。
+const managementPageSizeMax = 100
+
+func clampManagementPageSize(size int) int {
+	if size < 1 {
+		return 20
+	}
+	if size > managementPageSizeMax {
+		return managementPageSizeMax
+	}
+	return size
+}
+
+// parsePositiveQueryInt 解析正整数查询参数，非法或非正返回 0（=不过滤）
+func parsePositiveQueryInt(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+// maskPhoneNumber 管理端列表展示用手机号脱敏：11 位保留前3后4，其余位数按长度截半保留
+func maskPhoneNumber(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	digits := 0
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			digits++
+		}
+	}
+	if digits == 11 && len(s) == 11 {
+		return s[:3] + "****" + s[7:]
+	}
+	if len(s) <= 4 {
+		return strings.Repeat("*", len(s))
+	}
+	keep := len(s) / 4
+	if keep < 1 {
+		keep = 1
+	}
+	return s[:keep] + "****" + s[len(s)-keep:]
+}
+
+// RegisterManagementRoutes 注册管理后台路由
+func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthProcessor, userDBModel *model.UserModel, userRedisModel *model.UserRedisModel, userProfileModel *model.UserProfileModel, stoneRecordModel *model.StoneRecordModel) {
+	registerWecomLogin(r, userDBModel)
+	// 登录接口（不需要认证）
+	loginGate := newManagementLoginGate()
+	r.POST("/login", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+		var req processor.PasswordLoginRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  FormatValidationError("参数错误: " + err.Error()),
+			})
+			return
+		}
+
+		if !loginGate.allow(req.Username) {
+			crmError(c, 429, "登录尝试过于频繁，请 5 分钟后重试")
+			return
+		}
+		// 使用账号密码登录策略
+		strategy, ok := authProcessor.GetStrategy("password")
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "登录策略未配置",
+			})
+			return
+		}
+
+		result, err := strategy.Login(context.Background(), &req)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "账号或密码错误",
+			})
+			return
+		}
+
+		// 设置session
+		if err := SetUserSession(c, result.User.ID, result.User.Username, result.User.UserType); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "保存会话失败",
+			})
+			return
+		}
+
+		// 返回平台访问范围，前端据此直达落地页（crm_only 无需再经 dashboard 二次跳转）
+		accessScope := ""
+		if access, accessErr := readManagementAccess(c.Request.Context(), userDBModel.DB, result.User.ID); accessErr == nil && access.Enabled {
+			accessScope = access.Scope
+		}
+		data := gin.H{
+			"id":       result.User.ID,
+			"username": result.User.Username,
+		}
+		if accessScope != "" {
+			data["scope"] = accessScope
+			data["crmEnabled"] = crmEnabled()
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"msg":  "登录成功",
+			"data": data,
+		})
+	})
+
+	// 需要认证的路由组
+	auth := r.Group("")
+	auth.Use(AuthRequired, ManagementAccessRequired(userDBModel))
+
+	// 获取当前用户信息
+	auth.GET("/me", func(c *gin.Context) {
+		userID := GetUserID(c)
+		username := GetUsername(c)
+		accessScope := "platform_admin"
+		if value, ok := c.Get("management.access"); ok {
+			accessScope = value.(managementAccess).Scope
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"msg":  "success",
+			"data": gin.H{
+				"id":         userID,
+				"username":   username,
+				"scope":      accessScope,
+				"crmEnabled": crmEnabled(),
+			},
+		})
+	})
+
+	// 登出
+	auth.POST("/logout", func(c *gin.Context) {
+		if err := ClearUserSession(c); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "登出失败",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"msg":  "已登出",
+		})
+	})
+
+	// 用户管理接口
+	user := auth.Group("/users")
+	{
+		// 获取用户列表（小程序用户）
+		user.GET("", func(c *gin.Context) {
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+			keyword := strings.TrimSpace(c.Query("keyword"))
+			enterpriseWechatStatus := strings.TrimSpace(c.DefaultQuery("enterprise_wechat_status", "all"))
+			if page < 1 {
+				page = 1
+			}
+			pageSize = clampManagementPageSize(pageSize)
+			if enterpriseWechatStatus != "verified" && enterpriseWechatStatus != "pending" {
+				enterpriseWechatStatus = "all"
+			}
+			offset := (page - 1) * pageSize
+
+			filters := model.ManagementUserListFilters{
+				Keyword:                keyword,
+				EnterpriseWechatStatus: enterpriseWechatStatus,
+				IdentityType:           strings.TrimSpace(c.Query("identity_type")),
+				Status:                 strings.TrimSpace(c.Query("status")),
+				CreatedWithinDays:      parsePositiveQueryInt(c.Query("created_within_days")),
+			}
+			if v := c.Query("stones_min"); v != "" {
+				if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+					filters.StonesMin = &n
+				}
+			}
+			if v := c.Query("stones_max"); v != "" {
+				if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+					filters.StonesMax = &n
+				}
+			}
+			filters.RiskOnly = c.Query("risk") == "1"
+			filters.Member = strings.TrimSpace(c.Query("member"))
+			filters.SortBy = strings.TrimSpace(c.Query("sort_by"))
+			filters.SortDesc = c.Query("sort_order") == "desc"
+
+			users, err := userDBModel.ListManagementUsers(filters, pageSize, offset)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取用户列表失败: " + err.Error(),
+				})
+				return
+			}
+
+			total, err := userDBModel.CountManagementUsers(filters)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取用户总数失败: " + err.Error(),
+				})
+				return
+			}
+
+			// 获取每个用户的灵石余额
+			userList := make([]gin.H, 0)
+			for _, u := range users {
+				stones, _ := userRedisModel.GetStones(u.ID)
+				verifiedAt := ""
+				if u.EnterpriseWechatVerifiedAt != nil {
+					verifiedAt = u.EnterpriseWechatVerifiedAt.Format("2006-01-02 15:04:05")
+				}
+				// 风险标签：列表只展示廉价可算的结构化信号；同设备多账号/未设密码在 360 详情里查
+				riskTags := make([]string, 0)
+				if u.LastDeviceChangeTime != nil && u.LastDeviceChangeTime.After(time.Now().Add(-7*24*time.Hour)) {
+					riskTags = append(riskTags, "recent_device_change")
+				}
+				memberStatus := ""
+				if u.MemberStatus == "active" && u.MemberExpiredAt != nil && u.MemberExpiredAt.After(time.Now()) {
+					memberStatus = "active"
+				} else if u.MemberStatus != "" {
+					memberStatus = "expired"
+				}
+				bannedAt := ""
+				if u.BannedAt != nil {
+					bannedAt = u.BannedAt.Format("2006-01-02 15:04:05")
+				}
+				userList = append(userList, gin.H{
+					"id":                            u.ID,
+					"username":                      u.Username,
+					"user_type":                     u.UserType,
+					"stones":                        stones,
+					"nickname":                      strings.TrimSpace(u.Nickname),
+					"phone":                         maskPhoneNumber(u.Phone),
+					"identity_type":                 u.IdentityType,
+					"status":                        u.Status,
+					"banned_reason":                 u.BannedReason,
+					"banned_at":                     bannedAt,
+					"risk_tags":                     riskTags,
+					"member_status":                 memberStatus,
+					"member_plan_title":             u.MemberPlanTitle,
+					"enterprise_wechat_verified":    u.EnterpriseWechatVerified,
+					"enterprise_wechat_contact":     maskPhoneNumber(strings.TrimSpace(u.EnterpriseWechatContact)),
+					"enterprise_wechat_verified_at": verifiedAt,
+					"created_at":                    u.CreatedAt,
+					"updated_at":                    u.UpdatedAt,
+				})
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"list":      userList,
+					"total":     total,
+					"page":      page,
+					"page_size": pageSize,
+				},
+			})
+		})
+
+		// 用户列表全库真实口径统计（替代旧版"按当前页计算"的失真统计）
+		auth.GET("/user-stats", func(c *gin.Context) {
+			stats, err := userDBModel.GetManagementUserStats()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取用户统计失败: " + err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": stats})
+		})
+
+		// 封禁用户：拦截登录与 AI 任务/支付发起（POST 会被审计中间件记录）
+		user.POST("/:id/ban", func(c *gin.Context) {
+			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			var req struct {
+				Reason string `json:"reason" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("请填写封禁原因: " + err.Error())})
+				return
+			}
+			reason := strings.TrimSpace(req.Reason)
+			if len(reason) > 200 {
+				reason = reason[:200]
+			}
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			if u.UserType != "miniprogram" {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "仅支持封禁小程序用户"})
+				return
+			}
+			if err := userDBModel.SetUserBanned(id, true, reason); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "封禁失败: " + err.Error()})
+				return
+			}
+			log.Printf("[风控] 管理员 %s 封禁用户 %s (ID:%d)，原因: %s", GetUsername(c), u.Username, id, reason)
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已封禁", "data": gin.H{"id": id, "status": "banned"}})
+		})
+
+		// 解封用户
+		user.POST("/:id/unban", func(c *gin.Context) {
+			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			var req struct {
+				Reason string `json:"reason"`
+			}
+			_ = c.ShouldBindJSON(&req)
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			if err := userDBModel.SetUserBanned(id, false, strings.TrimSpace(req.Reason)); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "解封失败: " + err.Error()})
+				return
+			}
+			log.Printf("[风控] 管理员 %s 解封用户 %s (ID:%d)，说明: %s", GetUsername(c), u.Username, id, req.Reason)
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已解封", "data": gin.H{"id": id, "status": "active"}})
+		})
+
+		// 查看完整手机号（列表默认脱敏；POST 形式让审计中间件自动记录本次查看）
+		user.POST("/:id/phone-reveal", func(c *gin.Context) {
+			id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			if _, err := userDBModel.GetByID(id); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			var phone, wechatContact string
+			if err := userDBModel.DB.QueryRow(`SELECT COALESCE(p.phone, ''), COALESCE(p.enterprise_wechat_contact, '') FROM user_profiles p WHERE p.user_id = ?`, id).Scan(&phone, &wechatContact); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户扩展信息不存在"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"user_id":                   id,
+					"phone":                     phone,
+					"enterprise_wechat_contact": wechatContact,
+				},
+			})
+		})
+
+		// 获取单个用户信息
+		user.GET("/:id", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "无效的用户ID",
+				})
+				return
+			}
+
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code": 404,
+					"msg":  "用户不存在",
+				})
+				return
+			}
+
+			// 获取灵石余额
+			stones, _ := userRedisModel.GetStones(u.ID)
+			var profileData *model.UserProfile
+			if userProfileModel != nil {
+				profileData, _ = userProfileModel.GetByUserID(u.ID)
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"id":        u.ID,
+					"username":  u.Username,
+					"user_type": u.UserType,
+					"stones":    stones,
+					"nickname": func() string {
+						if profileData != nil {
+							return profileData.Nickname
+						}
+						return ""
+					}(),
+					"avatar": func() string {
+						if profileData != nil {
+							return sanitizePublicImageURL(profileData.Avatar)
+						}
+						return ""
+					}(),
+					"designer_bio": func() string {
+						if profileData != nil {
+							return profileData.DesignerBio
+						}
+						return ""
+					}(),
+					"specialty_styles": func() string {
+						if profileData != nil {
+							return profileData.SpecialtyStyles
+						}
+						return ""
+					}(),
+					"designer_experience_years": func() int64 {
+						if profileData != nil {
+							return profileData.DesignerExperienceYears
+						}
+						return 0
+					}(),
+					"service_title": func() string {
+						if profileData != nil {
+							return profileData.ServiceTitle
+						}
+						return ""
+					}(),
+					"created_at": u.CreatedAt,
+					"updated_at": u.UpdatedAt,
+				},
+			})
+		})
+
+		user.GET("/:id/enterprise-wechat", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			if _, err := userDBModel.GetByID(id); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			if userProfileModel == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "用户扩展信息服务不可用"})
+				return
+			}
+			profile, err := userProfileModel.GetOrCreate(id, "")
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取手机号授权验证状态失败: " + err.Error()})
+				return
+			}
+			verifiedAt := ""
+			if profile.EnterpriseWechatVerifiedAt != nil {
+				verifiedAt = profile.EnterpriseWechatVerifiedAt.Format("2006-01-02 15:04:05")
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"user_id":                       id,
+					"enterprise_wechat_verified":    profile.EnterpriseWechatVerified,
+					"enterprise_wechat_verified_at": verifiedAt,
+					"enterprise_wechat_contact":     strings.TrimSpace(profile.EnterpriseWechatContact),
+				},
+			})
+		})
+
+		user.PUT("/:id/enterprise-wechat", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil || id <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的用户ID"})
+				return
+			}
+			if _, err := userDBModel.GetByID(id); err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "用户不存在"})
+				return
+			}
+			if userProfileModel == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "用户扩展信息服务不可用"})
+				return
+			}
+			var req struct {
+				Verified bool   `json:"verified"`
+				Contact  string `json:"contact"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
+				return
+			}
+			if _, err := userProfileModel.GetOrCreate(id, ""); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "初始化用户扩展信息失败: " + err.Error()})
+				return
+			}
+			contact := strings.TrimSpace(req.Contact)
+			if req.Verified && contact == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "手机号授权通过时必须填写手机号"})
+				return
+			}
+			if err := userProfileModel.SetEnterpriseWechatVerification(id, req.Verified, contact); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "保存手机号授权状态失败: " + err.Error()})
+				return
+			}
+			profile, err := userProfileModel.GetByUserID(id)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取手机号授权状态失败: " + err.Error()})
+				return
+			}
+			verifiedAt := ""
+			if profile.EnterpriseWechatVerifiedAt != nil {
+				verifiedAt = profile.EnterpriseWechatVerifiedAt.Format("2006-01-02 15:04:05")
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "保存成功",
+				"data": gin.H{
+					"user_id":                       id,
+					"enterprise_wechat_verified":    profile.EnterpriseWechatVerified,
+					"enterprise_wechat_verified_at": verifiedAt,
+					"enterprise_wechat_contact":     strings.TrimSpace(profile.EnterpriseWechatContact),
+				},
+			})
+		})
+
+		// 更新用户基础信息（用户名、登录密码）
+		user.PUT("/:id", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "无效的用户ID",
+				})
+				return
+			}
+
+			var req struct {
+				Username                *string `json:"username"` // 新用户名（可选）
+				Password                *string `json:"password"` // 新密码（可选，留空则不修改）
+				Nickname                *string `json:"nickname"` // 昵称（用户扩展信息，可选）
+				Avatar                  *string `json:"avatar"`   // 头像URL（用户扩展信息，可选）
+				DesignerBio             *string `json:"designer_bio"`
+				SpecialtyStyles         *string `json:"specialty_styles"`
+				DesignerExperienceYears *int64  `json:"designer_experience_years"`
+				ServiceTitle            *string `json:"service_title"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  FormatValidationError("参数错误: " + err.Error()),
+				})
+				return
+			}
+
+			if (req.Username == nil || strings.TrimSpace(*req.Username) == "") &&
+				(req.Password == nil || strings.TrimSpace(*req.Password) == "") &&
+				(req.Nickname == nil || strings.TrimSpace(*req.Nickname) == "") &&
+				(req.Avatar == nil || strings.TrimSpace(*req.Avatar) == "") &&
+				req.DesignerBio == nil &&
+				req.SpecialtyStyles == nil &&
+				req.DesignerExperienceYears == nil &&
+				req.ServiceTitle == nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "至少需要提供一项可修改字段",
+				})
+				return
+			}
+
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code": 404,
+					"msg":  "用户不存在",
+				})
+				return
+			}
+
+			updates := []string{}
+			args := []interface{}{}
+
+			// 处理用户名修改
+			if req.Username != nil {
+				newUsername := strings.TrimSpace(*req.Username)
+				if newUsername == "" {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"code": 400,
+						"msg":  "用户名不能为空",
+					})
+					return
+				}
+				if newUsername != u.Username {
+					// 检查同类型用户下用户名是否已存在
+					if other, err := userDBModel.GetByUsernameAndType(newUsername, u.UserType); err == nil && other != nil && other.ID != u.ID {
+						c.JSON(http.StatusBadRequest, gin.H{
+							"code": 400,
+							"msg":  "该用户名已被占用",
+						})
+						return
+					}
+					updates = append(updates, "username = ?")
+					args = append(args, newUsername)
+				}
+			}
+
+			// 处理密码修改
+			if req.Password != nil {
+				newPassword := strings.TrimSpace(*req.Password)
+				if newPassword != "" {
+					hashed := function.HashPassword(newPassword)
+					updates = append(updates, "password = ?")
+					args = append(args, hashed)
+				}
+			}
+
+			// 如果有需要更新的用户名/密码，则更新 users 表
+			if len(updates) > 0 {
+				updates = append(updates, "updated_at = NOW()")
+				args = append(args, id)
+				query := "UPDATE users SET " + strings.Join(updates, ", ") + " WHERE id = ?"
+				if _, err := userDBModel.DB.Exec(query, args...); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code": 500,
+						"msg":  "更新用户信息失败: " + err.Error(),
+					})
+					return
+				}
+			}
+
+			// 更新扩展信息（昵称、头像）
+			if userProfileModel != nil {
+				profileData, _ := userProfileModel.GetOrCreate(id, "")
+				if req.Nickname != nil {
+					if err := userProfileModel.UpdateNickname(id, strings.TrimSpace(*req.Nickname)); err != nil {
+						// 不中断整体流程，仅记录错误
+						log.Println("更新用户昵称失败:", err)
+					}
+				}
+				if req.Avatar != nil {
+					avatar := strings.TrimSpace(*req.Avatar)
+					if !isSafeRemoteImageURL(avatar) {
+						c.JSON(http.StatusBadRequest, gin.H{
+							"code": 400,
+							"msg":  "头像必须是可公开访问的 http/https 地址",
+						})
+						return
+					}
+					if err := userProfileModel.UpdateAvatar(id, avatar); err != nil {
+						log.Println("更新用户头像失败:", err)
+					}
+				}
+				if profileData != nil && (req.DesignerBio != nil || req.SpecialtyStyles != nil || req.DesignerExperienceYears != nil || req.ServiceTitle != nil) {
+					designerBio := profileData.DesignerBio
+					specialtyStyles := profileData.SpecialtyStyles
+					designerExperienceYears := profileData.DesignerExperienceYears
+					serviceTitle := profileData.ServiceTitle
+					if req.DesignerBio != nil {
+						designerBio = strings.TrimSpace(*req.DesignerBio)
+					}
+					if req.SpecialtyStyles != nil {
+						specialtyStyles = strings.TrimSpace(*req.SpecialtyStyles)
+					}
+					if req.DesignerExperienceYears != nil && *req.DesignerExperienceYears >= 0 {
+						designerExperienceYears = *req.DesignerExperienceYears
+					}
+					if req.ServiceTitle != nil {
+						serviceTitle = strings.TrimSpace(*req.ServiceTitle)
+					}
+					if err := userProfileModel.UpdateDesignerProfile(id, designerBio, specialtyStyles, designerExperienceYears, serviceTitle, profileData.ServiceQuote, profileData.ServiceIntro, profileData.ServiceEnabled); err != nil {
+						log.Println("更新设计师资料失败:", err)
+					}
+				}
+			}
+
+			// 重新获取用户信息
+			updated, _ := userDBModel.GetByID(id)
+
+			resp := gin.H{
+				"id":         updated.ID,
+				"username":   updated.Username,
+				"user_type":  updated.UserType,
+				"created_at": updated.CreatedAt,
+				"updated_at": updated.UpdatedAt,
+			}
+			// 尝试带上扩展信息（如果有）
+			if userProfileModel != nil {
+				if profile, err := userProfileModel.GetByUserID(id); err == nil && profile != nil {
+					resp["nickname"] = profile.Nickname
+					resp["avatar"] = profile.Avatar
+					resp["designer_bio"] = profile.DesignerBio
+					resp["specialty_styles"] = profile.SpecialtyStyles
+					resp["designer_experience_years"] = profile.DesignerExperienceYears
+					resp["service_title"] = profile.ServiceTitle
+				}
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "更新成功",
+				"data": resp,
+			})
+		})
+
+		// 修改用户灵石余额
+		user.PUT("/:id/stones", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "无效的用户ID",
+				})
+				return
+			}
+
+			var req setStonesRequest
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  FormatValidationError("参数错误: " + err.Error()),
+				})
+				return
+			}
+
+			// 检查用户是否存在
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code": 404,
+					"msg":  "用户不存在",
+				})
+				return
+			}
+
+			// 获取当前灵石余额（读取失败必须中止，否则流水里的旧值无从谈起）
+			oldStones, err := userRedisModel.GetStones(id)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "读取当前余额失败: " + err.Error(),
+				})
+				return
+			}
+
+			// 设置新的灵石余额（0 是合法余额；required 已保证字段存在）
+			newStones := *req.Stones
+			if newStones > maxAdminSetStones {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  fmt.Sprintf("目标余额不能超过 %d（如确需更大额度请分次操作并留存审批记录）", maxAdminSetStones),
+				})
+				return
+			}
+			if err := userRedisModel.SetStones(id, newStones); err != nil {
+				// SetStones 先写 Redis 再写 MySQL：MySQL 失败时 Redis 可能已变更。
+				// 若就此返回，余额已变而无流水，且重试会以污染后的值做差，永远补不上流水；
+				// 服务重启还会把 Redis 拉回旧值，表现为"设置成功后余额弹回"。
+				if current, gerr := userRedisModel.GetStones(id); gerr == nil && current != oldStones {
+					if rbErr := rollbackStonesDelta(userRedisModel, id, oldStones, current); rbErr != nil {
+						log.Printf("[资金][严重] 灵石设置 MySQL 失败且 Redis 回滚失败，需人工核对: user=%d old=%d redis当前=%d err=%v", u.ID, oldStones, current, rbErr)
+					} else {
+						log.Printf("[资金] 灵石设置 MySQL 同步失败，Redis 已增量回滚: user=%d", u.ID)
+					}
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "修改灵石余额失败: " + err.Error(),
+				})
+				return
+			}
+
+			// 记录操作日志
+			adminName := GetUsername(c)
+			logMessage := fmt.Sprintf("管理员 %s 将用户 %s (ID:%d) 的灵石余额从 %d 修改为 %d",
+				adminName, u.Username, u.ID, oldStones, newStones)
+			if req.Remark != "" {
+				logMessage += "，备注: " + req.Remark
+			}
+			log.Println(logMessage)
+			if newStones != oldStones {
+				delta := newStones - oldStones
+				recordType := "manual_grant"
+				sceneDesc := "管理员增加灵石"
+				if delta < 0 {
+					recordType = "manual_deduct"
+					sceneDesc = "管理员扣减灵石"
+				}
+				remark := fmt.Sprintf("管理员 %s 直接设置余额", adminName)
+				if req.Remark != "" {
+					remark += "：" + req.Remark
+				}
+				if err := createAdminStonesRecord(stoneRecordModel, u.ID, recordType, delta, sceneDesc, remark); err != nil {
+					// 流水是对账依据：写不进去就把本次变更增量冲销，绝不能"余额变了但没有流水"。
+					// 用增量补偿而非 SetStones 绝对值回滚：回滚窗口内的并发扣减/充值不会被覆盖
+					log.Printf("[资金] 灵石设置流水失败 user=%d old=%d new=%d err=%v", u.ID, oldStones, newStones, err)
+					if rbErr := rollbackStonesDelta(userRedisModel, id, oldStones, newStones); rbErr != nil {
+						log.Printf("[资金][严重] 回滚失败，需人工核对 user=%d old=%d new=%d err=%v", u.ID, oldStones, newStones, rbErr)
+					}
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code": 500,
+						"msg":  "流水记录失败，本次设置已回滚；若页面余额仍有变化请立即联系技术核对",
+					})
+					return
+				}
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "修改成功",
+				"data": gin.H{
+					"id":         u.ID,
+					"username":   u.Username,
+					"old_stones": oldStones,
+					"new_stones": newStones,
+				},
+			})
+		})
+
+		// 增减用户灵石（相对操作）
+		user.POST("/:id/stones/adjust", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "无效的用户ID",
+				})
+				return
+			}
+
+			var req struct {
+				Amount int64  `json:"amount" binding:"required"` // 调整数量（正数增加，负数减少）
+				Remark string `json:"remark"`                    // 备注（可选）
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  FormatValidationError("参数错误: " + err.Error()),
+				})
+				return
+			}
+
+			if req.Amount == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "调整数量不能为0",
+				})
+				return
+			}
+			if abs(req.Amount) > maxAdminAdjustStones {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  fmt.Sprintf("单次调整不能超过 %d 灵石（如确需更大额度请分次操作并留存审批记录）", maxAdminAdjustStones),
+				})
+				return
+			}
+
+			// 检查用户是否存在
+			u, err := userDBModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code": 404,
+					"msg":  "用户不存在",
+				})
+				return
+			}
+
+			// 前置读余额仅用于友好提示；真正的余额校验在下方原子操作（Lua 脚本）内完成
+			oldStones, _ := userRedisModel.GetStones(id)
+			if oldStones+req.Amount < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  fmt.Sprintf("操作后余额不能为负数（当前余额: %d，调整: %d）", oldStones, req.Amount),
+				})
+				return
+			}
+
+			// 执行调整：AddStones（INCR）与 DeductStones（Lua 原子检查+扣减）不存在读-改-写间隙
+			if req.Amount > 0 {
+				if err := userRedisModel.AddStones(id, req.Amount); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code": 500,
+						"msg":  "调整灵石余额失败: " + err.Error(),
+					})
+					return
+				}
+			} else {
+				if err := userRedisModel.DeductStones(id, -req.Amount); err != nil {
+					if errors.Is(err, model.ErrInsufficientStones) {
+						c.JSON(http.StatusBadRequest, gin.H{
+							"code": 400,
+							"msg":  "余额不足（并发操作期间余额已变化，请刷新后重试）",
+						})
+						return
+					}
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code": 500,
+						"msg":  "调整灵石余额失败: " + err.Error(),
+					})
+					return
+				}
+			}
+
+			// 以原子操作后的实际余额为准（并发场景下与前置读值可能不同）
+			newStones, err := userRedisModel.GetStones(id)
+			if err != nil {
+				log.Printf("[资金] 调整后读取余额失败（余额已变更）: user=%d amount=%d err=%v", u.ID, req.Amount, err)
+				newStones = oldStones + req.Amount
+			}
+
+			// 记录操作日志
+			adminName := GetUsername(c)
+			operation := "增加"
+			if req.Amount < 0 {
+				operation = "扣除"
+			}
+			logMessage := fmt.Sprintf("管理员 %s %s用户 %s (ID:%d) 灵石 %d，余额从 %d 变为 %d",
+				adminName, operation, u.Username, u.ID, abs(req.Amount), newStones-req.Amount, newStones)
+			if req.Remark != "" {
+				logMessage += "，备注: " + req.Remark
+			}
+			log.Println(logMessage)
+			{
+				recordType := "manual_grant"
+				sceneDesc := "管理员增加灵石"
+				if req.Amount < 0 {
+					recordType = "manual_deduct"
+					sceneDesc = "管理员扣减灵石"
+				}
+				remark := fmt.Sprintf("管理员 %s 调整余额", adminName)
+				if req.Remark != "" {
+					remark += "：" + req.Remark
+				}
+				if err := createAdminStonesRecord(stoneRecordModel, u.ID, recordType, req.Amount, sceneDesc, remark); err != nil {
+					// 流水是对账依据：写不进去就反向补偿，绝不能"余额变了但没有流水"
+					log.Printf("[资金] 灵石调整流水失败 user=%d amount=%d err=%v", u.ID, req.Amount, err)
+					if req.Amount > 0 {
+						if rbErr := userRedisModel.DeductStones(id, req.Amount); rbErr != nil {
+							log.Printf("[资金][严重] 反向补偿失败，需人工核对: user=%d amount=%d err=%v", u.ID, req.Amount, rbErr)
+						}
+					} else {
+						if rbErr := userRedisModel.AddStones(id, -req.Amount); rbErr != nil {
+							log.Printf("[资金][严重] 反向补偿失败，需人工核对: user=%d amount=%d err=%v", u.ID, req.Amount, rbErr)
+						}
+					}
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"code": 500,
+						"msg":  "流水记录失败，本次调整已反向冲销；若页面余额仍有变化请立即联系技术核对",
+					})
+					return
+				}
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "调整成功",
+				"data": gin.H{
+					"id":         u.ID,
+					"username":   u.Username,
+					"old_stones": oldStones,
+					"new_stones": newStones,
+					"adjustment": req.Amount,
+				},
+			})
+		})
+	}
+
+	// 获取COS临时密钥（STS）
+	auth.GET("/cos/sts", func(c *gin.Context) {
+		cfg := config.Get()
+		if !cfg.COS.EnableSTS {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "未启用COS STS，请检查配置",
+			})
+			return
+		}
+
+		if err := component.HealthCheck(cfg); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": 400,
+				"msg":  "COS配置异常: " + err.Error(),
+			})
+			return
+		}
+
+		cred, err := component.RequestSTSCredential(cfg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": 500,
+				"msg":  "获取COS临时密钥失败: " + err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"code": 0,
+			"msg":  "success",
+			"data": gin.H{
+				"tmp_secret_id":  cred.Credentials.TmpSecretID,
+				"tmp_secret_key": cred.Credentials.TmpSecretKey,
+				"session_token":  cred.Credentials.SessionToken,
+				"start_time":     cred.StartTime,
+				"expired_time":   cred.ExpiredTime,
+				"bucket":         cfg.COS.Bucket,
+				"region":         cfg.COS.Region,
+				"prefix":         component.NormalizePrefix(cfg.COS.Prefix),
+			},
+		})
+	})
+
+	// OSS文件管理接口
+	oss := auth.Group("/oss")
+	{
+		ossFileModel := model.NewOSSFileModel(userDBModel.DB)
+
+		// 获取OSS文件列表
+		oss.GET("/files", func(c *gin.Context) {
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+			fileType := c.DefaultQuery("file_type", "all")
+			sourceType := c.DefaultQuery("source_type", "all")
+			keyword := c.DefaultQuery("keyword", "")
+
+			if page < 1 {
+				page = 1
+			}
+			pageSize = clampManagementPageSize(pageSize)
+			offset := (page - 1) * pageSize
+
+			files, err := ossFileModel.GetAll(pageSize, offset, sourceType, keyword, fileType)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取文件列表失败: " + err.Error(),
+				})
+				return
+			}
+
+			total, err := ossFileModel.Count(sourceType, keyword, fileType)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取文件总数失败: " + err.Error(),
+				})
+				return
+			}
+
+			fileList := make([]gin.H, 0)
+			for _, f := range files {
+				// 格式化来源信息
+				sourceLabel := f.SourceName
+				if f.SourceType == "user_ai" {
+					sourceLabel = f.SourceName + " AI生成"
+				} else if f.SourceType == "admin_upload" {
+					sourceLabel = f.SourceName + " 上传"
+				}
+
+				fileList = append(fileList, gin.H{
+					"id":          f.ID,
+					"name":        f.FileName,
+					"key":         f.ObjectKey,
+					"size":        f.FileSize,
+					"type":        getFileTypeFromMIME(f.ContentType),
+					"url":         f.FileURL,
+					"upload_time": f.CreatedAt,
+					"uploader":    sourceLabel,
+					"source_type": f.SourceType,
+					"source_name": f.SourceName,
+				})
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"list":      fileList,
+					"total":     total,
+					"page":      page,
+					"page_size": pageSize,
+				},
+			})
+		})
+
+		// 上传OSS文件（管理员上传）
+		oss.POST("/upload", func(c *gin.Context) {
+			file, err := c.FormFile("file")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "文件上传失败: " + err.Error(),
+				})
+				return
+			}
+
+			// 打开文件
+			src, err := file.Open()
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "打开文件失败: " + err.Error(),
+				})
+				return
+			}
+			defer src.Close()
+
+			// 读取文件内容
+			fileData := make([]byte, file.Size)
+			_, err = src.Read(fileData)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "读取文件失败: " + err.Error(),
+				})
+				return
+			}
+
+			// 生成对象键（路径）
+			cfg := config.Get()
+			objectKey := generateAdminUploadObjectKey(file.Filename)
+
+			// 上传到COS
+			cosClient := component.GetCOSClient()
+			if cosClient == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "COS客户端未初始化",
+				})
+				return
+			}
+
+			fileURL, err := function.UploadBytes(context.Background(), cosClient, cfg, objectKey, fileData, file.Header.Get("Content-Type"))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "上传到COS失败: " + err.Error(),
+				})
+				return
+			}
+
+			// 获取当前管理员信息
+			adminID := GetUserID(c)
+			adminName := GetUsername(c)
+
+			// 保存文件记录到数据库
+			ossFile := &model.OSSFile{
+				ObjectKey:   objectKey,
+				FileName:    file.Filename,
+				FileSize:    file.Size,
+				ContentType: file.Header.Get("Content-Type"),
+				FileURL:     fileURL,
+				SourceType:  "admin_upload",
+				SourceID:    adminID,
+				SourceName:  adminName,
+			}
+
+			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
+			if err := ossFileModel.Create(ossFile); err != nil {
+				// 如果数据库保存失败，尝试删除COS中的文件
+				cosClient.Object.Delete(context.Background(), objectKey)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "保存文件记录失败: " + err.Error(),
+				})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "上传成功",
+				"data": gin.H{
+					"id":          ossFile.ID,
+					"name":        ossFile.FileName,
+					"key":         ossFile.ObjectKey,
+					"size":        ossFile.FileSize,
+					"type":        getFileTypeFromMIME(ossFile.ContentType),
+					"url":         ossFile.FileURL,
+					"upload_time": ossFile.CreatedAt,
+					"uploader":    adminName + " 上传",
+				},
+			})
+		})
+
+		// 删除OSS文件
+		oss.DELETE("/files/:id", func(c *gin.Context) {
+			idStr := c.Param("id")
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "无效的文件ID",
+				})
+				return
+			}
+
+			// 获取文件记录
+			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
+			file, err := ossFileModel.GetByID(id)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{
+					"code": 404,
+					"msg":  "文件不存在",
+				})
+				return
+			}
+
+			// 从COS删除文件
+			cosClient := component.GetCOSClient()
+			if cosClient != nil {
+				cosClient.Object.Delete(context.Background(), file.ObjectKey)
+			}
+
+			// 从数据库删除记录
+			if err := ossFileModel.Delete(id); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "删除文件记录失败: " + err.Error(),
+				})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "删除成功",
+			})
+		})
+
+		// 批量删除OSS文件
+		oss.POST("/files/batch", func(c *gin.Context) {
+			var req struct {
+				IDs []int64 `json:"ids"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "参数错误: " + err.Error(),
+				})
+				return
+			}
+
+			if len(req.IDs) == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  "请选择要删除的文件",
+				})
+				return
+			}
+
+			// 获取所有文件记录
+			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
+			cosClient := component.GetCOSClient()
+
+			// 从COS删除文件
+			for _, id := range req.IDs {
+				file, err := ossFileModel.GetByID(id)
+				if err == nil && cosClient != nil {
+					cosClient.Object.Delete(context.Background(), file.ObjectKey)
+				}
+			}
+
+			// 从数据库批量删除记录
+			if err := ossFileModel.DeleteBatch(req.IDs); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "批量删除失败: " + err.Error(),
+				})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "批量删除成功",
+			})
+		})
+	}
+
+	// 日志管理接口
+	logs := auth.Group("/logs")
+	{
+		logConfigModel := model.NewLogConfigModel(userDBModel.DB)
+		logModel := model.NewLogModel(userDBModel.DB)
+
+		// 获取日志配置
+		logs.GET("/config", func(c *gin.Context) {
+			config, err := logConfigModel.Get()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取日志配置失败: " + err.Error(),
+				})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"rotate_interval": config.RotateInterval,
+					"retention_days":  config.RetentionDays,
+				},
+			})
+		})
+
+		// 更新日志配置
+		logs.POST("/config", func(c *gin.Context) {
+			var req struct {
+				RotateInterval int `json:"rotate_interval" binding:"required,min=1,max=168"` // 1-168小时（1周）
+				RetentionDays  int `json:"retention_days" binding:"required,min=1,max=365"`  // 1-365天（1年）
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
+					"msg":  FormatValidationError("参数错误: " + err.Error()),
+				})
+				return
+			}
+
+			if err := logConfigModel.CreateOrUpdate(req.RotateInterval, req.RetentionDays); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "更新日志配置失败: " + err.Error(),
+				})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "配置更新成功",
+			})
+		})
+
+		// 获取日志列表
+		logs.GET("", func(c *gin.Context) {
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+			logType := c.DefaultQuery("type", "all")
+			level := c.DefaultQuery("level", "all")
+			keyword := c.DefaultQuery("keyword", "")
+
+			if page < 1 {
+				page = 1
+			}
+			pageSize = clampManagementPageSize(pageSize)
+			offset := (page - 1) * pageSize
+
+			logList, err := logModel.GetAll(pageSize, offset, logType, level, keyword, nil, nil)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取日志列表失败: " + err.Error(),
+				})
+				return
+			}
+
+			total, err := logModel.Count(logType, level, keyword, nil, nil)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code": 500,
+					"msg":  "获取日志总数失败: " + err.Error(),
+				})
+				return
+			}
+
+			logs := make([]gin.H, 0)
+			for _, l := range logList {
+				logs = append(logs, gin.H{
+					"id":        l.ID,
+					"type":      l.Type,
+					"level":     l.Level,
+					"message":   l.Message,
+					"user":      l.Username,
+					"timestamp": l.CreatedAt,
+					"details":   l.Details,
+				})
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "success",
+				"data": gin.H{
+					"list":      logs,
+					"total":     total,
+					"page":      page,
+					"page_size": pageSize,
+				},
+			})
+		})
+	}
+}
+
+// getFileTypeFromMIME 根据MIME类型判断文件类型
+func getFileTypeFromMIME(contentType string) string {
+	if contentType == "" {
+		return "other"
+	}
+	if strings.HasPrefix(contentType, "image/") {
+		return "image"
+	}
+	if strings.HasPrefix(contentType, "video/") {
+		return "video"
+	}
+	if strings.HasPrefix(contentType, "audio/") {
+		return "audio"
+	}
+	if strings.HasPrefix(contentType, "text/") || contentType == "application/pdf" ||
+		strings.Contains(contentType, "document") || strings.Contains(contentType, "word") ||
+		strings.Contains(contentType, "excel") || strings.Contains(contentType, "powerpoint") {
+		return "document"
+	}
+	return "other"
+}

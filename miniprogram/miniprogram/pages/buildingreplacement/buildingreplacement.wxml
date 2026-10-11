@@ -1,0 +1,98 @@
+<!--pages/buildingreplacement/buildingreplacement.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="城市更新" background="#e6daca" />
+
+  <view class="content">
+    <!-- 上传区域 -->
+    <view class="upload-section">
+      <view class="upload-item">
+        <text class="upload-label">建筑外立面</text>
+        <view class="upload-area" bindtap="onUploadFacade">
+          <image wx:if="{{facadeImage}}" class="uploaded-preview" src="{{facadeImage}}" mode="aspectFill" />
+          <view wx:else class="upload-placeholder">
+            <t-icon name="camera" size="60rpx" color="#8c7553" />
+            <text>点击上传</text>
+          </view>
+          <view class="upload-delete" wx:if="{{facadeImage}}" bindtap="onDeleteFacade" catchtap="true">×</view>
+        </view>
+      </view>
+
+      <view class="upload-item">
+        <text class="upload-label">建筑内部</text>
+        <view class="upload-area" bindtap="onUploadInterior">
+          <image wx:if="{{interiorImage}}" class="uploaded-preview" src="{{interiorImage}}" mode="aspectFill" />
+          <view wx:else class="upload-placeholder">
+            <t-icon name="camera" size="60rpx" color="#8c7553" />
+            <text>点击上传</text>
+          </view>
+          <view class="upload-delete" wx:if="{{interiorImage}}" bindtap="onDeleteInterior" catchtap="true">×</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 改造方向选择 -->
+    <view class="direction-section">
+      <text class="section-title">改造方向</text>
+      <view class="direction-options">
+        <view class="direction-btn {{selectedDirection === item.value ? 'active' : ''}}"
+              wx:for="{{directions}}"
+              wx:key="index"
+              bindtap="onSelectDirection"
+              data-value="{{item.value}}">
+          {{item.label}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 材料/风格选择 -->
+    <view class="material-section">
+      <text class="section-title">材料/风格</text>
+      <view class="material-grid">
+        <view class="material-item {{selectedMaterial === item.value ? 'active' : ''}}"
+              wx:for="{{materials}}"
+              wx:key="index"
+              bindtap="onSelectMaterial"
+              data-value="{{item.value}}">
+          <t-icon class="material-icon" name="{{item.icon}}" size="40rpx" color="{{selectedMaterial === item.value ? '#b79066' : '#8c7553'}}" />
+          <text class="material-text">{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 自定义提示词输入 -->
+    <view class="prompt-section">
+      <view class="prompt-title-row">
+        <text class="section-title">自定义提示词（可选）</text>
+        <view class="ai-optimize-btn {{optimizingPrompt ? 'loading' : ''}}" bindtap="onOptimizePrompt">
+          <text class="ai-optimize-text">{{optimizingPrompt ? '优化中...' : 'AI优化'}}</text>
+        </view>
+      </view>
+      <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="prompt-textarea" value="{{customPrompt}}" bindinput="onCustomPromptInput" placeholder="可以输入自定义的AI提示词，更精确地描述您的改造需求..." placeholder-style="color: rgba(111, 89, 69, 0.5);" maxlength="1000" />
+    </view>
+
+    <!-- 改造前后对比 -->
+    <view class="comparison-section" wx:if="{{comparisonImages.length > 0}}">
+      <text class="section-title">改造前后对比</text>
+      <view class="comparison-list">
+        <view class="comparison-item" wx:for="{{comparisonImages}}" wx:key="index">
+          <view class="comparison-before">
+            <text class="comparison-label">改造前</text>
+            <image class="comparison-image" src="{{item.before}}" mode="aspectFill" />
+          </view>
+          <view class="comparison-after">
+            <text class="comparison-label">AI改造后</text>
+            <image class="comparison-image" src="{{item.after}}" mode="aspectFill" />
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- AI生成按钮 -->
+    <view class="generate-button-wrapper">
+      <button class="generate-button" bindtap="onGenerate" disabled="{{generating}}">
+        {{generating ? '生成中...' : 'AI生成改造方案'}}
+      </button>
+    </view>
+  </view>
+</view>

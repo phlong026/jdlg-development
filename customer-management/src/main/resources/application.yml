@@ -1,0 +1,79 @@
+server:
+  port: 8085
+ai:
+  models: #大模型相关配置
+    enabled:
+      - glm-4
+    configs:
+      glm-4:
+        api-key: ${AI_API_KEY:}
+        base-url: https://open.bigmodel.cn/api/paas/v4
+        model-name: glm-4
+  vector: #向量相关配置
+    host: 127.0.0.1  #Milvus地址
+    port: 19530 #Milvus端口,api通信端口,非web访问端口.
+    collectionName: iyque_vectors #向量集合名称
+    dimension: 1536 #向量维度
+    score: 0.5f #向量查询相似度
+    enabled:
+      - embedding-3
+    configs:
+      embedding-3:
+        api-key: ${AI_API_KEY:}
+        base-url: https://open.bigmodel.cn/api/paas/v4
+        model-name: embedding-3
+
+iyque:
+  userName: iyque
+  pwd: ${CRM_ADMIN_PASSWORD:}
+  demo: false
+  fileViewUrl: http://127.0.0.1:8085/file/fileView/ #文件统一访问前缀，后端api指向 FileController.readFile
+  uploadDir: ./upload
+  inquiryAll: true
+  complaintUrl: http://iyque.cn/openmobile/customerComplaint #投诉页面
+  customerSeasUrl: https://iyque.cn/openmobile/customerSeas #客户公海页面
+  h5MarketUrl: https://iyque.cn/openmobile/H5Marketing?id={0} #h5营销页面
+  vector:
+    host: 127.0.0.1  #Milvus地址
+    port: 19530 #Milvus端口,api通信端口,非web访问端口.
+    collectionName: iyque_vectors #向量集合名称
+    dimension: 1536 #向量维度
+    vectorModel: embedding-3 #向量模型,支持智普的 embedding-3，与embedding-2
+    score: 0.5f #向量查询相似度
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:10179/scrm_ky?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: ${CRM_DB_PASSWORD:}
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    generate-ddl: true
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    database: 1
+  jackson:
+    time-zone: Asia/Shanghai
+    serialization:
+      fail-on-empty-beans: false
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.yourproject.entity # 替换为你的实体类所在包
+  configuration:
+    map-underscore-to-camel-case: false # 自动将下划线字段名映射为驼峰属性名
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 输出MyBatis-Plus的SQL日志

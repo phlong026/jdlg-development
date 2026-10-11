@@ -1,0 +1,47 @@
+{
+  "javascriptSyntaxFiles": [
+    "miniprogram/miniprogram/pages/index/index.js",
+    "miniprogram/tests/home-safe-area-layout.test.js",
+    "miniprogram/tests/home-cloud-header-release.test.js",
+    "docs/home-refinement-20261011/rollback.cjs"
+  ],
+  "typescriptSyntaxDiagnostics": [],
+  "typescriptTypecheckScope": "homepage and transitively imported modules",
+  "typescriptDiagnostics": [],
+  "scssWxssApprovedRulesMatch": true,
+  "secretScanFiles": [
+    "miniprogram/miniprogram/pages/index/index.js",
+    "miniprogram/miniprogram/pages/index/index.scss",
+    "miniprogram/miniprogram/pages/index/index.ts",
+    "miniprogram/miniprogram/pages/index/index.wxml",
+    "miniprogram/miniprogram/pages/index/index.wxss",
+    "miniprogram/tests/home-cloud-header-release.test.js",
+    "miniprogram/tests/home-safe-area-layout.test.js",
+    "docs/home-refinement-20261011/rollback.cjs"
+  ],
+  "secretFindings": [],
+  "dependenciesAdded": false,
+  "formatCheck": "git diff --check; existing source formatting retained; no lint/formatter scripts configured",
+  "afterBrandEnlargement": true,
+  "afterSloganEnlargement": true,
+  "evidenceTextFilesScanned": 41,
+  "scssWxssCheckedSelectors": [
+    ".brand-backdrop::after",
+    ".brand-header",
+    ".brand-header>image,.brand-header>view",
+    ".brand-symbol",
+    ".brand-copy",
+    ".brand-name",
+    ".brand-en",
+    ".brand-slogan",
+    ".brand-slogantext",
+    ".slogan-line",
+    ".cost-title",
+    ".estimate-note",
+    ".privacy-link",
+    ".brand-header::before"
+  ],
+  "afterBrandBackgroundCleaning": true,
+  "recordedAt": "2026-10-11T12:19:36.527506+00:00",
+  "afterSoftTransparency": true
+}

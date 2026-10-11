@@ -1,0 +1,132 @@
+{
+  "exportedAt": "2026-10-09T02:30:16.758Z",
+  "source": {
+    "wxmlPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxml",
+    "wxssPath": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/miniprogram/pages/index/index.wxss",
+    "wxmlSha256": "48812b7fa05251989b8c8e399b2b94a625248928be5bfa0b2b96e391c70e26f3",
+    "wxssSha256": "0b2bf89f4bae2f36c7995bb678ddb93a2119a8f5dfecaa0bd3d972e1e4b5d495"
+  },
+  "logicalViewport": {
+    "width": 853,
+    "height": 1844
+  },
+  "deviceScaleFactor": 3,
+  "pngDimensions": {
+    "width": 2559,
+    "height": 5532
+  },
+  "estimateButton": {
+    "x": 62.984375,
+    "y": 1512.984375,
+    "width": 726.984375,
+    "height": 83,
+    "fontFamily": "\"PingFang SC\", sans-serif",
+    "fontSize": "35.2573px",
+    "parentFontFamily": "\"PingFang SC\", sans-serif"
+  },
+  "background": {
+    "gradient": "linear-gradient(rgb(230, 218, 202), rgb(236, 228, 217))",
+    "backdropOpacity": "0.85",
+    "samplingMethod": "最终 PNG 的背景空白点；每点平均 15×15 物理像素，等于 5×5 逻辑像素",
+    "samples": [
+      {
+        "label": "顶部中央空白背景",
+        "x": 426,
+        "y": 24,
+        "logicalCoordinates": true,
+        "sampleSquarePhysicalPixels": 15,
+        "rgb": [
+          229,
+          216,
+          198
+        ],
+        "hex": "#e5d8c6"
+      },
+      {
+        "label": "上部左侧边缘背景",
+        "x": 12,
+        "y": 360,
+        "logicalCoordinates": true,
+        "sampleSquarePhysicalPixels": 15,
+        "rgb": [
+          230,
+          218,
+          201
+        ],
+        "hex": "#e6dac9"
+      },
+      {
+        "label": "中部右侧边缘背景",
+        "x": 841,
+        "y": 790,
+        "logicalCoordinates": true,
+        "sampleSquarePhysicalPixels": 15,
+        "rgb": [
+          232,
+          220,
+          205
+        ],
+        "hex": "#e8dccd"
+      },
+      {
+        "label": "造价卡片上方左侧背景",
+        "x": 12,
+        "y": 1070,
+        "logicalCoordinates": true,
+        "sampleSquarePhysicalPixels": 15,
+        "rgb": [
+          234,
+          221,
+          206
+        ],
+        "hex": "#eaddce"
+      },
+      {
+        "label": "首屏底部右侧背景",
+        "x": 841,
+        "y": 1680,
+        "logicalCoordinates": true,
+        "sampleSquarePhysicalPixels": 15,
+        "rgb": [
+          233,
+          225,
+          211
+        ],
+        "hex": "#e9e1d3"
+      }
+    ]
+  },
+  "assets": [
+    "/assets/home-reference/hd/backdrop.jpg",
+    "/assets/home-reference/hd/brand-symbol-old.png",
+    "/assets/home-reference/hd/brand-name-old.png",
+    "/assets/home-reference/hd/brand-en-old.png",
+    "/assets/smart-service-icon.png",
+    "/assets/home-reference/hd/advisor.png",
+    "/assets/home-reference/hd/calculator.png",
+    "/assets/home-reference/hd/ai-tools.png",
+    "/assets/home-reference/hd/villa.png",
+    "/assets/home-reference/hd/interior.png",
+    "/assets/home-reference/hd/courtyard.png",
+    "/assets/home-reference/hd/renovation.png",
+    "/assets/home-reference/hd/templates.png",
+    "/assets/home-reference/hd/ai-shell.png",
+    "/assets/home-reference/hd/ai-medallion.png",
+    "/assets/home-reference/hd/camera.png",
+    "/assets/home-reference/hd/sparkles.png",
+    "/assets/home-reference/hd/cost-stat-v2.png",
+    "/assets/home-reference/hd/rural-villa.png",
+    "/assets/home-reference/hd/urban-building.png",
+    "/assets/home-reference/hd/location.png",
+    "/assets/home-reference/hd/ruler.png",
+    "/assets/home-reference/hd/estimate-shell.png",
+    "/assets/tabbar/首页导航栏@2x.png"
+  ],
+  "state": {
+    "projectType": "rural_villa",
+    "region": "请选择",
+    "buildingArea": ""
+  },
+  "rendering": "直接转换当前首页 WXML 和编译 WXSS，原生 DOM 文本与独立高清 PNG 在 DPR 3 渲染；不是放大截图",
+  "nativeChrome": "微信顶部胶囊为静态 CSS 示意；实际小程序使用系统胶囊"
+}

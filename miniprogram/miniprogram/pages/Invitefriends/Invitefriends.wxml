@@ -1,0 +1,164 @@
+<!--pages/Invitefriends/Invitefriends.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="邀请好友" subtitle="分享赚取灵石奖励" background="#e6daca" />
+
+  <!-- 内容区 -->
+  <scroll-view class="content" scroll-y="true">
+    <view class="content-inner">
+    <!-- 邀请规则卡片 -->
+    <view class="rule-card">
+      <view class="rule-header">
+        <view class="rule-icon">
+          <t-icon name="gift" size="36rpx" color="#a9855b" />
+        </view>
+        <text class="rule-title">邀请奖励</text>
+      </view>
+      <view class="rule-list">
+        <view class="rule-item">
+          <view class="rule-dot"></view>
+          <text class="rule-text">邀请好友注册，双方各获得 <text class="highlight">50灵石</text></text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 我的邀请数据 -->
+    <view class="stats-card">
+      <view class="stats-header">
+        <text class="stats-title">我的邀请数据</text>
+      </view>
+      <view class="stats-grid">
+        <view class="stats-item">
+          <text class="stats-value">{{inviteCount}}</text>
+          <text class="stats-label">已邀请好友</text>
+        </view>
+        <view class="stats-item">
+          <text class="stats-value">{{totalReward}}</text>
+          <text class="stats-label">累计奖励（灵石）</text>
+        </view>
+        <view class="stats-item">
+          <text class="stats-value">{{monthReward}}</text>
+          <text class="stats-label">本月奖励（灵石）</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 我的邀请码（后端 6 位唯一码） -->
+    <view class="code-card">
+      <view class="code-header">
+        <text class="code-title">我的邀请码</text>
+        <view class="code-copy-btn" bindtap="onCopyCode">
+          <t-icon name="file-copy" size="32rpx" color="#8a6546" />
+          <text>复制</text>
+        </view>
+      </view>
+      <view class="code-value">{{inviteCode || '请先登录'}}</view>
+      <view class="code-tip">好友注册时输入此邀请码，双方即可获得奖励</view>
+    </view>
+
+    <!-- 输入他人邀请码核销（未绑定过邀请人时可绑定） -->
+    <view class="code-card redeem-card">
+      <view class="code-header">
+        <text class="code-title">输入他人邀请码</text>
+      </view>
+      <view class="redeem-row">
+        <input
+          class="redeem-input"
+          placeholder="请输入 6 位邀请码"
+          placeholder-style="color: #b2a08a;"
+          value="{{redeemCodeInput}}"
+          maxlength="6"
+          bindinput="onRedeemCodeInput"
+        />
+        <button class="redeem-btn" bindtap="onRedeemCode">核销</button>
+      </view>
+      <view class="code-tip redeem-tip">未绑定过邀请人时，核销后双方各得 50 灵石</view>
+    </view>
+
+    <!-- 操作按钮 -->
+    <view class="action-section">
+      <button class="action-btn primary" bindtap="onGeneratePoster">
+        <text>生成邀请海报</text>
+      </button>
+      <button class="action-btn secondary" open-type="share">
+        <text>分享给微信好友</text>
+      </button>
+    </view>
+
+    <!-- 邀请记录 -->
+    <view class="record-section">
+      <view class="section-header">
+        <text class="section-title">邀请记录</text>
+      </view>
+      <view class="record-list">
+        <view class="record-item" wx:for="{{records}}" wx:key="id">
+          <view class="record-left">
+            <view class="record-avatar">
+              <image src="{{item.avatar}}" mode="aspectFill" />
+            </view>
+            <view class="record-info">
+              <text class="record-name">{{item.name}}</text>
+              <text class="record-desc">{{item.desc}}</text>
+            </view>
+          </view>
+          <view class="record-right">
+            <text class="record-reward">+{{item.reward}}灵石</text>
+            <text class="record-time">{{item.time}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="empty-records" wx:if="{{records.length === 0}}">
+        <text class="empty-text">暂无邀请记录</text>
+      </view>
+    </view>
+    </view>
+  </scroll-view>
+
+  <!-- 海报预览弹窗 -->
+  <view class="poster-modal {{showPosterModal ? 'show' : ''}}">
+    <view class="poster-content">
+      <view class="poster-header">
+        <view class="poster-heading">
+          <text class="poster-title">分享海报</text>
+          <text class="poster-subtitle">保存或转发给好友，扫码即可进入小程序</text>
+        </view>
+        <view class="poster-close" bindtap="onClosePosterModal">
+          <t-icon name="close" size="40rpx" color="#8a6546" />
+        </view>
+      </view>
+      <view class="poster-preview">
+        <view class="poster-stage">
+          <canvas
+            type="2d"
+            id="posterCanvas"
+            class="poster-canvas {{posterImageUrl ? 'poster-canvas-hidden' : ''}}"
+          ></canvas>
+          <image
+            wx:if="{{posterImageUrl}}"
+            class="poster-image"
+            src="{{posterImageUrl}}"
+            mode="widthFix"
+          />
+          <image
+            wx:if="{{posterImageUrl && posterLogoOverlayVisible}}"
+            class="poster-logo-overlay"
+            src="{{posterLogoUrl}}"
+            mode="aspectFit"
+          />
+          <view wx:if="{{!posterImageUrl}}" class="poster-loading">
+            <text class="poster-loading-title">正在生成海报</text>
+            <text class="poster-loading-desc">请稍等，马上就好</text>
+          </view>
+        </view>
+        <view class="poster-helper">
+          <view class="poster-helper-dot"></view>
+          <text class="poster-helper-text">建议先保存图片；好友也可直接扫码右下角小程序码进入</text>
+        </view>
+      </view>
+      <view class="poster-actions">
+        <button class="poster-btn" bindtap="onSavePoster">保存图片</button>
+        <button class="poster-btn primary" bindtap="onSharePoster">立即分享</button>
+      </view>
+    </view>
+  </view>
+</view>

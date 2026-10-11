@@ -1,0 +1,450 @@
+// Scope lazy-loaded styles so visiting another page cannot change this page.
+:where(.layout-content[data-admin-page="/virtualpay"]) {
+// 本页的按钮原本靠其它页面的 .btn-primary / .btn-secondary 样式"泄漏"才正常，样式按路径限定后丢失，这里补上（与订单中心一致）。
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: #8b5e3c;
+  color: #ffffff;
+}
+
+.virtual-pay-container {
+  padding: 20px 24px 24px;
+}
+
+.virtual-pay-toolbar,
+.log-toolbar,
+.virtual-pay-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.virtual-pay-toolbar h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: #111827;
+}
+
+.virtual-pay-toolbar p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.health-panel,
+.virtual-pay-table-wrap {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.health-overview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e5e7eb;
+
+  span,
+  small {
+    color: #6b7280;
+  }
+
+  strong {
+    font-size: 22px;
+  }
+
+  &.is-ok strong {
+    color: #047857;
+  }
+
+  &.is-warning strong {
+    color: #b45309;
+  }
+}
+
+.health-grid,
+.virtual-pay-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+// 统计区直接放在页面里（不在面板内），不需要面板的内边距，否则左右缩进、与上下区块对不齐
+.virtual-pay-stats {
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+.health-item,
+.virtual-pay-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  background: #f9fafb;
+
+  span {
+    color: #6b7280;
+    font-size: 13px;
+  }
+
+  strong {
+    color: #111827;
+    font-size: 18px;
+  }
+
+  .ok {
+    color: #047857;
+  }
+
+  .warning {
+    color: #b45309;
+  }
+}
+
+.log-toolbar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.log-toolbar .search-box {
+  min-width: 320px;
+  position: relative;
+}
+
+.log-toolbar input,
+.log-toolbar select {
+  height: 42px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: #ffffff;
+  outline: none;
+}
+
+.log-toolbar input {
+  width: 100%;
+  padding-left: 38px;
+}
+
+.log-toolbar .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.virtual-pay-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.virtual-pay-table th,
+.virtual-pay-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.virtual-pay-table th {
+  background: #f9fafb;
+  color: #111827;
+  font-weight: 700;
+}
+
+.mono {
+  font-family: monospace;
+}
+
+.status-pill {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+
+  &.ok {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  &.warning {
+    background: #fef3c7;
+    color: #92400e;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  color: #9ca3af;
+  padding: 44px 16px;
+}
+
+.virtual-pay-pagination {
+  justify-content: flex-end;
+}
+
+@media (max-width: 1200px) {
+  .health-grid,
+  .virtual-pay-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .virtual-pay-container {
+    padding: 16px;
+  }
+
+  .virtual-pay-toolbar,
+  .virtual-pay-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .health-grid,
+  .virtual-pay-stats {
+    grid-template-columns: 1fr;
+  }
+}
+}
+
+/* 推送日志客户反查（T1）：客户列可点击进入用户360 */
+.user-link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #8b5e3c;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  &:hover {
+    color: #6d4426;
+  }
+
+  .user-id-meta {
+    color: #9ca3af;
+    font-size: 11px;
+    text-decoration: none;
+  }
+}
+
+.btn-mini {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: #8b5e3c;
+    border-color: #8b5e3c;
+  }
+}
+
+/* ============ 双账差额监控（G3） ============ */
+.diff-card {
+  background: #fffdf8;
+  border: 1px solid #e9dfd0;
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+
+.diff-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e9dfd0;
+
+  h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #35291c;
+  }
+
+  small {
+    display: block;
+    font-size: 11.5px;
+    color: #b3a48e;
+    margin-top: 2px;
+  }
+
+  .btn-calibrate {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #a8642f;
+    background: #f4e5d3;
+    color: #8c5024;
+    border-radius: 8px;
+    padding: 5px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: #a8642f;
+      color: #fff8ef;
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.diff-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.diff-stat {
+  display: flex;
+  flex-direction: column;
+
+  b {
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    color: #35291c;
+
+    &.is-ok {
+      color: #2f8f6b;
+    }
+
+    &.is-danger {
+      color: #c0392b;
+    }
+  }
+
+  span {
+    font-size: 11.5px;
+    color: #b3a48e;
+  }
+}
+
+.diff-list {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diff-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e9dfd0;
+  background: #faf5ec;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+
+  &:hover {
+    border-color: #a8642f;
+  }
+
+  b {
+    color: #35291c;
+    flex-shrink: 0;
+  }
+
+  span {
+    color: #8a7a66;
+    flex: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  em {
+    font-style: normal;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+
+    &.plus {
+      color: #c0392b;
+    }
+
+    &.minus {
+      color: #2f8f6b;
+    }
+  }
+}
+
+.diff-more,
+.diff-empty {
+  font-size: 11.5px;
+  color: #b3a48e;
+  background: #faf5ec;
+  border: 1px dashed #e9dfd0;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.is-danger {
+  color: #c0392b;
+}
+
+.op-cell-inline {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-mini.warn {
+  color: #b97f1f;
+  border-color: #ecd9ac;
+
+  &:hover:not(:disabled) {
+    background: #faf0da;
+    border-color: #b97f1f;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

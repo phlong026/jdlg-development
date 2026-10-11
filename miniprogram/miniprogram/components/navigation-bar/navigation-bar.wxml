@@ -1,0 +1,26 @@
+<!-- 统一导航栏组件 -->
+<view class="uni-nav" style="padding-top: {{navSafeTop}}px; height: {{navBarHeight}}px; background: {{background}};">
+  <view class="uni-nav-inner" style="height: {{navContentHeight}}px;">
+    <!-- 左侧：返回按钮 -->
+    <view class="uni-nav-side" style="width: {{navSideWidth}}px;">
+      <view wx:if="{{back}}" class="uni-nav-back" bindtap="onBack" hover-class="uni-nav-back--active" hover-stay-time="100" aria-role="button" aria-label="返回">
+        <view class="uni-nav-chevron"></view>
+      </view>
+      <slot wx:else name="left"></slot>
+    </view>
+
+    <!-- 中间：标题 -->
+    <view class="uni-nav-title">
+      <block wx:if="{{title}}">
+        <text class="uni-nav-title-main" style="color: {{color}};">{{title}}</text>
+        <text wx:if="{{subtitle}}" class="uni-nav-title-sub" style="color: {{color}};">{{subtitle}}</text>
+      </block>
+      <slot wx:else name="center"></slot>
+    </view>
+
+    <!-- 右侧：操作区 -->
+    <view class="uni-nav-side" style="width: {{navSideWidth}}px;">
+      <slot name="right"></slot>
+    </view>
+  </view>
+</view>

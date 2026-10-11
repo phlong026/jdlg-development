@@ -1,0 +1,240 @@
+<!--pages/myInformationmodification/myInformationmodification.wxml-->
+<view class="page">
+  <!-- 统一导航栏 -->
+  <navigation-bar title="{{navTitle}}" subtitle="{{navSubtitle}}" background="#e6daca" />
+
+  <!-- 加载状态 -->
+  <view class="loading-container" wx:if="{{loading}}">
+    <t-icon name="loading" size="64rpx" class="loading-icon" color="#b79066" />
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <!-- 主要内容 -->
+  <view class="content" wx:else>
+    <view class="avatar-section" bindtap="chooseAvatar" wx:if="{{showProfileSection}}">
+      <view class="avatar-wrapper">
+        <image
+          class="avatar"
+          src="{{userInfo.avatar || defaultAvatarImage}}"
+          mode="aspectFill"
+        />
+        <view class="avatar-edit">
+          <t-icon name="camera" size="32rpx" color="#fff" />
+        </view>
+      </view>
+      <text class="avatar-tip">点击更换头像，支持拍照或从相册选择</text>
+    </view>
+
+    <view class="info-list">
+      <block wx:if="{{showProfileSection}}">
+        <view class="info-item">
+          <view class="info-main">
+            <text class="info-label">昵称</text>
+            <text class="info-help-text">昵称用于页面展示，可随时修改</text>
+          </view>
+          <view class="info-value" wx:if="{{!editingNickname}}">
+            <text class="value-text">{{userInfo.nickname || '未设置'}}</text>
+            <view class="edit-btn" bindtap="startEditNickname">
+              <t-icon name="edit" size="36rpx" color="#8c7553" />
+            </view>
+          </view>
+          <view class="info-edit-block" wx:else>
+            <input
+              class="edit-input"
+              value="{{tempNickname}}"
+              bindinput="onNicknameInput"
+              placeholder="请输入昵称"
+              placeholder-class="edit-input-placeholder"
+              placeholder-style="color: rgba(140, 117, 83, 0.72);"
+              maxlength="32"
+              cursor-color="#8c7553"
+              focus="{{true}}"
+            />
+            <view class="edit-meta-row">
+              <text class="edit-helper-text">建议使用容易识别的名字，方便别人认出你</text>
+              <text class="edit-count-text">{{tempNickname.length}} / 32</text>
+            </view>
+            <view class="edit-actions">
+              <text class="action-btn cancel" bindtap="cancelEditNickname">取消</text>
+              <text class="action-btn save {{savingNickname ? 'disabled' : ''}}" bindtap="saveNickname">{{savingNickname ? '保存中...' : '保存'}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="info-item">
+          <view class="info-main">
+            <text class="info-label">用户名</text>
+            <text class="info-help-text">用户名用于账号密码登录，不直接对外展示</text>
+          </view>
+          <view class="info-value">
+            <text class="value-text">{{userInfo.username || '未设置'}}</text>
+          </view>
+        </view>
+
+        <view class="info-item clickable" bindtap="openPasswordModal">
+          <view class="info-main">
+            <text class="info-label">账号密码</text>
+            <text class="info-help-text">建议尽快补充账号密码，方便后续通过密码登录</text>
+          </view>
+          <view class="info-value">
+            <text class="value-text {{userInfo.hasPassword ? 'set' : 'not-set'}}">
+              {{userInfo.hasPassword ? '已设置' : '未设置'}}
+            </text>
+            <t-icon name="chevron-right" size="36rpx" color="#8c7553" />
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <view class="designer-card" wx:if="{{manageDesignerInProfile && designerManageSection !== 'service'}}">
+      <view class="designer-card-header">
+        <text class="designer-card-title">设计师资料</text>
+        <text class="designer-card-subtitle">这些资料会同步展示到设计师中心页面</text>
+      </view>
+
+      <view class="designer-form-item">
+        <text class="designer-form-label">设计师简介</text>
+        <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="designer-textarea" value="{{designerForm.designerBio}}" bindinput="onDesignerFieldInput" data-field="designerBio" maxlength="1024" placeholder="例如：新中式空间设计师，专注住宅与庭院方案" placeholder-style="color: rgba(140, 117, 83, 0.58);"></textarea>
+      </view>
+
+      <view class="designer-form-item">
+        <text class="designer-form-label">擅长方向</text>
+        <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="designer-textarea designer-textarea-short" value="{{designerForm.specialtyStyles}}" bindinput="onDesignerFieldInput" data-field="specialtyStyles" maxlength="512" placeholder="例如：别墅设计、庭院营造、室内软装" placeholder-style="color: rgba(140, 117, 83, 0.58);"></textarea>
+      </view>
+
+      <view class="designer-form-item">
+        <text class="designer-form-label">真实从业经验（年）</text>
+        <input class="designer-input" value="{{designerForm.designerExperienceYears}}" bindinput="onDesignerFieldInput" data-field="designerExperienceYears" type="digit" placeholder="例如：8" placeholder-style="color: rgba(140, 117, 83, 0.58);" />
+      </view>
+
+      <view class="designer-switch-row">
+        <view class="designer-switch-copy">
+          <text class="designer-form-label">是否公开展示到设计师中心</text>
+          <text class="designer-switch-desc">关闭后，你的设计师资料和公开主页都不会出现在设计师中心里</text>
+        </view>
+        <switch checked="{{designerForm.designerVisible}}" color="#b79066" bindchange="onDesignerVisibleChange"></switch>
+      </view>
+
+      <button class="designer-save-btn" bindtap="saveDesignerProfile" loading="{{saving}}">保存设计师资料</button>
+    </view>
+
+    <view class="designer-card" wx:if="{{manageDesignerInProfile && designerManageSection !== 'designer'}}">
+      <view class="designer-card-header">
+        <text class="designer-card-title">服务配置</text>
+        <text class="designer-card-subtitle">你可以在这里设置对外展示的服务标题、报价和服务说明</text>
+      </view>
+
+      <view class="designer-form-item">
+        <text class="designer-form-label">服务标题</text>
+        <input class="designer-input" value="{{designerForm.serviceTitle}}" bindinput="onDesignerFieldInput" data-field="serviceTitle" maxlength="128" placeholder="例如：室内设计师" placeholder-style="color: rgba(140, 117, 83, 0.58);" />
+      </view>
+
+      <view class="designer-form-item">
+        <text class="designer-form-label">服务报价（灵石）</text>
+        <input class="designer-input" value="{{designerForm.serviceQuote}}" bindinput="onDesignerFieldInput" data-field="serviceQuote" type="digit" placeholder="例如：199" placeholder-style="color: rgba(140, 117, 83, 0.58);" />
+      </view>
+
+      <view class="designer-form-item">
+        <text class="designer-form-label">服务介绍</text>
+        <textarea show-confirm-bar="{{false}}" disable-default-padding="{{true}}" cursor-spacing="140" confirm-hold="{{true}}" class="designer-textarea" value="{{designerForm.serviceIntro}}" bindinput="onDesignerFieldInput" data-field="serviceIntro" maxlength="1024" placeholder="例如：提供户型优化、空间配色、软装建议等" placeholder-style="color: rgba(140, 117, 83, 0.58);"></textarea>
+      </view>
+
+      <view class="designer-switch-row">
+        <view class="designer-switch-copy">
+          <text class="designer-form-label">是否对外展示服务</text>
+          <text class="designer-switch-desc">关闭后，设计师中心仍保留资料，但不突出展示服务状态</text>
+        </view>
+        <switch checked="{{designerForm.serviceEnabled}}" color="#b79066" bindchange="onServiceEnabledChange"></switch>
+      </view>
+
+      <button class="designer-save-btn" bindtap="saveServiceConfig" loading="{{saving}}">保存服务配置</button>
+    </view>
+
+    <!-- 提示信息 -->
+    <view class="tips-section">
+      <view class="tip-item">
+        <t-icon name="info-circle" size="28rpx" color="#8c7553" />
+        <text class="tip-text">昵称、头像和账号密码修改后会即时同步到当前账号资料</text>
+      </view>
+      <view class="tip-item">
+        <t-icon name="info-circle" size="28rpx" color="#8c7553" />
+        <text class="tip-text">建议设置账号密码，方便后续通过密码方式补充登录</text>
+      </view>
+      <view class="tip-item">
+        <t-icon name="info-circle" size="28rpx" color="#8c7553" />
+        <text class="tip-text">设计师资料请前往设计师主页继续维护</text>
+      </view>
+    </view>
+
+    <!-- 退出登录按钮 -->
+    <view class="logout-section">
+      <button class="logout-btn" bindtap="logout">退出登录</button>
+    </view>
+  </view>
+
+  <!-- 密码设置弹窗 -->
+  <view class="modal-mask" wx:if="{{showPasswordModal}}" bindtap="closePasswordModal">
+    <view class="modal-content" catchtap="onModalContentTap">
+      <view class="modal-header">
+        <text class="modal-title">{{userInfo.hasPassword ? '修改密码' : '设置账号密码'}}</text>
+        <view class="modal-close" bindtap="closePasswordModal">
+          <t-icon name="close" size="40rpx" color="#8c7553" />
+        </view>
+      </view>
+      <view class="modal-body">
+        <view class="form-item">
+          <text class="form-label">用户名</text>
+          <input
+            class="form-input"
+            value="{{passwordForm.username}}"
+            bindinput="onPasswordFormInput"
+            data-field="username"
+            placeholder="请输入用户名（至少4位）"
+            maxlength="32"
+          />
+          <text class="form-tip {{passwordValidation.usernameValid ? 'success' : ''}}">{{passwordValidation.usernameTip}}</text>
+        </view>
+        <view class="form-item" wx:if="{{userInfo.hasPassword}}">
+          <text class="form-label">原密码</text>
+          <input
+            class="form-input"
+            value="{{passwordForm.oldPassword}}"
+            bindinput="onPasswordFormInput"
+            data-field="oldPassword"
+            placeholder="请输入原密码"
+            password="{{true}}"
+          />
+          <text class="form-tip {{passwordValidation.oldPasswordValid ? 'success' : ''}}">{{passwordValidation.oldPasswordTip}}</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">{{userInfo.hasPassword ? '新密码' : '密码'}}</text>
+          <input
+            class="form-input"
+            value="{{passwordForm.password}}"
+            bindinput="onPasswordFormInput"
+            data-field="password"
+            placeholder="请输入密码（至少6位）"
+            password="{{true}}"
+          />
+          <text class="form-tip {{passwordValidation.passwordValid ? 'success' : ''}}">{{passwordValidation.passwordTip}}</text>
+        </view>
+        <view class="form-item">
+          <text class="form-label">确认密码</text>
+          <input
+            class="form-input"
+            value="{{passwordForm.confirmPassword}}"
+            bindinput="onPasswordFormInput"
+            data-field="confirmPassword"
+            placeholder="请再次输入密码"
+            password="{{true}}"
+          />
+          <text class="form-tip {{passwordValidation.confirmValid ? 'success' : ''}}">{{passwordValidation.confirmTip}}</text>
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="modal-btn cancel" bindtap="closePasswordModal">取消</button>
+        <button class="modal-btn confirm" bindtap="savePassword" loading="{{savingPassword}}" disabled="{{!passwordValidation.canSubmit || savingPassword}}">{{userInfo.hasPassword ? '保存新密码' : '保存账号密码'}}</button>
+      </view>
+    </view>
+  </view>
+</view>

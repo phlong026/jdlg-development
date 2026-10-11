@@ -1,0 +1,54 @@
+<!--pages/voicecall/voicecall.wxml-->
+<view class="page">
+  <!-- 顶部导航栏 -->
+  <view class="top-bar">
+    <view class="top-bar-left">
+      <view class="menu-btn" bindtap="onMenu">
+        <t-icon name="more" size="40rpx" color="#fff" />
+      </view>
+      <view class="top-bar-left-scene">
+      <view class="scene-btn" bindtap="onSelectScene">
+        <t-icon name="setting" size="40rpx" color="#fff" />
+        <text class="scene-text">选择情景</text>
+      </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 主内容区域 -->
+  <view class="main-content">
+    <!-- 中央头像 -->
+    <view class="avatar-container">
+      <image class="avatar-image" src="{{avatarImage}}" mode="aspectFill" />
+    </view>
+  </view>
+
+  <!-- 底部控制栏 -->
+  <view class="control-bar">
+    <view class="control-bar-top">
+      <!-- 语音指示器 -->
+      <view class="voice-indicator">
+        <view class="dot"></view>
+        <view class="dot dot-second"></view>
+        <view class="dot dot-third"></view>
+      </view>
+
+      <!-- 状态文本 -->
+      <text class="status-text">你可以开始说话</text>
+    </view>
+    <view class="control-bar-bottom">
+    <view class="control-btn" bindtap="onMute">
+      <t-icon name="microphone" size="48rpx" color="#fff" />
+    </view>
+    <view class="control-btn" bindtap="onUpload">
+      <t-icon name="upload" size="48rpx" color="#fff" />
+    </view>
+    <view class="control-btn" bindtap="onCamera">
+      <t-icon name="image" size="48rpx" color="#fff" />
+    </view>
+    <view class="control-btn end-call" bindtap="onEndCall">
+      <t-icon name="close" size="48rpx" color="#fff" />
+    </view>
+    </view>
+  </view>
+</view>

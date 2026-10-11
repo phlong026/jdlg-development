@@ -1,0 +1,33 @@
+{
+  "baselineCommit": "f7caa200750ccd313265bd72d5b2d6cacc15eec5",
+  "files": [
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.wxml",
+      "sha256": "3d7604cb21076353ef3df6db566385f91fb35d5ab55dee716aca0b9769ea3f06"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.scss",
+      "sha256": "5d1cf5ab6ec689bf3bb002daa60d80a2f637f2106fc6a263097492c967d5d3c2"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.wxss",
+      "sha256": "b45ff364e8a4d8493a66d937db48d5c706b4f8ee22e34928a46c331844145ced"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.ts",
+      "sha256": "6a9b48cb93d803ab5b42574da24359dcd72ae32e8415272a015b892fdfefd322"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.js",
+      "sha256": "eff89ba701c357b3da2d31e2f059576fed62f094183bffaa3dbea83447331546"
+    },
+    {
+      "path": "miniprogram/tests/home-cloud-header-release.test.js",
+      "sha256": "adb953725d93e8e17f98c45179d2eb8b3018f62f96a794b899817da0131514eb"
+    },
+    {
+      "path": "miniprogram/tests/home-reference.test.js",
+      "sha256": "1b98d821fc69eacd8ea430f1a27d2fa0c9f7dd1557c5cdfaa82e26450423eaee"
+    }
+  ]
+}

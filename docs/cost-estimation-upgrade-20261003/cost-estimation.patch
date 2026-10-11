@@ -1,0 +1,1903 @@
+--- a/miniprogram/miniprogram/pages/aicost/aicost.js
++++ b/miniprogram/miniprogram/pages/aicost/aicost.js
+@@ -1 +0,0 @@
+-"use strict";
+@@ -4,28 +2,0 @@
+-const MARKETING_DISCOUNT_RATE = 0.9;
+-// ========== 基础工程：固定参考总价（单位：元） ==========
+-const FOUNDATION_PRICE_MAP = {
+-    '独立基础': 75000,
+-    '条形基础': 125000,
+-    '筏板基础': 135000,
+-    '桩基础': 0, // 不做固定估算
+-};
+-// ========== 主体结构基准单价（元/㎡） ==========
+-const MAIN_STRUCTURE_UNIT_PRICE = 700;
+-// ========== 外装工程基准单价（元/㎡），按外立面类型区分 ==========
+-const FACADE_BASE_PRICE_MAP = {
+-    '涂料外墙': 700,
+-    '真石漆': 700,
+-    '陶瓷砖外墙': 800,
+-    '石材外墙': 800,
+-    '铝板/金属外立面': 800,
+-};
+-// ========== 室内装修基准单价（元/㎡，含水电安装配套） ==========
+-const INTERIOR_UNIT_PRICE = 800;
+-// ========== 城市地区系数（以泉州为基准 1.00） ==========
+-const CITY_FACTOR_MAP = {
+-    '上海': 1.08, '北京': 1.08, '深圳': 1.08,
+-    '杭州': 1.05, '南京': 1.05, '苏州': 1.05, '广州': 1.05,
+-    '佛山': 1.05, '东莞': 1.05, '珠海': 1.05, '成都': 1.05,
+-    '武汉': 1.05, '长沙': 1.05,
+-    '福州': 1.03, '厦门': 1.03,
+-};
+@@ -64,2 +35,2 @@
+-    const num = parseInt(String(value || '').trim(), 10);
+-    return Number.isFinite(num) && num > 0 ? Math.min(num, 20) : 0;
++    const num = Number(String(value || '').trim());
++    return Number.isInteger(num) && num > 0 && num <= 20 ? num : 0;
+@@ -68,111 +39,20 @@
+-    return `${(amount / 10000).toFixed(1)}万`;
+-}
+-function applyMarketingDiscount(amount) {
+-    return Math.round(amount * MARKETING_DISCOUNT_RATE);
+-}
+-// ========== 各维度系数函数 ==========
+-// 地区系数（以泉州为基准 1.00）
+-function getCityFactor(city) {
+-    return CITY_FACTOR_MAP[city] || 1.00;
+-}
+-// 结构形式系数 → 主体结构
+-function getStructureFactor(structureType) {
+-    if (structureType === '砖混结构')
+-        return 1.00;
+-    if (structureType === '框架结构')
+-        return 1.08;
+-    return 1.15; // 钢结构
+-}
+-// 建筑风格系数 → 主体结构
+-function getBuildingStyleFactor(style) {
+-    if (style === '新闽派')
+-        return 1.00;
+-    if (style === '现代风格')
+-        return 1.05;
+-    if (style === '新中式')
+-        return 1.10;
+-    return 1.15; // 欧式
+-}
+-// 屋顶形式系数 → 主体结构
+-function getRoofFactor(roofType) {
+-    if (roofType === '平屋顶')
+-        return 1.00;
+-    if (roofType === '坡屋顶')
+-        return 1.05;
+-    if (roofType === '组合屋顶')
+-        return 1.10;
+-    return 1.15; // 燕尾脊
+-}
+-// 地下室系数 → 基础工程
+-function getBasementFactor(basementType) {
+-    if (basementType === '无地下室')
+-        return 1.00;
+-    if (basementType === '半地下室')
+-        return 1.10;
+-    return 1.15; // 全地下室
+-}
+-// 外立面样式系数 → 外装工程
+-function getFacadeFactor(facadeStyle) {
+-    if (facadeStyle === '涂料外墙')
+-        return 1.00;
+-    if (facadeStyle === '真石漆')
+-        return 1.06;
+-    if (facadeStyle === '陶瓷砖外墙')
+-        return 1.14;
+-    return 1.15; // 石材外墙 / 铝板金属外立面
+-}
+-// 装修标准系数 → 外装工程 + 室内装修
+-function getDecorationFactor(decorationStyle) {
+-    if (decorationStyle === '经济型')
+-        return 1.00;
+-    if (decorationStyle === '标准型')
+-        return 1.08;
+-    return 1.15; // 品质型
+-}
+-// ========== 动态备注生成 ==========
+-function buildDynamicNotes(foundationType, basementType, facadeStyle, roofType) {
+-    const notes = [];
+-    if (foundationType === '桩基础') {
+-        notes.push('桩基按图纸及现场情况定价');
+-    }
+-    if (basementType === '半地下室' || basementType === '全地下室') {
+-        notes.push('地下室实际成本需结合图纸');
+-    }
+-    if (facadeStyle === '石材外墙' || facadeStyle === '铝板/金属外立面') {
+-        notes.push('石材/金属外立面按图纸及现场情况定价');
+-    }
+-    if (roofType === '组合屋顶' || roofType === '燕尾脊') {
+-        notes.push('复杂屋顶做法按图纸定价');
+-    }
+-    return notes;
+-}
+-// ========== 核心计算：四分项相加 ==========
+-function estimateTotalCost(buildingArea, city, structureType, buildingStyle, roofType, basementType, facadeStyle, decorationStyle, foundationType) {
+-    const cityFactor = getCityFactor(city);
+-    // 1. 基础工程费 = 固定参考总价 × 地下室系数 × 地区系数
+-    const foundationPrice = FOUNDATION_PRICE_MAP[foundationType] || 0;
+-    const rawFoundationCost = Math.round(foundationPrice * getBasementFactor(basementType) * cityFactor);
+-    const isFoundationEstimable = foundationType !== '桩基础';
+-    // 2. 主体结构费 = 总建筑面积 × 700 × 结构系数 × 风格系数 × 屋顶系数 × 地区系数
+-    const rawMainStructureCost = Math.round(buildingArea * MAIN_STRUCTURE_UNIT_PRICE *
+-        getStructureFactor(structureType) *
+-        getBuildingStyleFactor(buildingStyle) *
+-        getRoofFactor(roofType) *
+-        cityFactor);
+-    // 3. 外装工程费 = 总建筑面积 × 外立面基准单价 × 外立面系数 × 装修标准系数 × 地区系数
+-    const facadeBasePrice = FACADE_BASE_PRICE_MAP[facadeStyle] || 700;
+-    const rawExteriorCost = Math.round(buildingArea * facadeBasePrice *
+-        getFacadeFactor(facadeStyle) *
+-        getDecorationFactor(decorationStyle) *
+-        cityFactor);
+-    // 4. 室内装修费 = 总建筑面积 × 800 × 装修标准系数 × 地区系数
+-    const rawInteriorCost = Math.round(buildingArea * INTERIOR_UNIT_PRICE *
+-        getDecorationFactor(decorationStyle) *
+-        cityFactor);
+-    const foundationCost = applyMarketingDiscount(rawFoundationCost);
+-    const mainStructureCost = applyMarketingDiscount(rawMainStructureCost);
+-    const exteriorCost = applyMarketingDiscount(rawExteriorCost);
+-    const interiorCost = applyMarketingDiscount(rawInteriorCost);
+-    const totalCost = foundationCost + mainStructureCost + exteriorCost + interiorCost;
+-    const unitCost = buildingArea > 0 ? Math.round(totalCost / buildingArea) : 0;
+-    // 构建四分项明细
++    return `${(amount / 10000).toFixed(2)}万元`;
++}
++// 已有成本单价直接使用；新表未覆盖的形式只借用旧规则的相对比例。
++const foundationPrices = {
++    '独立基础': 650, '条形基础': 650 * (125000 / 75000), '筏板基础': 650,
++};
++const structurePrices = {
++    '砖混结构': 685, '框架结构': 735, '钢结构': 830,
++};
++const roofPrices = {
++    '平屋顶': 105, '组合屋顶': 145, '坡屋顶': 185, '燕尾脊': 185 * (1.15 / 1.05),
++};
++const facadePrices = {
++    '涂料外墙': 430, '真石漆': 430, '陶瓷砖外墙': 450,
++    '石材外墙': 750, '铝板/金属外立面': 750,
++};
++const windowPrices = { '常规': 190, '系统窗高档': 250 };
++function estimateTotalCost(input) {
++    const { footprintArea, buildingArea, foundationType, structureType, roofType, facadeStyle, windowStandard } = input;
++    const estimable = foundationType !== '桩基础';
+@@ -180,28 +60,12 @@
+-        {
+-            name: '基础工程',
+-            amount: foundationCost,
+-            amountText: isFoundationEstimable ? formatWan(foundationCost) : '按图纸定价',
+-            percent: totalCost > 0 ? Math.round(foundationCost / totalCost * 100) : 0,
+-            note: '土方、基础、垫层、防潮等基础施工',
+-        },
+-        {
+-            name: '主体结构',
+-            amount: mainStructureCost,
+-            amountText: formatWan(mainStructureCost),
+-            percent: totalCost > 0 ? Math.round(mainStructureCost / totalCost * 100) : 0,
+-            note: '梁板柱、楼梯、砌体等主体工程',
+-        },
+-        {
+-            name: '外装工程',
+-            amount: exteriorCost,
+-            amountText: formatWan(exteriorCost),
+-            percent: totalCost > 0 ? Math.round(exteriorCost / totalCost * 100) : 0,
+-            note: '外墙装饰、门窗及防水工程',
+-        },
+-        {
+-            name: '室内装修',
+-            amount: interiorCost,
+-            amountText: formatWan(interiorCost),
+-            percent: totalCost > 0 ? Math.round(interiorCost / totalCost * 100) : 0,
+-            note: '贴砖、门窗、水电安装配套',
+-        },
++        { name: '地基工程', amount: estimable ? Math.round(footprintArea * foundationPrices[foundationType]) : 0,
++            note: '土方、垫层、钢筋砼基础、地梁、地下挡墙', estimable },
++        { name: '主体工程', amount: Math.round(buildingArea * structurePrices[structureType]),
++            note: '梁板柱、砌体、楼梯、钢筋模板（含脚手架等施工措施）', estimable: true },
++        { name: '屋顶工程', amount: Math.round(buildingArea * roofPrices[roofType]),
++            note: '防水、保温、找平、瓦/砖面层', estimable: true },
++        { name: '门窗工程', amount: Math.round(buildingArea * windowPrices[windowStandard]),
++            note: '断桥铝合金窗、开启扇、玻璃栏板', estimable: true },
++        { name: '外墙装饰', amount: Math.round(buildingArea * facadePrices[facadeStyle]),
++            note: '粉刷、真石漆/瓷砖/石材饰面、线条', estimable: true },
++        { name: '水电暖费用', amount: Math.round(buildingArea * 40),
++            note: '水电管线预埋、控制箱、雨水管', estimable: true },
+@@ -209 +73 @@
+-    const dynamicNotes = buildDynamicNotes(foundationType, basementType, facadeStyle, roofType);
++    const totalCost = breakdown.reduce((sum, item) => sum + item.amount, 0);
+@@ -212,3 +76,8 @@
+-        unitCost,
+-        breakdown,
+-        dynamicNotes,
++        unitCost: (totalCost / buildingArea).toFixed(2),
++        totalLabel: estimable ? '参考总造价' : '已测算部分合计',
++        unitLabel: estimable ? '参考单价' : '已测算部分单价',
++        breakdown: breakdown.map(item => ({ ...item,
++            amountText: item.estimable ? formatWan(item.amount) : '按图纸核算',
++            percent: totalCost > 0 ? Math.round(item.amount / totalCost * 100) : 0,
++        })),
++        dynamicNotes: ['不同地基因方案不同，价格不同。', '不同屋顶因做法不同，价格不同。'],
+@@ -243,0 +113,3 @@
++        windowStandard: '常规',
++        windowIndex: 0,
++        windowOptions: ['常规', '系统窗高档'],
+@@ -260 +132 @@
+-            title: '造价生成 · 快速估算建房价格',
++            title: '造价测算 · 快速估算建房价格',
+@@ -353,20 +225,68 @@
+-        const buildingArea = toPositiveNumber(this.data.buildingArea);
+-        if (!String(this.data.province || '').trim()) {
+-            wx.showToast({ title: '请填写省份', icon: 'none' });
+-            return;
+-        }
+-        if (!String(this.data.city || '').trim()) {
+-            wx.showToast({ title: '请填写城市', icon: 'none' });
+-            return;
+-        }
+-        if (!buildingArea) {
+-            wx.showToast({ title: '请填写总建筑面积', icon: 'none' });
+-            return;
+-        }
+-        const result = estimateTotalCost(buildingArea, this.data.city, this.data.structureType, this.data.buildingStyle, this.data.roofType, this.data.basementType, this.data.facadeStyle, this.data.decorationStyle, this.data.foundationType);
+-        wx.setStorageSync(RESULT_STORAGE_KEY, {
+-            estimatedTotalCost: formatWan(result.totalCost),
+-            estimatedUnitCost: `${result.unitCost}元/㎡`,
+-            costBreakdown: result.breakdown,
+-            dynamicNotes: result.dynamicNotes,
+-        });
++        const data = this.data;
++        const footprintArea = toPositiveNumber(data.footprintArea);
++        const buildingArea = toPositiveNumber(data.buildingArea);
++        const floorCount = toPositiveInteger(data.floorCount);
++        const firstFloorHeight = toPositiveNumber(data.firstFloorHeight);
++        const upperFloorHeight = toPositiveNumber(data.upperFloorHeight);
++        let error = '';
++        if (!data.province || !data.city)
++            error = '请选择所在地区';
++        else if (!footprintArea)
++            error = '请填写建筑占地面积';
++        else if (!buildingArea)
++            error = '请填写总建筑面积';
++        else if (buildingArea < footprintArea)
++            error = '总建筑面积不能小于占地面积';
++        else if (!floorCount)
++            error = '楼层数请填写1至20的整数';
++        else if (!firstFloorHeight)
++            error = '请填写首层高度';
++        else if (floorCount > 1 && !upperFloorHeight)
++            error = '请填写其他楼层高度';
++        else if ((data.foundationType !== '桩基础' && !foundationPrices[data.foundationType]) ||
++            !structurePrices[data.structureType] || !roofPrices[data.roofType] ||
++            !facadePrices[data.facadeStyle] || !windowPrices[data.windowStandard])
++            error = '请重新选择建筑参数';
++        if (error) {
++            wx.showToast({ title: error, icon: 'none' });
++            return;
++        }
++        const result = estimateTotalCost({
++            footprintArea, buildingArea, foundationType: data.foundationType,
++            structureType: data.structureType, roofType: data.roofType,
++            facadeStyle: data.facadeStyle, windowStandard: data.windowStandard,
++        });
++        // 保存本次提交的信息快照，避免再次编辑表单后报告内容与金额不一致。
++        const basicInfo = [
++            { label: '所在地区', value: `${data.province} / ${data.city}`, fullWidth: true },
++            { label: '建筑占地面积', value: `${footprintArea}㎡` },
++            { label: '总建筑面积', value: `${buildingArea}㎡` },
++            { label: '楼层数', value: `${floorCount}层` },
++            { label: '首层高度', value: `${firstFloorHeight}m` },
++            { label: '其他楼层高度', value: floorCount > 1 ? `${upperFloorHeight}m` : '不适用' },
++            { label: '地下室形式', value: data.basementType },
++            { label: '建筑风格', value: data.buildingStyle },
++            { label: '结构形式', value: data.structureType },
++            { label: '屋顶形式', value: data.roofType },
++            { label: '外立面样式', value: data.facadeStyle },
++            { label: '建筑基础', value: data.foundationType },
++            { label: '装修标准', value: data.decorationStyle },
++            { label: '门窗标准', value: data.windowStandard },
++        ];
++        try {
++            wx.setStorageSync(RESULT_STORAGE_KEY, {
++                version: 2,
++                estimatedTotalCost: formatWan(result.totalCost),
++                estimatedUnitCost: `${result.unitCost}元/㎡`,
++                totalLabel: result.totalLabel,
++                unitLabel: result.unitLabel,
++                basicInfo,
++                costBreakdown: result.breakdown,
++                dynamicNotes: result.dynamicNotes,
++            });
++        }
++        catch (error) {
++            console.error('保存造价测算报告失败:', error);
++            wx.showToast({ title: '报告保存失败，请重试', icon: 'none' });
++            return;
++        }
+@@ -376,4 +296 @@
+-                wx.showToast({
+-                    title: '造价结果页打开失败',
+-                    icon: 'none',
+-                });
++                wx.showToast({ title: '测算报告打开失败，请重试', icon: 'none' });
+--- a/miniprogram/miniprogram/pages/aicost/aicost.scss
++++ b/miniprogram/miniprogram/pages/aicost/aicost.scss
+@@ -185,0 +186,12 @@
++
++.form-select::after {
++  content: '';
++  width: 14rpx;
++  height: 14rpx;
++  margin-left: 12rpx;
++  margin-right: 4rpx;
++  flex-shrink: 0;
++  border-right: 2rpx solid #a9855b;
++  border-bottom: 2rpx solid #a9855b;
++  transform: translateY(-4rpx) rotate(45deg);
++}
+--- a/miniprogram/miniprogram/pages/aicost/aicost.ts
++++ b/miniprogram/miniprogram/pages/aicost/aicost.ts
+@@ -6,2 +6,3 @@
+-  amountText: string;
+-  percent: number;
++  amountText?: string;
++  percent?: number;
++  estimable: boolean;
+@@ -12,34 +12,0 @@
+-const MARKETING_DISCOUNT_RATE = 0.9;
+-
+-// ========== 基础工程：固定参考总价（单位：元） ==========
+-const FOUNDATION_PRICE_MAP: Record<string, number> = {
+-  '独立基础': 75000,
+-  '条形基础': 125000,
+-  '筏板基础': 135000,
+-  '桩基础': 0, // 不做固定估算
+-};
+-
+-// ========== 主体结构基准单价（元/㎡） ==========
+-const MAIN_STRUCTURE_UNIT_PRICE = 700;
+-
+-// ========== 外装工程基准单价（元/㎡），按外立面类型区分 ==========
+-const FACADE_BASE_PRICE_MAP: Record<string, number> = {
+-  '涂料外墙': 700,
+-  '真石漆': 700,
+-  '陶瓷砖外墙': 800,
+-  '石材外墙': 800,
+-  '铝板/金属外立面': 800,
+-};
+-
+-// ========== 室内装修基准单价（元/㎡，含水电安装配套） ==========
+-const INTERIOR_UNIT_PRICE = 800;
+-
+-// ========== 城市地区系数（以泉州为基准 1.00） ==========
+-const CITY_FACTOR_MAP: Record<string, number> = {
+-  '上海': 1.08, '北京': 1.08, '深圳': 1.08,
+-  '杭州': 1.05, '南京': 1.05, '苏州': 1.05, '广州': 1.05,
+-  '佛山': 1.05, '东莞': 1.05, '珠海': 1.05, '成都': 1.05,
+-  '武汉': 1.05, '长沙': 1.05,
+-  '福州': 1.03, '厦门': 1.03,
+-};
+-
+@@ -82,2 +49,2 @@
+-  const num = parseInt(String(value || '').trim(), 10);
+-  return Number.isFinite(num) && num > 0 ? Math.min(num, 20) : 0;
++  const num = Number(String(value || '').trim());
++  return Number.isInteger(num) && num > 0 && num <= 20 ? num : 0;
+@@ -87,130 +54,32 @@
+-  return `${(amount / 10000).toFixed(1)}万`;
+-}
+-
+-function applyMarketingDiscount(amount: number): number {
+-  return Math.round(amount * MARKETING_DISCOUNT_RATE);
+-}
+-
+-// ========== 各维度系数函数 ==========
+-
+-// 地区系数（以泉州为基准 1.00）
+-function getCityFactor(city: string): number {
+-  return CITY_FACTOR_MAP[city] || 1.00;
+-}
+-
+-// 结构形式系数 → 主体结构
+-function getStructureFactor(structureType: string): number {
+-  if (structureType === '砖混结构') return 1.00;
+-  if (structureType === '框架结构') return 1.08;
+-  return 1.15; // 钢结构
+-}
+-
+-// 建筑风格系数 → 主体结构
+-function getBuildingStyleFactor(style: string): number {
+-  if (style === '新闽派') return 1.00;
+-  if (style === '现代风格') return 1.05;
+-  if (style === '新中式') return 1.10;
+-  return 1.15; // 欧式
+-}
+-
+-// 屋顶形式系数 → 主体结构
+-function getRoofFactor(roofType: string): number {
+-  if (roofType === '平屋顶') return 1.00;
+-  if (roofType === '坡屋顶') return 1.05;
+-  if (roofType === '组合屋顶') return 1.10;
+-  return 1.15; // 燕尾脊
+-}
+-
+-// 地下室系数 → 基础工程
+-function getBasementFactor(basementType: string): number {
+-  if (basementType === '无地下室') return 1.00;
+-  if (basementType === '半地下室') return 1.10;
+-  return 1.15; // 全地下室
+-}
+-
+-// 外立面样式系数 → 外装工程
+-function getFacadeFactor(facadeStyle: string): number {
+-  if (facadeStyle === '涂料外墙') return 1.00;
+-  if (facadeStyle === '真石漆') return 1.06;
+-  if (facadeStyle === '陶瓷砖外墙') return 1.14;
+-  return 1.15; // 石材外墙 / 铝板金属外立面
+-}
+-
+-// 装修标准系数 → 外装工程 + 室内装修
+-function getDecorationFactor(decorationStyle: string): number {
+-  if (decorationStyle === '经济型') return 1.00;
+-  if (decorationStyle === '标准型') return 1.08;
+-  return 1.15; // 品质型
+-}
+-
+-// ========== 动态备注生成 ==========
+-function buildDynamicNotes(foundationType: string, basementType: string, facadeStyle: string, roofType: string): string[] {
+-  const notes: string[] = [];
+-  if (foundationType === '桩基础') {
+-    notes.push('桩基按图纸及现场情况定价');
+-  }
+-  if (basementType === '半地下室' || basementType === '全地下室') {
+-    notes.push('地下室实际成本需结合图纸');
+-  }
+-  if (facadeStyle === '石材外墙' || facadeStyle === '铝板/金属外立面') {
+-    notes.push('石材/金属外立面按图纸及现场情况定价');
+-  }
+-  if (roofType === '组合屋顶' || roofType === '燕尾脊') {
+-    notes.push('复杂屋顶做法按图纸定价');
+-  }
+-  return notes;
+-}
+-
+-// ========== 核心计算：四分项相加 ==========
+-function estimateTotalCost(
+-  buildingArea: number,
+-  city: string,
+-  structureType: string,
+-  buildingStyle: string,
+-  roofType: string,
+-  basementType: string,
+-  facadeStyle: string,
+-  decorationStyle: string,
+-  foundationType: string,
+-) {
+-  const cityFactor = getCityFactor(city);
+-
+-  // 1. 基础工程费 = 固定参考总价 × 地下室系数 × 地区系数
+-  const foundationPrice = FOUNDATION_PRICE_MAP[foundationType] || 0;
+-  const rawFoundationCost = Math.round(foundationPrice * getBasementFactor(basementType) * cityFactor);
+-  const isFoundationEstimable = foundationType !== '桩基础';
+-
+-  // 2. 主体结构费 = 总建筑面积 × 700 × 结构系数 × 风格系数 × 屋顶系数 × 地区系数
+-  const rawMainStructureCost = Math.round(
+-    buildingArea * MAIN_STRUCTURE_UNIT_PRICE *
+-    getStructureFactor(structureType) *
+-    getBuildingStyleFactor(buildingStyle) *
+-    getRoofFactor(roofType) *
+-    cityFactor
+-  );
+-
+-  // 3. 外装工程费 = 总建筑面积 × 外立面基准单价 × 外立面系数 × 装修标准系数 × 地区系数
+-  const facadeBasePrice = FACADE_BASE_PRICE_MAP[facadeStyle] || 700;
+-  const rawExteriorCost = Math.round(
+-    buildingArea * facadeBasePrice *
+-    getFacadeFactor(facadeStyle) *
+-    getDecorationFactor(decorationStyle) *
+-    cityFactor
+-  );
+-
+-  // 4. 室内装修费 = 总建筑面积 × 800 × 装修标准系数 × 地区系数
+-  const rawInteriorCost = Math.round(
+-    buildingArea * INTERIOR_UNIT_PRICE *
+-    getDecorationFactor(decorationStyle) *
+-    cityFactor
+-  );
+-
+-  const foundationCost = applyMarketingDiscount(rawFoundationCost);
+-  const mainStructureCost = applyMarketingDiscount(rawMainStructureCost);
+-  const exteriorCost = applyMarketingDiscount(rawExteriorCost);
+-  const interiorCost = applyMarketingDiscount(rawInteriorCost);
+-
+-  const totalCost = foundationCost + mainStructureCost + exteriorCost + interiorCost;
+-  const unitCost = buildingArea > 0 ? Math.round(totalCost / buildingArea) : 0;
+-
+-  // 构建四分项明细
++  return `${(amount / 10000).toFixed(2)}万元`;
++}
++
++// 已有成本单价直接使用；新表未覆盖的形式只借用旧规则的相对比例。
++const foundationPrices: Record<string, number> = {
++  '独立基础': 650, '条形基础': 650 * (125000 / 75000), '筏板基础': 650,
++};
++const structurePrices: Record<string, number> = {
++  '砖混结构': 685, '框架结构': 735, '钢结构': 830,
++};
++const roofPrices: Record<string, number> = {
++  '平屋顶': 105, '组合屋顶': 145, '坡屋顶': 185, '燕尾脊': 185 * (1.15 / 1.05),
++};
++const facadePrices: Record<string, number> = {
++  '涂料外墙': 430, '真石漆': 430, '陶瓷砖外墙': 450,
++  '石材外墙': 750, '铝板/金属外立面': 750,
++};
++const windowPrices: Record<string, number> = { '常规': 190, '系统窗高档': 250 };
++
++type EstimateInput = {
++  footprintArea: number;
++  buildingArea: number;
++  foundationType: string;
++  structureType: string;
++  roofType: string;
++  facadeStyle: string;
++  windowStandard: string;
++};
++
++function estimateTotalCost(input: EstimateInput) {
++  const { footprintArea, buildingArea, foundationType, structureType, roofType, facadeStyle, windowStandard } = input;
++  const estimable = foundationType !== '桩基础';
+@@ -218,28 +87,12 @@
+-    {
+-      name: '基础工程',
+-      amount: foundationCost,
+-      amountText: isFoundationEstimable ? formatWan(foundationCost) : '按图纸定价',
+-      percent: totalCost > 0 ? Math.round(foundationCost / totalCost * 100) : 0,
+-      note: '土方、基础、垫层、防潮等基础施工',
+-    },
+-    {
+-      name: '主体结构',
+-      amount: mainStructureCost,
+-      amountText: formatWan(mainStructureCost),
+-      percent: totalCost > 0 ? Math.round(mainStructureCost / totalCost * 100) : 0,
+-      note: '梁板柱、楼梯、砌体等主体工程',
+-    },
+-    {
+-      name: '外装工程',
+-      amount: exteriorCost,
+-      amountText: formatWan(exteriorCost),
+-      percent: totalCost > 0 ? Math.round(exteriorCost / totalCost * 100) : 0,
+-      note: '外墙装饰、门窗及防水工程',
+-    },
+-    {
+-      name: '室内装修',
+-      amount: interiorCost,
+-      amountText: formatWan(interiorCost),
+-      percent: totalCost > 0 ? Math.round(interiorCost / totalCost * 100) : 0,
+-      note: '贴砖、门窗、水电安装配套',
+-    },
++    { name: '地基工程', amount: estimable ? Math.round(footprintArea * foundationPrices[foundationType]) : 0,
++      note: '土方、垫层、钢筋砼基础、地梁、地下挡墙', estimable },
++    { name: '主体工程', amount: Math.round(buildingArea * structurePrices[structureType]),
++      note: '梁板柱、砌体、楼梯、钢筋模板（含脚手架等施工措施）', estimable: true },
++    { name: '屋顶工程', amount: Math.round(buildingArea * roofPrices[roofType]),
++      note: '防水、保温、找平、瓦/砖面层', estimable: true },
++    { name: '门窗工程', amount: Math.round(buildingArea * windowPrices[windowStandard]),
++      note: '断桥铝合金窗、开启扇、玻璃栏板', estimable: true },
++    { name: '外墙装饰', amount: Math.round(buildingArea * facadePrices[facadeStyle]),
++      note: '粉刷、真石漆/瓷砖/石材饰面、线条', estimable: true },
++    { name: '水电暖费用', amount: Math.round(buildingArea * 40),
++      note: '水电管线预埋、控制箱、雨水管', estimable: true },
+@@ -247,3 +100 @@
+-
+-  const dynamicNotes = buildDynamicNotes(foundationType, basementType, facadeStyle, roofType);
+-
++  const totalCost = breakdown.reduce((sum, item) => sum + item.amount, 0);
+@@ -252,3 +103,8 @@
+-    unitCost,
+-    breakdown,
+-    dynamicNotes,
++    unitCost: (totalCost / buildingArea).toFixed(2),
++    totalLabel: estimable ? '参考总造价' : '已测算部分合计',
++    unitLabel: estimable ? '参考单价' : '已测算部分单价',
++    breakdown: breakdown.map(item => ({ ...item,
++      amountText: item.estimable ? formatWan(item.amount) : '按图纸核算',
++      percent: totalCost > 0 ? Math.round(item.amount / totalCost * 100) : 0,
++    })),
++    dynamicNotes: ['不同地基因方案不同，价格不同。', '不同屋顶因做法不同，价格不同。'],
+@@ -284,0 +141,3 @@
++    windowStandard: '常规',
++    windowIndex: 0,
++    windowOptions: ['常规', '系统窗高档'],
+@@ -303 +162 @@
+-      title: '造价生成 · 快速估算建房价格',
++      title: '造价测算 · 快速估算建房价格',
+@@ -420,34 +279,59 @@
+-    const buildingArea = toPositiveNumber(this.data.buildingArea);
+-
+-    if (!String(this.data.province || '').trim()) {
+-      wx.showToast({ title: '请填写省份', icon: 'none' });
+-      return;
+-    }
+-    if (!String(this.data.city || '').trim()) {
+-      wx.showToast({ title: '请填写城市', icon: 'none' });
+-      return;
+-    }
+-    if (!buildingArea) {
+-      wx.showToast({ title: '请填写总建筑面积', icon: 'none' });
+-      return;
+-    }
+-
+-    const result = estimateTotalCost(
+-      buildingArea,
+-      this.data.city,
+-      this.data.structureType,
+-      this.data.buildingStyle,
+-      this.data.roofType,
+-      this.data.basementType,
+-      this.data.facadeStyle,
+-      this.data.decorationStyle,
+-      this.data.foundationType,
+-    );
+-
+-    wx.setStorageSync(RESULT_STORAGE_KEY, {
+-      estimatedTotalCost: formatWan(result.totalCost),
+-      estimatedUnitCost: `${result.unitCost}元/㎡`,
+-      costBreakdown: result.breakdown,
+-      dynamicNotes: result.dynamicNotes,
+-    });
+-
++    const data = this.data;
++    const footprintArea = toPositiveNumber(data.footprintArea);
++    const buildingArea = toPositiveNumber(data.buildingArea);
++    const floorCount = toPositiveInteger(data.floorCount);
++    const firstFloorHeight = toPositiveNumber(data.firstFloorHeight);
++    const upperFloorHeight = toPositiveNumber(data.upperFloorHeight);
++    let error = '';
++    if (!data.province || !data.city) error = '请选择所在地区';
++    else if (!footprintArea) error = '请填写建筑占地面积';
++    else if (!buildingArea) error = '请填写总建筑面积';
++    else if (buildingArea < footprintArea) error = '总建筑面积不能小于占地面积';
++    else if (!floorCount) error = '楼层数请填写1至20的整数';
++    else if (!firstFloorHeight) error = '请填写首层高度';
++    else if (floorCount > 1 && !upperFloorHeight) error = '请填写其他楼层高度';
++    else if ((data.foundationType !== '桩基础' && !foundationPrices[data.foundationType]) ||
++      !structurePrices[data.structureType] || !roofPrices[data.roofType] ||
++      !facadePrices[data.facadeStyle] || !windowPrices[data.windowStandard]) error = '请重新选择建筑参数';
++    if (error) {
++      wx.showToast({ title: error, icon: 'none' });
++      return;
++    }
++    const result = estimateTotalCost({
++      footprintArea, buildingArea, foundationType: data.foundationType,
++      structureType: data.structureType, roofType: data.roofType,
++      facadeStyle: data.facadeStyle, windowStandard: data.windowStandard,
++    });
++    // 保存本次提交的信息快照，避免再次编辑表单后报告内容与金额不一致。
++    const basicInfo = [
++      { label: '所在地区', value: `${data.province} / ${data.city}`, fullWidth: true },
++      { label: '建筑占地面积', value: `${footprintArea}㎡` },
++      { label: '总建筑面积', value: `${buildingArea}㎡` },
++      { label: '楼层数', value: `${floorCount}层` },
++      { label: '首层高度', value: `${firstFloorHeight}m` },
++      { label: '其他楼层高度', value: floorCount > 1 ? `${upperFloorHeight}m` : '不适用' },
++      { label: '地下室形式', value: data.basementType },
++      { label: '建筑风格', value: data.buildingStyle },
++      { label: '结构形式', value: data.structureType },
++      { label: '屋顶形式', value: data.roofType },
++      { label: '外立面样式', value: data.facadeStyle },
++      { label: '建筑基础', value: data.foundationType },
++      { label: '装修标准', value: data.decorationStyle },
++      { label: '门窗标准', value: data.windowStandard },
++    ];
++    try {
++      wx.setStorageSync(RESULT_STORAGE_KEY, {
++        version: 2,
++        estimatedTotalCost: formatWan(result.totalCost),
++        estimatedUnitCost: `${result.unitCost}元/㎡`,
++        totalLabel: result.totalLabel,
++        unitLabel: result.unitLabel,
++        basicInfo,
++        costBreakdown: result.breakdown,
++        dynamicNotes: result.dynamicNotes,
++      });
++    } catch (error) {
++      console.error('保存造价测算报告失败:', error);
++      wx.showToast({ title: '报告保存失败，请重试', icon: 'none' });
++      return;
++    }
+@@ -457,4 +341 @@
+-        wx.showToast({
+-          title: '造价结果页打开失败',
+-          icon: 'none',
+-        });
++        wx.showToast({ title: '测算报告打开失败，请重试', icon: 'none' });
+--- a/miniprogram/miniprogram/pages/aicost/aicost.wxml
++++ b/miniprogram/miniprogram/pages/aicost/aicost.wxml
+@@ -3 +3 @@
+-  <navigation-bar title="造价生成" background="#e6daca" />
++  <navigation-bar title="造价测算" background="#e6daca" />
+@@ -138,0 +139,9 @@
++            <view class="form-row">
++              <view class="form-item half">
++                <text class="form-label">门窗标准</text>
++                <picker mode="selector" range="{{windowOptions}}" value="{{windowIndex}}" data-field="windowStandard" data-options="windowOptions" data-index-field="windowIndex" bindchange="onOptionChange">
++                  <view class="form-select"><text class="select-text">{{windowStandard}}</text></view>
++                </picker>
++              </view>
++              <view class="form-item half"></view>
++            </view>
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.js
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.js
+@@ -5,0 +6 @@
++const RESULT_SCHEMA_VERSION = 2;
+@@ -7 +8,33 @@
+-const chartColors = ['#b98f5e', '#d2ad76', '#8f6e4d', '#c8a679'];
++const chartColors = ['#c39b65', '#ab8154', '#d0af7b', '#94704d', '#bc9362', '#d7b989'];
++function isBasicInfoItem(item) {
++    if (!item || typeof item !== 'object')
++        return false;
++    const value = item;
++    return typeof value.label === 'string' && !!value.label.trim()
++        && typeof value.value === 'string' && !!value.value.trim()
++        && (value.fullWidth === undefined || typeof value.fullWidth === 'boolean');
++}
++function isCostBreakdownItem(item) {
++    if (!item || typeof item !== 'object')
++        return false;
++    const value = item;
++    return typeof value.name === 'string' && !!value.name.trim()
++        && typeof value.amount === 'number' && Number.isFinite(value.amount) && value.amount >= 0
++        && typeof value.amountText === 'string' && !!value.amountText.trim()
++        && typeof value.percent === 'number' && Number.isFinite(value.percent) && value.percent >= 0 && value.percent <= 100
++        && typeof value.note === 'string' && !!value.note.trim()
++        && typeof value.estimable === 'boolean';
++}
++function isCurrentResult(result) {
++    if (!result || typeof result !== 'object')
++        return false;
++    const value = result;
++    return value.version === RESULT_SCHEMA_VERSION
++        && typeof value.estimatedTotalCost === 'string'
++        && typeof value.estimatedUnitCost === 'string'
++        && typeof value.totalLabel === 'string'
++        && typeof value.unitLabel === 'string'
++        && Array.isArray(value.basicInfo) && value.basicInfo.length === 14 && value.basicInfo.every(isBasicInfoItem)
++        && Array.isArray(value.costBreakdown) && value.costBreakdown.length === 6 && value.costBreakdown.every(isCostBreakdownItem)
++        && Array.isArray(value.dynamicNotes) && value.dynamicNotes.every(note => typeof note === 'string');
++}
+@@ -9,4 +42 @@
+-    return items.map((item, index) => ({
+-        ...item,
+-        color: chartColors[index % chartColors.length],
+-    }));
++    return items.map((item, index) => ({ ...item, color: chartColors[index % chartColors.length] }));
+@@ -17,0 +48,3 @@
++        totalLabel: '参考总造价',
++        unitLabel: '参考单价',
++        basicInfo: [],
+@@ -26,6 +59,10 @@
+-        const result = wx.getStorageSync(RESULT_STORAGE_KEY);
+-        if (!result || !result.estimatedTotalCost) {
+-            wx.showToast({ title: '请先生成参考造价', icon: 'none' });
+-            setTimeout(() => {
+-                wx.navigateBack();
+-            }, 800);
++        let result;
++        try {
++            result = wx.getStorageSync(RESULT_STORAGE_KEY);
++        }
++        catch (error) {
++            console.error('读取造价测算结果失败:', error);
++        }
++        if (!isCurrentResult(result)) {
++            wx.showToast({ title: '测算数据已更新，请重新测算', icon: 'none' });
++            setTimeout(() => wx.navigateBack(), 800);
+@@ -37,2 +74,5 @@
+-            costBreakdown: withChartColors(result.costBreakdown || []),
+-            dynamicNotes: result.dynamicNotes || [],
++            totalLabel: result.totalLabel,
++            unitLabel: result.unitLabel,
++            basicInfo: result.basicInfo,
++            costBreakdown: withChartColors(result.costBreakdown),
++            dynamicNotes: result.dynamicNotes,
+@@ -43,4 +83 @@
+-        return {
+-            title: '造价生成 · 参考测算结果',
+-            path: '/pages/aicost/aicost',
+-        };
++        return { title: '造价测算 · 工程造价测算报告', path: '/pages/aicost/aicost' };
+@@ -49,3 +86 @@
+-        this.setData({
+-            showCostDetails: !this.data.showCostDetails,
+-        });
++        this.setData({ showCostDetails: !this.data.showCostDetails });
+@@ -54 +89 @@
+-        if (this.data.enterpriseWechatConfigLoading && !force) {
++        if (this.data.enterpriseWechatConfigLoading && !force)
+@@ -56 +90,0 @@
+-        }
+@@ -62,3 +96 @@
+-        this.setData({
+-            enterpriseWechatConfigLoading: true,
+-        });
++        this.setData({ enterpriseWechatConfigLoading: true });
+@@ -70,3 +102,2 @@
+-                    header: {
+-                        token,
+-                    },
++                    header: { token },
++                    timeout: 8000,
+@@ -100,3 +131 @@
+-            this.setData({
+-                enterpriseWechatConfigLoading: false,
+-            });
++            this.setData({ enterpriseWechatConfigLoading: false });
+@@ -110 +139 @@
+-        if (opened) {
++        if (opened)
+@@ -112 +140,0 @@
+-        }
+@@ -115,6 +143 @@
+-            fail: () => {
+-                wx.showToast({
+-                    title: '联系客服入口打开失败',
+-                    icon: 'none',
+-                });
+-            },
++            fail: () => wx.showToast({ title: '联系设计师入口打开失败', icon: 'none' }),
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.scss
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.scss
+@@ -6,2 +6,2 @@
+-    radial-gradient(circle at 50% 4%, rgba(255, 248, 236, 0.48) 0%, rgba(255, 248, 236, 0) 28%),
+-    linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
++    radial-gradient(circle at 50% 3%, rgba(255, 249, 239, 0.54) 0%, rgba(255, 249, 239, 0) 28%),
++    linear-gradient(180deg, #e6daca 0%, #eee5d9 100%);
+@@ -17 +17 @@
+-  padding: 12rpx 26rpx calc(36rpx + env(safe-area-inset-bottom));
++  padding: 8rpx 24rpx calc(42rpx + env(safe-area-inset-bottom));
+@@ -21,8 +21,10 @@
+-.result-card,
+-.composition-card,
+-.action-card,
+-.detail-panel {
+-  background: linear-gradient(180deg, rgba(255, 250, 243, 0.96) 0%, rgba(246, 237, 226, 0.92) 100%);
+-  border: 1px solid rgba(188, 168, 145, 0.3);
+-  border-radius: 24rpx;
+-  box-shadow: 0 18rpx 40rpx rgba(113, 80, 63, 0.1);
++.report-title {
++  padding: 14rpx 0 28rpx;
++  color: #563b2a;
++  font-size: 42rpx;
++  font-weight: 800;
++  letter-spacing: 2rpx;
++  text-align: center;
++}
++
++.report-card {
+@@ -31,19 +33,13 @@
+-}
+-
+-.result-card {
+-  display: flex;
+-  flex-direction: column;
+-  align-items: center;
+-  padding: 36rpx 28rpx 34rpx;
+-}
+-
+-.result-label {
+-  color: #8c7553;
+-  font-size: 27rpx;
+-  font-weight: 600;
+-}
+-
+-.result-amount {
+-  margin-top: 12rpx;
+-  color: #a9855b;
+-  font-size: 68rpx;
++  border: 1px solid rgba(188, 155, 116, 0.28);
++  border-radius: 24rpx;
++  background: linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(250, 242, 232, 0.96));
++  box-shadow: 0 14rpx 32rpx rgba(99, 69, 47, 0.08);
++}
++
++.card-title {
++  display: flex;
++  align-items: center;
++  gap: 16rpx;
++  padding: 28rpx 28rpx 24rpx;
++  color: #553927;
++  font-size: 32rpx;
+@@ -51,70 +47,13 @@
+-  line-height: 1.1;
+-}
+-
+-.result-unit {
+-  margin-top: 10rpx;
+-  color: #6f5945;
+-  font-size: 25rpx;
+-}
+-
+-.section-title {
+-  color: #5e412f;
+-  font-size: 29rpx;
+-  font-weight: 700;
+-  padding: 22rpx 28rpx 18rpx;
+-  border-bottom: 1px solid rgba(188, 168, 145, 0.28);
+-}
+-
+-.donut-wrap {
+-  display: flex;
+-  justify-content: center;
+-  padding: 34rpx 0 22rpx;
+-}
+-
+-.cost-donut {
+-  width: 280rpx;
+-  height: 280rpx;
+-  border-radius: 50%;
+-  background: conic-gradient(
+-    #b98f5e 0deg 90deg,
+-    #d2ad76 90deg 180deg,
+-    #8f6e4d 180deg 270deg,
+-    #c8a679 270deg 360deg
+-  );
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), 0 16rpx 34rpx rgba(113, 80, 63, 0.12);
+-}
+-
+-.donut-hole {
+-  width: 168rpx;
+-  height: 168rpx;
+-  border-radius: 50%;
+-  background: #fff8ef;
+-  display: flex;
+-  flex-direction: column;
+-  align-items: center;
+-  justify-content: center;
+-  box-shadow: inset 0 6rpx 16rpx rgba(113, 80, 63, 0.08);
+-}
+-
+-.donut-title {
+-  color: #8c7553;
+-  font-size: 22rpx;
+-}
+-
+-.donut-value {
+-  margin-top: 6rpx;
+-  color: #5e412f;
+-  font-size: 30rpx;
+-  font-weight: 800;
+-}
+-
+-.donut-legend {
+-  padding: 0 28rpx 24rpx;
+-}
+-
+-.legend-item {
+-  display: flex;
+-  align-items: center;
++}
++
++.title-mark {
++  flex: 0 0 auto;
++  width: 8rpx;
++  height: 44rpx;
++  border-radius: 2rpx;
++  background: linear-gradient(180deg, #d4af74, #a77b4c);
++}
++
++.basic-grid {
++  display: flex;
++  flex-wrap: wrap;
+@@ -122,12 +61,28 @@
+-  gap: 24rpx;
+-  padding: 16rpx 0;
+-  border-top: 1px solid rgba(188, 168, 145, 0.18);
+-}
+-
+-.legend-main,
+-.legend-value {
+-  display: flex;
+-  align-items: center;
+-}
+-
+-.legend-main {
++  padding: 0 28rpx 28rpx;
++}
++
++.basic-item {
++  width: 48%;
++  min-height: 74rpx;
++  display: flex;
++  align-items: center;
++  gap: 12rpx;
++  box-sizing: border-box;
++  padding: 0 16rpx;
++  border-top: 1px solid rgba(180, 150, 118, 0.2);
++}
++
++.basic-item.full-width {
++  width: 100%;
++  min-height: 82rpx;
++  border-radius: 12rpx;
++  background: rgba(237, 223, 204, 0.36);
++}
++
++.basic-label {
++  flex: 0 0 auto;
++  color: #8a735d;
++  font-size: 26rpx;
++}
++
++.basic-value {
+@@ -136,17 +91,90 @@
+-}
+-
+-.legend-dot {
+-  flex: 0 0 auto;
+-  width: 18rpx;
+-  height: 18rpx;
+-  border-radius: 50%;
+-  margin-right: 14rpx;
+-}
+-
+-.legend-name {
+-  color: #5e412f;
+-  font-size: 26rpx;
+-  font-weight: 600;
+-}
+-
+-.legend-value {
++  color: #503522;
++  font-size: 28rpx;
++  font-weight: 650;
++  text-align: right;
++}
++
++.total-row {
++  display: flex;
++  align-items: stretch;
++  padding: 4rpx 28rpx 26rpx;
++}
++
++.total-main {
++  min-width: 0;
++  flex: 1.3;
++  display: flex;
++  flex-direction: column;
++  justify-content: center;
++  padding-right: 24rpx;
++}
++
++.unit-main {
++  flex: 0.8;
++  display: flex;
++  flex-direction: column;
++  justify-content: center;
++  padding-left: 24rpx;
++  border-left: 1px solid rgba(180, 150, 118, 0.3);
++}
++
++.total-label,
++.unit-label {
++  color: #8a735d;
++  font-size: 23rpx;
++}
++
++.total-amount {
++  margin-top: 6rpx;
++  color: #b5864f;
++  font-size: 55rpx;
++  font-weight: 800;
++  line-height: 1.15;
++}
++
++.unit-value {
++  margin-top: 10rpx;
++  color: #9b7146;
++  font-size: 27rpx;
++  font-weight: 750;
++  line-height: 1.25;
++}
++
++.summary-list {
++  margin: 0 28rpx;
++  padding: 8rpx 0;
++  border-top: 1px solid rgba(180, 150, 118, 0.3);
++  border-bottom: 1px solid rgba(180, 150, 118, 0.24);
++}
++
++.summary-item {
++  min-height: 64rpx;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 20rpx;
++  padding: 0 18rpx;
++  margin: 8rpx 0;
++  border-radius: 10rpx;
++  background: rgba(235, 220, 201, 0.34);
++}
++
++.summary-name {
++  color: #6c513b;
++  font-size: 28rpx;
++  font-weight: 650;
++}
++
++.summary-amount {
++  color: #553927;
++  font-size: 28rpx;
++  font-weight: 750;
++}
++
++.pending {
++  color: #9a7958;
++  font-size: 25rpx;
++}
++
++.action-row {
++  display: flex;
+@@ -154,9 +182 @@
+-  color: #8c7553;
+-  font-size: 24rpx;
+-  font-weight: 600;
+-}
+-
+-.action-card {
+-  display: flex;
+-  gap: 20rpx;
+-  padding: 24rpx;
++  padding: 26rpx 28rpx 0;
+@@ -166,0 +187 @@
++  min-width: 0;
+@@ -168 +189,14 @@
+-  height: 84rpx;
++  height: 82rpx;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  margin: 0;
++  padding: 0 12rpx;
++  border-radius: 14rpx;
++  font-size: 28rpx;
++  font-weight: 750;
++  line-height: 1.2;
++}
++
++.detail-btn::after,
++.contact-btn::after {
+@@ -170,11 +203,0 @@
+-  border-radius: 999rpx;
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+-  font-size: 28rpx;
+-  font-weight: 700;
+-  line-height: 1;
+-
+-  &::after {
+-    border: none;
+-  }
+@@ -184,3 +207,3 @@
+-  background: rgba(255, 255, 255, 0.86);
+-  color: #6f5945;
+-  border: 1px solid rgba(188, 168, 145, 0.38);
++  color: #61452f;
++  border: 1px solid rgba(164, 120, 75, 0.66);
++  background: rgba(255, 252, 247, 0.86);
+@@ -190 +212,0 @@
+-  background: linear-gradient(135deg, #c8a679 0%, #a9855b 100%);
+@@ -192 +214,14 @@
+-  box-shadow: 0 12rpx 28rpx rgba(113, 80, 63, 0.16);
++  background: linear-gradient(135deg, #d0ac76 0%, #a77b4c 100%);
++  box-shadow: 0 10rpx 24rpx rgba(113, 80, 63, 0.14);
++}
++
++.designer-tip {
++  padding: 18rpx 28rpx 28rpx;
++  color: #8a735d;
++  font-size: 22rpx;
++  text-align: center;
++}
++
++.compact-title {
++  padding-bottom: 18rpx;
++  border-bottom: 1px solid rgba(180, 150, 118, 0.22);
+@@ -196 +231 @@
+-  padding: 8rpx 30rpx 24rpx;
++  padding: 4rpx 28rpx 10rpx;
+@@ -200,9 +235,10 @@
+-  padding: 20rpx 0;
+-  border-bottom: 1px solid rgba(188, 168, 145, 0.24);
+-
+-  &:last-child {
+-    border-bottom: none;
+-  }
+-}
+-
+-.breakdown-main {
++  padding: 22rpx 0;
++  border-bottom: 1px solid rgba(180, 150, 118, 0.22);
++}
++
++.breakdown-item:last-child {
++  border-bottom: none;
++}
++
++.breakdown-main,
++.chart-meta {
+@@ -211,0 +248,4 @@
++}
++
++.breakdown-main {
++  align-items: center;
+@@ -216,3 +256,3 @@
+-  color: #5e412f;
+-  font-size: 28rpx;
+-  font-weight: 700;
++  color: #553927;
++  font-size: 27rpx;
++  font-weight: 750;
+@@ -222,2 +262,2 @@
+-  color: #a9855b;
+-  font-size: 28rpx;
++  color: #a57a4b;
++  font-size: 27rpx;
+@@ -228 +268 @@
+-  height: 18rpx;
++  height: 14rpx;
+@@ -231 +271 @@
+-  background: rgba(188, 168, 145, 0.2);
++  background: rgba(180, 150, 118, 0.17);
+@@ -234,0 +275 @@
++  min-width: 8rpx;
+@@ -239 +280,26 @@
+-.chart-meta,
++.chart-meta {
++  align-items: flex-start;
++  margin-top: 9rpx;
++  color: #8a735d;
++  font-size: 22rpx;
++  line-height: 1.45;
++}
++
++.chart-note {
++  flex: 1;
++  text-align: right;
++}
++
++.plain-notes {
++  margin: 0 28rpx;
++  padding: 14rpx 18rpx;
++  border-radius: 12rpx;
++  background: rgba(235, 220, 201, 0.3);
++}
++
++.plain-note {
++  color: #80684f;
++  font-size: 24rpx;
++  line-height: 1.65;
++}
++
+@@ -241 +307,2 @@
+-  color: #8c7553;
++  padding: 18rpx 28rpx 28rpx;
++  color: #856d54;
+@@ -243,14 +309,0 @@
+-  line-height: 1.5;
+-}
+-
+-.chart-meta {
+-  display: flex;
+-  justify-content: space-between;
+-  gap: 20rpx;
+-  margin-top: 8rpx;
+-}
+-
+-.breakdown-note {
+-  padding: 16rpx 30rpx 0;
+-  color: #a08868;
+-  font-size: 22rpx;
+@@ -260,3 +313,7 @@
+-.breakdown-tip {
+-  padding: 12rpx 30rpx 30rpx;
+-}
++.report-disclaimer {
++  padding: 2rpx 34rpx 34rpx;
++  color: #88735f;
++  font-size: 21rpx;
++  line-height: 1.55;
++  text-align: center;
++}
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.ts
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.ts
+@@ -8,0 +9 @@
++type BasicInfoItem = { label: string; value: string; fullWidth?: boolean };
+@@ -14,0 +16 @@
++  estimable: boolean;
+@@ -17 +18,0 @@
+-
+@@ -18,0 +20 @@
++  version: number;
+@@ -20,0 +23,3 @@
++  totalLabel: string;
++  unitLabel: string;
++  basicInfo: BasicInfoItem[];
+@@ -25,0 +31 @@
++const RESULT_SCHEMA_VERSION = 2;
+@@ -27 +33,33 @@
+-const chartColors = ['#b98f5e', '#d2ad76', '#8f6e4d', '#c8a679'];
++const chartColors = ['#c39b65', '#ab8154', '#d0af7b', '#94704d', '#bc9362', '#d7b989'];
++
++function isBasicInfoItem(item: unknown): item is BasicInfoItem {
++  if (!item || typeof item !== 'object') return false;
++  const value = item as Partial<BasicInfoItem>;
++  return typeof value.label === 'string' && !!value.label.trim()
++    && typeof value.value === 'string' && !!value.value.trim()
++    && (value.fullWidth === undefined || typeof value.fullWidth === 'boolean');
++}
++
++function isCostBreakdownItem(item: unknown): item is CostBreakdownItem {
++  if (!item || typeof item !== 'object') return false;
++  const value = item as Partial<CostBreakdownItem>;
++  return typeof value.name === 'string' && !!value.name.trim()
++    && typeof value.amount === 'number' && Number.isFinite(value.amount) && value.amount >= 0
++    && typeof value.amountText === 'string' && !!value.amountText.trim()
++    && typeof value.percent === 'number' && Number.isFinite(value.percent) && value.percent >= 0 && value.percent <= 100
++    && typeof value.note === 'string' && !!value.note.trim()
++    && typeof value.estimable === 'boolean';
++}
++
++function isCurrentResult(result: unknown): result is CostEstimateResult {
++  if (!result || typeof result !== 'object') return false;
++  const value = result as Partial<CostEstimateResult>;
++  return value.version === RESULT_SCHEMA_VERSION
++    && typeof value.estimatedTotalCost === 'string'
++    && typeof value.estimatedUnitCost === 'string'
++    && typeof value.totalLabel === 'string'
++    && typeof value.unitLabel === 'string'
++    && Array.isArray(value.basicInfo) && value.basicInfo.length === 14 && value.basicInfo.every(isBasicInfoItem)
++    && Array.isArray(value.costBreakdown) && value.costBreakdown.length === 6 && value.costBreakdown.every(isCostBreakdownItem)
++    && Array.isArray(value.dynamicNotes) && value.dynamicNotes.every(note => typeof note === 'string');
++}
+@@ -30,4 +68 @@
+-  return items.map((item, index) => ({
+-    ...item,
+-    color: chartColors[index % chartColors.length],
+-  }));
++  return items.map((item, index) => ({ ...item, color: chartColors[index % chartColors.length] }));
+@@ -39,0 +75,3 @@
++    totalLabel: '参考总造价',
++    unitLabel: '参考单价',
++    basicInfo: [] as BasicInfoItem[],
+@@ -49,7 +87,9 @@
+-    const result = wx.getStorageSync(RESULT_STORAGE_KEY) as CostEstimateResult | '';
+-
+-    if (!result || !result.estimatedTotalCost) {
+-      wx.showToast({ title: '请先生成参考造价', icon: 'none' });
+-      setTimeout(() => {
+-        wx.navigateBack();
+-      }, 800);
++    let result: unknown;
++    try {
++      result = wx.getStorageSync(RESULT_STORAGE_KEY);
++    } catch (error) {
++      console.error('读取造价测算结果失败:', error);
++    }
++    if (!isCurrentResult(result)) {
++      wx.showToast({ title: '测算数据已更新，请重新测算', icon: 'none' });
++      setTimeout(() => wx.navigateBack(), 800);
+@@ -58 +97,0 @@
+-
+@@ -62,2 +101,5 @@
+-      costBreakdown: withChartColors(result.costBreakdown || []),
+-      dynamicNotes: result.dynamicNotes || [],
++      totalLabel: result.totalLabel,
++      unitLabel: result.unitLabel,
++      basicInfo: result.basicInfo,
++      costBreakdown: withChartColors(result.costBreakdown),
++      dynamicNotes: result.dynamicNotes,
+@@ -65 +106,0 @@
+-
+@@ -70,4 +111 @@
+-    return {
+-      title: '造价生成 · 参考测算结果',
+-      path: '/pages/aicost/aicost',
+-    };
++    return { title: '造价测算 · 工程造价测算报告', path: '/pages/aicost/aicost' };
+@@ -77,3 +115 @@
+-    this.setData({
+-      showCostDetails: !this.data.showCostDetails,
+-    });
++    this.setData({ showCostDetails: !this.data.showCostDetails });
+@@ -83,4 +119 @@
+-    if (this.data.enterpriseWechatConfigLoading && !force) {
+-      return;
+-    }
+-
++    if (this.data.enterpriseWechatConfigLoading && !force) return;
+@@ -92,5 +125 @@
+-
+-    this.setData({
+-      enterpriseWechatConfigLoading: true,
+-    });
+-
++    this.setData({ enterpriseWechatConfigLoading: true });
+@@ -102,3 +131,2 @@
+-          header: {
+-            token,
+-          },
++          header: { token },
++          timeout: 8000,
+@@ -120 +147,0 @@
+-
+@@ -125 +151,0 @@
+-
+@@ -133,3 +159 @@
+-      this.setData({
+-        enterpriseWechatConfigLoading: false,
+-      });
++      this.setData({ enterpriseWechatConfigLoading: false });
+@@ -144,4 +168 @@
+-    if (opened) {
+-      return;
+-    }
+-
++    if (opened) return;
+@@ -150,6 +171 @@
+-      fail: () => {
+-        wx.showToast({
+-          title: '联系客服入口打开失败',
+-          icon: 'none',
+-        });
+-      },
++      fail: () => wx.showToast({ title: '联系设计师入口打开失败', icon: 'none' }),
+--- a/miniprogram/miniprogram/pages/aicostresult/aicostresult.wxml
++++ b/miniprogram/miniprogram/pages/aicostresult/aicostresult.wxml
+@@ -3 +3,3 @@
+-  <navigation-bar title="造价结果" background="#e6daca" />
++  <navigation-bar title="造价测算报告" background="#e6daca" />
++  <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
++    <view class="report-title">工程造价测算报告</view>
+@@ -5,28 +7,6 @@
+-  <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+-    <view class="result-card">
+-      <text class="result-label">参考测算价</text>
+-      <text class="result-amount">{{estimatedTotalCost}}</text>
+-      <text class="result-unit">约 {{estimatedUnitCost}}</text>
+-    </view>
+-
+-    <view class="composition-card">
+-      <view class="section-title">常见分部分项工程造价组成</view>
+-      <view class="donut-wrap">
+-        <view class="cost-donut">
+-          <view class="donut-hole">
+-            <text class="donut-title">组成</text>
+-            <text class="donut-value">{{estimatedTotalCost}}</text>
+-          </view>
+-        </view>
+-      </view>
+-
+-      <view class="donut-legend">
+-        <view class="legend-item" wx:for="{{costBreakdown}}" wx:key="name">
+-          <view class="legend-main">
+-            <view class="legend-dot" style="background: {{item.color}};"></view>
+-            <text class="legend-name">{{item.name}}</text>
+-          </view>
+-          <view class="legend-value">
+-            <text>{{item.percent}}%</text>
+-            <text>{{item.amountText}}</text>
+-          </view>
++    <view class="report-card basic-card">
++      <view class="card-title"><view class="title-mark"></view><text>基础信息</text></view>
++      <view class="basic-grid">
++        <view class="basic-item {{item.fullWidth ? 'full-width' : ''}}" wx:for="{{basicInfo}}" wx:key="label">
++          <text class="basic-label">{{item.label}}</text>
++          <text class="basic-value">{{item.value}}</text>
+@@ -37,3 +17,17 @@
+-    <view class="action-card">
+-      <button class="detail-btn" bindtap="onViewCostDetails">{{showCostDetails ? '收起费用明细' : '查看费用明细'}}</button>
+-      <button class="contact-btn" bindtap="onContactService">联系客服</button>
++    <view class="report-card estimate-card">
++      <view class="card-title"><view class="title-mark"></view><text>主要工程造价测算</text></view>
++      <view class="total-row">
++        <view class="total-main"><text class="total-label">{{totalLabel}}</text><text class="total-amount">{{estimatedTotalCost}}</text></view>
++        <view class="unit-main"><text class="unit-label">{{unitLabel}}</text><text class="unit-value">{{estimatedUnitCost}}</text></view>
++      </view>
++      <view class="summary-list">
++        <view class="summary-item" wx:for="{{costBreakdown}}" wx:key="name">
++          <text class="summary-name">{{item.name}}</text>
++          <text class="summary-amount {{item.estimable ? '' : 'pending'}}">{{item.amountText}}</text>
++        </view>
++      </view>
++      <view class="action-row">
++        <button class="detail-btn" bindtap="onViewCostDetails">{{showCostDetails ? '收起费用明细' : '查看费用明细'}}</button>
++        <button class="contact-btn" bindtap="onContactService">联系设计师优化</button>
++      </view>
++      <view class="designer-tip">一户一档，可由设计师进一步深化方案。</view>
+@@ -42,2 +36,2 @@
+-    <view class="detail-panel" wx:if="{{showCostDetails}}">
+-      <view class="section-title">常见分项工程造价</view>
++    <view class="report-card detail-panel" wx:if="{{showCostDetails}}">
++      <view class="card-title compact-title"><view class="title-mark"></view><text>费用明细</text></view>
+@@ -48 +42 @@
+-            <text class="breakdown-amount">{{item.amountText}}</text>
++            <text class="breakdown-amount {{item.estimable ? '' : 'pending'}}">{{item.amountText}}</text>
+@@ -50,3 +44 @@
+-          <view class="chart-bar">
+-            <view class="chart-bar-fill" style="width: {{item.percent}}%; background: {{item.color}};"></view>
+-          </view>
++          <view class="chart-bar" wx:if="{{item.estimable}}"><view class="chart-bar-fill" style="width: {{item.percent}}%; background: {{item.color}};"></view></view>
+@@ -54,2 +46,2 @@
+-            <text>{{item.percent}}%</text>
+-            <text>{{item.note}}</text>
++            <text wx:if="{{item.estimable}}">{{item.percent}}%</text><text wx:else>需结合图纸核算</text>
++            <text class="chart-note">{{item.note}}</text>
+@@ -59,2 +51,2 @@
+-      <view class="breakdown-note" wx:if="{{dynamicNotes.length > 0}}">
+-        <text>注：{{dynamicNotes[0]}}<block wx:for="{{dynamicNotes}}" wx:if="{{index > 0}}" wx:key="*this">、{{item}}</block>，需结合图纸及现场情况最终定价。</text>
++      <view class="plain-notes" wx:if="{{dynamicNotes.length}}">
++        <view class="plain-note" wx:for="{{dynamicNotes}}" wx:key="*this">· {{item}}</view>
+@@ -62 +54 @@
+-      <view class="breakdown-tip">以上为快速估算结果，最终价格需结合地勘、结构、材料品牌和施工范围确认。</view>
++      <view class="breakdown-tip">室内装修另计。</view>
+@@ -63,0 +56 @@
++    <view class="report-disclaimer">以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认。</view>
+--- /dev/null
++++ b/miniprogram/tests/aicost-pricing.test.js
+@@ -0,0 +1,54 @@
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const vm = require('node:vm');
++const path = require('node:path');
++const source = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicost/aicost.js'), 'utf8');
++function form(overrides = {}, storageFails = false) {
++  let config, saved, toast, route;
++  vm.runInNewContext(source, { Page: p => { config = p; }, wx: {
++    showToast: p => { toast = p.title; },
++    setStorageSync: (key, value) => { if (storageFails) throw new Error('storage full'); saved = value; },
++    navigateTo: p => { route = p.url; },
++  }, console: { error() {} } });
++  const page = { ...config, data: { ...config.data, footprintArea: '120', buildingArea: '320', ...overrides },
++    setData(values) { Object.assign(this.data, values); } };
++  page.onEstimateCost();
++  return { page, saved, toast, route };
++}
++const normal = form();
++assert.equal(normal.saved.version, 2);
++assert.equal(normal.saved.estimatedTotalCost, '58.36万元');
++assert.equal(normal.saved.estimatedUnitCost, '1823.75元/㎡');
++assert.deepEqual(Array.from(normal.saved.costBreakdown, i => i.amount), [78000, 235200, 59200, 60800, 137600, 12800]);
++assert.equal(normal.saved.basicInfo.length, 14);
++assert.equal(normal.route, '/pages/aicostresult/aicostresult');
++normal.page.data.buildingArea = '999';
++assert.equal(normal.saved.basicInfo.find(i => i.label === '总建筑面积').value, '320㎡');
++assert.equal(form({ foundationType: '条形基础' }).saved.costBreakdown[0].amount, 130000);
++assert.equal(form({ foundationType: '筏板基础' }).saved.costBreakdown[0].amount, 78000);
++assert.equal(form({ roofType: '燕尾脊' }).saved.costBreakdown[2].amount, 64838);
++for (const [structureType, price] of [['砖混结构',685], ['框架结构',735], ['钢结构',830]]) {
++  assert.equal(form({ structureType }).saved.costBreakdown[1].amount, 320 * price);
++}
++for (const [roofType, price] of [['平屋顶',105], ['组合屋顶',145], ['坡屋顶',185]]) {
++  assert.equal(form({ roofType }).saved.costBreakdown[2].amount, 320 * price);
++}
++for (const [facadeStyle, price] of [['涂料外墙',430], ['真石漆',430], ['陶瓷砖外墙',450], ['石材外墙',750], ['铝板/金属外立面',750]]) {
++  assert.equal(form({ facadeStyle }).saved.costBreakdown[4].amount, 320 * price);
++}
++assert.equal(form({ windowStandard: '系统窗高档' }).saved.costBreakdown[3].amount, 80000);
++assert.equal(form({ city: '上海', buildingStyle: '欧式', basementType: '全地下室', decorationStyle: '品质型' }).saved.estimatedTotalCost, normal.saved.estimatedTotalCost);
++const pile = form({ foundationType: '桩基础' }).saved;
++assert.equal(pile.totalLabel, '已测算部分合计');
++assert.equal(pile.unitLabel, '已测算部分单价');
++assert.equal(pile.costBreakdown[0].amountText, '按图纸核算');
++assert.equal(pile.costBreakdown[0].estimable, false);
++assert.equal(pile.estimatedTotalCost, '50.56万元');
++assert.equal(form({ footprintArea: '' }).saved, undefined);
++assert.equal(form({ buildingArea: '-1' }).saved, undefined);
++assert.equal(form({ footprintArea: '321' }).saved, undefined);
++assert.equal(form({ floorCount: '1.5' }).saved, undefined);
++assert.equal(form({ firstFloorHeight: '' }).saved, undefined);
++assert.equal(form({ floorCount: '1', upperFloorHeight: '', hasUpperFloorHeight: false }).saved.basicInfo.find(i => i.label === '其他楼层高度').value, '不适用');
++assert.equal(form({}, true).route, undefined);
++console.log('Six-part pricing, all tiers, derived rates, snapshots, partial estimates and validation passed');
+--- /dev/null
++++ b/miniprogram/tests/aicost-report.test.js
+@@ -0,0 +1,158 @@
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++const assert = require('node:assert/strict');
++const { test } = require('node:test');
++const ts = require('./report-runtime')('typescript');
++
++const pagePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.ts');
++
++function createHarness(cachedResult) {
++  let definition;
++  const toasts = [];
++  let navigatedBack = 0;
++  const code = ts.transpileModule(fs.readFileSync(pagePath, 'utf8'), {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
++  }).outputText;
++
++  vm.runInNewContext(code, {
++    exports: {},
++    Page(value) { definition = value; },
++    require() {
++      return {
++        DEFAULT_CUSTOMER_SERVICE_CORP_ID: 'corp',
++        DEFAULT_CUSTOMER_SERVICE_URL: 'service-url',
++        resolveEnterpriseWechatServiceConfig: value => value,
++        tryOpenCustomerServiceDirect: async () => true,
++      };
++    },
++    setTimeout(callback) { callback(); },
++    console: { ...console, error() {} },
++    wx: {
++      getStorageSync(key) {
++        if (key === 'aicostEstimateResult') {
++          if (cachedResult instanceof Error) throw cachedResult;
++          return cachedResult;
++        }
++        return '';
++      },
++      showToast(options) { toasts.push(options.title); },
++      navigateBack() { navigatedBack += 1; },
++      navigateTo() {},
++    },
++  });
++
++  const page = {
++    ...definition,
++    data: JSON.parse(JSON.stringify(definition.data)),
++    setData(patch) { Object.assign(this.data, patch); },
++    loadEnterpriseWechatServiceConfig() {},
++  };
++  return { page, toasts, get navigatedBack() { return navigatedBack; } };
++}
++
++const currentResult = {
++  version: 2,
++  estimatedTotalCost: '58.36万元',
++  estimatedUnitCost: '1823.75元/㎡',
++  totalLabel: '参考总造价',
++  unitLabel: '参考单价',
++  basicInfo: [
++    { label: '所在地区', value: '福建 / 泉州', fullWidth: true },
++    { label: '建筑占地面积', value: '120 ㎡' },
++    { label: '总建筑面积', value: '320 ㎡' },
++    { label: '楼层数', value: '3层' },
++    { label: '首层高度', value: '3.6m' },
++    { label: '其他楼层高度', value: '3.3m' },
++    { label: '地下室形式', value: '无地下室' },
++    { label: '建筑风格', value: '新闽派' },
++    { label: '结构形式', value: '框架结构' },
++    { label: '屋顶形式', value: '坡屋顶' },
++    { label: '外立面样式', value: '真石漆' },
++    { label: '建筑基础', value: '独立基础' },
++    { label: '装修标准', value: '标准型' },
++    { label: '门窗标准', value: '常规' },
++  ],
++  costBreakdown: [
++    { name: '地基工程', amount: 78000, amountText: '7.80万元', percent: 13, note: '土方、垫层', estimable: true },
++    { name: '主体工程', amount: 235200, amountText: '23.52万元', percent: 40, note: '梁板柱、砌体', estimable: true },
++    { name: '屋顶工程', amount: 59200, amountText: '5.92万元', percent: 10, note: '防水、保温', estimable: true },
++    { name: '门窗工程', amount: 60800, amountText: '6.08万元', percent: 10, note: '断桥铝合金窗', estimable: true },
++    { name: '外墙装饰', amount: 137600, amountText: '13.76万元', percent: 24, note: '粉刷、真石漆', estimable: true },
++    { name: '水电暖费用', amount: 12800, amountText: '1.28万元', percent: 2, note: '水电管线预埋', estimable: true },
++  ],
++  dynamicNotes: ['不同地基因方案不同，价格不同'],
++};
++
++test('report loads the complete version 2 estimate snapshot', () => {
++  const h = createHarness(currentResult);
++  h.page.onLoad();
++  assert.equal(h.page.data.estimatedTotalCost, '58.36万元');
++  assert.equal(h.page.data.totalLabel, '参考总造价');
++  assert.equal(h.page.data.unitLabel, '参考单价');
++  assert.equal(h.page.data.basicInfo.length, 14);
++  assert.equal(h.page.data.costBreakdown.length, 6);
++  assert.equal(h.toasts.length, 0);
++});
++
++test('a partially estimated report labels both total and unit price clearly', () => {
++  const partialResult = {
++    ...currentResult,
++    totalLabel: '已测算部分合计',
++    unitLabel: '已测算部分单价',
++    costBreakdown: currentResult.costBreakdown.map((item, index) => index === 0
++      ? { ...item, amount: 0, amountText: '按图纸核算', percent: 0, estimable: false }
++      : item),
++  };
++  const h = createHarness(partialResult);
++  h.page.onLoad();
++  assert.equal(h.page.data.totalLabel, '已测算部分合计');
++  assert.equal(h.page.data.unitLabel, '已测算部分单价');
++  assert.equal(h.page.data.costBreakdown[0].amountText, '按图纸核算');
++});
++
++test('report rejects a version 2 cache with missing rows or malformed items', () => {
++  const damagedCaches = [
++    { ...currentResult, basicInfo: currentResult.basicInfo.slice(0, 13) },
++    { ...currentResult, costBreakdown: currentResult.costBreakdown.map((item, index) => index === 0 ? { ...item, estimable: 'yes' } : item) },
++  ];
++  for (const cached of damagedCaches) {
++    const h = createHarness(cached);
++    h.page.onLoad();
++    assert.equal(h.toasts[0], '测算数据已更新，请重新测算');
++    assert.equal(h.navigatedBack, 1);
++  }
++});
++
++test('report rejects old or unreadable cache and asks for a fresh estimate', () => {
++  for (const cached of [{ estimatedTotalCost: '88.5万元' }, new Error('storage unavailable')]) {
++    const h = createHarness(cached);
++    h.page.onLoad();
++    assert.equal(h.toasts[0], '测算数据已更新，请重新测算');
++    assert.equal(h.navigatedBack, 1);
++  }
++});
++
++test('cost details toggle without changing the estimate snapshot', () => {
++  const h = createHarness(currentResult);
++  h.page.onLoad();
++  h.page.onViewCostDetails();
++  assert.equal(h.page.data.showCostDetails, true);
++  assert.equal(h.page.data.costBreakdown[0].name, '地基工程');
++  h.page.onViewCostDetails();
++  assert.equal(h.page.data.showCostDetails, false);
++});
++
++test('report template keeps the warm two-card layout and designer conversion entry', () => {
++  const wxml = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.wxml'), 'utf8');
++  const scss = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.scss'), 'utf8');
++  const js = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.js'), 'utf8');
++  assert.match(wxml, /工程造价测算报告/);
++  assert.match(wxml, /basicInfo/);
++  assert.match(wxml, /联系设计师优化/);
++  assert.match(wxml, /costBreakdown/);
++  assert.doesNotMatch(wxml, /cost-donut|donut-legend/);
++  assert.match(scss, /#e6daca/);
++  assert.match(js, /RESULT_SCHEMA_VERSION\s*=\s*2/);
++  assert.match(js, /timeout:\s*8000/);
++});
+--- a/miniprogram/tests/home-cost-allround-aicost.test.js
++++ b/miniprogram/tests/home-cost-allround-aicost.test.js
+@@ -43,0 +44 @@
++// 价格和报告状态通过 aicost-pricing / aicost-report 的行为测试验证。
+@@ -45,20 +46,6 @@
+-  assert.match(source, /estimateTotalCost/, 'cost page should calculate a local rough estimate');
+-  assert.match(source, /discountRate:\s*0\.7/, 'cost page should display a price about 30 percent below normal cost');
+-  assert.match(source, /footprintArea/, 'cost page should track building footprint area separately');
+-  assert.match(source, /provinceOptions/, 'cost page should provide province dropdown options');
+-  assert.match(source, /cityOptionsMap/, 'cost page should provide province-linked city options');
+-  assert.match(source, /regionOptions/, 'cost page should provide province-city picker columns');
+-  assert.match(source, /onRegionColumnChange/, 'cost page should update city column when province changes');
+-  assert.match(source, /onRegionChange/, 'cost page should select province and city together');
+-  assert.match(source, /onRegionCancel/, 'cost page should restore region columns when picker is canceled');
+-  assert.match(source, /onOptionChange/, 'cost page should use native pickers for option fields');
+-  assert.doesNotMatch(source, /onSelectProvince/, 'cost page should not keep separate province action sheet selection');
+-  assert.doesNotMatch(source, /onSelectCity/, 'cost page should not keep separate city action sheet selection');
+-  assert.doesNotMatch(source, /onSelectOption/, 'cost page should not use action sheet for option fields');
+-  assert.doesNotMatch(source, /showActionSheet/, 'cost page should not use action sheet for dropdown-style fields');
+-  assert.match(source, /floorCount/, 'cost page should include floor count in the estimate model');
+-  assert.match(source, /structureType/, 'cost page should include structure type in the estimate model');
+-  assert.match(source, /燕尾脊/, 'cost page should support Minnan swallowtail roof form');
+-  assert.match(source, /请填写总建筑面积/, 'cost page should validate total building area');
+-  assert.match(source, /aicostEstimateResult/, 'cost page should save the estimate result before navigation');
+-  assert.match(source, /\/pages\/aicostresult\/aicostresult/, 'cost page should navigate to the estimate result page');
++  assert.match(source, /estimateTotalCost/);
++  assert.doesNotMatch(source, /MARKETING_DISCOUNT_RATE|discountRate|INTERIOR_UNIT_PRICE/);
++  assert.match(source, /onRegionColumnChange/);
++  assert.match(source, /onRegionCancel/);
++  assert.match(source, /windowStandard/);
++  assert.match(source, /燕尾脊/);
+@@ -66,48 +53,12 @@
+-
+-assert.match(appJson, /pages\/aicostresult\/aicostresult/, 'app should register the cost result page');
+-assert.match(aicostWxml, /所在地区/, 'cost page should collect region in one field');
+-assert.match(aicostWxml, /mode="multiSelector"/, 'region should use a two-column native picker');
+-assert.match(aicostWxml, /range="{{regionOptions}}"/, 'region picker should use province-city columns');
+-assert.match(aicostWxml, /bindcolumnchange="onRegionColumnChange"/, 'region picker should update city column');
+-assert.match(aicostWxml, /bindchange="onRegionChange"/, 'region picker should save province and city together');
+-assert.match(aicostWxml, /bindcancel="onRegionCancel"/, 'region picker should reset pending wheel changes on cancel');
+-assert.doesNotMatch(aicostWxml, /hero-card/, 'cost page should remove the top intro card');
+-assert.doesNotMatch(aicostWxml, /建房造价快速测算/, 'cost page should remove the top intro title');
+-assert.match(aicostWxml, /<\/scroll-view>[\s\S]*bottom-action[\s\S]*生成参考造价/, 'cost submit button should be fixed at the page bottom');
+-assert.doesNotMatch(aicostWxml, /submit-section/, 'cost page should not render a separated submit section');
+-assert.doesNotMatch(aicostWxml, /bindtap="onSelectOption"/, 'option fields should not use action sheet tap handlers');
+-assert.doesNotMatch(aicostWxml, /chevron-down/, 'cost page dropdown fields should not render right-side arrow icons');
+-assert.match(aicostWxml, /建筑占地面积/, 'cost page should collect building footprint area');
+-assert.match(aicostWxml, /总建筑面积/, 'cost page should collect total building area');
+-assert.match(aicostWxml, /基础信息/, 'cost page should group basic information');
+-assert.match(aicostWxml, /楼层信息/, 'cost page should group floor information');
+-assert.match(aicostWxml, /建筑风格/, 'cost page should group construction style');
+-assert.doesNotMatch(aicostWxml, /建造形式/, 'cost page should not show the old construction form group name');
+-assert.match(aicostWxml, /装修标准/, 'cost page should group decoration standard');
+-assert.match(aicostWxml, /楼层数/, 'cost page should collect floor count');
+-assert.match(aicostWxml, /楼层高度/, 'cost page should collect floor height');
+-assert.match(aicostWxml, /结构形式/, 'cost page should collect structure type');
+-assert.match(aicostWxml, /屋顶形式/, 'cost page should collect roof type');
+-assert.match(aicostWxml, /地下室形式/, 'cost page should collect basement type');
+-assert.match(aicostWxml, /装修标准/, 'cost page should collect decoration standard');
+-assert.match(aicostWxml, /外立面样式/, 'cost page should collect facade style');
+-assert.match(aicostWxml, /data-field="floorCount"/, 'floor count should use the shared picker change handler');
+-assert.match(aicostWxml, /data-field="basementType"/, 'basement type should use the shared picker change handler');
+-assert.match(aicostWxml, /data-field="structureType"/, 'structure type should use the shared picker change handler');
+-assert.match(aicostWxml, /data-field="roofType"/, 'roof type should use the shared picker change handler');
+-assert.match(aicostWxml, /data-field="facadeStyle"/, 'facade style should use the shared picker change handler');
+-assert.match(aicostWxml, /data-field="decorationStyle"/, 'decoration style should use the shared picker change handler');
+-assert.doesNotMatch(aicostJson, /t-icon/, 'cost page should not import icon only for select arrows');
+-assert.doesNotMatch(aicostWxml, /result-section/, 'cost form page should not render result cards inline');
+-assert.doesNotMatch(aicostWxml, /查看费用明细/, 'cost form page should not render detail entry inline');
+-assert.doesNotMatch(aicostWxml, /联系客服/, 'cost form page should not render customer service inline');
+-assert.doesNotMatch(aicostWxml, /已按常规造价/, 'cost form page should not display discount marketing copy');
+-assert.doesNotMatch(aicostWxml, /常规估算/, 'cost form page should not display normal estimate marketing copy');
+-assert.doesNotMatch(aicostWxml, /当前方案/, 'cost form page should not display discount comparison marketing copy');
+-assert.doesNotMatch(aicostScss, /\.hero-card/, 'cost page should remove unused hero card styles');
+-assert.match(aicostScss, /\.cost-scroll-wrap\s*{[^}]*top:\s*calc\(env\(safe-area-inset-top\) \+ 174rpx\)/s, 'cost page content should keep comfortable distance from the navigation layout');
+-assert.doesNotMatch(aicostScss, /\.content-scroll\s*{[^}]*position:\s*fixed;/s, 'cost page scroll area should not use fixed positioning');
+-assert.match(aicostScss, /\.cost-scroll-wrap[\s\S]*position:\s*fixed;[\s\S]*top:\s*calc\(env\(safe-area-inset-top\) \+ 174rpx\)/, 'cost page should use one fixed viewport wrapper below navigation');
+-assert.match(aicostScss, /\.bottom-action[\s\S]*position:\s*fixed;[\s\S]*bottom:\s*0;/, 'cost page should style a fixed bottom action');
+-assert.match(aicostScss, /\.submit-btn\s*{[\s\S]*?display:\s*flex;[\s\S]*?justify-content:\s*center;/, 'cost submit button text should be centered');
+-
++assert.match(appJson, /pages\/aicostresult\/aicostresult/);
++assert.match(aicostWxml, /title="造价测算"/);
++assert.match(aicostWxml, /mode="multiSelector"/);
++assert.match(aicostWxml, /bindcancel="onRegionCancel"/);
++assert.match(aicostWxml, /基础地区信息/);
++assert.match(aicostWxml, /面积参数/);
++assert.match(aicostWxml, /楼层参数/);
++assert.match(aicostWxml, /建筑核心属性 \/ 外观装修标准/);
++assert.match(aicostWxml, /data-field="windowStandard"/);
++assert.match(aicostWxml, /<\/scroll-view>[\s\S]*bottom-action[\s\S]*生成参考造价/);
++assert.doesNotMatch(aicostJson, /t-icon/);
++assert.match(aicostScss, /\.cost-scroll-wrap[\s\S]*position:\s*fixed;/);
+@@ -115,7 +66,5 @@
+-  assert.match(source, /aicostEstimateResult/, 'cost result page should read cached estimate data');
+-  assert.match(source, /resolveEnterpriseWechatServiceConfig/, 'cost result page should reuse the shared enterprise wechat config resolver');
+-  assert.match(source, /enterpriseWechatCustomerServiceCorpId/, 'cost result page should pass configured customer service corp id');
+-  assert.match(source, /enterpriseWechatCustomerServiceUrl/, 'cost result page should pass configured customer service url');
+-  assert.match(source, /loadEnterpriseWechatServiceConfig/, 'cost result page should load the shared customer service config');
+-  assert.match(source, /onViewCostDetails/, 'cost result page should expose a cost detail toggle');
+-  assert.match(source, /onContactService/, 'cost result page should expose customer service conversion');
++  assert.match(source, /aicostEstimateResult/);
++  assert.match(source, /resolveEnterpriseWechatServiceConfig/);
++  assert.match(source, /onViewCostDetails/);
++  assert.match(source, /onContactService/);
++  assert.match(source, /\/pages\/customerservice\/customerservice\?source=aicost/);
+@@ -123,17 +72,8 @@
+-
+-assert.match(aicostResultWxml, /参考测算价/, 'cost result page should show the estimate amount');
+-assert.match(aicostResultWxml, /cost-donut/, 'cost result page should render a donut chart by default');
+-assert.match(aicostResultWxml, /donut-legend/, 'cost result page should render chart legends');
+-assert.match(aicostResultWxml, /常见分部分项工程造价组成/, 'cost result page should show cost composition');
+-assert.match(aicostResultWxml, /查看费用明细/, 'cost result page should show detail entry');
+-assert.match(aicostResultWxml, /联系客服/, 'cost result page should guide users to customer service');
+-assert.match(aicostResultWxml, /chart-bar-fill/, 'cost result detail should include proportional bars after expansion');
+-assert.doesNotMatch(aicostResultWxml, /已按常规造价/, 'cost result page should not display discount marketing copy');
+-assert.doesNotMatch(aicostResultWxml, /常规估算/, 'cost result page should not display normal estimate marketing copy');
+-assert.doesNotMatch(aicostResultWxml, /当前方案/, 'cost result page should not display discount comparison marketing copy');
+-assert.match(aicostResultTs, /\/pages\/customerservice\/customerservice\?source=aicost/, 'cost result page should fall back to the shared customer service page');
+-assert.doesNotMatch(aicostResultTs, /\/pages\/chat\/chat\\?mode=chat/, 'cost result page should not use its own chat fallback');
+-assert.match(aicostResultScss, /conic-gradient/, 'cost result chart should use a donut-style composition chart');
+-assert.match(aicostResultScss, /\.detail-panel/, 'cost result page should define expanded detail styles');
+-
+-console.log('home cost entry, allround parent workshop, and cost estimate checks passed');
++assert.match(aicostResultWxml, /基础信息/);
++assert.match(aicostResultWxml, /主要工程造价测算/);
++assert.match(aicostResultWxml, /联系设计师优化/);
++assert.match(aicostResultWxml, /查看费用明细/);
++assert.match(aicostResultWxml, /chart-bar-fill/);
++assert.doesNotMatch(aicostResultWxml, /cost-donut/);
++assert.match(aicostResultScss, /\.report-card/);
++console.log('Existing home entry and design tabs, native form, report layout and service route passed');

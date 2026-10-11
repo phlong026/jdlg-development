@@ -1,0 +1,1109 @@
+[
+  {
+    "path": "/admin/dashboard",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载总控台数据失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "后台总控台"
+  },
+  {
+    "path": "/admin/users",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载用户列表失败：获取用户列表失败: Error 1146 (42S02): Table 'jd_crm_integration.user_profiles' doesn't exist下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "用户管理"
+  },
+  {
+    "path": "/admin/user-workbench",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 0,
+    "title": "用户360工作台"
+  },
+  {
+    "path": "/admin/recharge",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载订单中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "订单中心"
+  },
+  {
+    "path": "/admin/virtualpay",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载虚拟支付监控失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "虚拟支付监控"
+  },
+  {
+    "path": "/admin/ai-tasks",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载AI任务中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "AI任务中心"
+  },
+  {
+    "path": "/admin/support-tickets",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载工单中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "异常工单中心"
+  },
+  {
+    "path": "/admin/customer-management",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 0,
+    "title": "客户管理"
+  },
+  {
+    "path": "/admin/certification",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "资质认证与审核"
+  },
+  {
+    "path": "/admin/designer-center",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载设计师列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "设计师中心"
+  },
+  {
+    "path": "/admin/membership-operations",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载会员运营页失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "用户会员运营"
+  },
+  {
+    "path": "/admin/customer-leads",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 3,
+    "title": "客服线索工作台"
+  },
+  {
+    "path": "/admin/distribution",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载分销邀请中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 2,
+    "title": "分销邀请中心"
+  },
+  {
+    "path": "/admin/templates",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载模板列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "模板广场管理"
+  },
+  {
+    "path": "/admin/inspirations",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载灵感素材失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "灵感素材审核"
+  },
+  {
+    "path": "/admin/content-analytics",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载内容运营分析失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 5,
+    "title": "内容运营分析"
+  },
+  {
+    "path": "/admin/risk-control",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载风控台失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 4,
+    "title": "风控台"
+  },
+  {
+    "path": "/admin/report-center",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载报表中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "报表导出中心"
+  },
+  {
+    "path": "/admin/logs",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载获取日志列表失败: 获取日志列表失败下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "日志管理"
+  },
+  {
+    "path": "/admin/ai-config",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载API配置失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "AI配置"
+  },
+  {
+    "path": "/admin/ai-tools",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载 AI 工具列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "AI工具管理"
+  },
+  {
+    "path": "/admin/recharge-config",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载充值配置列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "充值配置"
+  },
+  {
+    "path": "/admin/membership-plans",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载会员计划失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "会员计划"
+  },
+  {
+    "path": "/admin/oss",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载获取文件列表失败: 获取文件列表失败下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "OSS管理"
+  },
+  {
+    "path": "/admin/utility-tools",
+    "width": 320,
+    "height": 700,
+    "actualWidth": 320,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载实用工具内容列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "实用工具管理"
+  },
+  {
+    "path": "/admin/dashboard",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载总控台数据失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "后台总控台"
+  },
+  {
+    "path": "/admin/users",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载用户列表失败：获取用户列表失败: Error 1146 (42S02): Table 'jd_crm_integration.user_profiles' doesn't exist下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "用户管理"
+  },
+  {
+    "path": "/admin/user-workbench",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 0,
+    "title": "用户360工作台"
+  },
+  {
+    "path": "/admin/recharge",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载订单中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "订单中心"
+  },
+  {
+    "path": "/admin/virtualpay",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载虚拟支付监控失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "虚拟支付监控"
+  },
+  {
+    "path": "/admin/ai-tasks",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载AI任务中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "AI任务中心"
+  },
+  {
+    "path": "/admin/support-tickets",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载工单中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "异常工单中心"
+  },
+  {
+    "path": "/admin/customer-management",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 0,
+    "title": "客户管理"
+  },
+  {
+    "path": "/admin/certification",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "资质认证与审核"
+  },
+  {
+    "path": "/admin/designer-center",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载设计师列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "设计师中心"
+  },
+  {
+    "path": "/admin/membership-operations",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载会员运营页失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "用户会员运营"
+  },
+  {
+    "path": "/admin/customer-leads",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 3,
+    "title": "客服线索工作台"
+  },
+  {
+    "path": "/admin/distribution",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载分销邀请中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 2,
+    "title": "分销邀请中心"
+  },
+  {
+    "path": "/admin/templates",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载模板列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "模板广场管理"
+  },
+  {
+    "path": "/admin/inspirations",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载灵感素材失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "灵感素材审核"
+  },
+  {
+    "path": "/admin/content-analytics",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载内容运营分析失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 5,
+    "title": "内容运营分析"
+  },
+  {
+    "path": "/admin/risk-control",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载风控台失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 4,
+    "title": "风控台"
+  },
+  {
+    "path": "/admin/report-center",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载报表中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "报表导出中心"
+  },
+  {
+    "path": "/admin/logs",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载获取日志列表失败: 获取日志列表失败下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "日志管理"
+  },
+  {
+    "path": "/admin/ai-config",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载计费配置失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "AI配置"
+  },
+  {
+    "path": "/admin/ai-tools",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载 AI 工具列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "AI工具管理"
+  },
+  {
+    "path": "/admin/recharge-config",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载充值配置列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "充值配置"
+  },
+  {
+    "path": "/admin/membership-plans",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载会员计划失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "会员计划"
+  },
+  {
+    "path": "/admin/oss",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载获取文件列表失败: 获取文件列表失败下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "OSS管理"
+  },
+  {
+    "path": "/admin/utility-tools",
+    "width": 768,
+    "height": 1024,
+    "actualWidth": 768,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载实用工具内容列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "实用工具管理"
+  },
+  {
+    "path": "/admin/dashboard",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载总控台数据失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "后台总控台"
+  },
+  {
+    "path": "/admin/users",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载用户列表失败：获取用户列表失败: Error 1146 (42S02): Table 'jd_crm_integration.user_profiles' doesn't exist下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "用户管理"
+  },
+  {
+    "path": "/admin/user-workbench",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 0,
+    "title": "用户360工作台"
+  },
+  {
+    "path": "/admin/recharge",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载订单中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "订单中心"
+  },
+  {
+    "path": "/admin/virtualpay",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载虚拟支付监控失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "虚拟支付监控"
+  },
+  {
+    "path": "/admin/ai-tasks",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载AI任务中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "AI任务中心"
+  },
+  {
+    "path": "/admin/support-tickets",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载工单中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "异常工单中心"
+  },
+  {
+    "path": "/admin/customer-management",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 0,
+    "title": "客户管理"
+  },
+  {
+    "path": "/admin/certification",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "资质认证与审核"
+  },
+  {
+    "path": "/admin/designer-center",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载设计师列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "设计师中心"
+  },
+  {
+    "path": "/admin/membership-operations",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载会员运营页失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "用户会员运营"
+  },
+  {
+    "path": "/admin/customer-leads",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [],
+    "offenders": [],
+    "tables": 3,
+    "title": "客服线索工作台"
+  },
+  {
+    "path": "/admin/distribution",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载分销邀请中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 2,
+    "title": "分销邀请中心"
+  },
+  {
+    "path": "/admin/templates",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载模板列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "模板广场管理"
+  },
+  {
+    "path": "/admin/inspirations",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载灵感素材失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "灵感素材审核"
+  },
+  {
+    "path": "/admin/content-analytics",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载内容运营分析失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 5,
+    "title": "内容运营分析"
+  },
+  {
+    "path": "/admin/risk-control",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载风控台失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 4,
+    "title": "风控台"
+  },
+  {
+    "path": "/admin/report-center",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载报表中心失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "报表导出中心"
+  },
+  {
+    "path": "/admin/logs",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载获取日志列表失败: 获取日志列表失败下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "日志管理"
+  },
+  {
+    "path": "/admin/ai-config",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载计费配置失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "AI配置"
+  },
+  {
+    "path": "/admin/ai-tools",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载 AI 工具列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "AI工具管理"
+  },
+  {
+    "path": "/admin/recharge-config",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载充值配置列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "充值配置"
+  },
+  {
+    "path": "/admin/membership-plans",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载会员计划失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "会员计划"
+  },
+  {
+    "path": "/admin/oss",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载获取文件列表失败: 获取文件列表失败下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 1,
+    "title": "OSS管理"
+  },
+  {
+    "path": "/admin/utility-tools",
+    "width": 1440,
+    "height": 900,
+    "actualWidth": 1440,
+    "bodyExtra": 0,
+    "contentOverflow": 0,
+    "docOverflow": false,
+    "error": [
+      "页面数据未能加载加载实用工具内容列表失败：此隔离环境只加载客户管理及原线索模块下方仅显示页面结构，统计值和空列表不代表实际业务数据。重新加载"
+    ],
+    "offenders": [],
+    "tables": 0,
+    "title": "实用工具管理"
+  }
+]

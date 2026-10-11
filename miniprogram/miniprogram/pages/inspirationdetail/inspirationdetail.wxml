@@ -1,0 +1,45 @@
+<view class="inspiration-detail-page">
+  <navigation-bar title="灵感详情" background="#e6daca" />
+
+  <view class="page-body" wx:if="{{!loading && detail}}">
+    <view class="hero-card">
+      <image class="hero-image" src="{{currentImage || detail.cover_image}}" mode="aspectFill" lazy-load bindtap="onPreviewImage" data-url="{{currentImage || detail.cover_image}}" />
+      <view class="thumb-list" wx:if="{{detail.images && detail.images.length > 1}}">
+        <image class="thumb-item" wx:for="{{detail.images}}" wx:key="*this" src="{{item}}" mode="aspectFill" lazy-load bindtap="onPreviewImage" data-url="{{item}}" />
+      </view>
+    </view>
+
+    <view class="content-card">
+      <text class="content-kicker">灵感案例模板</text>
+      <text class="title">{{detail.title}}</text>
+      <view class="meta-row">
+        <text class="meta-tag">{{detail.topic || '灵感'}}</text>
+        <text class="meta-text" wx:if="{{detail.scene}}">场景：{{detail.scene}}</text>
+        <text class="meta-text" wx:if="{{detail.style}}">风格：{{detail.style}}</text>
+      </view>
+      <view class="tag-list" wx:if="{{detail.tags && detail.tags.length}}">
+        <text class="tag-item" wx:for="{{detail.tags}}" wx:key="*this">{{item}}</text>
+      </view>
+      <text class="description">{{detail.description || '这组案例适合直接拿来做同款参考，快速生成相似风格与构图。'}}</text>
+      <view class="action-stack">
+        <view class="action-row">
+          <button class="action-btn share" open-type="share">
+            <text>分享模板</text>
+          </button>
+          <button class="action-btn favorite {{isFavorited ? 'active' : ''}}" bindtap="toggleFavorite">
+            {{favoriteLoading ? '处理中' : (isFavorited ? '已收藏' : '收藏')}}
+          </button>
+          <button class="action-btn primary" bindtap="onMakeSame">做同款</button>
+        </view>
+        <text class="action-hint">自动带入当前案例图与场景信息，直接开始生成相似方案。</text>
+      </view>
+      <view class="footer-info">
+        <text>发布者：{{detail.creator || '官方内容池'}}</text>
+        <text>浏览：{{detail.view_count || 0}}</text>
+        <text wx:if="{{detail.created_at}}">{{detail.created_at}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="loading-state" wx:if="{{loading}}">加载中...</view>
+</view>
