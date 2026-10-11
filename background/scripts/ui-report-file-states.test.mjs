@@ -71,6 +71,7 @@ function harness(name) {
   const module = { exports: {} };
   const context = vm.createContext({
     module, exports: module.exports, URLSearchParams, Error, console,
+    FormData: class { constructor() { this.entries = []; } append(name, value) { this.entries.push([name, value]); } },
     alert: message => alerts.push(message),
     window: { location: { pathname: `/admin/${name}` }, confirm: message => { confirms.push(message); return settings.confirm(message); }, open: (...args) => opens.push(args) },
     fetch: (url, options) => {
@@ -328,4 +329,81 @@ test('OSS shrinking an out-of-range list to zero recovers page one and ignores o
   assert.equal(h.requests.length, readCount); assert.match(textOf(page.tree), /file-9/);
   click(page, '刷新'); await resolveFiles(h, [], 3, 0);
   assert.match(textOf(page.tree), /暂无文件数据/); assert.equal(new URL(h.requests[3].url).searchParams.get('page'), '1');
+});
+
+test('OSS native picker opens without posting; upload lock blocks duplicate change and picker activation until retry', async () => {
+  const h = harness('oss'), page = h.runtime; await resolveFiles(h); click(page, '上传文件');
+  let picks = 0; const fileInput = input(page, '上传 OSS 文件'); fileInput.ref.current = { click() { picks++; } };
+  const picker = button(page, '选择文件'); assert.equal(picker.props.type, 'button'); assert.equal(picker.props.disabled, false);
+  picker.props.onClick(); picker.props.onClick(); assert.equal(picks, 2); assert.equal(h.writes.length, 0);
+  await fileInput.props.onChange({ target: { files: [], value: '' } }); assert.equal(h.writes.length, 0);
+  const event = { target: { files: [{ name: 'fixture.png' }], value: 'fixture.png' } };
+  const pending = fileInput.props.onChange(event); picker.props.onClick(); await fileInput.props.onChange(event);
+  assert.equal(picks, 2); assert.equal(h.writes.length, 1); assert.equal(h.writes[0].url, 'https://fixture.invalid/oss/upload');
+  page.render(); assert.equal(button(page, '上传中...').props.disabled, true);
+  h.writes[0].reject(new Error('fixture retry')); await pending; page.render(); assert.equal(event.target.value, '');
+  click(page, '选择文件'); assert.equal(picks, 3); assert.equal(h.writes.length, 1);
+  page.unmount(); button(page, '选择文件').props.onClick(); assert.equal(picks, 3);
+});
+
+test('OSS canceled/reopened picker sessions reject old picker, change and close handlers before and after render', async () => {
+  const h = harness('oss'), page = h.runtime; await resolveFiles(h); click(page, '上传文件');
+  let picks = 0; const oldInput = input(page, '上传 OSS 文件'); oldInput.ref.current = { click() { picks++; } };
+  const oldPicker = button(page, '选择文件').props.onClick;
+  const oldClose = input(page, '关闭上传文件').props.onClick;
+  const open = button(page, '上传文件').props.onClick;
+  oldClose(); oldPicker(); await oldInput.props.onChange({ target: { files: [{ name: 'canceled.png' }], value: 'canceled.png' } });
+  assert.equal(picks, 0); assert.equal(h.writes.length, 0);
+  open(); page.render(); oldClose(); oldPicker(); await oldInput.props.onChange({ target: { files: [{ name: 'old.png' }], value: 'old.png' } });
+  page.render(); assert.equal(nodes(page.tree, node => node.props?.className === 'modal-overlay').length, 1);
+  assert.equal(picks, 0); assert.equal(h.writes.length, 0);
+  // Repeated open does not replace an already active session.
+  const currentPicker = button(page, '选择文件').props.onClick; open(); currentPicker(); assert.equal(picks, 1);
+  const currentInput = input(page, '上传 OSS 文件'); await currentInput.props.onChange({ target: { files: [], value: '' } });
+  assert.equal(h.writes.length, 0); assert.equal(h.alerts.length, 0);
+});
+
+test('OSS pending upload synchronously blocks close, overlay dismissal, reopen, duplicate change and picker; failure allows retry', async () => {
+  const h = harness('oss'), page = h.runtime; await resolveFiles(h); click(page, '上传文件');
+  let picks = 0; const pickerInput = input(page, '上传 OSS 文件'); pickerInput.ref.current = { click() { picks++; } };
+  const close = input(page, '关闭上传文件').props.onClick, open = button(page, '上传文件').props.onClick, picker = button(page, '选择文件').props.onClick;
+  const overlay = one(page, node => node.props?.className === 'modal-overlay', 'upload overlay').props.onClick;
+  const event = { target: { files: [{ name: 'one.png' }], value: 'one.png' } };
+  const pending = pickerInput.props.onChange(event); close(); overlay(); open(); picker(); await pickerInput.props.onChange(event);
+  assert.equal(h.writes.length, 1); assert.equal(picks, 0); page.render();
+  assert.equal(input(page, '关闭上传文件').props.disabled, true); assert.equal(button(page, '上传文件').props.disabled, true);
+  h.writes[0].resolve({ ok: true, json: async () => ({ code: 1, msg: 'upload retry' }) }); await pending; page.render();
+  assert.equal(h.alerts.at(-1), 'upload retry'); assert.equal(event.target.value, ''); assert.equal(input(page, '关闭上传文件').props.disabled, false);
+  button(page, '选择文件').props.onClick(); assert.equal(picks, 1);
+  const retry = input(page, '上传 OSS 文件').props.onChange(event); assert.equal(h.writes.length, 2);
+  h.writes[1].resolve(response({ url: 'https://fixture.invalid/uploaded' })); await retry; page.render();
+  assert.equal(nodes(page.tree, node => node.props?.className === 'modal-overlay').length, 0);
+  assert.equal(h.alerts.filter(text => text === '上传成功').length, 1);
+});
+
+test('OSS upload completion refreshes current filters rather than its original list closure', async () => {
+  const h = harness('oss'), page = h.runtime; await resolveFiles(h); click(page, '上传文件');
+  const pending = input(page, '上传 OSS 文件').props.onChange({ target: { files: [{ name: 'one.png' }], value: 'one.png' } });
+  change(page, '文件来源', 'user_ai'); page.effects(); page.render();
+  change(page, '文件名或路径', 'new-scope'); click(page, '搜索文件'); page.effects(); page.render();
+  const beforeRefresh = h.requests.length;
+  h.writes[0].resolve(response({ url: 'https://fixture.invalid/uploaded' })); await pending; page.render();
+  assert.equal(h.requests.length, beforeRefresh + 1);
+  const params = new URL(h.requests.at(-1).url).searchParams;
+  assert.equal(params.get('source_type'), 'user_ai'); assert.equal(params.get('keyword'), 'new-scope'); assert.equal(params.get('page'), '1');
+  await resolveFiles(h, [9], h.requests.length - 1, 1);
+  await resolveFiles(h, [8], beforeRefresh - 1, 1);
+  assert.match(textOf(page.tree), /file-9/); assert.doesNotMatch(textOf(page.tree), /file-8/);
+  assert.equal(h.writes[0].options.credentials, 'include'); assert.equal(h.writes[0].options.body.entries[0][0], 'file');
+});
+
+test('OSS unmount silences late upload success, business failure and network rejection without closing, updating or refreshing', async () => {
+  for (const outcome of ['success', 'business', 'network']) {
+    const h = harness('oss'), page = h.runtime; await resolveFiles(h); click(page, '上传文件');
+    const pending = input(page, '上传 OSS 文件').props.onChange({ target: { files: [{ name: 'one.png' }], value: 'one.png' } });
+    page.unmount(); const updates = page.updates, reads = h.requests.length;
+    if (outcome === 'network') h.writes[0].reject(new Error('late upload'));
+    else h.writes[0].resolve({ ok: true, json: async () => ({ code: outcome === 'success' ? 0 : 1, msg: 'late business', data: {} }) });
+    await pending; await flush(); assert.equal(page.updates, updates, outcome); assert.equal(h.requests.length, reads, outcome); assert.equal(h.alerts.length, 0, outcome);
+  }
 });

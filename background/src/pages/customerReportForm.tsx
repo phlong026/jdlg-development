@@ -15,10 +15,14 @@ export default function CustomerReportForm({customer,cancel,saved,beginMutation}
  const current=()=>operation.current.alive&&operation.current.epoch===epoch;
  useEffect(()=>{setFormTarget(customer?.id);setForm(reportForm(customer));setVersion(customer?.version);setConflict(false);setLatest(null);setDuplicate(false);setReviewReason('');setBusy(false);setError('');setSuccess('')},[customer?.id]);
  useEffect(()=>{operation.current.alive=true;return()=>{operation.current.alive=false;operation.current.epoch++}},[]);
- const formRef=useRef<HTMLFormElement>(null);
- useEffect(()=>{const previous=document.activeElement as HTMLElement;const key=(e:KeyboardEvent)=>{
+ const formRef=useRef<HTMLFormElement>(null);const cancelRef=useRef(cancel);cancelRef.current=cancel;
+ const dismiss=()=>{if(current()&&!operation.current.busy)cancelRef.current()};
+ useEffect(()=>{const previous=document.activeElement as HTMLElement;return()=>{if(previous?.isConnected&&!previous.matches(':disabled')&&previous.getClientRects().length)previous.focus()}},[]);
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{
+  if(e.defaultPrevented||e.isComposing||!current())return;
+  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation?.();e.stopPropagation();dismiss();return}
   if(e.key==='Tab'){const items=Array.from(formRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')||[]).filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}
- };window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);previous?.focus()}},[]);
+ };window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key)},[epoch]);
  const field=(key:keyof typeof form,value:string)=>setForm(f=>({...f,[key]:value}));
  const submit=async(e:React.FormEvent)=>{
   e.preventDefault();if(!current()||formTarget!==customer?.id||operation.current.busy||operation.current.completed||operation.current.conflict)return;
@@ -49,6 +53,6 @@ export default function CustomerReportForm({customer,cancel,saved,beginMutation}
   </div>
   <details className="crm-report-extra" open={form.remark?true:undefined}><summary>补充备注（选填）</summary><textarea aria-label="补充备注" disabled={busy||operation.current.completed} rows={3} maxLength={2000} value={form.remark} onChange={e=>field('remark',e.target.value)} placeholder="预算、宅基地情况等"/></details>
   {duplicate&&!customer&&<details><summary>申请主管核实共用电话 / 不同客户</summary><label>核实说明<textarea maxLength={1000} value={reviewReason} onChange={e=>setReviewReason(e.target.value)} placeholder="请说明不同姓名、地址及共用电话原因"/></label><button type="button" disabled={busy||!reviewReason.trim()} onClick={review}>提交核实申请</button></details>}
-  <footer className="crm-form-footer"><button type="button" disabled={busy} onClick={cancel}>取消</button><button className="crm-primary" disabled={busy||conflict||operation.current.completed||formTarget!==customer?.id}>{busy?'正在保存…':customer?'保存资料':'提交报备'}</button></footer>
+  <footer className="crm-form-footer"><button type="button" disabled={busy} onClick={dismiss}>取消</button><button className="crm-primary" disabled={busy||conflict||operation.current.completed||formTarget!==customer?.id}>{busy?'正在保存…':customer?'保存资料':'提交报备'}</button></footer>
  </form>;
 }

@@ -396,7 +396,7 @@ const UtilityTools: React.FC = () => {
                 {/* 添加/编辑弹窗 */}
                 {(showAddModal || showEditModal) && (
                     <div className="modal-overlay" onClick={dismissEditor}>
-                        <div className="modal-content modal-form" role="dialog" aria-modal="true" aria-label={showEditModal ? '编辑内容' : '添加内容'} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') dismissEditor(); }}>
+                        <div className="modal-content modal-form" role="dialog" aria-modal="true" aria-label={showEditModal ? '编辑内容' : '添加内容'} onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>{showEditModal ? '编辑内容' : '添加内容'}</h3>
                                 <button className="modal-close" onClick={dismissEditor} disabled={editorSaving} aria-label="关闭内容编辑">✕</button>

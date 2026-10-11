@@ -167,48 +167,50 @@ const AuditLogs: React.FC = () => {
                 summary={<span>当前筛选共 {total ?? '—'} 条；管理端非 GET 请求自动记录，结果以 HTTP 状态码为准。</span>}
             />
 
-            <div className="logs-table-container section-card">
-                <table className="logs-table">
-                    <thead>
-                        <tr>
-                            <th>时间</th>
-                            <th>操作人</th>
-                            <th>请求方法</th>
-                            <th>资源</th>
-                            <th>接口</th>
-                            <th>结果</th>
-                            <th>耗时</th>
-                            <th>来源 IP</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items.length === 0 ? (
+            <div className="section-card logs-table-panel">
+                <div className="logs-table-container">
+                    <table className="logs-table">
+                        <thead>
                             <tr>
-                                <td colSpan={8} className="empty-state">
-                                    {loading ? '加载中...' : error ? <span role="alert">审计加载失败：{error}<button className="btn-secondary" onClick={() => void fetchList()}>重新加载审计</button></span> : '暂无操作记录，管理端非 GET 请求会自动记录在这里'}
-                                </td>
+                                <th>时间</th>
+                                <th>操作人</th>
+                                <th>请求方法</th>
+                                <th>资源</th>
+                                <th>接口</th>
+                                <th>结果</th>
+                                <th>耗时</th>
+                                <th>来源 IP</th>
                             </tr>
-                        ) : (
-                            items.map((item) => (
-                                <tr key={item.id}>
-                                    <td>{new Date(item.created_at).toLocaleString('zh-CN')}</td>
-                                    <td>{item.username || `用户#${item.user_id}`}</td>
-                                    <td>{METHOD_LABELS[item.method] || item.method}</td>
-                                    <td>
-                                        {targetLabel(item.target_type)}
-                                        {item.target_id ? ` #${item.target_id}` : ''}
+                        </thead>
+                        <tbody>
+                            {items.length === 0 ? (
+                                <tr>
+                                    <td colSpan={8} className="empty-state">
+                                        {loading ? '加载中...' : error ? <span role="alert">审计加载失败：{error}<button className="btn-secondary" onClick={() => void fetchList()}>重新加载审计</button></span> : '暂无操作记录，管理端非 GET 请求会自动记录在这里'}
                                     </td>
-                                    <td className="audit-path" title={item.path}>{item.path}</td>
-                                    <td>
-                                        <span className={`level-badge ${statusClass(item.status)}`}>{item.status}</span>
-                                    </td>
-                                    <td>{item.duration_ms}ms</td>
-                                    <td>{item.ip || '—'}</td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            ) : (
+                                items.map((item) => (
+                                    <tr key={item.id}>
+                                        <td>{new Date(item.created_at).toLocaleString('zh-CN')}</td>
+                                        <td>{item.username || `用户#${item.user_id}`}</td>
+                                        <td>{METHOD_LABELS[item.method] || item.method}</td>
+                                        <td>
+                                            {targetLabel(item.target_type)}
+                                            {item.target_id ? ` #${item.target_id}` : ''}
+                                        </td>
+                                        <td className="audit-path" title={item.path}>{item.path}</td>
+                                        <td>
+                                            <span className={`level-badge ${statusClass(item.status)}`}>{item.status}</span>
+                                        </td>
+                                        <td>{item.duration_ms}ms</td>
+                                        <td>{item.ip || '—'}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
                 <div className="pagination">
                     <button className="btn-secondary" disabled={query.page <= 1 || loading || Boolean(error) || totalPages === null} onClick={() => changePage(query.page - 1)}>
                         上一页

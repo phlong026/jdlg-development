@@ -31,6 +31,12 @@ const OSS: React.FC = () => {
     const [total, setTotal] = useState(0);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const uploadInputRef = useRef<HTMLInputElement>(null);
+    const uploadPending = useRef(false);
+    const uploadOpen = useRef(false);
+    const uploadSession = useRef(0);
+    const renderedUploadSession = uploadSession.current;
+    const latestFetchFiles = useRef<() => Promise<void>>(async () => {});
     const [deleting, setDeleting] = useState(false);
     const [loadError, setLoadError] = useState('');
     const [loadedScope, setLoadedScope] = useState<string | null>(null);
@@ -62,6 +68,8 @@ const OSS: React.FC = () => {
         return () => {
             mounted.current = false;
             requestVersion.current += 1;
+            uploadOpen.current = false;
+            uploadSession.current += 1;
         };
     }, []);
 
@@ -103,6 +111,8 @@ const OSS: React.FC = () => {
             if (isCurrent()) setLoading(false);
         }
     };
+
+    latestFetchFiles.current = fetchFiles;
 
     useEffect(() => {
         void fetchFiles();
@@ -180,39 +190,66 @@ const OSS: React.FC = () => {
     const handleDelete = (fileId: number) => deleteFiles(fileId);
     const handleBatchDelete = () => deleteFiles();
 
-    const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+    const openUploadModal = () => {
+        if (!mounted.current || uploadPending.current || uploadOpen.current) return;
+        uploadSession.current += 1;
+        uploadOpen.current = true;
+        setShowUploadModal(true);
+    };
 
+    const closeUploadModal = () => {
+        if (!mounted.current || uploadPending.current || !uploadOpen.current || renderedUploadSession !== uploadSession.current) return;
+        uploadOpen.current = false;
+        uploadSession.current += 1;
+        setShowUploadModal(false);
+    };
+
+    const openFilePicker = () => {
+        if (!mounted.current || !uploadOpen.current || renderedUploadSession !== uploadSession.current || uploadPending.current) return;
+        uploadInputRef.current?.click();
+    };
+
+    const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const input = event.target;
+        const file = input.files?.[0];
+        const session = renderedUploadSession;
+        if (!file || !mounted.current || !uploadOpen.current || session !== uploadSession.current || uploadPending.current) return;
+
+        uploadPending.current = true;
         setUploading(true);
         const formData = new FormData();
         formData.append('file', file);
-
+        const isCurrent = () => mounted.current && uploadOpen.current && session === uploadSession.current;
+        let succeeded = false;
         try {
             const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.OSS.UPLOAD}`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData,
             });
-
-            if (!response.ok) {
-                throw new Error('上传失败');
-            }
-
+            if (!response.ok) throw new Error('上传失败');
             const result = await response.json();
+            if (!isCurrent()) return;
             if (result.code === 0) {
                 alert('上传成功');
-                setShowUploadModal(false);
-                fetchFiles();
+                succeeded = true;
             } else {
                 alert(result.msg || '上传失败');
             }
         } catch (error: any) {
-            alert('上传失败: ' + error.message);
+            if (isCurrent()) alert('上传失败: ' + error.message);
         } finally {
-            setUploading(false);
-            // 清空input
-            event.target.value = '';
+            uploadPending.current = false;
+            if (isCurrent()) {
+                setUploading(false);
+                input.value = '';
+                if (succeeded) {
+                    uploadOpen.current = false;
+                    uploadSession.current += 1;
+                    setShowUploadModal(false);
+                    void latestFetchFiles.current();
+                }
+            }
         }
     };
 
@@ -253,7 +290,7 @@ const OSS: React.FC = () => {
                                 <FiRefreshCw />
                                 {loading ? '刷新中...' : '刷新'}
                             </button>
-                            <button className="btn-primary" onClick={() => setShowUploadModal(true)}>
+                            <button className="btn-primary" onClick={openUploadModal} disabled={uploading}>
                                 <FiUpload />
                                 上传文件
                             </button>
@@ -472,11 +509,11 @@ const OSS: React.FC = () => {
 
                 {/* 上传模态框 */}
                 {showUploadModal && (
-                    <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+                    <div className="modal-overlay" onClick={closeUploadModal}>
                         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>上传文件</h3>
-                                <button className="modal-close" onClick={() => setShowUploadModal(false)}>
+                                <button className="modal-close" onClick={closeUploadModal} disabled={uploading} aria-label="关闭上传文件">
                                     <FiX />
                                 </button>
                             </div>
@@ -484,13 +521,15 @@ const OSS: React.FC = () => {
                                 <input
                                     type="file"
                                     id="file-upload"
+                                    ref={uploadInputRef}
+                                    aria-label="上传 OSS 文件"
                                     onChange={handleUpload}
                                     disabled={uploading}
                                     style={{ display: 'none' }}
                                 />
-                                <label htmlFor="file-upload" className="upload-label">
+                                <button type="button" className="upload-label" onClick={openFilePicker} disabled={uploading}>
                                     {uploading ? '上传中...' : '选择文件'}
-                                </label>
+                                </button>
                             </div>
                         </div>
                     </div>

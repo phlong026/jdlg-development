@@ -14,8 +14,9 @@
 | --- | --- | --- | --- |
 | 第一批 | `f71ca7c620aa21ac7c56b5e86333c9e58d31dc02` | `2ffa4023a763df937caa98d25e11263cbac12464` | `549a960334c711d5768a853d3855e70d41c8a69a` |
 | 第二批 | `53188d7136d10dfb15ddcdeed1cbf852b3655ef3` | `b7f4e34a64afc53405a4461cabb4e88659e91a8a` | `73388ecf6492e3feb9b4599a96ea59b4e869dc89` |
+| 第三批 | `975126c0910d94f936b628f20207d1f9d48a7a5e` | `792b682fb9650fe01c45892eb6661c388f48f5b0` | `9b65f515801caa0f71c6c3ecd2f0aed0097c5a35` |
 
-远程分支：`fix/admin-remaining-remediation-20261011`。远程发布在完整仓库基线上应用各批增量；本地为隔离的局部检出快照，因此本地和远程提交SHA不同。已逐次读取分支核对；第一批25文件、第二批26文件。后续批次与最终PR以实际发布读回记录为准。
+远程分支：`fix/admin-remaining-remediation-20261011`。远程发布在完整仓库基线上应用各批增量；本地为隔离的局部检出快照，因此本地和远程提交SHA不同。已逐次读取分支核对；第一批25文件、第二批26文件、第三批29文件。后续批次与最终PR以实际发布读回记录为准。
 
 ## 第一批：入口、编辑与操作对象安全
 
@@ -96,10 +97,75 @@
 - 独立复跑专项及回归130/130通过；另外2项OSS/精选案例末页回退后的旧删除回调反证通过；未发现剩余阻断。
 - 已知服务端限制：已绑定设备人数查询失败仍回0；未配置审计模型时回空成功。前端无法仅据这些成功响应区分真实0/空与未取到数据，本轮未扩大为后端业务改造。
 
-## 后续待完成的清单
+## 第四批：键盘、触控、级联与完整覆盖复核
 
-- G04/G05：剩余弹窗键盘、触控与窄屏/短屏修复，随后全量独立复核与门禁。
-- 所有页面真实Android/iPhone WebView和生产集成验证仍待人工验收。
+- G04：共享弹窗键盘扩展到剩余目标路由，Escape只调用最上层原关闭按钮，Tab循环与焦点返回不抢占命令面板或CRM自管抽屉。CRM报备空闲Escape关闭，提交中同一同步锁禁止关闭；旧回调不能换对象。
+- 复核补漏：线索保存中关闭/重开/换详情原本可能丢失原草稿，已在实际处理函数增加同步守卫；失败保留备注并解锁，成功再清理。工具页移除重复Escape拥有者。
+- G05：剩余12页的长值、筛选收缩、44px触控、操作列可达和长表单内部滚动使用明确路由样式；仅已核实的操作尾列固定，金额/状态/审核列不隐藏。审计分页移到表格横向滚动层外。
+- 线索短屏/769–900宽正文可滚动、搜索不再被260px最小宽度撑开；独立复核发现原共享手机样式以更高特异性覆盖新规则，已增加两入口明确路由覆盖并用合并CSS检查验证胜出规则，不只编译单文件。
+- 灵感和文件库的文件选择入口补原生按钮语义，保留原文件处理、上传锁和会话归属。
+
+### 第四批与最终门禁（2026-10-11 UTC）
+
+- 最终前端完整 `npm test`：469/469通过；TypeScript、31路由（132处跳转字面量、147处样式作用域、57个导航条目）及生产构建175模块通过。
+- 模板后端最终再次运行原生产源隔离测试：model15组、Gin handler8组，合计23组顶层测试带`-race`通过。后端及CI文件与第一批相比没有新增变化。
+- 第四批独立专项114/114、另行设计的17项反证通过；最终覆盖复核未发现剩余阻断。37项均有对应实现/测试，没有发现计费、退款资格/金额、审核结论、角色授权或客户分配规则越界。
+- 复核发现的级联覆盖、上传键盘入口、上传旧会话/卸载回调、工具长标题及手机纵向flex留白已修正；OSS上传成功后读取失败不重新上传。
+- 工作流PR/manual触发、contents只读、官方action完整SHA固定及脚本语法复核通过；完整四批相对原基线的`git diff --check`通过，包含新增测试文件末尾空行检查。
+- 当前为开发环境结果。新PR和远程Actions须按最后远程head独立核验，不沿用上一轮PR的成功记录。
+
+## 37项实现与自动化证据对应
+
+下表逐项定位本轮F01–F03与34项整改。路径中页面位于`background/src/pages/`，测试位于`background/scripts/`；表格记录代码及自动化证据，不表示真实浏览器或生产任务已人工验收。
+
+| 编号 | 实现定位/业务结果 | 主要自动化证据 |
+| --- | --- | --- |
+| F01 | users：封禁/解封提交锁及正确对象 | ui-user-operation-states |
+| F02 | dashboard/orderCenter/virtualPay：统一用户详情入口 | ui-business-copy |
+| F03 | aiPricing：业务成本口径、折叠标识、高级入口 | ui-pricing-states、ui-business-copy |
+| C01 | templates：可新增、独立图片输入与草稿归属 | template-editor |
+| C02 | templates/API及service/model/template_update.go、route/template_update_handler.go：差异更新与并发保留 | template-editor；service/scripts/test-template-update.sh |
+| C03 | templates：标签配置串行保存及失败保留 | template-config |
+| C04 | templates/inspirations/designerCenter/utilityTools：真实分页总量 | template-config、template-pagination、ui-inspiration-lifecycle、ui-designer-list-lifecycle、utility-tools |
+| C05 | inspirations：上传余量、部分成功、取消与迟到归属 | ui-inspiration-lifecycle |
+| C06 | templates：精选候选与显示模式不隐式改写 | template-config |
+| C07 | contentAnalytics/templates：精确模板ID、同名搜索、创建时间 | ui-content-analytics-states、template-config |
+| C08 | templates：可见乱码、未知状态/模式、审核与来源保留 | template-editor、template-config |
+| W01 | supportTickets：弹窗结构与可达操作 | ui-support-dialog、ui-dialog-keyboard |
+| W02 | supportTickets：备注草稿、同步防重及对象校验 | ui-support-states |
+| W03 | supportTickets：分页、加载/空/错及重试 | ui-support-states |
+| W04 | supportTickets：全局统计、队列、来源业务标签 | ui-support-states |
+| S01 | customerLeads/Hub/ManagementSession：CRM接管边界 | ui-crm-edit-boundaries |
+| S02 | customerManagement的AccessPanel：权限编辑快照/409核对 | ui-crm-edit-boundaries |
+| S03 | customerReportForm/customerWorkflow：冲突草稿与版本 | ui-crm-workflow-safety |
+| S04 | customerManagement/Workflow/ReportForm：写成读败区分 | ui-crm-workflow-safety |
+| S05 | customerManagement：服务端公海证据与对象一致性 | ui-crm-workflow-safety |
+| S06 | ManagementSession/leadOverviewStore：会话隔离 | ui-crm-workflow-safety |
+| S07 | customerWorkflow通知重试及customerManagement的SyncPanel：同步防重 | ui-crm-workflow-safety |
+| S08 | customerLeadHub/customerManagement：待办/高意向/全局口径 | ui-crm-workflow-safety |
+| R01 | reportCenter：比例与业务字段名称 | ui-report-file-states |
+| R02 | reportCenter：导出绑定成功预览快照 | ui-report-file-states |
+| R03 | riskControl/distribution：独立真实分页 | ui-risk-control-lifecycle、ui-audit-distribution-states |
+| R04 | riskControl：支付/任务/工单与用户准确入口 | ui-risk-control-lifecycle |
+| R05 | riskControl/distribution：风险统计范围和灵石单位 | ui-risk-control-lifecycle、ui-audit-distribution-states |
+| M01 | oss：当前页选择与删除目标快照 | ui-report-file-states |
+| M02 | oss：末页收缩恢复 | ui-report-file-states |
+| M03 | logs：请求方法中性名称和结果样式 | ui-audit-distribution-states |
+| M04 | logs：真实筛选组件及独立样式加载 | ui-audit-distribution-states |
+| G01 | 各目标页：请求代际、取消/卸载/旧响应隔离 | 各lifecycle/states及CRM专测 |
+| G02 | 各目标页可观测错误态已修；下述两项后端成功伪装为空/0的端到端例外尚未闭合 | 各lifecycle/states及CRM专测 |
+| G03 | 各目标页：业务文案与可展开诊断 | ui-business-copy、ui-support-states、分析/风险/审计专测 |
+| G04 | adminDialogKeyboard、CRM表单及上传入口：键盘/焦点/提交守卫 | ui-dialog-keyboard、ui-crm-keyboard及上传入口处理函数测试 |
+| G05 | responsive-remaining/customerLeads：窄屏短屏、触控与滚动链 | ui-remaining-responsive、ui-crm-responsive、ui-responsive |
+
+## G02端到端未闭合例外：既有后端可用性契约
+
+这两项在本轮只读核对接口时发现，均已存在于基线`2e011e433c74dc1660499ec7b5f2bcbcde71a582`，不是本轮新增回归。仅确认源码条件分支，未证明生产曾触发。它们不是“全部业务问题清零”的已完成项。
+
+1. `service/route/risk_control_management.go:62–64`：已绑定设备用户数COUNT失败后赋0，75–81行仍随成功概览返回。使用者可能把“查询失败”误读为“确实没有绑定设备账号”。R05统计名称/范围已修，但这个可用性问题仍为G02端到端验收例外。
+2. `service/route/management_audit.go:68–70`：auditModel为空时直接返回HTTP200/code0/list[]/total0。页面无法辨别“没有记录”与“审计模块未配置”；同文件20–22行writer为空时跳过审计写入，尚未验证生产是否如此。M03/M04文案与样式已修，审计可用性仍为G02端到端验收例外。
+
+建议另行确认后修订服务端契约：明确返回不可用状态或错误，前端展示无法判定与恢复指引，并给SQL失败/模块未配置/合法0或空三组测试。本轮后端实施授权仅涉及C02必要模板更新契约，没有擅自扩大其他后端修改。前端收到现有无区分的成功响应时，不能自行推断缺数。
 
 ## 验收边界
 

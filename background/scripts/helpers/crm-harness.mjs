@@ -105,5 +105,3 @@ function environment() {
 }
 
 export { environment, CRMError, baseSession, account, user, lead, deferred, nodes, textOf, settle };
-
-

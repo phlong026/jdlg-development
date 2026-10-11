@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const React = require('react');
 import ts from 'typescript';
+import { environment, deferred } from './helpers/crm-harness.mjs';
 
 const source = fs.readFileSync(new URL('../src/component/adminDialogKeyboard.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
@@ -99,7 +100,7 @@ function mount(path = '/user-workbench') {
     const overlay = root.append(new Element('div', 'modal-overlay')); overlay.zIndex = String(z);
     const panel = overlay.append(new Element('section', kind));
     panel.append(new Element('h3', '', title));
-    const className = ({ 'modal-content': 'modal-close', 'cert-drawer': 'cert-drawer-close', 'order-drawer': 'drawer-close', 'aip-modal': 'aip-modal-close', 'aca-modal': 'aca-modal-close', 'aca-preview': 'aca-btn' })[kind];
+    const className = ({ 'modal-content': 'modal-close', 'cert-drawer': 'cert-drawer-close', 'order-drawer': 'drawer-close', 'aip-modal': 'aip-modal-close', 'aca-modal': 'aca-modal-close', 'aca-preview': 'aca-btn', 'customer-lead-modal': 'customer-lead-modal-close', 'customer-lead-action-modal': 'customer-lead-modal-close' })[kind];
     const closeButton = close ? panel.append(new Element('button', className, '关闭')) : null;
     if (closeButton) closeButton.onClick = () => overlay.remove();
     const field = input ? panel.append(new Element('textarea')) : null;
@@ -242,7 +243,7 @@ test('the production palette Escape closes once, leaves the modal open, and rest
 });
 
 test('the production palette traps Tab above a mobile sidebar and stops Escape reaching it', () => {
-  const page = mount('/customer-management'); // This page is deliberately outside the shared controller.
+  const page = mount('/customer-management'); // CRM panels keep their own keyboard behavior.
   const sidebarButton = page.container.append(new page.Element('button', 'sidebar-link')); sidebarButton.focus();
   let sidebarEscapes = 0, sidebarTabs = 0;
   page.windowListeners.push(event => { if (event.key === 'Escape') sidebarEscapes += 1; if (event.key === 'Tab') sidebarTabs += 1; });
@@ -273,11 +274,55 @@ test('existing labels survive and cleanup removes listeners/observer without old
   assert.equal(page.listeners.get('keydown').size, 0);
 });
 
-test('scope stays limited to the reviewed 17 routes; CRM and customer leads are untouched', () => {
-  const allowed = ['/dashboard', '/users', '/user-workbench', '/designer-center', '/certification', '/membership-operations', '/recharge', '/virtualpay', '/pricing-config', '/recharge-config', '/membership-plans', '/ai-overview', '/ai-tasks', '/ai-content-audits', '/ai-tools', '/ai-pricing', '/ai-config'];
+test('scope covers the reviewed 24 routes without taking over unrelated pages', () => {
+  const allowed = ['/dashboard', '/users', '/user-workbench', '/designer-center', '/certification', '/membership-operations', '/recharge', '/virtualpay', '/pricing-config', '/recharge-config', '/membership-plans', '/ai-overview', '/ai-tasks', '/ai-content-audits', '/ai-tools', '/ai-pricing', '/ai-config', '/templates', '/inspirations', '/support-tickets', '/utility-tools', '/oss', '/customer-leads', '/customer-management'];
   const page = mount(); assert.ok(allowed.every(page.api.isManagedDialogPage));
-  for (const path of ['/customer-management', '/customer-leads', '/templates', '/support-tickets']) {
+  for (const path of ['/login', '/materials', '/unknown']) {
     const other = mount(path); const dialog = other.dialog(); other.flush(); other.key('Escape');
     assert.equal(other.observers.length, 0); assert.equal(dialog.close.clicks, 0); assert.equal(dialog.panel.hasAttribute('role'), false);
   }
+});
+
+
+for (const route of ['/templates', '/inspirations', '/support-tickets', '/utility-tools', '/oss']) {
+  test(`${route}: generic modal gets focus trapping and guarded Escape`, () => {
+    const page=mount(route), dialog=page.dialog('modal-content',{input:true});page.flush();
+    assert.equal(page.doc.activeElement,dialog.close);page.key('Tab',{shiftKey:true});assert.equal(page.doc.activeElement,dialog.confirm);
+    dialog.close.disabled=true;page.key('Escape');assert.equal(dialog.close.clicks,0);
+    dialog.close.disabled=false;page.key('Escape');page.flush();assert.equal(dialog.close.clicks,1);assert.equal(page.doc.activeElement,page.opener);
+  });
+}
+
+for (const route of ['/customer-leads','/customer-management']) {
+  test(`${route}: only the top legacy lead layer closes, returns focus, and yields to the palette`, () => {
+    const page=mount(route),detail=page.dialog('customer-lead-modal');page.flush();detail.confirm.focus();
+    const action=page.dialog('customer-lead-action-modal',{input:true});page.flush();
+    const palette=openPalette(page);page.key('Escape');page.flush();assert.equal(palette.closes,1);assert.equal(action.close.clicks,0);
+    page.key('Tab',{shiftKey:true});assert.equal(page.doc.activeElement,action.confirm);page.key('Tab');assert.equal(page.doc.activeElement,action.close);
+    page.key('Escape');page.flush();assert.equal(action.close.clicks,1);assert.equal(detail.close.clicks,0);assert.equal(page.doc.activeElement,detail.confirm);
+    page.key('Escape');page.flush();assert.equal(detail.close.clicks,1);assert.equal(page.doc.activeElement,page.opener);
+  });
+}
+
+test('CRM self-managed drawer is excluded and keeps focus/keys above a legacy lead dialog',()=>{
+  const page=mount('/customer-management'),legacy=page.dialog('customer-lead-modal',{z:1000});page.flush();
+  const drawer=page.dialog('crm-drawer',{z:1400,input:true});drawer.field.focus();page.flush();
+  assert.equal(drawer.panel.hasAttribute('role'),false);assert.equal(drawer.panel.hasAttribute('tabindex'),false);
+  assert.equal(page.doc.activeElement,drawer.field);assert.equal(legacy.panel.getAttribute('aria-modal'),'false');
+  const escape=page.key('Escape');assert.equal(escape.defaultPrevented,false);assert.equal(legacy.close.clicks,0);
+  drawer.overlay.remove();page.flush();page.key('Escape');assert.equal(legacy.close.clicks,1);
+});
+
+test('shared keyboard keeps the real pending legacy editor open and cannot reopen a duplicate write',async()=>{
+  const env=environment(),pending=deferred();let writes=0;env.leadApi.updateCustomerLeadStatus=()=>{writes++;return pending.promise};
+  const leads=await env.mount('customerLeads.tsx');await leads.button('详情').props.onClick();await leads.flush();
+  const page=mount('/customer-leads'),detail=page.dialog('customer-lead-modal');page.flush();
+  leads.button('记录跟进').props.onClick();leads.render();const action=page.dialog('customer-lead-action-modal');page.flush();
+  const actionNode=leads.find(n=>n.props?.className==='customer-lead-action-modal');
+  const closeNode=actionNode.props.children[0].props.children[1];
+  action.close.onClick=()=>{closeNode.props.onClick();leads.render();if(!leads.all(n=>n.props?.className==='customer-lead-action-modal').length)action.overlay.remove()};
+  const area=leads.find(n=>n.type==='textarea');area.props.onChange({target:{value:'Keep draft'}});leads.render();leads.button('保存跟进').props.onClick();
+  page.key('Escape');page.flush();assert.equal(action.overlay.isConnected,true);assert.equal(detail.close.clicks,0);
+  leads.button('记录跟进').props.onClick();leads.render();leads.find(n=>n.type==='textarea').props.onChange({target:{value:'Do not submit twice'}});leads.render();leads.button('保存跟进').props.onClick();assert.equal(writes,1);
+  pending.reject(new Error('fixture save failed'));await leads.flush();page.key('Escape');page.flush();assert.equal(action.overlay.isConnected,false);assert.equal(detail.close.clicks,0);
 });

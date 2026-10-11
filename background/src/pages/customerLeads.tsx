@@ -276,6 +276,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const handleViewDetail = async (item: CustomerLeadItem) => {
+        if (saving.current) return;
         const request = ++detailRequest.current;
         setDetail(null);
         setDetailLoading(true);
@@ -290,13 +291,14 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const handleCloseDetail = () => {
+        if (saving.current) return;
         detailRequest.current++;
         setDetailLoading(false);
         setDetail(null);
     };
 
     const openAction = (item?: CustomerLeadItem) => {
-        if (!writeAllowed.current) return;
+        if (!writeAllowed.current || saving.current) return;
         actionSequence.current++;
         setSaveNotice('');
         const lead = item || activeLead || null;
@@ -310,12 +312,14 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
         });
     };
 
-    const closeAction = () => {
+    const resetAction = () => {
         actionSequence.current++;
         setActionTarget(null);
         setBatchMode(false);
         setActionForm(defaultAction);
     };
+
+    const closeAction = () => { if (!saving.current) resetAction(); };
 
     const saveAction = async () => {
         if (!writeAllowed.current || saving.current || actionEpoch !== actionSequence.current) return;
@@ -340,7 +344,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             return;
         }
         if (!alive.current || !isLeadOverviewSessionCurrent(sessionTicket)) { saving.current = false; return; }
-        if (actionEpoch === actionSequence.current) closeAction();
+        if (actionEpoch === actionSequence.current) resetAction();
         setSelectedIds([]);
         setSaveNotice('跟进已保存，正在读取最新数据。');
         let detailRead = true;
@@ -615,7 +619,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <h3>线索详情</h3>
                                     <p>{activeLead ? `${getDisplayName(activeLead)} · ${getNextActionText(activeLead)}` : '正在加载线索详情'}</p>
                                 </div>
-                                <button type="button" className="customer-lead-modal-close" onClick={handleCloseDetail}>
+                                <button type="button" className="customer-lead-modal-close" disabled={savingAction} aria-disabled={savingAction} onClick={handleCloseDetail}>
                                     <FiXIcon />
                                 </button>
                             </div>
@@ -730,7 +734,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <h3>{batchMode ? `批量处理 ${selectedIds.length} 条线索` : `跟进 ${actionTarget ? getDisplayName(actionTarget) : ''}`}</h3>
                                     <p>填写记录后，其他同事能直接接上，不用重新翻聊天上下文。</p>
                                 </div>
-                                <button type="button" className="customer-lead-modal-close" onClick={closeAction}>
+                                <button type="button" className="customer-lead-modal-close" disabled={savingAction} aria-disabled={savingAction} onClick={closeAction}>
                                     <FiXIcon />
                                 </button>
                             </div>
@@ -763,7 +767,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <textarea value={actionForm.remark} onChange={(event) => setActionForm((form) => ({ ...form, remark: event.target.value }))} rows={5} placeholder="例如：已电话沟通，用户关心三层新中式造价，约明天下午发初步预算。" />
                                 </label>
                                 <div className="customer-lead-action-footer">
-                                    <button type="button" className="customer-lead-btn secondary" onClick={closeAction}>取消</button>
+                                    <button type="button" className="customer-lead-btn secondary" disabled={savingAction} onClick={closeAction}>取消</button>
                                     <button type="button" className="customer-lead-btn" disabled={savingAction} onClick={() => void saveAction()}>
                                         保存跟进
                                     </button>

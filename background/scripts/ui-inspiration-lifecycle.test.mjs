@@ -200,3 +200,32 @@ test('inspiration unmount drops late list/detail/upload/write results without UI
     await flush(); await flush(); assert.equal(h.page.updates, updates, phase); assert.equal(h.lists.length, reads, phase); assert.equal(h.uploads.length, phase === 'upload' ? 1 : 0, phase);
   }
 });
+
+test('inspiration native picker button invokes only the hidden input and respects the upload lock before rerender', async () => {
+  const h = harness(); await list(h); await edit(h, 1);
+  let picks = 0; named(h.page, '上传灵感图片').ref.current = { click() { picks++; } };
+  const trigger = button(h.page, '选择图片并上传'); assert.equal(trigger.props.type, 'button');
+  trigger.props.onClick(); trigger.props.onClick(); assert.equal(picks, 2); assert.equal(h.uploads.length, 0); assert.equal(h.writes.length, 0);
+  named(h.page, '上传灵感图片').props.onChange({ target: { files: [], value: '' } }); assert.equal(h.uploads.length, 0);
+  upload(h.page, ['one']); trigger.props.onClick(); assert.equal(picks, 2); assert.equal(h.uploads.length, 1);
+  assert.equal(button(h.page, '选择图片并上传').props.disabled, true);
+  h.uploads[0].reject(new Error('retry picker')); await settle(h.page);
+  assert.equal(button(h.page, '选择图片并上传').props.disabled, false); click(h.page, '选择图片并上传'); assert.equal(picks, 3);
+  assert.equal(h.uploads.length, 1, 'picker recovery itself never posts a file');
+});
+
+test('inspiration picker cannot bypass canceled sessions, detail failures, nine-image limit or pending save', async () => {
+  const h = harness(); await list(h); await edit(h, 1);
+  let picks = 0; named(h.page, '上传灵感图片').ref.current = { click() { picks++; } };
+  const oldPick = button(h.page, '选择图片并上传').props.onClick;
+  click(h.page, '取消'); click(h.page, '新增灵感'); oldPick(); assert.equal(picks, 0);
+  click(h.page, '取消'); named(h.page, '编辑灵感 1').props.onClick(); h.page.render();
+  assert.equal(button(h.page, '选择图片并上传').props.disabled, true); button(h.page, '选择图片并上传').props.onClick(); assert.equal(picks, 0);
+  h.details.at(-1).reject(new Error('detail unavailable')); await settle(h.page); button(h.page, '选择图片并上传').props.onClick(); assert.equal(picks, 0);
+  click(h.page, '重新加载详情'); h.details.at(-1).resolve(item(1, { images: Array.from({ length: 9 }, (_, i) => `image-${i}`) })); await settle(h.page);
+  assert.equal(button(h.page, '选择图片并上传').props.disabled, true); button(h.page, '选择图片并上传').props.onClick(); assert.equal(picks, 0);
+  named(h.page, '移除图片 9').props.onClick(); h.page.render(); const pick = button(h.page, '选择图片并上传').props.onClick;
+  button(h.page, '保存').props.onClick(); pick(); assert.equal(picks, 0); assert.equal(h.writes.length, 1); assert.equal(h.uploads.length, 0);
+  h.writes[0].reject(new Error('save failed')); await settle(h.page); pick(); assert.equal(picks, 1);
+  h.page.unmount(); pick(); assert.equal(picks, 1);
+});

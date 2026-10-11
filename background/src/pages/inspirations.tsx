@@ -144,6 +144,7 @@ const Inspirations: React.FC = () => {
     const editorTarget = useRef<string | null>(null);
     const editorReady = useRef(false);
     const uploadSession = useRef<number | null>(null);
+    const uploadInputRef = useRef<HTMLInputElement>(null);
     const writePending = useRef(false);
     const formRef = useRef(formData);
     const scope = JSON.stringify([page, searchKeyword, statusFilter, topicFilter]);
@@ -290,6 +291,11 @@ const Inspirations: React.FC = () => {
         if (!mounted.current || scopeRef.current !== scope || !listContext.current.ready || !listContext.current.list.some(row => row.id === item.id)) return;
         const session = startEditor(item.id);
         void loadEditorDetail(item.id, session);
+    };
+
+    const openImagePicker = () => {
+        if (!mounted.current || renderSession !== editorSession.current || !editorTarget.current || !editorReady.current || uploadSession.current !== null || writePending.current || formRef.current.imageUrls.length >= 9) return;
+        uploadInputRef.current?.click();
     };
 
     const uploadImages = async (files: File[]) => {
@@ -514,10 +520,10 @@ const Inspirations: React.FC = () => {
                                 <div className="form-group">
                                     <label>图片</label>
                                     <div className="image-upload-group">
-                                        <label className="btn-secondary upload-trigger">
+                                        <button type="button" className="btn-secondary upload-trigger" onClick={openImagePicker} disabled={uploading || Boolean(actionLoading) || editorLoading || Boolean(editorError) || formData.imageUrls.length >= 9}>
                                             选择图片并上传
-                                            <input aria-label="上传灵感图片" type="file" multiple accept="image/*" hidden disabled={uploading || Boolean(actionLoading) || editorLoading || Boolean(editorError) || formData.imageUrls.length >= 9} onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ''; void uploadImages(files); }} />
-                                        </label>
+                                        </button>
+                                        <input ref={uploadInputRef} aria-label="上传灵感图片" type="file" multiple accept="image/*" hidden disabled={uploading || Boolean(actionLoading) || editorLoading || Boolean(editorError) || formData.imageUrls.length >= 9} onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ''; void uploadImages(files); }} />
                                         <span className="upload-hint">最多 9 张，第一张作为封面</span>
                                     </div>
                                     {uploading && <div className="upload-hint">图片上传中...</div>}
