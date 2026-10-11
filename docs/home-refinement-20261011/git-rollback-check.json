@@ -1,6 +1,8 @@
 {
-  "stagedReverseApplyCheck": true,
-  "baseline": "f7caa200750ccd313265bd72d5b2d6cacc15eec5",
-  "gitRevertCanRestoreWithoutConflicts": true,
-  "workingFilesNotChangedByCheck": true
+  "parentCommit": "20e3dd2f0bb5508ab4c6b623b7258f9c8a5731b0",
+  "stagedBinaryReverseCheckPassed": true,
+  "rollbackScriptExactRestorePassed": true,
+  "laterEditProtectionPassed": true,
+  "liveWorkingTreeNotRolledBack": true,
+  "scope": "最终透明渐变及验证证据"
 }

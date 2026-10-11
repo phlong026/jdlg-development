@@ -1,14 +1,14 @@
 {
   "size": {
-    "total": 2557460,
+    "total": 2557930,
     "packages": [
       {
         "name": "TOTAL",
-        "size": 2557460
+        "size": 2557930
       },
       {
         "name": "main",
-        "size": 1463088
+        "size": 1463558
       },
       {
         "name": "/pages/adminhome/",

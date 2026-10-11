@@ -4,18 +4,26 @@
     {
       "name": "iPhone 15 Pro Max",
       "width": 430,
-      "screenshot": "微信模拟器-修改后-iPhone15ProMax.png"
+      "screenshot": "微信模拟器-修改后-iPhone15ProMax.png",
+      "console": {
+        "errors": 0,
+        "warnings": 4
+      }
     },
     {
       "name": "iPhone 8",
       "width": 375,
-      "screenshot": "微信模拟器-修改后-iPhone8.png"
+      "screenshot": "微信模拟器-修改后-iPhone8.png",
+      "console": {
+        "errors": 0,
+        "warnings": 3
+      }
     }
   ],
   "finalConsole": {
     "errors": 0,
     "warnings": 3,
-    "evidence": "432 tab (selected) Description: 调试器 - Errors: 0, Warnings: 3, Value: 1"
+    "evidence": "435 tab (selected) Description: 调试器 - Errors: 0, Warnings: 3, Value: 1"
   },
   "checks": {
     "logoBelowStatusBar": true,
@@ -26,7 +34,12 @@
     "privacyPageOpened": true,
     "finalHomepageVisible": true,
     "sloganEnlargedWithBrand": true,
-    "smallScreenFinalSloganChecked": true
+    "smallScreenFinalSloganChecked": true,
+    "brandBackdropClean": true,
+    "brandForegroundProminent": true,
+    "localGradientDoesNotCoverCustomerService": true,
+    "softTransitionChecked": true,
+    "villaDetailsVisible": true
   },
   "transientIssues": [
     {
@@ -41,5 +54,5 @@
     }
   ],
   "realDeviceAcceptance": false,
-  "recordedAt": "2026-10-11T11:59:24.190Z"
+  "recordedAt": "2026-10-11T12:21:12.303921+00:00"
 }

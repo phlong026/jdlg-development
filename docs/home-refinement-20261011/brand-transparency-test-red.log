@@ -1,0 +1,24 @@
+Home status-bar clearance, service order, privacy entry and protected content passed
+node:assert:768
+    throw err;
+    ^
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /linear-gradient\(to right, rgba\(249,245,237,\.76\)/. Input:
+
+'content: ""; position: absolute; left: 0; top: -32rpx; width: 560rpx; height: 232rpx; background: linear-gradient(to right, rgba(249,245,237,.98) 0%, rgba(249,245,237,.98) 78%, rgba(249,245,237,0) 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%); pointer-events: none;'
+
+    at Object.<anonymous> (/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/tests/home-safe-area-layout.test.js:112:8)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'content: ""; position: absolute; left: 0; top: -32rpx; width: 560rpx; height: 232rpx; background: linear-gradient(to right, rgba(249,245,237,.98) 0%, rgba(249,245,237,.98) 78%, rgba(249,245,237,0) 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%); pointer-events: none;',
+  expected: /linear-gradient\(to right, rgba\(249,245,237,\.76\)/,
+  operator: 'match'
+}
+
+Node.js v20.20.2

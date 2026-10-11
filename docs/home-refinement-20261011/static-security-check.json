@@ -24,7 +24,7 @@
   "formatCheck": "git diff --check; existing source formatting retained; no lint/formatter scripts configured",
   "afterBrandEnlargement": true,
   "afterSloganEnlargement": true,
-  "evidenceTextFilesScanned": 39,
+  "evidenceTextFilesScanned": 41,
   "scssWxssCheckedSelectors": [
     ".brand-backdrop::after",
     ".brand-header",
@@ -38,6 +38,10 @@
     ".slogan-line",
     ".cost-title",
     ".estimate-note",
-    ".privacy-link"
-  ]
+    ".privacy-link",
+    ".brand-header::before"
+  ],
+  "afterBrandBackgroundCleaning": true,
+  "recordedAt": "2026-10-11T12:19:36.527506+00:00",
+  "afterSoftTransparency": true
 }

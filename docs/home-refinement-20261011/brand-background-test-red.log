@@ -1,0 +1,21 @@
+Home status-bar clearance, service order, privacy entry and protected content passed
+node:internal/assert/utils:281
+    throw err;
+    ^
+
+AssertionError [ERR_ASSERTION]: Brand needs a clean local backdrop
+    at Object.<anonymous> (/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/tests/home-safe-area-layout.test.js:110:8)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: undefined,
+  expected: true,
+  operator: '=='
+}
+
+Node.js v20.20.2

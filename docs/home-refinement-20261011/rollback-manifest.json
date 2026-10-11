@@ -11,13 +11,13 @@
       "path": "miniprogram/miniprogram/pages/index/index.scss",
       "role": "restore",
       "beforeSha256": "5d1cf5ab6ec689bf3bb002daa60d80a2f637f2106fc6a263097492c967d5d3c2",
-      "afterSha256": "ae91b80b9856d3988af338bb0644c194630737e76430238991be86de3d5fede5"
+      "afterSha256": "9523467b3f08d25d246d7f0bdc315d2fc5a50878025021419e0b8f5f08e182e8"
     },
     {
       "path": "miniprogram/miniprogram/pages/index/index.wxss",
       "role": "restore",
       "beforeSha256": "b45ff364e8a4d8493a66d937db48d5c706b4f8ee22e34928a46c331844145ced",
-      "afterSha256": "a11563e01f3672099ceb8d6f8e2ff12805328e5f981218893387ecf4414e76c4"
+      "afterSha256": "4f230f263d9611eaa8b42afb12125311f152c321115f825e924f0d10fe8edb3c"
     },
     {
       "path": "miniprogram/miniprogram/pages/index/index.ts",
@@ -40,7 +40,7 @@
     {
       "path": "miniprogram/tests/home-safe-area-layout.test.js",
       "role": "remove",
-      "afterSha256": "b4ccbf537ae8d9b09ebddfaa836182f20227fd4154c9a7742a9b0837dfab334b"
+      "afterSha256": "770b971df75c80f383427bc96ba242277501bff2cb4e90e6e7ad920300d3a1d1"
     }
   ]
 }

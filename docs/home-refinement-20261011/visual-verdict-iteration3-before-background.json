@@ -1,0 +1,14 @@
+{
+  "iteration": 3,
+  "score": 96,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [],
+  "suggestions": [],
+  "reasoning": "人工检查原生模拟器：Logo、中英文品牌名与 slogan 同步放大20%，字间距与短线协调，手机状态栏与右上角胶囊清晰可见；小屏和大屏八宫格、原AI胶囊及报价表单保持确认位置。图片仍采用未压缩的原始高清素材。本评分为人工视觉评价，不是像素相似率。",
+  "screenshots": [
+    "微信模拟器-修改后-iPhone15ProMax.png",
+    "微信模拟器-修改后-iPhone8.png"
+  ],
+  "realDeviceAcceptance": false
+}

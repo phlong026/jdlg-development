@@ -104,3 +104,19 @@ assert.match(styles, /\.brand-en\s*\{[^}]*width:\s*180\.42rpx;[^}]*height:\s*35\
 
 assert.match(styles, /\.brand-slogan text\s*\{[^}]*font-size:\s*21\.11rpx;[^}]*letter-spacing:\s*12\.66rpx;/);
 assert.match(styles, /\.slogan-line\s*\{[^}]*width:\s*31\.66rpx;/);
+
+// 品牌背景只覆盖左侧品牌区，透明边缘不遮挡右侧客服或接收点击。
+const brandScrim = newRules.get('.brand-header::before');
+assert.ok(brandScrim, 'Brand needs a clean local backdrop');
+assert.match(brandScrim, /pointer-events:\s*none/);
+assert.match(brandScrim, /linear-gradient\(to right, rgba\(249,245,237,\.76\)/);
+assert.match(brandScrim, /-webkit-mask-image:\s*linear-gradient/);
+assert.ok(Number(brandScrim.match(/width:\s*([\d.]+)rpx/)[1]) < 598.77, 'Brand scrim must stop before customer service');
+assert.doesNotMatch(newRules.get('.brand-symbol'), /opacity:/);
+assert.doesNotMatch(newRules.get('.brand-copy'), /opacity:/);
+assert.doesNotMatch(newRules.get('.brand-slogan'), /opacity:/);
+
+const firstBrandOpacity = Number(brandScrim.match(/rgba\(249,245,237,([.\d]+)\)/)[1]);
+assert.ok(firstBrandOpacity <= .8, 'Brand backdrop must leave the villa visible');
+assert.match(brandScrim, /rgba\(249,245,237,\.24\) 74%/);
+assert.ok(Number(brandScrim.match(/height:\s*([\d.]+)rpx/)[1]) <= 205, 'Do not wash out the villa below the slogan');

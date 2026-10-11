@@ -8,6 +8,8 @@ page { overflow: visible; background: #ece4d9; }
 .brand-backdrop-image { display: block; width: 100%; height: 100%; pointer-events: none; }
 .brand-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(249,245,237,.38), rgba(249,245,237,.38)), linear-gradient(to right, transparent 72%, rgba(249,245,237,.62) 100%); pointer-events: none; }
 .brand-header { position: absolute; left: 0; top: 68px; width: 750rpx; height: 153.16rpx; pointer-events: none; }
+// 清理品牌后方的树木与建筑线条，柔和边缘保留右侧别墅场景。
+.brand-header::before { content: ""; position: absolute; left: 0; top: -24rpx; width: 520rpx; height: 205rpx; background: linear-gradient(to right, rgba(249,245,237,.76) 0%, rgba(249,245,237,.64) 40%, rgba(249,245,237,.24) 74%, rgba(249,245,237,0) 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.65) 14%, #000 32%, rgba(0,0,0,.75) 62%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.65) 14%, #000 32%, rgba(0,0,0,.75) 62%, transparent 100%); pointer-events: none; }
 .brand-header > image, .brand-header > view { position: absolute; box-sizing: border-box; }
 .home-art-layer { position: absolute; left: 0; top: 105.51rpx; width: 750rpx; height: 1383.06rpx; }
 .home-art-layer > text, .home-art-layer > image, .home-art-layer > view, .home-art-layer > picker { position: absolute; box-sizing: border-box; }

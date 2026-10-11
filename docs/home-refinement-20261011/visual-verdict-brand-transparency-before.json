@@ -1,0 +1,19 @@
+{
+  "iteration": 5,
+  "score": 78,
+  "verdict": "needs_changes",
+  "category_match": true,
+  "differences": [
+    "局部遮罩过白、透明度不足，别墅细节被覆盖；需要连续的柔和过渡。"
+  ],
+  "suggestions": [
+    "降低遮罩不透明度，缩小覆盖范围，同时连续渐变淡出右侧和下方。"
+  ],
+  "reasoning": "用户反馈与对比图显示原98%遮罩过实，需要提高场景可见度。本评分为人工视觉评价。",
+  "screenshots": [
+    "微信模拟器-修改后-iPhone15ProMax.png",
+    "微信模拟器-修改后-iPhone8.png"
+  ],
+  "realDeviceAcceptance": false,
+  "recordedAt": "2026-10-11T12:14:39.365577+00:00"
+}
