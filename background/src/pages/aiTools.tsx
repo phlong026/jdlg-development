@@ -1017,7 +1017,7 @@ const AITools: React.FC = () => {
                                 ) : (
                                     <>
                                         <p className="diff-summary">以下 <b>{diffTarget.items.length}</b> 处将发布到线上（小程序即时生效）：</p>
-                                        <table className="diff-table">
+                                        <div className="admin-table-region"><table className="diff-table">
                                             <thead>
                                                 <tr><th>项目</th><th>线上</th><th>草稿</th></tr>
                                             </thead>
@@ -1034,7 +1034,7 @@ const AITools: React.FC = () => {
                                                     </tr>
                                                 ))}
                                             </tbody>
-                                        </table>
+                                        </table></div>
                                         <div className="form-group" style={{ marginTop: 12 }}>
                                             <label>发布备注</label>
                                             <input value={publishNote} onChange={(e) => setPublishNote(e.target.value)} placeholder="写入版本记录，如：v3 强化线稿" />
@@ -1066,7 +1066,7 @@ const AITools: React.FC = () => {
                                 ) : versions.length === 0 ? (
                                     <div className="diff-empty">该工具还没有发布过版本（旧工具从下次发布起开始留版本）。</div>
                                 ) : (
-                                    <table className="diff-table versions-table">
+                                    <div className="admin-table-region"><table className="diff-table versions-table">
                                         <thead>
                                             <tr><th>版本</th><th>发布时间</th><th>操作人 / 备注</th><th>发布前7日</th><th>发布后</th><th>操作</th></tr>
                                         </thead>
@@ -1092,7 +1092,7 @@ const AITools: React.FC = () => {
                                                 </tr>
                                             ))}
                                         </tbody>
-                                    </table>
+                                    </table></div>
                                 )}
                                 <div className="diff-empty small">效果对比口径：发布前 7 日 vs 本版发布至下版发布之间；「—」表示无样本。</div>
                             </div>

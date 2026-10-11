@@ -88,10 +88,10 @@ const SceneRankRow: React.FC<{ scene: AIOverviewScene; maxTotal: number }> = ({ 
             <span>{scene.label}</span>
             <code>{scene.scene}</code>
         </div>
-        <div className="aio-rank-bar-wrap"><div className="aio-rank-bar" style={{ width: `${Math.max(2, (scene.total / maxTotal) * 100)}%` }} /></div>
-        <span className="aio-rank-num">{scene.total.toLocaleString()}</span>
-        <span className={`aio-rank-rate ${failedRateTone(scene.failed_rate)}`}>{formatPercent(1 - scene.failed_rate)}</span>
-        <span className="aio-rank-stones">{scene.stones.toLocaleString()}</span>
+        <div className="aio-rank-bar-wrap" aria-hidden="true"><div className="aio-rank-bar" style={{ width: `${Math.max(2, (scene.total / maxTotal) * 100)}%` }} /></div>
+        <span className="aio-rank-num"><span className="aio-mobile-label">调用量</span>{scene.total.toLocaleString()}</span>
+        <span className={`aio-rank-rate ${failedRateTone(scene.failed_rate)}`}><span className="aio-mobile-label">成功率</span>{formatPercent(1 - scene.failed_rate)}</span>
+        <span className="aio-rank-stones"><span className="aio-mobile-label">灵石收入</span>{scene.stones.toLocaleString()}</span>
     </div>
 );
 
@@ -339,7 +339,7 @@ const AIOverview: React.FC = () => {
                         data.tools_top.map((tool) => (
                             <div key={tool.tool_id} className="aio-tool-row">
                                 <span className="aio-tool-name">{tool.name}</span>
-                                <div className="aio-rank-bar-wrap"><div className="aio-rank-bar alt" style={{ width: `${Math.max(3, (tool.total_7d / (data.tools_top[0]?.total_7d || 1)) * 100)}%` }} /></div>
+                                <div className="aio-rank-bar-wrap" aria-hidden="true"><div className="aio-rank-bar alt" style={{ width: `${Math.max(3, (tool.total_7d / (data.tools_top[0]?.total_7d || 1)) * 100)}%` }} /></div>
                                 <span className="aio-rank-num">{tool.total_7d.toLocaleString()}</span>
                             </div>
                         ))

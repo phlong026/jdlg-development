@@ -183,7 +183,7 @@ const PricingConfig: React.FC = () => {
                         添加档位
                     </button>
                 </div>
-                <table className="pricing-table">
+                <div className="admin-table-region"><table className="pricing-table">
                     <thead>
                         <tr>
                             <th>档位名称</th>
@@ -239,14 +239,14 @@ const PricingConfig: React.FC = () => {
                             );
                         })}
                     </tbody>
-                </table>
+                </table></div>
             </section>
 
             <section className="pricing-section">
                 <div className="pricing-section-head">
                     <h4>认证道具价格</h4>
                 </div>
-                <table className="pricing-table">
+                <div className="admin-table-region"><table className="pricing-table">
                     <thead>
                         <tr>
                             <th>道具</th>
@@ -269,7 +269,7 @@ const PricingConfig: React.FC = () => {
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                </table></div>
             </section>
         </div>
     );

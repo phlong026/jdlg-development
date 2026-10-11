@@ -239,7 +239,7 @@
     grid-template-columns: 1fr;
   }
 }
-}
+
 
 /* 推送日志客户反查（T1）：客户列可点击进入用户360 */
 .user-link-button {
@@ -448,3 +448,5 @@
     cursor: not-allowed;
   }
 }
+
+} /* end route scope */

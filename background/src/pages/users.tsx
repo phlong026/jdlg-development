@@ -677,7 +677,7 @@ const Users: React.FC = () => {
                             </div>
                             {mergePrecheck && (
                                 <div className="merge-result">
-                                    <table className="merge-compare">
+                                    <div className="admin-table-region"><table className="merge-compare">
                                         <thead>
                                             <tr>
                                                 <th>资产项</th>
@@ -703,7 +703,7 @@ const Users: React.FC = () => {
                                                 </tr>
                                             ))}
                                         </tbody>
-                                    </table>
+                                    </table></div>
                                     {mergePrecheck.conflicts.length > 0 && (
                                         <div className="merge-conflicts">
                                             <b>冲突点（执行前需人工决策）：</b>

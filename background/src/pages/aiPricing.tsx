@@ -142,7 +142,7 @@ const PricingHistoryModal: React.FC<{
                     ) : versions.length === 0 ? (
                         <div className="aip-empty">该场景还没有调价记录（初始定价不产生版本）</div>
                     ) : (
-                        <table className="aip-table slim">
+                        <div className="admin-table-region"><table className="aip-table slim">
                             <thead>
                                 <tr><th>时间</th><th>调整</th><th>操作人</th><th>备注</th><th>操作</th></tr>
                             </thead>
@@ -161,7 +161,7 @@ const PricingHistoryModal: React.FC<{
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                     )}
                 </div>
                 <div className="aip-modal-foot">
@@ -322,7 +322,7 @@ const AIPricing: React.FC = () => {
                         </div>
                     ) : null}
                     <section className="section-card aip-card">
-                        <table className="aip-table">
+                        <div className="admin-table-region"><table className="aip-table">
                             <thead>
                                 <tr>
                                     <th>场景</th>
@@ -368,7 +368,7 @@ const AIPricing: React.FC = () => {
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                         <div className="aip-foot-note">
                             「AI 配置（旧版）」仍保留原始表单（含 extra_config JSON 编辑），可从 ⌘K 搜索进入；本页为运营视角入口。
                         </div>
@@ -487,7 +487,7 @@ const AIPricing: React.FC = () => {
 
                     <section className="section-card aip-card">
                         <div className="aip-card-head"><h3>接口配置（中文视图）</h3></div>
-                        <table className="aip-table">
+                        <div className="admin-table-region"><table className="aip-table">
                             <thead>
                                 <tr>
                                     <th>配置</th><th>任务类型</th><th>协议</th><th>状态</th><th>接口地址</th><th>更新时间</th><th>操作</th>
@@ -523,7 +523,7 @@ const AIPricing: React.FC = () => {
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                         <div className="aip-foot-note">同一场景仅一条启用配置，切换只影响新任务；密钥已配置的显示掩码，明文不下发。</div>
                     </section>
                 </>

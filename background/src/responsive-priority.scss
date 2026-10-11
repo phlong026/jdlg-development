@@ -1,4 +1,10 @@
 // These custom overlays are not .modal-content, so the shared modal rules miss them.
+.admin-table-region {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
 .layout-content:has(.drawer-overlay, .cert-drawer-mask, .aip-modal-overlay, .aca-modal-overlay) {
   overflow: hidden;
 }
@@ -94,4 +100,128 @@
 @media (prefers-reduced-motion: reduce) {
   .layout-content[data-admin-page='/recharge'] .order-drawer,
   .layout-content[data-admin-page='/recharge'] .drawer-overlay { animation: none; }
+}
+
+// First-pass mobile fixes for the workbench, users, payments and AI operations.
+// Route scoping prevents lazy-loaded page styles from leaking into other modules.
+
+.layout-content[data-admin-page='/ai-overview'] {
+  .aio-mobile-label { display: none; }
+  .aio-kpi, .aio-card, .aio-prov-card,
+  .aio-rank-name, .aio-tool-name { min-width: 0; overflow-wrap: anywhere; }
+  .aio-card-head, .aio-legend, .aio-prov-foot, .aio-alert-line { flex-wrap: wrap; }
+}
+
+.layout-content[data-admin-page='/ai-tasks'] {
+  details.task-detail-card > summary {
+    min-height: 44px;
+    padding: 10px 0;
+    color: var(--admin-text);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  details.task-detail-card > summary:focus-visible {
+    outline: 2px solid var(--admin-accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+
+@media (max-width: 640px) {
+  .layout-content[data-admin-page='/dashboard'] {
+    .dash-kpi-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dash-kpi { min-width: 0; padding: 12px; overflow-wrap: anywhere; }
+    .dash-kpi-value { font-size: clamp(18px, 5.5vw, 24px); }
+    .dash-meta, .dash-trend-tools { max-width: 100%; flex-wrap: wrap; }
+  }
+
+  .layout-content[data-admin-page='/recharge'] {
+    .fund-kpi-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fund-kpi-band .stat-item { min-width: 0; padding: 12px; overflow-wrap: anywhere; }
+    .order-drawer { width: 100%; max-width: 100%; border-left: 0; }
+    .drawer-header, .drawer-body, .drawer-footer { padding-left: 14px; padding-right: 14px; }
+    .fund-view-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fund-item { min-width: 0; overflow-wrap: anywhere; }
+    .fund-view-title { flex-wrap: wrap; }
+    .drawer-footer > button { flex: 1 1 130px; }
+  }
+
+  .layout-content[data-admin-page='/virtualpay'] {
+    .diff-list { min-width: 0; width: 100%; flex-basis: 100%; }
+    .diff-row { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+    .diff-row span { min-width: 0; }
+  }
+
+  .layout-content[data-admin-page='/ai-overview'] {
+    .aio-kpi-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .aio-kpi { padding: 12px; }
+    .aio-kpi b { font-size: clamp(18px, 5.5vw, 22px); }
+    .aio-card { padding: 14px; }
+    .aio-alert-strip { flex-wrap: wrap; }
+    .aio-alert-strip > div { min-width: 0; flex: 1 1 180px; overflow-wrap: anywhere; }
+    .aio-alert-go { margin-left: 0; }
+    .aio-rank-head { display: none; }
+    .aio-rank-row {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px 12px;
+      padding: 14px 0;
+    }
+    .aio-rank-name, .aio-rank-bar-wrap { grid-column: 1 / -1; }
+    .aio-rank-num, .aio-rank-rate, .aio-rank-stones {
+      min-width: 0;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .aio-mobile-label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--admin-text-muted);
+      font-size: 11px;
+      font-weight: 400;
+    }
+    .aio-prov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .aio-tool-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 52px; }
+    .aio-fail-name { width: auto; flex: 0 1 110px; overflow-wrap: anywhere; }
+    .aio-legend { margin-left: 0; }
+  }
+
+  .layout-content[data-admin-page='/ai-pricing'] {
+    .aip-prov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .aip-test-wrap { max-width: 100%; flex-wrap: wrap; }
+    .aip-test-result { min-width: 0; overflow-wrap: anywhere; }
+    .aip-form-row { flex-direction: column; align-items: stretch; gap: 6px; }
+    .aip-form-row label { width: auto; }
+    .aip-form-row input { min-width: 0; width: 100%; }
+  }
+}
+
+@media (max-width: 768px) {
+  // Keep the next action in reach while preserving every financial/status column.
+  .layout-content:is([data-admin-page='/users'], [data-admin-page='/recharge'], [data-admin-page='/ai-tasks'], [data-admin-page='/membership-operations']) {
+    :is(.users-table, .order-center-table, .task-table, .membership-table) {
+      th:last-child, td:last-child:not([colspan]) {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        width: 128px;
+        min-width: 128px;
+        max-width: 128px;
+        background: var(--admin-surface);
+        box-shadow: -3px 0 6px rgba(47, 36, 27, .08);
+        white-space: normal;
+      }
+      .action-buttons, .order-action-group, .task-action-group, .table-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-width: 0;
+      }
+      :is(.action-buttons, .order-action-group, .task-action-group, .table-actions) > button {
+        width: 100%;
+        min-height: 44px;
+        white-space: normal;
+      }
+    }
+  }
 }

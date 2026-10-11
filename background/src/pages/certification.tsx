@@ -296,7 +296,7 @@ const Certification: React.FC = () => {
                     {loading && list.length === 0 ? (
                         <div className="table-loading">加载中...</div>
                     ) : (
-                        <table className="data-table">
+                        <div className="admin-table-region"><table className="data-table">
                             <thead>
                                 <tr>
                                     <th>申请</th>
@@ -381,7 +381,7 @@ const Certification: React.FC = () => {
                                     })
                                 )}
                             </tbody>
-                        </table>
+                        </table></div>
                     )}
                 </div>
 
