@@ -1,5 +1,5 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FiActivity, FiClock, FiFileText, FiRefreshCw, FiSearch, FiUserCheck, FiX } from 'react-icons/fi';
 import {
@@ -19,6 +19,7 @@ import {
 import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
 import { publishLeadOverview } from '../component/leadOverviewStore';
 import CustomerLeadHub from './customerLeadHub';
+import { useManagementSession } from '../component/ManagementSession';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -135,6 +136,19 @@ const getNextActionText = (lead: CustomerLeadItem | null) => {
 // embedded：嵌在客户管理页的一个栏目里时，队列用页内卡片切换、不读写地址；
 // 单独打开（/customer-leads）时队列由地址 ?queue= 决定，切换入口在顶部子导航条，?user_id= 可只看某个用户的线索。
 const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ readOnly=false, embedded=false }) => {
+    const session = useManagementSession();
+    // /me.crmEnabled is the global takeover switch, not this account's CRM access.
+    // Missing/failed session checks must never reopen the legacy write endpoints.
+    const sessionReady = !session.loading && !session.error && !!session.user;
+    const canWrite = !readOnly && !session.crmLoading && sessionReady && session.user?.scope === 'platform_admin' && session.user.crmEnabled === false;
+    const canOpenCustomers = sessionReady && !session.crmLoading && !!session.crmContext;
+    const writeAllowed = useRef(canWrite);
+    writeAllowed.current = canWrite;
+    const writeBlockedText = !sessionReady || session.user?.crmEnabled === undefined
+        ? '会话或客户接入状态尚未确认，暂不能修改线索。请重新检查会话。'
+        : session.user.crmEnabled
+            ? '小程序线索已由统一客户档案接管，旧线索仅供查看；跟进与归属请在客户档案中处理。'
+            : '当前页面仅可查看线索，暂不能修改跟进与归属。';
     const [params, setParams] = useSearchParams();
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
     const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -159,6 +173,13 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [batchMode, setBatchMode] = useState(false);
     const [actionForm, setActionForm] = useState<ActionForm>(defaultAction);
     const [savingAction, setSavingAction] = useState(false);
+
+    useEffect(() => {
+        setActionTarget(null);
+        setBatchMode(false);
+        setActionForm(defaultAction);
+        setSelectedIds([]);
+    }, [canWrite, session.user?.id]);
 
     const selectedItems = useMemo(() => list.filter((item) => selectedIds.includes(item.id)), [list, selectedIds]);
     const activeLead = detail?.lead || null;
@@ -244,6 +265,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const openAction = (item?: CustomerLeadItem) => {
+        if (!writeAllowed.current) return;
         const lead = item || activeLead || null;
         setActionTarget(lead);
         setBatchMode(!lead);
@@ -262,6 +284,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const saveAction = async () => {
+        if (!writeAllowed.current || savingAction) return;
         if (!actionForm.remark.trim()) {
             window.alert('请填写本次跟进记录，方便后续同事接手');
             return;
@@ -269,7 +292,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
         const payload = buildActionPayload(actionForm);
         setSavingAction(true);
         try {
-            if(readOnly){alert("请在统一客户档案中处理跟进与归属");return}
             if (batchMode) {
                 if (selectedIds.length === 0) {
                     window.alert('请先选择要批量处理的线索');
@@ -298,10 +320,12 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     };
 
     const toggleSelected = (id: number) => {
+        if (!writeAllowed.current) return;
         setSelectedIds((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
     };
 
     const toggleSelectPage = () => {
+        if (!writeAllowed.current) return;
         if (selectedIds.length === list.length) {
             setSelectedIds([]);
             return;
@@ -312,6 +336,13 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     return (
         <>
             <div className="customer-lead-page">
+                {!canWrite && <section className="customer-lead-panel" role="status">
+                    <p>{writeBlockedText}</p>
+                    {canOpenCustomers ? <Link className="customer-lead-btn" to="/customer-management?tab=customers">前往客户档案列表</Link> : <>
+                        {session.user?.crmEnabled && <p>{session.crmError || '当前账号的客户访问尚未就绪，请重新检查；仍不可用时联系系统管理员。'}</p>}
+                        <button type="button" className="customer-lead-btn secondary" disabled={session.loading || session.crmLoading} onClick={session.refresh}>重新检查会话与客户权限</button>
+                    </>}
+                </section>}
                 {embedded ? (
                 <>
                 <div className="customer-lead-hero">
@@ -442,7 +473,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     {selectedIds.length > 0 ? (
                         <div className="customer-lead-batchbar">
                             <span>已选择 {selectedIds.length} 条线索</span>
-                            <button type="button" className="customer-lead-btn" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction()}>
+                            <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction()}>
                                 批量处理
                             </button>
                             <button type="button" className="customer-lead-btn secondary" onClick={() => setSelectedIds([])}>
@@ -456,7 +487,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <thead>
                                 <tr>
                                     <th className="checkbox-cell">
-                                        <input type="checkbox" checked={list.length > 0 && selectedIds.length === list.length} onChange={toggleSelectPage} />
+                                        <input type="checkbox" disabled={!canWrite} checked={list.length > 0 && selectedIds.length === list.length} onChange={toggleSelectPage} />
                                     </th>
                                     <th>用户</th>
                                     <th>需求与联系方式</th>
@@ -471,7 +502,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                 {list.map((item) => (
                                     <tr key={item.id}>
                                         <td className="checkbox-cell">
-                                            <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
+                                            <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
                                         </td>
                                         <td>
                                             <strong>{getDisplayName(item)}</strong>
@@ -507,7 +538,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                                 <button type="button" className="customer-lead-link" onClick={() => void handleViewDetail(item)}>
                                                     详情
                                                 </button>
-                                                <button type="button" className="customer-lead-link" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction(item)}>
+                                                <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>
                                                     跟进
                                                 </button>
                                             </div>
@@ -553,7 +584,8 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <div className="customer-lead-next-action">
                                             <strong>{getNextActionText(activeLead)}</strong>
                                             <span>{detail?.summary || '暂无客户摘要。'}</span>
-                                            <button type="button" className="customer-lead-btn" disabled={readOnly} title={readOnly?"请在统一客户档案中处理":undefined} onClick={() => openAction(activeLead)}>记录跟进</button>
+                                            <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(activeLead)}>记录跟进</button>
+                                            {!canWrite && canOpenCustomers && <Link to="/customer-management?tab=customers">前往客户档案列表处理</Link>}
                                         </div>
                                     </section>
 
@@ -646,7 +678,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                     </div>
                 ) : null}
 
-                {!readOnly&&(actionTarget || batchMode) ? (
+                {canWrite && (actionTarget || batchMode) ? (
                     <div className="customer-lead-modal-overlay" onClick={closeAction}>
                         <div className="customer-lead-action-modal" onClick={(event) => event.stopPropagation()}>
                             <div className="customer-lead-modal-header">

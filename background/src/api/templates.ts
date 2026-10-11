@@ -101,10 +101,11 @@ export const getTemplateDetail = async (id: string) => {
     return res.data!;
 };
 
-// 更新模板（用于编辑，需传完整字段）
+// 更新模板：仅提交实际编辑字段；省略保留数据库当前值，空串/false/0 表示显式修改。
 export const updateTemplate = async (id: string, data: TemplateUpdateRequest) => {
-    const res = await put<TemplateItem>(API_ENDPOINTS.TEMPLATES.UPDATE(id), data);
-    return res.data!;
+    const res = await put<TemplateItem | null>(API_ENDPOINTS.TEMPLATES.UPDATE(id), data);
+    // A committed edit may succeed while the response's read-back fails.
+    return res.data ?? null;
 };
 
 // 仅更新模板状态（用于审核通过/拒绝）

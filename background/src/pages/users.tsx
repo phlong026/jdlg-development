@@ -94,6 +94,8 @@ const Users: React.FC = () => {
     const [banReason, setBanReason] = useState('');
     const [banSubmitting, setBanSubmitting] = useState(false);
     const [banError, setBanError] = useState('');
+    // A submitted mutation keeps its lock until it settles, independent of dialog events.
+    const banInFlight = useRef(false);
     const banRequestId = useRef(0);
     const renderedBanRequestId = banRequestId.current;
 
@@ -258,6 +260,7 @@ const Users: React.FC = () => {
     };
 
     const openBanModal = (row: UserRow, mode: 'ban' | 'unban') => {
+        if (banInFlight.current) return;
         banRequestId.current += 1;
         setBanError('');
         setBanSubmitting(false);
@@ -267,6 +270,7 @@ const Users: React.FC = () => {
     };
 
     const closeBanModal = () => {
+        if (banInFlight.current) return;
         banRequestId.current += 1;
         setBanTarget(null);
         setBanError('');
@@ -274,7 +278,8 @@ const Users: React.FC = () => {
     };
 
     const submitBan = async () => {
-        if (!banTarget || banSubmitting || renderedBanRequestId !== banRequestId.current || (banMode === 'ban' && !banReason.trim())) return;
+        if (!banTarget || banInFlight.current || banSubmitting || renderedBanRequestId !== banRequestId.current || (banMode === 'ban' && !banReason.trim())) return;
+        banInFlight.current = true;
         const requestId = ++banRequestId.current;
         setBanError('');
         setBanSubmitting(true);
@@ -292,6 +297,7 @@ const Users: React.FC = () => {
                 setBanError(`${banMode === 'ban' ? '封禁失败' : '解封失败'}：${error?.message || '请稍后重试'}`);
             }
         } finally {
+            banInFlight.current = false;
             if (requestId === banRequestId.current) setBanSubmitting(false);
         }
     };
@@ -644,7 +650,7 @@ const Users: React.FC = () => {
                     <div className="modal-content ban-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>{banMode === 'ban' ? '封禁账号' : '解封账号'}</h3>
-                            <button className="modal-close" onClick={closeBanModal}>✕</button>
+                            <button className="modal-close" onClick={closeBanModal} disabled={banSubmitting} aria-label="关闭账号操作">✕</button>
                         </div>
                         <div className="modal-body">
                             <div className="ban-user-bar">
@@ -691,7 +697,7 @@ const Users: React.FC = () => {
                             )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn-secondary" onClick={closeBanModal}>取消</button>
+                            <button className="btn-secondary" onClick={closeBanModal} disabled={banSubmitting}>取消</button>
                             <button
                                 className={banMode === 'ban' ? 'btn-danger-solid' : 'btn-primary'}
                                 onClick={submitBan}

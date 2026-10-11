@@ -462,10 +462,10 @@ const SupportTickets: React.FC = () => {
 
                 {showCreateModal ? (
                     <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-                        <div className="modal-content support-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-content support-modal" role="dialog" aria-modal="true" aria-labelledby="support-create-title" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
-                                <h3>新建投诉工单</h3>
-                                <button className="modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
+                                <h3 id="support-create-title">新建投诉工单</h3>
+                                <button className="modal-close" onClick={() => setShowCreateModal(false)} aria-label="关闭新建工单">✕</button>
                             </div>
                             <div className="modal-body support-form">
                                 <label>
@@ -507,10 +507,10 @@ const SupportTickets: React.FC = () => {
 
                 {showDetailModal && detail ? (
                     <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
-                        <div className="modal-content support-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-content support-modal" role="dialog" aria-modal="true" aria-labelledby="support-detail-title" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
-                                <h3>工单详情</h3>
-                                <button className="modal-close" onClick={() => setShowDetailModal(false)}>✕</button>
+                                <h3 id="support-detail-title">工单详情</h3>
+                                <button className="modal-close" onClick={() => setShowDetailModal(false)} aria-label="关闭工单详情">✕</button>
                             </div>
                             <div className="modal-body detail-stack">
                                 <div className="detail-block">

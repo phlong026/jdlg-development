@@ -21,6 +21,7 @@ import {
     updateFeaturedCaseGroup,
     deleteFeaturedCaseGroup,
     type TemplateItem as ApiTemplate,
+    type TemplateUpdateRequest,
     type TemplateCategoryItem,
     type TabConfigItem,
     type FeaturedCaseGroup,
@@ -129,7 +130,67 @@ const Templates: React.FC = () => {
     const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
     const [moveTargetTemplate, setMoveTargetTemplate] = useState<Template | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const [formData, setFormData] = useState<typeof defaultForm>(defaultForm);
+    const [addFormData, setAddFormData] = useState<typeof defaultForm>(defaultForm);
+    const [editFormData, setEditFormData] = useState<typeof defaultForm>(defaultForm);
+    const editInitialFormRef = useRef<typeof defaultForm | null>(null);
+    const addUploadRef = useRef<HTMLInputElement>(null);
+    const editUploadRef = useRef<HTMLInputElement>(null);
+    const editorSessionRef = useRef(0);
+    const savePendingRef = useRef(false);
+    const uploadPendingRef = useRef(false);
+    const [uploading, setUploading] = useState(false);
+
+    const closeTemplateEditor = () => {
+        editorSessionRef.current += 1;
+        setShowAddModal(false);
+        setShowEditModal(false);
+        setSelectedTemplate(null);
+        editInitialFormRef.current = null;
+        uploadPendingRef.current = false;
+        setUploading(false);
+    };
+
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, mode: 'add' | 'edit') => {
+        const input = event.currentTarget;
+        const files = Array.from(input.files || []);
+        input.value = '';
+        if (!files.length || uploadPendingRef.current || savePendingRef.current) return;
+        const session = editorSessionRef.current;
+        uploadPendingRef.current = true;
+        setUploading(true);
+        const uploaded: string[] = [];
+        try {
+            for (const file of files) {
+                if (session !== editorSessionRef.current) return;
+                const body = new FormData();
+                body.append('file', file);
+                try {
+                    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.OSS.UPLOAD}`, {
+                        method: 'POST', credentials: 'include', body,
+                    });
+                    const result = await response.json();
+                    if (session !== editorSessionRef.current) return;
+                    if (response.ok && result.code === 0 && result.data?.url) {
+                        uploaded.push(result.data.url);
+                    } else {
+                        alert(result.msg || '上传失败');
+                    }
+                } catch (error: any) {
+                    if (session !== editorSessionRef.current) return;
+                    alert('上传失败: ' + (error?.message || '未知错误'));
+                }
+            }
+            if (session === editorSessionRef.current && uploaded.length) {
+                const setForm = mode === 'add' ? setAddFormData : setEditFormData;
+                setForm(form => ({ ...form, imageUrls: [...form.imageUrls, ...uploaded] }));
+            }
+        } finally {
+            if (session === editorSessionRef.current) {
+                uploadPendingRef.current = false;
+                setUploading(false);
+            }
+        }
+    };
     const [categoryForm, setCategoryForm] = useState({ id: '', name: '', sort_order: 0 });
     const [categorySectionOpen, setCategorySectionOpen] = useState(false);
     const [tabConfigSectionOpen, setTabConfigSectionOpen] = useState(false);
@@ -503,11 +564,15 @@ const Templates: React.FC = () => {
     };
 
     const handleEdit = async (template: Template) => {
+        if (savePendingRef.current) return;
+        closeTemplateEditor();
+        const session = editorSessionRef.current;
         try {
             if (!mainTabs.length || !subTabs.length) {
                 await loadTabConfig();
             }
             const detail = await getTemplateDetail(template.id);
+            if (session !== editorSessionRef.current) return;
             // 杩樺師宸叉湁鍥剧墖锛?
             // 1锛変紭鍏堜粠 detail.images 瑙ｆ瀽锛堝瓧绗︿覆鏁扮粍鎴栧璞℃暟缁勶級锛?
             // 2锛夊鏋滄病鏈?images锛屼絾鏈?thumbnail/preview_url锛屽垯鐢ㄥ畠浠ˉ涓€寮狅紝閬垮厤缂栬緫鏃舵妸鑰佸浘鐗囨竻绌恒€?
@@ -545,7 +610,7 @@ const Templates: React.FC = () => {
             })();
 
             const detailTemplate = convertTemplate(detail);
-            setFormData({
+            const initialForm = {
                 name: detail.name,
                 category: detail.category,
                 mainTab: detail.main_tab || '',
@@ -556,7 +621,9 @@ const Templates: React.FC = () => {
                 price: detail.price ?? 0,
                 isFree: detail.is_free ?? true,
                 status: detail.status,
-            });
+            };
+            editInitialFormRef.current = initialForm;
+            setEditFormData(initialForm);
             setSelectedTemplate(detailTemplate);
             setShowEditModal(true);
         } catch (e) {
@@ -574,70 +641,85 @@ const Templates: React.FC = () => {
     };
 
     const handleSaveEdit = async () => {
-        if (!selectedTemplate) return;
-        if (!formData.name.trim()) {
+        if (!selectedTemplate || !editInitialFormRef.current || savePendingRef.current || uploadPendingRef.current) return;
+        if (!editFormData.name.trim()) {
             alert('请填写名称');
             return;
         }
+        const initial = editInitialFormRef.current;
+        const patch: TemplateUpdateRequest = {};
+        if (editFormData.name !== initial.name) patch.name = editFormData.name;
+        if (editFormData.description !== initial.description) patch.description = editFormData.description;
+        if (editFormData.mainTab !== initial.mainTab) patch.main_tab = editFormData.mainTab;
+        if (editFormData.subTab !== initial.subTab) patch.sub_tab = editFormData.subTab;
+        if (editFormData.thirdTab !== initial.thirdTab) patch.third_tab = editFormData.thirdTab;
+        if (editFormData.price !== initial.price) patch.price = editFormData.price;
+        if (editFormData.isFree !== initial.isFree) patch.is_free = editFormData.isFree;
+        if (editFormData.status !== initial.status) patch.status = editFormData.status;
+        if (JSON.stringify(editFormData.imageUrls) !== JSON.stringify(initial.imageUrls)) {
+            const { thumbnail, previewUrl, images } = buildImageFields(editFormData.imageUrls);
+            patch.thumbnail = thumbnail;
+            patch.preview_url = previewUrl;
+            patch.images = images;
+        }
+        if (!Object.keys(patch).length) {
+            closeTemplateEditor();
+            return;
+        }
+        savePendingRef.current = true;
+        const session = editorSessionRef.current;
         setActionLoading(selectedTemplate.id);
         try {
-            const { thumbnail, previewUrl, images } = buildImageFields(formData.imageUrls);
-            // 鍒嗙被锛氱紪杈戞椂娌跨敤鍘熸湁鍒嗙被
-            const category = formData.category || selectedTemplate.category || categories[0]?.id || 'villa';
-            const updated = await updateTemplate(selectedTemplate.id, {
-                name: formData.name,
-                category,
-                main_tab: formData.mainTab || undefined,
-                sub_tab: formData.subTab || undefined,
-                third_tab: formData.thirdTab || undefined,
-                description: formData.description,
-                thumbnail: thumbnail || undefined,
-                preview_url: previewUrl || undefined,
-                images: images || undefined,
-                price: formData.price,
-                is_free: formData.isFree,
-                status: formData.status,
-            });
-            setTemplates(templates.map(t => t.id === selectedTemplate.id ? convertTemplate(updated) : t));
-            setShowEditModal(false);
-            setSelectedTemplate(null);
-        } catch (e: any) {
-            alert(e?.message || '更新失败');
+            const updated = await updateTemplate(selectedTemplate.id, patch);
+            if (updated) {
+                setTemplates(items => items.map(item => item.id === selectedTemplate.id ? convertTemplate(updated) : item));
+            }
+            if (session === editorSessionRef.current) closeTemplateEditor();
+            if (!updated) {
+                alert('修改已保存，但最新数据暂时无法读取，请刷新列表核实');
+                void loadTemplates();
+            }
+        } catch (error: any) {
+            alert(error?.message || '更新失败');
         } finally {
+            savePendingRef.current = false;
             setActionLoading(null);
         }
     };
 
     const handleAddTemplate = async () => {
-        if (!formData.name.trim()) {
+        if (savePendingRef.current || uploadPendingRef.current) return;
+        if (!addFormData.name.trim()) {
             alert('请填写名称');
             return;
         }
+        savePendingRef.current = true;
+        const session = editorSessionRef.current;
         setActionLoading('add');
         try {
-            const { thumbnail, previewUrl, images } = buildImageFields(formData.imageUrls);
+            const { thumbnail, previewUrl, images } = buildImageFields(addFormData.imageUrls);
             // 鍒嗙被锛氫笉鍐嶅崟鐙€夋嫨锛岄粯璁や娇鐢ㄧ涓€涓垎绫?
             const category = categories[0]?.id || 'villa';
             await createTemplate({
-                name: formData.name,
+                name: addFormData.name,
                 category,
-                main_tab: formData.mainTab || undefined,
-                sub_tab: formData.subTab || undefined,
-                third_tab: formData.thirdTab || undefined,
-                description: formData.description,
+                main_tab: addFormData.mainTab || undefined,
+                sub_tab: addFormData.subTab || undefined,
+                third_tab: addFormData.thirdTab || undefined,
+                description: addFormData.description,
                 thumbnail: thumbnail || undefined,
                 preview_url: previewUrl || undefined,
                 images: images || undefined,
-                price: formData.price,
-                is_free: formData.isFree,
-                status: formData.status,
+                price: addFormData.price,
+                is_free: addFormData.isFree,
+                status: addFormData.status,
             });
-            setShowAddModal(false);
-            setFormData(defaultForm);
+            if (session === editorSessionRef.current) closeTemplateEditor();
             loadTemplates();
         } catch (e: any) {
             alert(e?.message || '创建失败');
         } finally {
+            savePendingRef.current = false;
             setActionLoading(null);
         }
     };
@@ -884,7 +966,9 @@ const Templates: React.FC = () => {
                                     if (!mainTabs.length || !subTabs.length) {
                                         loadTabConfig();
                                     }
-                                    setFormData(defaultForm);
+                                    if (savePendingRef.current) return;
+                                    closeTemplateEditor();
+                                    setAddFormData({ ...defaultForm, imageUrls: [] });
                                     setShowAddModal(true);
                                 }}
                             >
@@ -1269,24 +1353,24 @@ const Templates: React.FC = () => {
 
                 {/* 娣诲姞妯℃澘寮圭獥 */}
                 {showAddModal && (
-                    <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+                    <div className="modal-overlay" onClick={closeTemplateEditor}>
                         <div className="modal-content modal-form" onClick={(e) => e.stopPropagation()}>
                             <div className="modal-header">
                                 <h3>添加模板</h3>
-                                <button className="modal-close" onClick={() => setShowAddModal(false)}>×</button>
+                                <button className="modal-close" onClick={closeTemplateEditor}>×</button>
                             </div>
                             <div className="modal-body">
                                 <div className="form-group">
                                     <label>名称 *</label>
-                                    <input className="form-input" value={formData.name} onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
+                                    <input className="form-input" value={addFormData.name} onChange={(e) => setAddFormData(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
                                 </div>
                                 {/* 分类由系统根据配置自动处理，这里不再单独选择 */}
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>一级标签（可选）</label>
-                                        <select className="form-input" value={formData.mainTab} onChange={(e) => {
+                                        <select className="form-input" value={addFormData.mainTab} onChange={(e) => {
                                             const mainTabValue = e.target.value;
-                                            setFormData(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
+                                            setAddFormData(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
                                         }}>
                                             <option value="">不设置（仅分类）</option>
                                             {mainTabs.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -1294,22 +1378,139 @@ const Templates: React.FC = () => {
                                     </div>
                                     <div className="form-group">
                                         <label>二级标签（可选）</label>
-                                        <select className="form-input" value={formData.subTab} onChange={(e) => setFormData(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!formData.mainTab}>
+                                        <select className="form-input" value={addFormData.subTab} onChange={(e) => setAddFormData(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!addFormData.mainTab}>
                                             <option value="">不设置（仅父标签）</option>
-                                            {formData.mainTab && getChildTabsByParent(subTabs, formData.mainTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                            {addFormData.mainTab && getChildTabsByParent(subTabs, addFormData.mainTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                         </select>
                                     </div>
                                 </div>
                                 <div className="form-group">
                                     <label>三级Tab（可选）</label>
-                                    <select className="form-input" value={formData.thirdTab} onChange={(e) => setFormData(f => ({ ...f, thirdTab: e.target.value }))} disabled={!formData.subTab || getChildTabsByParent(thirdTabs, formData.subTab).length === 0}>
+                                    <select className="form-input" value={addFormData.thirdTab} onChange={(e) => setAddFormData(f => ({ ...f, thirdTab: e.target.value }))} disabled={!addFormData.subTab || getChildTabsByParent(thirdTabs, addFormData.subTab).length === 0}>
                                         <option value="">不设置（仅二级Tab）</option>
-                                        {formData.subTab && getChildTabsByParent(thirdTabs, formData.subTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                        {addFormData.subTab && getChildTabsByParent(thirdTabs, addFormData.subTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group">
                                     <label>描述</label>
-                                    <textarea className="form-input" rows={3} value={formData.description} onChange={(e) => setFormData(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
+                                    <textarea className="form-input" rows={3} value={addFormData.description} onChange={(e) => setAddFormData(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
+                                </div>
+                                <div className="form-group">
+                                    <label>模板图片（支持多图）</label>
+                                    <div className="image-upload-group">
+                                        <input ref={addUploadRef} type="file" accept="image/*" multiple
+                                            style={{ display: 'none' }} onChange={event => handleImageUpload(event, 'add')} />
+                                        <button
+                                            type="button"
+                                            className="btn-secondary"
+                                            disabled={uploading || actionLoading === 'add'}
+                                            onClick={() => addUploadRef.current?.click()}
+                                        >
+                                            选择图片并上传
+                                        </button>
+                                    </div>
+                                    {addFormData.imageUrls && addFormData.imageUrls.length > 0 && (
+                                        <div className="image-preview-list">
+                                            {addFormData.imageUrls.map((url, idx) => (
+                                                <div key={url + idx} className="image-preview-item">
+                                                    <img
+                                                        src={url}
+                                                        alt={`图片${idx + 1}`}
+                                                        className="image-preview-thumb"
+                                                        onClick={() => window.open(url, '_blank')}
+                                                    />
+                                                    <div className="image-preview-meta">
+                                                        {idx === 0 && <span className="badge-primary">首图（缩略图/主图）</span>}
+                                                        <button
+                                                            type="button"
+                                                            className="btn-action btn-delete"
+                                                            onClick={() =>
+                                                                setAddFormData(f => ({
+                                                                    ...f,
+                                                                    imageUrls: (f.imageUrls || []).filter((_, i) => i !== idx),
+                                                                }))
+                                                            }
+                                                        >
+                                                            删除
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>价格（灵石）</label>
+                                        <input type="number" className="form-input" value={addFormData.price || ''} onChange={(e) => setAddFormData(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
+                                    </div>
+                                    <div className="form-group form-group-inline">
+                                        <label>
+                                            <input type="checkbox" checked={addFormData.isFree} onChange={(e) => setAddFormData(f => ({ ...f, isFree: e.target.checked }))} />
+                                            免费
+                                        </label>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>状态</label>
+                                        <select className="form-input" value={addFormData.status} onChange={(e) => setAddFormData(f => ({ ...f, status: e.target.value }))}>
+                                            <option value="draft">草稿</option>
+                                            <option value="published">已发布</option>
+                                            <option value="archived">已归档</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn-secondary" onClick={closeTemplateEditor}>取消</button>
+                                <button className="btn-primary" onClick={handleAddTemplate} disabled={uploading || actionLoading === 'add'}>保存</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 编辑模板弹窗 */}
+                {showEditModal && selectedTemplate && (
+                    <div className="modal-overlay" onClick={closeTemplateEditor}>
+                        <div className="modal-content modal-form" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3>编辑模板</h3>
+                                <button className="modal-close" onClick={closeTemplateEditor}>×</button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="form-group">
+                                    <label>名称 *</label>
+                                    <input className="form-input" value={editFormData.name} onChange={(e) => setEditFormData(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
+                                </div>
+                                {/* 分类由系统根据配置自动处理，这里不再单独选择 */}
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>一级标签（可选）</label>
+                                        <select className="form-input" value={editFormData.mainTab} onChange={(e) => {
+                                            const mainTabValue = e.target.value;
+                                            setEditFormData(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
+                                        }}>
+                                            <option value="">不设置（仅分类）</option>
+                                            {mainTabs.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>二级标签（可选）</label>
+                                        <select className="form-input" value={editFormData.subTab} onChange={(e) => setEditFormData(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!editFormData.mainTab}>
+                                            <option value="">不设置（仅父标签）</option>
+                                            {editFormData.mainTab && getChildTabsByParent(subTabs, editFormData.mainTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label>三级Tab（可选）</label>
+                                    <select className="form-input" value={editFormData.thirdTab} onChange={(e) => setEditFormData(f => ({ ...f, thirdTab: e.target.value }))} disabled={!editFormData.subTab || getChildTabsByParent(thirdTabs, editFormData.subTab).length === 0}>
+                                        <option value="">不设置（仅二级Tab）</option>
+                                        {editFormData.subTab && getChildTabsByParent(thirdTabs, editFormData.subTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label>描述</label>
+                                    <textarea className="form-input" rows={3} value={editFormData.description} onChange={(e) => setEditFormData(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
                                 </div>
                                 <div className="readonly-info-panel">
                                     <div className="readonly-info-title">运营信息</div>
@@ -1343,64 +1544,20 @@ const Templates: React.FC = () => {
                                 <div className="form-group">
                                     <label>模板图片（支持多图）</label>
                                     <div className="image-upload-group">
-                                        <input
-                                            id="template-images-upload"
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            style={{ display: 'none' }}
-                                            onChange={async (e) => {
-                                                const files = Array.from(e.target.files || []);
-                                                if (!files.length) return;
-                                                const uploaded: string[] = [];
-                                                for (const file of files) {
-                                                    const formDataUpload = new FormData();
-                                                    formDataUpload.append('file', file);
-                                                    try {
-                                                        const resp = await fetch(`${API_BASE_URL}${API_ENDPOINTS.OSS.UPLOAD}`, {
-                                                            method: 'POST',
-                                                            credentials: 'include',
-                                                            body: formDataUpload,
-                                                        });
-                                                        const result = await resp.json();
-                                                        if (resp.ok && result.code === 0 && result.data?.url) {
-                                                            uploaded.push(result.data.url);
-                                                        } else {
-                                                            alert(result.msg || '上传失败');
-                                                        }
-                                                    } catch (err: any) {
-                                                        alert('上传失败: ' + (err?.message || '未知错误'));
-                                                    }
-                                                }
-                                                if (uploaded.length) {
-                                                    setFormData(f => ({
-                                                        ...f,
-                                                        imageUrls: [...(f.imageUrls || []), ...uploaded],
-                                                    }));
-                                                }
-                                                // 清空 input，避免同一文件不触发 change
-                                                e.target.value = '';
-                                            }}
-                                        />
+                                        <input ref={editUploadRef} type="file" accept="image/*" multiple
+                                            style={{ display: 'none' }} onChange={event => handleImageUpload(event, 'edit')} />
                                         <button
                                             type="button"
                                             className="btn-secondary"
-                                            onClick={() => {
-                                                const input = document.getElementById('template-images-upload') as HTMLInputElement | null;
-                                                input?.click();
-                                            }}
+                                            disabled={uploading || actionLoading === selectedTemplate.id}
+                                            onClick={() => editUploadRef.current?.click()}
                                         >
                                             选择图片并上传
                                         </button>
                                     </div>
-                                    {selectedTemplate && (
-                                        <div className="image-size-tip">
-                                            当前封面尺寸：{formatImageMeta(selectedTemplate.imageWidth, selectedTemplate.imageHeight)}
-                                        </div>
-                                    )}
-                                    {formData.imageUrls && formData.imageUrls.length > 0 && (
+                                    {editFormData.imageUrls && editFormData.imageUrls.length > 0 && (
                                         <div className="image-preview-list">
-                                            {formData.imageUrls.map((url, idx) => (
+                                            {editFormData.imageUrls.map((url, idx) => (
                                                 <div key={url + idx} className="image-preview-item">
                                                     <img
                                                         src={url}
@@ -1414,7 +1571,7 @@ const Templates: React.FC = () => {
                                                             type="button"
                                                             className="btn-action btn-delete"
                                                             onClick={() =>
-                                                                setFormData(f => ({
+                                                                setEditFormData(f => ({
                                                                     ...f,
                                                                     imageUrls: (f.imageUrls || []).filter((_, i) => i !== idx),
                                                                 }))
@@ -1431,135 +1588,17 @@ const Templates: React.FC = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>价格（灵石）</label>
-                                        <input type="number" className="form-input" value={formData.price || ''} onChange={(e) => setFormData(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
+                                        <input type="number" className="form-input" value={editFormData.price || ''} onChange={(e) => setEditFormData(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
                                     </div>
                                     <div className="form-group form-group-inline">
                                         <label>
-                                            <input type="checkbox" checked={formData.isFree} onChange={(e) => setFormData(f => ({ ...f, isFree: e.target.checked }))} />
+                                            <input type="checkbox" checked={editFormData.isFree} onChange={(e) => setEditFormData(f => ({ ...f, isFree: e.target.checked }))} />
                                             免费
                                         </label>
                                     </div>
                                     <div className="form-group">
                                         <label>状态</label>
-                                        <select className="form-input" value={formData.status} onChange={(e) => setFormData(f => ({ ...f, status: e.target.value }))}>
-                                            <option value="draft">草稿</option>
-                                            <option value="published">已发布</option>
-                                            <option value="archived">已归档</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowAddModal(false)}>取消</button>
-                                <button className="btn-primary" onClick={handleAddTemplate} disabled={actionLoading === 'add'}>保存</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 编辑模板弹窗 */}
-                {showEditModal && selectedTemplate && (
-                    <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-                        <div className="modal-content modal-form" onClick={(e) => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h3>编辑模板</h3>
-                                <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="form-group">
-                                    <label>名称 *</label>
-                                    <input className="form-input" value={formData.name} onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
-                                </div>
-                                {/* 分类由系统根据配置自动处理，这里不再单独选择 */}
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>一级标签（可选）</label>
-                                        <select className="form-input" value={formData.mainTab} onChange={(e) => {
-                                            const mainTabValue = e.target.value;
-                                            setFormData(f => ({ ...f, mainTab: mainTabValue, subTab: '', thirdTab: '' }));
-                                        }}>
-                                            <option value="">不设置（仅分类）</option>
-                                            {mainTabs.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="form-group">
-                                        <label>二级标签（可选）</label>
-                                        <select className="form-input" value={formData.subTab} onChange={(e) => setFormData(f => ({ ...f, subTab: e.target.value, thirdTab: '' }))} disabled={!formData.mainTab}>
-                                            <option value="">不设置（仅父标签）</option>
-                                            {formData.mainTab && getChildTabsByParent(subTabs, formData.mainTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>三级Tab（可选）</label>
-                                    <select className="form-input" value={formData.thirdTab} onChange={(e) => setFormData(f => ({ ...f, thirdTab: e.target.value }))} disabled={!formData.subTab || getChildTabsByParent(thirdTabs, formData.subTab).length === 0}>
-                                        <option value="">不设置（仅二级Tab）</option>
-                                        {formData.subTab && getChildTabsByParent(thirdTabs, formData.subTab).map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>描述</label>
-                                    <textarea className="form-input" rows={3} value={formData.description} onChange={(e) => setFormData(f => ({ ...f, description: e.target.value }))} placeholder="模板描述" />
-                                </div>
-                                <div className="form-group">
-                                    <label>模板图片（支持多图）</label>
-                                    <div className="image-upload-group">
-                                        {/* 复用同一个 input，编辑弹窗仅触发 click */}
-                                        <button
-                                            type="button"
-                                            className="btn-secondary"
-                                            onClick={() => {
-                                                const input = document.getElementById('template-images-upload') as HTMLInputElement | null;
-                                                input?.click();
-                                            }}
-                                        >
-                                            选择图片并上传
-                                        </button>
-                                    </div>
-                                    {formData.imageUrls && formData.imageUrls.length > 0 && (
-                                        <div className="image-preview-list">
-                                            {formData.imageUrls.map((url, idx) => (
-                                                <div key={url + idx} className="image-preview-item">
-                                                    <img
-                                                        src={url}
-                                                        alt={`图片${idx + 1}`}
-                                                        className="image-preview-thumb"
-                                                        onClick={() => window.open(url, '_blank')}
-                                                    />
-                                                    <div className="image-preview-meta">
-                                                        {idx === 0 && <span className="badge-primary">首图（缩略图/主图）</span>}
-                                                        <button
-                                                            type="button"
-                                                            className="btn-action btn-delete"
-                                                            onClick={() =>
-                                                                setFormData(f => ({
-                                                                    ...f,
-                                                                    imageUrls: (f.imageUrls || []).filter((_, i) => i !== idx),
-                                                                }))
-                                                            }
-                                                        >
-                                                            删除
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>价格（灵石）</label>
-                                        <input type="number" className="form-input" value={formData.price || ''} onChange={(e) => setFormData(f => ({ ...f, price: parseInt(e.target.value, 10) || 0 }))} />
-                                    </div>
-                                    <div className="form-group form-group-inline">
-                                        <label>
-                                            <input type="checkbox" checked={formData.isFree} onChange={(e) => setFormData(f => ({ ...f, isFree: e.target.checked }))} />
-                                            免费
-                                        </label>
-                                    </div>
-                                    <div className="form-group">
-                                        <label>状态</label>
-                                        <select className="form-input" value={formData.status} onChange={(e) => setFormData(f => ({ ...f, status: e.target.value }))}>
+                                        <select className="form-input" value={editFormData.status} onChange={(e) => setEditFormData(f => ({ ...f, status: e.target.value }))}>
                                             <option value="draft">草稿</option>
                                             <option value="pending">待审核</option>
                                             <option value="published">已发布</option>
@@ -1569,8 +1608,8 @@ const Templates: React.FC = () => {
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button className="btn-secondary" onClick={() => setShowEditModal(false)}>取消</button>
-                                <button className="btn-primary" onClick={handleSaveEdit} disabled={actionLoading === selectedTemplate.id}>保存</button>
+                                <button className="btn-secondary" onClick={closeTemplateEditor}>取消</button>
+                                <button className="btn-primary" onClick={handleSaveEdit} disabled={uploading || actionLoading === selectedTemplate.id}>保存</button>
                             </div>
                         </div>
                     </div>

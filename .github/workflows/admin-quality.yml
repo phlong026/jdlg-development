@@ -57,3 +57,29 @@ jobs:
             git show --format= --check HEAD
           fi
           git diff --exit-code HEAD
+
+  template-contract:
+    name: Template update contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the validated Go version
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.2'
+          cache: false
+
+      # These tests use the production template model/handler with a fake SQL
+      # driver and httptest. They do not need production credentials or services.
+      - name: Run isolated template contract regression tests
+        run: bash service/scripts/test-template-update.sh
+
+      - name: Check tracked files remain unchanged
+        run: git diff --exit-code HEAD

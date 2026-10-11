@@ -35,6 +35,9 @@ type Template struct {
 	OriginalTaskID int64     `json:"original_task_id"` // 原始AI任务ID，用于获取提示词和参考图
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+
+	// Raw storage is retained for edit CAS; Description may be normalized for display.
+	storedDescription *string
 }
 
 const LegacyTemplatePromptPrefix = "\n\n提示词: "
@@ -54,17 +57,14 @@ func normalizeTemplateRecord(template *Template) {
 	if template == nil {
 		return
 	}
-	template.Description = strings.TrimSpace(template.Description)
-	template.InternalPrompt = strings.TrimSpace(template.InternalPrompt)
-	if template.InternalPrompt != "" {
-		return
-	}
-	publicDescription, prompt := SplitTemplateDescriptionPrompt(template.Description)
-	if prompt == "" {
-		return
-	}
+	// Split before trimming: an empty public description starts with the
+	// newline-delimited legacy prompt marker. Trimming first would expose it.
+	publicDescription, legacyPrompt := SplitTemplateDescriptionPrompt(template.Description)
 	template.Description = publicDescription
-	template.InternalPrompt = prompt
+	template.InternalPrompt = strings.TrimSpace(template.InternalPrompt)
+	if template.InternalPrompt == "" {
+		template.InternalPrompt = legacyPrompt
+	}
 }
 
 // TemplateModel 模板模型
@@ -222,6 +222,8 @@ func (m *TemplateModel) GetByID(id int64) (*Template, error) {
 	}
 	template.IsFree = isFreeInt == 1
 	template.IsFeatured = isFeaturedInt == 1
+	storedDescription := template.Description
+	template.storedDescription = &storedDescription
 	normalizeTemplateRecord(template)
 	return template, nil
 }
