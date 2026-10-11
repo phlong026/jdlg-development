@@ -5,6 +5,7 @@ const parameter_1 = require("../../utils/parameter");
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const asset_1 = require("../../utils/asset");
 const trackingConsent = require('../../utils/tracking/index');
+const shareMaterials = require('../../utils/tracking/materials');
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
 const PAGE_BACKGROUND_TOP = '#e6daca';
@@ -115,10 +116,12 @@ function buildWorkbenchMenuItems(options) {
     ];
 }
 Page({
+    ...shareMaterials.methods,
     /**
      * 页面的初始数据
      */
     data: {
+        ...shareMaterials.data,
         token: '',
         userInfo: null,
         userProfile: {
@@ -184,7 +187,10 @@ Page({
             backgroundColorBottom: PAGE_BACKGROUND_BOTTOM,
         });
     },
+    onHide() { this.hideShareMaterials(); },
+    onUnload() { this.hideShareMaterials(); },
     onShow() {
+        this.refreshShareMaterials();
         this.syncTrackingConsent();
         trackingConsent.refreshConfig().then(() => this.syncTrackingConsent());
         this.syncWindowBackground();
@@ -198,14 +204,16 @@ Page({
         this.setData({ trackingConsented: trackingConsent.consented() });
     },
     async onTrackingConsentTap() {
-        if (this.data.trackingConsentBusy) return;
+        if (this.data.trackingConsentBusy)
+            return;
         this.setData({ trackingConsentBusy: true });
         try {
             const chosen = await trackingConsent.showConsentChoices(this);
             if (!chosen && !trackingConsent.config().enabled) {
                 wx.showToast({ title: '访问分析未启用，仍可撤回同意', icon: 'none' });
             }
-        } finally {
+        }
+        finally {
             this.syncTrackingConsent();
             this.setData({ trackingConsentBusy: false });
         }
@@ -267,6 +275,8 @@ Page({
      */
     loadUserData(forceRemote = false) {
         const token = wx.getStorageSync('token');
+        if (this.__materialsAccount !== String(token || ''))
+            this.resetShareMaterials();
         const userInfo = wx.getStorageSync('userInfo') || null;
         const currentUserInfo = this.data.userInfo || null;
         const displayUserInfo = userInfo || currentUserInfo;
@@ -580,6 +590,7 @@ Page({
      * 页面相关事件处理函数--监听用户下拉动作
      */
     onPullDownRefresh() {
+        this.refreshShareMaterials();
         this.loadUserData();
         wx.stopPullDownRefresh();
     },

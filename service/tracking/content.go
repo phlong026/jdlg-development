@@ -205,7 +205,7 @@ func (s *Service) ReadContent(ctx context.Context, id string, version int) (Cont
 		return out, fail(404, "内容不可访问")
 	}
 	e := s.transaction(ctx, func(r Repository) error {
-		if e := s.available(r, "pages/contentreader/contentreader", id, version); e != nil {
+		if e := s.available(ctx, r, "pages/contentreader/contentreader", id, version); e != nil {
 			return e
 		}
 		var e error

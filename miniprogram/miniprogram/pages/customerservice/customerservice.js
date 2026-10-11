@@ -686,8 +686,10 @@ Page({
     },
     async handoffHuman() {
         this.touchFlow();
+        let leadSaved = false;
         try {
-            await this.createLead('handoff_human');
+            const saved = await this.createLead('handoff_human');
+            leadSaved = !!(saved && saved.id);
         }
         catch (error) {
             if (getErrorStatusCode(error) !== 404) {
@@ -703,7 +705,7 @@ Page({
             customerServiceUrl: enterpriseWechat_1.DEFAULT_CUSTOMER_SERVICE_URL,
         });
         if (!result.opened) {
-            wx.showToast({ title: '已为你记录需求，可在首页联系服务商继续沟通', icon: 'none' });
+            wx.showToast({ title: leadSaved ? '已为你记录需求，可在首页联系服务商继续沟通' : '请求暂未保存，请重试或在首页联系服务商', icon: 'none' });
         }
     },
     async createLead(reason, options = {}) {
@@ -719,7 +721,7 @@ Page({
             }
             return;
         }
-        const apiPath = '/api/v1/miniprogram/customer-service/leads';
+        const apiPath = reason === 'handoff_human' ? '/api/v1/miniprogram/customer-service/consultation-requests' : '/api/v1/miniprogram/customer-service/leads';
         const body = {
             session_no: this.data.sessionNo,
             source: this.data.source,
@@ -740,7 +742,7 @@ Page({
                 style_reference: selectedStyleReference,
             },
         };
-        await this.postCustomerService(apiPath, body);
+        return await this.postCustomerService(apiPath, body);
     },
     async recordEvent(eventType, payload = {}) {
         const token = wx.getStorageSync('token');
@@ -804,10 +806,10 @@ Page({
             wx.request({
                 url: `${API_BASE_URL}${apiPath}`,
                 method: 'POST',
-                header: {
+                header: require('../../utils/tracking/consultation').optionalConsultationHeaders(apiPath, {
                     ...(0, parameter_1.paramsToHeaders)(params),
                     'Content-Type': 'application/json',
-                },
+                }),
                 data: body,
                 success: (res) => {
                     const data = res.data || {};

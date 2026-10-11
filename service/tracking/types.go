@@ -237,12 +237,24 @@ type IntentRule struct {
 	End     time.Time `json:"window_end"`
 }
 type IntentOverride struct {
+	Created time.Time `json:"created_at"`
 	Level   string    `json:"level"`
 	Reason  string    `json:"reason"`
 	Actor   int64     `json:"actor"`
 	Expires time.Time `json:"expires_at"`
 }
 type Intent struct {
+	Metrics              IntentMetrics    `json:"metrics"`
+	Thresholds           RuleParameters   `json:"thresholds"`
+	Exclusions           []string         `json:"exclusions"`
+	ParticipatingMetrics []string         `json:"participating_metrics"`
+	Evidence             []IntentEvidence `json:"evidence"`
+	EvidenceTruncated    bool             `json:"evidence_truncated,omitempty"`
+	ScopeRequired        bool             `json:"scope_required,omitempty"`
+	Timezone             string           `json:"timezone"`
+	OverrideState        string           `json:"override_state"`
+	sourceFingerprint    string
+
 	OriginalRule *IntentRule     `json:"original_rule,omitempty"`
 	Override     *IntentOverride `json:"override,omitempty"`
 	Level        string          `json:"level"`

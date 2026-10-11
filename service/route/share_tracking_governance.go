@@ -26,17 +26,19 @@ func makeTrackingCRMVerifier(db *sql.DB) func(context.Context, tracking.Scope, s
 		if e != nil || userID <= 0 {
 			return denied()
 		}
-		access, e := readManagementAccess(ctx, db, scope.Actor)
+		reader := tracking.SourceReadDB(ctx, db)
+		var access managementAccess
+		e = reader.QueryRowContext(ctx, `SELECT a.scope,a.enabled,a.version FROM management_access a JOIN users u ON u.id=a.user_id WHERE a.user_id=? AND u.user_type='management'`, scope.Actor).Scan(&access.Scope, &access.Enabled, &access.Version)
 		if e != nil || !access.Enabled || (access.Scope != "platform_admin" && access.Scope != "crm_only") {
 			return denied()
 		}
 		var owner string
-		e = db.QueryRowContext(ctx, `SELECT owner_id FROM tracking_access WHERE user_id=? AND tenant_id=? AND owner_id=? AND enabled=TRUE AND can_view=TRUE AND can_crm=TRUE`, scope.Actor, scope.Tenant, scope.Owners[0]).Scan(&owner)
+		e = reader.QueryRowContext(ctx, `SELECT owner_id FROM tracking_access WHERE user_id=? AND tenant_id=? AND owner_id=? AND enabled=TRUE AND can_view=TRUE AND can_crm=TRUE`, scope.Actor, scope.Tenant, scope.Owners[0]).Scan(&owner)
 		if e != nil || owner != scope.Owners[0] {
 			return denied()
 		}
 		var subject string
-		e = db.QueryRowContext(ctx, `SELECT crm_username FROM management_crm_link WHERE user_id=? AND enabled=TRUE AND state='active'`, scope.Actor).Scan(&subject)
+		e = reader.QueryRowContext(ctx, `SELECT crm_username FROM management_crm_link WHERE user_id=? AND enabled=TRUE AND state='active'`, scope.Actor).Scan(&subject)
 		if e != nil || strings.TrimSpace(subject) == "" || subject == "@platform" {
 			return denied()
 		}

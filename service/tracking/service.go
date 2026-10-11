@@ -12,11 +12,15 @@ import (
 )
 
 type Service struct {
-	ResolveLegacy func(string, int64) (LegacyMetadata, error)
-	VerifyCRM     func(context.Context, Scope, string, string, string) error
-	Store         Store
-	Config        Config
-	Now           func() time.Time
+	VerifyBusiness func(context.Context, BusinessProof) (bool, error)
+	// Server-side, current account grant lookup. Never derived from client fields.
+	IsContentOperator    func(context.Context, int64, string) (bool, error)
+	ResolveLegacy        func(string, int64) (LegacyMetadata, error)
+	ResolveLegacyContext func(context.Context, string, int64) (LegacyMetadata, error)
+	VerifyCRM            func(context.Context, Scope, string, string, string) error
+	Store                Store
+	Config               Config
+	Now                  func() time.Time
 }
 
 func New(store Store, cfg Config) *Service {
@@ -51,13 +55,13 @@ func (s *Service) entry(r Repository, token string) (Entry, error) {
 	}
 	return en, nil
 }
-func (s *Service) available(r Repository, route, content string, version int) error {
+func (s *Service) available(ctx context.Context, r Repository, route, content string, version int) error {
 	if e := s.Config.validateRoute(route); e != nil {
 		return e
 	}
 	if route != "pages/contentreader/contentreader" {
 		if LegacyRoute(route) {
-			_, err := s.resolveLegacy(route, content)
+			_, err := s.resolveLegacy(sourceReadContext(ctx, r), route, content)
 			if err != nil {
 				return err
 			}
@@ -70,6 +74,9 @@ func (s *Service) available(r Repository, route, content string, version int) er
 			return fail(400, "此页面不接受内容标识")
 		}
 		return nil
+	}
+	if !s.Config.ContentEnabled {
+		return fail(404, "内容不可访问")
 	}
 	if _, e := r.Get("content_revoked", content); e == nil {
 		return fail(404, "内容不可访问")
@@ -102,25 +109,38 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		var legacy Content
 		if LegacyRoute(in.Route) {
 			var err error
-			legacy, err = s.resolveLegacy(in.Route, in.Content)
+			legacy, err = s.resolveLegacy(sourceReadContext(ctx, r), in.Route, in.Content)
 			if err != nil {
 				return err
 			}
 			in.Version = legacy.Version
 		}
-		if e := s.available(r, in.Route, in.Content, in.Version); e != nil {
+		if e := s.available(ctx, r, in.Route, in.Content, in.Version); e != nil {
 			return e
 		}
 		now := s.Now()
 		owner := s.Config.DefaultOwner
 		share := ""
 		self := false
+		if in.Route == publishedReaderRoute {
+			content, err := decode[Content](r, "version", contentKey(in.Content, in.Version))
+			if err != nil {
+				return err
+			}
+			owner = content.Owner
+			if account > 0 && s.IsContentOperator != nil {
+				self, err = s.IsContentOperator(sourceReadContext(ctx, r), account, owner)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		if in.ShareToken != "" {
 			sh, e := decode[Share](r, "share", hash(in.ShareToken))
 			if e == nil && sh.Route == in.Route && sh.Content == in.Content && sh.Version == in.Version && !sh.Revoked && now.Before(sh.Expires) {
 				share = sh.ID
 				owner = sh.Owner
-				self = account > 0 && sh.Sharer == "u:"+strconv.FormatInt(account, 10)
+				self = self || account > 0 && sh.Sharer == "u:"+strconv.FormatInt(account, 10)
 			}
 		}
 		if owner == "" {
@@ -152,13 +172,13 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 					return lookup
 				}
 			}
-			if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == account {
+			if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == account && (in.Route != publishedReaderRoute || old.Owner == owner) {
 				out.Session = old.Session
 				out.Started = old.Started
 				out.Share = old.Share
 				out.Owner = old.Owner
-				out.Self = old.Self
-			} else if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == 0 && account > 0 {
+				out.Self = out.Self || old.Self
+			} else if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == 0 && account > 0 && (in.Route != publishedReaderRoute || old.Owner == owner) {
 				out.Session = old.Session
 				out.Started = old.Started
 				out.Share = old.Share
@@ -221,7 +241,7 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 		var legacy Content
 		if LegacyRoute(in.Route) {
 			var err error
-			legacy, err = s.resolveLegacy(in.Route, in.Content)
+			legacy, err = s.resolveLegacy(sourceReadContext(ctx, r), in.Route, in.Content)
 			if err != nil {
 				return err
 			}
@@ -229,7 +249,7 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 				return fail(409, "原内容已更新，请重新进入页面后分享")
 			}
 		}
-		if e := s.available(r, in.Route, in.Content, in.Version); e != nil {
+		if e := s.available(ctx, r, in.Route, in.Content, in.Version); e != nil {
 			return e
 		}
 		now := s.Now()
@@ -289,7 +309,7 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 	})
 	return out, e
 }
-func (s *Service) validateEvent(r Repository, en Entry, e *Event) error {
+func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *Event) error {
 	now := s.Now()
 	if e.Schema != 1 || !validID(e.ID) || (e.Type != "share_intent" && !validID(e.View)) || e.Session != en.Session {
 		return fail(400, "事件版本或上下文无效")
@@ -297,7 +317,7 @@ func (s *Service) validateEvent(r Repository, en Entry, e *Event) error {
 	if e.Route != en.Route || e.Content != en.Content || e.Version != en.Version {
 		return fail(400, "页面内容绑定不一致")
 	}
-	if err := s.available(r, e.Route, e.Content, e.Version); err != nil {
+	if err := s.available(ctx, r, e.Route, e.Content, e.Version); err != nil {
 		return err
 	}
 	if e.Occurred.IsZero() || e.Occurred.After(now.Add(2*time.Minute)) || e.Occurred.Before(now.Add(-72*time.Hour)) || e.Occurred.Before(en.Started.Add(-2*time.Minute)) {
@@ -456,7 +476,7 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 				out = append(out, res)
 				continue
 			}
-			if err = s.validateEvent(r, en, &e); err != nil {
+			if err = s.validateEvent(ctx, r, en, &e); err != nil {
 				res.Reason = err.Error()
 				out = append(out, res)
 				continue
@@ -585,11 +605,11 @@ func (s *Service) ResolveShare(ctx context.Context, token string) (map[string]an
 		if e != nil || sh.Revoked || s.Now().After(sh.Expires) {
 			return fail(404, "分享入口无效")
 		}
-		if e = s.available(r, sh.Route, sh.Content, sh.Version); e != nil {
+		if e = s.available(ctx, r, sh.Route, sh.Content, sh.Version); e != nil {
 			return e
 		}
 		if LegacyRoute(sh.Route) {
-			current, err := s.resolveLegacy(sh.Route, sh.Content)
+			current, err := s.resolveLegacy(sourceReadContext(ctx, r), sh.Route, sh.Content)
 			if err != nil {
 				return err
 			}

@@ -68,10 +68,45 @@ as_of固定收件快照用于分页；原始记录过期后，早于已冻结投
 
 ### 可解释意向证据
 
-当前followup-v1规则固定近30天窗口。匿名或证据不足为待判断；有效登录访问默认低关注，单纯复访不会升为中等。至少两次会话访问加该窗口内的服务端真实收藏成功证据可判中等；咨询/预约/报价的高关注仅接受可信服务端成功事实，不能以已有规则分支冒充所有业务链路均已接线。支持带原因及最长30天有效期的人工修正，并分别显示原规则和人工覆盖。未提供任意规则配置后台，修改规则/窗口及更多成功源仍需单独实现和验收。
+首版确定性规则按授权owner提供可配置窗口、会话/收藏/业务阈值及每日贡献上限；默认followup-v1为近30天。`GET/POST /intent-rules`提供只读说明和专门规则权限配置，保存创建不可变版本并事务性重算；`POST /intent-rules/recompute`支持版本绑定的幂等重算。标签返回参与指标、阈值、固定排除项、可追溯证据、原规则与人工覆盖状态。不同归属配置不一致时标签为待判断并要求选择单一归属，列表仍可使用。普通复访、点击、估价和AI关键词不会单独升级；真实收藏和独立主动咨询成功已接线，预约/报价尚无可用的真实成功源，不伪造。接口、版本回放、审计和删除语义见 [首版跟进规则合同](intent-rules.md)。
 
 ## 查询资源预算与范围下推
 
 数据库查询必须先限定授权 owner、业务时间和必要的内容/访客/页面或会话范围。为保留窗口前PV、跨午夜和跨页面时长去重，先选候选会话，再取得其所需完整事实，不对返回数据做静默截断。
 
 每请求累计最多20,000条读取记录及32MiB原始payload，超预算返回422，提示缩小时间、归属、素材或访客范围；成功响应绝不冒充部分统计。已过期原始明细返回410，无法从保留数据重建的历史快照返回409。预算是防止无界读的安全限制，不是百万级宽窗口报表的SLO证明。实施、索引和验证详见 service/docs/TRACKING_QUERY_BOUNDS.md。
+
+## 小程序已发布素材入口
+
+已有“我的”页增加“可分享素材”，复用已注册的 `pages/contentreader/contentreader`，不新增页面。
+
+- `GET /api/v1/miniprogram/tracking/materials?limit=20&cursor=...`：必须通过现有完整签名 token 验证。服务端按当前账号、配置 tenant、`tracking_access.enabled=true AND can_manage=true`、`users.user_type=miniprogram`、账号 active 取 owner 范围。没有授权为 403，前端隐藏入口；权限/数据服务故障为错误和重试态，不能假装空数据。仅返回该范围的不可变已发布快照标题、封面、固定版本、发布状态及 reader route，不返回草稿正文/标题、owner、访问统计。默认20、最高50，受同一后端查询预算限制。
+- `GET /api/v1/miniprogram/tracking/materials/:id/versions/:version`：每次点击重新验证当前权限、owner、固定发布版本和撤回墓碑，返回同一安全元数据。前端仅能导航到固定 reader；无权限、草稿、其他owner和撤回统一不可访问。此操作不生成PV或分享成功记录。
+- 发布后继续编辑草稿时，入口保持该素材最近已发布的固定快照，绝不混入正在编辑的标题/封面。撤回后不再列出，旧reader也不能读取。内容开关独立于分析开关，关闭分析或拒绝告知仍可打开和原生分享。
+- reader 成功加载前以及读取失败/撤回时隐藏原生分享菜单并清空旧内容；成功后分享目标仍是实际 content_id/content_version，标题/封面来自该发布版本。
+- `POST /entry` 对 reader 使用真实发布素材 owner，不使用默认owner。已认证且当前具有该owner素材能力的mini账号由服务端判定 self；客户端不可提供self/preview标记。其准备分享的阅读事件不进入客户PV/UV/可见时长统计；读取权限故障时采集失败关闭，不影响公开阅读。普通接收者仍按合法告知同意后记录。
+- 私有列表不落本地缓存，返回 `Cache-Control: private, no-store`。换号/登出/离开页立即清空列表，并丢弃旧请求；重复点击、旧打开请求不能把新账号导航到旧上下文。
+
+### 授权配置前提（不自动执行）
+
+现有小程序登录只接受 `users.user_type='miniprogram'`，管理后台账号只接受management身份。这两个账号不会根据名称、手机号或 management_access 自动映射。当前没有专门的mini素材授权UI；上线前须由有权限的数据库管理员确认实际mini用户ID、已存在的tenant和素材owner，经业务批准后显式配置 `tracking_access`。不能把管理端已授权当成小程序已授权。
+
+下面仅是最小权限配置模板，不随迁移执行，也未在本轮对任何数据库执行。全部占位值必须由授权管理员核实，owner必须与要分享的素材一致；同一mini账号需要多个owner时逐项审批。mini能力仅供公开素材列表和打开，不允许访问管理端草稿或客户数据。
+
+```sql
+-- 先在受控环境核验账号类型和状态，以及目标素材owner；不得按昵称猜测账号。
+SELECT id, user_type, status FROM users WHERE id = :verified_miniprogram_user_id;
+-- 新增最小授权；若已存在记录，先人工审查其现有独立能力，勿直接覆盖。
+INSERT INTO tracking_access
+ (user_id, tenant_id, owner_id, can_view, can_manage, can_crm, can_delete, can_rules, enabled, updated_by, updated_at)
+SELECT id, :verified_tenant_id, :verified_content_owner,
+ FALSE, TRUE, FALSE, FALSE, FALSE, TRUE, :authorized_operator_id, UTC_TIMESTAMP(6)
+FROM users
+WHERE id = :verified_miniprogram_user_id
+ AND user_type = 'miniprogram' AND COALESCE(status, 'active') = 'active';
+-- 撤销此mini素材能力（仍需真实管理员授权）：
+UPDATE tracking_access SET enabled=FALSE, updated_by=:authorized_operator_id, updated_at=UTC_TIMESTAMP(6)
+WHERE user_id=:verified_miniprogram_user_id AND tenant_id=:verified_tenant_id AND owner_id=:verified_content_owner;
+```
+
+自动覆盖：`service/tracking/published_materials_test.go`、`service/route/share_tracking_materials_test.go`、`miniprogram/tests/tracking-materials.test.js`。数据库驱动和Node VM只验证代码合同；真实签名登录/Redis、授权配置、微信开发者工具/真机样式、真实A分享给B的全链路仍是上线验收项。

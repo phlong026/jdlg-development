@@ -356,29 +356,58 @@ func appendUnique(a []string, s string) []string {
 }
 
 type intentFacts struct {
-	views     map[string][]factView
-	business  map[string][]Record
-	overrides map[string]Record
-	crm       map[string]Record
+	rule       RuleConfig
+	mixedRules bool
+	views      map[string][]factView
+	business   map[string][]Record
+	overrides  map[string]Record
+	crm        map[string]Record
 }
 
-func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time, visitors []string) (intentFacts, error) {
+func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope, now time.Time, visitors []string) (intentFacts, error) {
 	data := intentFacts{views: map[string][]factView{}, business: map[string][]Record{}, overrides: map[string]Record{}, crm: map[string]Record{}}
-	if s.Config.IntentEnabled {
-		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -30), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors})
+	var ruleErr error
+	data.rule, data.mixedRules, ruleErr = activeRule(r, scope, now)
+	if ruleErr != nil {
+		return data, ruleErr
+	}
+	if s.Config.IntentEnabled && !data.mixedRules {
+		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -data.rule.WindowDays), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors})
 		if e != nil {
 			return data, e
 		}
 		for _, v := range facts {
 			data.views[v.Visitor] = append(data.views[v.Visitor], v)
 		}
-		business, e := scopedRecords(r, "business", RecordQuery{Owners: permittedOwners(scope, ""), AtFrom: now.AddDate(0, 0, -30), AtThrough: now, VisitorKeys: visitors, IdentityAsOf: now})
+		business, e := scopedRecords(r, "business", RecordQuery{Owners: permittedOwners(scope, ""), AtFrom: now.AddDate(0, 0, -data.rule.WindowDays), AtThrough: now, VisitorKeys: visitors, IdentityAsOf: now})
 		if e != nil {
 			return data, e
 		}
+		verifiedSources := map[string]bool{}
+		verifyContext, cancelVerify := context.WithTimeout(sourceReadContext(ctx, r), 2*time.Second)
+		defer cancelVerify()
 		for _, b := range business {
-			if !scope.Allows(b.Owner) || b.At.Before(now.AddDate(0, 0, -30)) || b.At.After(now) {
+			if !scope.Allows(b.Owner) || b.At.Before(now.AddDate(0, 0, -data.rule.WindowDays)) || b.At.After(now) {
 				continue
+			}
+			if s.VerifyBusiness != nil {
+				proof, ok := sourceBusinessProof(b)
+				if !ok {
+					continue
+				}
+				cacheKey := string(marshal(proof))
+				valid, checked := verifiedSources[cacheKey]
+				if !checked {
+					var verifyErr error
+					valid, verifyErr = s.VerifyBusiness(verifyContext, proof)
+					if verifyErr != nil {
+						return data, ErrUnavailable
+					}
+					verifiedSources[cacheKey] = valid
+				}
+				if !valid {
+					continue
+				}
 			}
 			key := resolvedVisitorAt(r, b, now)
 			data.business[key] = append(data.business[key], b)
@@ -407,80 +436,126 @@ func (s *Service) loadIntentFacts(r Repository, scope Scope, now time.Time, visi
 	return data, nil
 }
 func (s *Service) intent(scope Scope, key string, now time.Time, data intentFacts) Intent {
-	in := Intent{Level: "unknown", Reasons: []string{"证据不足，待判断"}, Rule: RuleVersion, Start: now.AddDate(0, 0, -30), End: now, Calculated: now}
+	rule := data.rule
+	in := Intent{Level: "unknown", Reasons: []string{"证据不足，待判断"}, Rule: rule.Version, Start: now.AddDate(0, 0, -rule.WindowDays), End: now, Calculated: now, Thresholds: rule.RuleParameters, Exclusions: rule.Exclusions, ParticipatingMetrics: rule.Metrics, Timezone: rule.Timezone, OverrideState: "none", Evidence: []IntentEvidence{}}
+	if data.mixedRules {
+		in.ScopeRequired = true
+		in.Rule = "mixed"
+		in.Reasons = []string{"所选归属使用不同规则，请选择单一归属查看意向参考"}
+		return in
+	}
 	if !s.Config.IntentEnabled {
 		return in
 	}
-	facts := data.views[key]
+	facts := append([]factView{}, data.views[key]...)
+	sort.Slice(facts, func(i, j int) bool {
+		if facts[i].Started.Equal(facts[j].Started) {
+			return facts[i].ID < facts[j].ID
+		}
+		return facts[i].Started.Before(facts[j].Started)
+	})
 	sessions := map[string]bool{}
-	valid := 0
+	sessionDays := map[string]int{}
+	validSessions := map[string]bool{}
+	evidence := []IntentEvidence{}
+	zone := time.FixedZone("Asia/Shanghai", 8*60*60)
 	for _, v := range facts {
-		if v.Visitor == key {
-			valid++
-			sessions[v.Session] = true
+		if v.Visitor != key {
+			continue
 		}
-	}
-	if valid == 0 || strings.HasPrefix(key, "a:") {
-		return in
-	}
-	in.Level = "low"
-	in.Reasons = []string{"当前可观测行为较少；不表示没有需求"}
-	if len(sessions) > 1 {
-		in.Reasons = append(in.Reasons, "跨会话访问 "+strconv.Itoa(len(sessions))+" 次；复访本身不证明成交意愿")
-	}
-	business := data.business[key]
-	if len(business) > 0 {
-		sort.Slice(business, func(i, j int) bool {
-			if business[i].At.Equal(business[j].At) {
-				return business[i].ID < business[j].ID
-			}
-			return business[i].At.After(business[j].At)
-		})
-		for _, b := range business {
-			if scope.Allows(b.Owner) && !b.At.Before(in.Start) && !b.At.After(now) {
-				var detail map[string]string
-				if json.Unmarshal(b.Payload, &detail) != nil {
-					continue
-				}
-				action := map[string]string{"consultation": "咨询", "appointment": "预约", "quote": "报价"}[detail["action"]]
-				if action == "" {
-					continue
-				}
-				in.Level = "high"
-				in.Reasons = []string{"服务端已确认" + action + "，时间 " + b.At.UTC().Format(time.RFC3339) + "；需人工核实"}
-				break
-			}
+		validSessions[v.Session] = true
+		if sessions[v.Session] {
+			continue
 		}
+		sessions[v.Session] = true
+		at := v.Started
+		if at.Before(in.Start) {
+			at = in.Start
+		}
+		day := at.In(zone).Format("2006-01-02")
+		if sessionDays[day] >= rule.DailySessionCap {
+			continue
+		}
+		sessionDays[day]++
+		in.Metrics.Sessions++
+		evidence = append(evidence, IntentEvidence{Kind: "page_view", ID: v.ID, View: v.ID, Session: v.Session, At: v.Started, Content: v.Content, Version: v.Version})
 	}
-	if in.Level == "low" && len(sessions) >= 2 {
-		for _, b := range business {
-			var detail map[string]string
-			if json.Unmarshal(b.Payload, &detail) == nil && detail["action"] == "favorite" {
-				in.Level = "medium"
-				in.Reasons = []string{"近30天跨至少两个会话复访，并有服务端确认的收藏；仅供跟进参考"}
-				break
-			}
+	business := append([]Record{}, data.business[key]...)
+	sort.Slice(business, func(i, j int) bool {
+		if business[i].At.Equal(business[j].At) {
+			return business[i].ID < business[j].ID
+		}
+		return business[i].At.Before(business[j].At)
+	})
+	actionDays := map[string]int{}
+	seenBusiness := map[string]bool{}
+	for _, b := range business {
+		if !scope.Allows(b.Owner) || b.At.Before(in.Start) || b.At.After(now) || seenBusiness[b.ID] || !validSessions[b.Session] {
+			continue
+		}
+		seenBusiness[b.ID] = true
+		var detail map[string]string
+		if json.Unmarshal(b.Payload, &detail) != nil {
+			continue
+		}
+		action := detail["action"]
+		if action != "favorite" && action != "consultation" && action != "appointment" && action != "quote" {
+			continue
+		}
+		if detail["quality"] == "abnormal" || detail["quality"] == "test" || detail["quality"] == "preview" || detail["quality"] == "self" {
+			continue
+		}
+		bucket := action + ":" + b.At.In(zone).Format("2006-01-02")
+		if actionDays[bucket] >= rule.DailyActionCap {
+			continue
+		}
+		actionDays[bucket]++
+		if action == "favorite" {
+			in.Metrics.Favorites++
+		} else {
+			in.Metrics.BusinessResults++
+		}
+		evidence = append(evidence, IntentEvidence{Kind: "business", ID: b.ID, Session: b.Session, Action: action, At: b.At})
+	}
+	in.sourceFingerprint = hash(string(marshal(evidence)))
+	in.Evidence = evidence
+	if len(evidence) > 100 {
+		in.Evidence = append([]IntentEvidence{}, evidence[:100]...)
+		in.EvidenceTruncated = true
+	}
+	if len(validSessions) > 0 && !strings.HasPrefix(key, "a:") {
+		in.Level = "low"
+		in.Reasons = []string{"当前可观测行为较少；不表示没有需求"}
+		if in.Metrics.Sessions > 1 {
+			in.Reasons = append(in.Reasons, "窗口内有效独立会话 "+strconv.Itoa(in.Metrics.Sessions)+" 次；复访本身不证明成交意愿")
+		}
+		if in.Metrics.BusinessResults >= rule.HighBusinessResults {
+			in.Level = "high"
+			in.Reasons = []string{"近" + strconv.Itoa(rule.WindowDays) + "天内服务端确认业务请求 " + strconv.Itoa(in.Metrics.BusinessResults) + " 次；具体行为见证据，需人工核实"}
+		} else if in.Metrics.Sessions >= rule.MediumSessions && in.Metrics.Favorites >= rule.MediumFavorites {
+			in.Level = "medium"
+			in.Reasons = []string{"近" + strconv.Itoa(rule.WindowDays) + "天跨 " + strconv.Itoa(in.Metrics.Sessions) + " 个有效会话访问，并有 " + strconv.Itoa(in.Metrics.Favorites) + " 次服务端确认收藏；仅供跟进参考"}
 		}
 	}
 	in.OriginalRule = &IntentRule{Level: in.Level, Reasons: append([]string{}, in.Reasons...), Rule: in.Rule, Start: in.Start, End: in.End}
-	// Overrides are owner scoped; an aggregate across owners cannot inherit one owner's note.
+	// An override remains private to its owner, and cannot make anonymous data a real identity.
 	if len(scope.Owners) == 1 {
 		rec, ok := data.overrides[privateKey(scope.Owners[0], key)]
 		if ok && rec.Owner == scope.Owners[0] && !rec.At.After(now) {
-			var manual struct {
-				Level  string    `json:"level"`
-				Reason string    `json:"reason"`
-				Until  time.Time `json:"expires_at"`
-				Actor  int64     `json:"actor"`
-			}
-			if json.Unmarshal(rec.Payload, &manual) == nil && manual.Until.After(now) {
-				in.Override = &IntentOverride{Level: manual.Level, Reason: manual.Reason, Actor: manual.Actor, Expires: manual.Until}
-				in.Note = manual.Reason
-				in.Level = manual.Level
+			var manual IntentOverride
+			if json.Unmarshal(rec.Payload, &manual) == nil {
+				manual.Created = rec.At
+				if manual.Expires.After(now) && !strings.HasPrefix(key, "a:") {
+					in.Override = &manual
+					in.Note = manual.Reason
+					in.Level = manual.Level
+					in.OverrideState = "active"
+				} else {
+					in.OverrideState = "expired"
+				}
 			}
 		}
 	}
-
 	return in
 }
 func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, error) {
@@ -528,7 +603,7 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			ss[v.Visitor][v.Session] = true
 		}
 		effective := ownerScope(scope, f.Owner)
-		intentData, e := s.loadIntentFacts(r, effective, f.AsOf, visitorKeys(by))
+		intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by))
 		if e != nil {
 			return e
 		}
@@ -536,6 +611,9 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		for key, v := range by {
 			v.Sessions = len(ss[key])
 			v.Intent = s.intent(effective, key, f.AsOf, intentData)
+			if _, e = s.recordIntentEvaluation(r, effective, key, v.Intent); e != nil {
+				return e
+			}
 			if scope.CRM && len(effective.Owners) == 1 {
 				rec, ok := intentData.crm[privateKey(effective.Owners[0], key)]
 				if ok && rec.Owner == effective.Owners[0] && !rec.At.After(f.AsOf) {

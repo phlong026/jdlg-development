@@ -52,7 +52,7 @@ func (s *Service) LinkCRM(ctx context.Context, scope Scope, key, customer, busin
 		if e != nil {
 			return e
 		}
-		if e = s.VerifyCRM(ctx, ownerScope(scope, owner), key, customer, businessNumber); e != nil {
+		if e = s.VerifyCRM(sourceReadContext(ctx, r), ownerScope(scope, owner), key, customer, businessNumber); e != nil {
 			return e
 		}
 		rec := record("crm", privateKey(owner, key), owner, s.Now(), map[string]string{"customer_id": customer, "business_number": businessNumber, "basis": basis, "source": "verified_upstream"})

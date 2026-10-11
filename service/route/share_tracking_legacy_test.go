@@ -27,7 +27,7 @@ func (legacyTestConn) Begin() (driver.Tx, error)           { return nil, driver.
 func (legacyTestConn) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	start := strings.Index(q, "SELECT ") + 7
 	end := strings.Index(q, "FROM ")
-	names := strings.Split(q[start:end], ",")
+	names := legacySelectColumns(q[start:end])
 	r := &legacyTestRows{columns: names}
 	id := args[0].Value.(int64)
 	if id == 404 {
@@ -41,9 +41,9 @@ func (legacyTestConn) QueryContext(_ context.Context, q string, args []driver.Na
 			v = id
 		case "created_at", "updated_at":
 			v = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		case "name":
+		case "name", "title", "username", "nickname":
 			v = "公共庭院"
-		case "thumbnail":
+		case "thumbnail", "list_cover_image", "cover_image", "avatar":
 			v = "https://public.example/cover.jpg"
 		case "description":
 			v = "公开描述\n\n提示词: private-prompt"
@@ -63,7 +63,26 @@ func (legacyTestConn) QueryContext(_ context.Context, q string, args []driver.Na
 			v = int64(900)
 		case "image_height":
 			v = int64(1600)
-		case "price", "is_free", "is_featured", "download_count", "like_count", "creator_user_id", "original_task_id":
+		case "is_published":
+			v = int64(1)
+			if id == 2 {
+				v = int64(0)
+			}
+		case "user_type":
+			v = "miniprogram"
+			if id == 2 {
+				v = "management"
+			}
+		case "designer_visible":
+			v = int64(1)
+			if id == 3 {
+				v = int64(0)
+			}
+		case "device_bind_time", "last_device_change_time", "enterprise_wechat_verified_at":
+			v = nil
+		case "password", "COALESCE(openid, '')", "COALESCE(unionid, '')", "phone", "device_id", "enterprise_wechat_contact":
+			v = "private-account-data"
+		case "price", "is_free", "is_featured", "download_count", "like_count", "creator_user_id", "original_task_id", "sort_order", "show_usage_tips", "is_common", "usage_count", "view_count", "COALESCE(can_withdraw,0)", "user_id", "designer_experience_years", "service_quote", "service_enabled", "enterprise_wechat_verified", "has_password":
 			v = int64(0)
 		}
 		r.values = append(r.values, v)
@@ -90,15 +109,35 @@ func TestLegacyTemplateResolverEnforcesPublicSource(t *testing.T) {
 	resolve := makeTrackingLegacyResolver(db)
 	route := "pages/templatesquaredetails/templatesquaredetails"
 	for _, id := range []int64{2, 3, 404} {
-		if _, e := resolve(route, id); e == nil {
+		if _, e := resolve(context.Background(), route, id); e == nil {
 			t.Fatalf("accepted private/draft/missing %d", id)
 		}
 	}
-	m, e := resolve(route, 1)
+	m, e := resolve(context.Background(), route, 1)
 	if e != nil {
 		t.Fatal(e)
 	}
 	if m.Title != "公共庭院" || m.Width != 900 || m.Height != 1600 || strings.Contains(m.VersionSeed, "private") {
 		t.Fatalf("bad safe metadata %+v", m)
 	}
+}
+
+// SELECT expressions can include commas (for example COALESCE on user fields).
+func legacySelectColumns(list string) []string {
+	var out []string
+	depth, start := 0, 0
+	for i, c := range list {
+		switch c {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ',':
+			if depth == 0 {
+				out = append(out, list[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(out, list[start:])
 }

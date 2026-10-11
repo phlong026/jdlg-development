@@ -6,7 +6,13 @@ export const TRACKING_API = '/api/v1/management/tracking';
 export type Intent = 'high' | 'medium' | 'low' | 'unknown';
 export interface Snapshot { as_of: string; metric_version: string; }
 export interface Page<T> extends Snapshot { items: T[]; next_cursor?: string; identified_count: number; anonymous_count: number; }
-export interface IntentEvidence { level: Intent; reasons: string[]; rule_version: string; window_start: string; window_end: string; calculated_at?: string; manual_note?: string; original_rule?: IntentEvidence; override?: { level: Intent; reason: string; actor?: string; created_at?: string; expires_at: string }; }
+export interface IntentRuleParameters { window_days: number; medium_sessions: number; medium_favorites: number; high_business_results: number; daily_session_cap: number; daily_action_cap: number; }
+export interface IntentRuleConfiguration extends IntentRuleParameters { rule_version: string; revision: number; owner_id: string; effective_at: string; actor: number | string; reason: string; timezone: string; participating_metrics: string[]; exclusions: string[]; }
+export interface IntentRecomputeResult { rule_version: string; evaluated_count: number; changed_count: number; as_of: string; }
+export interface IntentRulesResult { current: IntentRuleConfiguration; history: IntentRuleConfiguration[]; recomputed?: IntentRecomputeResult; }
+export interface IntentRuleInput extends IntentRuleParameters { expected_rule_version: string; reason: string; }
+export interface IntentRecordEvidence { kind: 'page_view' | 'business'; record_id: string; session_id?: string; page_view_id?: string; action?: string; occurred_at: string; content_id?: string; content_version?: number; }
+export interface IntentEvidence { metrics?: { sessions: number; favorites: number; business_results: number }; thresholds?: IntentRuleParameters; exclusions?: string[]; participating_metrics?: string[]; timezone?: string; override_state?: 'none' | 'active' | 'expired'; scope_required?: boolean; evidence?: IntentRecordEvidence[]; evidence_truncated?: boolean; level: Intent; reasons: string[]; rule_version: string; window_start: string; window_end: string; calculated_at?: string; manual_note?: string; original_rule?: IntentEvidence; override?: { level: Intent; reason: string; actor?: number | string; created_at?: string; expires_at: string }; }
 export interface Visitor { visitor_key: string; nickname?: string; avatar_url?: string; identity_state: 'identified' | 'anonymous' | 'deleted'; crm_label?: string; last_visit: string; page_views: number; visible_ms: number; session_count: number; intent: IntentEvidence; }
 export interface Asset { media_id: string; kind: 'image' | 'video'; url: string; width: number; height: number; mime: string; title?: string; }
 export interface Content { read_only?: boolean; route_key?: string; version_mode?: string; content_id: string; version: number; revision: number; title: string; type: string; status: 'draft' | 'published' | 'revoked'; cover?: Asset; media: Asset[]; body: string; body_format?: 'plain' | 'rich_text'; source_url?: string; source_note?: string; rights: 'own' | 'authorized'; owner_id?: string; page_views: number; visible_ms: number; last_visit?: string; published_at?: string; }
@@ -33,6 +39,9 @@ export async function trackingRequest<T>(resource: string, options: { signal?: A
     } finally { clearTimeout(timeout); options.signal?.removeEventListener('abort', abort); }
 }
 export const tracking = {
+    intentRules: (owner: string, signal?: AbortSignal) => trackingRequest<IntentRulesResult>('/intent-rules', { params: { owner }, signal }),
+    saveIntentRules: (body: IntentRuleInput, owner: string) => trackingRequest<IntentRulesResult>('/intent-rules', { method: 'POST', body, params: { owner } }),
+    recomputeIntent: (body: { request_id: string; reason: string; rule_version: string }, owner: string) => trackingRequest<IntentRecomputeResult>('/intent-rules/recompute', { method: 'POST', body, params: { owner } }),
     linkCRM: (body: { visitor_key: string; customer_id: string; business_number: string; basis: string }, owner: string) => trackingRequest<{ linked: boolean }>('/identity-links', { method: 'POST', body, params: { owner } }),
     unlinkCRM: (visitor: string, owner: string) => trackingRequest<{ unlinked: boolean }>(`/identity-links/${encodeURIComponent(visitor)}`, { method: 'DELETE', params: { owner } }),
     overrideIntent: (body: { visitor_key: string; level: Intent; reason: string; expires_at: string }, owner: string) => trackingRequest<{ updated: boolean }>('/intent-overrides', { method: 'POST', body, params: { owner } }),

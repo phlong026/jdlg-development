@@ -6,11 +6,11 @@
 
 ## 本轮证据索引
 
-- 验证日期：2026-10-11 UTC / Asia/Shanghai 2026-10-12；验证者为开发分支自动化，尚无真实设备验收人。最终安全收敛阶段基于8e723e58270d2efc5d8f5f92515fd3e4e26c6b0e；本文件所在提交与发布manifest关联最终快照。
-- S：service下go test -json ./...；518条pass、5条skip、0fail（含子测试）；/tmp/share-final-go.jsonl。测试文件：tracking/service_test.go、review_security_test.go、governance_test.go、aggregates_test.go、legacy_test.go、richtext_test.go、scoped_query_test.go、scoped_sql_test.go、privacy_scoped_test.go，route/share_tracking_test.go、share_tracking_legacy_test.go。
-- A：background下npm test及npm run build；499项pass，TypeScript、路由检查和构建通过；/tmp/share-final-admin.log。相关套件：scripts/share-tracking.test.mjs和share-tracking-governance.test.mjs。
-- M：miniprogram下npm run test:tracking及npm run check:tracking；127/127pass、TS/JS一致；/tmp/share-final-mini.log。套件：tests/share-tracking.test.js、observed-content-actions.test.js、tracking-idle.test.js、tracking-consent.test.js、tracking-reader-entry.test.js。
-- 全量小程序211项：206pass、2项固定基线客服fail、3skip；/tmp/share-final-mini-all.log。失败不因分享模块聚焦通过而消失，详见rollout-and-verification.md。
+- 验证日期：2026-10-11 UTC / Asia/Shanghai 2026-10-12；验证者为开发分支自动化，尚无真实设备验收人。最终首版闭环阶段基于811247a859c3d876431ea8dafbe896213e8ace87；本文件所在提交与发布manifest关联最终快照。
+- S：service下go test -json ./...；578条pass、5条skip、0fail（含子测试）；/tmp/share-closure-go.jsonl。测试文件：tracking/service_test.go、review_security_test.go、governance_test.go、aggregates_test.go、legacy_test.go、richtext_test.go、scoped_query_test.go、scoped_sql_test.go、privacy_scoped_test.go，route/share_tracking_test.go、share_tracking_legacy_test.go；新增rules、published_materials、business verifier、consultation及单连接事务源回归。
+- A：background下npm test及npm run build；519项pass，TypeScript、路由检查和构建通过；/tmp/share-closure-admin.log。相关套件：scripts/share-tracking.test.mjs和share-tracking-governance.test.mjs、share-tracking-rules.test.mjs。
+- M：miniprogram下npm run test:tracking及npm run check:tracking；171/171pass、TS/JS一致；/tmp/share-closure-mini.log。套件：tests/share-tracking.test.js、observed-content-actions.test.js、tracking-idle.test.js、tracking-consent.test.js、tracking-reader-entry.test.js、tracking-routes.test.js、tracking-materials.test.js、tracking-consultation.test.js。
+- 全量小程序255项：250pass、2项固定基线客服fail、3skip；/tmp/share-closure-mini-all.log。失败不因分享模块聚焦通过而消失，详见rollout-and-verification.md。
 - V：background/e2e/share_tracking.py为合成API fixture的浏览器脚本。Chromium socket权限阻塞，未获得六宽度截图，V不是已通过证据。所有微信/视频真机证据缺失；MySQL、Redis、真实CRM及生产等价负载未运行。
 - 上述日志为本次环境临时证据，交付需与最终提交归档；S/A/M的内存、模拟网络、源码/DOM测试不等于真实端到端联调。以下每项都保留原验收标准，并只注明实际覆盖。
 
@@ -114,7 +114,7 @@
 - 数据口径：发布版本不可变；预览自访测试默认排除；撤回使所有旧入口不能继续读。
 - 通过标准及证据：预览不入客户统计；入口进入自有阅读页；旧访问有原版本；撤回不能继续读取；不依赖自动导入才能完成首版。证据：版本与状态记录。
 - 自动化：自动证据已通过（版本/清洗/界面状态）：S的TestReviewOldVersionDraftAndRevoke、TestRevokedContentAndReadWithoutAnalytics、TestRichTextSavePreviewPublishRead；A验证先保存再预览、编辑失效预览、失败保留、重复写单飞及multipart；M验证固定reader及scene解析，plain保持转义、显式rich_text才渲染。 证据路径按上方S/A/M索引。
-- 本项尚缺：真实媒体上传持久盘、权限/尺寸、发布→微信码→接收阅读→新版本→撤回全链路待验。受控HTML源码编辑已实现，不自动抓取公众号；URL Link未开放，不能替代成假二维码或普通短链。
+- 本项尚缺：“我的→授权可分享素材→固定reader→原生分享”入口及权限/迟到响应负向已实现；真实mini授权、媒体持久盘、权限/尺寸、发布→原生分享或微信码→接收阅读→新版本→撤回全链路待验。受控HTML源码编辑已实现，不自动抓取公众号；URL Link未开放，不能替代成假二维码或普通短链。
 - 后台/服务端联调：待可运行数据库、身份及媒体环境验证。
 - 真机：待验；须记录双账号与iOS/Android、微信版本/基础库，涉及设备生命周期项不以浏览器替代。
 - 缺陷和复测：上述自动覆盖仅对应本轮工作树；待验项不得划为通过，后续修复需关联最终提交、复现与复测证据。
@@ -204,8 +204,8 @@
 - 步骤：加入预约成功、普通复访、重复点击、缺失记录和人工修正；更改规则版本后重算。
 - 数据口径：标签是跟进参考非购买概率；真实业务成功与客户端点击分开。
 - 通过标准及证据：高、中、低关注、待判断符合配置；显示真实原因与窗口；重复事件不刷高；人工修正可追溯。证据：规则样例测试。
-- 自动化：部分自动覆盖：S的TestVerifiedFavoriteEvidenceAndDuplicateCap验证同账号token、真实服务端证据接口去重及两会话+收藏中等；TestReviewNoMediumIntentFromRepeatVisitsAlone防复访刷等级；A治理套件验证原规则/人工覆盖分离、原因、30天有效期及独立权限。 证据路径按上方S/A/M索引。
-- 本项尚缺：固定followup-v1/30天窗口已实现，任意规则版本/窗口配置及重算流程尚未完成；真实收藏持久层到分析链待联调，异步500ms可能少计；咨询/预约/报价成功源不因存在高等级分支而视为全部接线。
+- 自动化：自动证据已通过（规则/版本/重算/真实源约束）：新增rules_test.go及rules/business/consultation route套件覆盖不可变版本、独立窗口、每日上限、旧快照、人工覆盖、源撤销与同事务读取；A规则20项覆盖配置/冲突/幂等/只读/证据窗口。S的TestVerifiedFavoriteEvidenceAndDuplicateCap验证同账号token、真实服务端证据接口去重及两会话+收藏中等；TestReviewNoMediumIntentFromRepeatVisitsAlone防复访刷等级；A治理套件验证原规则/人工覆盖分离、原因、30天有效期及独立权限。 证据路径按上方S/A/M索引。
+- 本项尚缺：按归属隔离的首版阈值、1–90天窗口、不可变版本、审计与幂等重算已实现；真实后台改规则→重算→标签变化仍待联调。收藏与明确主动咨询成功钩子已接，异步500ms可能少计；预约/报价无合适成功源，企微消息缺可信身份桥，不假称全部接线。详见intent-rules.md及business-sources.md。
 - 后台/服务端联调：待可运行数据库、身份及媒体环境验证。
 - 真机：待验；须记录双账号与iOS/Android、微信版本/基础库，涉及设备生命周期项不以浏览器替代。
 - 缺陷和复测：上述自动覆盖仅对应本轮工作树；待验项不得划为通过，后续修复需关联最终提交、复现与复测证据。
@@ -238,7 +238,7 @@
 
 ## 回归与证据目录约定
 
-- 保留原后台469项基线及本轮499项实际结果；Go本轮518项含子测试，不与旧“后端23项”局部基线直接相减。小程序两项固定失败、三项跳过及Go五项集成跳过必须随交付披露。
+- 保留原后台469项基线及本轮519项实际结果；Go本轮578项含子测试，不与旧“后端23项”局部基线直接相减。小程序两项固定失败、三项跳过及Go五项集成跳过必须随交付披露。
 - 新计量单元测试、Go HTTP负向测试、SDK生命周期与离线队列测试、UI状态/键盘/响应式测试分别记录。
 - 每项证据至少包括代码提交、命令/响应、结果、范围限制；必要时脱敏事件/SQL对账、录屏/截图。
 - 不将开发fixture、无数据库的handler单测或静态源码断言写成真实端到端业务验收。

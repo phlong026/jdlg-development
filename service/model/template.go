@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"time"
@@ -196,6 +197,12 @@ func nullableInt64(v int64) interface{} {
 
 // GetByID 根据ID获取模板
 func (m *TemplateModel) GetByID(id int64) (*Template, error) {
+	return GetTemplateByID(context.Background(), m.DB, id)
+}
+
+// GetTemplateByID preserves the model's read and normalization semantics while
+// allowing callers to reuse an existing transaction without another pool borrow.
+func GetTemplateByID(ctx context.Context, q SQLRowQueryer, id int64) (*Template, error) {
 	query := `SELECT id, name, category, main_tab, sub_tab, third_tab, description, internal_prompt, thumbnail, preview_url, images, image_width, image_height, price, is_free, is_featured,
 	          download_count, like_count, status, publish_scope, reject_reason, source_type, creator, creator_user_id, original_task_id, created_at, updated_at
 	          FROM templates WHERE id = ?`
@@ -203,7 +210,7 @@ func (m *TemplateModel) GetByID(id int64) (*Template, error) {
 	var isFreeInt, isFeaturedInt int
 	var creatorUserID, originalTaskID sql.NullInt64
 	var internalPrompt sql.NullString
-	err := m.DB.QueryRow(query, id).Scan(
+	err := q.QueryRowContext(ctx, query, id).Scan(
 		&template.ID, &template.Name, &template.Category, &template.MainTab, &template.SubTab, &template.ThirdTab, &template.Description, &internalPrompt,
 		&template.Thumbnail, &template.PreviewURL, &template.Images, &template.ImageWidth, &template.ImageHeight,
 		&template.Price, &isFreeInt, &isFeaturedInt, &template.DownloadCount, &template.LikeCount,

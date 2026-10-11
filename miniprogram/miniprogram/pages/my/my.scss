@@ -837,3 +837,18 @@ page {
     color: rgba(255, 255, 255, 0.6);
   }
 }
+
+/* Published materials reuse the existing My page; styles stay scoped here. */
+.page .share-materials-card { padding: 24rpx; box-sizing: border-box; border-radius: 28rpx; background: rgba(255, 255, 255, 0.84); }
+.share-materials-caption, .share-materials-state { display: block; color: #62594f; font-size: 26rpx; line-height: 1.6; }
+.share-materials-state { padding: 32rpx 0; }
+.share-material-item { display: flex; align-items: center; gap: 20rpx; width: 100%; margin: 18rpx 0; padding: 20rpx; text-align: left; line-height: 1.5; background: #faf7f1; border-radius: 16rpx; }
+.share-material-item::after { border: 0; }
+.share-material-cover { flex: 0 0 120rpx; width: 120rpx; height: 144rpx; background: #eee7dc; border-radius: 8rpx; }
+.share-material-placeholder { display: flex; align-items: center; justify-content: center; font-size: 26rpx; color: #766b5d; }
+.share-material-copy { flex: 1; min-width: 0; }
+.share-material-title, .share-material-status, .share-material-open { display: block; word-break: break-all; }
+.share-material-title { color: #342e28; font-size: 30rpx; }
+.share-material-status { color: #526347; font-size: 24rpx; margin-top: 8rpx; }
+.share-material-open { color: #756046; font-size: 24rpx; margin-top: 8rpx; }
+.share-material-refresh { margin-top: 16rpx; font-size: 26rpx; }

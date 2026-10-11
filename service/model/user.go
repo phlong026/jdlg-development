@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"hash/crc32"
@@ -212,11 +213,17 @@ func (m *UserModel) updateUnionIDIfNeeded(user *User, unionid string) error {
 
 // GetByID 根据ID获取用户
 func (m *UserModel) GetByID(id int64) (*User, error) {
+	return GetUserByID(context.Background(), m.DB, id)
+}
+
+// GetUserByID preserves the model's read and normalization semantics while
+// allowing callers to reuse an existing transaction without another pool borrow.
+func GetUserByID(ctx context.Context, q SQLRowQueryer, id int64) (*User, error) {
 	user := &User{}
 	query := `SELECT id, username, password, COALESCE(openid, ''), COALESCE(unionid, ''), user_type, COALESCE(can_withdraw,0), created_at, updated_at 
 	          FROM users WHERE id = ?`
 	var canWithdraw int
-	err := m.DB.QueryRow(query, id).Scan(
+	err := q.QueryRowContext(ctx, query, id).Scan(
 		&user.ID, &user.Username, &user.Password, &user.OpenID, &user.UnionID,
 		&user.UserType, &canWithdraw, &user.CreatedAt, &user.UpdatedAt,
 	)

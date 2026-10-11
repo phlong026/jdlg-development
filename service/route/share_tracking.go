@@ -155,7 +155,8 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	cfg := tracking.LoadConfig()
 	svc := tracking.New(&tracking.SQLStore{DB: users.DB}, cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
-	svc.ResolveLegacy = makeTrackingLegacyResolver(users.DB)
+	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
+	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
 	// This is a separate capability group, not an implicit platform-admin data grant.
 	mg := v1.Group("/management/tracking")
 	mg.Use(AuthRequired, func(c *gin.Context) {
@@ -174,6 +175,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Set("tracking.scope", scope)
 		c.Next()
 	})
+	registerTrackingRuleRoutes(mg, svc)
 	sc := func(c *gin.Context) tracking.Scope { return c.MustGet("tracking.scope").(tracking.Scope) }
 	view := func(c *gin.Context) bool {
 		if !sc(c).View {
@@ -426,6 +428,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, gin.H{"status": "completed"}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
+	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	pub.POST("/share-entry", func(c *gin.Context) {
 		var in struct {
 			Scene string `json:"scene"`
@@ -440,6 +443,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, gin.H{"enabled": cfg.Enabled, "content_enabled": cfg.ContentEnabled, "video_enabled": cfg.VideoEnabled, "intent_enabled": cfg.IntentEnabled, "consent_version": cfg.ConsentVersion, "privacy_notice": cfg.PrivacyNotice, "sample_ms": 10000, "max_queue": 500, "ttl_hours": 72}, nil)
 	})
 	pub.GET("/contents/:id/versions/:version", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		version, _ := strconv.Atoi(c.Param("version"))
 		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
 		trackingResponse(c, v, e)

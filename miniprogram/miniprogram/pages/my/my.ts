@@ -7,6 +7,7 @@ import {
 } from '../../utils/deviceFingerprint';
 import { resolveAssetPath } from '../../utils/asset';
 const trackingConsent = require('../../utils/tracking/index');
+const shareMaterials = require('../../utils/tracking/materials');
 
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
@@ -146,10 +147,12 @@ function buildWorkbenchMenuItems(options: {
 }
 
 Page({
+  ...shareMaterials.methods,
   /**
    * 页面的初始数据
    */
   data: {
+    ...shareMaterials.data,
     token: '',
     userInfo: null as any,
     userProfile: {
@@ -220,7 +223,10 @@ Page({
     });
   },
 
+  onHide() { this.hideShareMaterials(); },
+  onUnload() { this.hideShareMaterials(); },
   onShow() {
+    this.refreshShareMaterials();
     this.syncTrackingConsent();
     trackingConsent.refreshConfig().then(() => this.syncTrackingConsent());
     this.syncWindowBackground();
@@ -310,6 +316,7 @@ Page({
    */
   loadUserData(forceRemote = false) {
     const token = wx.getStorageSync('token');
+    if (this.__materialsAccount !== String(token || '')) this.resetShareMaterials();
     const userInfo = wx.getStorageSync('userInfo') || null;
     const currentUserInfo = this.data.userInfo || null;
     const displayUserInfo = userInfo || currentUserInfo;
@@ -635,6 +642,7 @@ Page({
    * 页面相关事件处理函数--监听用户下拉动作
    */
   onPullDownRefresh() {
+    this.refreshShareMaterials();
     this.loadUserData();
     wx.stopPullDownRefresh();
   },

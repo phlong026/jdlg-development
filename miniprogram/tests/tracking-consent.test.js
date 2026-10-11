@@ -35,9 +35,11 @@ function runtime({storage={},configuration,configRequest,offlineEvents=false}={}
     const page={...definition,route,data:JSON.parse(JSON.stringify(definition.data||{})),setData(value,done){Object.assign(this.data,value);if(done)done.call(this);}};
     return page;
   }
+  const materialSandbox={module:{exports:{}},require:()=>api,wx,Promise};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'utils/tracking/materials.js'),'utf8'),materialSandbox);
   function actual(name) {
     const source=fs.readFileSync(path.join(root,'pages',name,name+'.js'),'utf8');
-    vm.runInNewContext(source,{Page:sandbox.Page,exports:{},require:name=>name.endsWith('/tracking/index')?adapter:new Proxy({},{get:(_,key)=>key==='resolveAssetPath'?v=>v:()=>''}),wx,console:{log(){},error(){}},Promise,Date,Math,Set,setTimeout,clearTimeout});
+    vm.runInNewContext(source,{Page:sandbox.Page,exports:{},require:name=>name.endsWith('/tracking/index')?adapter:name.endsWith('/tracking/materials')?materialSandbox.module.exports:new Proxy({},{get:(_,key)=>key==='resolveAssetPath'?v=>v:()=>''}),wx,console:{log(){},error(){}},Promise,Date,Math,Set,setTimeout,clearTimeout});
     return{...definition,route:'pages/'+name+'/'+name,data:JSON.parse(JSON.stringify(definition.data||{})),setData(value,done){Object.assign(this.data,value);if(done)done.call(this);}};
   }
   return{adapter,modals,business,entries,events,toasts,storage,register,actual,

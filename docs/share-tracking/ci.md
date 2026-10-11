@@ -31,7 +31,7 @@ npm run check:tracking
 npm run check:tracking-routes
 ```
 
-- `test:tracking` 执行 SDK、真实公开回调、闲置与身份边界、告知同意、阅读入口竞态，以及路由检查器自身的正反例回归。
+- `test:tracking` 执行 SDK、真实公开回调、闲置与身份边界、告知同意、阅读入口竞态，授权素材入口、明确咨询成功指令，以及路由检查器自身的正反例回归。
 - `check:tracking` 只比对确定性 TS → JS 产物，不重写源码或生成文件。
 - `check:tracking-routes` 从真实 app.json 的主包、分包提取全部 58 条路径；拒绝重复、不规范路径及未经更新的路由数量变化。前端 `ROUTES` 和 Go `routes.json` 必须与 app 路径逐项、大小写完全一致，不允许额外项或遗漏。
 - 逐项校验前端 `collect` 与后端 `Public` 为显式布尔值且相同、`kind` 与 `Type` 相同、后端标题非空。公开页必须有受支持的就绪策略；私有页必须使用 excluded 类型、具体排除理由和对应就绪值。实际 runtime policy（含前导斜线形式）必须返回同一策略，未知路径必须关闭采集。
@@ -43,7 +43,7 @@ npm run check:tracking-routes
 
 - 后端普通测试：`service/tracking`、`service/route` 通过。
 - 后端 race：`service/tracking`、`service/route` 通过，未报告竞态。
-- 聚焦小程序测试：145 项通过，0 失败，0 跳过；含检查器 1 项真实仓库正例和 17 项输入变异反例。
+- 聚焦小程序测试：171 项通过，0 失败，0 跳过；含检查器 1 项真实仓库正例和 17 项输入变异反例。
 - TS/JS 同步检查通过；58 路由、21 公开 / 37 排除、前后端策略一致性通过。
 - 工作流 YAML 可解析；静态核对触发器、只读权限、完整 action SHA 与既有工作流一致，无 secrets 引用或 `pull_request_target`。
 - 受限本地环境的 Go 默认缓存目录不可写，因此仅将 `GOCACHE` / `GOMODCACHE` 指向现有可写缓存并将已安装 Go 加入 PATH；测试命令和包范围未改变。GitHub 托管 runner 使用正常默认缓存路径，无需这些本地覆盖。
@@ -59,7 +59,7 @@ cd miniprogram
 node --test tests/*.test.js
 ```
 
-2026-10-11 当前结果：229 项，224 通过，2 失败，3 跳过。两项客服失败与新增本门禁前复测一致：
+2026-10-11 当前结果：255 项，250 通过，2 失败，3 跳过。两项客服失败与新增本门禁前复测一致：
 
 1. `customer-service-action-placement.test.js:22`：断言需求卡不应包含“对接设计老师”。
 2. `customer-service-knowledge.test.js:49`：断言客服页应调用旧 `matchKnowledge`。

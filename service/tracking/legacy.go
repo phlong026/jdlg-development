@@ -1,6 +1,7 @@
 package tracking
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -29,9 +30,9 @@ func LegacyID(route string, id int64) string {
 	_, _ = h.Write([]byte(route))
 	return fmt.Sprintf("legacy:%x:%d", h.Sum32(), id)
 }
-func (s *Service) resolveLegacy(route, content string) (Content, error) {
+func (s *Service) resolveLegacy(ctx context.Context, route, content string) (Content, error) {
 	var c Content
-	if !LegacyRoute(route) || s.ResolveLegacy == nil {
+	if !LegacyRoute(route) || s.ResolveLegacyContext == nil && s.ResolveLegacy == nil {
 		return c, fail(404, "原内容不可访问")
 	}
 	parts := strings.Split(content, ":")
@@ -42,7 +43,14 @@ func (s *Service) resolveLegacy(route, content string) (Content, error) {
 	if err != nil || id <= 0 || content != LegacyID(route, id) {
 		return c, fail(404, "原内容标识无效")
 	}
-	m, err := s.ResolveLegacy(route, id)
+	var m LegacyMetadata
+	if s.ResolveLegacyContext != nil {
+		m, err = s.ResolveLegacyContext(ctx, route, id)
+	} else {
+		// Compatibility for in-memory integrations. Production source readers use
+		// ResolveLegacyContext so they share the active tracking transaction.
+		m, err = s.ResolveLegacy(route, id)
+	}
 	if err != nil {
 		return c, err
 	}

@@ -104,7 +104,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// AI提示词优化接口（需要token验证+会员）
 		RegisterPromptOptimizeRoute(miniprogramAI, codeSessionModel, userMembershipModel, cfg)
 		RegisterBuildingCodeRoutes(miniprogramAI, buildingCodeDocumentModel, buildingCodeChatModel, userModel, pricingModel, cfg)
-		RegisterCustomerServiceRoutes(miniprogramAI, customerServiceModel)
+		RegisterCustomerServiceRoutes(miniprogramAI, customerServiceModel, trackingService)
 		// 任务状态轮询接口（需要token验证）
 		RegisterTaskStatusRoute(miniprogramAI, codeSessionModel, userModel, pricingModel, taskModel, videoTaskModel, stoneRecordModel, aiToolModel, cfg)
 		// AI 生成视频：发起、轮询、查询（结果存自家 OSS）

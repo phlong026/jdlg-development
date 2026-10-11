@@ -122,7 +122,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 	p := &visitorDeletion{rows: map[string]Record{}, sessions: map[string]bool{}, events: map[string]bool{}, views: map[string]bool{}, sequences: map[string]bool{}, shares: map[string]bool{}}
 	// Deliberately do not restrict Owners: full-identity deletion must detect
 	// any inaccessible owner, including one represented only by an old entry.
-	for _, kind := range []string{"event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override"} {
+	for _, kind := range []string{"event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override", "intent_evaluation"} {
 		rows, err := scopedRecords(r, kind, RecordQuery{VisitorKeys: []string{key}})
 		if err != nil {
 			return nil, err
@@ -141,7 +141,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 		}
 	}
 	// Pre-owner-scoped private annotations used the identity itself as ID.
-	for _, kind := range []string{"crm", "intent_override"} {
+	for _, kind := range []string{"crm", "intent_override", "intent_evaluation"} {
 		row, err := r.Get(kind, key)
 		if errors.Is(err, ErrNotFound) {
 			continue
@@ -159,7 +159,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 	// Only verified target sessions expand the graph. Never turn a device's
 	// anonymous visitor key into a global alias for the identified account.
 	sessions := deletionKeys(p.sessions)
-	for _, kind := range []string{"event", "entry", "session", "identity", "business", "daily_summary", "summary_state", "crm", "intent_override", "view_binding"} {
+	for _, kind := range []string{"event", "entry", "session", "identity", "business", "daily_summary", "summary_state", "crm", "intent_override", "intent_evaluation", "view_binding"} {
 		rows, err := scopedRecords(r, kind, RecordQuery{Sessions: sessions})
 		if err != nil {
 			return nil, err

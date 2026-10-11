@@ -108,6 +108,23 @@
         </view>
       </view>
 
+      <view wx:if="{{hasLoginToken && shareMaterialsState !== 'hidden'}}" class="share-materials-section">
+        <view class="menu-section-title">可分享素材</view>
+        <view class="menu-card share-materials-card">
+          <text class="share-materials-caption">仅展示已授权的已发布版本，打开后可原生分享。</text>
+          <view wx:if="{{shareMaterialsState === 'loading' && !shareMaterials.length}}" class="share-materials-state" role="status">正在加载素材…</view>
+          <view wx:elif="{{shareMaterialsState === 'error'}}" class="share-materials-state">素材暂时加载失败，请重试。</view>
+          <view wx:elif="{{shareMaterialsState === 'empty'}}" class="share-materials-state">暂无已发布的可分享素材。</view>
+          <button wx:for="{{shareMaterials}}" wx:key="content_id" class="share-material-item" data-id="{{item.content_id}}" bindtap="openShareMaterial" disabled="{{!!shareMaterialOpening || shareMaterialsLoading}}" aria-label="{{'打开已发布素材：' + item.title}}">
+            <image wx:if="{{item.coverURL}}" class="share-material-cover" src="{{item.coverURL}}" mode="aspectFit" />
+            <view wx:else class="share-material-cover share-material-placeholder">文章</view>
+            <view class="share-material-copy"><text class="share-material-title">{{item.title}}</text><text class="share-material-status">已发布 · 版本 {{item.content_version}}</text><text class="share-material-open">{{shareMaterialOpening === item.content_id ? '正在打开…' : '打开并分享 ›'}}</text></view>
+          </button>
+          <button class="share-material-refresh" bindtap="refreshShareMaterials" loading="{{shareMaterialsLoading}}" disabled="{{shareMaterialsLoading || !!shareMaterialOpening}}">{{shareMaterialsState === 'error' ? '重试加载' : '刷新素材'}}</button>
+          <button wx:if="{{shareMaterialsCursor}}" class="share-material-refresh" bindtap="refreshShareMaterials" data-more="{{true}}" disabled="{{shareMaterialsLoading || !!shareMaterialOpening}}">加载更多</button>
+        </view>
+      </view>
+
       <view class="menu-section-title">账户与工具</view>
       <view class="menu-card menu-list-card service-card">
         <view

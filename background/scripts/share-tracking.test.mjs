@@ -9,7 +9,7 @@ const root = new URL('../', import.meta.url);
 function load(file, overrides = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(new URL(file, root), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: name => name in overrides ? overrides[name] : name === '../config/api' ? { API_BASE_URL: '' } : name === '../utils/session' ? { expireSession() {} } : require(name), Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, window: { location: { origin: 'https://example.test', protocol: 'https:' } }, ...overrides.globals });
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => name in overrides ? overrides[name] : name === './evidence' ? { IntentEvidenceDetails: 'IntentEvidenceDetails' } : name === '../config/api' ? { API_BASE_URL: '' } : name === '../utils/session' ? { expireSession() {} } : require(name), Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, window: { location: { origin: 'https://example.test', protocol: 'https:' } }, ...overrides.globals });
   return module.exports;
 }
 const model = load('src/pages/shareTracking/model.ts');
@@ -57,7 +57,7 @@ test('resource hook aborts and ignores late older responses and post-unmount com
 });
 test('UI preserves scope in same-session exploration and separates metrics and identities', () => {
  const detail=fs.readFileSync(new URL('src/pages/shareTracking/details.tsx',root),'utf8');const page=fs.readFileSync(new URL('src/pages/shareTracking.tsx',root),'utf8');
- assert.match(detail,/content_id: contentId, include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
+ assert.match(detail,/content_id: showingEvidence \? undefined : contentId, include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
 });
 
 function editorHarness(overrides = {}) {

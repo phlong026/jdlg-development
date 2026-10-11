@@ -1,18 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Context, Intent, IntentEvidence, tracking, Visitor } from '../../api/shareTracking';
+import { Context, Intent, tracking, Visitor } from '../../api/shareTracking';
 import { intentLabels, time } from './model';
+import { IntentEvidenceDetails } from './evidence';
 
-export type GovernanceProps = { context?: Context; onBusyChange?: (value: boolean) => void; onDirtyChange?: (value: boolean) => void; changed?: () => void };
+export type GovernanceProps = { context?: Context; onOpenEvidence?: () => void; onBusyChange?: (value: boolean) => void; onDirtyChange?: (value: boolean) => void; changed?: () => void };
 export function validateOverride(reason: string, expiry: string, now = Date.now()): string {
     if (!reason.trim() || reason.trim().length > 500) return '请填写 1–500 字的修正原因';
     const expires = new Date(expiry).getTime();
     if (!Number.isFinite(expires) || expires <= now || expires > now + 30 * 86400000) return '有效期必须晚于现在且不超过 30 天';
     return '';
 }
-function RuleResult({ evidence }: { evidence: IntentEvidence }) {
-    return <><p>{intentLabels[evidence.level] || '待判断'} · 规则 {evidence.rule_version || '未提供'}</p><p>评估窗口 {time(evidence.window_start)} 至 {time(evidence.window_end)}</p><ul>{evidence.reasons?.map((reason, i) => <li key={i}>{reason}</li>)}</ul></>;
-}
-export function VisitorGovernance({ visitor, context, onBusyChange, onDirtyChange, changed, onDeleted }: GovernanceProps & { visitor: Visitor; onDeleted: () => void }) {
+export function VisitorGovernance({ visitor, context, onOpenEvidence, onBusyChange, onDirtyChange, changed, onDeleted }: GovernanceProps & { visitor: Visitor; onDeleted: () => void }) {
     const owners = context?.owners || [];
     const [owner, setOwner] = useState('');
     const selectedOwner = owner || (owners.length === 1 ? owners[0].id : '');
@@ -45,9 +43,9 @@ export function VisitorGovernance({ visitor, context, onBusyChange, onDirtyChang
     const original = visitor.intent?.original_rule;
     const override = visitor.intent?.override;
     return <section className="st-governance" aria-label="访客治理"><h3>身份与意向依据</h3><p>目标账号 / 访客标识：{visitor.visitor_key}</p><p>{visitor.crm_label || '当前列表范围未提供 CRM 关联'}</p>
-        <h4>当前意向结果</h4>{visitor.intent && <RuleResult evidence={visitor.intent} />}
+        <h4>当前意向结果</h4>{visitor.intent && <IntentEvidenceDetails evidence={visitor.intent} onOpenRecords={onOpenEvidence} recordsLabel="按意向评估窗口查看来源会话" />}
         {(override || visitor.intent?.manual_note) && <p>人工修正：{override ? intentLabels[override.level] : intentLabels[visitor.intent.level]} · {override?.reason || visitor.intent.manual_note} · 操作者 {override?.actor || '接口未提供'} · 修正时间 {time(override?.created_at)} · 有效至 {time(override?.expires_at)}</p>}
-        {original ? <><h4>原规则结果</h4><RuleResult evidence={original} /></> : <p className="st-warning">接口尚未返回独立的原规则结果；当前结果可能包含人工覆盖，不能当作原规则结果。</p>}
+        {original ? <><h4>原规则结果</h4><IntentEvidenceDetails evidence={original} /></> : <p className="st-warning">接口尚未返回独立的原规则结果；当前结果可能包含人工覆盖，不能当作原规则结果。</p>}
         {error && <p className="st-error" role="alert">{error}</p>}{notice && <p role="status">{notice} 请关闭详情并刷新后重新打开，核对最新状态。</p>}
         {!completed && <fieldset disabled={busy}><legend>专门授权操作</legend>
             {(permitted.crm || permitted.rules) && <><label>治理归属范围<select value={selectedOwner} onChange={e => { if (!pending.current) setOwner(e.target.value); }}><option value="">请选择归属范围</option>{owners.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}</select></label><p>CRM 映射和人工意向修正仅作用于所选归属；上方结果仍是当前列表筛选范围。删除操作不随此选择缩小。</p>{!owners.length && <p className="st-warning">未取得授权归属，暂不能提交映射或意向修正。</p>}</>}
