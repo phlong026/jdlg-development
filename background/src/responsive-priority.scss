@@ -1,0 +1,97 @@
+// These custom overlays are not .modal-content, so the shared modal rules miss them.
+.layout-content:has(.drawer-overlay, .cert-drawer-mask, .aip-modal-overlay, .aca-modal-overlay) {
+  overflow: hidden;
+}
+
+.layout-content:is([data-admin-page='/users'], [data-admin-page='/user-workbench'], [data-admin-page='/certification'], [data-admin-page='/recharge'], [data-admin-page='/ai-tasks'], [data-admin-page='/ai-tools'], [data-admin-page='/ai-config']) {
+  .modal-header, .modal-footer { flex-shrink: 0; }
+  .modal-body { min-height: 0; }
+}
+
+.layout-content[data-admin-page='/certification'] {
+  .cert-drawer-mask { z-index: 1300; }
+  .cert-drawer {
+    z-index: 1301;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-width: 0;
+  }
+  .cert-drawer-head { flex-wrap: wrap; }
+  .cert-drawer-head, .cert-drawer-foot { flex-shrink: 0; }
+  .cert-drawer-head h3 { min-width: 0; overflow-wrap: anywhere; }
+  .cert-drawer-body { min-height: 0; overscroll-behavior: contain; }
+  .cert-drawer-close { min-width: 44px; min-height: 44px; }
+  .cert-drawer-foot {
+    flex-wrap: wrap;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+.layout-content[data-admin-page='/recharge'] {
+  .drawer-overlay { z-index: 1300; }
+  .order-drawer {
+    z-index: 1301;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-width: 0;
+  }
+  .drawer-header, .drawer-footer { flex-shrink: 0; }
+  .drawer-header > div { min-width: 0; overflow-wrap: anywhere; }
+  .drawer-body { min-height: 0; overscroll-behavior: contain; }
+  .drawer-close { width: 44px; height: 44px; }
+  .drawer-footer {
+    flex-wrap: wrap;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+.layout-content:is([data-admin-page='/ai-pricing'], [data-admin-page='/ai-content-audits']) {
+  .aip-modal-overlay, .aca-modal-overlay {
+    z-index: 1400;
+    padding: 16px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .aip-modal, .aca-modal {
+    min-width: 0;
+    max-width: 100%;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .aip-modal-head, .aca-modal-head,
+  .aip-modal-foot, .aca-modal-foot { flex-shrink: 0; gap: 10px; }
+  .aip-modal-head h3, .aca-modal-head h3 { min-width: 0; overflow-wrap: anywhere; }
+  .aip-modal-body, .aca-modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .aip-modal-close, .aca-modal-close { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  .aip-modal-foot, .aca-modal-foot {
+    flex-wrap: wrap;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+
+@media (max-width: 640px) {
+  .layout-content[data-admin-page='/certification'] {
+    .cert-drawer { width: 100%; max-width: 100%; border-left: 0; }
+    .cert-drawer-foot > button { flex: 1 1 130px; }
+  }
+  .layout-content[data-admin-page='/recharge'] {
+    .order-drawer { width: 100%; max-width: 100%; border-left: 0; }
+    .drawer-header, .drawer-body, .drawer-footer { padding-left: 14px; padding-right: 14px; }
+    .drawer-footer > button { flex: 1 1 130px; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-content[data-admin-page='/recharge'] .order-drawer,
+  .layout-content[data-admin-page='/recharge'] .drawer-overlay { animation: none; }
+}

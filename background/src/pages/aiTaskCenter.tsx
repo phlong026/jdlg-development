@@ -663,7 +663,7 @@ const AITaskCenter: React.FC = () => {
                                 <th>{activeTab === 'image' ? '场景 / 模型' : '模型 / 时长'}</th>
                                 <th>状态</th>
                                 <th>灵石</th>
-                                {activeTab === 'image' ? '错误信息' : '提示词 / 错误信息'}
+                                <th>{activeTab === 'image' ? '错误信息' : '提示词 / 错误信息'}</th>
                                 <th>创建时间</th>
                                 <th>操作</th>
                             </tr>

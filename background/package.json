@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npm run check",
+    "test": "npm run check && npm run test:ui",
+    "test:ui": "node --test scripts/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "check:routes": "node scripts/check-routes.mjs",
     "check": "npm run typecheck && npm run check:routes",
