@@ -45,7 +45,7 @@ Page({
     try {
       const category = this.data.currentCategory === 'all' ? '' : this.data.currentCategory;
       const url = `${UTILITY_TOOLS_API_BASE_URL}/api/v1/miniprogram/utility-tools${category ? `?category=${category}` : ''}`;
-      
+
       const res = await new Promise<any>((resolve, reject) => {
         wx.request({
           url,
@@ -92,7 +92,7 @@ Page({
   onToolTap(e: any) {
     const id = e.currentTarget.dataset.id;
     if (!id) return;
-    
+
     // 跳转到详情页
     wx.navigateTo({
       url: `/pages/utilitytooldetail/utilitytooldetail?id=${id}`,

@@ -58,7 +58,7 @@ raw 90天、summary及支持记录180天是待批准建议，DefaultRetentionPol
 
 任何未验项继续标为待验；代码提交、备份或推送不等于生产发布批准。
 
-本阶段另通过 go test -race ./tracking ./route；日志 /tmp/share-closure-race.log。Go统计包含新增实际路由权限子测试。原CRLF源文件维持行尾，差异检查使用 git -c core.whitespace=cr-at-eol diff --check。
+本阶段另通过 go test -race ./tracking ./route；日志 /tmp/share-closure-race.log。Go统计包含新增实际路由权限子测试。PR3 实际 CI 补验发现原 CRLF 的新增行触发默认 git diff --check，而早期本地 cr-at-eol 覆盖没有复现该门禁。现将 distribution.ts、utilitytools.ts 统一为 LF 并清除两条空白行尾空格；忽略行尾空白比较无逻辑差异。按固定 main c4e761d 的真实原文件内容/模式重建整 PR（含新增文件）后，默认 git diff --check 通过。
 
 ## 安全下推与第二轮阅读页复核
 
@@ -67,3 +67,7 @@ raw 90天、summary及支持记录180天是待批准建议，DefaultRetentionPol
 阅读页补13项真实模块集成回归；旧阶段的st复活及迟到scene覆盖已由红转绿验证，普通同页重试保留尚未消费的有效首次入口。171项跟踪测试包括原SDK、真实动作、空闲/异步、同意和阅读页入口套件。
 
 本轮另执行 go vet ./tracking ./route，通过无诊断；日志 /tmp/share-closure-vet.log。修改后全量前端构建及小程序回归已重跑。真实浏览器、MySQL、企微、CRM及微信设备仍未接通，不声称端到端或SLO通过。
+
+## PR3 CI 隔离合同修复
+
+Admin quality run 38168361665 中，519 项后台测试与构建已通过，但模板隔离脚本漏拷新共享只读接口 source_reader.go，导致 SQLRowQueryer 未定义；另有上述 CRLF 门禁差异。已只在 test-template-update.sh 显式源清单补该接口，未扩成全服务、未禁用或忽略任何检查。原样执行脚本的 15 个 model、8 个 handler 顶层测试及子测试通过，保留 -race -count=1；小程序171项聚焦、产物一致性及58路由策略检查复测通过。远程需按修复提交重新验 CI，不能用本地通过覆盖原失败记录。
