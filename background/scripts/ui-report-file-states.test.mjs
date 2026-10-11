@@ -303,3 +303,29 @@ test('report mismatched response or missing actual dates cannot be exported; unm
   h.requests[0].resolve(report(h.requests[0].params)); await flush(); await flush();
   assert.equal(h.runtime.updates, updates); assert.equal(h.errors.length, 0); assert.equal(h.recovered.length, 0);
 });
+
+test('OSS deleting the sole second-page file corrects 21→20 to page one with cleared selection', async () => {
+  const h = harness('oss'), page = h.runtime;
+  await resolveFiles(h, [1], 0, 21);
+  click(page, '下一页'); page.effects(); page.render(); await resolveFiles(h, [21], 1, 21);
+  toggle(page, 21); const remove = click(page, '批量删除 (1)');
+  assert.deepEqual(JSON.parse(h.writes[0].options.body), { ids: [21] });
+  h.writes[0].resolve(response({})); await remove; await settle(page);
+  assert.equal(new URL(h.requests[2].url).searchParams.get('page'), '2');
+  await resolveFiles(h, [], 2, 20); page.effects(); page.render();
+  assert.equal(new URL(h.requests[3].url).searchParams.get('page'), '1');
+  await resolveFiles(h, [1, 2], 3, 20);
+  assert.match(textOf(page.tree), /file-1/); assert.equal(selected(page).length, 0);
+  assert.doesNotMatch(textOf(page.tree), /第 2 页|暂无文件数据/);
+});
+
+test('OSS shrinking an out-of-range list to zero recovers page one and ignores obsolete page corrections', async () => {
+  const h = harness('oss'), page = h.runtime;
+  await resolveFiles(h, [1], 0, 21); click(page, '下一页'); page.effects(); page.render();
+  change(page, '文件来源', 'user_ai'); page.effects(); page.render();
+  await resolveFiles(h, [9], 2, 1); const readCount = h.requests.length;
+  await resolveFiles(h, [], 1, 0); page.effects(); page.render();
+  assert.equal(h.requests.length, readCount); assert.match(textOf(page.tree), /file-9/);
+  click(page, '刷新'); await resolveFiles(h, [], 3, 0);
+  assert.match(textOf(page.tree), /暂无文件数据/); assert.equal(new URL(h.requests[3].url).searchParams.get('page'), '1');
+});

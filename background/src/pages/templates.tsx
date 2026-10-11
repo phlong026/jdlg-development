@@ -281,6 +281,32 @@ const Templates: React.FC = () => {
     const [featuredGroupsError, setFeaturedGroupsError] = useState('');
     const [featuredGroupsLoaded, setFeaturedGroupsLoaded] = useState(false);
     const featuredGroupReadRef = useRef(0);
+    const featuredAliveRef = useRef(true);
+    const featuredSectionOpenRef = useRef(false);
+    const [featuredPage, setFeaturedPage] = useState(1);
+    const featuredPageRef = useRef(1);
+    const featuredLoadedPageRef = useRef(0);
+    const [featuredTotal, setFeaturedTotal] = useState<number | null>(null);
+    const featuredPageSize = 20;
+    const toggleFeaturedSection = () => {
+        if (!featuredAliveRef.current) return;
+        const open = !featuredSectionOpenRef.current;
+        featuredSectionOpenRef.current = open;
+        featuredGroupReadRef.current += 1;
+        setLoadingFeaturedGroups(false);
+        setFeaturedGroupSectionOpen(open);
+    };
+    const changeFeaturedPage = (page: number) => {
+        if (!featuredAliveRef.current || !featuredSectionOpenRef.current || page < 1 || page === featuredPageRef.current) return;
+        featuredPageRef.current = page;
+        featuredGroupReadRef.current += 1;
+        setFeaturedPage(page);
+        setFeaturedGroups([]);
+        setFeaturedTotal(null);
+        setFeaturedGroupsLoaded(false);
+        setFeaturedGroupsError('');
+        setLoadingFeaturedGroups(true);
+    };
     const featuredGroupWriteRef = useRef(false);
     const [featuredGroupSaving, setFeaturedGroupSaving] = useState(false);
     const featuredEditorSessionRef = useRef(0);
@@ -367,12 +393,16 @@ const Templates: React.FC = () => {
         return () => { linkedTemplateReadRef.current += 1; };
     }, [loadLinkedTemplate]);
 
-    useEffect(() => () => {
+    useEffect(() => {
+        featuredAliveRef.current = true;
+        return () => {
+        featuredAliveRef.current = false;
         editorSessionRef.current += 1;
         templateReadRef.current += 1;
         featuredGroupReadRef.current += 1;
         featuredEditorSessionRef.current += 1;
         featuredOptionsReadRef.current += 1;
+        };
     }, []);
 
     const loadCategories = useCallback(async () => {
@@ -1045,24 +1075,37 @@ const Templates: React.FC = () => {
     };
 
     const loadFeaturedGroups = useCallback(async () => {
+        if (!featuredAliveRef.current || !featuredSectionOpenRef.current) return null;
+        const page = featuredPageRef.current;
         const request = ++featuredGroupReadRef.current;
+        const isCurrent = () => featuredAliveRef.current && featuredSectionOpenRef.current &&
+            request === featuredGroupReadRef.current && page === featuredPageRef.current;
         setLoadingFeaturedGroups(true);
         setFeaturedGroupsError('');
         try {
-            const res = await getFeaturedCaseGroups(1, 100);
-            if (request !== featuredGroupReadRef.current) return null;
-            if (!Array.isArray(res?.list)) throw new Error('案例组列表响应不完整，请重试');
+            const res = await getFeaturedCaseGroups(page, featuredPageSize);
+            if (!isCurrent()) return null;
+            if (!Array.isArray(res?.list) || !Number.isSafeInteger(res.total) || res.total < 0 ||
+                (res.page !== undefined && res.page !== page) ||
+                (res.page_size !== undefined && res.page_size !== featuredPageSize)) throw new Error('案例组分页响应不完整或页码不匹配，请重试');
+            const lastPage = Math.max(1, Math.ceil(res.total / featuredPageSize));
+            if (page > lastPage) { changeFeaturedPage(lastPage); return null; }
             setFeaturedGroups(res.list);
+            setFeaturedTotal(res.total);
             setFeaturedGroupsLoaded(true);
+            featuredLoadedPageRef.current = page;
             return true;
         } catch (error: any) {
-            if (request !== featuredGroupReadRef.current) return null;
+            if (!isCurrent()) return null;
+            if (featuredLoadedPageRef.current !== page) { setFeaturedGroups([]); setFeaturedTotal(null); setFeaturedGroupsLoaded(false); }
             setFeaturedGroupsError(error?.message || '加载精选案例组失败');
             return false;
         } finally {
-            if (request === featuredGroupReadRef.current) setLoadingFeaturedGroups(false);
+            if (isCurrent()) setLoadingFeaturedGroups(false);
         }
     }, []);
+
+    useEffect(() => { if (featuredGroupSectionOpen) void loadFeaturedGroups(); }, [featuredGroupSectionOpen, featuredPage, loadFeaturedGroups]);
 
     const loadFeaturedOptions = async (page = 1, session = featuredEditorSessionRef.current) => {
         if (session !== featuredEditorSessionRef.current || featuredOptionsPendingRef.current) return;
@@ -1109,7 +1152,7 @@ const Templates: React.FC = () => {
     };
 
     const openFeaturedGroupEditor = (group?: FeaturedCaseGroup) => {
-        if (featuredGroupWriteRef.current) return;
+        if (!featuredAliveRef.current || !featuredSectionOpenRef.current || featuredPage !== featuredPageRef.current || featuredGroupWriteRef.current) return;
         closeFeaturedGroupEditor();
         setSelectedFeaturedGroup(group || null);
         setFeaturedGroupForm({
@@ -1179,12 +1222,14 @@ const Templates: React.FC = () => {
             if (groupId) await updateFeaturedCaseGroup(String(groupId), payload);
             else await createFeaturedCaseGroup(payload);
         } catch (error: any) {
-            alert(error?.message || '保存案例组失败');
+            if (featuredAliveRef.current) alert(error?.message || '保存案例组失败');
             return;
         } finally {
             featuredGroupWriteRef.current = false;
-            setFeaturedGroupSaving(false);
-            setActionLoading(null);
+            if (featuredAliveRef.current) {
+                setFeaturedGroupSaving(false);
+                setActionLoading(null);
+            }
         }
         if (session === featuredEditorSessionRef.current) closeFeaturedGroupEditor();
         // The write is committed. A refresh failure has its own feedback and
@@ -1194,20 +1239,23 @@ const Templates: React.FC = () => {
     };
 
     const handleDeleteFeaturedGroup = async (groupId: number) => {
-        if (featuredGroupWriteRef.current || !window.confirm('确定要删除这个精选案例组吗？')) return;
+        if (!featuredAliveRef.current || !featuredSectionOpenRef.current || featuredPage !== featuredPageRef.current || featuredGroupWriteRef.current || !window.confirm('确定要删除这个精选案例组吗？')) return;
         featuredGroupWriteRef.current = true;
         setFeaturedGroupSaving(true);
         setActionLoading(`group-${groupId}`);
         try {
             await deleteFeaturedCaseGroup(String(groupId));
         } catch (error: any) {
-            alert(error?.message || '删除失败');
+            if (featuredAliveRef.current) alert(error?.message || '删除失败');
             return;
         } finally {
             featuredGroupWriteRef.current = false;
-            setFeaturedGroupSaving(false);
-            setActionLoading(null);
+            if (featuredAliveRef.current) {
+                setFeaturedGroupSaving(false);
+                setActionLoading(null);
+            }
         }
+        if (!featuredAliveRef.current) return;
         setFeaturedGroups(items => items.filter(item => item.id !== groupId));
         const refreshed = await loadFeaturedGroups();
         if (refreshed === false) setFeaturedGroupsError('案例组已删除，但列表刷新失败，请重试加载');
@@ -1231,7 +1279,7 @@ const Templates: React.FC = () => {
                             <p>分类与状态筛选覆盖全部模板；关键词仅检索当前页。可审核模板、整理分类，或配置首页精选案例与标签。</p>
                         </div>
                         <div className="toolbar-actions management-actions">
-                            <button className="btn-secondary" onClick={() => { setFeaturedGroupSectionOpen(!featuredGroupSectionOpen); if (!featuredGroupSectionOpen) loadFeaturedGroups(); }}>
+                            <button className="btn-secondary" onClick={toggleFeaturedSection}>
                                 精选案例组管理
                             </button>
                             <button className="btn-secondary" onClick={() => { setTabConfigSectionOpen(!tabConfigSectionOpen); if (!tabConfigSectionOpen) loadTabConfig(); }}>
@@ -1449,7 +1497,7 @@ const Templates: React.FC = () => {
                             </button>
                         </div>
                         <p className="section-desc">案例组会显示在小程序首页的精选案例区域，每组可配置 1-2 个案例，支持对比、并排和普通模式。</p>
-                        {featuredGroupsError && <div className="template-feedback" role="alert">{featuredGroupsError}<button className="btn-secondary" onClick={loadFeaturedGroups}>重新加载案例组</button></div>}
+                        {featuredGroupsError && <div className="template-feedback" role="alert">{featuredGroupsError}{featuredGroupsLoaded ? '（保留上次成功结果）' : ''}<button className="btn-secondary" onClick={loadFeaturedGroups}>重新加载案例组</button></div>}
                         {loadingFeaturedGroups ? (
                             <div className="loading-state">加载中...</div>
                         ) : (
@@ -1518,6 +1566,11 @@ const Templates: React.FC = () => {
                                 )}
                             </div>
                         )}
+                        <nav className="template-pagination" aria-label="精选案例组分页">
+                            <span>共 {featuredTotal ?? '—'} 组 · 第 {featuredPage} 页 · 共 {featuredTotal === null ? '—' : Math.max(1, Math.ceil(featuredTotal / featuredPageSize))} 页 · 每页 {featuredPageSize} 组</span>
+                            <button className="btn-secondary" disabled={loadingFeaturedGroups || featuredPage <= 1} onClick={() => { if (featuredPage === featuredPageRef.current) changeFeaturedPage(featuredPage - 1); }}>上一页</button>
+                            <button className="btn-secondary" disabled={loadingFeaturedGroups || featuredTotal === null || featuredPage * featuredPageSize >= featuredTotal} onClick={() => { if (featuredPage === featuredPageRef.current && featuredTotal !== null && featuredPage * featuredPageSize < featuredTotal) changeFeaturedPage(featuredPage + 1); }}>下一页</button>
+                        </nav>
                     </div>
                 )}
 

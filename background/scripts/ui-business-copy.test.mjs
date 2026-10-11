@@ -45,3 +45,13 @@ test('Chinese language and user-detail names are consistent across menus and rou
     assert.match(source, /\/user-workbench/);
   }
 });
+
+
+test('remaining user detail entry copy uses the same business name and preserves its route', () => {
+  for (const file of ['dashboard', 'orderCenter', 'virtualPay']) {
+    const source = read(`src/pages/${file}.tsx`);
+    assert.doesNotMatch(source, /用户\s*360/);
+    assert.match(source, /用户详情/);
+    assert.match(source, /\/user-workbench/);
+  }
+});

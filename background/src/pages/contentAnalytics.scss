@@ -169,6 +169,21 @@
   }
 }
 
+.analytics-load-state {
+  color: #6b7280;
+  padding: 24px;
+
+  &[role="alert"] {
+    color: #b42318;
+  }
+}
+
+.btn-text-link:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .empty-state {
   text-align: center;
   padding: 40px;

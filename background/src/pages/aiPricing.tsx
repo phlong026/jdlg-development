@@ -352,13 +352,13 @@ const AIPricing: React.FC = () => {
                 <>
                     <div className="aip-notice">
                         调价需<b>二次确认并自动留痕</b>（操作人 / 旧值 / 新值），可从历史记录发起回滚，确认后生效。
-                        毛利率 =（灵石收入折元 − API 成本估算）÷ 收入，按 10 灵石 = ¥1 折算；成本为模型单价估算口径，非财务数据。
+                        毛利率 =（灵石收入折元 − 服务成本估算）÷ 收入，按 10 灵石 = ¥1 折算；成本为模型单价估算口径，非财务数据。
                     </div>
                     {lowMarginRows.length > 0 ? (
                         <div className="aip-notice warn">
                             <b>毛利预警：</b>
                             {lowMarginRows.map((item) => `${item.label}（${formatPercent(item.margin_rate)}）`).join('、')}
-                            低于 30%——视频类可参考行业单条成本（1~5 元）重新定价，失败率高的场景先解决失败退款再调价。
+                            低于 30%。请先核对实际服务成本、失败原因及退款记录，再决定是否调价。
                         </div>
                     ) : null}
                     <section className="section-card aip-card">
@@ -367,7 +367,7 @@ const AIPricing: React.FC = () => {
                                 <tr>
                                     <th>场景</th>
                                     <th>定价</th>
-                                    <th>API 成本<span className="th-hint">¥/次 · 估算</span></th>
+                                    <th>服务成本<span className="th-hint">¥/次 · 估算</span></th>
                                     <th>毛利率</th>
                                     <th>近7日调用</th>
                                     <th>最近调价</th>
@@ -382,7 +382,7 @@ const AIPricing: React.FC = () => {
                                         <td>
                                             <div className="aip-scene-cell">
                                                 <b>{item.label}</b>
-                                                <code>{item.scene}</code>
+                                                <details className="aip-scene-diagnostic"><summary>场景标识</summary><code>{item.scene}</code></details>
                                             </div>
                                         </td>
                                         <td><b>{item.stones}</b> 灵石</td>
@@ -410,7 +410,8 @@ const AIPricing: React.FC = () => {
                             </tbody>
                         </table></div>
                         <div className="aip-foot-note">
-                            「AI 配置（旧版）」仍保留原始表单（含 extra_config JSON 编辑），可从 ⌘K 搜索进入；本页为运营视角入口。
+                            高级设置保留服务协议、请求参数等技术配置，调整前请核对对新任务的影响。
+                            <button type="button" className="aip-link" onClick={() => navigate('/ai-config')}>打开高级设置</button>
                         </div>
                     </section>
                 </>

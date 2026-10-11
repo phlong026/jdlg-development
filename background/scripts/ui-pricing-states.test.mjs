@@ -21,6 +21,7 @@ let activeRuntime = null;
 let api = {};
 let calls = [];
 let alerts = [];
+let navigations = [];
 const fakeReact = {
   ...React,
   useState(initial) {
@@ -55,7 +56,7 @@ const context = vm.createContext({
   module: moduleRef, exports: moduleRef.exports,
   require(name) {
     if (name === 'react') return fakeReact;
-    if (name === 'react-router-dom') return { useNavigate: () => () => {}, useSearchParams: () => [new URLSearchParams(), () => {}] };
+    if (name === 'react-router-dom') return { useNavigate: () => target => navigations.push(target), useSearchParams: () => [new URLSearchParams(), () => {}] };
     if (name.endsWith('.scss')) return {};
     if (name === '../utils/pageLoadError') return { reportPageLoadError: () => {} };
     if (name === '../api/aiOverview' || name === '../api/ai') return new Proxy({}, { get: (_, method) => (...args) => api[method](...args) });
@@ -67,7 +68,7 @@ const context = vm.createContext({
 vm.runInContext(sourceJs, context, { filename: sourcePath });
 const { default: Pricing, AdjustPricingModal: Adjust, PricingHistoryModal: History } = moduleRef.exports;
 function resetApi(overrides = {}) {
-  calls = []; alerts = [];
+  calls = []; alerts = []; navigations = [];
   api = {
     saveAIPricing: async payload => { calls.push(JSON.parse(JSON.stringify(payload))); },
     getAIPricingVersions: async () => [version],
@@ -280,4 +281,27 @@ test('AI pricing keeps confirmation, version and retry states consistent', async
   assert.equal(oldSavedCalls, 0);
   check('unmounted old pricing modal cannot close the parent replacement through late onSaved');
 
+});
+
+
+test('pricing business details remain visible while identifiers are collapsed and advanced settings have a direct entry', async () => {
+  resetApi({ getAIPricingOpsList: async () => [{ ...baseItem, margin_rate: 0.2 }] });
+  const page = mount(Pricing, {}); page.effects(); await flush(); page.render();
+  const diagnostic = nodes(page.tree, n => n.type === 'details' && n.props.className === 'aip-scene-diagnostic');
+  assert.equal(diagnostic.length, 1);
+  assert.notEqual(diagnostic[0].props.open, true);
+  assert.match(textOf(diagnostic[0]), /ai_draw_single/);
+  assert.equal(nodes(diagnostic[0], n => n.type === 'summary').length, 1);
+  const row = nodes(page.tree, n => n.type === 'tr' && n.key === baseItem.scene)[0];
+  assert.ok(row);
+  const visible = row.props.children.filter(n => n?.type === 'td').slice(1).map(textOf).join('|');
+  assert.match(visible, /10 灵石/); assert.match(visible, /¥0.20/); assert.match(visible, /20.0%/);
+  assert.match(visible, /调价历史/);
+  assert.match(textOf(page.tree), /10 灵石 = ¥1/);
+  assert.match(textOf(page.tree), /二次确认并自动留痕/);
+  assert.match(textOf(page.tree), /失败原因及退款记录/);
+  assert.doesNotMatch(textOf(page.tree), /extra_config|JSON|行业单条成本/);
+  await click(page, '打开高级设置');
+  assert.deepEqual(navigations, ['/ai-config']);
+  assert.equal(calls.length, 0, 'opening advanced settings must not change a price');
 });

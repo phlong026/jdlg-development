@@ -1,5 +1,5 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useState } from 'react';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertTriangle, FiCpu, FiRefreshCw, FiRepeat, FiSearch, FiShield } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
@@ -10,10 +10,9 @@ import {
     getRiskControlOverview,
     getRiskControlUsers,
     type RiskControlAlertItem,
-    type RiskControlDeviceChangeItem,
-    type RiskControlDeviceGroupItem,
     type RiskControlOverview,
-    type RiskControlUserItem,
+    type RiskControlListParams,
+    type RiskControlListResponse,
 } from '../api/riskControl';
 import './riskControl.scss';
 
@@ -24,13 +23,143 @@ const FiCpuIcon = FiCpu as unknown as React.ComponentType<any>;
 const FiRepeatIcon = FiRepeat as unknown as React.ComponentType<any>;
 const FiAlertTriangleIcon = FiAlertTriangle as unknown as React.ComponentType<any>;
 
-const defaultOverview: RiskControlOverview = {
-    shared_devices: 0,
-    device_risk_users: 0,
-    recent_device_changes: 0,
-    abnormal_payments: 0,
-    failed_tasks: 0,
-};
+const PAGE_SIZE = 10;
+const isRecord = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
+const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
+const isId = (value: unknown) => (typeof value === 'string' && !!value.trim()) || (isCount(value) && value > 0);
+const optionalText = (value: unknown) => value == null || typeof value === 'string';
+const isUser = (value: unknown) => isRecord(value) && isId(value.user_id) && typeof value.username === 'string' && optionalText(value.nickname);
+const isDeviceGroup = (value: unknown) => isRecord(value) && typeof value.device_id === 'string' && isCount(value.user_count)
+    && optionalText(value.latest_activity_at) && Array.isArray(value.users) && value.users.every(isUser);
+const isDeviceChange = (value: unknown) => isUser(value) && isRecord(value) && optionalText(value.device_id) && optionalText(value.last_device_change_time);
+const isAlert = (value: unknown) => isUser(value) && isRecord(value) && typeof value.alert_type === 'string'
+    && isCount(value.alert_count) && optionalText(value.latest_time) && optionalText(value.detail);
+const isRiskUser = (value: unknown) => isUser(value) && isRecord(value) && optionalText(value.device_id)
+    && isCount(value.shared_device_count) && isCount(value.failed_task_count) && isCount(value.abnormal_payment_count)
+    && optionalText(value.last_device_change_time) && (value.risk_tags == null || (Array.isArray(value.risk_tags) && value.risk_tags.every(tag => typeof tag === 'string')));
+
+interface RiskListState<T> {
+    list: T[];
+    total: number | null;
+    page: number;
+    loading: boolean;
+    error: string;
+    generation: number;
+}
+
+// Each module owns its request generation. Handler-time invalidation closes the
+// gap before React's next render/effect, including filter and retry races.
+function useRiskList<T>(fetchList: (params: RiskControlListParams) => Promise<RiskControlListResponse<T>>, validItem: (value: unknown) => boolean, label: string) {
+    const [state, setState] = useState<RiskListState<T>>({ list: [], total: null, page: 1, loading: true, error: '', generation: 0 });
+    const scope = useRef({ mounted: false, generation: 0, keyword: '', page: 1 });
+    const source = `加载${label}失败`;
+
+    const load = async (page: number, keyword: string) => {
+        if (!scope.current.mounted) return;
+        const generation = ++scope.current.generation;
+        scope.current.keyword = keyword;
+        scope.current.page = page;
+        setState({ list: [], total: null, page, loading: true, error: '', generation });
+        const isCurrent = () => scope.current.mounted && generation === scope.current.generation;
+        try {
+            const response = await fetchList({ page, page_size: PAGE_SIZE, keyword });
+            if (!isCurrent()) return;
+            if (!isRecord(response) || !Array.isArray(response.list) || !response.list.every(validItem)
+                || !isCount(response.total) || response.page !== page || response.page_size !== PAGE_SIZE
+                || response.list.length > PAGE_SIZE || response.list.length > response.total) {
+                throw new Error('返回数据格式异常，请重试');
+            }
+            const lastPage = Math.max(1, Math.ceil(response.total / PAGE_SIZE));
+            if (page > lastPage) {
+                // Totals can shrink between reads. Only this table moves back.
+                void load(lastPage, keyword);
+                return;
+            }
+            if (response.total > 0 && response.list.length === 0) throw new Error('当前页数据缺失，请重试');
+            setState({ list: response.list, total: response.total, page, loading: false, error: '', generation });
+            reportPageLoadRecovered(source);
+        } catch (error) {
+            if (!isCurrent()) return;
+            const detail = error instanceof Error ? error.message : '请求失败，请重试';
+            setState({ list: [], total: null, page, loading: false, error: detail, generation });
+            reportPageLoadError(error, source);
+        }
+    };
+
+    useEffect(() => {
+        scope.current.mounted = true;
+        void load(1, '');
+        return () => { scope.current.mounted = false; scope.current.generation++; };
+    }, []);
+
+    const isCurrentView = () => scope.current.mounted && state.generation === scope.current.generation;
+    return {
+        ...state,
+        label,
+        applyKeyword: (keyword: string) => { void load(1, keyword); },
+        refresh: () => { if (isCurrentView()) void load(scope.current.page, scope.current.keyword); },
+        changePage: (page: number) => {
+            if (!isCurrentView() || state.loading || state.error || state.total == null || !Number.isSafeInteger(page)
+                || page < 1 || page > Math.max(1, Math.ceil(state.total / PAGE_SIZE)) || page === scope.current.page) return;
+            void load(page, scope.current.keyword);
+        },
+    };
+}
+
+function useRiskOverview() {
+    const [state, setState] = useState<{ data: RiskControlOverview | null; loading: boolean; error: string; generation: number }>({ data: null, loading: true, error: '', generation: 0 });
+    const request = useRef({ mounted: false, generation: 0 });
+    const source = '加载风控全局概览失败';
+    const load = async () => {
+        if (!request.current.mounted) return;
+        const generation = ++request.current.generation;
+        setState({ data: null, loading: true, error: '', generation });
+        const isCurrent = () => request.current.mounted && generation === request.current.generation;
+        try {
+            const data = await getRiskControlOverview();
+            if (!isCurrent()) return;
+            if (!isRecord(data) || !['shared_devices', 'device_risk_users', 'recent_device_changes', 'abnormal_payments', 'failed_tasks'].every(key => isCount(data[key]))) {
+                throw new Error('返回数据格式异常，请重试');
+            }
+            setState({ data, loading: false, error: '', generation });
+            reportPageLoadRecovered(source);
+        } catch (error) {
+            if (!isCurrent()) return;
+            setState({ data: null, loading: false, error: error instanceof Error ? error.message : '请求失败，请重试', generation });
+            reportPageLoadError(error, source);
+        }
+    };
+    useEffect(() => {
+        request.current.mounted = true;
+        void load();
+        return () => { request.current.mounted = false; request.current.generation++; };
+    }, []);
+    return { ...state, refresh: () => { if (request.current.mounted && state.generation === request.current.generation) void load(); } };
+}
+
+function tableFeedback<T>(table: RiskListState<T> & { label: string; refresh: () => void }, columns: number, emptyText: string) {
+    if (!table.loading && !table.error && table.list.length) return null;
+    return <tr><td colSpan={columns} className="empty-state">
+        {table.loading ? <span role="status">{table.label}加载中…</span> : table.error ? (
+            <div className="risk-load-error" role="alert">
+                <span>{table.label}加载失败：{table.error}</span>
+                <button className="btn-secondary" onClick={table.refresh}>重试{table.label}</button>
+            </div>
+        ) : emptyText}
+    </td></tr>;
+}
+
+function pagination<T>(table: RiskListState<T> & { label: string; changePage: (page: number) => void }) {
+    const pageCount = table.total == null ? null : Math.max(1, Math.ceil(table.total / PAGE_SIZE));
+    const disabled = table.loading || !!table.error || table.total == null;
+    return <nav className="risk-pagination" aria-label={`${table.label}分页`}>
+        <span aria-live="polite">共 {table.total ?? '—'} 条 · 第 {table.page} / {pageCount ?? '—'} 页 · 每页 {PAGE_SIZE} 条</span>
+        <div className="risk-pagination-actions">
+            <button className="btn-secondary" aria-label={`${table.label}上一页`} onClick={() => table.changePage(table.page - 1)} disabled={disabled || table.page <= 1}>上一页</button>
+            <button className="btn-secondary" aria-label={`${table.label}下一页`} onClick={() => table.changePage(table.page + 1)} disabled={disabled || table.page >= (pageCount ?? 1)}>下一页</button>
+        </div>
+    </nav>;
+}
 
 const formatDateTime = (value?: string) => {
     if (!value) return '暂无';
@@ -41,51 +170,29 @@ const formatDateTime = (value?: string) => {
 
 const RiskControl: React.FC = () => {
     const navigate = useNavigate();
-    const [overview, setOverview] = useState<RiskControlOverview>(defaultOverview);
-    const [deviceGroups, setDeviceGroups] = useState<RiskControlDeviceGroupItem[]>([]);
-    const [deviceChanges, setDeviceChanges] = useState<RiskControlDeviceChangeItem[]>([]);
-    const [alerts, setAlerts] = useState<RiskControlAlertItem[]>([]);
-    const [riskUsers, setRiskUsers] = useState<RiskControlUserItem[]>([]);
-    const [loading, setLoading] = useState(false);
+    const overview = useRiskOverview();
+    const groups = useRiskList(getRiskControlDeviceGroups, isDeviceGroup, '同设备账号');
+    const changes = useRiskList(getRiskControlDeviceChanges, isDeviceChange, '设备换绑');
+    const alertList = useRiskList(getRiskControlAlerts, isAlert, '风险告警');
+    const users = useRiskList(getRiskControlUsers, isRiskUser, '风险用户');
     const [searchInput, setSearchInput] = useState('');
     const [keyword, setKeyword] = useState('');
-
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const params = { page: 1, page_size: 10, keyword };
-            const [overviewData, groupsData, changesData, alertsData, usersData] = await Promise.all([
-                getRiskControlOverview(),
-                getRiskControlDeviceGroups(params),
-                getRiskControlDeviceChanges(params),
-                getRiskControlAlerts(params),
-                getRiskControlUsers(params),
-            ]);
-            setOverview(overviewData);
-            setDeviceGroups(groupsData.list || []);
-            setDeviceChanges(changesData.list || []);
-            setAlerts(alertsData.list || []);
-            setRiskUsers(usersData.list || []);
-        } catch (error) {
-            console.error('加载风控台失败:', error);
-            reportPageLoadError(error, '加载风控台失败');
-        } finally {
-            setLoading(false);
-        }
+    const tables = [groups, changes, alertList, users];
+    const loading = overview.loading || tables.some(table => table.loading);
+    const applySearch = (value: string) => {
+        setKeyword(value);
+        tables.forEach(table => table.applyKeyword(value));
     };
-
-    useEffect(() => {
-        void loadData();
-    }, [keyword]);
-
-    const handleSearch = () => {
-        setKeyword(searchInput.trim());
-    };
-
+    const handleSearch = () => applySearch(searchInput.trim());
     const handleReset = () => {
         setSearchInput('');
-        setKeyword('');
+        applySearch('');
     };
+    const refreshAll = () => {
+        overview.refresh();
+        tables.forEach(table => table.refresh());
+    };
+    const metric = (key: keyof RiskControlOverview) => overview.data?.[key] ?? '—';
 
     const openUserWorkbench = (userId: number | string) => {
         navigate(`/user-workbench?userId=${userId}`);
@@ -96,7 +203,7 @@ const RiskControl: React.FC = () => {
             navigate('/recharge');
             return;
         }
-        navigate('/ai-tasks');
+        if (item.alert_type === 'task') navigate('/ai-tasks');
     };
 
     return (
@@ -104,11 +211,11 @@ const RiskControl: React.FC = () => {
             <div className="risk-control-page">
                 <ManagementSearchPanel
                     title="风险检索与异常排查"
-                    description="先按用户名、昵称或设备ID锁定风险对象，再查看多账号同设备、换绑记录、失败任务和风险标签。"
+                    description="关键词用于下方四张表：同设备账号、换绑与风险用户支持用户名、昵称或设备ID；风险告警仅支持用户名或昵称。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
-                            <button className="btn-secondary" onClick={() => void loadData()} disabled={loading}>
+                            <button className="btn-secondary" onClick={refreshAll} disabled={loading}>
                                 <FiRefreshCwIcon />
                                 {loading ? '刷新中...' : '刷新'}
                             </button>
@@ -137,7 +244,7 @@ const RiskControl: React.FC = () => {
                     summary={(
                         <>
                             <div>
-                                当前共享设备 <strong>{overview.shared_devices}</strong> 个，风险用户 <strong>{overview.device_risk_users}</strong> 位
+                                下方列表各自分页；全局概览不受关键词筛选影响。
                             </div>
                             <div className="management-search-tags">
                                 {keyword ? <span className="management-search-tag">关键词：{keyword}</span> : null}
@@ -146,32 +253,45 @@ const RiskControl: React.FC = () => {
                     )}
                 />
 
+                <section className="risk-overview" aria-label="风控全局概览" aria-busy={overview.loading}>
+                    <div className="section-header">
+                        <div><h3>全局概览</h3><p>不受关键词筛选影响，各项统计时间范围见下方说明。</p></div>
+                        <button className="btn-secondary" onClick={overview.refresh} disabled={overview.loading}>刷新全局概览</button>
+                    </div>
+                    {overview.loading ? <p role="status">全局概览加载中…</p> : overview.error ? (
+                        <div className="risk-load-error" role="alert">
+                            <span>全局概览加载失败：{overview.error}</span>
+                            <button className="btn-secondary" onClick={overview.refresh}>重试全局概览</button>
+                        </div>
+                    ) : null}
                 <div className="risk-stats-grid">
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiCpuIcon /></div>
                         <div className="stat-label">多账号同设备</div>
-                        <div className="stat-value">{overview.shared_devices}</div>
-                        <div className="stat-desc">同一个设备被多个账号使用，需要优先排查共享与薅羊毛风险。</div>
+                        <div className="stat-value">{metric('shared_devices')}</div>
+                        <div className="stat-desc">全量共享设备数：同一设备绑定多个账号，需人工核查原因。</div>
                     </div>
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiShieldIcon /></div>
-                        <div className="stat-label">设备风险用户</div>
-                        <div className="stat-value">{overview.device_risk_users}</div>
-                        <div className="stat-desc">已经绑定设备的用户规模，可以帮助判断风险面有多大。</div>
+                        <div className="stat-label">已绑定设备用户</div>
+                        <div className="stat-value">{metric('device_risk_users')}</div>
+                        <div className="stat-desc">全量已绑定设备账号，非命中风险人数；按接口统计展示。</div>
                     </div>
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiRepeatIcon /></div>
                         <div className="stat-label">最近换绑设备</div>
-                        <div className="stat-value">{overview.recent_device_changes}</div>
+                        <div className="stat-value">{metric('recent_device_changes')}</div>
                         <div className="stat-desc">近 30 天内出现过设备更换的账号。</div>
                     </div>
                     <div className="stat-card section-card">
                         <div className="stat-icon"><FiAlertTriangleIcon /></div>
                         <div className="stat-label">异常支付 / 失败任务</div>
-                        <div className="stat-value">{overview.abnormal_payments} / {overview.failed_tasks}</div>
-                        <div className="stat-desc">近 7 天的支付异常和任务失败，方便快速发现坏点。</div>
+                        <div className="stat-value">{metric('abnormal_payments')} / {metric('failed_tasks')}</div>
+                        <div className="stat-desc">近 7 天：异常支付含失败与待支付；任务仅统计失败。</div>
                     </div>
                 </div>
+
+                </section>
 
                 <div className="risk-panel section-card">
                     <div className="risk-section">
@@ -182,7 +302,7 @@ const RiskControl: React.FC = () => {
                             </div>
                         </div>
                         <div className="risk-table-container">
-                            <table className="risk-table">
+                            <table className="risk-table" aria-label="同设备账号" aria-busy={groups.loading}>
                                 <thead>
                                     <tr>
                                         <th>设备ID</th>
@@ -193,9 +313,7 @@ const RiskControl: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {deviceGroups.length === 0 ? (
-                                        <tr><td colSpan={5} className="empty-state">暂无异常设备分组</td></tr>
-                                    ) : deviceGroups.map((item) => (
+                                    {tableFeedback(groups, 5, '当前筛选下暂无同设备账号分组') || groups.list.map((item) => (
                                         <tr key={item.device_id}>
                                             <td className="mono-cell">{item.device_id}</td>
                                             <td>{item.user_count}</td>
@@ -211,9 +329,9 @@ const RiskControl: React.FC = () => {
                                             <td>{formatDateTime(item.latest_activity_at)}</td>
                                             <td>
                                                 <div className="table-action-stack">
-                                                    <button className="btn-text-link" onClick={() => navigate('/users')}>查看用户列表</button>
+                                                    <button className="btn-text-link" onClick={() => navigate('/users')}>打开用户列表（未筛选）</button>
                                                     {item.users[0] ? (
-                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.users[0].user_id)}>查看首个用户360</button>
+                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.users[0].user_id)}>查看首个用户详情</button>
                                                     ) : null}
                                                 </div>
                                             </td>
@@ -222,18 +340,19 @@ const RiskControl: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+                        {pagination(groups)}
                     </div>
 
                     <div className="risk-grid">
                         <div className="risk-section half">
                             <div className="section-header">
                                 <div>
-                                    <h3>近期换绑设备提醒</h3>
-                                    <p>最近改过设备的账号，适合和投诉、支付异常、任务异常一起联动看。</p>
+                                    <h3>设备换绑记录</h3>
+                                    <p>列出所有有设备换绑时间的账号，不限近 30 天；与上方近 30 天概览口径不同。</p>
                                 </div>
                             </div>
                             <div className="risk-table-container">
-                                <table className="risk-table compact">
+                                <table className="risk-table compact" aria-label="设备换绑" aria-busy={changes.loading}>
                                     <thead>
                                         <tr>
                                             <th>用户</th>
@@ -243,9 +362,7 @@ const RiskControl: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {deviceChanges.length === 0 ? (
-                                            <tr><td colSpan={4} className="empty-state">暂无近期换绑记录</td></tr>
-                                        ) : deviceChanges.map((item) => (
+                                        {tableFeedback(changes, 4, '当前筛选下暂无设备换绑记录') || changes.list.map((item) => (
                                             <tr key={`change-${item.user_id}`}>
                                                 <td>
                                                     <div className="identity-cell">
@@ -257,8 +374,8 @@ const RiskControl: React.FC = () => {
                                                 <td>{formatDateTime(item.last_device_change_time)}</td>
                                                 <td>
                                                     <div className="table-action-stack">
-                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>进入用户360</button>
-                                                        <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>转异常工单</button>
+                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
+                                                        <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>打开工单中心（未筛选）</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -266,17 +383,18 @@ const RiskControl: React.FC = () => {
                                     </tbody>
                                 </table>
                             </div>
+                            {pagination(changes)}
                         </div>
 
                         <div className="risk-section half">
                             <div className="section-header">
                                 <div>
                                     <h3>异常支付 / 异常任务告警</h3>
-                                    <p>同一用户短时间内反复失败时，通常意味着通道、账号行为或第三方接口有问题。</p>
+                                    <p>近 7 天按用户和类型汇总，次数 ≥ 2 才告警；支付含失败与待支付，任务仅失败。此表仅搜索用户名或昵称。</p>
                                 </div>
                             </div>
                             <div className="risk-table-container">
-                                <table className="risk-table compact">
+                                <table className="risk-table compact" aria-label="风险告警" aria-busy={alertList.loading}>
                                     <thead>
                                         <tr>
                                             <th>用户</th>
@@ -287,9 +405,7 @@ const RiskControl: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {alerts.length === 0 ? (
-                                            <tr><td colSpan={5} className="empty-state">暂无风险告警</td></tr>
-                                        ) : alerts.map((item) => (
+                                        {tableFeedback(alertList, 5, '当前筛选下暂无风险告警') || alertList.list.map((item) => (
                                             <tr key={`${item.alert_type}-${item.user_id}`}>
                                                 <td>
                                                     <div className="identity-cell">
@@ -297,14 +413,16 @@ const RiskControl: React.FC = () => {
                                                         <span>{item.detail || '暂无详情'}</span>
                                                     </div>
                                                 </td>
-                                                <td>{item.alert_type === 'payment' ? '支付异常' : '任务异常'}</td>
+                                                <td>{item.alert_type === 'payment' ? '支付异常' : item.alert_type === 'task' ? '任务异常' : `未知类型（${item.alert_type || '空值'}）`}</td>
                                                 <td>{item.alert_count}</td>
                                                 <td>{formatDateTime(item.latest_time)}</td>
                                                 <td>
                                                     <div className="table-action-stack">
-                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>进入用户360</button>
-                                                        <button className="btn-text-link" onClick={() => openAlertSourcePage(item)}>{item.alert_type === 'payment' ? '查看订单中心' : '查看AI任务中心'}</button>
-                                                        <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>进入工单中心</button>
+                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
+                                                        {item.alert_type === 'payment' || item.alert_type === 'task' ? (
+                                                            <button className="btn-text-link" onClick={() => openAlertSourcePage(item)}>{item.alert_type === 'payment' ? '打开订单列表（未筛选）' : '打开AI任务列表（未筛选）'}</button>
+                                                        ) : <span className="risk-unknown-source">未知类型，无对应来源入口</span>}
+                                                        <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>打开工单中心（未筛选）</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -312,6 +430,7 @@ const RiskControl: React.FC = () => {
                                     </tbody>
                                 </table>
                             </div>
+                            {pagination(alertList)}
                         </div>
                     </div>
 
@@ -319,11 +438,11 @@ const RiskControl: React.FC = () => {
                         <div className="section-header">
                             <div>
                                 <h3>用户风险标签</h3>
-                                <p>把多个异常合并成用户级标签后，运营就能直接判断谁该优先回访、限制或人工核查。</p>
+                                <p>共享设备与换绑记录不限时间；失败任务及异常支付为近 7 天，支付含失败与待支付。标签供人工核查，列表入口不创建工单或执行账号处置。</p>
                             </div>
                         </div>
                         <div className="risk-table-container">
-                            <table className="risk-table">
+                            <table className="risk-table" aria-label="风险用户" aria-busy={users.loading}>
                                 <thead>
                                     <tr>
                                         <th>用户</th>
@@ -336,9 +455,7 @@ const RiskControl: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {riskUsers.length === 0 ? (
-                                        <tr><td colSpan={7} className="empty-state">暂无风险用户</td></tr>
-                                    ) : riskUsers.map((item) => (
+                                    {tableFeedback(users, 7, '当前筛选下暂无风险用户') || users.list.map((item) => (
                                         <tr key={`user-${item.user_id}`}>
                                             <td>
                                                 <div className="identity-cell">
@@ -353,17 +470,17 @@ const RiskControl: React.FC = () => {
                                             <td>
                                                 <div className="tag-list">
                                                     {item.risk_tags?.length ? item.risk_tags.map((tag) => (
-                                                        <span key={`${item.user_id}-${tag}`} className="inline-tag danger">{tag}</span>
+                                                        <span key={`${item.user_id}-${tag}`} className="inline-tag danger">{tag === '近期换绑设备' ? '有设备换绑记录' : tag}</span>
                                                     )) : <span className="inline-tag">待观察</span>}
                                                 </div>
                                             </td>
                                             <td>
                                                 <div className="table-action-stack">
-                                                    <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>进入用户360</button>
+                                                    <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
                                                     <button className="btn-text-link" onClick={() => navigate(item.abnormal_payment_count > 0 ? '/recharge' : '/ai-tasks')}>
-                                                        {item.abnormal_payment_count > 0 ? '查看订单中心' : '查看AI任务中心'}
+                                                        {item.abnormal_payment_count > 0 ? '打开订单列表（未筛选）' : '打开AI任务列表（未筛选）'}
                                                     </button>
-                                                    <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>进入工单中心</button>
+                                                    <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>打开工单中心（未筛选）</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -371,6 +488,7 @@ const RiskControl: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+                        {pagination(users)}
                     </div>
                 </div>
             </div>

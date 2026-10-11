@@ -1152,7 +1152,7 @@ const OrderCenter: React.FC = () => {
                                         {refundingOrderId === detailOrder.id ? '退款中...' : '虚拟支付退款'}
                                     </button>
                                 )}
-                                <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${detailOrder.user_id}`)}>进入用户360</button>
+                                <button className="btn-secondary" onClick={() => navigate(`/user-workbench?userId=${detailOrder.user_id}`)}>进入用户详情</button>
                                 <button className="btn-secondary" onClick={handleExportStatement} title="导出该订单的对账单 CSV（订单信息 + 资金视图 + 关联推送）">对账单</button>
                                 </>
                                 )}

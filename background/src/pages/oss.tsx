@@ -83,9 +83,16 @@ const OSS: React.FC = () => {
             if (!isCurrent()) return;
             if (result.code !== 0) throw new Error(result.msg || '获取文件列表失败');
             if (!result.data || (result.data.list !== null && !Array.isArray(result.data.list))) throw new Error('文件列表响应无效');
+            if (!Number.isFinite(result.data.total) || result.data.total < 0) throw new Error('文件总数响应无效');
+            const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
+            if (page > lastPage) {
+                invalidateList();
+                setPage(lastPage);
+                return;
+            }
             // Preserve the API's nullable-empty-list compatibility without accepting a missing payload.
             setFiles(result.data.list || []);
-            setTotal(result.data.total || 0);
+            setTotal(result.data.total);
             setLoadedScope(scope);
             reportPageLoadRecovered('获取文件列表失败');
         } catch (error: any) {
@@ -441,7 +448,7 @@ const OSS: React.FC = () => {
                 )}
 
                 {/* 分页 */}
-                {ready && total > pageSize && (
+                {ready && (total > pageSize || page > 1) && (
                     <div className="pagination">
                         <button
                             className="btn-page"
@@ -451,7 +458,7 @@ const OSS: React.FC = () => {
                             上一页
                         </button>
                         <span className="page-info">
-                            第 {page} 页，共 {Math.ceil(total / pageSize)} 页
+                            第 {page} 页，共 {Math.max(1, Math.ceil(total / pageSize))} 页
                         </span>
                         <button
                             className="btn-page"
