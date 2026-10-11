@@ -1,0 +1,251 @@
+node:assert:768
+    throw err;
+    ^
+
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /class="brand-header" style="top: \{\{brandHeaderTop\}\}px;"/. Input:
+
+'<!--index.wxml-->\n' +
+  '<view class="pages">\n' +
+  '  <view class="home-canvas">\n' +
+  '    <image class="home-backdrop" src="{{homeAssets.backdrop}}" mode="scaleToFill" aria-hidden="true" />\n' +
+  '    <view class="brand-backdrop" aria-hidden="true">\n' +
+  '      <image class="brand-backdrop-image" src="{{homeAssets.brandScene}}" mode="aspectFill" aria-hidden="true" />\n' +
+  '    </view>\n' +
+  '    <view class="home-art-layer">\n' +
+  '      <image class="brand-symbol" src="{{homeAssets.brandSymbol}}" mode="aspectFit" aria-hidden="true" />\n' +
+  '      <view class="brand-copy"><image class="brand-name" src="{{homeAssets.brandName}}" mode="aspectFit" aria-label="甲第灵光" /><image class="brand-en" src="{{homeAssets.brandEnglish}}" mode="aspectFit" aria-label="ArchLight" /></view>\n' +
+  '      <view class="brand-slogan"><view class="slogan-line"></view><text>让理想家园触手可及</text><view class="slogan-line"></view></view>\n' +
+  '      <view class="hotspot smart-service-float" bindtap="onMascotTap" role="button" aria-label="在线客服">\n' +
+  '        <image class="customer-icon" src="{{homeAssets.customerService}}" mode="aspectFit" aria-hidden="true" /><text>在线客服</text>\n' +
+  '      </view>\n' +
+  '      <view class="service-panel"></view>\n' +
+  '      <view class="service-grid">\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.advisor}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">建房顾问</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aicost/aicost" role="button" aria-label="造价测算">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.calculator}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">造价测算</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI工具">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.aiTools}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">AI工具</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=exterior" role="button" aria-label="别墅设计">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.villa}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">别墅设计</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=interior" role="button" aria-label="装修设计">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.interior}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">装修设计</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=courtyard&amp;prompt=庭院景观设计" role="button" aria-label="庭院设计">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.courtyard}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">庭院设计</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/buildingreplacement/buildingreplacement" role="button" aria-label="旧居翻新">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.renovation}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">旧居翻新</text>\n' +
+  '        </view>\n' +
+  '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">\n' +
+  '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.templates}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '          <text class="service-label">模板广场</text>\n' +
+  '        </view>\n' +
+  '      </view>\n' +
+  '      <image class="ai-panel" src="{{homeAssets.aiPanel}}" mode="scaleToFill" aria-hidden="true" />\n' +
+  '      <image class="hotspot ai-hotspot" src="{{homeAssets.aiOrb}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="AI设计" />\n' +
+  '      <text class="ai-title">拍照说需求 · 1分钟出方案</text>\n' +
+  '      <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="拍照上传"><image src="{{homeAssets.camera}}" mode="scaleToFill" aria-hidden="true" /><text>拍照上传</text></view>\n' +
+  '      <view class="ai-action-divider"></view>\n' +
+  '      <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI生图工具"><image src="{{homeAssets.sparkles}}" mode="aspectFit" aria-hidden="true" /><text>AI生图工具</text></view>\n' +
+  '      <view class="cost-panel"></view>\n' +
+  '      <view class="cost-stat-icon"><image class="cost-stat-bars" src="{{homeAssets.costStats}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+  '      <text class="cost-title">智能造价</text>\n' +
+  '      <text class="cost-copy">快速估算项目造价，合理规划您的理想之家</text>\n' +
+  '      <view class="cost-form-panel"></view>\n' +
+  '      <text class="cost-project-label">项目类型</text>\n' +
+  `      <view class="quick-project quick-project--rural {{quickProjectType === 'rural_villa' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="rural_villa" role="button" aria-label="乡村别墅" aria-pressed="{{quickProjectType === 'rural_villa'}}"><image src="{{homeAssets.ruralVilla}}" mode="aspectFit" aria-hidden="true" /><text>乡村别墅</text></view>\n` +
+  `      <view class="quick-project quick-project--urban {{quickProjectType === 'urban_renewal' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="urban_renewal" role="button" aria-label="城市更新" aria-pressed="{{quickProjectType === 'urban_renewal'}}"><image src="{{homeAssets.urbanBuilding}}" mode="aspectFit" aria-hidden="true" /><text>城市更新</text></view>\n` +
+  '      <text class="cost-region-label">所在地区</text>\n' +
+  '      <text class="cost-area-label">建筑面积</text>\n' +
+  '      <picker class="quick-region" mode="multiSelector" range="{{quickRegionOptions}}" value="{{quickRegionIndex}}" bindcolumnchange="onQuickRegionColumnChange" bindchange="onQuickRegionChange" bindcancel="onQuickRegionCancel" aria-label="所在地区">\n' +
+  `        <view class="quick-region-hitbox"><image src="{{homeAssets.location}}" mode="scaleToFill" aria-hidden="true" /><text class="quick-region-value {{quickRegionText ? 'quick-region-value--selected' : ''}}">{{quickRegionText || '请选择'}}</text><view class="field-chevron"></view></view>\n` +
+  '      </picker>\n' +
+  '      <view class="quick-area"><image src="{{homeAssets.ruler}}" mode="aspectFit" aria-hidden="true" /><input class="quick-area-input" type="digit" value="{{quickArea}}" placeholder="请输入" placeholder-class="quick-area-placeholder" bindinput="onQuickAreaInput" aria-label="建筑面积，平方米" /><text class="area-unit">m²</text></view>\n' +
+  '      <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算"><image class="estimate-button-art" src="{{homeAssets.estimateButton}}" mode="scaleToFill" aria-hidden="true" /><text>立即估算</text></button>\n' +
+  '      <view class="estimate-note"><text class="info-icon">i</text><text>估算结果仅供参考</text></view>\n' +
+  '    </view>\n' +
+  '  </view>\n' +
+  '  <view class="content">\n' +
+  '    <view class="case-section" wx:if="{{featuredGroups && featuredGroups.length > 0}}">\n' +
+  '      <text class="case-title">精选案例对比</text>\n' +
+  '      <view class="featured-groups">\n' +
+  '        <view class="featured-group" wx:for="{{featuredGroups}}" wx:key="id">\n' +
+  `          <view class="case-comparison" wx:if="{{item.display_mode === 'comparison'}}">\n` +
+  '            <view class="case-card" wx:if="{{item.case1}}">\n' +
+  '              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">\n' +
+  '                <view class="case-image-wrapper">\n' +
+  '                  <text class="case-label">{{item.case1_label}}</text>\n' +
+  '                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>\n' +
+  '                </view>\n' +
+  '                <view class="case-content">\n' +
+  '                  <text class="case-item-title">{{item.case1.name}}</text>\n' +
+  `                  <text class="case-item-desc">{{item.case1.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>\n` +
+  '                </view>\n' +
+  '              </view>\n' +
+  '            </view>\n' +
+  '            <view class="vs-divider" wx:if="{{item.case1 && item.case2}}">VS</view>\n' +
+  '            <view class="case-card" wx:if="{{item.case2}}">\n' +
+  '              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case2.id}}">\n' +
+  '                <view class="case-image-wrapper">\n' +
+  '                  <text class="case-label">{{item.case2_label}}</text>\n' +
+  '                  <image class="case-image" src="{{item.case2.thumbnail || item.case2.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>\n' +
+  '                </view>\n' +
+  '                <view class="case-content">\n' +
+  '                  <text class="case-item-title">{{item.case2.name}}</text>\n' +
+  `                  <text class="case-item-desc">{{item.case2.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>\n` +
+  '                </view>\n' +
+  '              </view>\n' +
+  '            </view>\n' +
+  '          </view>\n' +
+  '\n' +
+  `          <view class="case-side-by-side" wx:elif="{{item.display_mode === 'side_by_side'}}">\n` +
+  '            <view class="case-card" wx:if="{{item.case1}}">\n' +
+  '              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">\n' +
+  '                <view class="case-image-wrapper">\n' +
+  '                  <text class="case-label">{{item.case1_label}}</text>\n' +
+  '                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>\n' +
+  '                </view>\n' +
+  '                <view class="case-content">\n' +
+  '                  <text class="case-item-title'... 9831 more characters
+
+    at Object.<anonymous> (/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram/tests/home-safe-area-layout.test.js:13:8)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: '<!--index.wxml-->\n' +
+    '<view class="pages">\n' +
+    '  <view class="home-canvas">\n' +
+    '    <image class="home-backdrop" src="{{homeAssets.backdrop}}" mode="scaleToFill" aria-hidden="true" />\n' +
+    '    <view class="brand-backdrop" aria-hidden="true">\n' +
+    '      <image class="brand-backdrop-image" src="{{homeAssets.brandScene}}" mode="aspectFill" aria-hidden="true" />\n' +
+    '    </view>\n' +
+    '    <view class="home-art-layer">\n' +
+    '      <image class="brand-symbol" src="{{homeAssets.brandSymbol}}" mode="aspectFit" aria-hidden="true" />\n' +
+    '      <view class="brand-copy"><image class="brand-name" src="{{homeAssets.brandName}}" mode="aspectFit" aria-label="甲第灵光" /><image class="brand-en" src="{{homeAssets.brandEnglish}}" mode="aspectFit" aria-label="ArchLight" /></view>\n' +
+    '      <view class="brand-slogan"><view class="slogan-line"></view><text>让理想家园触手可及</text><view class="slogan-line"></view></view>\n' +
+    '      <view class="hotspot smart-service-float" bindtap="onMascotTap" role="button" aria-label="在线客服">\n' +
+    '        <image class="customer-icon" src="{{homeAssets.customerService}}" mode="aspectFit" aria-hidden="true" /><text>在线客服</text>\n' +
+    '      </view>\n' +
+    '      <view class="service-panel"></view>\n' +
+    '      <view class="service-grid">\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.advisor}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">建房顾问</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aicost/aicost" role="button" aria-label="造价测算">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.calculator}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">造价测算</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI工具">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.aiTools}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">AI工具</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=exterior" role="button" aria-label="别墅设计">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.villa}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">别墅设计</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=rural_villa&amp;showSceneTabs=1&amp;tab=interior" role="button" aria-label="装修设计">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.interior}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">装修设计</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=courtyard&amp;prompt=庭院景观设计" role="button" aria-label="庭院设计">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.courtyard}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">庭院设计</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/buildingreplacement/buildingreplacement" role="button" aria-label="旧居翻新">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.renovation}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">旧居翻新</text>\n' +
+    '        </view>\n' +
+    '        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">\n' +
+    '          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.templates}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '          <text class="service-label">模板广场</text>\n' +
+    '        </view>\n' +
+    '      </view>\n' +
+    '      <image class="ai-panel" src="{{homeAssets.aiPanel}}" mode="scaleToFill" aria-hidden="true" />\n' +
+    '      <image class="hotspot ai-hotspot" src="{{homeAssets.aiOrb}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="AI设计" />\n' +
+    '      <text class="ai-title">拍照说需求 · 1分钟出方案</text>\n' +
+    '      <view class="hotspot photo-hotspot" bindtap="onOpenPage" data-url="/pages/aigenerate/aigenerate?source=index" role="button" aria-label="拍照上传"><image src="{{homeAssets.camera}}" mode="scaleToFill" aria-hidden="true" /><text>拍照上传</text></view>\n' +
+    '      <view class="ai-action-divider"></view>\n' +
+    '      <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI生图工具"><image src="{{homeAssets.sparkles}}" mode="aspectFit" aria-hidden="true" /><text>AI生图工具</text></view>\n' +
+    '      <view class="cost-panel"></view>\n' +
+    '      <view class="cost-stat-icon"><image class="cost-stat-bars" src="{{homeAssets.costStats}}" mode="aspectFit" aria-hidden="true" /></view>\n' +
+    '      <text class="cost-title">智能造价</text>\n' +
+    '      <text class="cost-copy">快速估算项目造价，合理规划您的理想之家</text>\n' +
+    '      <view class="cost-form-panel"></view>\n' +
+    '      <text class="cost-project-label">项目类型</text>\n' +
+    `      <view class="quick-project quick-project--rural {{quickProjectType === 'rural_villa' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="rural_villa" role="button" aria-label="乡村别墅" aria-pressed="{{quickProjectType === 'rural_villa'}}"><image src="{{homeAssets.ruralVilla}}" mode="aspectFit" aria-hidden="true" /><text>乡村别墅</text></view>\n` +
+    `      <view class="quick-project quick-project--urban {{quickProjectType === 'urban_renewal' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="urban_renewal" role="button" aria-label="城市更新" aria-pressed="{{quickProjectType === 'urban_renewal'}}"><image src="{{homeAssets.urbanBuilding}}" mode="aspectFit" aria-hidden="true" /><text>城市更新</text></view>\n` +
+    '      <text class="cost-region-label">所在地区</text>\n' +
+    '      <text class="cost-area-label">建筑面积</text>\n' +
+    '      <picker class="quick-region" mode="multiSelector" range="{{quickRegionOptions}}" value="{{quickRegionIndex}}" bindcolumnchange="onQuickRegionColumnChange" bindchange="onQuickRegionChange" bindcancel="onQuickRegionCancel" aria-label="所在地区">\n' +
+    `        <view class="quick-region-hitbox"><image src="{{homeAssets.location}}" mode="scaleToFill" aria-hidden="true" /><text class="quick-region-value {{quickRegionText ? 'quick-region-value--selected' : ''}}">{{quickRegionText || '请选择'}}</text><view class="field-chevron"></view></view>\n` +
+    '      </picker>\n' +
+    '      <view class="quick-area"><image src="{{homeAssets.ruler}}" mode="aspectFit" aria-hidden="true" /><input class="quick-area-input" type="digit" value="{{quickArea}}" placeholder="请输入" placeholder-class="quick-area-placeholder" bindinput="onQuickAreaInput" aria-label="建筑面积，平方米" /><text class="area-unit">m²</text></view>\n' +
+    '      <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算"><image class="estimate-button-art" src="{{homeAssets.estimateButton}}" mode="scaleToFill" aria-hidden="true" /><text>立即估算</text></button>\n' +
+    '      <view class="estimate-note"><text class="info-icon">i</text><text>估算结果仅供参考</text></view>\n' +
+    '    </view>\n' +
+    '  </view>\n' +
+    '  <view class="content">\n' +
+    '    <view class="case-section" wx:if="{{featuredGroups && featuredGroups.length > 0}}">\n' +
+    '      <text class="case-title">精选案例对比</text>\n' +
+    '      <view class="featured-groups">\n' +
+    '        <view class="featured-group" wx:for="{{featuredGroups}}" wx:key="id">\n' +
+    `          <view class="case-comparison" wx:if="{{item.display_mode === 'comparison'}}">\n` +
+    '            <view class="case-card" wx:if="{{item.case1}}">\n' +
+    '              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">\n' +
+    '                <view class="case-image-wrapper">\n' +
+    '                  <text class="case-label">{{item.case1_label}}</text>\n' +
+    '                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>\n' +
+    '                </view>\n' +
+    '                <view class="case-content">\n' +
+    '                  <text class="case-item-title">{{item.case1.name}}</text>\n' +
+    `                  <text class="case-item-desc">{{item.case1.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>\n` +
+    '                </view>\n' +
+    '              </view>\n' +
+    '            </view>\n' +
+    '            <view class="vs-divider" wx:if="{{item.case1 && item.case2}}">VS</view>\n' +
+    '            <view class="case-card" wx:if="{{item.case2}}">\n' +
+    '              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case2.id}}">\n' +
+    '                <view class="case-image-wrapper">\n' +
+    '                  <text class="case-label">{{item.case2_label}}</text>\n' +
+    '                  <image class="case-image" src="{{item.case2.thumbnail || item.case2.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>\n' +
+    '                </view>\n' +
+    '                <view class="case-content">\n' +
+    '                  <text class="case-item-title">{{item.case2.name}}</text>\n' +
+    `                  <text class="case-item-desc">{{item.case2.description || '通过AI技术，将真实场景快速转换为专业设计方案'}}</text>\n` +
+    '                </view>\n' +
+    '              </view>\n' +
+    '            </view>\n' +
+    '          </view>\n' +
+    '\n' +
+    `          <view class="case-side-by-side" wx:elif="{{item.display_mode === 'side_by_side'}}">\n` +
+    '            <view class="case-card" wx:if="{{item.case1}}">\n' +
+    '              <view class="case-item" bindtap="onFeaturedCaseTap" data-id="{{item.case1.id}}">\n' +
+    '                <view class="case-image-wrapper">\n' +
+    '                  <text class="case-label">{{item.case1_label}}</text>\n' +
+    '                  <image class="case-image" src="{{item.case1.thumbnail || item.case1.preview_url || defaultCoverImage}}" mode="widthFix" lazy-load></image>\n' +
+    '                </view>\n' +
+    '                <view class="case-content">\n' +
+    '                  <text class="case-item-title'... 9831 more characters,
+  expected: /class="brand-header" style="top: \{\{brandHeaderTop\}\}px;"/,
+  operator: 'match'
+}
+
+Node.js v20.20.2

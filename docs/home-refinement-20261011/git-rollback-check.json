@@ -1,0 +1,6 @@
+{
+  "stagedReverseApplyCheck": true,
+  "baseline": "f7caa200750ccd313265bd72d5b2d6cacc15eec5",
+  "gitRevertCanRestoreWithoutConflicts": true,
+  "workingFilesNotChangedByCheck": true
+}

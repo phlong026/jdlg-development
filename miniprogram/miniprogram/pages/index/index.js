@@ -40,6 +40,7 @@ Page({
         quickCity: '',
         quickArea: '',
         homeAssets: homeAssets_1.HOME_ASSETS,
+        brandHeaderTop: 68,
         defaultCoverImage: (0, asset_1.resolveAssetPath)('/assets/images/home.jpg'),
         introLogoImage: (0, asset_1.resolveAssetPath)('/assets/home/intro-logo.png'),
         mascotBouncing: false,
@@ -51,7 +52,22 @@ Page({
         }
     },
     onLoad() {
+        this.syncBrandSafeArea();
         this.showHomeIntroPopupOnce();
+    },
+    syncBrandSafeArea() {
+        if (typeof wx.getWindowInfo !== 'function')
+            return;
+        try {
+            const info = wx.getWindowInfo();
+            const width = Number(info.windowWidth) || 375;
+            const statusBarHeight = Number(info.statusBarHeight) || 44;
+            // 至少比旧版下移 24rpx，同时在手机状态栏下留出 12px。
+            this.setData({ brandHeaderTop: Math.max(85.55 * width / 750, statusBarHeight + 12) });
+        }
+        catch (error) {
+            console.warn('首页品牌安全距离读取失败，保留默认位置', error);
+        }
     },
     onShow() {
         if ((0, reportNavigation_1.resumeReportAfterLogin)())

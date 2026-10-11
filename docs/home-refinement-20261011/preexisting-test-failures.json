@@ -1,0 +1,15 @@
+{
+  "baselineCommit": "f7caa200750ccd313265bd72d5b2d6cacc15eec5",
+  "results": [
+    {
+      "test": "customer-service-action-placement.test.js",
+      "exitCode": 1,
+      "output": "node:internal/modules/cjs/loader:1210\n  throw err;\n  ^\n\nError: Cannot find module '/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-baseline-failures-ddka94xi/miniprogram/tests/customer-service-action-placement.test.js'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)\n    at node:internal/main/run_main_module:28:49 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v20.20.2\n"
+    },
+    {
+      "test": "customer-service-knowledge.test.js",
+      "exitCode": 1,
+      "output": "node:internal/modules/cjs/loader:1210\n  throw err;\n  ^\n\nError: Cannot find module '/private/var/folders/fk/mkvjzrk94_1f6z5f598pckcw0000gn/T/jdlg-baseline-failures-ddka94xi/miniprogram/tests/customer-service-knowledge.test.js'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)\n    at node:internal/main/run_main_module:28:49 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v20.20.2\n"
+    }
+  ]
+}

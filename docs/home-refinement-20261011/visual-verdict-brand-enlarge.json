@@ -1,0 +1,12 @@
+{
+  "iteration": 2,
+  "score": 95,
+  "verdict": "pass",
+  "category_match": true,
+  "differences": [],
+  "suggestions": [
+    "用户追加 slogan 跟随 Logo 和品牌名同步放大，统一字间距和装饰线。"
+  ],
+  "reasoning": "人工检查放大20%的 Logo 与中英文品牌图；iPhone 15 Pro Max 和 iPhone 8 均未遮挡状态栏或胶囊，八宫格与原 AI 胶囊保持。评分是人工视觉评价，不是像素相似率。",
+  "realDeviceAcceptance": false
+}

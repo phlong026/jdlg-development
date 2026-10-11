@@ -5,22 +5,20 @@
     <view class="brand-backdrop" aria-hidden="true">
       <image class="brand-backdrop-image" src="{{homeAssets.brandScene}}" mode="aspectFill" aria-hidden="true" />
     </view>
-    <view class="home-art-layer">
+    <view class="brand-header" style="top: {{brandHeaderTop}}px;">
       <image class="brand-symbol" src="{{homeAssets.brandSymbol}}" mode="aspectFit" aria-hidden="true" />
       <view class="brand-copy"><image class="brand-name" src="{{homeAssets.brandName}}" mode="aspectFit" aria-label="甲第灵光" /><image class="brand-en" src="{{homeAssets.brandEnglish}}" mode="aspectFit" aria-label="ArchLight" /></view>
       <view class="brand-slogan"><view class="slogan-line"></view><text>让理想家园触手可及</text><view class="slogan-line"></view></view>
+    </view>
+    <view class="home-art-layer">
       <view class="hotspot smart-service-float" bindtap="onMascotTap" role="button" aria-label="在线客服">
         <image class="customer-icon" src="{{homeAssets.customerService}}" mode="aspectFit" aria-hidden="true" /><text>在线客服</text>
       </view>
       <view class="service-panel"></view>
       <view class="service-grid">
-        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">
-          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.advisor}}" mode="aspectFit" aria-hidden="true" /></view>
-          <text class="service-label">建房顾问</text>
-        </view>
-        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aicost/aicost" role="button" aria-label="造价测算">
-          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.calculator}}" mode="aspectFit" aria-hidden="true" /></view>
-          <text class="service-label">造价测算</text>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">
+          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.templates}}" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">模板广场</text>
         </view>
         <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI工具">
           <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.aiTools}}" mode="aspectFit" aria-hidden="true" /></view>
@@ -42,9 +40,13 @@
           <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.renovation}}" mode="aspectFit" aria-hidden="true" /></view>
           <text class="service-label">旧居翻新</text>
         </view>
-        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/template/template" role="button" aria-label="模板广场">
-          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.templates}}" mode="aspectFit" aria-hidden="true" /></view>
-          <text class="service-label">模板广场</text>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/aicost/aicost" role="button" aria-label="造价测算">
+          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.calculator}}" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">造价测算</text>
+        </view>
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">
+          <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.advisor}}" mode="aspectFit" aria-hidden="true" /></view>
+          <text class="service-label">建房顾问</text>
         </view>
       </view>
       <image class="ai-panel" src="{{homeAssets.aiPanel}}" mode="scaleToFill" aria-hidden="true" />
@@ -55,12 +57,12 @@
       <view class="hotspot voice-hotspot" bindtap="onOpenPage" data-url="/pages/aitools/aitools" role="button" aria-label="AI生图工具"><image src="{{homeAssets.sparkles}}" mode="aspectFit" aria-hidden="true" /><text>AI生图工具</text></view>
       <view class="cost-panel"></view>
       <view class="cost-stat-icon"><image class="cost-stat-bars" src="{{homeAssets.costStats}}" mode="aspectFit" aria-hidden="true" /></view>
-      <text class="cost-title">智能造价</text>
+      <text class="cost-title">10秒估算建房报价</text>
       <text class="cost-copy">快速估算项目造价，合理规划您的理想之家</text>
       <view class="cost-form-panel"></view>
       <text class="cost-project-label">项目类型</text>
-      <view class="quick-project quick-project--rural {{quickProjectType === 'rural_villa' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="rural_villa" role="button" aria-label="乡村别墅" aria-pressed="{{quickProjectType === 'rural_villa'}}"><image src="{{homeAssets.ruralVilla}}" mode="aspectFit" aria-hidden="true" /><text>乡村别墅</text></view>
-      <view class="quick-project quick-project--urban {{quickProjectType === 'urban_renewal' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="urban_renewal" role="button" aria-label="城市更新" aria-pressed="{{quickProjectType === 'urban_renewal'}}"><image src="{{homeAssets.urbanBuilding}}" mode="aspectFit" aria-hidden="true" /><text>城市更新</text></view>
+      <view class="quick-project quick-project--rural {{quickProjectType === 'rural_villa' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="rural_villa" role="button" aria-label="别墅工程" aria-pressed="{{quickProjectType === 'rural_villa'}}"><image src="{{homeAssets.ruralVilla}}" mode="aspectFit" aria-hidden="true" /><text>别墅工程</text></view>
+      <view class="quick-project quick-project--urban {{quickProjectType === 'urban_renewal' ? 'quick-project--selected' : ''}}" bindtap="onQuickProjectChange" data-type="urban_renewal" role="button" aria-label="室内装修" aria-pressed="{{quickProjectType === 'urban_renewal'}}"><image src="{{homeAssets.urbanBuilding}}" mode="aspectFit" aria-hidden="true" /><text>室内装修</text></view>
       <text class="cost-region-label">所在地区</text>
       <text class="cost-area-label">建筑面积</text>
       <picker class="quick-region" mode="multiSelector" range="{{quickRegionOptions}}" value="{{quickRegionIndex}}" bindcolumnchange="onQuickRegionColumnChange" bindchange="onQuickRegionChange" bindcancel="onQuickRegionCancel" aria-label="所在地区">
@@ -68,7 +70,7 @@
       </picker>
       <view class="quick-area"><image src="{{homeAssets.ruler}}" mode="aspectFit" aria-hidden="true" /><input class="quick-area-input" type="digit" value="{{quickArea}}" placeholder="请输入" placeholder-class="quick-area-placeholder" bindinput="onQuickAreaInput" aria-label="建筑面积，平方米" /><text class="area-unit">m²</text></view>
       <button class="hotspot quick-estimate" bindtap="onQuickEstimate" aria-label="立即估算"><image class="estimate-button-art" src="{{homeAssets.estimateButton}}" mode="scaleToFill" aria-hidden="true" /><text>立即估算</text></button>
-      <view class="estimate-note"><text class="info-icon">i</text><text>估算结果仅供参考</text></view>
+      <view class="estimate-note"><text>点击按钮视为同意</text><text class="privacy-link" bindtap="onOpenPage" data-url="/pages/privacy/privacy?type=privacy" role="link" aria-label="查看隐私协议">《隐私协议》</text></view>
     </view>
   </view>
   <view class="content">

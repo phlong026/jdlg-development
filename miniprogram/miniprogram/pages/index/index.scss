@@ -6,16 +6,18 @@ page { overflow: visible; background: #ece4d9; }
 .home-backdrop { opacity: .85; mix-blend-mode: multiply; position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
 .brand-backdrop { position: absolute; left: 0; top: 0; width: 750rpx; height: 349.06rpx; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, #000 84%, transparent 100%); }
 .brand-backdrop-image { display: block; width: 100%; height: 100%; pointer-events: none; }
-.brand-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to right, transparent 72%, rgba(249,245,237,.62) 100%); pointer-events: none; }
+.brand-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(249,245,237,.38), rgba(249,245,237,.38)), linear-gradient(to right, transparent 72%, rgba(249,245,237,.62) 100%); pointer-events: none; }
+.brand-header { position: absolute; left: 0; top: 68px; width: 750rpx; height: 153.16rpx; pointer-events: none; }
+.brand-header > image, .brand-header > view { position: absolute; box-sizing: border-box; }
 .home-art-layer { position: absolute; left: 0; top: 105.51rpx; width: 750rpx; height: 1383.06rpx; }
 .home-art-layer > text, .home-art-layer > image, .home-art-layer > view, .home-art-layer > picker { position: absolute; box-sizing: border-box; }
-.brand-symbol { left: 38.69rpx; top: -43.96rpx; width: 108.15rpx; height: 90.56rpx; }
-.brand-copy { left: 165.30rpx; top: -21.98rpx; width: 165.30rpx; height: 72.98rpx; display: flex; flex-direction: column; color: #9a8170; }
-.brand-name { display: block; width: 150.35rpx; height: 37.81rpx; }
-.brand-en { display: block; width: 150.35rpx; height: 29.89rpx; margin-top: 1.76rpx; }
-.brand-slogan { left: 34.29rpx; top: 61.55rpx; width: 360.49rpx; height: 24.62rpx; display: flex; align-items: center; gap: 16.71rpx; }
-.brand-slogan text { font-size: 17.59rpx; letter-spacing: 10.55rpx; white-space: nowrap; }
-.slogan-line { width: 26.38rpx; height: 1rpx; background: #8c9091; flex-shrink: 0; }
+.brand-symbol { left: 38.69rpx; top: 0; width: 129.78rpx; height: 108.67rpx; }
+.brand-copy { left: 190.62rpx; top: 26.38rpx; width: 198.36rpx; height: 87.58rpx; display: flex; flex-direction: column; color: #9a8170; }
+.brand-name { display: block; width: 180.42rpx; height: 45.37rpx; }
+.brand-en { display: block; width: 180.42rpx; height: 35.87rpx; margin-top: 2.11rpx; }
+.brand-slogan { left: 34.29rpx; top: 123.62rpx; width: 432.59rpx; height: 29.54rpx; display: flex; align-items: center; gap: 20.05rpx; }
+.brand-slogan text { font-size: 21.11rpx; letter-spacing: 12.66rpx; white-space: nowrap; }
+.slogan-line { width: 31.66rpx; height: 1.2rpx; background: #8c9091; flex-shrink: 0; }
 .hotspot { position: absolute; z-index: 6; }
 .smart-service-float { left: 598.77rpx; top: 78.25rpx; width: 98.48rpx; height: 131.01rpx; display: flex; flex-direction: column; align-items: center; font-size: 21rpx; line-height: 28rpx; }
 .customer-icon { width: 97rpx; height: 97rpx; margin-bottom: 5rpx; }
@@ -39,7 +41,7 @@ page { overflow: visible; background: #ece4d9; }
 .cost-panel { left: 29.02rpx; top: 847.60rpx; width: 691.09rpx; height: 511.72rpx; border-radius: 21rpx; border: 1rpx solid #fff; background: rgba(255,255,255,.68); box-shadow: 0 3rpx 8rpx rgba(151,127,103,.14), inset 0 0 0 3rpx rgba(255,255,255,.38); }
 .cost-stat-icon { left: 53.63rpx; top: 873.09rpx; width: 73.86rpx; height: 72.98rpx; border-radius: 50%; border: 1rpx solid #e1c39f; background: linear-gradient(135deg,#fffefa,#f4ebdf); box-shadow: 0 3rpx 8rpx rgba(140,117,83,.18); display: flex; align-items: center; justify-content: center; }
 .cost-stat-bars { width: 50rpx; height: 50rpx; }
-.cost-title { left: 144.20rpx; top: 872.22rpx; width: 193.43rpx; height: 50.12rpx; color: #50381f; font-size: 39rpx; font-weight: 600; line-height: 46rpx; }
+.cost-title { left: 144.20rpx; top: 872.22rpx; width: 527.55rpx; height: 50.12rpx; color: #50381f; font-size: 39rpx; font-weight: 600; line-height: 46rpx; white-space: nowrap; }
 .cost-copy { left: 144.20rpx; top: 923.21rpx; width: 527.55rpx; height: 32.53rpx; color: #81828e; font-size: 22.85rpx; line-height: 30rpx; white-space: nowrap; }
 .cost-form-panel { left: 34.29rpx; top: 964.54rpx; width: 680.54rpx; height: 391.27rpx; border-radius: 22rpx; background: rgba(255,255,255,.91); }
 .cost-project-label { left: 56.27rpx; top: 980.36rpx; width: 175.85rpx; height: 26.38rpx; font-size: 24rpx; line-height: 29rpx; color: #28282b; }
@@ -64,7 +66,8 @@ page { overflow: visible; background: #ece4d9; }
 .quick-estimate { left: 55.39rpx; top: 1224.79rpx; width: 639.21rpx; height: 72.98rpx; border: 0; border-radius: 70rpx; background: transparent; color: #fff; font-size: 31rpx; display: flex; align-items: center; justify-content: center; overflow: visible; box-shadow: 0 5rpx 12rpx rgba(139,110,78,.16); }
 .estimate-button-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .quick-estimate > text { position: relative; pointer-events: none; font: inherit; }
-.estimate-note { left: 249.71rpx; top: 1313.60rpx; width: 250.59rpx; height: 30.77rpx; display: flex; align-items: center; justify-content: center; gap: 9rpx; color: #787b83; font-size: 20rpx; }
+.estimate-note { left: 55.39rpx; top: 1313.60rpx; width: 639.21rpx; height: 30.77rpx; display: flex; align-items: center; justify-content: center; gap: 0; color: #787b83; font-size: 20rpx; white-space: nowrap; }
+.privacy-link { color: #8a694e; text-decoration: underline; padding: 8rpx 0; }
 .home-art-layer .quick-estimate { width: 639.21rpx; max-width: none; margin: 0; padding: 0; line-height: normal; box-sizing: border-box; font-weight: 400; font-family: inherit; }
 .quick-estimate::after { border: 0; }
 .info-icon { width: 19rpx; height: 19rpx; border: 1.5rpx solid #787b83; border-radius: 50%; font: 16rpx/19rpx Georgia, serif; text-align: center; }

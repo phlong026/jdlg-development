@@ -1,0 +1,46 @@
+{
+  "baselineCommit": "f7caa200750ccd313265bd72d5b2d6cacc15eec5",
+  "files": [
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.wxml",
+      "role": "restore",
+      "beforeSha256": "3d7604cb21076353ef3df6db566385f91fb35d5ab55dee716aca0b9769ea3f06",
+      "afterSha256": "3ba68bcac0c94351635e5ddac63c30df3398313bb3393bc37c8b126d08676be1"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.scss",
+      "role": "restore",
+      "beforeSha256": "5d1cf5ab6ec689bf3bb002daa60d80a2f637f2106fc6a263097492c967d5d3c2",
+      "afterSha256": "ae91b80b9856d3988af338bb0644c194630737e76430238991be86de3d5fede5"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.wxss",
+      "role": "restore",
+      "beforeSha256": "b45ff364e8a4d8493a66d937db48d5c706b4f8ee22e34928a46c331844145ced",
+      "afterSha256": "a11563e01f3672099ceb8d6f8e2ff12805328e5f981218893387ecf4414e76c4"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.ts",
+      "role": "restore",
+      "beforeSha256": "6a9b48cb93d803ab5b42574da24359dcd72ae32e8415272a015b892fdfefd322",
+      "afterSha256": "acccee380a2a7273a1c626644ae25bffa95aa5bdfe580594b74e03c68346096f"
+    },
+    {
+      "path": "miniprogram/miniprogram/pages/index/index.js",
+      "role": "restore",
+      "beforeSha256": "eff89ba701c357b3da2d31e2f059576fed62f094183bffaa3dbea83447331546",
+      "afterSha256": "8efd99376f1c535cc188eafb47f75955296c2db689992ea31ef8dc1c2d8dd340"
+    },
+    {
+      "path": "miniprogram/tests/home-cloud-header-release.test.js",
+      "role": "restore",
+      "beforeSha256": "adb953725d93e8e17f98c45179d2eb8b3018f62f96a794b899817da0131514eb",
+      "afterSha256": "b10255c04778ae1595350c5fd0e8d4b00b83d1ea409d5159c5967a42373e76ff"
+    },
+    {
+      "path": "miniprogram/tests/home-safe-area-layout.test.js",
+      "role": "remove",
+      "afterSha256": "b4ccbf537ae8d9b09ebddfaa836182f20227fd4154c9a7742a9b0837dfab334b"
+    }
+  ]
+}

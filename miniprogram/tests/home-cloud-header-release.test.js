@@ -42,8 +42,9 @@ for (const property of [
 }
 
 assert.match(styles, /\.brand-backdrop\s*\{[^}]*pointer-events:\s*none;/s);
-assert.match(styles, /\.brand-symbol\s*\{\s*left:\s*38\.69rpx;\s*top:\s*-43\.96rpx;/);
-assert.match(styles, /\.brand-slogan\s*\{\s*left:\s*34\.29rpx;\s*top:\s*61\.55rpx;/);
+assert.match(styles, /\.brand-header\s*\{[^}]*pointer-events:\s*none;/s);
+assert.match(styles, /\.brand-symbol\s*\{\s*left:\s*38\.69rpx;\s*top:\s*0;/);
+assert.match(styles, /\.brand-slogan\s*\{\s*left:\s*34\.29rpx;\s*top:\s*123\.62rpx;/);
 
 // Existing routes, event bindings and core geometry are release invariants.
 for (const route of [
