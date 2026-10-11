@@ -1,0 +1,59 @@
+name: Admin quality
+
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  admin-quality:
+    name: Admin checks and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: background
+        shell: bash
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up the validated Node.js version
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # npm test includes TypeScript, all registered routes and the full UI suite.
+      - name: Run type, route and UI regression checks
+        run: npm test
+
+      - name: Build production assets
+        run: npm run build
+
+      - name: Check the submitted diff and tracked worktree
+        working-directory: .
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            # Checkout uses the PR merge commit. Compare its base parent so that
+            # whitespace errors in any commit of this PR are checked.
+            git diff --check HEAD^1 HEAD
+          else
+            git show --format= --check HEAD
+          fi
+          git diff --exit-code HEAD

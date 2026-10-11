@@ -1,16 +1,43 @@
 .layout-subnav {
+  position: relative;
   flex-shrink: 0;
+  min-width: 0;
+  background: #ffffff;
+  border-bottom: 1px solid #eee4d7;
+}
+
+.subnav-scroll-track {
   display: flex;
   align-items: stretch;
   gap: 2px;
   padding: 0 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #eee4d7;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
-
   &::-webkit-scrollbar { display: none; }
+  > * { flex-shrink: 0; }
 }
+
+// Visible edge controls double as an overflow cue without changing track width.
+.subnav-scroll-button {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  color: #7a5335;
+  cursor: pointer;
+  &:disabled { opacity: 0; pointer-events: none; }
+  &:focus-visible { outline: 2px solid #8b5e3c; outline-offset: -3px; }
+}
+.subnav-scroll-left { left: 0; background: linear-gradient(to right, #fff 75%, #ffffff00); }
+.subnav-scroll-left svg { transform: rotate(180deg); }
+.subnav-scroll-right { right: 0; background: linear-gradient(to left, #fff 75%, #ffffff00); }
 
 .subnav-tab,
 .subnav-back,
@@ -27,6 +54,7 @@
   transition: color 0.15s ease;
 
   &:hover { color: #8b5e3c; }
+  &:focus-visible { outline: 2px solid #8b5e3c; outline-offset: -3px; border-radius: 4px; }
 }
 
 .subnav-tab {
@@ -79,7 +107,7 @@
 }
 
 @media (max-width: 640px) {
-  .layout-subnav { padding: 0 12px; }
+  .subnav-scroll-track { padding: 0 12px; }
 }
 
 // 二级页面包屑：分组（可点）/ 当前页（不可点）

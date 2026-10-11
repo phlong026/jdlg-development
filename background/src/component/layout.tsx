@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import type { PageLoadFailure } from '../utils/pageLoadError';
+import { updatePageLoadFailures } from '../utils/pageLoadError';
 import Sidebar from './sidebar';
 import Topbar from './topbar';
 import SubNav from './SubNav';
 import SubNavCards from './SubNavCards';
 import CommandPalette from './CommandPalette';
+import { installAdminDialogKeyboard } from './adminDialogKeyboard';
 import { useManagementSession } from './ManagementSession';
 import { locate, searchablePages, visibleGroups } from './navConfig';
 import { readNavMode, saveNavMode, type NavMode } from './navMode';
@@ -22,7 +24,8 @@ import './layout.scss';
  */
 const AdminLayout: React.FC = () => {
     const { pathname } = useLocation();
-    const [loadFailure, setLoadFailure] = useState('');
+    const [loadFailures, setLoadFailures] = useState<Record<string, string>>({});
+    const loadFailure = Object.values(loadFailures).join('；');
     const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
     const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -53,15 +56,20 @@ const AdminLayout: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        setLoadFailure('');
+        setLoadFailures({});
         // 内容区现在是同一个元素：切换页面时要手动回到顶部（以前每页重建，天然从顶部开始）
         contentRef.current?.scrollTo({ top: 0 });
         const report = (event: Event) => {
             const detail = (event as CustomEvent<PageLoadFailure>).detail;
-            if (detail?.path === window.location.pathname) setLoadFailure(detail.message);
+            if (detail?.path === window.location.pathname) setLoadFailures((current) => updatePageLoadFailures(current, detail));
         };
         window.addEventListener('admin-page-load-error', report);
         return () => window.removeEventListener('admin-page-load-error', report);
+    }, [pathname]);
+
+    useEffect(() => {
+        const root = contentRef.current;
+        if (root) return installAdminDialogKeyboard(root);
     }, [pathname]);
 
     useEffect(() => {
@@ -147,7 +155,7 @@ const AdminLayout: React.FC = () => {
                     ? (subnavGroup.display === 'cards' ? <SubNavCards group={subnavGroup} location={where} /> : <SubNav group={subnavGroup} location={where} />)
                     : null}
                 <div className="layout-content" data-admin-page={pathname} ref={contentRef}>
-                    {loadFailure && <div className="page-load-error" role="alert"><div><strong>页面数据未能加载</strong><p>{loadFailure}</p><small>下方仅显示页面结构，统计值和空列表不代表实际业务数据。</small></div><button type="button" onClick={() => window.location.reload()}>重新加载</button></div>}
+                    {loadFailure && <div className="page-load-error" role="alert"><div><strong>页面数据未能加载</strong><p>{loadFailure}</p><small>部分数据未能加载，相关统计或列表可能不完整，请重试后再据此操作。</small></div><button type="button" onClick={() => window.location.reload()}>重新加载</button></div>}
                     <Outlet />
                 </div>
             </div>

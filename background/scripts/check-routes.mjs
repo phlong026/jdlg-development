@@ -66,7 +66,7 @@ const scssFiles = walk(SRC, ['.scss']);
 let scoped = 0;
 for (const file of scssFiles) {
   const text = read(file);
-  for (const m of text.matchAll(/data-admin-page="([^"]+)"/g)) {
+  for (const m of text.matchAll(/data-admin-page=["']([^"']+)["']/g)) {
     scoped += 1;
     if (!routes.has(m[1])) add('样式作用域', file, text, m.index, `data-admin-page="${m[1]}" 不是任何路由，该页面样式将不生效`);
   }

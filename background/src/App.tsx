@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './App.scss';
 import './responsive.scss';
+import './responsive-priority.scss';
 import routes from './routes';
 import AdminLayout from './component/layout';
 import ProtectedRoute from './component/ProtectedRoute';

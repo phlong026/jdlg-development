@@ -38,7 +38,7 @@ export const platformSections: NavSection[] = [
         items: [
             { path: '/dashboard', label: '后台总控台', icon: FiHome },
             { path: '/users', label: '用户管理', icon: FiUsers },
-            { path: '/user-workbench', label: '用户360工作台', icon: FiCompass },
+            { path: '/user-workbench', label: '用户详情', icon: FiCompass },
             { path: '/recharge', label: '订单中心', icon: FiDollarSign },
             { path: '/virtualpay', label: '虚拟支付监控', icon: FiDollarSign },
             { path: '/ai-overview', label: 'AI运营总览', icon: FiActivity },
@@ -162,7 +162,7 @@ export const navGroups: NavGroup[] = [
             { path: '/certification', label: '认证审核' },
             { path: '/membership-operations', label: '会员运营' },
         ],
-        related: [{ path: '/user-workbench', label: '用户360工作台' }],
+        related: [{ path: '/user-workbench', label: '用户详情' }],
     },
     {
         id: 'orders', label: '订单与支付', icon: FiDollarSign,

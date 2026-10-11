@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiRefreshCw, FiSearch, FiZap } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -48,6 +48,7 @@ const VirtualPay: React.FC = () => {
     const loadData = async (nextPage = page) => {
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const [healthData, logData, calibData] = await Promise.all([
                 getVirtualPayHealth(),
                 getXPayLogs({
@@ -68,6 +69,7 @@ const VirtualPay: React.FC = () => {
             setTotal(Number(logData.total || 0));
             setPage(Number(logData.page || nextPage));
             if (calibData) setCalibration(calibData);
+            reportPageLoadRecovered("加载虚拟支付监控失败", recoveryPage);
         } catch (error) {
             console.error('加载虚拟支付监控失败:', error);
             reportPageLoadError(error, '加载虚拟支付监控失败');

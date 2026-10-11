@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -115,6 +115,7 @@ const Dashboard: React.FC = () => {
     const loadDashboard = useCallback(async (range: 7 | 30 = trendRange) => {
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const [overviewRes, trendRes, todoRes] = await Promise.all([
                 getDashboardOverview(),
                 getDashboardTrends(range),
@@ -124,6 +125,7 @@ const Dashboard: React.FC = () => {
             setTrends(trendRes || []);
             setTodoItems(todoRes || []);
             setLoadedAt(new Date());
+            reportPageLoadRecovered("加载总控台数据失败", recoveryPage);
         } catch (error) {
             console.error('加载总控台数据失败:', error);
             reportPageLoadError(error, '加载总控台数据失败');
@@ -354,8 +356,10 @@ const Dashboard: React.FC = () => {
         setTrendRange(range);
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const trendRes = await getDashboardTrends(range);
             setTrends(trendRes || []);
+            reportPageLoadRecovered("加载趋势数据失败", recoveryPage);
         } catch (error) {
             console.error('切换趋势范围失败:', error);
             reportPageLoadError(error, '加载趋势数据失败');

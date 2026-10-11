@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
 import { FiAlertTriangle, FiPlus, FiRefreshCw, FiSave, FiTrash2 } from 'react-icons/fi';
 import {
@@ -60,7 +60,9 @@ const PricingConfig: React.FC = () => {
     const loadConfig = async () => {
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             hydrate(await getPricingConfig());
+            reportPageLoadRecovered("加载定价配置失败", recoveryPage);
         } catch (error) {
             console.error('加载定价配置失败:', error);
             reportPageLoadError(error, '加载定价配置失败');
@@ -183,7 +185,7 @@ const PricingConfig: React.FC = () => {
                         添加档位
                     </button>
                 </div>
-                <table className="pricing-table">
+                <div className="admin-table-region"><table className="pricing-table">
                     <thead>
                         <tr>
                             <th>档位名称</th>
@@ -239,14 +241,14 @@ const PricingConfig: React.FC = () => {
                             );
                         })}
                     </tbody>
-                </table>
+                </table></div>
             </section>
 
             <section className="pricing-section">
                 <div className="pricing-section-head">
                     <h4>认证道具价格</h4>
                 </div>
-                <table className="pricing-table">
+                <div className="admin-table-region"><table className="pricing-table">
                     <thead>
                         <tr>
                             <th>道具</th>
@@ -269,7 +271,7 @@ const PricingConfig: React.FC = () => {
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                </table></div>
             </section>
         </div>
     );

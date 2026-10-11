@@ -1,4 +1,4 @@
-import { reportPageLoadError } from '../utils/pageLoadError';
+import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAIContentAudits, reviewAIContentAudit, type AIContentAuditItem } from '../api/aiContentAudit';
@@ -43,10 +43,12 @@ const AIContentAudits: React.FC = () => {
     const loadData = useCallback(async (nextStatus = status, nextKeyword = keyword, nextPage = page) => {
         setLoading(true);
         try {
+            const recoveryPage = window.location.pathname;
             const res = await getAIContentAudits({ status: nextStatus, keyword: nextKeyword.trim(), page: nextPage, page_size: pageSize });
             setList(res.list || []);
             setTotal(res.total || 0);
             setPendingCount(res.pending_count || 0);
+            reportPageLoadRecovered("加载内容抽检列表失败", recoveryPage);
         } catch (error) {
             console.error('加载内容抽检列表失败:', error);
             reportPageLoadError(error, '加载内容抽检列表失败');
