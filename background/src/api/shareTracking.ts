@@ -1,3 +1,4 @@
+import { captureTrackingAccessBoundary, notifyTrackingAccessDenied } from '../pages/shareTracking/access';
 import { request } from '../utils/request';
 import { API_BASE_URL } from '../config/api';
 import { expireSession } from '../utils/session';
@@ -27,16 +28,18 @@ export interface DraftInput { title: string; body: string; body_format?: 'plain'
 export interface ShareMethods { message?: string; miniprogram_code_url?: string; url_link?: string; expires_at?: string; }
 export interface PublishResult { content: Content; share_methods: ShareMethods; }
 export async function trackingRequest<T>(resource: string, options: { signal?: AbortSignal; params?: Record<string, unknown>; method?: string; body?: unknown } = {}): Promise<T> {
+    const started = captureTrackingAccessBoundary();
     const controller = new AbortController(); let timedOut = false;
     const abort = () => controller.abort();
     if (options.signal?.aborted) controller.abort();
     options.signal?.addEventListener('abort', abort, { once: true });
     const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
     try {
-        const result = await request<T>(TRACKING_API + resource, { method: options.method || 'GET', signal: controller.signal, params: options.params, headers: { 'X-Tracking-Request': '1' }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
+        const result = await request<T>(TRACKING_API + resource, { method: options.method || 'GET', cache: 'no-store', signal: controller.signal, shouldExpireSession: () => started === captureTrackingAccessBoundary() && !controller.signal.aborted, params: options.params, headers: { 'X-Tracking-Request': '1' }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
         if (result.data === undefined || result.data === null) throw new Error('服务未返回有效数据，请重试');
         return result.data;
     } catch (error) {
+        if (resource !== '/context') notifyTrackingAccessDenied(error, started, options.signal);
         if (timedOut) throw new Error(options.method && options.method !== 'GET' ? '请求超时，操作结果尚未确认。请保留草稿并核对状态后重试' : '读取超时，请重试');
         throw error;
     } finally { clearTimeout(timeout); options.signal?.removeEventListener('abort', abort); }
@@ -60,11 +63,17 @@ export const tracking = {
     events: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<TrackingEvent>>(`/page-views/${encodeURIComponent(id)}/events`, { params, signal }),
     media: (signal?: AbortSignal, cursor?: string) => trackingRequest<Page<Asset>>('/media', { signal, params: { cursor, limit: 20 } }),
     upload: async (file: File, rights: 'own' | 'authorized', owner: string): Promise<Asset> => {
+        const started = captureTrackingAccessBoundary();
         const body = new FormData(); body.append('file', file); body.append('rights', rights); body.append('owner_id', owner);
-        const response = await fetch(API_BASE_URL + TRACKING_API + '/media', { method: 'POST', credentials: 'include', headers: { 'X-Tracking-Request': '1' }, body, signal: AbortSignal.timeout(120000) });
-        if (response.status === 401) expireSession();
+        const signal = AbortSignal.timeout(120000);
+        const response = await fetch(API_BASE_URL + TRACKING_API + '/media', { method: 'POST', cache: 'no-store', credentials: 'include', headers: { 'X-Tracking-Request': '1' }, body, signal });
+        if (response.status === 401 && started === captureTrackingAccessBoundary() && !signal.aborted) expireSession();
         const result = await response.json().catch(() => null);
-        if (!response.ok || !result || ![0, 200].includes(result.code) || !result.data) throw new Error(result?.msg || result?.message || `上传失败（HTTP ${response.status}）`);
+        if (!response.ok || !result || ![0, 200].includes(result.code) || !result.data) {
+            const error = Object.assign(new Error(result?.msg || result?.message || `上传失败（HTTP ${response.status}）`), { status: response.status });
+            notifyTrackingAccessDenied(error, started, signal);
+            throw error;
+        }
         return result.data;
     },
     save: (body: DraftInput, id?: string) => trackingRequest<Content>(id ? `/contents/${encodeURIComponent(id)}` : '/contents', { method: id ? 'PATCH' : 'POST', body }),

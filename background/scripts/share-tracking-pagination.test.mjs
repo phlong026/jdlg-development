@@ -71,11 +71,12 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     return overrides[method] ? overrides[method](call, () => page(method, params)) : Promise.resolve(method === 'content' ? content : page(method, params));
   }]));
   const context = { can_view: true, can_manage: true, owners: [{ id: 'owner-1', name: '销售一' }, { id: 'owner-2', name: '销售二' }] };
-  const props = kind === 'records' ? { canManage: true, context } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
+  const props = kind === 'records' ? { actorId: 42, canManage: true, context } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
   const saved = JSON.stringify({ filters: { ...model.defaultFilters, range: 'all', ...initial.filters }, view: initial.view || 'visitors' });
   const globals = { sessionStorage: { getItem: () => saved, setItem() {} }, document: { querySelector: () => ({ scrollTop: 5, scrollTo() {} }) }, window: { confirm: () => true } };
+  const access = load('src/pages/shareTracking/access.ts', { react, './model': model }, globals);
   const module = kind === 'records'
-    ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' },
+    ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, '../component/ManagementSession': { useManagementSession: () => ({ user: { id: 42 } }) }, './shareTracking/access': access, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' },
     './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
     './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)

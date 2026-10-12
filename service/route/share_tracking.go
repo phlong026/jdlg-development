@@ -166,7 +166,12 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
 	// This is a separate capability group, not an implicit platform-admin data grant.
 	mg := v1.Group("/management/tracking")
-	mg.Use(AuthRequired, func(c *gin.Context) {
+	mg.Use(func(c *gin.Context) {
+		// Capability and private visit responses must never survive a permission
+		// recheck through HTTP caches, including authentication failures.
+		c.Header("Cache-Control", "private, no-store")
+		c.Next()
+	}, AuthRequired, func(c *gin.Context) {
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
 		if e != nil {
 			trackingResponse(c, nil, e)
