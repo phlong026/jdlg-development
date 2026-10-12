@@ -7,7 +7,7 @@ import { duration, eventLabels, intentWindowQuery, qualityText, time } from './m
 
 // Detail endpoints bind cursors to their object, permissions and filter. Keep the
 // returned first cursor when navigating back so profile revisions cannot drift.
-function useDetailPage<T>(scope: string, fetchPage: (cursor: string | undefined, signal: AbortSignal) => Promise<Page<T>>) {
+export function useDetailPage<T>(scope: string, fetchPage: (cursor: string | undefined, signal: AbortSignal) => Promise<Page<T>>) {
     const [pagination, setPagination] = useState<{ scope: string; cursors: string[] }>({ scope, cursors: [] });
     const cursors = pagination.scope === scope ? pagination.cursors : [];
     if (pagination.scope !== scope) setPagination({ scope, cursors: [] });
@@ -27,7 +27,7 @@ function Events({ view, query }: { view: PageView; query: Record<string, unknown
     const { result: data, cursors, setCursors, reset } = useDetailPage(JSON.stringify([view.page_view_id, query]), (cursor, signal) => tracking.events(view.page_view_id, { ...query, cursor }, signal));
     return <div className="st-events"><Feedback {...data} retry={data.reload} resetSnapshot={reset} empty={data.data?.items.length === 0} /><SnapshotInfo data={data.data} /><ol>{data.data?.items.map(event => <li key={event.event_id}><strong>{eventLabels[event.event_type] || event.event_type}</strong><p>{time(event.occurred_at)} · 接收于 {time(event.received_at)}</p>{event.target_content_id && <p>目标素材 {event.target_content_id}</p>}{event.visible_delta_ms != null && <p>可见增量 {duration(event.visible_delta_ms)}</p>}{event.scroll_depth != null && <p>滚动到达 {event.scroll_depth}%（不表示读完）</p>}{event.current_time_ms != null && <p>播放位置 {duration(event.current_time_ms)} / {duration(event.video_duration_ms)}</p>}{event.video_watch_ms != null && <p>有效观看墙钟 {duration(event.video_watch_ms)} · 不重复覆盖 {duration(event.unique_played_ms)}</p>}{event.content_version != null && <p>访问版本 v{event.content_version}</p>}{event.quality_flags?.length > 0 && <p className="st-warning">质量标记：{qualityText(event.quality_flags)}</p>}</li>)}</ol><Pager cursor={cursors} next={data.data?.next_cursor} onNext={value => setCursors([...cursors, value])} onPrevious={() => setCursors(cursors.slice(0, -1))} /></div>;
 }
-function PageVisit({ view, query }: { view: PageView; query: Record<string, unknown> }) {
+export function PageVisit({ view, query }: { view: PageView; query: Record<string, unknown> }) {
     const [open, setOpen] = useState(false);
     const eventQuery = { ...query, content_id: view.content_id || undefined, content_version: view.content_id && view.content_version ? view.content_version : undefined, ...(query.include_related ? { content_q: undefined } : {}) };
     return <article className="st-page-visit"><button aria-expanded={open} onClick={() => setOpen(!open)}><strong>{view.title || view.route_key}</strong><span>{view.content_version != null ? `v${view.content_version}` : '页面'} · {duration(view.visible_ms)} · {open ? '收起事件' : '查看事件'}</span></button><p>进入 {time(view.started_at)} · {view.ended_at ? `离开 ${time(view.ended_at)}` : '会话未完整结束，时长仅含已收分段'}</p><p>{view.share_id ? `分享来源 ${view.share_id}` : view.previous_page_view_id ? `由上一页 ${view.previous_page_view_id} 进入（站内访问）` : '直接访问'}</p>{view.quality_flags?.length > 0 && <p className="st-warning">{qualityText(view.quality_flags)}</p>}{open && <Events view={view} query={eventQuery} />}</article>;

@@ -619,6 +619,7 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 				item.Views++
 			}
 			item.Visible += v.Visible
+			item.LatestVisit = latestCountedVisit(item.LatestVisit, v)
 			if v.Last.After(item.Last) {
 				item.Last = v.Last
 			}
@@ -746,6 +747,8 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 			}
 		}
 		by := map[string]*Session{}
+		metadata := map[string]VisitorContent{}
+		effective := ownerScope(scope, f.Owner)
 		for _, v := range all {
 			if v.Visitor != key || !selected[v.Session] || (!f.Related && f.Content != "" && v.Content != f.Content) {
 				continue
@@ -758,7 +761,22 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 				}
 				by[v.Session] = ss
 			}
-			ss.Views = append(ss.Views, v.PageView)
+			view := v.PageView
+			if view.Content != "" {
+				cacheKey := contentKey(view.Content, view.Version) + ":" + view.Route
+				material, cached := metadata[cacheKey]
+				if !cached {
+					material, e = s.visitedContent(ctx, r, effective, view.Content, view.Version, view.Route)
+					if e != nil {
+						return e
+					}
+					metadata[cacheKey] = material
+				}
+				// Raw events and retained summaries are historical facts, not a
+				// grant to disclose content metadata after current access changes.
+				view.Title = material.Title
+			}
+			ss.Views = append(ss.Views, view)
 			if v.Started.Before(ss.Started) {
 				ss.Started = v.Started
 			}

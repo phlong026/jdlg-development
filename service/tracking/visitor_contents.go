@@ -12,17 +12,18 @@ import (
 // VisitorContent is a historical visit projection, never an editor document or
 // a replay of revoked content. There is no body, source URL, or media list.
 type VisitorContent struct {
-	ID         string    `json:"content_id"`
-	Version    int       `json:"content_version"`
-	Title      string    `json:"title"`
-	Type       string    `json:"type"`
-	Status     string    `json:"status"`
-	Cover      *Asset    `json:"cover,omitempty"`
-	Route      string    `json:"route_key,omitempty"`
-	Accessible bool      `json:"content_accessible"`
-	PageViews  int       `json:"page_views"`
-	VisibleMS  int64     `json:"visible_ms"`
-	LastVisit  time.Time `json:"last_visit"`
+	ID          string       `json:"content_id"`
+	Version     int          `json:"content_version"`
+	Title       string       `json:"title"`
+	Type        string       `json:"type"`
+	Status      string       `json:"status"`
+	Cover       *Asset       `json:"cover,omitempty"`
+	Route       string       `json:"route_key,omitempty"`
+	Accessible  bool         `json:"content_accessible"`
+	PageViews   int          `json:"page_views"`
+	VisibleMS   int64        `json:"visible_ms"`
+	LatestVisit *LatestVisit `json:"latest_visit,omitempty"`
+	LastVisit   time.Time    `json:"last_visit"`
 }
 
 func (s *Service) visitedContent(ctx context.Context, r Repository, scope Scope, id string, version int, route string) (VisitorContent, error) {
@@ -159,6 +160,7 @@ func (s *Service) VisitorContents(ctx context.Context, scope Scope, key string, 
 				c.PageViews++
 			}
 			c.VisibleMS += fact.Visible
+			c.LatestVisit = latestCountedVisit(c.LatestVisit, fact)
 			if fact.Last.After(c.LastVisit) {
 				c.LastVisit = fact.Last
 			}

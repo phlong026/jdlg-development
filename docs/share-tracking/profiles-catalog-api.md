@@ -67,3 +67,9 @@ Content 增加 `identified_count` 与 `anonymous_count`。PV、可见时长、�
 头像仅接受可解析的 HTTPS、无用户凭据/片段的 ASCII 主机 URL；本地、私有、链路本地以及浏览器可能重新解释的十六进制/缩写/八进制数字地址不展示。非 ASCII 主机也不展示，可由资料源提供正规 ASCII 域名；此校验不声称能阻止正常公网域名后续 DNS 变更。匿名行永远不取账号头像，图片失败回退占位。
 
 会话和事件详情游标分别绑定端点类型、访客或页面访问标识、完整授权范围和筛选；每次请求仍重新鉴权。返回 first_cursor 后，回到第一页必须回放该 token，以维持资料版本；范围切换、显式刷新丢弃分页栈和 token。旧格式游标返回409要求刷新，跨对象或权限范围游标拒绝，不能把它作为授权凭据。详情事件请求带实际被点击的 content_id/content_version；一般页面不携带虚构版本。
+
+## 第二批：最近一次可见时长
+
+Visitor 与 VisitorContent 的可选 latest_visit 只投影当前授权/筛选/快照内计数的最新page_view：page_view_id、started_at、visible_ms以及可选 content_id/content_version。选择依据是进入时间，不是最后心跳；同进入时间按ID升序。单次visible_ms沿用事实去重及当前窗口裁剪，零保留。只有跨窗carry-over累计而无范围内新访问时省略该对象；客户端缺字段显示未提供。累计visible_ms、last_visit原定义不变，不把最近一次称为当前在线或真人注意力。
+
+Sessions的page_views标题每次重验当前素材访问状态；撤回、移归属、历史版本失效返回占位。原始事件/保留汇总里的旧标题不是当前读取授权。

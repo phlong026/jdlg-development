@@ -77,6 +77,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   const module = kind === 'records'
     ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' },
     './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
+    './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
     : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './model': model }, globals);
   function render() {
