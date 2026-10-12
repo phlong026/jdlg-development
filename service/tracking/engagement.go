@@ -6,18 +6,27 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 )
 
-// ConfirmFavorite records only a successfully committed, signed-in favorite.
-// The restricted analytics context must belong to that same verified account.
-func (s *Service) ConfirmFavorite(ctx context.Context, token string, account int64, targetType string, targetID int64) error {
+// FavoriteReceipt is provided only by the committed favorite source row. A
+// remove/re-add creates a new ID; retries reuse both ID and original creation time.
+type FavoriteReceipt struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+// ConfirmFavorite records a durable success, never the date of a telemetry retry.
+// Receipt-less callers from before durable source binding fail closed.
+func (s *Service) ConfirmFavorite(ctx context.Context, token string, account int64, targetType string, targetID int64, receipts ...FavoriteReceipt) error {
 	if !s.Config.Enabled || account <= 0 || targetID <= 0 {
 		return fail(403, "业务采集不可用")
 	}
 	allowed := map[string]bool{"template": true, "ai_tool": true, "designer": true, "inspiration": true}
-	if !allowed[targetType] {
-		return fail(400, "收藏类型无效")
+	if !allowed[targetType] || len(receipts) != 1 || receipts[0].ID <= 0 || receipts[0].CreatedAt.IsZero() || receipts[0].CreatedAt.After(s.Now().Add(2*time.Minute)) {
+		return fail(400, "缺少有效收藏成功凭据")
 	}
+	receipt := receipts[0]
 	return s.transaction(ctx, func(r Repository) error {
 		en, e := s.entry(r, token)
 		if e != nil {
@@ -26,13 +35,37 @@ func (s *Service) ConfirmFavorite(ctx context.Context, token string, account int
 		if en.Account != account || en.Visitor != "u:"+strconv.FormatInt(account, 10) {
 			return fail(403, "收藏账号与访问上下文不一致")
 		}
-		id := hash("favorite:" + en.Visitor + ":" + targetType + ":" + strconv.FormatInt(targetID, 10) + ":" + s.Now().UTC().Format("2006-01-02"))
-		if _, e = r.Get("business", id); e == nil {
+		if en.Preview || en.Self {
+			return fail(403, "预览或自访不计业务结果")
+		}
+		id := hash("favorite:receipt:" + strconv.FormatInt(receipt.ID, 10))
+		old, e := r.Get("business", id)
+		if e == nil {
+			proof, ok := sourceBusinessProof(old)
+			if !ok || proof.Action != "favorite" || proof.FavoriteReceiptID != receipt.ID || old.Owner != en.Owner || proof.Account != account || proof.TargetType != targetType || proof.TargetID != targetID || !proof.FavoriteCreatedAt.Equal(receipt.CreatedAt) {
+				return fail(409, "收藏成功凭据已有其他归属")
+			}
 			return nil
 		}
-		rec := record("business", id, en.Owner, s.Now(), map[string]string{"action": "favorite", "session": en.Session, "target_type": targetType, "target_id": strconv.FormatInt(targetID, 10)})
-		rec.Visitor = en.Visitor
-		rec.Session = en.Session
+		if !errors.Is(e, ErrNotFound) {
+			return e
+		}
+		// A later session cannot turn an old uncollected favorite into new intent.
+		if receipt.CreatedAt.Before(en.Started.Add(-2 * time.Minute)) {
+			return fail(409, "收藏成功时间不属于当前访问上下文")
+		}
+		proof := BusinessProof{Action: "favorite", Account: account, TargetType: targetType, TargetID: targetID, FavoriteReceiptID: receipt.ID, FavoriteCreatedAt: receipt.CreatedAt}
+		if s.VerifyBusiness != nil {
+			valid, err := s.VerifyBusiness(sourceReadContext(ctx, r), proof)
+			if err != nil {
+				return ErrUnavailable
+			}
+			if !valid {
+				return fail(409, "收藏成功凭据已失效")
+			}
+		}
+		rec := record("business", id, en.Owner, receipt.CreatedAt.UTC(), map[string]string{"action": "favorite", "session": en.Session, "target_type": targetType, "target_id": strconv.FormatInt(targetID, 10), "favorite_receipt_id": strconv.FormatInt(receipt.ID, 10), "favorite_created_at": receipt.CreatedAt.UTC().Format(time.RFC3339Nano)})
+		rec.Visitor, rec.Session = en.Visitor, en.Session
 		return r.Insert(rec)
 	})
 }
@@ -103,6 +136,17 @@ func sourceBusinessProof(row Record) (BusinessProof, bool) {
 	case "favorite":
 		proof.TargetType = detail["target_type"]
 		proof.TargetID, e = strconv.ParseInt(detail["target_id"], 10, 64)
+		if e != nil {
+			return proof, false
+		}
+		proof.FavoriteReceiptID, e = strconv.ParseInt(detail["favorite_receipt_id"], 10, 64)
+		if e != nil || proof.FavoriteReceiptID <= 0 {
+			return proof, false
+		}
+		proof.FavoriteCreatedAt, e = time.Parse(time.RFC3339Nano, detail["favorite_created_at"])
+		if e != nil || proof.FavoriteCreatedAt.IsZero() || !row.At.Truncate(time.Microsecond).Equal(proof.FavoriteCreatedAt.Truncate(time.Microsecond)) {
+			return proof, false
+		}
 	case "consultation":
 		if !strings.HasPrefix(detail["business_record_id"], "lead:") {
 			return proof, false

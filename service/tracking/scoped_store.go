@@ -23,6 +23,7 @@ type RecordQuery struct {
 	Owners, IDs, Sessions, VisitorKeys, Shares []string
 	Content, View                              string
 	AtFrom, AtBefore, AtThrough, IdentityAsOf  time.Time
+	CatalogAsOf                                time.Time // Immutable catalog membership; never mutable occurred_at.
 }
 
 type ScopedRecordLister interface {
@@ -168,7 +169,7 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 		return false, nil
 	}
 	switch row.Kind {
-	case "entry", "session", "view_binding":
+	case "entry", "session", "share", "view_binding":
 	case "identity":
 		if !includes(q.Sessions, row.ID) {
 			return false, nil
@@ -183,6 +184,15 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 	}
 	if len(row.Payload) > maxQueryPayloadBytes {
 		return false, ErrQueryTooLarge
+	}
+	if !q.CatalogAsOf.IsZero() && (row.Kind == "content" || row.Kind == "legacy_catalog") {
+		var c Content
+		if json.Unmarshal(row.Payload, &c) != nil {
+			return false, ErrUnavailable
+		}
+		if catalogCreatedAt(c, row.At).After(q.CatalogAsOf) {
+			return false, nil
+		}
 	}
 	original, session, share := row.Visitor, row.Session, row.Share
 	// Legacy entry/share records did not populate their denormalized columns.
@@ -206,12 +216,12 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 			original = link["visitor_key"]
 		}
 	case "share":
-		if q.VisitorKeys != nil || q.Shares != nil {
+		if q.VisitorKeys != nil || q.Shares != nil || q.Sessions != nil {
 			var sh Share
 			if json.Unmarshal(row.Payload, &sh) != nil {
 				return false, ErrUnavailable
 			}
-			original, share = sh.Sharer, sh.ID
+			original, share, session = sh.Sharer, sh.ID, sh.Session
 		}
 	case "view_binding":
 		if q.Sessions != nil {

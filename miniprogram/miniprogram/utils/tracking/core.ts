@@ -8,7 +8,7 @@ const SESSION_IDLE = 30 * 60 * 1000;
 function createTracker(io) {
   let enabled = false, consent = '', suspended = false, foreground = false, active = null;
   let anonymousLink = null;
-  let context = null, account = '', epoch = 0, previous = '', lastActivity = null;
+  let context = null, account = '', epoch = 0, observationEpoch = 0, previous = '', previousSession = '', lastActivity = null;
   let lastEntrySignature = '';
   let opening = null, busy = false, retryAt = 0, attempts = 0;
   let queue = [], dropped = { expired: 0, capacity: 0, rejected: 0, storage: 0 };
@@ -48,20 +48,40 @@ function createTracker(io) {
     if (raw) event(p, 'visible_segment', { segment_id: p.segment, seq: ++p.seq, visible_delta_ms: Math.floor(raw) });
     lastActivity = now;
   }
+  function observation(p) {
+    return {
+      generation: enabled && consent && !suspended && p && p.entryReady && p.view ? epoch + ':' + observationEpoch + ':' + p.view : '',
+      active: !!(enabled && consent && !suspended && foreground && p && active === p && p.visible && p.ready && !p.blocked && p.start != null)
+    };
+  }
+  function notifyObservation(p) {
+    if (p && p.observers) for (const listener of p.observers) {
+      try { listener(observation(p)); } catch (_) { /* Analytics cannot block playback or page lifecycle. */ }
+    }
+  }
+  function discardPending(p) {
+    p.share = ''; p.pendingEntry = null;
+    // Leaving a page invalidates an unresolved request as well as future retries.
+    if (p.entering) { p.request = (p.request || 0) + 1; p.entering = false; }
+  }
   function stop(p, end) {
     if (!p) return;
     sample(p); p.start = null;
-    if (end && p.view) { event(p, 'page_end'); previous = p.view; p.view = ''; }
+    if (end && p.view) { event(p, 'page_end'); previous = p.view; previousSession = p.context.session_id; p.view = ''; }
+    notifyObservation(p);
   }
   function begin(p) {
     if (!enabled || !consent || suspended || !foreground || active !== p || !p.visible || !p.ready || p.blocked || !p.context || !p.entryReady) return;
-    if (!p.view) { p.view = io.id(); p.previous = previous; event(p, 'page_view'); }
+    // Cached pages own their credential too; business adapters and the next entry
+    // must see the same context that is currently receiving visible heartbeats.
+    context = p.context;
+    if (!p.view) { p.view = io.id(); p.previous = previousSession === p.context.session_id ? previous : ''; event(p, 'page_view'); }
     if (p.start == null) { p.segment = io.id(); p.seq = 0; p.start = io.mono(); }
-    lastActivity = io.mono();
+    lastActivity = io.mono(); notifyObservation(p);
   }
   function boundary(reason) {
-    stop(active, true); epoch++; anonymousLink = null; context = null; previous = ''; opening = null; lastActivity = null;
-    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; p.share = ''; p.shareCache = {}; }
+    stop(active, true); epoch++; anonymousLink = null; context = null; previous = ''; previousSession = ''; opening = null; lastActivity = null;
+    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; discardPending(p); p.shareCache = {}; notifyObservation(p); }
     if (io.onBoundary) io.onBoundary(reason);
   }
   function checkAccount() {
@@ -74,17 +94,27 @@ function createTracker(io) {
   async function enter(p, share, fresh) {
     if (!enabled || !consent || suspended || !p) return;
     checkAccount();
-    if (fresh) boundary('external_entry');
+    if (fresh) {
+      boundary('external_entry');
+      // The launch input is consumed only on success, not by the boundary that
+      // starts its first request. Retries belong to this exact entry generation.
+      p.share = share || '';
+    }
     const version = epoch;
-    const old = context || anonymousLink;
+    if (!p.pendingEntry || p.pendingEntry.epoch !== epoch) p.pendingEntry = { epoch, share: p.share || '', shareRevision: p.shareRevision, previous: context || anonymousLink };
+    const pending = p.pendingEntry, old = pending.previous;
     const request = (p.request || 0) + 1; p.request = request; p.entering = true;
     try {
       const response = await io.entry({ route_key: p.route, content_id: p.content.id || undefined,
-        content_version: p.content.version || undefined, share_token: share || undefined,
+        content_version: p.content.version || undefined, share_token: pending.share || undefined,
         previous_entry_token: old ? old.entry_token : undefined, consent_version: consent });
       if (request !== p.request || version !== epoch || account !== io.account() || !enabled || !consent || suspended) return;
       if (!response || !response.entry_token || !response.session_id || response.content_accessible === false) { p.entryReady = false; return; }
-      anonymousLink = null; if (active === p) context = response; p.context = response; p.share = ''; p.entryReady = true; begin(p); flush();
+      // The server can split a session (owner change, idle credential, etc.)
+      // even with recent local activity. Invalidate retained contexts and never
+      // attach another session's predecessor to this new observation.
+      if (old && old.session_id !== response.session_id) boundary('server_session');
+      anonymousLink = null; if (active === p) context = response; p.context = response; p.share = ''; p.pendingEntry = null; p.entryReady = true; begin(p); flush();
       return response;
     } catch (_) {
       if (request === p.request && version === epoch) p.entryReady = false;
@@ -96,7 +126,7 @@ function createTracker(io) {
   function resume(p) {
     if (!p || active !== p || !foreground || !p.visible || !enabled || !consent || suspended) return;
     checkAccount();
-    if (!p.entryReady && p.ready && !p.entering) enter(p, p.share, !!p.share);
+    if (!p.entryReady && p.ready && !p.entering) enter(p, p.share, !p.pendingEntry && !!p.share);
     else begin(p);
   }
   async function flush() {
@@ -133,6 +163,9 @@ function createTracker(io) {
       checkAccount();
       const next = flag === true && !!version;
       if (next && enabled === (flag === true) && consent === (version || '')) { suspended = false; checkAccount(); resume(active); return; }
+      // A changed consent generation also invalidates cached hidden pages;
+      // there may be no visible page on which enter() can do that immediately.
+      if (next && consent && consent !== version && !(active && foreground && active.visible)) boundary('consent_change');
       if (!next) {
         // Only a config read awaiting the first explicit choice may retain the
         // current page's unconsumed launch token. Explicit denial/withdrawal,
@@ -147,15 +180,20 @@ function createTracker(io) {
     },
     // A failed config fetch is not a server kill switch or withdrawn consent.
     // Pause collection/retries, retaining the bounded, expiring offline queue.
-    suspend() { if (!suspended) { stop(active, false); suspended = true; } },
+    suspend() { if (!suspended) { stop(active, false); suspended = true; observationEpoch++; for (const p of pages.values()) notifyObservation(p); } },
     register(key, route, content, share) {
-      const p = { key, route, content: content || {}, share: share || '', visible: false, ready: false, view: '', start: null, entryReady: false, shareCache: {} };
+      const p = { key, route, content: content || {}, share: share || '', visible: false, ready: false, view: '', start: null, entryReady: false, shareCache: {}, shareRevision: 0, pendingEntry: null, observers: new Set() };
       pages.set(key, p); return p;
     },
     ready(key, available, content) {
       const p = pages.get(key); if (!p) return;
       if (content && (p.content.id !== content.id || p.content.version !== content.version)) {
-        stop(p, true); p.content = content; p.entryReady = false; p.context = null; p.shareCache = {};
+        stop(p, true);
+        // Resolved reader options may carry a newly observed external share.
+        // Preserve that newer input, but never rebind an old pending share to
+        // a replacement content/version merely because its request failed.
+        if (p.pendingEntry && p.shareRevision === p.pendingEntry.shareRevision) p.share = '';
+        p.pendingEntry = null; p.content = content; p.entryReady = false; p.context = null; p.shareCache = {};
         p.request = (p.request || 0) + 1; p.entering = false;
       }
       p.ready = available === true;
@@ -165,11 +203,11 @@ function createTracker(io) {
     show(key) {
       const p = pages.get(key); if (!p) return;
       checkAccount();
-      if (active && active !== p) { if (!consent) active.share = ''; active.visible = false; stop(active, true); }
+      if (active && active !== p) { discardPending(active); active.visible = false; stop(active, true); }
       active = p; p.visible = true;
       resume(p);
     },
-    hide(key, unload) { const p = pages.get(key); if (!p) return; stop(p, !!unload); p.visible = false; if (!consent) p.share = ''; if (unload) { pages.delete(key); if (active === p) active = null; } },
+    hide(key, unload) { const p = pages.get(key); if (!p) return; stop(p, !!unload); p.visible = false; discardPending(p); if (unload) { pages.delete(key); if (active === p) active = null; } },
     appShow(options) {
       checkAccount(); foreground = true;
       // WeChat may repeat the same launch query on ordinary foreground recovery.
@@ -182,10 +220,11 @@ function createTracker(io) {
       else resume(active);
       flush();
     },
-    appHide() { stop(active, false); foreground = false; if (!consent && active) active.share = ''; flush(); },
+    appHide() { stop(active, false); foreground = false; if (!consent && active) discardPending(active); flush(); },
     tick() { checkAccount(); if (active && !active.entryReady && active.ready && foreground) resume(active); else sample(active); flush(); },
     block(key, blocked) { const p = pages.get(key); if (!p) return; p.blocked = !!blocked; if (blocked) stop(p, false); else resume(p); },
     emit(key, type, extra) {
+      checkAccount();
       const p = pages.get(key);
       if (p && p.view && p.ready) {
         event(p, type, extra);
@@ -193,6 +232,12 @@ function createTracker(io) {
       }
     },
     shareIntent(ctx, route, content, shareId, channel) { event({context:ctx,route,content:content||{},visible:false}, 'share_intent', {share_id:shareId,source_channel:channel}); },
+    observation(key) { checkAccount(); return observation(pages.get(key)); },
+    observe(key, listener) {
+      const p = pages.get(key); if (!p) return () => {};
+      p.observers.add(listener); listener(observation(p));
+      return () => p.observers.delete(listener);
+    },
     context() { return context; },
     get(key) { return pages.get(key); },
     flush,

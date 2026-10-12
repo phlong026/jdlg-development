@@ -356,15 +356,16 @@ func appendUnique(a []string, s string) []string {
 }
 
 type intentFacts struct {
-	rule       RuleConfig
-	mixedRules bool
-	views      map[string][]factView
-	business   map[string][]Record
-	overrides  map[string]Record
-	crm        map[string]Record
+	rule             RuleConfig
+	mixedRules       bool
+	views            map[string][]factView
+	business         map[string][]Record
+	overrides        map[string]Record
+	overrideRevision int64
+	crm              map[string]Record
 }
 
-func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope, now time.Time, visitors []string) (intentFacts, error) {
+func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope, now time.Time, visitors []string, overrideLimit ...*int64) (intentFacts, error) {
 	data := intentFacts{views: map[string][]factView{}, business: map[string][]Record{}, overrides: map[string]Record{}, crm: map[string]Record{}}
 	var ruleErr error
 	data.rule, data.mixedRules, ruleErr = activeRule(r, scope, now)
@@ -412,14 +413,13 @@ func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope
 			key := resolvedVisitorAt(r, b, now)
 			data.business[key] = append(data.business[key], b)
 		}
-		overrides, e := scopedRecords(r, "intent_override", RecordQuery{Owners: permittedOwners(scope, ""), AtThrough: now, VisitorKeys: visitors, IdentityAsOf: now})
+		var limit *int64
+		if len(overrideLimit) != 0 {
+			limit = overrideLimit[0]
+		}
+		data.overrides, data.overrideRevision, e = loadIntentOverrides(r, scope, now, visitors, limit)
 		if e != nil {
 			return data, e
-		}
-		for _, rec := range overrides {
-			if scope.Allows(rec.Owner) && !rec.At.After(now) {
-				data.overrides[rec.ID] = rec
-			}
 		}
 	}
 	if scope.CRM {
@@ -437,7 +437,7 @@ func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope
 }
 func (s *Service) intent(scope Scope, key string, now time.Time, data intentFacts) Intent {
 	rule := data.rule
-	in := Intent{Level: "unknown", Reasons: []string{"证据不足，待判断"}, Rule: rule.Version, Start: now.AddDate(0, 0, -rule.WindowDays), End: now, Calculated: now, Thresholds: rule.RuleParameters, Exclusions: rule.Exclusions, ParticipatingMetrics: rule.Metrics, Timezone: rule.Timezone, OverrideState: "none", Evidence: []IntentEvidence{}}
+	in := Intent{overrideRevision: data.overrideRevision, Level: "unknown", Reasons: []string{"证据不足，待判断"}, Rule: rule.Version, Start: now.AddDate(0, 0, -rule.WindowDays), End: now, Calculated: now, Thresholds: rule.RuleParameters, Exclusions: rule.Exclusions, ParticipatingMetrics: rule.Metrics, Timezone: rule.Timezone, OverrideState: "none", Evidence: []IntentEvidence{}}
 	if data.mixedRules {
 		in.ScopeRequired = true
 		in.Rule = "mixed"
@@ -544,7 +544,9 @@ func (s *Service) intent(scope Scope, key string, now time.Time, data intentFact
 		if ok && rec.Owner == scope.Owners[0] && !rec.At.After(now) {
 			var manual IntentOverride
 			if json.Unmarshal(rec.Payload, &manual) == nil {
-				manual.Created = rec.At
+				if manual.Created.IsZero() {
+					manual.Created = rec.At
+				}
 				if manual.Expires.After(now) && !strings.HasPrefix(key, "a:") {
 					in.Override = &manual
 					in.Note = manual.Reason
@@ -565,6 +567,10 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 	}
 	var err error
 	f, err = s.Normalize(f)
+	if err != nil {
+		return out, err
+	}
+	overrideLimit, err := readOverrideCursor(f)
 	if err != nil {
 		return out, err
 	}
@@ -603,7 +609,7 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			ss[v.Visitor][v.Session] = true
 		}
 		effective := ownerScope(scope, f.Owner)
-		intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by))
+		intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by), overrideLimit)
 		if e != nil {
 			return e
 		}
@@ -667,12 +673,13 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			}
 			return cmp > 0
 		})
-		start, end, cursor, e := paginate(f, len(items))
+		start, end, cursor, e := paginateOverrideSnapshot(f, len(items), intentData.overrideRevision)
 		if e != nil {
 			return e
 		}
 		out.Items = items[start:end]
 		out.Cursor = cursor
+		out.FirstCursor = overrideSnapshotCursor(f, 0, intentData.overrideRevision)
 		return nil
 	})
 	return out, err
@@ -726,11 +733,11 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
 	err = s.queryTransaction(ctx, func(r Repository) error {
-		rows, e := scopedRecords(r, "content", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id})
+		rows, e := scopedRecords(r, "content", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id, CatalogAsOf: f.AsOf})
 		if e != nil {
 			return e
 		}
-		legacyRows, err := scopedRecords(r, "legacy_catalog", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id})
+		legacyRows, err := scopedRecords(r, "legacy_catalog", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id, CatalogAsOf: f.AsOf})
 		if err != nil {
 			return err
 		}
@@ -744,6 +751,9 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 			var c Content
 			if json.Unmarshal(row.Payload, &c) != nil {
 				return ErrUnavailable
+			}
+			if catalogCreatedAt(c, row.At).After(f.AsOf) {
+				continue
 			}
 			old, ok := latestLegacy[c.ID]
 			if !ok || row.At.After(old.At) || (row.At.Equal(old.At) && row.ID < old.ID) {
@@ -786,6 +796,9 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 			if json.Unmarshal(row.Payload, &c) != nil {
 				return ErrUnavailable
 			}
+			if catalogCreatedAt(c, row.At).After(f.AsOf) {
+				continue
+			}
 			if id != "" && c.ID != id {
 				continue
 			}
@@ -797,20 +810,7 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 		}
 		sort.Slice(items, func(i, j int) bool {
 			a, b := items[i], items[j]
-			var av, bv int64
-			switch f.Sort {
-			case "page_views":
-				av, bv = int64(a.PageViews), int64(b.PageViews)
-			case "visible_ms":
-				av, bv = a.VisibleMS, b.VisibleMS
-			default:
-				if a.LastVisit != nil {
-					av = a.LastVisit.UnixNano()
-				}
-				if b.LastVisit != nil {
-					bv = b.LastVisit.UnixNano()
-				}
-			}
+			av, bv := contentSortValue(a, f.Sort), contentSortValue(b, f.Sort)
 			if av == bv {
 				return a.ID < b.ID
 			}
@@ -819,11 +819,11 @@ func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string
 			}
 			return av > bv
 		})
-		start, end, cursor, e := paginate(f, len(items))
+		page, cursor, e := paginateContents(f, items)
 		if e != nil {
 			return e
 		}
-		out.Items = items[start:end]
+		out.Items = page
 		out.Cursor = cursor
 		return nil
 	})

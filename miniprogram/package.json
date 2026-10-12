@@ -11,7 +11,7 @@
     "build:tracking": "node scripts/build-tracking.js",
     "check:tracking": "node scripts/build-tracking.js --check",
     "check:tracking-routes": "node scripts/check-tracking-routes.js",
-    "test:tracking": "node --test tests/share-tracking.test.js tests/observed-content-actions.test.js tests/tracking-idle.test.js tests/tracking-consent.test.js tests/tracking-reader-entry.test.js tests/tracking-routes.test.js tests/tracking-materials.test.js tests/tracking-consultation.test.js"
+    "test:tracking": "node --test tests/share-tracking.test.js tests/observed-content-actions.test.js tests/tracking-idle.test.js tests/tracking-consent.test.js tests/tracking-reader-entry.test.js tests/tracking-routes.test.js tests/tracking-materials.test.js tests/tracking-consultation.test.js tests/tracking-measurement-boundaries.test.js"
   },
   "devDependencies": {
     "miniprogram-api-typings": "^2.8.3-1"

@@ -23,7 +23,7 @@
 - 原素材resolver通过既有模型核验公开发布状态，6条详情/工作台/主页路由创建真实标题封面只读卡和source_snapshot版本；正文摘要用于判变更，旧正文不存档或回放。不存在/不公开/错误路由namespace拒绝；旧版本入口不误归新版本。证据：service/tracking/legacy_test.go、service/route/share_tracking_legacy_test.go。
 - 8个已审计公开源页面观察真实列表/素材点击及图片打开回调；列表曝光不制造每项素材PV，目标必须成功加载可见才独立PV。证据：miniprogram/tests/observed-content-actions.test.js。
 - 日汇总已事务接入事件、身份关联、保留和删除；可在原始事件过期后保留受控历史指标，明细返回410，不能重建的历史快照返回409。证据：service/tracking/aggregates_test.go、governance_test.go及service/docs/TRACKING_DAILY_SUMMARIES.md。
-- 真实收藏成功已接入原签名POST /favorites，非空持久层Add成功且模板同步无错后才异步确认；必须匹配采集token与同一已登录账号，按账号/类型/目标/UTC日封顶去重。分析失败不改变收藏成功结果；异步超时或进程中断可能少计，不承诺可靠投递。近30天至少两个会话加收藏证据可判中等。持久层、微信登录和前后端完整链路尚未真实联调。
+- 真实收藏成功已接入原签名POST /favorites，非空持久层Add成功且模板同步无错后才异步确认；必须匹配采集token与同一已登录账号，按服务端已提交收藏行ID及其原始created_at持久去重；跨日重试不制造新事实或刷新成功时间。取消后重新收藏必须是新的源行ID。分析失败不改变收藏成功结果；异步超时或进程中断可能少计，不承诺可靠投递。近30天至少两个会话加收藏证据可判中等。持久层、微信登录和前后端完整链路尚未真实联调。
 - 正文支持plain及显式rich_text允许列表，保存前服务端清洗，前后端只对显式格式渲染富文本；媒体仍走授权资源。证据：service/tracking/richtext_test.go、background/scripts/share-tracking.test.mjs及阅读页回归。
 
 AT对应测试及还差哪些证据见acceptance-checklist.md。内存repository、模拟HTTP、DOM测试和合成浏览器fixture均须与真实数据库/平台验收分开。
@@ -71,3 +71,21 @@ raw 90天、summary及支持记录180天是待批准建议，DefaultRetentionPol
 ## PR3 CI 隔离合同修复
 
 Admin quality run 38168361665 中，519 项后台测试与构建已通过，但模板隔离脚本漏拷新共享只读接口 source_reader.go，导致 SQLRowQueryer 未定义；另有上述 CRLF 门禁差异。已只在 test-template-update.sh 显式源清单补该接口，未扩成全服务、未禁用或忽略任何检查。原样执行脚本的 15 个 model、8 个 handler 顶层测试及子测试通过，保留 -race -count=1；小程序171项聚焦、产物一致性及58路由策略检查复测通过。远程需按修复提交重新验 CI，不能用本地通过覆盖原失败记录。
+
+## PR3 外部评审修复：跟踪入口限流
+
+跟踪入口只读取可信 socket RemoteAddr；默认忽略 X-Forwarded-For 和 X-Real-IP，不再继承 Gin 的全局代理信任。可选 TRACKING_TRUSTED_PROXY_CIDRS 为逗号分隔的明确代理 CIDR，仅对跟踪入口生效；空值、任一非法值或 /0 均回退到不信任代理头。只有 socket 属于已配置代理时才从右到左解析完整 XFF 链，首个不可信跳为限流身份；头部超过 2048 字节、16 跳或包含非法地址时退回 socket。没有修改其他路由或运行机器网络设置。
+
+部署在反向代理之后而未配置本策略时，同一代理后的客户端共用 socket 限额。须先核验真实代理追加/清洗头部方式及精确出口范围，再由获授权部署流程配置；不能用任意网段放宽信任。真实代理集成尚未验。
+
+每个跟踪限流中间件最多保留 10,000 个 peer 的每分钟 60 次窗口，容量满时 O(1) 淘汰最久未访问项，不因 map 容量统一拒绝所有用户。超过容量的真实 peer 轮转可能使被淘汰窗口重建，属于有界内存下的近似限流；不是分布式限流或 DDoS 防护承诺。新增回归覆盖同一 socket 伪造 10,001 个 XFF、独立真实 peer、容量、时间窗口及并发 race。
+
+## PR3 十项评审修复终态回归
+
+- Go 全源码 `go test -p 1 -count=1 -json ./...`：648 条通过、5 条既有环境集成跳过、0 失败（含子测试）；跳过条件与上文相同。`go test -race -count=1 ./tracking ./route ./model` 与相同三包 `go vet` 通过。
+- 原 `service/scripts/test-template-update.sh` 隔离脚本通过，仍使用真实源文件和 race，不省略依赖。
+- 后台最终同全测集 `node --test --test-concurrency=2 scripts/*.test.mjs`：534/534；TypeScript、路由检查及生产构建通过。其中新增编辑器3项、分页实际组件/hooks12项。先前默认并发执行有旧 template-config 或 ui-crm-workflow-safety 整文件退出、未给具体断言的记录；各文件单独32/48通过，中间版本默认全量522及532重跑通过。没有证据确定退出原因，不把初次失败抹掉，也不把中间版本通过冒充最终默认并发结果。CI 保持既有后台命令，最终远程结果须另验。
+- 小程序正式 `npm run test:tracking`：196/196，新增25项计量边界回归；生成产物一致性与58路由（21公开/37排除）策略检查通过。全量280项：275通过、原客服2项失败、3跳过，未隐藏或修改这些旧失败。
+- 独立复核重跑原始问题隔离证据，确认十项源码修复；新增 first_cursor 返回首页与同帧旧分页回调均有回归。媒体与新 SQL 条件使用 database/sql 驱动夹具，未把它们写成真实 MySQL 证明。
+
+原始终态日志在本次交付的 review-repair-evidence 归档，包含失败与重试记录。当前自动化仍不替代17项AT整体签收、真实设备/平台/代理/数据库、视觉或负载验收。

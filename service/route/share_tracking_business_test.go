@@ -9,7 +9,10 @@ import (
 	"service/tracking"
 	"strings"
 	"testing"
+	"time"
 )
+
+var favoriteSourceCreated = time.Date(2026, 10, 11, 10, 0, 0, 0, time.UTC)
 
 type businessVerifierDriver struct{}
 type businessVerifierConn struct{ fail bool }
@@ -30,8 +33,8 @@ func (c businessVerifierConn) QueryContext(ctx context.Context, q string, args [
 	}
 	rows := &businessVerifierRows{}
 	switch q {
-	case "SELECT 1 FROM user_favorites WHERE user_id=? AND target_type=? AND target_id=? LIMIT 1":
-		rows.found = len(args) == 3 && args[0].Value == int64(7) && args[2].Value == int64(12)
+	case "SELECT 1 FROM user_favorites WHERE user_id=? AND target_type=? AND target_id=? AND id=? AND created_at=? LIMIT 1":
+		rows.found = len(args) == 5 && args[0].Value == int64(7) && args[1].Value == "template" && args[2].Value == int64(12) && args[3].Value == int64(101) && args[4].Value == favoriteSourceCreated
 	case "SELECT 1 FROM customer_leads WHERE id=? AND user_id=? AND status IN ('new','contacted','converted') LIMIT 1":
 		// ID 13 represents an invalidated lead; 404 represents deletion.
 		rows.found = len(args) == 2 && args[0].Value == int64(12) && args[1].Value == int64(7)
@@ -62,10 +65,13 @@ func TestBusinessVerifierChecksRealSourceOwnerAndValidity(t *testing.T) {
 		p     tracking.BusinessProof
 		valid bool
 	}{
-		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12}, true},
-		{tracking.BusinessProof{Action: "favorite", Account: 8, TargetType: "template", TargetID: 12}, false},
-		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 404}, false},
-		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "arbitrary_table", TargetID: 12}, false},
+		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12, FavoriteReceiptID: 101, FavoriteCreatedAt: favoriteSourceCreated}, true},
+		{tracking.BusinessProof{Action: "favorite", Account: 8, TargetType: "template", TargetID: 12, FavoriteReceiptID: 101, FavoriteCreatedAt: favoriteSourceCreated}, false},
+		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 404, FavoriteReceiptID: 101, FavoriteCreatedAt: favoriteSourceCreated}, false},
+		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "arbitrary_table", TargetID: 12, FavoriteReceiptID: 101, FavoriteCreatedAt: favoriteSourceCreated}, false},
+		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12}, false},
+		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12, FavoriteReceiptID: 100, FavoriteCreatedAt: favoriteSourceCreated}, false},
+		{tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12, FavoriteReceiptID: 101, FavoriteCreatedAt: favoriteSourceCreated.Add(time.Second)}, false},
 		{tracking.BusinessProof{Action: "consultation", Account: 7, TargetType: "lead", TargetID: 12}, true},
 		{tracking.BusinessProof{Action: "consultation", Account: 7, TargetType: "lead", TargetID: 13}, false},
 		{tracking.BusinessProof{Action: "consultation", Account: 7, TargetType: "lead", TargetID: 404}, false},
@@ -92,7 +98,7 @@ func TestBusinessVerifierFailureIsClosedAndRedacted(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer db.Close()
-	proof := tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12}
+	proof := tracking.BusinessProof{Action: "favorite", Account: 7, TargetType: "template", TargetID: 12, FavoriteReceiptID: 101, FavoriteCreatedAt: favoriteSourceCreated}
 	for _, verify := range []func(context.Context, tracking.BusinessProof) (bool, error){makeTrackingBusinessVerifier(db), makeTrackingBusinessVerifier(nil)} {
 		valid, e := verify(context.Background(), proof)
 		if valid || !errors.Is(e, tracking.ErrUnavailable) || strings.Contains(e.Error(), "private") {

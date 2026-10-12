@@ -5,7 +5,7 @@ import { expireSession } from '../utils/session';
 export const TRACKING_API = '/api/v1/management/tracking';
 export type Intent = 'high' | 'medium' | 'low' | 'unknown';
 export interface Snapshot { as_of: string; metric_version: string; }
-export interface Page<T> extends Snapshot { items: T[]; next_cursor?: string; identified_count: number; anonymous_count: number; }
+export interface Page<T> extends Snapshot { items: T[]; first_cursor?: string; next_cursor?: string; identified_count: number; anonymous_count: number; }
 export interface IntentRuleParameters { window_days: number; medium_sessions: number; medium_favorites: number; high_business_results: number; daily_session_cap: number; daily_action_cap: number; }
 export interface IntentRuleConfiguration extends IntentRuleParameters { rule_version: string; revision: number; owner_id: string; effective_at: string; actor: number | string; reason: string; timezone: string; participating_metrics: string[]; exclusions: string[]; }
 export interface IntentRecomputeResult { rule_version: string; evaluated_count: number; changed_count: number; as_of: string; }

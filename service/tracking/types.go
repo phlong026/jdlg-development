@@ -111,6 +111,7 @@ type Content struct {
 	SourceNote  string     `json:"source_note,omitempty"`
 	Rights      string     `json:"rights"`
 	Owner       string     `json:"owner_id"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
 	PublishedAt *time.Time `json:"published_at,omitempty"`
 	PageViews   int        `json:"page_views"`
 	VisibleMS   int64      `json:"visible_ms"`
@@ -136,6 +137,7 @@ type Share struct {
 	Version   int       `json:"content_version,omitempty"`
 	Owner     string    `json:"owner_id"`
 	Sharer    string    `json:"sharer_id"`
+	Session   string    `json:"session_id,omitempty"`
 	Parent    string    `json:"parent_share_id,omitempty"`
 	Expires   time.Time `json:"expires_at"`
 	Revoked   bool      `json:"revoked"`
@@ -223,10 +225,11 @@ type Snapshot struct {
 	Metric string    `json:"metric_version"`
 }
 type List struct {
-	Items      any    `json:"items"`
-	Cursor     string `json:"next_cursor,omitempty"`
-	Identified int    `json:"identified_count"`
-	Anonymous  int    `json:"anonymous_count"`
+	FirstCursor string `json:"first_cursor,omitempty"`
+	Items       any    `json:"items"`
+	Cursor      string `json:"next_cursor,omitempty"`
+	Identified  int    `json:"identified_count"`
+	Anonymous   int    `json:"anonymous_count"`
 	Snapshot
 }
 type IntentRule struct {
@@ -254,6 +257,7 @@ type Intent struct {
 	Timezone             string           `json:"timezone"`
 	OverrideState        string           `json:"override_state"`
 	sourceFingerprint    string
+	overrideRevision     int64
 
 	OriginalRule *IntentRule     `json:"original_rule,omitempty"`
 	Override     *IntentOverride `json:"override,omitempty"`

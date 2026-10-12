@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"crypto/sha256"
@@ -494,39 +493,6 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, v, e)
 	})
 	return svc
-}
-func trackingEntryRateLimit() gin.HandlerFunc {
-	var mu sync.Mutex
-	type slot struct {
-		at time.Time
-		n  int
-	}
-	buckets := map[string]slot{}
-	return func(c *gin.Context) {
-		mu.Lock()
-		now := time.Now()
-		key := c.ClientIP()
-		x := buckets[key]
-		if now.Sub(x.at) > time.Minute {
-			x = slot{at: now}
-		}
-		x.n++
-		buckets[key] = x
-		if len(buckets) > 10000 {
-			for k, v := range buckets {
-				if now.Sub(v.at) > time.Minute {
-					delete(buckets, k)
-				}
-			}
-		}
-		allowed := x.n <= 60 && len(buckets) <= 10000
-		mu.Unlock()
-		if !allowed {
-			trackingResponse(c, nil, &tracking.Error{Status: 429, Message: "请求过于频繁"})
-			return
-		}
-		c.Next()
-	}
 }
 
 // Daily generations expire well before the associated 30-day share token.

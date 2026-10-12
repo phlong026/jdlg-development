@@ -26,7 +26,7 @@ type RetentionPlan struct {
 }
 
 var rawRetentionKinds = []string{"event", "event_hash", "sequence", "view_binding", "entry", "rate"}
-var summaryRetentionKinds = []string{"session", "identity", "business", "crm", "intent_override", "intent_evaluation", "intent_recompute_request", "share", "share_request", "daily_summary", "summary_state"}
+var summaryRetentionKinds = []string{"session", "identity", "business", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "intent_recompute_request", "share", "share_request", "daily_summary", "summary_state"}
 
 func (s *Service) retentionAllowed(scope Scope, p RetentionPolicy, raw, summary time.Time) error {
 	if e := s.authorized(scope); e != nil {
@@ -124,6 +124,9 @@ func (s *Service) PurgeExpired(ctx context.Context, scope Scope, p RetentionPoli
 			if e = r.Remove(row.Kind, row.ID); e != nil {
 				return e
 			}
+		}
+		if e = prepareIntentOverrideRetention(r, rows, reviewed.SummaryBefore, s.Now()); e != nil {
+			return e
 		}
 		out = plan
 		owner := ""

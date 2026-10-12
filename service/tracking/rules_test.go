@@ -462,7 +462,8 @@ func TestIntentLiveBusinessRevocationRecomputesAndFailsClosed(t *testing.T) {
 	}
 }
 func TestIntentBusinessSourceProofContainsOnlyTrustedIdentifiers(t *testing.T) {
-	row := record("business", "proof0001", "owner", time.Now(), map[string]string{"action": "favorite", "target_type": "template", "target_id": "12", "phone": "should-never-be-projected"})
+	now := time.Now()
+	row := record("business", "proof0001", "owner", now, map[string]string{"action": "favorite", "target_type": "template", "target_id": "12", "favorite_receipt_id": "101", "favorite_created_at": now.UTC().Format(time.RFC3339Nano), "phone": "should-never-be-projected"})
 	row.Visitor = "u:7"
 	p, ok := sourceBusinessProof(row)
 	if !ok || p.Account != 7 || p.TargetID != 12 {

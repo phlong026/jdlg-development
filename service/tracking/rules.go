@@ -55,10 +55,12 @@ type RecomputeResult struct {
 
 // BusinessProof contains only server-bound source identifiers, never customer text.
 type BusinessProof struct {
-	Action     string
-	Account    int64
-	TargetType string
-	TargetID   int64
+	Action            string
+	Account           int64
+	TargetType        string
+	TargetID          int64
+	FavoriteReceiptID int64
+	FavoriteCreatedAt time.Time
 }
 
 type IntentMetrics struct {
@@ -217,10 +219,11 @@ func (s *Service) UpdateRules(ctx context.Context, scope Scope, input RuleUpdate
 // Evaluation state is never served as a cached label. Every query recomputes
 // authorized current facts; this small record exists solely to audit changes.
 type intentEvaluation struct {
-	Fingerprint string    `json:"fingerprint"`
-	Level       string    `json:"level"`
-	Rule        string    `json:"rule_version"`
-	AsOf        time.Time `json:"as_of"`
+	OverrideRevision int64     `json:"override_revision,omitempty"`
+	Fingerprint      string    `json:"fingerprint"`
+	Level            string    `json:"level"`
+	Rule             string    `json:"rule_version"`
+	AsOf             time.Time `json:"as_of"`
 }
 
 func (s *Service) recordIntentEvaluation(r Repository, scope Scope, key string, in Intent) (bool, error) {
@@ -233,18 +236,18 @@ func (s *Service) recordIntentEvaluation(r Repository, scope Scope, key string, 
 		Level, Rule, Source string
 		Metrics             IntentMetrics
 		Override            *IntentOverride
-	}{in.Level, in.Rule, in.sourceFingerprint, in.Metrics, in.Override}))), Level: in.Level, Rule: in.Rule, AsOf: in.Calculated}
+	}{in.Level, in.Rule, in.sourceFingerprint, in.Metrics, in.Override}))), Level: in.Level, Rule: in.Rule, AsOf: in.Calculated, OverrideRevision: in.overrideRevision}
 	old, e := decode[intentEvaluation](r, "intent_evaluation", id)
 	if e != nil && !errors.Is(e, ErrNotFound) {
 		return false, e
 	}
-	if e == nil && old.AsOf.After(next.AsOf) {
+	if e == nil && (old.AsOf.After(next.AsOf) || old.AsOf.Equal(next.AsOf) && old.OverrideRevision > next.OverrideRevision) {
 		return false, nil
 	}
 	if e == nil && old.Fingerprint == next.Fingerprint {
 		// Advance the observation watermark even when the label is unchanged;
 		// otherwise an intermediate historical snapshot can overwrite current state.
-		if next.AsOf.After(old.AsOf) {
+		if next.AsOf.After(old.AsOf) || next.OverrideRevision > old.OverrideRevision {
 			rec := record("intent_evaluation", id, owner, next.AsOf, next)
 			rec.Visitor = key
 			return false, r.Put(rec)

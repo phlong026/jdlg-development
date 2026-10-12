@@ -26,10 +26,11 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 	in.Body, in.BodyFormat = body, format
 	e := s.transaction(ctx, func(r Repository) error {
 		now := s.Now()
+		created := now.UTC()
 		revision := 1
 		version := 0
 		if id != "" {
-			old, e := decode[Content](r, "content", id)
+			old, e := loadCatalogContent(r, "content", id)
 			if e != nil || !scope.Allows(old.Owner) {
 				return fail(404, "素材不可访问")
 			}
@@ -44,6 +45,7 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 			}
 			revision = old.Revision + 1
 			version = old.Version
+			created = *old.CreatedAt
 		} else {
 			id = opaque()
 		}
@@ -72,7 +74,7 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 			}
 			media = append(media, a)
 		}
-		out = Content{ID: id, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+		out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
 		if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
 			return e
 		}
@@ -117,7 +119,7 @@ func (s *Service) Publish(ctx context.Context, scope Scope, id string, revision 
 		return out, fail(400, "缺少幂等标识")
 	}
 	e := s.transaction(ctx, func(r Repository) error {
-		c, e := decode[Content](r, "content", id)
+		c, e := loadCatalogContent(r, "content", id)
 		if e != nil || !scope.Allows(c.Owner) {
 			return fail(404, "素材不可访问")
 		}
@@ -171,7 +173,7 @@ func (s *Service) Revoke(ctx context.Context, scope Scope, id string, revision i
 		return c, fail(400, "撤回权限、原因或幂等标识无效")
 	}
 	e := s.transaction(ctx, func(r Repository) error {
-		old, e := decode[Content](r, "content", id)
+		old, e := loadCatalogContent(r, "content", id)
 		if e != nil || !scope.Allows(old.Owner) {
 			return fail(404, "素材不可访问")
 		}
@@ -244,24 +246,12 @@ func (s *Service) Media(ctx context.Context, scope *Scope, id string) (Asset, er
 		if !s.Config.ContentEnabled {
 			return fail(404, "媒体不可访问")
 		}
-		versions, e := r.List("version")
+		allowed, e := publicMediaReferenced(r, id, rec.Owner)
 		if e != nil {
 			return e
 		}
-		for _, v := range versions {
-			var c Content
-			if json.Unmarshal(v.Payload, &c) != nil {
-				continue
-			}
-			master, e := decode[Content](r, "content", c.ID)
-			if e != nil || master.Status == "revoked" || c.Status != "published" {
-				continue
-			}
-			for _, m := range c.Media {
-				if m.ID == id {
-					return json.Unmarshal(rec.Payload, &a)
-				}
-			}
+		if allowed {
+			return json.Unmarshal(rec.Payload, &a)
 		}
 		return fail(404, "媒体不可访问")
 	})

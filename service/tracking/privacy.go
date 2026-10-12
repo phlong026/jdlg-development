@@ -10,7 +10,7 @@ import (
 // tenant-wide identity or choose the first row from a mixed-owner query.
 func privateOwner(r Repository, scope Scope, key string) (string, error) {
 	owners := map[string]bool{}
-	for _, kind := range []string{"event", "daily_summary", "crm", "intent_override"} {
+	for _, kind := range []string{"event", "daily_summary", "crm", "intent_override", "intent_override_history", "intent_override_boundary"} {
 		rows, e := scopedRecords(r, kind, RecordQuery{Owners: permittedOwners(scope, ""), VisitorKeys: []string{key}})
 		if e != nil {
 			return "", e
@@ -98,12 +98,7 @@ func (s *Service) OverrideIntent(ctx context.Context, scope Scope, key, level, r
 		if e != nil {
 			return e
 		}
-		rec := record("intent_override", privateKey(owner, key), owner, s.Now(), map[string]any{"level": level, "reason": reason, "expires_at": expires, "actor": scope.Actor})
-		rec.Visitor = key
-		if e = r.Put(rec); e != nil {
-			return e
-		}
-		return audit(r, owner, "intent_override", scope.Actor, hash(key), s.Now(), map[string]string{"level": level})
+		return appendIntentOverride(r, owner, key, scope.Actor, level, reason, expires, s.Now())
 	})
 }
 func (s *Service) DeleteVisitor(ctx context.Context, scope Scope, key, reason string) error {

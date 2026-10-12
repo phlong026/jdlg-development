@@ -60,11 +60,11 @@ test('UI preserves scope in same-session exploration and separates metrics and i
  assert.match(detail,/content_id: showingEvidence \? undefined : contentId, include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
 });
 
-function editorHarness(overrides = {}) {
+function editorHarness(overrides = {}, initial = {}) {
  const React=require('react');let slots=[],index=0,tree;const calls=[];const lifecycle=[];
  const react={...React,useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useEffect(effect,deps){const i=index++;if(!slots[i]){const cleanup=effect();slots[i]={cleanup};lifecycle.push(()=>{cleanup?.();slots[i].cleanup=effect()})}}};
- const content={content_id:'content1',revision:1,version:1,title:'文章',body:'已授权正文',status:'draft',rights:'own',owner_id:'owner1',cover:{media_id:'image1'},media:[]};
- const api={save:async(...args)=>{calls.push(['save',...args]);return content},preview:async(...args)=>{calls.push(['preview',...args]);return{content,preview_token:'verified'}},publish:async(...args)=>{calls.push(['publish',...args]);return{content:{...content,status:'published'},share_methods:{}}},upload:async(...args)=>{calls.push(['upload',...args]);return{media_id:'uploaded'}},media:async()=>({items:[]}),...overrides};
+ const content={content_id:'content1',revision:1,version:1,title:'文章',body:'已授权正文',status:'draft',rights:'own',owner_id:'owner1',cover:{media_id:'image1'},media:[],...initial};
+ const api={save:async(...args)=>{calls.push(['save',...args]);return content},preview:async(...args)=>{calls.push(['preview',...args]);return{content,preview_token:'verified'}},publish:async(...args)=>{calls.push(['publish',...args]);return{content:{...content,status:'published'},share_methods:{}}},upload:async(...args)=>{calls.push(['upload',...args]);return{media_id:'uploaded'}},media:async()=>({items:[]}),revoke:async(...args)=>{calls.push(['revoke',...args]);return{...content,status:'revoked'}},...overrides};
  const components={Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',useResource:()=>({data:{items:[]},reload(){}})};
  const module=load('src/pages/shareTracking/editor.tsx',{'react':react,'../../api/shareTracking':{tracking:api},'./components':components,'./model':model,globals:{crypto:{randomUUID:()=> 'idempotency-one'},window:{confirm:()=>true}}});
  const nodes=x=>Array.isArray(x)?x.flatMap(nodes):!x||typeof x!=='object'?[]:[x,...nodes(x.props?.children)];
@@ -100,4 +100,23 @@ test('rich text renders only the explicit persisted format; legacy body remains 
  assert.ok(editor.includes('<ContentBody content={preview.content} />'));
  assert.ok(!editor.includes('dangerouslySetInnerHTML'));
  assert.ok(!editor.includes('<ContentBody content={form}'));
+});
+
+test('published draft keeps current public version and revokes without publishing unfinished edits',async()=>{
+ const h=editorHarness({}, {status:'draft',version:4,revision:9});
+ assert.match(h.text(),/当前公开版本：v4/);assert.match(h.text(),/无需发布草稿即可撤回/);
+ const input=h.find('label','撤回原因').props.children.find(n=>n?.type==='input');input.props.onChange({target:{value:'停止旧版分享'}});h.render();
+ h.find('button','撤回并停止旧入口阅读').props.onClick();await flush();h.render();
+ const writes=h.calls.filter(x=>['publish','save','revoke'].includes(x[0]));assert.deepEqual(normalized(writes),[['revoke','content1',9,'停止旧版分享','idempotency-one']]);
+ assert.equal(h.find('button','撤回并停止旧入口阅读'),undefined);assert.match(h.text(),/已撤回/);
+});
+test('unpublished draft and already revoked material do not offer revocation',()=>{
+ for(const initial of [{status:'draft',version:0},{status:'revoked',version:3}]){const h=editorHarness({},initial);assert.equal(h.find('button','撤回并停止旧入口阅读'),undefined);}
+});
+test('draft revoke is single flight and keeps reason/public controls on failure',async()=>{
+ let reject,writes=0;const p=new Promise((_,r)=>reject=r);const h=editorHarness({revoke:()=>{writes++;return p}}, {status:'draft',version:2,revision:5});
+ h.find('label','撤回原因').props.children.find(n=>n?.type==='input').props.onChange({target:{value:'复核撤回'}});h.render();
+ const button=h.find('button','撤回并停止旧入口阅读');button.props.onClick();button.props.onClick();assert.equal(writes,1);
+ reject(new Error('409 当前版本冲突'));await flush();h.render();assert.match(h.text(),/当前版本冲突/);assert.ok(h.find('button','撤回并停止旧入口阅读'));
+ assert.equal(h.find('label','撤回原因').props.children.find(n=>n?.type==='input').props.value,'复核撤回');
 });

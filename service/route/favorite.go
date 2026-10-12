@@ -97,8 +97,11 @@ func RegisterFavoriteRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 				c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": err.Error()})
 				return
 			}
+			var receipt *model.UserFavorite
 			if userFavoriteModel != nil {
-				if err := userFavoriteModel.Add(userID, req.TargetType, req.TargetID); err != nil {
+				var err error
+				receipt, err = userFavoriteModel.AddWithReceipt(c.Request.Context(), userID, req.TargetType, req.TargetID)
+				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "收藏失败: " + err.Error()})
 					return
 				}
@@ -119,13 +122,13 @@ func RegisterFavoriteRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 					}
 				}
 			}
-			if userFavoriteModel != nil && len(trackingServices) > 0 && trackingServices[0] != nil && c.GetHeader("X-Tracking-Token") != "" {
+			if receipt != nil && len(trackingServices) > 0 && trackingServices[0] != nil && c.GetHeader("X-Tracking-Token") != "" {
 				service, token, account, kind, target := trackingServices[0], c.GetHeader("X-Tracking-Token"), userID, req.TargetType, req.TargetID
 				// Telemetry cannot turn an already committed favorite into a failed business request.
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 					defer cancel()
-					_ = service.ConfirmFavorite(ctx, token, account, kind, target)
+					_ = service.ConfirmFavorite(ctx, token, account, kind, target, tracking.FavoriteReceipt{ID: receipt.ID, CreatedAt: receipt.CreatedAt})
 				}()
 			}
 			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "收藏成功", "data": gin.H{"favorited": true}})

@@ -24,7 +24,7 @@ func privacyRecord(row Record) (Record, error) {
 		if json.Unmarshal(row.Payload, &share) != nil {
 			return row, ErrUnavailable
 		}
-		row.Visitor, row.Share = share.Sharer, share.ID
+		row.Visitor, row.Share, row.Session = share.Sharer, share.ID, share.Session
 	case "identity":
 		var link map[string]string
 		if json.Unmarshal(row.Payload, &link) != nil || !strings.HasPrefix(link["visitor_key"], "u:") || link["original_visitor_key"] == "" {
@@ -122,7 +122,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 	p := &visitorDeletion{rows: map[string]Record{}, sessions: map[string]bool{}, events: map[string]bool{}, views: map[string]bool{}, sequences: map[string]bool{}, shares: map[string]bool{}}
 	// Deliberately do not restrict Owners: full-identity deletion must detect
 	// any inaccessible owner, including one represented only by an old entry.
-	for _, kind := range []string{"event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override", "intent_evaluation"} {
+	for _, kind := range []string{"event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation"} {
 		rows, err := scopedRecords(r, kind, RecordQuery{VisitorKeys: []string{key}})
 		if err != nil {
 			return nil, err
@@ -141,7 +141,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 		}
 	}
 	// Pre-owner-scoped private annotations used the identity itself as ID.
-	for _, kind := range []string{"crm", "intent_override", "intent_evaluation"} {
+	for _, kind := range []string{"crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation"} {
 		row, err := r.Get(kind, key)
 		if errors.Is(err, ErrNotFound) {
 			continue
@@ -159,7 +159,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 	// Only verified target sessions expand the graph. Never turn a device's
 	// anonymous visitor key into a global alias for the identified account.
 	sessions := deletionKeys(p.sessions)
-	for _, kind := range []string{"event", "entry", "session", "identity", "business", "daily_summary", "summary_state", "crm", "intent_override", "intent_evaluation", "view_binding"} {
+	for _, kind := range []string{"event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "view_binding"} {
 		rows, err := scopedRecords(r, kind, RecordQuery{Sessions: sessions})
 		if err != nil {
 			return nil, err
@@ -169,6 +169,12 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 				return nil, err
 			}
 		}
+	}
+	// Historical shares have no session column. Recover only an unambiguous
+	// accepted share_intent relationship; a device-wide anonymous key is not
+	// identity proof. Missing or conflicting evidence leaves the old link alone.
+	if err := p.addLegacyShares(r, scope); err != nil {
+		return nil, err
 	}
 	for _, related := range []struct {
 		kind string
@@ -190,4 +196,65 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 		}
 	}
 	return p, nil
+}
+
+func (p *visitorDeletion) addLegacyShares(r Repository, scope Scope) error {
+	candidates := map[string]bool{}
+	for _, row := range p.rows {
+		if row.Kind != "event" || !p.sessions[row.Session] {
+			continue
+		}
+		var event Event
+		if json.Unmarshal(row.Payload, &event) != nil {
+			return ErrUnavailable
+		}
+		if event.Type == "share_intent" && event.Share != "" {
+			candidates[event.Share] = true
+		}
+	}
+	shares, err := scopedRecords(r, "share", RecordQuery{Shares: deletionKeys(candidates)})
+	if err != nil {
+		return err
+	}
+	eventsByVisitor := map[string][]Record{}
+	for _, row := range shares {
+		var share Share
+		if json.Unmarshal(row.Payload, &share) != nil {
+			return ErrUnavailable
+		}
+		if share.Session != "" || !strings.HasPrefix(share.Sharer, "a:") {
+			continue
+		}
+		// Also inspect this anonymous key's other sessions for conflicting
+		// share-intent evidence. Do not resolve the key as an account-wide alias.
+		events, loaded := eventsByVisitor[share.Sharer]
+		if !loaded {
+			events, err = scopedRecords(r, "event", RecordQuery{VisitorKeys: []string{share.Sharer}})
+			if err != nil {
+				return err
+			}
+			eventsByVisitor[share.Sharer] = events
+		}
+		verified, ambiguous := false, false
+		for _, eventRow := range events {
+			var event Event
+			if json.Unmarshal(eventRow.Payload, &event) != nil {
+				return ErrUnavailable
+			}
+			if event.Type != "share_intent" || event.Share != share.ID {
+				continue
+			}
+			if eventRow.Visitor != share.Sharer || eventRow.Owner != row.Owner || eventRow.Session == "" || event.Session != eventRow.Session || event.Route != share.Route || event.Content != share.Content || event.Version != share.Version || event.Received.IsZero() || event.Received.Before(row.At) || !p.sessions[eventRow.Session] {
+				ambiguous = true
+				continue
+			}
+			verified = true
+		}
+		if verified && !ambiguous {
+			if err = p.add(scope, row); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

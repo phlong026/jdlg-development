@@ -256,7 +256,12 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 		owner := s.Config.DefaultOwner
 		visitor := ""
 		parent := ""
+		session := ""
 		if en, e := s.entry(r, token); e == nil {
+			if en.Account != account {
+				return fail(403, "分享账号与访问上下文不一致")
+			}
+			session = en.Session
 			owner = en.Owner
 			visitor = en.Visitor
 			if in.Parent != "" && in.Parent == en.Share {
@@ -294,14 +299,16 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 			return nil
 		}
 		tok := opaque()
-		sh := Share{ID: opaque(), Route: in.Route, Content: in.Content, Version: in.Version, Owner: owner, Sharer: visitor, Parent: parent, Expires: now.Add(30 * 24 * time.Hour)}
+		sh := Share{ID: opaque(), Route: in.Route, Content: in.Content, Version: in.Version, Owner: owner, Sharer: visitor, Session: session, Parent: parent, Expires: now.Add(30 * 24 * time.Hour)}
 		rec := record("share", hash(tok), owner, now, sh)
-		rec.Share = sh.ID
+		rec.Share, rec.Visitor, rec.Session = sh.ID, sh.Sharer, sh.Session
 		if e := r.Insert(rec); e != nil {
 			return e
 		}
 		out = map[string]any{"share_id": sh.ID, "share_token": tok, "expires_at": sh.Expires, "fingerprint": finger}
-		if e := r.Insert(record("share_request", key, owner, now, out)); e != nil {
+		request := record("share_request", key, owner, now, out)
+		request.Visitor, request.Session, request.Share = sh.Sharer, sh.Session, sh.ID
+		if e := r.Insert(request); e != nil {
 			return e
 		}
 		delete(out, "fingerprint")
@@ -390,7 +397,7 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 		return fail(400, "分享归因不一致")
 	}
 	if e.Type == "share_intent" && e.Share != "" {
-		shares, err := r.List("share")
+		shares, err := scopedRecords(r, "share", RecordQuery{Shares: []string{e.Share}})
 		if err != nil {
 			return err
 		}
@@ -398,7 +405,7 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 		for _, sr := range shares {
 			var sh Share
 			_ = json.Unmarshal(sr.Payload, &sh)
-			if sh.ID == e.Share && sh.Sharer == en.Visitor {
+			if sh.ID == e.Share && sh.Sharer == en.Visitor && (sh.Session == "" || sh.Session == en.Session) && sh.Owner == en.Owner && sh.Route == e.Route && sh.Content == e.Content && sh.Version == e.Version {
 				ok = true
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"strconv"
@@ -70,6 +71,15 @@ func (s *Service) resolveLegacy(ctx context.Context, route, content string) (Con
 }
 func saveLegacy(r Repository, c Content, owner string, now time.Time) error {
 	c.Owner = owner
+	catalogKey := hash(owner + ":" + c.ID)
+	created := now.UTC()
+	old, err := loadCatalogContent(r, "legacy_catalog", catalogKey)
+	if err == nil {
+		created = *old.CreatedAt
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	c.CreatedAt = &created
 	// Snapshot versions are immutable. Catalog rows are owner-scoped, not author-owned.
 	key := contentKey(c.ID, c.Version)
 	if _, err := r.Get("version", key); err == ErrNotFound {
@@ -79,5 +89,5 @@ func saveLegacy(r Repository, c Content, owner string, now time.Time) error {
 	} else if err != nil {
 		return err
 	}
-	return r.Put(record("legacy_catalog", hash(owner+":"+c.ID), owner, now, c))
+	return r.Put(record("legacy_catalog", catalogKey, owner, now, c))
 }

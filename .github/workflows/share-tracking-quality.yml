@@ -41,11 +41,11 @@ jobs:
 
       # Fake SQL, in-memory repositories and miniredis: no business credentials,
       # external database, production configuration or deployment is needed.
-      - name: Run tracking and HTTP route regressions
-        run: go test -count=1 ./tracking ./route
+      - name: Run tracking, source model and HTTP route regressions
+        run: go test -count=1 ./tracking ./route ./model
 
-      - name: Detect tracking and HTTP route data races
-        run: go test -race -count=1 ./tracking ./route
+      - name: Detect tracking, source model and HTTP route data races
+        run: go test -race -count=1 ./tracking ./route ./model
 
   tracking-miniprogram:
     name: Tracking mini-program and route policy checks

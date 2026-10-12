@@ -276,7 +276,8 @@ func TestBusinessRecomputeReusesTrackingTransactionWithOneConnection(t *testing.
 			store := &tracking.SQLStore{DB: db}
 			s := tracking.New(store, tracking.Config{Enabled: true, IntentEnabled: true, Tenant: "org-a", DefaultOwner: "owner-a"})
 			s.VerifyBusiness = makeTrackingBusinessVerifier(db)
-			detail := map[string]string{"action": action, "target_type": "template", "target_id": "12"}
+			occurred := s.Now().Add(-time.Minute)
+			detail := map[string]string{"action": action, "target_type": "template", "target_id": "12", "favorite_receipt_id": "101", "favorite_created_at": occurred.UTC().Format(time.RFC3339Nano)}
 			if action == "consultation" {
 				detail = map[string]string{"action": action, "business_record_id": "lead:12"}
 			}
@@ -285,7 +286,7 @@ func TestBusinessRecomputeReusesTrackingTransactionWithOneConnection(t *testing.
 				t.Fatal(err)
 			}
 			if err = store.Transaction(ctx, "org-a", func(r tracking.Repository) error {
-				return r.Insert(tracking.Record{Kind: "business", ID: "business-source", Owner: "owner-a", Visitor: "u:7", At: s.Now().Add(-time.Minute), Payload: payload})
+				return r.Insert(tracking.Record{Kind: "business", ID: "business-source", Owner: "owner-a", Visitor: "u:7", At: occurred, Payload: payload})
 			}); err != nil {
 				t.Fatal(err)
 			}

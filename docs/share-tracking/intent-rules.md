@@ -64,6 +64,19 @@
 
 参与指标是支持的服务端事实类型，不表示所有业务成功源都已接通。证据不包含联系方式、需求正文或 CRM 私有内容。
 
+## 人工修正历史与分页快照
+
+`POST /intent-overrides` 保持等级、原因、≤30天有效期及独立规则权限的原接口，不更改意向阈值。每次决定在租户事务锁内分配 owner 级递增 revision，追加完整不可变 `intent_override_history`，保存 level、reason、expires_at、actor、created_at、revision 及 previous_decision_id。`intent_override` 只作兼容的最新指针，不能替代历史。历史按授权 owner + visitor 查询；匿名不会因人工修正变成真实身份。
+
+- 在 as_of 之前的决定中按精确 created_at、revision 选择最新一条；相同时间由 revision 确定顺序。JSON 保留时间的完整精度，不将 SQL DATETIME(6) 截断时间当成决定的精确生效时间。替换后原理由、有效期和操作者仍可审计；最新决定到期时回归原规则，不能重新激活更早未到期决定。
+- 访客列表的 next_cursor 绑定同一查询、as_of 和 owner 级 revision 上限。晚于快照或相同时间的后续修正不会改变这个游标的筛选成员及 filtered counts。所有成功访客页（包括空页和单页）另返 first_cursor；回到第一页必须保留原 as_of、筛选和 limit，把 first_cursor 原样作为 cursor。刷新或改变筛选才开始新快照。未带游标的查询按 as_of + 当前已知 revision 确定性选取；若要求区分同一时间戳内的先后，必须保留返回游标。旧格式游标没有 revision 上限，升级后返回 409，要求显式刷新。
+- 现存单行覆盖在当前查询仍可用。首次替换时仅将实际存在的最后一条决定完整导入历史；不会从旧的仅等级审计伪造已丢失的理由、到期或操作者。早于最后已知旧决定的查询只对受影响 owner + visitor 返回 409。普通无覆盖账号及其他 owner 不因此受阻，旧快照在首次导入后仍可继续使用原游标。
+- 如果服务器时钟倒退至该访客已有决定之前，写入返回 409，不创建倒序历史；正常相同时间并发由事务序列分配不同 revision。历史游标不得把当前评价指纹倒写回旧 revision。
+
+完整决定保存在可按访客删除的不可变历史中。永久通用 audit 记录操作者、决定 ID、前一决定 ID、revision、等级及完整决定摘要；通过 ID 和摘要核验完整理由/到期/操作者，不在永久日志另存自由文本理由。新增历史、当前指针、revision 序列和 audit 同事务提交，任一失败全部回滚。
+
+个人删除会清除对应 owner 的当前决定、历史和不可恢复边界；完整身份涉及未授权 owner 时整体拒绝，不能留下部分历史。历史和边界纳入既有人工审核的支持记录保留期。清理已批准的过期历史后，只为受影响身份保留不含理由的 `intent_override_boundary`，使早期不可重建快照返回 409；该边界也受个人删除和支持记录保留政策约束。`intent_override_clock` 仅含 owner 级序列，不含 visitor 或理由，保留以避免 revision 重用。没有新增自动清理计划，真实数据库/恢复演练仍待验收。
+
 ## 真实业务接入边界
 
 - 收藏只在现有收藏业务提交成功后调用 ConfirmFavorite；客户端不能提交“成功”事件。
@@ -77,6 +90,10 @@
 
 复用 tracking_records，不新增账号体系或数据库表。
 
+- intent_override_history：owner + visitor + revision 的完整不可变决定
+- intent_override：兼容的最新决定指针
+- intent_override_clock：不含访客信息的 owner 级序列
+- intent_override_boundary：仅受影响身份的不可恢复历史边界
 - intent_rule：owner + rule_version 的不可变历史
 - intent_rule_current：每 owner 当前版本指针
 - intent_evaluation：owner + visitor 的当前评价指纹、level、版本和 as_of，仅用于比较变化，不作为查询标签缓存
@@ -92,3 +109,5 @@
 `service/tracking/rules_test.go` 覆盖窗口与报表范围独立、版本历史/旧快照、改规则自动重算、权限、非法阈值、每日会话/行为上限、重复动作与无有效访问的伪业务不升级、多归属混配、重算幂等冲突、源删除/异常、身份解除、人工覆盖过期、删除后重放、真实咨询账号校验，以及审计失败原子回滚。
 
 `service/route/share_tracking_rules_test.go` 覆盖 owner 越权、只读员工写入、重算写权限和未知请求字段；`share_tracking_business_test.go` 验证真实源 SQL 的账号/目标约束、取消/失效/删除排除、未知源拒绝、数据库错误脱敏和调用方取消。规则测试还覆盖纳秒级版本边界、相同标签推进时间水位以防旧快照倒写，以及运行时源撤销重算。既有查询权限/预算/删除测试继续覆盖新实现依赖的底层范围保证。生产 MySQL、真实设备及容量验收仍是独立门槛。
+
+`service/tracking/intent_override_history_test.go` 保留原业务复现，并覆盖完整旧理由/到期/操作者、审计摘要、最新决定到期不复活前一条、同时间及晚于快照的多页筛选/计数/返回首页、旧单行首次迁移、精确409范围、并发revision、时钟倒退、SQL时间精度、审计失败原子回滚、跨owner删除和人工保留维护。kind名称均不超过现有SQL的VARCHAR(24)，不依赖未执行的新表迁移。

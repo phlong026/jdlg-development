@@ -156,7 +156,7 @@ func TestPrivacyScopedSmallVisitorOperationsInLargeTenant(t *testing.T) {
 		t.Fatal(err)
 	}
 	for id, row := range before {
-		preserve := strings.HasPrefix(row.ID, "unrelated-") || strings.HasPrefix(row.ID, "noise-") || row.Kind == "audit"
+		preserve := strings.HasPrefix(row.ID, "unrelated-") || strings.HasPrefix(row.ID, "noise-") || row.Kind == "audit" || row.Kind == "intent_override_clock"
 		_, err := indexed.rows.Get(row.Kind, row.ID)
 		if preserve && err != nil {
 			t.Errorf("unrelated data removed: %s", id)
@@ -176,7 +176,7 @@ func TestPrivacyScopedSmallVisitorOperationsInLargeTenant(t *testing.T) {
 		}
 	}
 	for _, call := range indexed.calls {
-		if call.query.Owners != nil && call.kind != "event" && call.kind != "daily_summary" && call.kind != "crm" && call.kind != "intent_override" {
+		if call.query.Owners != nil && call.kind != "event" && call.kind != "daily_summary" && call.kind != "crm" && call.kind != "intent_override" && call.kind != "intent_override_history" && call.kind != "intent_override_boundary" {
 			t.Fatalf("deletion must inspect owners outside scope: %+v", call)
 		}
 	}

@@ -22,11 +22,12 @@ func makeTrackingBusinessVerifier(db *sql.DB) func(context.Context, tracking.Bus
 		var row *sql.Row
 		switch proof.Action {
 		case "favorite":
-			if model.NormalizeFavoriteTargetType(proof.TargetType) != proof.TargetType || proof.TargetType == "" {
+			if model.NormalizeFavoriteTargetType(proof.TargetType) != proof.TargetType || proof.TargetType == "" || proof.FavoriteReceiptID <= 0 || proof.FavoriteCreatedAt.IsZero() {
 				return false, nil
 			}
-			// UserFavoriteModel.Remove hard-deletes this exact account/target tuple.
-			row = reader.QueryRowContext(ctx, `SELECT 1 FROM user_favorites WHERE user_id=? AND target_type=? AND target_id=? LIMIT 1`, proof.Account, proof.TargetType, proof.TargetID)
+			// ID and created_at pin the exact durable success. A remove/re-add
+			// cannot resurrect the old receipt even for the same account/target.
+			row = reader.QueryRowContext(ctx, `SELECT 1 FROM user_favorites WHERE user_id=? AND target_type=? AND target_id=? AND id=? AND created_at=? LIMIT 1`, proof.Account, proof.TargetType, proof.TargetID, proof.FavoriteReceiptID, proof.FavoriteCreatedAt)
 		case "consultation":
 			if proof.TargetType != "lead" {
 				return false, nil

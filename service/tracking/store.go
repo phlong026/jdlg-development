@@ -90,7 +90,7 @@ const recordColumns = `r.kind,r.record_id,r.owner_id,r.visitor_key,r.session_id,
 // expressions are fixed server strings, shared by filtering and identity joins.
 func recordSessionColumn(kind string) string {
 	switch kind {
-	case "entry", "session":
+	case "entry", "session", "share":
 		return "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.session_id'))"
 	case "identity":
 		return "r.record_id"
@@ -171,6 +171,10 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 	if !q.AtThrough.IsZero() {
 		where = append(where, "r.occurred_at<=?")
 		args = append(args, stamp(q.AtThrough))
+	}
+	if !q.CatalogAsOf.IsZero() && (kind == "content" || kind == "legacy_catalog") {
+		where = append(where, catalogCreatedAtSQL+"<=?")
+		args = append(args, stamp(q.CatalogAsOf))
 	}
 	if q.VisitorKeys != nil {
 		if len(q.VisitorKeys) == 0 {

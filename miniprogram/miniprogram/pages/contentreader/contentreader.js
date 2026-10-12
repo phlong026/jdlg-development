@@ -8,7 +8,7 @@ Page({
  onLoad(options){this.entryGeneration=1;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.loadContent();},
  onShow(){this.pageVisible=true;tracking.block(this,false);if(this.hasShown)this.loadContent();this.hasShown=true;this.syncPlayerVisibility();},
  onHide(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;this.pageVisible=false;this.syncPlayerVisibility();this.pausePlayers();},
- onUnload(){this.loadSequence=(this.loadSequence||0)+1;this.pageVisible=false;this.pausePlayers();this.observers.forEach(o=>o.disconnect());this.observers=[];},
+ onUnload(){if(this.stopObservingTracking)this.stopObservingTracking();this.loadSequence=(this.loadSequence||0)+1;this.pageVisible=false;this.pausePlayers();this.observers.forEach(o=>o.disconnect());this.observers=[];},
  acceptExternalEntry(options){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=true;this.options=options||{};this.setData({content:null,contentReady:false,loading:true});this.loadContent();},
  async loadContent(){
   const sequence=(this.loadSequence||0)+1;this.loadSequence=sequence;
@@ -41,10 +41,11 @@ Page({
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},
  declineTracking(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;tracking.setConsent(false);this.setData({consented:false});},
  observePlayers(){
+  if(this.stopObservingTracking)this.stopObservingTracking();
   this.observers.forEach(o=>o.disconnect());this.observers=[];
   this.playerGeneration=(this.playerGeneration||0)+1;this.players={};this.playerVisible={};
   this.data.media.filter(m=>m.kind==='video').forEach(media=>{
-   const player=createVideoTracker({mono:()=>wx.getPerformance().now(),emit:(type,extra)=>tracking.emit(this,type,extra)},media.media_id,media.domId+'-generation-'+this.playerGeneration);
+   const player=createVideoTracker({mono:()=>wx.getPerformance().now(),observation:()=>tracking.observation?tracking.observation(this):null,emit:(type,extra)=>tracking.emit(this,type,extra)},media.media_id,media.domId+'-generation-'+this.playerGeneration);
    this.players[media.media_id]=player;
    // If intersection observation is unsupported, playback remains usable but no claimed watch time.
    if(this.createIntersectionObserver){const observer=this.createIntersectionObserver({thresholds:[0,.5,1]});observer.relativeToViewport().observe('#'+media.domId,rect=>{
@@ -52,6 +53,9 @@ Page({
     if(!this.playerVisible[media.media_id]&&this.fullscreenMedia!==media.media_id)wx.createVideoContext(media.domId,this).pause();
    });this.observers.push(observer);}
   });
+  // Subscribe at the SDK boundary so the global consent modal, withdrawal,
+  // identity changes and new page views reset the same surviving players.
+  if(tracking.observe)this.stopObservingTracking=tracking.observe(this,state=>Object.keys(this.players).forEach(id=>this.players[id].observe(state)));
  },
  syncPlayerVisibility(){Object.keys(this.players||{}).forEach(id=>this.players[id].visible(!!this.pageVisible&&(!!this.playerVisible[id]||this.fullscreenMedia===id)&&!this.data.sourceOpen));},
  pausePlayers(){(this.data.media||[]).filter(m=>m.kind==='video').forEach(m=>{wx.createVideoContext(m.domId,this).pause();const p=this.players[m.media_id];if(p)p.state('paused');});},

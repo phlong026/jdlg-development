@@ -39,7 +39,7 @@
 - `GET /media`、`POST /media` multipart：受控私有盘上传，真实PNG/JPEG/GIF≤10MiB、MP4≤50MiB，权属声明；MP4必须可读取合法尺寸；无任意URL导入或远程抓取。
 - `GET /contents/:id/code?version=N`：仅真实微信码开关及配置齐备时调用官方接口，超时/权限失败明确报错；不是伪造二维码。未开放URL Link。
 - `POST /identity-links`、`DELETE /identity-links/:visitor`：明确依据、业务ID/编号、专门权限，必须经过当前操作者可信CRM接口的目标权限验证。
-- `POST /intent-overrides`：等级、原因和≤30天有效期；仅专门规则权限。标签是跟进参考，不是购买概率。
+- `POST /intent-overrides`：等级、原因和≤30天有效期；仅专门规则权限。完整人工决定追加不可变历史并可按 as_of 回放，访客游标另绑定覆盖 revision；标签是跟进参考，不是购买概率。
 - `POST /deletions`：专门权限和原因；同步删除当前系统可控事实/映射，保留防重放墓碑；外部导出和备份治理另行核验，不虚称全副本即时清除。
 
 ## 数据字典与一致性
@@ -62,7 +62,7 @@
 
 受审保留维护会先重建并冻结受影响会话汇总，再删除原始事实；查询使用冻结汇总替代该会话原始部分，避免重复相加。拟定raw 90天、summary及支持记录180天尚待业务/隐私批准，破坏性维护默认关闭；不存在已启用的自动清理计划。汇总含可关联visitor/session及紧凑可见区间，仍是受权限和删除约束的个人数据。汇总按完整自然日桶过期，半日截止可保守多保留不足一天。删除个人数据同时删除daily_summary/summary_state，并保留防重放墓碑。
 
-as_of固定收件快照用于分页；原始记录过期后，早于已冻结投影的历史as_of无法重建时返回409，不伪造历史结果。CRM等动态注释快照仍有限制。详见 service/docs/TRACKING_DAILY_SUMMARIES.md 和 governance-maintenance.md。
+as_of固定收件快照用于分页；原始记录过期后，早于已冻结投影的历史as_of无法重建时返回409，不伪造历史结果。CRM动态注释快照仍有限制；人工修正采用不可变历史，访客 next_cursor/first_cursor 固定覆盖 revision，旧单行或已清理的不可恢复历史对受影响账号明确返回409，详见 intent-rules.md。详见 service/docs/TRACKING_DAILY_SUMMARIES.md 和 governance-maintenance.md。
 
 现版本尚未以百万事实压测：事务仍按租户串行，部分查询仍加载租户事实后过滤。已移除逐访客全扫描N+1并接入日汇总，但不能据此宣称10万PV/日或PRD P95目标达标；生产查询计划、锁等待、索引和维护窗口需要独立验证。
 

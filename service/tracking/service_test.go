@@ -382,13 +382,13 @@ func TestVerifiedFavoriteEvidenceAndDuplicateCap(t *testing.T) {
 	pv := ev(s, second, "favorite-pv2", "page_view", s.Now())
 	pv.View = "favorite-view2"
 	accept(t, s, second, pv)
-	if e := s.ConfirmFavorite(context.Background(), second.Token, 99, "template", 4); e == nil {
+	if e := s.ConfirmFavorite(context.Background(), second.Token, 99, "template", 4, FavoriteReceipt{ID: 104, CreatedAt: s.Now()}); e == nil {
 		t.Fatal("account spoof favorite")
 	}
-	if e := s.ConfirmFavorite(context.Background(), second.Token, 8, "template", 4); e != nil {
+	if e := s.ConfirmFavorite(context.Background(), second.Token, 8, "template", 4, FavoriteReceipt{ID: 104, CreatedAt: s.Now()}); e != nil {
 		t.Fatal(e)
 	}
-	if e := s.ConfirmFavorite(context.Background(), second.Token, 8, "template", 4); e != nil {
+	if e := s.ConfirmFavorite(context.Background(), second.Token, 8, "template", 4, FavoriteReceipt{ID: 104, CreatedAt: s.Now()}); e != nil {
 		t.Fatal(e)
 	}
 	out, e := s.Visitors(context.Background(), scope, Filter{})
