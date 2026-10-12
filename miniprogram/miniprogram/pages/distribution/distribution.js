@@ -241,6 +241,7 @@ function getNavLayout() {
 const INITIAL_NAV_LAYOUT = getNavLayout();
 Page({
     data: {
+      contentReady: false,
         loading: false,
         navSafeTop: INITIAL_NAV_LAYOUT.navSafeTop,
         navBarHeight: INITIAL_NAV_LAYOUT.navBarHeight,
@@ -317,6 +318,7 @@ Page({
         const selectedTrait = String(this.data.selectedTrait || '全部').trim();
         this.setData({
             loading: true,
+            contentReady: false,
             currentCategoryLabel: currentTabLabel,
             emptyTipText: buildDesignerEmptyTip(currentTabLabel, keyword, selectedTrait),
         });
@@ -349,6 +351,7 @@ Page({
         }
         this.setData({
             designerCards: nextDesignerCards,
+            contentReady: !!result && Array.isArray(result.list),
             loading: false,
             page: requestPage + 1,
             hasMore: nextHasMore,

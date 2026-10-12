@@ -148,6 +148,7 @@ function buildAvatarManageHint(isSelfHomepage: boolean, expanded: boolean): stri
 
 Page({
   data: {
+    contentReady: false,
     userId: 0,
     isSelfHomepage: false,
     loading: true,
@@ -381,7 +382,7 @@ Page({
       return;
     }
 
-    this.setData({ loading: true });
+    this.setData({ loading: true, contentReady: false });
 
     try {
       const data = await new Promise<any>((resolve, reject) => {
@@ -440,6 +441,7 @@ Page({
 
       this.setData({
         loading: false,
+        contentReady: !!data.profile && typeof data.profile.name === 'string' && !!data.profile.name.trim(),
         profile: {
           name: String(data?.profile?.name || '设计师主页'),
           avatar: normalizeImageUrl(String(data?.profile?.avatar || '')),

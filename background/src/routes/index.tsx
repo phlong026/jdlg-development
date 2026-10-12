@@ -25,6 +25,7 @@ const Users = lazy(() => import('../pages/users'));
 const Logs = lazy(() => import('../pages/logs'));
 const DesignerCenter = lazy(() => import('../pages/designerCenter'));
 const Distribution = lazy(() => import('../pages/distribution'));
+const ShareTracking = lazy(() => import('../pages/shareTracking'));
 const ContentAnalytics = lazy(() => import('../pages/contentAnalytics'));
 const RiskControl = lazy(() => import('../pages/riskControl'));
 const SupportTickets = lazy(() => import('../pages/supportTickets'));
@@ -66,6 +67,7 @@ export interface AppRoute {
 }
 
 export const routes: AppRoute[] = [
+    { path: '/share-tracking', title: '分享访问记录', element: withSuspense(<ShareTracking />), icon: FiShare2 },
     { path: '/customer-management', title: '客户管理', element: withSuspense(<CustomerManagement />), icon: FiUsers },
     {
         path: '/login',

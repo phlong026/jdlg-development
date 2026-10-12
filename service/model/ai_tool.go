@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -484,13 +485,19 @@ func (m *AIToolModel) ensureNewMinnanToolSeed() error {
 }
 
 func (m *AIToolModel) GetByID(id int64) (*AITool, error) {
+	return GetAIToolByID(context.Background(), m.DB, id)
+}
+
+// GetAIToolByID preserves the model's read and normalization semantics while
+// allowing callers to reuse an existing transaction without another pool borrow.
+func GetAIToolByID(ctx context.Context, q SQLRowQueryer, id int64) (*AITool, error) {
 	query := `SELECT id, code, name, category, short_description, detail_description, list_cover_image, detail_before_image, detail_after_image, preset_reference_images, style_presets, prompt_placeholder, default_prompt, upload_hint, show_usage_tips, usage_tips_title, usage_tips_content, sort_order, is_published, is_common, usage_count, created_at, updated_at
 	          FROM ai_tools WHERE id = ?`
 	tool := &AITool{}
 	var showUsageTipsInt int
 	var isPublishedInt int
 	var isCommonInt int
-	if err := m.DB.QueryRow(query, id).Scan(&tool.ID, &tool.Code, &tool.Name, &tool.Category, &tool.ShortDescription, &tool.DetailDescription, &tool.ListCoverImage, &tool.DetailBeforeImage, &tool.DetailAfterImage, &tool.PresetReferenceImages, &tool.StylePresetsRaw, &tool.PromptPlaceholder, &tool.DefaultPrompt, &tool.UploadHint, &showUsageTipsInt, &tool.UsageTipsTitle, &tool.UsageTipsContent, &tool.SortOrder, &isPublishedInt, &isCommonInt, &tool.UsageCount, &tool.CreatedAt, &tool.UpdatedAt); err != nil {
+	if err := q.QueryRowContext(ctx, query, id).Scan(&tool.ID, &tool.Code, &tool.Name, &tool.Category, &tool.ShortDescription, &tool.DetailDescription, &tool.ListCoverImage, &tool.DetailBeforeImage, &tool.DetailAfterImage, &tool.PresetReferenceImages, &tool.StylePresetsRaw, &tool.PromptPlaceholder, &tool.DefaultPrompt, &tool.UploadHint, &showUsageTipsInt, &tool.UsageTipsTitle, &tool.UsageTipsContent, &tool.SortOrder, &isPublishedInt, &isCommonInt, &tool.UsageCount, &tool.CreatedAt, &tool.UpdatedAt); err != nil {
 		return nil, err
 	}
 	tool.ShowUsageTips = showUsageTipsInt == 1

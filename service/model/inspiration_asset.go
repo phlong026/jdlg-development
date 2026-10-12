@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"time"
@@ -122,11 +123,17 @@ func (m *InspirationAssetModel) Create(asset *InspirationAsset) error {
 }
 
 func (m *InspirationAssetModel) GetByID(id int64) (*InspirationAsset, error) {
+	return GetInspirationAssetByID(context.Background(), m.DB, id)
+}
+
+// GetInspirationAssetByID preserves the model's read and normalization semantics while
+// allowing callers to reuse an existing transaction without another pool borrow.
+func GetInspirationAssetByID(ctx context.Context, q SQLRowQueryer, id int64) (*InspirationAsset, error) {
 	query := `SELECT id, title, description, cover_image, images, image_width, image_height, tags, scene, style, topic, sort_order, status, creator, creator_user_id, view_count, like_count, created_at, updated_at
 	          FROM inspiration_assets WHERE id = ?`
 	asset := &InspirationAsset{}
 	var creatorUserID sql.NullInt64
-	err := m.DB.QueryRow(query, id).Scan(
+	err := q.QueryRowContext(ctx, query, id).Scan(
 		&asset.ID,
 		&asset.Title,
 		&asset.Description,

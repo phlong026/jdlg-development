@@ -1,0 +1,27 @@
+<view class="reader">
+ <view class="navigation"><button bindtap="goBack" aria-label="返回">返回</button><text>内容阅读</text></view>
+ <view wx:if="{{loading}}" class="state" role="status">正在加载内容…</view>
+ <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="loadContent">重试</button></view>
+ <block wx:else>
+  <view class="title">{{content.title}}</view>
+  <view class="meta">版本 {{content.version}} · {{content.published_at || ''}}</view>
+  <view wx:if="{{consentAvailable}}" class="notice">
+   <text>{{consentNotice}}</text>
+   <text class="notice-caption">是否同意访问分析不影响阅读。可随时关闭；可见时长不代表已读或理解。</text>
+   <button wx:if="{{!consented}}" bindtap="acceptTracking">同意访问分析</button>
+   <button bindtap="declineTracking">{{consented ? '关闭访问分析' : '暂不同意，继续阅读'}}</button>
+  </view>
+  <!-- rich_text is persisted server-allowlisted HTML; legacy content remains escaped text. -->
+  <rich-text wx:if="{{content.body_format === 'rich_text'}}" class="body" nodes="{{content.body}}" selectable="{{true}}" />
+  <text wx:else class="body" selectable="{{true}}">{{content.body}}</text>
+  <view wx:for="{{media}}" wx:key="media_id" class="media-frame">
+   <image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" bindtap="openImage" binderror="mediaError" />
+   <video wx:else id="{{item.domId}}" style="width:100%;height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+   <view wx:if="{{mediaErrors[item.media_id]}}" class="error"><text>{{mediaErrors[item.media_id]}}</text><button bindtap="retryMedia">重新加载媒体</button></view>
+  </view>
+  <view wx:if="{{content.source_note}}" class="source">来源说明：{{content.source_note}}</view>
+  <button wx:if="{{content.source_url}}" bindtap="copySource">复制原文链接</button>
+  <button open-type="share">分享此内容</button>
+  <text class="limits">分享操作仅表示发起分享，不代表已送达。视频播放位置、有效观看时间与覆盖片段分别记录。</text>
+ </block>
+</view>

@@ -63,6 +63,7 @@ export const platformSections: NavSection[] = [
     {
         title: '风险与追踪',
         items: [
+            { path: '/share-tracking', label: '分享访问记录', icon: FiShare2 },
             { path: '/risk-control', label: '风控台', icon: FiShield },
             { path: '/report-center', label: '报表导出中心', icon: FiBarChart2 },
             { path: '/logs', label: '操作审计', icon: FiFileText },
@@ -92,7 +93,8 @@ export const customerSection: NavSection = {
  * fail-closed：仅 platform_admin 渲染平台菜单；scope 缺失或未知值时不暴露平台模块（与页内 tab 判定一致）。
  */
 export function visibleSections(scope: string | undefined, crmEnabled: boolean | undefined): NavSection[] {
-    if (scope !== 'platform_admin') return [customerSection];
+    if (scope !== 'platform_admin' && scope !== 'crm_only') return [customerSection];
+    if (scope === 'crm_only') return [customerSection, { title: '访问记录', items: [{ path: '/share-tracking', label: '分享访问记录', icon: FiShare2 }] }];
     return crmEnabled ? [platformSections[0], customerSection, ...platformSections.slice(1)] : platformSections;
 }
 
@@ -153,6 +155,7 @@ export interface NavGroup {
 }
 
 export const navGroups: NavGroup[] = [
+    { id: 'share-tracking', label: '分享访问记录', icon: FiShare2, pages: [{ path: '/share-tracking', label: '分享访问记录' }] },
     { id: 'dashboard', label: '工作台', icon: FiHome, pages: [{ path: '/dashboard', label: '后台总控台' }] },
     {
         id: 'users', label: '用户账号', icon: FiUsers, hint: '已注册的小程序用户',
@@ -241,7 +244,8 @@ export const navGroups: NavGroup[] = [
  */
 export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
     const crm = navGroups.find((g) => g.id === 'crm')!;
-    if (scope !== 'platform_admin') return [crm];
+    if (scope !== 'platform_admin' && scope !== 'crm_only') return [crm];
+    if (scope === 'crm_only') return [crm, navGroups.find((group) => group.id === 'share-tracking')!];
     return navGroups
         .filter((g) => g.id !== 'crm')
         .map((g) => (g.id === 'leads' ? { ...g, pages: [

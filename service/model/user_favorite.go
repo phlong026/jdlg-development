@@ -1,7 +1,9 @@
 package model
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -61,18 +63,49 @@ CREATE TABLE IF NOT EXISTS user_favorites (
 	return err
 }
 
+// Add preserves the existing no-op contract for invalid legacy callers.
 func (m *UserFavoriteModel) Add(userID int64, targetType string, targetID int64) error {
-	targetType = NormalizeFavoriteTargetType(targetType)
-	if userID <= 0 || targetType == "" || targetID <= 0 {
+	if userID <= 0 || NormalizeFavoriteTargetType(targetType) == "" || targetID <= 0 {
 		return nil
 	}
-	_, err := m.DB.Exec(
-		`INSERT IGNORE INTO user_favorites (user_id, target_type, target_id, created_at) VALUES (?, ?, ?, NOW())`,
-		userID,
-		targetType,
-		targetID,
-	)
+	_, err := m.AddWithReceipt(context.Background(), userID, targetType, targetID)
 	return err
+}
+
+// AddWithReceipt returns the committed row, including for INSERT IGNORE retries.
+// Its ID and creation time are the immutable success receipt. Cancellation deletes
+// that receipt; a later add gets a new ID and is a new business success. Read the
+// row under the insert transaction's lock so a racing remove/re-add cannot replace
+// the receipt between the successful INSERT and this read. A shared read lock
+// avoids upgrading INSERT IGNORE's duplicate-key shared lock on concurrent retries.
+func (m *UserFavoriteModel) AddWithReceipt(ctx context.Context, userID int64, targetType string, targetID int64) (*UserFavorite, error) {
+	targetType = NormalizeFavoriteTargetType(targetType)
+	if userID <= 0 || targetType == "" || targetID <= 0 {
+		return nil, errors.New("invalid favorite target")
+	}
+	tx, err := m.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx,
+		`INSERT IGNORE INTO user_favorites (user_id, target_type, target_id, created_at) VALUES (?, ?, ?, NOW())`,
+		userID, targetType, targetID); err != nil {
+		return nil, err
+	}
+	favorite := &UserFavorite{}
+	if err = tx.QueryRowContext(ctx,
+		`SELECT id, user_id, target_type, target_id, created_at FROM user_favorites WHERE user_id = ? AND target_type = ? AND target_id = ? LOCK IN SHARE MODE`,
+		userID, targetType, targetID).Scan(&favorite.ID, &favorite.UserID, &favorite.TargetType, &favorite.TargetID, &favorite.CreatedAt); err != nil {
+		return nil, err
+	}
+	if favorite.ID <= 0 || favorite.CreatedAt.IsZero() {
+		return nil, errors.New("invalid favorite receipt")
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return favorite, nil
 }
 
 func (m *UserFavoriteModel) Remove(userID int64, targetType string, targetID int64) error {

@@ -10,7 +10,8 @@ trap 'rm -rf -- "$test_dir"' EXIT
 
 mkdir -p "$test_dir/model" "$test_dir/route"
 cp "$service_dir/go.mod" "$service_dir/go.sum" "$test_dir/"
-for file in template.go template_update.go image_metadata.go inspiration_asset.go template_update_test.go; do
+# Keep the shared SQL reader interface with the production models that use it.
+for file in source_reader.go template.go template_update.go image_metadata.go inspiration_asset.go template_update_test.go; do
   cp "$service_dir/model/$file" "$test_dir/model/$file"
 done
 for file in template_update_handler.go template_update_handler_test.go; do

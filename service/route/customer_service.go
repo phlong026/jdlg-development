@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"service/model"
+	"service/tracking"
 )
 
 func parseCustomerLeadPageParams(c *gin.Context) (int, int, int) {
@@ -41,11 +42,23 @@ func parseCustomerLeadNextFollowupAt(value string) (*time.Time, error) {
 	return nil, strconv.ErrSyntax
 }
 
-func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *model.CustomerServiceModel) {
+func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *model.CustomerServiceModel, trackingServices ...*tracking.Service) {
+	var store customerLeadStore
+	if customerServiceModel != nil && customerServiceModel.DB != nil {
+		store = customerServiceModel
+	}
+	var confirmed consultationConfirmed
+	if len(trackingServices) > 0 && trackingServices[0] != nil {
+		confirmed = trackingServices[0].ConfirmConsultation
+	}
+	registerCustomerLeadRoutes(r, store, confirmed)
+}
+
+func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel customerLeadStore, confirmed consultationConfirmed) {
 	group := r.Group("/customer-service")
 
 	group.POST("/events", func(c *gin.Context) {
-		if customerServiceModel == nil || customerServiceModel.DB == nil {
+		if customerServiceModel == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "智能客服服务不可用"})
 			return
 		}
@@ -86,79 +99,96 @@ func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *mod
 		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"id": id}})
 	})
 
-	group.POST("/leads", func(c *gin.Context) {
-		if customerServiceModel == nil || customerServiceModel.DB == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "智能客服服务不可用"})
-			return
+	createLead := func(isConsultation bool) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if customerServiceModel == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "智能客服服务不可用"})
+				return
+			}
+			codeSession := GetTokenCodeSession(c)
+			if codeSession == nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未通过token验证"})
+				return
+			}
+			var req struct {
+				Name                    string                 `json:"name"`
+				Phone                   string                 `json:"phone"`
+				Wechat                  string                 `json:"wechat"`
+				EnterpriseWechatContact string                 `json:"enterprise_wechat_contact"`
+				DemandSummary           string                 `json:"demand_summary" binding:"required"`
+				HouseFloors             string                 `json:"house_floors"`
+				HouseStyle              string                 `json:"house_style"`
+				LandWidth               string                 `json:"land_width"`
+				LandDepth               string                 `json:"land_depth"`
+				RoomRequirement         string                 `json:"room_requirement"`
+				Source                  string                 `json:"source"`
+				SourceTaskNo            string                 `json:"source_task_no"`
+				IntentLevel             string                 `json:"intent_level"`
+				Status                  string                 `json:"status"`
+				Remark                  string                 `json:"remark"`
+				SessionNo               string                 `json:"session_no"`
+				Payload                 map[string]interface{} `json:"payload"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
+				return
+			}
+			source := strings.TrimSpace(req.Source)
+			if source == "" {
+				source = "customer_service"
+			}
+			id, err := customerServiceModel.CreateLead(&model.CustomerLeadCreateInput{
+				UserID:                  codeSession.UserID,
+				Name:                    req.Name,
+				Phone:                   req.Phone,
+				Wechat:                  req.Wechat,
+				EnterpriseWechatContact: req.EnterpriseWechatContact,
+				DemandSummary:           req.DemandSummary,
+				HouseFloors:             req.HouseFloors,
+				HouseStyle:              req.HouseStyle,
+				LandWidth:               req.LandWidth,
+				LandDepth:               req.LandDepth,
+				RoomRequirement:         req.RoomRequirement,
+				Source:                  source,
+				SessionNo:               req.SessionNo,
+				SourceTaskNo:            req.SourceTaskNo,
+				IntentLevel:             req.IntentLevel,
+				Status:                  req.Status,
+				Remark:                  req.Remark,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建客服线索失败: " + err.Error()})
+				return
+			}
+			_, eventErr := customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{
+				UserID:        codeSession.UserID,
+				LeadID:        id,
+				SessionNo:     req.SessionNo,
+				EventType:     "lead_submit",
+				Source:        source,
+				SourceTaskNo:  req.SourceTaskNo,
+				IntentLevel:   req.IntentLevel,
+				DemandSummary: req.DemandSummary,
+				Payload:       req.Payload,
+			})
+			if isConsultation && eventErr == nil && id > 0 {
+				// Preserve the existing lead_submit funnel and add a separate,
+				// minimal immutable proof of this explicit business command.
+				_, proofErr := customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{
+					UserID: codeSession.UserID, LeadID: id, SessionNo: req.SessionNo,
+					EventType: "consultation_request_submitted", Source: source,
+				})
+				if proofErr == nil && confirmed != nil {
+					confirmConsultationAfterCommit(confirmed, c.GetHeader("X-Tracking-Token"), codeSession.UserID, id)
+				}
+			}
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"id": id}})
 		}
-		codeSession := GetTokenCodeSession(c)
-		if codeSession == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未通过token验证"})
-			return
-		}
-		var req struct {
-			Name                    string                 `json:"name"`
-			Phone                   string                 `json:"phone"`
-			Wechat                  string                 `json:"wechat"`
-			EnterpriseWechatContact string                 `json:"enterprise_wechat_contact"`
-			DemandSummary           string                 `json:"demand_summary" binding:"required"`
-			HouseFloors             string                 `json:"house_floors"`
-			HouseStyle              string                 `json:"house_style"`
-			LandWidth               string                 `json:"land_width"`
-			LandDepth               string                 `json:"land_depth"`
-			RoomRequirement         string                 `json:"room_requirement"`
-			Source                  string                 `json:"source"`
-			SourceTaskNo            string                 `json:"source_task_no"`
-			IntentLevel             string                 `json:"intent_level"`
-			Status                  string                 `json:"status"`
-			Remark                  string                 `json:"remark"`
-			SessionNo               string                 `json:"session_no"`
-			Payload                 map[string]interface{} `json:"payload"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
-			return
-		}
-		source := strings.TrimSpace(req.Source)
-		if source == "" {
-			source = "customer_service"
-		}
-		id, err := customerServiceModel.CreateLead(&model.CustomerLeadCreateInput{
-			UserID:                  codeSession.UserID,
-			Name:                    req.Name,
-			Phone:                   req.Phone,
-			Wechat:                  req.Wechat,
-			EnterpriseWechatContact: req.EnterpriseWechatContact,
-			DemandSummary:           req.DemandSummary,
-			HouseFloors:             req.HouseFloors,
-			HouseStyle:              req.HouseStyle,
-			LandWidth:               req.LandWidth,
-			LandDepth:               req.LandDepth,
-			RoomRequirement:         req.RoomRequirement,
-			Source:                  source,
-			SessionNo:               req.SessionNo,
-			SourceTaskNo:            req.SourceTaskNo,
-			IntentLevel:             req.IntentLevel,
-			Status:                  req.Status,
-			Remark:                  req.Remark,
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建客服线索失败: " + err.Error()})
-			return
-		}
-		_, _ = customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{
-			UserID:        codeSession.UserID,
-			LeadID:        id,
-			SessionNo:     req.SessionNo,
-			EventType:     "lead_submit",
-			Source:        source,
-			SourceTaskNo:  req.SourceTaskNo,
-			IntentLevel:   req.IntentLevel,
-			DemandSummary: req.DemandSummary,
-			Payload:       req.Payload,
-		})
-		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"id": id}})
-	})
+	}
+	group.POST("/leads", createLead(false))
+	// A dedicated business command distinguishes an explicit request for human
+	// consultation from automatic requirement drafts and image-generation leads.
+	group.POST("/consultation-requests", createLead(true))
 }
 
 func RegisterPublicCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *model.CustomerServiceModel) {

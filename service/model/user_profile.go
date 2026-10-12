@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -124,8 +125,14 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 
 // GetByUserID 根据用户ID获取扩展信息
 func (m *UserProfileModel) GetByUserID(userID int64) (*UserProfile, error) {
+	return GetUserProfileByUserID(context.Background(), m.DB, userID)
+}
+
+// GetUserProfileByUserID preserves the model's read and normalization semantics while
+// allowing callers to reuse an existing transaction without another pool borrow.
+func GetUserProfileByUserID(ctx context.Context, q SQLRowQueryer, userID int64) (*UserProfile, error) {
 	query := `SELECT ` + userProfileSelectColumns + ` FROM user_profiles WHERE user_id = ?`
-	return scanUserProfile(m.DB.QueryRow(query, userID))
+	return scanUserProfile(q.QueryRowContext(ctx, query, userID))
 }
 
 // Create 创建用户扩展信息

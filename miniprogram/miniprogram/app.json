@@ -183,6 +183,12 @@
       "pages": [
         "withdrawcenter"
       ]
+    },
+    {
+      "root": "pages/contentreader",
+      "pages": [
+        "contentreader"
+      ]
     }
   ],
   "tabBar": {

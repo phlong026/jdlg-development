@@ -6,6 +6,8 @@ import {
   cacheDeviceFingerprint
 } from '../../utils/deviceFingerprint';
 import { resolveAssetPath } from '../../utils/asset';
+const trackingConsent = require('../../utils/tracking/index');
+const shareMaterials = require('../../utils/tracking/materials');
 
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
@@ -145,10 +147,12 @@ function buildWorkbenchMenuItems(options: {
 }
 
 Page({
+  ...shareMaterials.methods,
   /**
    * 页面的初始数据
    */
   data: {
+    ...shareMaterials.data,
     token: '',
     userInfo: null as any,
     userProfile: {
@@ -184,6 +188,8 @@ Page({
     lastCertificationRefreshTime: 0,
     lastCertificationRefreshToken: '',
     certificationRefreshInterval: CERTIFICATION_REFRESH_INTERVAL,
+    trackingConsented: false,
+    trackingConsentBusy: false,
   },
 
   /**
@@ -217,13 +223,42 @@ Page({
     });
   },
 
+  onHide() { this.hideShareMaterials(); },
+  onUnload() { this.hideShareMaterials(); },
   onShow() {
+    this.refreshShareMaterials();
+    this.syncTrackingConsent();
+    trackingConsent.refreshConfig().then(() => this.syncTrackingConsent());
     this.syncWindowBackground();
     this.syncTabBar();
     this.loadUserData();
     if (this.isLoggedIn()) {
       this.loadCertificationStatus();
     }
+  },
+
+  syncTrackingConsent() {
+    this.setData({ trackingConsented: trackingConsent.consented() });
+  },
+
+  async onTrackingConsentTap() {
+    if (this.data.trackingConsentBusy) return;
+    this.setData({ trackingConsentBusy: true });
+    try {
+      const chosen = await trackingConsent.showConsentChoices(this);
+      if (!chosen && !trackingConsent.config().enabled) {
+        wx.showToast({ title: '访问分析未启用，仍可撤回同意', icon: 'none' });
+      }
+    } finally {
+      this.syncTrackingConsent();
+      this.setData({ trackingConsentBusy: false });
+    }
+  },
+
+  onWithdrawTrackingConsent() {
+    trackingConsent.setConsent(false);
+    this.syncTrackingConsent();
+    wx.showToast({ title: '已撤回，不影响阅读和分享', icon: 'none' });
   },
 
   /**
@@ -281,6 +316,7 @@ Page({
    */
   loadUserData(forceRemote = false) {
     const token = wx.getStorageSync('token');
+    if (this.__materialsAccount !== String(token || '')) this.resetShareMaterials();
     const userInfo = wx.getStorageSync('userInfo') || null;
     const currentUserInfo = this.data.userInfo || null;
     const displayUserInfo = userInfo || currentUserInfo;
@@ -606,6 +642,7 @@ Page({
    * 页面相关事件处理函数--监听用户下拉动作
    */
   onPullDownRefresh() {
+    this.refreshShareMaterials();
     this.loadUserData();
     wx.stopPullDownRefresh();
   },

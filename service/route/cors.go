@@ -59,7 +59,7 @@ func CORSMiddleware() gin.HandlerFunc {
 			if allowedOrigin != "*" {
 				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 			}
-			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-CRM-Request, Authorization, accept, origin, Cache-Control, X-Requested-With, token, token-signature, sin, md5-signature, pass, tm")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-CRM-Request, X-Tracking-Request, X-Tracking-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, token, token-signature, sin, md5-signature, pass, tm")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 			c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
 			c.Writer.Header().Set("Access-Control-Max-Age", "86400")

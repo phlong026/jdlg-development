@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"time"
@@ -10,14 +11,14 @@ import (
 type UtilityTool struct {
 	ID          int64     `json:"id"`
 	Category    string    `json:"category"`     // local_norm(本地规范), faq(FAQ), video_tutorial(视频教程)
-	Title       string    `json:"title"`         // 标题
-	Content     string    `json:"content"`       // 内容（支持Markdown或HTML）
-	CoverImage  string    `json:"cover_image"`   // 封面图URL（视频教程用）
-	VideoURL    string    `json:"video_url"`     // 视频URL（视频教程用）
-	FileURL     string    `json:"file_url"`      // 文件URL（本地规范用，如PDF）
-	SortOrder   int       `json:"sort_order"`    // 排序顺序
-	IsPublished bool      `json:"is_published"`  // 是否发布
-	ViewCount   int64     `json:"view_count"`    // 查看次数
+	Title       string    `json:"title"`        // 标题
+	Content     string    `json:"content"`      // 内容（支持Markdown或HTML）
+	CoverImage  string    `json:"cover_image"`  // 封面图URL（视频教程用）
+	VideoURL    string    `json:"video_url"`    // 视频URL（视频教程用）
+	FileURL     string    `json:"file_url"`     // 文件URL（本地规范用，如PDF）
+	SortOrder   int       `json:"sort_order"`   // 排序顺序
+	IsPublished bool      `json:"is_published"` // 是否发布
+	ViewCount   int64     `json:"view_count"`   // 查看次数
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -82,11 +83,17 @@ func (m *UtilityToolModel) Create(tool *UtilityTool) error {
 
 // GetByID 根据ID获取实用工具内容
 func (m *UtilityToolModel) GetByID(id int64) (*UtilityTool, error) {
+	return GetUtilityToolByID(context.Background(), m.DB, id)
+}
+
+// GetUtilityToolByID preserves the model's read and normalization semantics while
+// allowing callers to reuse an existing transaction without another pool borrow.
+func GetUtilityToolByID(ctx context.Context, q SQLRowQueryer, id int64) (*UtilityTool, error) {
 	query := `SELECT id, category, title, content, cover_image, video_url, file_url, sort_order, is_published, view_count, created_at, updated_at
 	          FROM utility_tools WHERE id = ?`
 	tool := &UtilityTool{}
 	var isPublishedInt int
-	err := m.DB.QueryRow(query, id).Scan(
+	err := q.QueryRowContext(ctx, query, id).Scan(
 		&tool.ID, &tool.Category, &tool.Title, &tool.Content, &tool.CoverImage,
 		&tool.VideoURL, &tool.FileURL, &tool.SortOrder, &isPublishedInt, &tool.ViewCount,
 		&tool.CreatedAt, &tool.UpdatedAt)

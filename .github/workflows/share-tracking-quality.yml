@@ -1,0 +1,79 @@
+name: Share tracking quality
+
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    paths:
+      - '.github/workflows/share-tracking-quality.yml'
+      - 'service/**'
+      - 'miniprogram/**'
+      - 'docs/share-tracking/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tracking-backend:
+    name: Tracking backend tests and race checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: service
+        shell: bash
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the validated Go version
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.2'
+          cache: false
+
+      # Fake SQL, in-memory repositories and miniredis: no business credentials,
+      # external database, production configuration or deployment is needed.
+      - name: Run tracking, source model and HTTP route regressions
+        run: go test -count=1 ./tracking ./route ./model
+
+      - name: Detect tracking, source model and HTTP route data races
+        run: go test -race -count=1 ./tracking ./route ./model
+
+  tracking-miniprogram:
+    name: Tracking mini-program and route policy checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: miniprogram
+        shell: bash
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the validated Node.js version
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      # These focused tests and checks use only Node built-ins and checked-in
+      # sources. No npm dependency install or WeChat credentials are necessary.
+      - name: Run focused tracking regression tests
+        run: npm run test:tracking
+
+      - name: Check deterministic TypeScript and JavaScript outputs
+        run: npm run check:tracking
+
+      - name: Check every app route and both policy inventories
+        run: npm run check:tracking-routes
