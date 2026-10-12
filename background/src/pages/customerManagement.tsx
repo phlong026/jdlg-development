@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {useSearchParams} from 'react-router-dom';
+import {Link,useSearchParams} from 'react-router-dom';
 import {FiUsers,FiClock,FiRefreshCw,FiSearch,FiX,FiChevronRight,FiAlertCircle} from 'react-icons/fi';
 import {useManagementSession} from '../component/ManagementSession';
 import {crm,CRMError,activityNames,downloadCustomers,stages,categories,intents,dateTime,type Customer,type Dashboard,type Detail,type Employee,type Filter,type CustomerPage,type Stage,type SyncState,type Account,type Attachment,lifecycleNames} from '../api/wecomCustomers';
@@ -45,12 +45,18 @@ export default function CustomerManagement(){
  const go=(next:string,queue?:string)=>{if(!drawerGate.current.pending)setParams({tab:next,...(queue?{queue}:{})})};
  const [reporting,setReporting]=useState(false);
  const [selected,setSelected]=useState<{id:string;poolEvidence?:PoolEvidence}|null>(null),[refresh,setRefresh]=useState(0);
- const [completion,setCompletion]=useState('');const openCustomer=(id:string,poolEvidence?:PoolEvidence)=>{if(!drawerGate.current.pending)setSelected({id,poolEvidence})};
+ const [completion,setCompletion]=useState('');const openCustomer=(id:string,poolEvidence?:PoolEvidence)=>{if(drawerGate.current.pending)return;setSelected({id,poolEvidence});if(params.has('customer')){const next=new URLSearchParams(params);next.set('customer',id);setParams(next)}};
  useEffect(()=>{if(!drawerGate.current.pending)setSelected(null)},[tab,session.user?.id]);
+ const routeCustomer=params.get('customer');
+ const validRouteCustomer=routeCustomer!==null&&routeCustomer.length>0&&routeCustomer.length<=128&&!/[\/\\%;\r\n]/.test(routeCustomer)&&routeCustomer!=='.'&&routeCustomer!=='..';
+ const linkedSelection:{id:string;poolEvidence?:PoolEvidence}|null=routeCustomer!==null ? (validRouteCustomer&&session.crmContext&&tab==='customers'?{id:routeCustomer}:null) : selected;
+ const closeCustomer=()=>{if(drawerGate.current.pending)return;setSelected(null);if(routeCustomer!==null){const next=new URLSearchParams(params);next.delete('customer');setParams(next,{replace:true})}};
  const changed=()=>{if(!drawerGate.current.pending)setRefresh(n=>n+1)};
  if(session.crmLoading)return <><div className="crm-loading">正在读取客户权限…</div></>;
  return <><div className="crm-page">
   <header className="crm-heading"><div><span className="crm-eyebrow">CUSTOMER MANAGEMENT</span><h1>{titleOf[tab]}</h1><p>{session.crmContext?.account.displayName||session.user?.username}，{supervisor?'关注团队客户与跟进进度':'查看客户需求，安排下一次联系'}</p></div><div className="crm-actions">{session.crmContext&&<button className="crm-primary" disabled={drawerBusy} onClick={()=>{if(drawerGate.current.pending)return;setCompletion('');setReporting(true)}}>＋ 新增客户报备</button>}<button className="crm-secondary" disabled={drawerBusy} onClick={changed}><FiRefreshCw/>刷新</button></div></header>
+  {params.get('from')==='share-tracking'&&<p className="crm-note"><Link to="/share-tracking">返回分享访问记录</Link> · 关联为人工核实关系，客户权限在此重新检查</p>}
+  {routeCustomer!==null&&!validRouteCustomer&&<p role="alert" className="crm-error">客户目标无效，请返回分享访问记录重新打开。</p>}
   {completion&&<div className="crm-note" role="status">{completion}</div>}
   <nav className="crm-tabs" aria-label="客户管理栏目">{allowed.map(t=><button disabled={drawerBusy} key={t} className={tab===t?'active':''} onClick={()=>go(t)}>{titleOf[t]}</button>)}</nav>
   {session.crmContext?.demo&&<div className="crm-note">演示环境 · 虚构数据 · 真实企微自动接入尚未启用</div>}
@@ -64,7 +70,7 @@ export default function CustomerManagement(){
    {tab==='leads'&&platform&&<><SourceSyncStatus key={'ss'+refresh}/><CustomerLeads embedded/></>}
   </React.Fragment>}
   {reporting&&<div className="crm-overlay"><section className="crm-drawer" role="dialog" aria-modal="true" aria-label="新增客户报备"><header><h2>新增客户报备</h2></header><div className="crm-drawer-body"><CustomerReportForm cancel={()=>setReporting(false)} saved={c=>{setReporting(false);setCompletion('客户报备已保存。若列表读取失败，请重新读取，无需再次报备。');changed();openCustomer(c.id)}}/></div></section></div>}
-  {selected&&!reporting&&<CustomerDrawer key={selected.id} id={selected.id} poolEvidence={selected.poolEvidence} supervisor={supervisor} close={()=>{if(!drawerGate.current.pending)setSelected(null)}} changed={changed} pendingChanged={setDrawerPending} checkPool={()=>{if(drawerGate.current.pending)return;setSelected(null);go('pool')}}/>}
+  {linkedSelection&&!reporting&&<CustomerDrawer key={linkedSelection.id} id={linkedSelection.id} poolEvidence={linkedSelection.poolEvidence} supervisor={supervisor} close={closeCustomer} changed={changed} pendingChanged={setDrawerPending} checkPool={()=>{if(drawerGate.current.pending)return;setSelected(null);go('pool')}}/>}
  </div></>;
 }
 

@@ -2,7 +2,6 @@ package tracking
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"sort"
@@ -39,6 +38,9 @@ type factView struct {
 
 func (s *Service) Normalize(f Filter) (Filter, error) {
 	now := s.Now()
+	if f.ContentVersion < 0 || f.ContentVersion > 0 && f.Content == "" {
+		return f, fail(400, "素材版本筛选无效")
+	}
 	if f.AsOf.IsZero() {
 		f.AsOf = now
 	}
@@ -83,7 +85,8 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if f.Intent != "" && f.Intent != "all" && f.Intent != "high" && f.Intent != "medium" && f.Intent != "low" && f.Intent != "unknown" {
 		return f, fail(400, "意向筛选无效")
 	}
-	if len(f.Search) > 100 {
+	f.Search, f.ContentSearch, f.VisitorSearch = strings.TrimSpace(f.Search), strings.TrimSpace(f.ContentSearch), strings.TrimSpace(f.VisitorSearch)
+	if len(f.Search) > 100 || len(f.ContentSearch) > 100 || len(f.VisitorSearch) > 100 {
 		return f, fail(400, "搜索超限")
 	}
 	return f, nil
@@ -344,6 +347,15 @@ func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection f
 			out = append(out, *v)
 		}
 	}
+	if f.ContentVersion > 0 {
+		selected := make([]factView, 0, len(out))
+		for _, fact := range out {
+			if fact.Version == f.ContentVersion {
+				selected = append(selected, fact)
+			}
+		}
+		out = selected
+	}
 	return out, nil
 }
 func appendUnique(a []string, s string) []string {
@@ -580,22 +592,26 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		if e != nil {
 			return e
 		}
+		facts, titleRevision, e := filterFactTitles(r, scope, f, facts)
+		if e != nil {
+			return e
+		}
+		profiles, profileRevision, e := s.queryProfiles(ctx, r, facts)
+		if e != nil {
+			return e
+		}
+		profileRevision = joinedQueryRevision(profileRevision, titleRevision)
+		if e = checkProfileRevision(f, profileRevision); e != nil {
+			return e
+		}
+		out.ProfileRevision = profileRevision
 		by := map[string]*Visitor{}
 		ss := map[string]map[string]bool{}
 		for _, v := range facts {
 			item := by[v.Visitor]
 			if item == nil {
-				state := "identified"
-				name := "已识别账号"
-				if strings.HasPrefix(v.Visitor, "a:") {
-					state = "anonymous"
-					suffix := v.Visitor
-					if len(suffix) > 6 {
-						suffix = suffix[len(suffix)-6:]
-					}
-					name = "匿名访客 " + suffix
-				}
-				item = &Visitor{Key: v.Visitor, Nickname: name, State: state}
+				profile := profiles[v.Visitor]
+				item = &profile
 				by[v.Visitor] = item
 				ss[v.Visitor] = map[string]bool{}
 			}
@@ -630,15 +646,13 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 				}
 			}
 
-			if f.Identity != "" && f.Identity != "all" && v.State != f.Identity {
+			if !visitorMatches(*v, f) {
 				continue
 			}
 			if f.Intent != "" && f.Intent != "all" && v.Intent.Level != f.Intent {
 				continue
 			}
-			if f.Search != "" && !strings.Contains(strings.ToLower(v.Nickname+" "+v.CRMLabel), strings.ToLower(f.Search)) {
-				continue
-			}
+
 			if v.State == "identified" {
 				out.Identified++
 			} else {
@@ -678,156 +692,14 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			return e
 		}
 		out.Items = items[start:end]
-		out.Cursor = cursor
-		out.FirstCursor = overrideSnapshotCursor(f, 0, intentData.overrideRevision)
+		out.Cursor = withProfileRevision(cursor, profileRevision)
+		out.FirstCursor = withProfileRevision(overrideSnapshotCursor(f, 0, intentData.overrideRevision), profileRevision)
 		return nil
 	})
 	return out, err
-}
-func paginate(f Filter, total int) (int, int, string, error) {
-	signatureFilter := f
-	signatureFilter.Cursor = ""
-	sig := hash(string(marshal(signatureFilter)))
-	start := 0
-	if f.Cursor != "" {
-		b, e := base64.RawURLEncoding.DecodeString(f.Cursor)
-		if e != nil {
-			return 0, 0, "", fail(400, "游标无效")
-		}
-		var c struct {
-			Offset    int    `json:"offset"`
-			Signature string `json:"signature"`
-		}
-		if json.Unmarshal(b, &c) != nil || c.Offset < 0 || c.Offset > 1000000 || c.Signature != sig {
-			return 0, 0, "", fail(400, "游标与筛选不一致")
-		}
-		start = c.Offset
-	}
-	if start > total {
-		start = total
-	}
-	end := start + f.Limit
-	if end > total {
-		end = total
-	}
-	cursor := ""
-	if end < total {
-		cursor = base64.RawURLEncoding.EncodeToString(marshal(map[string]any{"offset": end, "signature": sig}))
-	}
-	return start, end, cursor, nil
 }
 func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string) (List, error) {
-	out := List{Items: []Content{}}
-	if e := s.authorized(scope); e != nil {
-		return out, e
-	}
-	if !scope.View && !scope.Manage {
-		return out, fail(403, "无素材访问权限")
-	}
-	// Visitor-only filters must not silently alter the content view.
-	f.Search, f.Identity, f.Intent = "", "", ""
-	var err error
-	f, err = s.Normalize(f)
-	if err != nil {
-		return out, err
-	}
-	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
-		rows, e := scopedRecords(r, "content", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id, CatalogAsOf: f.AsOf})
-		if e != nil {
-			return e
-		}
-		legacyRows, err := scopedRecords(r, "legacy_catalog", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id, CatalogAsOf: f.AsOf})
-		if err != nil {
-			return err
-		}
-		// A source may be shared into several authorized owner scopes. Show one
-		// material card with scoped aggregate facts, not duplicate totals.
-		latestLegacy := map[string]Record{}
-		for _, row := range legacyRows {
-			if !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) {
-				continue
-			}
-			var c Content
-			if json.Unmarshal(row.Payload, &c) != nil {
-				return ErrUnavailable
-			}
-			if catalogCreatedAt(c, row.At).After(f.AsOf) {
-				continue
-			}
-			old, ok := latestLegacy[c.ID]
-			if !ok || row.At.After(old.At) || (row.At.Equal(old.At) && row.ID < old.ID) {
-				latestLegacy[c.ID] = row
-			}
-		}
-		for _, row := range latestLegacy {
-			rows = append(rows, row)
-		}
-		facts := []factView{}
-		if scope.View {
-			metricsFilter := f
-			if id != "" && metricsFilter.Content == "" {
-				metricsFilter.Content = id
-			}
-			facts, e = s.facts(r, scope, metricsFilter)
-			if e != nil {
-				return e
-			}
-		}
-		summaries := map[string]Content{}
-		for _, v := range facts {
-			c := summaries[v.Content]
-			if v.Count {
-				c.PageViews++
-			}
-			c.VisibleMS += v.Visible
-			if c.LastVisit == nil || v.Last.After(*c.LastVisit) {
-				at := v.Last
-				c.LastVisit = &at
-			}
-			summaries[v.Content] = c
-		}
-		items := []Content{}
-		for _, row := range rows {
-			if !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) || (id != "" && row.ID != id && row.Kind != "legacy_catalog") {
-				continue
-			}
-			var c Content
-			if json.Unmarshal(row.Payload, &c) != nil {
-				return ErrUnavailable
-			}
-			if catalogCreatedAt(c, row.At).After(f.AsOf) {
-				continue
-			}
-			if id != "" && c.ID != id {
-				continue
-			}
-			c.PageViews, c.VisibleMS, c.LastVisit = 0, 0, nil
-			summary := summaries[c.ID]
-			c.PageViews, c.VisibleMS, c.LastVisit = summary.PageViews, summary.VisibleMS, summary.LastVisit
-
-			items = append(items, c)
-		}
-		sort.Slice(items, func(i, j int) bool {
-			a, b := items[i], items[j]
-			av, bv := contentSortValue(a, f.Sort), contentSortValue(b, f.Sort)
-			if av == bv {
-				return a.ID < b.ID
-			}
-			if f.Direction == "asc" {
-				return av < bv
-			}
-			return av > bv
-		})
-		page, cursor, e := paginateContents(f, items)
-		if e != nil {
-			return e
-		}
-		out.Items = page
-		out.Cursor = cursor
-		return nil
-	})
-	return out, err
+	return s.queryContents(ctx, scope, f, id)
 }
 func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filter) (List, error) {
 	out := List{Items: []Session{}}
@@ -845,6 +717,14 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 		if e != nil {
 			return e
 		}
+		all, revision, e := s.filterQueryFacts(ctx, r, scope, f, all)
+		if e != nil {
+			return e
+		}
+		if e = checkProfileRevision(f, revision); e != nil {
+			return e
+		}
+		out.ProfileRevision = revision
 		selected := map[string]bool{}
 		sessions := []string{}
 		for _, v := range all {
@@ -859,6 +739,7 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 		if f.Related && f.Content != "" {
 			base := f
 			base.Content = ""
+			base.ContentVersion = 0
 			all, e = s.factsSelected(r, scope, base, factSelection{Visitors: []string{key}, Sessions: sessions})
 			if e != nil {
 				return e
@@ -901,12 +782,13 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 			}
 			return items[i].Started.After(items[j].Started)
 		})
-		start, end, cursor, e := paginate(f, len(items))
+		start, end, cursor, first, e := paginateDetail(f, len(items), "sessions-v1", key, scope)
 		if e != nil {
 			return e
 		}
 		out.Items = items[start:end]
-		out.Cursor = cursor
+		out.Cursor = withProfileRevision(cursor, revision)
+		out.FirstCursor = withProfileRevision(first, revision)
 		return nil
 	})
 	return out, err
@@ -927,6 +809,14 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 		if e != nil {
 			return e
 		}
+		facts, revision, e := s.filterQueryFacts(ctx, r, scope, f, facts)
+		if e != nil {
+			return e
+		}
+		if e = checkProfileRevision(f, revision); e != nil {
+			return e
+		}
+		out.ProfileRevision = revision
 		for _, v := range facts {
 			if v.ID != id {
 				continue
@@ -937,12 +827,13 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 				}
 			}
 			sortEvents(v.events)
-			start, end, cursor, e := paginate(f, len(v.events))
+			start, end, cursor, first, e := paginateDetail(f, len(v.events), "events-v1", id, scope)
 			if e != nil {
 				return e
 			}
 			out.Items = v.events[start:end]
-			out.Cursor = cursor
+			out.Cursor = withProfileRevision(cursor, revision)
+			out.FirstCursor = withProfileRevision(first, revision)
 			return nil
 		}
 		return fail(404, "页面访问不可访问")

@@ -1,5 +1,5 @@
 import type { IntentEvidence } from '../../api/shareTracking';
-export type Filters = { range: string; start: string; end: string; identity: string; intent: string; owner: string; q: string; sort: string; direction: string };
+export type Filters = { range: string; start: string; end: string; identity: string; intent: string; owner: string; q: string; sort: string; direction: string; content_q?: string; visitor_q?: string };
 export const defaultFilters: Filters = { range: '7', start: '', end: '', identity: '', intent: '', owner: '', q: '', sort: 'last_visit', direction: 'desc' };
 export function shanghaiDate(now = new Date()): string { return new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10); }
 export function dateRange(filters: Filters, now = new Date()): { start?: string; end?: string } {
@@ -17,7 +17,7 @@ export function dateRange(filters: Filters, now = new Date()): { start?: string;
     }
     return { start: new Date(`${start}T00:00:00+08:00`).toISOString(), end: new Date(Date.parse(`${end}T00:00:00+08:00`) + 86400000).toISOString() };
 }
-export function queryFor(filters: Filters, now = new Date()): Record<string, unknown> { return { ...dateRange(filters, now), identity: filters.identity, intent: filters.intent, owner: filters.owner, q: filters.q.trim(), sort: filters.sort, direction: filters.direction, limit: 20 }; }
+export function queryFor(filters: Filters, now = new Date(), view: 'visitors' | 'contents' = 'visitors'): Record<string, unknown> { return { ...dateRange(filters, now), identity: filters.identity, ...(view === 'contents' ? { content_q: (filters.content_q || '').trim(), visitor_q: (filters.visitor_q || '').trim() } : { intent: filters.intent, q: filters.q.trim() }), owner: filters.owner, sort: filters.sort, direction: filters.direction, limit: 20 }; }
 export function time(value?: string): string { if (!value) return '未记录'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '时间不可用' : new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date); }
 export function duration(ms = 0): string { const seconds = Math.floor(Math.max(0, ms) / 1000); return seconds < 60 ? `${seconds}秒` : seconds < 3600 ? `${Math.floor(seconds / 60)}分${seconds % 60}秒` : `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; }
 export function safeMediaURL(value?: string): string | undefined { if (!value) return; try { const url = new URL(value, window.location.origin); return (url.protocol === 'https:' || (url.origin === window.location.origin && url.protocol === window.location.protocol)) && !url.username && !url.password ? url.href : undefined; } catch { return; } }
@@ -32,5 +32,5 @@ export function intentWindowQuery(query: Record<string, unknown>, evidence?: Int
     const start = Date.parse(evidence.window_start), end = Date.parse(evidence.window_end);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return;
     // Let the server include the exact as_of boundary; preserve its timestamp precision.
-    return { ...query, start: evidence.window_start, end: undefined, as_of: evidence.window_end, cursor: undefined, content_id: undefined, identity: undefined, intent: undefined, q: undefined };
+    return { ...query, start: evidence.window_start, end: undefined, as_of: evidence.window_end, cursor: undefined, content_id: undefined, content_version: undefined, content_q: undefined, visitor_q: undefined, identity: undefined, intent: undefined, q: undefined };
 }

@@ -120,3 +120,11 @@ test('draft revoke is single flight and keeps reason/public controls on failure'
  reject(new Error('409 当前版本冲突'));await flush();h.render();assert.match(h.text(),/当前版本冲突/);assert.ok(h.find('button','撤回并停止旧入口阅读'));
  assert.equal(h.find('label','撤回原因').props.children.find(n=>n?.type==='input').props.value,'复核撤回');
 });
+
+test('account presentation uses authorized nickname and safe avatar but never interprets anonymous as profile',()=>{
+ const {VisitorCard}=load('src/pages/shareTracking/components.tsx',{'./model':model});const {renderToStaticMarkup}=require('react-dom/server');const React=require('react');
+ const base={visitor_key:'u:42',identity_state:'identified',nickname:'测试 <昵称>',avatar_url:'https://assets.example.test/avatar.jpg',last_visit:'2026-10-12T00:00:00Z',page_views:1,visible_ms:1000,session_count:1,intent:{level:'low',reasons:[]}};
+ const render=v=>renderToStaticMarkup(React.createElement(VisitorCard,{visitor:v,onOpen(){}}));const known=render(base);assert.match(known,/测试 &lt;昵称&gt;/);assert.match(known,/avatar.jpg/);
+ const anonymous=render({...base,identity_state:'anonymous',visitor_key:'a:anonymous'});assert.doesNotMatch(anonymous,/avatar.jpg|测试/);assert.match(anonymous,/匿名访客/);
+ assert.doesNotMatch(render({...base,avatar_url:'javascript:alert(1)'}),/javascript:/);
+});

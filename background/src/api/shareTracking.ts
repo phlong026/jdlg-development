@@ -5,7 +5,7 @@ import { expireSession } from '../utils/session';
 export const TRACKING_API = '/api/v1/management/tracking';
 export type Intent = 'high' | 'medium' | 'low' | 'unknown';
 export interface Snapshot { as_of: string; metric_version: string; }
-export interface Page<T> extends Snapshot { items: T[]; first_cursor?: string; next_cursor?: string; identified_count: number; anonymous_count: number; }
+export interface Page<T> extends Snapshot { profile_revision?: string; omitted_page_count?: number; items: T[]; first_cursor?: string; next_cursor?: string; identified_count: number; anonymous_count: number; }
 export interface IntentRuleParameters { window_days: number; medium_sessions: number; medium_favorites: number; high_business_results: number; daily_session_cap: number; daily_action_cap: number; }
 export interface IntentRuleConfiguration extends IntentRuleParameters { rule_version: string; revision: number; owner_id: string; effective_at: string; actor: number | string; reason: string; timezone: string; participating_metrics: string[]; exclusions: string[]; }
 export interface IntentRecomputeResult { rule_version: string; evaluated_count: number; changed_count: number; as_of: string; }
@@ -13,9 +13,11 @@ export interface IntentRulesResult { current: IntentRuleConfiguration; history: 
 export interface IntentRuleInput extends IntentRuleParameters { expected_rule_version: string; reason: string; }
 export interface IntentRecordEvidence { kind: 'page_view' | 'business'; record_id: string; session_id?: string; page_view_id?: string; action?: string; occurred_at: string; content_id?: string; content_version?: number; }
 export interface IntentEvidence { metrics?: { sessions: number; favorites: number; business_results: number }; thresholds?: IntentRuleParameters; exclusions?: string[]; participating_metrics?: string[]; timezone?: string; override_state?: 'none' | 'active' | 'expired'; scope_required?: boolean; evidence?: IntentRecordEvidence[]; evidence_truncated?: boolean; level: Intent; reasons: string[]; rule_version: string; window_start: string; window_end: string; calculated_at?: string; manual_note?: string; original_rule?: IntentEvidence; override?: { level: Intent; reason: string; actor?: number | string; created_at?: string; expires_at: string }; }
+export interface CRMTarget { target_kind: 'customer'; customer_id: string; business_number: string; owner_id: string; }
 export interface Visitor { visitor_key: string; nickname?: string; avatar_url?: string; identity_state: 'identified' | 'anonymous' | 'deleted'; crm_label?: string; last_visit: string; page_views: number; visible_ms: number; session_count: number; intent: IntentEvidence; }
 export interface Asset { media_id: string; kind: 'image' | 'video'; url: string; width: number; height: number; mime: string; title?: string; }
-export interface Content { read_only?: boolean; route_key?: string; version_mode?: string; content_id: string; version: number; revision: number; title: string; type: string; status: 'draft' | 'published' | 'revoked'; cover?: Asset; media: Asset[]; body: string; body_format?: 'plain' | 'rich_text'; source_url?: string; source_note?: string; rights: 'own' | 'authorized'; owner_id?: string; page_views: number; visible_ms: number; last_visit?: string; published_at?: string; }
+export interface VisitorContent { content_id: string; content_version: number; title: string; type: string; status: string; cover?: Asset; page_views: number; visible_ms: number; last_visit: string; route_key?: string; content_accessible: boolean; }
+export interface Content { identified_count?: number; anonymous_count?: number;  read_only?: boolean; route_key?: string; version_mode?: string; content_id: string; version: number; revision: number; title: string; type: string; status: 'draft' | 'published' | 'revoked'; cover?: Asset; media: Asset[]; body: string; body_format?: 'plain' | 'rich_text'; source_url?: string; source_note?: string; rights: 'own' | 'authorized'; owner_id?: string; page_views: number; visible_ms: number; last_visit?: string; published_at?: string; }
 export interface PageView { page_view_id: string; route_key: string; title?: string; content_id?: string; content_version?: number; previous_page_view_id?: string; share_id?: string; started_at: string; ended_at?: string; visible_ms: number; quality_flags: string[]; }
 export interface Session { session_id: string; started_at: string; last_active_at: string; entry_share_id?: string; source: string; page_views: PageView[]; }
 export interface TrackingEvent { event_id: string; event_type: string; occurred_at: string; received_at: string; content_version?: number; target_content_id?: string; visible_delta_ms?: number; scroll_depth?: number; current_time_ms?: number; video_watch_ms?: number; unique_played_ms?: number; video_duration_ms?: number; quality_flags: string[]; }
@@ -46,11 +48,13 @@ export const tracking = {
     unlinkCRM: (visitor: string, owner: string) => trackingRequest<{ unlinked: boolean }>(`/identity-links/${encodeURIComponent(visitor)}`, { method: 'DELETE', params: { owner } }),
     overrideIntent: (body: { visitor_key: string; level: Intent; reason: string; expires_at: string }, owner: string) => trackingRequest<{ updated: boolean }>('/intent-overrides', { method: 'POST', body, params: { owner } }),
     deleteVisitor: (body: { visitor_key: string; reason: string }) => trackingRequest<{ status: string }>('/deletions', { method: 'POST', body }),
+    crmTarget: (visitor: string, owner?: string, signal?: AbortSignal) => trackingRequest<CRMTarget>(`/visitors/${encodeURIComponent(visitor)}/crm-target`, { params: owner ? { owner } : {}, signal }),
     context: (signal?: AbortSignal) => trackingRequest<Context>('/context', { signal }),
     visitors: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Visitor>>('/visitors', { params, signal }),
     contents: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Content>>('/contents', { params, signal }),
     content: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Content & Snapshot>(`/contents/${encodeURIComponent(id)}`, { params, signal }),
     contentVisitors: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Visitor>>(`/contents/${encodeURIComponent(id)}/visitors`, { params, signal }),
+    visitorContents: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<VisitorContent>>(`/visitors/${encodeURIComponent(id)}/contents`, { params, signal }),
     sessions: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Session>>(`/visitors/${encodeURIComponent(id)}/sessions`, { params, signal }),
     events: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<TrackingEvent>>(`/page-views/${encodeURIComponent(id)}/events`, { params, signal }),
     media: (signal?: AbortSignal, cursor?: string) => trackingRequest<Page<Asset>>('/media', { signal, params: { cursor, limit: 20 } }),

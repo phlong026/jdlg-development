@@ -75,8 +75,10 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   const saved = JSON.stringify({ filters: { ...model.defaultFilters, range: 'all', ...initial.filters }, view: initial.view || 'visitors' });
   const globals = { sessionStorage: { getItem: () => saved, setItem() {} }, document: { querySelector: () => ({ scrollTop: 5, scrollTo() {} }) }, window: { confirm: () => true } };
   const module = kind === 'records'
-    ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
-    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './governance': { VisitorGovernance: 'VisitorGovernance' }, './model': model }, globals);
+    ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' },
+    './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
+    './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
+    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './model': model }, globals);
   function render() {
     let renders = 0;
     do {
@@ -131,11 +133,11 @@ test('explicit refresh, range, owner, sort, search, clear, and business changes 
   await h.next(); await h.click('意向规则与重算'); await h.act(() => h.find('IntentRulesPanel').props.changed()); assertFresh();
 });
 
-test('view switches never reuse another view or prior visit cursor and clear unsupported visitor filters', async () => {
+test('view switches reset cursor while retaining supported identity and omitting customer-only intent', async () => {
   const h = harness(); await h.settle(); await h.filter('身份', 'anonymous'); await h.filter('意向参考', 'high'); await h.next();
   await h.click('素材视角');
   assert.equal(h.last('contents').params.cursor, undefined); assert.equal(h.last('contents').params.as_of, undefined);
-  assert.equal(h.last('contents').params.identity, ''); assert.equal(h.last('contents').params.intent, '');
+  assert.equal(h.last('contents').params.identity, 'anonymous'); assert.equal(h.last('contents').params.intent, undefined); assert.equal(h.last('contents').params.q, undefined);
   await h.next(); await h.click('客户视角');
   assert.equal(h.last().params.cursor, undefined); assert.equal(h.last().params.as_of, undefined); assert.equal(h.pager().cursor.length, 0);
 });
@@ -224,4 +226,23 @@ test('saved material visitor pagination stays invalid after scope round trips', 
   await h.act(() => { h.props.query = {}; }); const requestCount = h.calls.length;
   await h.act(() => stale.onNext(stale.next));
   assert.equal(h.calls.length, requestCount); assert.equal(h.pager().cursor.length, 0);
+});
+
+test('material title and visitor inputs submit distinct AND filters, preserve identity and reset snapshot',async()=>{
+ const h=harness();await h.settle();await h.filter('身份','anonymous');await h.click('素材视角');await h.next();
+ const form=h.find('form');const inputs=nodes(form).filter(n=>n.type==='input');assert.equal(inputs.length,2);
+ await h.act(()=>inputs[0].props.onChange({target:{value:'合成文章'}}));await h.act(()=>nodes(h.find('form')).filter(n=>n.type==='input')[1].props.onChange({target:{value:'匿名标识'}}));
+ await h.act(()=>h.find('form').props.onSubmit({preventDefault(){}}));const p=h.last('contents').params;
+ assert.equal(p.content_q,'合成文章');assert.equal(p.visitor_q,'匿名标识');assert.equal(p.identity,'anonymous');assert.equal(p.q,undefined);assert.equal(p.cursor,undefined);assert.equal(p.as_of,undefined);
+});
+test('visitor card material drilldown carries actual version and fixed observation scope',async()=>{
+ const h=harness();await h.settle();const panel=h.find('VisitorContentPanel');assert.equal(panel.props.visitor,'visitor-1');assert.ok(panel.props.query.as_of);
+ await h.act(()=>panel.props.onOpen({content_id:'visited-villa',content_version:3}));const detail=h.find('VisitorDetails');assert.equal(detail.props.contentId,'visited-villa');assert.equal(detail.props.query.content_version,3);assert.equal(detail.props.query.as_of,panel.props.query.as_of);
+});
+
+test('profile revision conflict offers an explicit fresh snapshot rather than replaying rejected cursor',async()=>{
+ let fail=false;const h=harness('records',{visitors:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())});await h.settle();fail=true;await h.next();assert.match(h.find('Feedback').props.error,/请刷新/);fail=false;await h.act(()=>h.find('Feedback').props.resetSnapshot());assert.equal(h.last().params.cursor,undefined);assert.equal(h.last().params.as_of,undefined);assert.equal(h.pager().cursor.length,0);
+});
+test('content visitor profile refresh clears rejected first cursor while retaining content scope',async()=>{
+ let fail=false;const h=harness('details',{contentVisitors:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())},{query:{owner:'owner-1',as_of:'2026-10-12T00:00:00Z'}});await h.settle();fail=true;await h.next();fail=false;await h.act(()=>nodes(h.render()).find(n=>n.type==='Feedback'&&n.props.error).props.resetSnapshot());assert.equal(h.last('contentVisitors').params.cursor,undefined);assert.equal(h.last('contentVisitors').params.owner,'owner-1');
 });
