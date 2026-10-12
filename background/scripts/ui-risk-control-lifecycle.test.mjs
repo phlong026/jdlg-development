@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
 import * as sass from 'sass';
+import { fileURLToPath } from 'node:url';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const labels = { groups: '同设备账号', changes: '设备换绑', alerts: '风险告警', users: '风险用户' };
@@ -286,7 +287,7 @@ test('copy accurately separates all-time device rows, seven-day alerts, global o
 });
 
 test('risk pagination and errors stay route-scoped, wrapping and accessible without global styles', () => {
-  const css = sass.compile(new URL('../src/pages/riskControl.scss', import.meta.url).pathname).css;
+  const css = sass.compile(fileURLToPath(new URL('../src/pages/riskControl.scss', import.meta.url))).css;
   assert.match(css, /data-admin-page="\/risk-control"/); assert.match(css, /\.risk-pagination[^}]*flex-wrap: wrap/s);
   assert.match(css, /\.risk-pagination-actions button[^}]*min-height: 44px/s);
   const h = harness(); assert.equal(nodes(h.page.tree, node => node.type === 'nav' && node.props?.['aria-label']?.endsWith('分页')).length, 4);

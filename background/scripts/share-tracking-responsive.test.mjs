@@ -2,10 +2,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as sass from 'sass';
+import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 
 const root = '.layout-content[data-admin-page="/share-tracking"] .share-tracking';
-const css = postcss.parse(sass.compile(new URL('../src/pages/shareTracking.scss', import.meta.url).pathname, { logger: sass.Logger.silent }).css);
+const css = postcss.parse(sass.compile(fileURLToPath(new URL('../src/pages/shareTracking.scss', import.meta.url)), { logger: sass.Logger.silent }).css);
 const viewports = [[320, 568], [375, 667], [390, 844], [768, 1024], [1024, 768], [1440, 900], [1024, 400]];
 function matchesMedia(rule, width, height, reducedMotion) {
     for (let parent = rule.parent; parent; parent = parent.parent) {
