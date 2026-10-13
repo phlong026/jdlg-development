@@ -10,6 +10,7 @@ Start Vite (or serve a production build under /admin/) on a local address first:
 E2E_WEB overrides the base URL (local addresses only). Exit code is non-zero when any check fails.
 Soft keyboards are approximated by a 390x300 viewport; real devices still need a manual pass.
 """
+import ipaddress
 import json
 import os
 import sys
@@ -17,9 +18,25 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
-BASE = os.environ.get("E2E_WEB", "http://127.0.0.1:5187")
-if "127.0.0.1" not in BASE and "localhost" not in BASE:
-    sys.exit("拒绝运行：只允许本机地址")
+BASE = os.environ.get("E2E_WEB", "http://127.0.0.1:5187").rstrip("/")
+
+
+def is_loopback(url):
+    """Only an http(s) URL whose parsed hostname is a real loopback address counts as local."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
+        return False
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+if not is_loopback(BASE):
+    sys.exit("拒绝运行：只允许本机地址（localhost / 127.0.0.0/8 / ::1）")
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/mobile-admin-audit"
 os.makedirs(OUT, exist_ok=True)
 
