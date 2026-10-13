@@ -113,6 +113,8 @@ type Content struct {
 	Owner       string     `json:"owner_id"`
 	CreatedAt   *time.Time `json:"created_at,omitempty"`
 	PublishedAt *time.Time `json:"published_at,omitempty"`
+	Identified  int        `json:"identified_count"`
+	Anonymous   int        `json:"anonymous_count"`
 	PageViews   int        `json:"page_views"`
 	VisibleMS   int64      `json:"visible_ms"`
 	LastVisit   *time.Time `json:"last_visit,omitempty"`
@@ -215,21 +217,24 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 }
 type Filter struct {
-	Start, End, AsOf                                                  time.Time
-	Content, Identity, Intent, Search, Owner, Sort, Direction, Cursor string
-	Limit                                                             int
-	Related                                                           bool
+	ContentVersion                                                                                  int
+	Start, End, AsOf                                                                                time.Time
+	Content, Identity, Intent, Search, ContentSearch, VisitorSearch, Owner, Sort, Direction, Cursor string
+	Limit                                                                                           int
+	Related                                                                                         bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`
 	Metric string    `json:"metric_version"`
 }
 type List struct {
-	FirstCursor string `json:"first_cursor,omitempty"`
-	Items       any    `json:"items"`
-	Cursor      string `json:"next_cursor,omitempty"`
-	Identified  int    `json:"identified_count"`
-	Anonymous   int    `json:"anonymous_count"`
+	FirstCursor      string `json:"first_cursor,omitempty"`
+	ProfileRevision  string `json:"profile_revision,omitempty"`
+	OmittedPageCount int    `json:"omitted_page_count,omitempty"`
+	Items            any    `json:"items"`
+	Cursor           string `json:"next_cursor,omitempty"`
+	Identified       int    `json:"identified_count"`
+	Anonymous        int    `json:"anonymous_count"`
 	Snapshot
 }
 type IntentRule struct {
@@ -269,16 +274,30 @@ type Intent struct {
 	Calculated   time.Time       `json:"calculated_at"`
 	Note         string          `json:"manual_note,omitempty"`
 }
+
+// LatestVisit describes one counted page view inside the active query scope.
+// Visible is that view's deduplicated, window-clipped duration, not a total
+// across visits. A nil projection means no page view started in the window;
+// a present projection with zero Visible is still a real counted visit.
+type LatestVisit struct {
+	ID      string    `json:"page_view_id"`
+	Started time.Time `json:"started_at"`
+	Visible int64     `json:"visible_ms"`
+	Content string    `json:"content_id,omitempty"`
+	Version int       `json:"content_version,omitempty"`
+}
 type Visitor struct {
-	Key      string    `json:"visitor_key"`
-	Nickname string    `json:"nickname"`
-	State    string    `json:"identity_state"`
-	CRMLabel string    `json:"crm_label,omitempty"`
-	Last     time.Time `json:"last_visit"`
-	Views    int       `json:"page_views"`
-	Visible  int64     `json:"visible_ms"`
-	Sessions int       `json:"session_count"`
-	Intent   Intent    `json:"intent"`
+	Key         string       `json:"visitor_key"`
+	Nickname    string       `json:"nickname"`
+	AvatarURL   string       `json:"avatar_url,omitempty"`
+	State       string       `json:"identity_state"`
+	CRMLabel    string       `json:"crm_label,omitempty"`
+	Last        time.Time    `json:"last_visit"`
+	Views       int          `json:"page_views"`
+	Visible     int64        `json:"visible_ms"`
+	LatestVisit *LatestVisit `json:"latest_visit,omitempty"`
+	Sessions    int          `json:"session_count"`
+	Intent      Intent       `json:"intent"`
 }
 type PageView struct {
 	ID       string     `json:"page_view_id"`

@@ -14,13 +14,14 @@ import (
 type Service struct {
 	VerifyBusiness func(context.Context, BusinessProof) (bool, error)
 	// Server-side, current account grant lookup. Never derived from client fields.
-	IsContentOperator    func(context.Context, int64, string) (bool, error)
-	ResolveLegacy        func(string, int64) (LegacyMetadata, error)
-	ResolveLegacyContext func(context.Context, string, int64) (LegacyMetadata, error)
-	VerifyCRM            func(context.Context, Scope, string, string, string) error
-	Store                Store
-	Config               Config
-	Now                  func() time.Time
+	IsContentOperator      func(context.Context, int64, string) (bool, error)
+	ResolveLegacy          func(string, int64) (LegacyMetadata, error)
+	ResolveLegacyContext   func(context.Context, string, int64) (LegacyMetadata, error)
+	VerifyCRM              func(context.Context, Scope, string, string, string) error
+	ResolveVisitorProfiles VisitorProfileResolver
+	Store                  Store
+	Config                 Config
+	Now                    func() time.Time
 }
 
 func New(store Store, cfg Config) *Service {

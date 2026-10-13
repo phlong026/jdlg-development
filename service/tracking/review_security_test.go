@@ -178,13 +178,19 @@ func TestReviewFilteredCountsSnapshotAndContentSort(t *testing.T) {
 	if _, e = s.Visitors(context.Background(), scope, f); e == nil {
 		t.Fatal("cursor accepted with different filter")
 	}
-	got, e := s.Contents(context.Background(), scope, Filter{Search: "does not match", Identity: "anonymous", Intent: "high", Sort: "last_visit"}, "")
+	got, e := s.Contents(context.Background(), scope, Filter{Search: "does not match", Identity: "all", Intent: "high", Sort: "last_visit"}, "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	items := got.Items.([]Content)
 	if len(items) != 2 || items[0].ID != "content2" || items[0].PageViews != 1 {
 		t.Fatalf("bad content filters/sort %+v", items)
+	}
+	// Material identity is now an explicit statistics filter. Legacy q/intent
+	// remain visitor-list-only; they do not become ambiguous material searches.
+	anonymous, err := s.Contents(context.Background(), scope, Filter{Identity: "anonymous"}, "")
+	if err != nil || len(anonymous.Items.([]Content)) != 0 {
+		t.Fatal(anonymous, err)
 	}
 	// A link established after the snapshot must not rewrite a previous page.
 	reviewPV(m, "view0004", "one", "a:device", "session4", "", now.Add(-time.Hour))

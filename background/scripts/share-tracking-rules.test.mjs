@@ -9,7 +9,7 @@ const root = new URL('../', import.meta.url);
 function load(file, overrides = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(new URL(file, root), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: name => name in overrides ? overrides[name] : name === '../config/api' ? { API_BASE_URL: '' } : name === '../utils/session' ? { expireSession() {} } : require(name), Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, ...overrides.globals });
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => name in overrides ? overrides[name] : name === '../pages/shareTracking/access' ? { captureTrackingAccessBoundary: () => ({}), notifyTrackingAccessDenied() {} } : name === '../config/api' ? { API_BASE_URL: '' } : name === '../utils/session' ? { expireSession() {} } : require(name), Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, ...overrides.globals });
   return module.exports;
 }
 const model = load('src/pages/shareTracking/model.ts');
@@ -24,7 +24,7 @@ const nodes = x => Array.isArray(x) ? x.flatMap(nodes) : !x || typeof x !== 'obj
 const text = x => Array.isArray(x) ? x.map(text).join('') : x == null || typeof x === 'boolean' ? '' : typeof x === 'object' ? text(x.props?.children) : String(x);
 function harness({ mode='editor', overrides={}, props={}, confirm=()=>true }={}) {
   const React=require('react'); const calls=[]; const slots=[]; let index=0,tree,effects=[],uuid=0,active=true;
-  const react={...React,useState(init){const i=index++;if(!(i in slots)) slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]},useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useEffect(effect,deps){const i=index++;if(!slots[i]||!deps||deps.some((d,j)=>!Object.is(d,slots[i].deps[j]))){const old=slots[i];slots[i]={deps,effect,cleanup:old?.cleanup};effects.push(()=>{slots[i].cleanup?.();slots[i].cleanup=effect()})}}};
+  const react={...React,useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useState(init){const i=index++;if(!(i in slots)) slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]},useEffect(effect,deps){const i=index++;if(!slots[i]||!deps||deps.some((d,j)=>!Object.is(d,slots[i].deps[j]))){const old=slots[i];slots[i]={deps,effect,cleanup:old?.cleanup};effects.push(()=>{slots[i].cleanup?.();slots[i].cleanup=effect()})}}};
   const api={intentRules:async owner=>{calls.push(['read',owner]);return result({...base,owner_id:owner})},saveIntentRules:async (body,owner)=>{calls.push(['save',body,owner]);return {...result({...base,...body,owner_id:owner,rule_version:'r2',revision:1}),recomputed:recomputed('r2')}},recomputeIntent:async (body,owner)=>{calls.push(['recompute',body,owner]);return recomputed(body.rule_version)},...overrides};
   const module=load('src/pages/shareTracking/rules.tsx',{'react':react,'../../api/shareTracking':{tracking:api},'./model':model,globals:{crypto:{randomUUID:()=>`request-number-${++uuid}`},window:{confirm,addEventListener(){},removeEventListener(){}}}});
   const options={owner:'owner-a',canWrite:true,isCurrent:()=>active,context:{can_view:true,can_manage:false,can_rules:true,owners:[{id:'owner-a',name:'归属 A'},{id:'owner-b',name:'归属 B'}]},changed:()=>calls.push(['changed']),onBusyChange:v=>calls.push(['busy',v]),onDirtyChange:v=>calls.push(['dirty',v]),...props};
@@ -137,10 +137,10 @@ test('evidence window query preserves authorized owner and precise as_of while c
 });
 test('detail evidence navigation uses its own window and restores list scope without altering owner',()=>{
  const React=require('react');let index=0,slots=[],tree;const calls=[];
- const react={...React,useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]}};
+ const react={...React,useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]}};
  const session={session_id:'source-session',page_views:[{page_view_id:'source-pv'}]};
  const components={ContentBody:'ContentBody',Counts:'Counts',Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',SnapshotInfo:'SnapshotInfo',VisitorCard:'VisitorCard',useResource:loader=>{void loader(new AbortController().signal);return{data:{items:[session]}}}};
- const {VisitorDetails}=load('src/pages/shareTracking/details.tsx',{'react':react,'../../api/shareTracking':{tracking:{sessions:async(key,query)=>{calls.push([key,query]);return{items:[]}}}},'./model':model,'./components':components,'./governance':{VisitorGovernance:'VisitorGovernance'}});
+ const {VisitorDetails}=load('src/pages/shareTracking/details.tsx',{'react':react,'../../api/shareTracking':{tracking:{sessions:async(key,query)=>{calls.push([key,query]);return{items:[]}}}},'./model':model,'./components':components,'./crmTarget':{CRMTargetButton:'CRMTargetButton'},'./governance':{VisitorGovernance:'VisitorGovernance'}});
  const visitor={visitor_key:'u:42',identity_state:'identified',intent:{window_start:'2026-09-11',window_end:'2026-10-11',evidence:[{session_id:'source-session'}]}};
  const query={owner:'owner-a',start:'2026-10-09',end:'2026-10-12',as_of:'2026-10-11',limit:20};
  function render(){index=0;tree=VisitorDetails({visitor,query,contentId:'content-filter'});return tree}render();assert.equal(calls.at(-1)[1].content_id,'content-filter');
@@ -148,4 +148,38 @@ test('detail evidence navigation uses its own window and restores list scope wit
  const page=nodes(tree).find(node=>typeof node.type==='function'&&node.type.name==='PageVisit');assert.ok(page);assert.equal(page.props.query.start,'2026-09-11');assert.equal(page.props.query.owner,'owner-a');
  nodes(tree).find(node=>node.type==='button'&&text(node)==='返回列表筛选范围').props.onClick();render();assert.equal(calls.at(-1)[1].start,'2026-10-09');assert.equal(calls.at(-1)[1].end,'2026-10-12');assert.equal(calls.at(-1)[1].content_id,'content-filter');
  visitor.intent.scope_required=true;render();assert.equal(nodes(tree).find(node=>node.type==='VisitorGovernance').props.onOpenEvidence,undefined);
+});
+
+test('actual version trajectory propagates the clicked page identity through PageVisit into Events',()=>{
+ const React=require('react');let index=0,slots=[],eventPhase=false;const calls=[];
+ const react={...React,useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]}};
+ for(const scenario of [{view:{page_view_id:'pv-A',content_id:'content-A',content_version:3},related:false},{view:{page_view_id:'pv-B',content_id:'content-B',content_version:8},related:true},{view:{page_view_id:'pv-page',route_key:'pages/home/home'},related:true}]){
+  slots=[];index=0;eventPhase=false;const session={session_id:'source-session',page_views:[scenario.view]};
+  const components={ContentBody:'ContentBody',Counts:'Counts',Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',SnapshotInfo:'SnapshotInfo',VisitorCard:'VisitorCard',useResource:loader=>{void loader(new AbortController().signal);return{data:{items:eventPhase?[]:[session]}}}};
+  const {VisitorDetails}=load('src/pages/shareTracking/details.tsx',{'react':react,'../../api/shareTracking':{tracking:{sessions:async()=>({items:[session]}),events:async(id,query)=>{calls.push({id,query});return{items:[]}}}},'./model':model,'./components':components,'./crmTarget':{CRMTargetButton:'CRMTargetButton'},'./governance':{VisitorGovernance:'VisitorGovernance'}});
+  const props={visitor:{visitor_key:'u:42',identity_state:'identified'},query:{owner:'owner-a',as_of:'2026-10-12T00:00:00Z',content_version:3,content_q:'标题'},contentId:'content-A'};
+  let tree=VisitorDetails(props);if(scenario.related){nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});index=0;tree=VisitorDetails(props)}
+  nodes(tree).find(n=>n.type==='button'&&n.props['aria-expanded']===false).props.onClick();index=0;tree=VisitorDetails(props);
+  const page=nodes(tree).find(n=>typeof n.type==='function'&&n.type.name==='PageVisit');assert.ok(page);slots=[];index=0;let pageTree=page.type(page.props);nodes(pageTree).find(n=>n.type==='button').props.onClick();index=0;pageTree=page.type(page.props);
+  const events=nodes(pageTree).find(n=>typeof n.type==='function'&&n.type.name==='Events');assert.ok(events);slots=[];index=0;eventPhase=true;events.type(events.props);
+  const last=calls.at(-1);assert.equal(last.id,scenario.view.page_view_id);assert.equal(last.query.content_id,scenario.view.content_id);assert.equal(last.query.content_version,scenario.view.content_version);assert.equal(last.query.owner,'owner-a');assert.equal(last.query.as_of,props.query.as_of);assert.equal(last.query.content_q,scenario.related?undefined:'标题');
+ }
+});
+
+test('session detail pagination replays first cursor and reset after explicit refresh or scope change',async()=>{
+ const React=require('react');let index=0,slots=[],tree;const calls=[];
+ const react={...React,useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]}};
+ const page={items:[],first_cursor:'bound-first',next_cursor:'bound-next'};
+ const components={ContentBody:'ContentBody',Counts:'Counts',Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',SnapshotInfo:'SnapshotInfo',VisitorCard:'VisitorCard',useResource:loader=>{void loader(new AbortController().signal);return{data:page,reload(){calls.push(['reload'])}}}};
+ const capture=async(id,query)=>{calls.push([id,query]);return page};
+ const {VisitorDetails}=load('src/pages/shareTracking/details.tsx',{'react':react,'../../api/shareTracking':{tracking:{sessions:capture,events:capture}},'./model':model,'./components':components,'./crmTarget':{CRMTargetButton:'CRMTargetButton'},'./governance':{VisitorGovernance:'VisitorGovernance'}});
+ let props={visitor:{visitor_key:'u:42',identity_state:'identified'},query:{owner:'owner-a',as_of:'2026-10-12T00:00:00Z'},contentId:'content-A'};
+ const render=()=>{index=0;tree=VisitorDetails(props)};
+ render();await flush();assert.equal(calls.at(-1)[1].cursor,undefined);
+ nodes(tree).find(n=>n.type==='Pager').props.onNext('bound-next');render();await flush();assert.equal(calls.at(-1)[1].cursor,'bound-next');
+ nodes(tree).find(n=>n.type==='Pager').props.onPrevious();render();await flush();assert.equal(calls.at(-1)[1].cursor,'bound-first');
+ nodes(tree).find(n=>n.type==='Feedback').props.resetSnapshot();render();await flush();assert.equal(calls.at(-1)[1].cursor,undefined);
+ nodes(tree).find(n=>n.type==='Pager').props.onNext('old-A-next');render();await flush();
+ props={...props,visitor:{...props.visitor,visitor_key:'u:43'}};render();await flush();assert.equal(calls.at(-1)[0],'u:43');assert.equal(calls.at(-1)[1].cursor,undefined);
+ props={...props,visitor:{...props.visitor,visitor_key:'u:42'}};render();await flush();assert.equal(calls.at(-1)[1].cursor,undefined);
 });

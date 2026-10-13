@@ -117,7 +117,7 @@ func loadTrackingScope(c *gin.Context, db *sql.DB, tenant string) (tracking.Scop
 	return scope, nil
 }
 func trackingFilter(c *gin.Context) (tracking.Filter, error) {
-	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true"}
+	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true"}
 	for name, target := range map[string]*time.Time{"start": &f.Start, "end": &f.End, "as_of": &f.AsOf} {
 		if raw := c.Query(name); raw != "" {
 			t, e := time.Parse(time.RFC3339Nano, raw)
@@ -126,6 +126,13 @@ func trackingFilter(c *gin.Context) (tracking.Filter, error) {
 			}
 			*target = t
 		}
+	}
+	if raw := c.Query("content_version"); raw != "" {
+		value, e := strconv.Atoi(raw)
+		if e != nil || value <= 0 {
+			return f, &tracking.Error{Status: 400, Message: "访问版本无效"}
+		}
+		f.ContentVersion = value
 	}
 	f.Limit, _ = strconv.Atoi(c.Query("limit"))
 	if mv := c.Query("metric_version"); mv != "" && mv != tracking.MetricVersion {
@@ -156,9 +163,15 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
 	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
+	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
 	// This is a separate capability group, not an implicit platform-admin data grant.
 	mg := v1.Group("/management/tracking")
-	mg.Use(AuthRequired, func(c *gin.Context) {
+	mg.Use(func(c *gin.Context) {
+		// Capability and private visit responses must never survive a permission
+		// recheck through HTTP caches, including authentication failures.
+		c.Header("Cache-Control", "private, no-store")
+		c.Next()
+	}, AuthRequired, func(c *gin.Context) {
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
 		if e != nil {
 			trackingResponse(c, nil, e)
@@ -175,6 +188,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Next()
 	})
 	registerTrackingRuleRoutes(mg, svc)
+	registerTrackingCRMTargetRoutes(mg, svc)
 	sc := func(c *gin.Context) tracking.Scope { return c.MustGet("tracking.scope").(tracking.Scope) }
 	view := func(c *gin.Context) bool {
 		if !sc(c).View {
@@ -250,6 +264,18 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Visitors(c.Request.Context(), sc(c), f)
+		trackingResponse(c, v, e)
+	})
+	mg.GET("/visitors/:id/contents", func(c *gin.Context) {
+		if !view(c) {
+			return
+		}
+		f, e := trackingFilter(c)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.VisitorContents(c.Request.Context(), sc(c), c.Param("id"), f)
 		trackingResponse(c, v, e)
 	})
 	mg.GET("/visitors/:id/sessions", func(c *gin.Context) {

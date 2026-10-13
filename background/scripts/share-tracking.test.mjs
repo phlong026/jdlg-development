@@ -9,7 +9,7 @@ const root = new URL('../', import.meta.url);
 function load(file, overrides = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(new URL(file, root), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: name => name in overrides ? overrides[name] : name === './evidence' ? { IntentEvidenceDetails: 'IntentEvidenceDetails' } : name === '../config/api' ? { API_BASE_URL: '' } : name === '../utils/session' ? { expireSession() {} } : require(name), Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, window: { location: { origin: 'https://example.test', protocol: 'https:' } }, ...overrides.globals });
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => name in overrides ? overrides[name] : name === '../pages/shareTracking/access' ? { captureTrackingAccessBoundary: () => ({}), notifyTrackingAccessDenied() {} } : name === './evidence' ? { IntentEvidenceDetails: 'IntentEvidenceDetails' } : name === '../config/api' ? { API_BASE_URL: '' } : name === '../utils/session' ? { expireSession() {} } : require(name), Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, window: { location: { origin: 'https://example.test', protocol: 'https:' } }, ...overrides.globals });
   return module.exports;
 }
 const model = load('src/pages/shareTracking/model.ts');
@@ -57,7 +57,7 @@ test('resource hook aborts and ignores late older responses and post-unmount com
 });
 test('UI preserves scope in same-session exploration and separates metrics and identities', () => {
  const detail=fs.readFileSync(new URL('src/pages/shareTracking/details.tsx',root),'utf8');const page=fs.readFileSync(new URL('src/pages/shareTracking.tsx',root),'utf8');
- assert.match(detail,/content_id: showingEvidence \? undefined : contentId, include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
+ assert.match(detail,/content_id: showingEvidence \? undefined : contentId, include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/saveTrackingView\(actorId, context.owners/);const access=fs.readFileSync(new URL('src/pages/shareTracking/access.ts',root),'utf8');assert.match(access,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
 });
 
 function editorHarness(overrides = {}, initial = {}) {
@@ -119,4 +119,12 @@ test('draft revoke is single flight and keeps reason/public controls on failure'
  const button=h.find('button','撤回并停止旧入口阅读');button.props.onClick();button.props.onClick();assert.equal(writes,1);
  reject(new Error('409 当前版本冲突'));await flush();h.render();assert.match(h.text(),/当前版本冲突/);assert.ok(h.find('button','撤回并停止旧入口阅读'));
  assert.equal(h.find('label','撤回原因').props.children.find(n=>n?.type==='input').props.value,'复核撤回');
+});
+
+test('account presentation uses authorized nickname and safe avatar but never interprets anonymous as profile',()=>{
+ const {VisitorCard}=load('src/pages/shareTracking/components.tsx',{'./model':model});const {renderToStaticMarkup}=require('react-dom/server');const React=require('react');
+ const base={visitor_key:'u:42',identity_state:'identified',nickname:'测试 <昵称>',avatar_url:'https://assets.example.test/avatar.jpg',last_visit:'2026-10-12T00:00:00Z',page_views:1,visible_ms:1000,session_count:1,intent:{level:'low',reasons:[]}};
+ const render=v=>renderToStaticMarkup(React.createElement(VisitorCard,{visitor:v,onOpen(){}}));const known=render(base);assert.match(known,/测试 &lt;昵称&gt;/);assert.match(known,/avatar.jpg/);
+ const anonymous=render({...base,identity_state:'anonymous',visitor_key:'a:anonymous'});assert.doesNotMatch(anonymous,/avatar.jpg|测试/);assert.match(anonymous,/匿名访客/);
+ assert.doesNotMatch(render({...base,avatar_url:'javascript:alert(1)'}),/javascript:/);
 });

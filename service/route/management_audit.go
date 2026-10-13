@@ -66,7 +66,8 @@ func RegisterManagementAuditRoutes(r *gin.RouterGroup, auditModel *model.Managem
 	audit := r.Group("/audit")
 	audit.GET("", func(c *gin.Context) {
 		if auditModel == nil {
-			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
+			// 未配置审计模块与"已配置但无审计记录"是两种状态，不能都按成功空列表返回。
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "操作审计模块未配置，服务不可用"})
 			return
 		}
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

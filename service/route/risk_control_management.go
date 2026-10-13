@@ -60,7 +60,7 @@ func queryRiskControlOverview(db *sql.DB) (gin.H, error) {
 		return nil, err
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM (SELECT user_id FROM user_profiles WHERE device_id <> '' GROUP BY device_id, user_id) t WHERE 1=1`).Scan(&deviceRiskUsers); err != nil {
-		deviceRiskUsers = 0
+		return nil, err
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM user_profiles WHERE last_device_change_time IS NOT NULL AND last_device_change_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)`).Scan(&recentDeviceChanges); err != nil {
 		return nil, err
