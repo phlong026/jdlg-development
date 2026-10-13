@@ -72,6 +72,8 @@ mini 与管理后台是不同账号类型；上线须给实际 mini 账号配置
 - [独立评审与修复记录](review-record.md)
 - [持续集成范围](ci.md)
 - [PR3 十项评审修复](pr3-review-repairs.md)
+- [联调环境准备清单](integration-env-checklist.md)
+- [第二轮完整代码评审（2026-10-13）](code-review-20261013.md)：容量、锁与部署风险，含 2 项 P0、4 项 P1
 - [SQL 查询边界](../../service/docs/TRACKING_QUERY_BOUNDS.md)
 - [日汇总语义](../../service/docs/TRACKING_DAILY_SUMMARIES.md)
 - [小程序路由清单](../../miniprogram/docs/route-inventory.md)
