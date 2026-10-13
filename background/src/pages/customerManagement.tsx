@@ -47,6 +47,15 @@ export default function CustomerManagement(){
  const [selected,setSelected]=useState<{id:string;poolEvidence?:PoolEvidence}|null>(null),[refresh,setRefresh]=useState(0);
  const [completion,setCompletion]=useState('');const openCustomer=(id:string,poolEvidence?:PoolEvidence)=>{if(drawerGate.current.pending)return;setSelected({id,poolEvidence});if(params.has('customer')){const next=new URLSearchParams(params);next.set('customer',id);setParams(next)}};
  useEffect(()=>{if(!drawerGate.current.pending)setSelected(null)},[tab,session.user?.id]);
+ // 窄屏下栏目条横向滚动：直达或切换后把当前栏目带入可视区（只滚动栏目条本身，不移动页面），并用 data-fade 标出两侧还有更多栏目
+ const tabsRef=useRef<HTMLElement>(null);const tabKeys=allowed.join('|');
+ useEffect(()=>{const track=tabsRef.current;if(!track)return;
+  const fade=()=>{const left=track.scrollLeft>1,right=track.scrollWidth-track.clientWidth-track.scrollLeft>1;if(left||right)track.dataset.fade=left&&right?'both':left?'left':'right';else delete track.dataset.fade};
+  const active=track.querySelector<HTMLElement>('.active');
+  if(active){const viewport=track.getBoundingClientRect(),item=active.getBoundingClientRect(),edge=36;
+   if(item.left<viewport.left+edge)track.scrollLeft+=item.left-viewport.left-edge;else if(item.right>viewport.right-edge)track.scrollLeft+=item.right-viewport.right+edge}
+  fade();track.addEventListener('scroll',fade,{passive:true});window.addEventListener('resize',fade);
+  return()=>{track.removeEventListener('scroll',fade);window.removeEventListener('resize',fade)}},[tab,tabKeys,session.crmLoading]);
  const routeCustomer=params.get('customer');
  const validRouteCustomer=routeCustomer!==null&&routeCustomer.length>0&&routeCustomer.length<=128&&!/[\/\\%;\r\n]/.test(routeCustomer)&&routeCustomer!=='.'&&routeCustomer!=='..';
  const linkedSelection:{id:string;poolEvidence?:PoolEvidence}|null=routeCustomer!==null ? (validRouteCustomer&&session.crmContext&&tab==='customers'?{id:routeCustomer}:null) : selected;
@@ -58,7 +67,7 @@ export default function CustomerManagement(){
   {params.get('from')==='share-tracking'&&<p className="crm-note"><Link to="/share-tracking">返回分享访问记录</Link> · 关联为人工核实关系，客户权限在此重新检查</p>}
   {routeCustomer!==null&&!validRouteCustomer&&<p role="alert" className="crm-error">客户目标无效，请返回分享访问记录重新打开。</p>}
   {completion&&<div className="crm-note" role="status">{completion}</div>}
-  <nav className="crm-tabs" aria-label="客户管理栏目">{allowed.map(t=><button disabled={drawerBusy} key={t} className={tab===t?'active':''} onClick={()=>go(t)}>{titleOf[t]}</button>)}</nav>
+  <nav className="crm-tabs" aria-label="客户管理栏目" ref={tabsRef}>{allowed.map(t=><button disabled={drawerBusy} key={t} className={tab===t?'active':''} onClick={()=>go(t)}>{titleOf[t]}</button>)}</nav>
   {session.crmContext?.demo&&<div className="crm-note">演示环境 · 虚构数据 · 真实企微自动接入尚未启用</div>}
   {!session.crmContext&&tab!=='access'&&tab!=='leads'?<Feedback error={session.crmError||'客户管理接入尚未配置，请联系系统管理员'} retry={session.refresh}/>:<React.Fragment key={session.user?.id}>
    {tab==='home'&&<Home key={'h'+refresh} supervisor={supervisor} open={openCustomer} go={go}/>}

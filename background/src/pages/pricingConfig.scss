@@ -228,4 +228,46 @@ button:disabled {
   color: #b3a48e;
   padding: 24px 16px;
 }
+
+.pricing-toolbar-actions .btn-secondary,
+.pricing-toolbar-actions .btn-primary,
+.source-badge {
+  white-space: nowrap;
+}
+
+// Phones: the title block and the status/actions group each get a full row, so
+// the status badge and button labels are never squeezed into one-character columns.
+@media (max-width: 768px) {
+  .pricing-config-container {
+    padding: 0;
+  }
+
+  .pricing-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .pricing-toolbar > div:first-child {
+    min-width: 0;
+  }
+
+  .pricing-toolbar-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .source-badge {
+    flex: 1 0 100%;
+    white-space: normal;
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .pricing-toolbar-actions .btn-secondary,
+  .pricing-toolbar-actions .btn-primary {
+    flex: 1 1 120px;
+    justify-content: center;
+  }
+}
 }

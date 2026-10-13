@@ -241,7 +241,7 @@ test('submitted editor fields remain locked while an unrelated row action is pen
   const write = h.button('保存').props.onClick(); h.render();
   const card = h.find(node => node.key === '2' && node.props?.className === 'template-card');
   const other = nodes(card).find(node => node.type === 'button' && node.props.title === '通过').props.onClick(); h.render();
-  assert.equal(nodes(h.modal()).find(node => node.type === 'fieldset' && node.props.className === 'modal-body').props.disabled, true);
+  assert.equal(nodes(h.modal()).find(node => node.type === 'fieldset' && node.props.className === 'modal-fields').props.disabled, true);
   assert.equal(h.button('保存').props.disabled, true);
   saving.resolve(template({ name: 'Submitted' })); moderation.resolve(); await Promise.all([write, other]); await h.flush();
 });

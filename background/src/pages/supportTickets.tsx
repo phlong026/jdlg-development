@@ -530,7 +530,7 @@ const SupportTickets: React.FC = () => {
                                         <td>
                                             <div className="identity-cell">
                                                 <strong>{item.title}</strong>
-                                                <span>{item.content || '暂无说明'}</span>
+                                                <span className="cell-clamp" title={item.content || undefined}>{item.content || '暂无说明'}</span>
                                             </div>
                                         </td>
                                         <td>

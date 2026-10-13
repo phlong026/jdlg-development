@@ -415,7 +415,7 @@ const Certification: React.FC = () => {
                                                 style={{ cursor: 'pointer' }}
                                             >
                                                 <td><b>#{app.id}</b><div className="cell-sub">用户 {app.user_id}</div></td>
-                                                <td>{subject}<div className="cell-sub">{subjectSub}</div></td>
+                                                <td className="cert-subject-cell">{subject}<div className="cell-sub">{subjectSub}</div></td>
                                                 <td>
                                                     <span className={`type-badge ${app.type}`}>
                                                         {TYPE_MAP[app.type] || app.type}

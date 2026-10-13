@@ -15,6 +15,10 @@
   .crm-customer-heading h2 { font-size: clamp(20px, 4vw, 26px); }
   .crm-recent > div, .crm-action-row > div { min-width: 0; overflow-wrap: anywhere; }
   .crm-tabs { scrollbar-width: thin; }
+  // Fade the side(s) that still have tabs beyond the edge (set by the tab strip's scroll handler).
+  .crm-tabs[data-fade='right'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+  .crm-tabs[data-fade='left'] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+  .crm-tabs[data-fade='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
   .crm-tabs button { flex-shrink: 0; }
   .crm-relation { flex-wrap: wrap; overflow-wrap: anywhere; }
 }

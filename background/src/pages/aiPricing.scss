@@ -57,8 +57,9 @@
 
 /* ───────── 提示条 ───────── */
 .aip-notice {
-    display: flex;
-    gap: 4px;
+    // Block flow: the notice is running prose, and a flex container would turn each
+    // text run and <b> into its own column on narrow screens.
+    display: block;
     background: var(--admin-surface-muted);
     border: 1px solid var(--admin-border);
     border-radius: var(--admin-radius-md);
