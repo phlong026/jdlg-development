@@ -13,6 +13,8 @@ export interface ApiResponse<T = any> {
 // 请求配置
 interface RequestConfig extends RequestInit {
     params?: Record<string, any>;
+    // Scoped callers can suppress expiry from an obsolete request; other callers keep the existing behavior.
+    shouldExpireSession?: () => boolean;
 }
 
 // 创建完整的URL
@@ -40,7 +42,7 @@ export const request = async <T = any>(
     endpoint: string,
     config: RequestConfig = {}
 ): Promise<ApiResponse<T>> => {
-    const { params, ...fetchConfig } = config;
+    const { params, shouldExpireSession, ...fetchConfig } = config;
     const requestPage = window.location.pathname;
     
     const url = createUrl(endpoint, params);
@@ -71,11 +73,11 @@ export const request = async <T = any>(
         if (!response.ok) {
             if (response.status === 401) {
                 // 会话失效：统一软跳（清 token + 事件 → ProtectedRoute 返回登录页），不再整页硬跳
-                expireSession();
-                throw new Error('未授权，请重新登录');
+                if (!shouldExpireSession || shouldExpireSession()) expireSession();
+                throw Object.assign(new Error('未授权，请重新登录'), { status: response.status });
             }
             const problem = await response.json().catch(() => null);
-            throw new Error(problem?.message || problem?.msg || `服务暂时不可用（HTTP ${response.status}）`);
+            throw Object.assign(new Error(problem?.message || problem?.msg || `服务暂时不可用（HTTP ${response.status}）`), { status: response.status });
         }
         
         const data: ApiResponse<T> = await response.json();

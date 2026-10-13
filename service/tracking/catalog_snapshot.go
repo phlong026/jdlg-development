@@ -62,28 +62,31 @@ func paginateContents(f Filter, items []Content) ([]Content, string, error) {
 		Signature string `json:"signature"`
 		ID        string `json:"id"`
 		Value     int64  `json:"value"`
+		First     bool   `json:"first,omitempty"`
 	}
 	start := 0
 	if f.Cursor != "" {
 		b, err := base64.RawURLEncoding.DecodeString(f.Cursor)
 		var c contentCursor
-		if err != nil || json.Unmarshal(b, &c) != nil || c.Kind != "content-v1" || c.Signature != signature || !validID(c.ID) {
+		if err != nil || json.Unmarshal(b, &c) != nil || c.Kind != "content-v1" || c.Signature != signature || (!c.First && !validID(c.ID)) {
 			return nil, "", fail(400, "游标与筛选不一致")
 		}
-		start = len(items)
-		for i, item := range items {
-			value := contentSortValue(item, f.Sort)
-			after := value == c.Value && item.ID > c.ID
-			if value != c.Value {
-				if f.Direction == "asc" {
-					after = value > c.Value
-				} else {
-					after = value < c.Value
+		if !c.First {
+			start = len(items)
+			for i, item := range items {
+				value := contentSortValue(item, f.Sort)
+				after := value == c.Value && item.ID > c.ID
+				if value != c.Value {
+					if f.Direction == "asc" {
+						after = value > c.Value
+					} else {
+						after = value < c.Value
+					}
 				}
-			}
-			if after {
-				start = i
-				break
+				if after {
+					start = i
+					break
+				}
 			}
 		}
 	}
@@ -97,4 +100,10 @@ func paginateContents(f Filter, items []Content) ([]Content, string, error) {
 		next = base64.RawURLEncoding.EncodeToString(marshal(contentCursor{Kind: "content-v1", Signature: signature, ID: last.ID, Value: contentSortValue(last, f.Sort)}))
 	}
 	return items[start:end], next, nil
+}
+
+// First page reuses the exact catalog snapshot and its query revision.
+func firstContentCursor(f Filter) string {
+	f.Cursor = ""
+	return base64.RawURLEncoding.EncodeToString(marshal(map[string]any{"kind": "content-v1", "signature": hash(string(marshal(f))), "first": true}))
 }

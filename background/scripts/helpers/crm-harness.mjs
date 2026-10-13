@@ -60,7 +60,7 @@ function environment() {
       require(name) {
         if (name === 'react') return react;
         if (name === 'react/jsx-runtime') return require(name);
-        if (name === 'react-router-dom') return { Link: 'a', useSearchParams: () => [env.params || new URLSearchParams(), () => {}] };
+        if (name === 'react-router-dom') return { Link: 'a', useSearchParams: () => [env.params || new URLSearchParams(), (next, options) => { env.paramChanges ||= []; env.paramChanges.push({ params: new URLSearchParams(next).toString(), options }); env.params = new URLSearchParams(next); }] };
         if (name === 'react-icons/fi') return new Proxy({}, { get: () => 'icon' });
         if (name === '../component/ManagementSession') return { useManagementSession: () => env.session };
         if (name === '../api/customerLeads') return env.leadApi;

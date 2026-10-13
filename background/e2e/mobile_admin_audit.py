@@ -84,7 +84,7 @@ FIXTURES = [
     ("/crm/access", lambda m: ok(dict(accounts=[], employees=[]))),
     ("/crm/dashboard", lambda m: ok(dict(overview={}, todayAdded=0, unknownAddedTime=0, recent=[], team=[], asOf="2026-10-13T00:00:00Z"))),
     ("/crm/", lambda m: ok(dict(list=[], total=0, page_size=20, runs=[], events=[], accounts=[], employees=[], pending=0, failed=0, configured=False, callbackConfigured=False))),
-    ("/tracking/context", lambda m: ok(dict(can_view=True, can_manage=True, owners=[]))),
+    ("/tracking/context", lambda m: ok(dict(can_view=True, can_manage=True, owners=[dict(id="owner-qa", name="授权测试归属")]))),
     ("/tracking/contents/content-qa-1/", lambda m: ok({**snapshot, "items": [], "next_cursor": None})),
     ("/tracking/contents/content-qa-1", lambda m: ok({**content, **snapshot})),
     ("/tracking/contents", lambda m: ok({**snapshot, "items": [content], "next_cursor": None})),
@@ -254,7 +254,10 @@ with sync_playwright() as p:
         page.wait_for_timeout(300)
         r = page.evaluate("""()=>{const d=document.querySelector('.st-dialog');d.scrollTop=1e6;const h=d.querySelector('header').getBoundingClientRect(),c=d.getBoundingClientRect(),
           btn=d.querySelector('header button').getBoundingClientRect();return{scrolled:d.scrollTop>0,headerAtTop:Math.abs(h.top-c.top)<2,closeInView:btn.top>=0&&btn.bottom<=innerHeight}}""")
-        check(not r["scrolled"] or (r["headerAtTop"] and r["closeInView"]), f"share dialog {name}: header/close scrolled away ({r})")
+        # shareTracking.scss deliberately un-pins the header at max-height:500px to save vertical space,
+        # so the pinned-header check only applies to taller viewports.
+        if SIZES[name][1] > 500:
+            check(not r["scrolled"] or (r["headerAtTop"] and r["closeInView"]), f"share dialog {name}: header/close scrolled away ({r})")
         page.screenshot(path=f"{OUT}/share-dialog-{name}.png")
         ctx.close()
 

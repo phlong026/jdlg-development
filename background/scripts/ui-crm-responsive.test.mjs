@@ -2,8 +2,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as sass from 'sass';
+import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
-const css=postcss.parse(sass.compile(new URL('../src/pages/customerLeads.scss',import.meta.url).pathname,{logger:sass.Logger.silent}).css);
+const css=postcss.parse(sass.compile(fileURLToPath(new URL('../src/pages/customerLeads.scss',import.meta.url)),{logger:sass.Logger.silent}).css);
 function styles(selector,width=1200,height=900){
  const result={};css.walkRules(rule=>{if(!rule.selector.endsWith(' '+selector))return;
   for(let p=rule.parent;p;p=p.parent)if(p.type==='atrule'&&p.name==='media'&&!p.params.split(',').some(term=>[...term.matchAll(/max-(width|height):\s*(\d+)px/g)].every(([,axis,n])=>(axis==='width'?width:height)<=Number(n))))return;
@@ -28,7 +29,7 @@ test('search can shrink below the previous 260px floor without losing its input 
 // Resolve relevant compiled selectors across the shared CSS bundle and page sheet, in either loading order.
 // This deliberately includes shorthand expansion and specificity rather than
 // assuming the last source declaration (or a single sheet) describes the winner.
-const shared=postcss.parse(['App.scss','responsive.scss','responsive-priority.scss','responsive-remaining.scss'].map(file=>sass.compile(new URL('../src/'+file,import.meta.url).pathname,{logger:sass.Logger.silent}).css).join('\n'));
+const shared=postcss.parse(['App.scss','responsive.scss','responsive-priority.scss','responsive-remaining.scss'].map(file=>sass.compile(fileURLToPath(new URL('../src/'+file,import.meta.url)),{logger:sass.Logger.silent}).css).join('\n'));
 const specificity=selector=>{
  const effective=selector.replace(/:where\([^)]*\)/g,'');
  return [0,(effective.match(/\.[\w-]+|\[[^\]]+\]/g)||[]).length,0];
