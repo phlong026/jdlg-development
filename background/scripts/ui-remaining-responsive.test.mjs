@@ -246,3 +246,16 @@ test('narrow-screen fixes for pricing header, AI pricing notice, CRM tabs and lo
   assert.ok(parseInt(minWidth('/certification', '.cert-subject-cell'), 10) >= 160);
   assert.match(read('src/pages/certification.tsx'), /<td className="cert-subject-cell">/);
 });
+
+test('list cells clamp long free text with the full value in title, CRM tabs show an edge cue, share dialog header is sticky', () => {
+  for (const file of ['orderCenter', 'aiTaskCenter', 'supportTickets']) assert.match(read(`src/pages/${file}.tsx`), /className="cell-clamp" title=\{/, `${file} clamps long text and exposes the full value`);
+  const clamp = declarations('x', 'x'); assert.deepEqual(clamp, {});
+  let lines;
+  compile('src/responsive-priority.scss').walkRules(rule => { if (rule.selectors.includes('.layout-content .cell-clamp')) rule.walkDecls('-webkit-line-clamp', decl => { lines = decl.value; }); });
+  assert.equal(lines, '3');
+  const crm = read('src/pages/customerManagement.tsx');
+  assert.match(crm, /dataset\.fade=/); assert.match(crm, /addEventListener\('scroll',fade/); assert.match(crm, /removeEventListener\('scroll',fade\)/);
+  assert.match(read('src/pages/customerResponsive.scss'), /\.crm-tabs\[data-fade='right'\][^}]*mask-image/);
+  const share = read('src/pages/shareTracking.scss');
+  assert.match(share, /\.st-dialog > header \{ position: sticky; top: -24px;/); assert.match(share, /\.st-dialog > header \{ top: -16px;/);
+});

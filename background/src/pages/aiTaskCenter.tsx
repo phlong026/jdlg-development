@@ -818,8 +818,8 @@ const AITaskCenter: React.FC = () => {
                                             </td>
                                             <td>
                                                 <div className="text-cell">
-                                                    {activeTab === 'video' && <strong>{item.prompt || '-'}</strong>}
-                                                    <span>{item.error_message || '暂无异常说明'}</span>
+                                                    {activeTab === 'video' && <strong className="cell-clamp" title={item.prompt || undefined}>{item.prompt || '-'}</strong>}
+                                                    <span className="cell-clamp" title={item.error_message || undefined}>{item.error_message || '暂无异常说明'}</span>
                                                 </div>
                                             </td>
                                             <td>{formatDateTime(item.created_at)}</td>

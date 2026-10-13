@@ -920,7 +920,7 @@ const OrderCenter: React.FC = () => {
                                             <td>
                                                 <div className="order-title-cell">
                                                     <strong>{record.title || '-'}</strong>
-                                                    <span>{record.description || '-'}</span>
+                                                    <span className="cell-clamp" title={record.description || undefined}>{record.description || '-'}</span>
                                                 </div>
                                             </td>
                                             <td>{formatDateTime(record.created_at)}</td>

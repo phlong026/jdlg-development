@@ -47,11 +47,15 @@ export default function CustomerManagement(){
  const [selected,setSelected]=useState<{id:string;poolEvidence?:PoolEvidence}|null>(null),[refresh,setRefresh]=useState(0);
  const [completion,setCompletion]=useState('');const openCustomer=(id:string,poolEvidence?:PoolEvidence)=>{if(!drawerGate.current.pending)setSelected({id,poolEvidence})};
  useEffect(()=>{if(!drawerGate.current.pending)setSelected(null)},[tab,session.user?.id]);
- // 窄屏下栏目条横向滚动：直达或切换后把当前栏目带入可视区（只滚动栏目条本身，不移动页面）
+ // 窄屏下栏目条横向滚动：直达或切换后把当前栏目带入可视区（只滚动栏目条本身，不移动页面），并用 data-fade 标出两侧还有更多栏目
  const tabsRef=useRef<HTMLElement>(null);const tabKeys=allowed.join('|');
- useEffect(()=>{const track=tabsRef.current,active=track?.querySelector<HTMLElement>('.active');if(!track||!active)return;
-  const viewport=track.getBoundingClientRect(),item=active.getBoundingClientRect(),edge=16;
-  if(item.left<viewport.left+edge)track.scrollLeft+=item.left-viewport.left-edge;else if(item.right>viewport.right-edge)track.scrollLeft+=item.right-viewport.right+edge},[tab,tabKeys,session.crmLoading]);
+ useEffect(()=>{const track=tabsRef.current;if(!track)return;
+  const fade=()=>{const left=track.scrollLeft>1,right=track.scrollWidth-track.clientWidth-track.scrollLeft>1;if(left||right)track.dataset.fade=left&&right?'both':left?'left':'right';else delete track.dataset.fade};
+  const active=track.querySelector<HTMLElement>('.active');
+  if(active){const viewport=track.getBoundingClientRect(),item=active.getBoundingClientRect(),edge=36;
+   if(item.left<viewport.left+edge)track.scrollLeft+=item.left-viewport.left-edge;else if(item.right>viewport.right-edge)track.scrollLeft+=item.right-viewport.right+edge}
+  fade();track.addEventListener('scroll',fade,{passive:true});window.addEventListener('resize',fade);
+  return()=>{track.removeEventListener('scroll',fade);window.removeEventListener('resize',fade)}},[tab,tabKeys,session.crmLoading]);
  const changed=()=>{if(!drawerGate.current.pending)setRefresh(n=>n+1)};
  if(session.crmLoading)return <><div className="crm-loading">正在读取客户权限…</div></>;
  return <><div className="crm-page">

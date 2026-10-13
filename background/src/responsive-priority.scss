@@ -266,6 +266,16 @@
   .cert-subject-cell { min-width: 180px; overflow-wrap: anywhere; }
 }
 
+// Long free text in list cells shows three lines; the full value is in the row's detail view (and title).
+.layout-content .cell-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
 // Financial definitions remain available by touch and keyboard, not hover alone.
 .layout-content[data-admin-page='/recharge'] .finance-help {
   min-width: 0;
