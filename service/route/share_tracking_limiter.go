@@ -2,6 +2,7 @@ package route
 
 import (
 	"container/list"
+	"log"
 	"net"
 	"net/netip"
 	"os"
@@ -133,11 +134,60 @@ func (l *trackingPeerLimiter) allow(key string) bool {
 	slot.count++
 	return true
 }
+
+// trackingProxyPolicyWarning reports policies under which every client behind a
+// reverse proxy shares the proxy's single socket-peer quota.
+func trackingProxyPolicyWarning(enabled bool, raw string) string {
+	if !enabled {
+		return ""
+	}
+	if strings.TrimSpace(raw) == "" {
+		return "TRACKING_TRUSTED_PROXY_CIDRS 未配置：若服务部署在反向代理后，所有访客将共用代理地址的每分钟60次入口/分享额度"
+	}
+	if trackingTrustedProxyPrefixes(raw) == nil {
+		return "TRACKING_TRUSTED_PROXY_CIDRS 无效，已整体忽略：所有访客按代理地址共用每分钟60次入口/分享额度"
+	}
+	return ""
+}
+
+var (
+	trackingLogf             = log.Printf
+	trackingForwardedWarning = &sync.Once{}
+)
+
+func trackingPeerTrusted(remote string, trusted []netip.Prefix) bool {
+	peer, ok := trackingPeerIP(remote)
+	if !ok {
+		return false
+	}
+	for _, prefix := range trusted {
+		if prefix.Contains(peer) {
+			return true
+		}
+	}
+	return false
+}
+
+// A forwarded header from an untrusted peer is either a direct client forging it
+// or a real proxy missing from the policy. Log once per process: the second case
+// silently collapses every visitor into one quota.
+func warnUntrustedForwarding(remote, forwarded string, trusted []netip.Prefix) {
+	if forwarded == "" || trackingPeerTrusted(remote, trusted) {
+		return
+	}
+	trackingForwardedWarning.Do(func() {
+		peer, _ := trackingPeerIP(remote)
+		trackingLogf("[Tracking] 收到来自 %s 的 X-Forwarded-For，但该地址不在 TRACKING_TRUSTED_PROXY_CIDRS 中；若它是反向代理，所有访客将共用一个限流额度", peer)
+	})
+}
+
 func trackingEntryRateLimit() gin.HandlerFunc {
 	trusted := trackingTrustedProxyPrefixes(os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS"))
 	limiter := newTrackingPeerLimiter(10000, 60, time.Now)
 	return func(c *gin.Context) {
-		if !limiter.allow(trackingRateKey(c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), trusted)) {
+		forwarded := c.GetHeader("X-Forwarded-For")
+		warnUntrustedForwarding(c.Request.RemoteAddr, forwarded, trusted)
+		if !limiter.allow(trackingRateKey(c.Request.RemoteAddr, forwarded, trusted)) {
 			trackingResponse(c, nil, &tracking.Error{Status: 429, Message: "请求过于频繁"})
 			return
 		}

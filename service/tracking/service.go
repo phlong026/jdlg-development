@@ -328,8 +328,8 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 	if err := s.available(ctx, r, e.Route, e.Content, e.Version); err != nil {
 		return err
 	}
-	if e.Occurred.IsZero() || e.Occurred.After(now.Add(2*time.Minute)) || e.Occurred.Before(now.Add(-72*time.Hour)) || e.Occurred.Before(en.Started.Add(-2*time.Minute)) {
-		return fail(400, "事件时间超出允许窗口")
+	if e.Occurred.IsZero() || eventClockRejection(now, en.Started, e.Occurred) != "" {
+		return fail(400, eventWindowMessage)
 	}
 	allowed := map[string]bool{"page_view": true, "page_end": true, "visible_segment": true, "share_intent": true, "content_click": true, "image_open": true, "outbound_click": true, "scroll_depth": true, "video_state": true, "video_progress": true}
 	if !allowed[e.Type] {
@@ -470,6 +470,7 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 		if err = r.Put(record("rate", bucket, en.Owner, now, n+len(events))); err != nil {
 			return err
 		}
+		clockRejected := map[string]int{}
 		for _, e := range events {
 			res := Result{ID: e.ID, Status: "rejected"}
 			original := e
@@ -486,6 +487,9 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			}
 			if err = s.validateEvent(ctx, r, en, &e); err != nil {
 				res.Reason = err.Error()
+				if reason := eventClockRejection(now, en.Started, e.Occurred); reason != "" && res.Reason == eventWindowMessage {
+					clockRejected[reason]++
+				}
 				out = append(out, res)
 				continue
 			}
@@ -541,6 +545,9 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			}
 			res.Status = "accepted"
 			out = append(out, res)
+		}
+		if err = addRejectionCounts(r, en.Owner, now, clockRejected); err != nil {
+			return err
 		}
 		if err = s.RebuildSessionSummaries(r, en.Session, now); err != nil {
 			return err

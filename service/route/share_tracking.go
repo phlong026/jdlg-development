@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -159,6 +160,9 @@ func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (trackin
 }
 func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
+	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
+		log.Printf("[Tracking] %s", warning)
+	}
 	svc := tracking.New(&tracking.SQLStore{DB: users.DB}, cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
@@ -253,6 +257,19 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			owners = append(owners, gin.H{"id": o, "name": o})
 		}
 		trackingResponse(c, gin.H{"can_view": scope.View, "can_manage": scope.Manage, "can_crm": scope.CRM, "can_delete": scope.Delete, "can_rules": scope.Rules, "owners": owners, "share_methods": []string{"native_miniprogram"}}, nil)
+	})
+	mg.GET("/diagnostics/rejections", func(c *gin.Context) {
+		days := 7
+		if raw := c.Query("days"); raw != "" {
+			value, e := strconv.Atoi(raw)
+			if e != nil {
+				trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "统计天数无效"})
+				return
+			}
+			days = value
+		}
+		v, e := svc.RejectionStats(c.Request.Context(), sc(c), days)
+		trackingResponse(c, gin.H{"items": v}, e)
 	})
 	mg.GET("/visitors", func(c *gin.Context) {
 		if !view(c) {

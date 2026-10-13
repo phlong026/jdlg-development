@@ -41,12 +41,13 @@
 - `POST /identity-links`、`DELETE /identity-links/:visitor`：明确依据、业务ID/编号、专门权限，必须经过当前操作者可信CRM接口的目标权限验证。
 - `POST /intent-overrides`：等级、原因和≤30天有效期；仅专门规则权限。完整人工决定追加不可变历史并可按 as_of 回放，访客游标另绑定覆盖 revision；标签是跟进参考，不是购买概率。
 - `POST /deletions`：专门权限和原因；同步删除当前系统可控事实/映射，保留防重放墓碑；外部导出和备份治理另行核验，不虚称全副本即时清除。
+- `GET /diagnostics/rejections?days=7`：需要查看权限；返回已授权归属最近 1–90 个 UTC 自然日、因事件时间超窗被拒的事件计数，按天倒序。`counts` 的键：`clock_ahead`（设备时间超前服务器 2 分钟以上）、`clock_behind`（事件早于本会话服务端开始时间 2 分钟以上）、`stale_queue`（离线队列超过 72 小时）。SDK 会丢弃被拒事件，所以计数持续增长说明有设备时钟偏差或积压，该用户在列表中会表现为“没有访问记录”。只含归属、日期和计数，不含访客、会话或事件标识。
 
 ## 数据字典与一致性
 
 `tracking_access`复用users.id记录显式能力，不复制账号系统。
 
-`tracking_records`为有类型的租户记录表。主键 `(tenant_id,kind,record_id)`；索引覆盖owner、visitor、content、share与时间，及session。kind区分content/version/media/share/share_request/entry/session/event/event_hash/sequence/view_binding/identity/crm/intent_override/business/audit/deletion/deletion_session/content_revoked/legacy_catalog/daily_summary/summary_state等。JSON字段由Go结构定义且入口严格校验，不存任意用户payload。所有时间以UTC字符串写入DATETIME并显式按UTC读回，避免旧DSN loc=Local改变含义。
+`tracking_records`为有类型的租户记录表。主键 `(tenant_id,kind,record_id)`；索引覆盖owner、visitor、content、share与时间，及session。kind区分content/version/media/share/share_request/entry/session/event/event_hash/sequence/view_binding/identity/crm/intent_override/business/audit/deletion/deletion_session/content_revoked/legacy_catalog/daily_summary/summary_state/rejection_stat等。rejection_stat 每个归属每个 UTC 日一行，只存计数，不纳入个人数据删除，也不在保留期清理范围内。JSON字段由Go结构定义且入口严格校验，不存任意用户payload。所有时间以UTC字符串写入DATETIME并显式按UTC读回，避免旧DSN loc=Local改变含义。
 
 事件使用INSERT不可改写。event_hash防相同ID不同内容，sequence防相同分段序号冲突。事实接受、身份变更及删除在事务内执行，租户行锁保证一致性。查询先按权限过滤再统计；同一session重叠可见区间取并集，跨午夜按查询边界裁剪；心跳/视频事件不会制造PV。
 
