@@ -111,7 +111,15 @@ for (const [width, height] of viewports) {
         assert.match(dialog['max-height'], /safe-area-inset-bottom/);
         assert.match(overlay.padding, /safe-area-inset-left/);
         assert.equal(styles('.st-dialog > header > button', width, height)['flex-shrink'], '0');
-        assert.equal(styles('.st-dialog > header', width, height).position, height <= 500 ? 'static' : 'sticky');
+        // The header stays pinned at every height; on short screens it is compact and its sticky offset matches the dialog padding.
+        const header = styles('.st-dialog > header', width, height);
+        assert.equal(header.position, 'sticky');
+        if (height <= 500) {
+            assert.equal(header.padding, '4px 16px');
+            assert.equal(header.top, '-12px');
+            assert.equal(header.margin, '-12px -16px 12px');
+            assert.equal(dialog.padding, '12px 16px 16px');
+        }
         assert.equal(styles('.st-dialog .st-media img', width, height)['max-height'], height <= 500 ? '50dvh' : 'min(560px, 60dvh)');
     });
 }

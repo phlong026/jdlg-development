@@ -253,11 +253,10 @@ with sync_playwright() as p:
         page.get_by_role("dialog").wait_for()
         page.wait_for_timeout(300)
         r = page.evaluate("""()=>{const d=document.querySelector('.st-dialog');d.scrollTop=1e6;const h=d.querySelector('header').getBoundingClientRect(),c=d.getBoundingClientRect(),
-          btn=d.querySelector('header button').getBoundingClientRect();return{scrolled:d.scrollTop>0,headerAtTop:Math.abs(h.top-c.top)<2,closeInView:btn.top>=0&&btn.bottom<=innerHeight}}""")
-        # shareTracking.scss deliberately un-pins the header at max-height:500px to save vertical space,
-        # so the pinned-header check only applies to taller viewports.
-        if SIZES[name][1] > 500:
-            check(not r["scrolled"] or (r["headerAtTop"] and r["closeInView"]), f"share dialog {name}: header/close scrolled away ({r})")
+          btn=d.querySelector('header button').getBoundingClientRect();return{headerH:h.height,scrolled:d.scrollTop>0,headerAtTop:Math.abs(h.top-c.top)<2,closeInView:btn.top>=0&&btn.bottom<=innerHeight}}""")
+        check(not r["scrolled"] or (r["headerAtTop"] and r["closeInView"]), f"share dialog {name}: header/close scrolled away ({r})")
+        if SIZES[name][1] <= 500:
+            check(r["headerH"] <= 60, f"share dialog {name}: compact pinned header takes {r['headerH']:.0f}px")
         page.screenshot(path=f"{OUT}/share-dialog-{name}.png")
         ctx.close()
 
