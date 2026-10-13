@@ -403,7 +403,8 @@ const UtilityTools: React.FC = () => {
                             </div>
                             {editorError && <div className="utility-feedback" role="alert">{editorError}</div>}
                             {editorMode === 'loading' && <div className="loading-state">{editorError ? '详情未加载，不能保存。请关闭后重试。' : '正在加载内容详情...'}</div>}
-                            <fieldset className="modal-body" disabled={editorMode === 'loading' || editorSaving} hidden={editorMode === 'loading'}>
+                            <div className="modal-body" hidden={editorMode === 'loading'}>
+                            <fieldset className="modal-fields" disabled={editorMode === 'loading' || editorSaving}>
                                 <div className="form-group">
                                     <label>分类 *</label>
                                     <select className="form-input" value={formData.category} onChange={(e) => updateForm(f => ({ ...f, category: e.target.value as any }))}>
@@ -451,6 +452,7 @@ const UtilityTools: React.FC = () => {
                                     </div>
                                 </div>
                             </fieldset>
+                            </div>
                             <div className="modal-footer">
                                 <button className="btn-secondary" onClick={dismissEditor} disabled={editorSaving}>取消</button>
                                 <button className="btn-primary" onClick={handleSave} disabled={editorMode === 'loading' || !!actionLoading}>

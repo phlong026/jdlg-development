@@ -192,3 +192,57 @@ test('utility titles and previews have their own shrink/wrap rules without hidin
     assert.equal(declarations('/utility-tools', '.tool-header .tool-status', width)['flex-shrink'], '0');
   }
 });
+
+test('template and utility editors scroll through a div body; the fieldset only carries the disabled state', () => {
+  for (const file of ['templates', 'utilityTools']) {
+    const tree = parse(`src/pages/${file}.tsx`);
+    const withClass = (tag, name) => find(tree, node => ts.isJsxElement(node) && node.openingElement.tagName.getText() === tag
+      && node.openingElement.attributes.properties.some(attr => attr.name?.getText() === 'className' && attr.initializer?.text === name));
+    assert.equal(withClass('fieldset', 'modal-body').length, 0, `${file}: a fieldset cannot be the scroll container`);
+    const fields = withClass('fieldset', 'modal-fields'); assert.ok(fields.length > 0);
+    for (const fieldset of fields) {
+      const parent = fieldset.parent;
+      assert.ok(ts.isJsxElement(parent) && parent.openingElement.tagName.getText() === 'div' && parent.openingElement.attributes.properties.some(attr => attr.name?.getText() === 'className' && attr.initializer?.text === 'modal-body'));
+    }
+  }
+  for (const route of ['/templates', '/utility-tools']) {
+    const fields = declarations(route, 'fieldset.modal-fields', 390, 480);
+    assert.equal(fields['min-width'], '0'); assert.equal(fields.border, '0');
+  }
+  assert.match(read('src/pages/utilityTools.scss'), /\.modal-body\[hidden\]\s*\{\s*display:\s*none/);
+});
+
+test('inspirations toolbar stacks on phones so search, filters and actions each get a full row', () => {
+  for (const width of widths) {
+    const toolbar = declarations('/inspirations', '.inspirations-toolbar', width);
+    assert.equal(toolbar['flex-direction'], width <= 768 ? 'column' : undefined);
+    const search = declarations('/inspirations', '.search-box', width);
+    if (width <= 768) { assert.equal(search.width, '100%'); assert.equal(search['max-width'], 'none'); assert.equal(search.flex, '0 0 auto'); }
+  }
+});
+
+test('narrow-screen fixes for pricing header, AI pricing notice, CRM tabs and long-text table columns', () => {
+  const rulesFor = (file, selector) => { const found = []; compile(file).walkRules(rule => { if (rule.selectors.some(item => item.endsWith(selector))) found.push(rule); }); return found; };
+  const decl = (rule, prop) => { let value; rule.walkDecls(prop, item => { value = item.value; }); return value; };
+  // F02: the header stacks inside a phone media query and the status badge owns its own row.
+  const toolbar = rulesFor('src/pages/pricingConfig.scss', '.pricing-toolbar').filter(rule => rule.parent.type === 'atrule');
+  assert.ok(toolbar.some(rule => decl(rule, 'flex-direction') === 'column'));
+  assert.ok(rulesFor('src/pages/pricingConfig.scss', '.pricing-toolbar-actions').some(rule => decl(rule, 'flex-wrap') === 'wrap'));
+  assert.ok(rulesFor('src/pages/pricingConfig.scss', '.source-badge').some(rule => decl(rule, 'flex') === '1 0 100%'));
+  // F03: prose with inline <b> must not be a flex row, otherwise every fragment becomes a column.
+  const notices = rulesFor('src/pages/aiPricing.scss', '.aip-notice').filter(rule => rule.selectors.some(item => item.endsWith('.aip-notice')));
+  assert.ok(notices.length > 0); assert.ok(notices.every(rule => decl(rule, 'display') !== 'flex'));
+  assert.equal(decl(notices[0], 'display'), 'block');
+  // F05: the CRM tab strip scrolls its active tab into view on load and on every switch.
+  const source = read('src/pages/customerManagement.tsx');
+  assert.match(source, /ref=\{tabsRef\}/); assert.match(source, /querySelector<HTMLElement>\('\.active'\)/); assert.match(source, /track\.scrollLeft\+=/);
+  assert.ok(source.indexOf('tabsRef=useRef') < source.indexOf('if(session.crmLoading)return'), 'hook must run before the loading early return');
+  // F06: long-text cells keep a readable minimum width in every affected table.
+  const priority = compile('src/responsive-priority.scss');
+  const minWidth = (route, leaf) => { let value; priority.walkRules(rule => { if (rule.selectors.includes(`.layout-content[data-admin-page='${route}'] ${leaf}`) || rule.selectors.includes(`.layout-content[data-admin-page="${route}"] ${leaf}`)) rule.walkDecls('min-width', item => { value = item.value; }); }); return value; };
+  for (const [route, table, cells] of [['/ai-tasks', '.task-table', ['.text-cell', '.user-cell']], ['/recharge', '.order-center-table', ['.order-title-cell', '.order-user-cell']], ['/membership-operations', '.membership-table', ['.order-cell', '.user-cell', '.time-cell', '.plan-cell']], ['/support-tickets', '.support-table', ['.identity-cell']]]) {
+    for (const cell of cells) assert.ok(parseInt(minWidth(route, `${table} ${cell}`), 10) >= 120, `${route} ${cell}`);
+  }
+  assert.ok(parseInt(minWidth('/certification', '.cert-subject-cell'), 10) >= 160);
+  assert.match(read('src/pages/certification.tsx'), /<td className="cert-subject-cell">/);
+});

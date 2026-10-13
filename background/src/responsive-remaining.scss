@@ -116,6 +116,9 @@
   }
   .modal-footer { flex-wrap: wrap; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
   .modal-close { flex-shrink: 0; width: 44px; height: 44px; }
+  // A fieldset cannot be the scroll container (it keeps min-content height), so
+  // it only carries the disabled state inside the scrolling .modal-body.
+  fieldset.modal-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
 }
 
 // Cover the 769–960px interval as well: the shared search component otherwise
@@ -168,6 +171,15 @@
   .layout-content[data-admin-page='/support-tickets'] .modal-content,
   .layout-content[data-admin-page='/oss'] .modal-content {
     max-height: calc(100dvh - max(12px, env(safe-area-inset-top))) !important;
+  }
+  // The toolbar is a row (search + filters | actions); stack it so each control keeps a readable width.
+  .layout-content[data-admin-page='/inspirations'] {
+    .inspirations-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+    .toolbar-left, .toolbar-actions { width: 100%; flex: 0 0 auto; }
+    .toolbar-left { gap: 12px; }
+    .search-box { flex: 0 0 auto; width: 100%; max-width: none; }
+    .toolbar-actions { flex-direction: row !important; flex-wrap: wrap; }
+    .toolbar-actions > button { flex: 1 1 140px; }
   }
   .layout-content[data-admin-page='/templates'] {
     .templates-grid, .readonly-info-grid { grid-template-columns: minmax(0, 1fr); }

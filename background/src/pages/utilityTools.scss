@@ -363,6 +363,6 @@
 
 .utility-feedback, .utility-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
 .utility-feedback { padding: 12px; background: #fff8eb; border: 1px solid #ead5aa; border-radius: 8px; overflow-wrap: anywhere; }
-fieldset.modal-body { border: 0; min-width: 0; margin: 0; }
-fieldset.modal-body[hidden] { display: none; }
+fieldset.modal-fields { border: 0; min-width: 0; margin: 0; padding: 0; }
+.modal-body[hidden] { display: none; }
 }

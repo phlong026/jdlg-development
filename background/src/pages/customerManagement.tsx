@@ -47,12 +47,17 @@ export default function CustomerManagement(){
  const [selected,setSelected]=useState<{id:string;poolEvidence?:PoolEvidence}|null>(null),[refresh,setRefresh]=useState(0);
  const [completion,setCompletion]=useState('');const openCustomer=(id:string,poolEvidence?:PoolEvidence)=>{if(!drawerGate.current.pending)setSelected({id,poolEvidence})};
  useEffect(()=>{if(!drawerGate.current.pending)setSelected(null)},[tab,session.user?.id]);
+ // 窄屏下栏目条横向滚动：直达或切换后把当前栏目带入可视区（只滚动栏目条本身，不移动页面）
+ const tabsRef=useRef<HTMLElement>(null);const tabKeys=allowed.join('|');
+ useEffect(()=>{const track=tabsRef.current,active=track?.querySelector<HTMLElement>('.active');if(!track||!active)return;
+  const viewport=track.getBoundingClientRect(),item=active.getBoundingClientRect(),edge=16;
+  if(item.left<viewport.left+edge)track.scrollLeft+=item.left-viewport.left-edge;else if(item.right>viewport.right-edge)track.scrollLeft+=item.right-viewport.right+edge},[tab,tabKeys,session.crmLoading]);
  const changed=()=>{if(!drawerGate.current.pending)setRefresh(n=>n+1)};
  if(session.crmLoading)return <><div className="crm-loading">正在读取客户权限…</div></>;
  return <><div className="crm-page">
   <header className="crm-heading"><div><span className="crm-eyebrow">CUSTOMER MANAGEMENT</span><h1>{titleOf[tab]}</h1><p>{session.crmContext?.account.displayName||session.user?.username}，{supervisor?'关注团队客户与跟进进度':'查看客户需求，安排下一次联系'}</p></div><div className="crm-actions">{session.crmContext&&<button className="crm-primary" disabled={drawerBusy} onClick={()=>{if(drawerGate.current.pending)return;setCompletion('');setReporting(true)}}>＋ 新增客户报备</button>}<button className="crm-secondary" disabled={drawerBusy} onClick={changed}><FiRefreshCw/>刷新</button></div></header>
   {completion&&<div className="crm-note" role="status">{completion}</div>}
-  <nav className="crm-tabs" aria-label="客户管理栏目">{allowed.map(t=><button disabled={drawerBusy} key={t} className={tab===t?'active':''} onClick={()=>go(t)}>{titleOf[t]}</button>)}</nav>
+  <nav className="crm-tabs" aria-label="客户管理栏目" ref={tabsRef}>{allowed.map(t=><button disabled={drawerBusy} key={t} className={tab===t?'active':''} onClick={()=>go(t)}>{titleOf[t]}</button>)}</nav>
   {session.crmContext?.demo&&<div className="crm-note">演示环境 · 虚构数据 · 真实企微自动接入尚未启用</div>}
   {!session.crmContext&&tab!=='access'&&tab!=='leads'?<Feedback error={session.crmError||'客户管理接入尚未配置，请联系系统管理员'} retry={session.refresh}/>:<React.Fragment key={session.user?.id}>
    {tab==='home'&&<Home key={'h'+refresh} supervisor={supervisor} open={openCustomer} go={go}/>}

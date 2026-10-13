@@ -238,6 +238,34 @@
   }
 }
 
+// Long-text columns keep a readable floor; the table's own container scrolls sideways
+// instead of letting the browser break Chinese text one character per line.
+.layout-content[data-admin-page='/ai-tasks'] .task-table {
+  .user-cell { min-width: 120px; }
+  .text-cell { min-width: 220px; }
+  .task-no, .user-cell, .text-cell { overflow-wrap: anywhere; }
+}
+.layout-content[data-admin-page='/recharge'] .order-center-table {
+  .order-user-cell { min-width: 130px; }
+  .order-amount-cell { min-width: 110px; }
+  .order-title-cell { min-width: 220px; }
+  .order-user-cell, .order-title-cell, .transaction-id { overflow-wrap: anywhere; }
+}
+.layout-content[data-admin-page='/membership-operations'] .membership-table {
+  .user-cell { min-width: 150px; }
+  .plan-cell { min-width: 130px; }
+  .time-cell { min-width: 150px; }
+  .order-cell { min-width: 200px; }
+  .user-cell, .plan-cell, .order-cell, .time-cell { overflow-wrap: anywhere; }
+}
+.layout-content[data-admin-page='/support-tickets'] .support-table {
+  .identity-cell { min-width: 150px; overflow-wrap: anywhere; }
+  td:first-child .identity-cell { min-width: 220px; }
+}
+.layout-content[data-admin-page='/certification'] {
+  .cert-subject-cell { min-width: 180px; overflow-wrap: anywhere; }
+}
+
 // Financial definitions remain available by touch and keyboard, not hover alone.
 .layout-content[data-admin-page='/recharge'] .finance-help {
   min-width: 0;
