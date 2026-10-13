@@ -49,7 +49,7 @@
 
 `tracking_records`为有类型的租户记录表。主键 `(tenant_id,kind,record_id)`；索引覆盖owner、visitor、content、share与时间，及session。kind区分content/version/media/share/share_request/entry/session/event/event_hash/sequence/view_binding/identity/crm/intent_override/business/audit/deletion/deletion_session/content_revoked/legacy_catalog/daily_summary/summary_state/rejection_stat等。rejection_stat 每个归属每个 UTC 日一行，只存计数，不纳入个人数据删除，也不在保留期清理范围内。JSON字段由Go结构定义且入口严格校验，不存任意用户payload。所有时间以UTC字符串写入DATETIME并显式按UTC读回，避免旧DSN loc=Local改变含义。
 
-事件使用INSERT不可改写。event_hash防相同ID不同内容，sequence防相同分段序号冲突。事实接受、身份变更及删除在事务内执行，租户行锁保证一致性。查询先按权限过滤再统计；同一session重叠可见区间取并集，跨午夜按查询边界裁剪；心跳/视频事件不会制造PV。
+事件使用INSERT不可改写。event_hash防相同ID不同内容，sequence防相同分段序号冲突。事实接受、身份变更、删除、注释和意向评估在写事务内执行，租户行锁保证写入串行。纯查询（访客/素材/会话/事件列表、规则读取、公开阅读与媒体、分享解析、保留试算、诊断）使用 `READ ONLY` + `REPEATABLE READ` 快照事务，不取租户锁；代码层与数据库层都拒绝其中的写入。访客列表在快照上计算标签后，另开一个短写事务记录意向评估（按 as_of/人工修正水位防止旧请求覆盖新状态，并跳过快照后被删除的访客）。CRM 桥接校验在所有事务之外执行，映射写入前在锁内重新确认访客归属。跟踪最多同时占用 `TRACKING_MAX_WRITE_TX`（默认4）个写连接和 `TRACKING_MAX_READ_TX`（默认6）个读连接，超出时在进程内排队，请求取消即返回503，不占用共享连接池。查询先按权限过滤再统计；同一session重叠可见区间取并集，跨午夜按查询边界裁剪；心跳/视频事件不会制造PV。
 
 ### 原业务素材的只读版本快照
 

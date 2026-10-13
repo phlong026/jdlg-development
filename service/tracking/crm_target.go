@@ -29,7 +29,8 @@ func (s *Service) VisitorCRMTarget(ctx context.Context, scope Scope, visitor str
 	if s.VerifyCRM == nil {
 		return out, fail(503, "客户关系验证尚未接通")
 	}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	var owner, customer, number string
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		dead, e := tombstoned(r, "deletion", visitor)
 		if e != nil {
 			return e
@@ -37,7 +38,7 @@ func (s *Service) VisitorCRMTarget(ctx context.Context, scope Scope, visitor str
 		if dead {
 			return fail(410, "访问记录已删除")
 		}
-		owner, e := privateOwner(r, scope, visitor)
+		owner, e = privateOwner(r, scope, visitor)
 		if e != nil {
 			return e
 		}
@@ -52,17 +53,21 @@ func (s *Service) VisitorCRMTarget(ctx context.Context, scope Scope, visitor str
 		if json.Unmarshal(row.Payload, &link) != nil {
 			return ErrUnavailable
 		}
-		customer, number := link["customer_id"], link["business_number"]
+		customer, number = link["customer_id"], link["business_number"]
 		if link["source"] != "verified_upstream" || !trim(customer, 128) || strings.ContainsAny(customer, "/\\%;\r\n") || customer == "." || customer == ".." || !trim(number, 100) {
 			return fail(409, "客户关联需要重新核实")
 		}
-		verifyCtx, cancel := context.WithTimeout(sourceReadContext(ctx, r), 2*time.Second)
-		defer cancel()
-		if e = s.VerifyCRM(verifyCtx, ownerScope(scope, owner), visitor, customer, number); e != nil {
-			return e
-		}
-		out = CRMTarget{Kind: "customer", CustomerID: customer, BusinessNumber: number, Owner: owner}
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	// The CRM bridge is an external HTTP call. It runs after the snapshot closes
+	// so no transaction or pool connection is held while it answers.
+	verifyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err = s.VerifyCRM(verifyCtx, ownerScope(scope, owner), visitor, customer, number); err != nil {
+		return out, err
+	}
+	return CRMTarget{Kind: "customer", CustomerID: customer, BusinessNumber: number, Owner: owner}, nil
 }

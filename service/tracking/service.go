@@ -615,7 +615,7 @@ func (s *Service) ResolveShare(ctx context.Context, token string) (map[string]an
 	if !validID(token) {
 		return out, fail(404, "分享入口无效")
 	}
-	err := s.transaction(ctx, func(r Repository) error {
+	err := s.readTransaction(ctx, func(r Repository) error {
 		sh, e := decode[Share](r, "share", hash(token))
 		if e != nil || sh.Revoked || s.Now().After(sh.Expires) {
 			return fail(404, "分享入口无效")

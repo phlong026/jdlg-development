@@ -163,7 +163,9 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
 		log.Printf("[Tracking] %s", warning)
 	}
-	svc := tracking.New(&tracking.SQLStore{DB: users.DB}, cfg)
+	// Tracking shares the application pool (20 connections). Cap what it may hold
+	// so queued tracking work waits in Go instead of starving core business.
+	svc := tracking.New(tracking.NewSQLStore(users.DB, trackingSlotLimit("TRACKING_MAX_WRITE_TX", 4), trackingSlotLimit("TRACKING_MAX_READ_TX", 6)), cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
 	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
@@ -536,6 +538,21 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, v, e)
 	})
 	return svc
+}
+
+// trackingSlotLimit reads a positive connection cap, falling back to the default
+// for empty or invalid values. It never disables the cap.
+func trackingSlotLimit(name string, fallback int) int {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 || value > 64 {
+		log.Printf("[Tracking] %s=%q 无效，使用默认值 %d", name, raw, fallback)
+		return fallback
+	}
+	return value
 }
 
 // Daily generations expire well before the associated 30-day share token.

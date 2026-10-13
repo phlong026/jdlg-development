@@ -47,13 +47,28 @@ func (s *Service) LinkCRM(ctx context.Context, scope Scope, key, customer, busin
 	if s.VerifyCRM == nil {
 		return fail(403, "CRM业务关系验证尚未接入")
 	}
+	var owner string
+	if e := s.readQueryTransaction(ctx, func(r Repository) error {
+		var e error
+		owner, e = privateOwner(r, scope, key)
+		return e
+	}); e != nil {
+		return e
+	}
+	// The CRM bridge is an external HTTP call (up to its client timeout). It must
+	// not run while holding the serialized tenant lock that fact acceptance needs.
+	if e := s.VerifyCRM(ctx, ownerScope(scope, owner), key, customer, businessNumber); e != nil {
+		return e
+	}
 	return s.queryTransaction(ctx, func(r Repository) error {
-		owner, e := privateOwner(r, scope, key)
+		// Re-resolve under the lock: the visitor may have been deleted or gained a
+		// second owner while the bridge answered.
+		current, e := privateOwner(r, scope, key)
 		if e != nil {
 			return e
 		}
-		if e = s.VerifyCRM(sourceReadContext(ctx, r), ownerScope(scope, owner), key, customer, businessNumber); e != nil {
-			return e
+		if current != owner {
+			return fail(409, "访客归属已变化，请刷新后重试")
 		}
 		rec := record("crm", privateKey(owner, key), owner, s.Now(), map[string]string{"customer_id": customer, "business_number": businessNumber, "basis": basis, "source": "verified_upstream"})
 		rec.Visitor = key

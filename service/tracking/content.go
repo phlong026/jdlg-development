@@ -206,7 +206,7 @@ func (s *Service) ReadContent(ctx context.Context, id string, version int) (Cont
 	if !s.Config.ContentEnabled {
 		return out, fail(404, "内容不可访问")
 	}
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		if e := s.available(ctx, r, "pages/contentreader/contentreader", id, version); e != nil {
 			return e
 		}
@@ -232,7 +232,7 @@ func (s *Service) AddMedia(ctx context.Context, scope Scope, asset Asset, owner 
 }
 func (s *Service) Media(ctx context.Context, scope *Scope, id string) (Asset, error) {
 	var a Asset
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		rec, e := r.Get("media", id)
 		if e != nil {
 			return fail(404, "媒体不可访问")
@@ -265,7 +265,7 @@ func (s *Service) ListMedia(ctx context.Context, scope Scope) (List, error) {
 	if !scope.Manage {
 		return out, fail(403, "无素材管理权限")
 	}
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		rows, e := r.List("media")
 		if e != nil {
 			return e

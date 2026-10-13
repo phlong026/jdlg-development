@@ -10,10 +10,29 @@ import (
 	"time"
 )
 
-// Query reads retain the existing tenant transaction/lock and fail closed even
-// if a legacy optional metadata lookup ignores a budget error.
+// readTransaction runs fn on a lock-free snapshot when the store supports it.
+// Stores without ReadStore keep the serialized transaction.
+func (s *Service) readTransaction(ctx context.Context, fn func(Repository) error) error {
+	if s.Store == nil || s.Config.Tenant == "" {
+		return ErrUnavailable
+	}
+	if reader, ok := s.Store.(ReadStore); ok {
+		return reader.ReadTransaction(ctx, s.Config.Tenant, fn)
+	}
+	return s.Store.Transaction(ctx, s.Config.Tenant, fn)
+}
+
+// Bounded queries fail closed even if a legacy optional metadata lookup
+// ignores a budget error. queryTransaction is for bounded reads that also
+// write (annotations, deletion); pure reads use readQueryTransaction.
 func (s *Service) queryTransaction(ctx context.Context, fn func(Repository) error) error {
-	return s.transaction(ctx, func(r Repository) error {
+	return boundedTransaction(s.transaction, ctx, fn)
+}
+func (s *Service) readQueryTransaction(ctx context.Context, fn func(Repository) error) error {
+	return boundedTransaction(s.readTransaction, ctx, fn)
+}
+func boundedTransaction(run func(context.Context, func(Repository) error) error, ctx context.Context, fn func(Repository) error) error {
+	return run(ctx, func(r Repository) error {
 		bounded := boundedQueryRepository(r).(*queryRepository)
 		err := fn(bounded)
 		if bounded.budget.err != nil {
@@ -587,7 +606,9 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	effective := ownerScope(scope, f.Owner)
+	pending := []pendingEvaluation{}
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		facts, e := s.facts(r, scope, f)
 		if e != nil {
 			return e
@@ -625,7 +646,6 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			}
 			ss[v.Visitor][v.Session] = true
 		}
-		effective := ownerScope(scope, f.Owner)
 		intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by), overrideLimit)
 		if e != nil {
 			return e
@@ -634,8 +654,8 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		for key, v := range by {
 			v.Sessions = len(ss[key])
 			v.Intent = s.intent(effective, key, f.AsOf, intentData)
-			if _, e = s.recordIntentEvaluation(r, effective, key, v.Intent); e != nil {
-				return e
+			if s.evaluationAudited(effective, v.Intent) {
+				pending = append(pending, pendingEvaluation{key: key, intent: v.Intent})
 			}
 			if scope.CRM && len(effective.Owners) == 1 {
 				rec, ok := intentData.crm[privateKey(effective.Owners[0], key)]
@@ -697,7 +717,14 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		out.FirstCursor = withProfileRevision(overrideSnapshotCursor(f, 0, intentData.overrideRevision), profileRevision)
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	// A served label is never left unaudited: failing to record fails the request.
+	if err = s.recordIntentEvaluations(ctx, effective, pending); err != nil {
+		return List{Items: []Visitor{}}, err
+	}
+	return out, nil
 }
 func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string) (List, error) {
 	return s.queryContents(ctx, scope, f, id)
@@ -713,7 +740,7 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		all, e := s.factsSelected(r, scope, f, factSelection{Visitors: []string{key}})
 		if e != nil {
 			return e
@@ -822,7 +849,7 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		facts, e := s.factsSelected(r, scope, f, factSelection{View: id})
 		if e != nil {
 			return e

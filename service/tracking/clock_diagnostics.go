@@ -75,7 +75,7 @@ func (s *Service) RejectionStats(ctx context.Context, scope Scope, days int) ([]
 		return out, fail(400, "统计天数需在1到90之间")
 	}
 	from := rejectionDayStart(s.Now()).AddDate(0, 0, -(days - 1))
-	err := s.queryTransaction(ctx, func(r Repository) error {
+	err := s.readQueryTransaction(ctx, func(r Repository) error {
 		rows, e := scopedRecords(r, "rejection_stat", RecordQuery{Owners: permittedOwners(scope, ""), AtFrom: from})
 		if e != nil {
 			return e

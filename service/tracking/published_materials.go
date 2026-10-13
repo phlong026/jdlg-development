@@ -70,7 +70,7 @@ func (s *Service) PublishedMaterials(ctx context.Context, scope Scope, cursor st
 	if limit > 50 {
 		limit = 50
 	}
-	err := s.queryTransaction(ctx, func(r Repository) error {
+	err := s.readQueryTransaction(ctx, func(r Repository) error {
 		rows, err := scopedRecords(r, "content", RecordQuery{Owners: scope.Owners})
 		if err != nil {
 			return err
@@ -118,7 +118,7 @@ func (s *Service) OpenPublishedMaterial(ctx context.Context, scope Scope, id str
 	if !validID(id) || version < 1 {
 		return out, fail(404, "素材不可访问")
 	}
-	err := s.queryTransaction(ctx, func(r Repository) error {
+	err := s.readQueryTransaction(ctx, func(r Repository) error {
 		var err error
 		out, err = s.publishedMaterial(ctx, r, scope, id, version)
 		return err

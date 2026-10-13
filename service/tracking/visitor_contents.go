@@ -121,7 +121,7 @@ func (s *Service) VisitorContents(ctx context.Context, scope Scope, key string, 
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		facts, e := s.factsSelected(r, scope, f, factSelection{Visitors: []string{key}})
 		if e != nil {
 			return e
