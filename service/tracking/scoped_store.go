@@ -24,6 +24,10 @@ type RecordQuery struct {
 	Content, View                              string
 	AtFrom, AtBefore, AtThrough, IdentityAsOf  time.Time
 	CatalogAsOf                                time.Time // Immutable catalog membership; never mutable occurred_at.
+	// WithoutExactSummary keeps only rows whose session lacks a complete
+	// projection without deferred events, i.e. one that may hold facts in days
+	// that have no projected bucket.
+	WithoutExactSummary bool
 }
 
 type ScopedRecordLister interface {
@@ -288,6 +292,15 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 		}
 		if link["original_visitor_key"] != original || !strings.HasPrefix(link["visitor_key"], "u:") || !includes(q.VisitorKeys, link["visitor_key"]) {
 			return false, nil
+		}
+	}
+	if q.WithoutExactSummary {
+		state, err := decode[summaryState](r, "summary_state", session)
+		if err == nil && state.Complete && state.DeferredFrom == nil {
+			return false, nil
+		}
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return false, err
 		}
 	}
 	return true, nil

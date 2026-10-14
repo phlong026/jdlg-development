@@ -45,6 +45,9 @@ func boundedTransaction(run func(context.Context, func(Repository) error) error,
 type factSelection struct {
 	Visitors, Sessions []string
 	View               string
+	// Summaries lets list and intent reductions read exact current projections
+	// instead of raw events. Drilldowns that need flags or events keep raw.
+	Summaries bool
 }
 
 type factView struct {
@@ -180,30 +183,42 @@ func hasFlag(e Event, f string) bool {
 	return false
 }
 func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error) {
-	return s.factsSelected(r, scope, f, factSelection{})
+	return s.factsSelected(r, scope, f, factSelection{Summaries: true})
 }
 func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, error) {
 	if !scope.View {
 		return nil, fail(403, "无访问记录查看权限")
 	}
-	retained, expired, e := s.summaryFactsSelected(r, scope, f, selection)
+	current := selection.Summaries && summaryWindowExact(f)
+	// expired holds every session its projections fully represent; raw rows of
+	// those sessions are never added to them.
+	retained, expired, stale, e := s.summaryFactsSelected(r, scope, f, selection, current)
 	if e != nil {
 		return nil, e
 	}
 	owners := permittedOwners(scope, f.Owner)
 	// All accepted visible segments are <= 15 seconds. Include segments ending
 	// after End that overlap the requested window; never discard the earlier PV.
-	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf})
+	// With current projections, a session needs a raw scan only if it may hold
+	// facts in days without a bucket: never projected, projected by an older
+	// projector, or with deferred events. Others with facts here have a bucket.
+	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf, WithoutExactSummary: current})
 	if e != nil {
 		return nil, e
 	}
 	sessions := []string{}
 	seenSessions := map[string]bool{}
-	for _, row := range candidates {
-		if !seenSessions[row.Session] {
-			sessions = append(sessions, row.Session)
-			seenSessions[row.Session] = true
+	addSession := func(session string) {
+		if !seenSessions[session] && !expired[session] {
+			sessions = append(sessions, session)
+			seenSessions[session] = true
 		}
+	}
+	for _, session := range stale {
+		addSession(session)
+	}
+	for _, row := range candidates {
+		addSession(row.Session)
 	}
 	// Read the complete authorized session, not just the candidate material or
 	// view. Session-wide overlap deduplication depends on the other page views.
@@ -404,7 +419,7 @@ func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope
 		return data, ruleErr
 	}
 	if s.Config.IntentEnabled && !data.mixedRules {
-		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -data.rule.WindowDays), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors})
+		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -data.rule.WindowDays), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors, Summaries: true})
 		if e != nil {
 			return data, e
 		}

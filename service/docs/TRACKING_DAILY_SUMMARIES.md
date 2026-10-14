@@ -56,6 +56,40 @@ frozen projection cannot be reconstructed after raw expiry; the reducer returns
 projection; a future metric-version migration must not pretend raw reconstruction
 is still possible.
 
+## Current projections for lists
+
+Visitor lists, content lists and intent evidence reduce current projections
+instead of raw events whenever the result is provably identical:
+
+- The window must be exact for whole buckets: its end lies after as_of (nothing
+  observed can be at or beyond it), or both start and end are Asia/Shanghai
+  midnights. The admin UI's day ranges, "all" and the intent window qualify;
+  arbitrary historical API windows use raw events.
+- The session's `summary_state` must be `complete` (written by this projector),
+  carry the current metric version, have `built_at` at or before as_of (no
+  acceptance or identity link since) and no `deferred_from` at or before as_of.
+  `deferred_from` is the earliest event the build left out because it occurred
+  after the build time (a device clock up to two minutes ahead).
+- Every attached event's day gets a bucket, even without visibility, so a
+  window's last observation (for example a page_end after midnight) survives.
+  `segment_continues_next_day` marks a bucket whose fresh visibility came from a
+  segment ending after midnight, reproducing the raw cap of that observation at
+  a day-aligned window end. A PV is reported only if it counts or has visible
+  time in the window; its last observation starts at its start time.
+- A session with no events to show still gets a `complete` state (owner and
+  visitor retained for scope and deletion discovery), so it is not rescanned.
+- Sessions whose projection is not exact, never projected, projected by the
+  older projector, or holding deferred events are reduced from raw events.
+
+`summary_equivalence_test.go` drives real Enter/Accept traffic with overlapping
+segments, midnight crossings, late and out-of-order batches, clocks ahead and
+mid-session logins, then requires identical facts (owner, visitor, session, PV,
+route, content, version, title, start, count, visible time, last observation)
+from both reductions across day, "all", intent and arbitrary windows and
+historical snapshots between batches. Mutation checks confirmed it fails when
+any of the conditions above is removed. Flags, end time and predecessor are not
+compared and list responses do not expose them; drilldowns keep raw reduction.
+
 ## Boundaries and validation
 
 The SQL adapter implements `SessionRecordLister` to push the affected-session

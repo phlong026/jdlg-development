@@ -274,6 +274,9 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 			where = append(where, clause+"))")
 		}
 	}
+	if q.WithoutExactSummary {
+		where = append(where, "NOT EXISTS (SELECT 1 FROM tracking_records summary_state WHERE summary_state.tenant_id=r.tenant_id AND summary_state.kind='summary_state' AND summary_state.record_id="+recordSessionColumn(kind)+" AND JSON_UNQUOTE(JSON_EXTRACT(summary_state.payload,'$.complete'))='true' AND JSON_EXTRACT(summary_state.payload,'$.deferred_from') IS NULL)")
+	}
 	args = append(args, limit)
 	return "SELECT " + recordColumns + " FROM tracking_records r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.occurred_at,r.record_id LIMIT ?", args
 }
