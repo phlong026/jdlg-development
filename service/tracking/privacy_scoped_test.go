@@ -262,19 +262,6 @@ func TestPrivacyScopedOwnerSelectionAndLookupFailures(t *testing.T) {
 	}
 }
 
-func TestPrivacyScopedDeletionBudgetRejectsWithoutPartialSuccess(t *testing.T) {
-	s, indexed, scope, now := privacyFixture(t)
-	for i := 0; i <= maxQueryRecords/2; i++ {
-		reviewPV(indexed.rows, fmt.Sprintf("target-%06d", i), "one", "u:1", "target-session", "", now)
-	}
-	before := privacyCopy(indexed.rows)
-	err := s.DeleteVisitor(context.Background(), scope, "u:1", "request")
-	requireQueryError(t, err, 422)
-	if !reflect.DeepEqual(indexed.rows, before) {
-		t.Fatal("budget rejection left partial deletion or tombstones")
-	}
-}
-
 func TestPrivacyScopedAnonymousDeletionKeepsAlreadyIdentifiedSessions(t *testing.T) {
 	s, indexed, scope, now := privacyFixture(t)
 	reviewPV(indexed.rows, "anonymous-view", "one", "a:device", "anonymous-session", "", now)

@@ -274,6 +274,14 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 			where = append(where, clause+"))")
 		}
 	}
+	if q.hasCursor() {
+		// Rows are ordered by (occurred_at, record_id); resume strictly after the cursor.
+		where = append(where, "(r.occurred_at>? OR (r.occurred_at=? AND r.record_id>?))")
+		args = append(args, stamp(q.AfterAt), stamp(q.AfterAt), q.AfterID)
+	}
+	if q.Limit > 0 && q.Limit < limit {
+		limit = q.Limit
+	}
 	if q.WithoutExactSummary {
 		where = append(where, "NOT EXISTS (SELECT 1 FROM tracking_records summary_state WHERE summary_state.tenant_id=r.tenant_id AND summary_state.kind='summary_state' AND summary_state.record_id="+recordSessionColumn(kind)+" AND JSON_UNQUOTE(JSON_EXTRACT(summary_state.payload,'$.complete'))='true' AND JSON_EXTRACT(summary_state.payload,'$.deferred_from') IS NULL)")
 	}

@@ -22,6 +22,8 @@ type Service struct {
 	Store                  Store
 	Config                 Config
 	Now                    func() time.Time
+	// Tests only: take the staged deletion path even when the atomic plan fits.
+	forceStagedDeletion bool
 }
 
 func New(store Store, cfg Config) *Service {

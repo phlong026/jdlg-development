@@ -468,8 +468,15 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		e := svc.DeleteVisitor(c.Request.Context(), sc(c), in.Visitor, in.Reason)
-		trackingResponse(c, gin.H{"status": "completed"}, e)
+		// A deletion too large for one transaction is staged. The data is already
+		// unreadable once it starts; this request does a bounded share of the
+		// removal and a repeated identical request continues it.
+		done, e := svc.DeleteVisitorProgress(c.Request.Context(), sc(c), in.Visitor, in.Reason, trackingDeletionPagesPerRequest)
+		status := "in_progress"
+		if done {
+			status = "completed"
+		}
+		trackingResponse(c, gin.H{"status": status}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
@@ -539,6 +546,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	})
 	return svc
 }
+
+// Each staged page is one short transaction of up to 500 rows per query, so this
+// bounds one HTTP request to a few tens of thousands of rows.
+const trackingDeletionPagesPerRequest = 60
 
 // trackingSlotLimit reads a positive connection cap, falling back to the default
 // for empty or invalid values. It never disables the cap.

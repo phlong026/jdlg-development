@@ -3,6 +3,10 @@ import { Context, Intent, tracking, Visitor } from '../../api/shareTracking';
 import { intentLabels, time } from './model';
 import { IntentEvidenceDetails } from './evidence';
 
+// A deletion too large for one transaction continues over several requests. The
+// data is already unreadable; the operator repeats the same confirmation.
+export class DeletionInProgress extends Error {}
+export const deletionInProgressMessage = '删除仍在进行：该访客数据已不可读取且不会再增加。请再次点击“确认删除访问记录与映射”继续，直到服务端确认完成';
 export type GovernanceProps = { context?: Context; onOpenEvidence?: () => void; onBusyChange?: (value: boolean) => void; onDirtyChange?: (value: boolean) => void; changed?: () => void };
 export function validateOverride(reason: string, expiry: string, now = Date.now()): string {
     if (!reason.trim() || reason.trim().length > 500) return '请填写 1–500 字的修正原因';
@@ -36,7 +40,7 @@ export function VisitorGovernance({ visitor, context, onOpenEvidence, onBusyChan
             if (!alive.current || target.current !== key) return;
             setCompleted(true); setNotice(message); setCustomer(''); setNumber(''); setBasis(''); setLevel('unknown'); setReason(''); setExpiry(''); setDeleteReason(''); setDeleteDialog(false); setConfirmation(''); onDirtyChange?.(false); changed?.();
             if (deleted) onDeleted();
-        } catch (error) { if (alive.current && target.current === key) setError(`${(error as Error).message}。草稿已保留；结果不明确时请先刷新核对，不要重复提交。`); }
+        } catch (error) { if (alive.current && target.current === key) setError(error instanceof DeletionInProgress ? error.message : `${(error as Error).message}。草稿已保留；结果不明确时请先刷新核对，不要重复提交。`); }
         finally { pending.current = false; if (alive.current && target.current === key) { setBusy(false); onBusyChange?.(false); } }
     }
     if (visitor.identity_state === 'deleted') return null;
@@ -57,7 +61,7 @@ export function VisitorGovernance({ visitor, context, onOpenEvidence, onBusyChan
             {context?.can_crm && !signedIn && <p>匿名访客不能建立 CRM 映射；须先由服务端确认登录账号。</p>}
             {permitted.rules && <section><h4>人工意向修正</h4><p>须填写原因和有效期（最多 30 天）；操作人和时间由服务端记录。</p><label>修正等级<select value={level} onChange={e => setLevel(e.target.value as Intent)}>{Object.entries(intentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>修正原因<textarea value={reason} maxLength={500} onChange={e => setReason(e.target.value)} /></label><label>有效至（当前设备时区）<input type="datetime-local" value={expiry} onChange={e => setExpiry(e.target.value)} /></label><button disabled={busy || !ownerAllowed} onClick={() => { const validation = validateOverride(reason, expiry); if (validation) { setError(validation); return; } void perform('rules', async key => (await tracking.overrideIntent({ visitor_key: key, level, reason: reason.trim(), expires_at: new Date(expiry).toISOString() }, selectedOwner)).updated, '服务端已确认人工意向修正'); }}>保存人工修正</button></section>}
             {permitted.deletion && <section><h4>删除访问数据</h4><p>删除当前授权范围内该访客的访问记录、汇总和身份映射；不会撤回已发布素材。缓存、授权导出副本和备份须按批准策略治理，不能据此认定备份已立即清除。</p><button disabled={busy} onClick={() => { setConfirmation(''); setDeleteDialog(true); }}>申请删除此访客数据</button>
-                {deleteDialog && <section role="alertdialog" aria-modal="false" aria-label="确认删除指定访客数据"><h4>确认删除：{visitor.visitor_key}</h4><p>此操作不可通过本页面恢复。每次删除都需要单独确认，请核对目标。</p><label>删除原因<textarea value={deleteReason} maxLength={500} onChange={e => setDeleteReason(e.target.value)} /></label><label>输入完整访客标识以确认<input autoComplete="off" value={confirmation} onChange={e => setConfirmation(e.target.value)} /></label><button disabled={busy || confirmation !== visitor.visitor_key || !deleteReason.trim()} onClick={() => { if (confirmation !== visitor.visitor_key || !deleteReason.trim()) return; void perform('deletion', async key => (await tracking.deleteVisitor({ visitor_key: key, reason: deleteReason.trim() })).status === 'completed', '服务端已确认当前授权范围内的数据删除；备份和副本仍按治理策略处理', true); }}>确认删除访问记录与映射</button><button disabled={busy} onClick={() => { setDeleteDialog(false); setConfirmation(''); }}>取消删除</button></section>}
+                {deleteDialog && <section role="alertdialog" aria-modal="false" aria-label="确认删除指定访客数据"><h4>确认删除：{visitor.visitor_key}</h4><p>此操作不可通过本页面恢复。每次删除都需要单独确认，请核对目标。</p><label>删除原因<textarea value={deleteReason} maxLength={500} onChange={e => setDeleteReason(e.target.value)} /></label><label>输入完整访客标识以确认<input autoComplete="off" value={confirmation} onChange={e => setConfirmation(e.target.value)} /></label><button disabled={busy || confirmation !== visitor.visitor_key || !deleteReason.trim()} onClick={() => { if (confirmation !== visitor.visitor_key || !deleteReason.trim()) return; void perform('deletion', async key => { const result = await tracking.deleteVisitor({ visitor_key: key, reason: deleteReason.trim() }); if (result.status === 'in_progress') throw new DeletionInProgress(deletionInProgressMessage); return result.status === 'completed'; }, '服务端已确认当前授权范围内的数据删除；备份和副本仍按治理策略处理', true); }}>确认删除访问记录与映射</button><button disabled={busy} onClick={() => { setDeleteDialog(false); setConfirmation(''); }}>取消删除</button></section>}
             </section>}
             {!permitted.crm && !permitted.rules && !permitted.deletion && <p>当前账号没有适用于此访客的治理操作权限。</p>}
         </fieldset>}

@@ -118,7 +118,7 @@ func (p *visitorDeletion) add(scope Scope, row Record) error {
 	return nil
 }
 
-func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletion, error) {
+func planVisitorDeletion(r Repository, scope Scope, key string, resuming bool) (*visitorDeletion, error) {
 	p := &visitorDeletion{rows: map[string]Record{}, sessions: map[string]bool{}, events: map[string]bool{}, views: map[string]bool{}, sequences: map[string]bool{}, shares: map[string]bool{}}
 	// Deliberately do not restrict Owners: full-identity deletion must detect
 	// any inaccessible owner, including one represented only by an old entry.
@@ -153,7 +153,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string) (*visitorDeletio
 			return nil, err
 		}
 	}
-	if len(p.rows) == 0 {
+	if len(p.rows) == 0 && !resuming {
 		return nil, fail(404, "访客不可访问")
 	}
 	// Only verified target sessions expand the graph. Never turn a device's

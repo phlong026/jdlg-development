@@ -2,6 +2,8 @@ package tracking
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 )
@@ -116,25 +118,87 @@ func (s *Service) OverrideIntent(ctx context.Context, scope Scope, key, level, r
 		return appendIntentOverride(r, owner, key, scope.Actor, level, reason, expires, s.Now())
 	})
 }
+
+// deletionMark is the stored tombstone payload. Tombstones written before
+// staged deletion existed carry only deleted_at and count as complete.
+type deletionMark struct {
+	DeletedAt  time.Time `json:"deleted_at"`
+	InProgress bool      `json:"in_progress,omitempty"`
+}
+
+func readDeletionMark(r Repository, key string) (mark deletionMark, exists bool, err error) {
+	row, e := r.Get("deletion", key)
+	if errors.Is(e, ErrNotFound) {
+		return mark, false, nil
+	}
+	if e != nil {
+		return mark, false, e
+	}
+	if json.Unmarshal(row.Payload, &mark) != nil {
+		return mark, true, ErrUnavailable
+	}
+	return mark, true, nil
+}
+
+// DeleteVisitor deletes everything for the visitor and returns only when the
+// deletion is complete.
 func (s *Service) DeleteVisitor(ctx context.Context, scope Scope, key, reason string) error {
+	_, err := s.DeleteVisitorProgress(ctx, scope, key, reason, 0)
+	return err
+}
+
+// DeleteVisitorProgress reports whether deletion finished. A deletion that fits
+// the read budget runs in one atomic transaction, as before. One that does not
+// fits is staged: scope is verified first, tombstones are written so the data is
+// already unreadable and no new data is accepted, then rows are removed in short
+// transactions. maxPages > 0 stops a staged run early and returns done=false;
+// calling again resumes. A failure after the tombstone leaves data hidden and
+// the deletion resumable, never silently complete.
+func (s *Service) DeleteVisitorProgress(ctx context.Context, scope Scope, key, reason string, maxPages int) (bool, error) {
 	if e := s.authorized(scope); e != nil {
-		return e
+		return false, e
 	}
 	if !scope.Delete || !trim(reason, 500) {
-		return fail(403, "需要专门删除权限和原因")
+		return false, fail(403, "需要专门删除权限和原因")
 	}
+	var mark deletionMark
+	var started bool
+	if e := s.readQueryTransaction(ctx, func(r Repository) error {
+		var err error
+		mark, started, err = readDeletionMark(r, key)
+		return err
+	}); e != nil {
+		return false, e
+	}
+	// Only an unfinished staged deletion may be resumed with no rows left. A
+	// finished one answers like an unknown visitor (404), so a caller without
+	// access cannot learn that an account was deleted.
+	resuming := started && mark.InProgress
+	if !s.forceStagedDeletion {
+		err := s.deleteVisitorAtomic(ctx, scope, key, reason, resuming)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, ErrQueryTooLarge) {
+			return false, err
+		}
+	}
+	return s.deleteVisitorStaged(ctx, scope, key, reason, maxPages)
+}
+
+func (s *Service) deleteVisitorAtomic(ctx context.Context, scope Scope, key, reason string, resuming bool) error {
 	return s.queryTransaction(ctx, func(r Repository) error {
-		plan, e := planVisitorDeletion(r, scope, key)
+		plan, e := planVisitorDeletion(r, scope, key, resuming)
 		if e != nil {
 			return e
 		}
 		// Resolve all identities, dependencies and owners before mutating anything.
 		// Tombstones, removals and audit still commit in the same transaction.
-		if e := r.Put(record("deletion", key, "", s.Now(), map[string]any{"deleted_at": s.Now()})); e != nil {
+		if e := r.Put(record("deletion", key, "", s.Now(), deletionMark{DeletedAt: s.Now()})); e != nil {
 			return e
 		}
 		for session := range plan.sessions {
-			if e := r.Put(record("deletion_session", session, "", s.Now(), map[string]any{"deleted_at": s.Now()})); e != nil {
+			if e := r.Put(sessionTombstone(session, key, s.Now())); e != nil {
 				return e
 			}
 		}
