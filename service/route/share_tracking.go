@@ -71,18 +71,25 @@ func trackingMutationAllowed(r *http.Request) bool {
 	return e == nil && u.Host == r.Host && (u.Scheme == "https" || u.Scheme == "http" && r.TLS == nil)
 }
 func loadTrackingScope(c *gin.Context, db *sql.DB, tenant string) (tracking.Scope, error) {
-	scope := tracking.Scope{Tenant: tenant, Actor: GetUserID(c), Owners: []string{}}
+	return loadTrackingScopeFor(c.Request.Context(), db, tenant, GetUserID(c))
+}
+
+// loadTrackingScopeFor reads one management account's current tracking grants.
+// A background job acts through the same lookup a login session does, so it can
+// never hold more than an explicit, enabled grant.
+func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor int64) (tracking.Scope, error) {
+	scope := tracking.Scope{Tenant: tenant, Actor: actor, Owners: []string{}}
 	if scope.Actor <= 0 {
 		return scope, &tracking.Error{Status: 401, Message: "未登录"}
 	}
 	if db == nil || tenant == "" {
 		return scope, tracking.ErrUnavailable
 	}
-	access, e := readManagementAccess(c.Request.Context(), db, scope.Actor)
+	access, e := readManagementAccess(ctx, db, scope.Actor)
 	if e != nil || !access.Enabled {
 		return scope, &tracking.Error{Status: 403, Message: "管理账号未授权"}
 	}
-	rows, e := db.QueryContext(c.Request.Context(), `SELECT t.owner_id,t.can_view,t.can_manage,t.can_crm,t.can_delete,t.can_rules FROM tracking_access t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND u.user_type='management'`, scope.Actor, tenant)
+	rows, e := db.QueryContext(ctx, `SELECT t.owner_id,t.can_view,t.can_manage,t.can_crm,t.can_delete,t.can_rules FROM tracking_access t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND u.user_type='management'`, scope.Actor, tenant)
 	if e != nil {
 		return scope, tracking.ErrUnavailable
 	}
@@ -173,6 +180,25 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
 	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
 	// This is a separate capability group, not an implicit platform-admin data grant.
+	mpSettings := loadMPSyncSettings(os.Getenv)
+	for _, problem := range mpSettings.Problems {
+		log.Printf("[Tracking] 公众号同步未启用：%s", problem)
+	}
+	var mpRunner *mpSyncRunner
+	if mpSettings.Enabled {
+		mpRunner = &mpSyncRunner{
+			svc: svc, settings: mpSettings,
+			source: &tracking.OfficialAccountSource{API: wechatAPI, AppID: mpSettings.Config.AppID, Secret: mpSettings.Secret},
+			scopeFor: func(ctx context.Context) (tracking.Scope, error) {
+				return loadTrackingScopeFor(ctx, users.DB, cfg.Tenant, mpSettings.Actor)
+			},
+			mediaStore: func(scope tracking.Scope) tracking.MediaStore { return trackingMPMediaStore(svc, scope) },
+		}
+		if mpSettings.Config.ImportImages {
+			mpRunner.fetcher = tracking.NewSafeMediaFetcher()
+		}
+		go mpRunner.Loop(context.Background())
+	}
 	mg := v1.Group("/management/tracking")
 	mg.Use(func(c *gin.Context) {
 		// Capability and private visit responses must never survive a permission
@@ -271,13 +297,14 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Header("Cache-Control", "private, no-store")
 		trackingResponse(c, link, nil)
 	})
+	registerMPSyncRoutes(mg, svc, mpRunner, mpSettings, sc)
 	mg.GET("/context", func(c *gin.Context) {
 		scope := sc(c)
 		owners := []gin.H{}
 		for _, o := range scope.Owners {
 			owners = append(owners, gin.H{"id": o, "name": o})
 		}
-		trackingResponse(c, gin.H{"can_view": scope.View, "can_manage": scope.Manage, "can_crm": scope.CRM, "can_delete": scope.Delete, "can_rules": scope.Rules, "owners": owners, "share_methods": []string{"native_miniprogram"}}, nil)
+		trackingResponse(c, gin.H{"can_view": scope.View, "can_manage": scope.Manage, "can_crm": scope.CRM, "can_delete": scope.Delete, "can_rules": scope.Rules, "owners": owners, "share_methods": []string{"native_miniprogram"}, "mp_sync": mpSyncVisible(mpSettings, scope)}, nil)
 	})
 	mg.GET("/diagnostics/rejections", func(c *gin.Context) {
 		days := 7
