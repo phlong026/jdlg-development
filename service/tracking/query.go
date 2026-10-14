@@ -3,7 +3,6 @@ package tracking
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -226,24 +225,13 @@ func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection f
 	if e != nil {
 		return nil, e
 	}
-	identities, deleted, deletedSessions := map[string]Record{}, map[string]bool{}, map[string]bool{}
+	meta, err := loadSessionMeta(r, sessions, true, true, true)
+	if err != nil {
+		return nil, err
+	}
+	identities, deleted, deletedSessions := meta.identity, map[string]bool{}, meta.deleted
 	for _, session := range sessions {
-		rec, err := r.Get("identity", session)
-		if err == nil {
-			identities[session] = rec
-		} else if !errors.Is(err, ErrNotFound) {
-			return nil, err
-		}
-		dead, err := tombstoned(r, "deletion_session", session)
-		if err != nil {
-			return nil, err
-		}
-		deletedSessions[session] = dead
-		state, err := decode[summaryState](r, "summary_state", session)
-		if err != nil && !errors.Is(err, ErrNotFound) {
-			return nil, err
-		}
-		if state.RawExpired {
+		if meta.state[session].RawExpired {
 			expired[session] = true
 		}
 	}

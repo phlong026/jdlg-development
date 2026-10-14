@@ -35,7 +35,9 @@ func (r indexedTestRepo) List(kind string) ([]Record, error) {
 }
 func (r indexedTestRepo) ListScoped(kind string, q RecordQuery) ([]Record, error) {
 	r.calls = append(r.calls, scopedQueryCall{kind, q})
-	if q.Owners == nil {
+	// An exact-ID lookup is a bounded point read, the batched form of Get. Every
+	// other scoped query must still carry an owner predicate.
+	if q.Owners == nil && q.IDs == nil {
 		return nil, fmt.Errorf("missing owner predicate for %s", kind)
 	}
 	out := []Record{}

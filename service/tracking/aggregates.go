@@ -388,21 +388,26 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 	if e != nil {
 		return nil, nil, nil, e
 	}
+	rowSessions := make([]string, 0, len(rows))
+	for _, row := range rows {
+		rowSessions = append(rowSessions, row.Session)
+	}
+	meta, err := loadSessionMeta(r, rowSessions, false, true, true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	checked := map[string]bool{}
 	for _, row := range rows {
 		if checked[row.Session] {
 			continue
 		}
 		checked[row.Session] = true
-		state, err := decode[summaryState](r, "summary_state", row.Session)
-		if err != nil && !errors.Is(err, ErrNotFound) {
-			return nil, nil, nil, err
-		}
+		state, found := meta.state[row.Session]
 		switch {
 		case state.RawExpired:
 			expired[row.Session] = true
 			summarized[row.Session] = true
-		case current && err == nil && summaryUsable(state, f.AsOf):
+		case current && found && summaryUsable(state, f.AsOf):
 			summarized[row.Session] = true
 		case current:
 			raw = append(raw, row.Session)
@@ -414,7 +419,7 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 		hi = f.AsOf
 	}
 	// One lookup per session, identity and visitor rather than per bucket row.
-	deadSessions, deadVisitors, resolved := map[string]bool{}, map[string]bool{}, map[string]string{}
+	deadSessions, deadVisitors, resolved := meta.deleted, map[string]bool{}, map[string]string{}
 	tombstone := func(kind, id string, cache map[string]bool) (bool, error) {
 		dead, ok := cache[id]
 		if !ok {
@@ -431,11 +436,7 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 		if !summarized[row.Session] || !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) {
 			continue
 		}
-		dead, e := tombstone("deletion_session", row.Session, deadSessions)
-		if e != nil {
-			return nil, nil, nil, e
-		}
-		if dead {
+		if deadSessions[row.Session] {
 			continue
 		}
 		var x DailySummary
@@ -455,7 +456,7 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 		if !includes(selection.Visitors, visitor) {
 			continue
 		}
-		dead, e = tombstone("deletion", visitor, deadVisitors)
+		dead, e := tombstone("deletion", visitor, deadVisitors)
 		if e != nil {
 			return nil, nil, nil, e
 		}

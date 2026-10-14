@@ -183,6 +183,28 @@ func recordVisitorColumn(kind string) string {
 		return "r.visitor_key"
 	}
 }
+
+// addShareIn selects share and share_request rows by share ID. New rows carry
+// the ID in the indexed share_id column; rows written before that column was
+// filled keep it in the payload. The payload is consulted only when the column is
+// blank, so with tracking_kind_share and a backfill (share_tracking_share_lookup_up.sql)
+// the lookup is an index range, and without them it is still correct.
+func addShareIn(where *[]string, args *[]any, values []string) {
+	if values == nil {
+		return
+	}
+	if len(values) == 0 {
+		*where = append(*where, "1=0")
+		return
+	}
+	slots := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+	*where = append(*where, "(r.share_id IN ("+slots+") OR (r.share_id='' AND JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.share_id')) IN ("+slots+")))")
+	for i := 0; i < 2; i++ {
+		for _, value := range values {
+			*args = append(*args, value)
+		}
+	}
+}
 func recordShareColumn(kind string) string {
 	switch kind {
 	case "share", "share_request":
@@ -213,7 +235,11 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 	addIn("r.owner_id", q.Owners)
 	addIn("r.record_id", q.IDs)
 	addIn(recordSessionColumn(kind), q.Sessions)
-	addIn(recordShareColumn(kind), q.Shares)
+	if kind == "share" || kind == "share_request" {
+		addShareIn(&where, &args, q.Shares)
+	} else {
+		addIn(recordShareColumn(kind), q.Shares)
+	}
 	if q.Content != "" {
 		column := "r.content_id"
 		if kind == "content" || kind == "legacy_catalog" {

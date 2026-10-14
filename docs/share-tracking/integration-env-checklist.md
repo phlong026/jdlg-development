@@ -37,6 +37,7 @@
 | 2.1 | `service/sql/management_access_seed_template.sql` | 前置条件：管理端访问授权已存在；按模板逐个登记测试管理员 | 测试管理员登录后能打开总控台 | |
 | 2.2 | `service/sql/share_tracking_up.sql` | 新建 `tracking_tenant_lock`、`tracking_access`、`tracking_records`，只增表，不授权 | `SHOW CREATE TABLE tracking_records` 含 7 个二级索引 | |
 | 2.3 | `service/sql/share_tracking_bounded_queries_up.sql` | 对已存在的旧 `tracking_records` 补索引，可重复执行 | 重复执行无报错；索引存在 | |
+| 2.3a | `service/sql/share_tracking_share_lookup_up.sql` | 为 share/share_request 的 share_id 查询加 `tracking_kind_share` 索引，并回填旧记录的 share_id 列；可重复执行，大表请在维护窗口执行 | 索引存在；脚本末尾的校验查询返回 0 | |
 | 2.4 | 回滚演练 | 关闭 `TRACKING_ENABLED`，确认原分享和原页面不受影响；**不删表** | 关闭开关后小程序原分享、原详情页正常 | |
 | 2.5 | `EXPLAIN` 采样 | 对访客列表、素材列表、会话轨迹三类查询抓取实际 SQL 并 `EXPLAIN` | 记录是否命中 `tracking_scope_time` / `tracking_session_time` 等索引 | |
 

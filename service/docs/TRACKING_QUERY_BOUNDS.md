@@ -56,6 +56,10 @@ Compatibility is intentionally limited by the historical data that actually exis
 
 Tests reproduce the new-earlier-ID pagination failure for both own and legacy catalogs, keep edited pre-existing cards in a fixed snapshot, cover draft/publish/withdraw lifecycle timestamp retention, exact submicrosecond cutoff, metric keyset order, and filter mismatch rejection. SQLStore boundary fixtures assert owner/creation predicates and bounded transfer with a modeled 20,001-row post-snapshot catalog. They do not execute MySQL date parsing or establish an index plan. JSON creation-time filtering and the media existence query remain explicit real-MySQL integration and load verification gates.
 
+## Batched metadata and share lookups
+
+Per-session identity links, deletion tombstones and projection states are read in ID-bounded batches (500 IDs per query) by `loadSessionMeta`, not by one point read per session. The read budget still counts only rows that exist. Share and share_request rows are selected by the indexed `share_id` column; only rows whose column is blank are matched through the payload, so the lookup is correct before `share_tracking_share_lookup_up.sql` runs and an index range after it. Whether the visitor and session predicates that still read JSON use an index must be judged from `EXPLAIN` on a real MySQL; it is not established here.
+
 ## Indexes and deployment
 
 The initial schema `service/sql/share_tracking_up.sql` includes the existing tenant/kind/owner/time indexes plus:
