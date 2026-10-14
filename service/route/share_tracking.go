@@ -1,6 +1,7 @@
 package route
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -165,6 +166,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	}
 	// Tracking shares the application pool (20 connections). Cap what it may hold
 	// so queued tracking work waits in Go instead of starving core business.
+	wechatAPI := tracking.NewWechatAPI()
 	svc := tracking.New(tracking.NewSQLStore(users.DB, trackingSlotLimit("TRACKING_MAX_WRITE_TX", 4), trackingSlotLimit("TRACKING_MAX_READ_TX", 6)), cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
@@ -251,6 +253,23 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		}
 		c.Header("Cache-Control", "private, no-store")
 		c.Data(200, http.DetectContentType(bytes), bytes)
+	})
+	mg.GET("/contents/:id/url-link", func(c *gin.Context) {
+		version, _ := strconv.Atoi(c.Query("version"))
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+		link, e := trackingURLLink(ctx, svc, wechatAPI, miniprogramCredentials(), sc(c), c.Param("id"), version)
+		if e != nil {
+			var wechat *tracking.WechatError
+			if errors.As(e, &wechat) {
+				log.Printf("[Tracking] url link: wechat errcode %d", wechat.Code)
+				e = &tracking.Error{Status: 502, Message: trackingURLLinkProblem(e)}
+			}
+			trackingResponse(c, nil, e)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		trackingResponse(c, link, nil)
 	})
 	mg.GET("/context", func(c *gin.Context) {
 		scope := sc(c)
@@ -394,9 +413,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Publish(c.Request.Context(), sc(c), c.Param("id"), in.Revision, in.Preview, in.Key)
-		if e == nil && os.Getenv("TRACKING_WECHAT_CODE_ENABLED") == "true" {
+		if e == nil {
 			if content, ok := v["content"].(tracking.Content); ok {
-				v["share_methods"] = gin.H{"miniprogram_code_url": "/api/v1/management/tracking/contents/" + content.ID + "/code?version=" + strconv.Itoa(content.Version), "message": "真实微信码由服务端按需请求，加载失败表示权限或配置尚未通过；URL Link未开通"}
+				existing, _ := v["share_methods"].(map[string]any)
+				v["share_methods"] = trackingShareMethods(c.Request.Context(), svc, wechatAPI, sc(c), content, existing)
 			}
 		}
 		trackingResponse(c, v, e)
@@ -550,6 +570,36 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 // Each staged page is one short transaction of up to 500 rows per query, so this
 // bounds one HTTP request to a few tens of thousands of rows.
 const trackingDeletionPagesPerRequest = 60
+
+// trackingShareMethods lists what the operator can use right after a publish.
+// The publish already succeeded, so a failure here is reported as a message and
+// never fails the request.
+func trackingShareMethods(ctx context.Context, svc *tracking.Service, api *tracking.WechatAPI, scope tracking.Scope, content tracking.Content, existing map[string]any) gin.H {
+	methods := gin.H{"message": "请在小程序自有素材页打开后使用原生分享。微信码与URL Link须完成服务端权限核验后开放。"}
+	for key, value := range existing {
+		methods[key] = value
+	}
+	if os.Getenv("TRACKING_WECHAT_CODE_ENABLED") == "true" {
+		methods["miniprogram_code_url"] = "/api/v1/management/tracking/contents/" + content.ID + "/code?version=" + strconv.Itoa(content.Version)
+		methods["message"] = "真实微信码由服务端按需请求，加载失败表示权限或配置尚未通过"
+	}
+	if trackingURLLinkEnabled() {
+		linkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		link, err := trackingURLLink(linkCtx, svc, api, miniprogramCredentials(), scope, content.ID, content.Version)
+		if err != nil {
+			var wechat *tracking.WechatError
+			if errors.As(err, &wechat) {
+				log.Printf("[Tracking] url link: wechat errcode %d", wechat.Code)
+			}
+			methods["message"] = trackingURLLinkProblem(err)
+		} else {
+			methods["url_link"] = link.URL
+			methods["expires_at"] = link.Expires
+		}
+	}
+	return methods
+}
 
 // trackingSlotLimit reads a positive connection cap, falling back to the default
 // for empty or invalid values. It never disables the cap.
