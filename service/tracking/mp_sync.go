@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 )
@@ -101,7 +102,18 @@ type mpMapping struct {
 	// Signature identifies the editable fields of the content as sync last wrote
 	// them. A different current signature means a person edited it since.
 	Signature string `json:"content_signature"`
+	// Images records how pictures were handled when the draft was last written.
+	// The fingerprint covers the article's text and picture addresses, not whether
+	// the pictures actually arrived, so without this a failed download, a spent
+	// per-run budget or image import enabled later would never be retried.
+	Images string `json:"images,omitempty"`
 }
+
+const (
+	mpImagesOff      = "off"      // import was disabled; no pictures were requested
+	mpImagesComplete = "complete" // every requested picture is attached
+	mpImagesPartial  = "partial"  // at least one picture failed or hit the run budget
+)
 
 func contentSignature(c Content) string {
 	cover := ""
@@ -235,11 +247,48 @@ func (s *Service) syncMPArticle(ctx context.Context, scope Scope, cfg MPSyncConf
 	}); err != nil {
 		return "failed", mpFailed
 	}
+	importImages := cfg.ImportImages && fetch != nil && store != nil
+	// retrying marks a pass whose only purpose is to attach missing pictures; the
+	// cover and pictures already on the draft are kept to tell whether it did.
+	var retrying bool
+	var attachedCover string
+	var attachedMedia []string
 	if known && current.Fingerprint == prepared.fingerprint {
-		return "unchanged", ""
+		if !importImages || current.Images == mpImagesComplete {
+			return "unchanged", ""
+		}
+		// Pictures are wanted but were not all attached last time. Retry only a
+		// draft nobody has touched: an edited or revoked one is left exactly as
+		// it was, as for any other unchanged article, and costs no downloads.
+		var retry bool
+		if err := s.readTransaction(ctx, func(r Repository) error {
+			existing, e := loadCatalogContent(r, "content", current.ContentID)
+			if errors.Is(e, ErrNotFound) {
+				return nil
+			}
+			if e != nil {
+				return e
+			}
+			retry = existing.Status != "revoked" && contentSignature(existing) == current.Signature
+			if existing.Cover != nil {
+				attachedCover = existing.Cover.ID
+			}
+			for _, m := range existing.Media {
+				attachedMedia = append(attachedMedia, m.ID)
+			}
+			return nil
+		}); err != nil {
+			return "failed", mpFailed
+		}
+		if !retry {
+			return "unchanged", ""
+		}
+		retrying = true
 	}
 	draft := prepared.draft
-	if cfg.ImportImages && fetch != nil && store != nil {
+	imageState := mpImagesOff
+	if importImages {
+		failuresBefore := counts.ImageFailures
 		if prepared.thumb != "" {
 			if id, ok := s.importMPMedia(ctx, scope, cfg, fetch, store, prepared.thumb, runImages, counts); ok {
 				draft.CoverID = id
@@ -252,6 +301,26 @@ func (s *Service) syncMPArticle(ctx context.Context, scope Scope, cfg MPSyncConf
 			if id, ok := s.importMPMedia(ctx, scope, cfg, fetch, store, raw, runImages, counts); ok {
 				draft.MediaIDs = append(draft.MediaIDs, id)
 			}
+		}
+		imageState = mpImagesComplete
+		if counts.ImageFailures > failuresBefore {
+			imageState = mpImagesPartial
+		}
+		// Nothing new arrived: leave the draft, and its revision, exactly as it is.
+		// A picture that never loads must not rewrite the draft on every run under
+		// a person who is reviewing it. If every picture turns out to be attached
+		// already (a mapping from before pictures were tracked), only the mapping
+		// is updated, so the article settles without touching the content.
+		if retrying && draft.CoverID == attachedCover && slices.Equal(draft.MediaIDs, attachedMedia) {
+			if imageState == mpImagesComplete {
+				current.Images = mpImagesComplete
+				if err := s.transaction(ctx, func(r Repository) error {
+					return r.Put(record("mp_article", key, cfg.Owner, s.Now(), current))
+				}); err != nil {
+					return "failed", mpFailed
+				}
+			}
+			return "unchanged", ""
 		}
 	}
 	outcome, outcomeReason := "", ""
@@ -289,7 +358,7 @@ func (s *Service) syncMPArticle(ctx context.Context, scope Scope, cfg MPSyncConf
 		if e != nil {
 			return e
 		}
-		mapping = mpMapping{ContentID: saved.ID, Fingerprint: prepared.fingerprint, Signature: contentSignature(saved)}
+		mapping = mpMapping{ContentID: saved.ID, Fingerprint: prepared.fingerprint, Signature: contentSignature(saved), Images: imageState}
 		if e = r.Put(record("mp_article", key, cfg.Owner, now, mapping)); e != nil {
 			return e
 		}

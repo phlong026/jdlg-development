@@ -416,3 +416,157 @@ func TestMPSyncArticleIDsAreNamespacedByAccount(t *testing.T) {
 		t.Fatal("two accounts sharing an article ID were merged")
 	}
 }
+
+// The fingerprint covers an article's text and picture addresses, not whether
+// the pictures arrived. A picture that failed once must be retried on a later
+// run even though nothing upstream changed.
+func TestMPSyncRetriesAFailedPictureWithoutAnyUpstreamChange(t *testing.T) {
+	s, scope, cfg := mpFixture(t)
+	cfg.ImportImages = true
+	src := &fakeMPSource{articles: []MPArticle{mpArticle(1, `<p>正文</p><img src="https://mmbiz.qpic.cn/p/ok"><img src="https://mmbiz.qpic.cn/p/flaky">`)}}
+	fetch := &fakeMediaFetcher{fail: map[string]bool{"https://mmbiz.qpic.cn/p/flaky": true}}
+	res := syncOnce(t, s, scope, cfg, src, fetch)
+	if res.Counts.Created != 1 || res.Counts.ImageFailures != 1 || len(listContents(t, s)[0].Media) != 1 {
+		t.Fatalf("first run: %+v", res.Counts)
+	}
+	// Still failing: the picture is tried again, but a retry that attaches nothing
+	// new must not rewrite the draft. Otherwise a picture that never loads would
+	// bump the revision on every run under a person who is reviewing it.
+	revision := listContents(t, s)[0].Revision
+	fetch.calls = nil
+	for run := 0; run < 2; run++ {
+		res = syncOnce(t, s, scope, cfg, src, fetch)
+		if res.Counts.Updated != 0 || res.Counts.Unchanged != 1 || res.Counts.ImageFailures != 1 {
+			t.Fatalf("a retry that attaches nothing must leave the draft alone and still report the failure: %+v", res.Counts)
+		}
+	}
+	if len(fetch.calls) != 2 || fetch.calls[0] != "https://mmbiz.qpic.cn/p/flaky" {
+		t.Fatalf("the failing picture must be retried on every run: %v", fetch.calls)
+	}
+	if now := listContents(t, s)[0]; now.Revision != revision || len(now.Media) != 1 {
+		t.Fatalf("a retry that attached nothing changed the draft: revision %d -> %d", revision, now.Revision)
+	}
+	fetch.fail, fetch.calls = nil, nil
+	res = syncOnce(t, s, scope, cfg, src, fetch)
+	if res.Counts.Updated != 1 || res.Counts.ImageFailures != 0 || len(listContents(t, s)[0].Media) != 2 {
+		t.Fatalf("the missing picture was not attached once it became available: %+v", res.Counts)
+	}
+	if len(fetch.calls) != 1 || fetch.calls[0] != "https://mmbiz.qpic.cn/p/flaky" {
+		t.Fatalf("only the missing picture may be fetched: %v", fetch.calls)
+	}
+	fetch.calls = nil
+	if res = syncOnce(t, s, scope, cfg, src, fetch); res.Counts.Unchanged != 1 || res.Counts.Updated != 0 || len(fetch.calls) != 0 {
+		t.Fatalf("a complete article must settle as unchanged without fetching: %+v %v", res.Counts, fetch.calls)
+	}
+}
+
+// Turning picture import on after text-only syncs must reach articles that are
+// already mapped, and leaving it off must not churn them.
+func TestMPSyncImportsPicturesEnabledAfterATextOnlySync(t *testing.T) {
+	s, scope, cfg := mpFixture(t)
+	src := &fakeMPSource{articles: []MPArticle{mpArticle(1, `<p>正文</p><img src="https://mmbiz.qpic.cn/p/1">`)}}
+	fetch := &fakeMediaFetcher{}
+	syncOnce(t, s, scope, cfg, src, fetch)
+	if res := syncOnce(t, s, scope, cfg, src, fetch); res.Counts.Unchanged != 1 || len(fetch.calls) != 0 {
+		t.Fatalf("with import off, repeated runs must not change anything: %+v", res.Counts)
+	}
+	cfg.ImportImages = true
+	res := syncOnce(t, s, scope, cfg, src, fetch)
+	if res.Counts.Updated != 1 || res.Counts.ImagesImported != 1 || len(listContents(t, s)[0].Media) != 1 {
+		t.Fatalf("enabling import did not reach the mapped article: %+v", res.Counts)
+	}
+	if res = syncOnce(t, s, scope, cfg, src, fetch); res.Counts.Unchanged != 1 {
+		t.Fatalf("must settle after the pictures arrive: %+v", res.Counts)
+	}
+	// Switching import off again leaves the finished draft alone.
+	cfg.ImportImages = false
+	if res = syncOnce(t, s, scope, cfg, src, fetch); res.Counts.Unchanged != 1 {
+		t.Fatalf("turning import off must not churn drafts: %+v", res.Counts)
+	}
+}
+
+// A per-run picture budget that runs out is not final: each later run finishes
+// more of the pictures, reusing the ones already stored.
+func TestMPSyncFinishesPicturesAcrossRunsWhenTheBudgetRunsOut(t *testing.T) {
+	s, scope, cfg := mpFixture(t)
+	cfg.ImportImages, cfg.RunImages = true, 1
+	src := &fakeMPSource{articles: []MPArticle{mpArticle(1, `<p>正文</p><img src="https://mmbiz.qpic.cn/p/1"><img src="https://mmbiz.qpic.cn/p/2"><img src="https://mmbiz.qpic.cn/p/3">`)}}
+	fetch := &fakeMediaFetcher{}
+	for run := 1; run <= 3; run++ {
+		syncOnce(t, s, scope, cfg, src, fetch)
+		if got := len(listContents(t, s)[0].Media); got != run {
+			t.Fatalf("run %d: %d pictures attached, want %d", run, got, run)
+		}
+	}
+	fetch.calls = nil
+	if res := syncOnce(t, s, scope, cfg, src, fetch); res.Counts.Unchanged != 1 || len(fetch.calls) != 0 {
+		t.Fatalf("all pictures attached, so the article must settle: %+v %v", res.Counts, fetch.calls)
+	}
+}
+
+// Retrying pictures must never touch a draft a person edited or a revoked one,
+// and must not download anything for them.
+func TestMPSyncDoesNotRetryPicturesOnAnEditedDraft(t *testing.T) {
+	s, scope, cfg := mpFixture(t)
+	cfg.ImportImages = true
+	src := &fakeMPSource{articles: []MPArticle{mpArticle(1, `<p>正文</p><img src="https://mmbiz.qpic.cn/p/flaky">`)}}
+	fetch := &fakeMediaFetcher{fail: map[string]bool{"https://mmbiz.qpic.cn/p/flaky": true}}
+	syncOnce(t, s, scope, cfg, src, fetch)
+	c := listContents(t, s)[0]
+	edited, err := s.SaveContent(context.Background(), scope, c.ID, Draft{Title: c.Title, Body: "<p>人工修改后的正文</p>", BodyFormat: "rich_text", SourceURL: c.SourceURL, SourceNote: c.SourceNote, Rights: c.Rights, Owner: c.Owner, Revision: c.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetch.fail, fetch.calls = nil, nil
+	res := syncOnce(t, s, scope, cfg, src, fetch)
+	if res.Counts.Unchanged != 1 || res.Counts.Conflicts != 0 || len(fetch.calls) != 0 {
+		t.Fatalf("an edited draft must be left alone and cost no downloads: %+v %v", res.Counts, fetch.calls)
+	}
+	if now := listContents(t, s)[0]; now.Revision != edited.Revision || !strings.Contains(now.Body, "人工修改后的正文") {
+		t.Fatalf("a person's edit was overwritten: %+v", now)
+	}
+}
+
+// A mapping written before pictures were tracked carries no image state. When its
+// pictures are in fact all attached, the article must settle by updating only the
+// mapping, not by rewriting the draft under whoever is reading it.
+func TestMPSyncSettlesAMappingWrittenBeforePicturesWereTracked(t *testing.T) {
+	s, scope, cfg := mpFixture(t)
+	cfg.ImportImages = true
+	src := &fakeMPSource{articles: []MPArticle{mpArticle(1, `<p>正文</p><img src="https://mmbiz.qpic.cn/p/1">`)}}
+	fetch := &fakeMediaFetcher{}
+	syncOnce(t, s, scope, cfg, src, fetch)
+	key := hash("mp:" + cfg.AppID + ":" + src.articles[0].ID)
+	stateOf := func() string {
+		var state string
+		if err := s.readTransaction(context.Background(), func(r Repository) error {
+			m, e := decode[mpMapping](r, "mp_article", key)
+			state = m.Images
+			return e
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+	if stateOf() != mpImagesComplete {
+		t.Fatalf("a finished article must be recorded as complete, got %q", stateOf())
+	}
+	if err := s.transaction(context.Background(), func(r Repository) error {
+		m, e := decode[mpMapping](r, "mp_article", key)
+		if e != nil {
+			return e
+		}
+		m.Images = "" // as written by the previous version
+		return r.Put(record("mp_article", key, cfg.Owner, s.Now(), m))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	revision := listContents(t, s)[0].Revision
+	res := syncOnce(t, s, scope, cfg, src, fetch)
+	if res.Counts.Unchanged != 1 || res.Counts.Updated != 0 || listContents(t, s)[0].Revision != revision {
+		t.Fatalf("an already complete article must not be rewritten: %+v", res.Counts)
+	}
+	if stateOf() != mpImagesComplete {
+		t.Fatalf("the article must settle as complete, got %q", stateOf())
+	}
+}
