@@ -2,6 +2,7 @@ package tracking
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 )
@@ -37,6 +38,11 @@ type OfficialAccountSource struct {
 
 const mpPageSize = 20 // the interface allows at most 20 per call
 
+// mpPageLimit bounds one reply. A page carries every article's full HTML, so a
+// page of long articles can exceed it; the source then asks for fewer per call.
+// It is a variable only so a test can use a small one.
+var mpPageLimit int64 = 8 << 20
+
 func (o *OfficialAccountSource) Articles(ctx context.Context, limit int) ([]MPArticle, error) {
 	if limit <= 0 {
 		return nil, ErrUnavailable
@@ -46,7 +52,9 @@ func (o *OfficialAccountSource) Articles(ctx context.Context, limit int) ([]MPAr
 		return nil, err
 	}
 	out := []MPArticle{}
-	for offset := 0; len(out) < limit; offset += mpPageSize {
+	size := mpPageSize
+	offset := 0
+	for len(out) < limit {
 		var page struct {
 			Total int `json:"total_count"`
 			Items []struct {
@@ -64,8 +72,19 @@ func (o *OfficialAccountSource) Articles(ctx context.Context, limit int) ([]MPAr
 				UpdateTime int64 `json:"update_time"`
 			} `json:"item"`
 		}
-		payload := map[string]any{"offset": offset, "count": mpPageSize, "no_content": 0}
-		if err = o.API.PostJSON(ctx, "/cgi-bin/freepublish/batchget", token, payload, &page, 8<<20); err != nil {
+		payload := map[string]any{"offset": offset, "count": size, "no_content": 0}
+		if err = o.API.PostJSON(ctx, "/cgi-bin/freepublish/batchget", token, payload, &page, mpPageLimit); err != nil {
+			if errors.Is(err, errResponseTooLarge) {
+				if size == 1 {
+					// A single publication is bigger than any reply we accept, so asking
+					// for less cannot help; say so rather than failing without a reason.
+					return nil, fail(502, "公众号有单次发布的内容超过接口响应上限，无法同步；请缩短该次发布的文章后重试")
+				}
+				// Retry this same offset with half as many per call, and keep the
+				// smaller size for the rest of the run.
+				size = max(1, size/2)
+				continue
+			}
 			return nil, err
 		}
 		for _, item := range page.Items {
@@ -87,6 +106,7 @@ func (o *OfficialAccountSource) Articles(ctx context.Context, limit int) ([]MPAr
 		if len(page.Items) == 0 || offset+len(page.Items) >= page.Total {
 			break
 		}
+		offset += size
 	}
 	return out, nil
 }

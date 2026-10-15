@@ -61,6 +61,16 @@ func NewWechatAPI() *WechatAPI {
 	return &WechatAPI{Base: wechatAPIBase, Client: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 
+// errResponseTooLarge is returned when a reply is bigger than the caller allowed.
+// It still satisfies errors.Is(err, ErrUnavailable), so existing callers treat it
+// as any other unusable reply, but a caller that can ask for less may tell it apart.
+var errResponseTooLarge error = responseTooLargeError{}
+
+type responseTooLargeError struct{}
+
+func (responseTooLargeError) Error() string        { return "wechat response too large" }
+func (responseTooLargeError) Is(target error) bool { return target == ErrUnavailable }
+
 func (w *WechatAPI) do(req *http.Request, limit int64) ([]byte, error) {
 	res, err := w.Client.Do(req)
 	if err != nil {
@@ -68,8 +78,11 @@ func (w *WechatAPI) do(req *http.Request, limit int64) ([]byte, error) {
 	}
 	defer res.Body.Close()
 	b, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
-	if err != nil || res.StatusCode != http.StatusOK || int64(len(b)) > limit {
+	if err != nil || res.StatusCode != http.StatusOK {
 		return nil, ErrUnavailable
+	}
+	if int64(len(b)) > limit {
+		return nil, errResponseTooLarge
 	}
 	var status struct {
 		Code int `json:"errcode"`
