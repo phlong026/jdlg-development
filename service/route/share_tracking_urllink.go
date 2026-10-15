@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"service/config"
+	"service/function"
 	"service/tracking"
 )
 
@@ -20,10 +21,31 @@ const trackingReaderRoute = "pages/contentreader/contentreader"
 // the code that spends them can be tested without process-wide state.
 type wechatCredentials struct{ AppID, Secret string }
 
+// newTrackingWechatAPI builds tracking's WeChat client. The mini-program's
+// access_token is already cached by function.GetAccessToken for payment, profile
+// and QR-code calls. WeChat keeps one live token per app, so tracking must take
+// that app's token from the same cache; fetching its own would retire the one
+// those callers hold. Any other app (the official account) is cached by the client.
+func newTrackingWechatAPI(mini wechatCredentials) *tracking.WechatAPI {
+	api := tracking.NewWechatAPI()
+	if mini.AppID != "" {
+		api.SharedTokens = map[string]tracking.TokenFunc{
+			mini.AppID: func(_ context.Context, appID, secret string) (string, error) {
+				return function.GetAccessToken(appID, secret)
+			},
+		}
+	}
+	return api
+}
+
 func miniprogramCredentials() wechatCredentials {
 	wx := config.Get().Wechat
 	return wechatCredentials{AppID: wx.AppID, Secret: wx.AppSecret}
 }
+
+// trackingURLLinkPerMinute bounds how many links one management account may
+// request per minute.
+const trackingURLLinkPerMinute = 20
 
 func trackingURLLinkEnabled() bool { return os.Getenv("TRACKING_WECHAT_URLLINK_ENABLED") == "true" }
 

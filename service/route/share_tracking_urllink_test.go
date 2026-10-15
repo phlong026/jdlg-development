@@ -10,10 +10,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"service/model"
 	"service/tracking"
 )
 
@@ -236,5 +239,75 @@ func TestURLLinkNearExpiryCacheEntryIsNotServed(t *testing.T) {
 	}
 	if got, err = w.link(w.scope, 1); err != nil || got.URL == "" {
 		t.Fatalf("corrupt cache: %+v %v", got, err)
+	}
+}
+
+// urlLinkRoutes serves only the url-link routes, with the management scope taken
+// from the X-Test-Actor header instead of a login session.
+func urlLinkRoutes(t *testing.T) *gin.Engine {
+	t.Helper()
+	t.Setenv("TRACKING_WECHAT_URLLINK_ENABLED", "")
+	gin.SetMode(gin.TestMode)
+	registered := gin.New()
+	RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil)
+	router := gin.New()
+	for _, route := range registered.Routes() {
+		if strings.HasSuffix(route.Path, "/url-link") {
+			router.Handle(route.Method, route.Path, func(c *gin.Context) {
+				actor, _ := strconv.ParseInt(c.GetHeader("X-Test-Actor"), 10, 64)
+				c.Set("tracking.scope", tracking.Scope{Manage: true, Actor: actor})
+				c.Next()
+			}, route.HandlerFunc)
+		}
+	}
+	return router
+}
+
+func urlLinkRequest(router *gin.Engine, method string, actor int) int {
+	request := httptest.NewRequest(method, "/api/v1/management/tracking/contents/content-1/url-link?version=1", nil)
+	request.Header.Set("X-Test-Actor", strconv.Itoa(actor))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response.Code
+}
+
+// Generating a link creates a share and can spend WeChat quota, so it must not be
+// reachable by a GET that a prefetcher, image tag or link scanner can issue. The
+// management group applies its origin check to every non-GET method, so a POST
+// route inherits it.
+func TestURLLinkRouteIsAPostMutationNotAGet(t *testing.T) {
+	router := urlLinkRoutes(t)
+	if code := urlLinkRequest(router, "GET", 7); code != http.StatusNotFound {
+		t.Fatalf("GET must no longer generate a link, got %d", code)
+	}
+	if code := urlLinkRequest(router, "POST", 7); code != http.StatusForbidden {
+		t.Fatalf("POST must reach the handler (disabled here, so refused with 403), got %d", code)
+	}
+}
+
+func TestURLLinkRouteLimitsEachAccountPerMinute(t *testing.T) {
+	router := urlLinkRoutes(t)
+	for i := 1; i <= trackingURLLinkPerMinute; i++ {
+		if code := urlLinkRequest(router, "POST", 7); code != http.StatusForbidden {
+			t.Fatalf("request %d is inside the limit and must reach the handler, got %d", i, code)
+		}
+	}
+	if code := urlLinkRequest(router, "POST", 7); code != http.StatusTooManyRequests {
+		t.Fatalf("the request over the limit must be refused with 429, got %d", code)
+	}
+	if code := urlLinkRequest(router, "POST", 8); code != http.StatusForbidden {
+		t.Fatalf("another account has its own allowance, got %d", code)
+	}
+}
+
+// The mini-program's access_token is cached for payment, profile and QR-code
+// calls. Tracking must take that app's token from the same cache.
+func TestTrackingWechatAPISharesTheMiniprogramTokenCache(t *testing.T) {
+	api := newTrackingWechatAPI(wechatCredentials{AppID: "wx-mini", Secret: "secret"})
+	if api.SharedTokens["wx-mini"] == nil || len(api.SharedTokens) != 1 {
+		t.Fatalf("the mini-program app must use the shared token source: %v", api.SharedTokens)
+	}
+	if bare := newTrackingWechatAPI(wechatCredentials{}); len(bare.SharedTokens) != 0 {
+		t.Fatalf("no mini-program app configured, nothing to share: %v", bare.SharedTokens)
 	}
 }

@@ -173,7 +173,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	}
 	// Tracking shares the application pool (20 connections). Cap what it may hold
 	// so queued tracking work waits in Go instead of starving core business.
-	wechatAPI := tracking.NewWechatAPI()
+	wechatAPI := newTrackingWechatAPI(miniprogramCredentials())
 	svc := tracking.New(tracking.NewSQLStore(users.DB, trackingSlotLimit("TRACKING_MAX_WRITE_TX", 4), trackingSlotLimit("TRACKING_MAX_READ_TX", 6)), cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
@@ -280,7 +280,15 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Header("Cache-Control", "private, no-store")
 		c.Data(200, http.DetectContentType(bytes), bytes)
 	})
-	mg.GET("/contents/:id/url-link", func(c *gin.Context) {
+	// Generating a link creates a share and can spend WeChat quota, so it is a
+	// mutation: POST puts it behind the management group's origin check, and each
+	// account is held to a modest rate so a loop over contents cannot drain quota.
+	urlLinkLimiter := newTrackingPeerLimiter(1000, trackingURLLinkPerMinute, time.Now)
+	mg.POST("/contents/:id/url-link", func(c *gin.Context) {
+		if !urlLinkLimiter.allow(strconv.FormatInt(sc(c).Actor, 10)) {
+			trackingResponse(c, nil, &tracking.Error{Status: 429, Message: "生成URL Link过于频繁，请稍后再试"})
+			return
+		}
 		version, _ := strconv.Atoi(c.Query("version"))
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 		defer cancel()

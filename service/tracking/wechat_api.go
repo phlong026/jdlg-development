@@ -3,6 +3,8 @@ package tracking
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,7 +32,30 @@ func (e *WechatError) Error() string { return fmt.Sprintf("wechat api errcode %d
 type WechatAPI struct {
 	Base   string
 	Client *http.Client
+	// SharedTokens routes an AppID whose access_token is also used elsewhere in
+	// the process (the mini-program: payment, profile, QR codes) through that
+	// shared cache. WeChat keeps one live token per app, so a second independent
+	// fetch retires the first one after a short grace period and two caches for
+	// the same app would keep breaking each other's calls.
+	SharedTokens map[string]TokenFunc
+
+	mu     sync.Mutex
+	tokens map[string]cachedToken
+	now    func() time.Time // tests only; nil means time.Now
 }
+
+// TokenFunc returns a currently valid access_token for one app.
+type TokenFunc func(ctx context.Context, appID, secret string) (string, error)
+
+type cachedToken struct {
+	value   string
+	secret  string // digest, so a rotated secret is never served a stale token
+	expires time.Time
+}
+
+// tokenRefreshMargin renews a token this long before WeChat expires it, so a
+// request that starts just before expiry never carries a dead token.
+const tokenRefreshMargin = 5 * time.Minute
 
 func NewWechatAPI() *WechatAPI {
 	return &WechatAPI{Base: wechatAPIBase, Client: &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
@@ -57,11 +83,32 @@ func (w *WechatAPI) do(req *http.Request, limit int64) ([]byte, error) {
 	return b, nil
 }
 
-// Token fetches a client-credential access token. Callers use it for one
-// operation or one sync run and never store it.
+// Token returns an access_token for appID. A token is fetched at most once per
+// lifetime and reused, so publishing, link generation and sync runs do not each
+// spend the daily /cgi-bin/token quota or retire a token another caller holds.
+// Failures are never cached, and no error carries the credential.
 func (w *WechatAPI) Token(ctx context.Context, appID, secret string) (string, error) {
 	if appID == "" || secret == "" {
 		return "", ErrUnavailable
+	}
+	if source := w.SharedTokens[appID]; source != nil {
+		token, err := source(ctx, appID, secret)
+		if err != nil || token == "" {
+			// The shared source's error may quote its request URL, which holds the secret.
+			return "", ErrUnavailable
+		}
+		return token, nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	now := time.Now()
+	if w.now != nil {
+		now = w.now()
+	}
+	digest := sha256.Sum256([]byte(secret))
+	fingerprint := hex.EncodeToString(digest[:])
+	if cached, ok := w.tokens[appID]; ok && cached.secret == fingerprint && cached.expires.After(now.Add(tokenRefreshMargin)) {
+		return cached.value, nil
 	}
 	q := url.Values{"grant_type": {"client_credential"}, "appid": {appID}, "secret": {secret}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, w.Base+"/cgi-bin/token?"+q.Encode(), nil)
@@ -73,11 +120,19 @@ func (w *WechatAPI) Token(ctx context.Context, appID, secret string) (string, er
 		return "", err
 	}
 	var out struct {
-		Token string `json:"access_token"`
+		Token     string `json:"access_token"`
+		ExpiresIn int    `json:"expires_in"`
 	}
 	if json.Unmarshal(b, &out) != nil || out.Token == "" {
 		return "", ErrUnavailable
 	}
+	if out.ExpiresIn <= 0 {
+		out.ExpiresIn = 7200
+	}
+	if w.tokens == nil {
+		w.tokens = map[string]cachedToken{}
+	}
+	w.tokens[appID] = cachedToken{value: out.Token, secret: fingerprint, expires: now.Add(time.Duration(out.ExpiresIn) * time.Second)}
 	return out.Token, nil
 }
 
