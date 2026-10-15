@@ -3,6 +3,7 @@ package tracking
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,6 +25,51 @@ type RecordQuery struct {
 	Content, View                              string
 	AtFrom, AtBefore, AtThrough, IdentityAsOf  time.Time
 	CatalogAsOf                                time.Time // Immutable catalog membership; never mutable occurred_at.
+	// WithoutExactSummary keeps only rows whose session lacks a complete
+	// projection without deferred events, i.e. one that may hold facts in days
+	// that have no projected bucket.
+	WithoutExactSummary bool
+	// Limit caps the rows returned (0: only the read budget applies). A cursor
+	// (AfterAt, AfterID) resumes after a row of the same ORDER BY occurred_at,
+	// record_id ordering, so a caller can page through a result larger than the
+	// read budget in separate transactions.
+	Limit   int
+	AfterAt time.Time
+	AfterID string
+}
+
+func (q RecordQuery) hasCursor() bool { return q.AfterID != "" || !q.AfterAt.IsZero() }
+
+// pageRecords is the portable way to read one page. Repositories (and test
+// doubles) that ignore Limit or the cursor still return exactly the same page,
+// because the result is ordered, resumed and truncated here as well.
+func pageRecords(r Repository, kind string, q RecordQuery) ([]Record, error) {
+	rows, err := scopedRecords(r, kind, q)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].At.Equal(rows[j].At) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].At.Before(rows[j].At)
+	})
+	if q.hasCursor() {
+		kept := rows[:0:0]
+		for _, row := range rows {
+			if rowAfterCursor(row, q) {
+				kept = append(kept, row)
+			}
+		}
+		rows = kept
+	}
+	if q.Limit > 0 && len(rows) > q.Limit {
+		rows = rows[:q.Limit]
+	}
+	return rows, nil
+}
+func rowAfterCursor(row Record, q RecordQuery) bool {
+	return row.At.After(q.AfterAt) || row.At.Equal(q.AfterAt) && row.ID > q.AfterID
 }
 
 type ScopedRecordLister interface {
@@ -145,6 +191,15 @@ func scopedRecords(r Repository, kind string, q RecordQuery) ([]Record, error) {
 		}
 		out = append(out, row)
 	}
+	if q.Limit > 0 && len(out) > q.Limit {
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].At.Equal(out[j].At) {
+				return out[i].ID < out[j].ID
+			}
+			return out[i].At.Before(out[j].At)
+		})
+		out = out[:q.Limit]
+	}
 	return out, nil
 }
 func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
@@ -160,6 +215,9 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 		return false, nil
 	}
 	if !q.AtThrough.IsZero() && row.At.Truncate(time.Microsecond).After(q.AtThrough.Truncate(time.Microsecond)) {
+		return false, nil
+	}
+	if q.hasCursor() && !rowAfterCursor(row, q) {
 		return false, nil
 	}
 	// Apply authoritative scalar predicates before touching JSON. This keeps
@@ -288,6 +346,15 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 		}
 		if link["original_visitor_key"] != original || !strings.HasPrefix(link["visitor_key"], "u:") || !includes(q.VisitorKeys, link["visitor_key"]) {
 			return false, nil
+		}
+	}
+	if q.WithoutExactSummary {
+		state, err := decode[summaryState](r, "summary_state", session)
+		if err == nil && state.Complete && state.DeferredFrom == nil {
+			return false, nil
+		}
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return false, err
 		}
 	}
 	return true, nil

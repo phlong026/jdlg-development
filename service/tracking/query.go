@@ -3,17 +3,35 @@ package tracking
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// Query reads retain the existing tenant transaction/lock and fail closed even
-// if a legacy optional metadata lookup ignores a budget error.
+// readTransaction runs fn on a lock-free snapshot when the store supports it.
+// Stores without ReadStore keep the serialized transaction.
+func (s *Service) readTransaction(ctx context.Context, fn func(Repository) error) error {
+	if s.Store == nil || s.Config.Tenant == "" {
+		return ErrUnavailable
+	}
+	if reader, ok := s.Store.(ReadStore); ok {
+		return reader.ReadTransaction(ctx, s.Config.Tenant, fn)
+	}
+	return s.Store.Transaction(ctx, s.Config.Tenant, fn)
+}
+
+// Bounded queries fail closed even if a legacy optional metadata lookup
+// ignores a budget error. queryTransaction is for bounded reads that also
+// write (annotations, deletion); pure reads use readQueryTransaction.
 func (s *Service) queryTransaction(ctx context.Context, fn func(Repository) error) error {
-	return s.transaction(ctx, func(r Repository) error {
+	return boundedTransaction(s.transaction, ctx, fn)
+}
+func (s *Service) readQueryTransaction(ctx context.Context, fn func(Repository) error) error {
+	return boundedTransaction(s.readTransaction, ctx, fn)
+}
+func boundedTransaction(run func(context.Context, func(Repository) error) error, ctx context.Context, fn func(Repository) error) error {
+	return run(ctx, func(r Repository) error {
 		bounded := boundedQueryRepository(r).(*queryRepository)
 		err := fn(bounded)
 		if bounded.budget.err != nil {
@@ -26,6 +44,9 @@ func (s *Service) queryTransaction(ctx context.Context, fn func(Repository) erro
 type factSelection struct {
 	Visitors, Sessions []string
 	View               string
+	// Summaries lets list and intent reductions read exact current projections
+	// instead of raw events. Drilldowns that need flags or events keep raw.
+	Summaries bool
 }
 
 type factView struct {
@@ -161,30 +182,42 @@ func hasFlag(e Event, f string) bool {
 	return false
 }
 func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error) {
-	return s.factsSelected(r, scope, f, factSelection{})
+	return s.factsSelected(r, scope, f, factSelection{Summaries: true})
 }
 func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, error) {
 	if !scope.View {
 		return nil, fail(403, "无访问记录查看权限")
 	}
-	retained, expired, e := s.summaryFactsSelected(r, scope, f, selection)
+	current := selection.Summaries && summaryWindowExact(f)
+	// expired holds every session its projections fully represent; raw rows of
+	// those sessions are never added to them.
+	retained, expired, stale, e := s.summaryFactsSelected(r, scope, f, selection, current)
 	if e != nil {
 		return nil, e
 	}
 	owners := permittedOwners(scope, f.Owner)
 	// All accepted visible segments are <= 15 seconds. Include segments ending
 	// after End that overlap the requested window; never discard the earlier PV.
-	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf})
+	// With current projections, a session needs a raw scan only if it may hold
+	// facts in days without a bucket: never projected, projected by an older
+	// projector, or with deferred events. Others with facts here have a bucket.
+	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf, WithoutExactSummary: current})
 	if e != nil {
 		return nil, e
 	}
 	sessions := []string{}
 	seenSessions := map[string]bool{}
-	for _, row := range candidates {
-		if !seenSessions[row.Session] {
-			sessions = append(sessions, row.Session)
-			seenSessions[row.Session] = true
+	addSession := func(session string) {
+		if !seenSessions[session] && !expired[session] {
+			sessions = append(sessions, session)
+			seenSessions[session] = true
 		}
+	}
+	for _, session := range stale {
+		addSession(session)
+	}
+	for _, row := range candidates {
+		addSession(row.Session)
 	}
 	// Read the complete authorized session, not just the candidate material or
 	// view. Session-wide overlap deduplication depends on the other page views.
@@ -192,24 +225,13 @@ func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection f
 	if e != nil {
 		return nil, e
 	}
-	identities, deleted, deletedSessions := map[string]Record{}, map[string]bool{}, map[string]bool{}
+	meta, err := loadSessionMeta(r, sessions, true, true, true)
+	if err != nil {
+		return nil, err
+	}
+	identities, deleted, deletedSessions := meta.identity, map[string]bool{}, meta.deleted
 	for _, session := range sessions {
-		rec, err := r.Get("identity", session)
-		if err == nil {
-			identities[session] = rec
-		} else if !errors.Is(err, ErrNotFound) {
-			return nil, err
-		}
-		dead, err := tombstoned(r, "deletion_session", session)
-		if err != nil {
-			return nil, err
-		}
-		deletedSessions[session] = dead
-		state, err := decode[summaryState](r, "summary_state", session)
-		if err != nil && !errors.Is(err, ErrNotFound) {
-			return nil, err
-		}
-		if state.RawExpired {
+		if meta.state[session].RawExpired {
 			expired[session] = true
 		}
 	}
@@ -385,7 +407,7 @@ func (s *Service) loadIntentFacts(ctx context.Context, r Repository, scope Scope
 		return data, ruleErr
 	}
 	if s.Config.IntentEnabled && !data.mixedRules {
-		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -data.rule.WindowDays), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors})
+		facts, e := s.factsSelected(r, scope, Filter{Start: now.AddDate(0, 0, -data.rule.WindowDays), End: now.Add(time.Nanosecond), AsOf: now}, factSelection{Visitors: visitors, Summaries: true})
 		if e != nil {
 			return data, e
 		}
@@ -587,7 +609,9 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	effective := ownerScope(scope, f.Owner)
+	pending := []pendingEvaluation{}
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		facts, e := s.facts(r, scope, f)
 		if e != nil {
 			return e
@@ -625,7 +649,6 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			}
 			ss[v.Visitor][v.Session] = true
 		}
-		effective := ownerScope(scope, f.Owner)
 		intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by), overrideLimit)
 		if e != nil {
 			return e
@@ -634,8 +657,8 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		for key, v := range by {
 			v.Sessions = len(ss[key])
 			v.Intent = s.intent(effective, key, f.AsOf, intentData)
-			if _, e = s.recordIntentEvaluation(r, effective, key, v.Intent); e != nil {
-				return e
+			if s.evaluationAudited(effective, v.Intent) {
+				pending = append(pending, pendingEvaluation{key: key, intent: v.Intent})
 			}
 			if scope.CRM && len(effective.Owners) == 1 {
 				rec, ok := intentData.crm[privateKey(effective.Owners[0], key)]
@@ -697,7 +720,14 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		out.FirstCursor = withProfileRevision(overrideSnapshotCursor(f, 0, intentData.overrideRevision), profileRevision)
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	// A served label is never left unaudited: failing to record fails the request.
+	if err = s.recordIntentEvaluations(ctx, effective, pending); err != nil {
+		return List{Items: []Visitor{}}, err
+	}
+	return out, nil
 }
 func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string) (List, error) {
 	return s.queryContents(ctx, scope, f, id)
@@ -713,7 +743,7 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		all, e := s.factsSelected(r, scope, f, factSelection{Visitors: []string{key}})
 		if e != nil {
 			return e
@@ -822,7 +852,7 @@ func (s *Service) Events(ctx context.Context, scope Scope, id string, f Filter) 
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		facts, e := s.factsSelected(r, scope, f, factSelection{View: id})
 		if e != nil {
 			return e

@@ -178,7 +178,7 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 		return out, err
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
-	err = s.queryTransaction(ctx, func(r Repository) error {
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		selectedID := id
 		if selectedID == "" {
 			selectedID = f.Content

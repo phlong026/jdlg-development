@@ -35,7 +35,7 @@ func aggregateRows(t *testing.T, r Repository) []DailySummary {
 }
 func TestDailySummaryDuplicateLateCrossMidnight(t *testing.T) {
 	s, _ := fixture(t)
-	r := &memoryRepo{map[string]Record{}}
+	r := &memoryRepo{data: map[string]Record{}}
 	at := time.Date(2026, 10, 10, 15, 59, 55, 0, time.UTC)
 	aggregateSeed(t, r, "owner-a", "a:alice", "session-a", "view-a", "heartbeat", "visible_segment", at.Add(10*time.Second), 10000)
 	if e := s.RebuildSessionSummaries(r, "session-a", s.Now()); e != nil {
@@ -81,7 +81,7 @@ func TestDailySummaryDuplicateLateCrossMidnight(t *testing.T) {
 }
 func TestDailySummaryRetentionScopeIdentityAndDeletion(t *testing.T) {
 	s, scope := fixture(t)
-	r := &memoryRepo{map[string]Record{}}
+	r := &memoryRepo{data: map[string]Record{}}
 	at := s.Now().AddDate(0, 0, -100)
 	for _, owner := range []string{"owner-a", "owner-b"} {
 		session := "session-" + owner
@@ -132,7 +132,7 @@ func TestDailySummaryRetentionScopeIdentityAndDeletion(t *testing.T) {
 }
 func TestDailySummaryRejectsUnavailableHistoricalSnapshot(t *testing.T) {
 	s, scope := fixture(t)
-	r := &memoryRepo{map[string]Record{}}
+	r := &memoryRepo{data: map[string]Record{}}
 	at := s.Now().AddDate(0, 0, -100)
 	aggregateSeed(t, r, "owner-a", "u:1", "session-a", "view-a", "pv-a", "page_view", at, 0)
 	raw, _ := r.List("event")
@@ -218,7 +218,7 @@ func TestDailySummaryPurgeRetainsMetrics(t *testing.T) {
 
 func TestDailySummaryIdentityBoundarySameSession(t *testing.T) {
 	s, _ := fixture(t)
-	r := &memoryRepo{map[string]Record{}}
+	r := &memoryRepo{data: map[string]Record{}}
 	at := s.Now().Add(-time.Hour)
 	aggregateSeed(t, r, "owner-a", "a:alice", "session-link", "view-link", "pv-link", "page_view", at, 0)
 	aggregateSeed(t, r, "owner-a", "u:42", "session-link", "view-link", "seg-link", "visible_segment", at.Add(10*time.Second), 10000)
@@ -234,7 +234,7 @@ func TestDailySummaryIdentityBoundarySameSession(t *testing.T) {
 
 func TestDailySummaryLegacyPurgeDoesNotExtendRetention(t *testing.T) {
 	s, _ := fixture(t)
-	r := &memoryRepo{map[string]Record{}}
+	r := &memoryRepo{data: map[string]Record{}}
 	at := s.Now().AddDate(0, 0, -200)
 	aggregateSeed(t, r, "owner-a", "u:22", "session-legacy", "view-legacy", "pv-legacy", "page_view", at, 0)
 	raw, _ := r.List("event")

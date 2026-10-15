@@ -94,6 +94,43 @@ func TestTrackingProxyPolicyIsExplicitAndRightAnchored(t *testing.T) {
 		}
 	}
 }
+func TestTrackingProxyPolicyWarning(t *testing.T) {
+	for _, tc := range []struct {
+		enabled bool
+		raw     string
+		warn    bool
+	}{
+		{false, "", false},
+		{true, "", true},
+		{true, "  ", true},
+		{true, "10.0.0.0/24,garbage", true},
+		{true, "0.0.0.0/0", true},
+		{true, "10.0.0.0/24, 2001:db8::/64", false},
+	} {
+		if got := trackingProxyPolicyWarning(tc.enabled, tc.raw); (got != "") != tc.warn {
+			t.Fatalf("%+v: got %q", tc, got)
+		}
+	}
+}
+func TestTrackingUntrustedForwardingWarnsOnce(t *testing.T) {
+	oldLogf, oldOnce := trackingLogf, trackingForwardedWarning
+	defer func() { trackingLogf, trackingForwardedWarning = oldLogf, oldOnce }()
+	var logged []string
+	trackingLogf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
+	trackingForwardedWarning = &sync.Once{}
+	trusted := trackingTrustedProxyPrefixes("10.0.0.0/24")
+	warnUntrustedForwarding("10.0.0.1:443", "198.51.100.9", trusted)
+	warnUntrustedForwarding("203.0.113.8:443", "", trusted)
+	if len(logged) != 0 {
+		t.Fatalf("trusted proxy or plain client warned: %v", logged)
+	}
+	warnUntrustedForwarding("172.17.0.1:443", "198.51.100.9", trusted)
+	warnUntrustedForwarding("172.17.0.1:443", "198.51.100.10", trusted)
+	warnUntrustedForwarding("[::ffff:172.17.0.2]:443", "198.51.100.11", nil)
+	if len(logged) != 1 || !strings.Contains(logged[0], "172.17.0.1") {
+		t.Fatalf("want one warning naming the untrusted peer, got %v", logged)
+	}
+}
 func TestTrackingLimiterConcurrentQuotaIsAtomic(t *testing.T) {
 	l := newTrackingPeerLimiter(10000, 60, time.Now)
 	var accepted atomic.Int32

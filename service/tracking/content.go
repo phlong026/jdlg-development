@@ -10,77 +10,95 @@ import (
 
 func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Draft) (Content, error) {
 	var out Content
-	if e := s.authorized(scope); e != nil {
-		return out, e
-	}
-	if !scope.Manage {
-		return out, fail(403, "无素材管理权限")
-	}
-	if !trim(in.Title, 80) || !trim(in.Body, 100000) || len(in.SourceNote) > 2000 || (in.SourceURL != "" && !safeURL(in.SourceURL)) || (in.Rights != "own" && in.Rights != "authorized") || !scope.Allows(in.Owner) || len(in.MediaIDs) > 50 {
-		return out, fail(400, "标题正文权属或归属无效")
-	}
-	body, format, err := normalizeBody(in.Body, in.BodyFormat)
+	in, err := s.validateDraft(scope, in)
 	if err != nil {
 		return out, err
 	}
-	in.Body, in.BodyFormat = body, format
 	e := s.transaction(ctx, func(r Repository) error {
-		now := s.Now()
-		created := now.UTC()
-		revision := 1
-		version := 0
-		if id != "" {
-			old, e := loadCatalogContent(r, "content", id)
-			if e != nil || !scope.Allows(old.Owner) {
-				return fail(404, "素材不可访问")
-			}
-			if old.Status == "revoked" {
-				return fail(409, "撤回素材不可重新发布，请创建新素材")
-			}
-			if old.Owner != in.Owner {
-				return fail(409, "素材归属变更需单独授权迁移")
-			}
-			if old.Revision != in.Revision {
-				return fail(409, "素材已更新，请重新读取")
-			}
-			revision = old.Revision + 1
-			version = old.Version
-			created = *old.CreatedAt
-		} else {
-			id = opaque()
-		}
-		media := []Asset{}
-		var cover *Asset
-		seen := map[string]bool{}
-		for _, mid := range append(append([]string{}, in.MediaIDs...), in.CoverID) {
-			if mid == "" || seen[mid] {
-				continue
-			}
-			seen[mid] = true
-			rec, e := r.Get("media", mid)
-			if e != nil || !scope.Allows(rec.Owner) || rec.Owner != in.Owner {
-				return fail(404, "媒体不可访问")
-			}
-			var a Asset
-			if json.Unmarshal(rec.Payload, &a) != nil {
-				return ErrUnavailable
-			}
-			if mid == in.CoverID {
-				if a.Kind != "image" {
-					return fail(400, "封面必须是图片")
-				}
-				c := a
-				cover = &c
-			}
-			media = append(media, a)
-		}
-		out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
-		if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
-			return e
-		}
-		return audit(r, in.Owner, "save_content", scope.Actor, id, now, map[string]any{"revision": revision})
+		saved, e := s.saveContentIn(r, scope, id, in, s.Now())
+		out = saved
+		return e
 	})
 	return out, e
+}
+
+// validateDraft applies the checks every writer of content shares and returns
+// the draft with its body normalised.
+func (s *Service) validateDraft(scope Scope, in Draft) (Draft, error) {
+	if e := s.authorized(scope); e != nil {
+		return in, e
+	}
+	if !scope.Manage {
+		return in, fail(403, "无素材管理权限")
+	}
+	if !trim(in.Title, 80) || !trim(in.Body, 100000) || len(in.SourceNote) > 2000 || (in.SourceURL != "" && !safeURL(in.SourceURL)) || (in.Rights != "own" && in.Rights != "authorized") || !scope.Allows(in.Owner) || len(in.MediaIDs) > 50 {
+		return in, fail(400, "标题正文权属或归属无效")
+	}
+	body, format, err := normalizeBody(in.Body, in.BodyFormat)
+	if err != nil {
+		return in, err
+	}
+	in.Body, in.BodyFormat = body, format
+	return in, nil
+}
+
+// saveContentIn writes one draft revision inside the caller's transaction. The
+// draft must already have passed validateDraft.
+func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, now time.Time) (Content, error) {
+	var out Content
+	created := now.UTC()
+	revision := 1
+	version := 0
+	if id != "" {
+		old, e := loadCatalogContent(r, "content", id)
+		if e != nil || !scope.Allows(old.Owner) {
+			return out, fail(404, "素材不可访问")
+		}
+		if old.Status == "revoked" {
+			return out, fail(409, "撤回素材不可重新发布，请创建新素材")
+		}
+		if old.Owner != in.Owner {
+			return out, fail(409, "素材归属变更需单独授权迁移")
+		}
+		if old.Revision != in.Revision {
+			return out, fail(409, "素材已更新，请重新读取")
+		}
+		revision = old.Revision + 1
+		version = old.Version
+		created = *old.CreatedAt
+	} else {
+		id = opaque()
+	}
+	media := []Asset{}
+	var cover *Asset
+	seen := map[string]bool{}
+	for _, mid := range append(append([]string{}, in.MediaIDs...), in.CoverID) {
+		if mid == "" || seen[mid] {
+			continue
+		}
+		seen[mid] = true
+		rec, e := r.Get("media", mid)
+		if e != nil || !scope.Allows(rec.Owner) || rec.Owner != in.Owner {
+			return out, fail(404, "媒体不可访问")
+		}
+		var a Asset
+		if json.Unmarshal(rec.Payload, &a) != nil {
+			return out, ErrUnavailable
+		}
+		if mid == in.CoverID {
+			if a.Kind != "image" {
+				return out, fail(400, "封面必须是图片")
+			}
+			c := a
+			cover = &c
+		}
+		media = append(media, a)
+	}
+	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+	if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
+		return out, e
+	}
+	return out, audit(r, in.Owner, "save_content", scope.Actor, id, now, map[string]any{"revision": revision})
 }
 func (s *Service) Preview(ctx context.Context, scope Scope, id string, revision int) (map[string]any, error) {
 	var out map[string]any
@@ -206,7 +224,7 @@ func (s *Service) ReadContent(ctx context.Context, id string, version int) (Cont
 	if !s.Config.ContentEnabled {
 		return out, fail(404, "内容不可访问")
 	}
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		if e := s.available(ctx, r, "pages/contentreader/contentreader", id, version); e != nil {
 			return e
 		}
@@ -232,7 +250,7 @@ func (s *Service) AddMedia(ctx context.Context, scope Scope, asset Asset, owner 
 }
 func (s *Service) Media(ctx context.Context, scope *Scope, id string) (Asset, error) {
 	var a Asset
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		rec, e := r.Get("media", id)
 		if e != nil {
 			return fail(404, "媒体不可访问")
@@ -265,7 +283,7 @@ func (s *Service) ListMedia(ctx context.Context, scope Scope) (List, error) {
 	if !scope.Manage {
 		return out, fail(403, "无素材管理权限")
 	}
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		rows, e := r.List("media")
 		if e != nil {
 			return e

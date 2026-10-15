@@ -37,18 +37,21 @@
 - `POST /contents/:id/publish`：预览令牌、expected_revision和idempotency_key；创建不可变版本。
 - `POST /contents/:id/revoke`：原因、版本、幂等键；永久撤回墓碑，旧入口和媒体不继续公开。
 - `GET /media`、`POST /media` multipart：受控私有盘上传，真实PNG/JPEG/GIF≤10MiB、MP4≤50MiB，权属声明；MP4必须可读取合法尺寸；无任意URL导入或远程抓取。
-- `GET /contents/:id/code?version=N`：仅真实微信码开关及配置齐备时调用官方接口，超时/权限失败明确报错；不是伪造二维码。未开放URL Link。
-- `POST /identity-links`、`DELETE /identity-links/:visitor`：明确依据、业务ID/编号、专门权限，必须经过当前操作者可信CRM接口的目标权限验证。
+- `GET /contents/:id/code?version=N`：仅真实微信码开关及配置齐备时调用官方接口，超时/权限失败明确报错；不是伪造二维码。URL Link见下一条。
+- `POST /contents/:id/url-link?version=N`：会创建分享并占用微信生成额度，所以是写操作，而不是 GET：与管理端其他写接口一样要求 `X-Tracking-Request: 1` 头和同源 `Origin`（预取、图片标签、链接扫描器无法触发），且每个账号每分钟最多 20 次，超出返回 429。需TRACKING_WECHAT_URLLINK_ENABLED=true、对该素材归属有管理权限且该版本已发布；调用官方 generate_urllink 返回 `{url_link, expires_at}`，链接带该账号当日新建的分享令牌，有效期29天（早于令牌到期）。发布接口在开启后也会在 `share_methods.url_link` 返回。生成失败只返回说明，不影响发布。
+- `GET /mp-sync`、`POST /mp-sync`：需TRACKING_MP_SYNC_ENABLED=true及对配置归属的管理权限。GET返回配置摘要与最近一次同步结果（含 `publishes:false`）；POST立即同步一次（同一进程内同时只运行一次，手动触发间隔不少于1分钟，运行期间返回409，过于频繁返回429），返回各项计数与最多20条未同步原因。同步只生成或更新草稿，不发布、不撤回、不覆盖人工修改。
+- `POST /identity-links`、`DELETE /identity-links/:visitor`：明确依据、业务ID/编号、专门权限，必须经过当前操作者可信CRM接口的目标权限验证。关联时对CRM接口的核验最多等待5秒（列表里读取已有关联时为2秒），超时按核验失败处理、不写入映射。
 - `POST /intent-overrides`：等级、原因和≤30天有效期；仅专门规则权限。完整人工决定追加不可变历史并可按 as_of 回放，访客游标另绑定覆盖 revision；标签是跟进参考，不是购买概率。
-- `POST /deletions`：专门权限和原因；同步删除当前系统可控事实/映射，保留防重放墓碑；外部导出和备份治理另行核验，不虚称全副本即时清除。
+- `POST /deletions`：专门权限和原因；删除当前系统可控事实/映射，保留防重放墓碑；外部导出和备份治理另行核验，不虚称全副本即时清除。返回 `status`：`completed` 表示全部删除完成；`in_progress` 表示数据量超出单事务预算，已不可读取但未删完，重复同一请求继续。其他值或错误都不能当作完成。细节见 [权限、保留及删除维护](governance-maintenance.md)。
+- `GET /diagnostics/rejections?days=7`：需要查看权限；返回已授权归属最近 1–90 个 UTC 自然日、因事件时间超窗被拒的事件计数，按天倒序。`counts` 的键：`clock_ahead`（设备时间超前服务器 2 分钟以上）、`clock_behind`（事件早于本会话服务端开始时间 2 分钟以上）、`stale_queue`（离线队列超过 72 小时）。SDK 会丢弃被拒事件，所以计数持续增长说明有设备时钟偏差或积压，该用户在列表中会表现为“没有访问记录”。只含归属、日期和计数，不含访客、会话或事件标识。
 
 ## 数据字典与一致性
 
 `tracking_access`复用users.id记录显式能力，不复制账号系统。
 
-`tracking_records`为有类型的租户记录表。主键 `(tenant_id,kind,record_id)`；索引覆盖owner、visitor、content、share与时间，及session。kind区分content/version/media/share/share_request/entry/session/event/event_hash/sequence/view_binding/identity/crm/intent_override/business/audit/deletion/deletion_session/content_revoked/legacy_catalog/daily_summary/summary_state等。JSON字段由Go结构定义且入口严格校验，不存任意用户payload。所有时间以UTC字符串写入DATETIME并显式按UTC读回，避免旧DSN loc=Local改变含义。
+`tracking_records`为有类型的租户记录表。主键 `(tenant_id,kind,record_id)`；索引覆盖owner、visitor、content、share与时间，及session。kind区分content/version/media/share/share_request/entry/session/event/event_hash/sequence/view_binding/identity/crm/intent_override/business/audit/deletion/deletion_session/content_revoked/legacy_catalog/daily_summary/summary_state/rejection_stat等。rejection_stat 每个归属每个 UTC 日一行，只存计数，不纳入个人数据删除，也不在保留期清理范围内。JSON字段由Go结构定义且入口严格校验，不存任意用户payload。所有时间以UTC字符串写入DATETIME并显式按UTC读回，避免旧DSN loc=Local改变含义。
 
-事件使用INSERT不可改写。event_hash防相同ID不同内容，sequence防相同分段序号冲突。事实接受、身份变更及删除在事务内执行，租户行锁保证一致性。查询先按权限过滤再统计；同一session重叠可见区间取并集，跨午夜按查询边界裁剪；心跳/视频事件不会制造PV。
+事件使用INSERT不可改写。event_hash防相同ID不同内容，sequence防相同分段序号冲突。事实接受、身份变更、删除、注释和意向评估在写事务内执行，租户行锁保证写入串行。纯查询（访客/素材/会话/事件列表、规则读取、公开阅读与媒体、分享解析、保留试算、诊断）使用 `READ ONLY` + `REPEATABLE READ` 快照事务，不取租户锁；代码层与数据库层都拒绝其中的写入。访客列表在快照上计算标签后，另开一个短写事务记录意向评估（按 as_of/人工修正水位防止旧请求覆盖新状态，并跳过快照后被删除的访客）。CRM 桥接校验在所有事务之外执行，映射写入前在锁内重新确认访客归属。跟踪最多同时占用 `TRACKING_MAX_WRITE_TX`（默认4）个写连接和 `TRACKING_MAX_READ_TX`（默认6）个读连接，超出时在进程内排队，请求取消即返回503，不占用共享连接池。查询先按权限过滤再统计；同一session重叠可见区间取并集，跨午夜按查询边界裁剪；心跳/视频事件不会制造PV。
 
 ### 原业务素材的只读版本快照
 
@@ -72,6 +75,7 @@ as_of固定收件快照用于分页；原始记录过期后，早于已冻结投
 
 ## 查询资源预算与范围下推
 
+访客列表、素材列表和意向证据优先读取每个页面访问、每个自然日一行的 daily_summary 投影；只有投影在所查 as_of 下不能精确复现的会话（尚未投影、旧版投影、有延后事件、或投影晚于 as_of 重建）才回退读取原始事件。前提是时间窗口按上海自然日对齐，或窗口结束晚于 as_of（后台的日期范围、“全部”和意向窗口都满足）。两种归约的结果由差分测试逐字段比对一致。一次一分钟访问约消耗 2 条预算（原来约 16 条）。会话与事件下钻、访客素材卡仍读原始事件。
 数据库查询必须先限定授权 owner、业务时间和必要的内容/访客/页面或会话范围。为保留窗口前PV、跨午夜和跨页面时长去重，先选候选会话，再取得其所需完整事实，不对返回数据做静默截断。
 
 每请求累计最多20,000条读取记录及32MiB原始payload，超预算返回422，提示缩小时间、归属、素材或访客范围；成功响应绝不冒充部分统计。已过期原始明细返回410，无法从保留数据重建的历史快照返回409。预算是防止无界读的安全限制，不是百万级宽窗口报表的SLO证明。实施、索引和验证详见 service/docs/TRACKING_QUERY_BOUNDS.md。

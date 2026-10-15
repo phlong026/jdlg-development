@@ -159,7 +159,7 @@ func (s *Service) Rules(ctx context.Context, scope Scope) (RulesSnapshot, error)
 	if e := s.ruleScope(scope, false); e != nil {
 		return out, e
 	}
-	e := s.queryTransaction(ctx, func(r Repository) error {
+	e := s.readQueryTransaction(ctx, func(r Repository) error {
 		h, e := ruleHistory(r, scope.Owners[0], s.Now())
 		if e != nil {
 			return e
@@ -226,8 +226,43 @@ type intentEvaluation struct {
 	AsOf             time.Time `json:"as_of"`
 }
 
+func (s *Service) evaluationAudited(scope Scope, in Intent) bool {
+	return s.Config.IntentEnabled && len(scope.Owners) == 1 && !in.ScopeRequired
+}
+
+type pendingEvaluation struct {
+	key    string
+	intent Intent
+}
+
+// recordIntentEvaluations writes evaluations computed on a lock-free snapshot in
+// one short serialized transaction. recordIntentEvaluation's as_of/override
+// watermark keeps a slower request from overwriting a newer evaluation, and a
+// visitor deleted after the snapshot is skipped rather than resurrected.
+func (s *Service) recordIntentEvaluations(ctx context.Context, scope Scope, pending []pendingEvaluation) error {
+	if len(pending) == 0 {
+		return nil
+	}
+	sort.Slice(pending, func(i, j int) bool { return pending[i].key < pending[j].key })
+	return s.transaction(ctx, func(r Repository) error {
+		for _, p := range pending {
+			dead, e := tombstoned(r, "deletion", p.key)
+			if e != nil {
+				return e
+			}
+			if dead {
+				continue
+			}
+			if _, e = s.recordIntentEvaluation(r, scope, p.key, p.intent); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+}
+
 func (s *Service) recordIntentEvaluation(r Repository, scope Scope, key string, in Intent) (bool, error) {
-	if !s.Config.IntentEnabled || len(scope.Owners) != 1 || in.ScopeRequired {
+	if !s.evaluationAudited(scope, in) {
 		return false, nil
 	}
 	owner := scope.Owners[0]

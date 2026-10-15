@@ -21,17 +21,88 @@ type Store interface {
 	Transaction(context.Context, string, func(Repository) error) error
 }
 
+// ReadStore runs fn on one consistent snapshot without taking the tenant lock,
+// so reads never queue behind (or block) fact acceptance. Repositories passed to
+// fn reject every write; a path that must write uses Transaction instead.
+type ReadStore interface {
+	ReadTransaction(context.Context, string, func(Repository) error) error
+}
+
 var ErrNotFound = errors.New("not found")
 
-type SQLStore struct{ DB *sql.DB }
+// ErrReadOnly marks a write attempted inside a read transaction: a programming
+// error, never a client condition.
+var ErrReadOnly = errors.New("tracking read transaction cannot write")
+
+// SQLStore shares the application's connection pool. The optional slot limits
+// cap how many pool connections tracking may hold at once, waiting in Go (not
+// on a held connection) when full. Nil slots mean no limit.
+type SQLStore struct {
+	DB                    *sql.DB
+	writeSlots, readSlots chan struct{}
+}
+
+func NewSQLStore(db *sql.DB, maxWriters, maxReaders int) *SQLStore {
+	s := &SQLStore{DB: db}
+	if maxWriters > 0 {
+		s.writeSlots = make(chan struct{}, maxWriters)
+	}
+	if maxReaders > 0 {
+		s.readSlots = make(chan struct{}, maxReaders)
+	}
+	return s
+}
+
+func acquireSlot(ctx context.Context, slots chan struct{}) (func(), error) {
+	if slots == nil {
+		return func() {}, nil
+	}
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ErrUnavailable
+	}
+}
+
 type sqlRepo struct {
-	ctx    context.Context
-	tx     *sql.Tx
-	tenant string
-	budget readBudget
+	ctx      context.Context
+	tx       *sql.Tx
+	tenant   string
+	budget   readBudget
+	readOnly bool
+}
+
+func (s *SQLStore) ReadTransaction(ctx context.Context, tenant string, fn func(Repository) error) error {
+	release, e := acquireSlot(ctx, s.readSlots)
+	if e != nil {
+		return e
+	}
+	defer release()
+	// REPEATABLE READ gives every query in fn the same snapshot, which the tenant
+	// lock used to provide by excluding writers. READ ONLY makes MySQL reject a
+	// write even if the Go-side guard were bypassed.
+	tx, e := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	repo := &sqlRepo{ctx: ctx, tx: tx, tenant: tenant, readOnly: true}
+	if e = fn(repo); e != nil {
+		return e
+	}
+	if repo.budget.err != nil {
+		return repo.budget.err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLStore) Transaction(ctx context.Context, tenant string, fn func(Repository) error) error {
+	release, e := acquireSlot(ctx, s.writeSlots)
+	if e != nil {
+		return e
+	}
+	defer release()
 	tx, e := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if e != nil {
 		return e
@@ -112,6 +183,28 @@ func recordVisitorColumn(kind string) string {
 		return "r.visitor_key"
 	}
 }
+
+// addShareIn selects share and share_request rows by share ID. New rows carry
+// the ID in the indexed share_id column; rows written before that column was
+// filled keep it in the payload. The payload is consulted only when the column is
+// blank, so with tracking_kind_share and a backfill (share_tracking_share_lookup_up.sql)
+// the lookup is an index range, and without them it is still correct.
+func addShareIn(where *[]string, args *[]any, values []string) {
+	if values == nil {
+		return
+	}
+	if len(values) == 0 {
+		*where = append(*where, "1=0")
+		return
+	}
+	slots := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+	*where = append(*where, "(r.share_id IN ("+slots+") OR (r.share_id='' AND JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.share_id')) IN ("+slots+")))")
+	for i := 0; i < 2; i++ {
+		for _, value := range values {
+			*args = append(*args, value)
+		}
+	}
+}
 func recordShareColumn(kind string) string {
 	switch kind {
 	case "share", "share_request":
@@ -142,7 +235,11 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 	addIn("r.owner_id", q.Owners)
 	addIn("r.record_id", q.IDs)
 	addIn(recordSessionColumn(kind), q.Sessions)
-	addIn(recordShareColumn(kind), q.Shares)
+	if kind == "share" || kind == "share_request" {
+		addShareIn(&where, &args, q.Shares)
+	} else {
+		addIn(recordShareColumn(kind), q.Shares)
+	}
 	if q.Content != "" {
 		column := "r.content_id"
 		if kind == "content" || kind == "legacy_catalog" {
@@ -203,6 +300,17 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 			where = append(where, clause+"))")
 		}
 	}
+	if q.hasCursor() {
+		// Rows are ordered by (occurred_at, record_id); resume strictly after the cursor.
+		where = append(where, "(r.occurred_at>? OR (r.occurred_at=? AND r.record_id>?))")
+		args = append(args, stamp(q.AfterAt), stamp(q.AfterAt), q.AfterID)
+	}
+	if q.Limit > 0 && q.Limit < limit {
+		limit = q.Limit
+	}
+	if q.WithoutExactSummary {
+		where = append(where, "NOT EXISTS (SELECT 1 FROM tracking_records summary_state WHERE summary_state.tenant_id=r.tenant_id AND summary_state.kind='summary_state' AND summary_state.record_id="+recordSessionColumn(kind)+" AND JSON_UNQUOTE(JSON_EXTRACT(summary_state.payload,'$.complete'))='true' AND JSON_EXTRACT(summary_state.payload,'$.deferred_from') IS NULL)")
+	}
 	args = append(args, limit)
 	return "SELECT " + recordColumns + " FROM tracking_records r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.occurred_at,r.record_id LIMIT ?", args
 }
@@ -248,6 +356,9 @@ func (r *sqlRepo) ListScoped(kind string, q RecordQuery) ([]Record, error) {
 	return out, nil
 }
 func (r *sqlRepo) write(v Record, upsert bool) error {
+	if r.readOnly {
+		return ErrReadOnly
+	}
 	if v.At.IsZero() {
 		v.At = time.Now().UTC()
 	}
@@ -261,6 +372,9 @@ func (r *sqlRepo) write(v Record, upsert bool) error {
 func (r *sqlRepo) Put(v Record) error    { return r.write(v, true) }
 func (r *sqlRepo) Insert(v Record) error { return r.write(v, false) }
 func (r *sqlRepo) Remove(kind, id string) error {
+	if r.readOnly {
+		return ErrReadOnly
+	}
 	_, e := r.tx.ExecContext(r.ctx, "DELETE FROM tracking_records WHERE tenant_id=? AND kind=? AND record_id=?", r.tenant, kind, id)
 	return e
 }

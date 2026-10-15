@@ -1,10 +1,12 @@
 package route
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -69,18 +71,25 @@ func trackingMutationAllowed(r *http.Request) bool {
 	return e == nil && u.Host == r.Host && (u.Scheme == "https" || u.Scheme == "http" && r.TLS == nil)
 }
 func loadTrackingScope(c *gin.Context, db *sql.DB, tenant string) (tracking.Scope, error) {
-	scope := tracking.Scope{Tenant: tenant, Actor: GetUserID(c), Owners: []string{}}
+	return loadTrackingScopeFor(c.Request.Context(), db, tenant, GetUserID(c))
+}
+
+// loadTrackingScopeFor reads one management account's current tracking grants.
+// A background job acts through the same lookup a login session does, so it can
+// never hold more than an explicit, enabled grant.
+func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor int64) (tracking.Scope, error) {
+	scope := tracking.Scope{Tenant: tenant, Actor: actor, Owners: []string{}}
 	if scope.Actor <= 0 {
 		return scope, &tracking.Error{Status: 401, Message: "未登录"}
 	}
 	if db == nil || tenant == "" {
 		return scope, tracking.ErrUnavailable
 	}
-	access, e := readManagementAccess(c.Request.Context(), db, scope.Actor)
+	access, e := readManagementAccess(ctx, db, scope.Actor)
 	if e != nil || !access.Enabled {
 		return scope, &tracking.Error{Status: 403, Message: "管理账号未授权"}
 	}
-	rows, e := db.QueryContext(c.Request.Context(), `SELECT t.owner_id,t.can_view,t.can_manage,t.can_crm,t.can_delete,t.can_rules FROM tracking_access t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND u.user_type='management'`, scope.Actor, tenant)
+	rows, e := db.QueryContext(ctx, `SELECT t.owner_id,t.can_view,t.can_manage,t.can_crm,t.can_delete,t.can_rules FROM tracking_access t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND u.user_type='management'`, scope.Actor, tenant)
 	if e != nil {
 		return scope, tracking.ErrUnavailable
 	}
@@ -159,12 +168,37 @@ func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (trackin
 }
 func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
-	svc := tracking.New(&tracking.SQLStore{DB: users.DB}, cfg)
+	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
+		log.Printf("[Tracking] %s", warning)
+	}
+	// Tracking shares the application pool (20 connections). Cap what it may hold
+	// so queued tracking work waits in Go instead of starving core business.
+	wechatAPI := newTrackingWechatAPI(miniprogramCredentials())
+	svc := tracking.New(tracking.NewSQLStore(users.DB, trackingSlotLimit("TRACKING_MAX_WRITE_TX", 4), trackingSlotLimit("TRACKING_MAX_READ_TX", 6)), cfg)
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
 	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
 	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
 	// This is a separate capability group, not an implicit platform-admin data grant.
+	mpSettings := loadMPSyncSettings(os.Getenv)
+	for _, problem := range mpSettings.Problems {
+		log.Printf("[Tracking] 公众号同步未启用：%s", problem)
+	}
+	var mpRunner *mpSyncRunner
+	if mpSettings.Enabled {
+		mpRunner = &mpSyncRunner{
+			svc: svc, settings: mpSettings,
+			source: &tracking.OfficialAccountSource{API: wechatAPI, AppID: mpSettings.Config.AppID, Secret: mpSettings.Secret},
+			scopeFor: func(ctx context.Context) (tracking.Scope, error) {
+				return loadTrackingScopeFor(ctx, users.DB, cfg.Tenant, mpSettings.Actor)
+			},
+			mediaStore: func(scope tracking.Scope) tracking.MediaStore { return trackingMPMediaStore(svc, scope) },
+		}
+		if mpSettings.Config.ImportImages {
+			mpRunner.fetcher = tracking.NewSafeMediaFetcher()
+		}
+		go mpRunner.Loop(context.Background())
+	}
 	mg := v1.Group("/management/tracking")
 	mg.Use(func(c *gin.Context) {
 		// Capability and private visit responses must never survive a permission
@@ -246,13 +280,52 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Header("Cache-Control", "private, no-store")
 		c.Data(200, http.DetectContentType(bytes), bytes)
 	})
+	// Generating a link creates a share and can spend WeChat quota, so it is a
+	// mutation: POST puts it behind the management group's origin check, and each
+	// account is held to a modest rate so a loop over contents cannot drain quota.
+	urlLinkLimiter := newTrackingPeerLimiter(1000, trackingURLLinkPerMinute, time.Now)
+	mg.POST("/contents/:id/url-link", func(c *gin.Context) {
+		if !urlLinkLimiter.allow(strconv.FormatInt(sc(c).Actor, 10)) {
+			trackingResponse(c, nil, &tracking.Error{Status: 429, Message: "生成URL Link过于频繁，请稍后再试"})
+			return
+		}
+		version, _ := strconv.Atoi(c.Query("version"))
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+		link, e := trackingURLLink(ctx, svc, wechatAPI, miniprogramCredentials(), sc(c), c.Param("id"), version)
+		if e != nil {
+			var wechat *tracking.WechatError
+			if errors.As(e, &wechat) {
+				log.Printf("[Tracking] url link: wechat errcode %d", wechat.Code)
+				e = &tracking.Error{Status: 502, Message: trackingURLLinkProblem(e)}
+			}
+			trackingResponse(c, nil, e)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		trackingResponse(c, link, nil)
+	})
+	registerMPSyncRoutes(mg, svc, mpRunner, mpSettings, sc)
 	mg.GET("/context", func(c *gin.Context) {
 		scope := sc(c)
 		owners := []gin.H{}
 		for _, o := range scope.Owners {
 			owners = append(owners, gin.H{"id": o, "name": o})
 		}
-		trackingResponse(c, gin.H{"can_view": scope.View, "can_manage": scope.Manage, "can_crm": scope.CRM, "can_delete": scope.Delete, "can_rules": scope.Rules, "owners": owners, "share_methods": []string{"native_miniprogram"}}, nil)
+		trackingResponse(c, gin.H{"can_view": scope.View, "can_manage": scope.Manage, "can_crm": scope.CRM, "can_delete": scope.Delete, "can_rules": scope.Rules, "owners": owners, "share_methods": []string{"native_miniprogram"}, "mp_sync": mpSyncVisible(mpSettings, scope)}, nil)
+	})
+	mg.GET("/diagnostics/rejections", func(c *gin.Context) {
+		days := 7
+		if raw := c.Query("days"); raw != "" {
+			value, e := strconv.Atoi(raw)
+			if e != nil {
+				trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "统计天数无效"})
+				return
+			}
+			days = value
+		}
+		v, e := svc.RejectionStats(c.Request.Context(), sc(c), days)
+		trackingResponse(c, gin.H{"items": v}, e)
 	})
 	mg.GET("/visitors", func(c *gin.Context) {
 		if !view(c) {
@@ -375,10 +448,8 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Publish(c.Request.Context(), sc(c), c.Param("id"), in.Revision, in.Preview, in.Key)
-		if e == nil && os.Getenv("TRACKING_WECHAT_CODE_ENABLED") == "true" {
-			if content, ok := v["content"].(tracking.Content); ok {
-				v["share_methods"] = gin.H{"miniprogram_code_url": "/api/v1/management/tracking/contents/" + content.ID + "/code?version=" + strconv.Itoa(content.Version), "message": "真实微信码由服务端按需请求，加载失败表示权限或配置尚未通过；URL Link未开通"}
-			}
+		if e == nil {
+			addPublishShareMethods(c.Request.Context(), svc, wechatAPI, sc(c), v)
 		}
 		trackingResponse(c, v, e)
 	})
@@ -449,8 +520,15 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		e := svc.DeleteVisitor(c.Request.Context(), sc(c), in.Visitor, in.Reason)
-		trackingResponse(c, gin.H{"status": "completed"}, e)
+		// A deletion too large for one transaction is staged. The data is already
+		// unreadable once it starts; this request does a bounded share of the
+		// removal and a repeated identical request continues it.
+		done, e := svc.DeleteVisitorProgress(c.Request.Context(), sc(c), in.Visitor, in.Reason, trackingDeletionPagesPerRequest)
+		status := "in_progress"
+		if done {
+			status = "completed"
+		}
+		trackingResponse(c, gin.H{"status": status}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
@@ -519,6 +597,92 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, v, e)
 	})
 	return svc
+}
+
+// Each staged page is one short transaction of up to 500 rows per query, so this
+// bounds one HTTP request to a few tens of thousands of rows.
+const trackingDeletionPagesPerRequest = 60
+
+// publishedContent reads the content out of a publish result. A first publish
+// carries the typed value, but an idempotent replay returns the stored
+// publication, whose content is decoded JSON, so both shapes are accepted.
+func publishedContent(result map[string]any) (tracking.Content, bool) {
+	var content tracking.Content
+	switch value := result["content"].(type) {
+	case tracking.Content:
+		content = value
+	case map[string]any:
+		raw, err := json.Marshal(value)
+		if err != nil || json.Unmarshal(raw, &content) != nil {
+			return tracking.Content{}, false
+		}
+	default:
+		return tracking.Content{}, false
+	}
+	return content, content.ID != "" && content.Version > 0
+}
+
+// addPublishShareMethods adds the operator's share methods to a publish result.
+// It runs for a replay too: when the first response was lost or timed out after
+// the publication committed, the retry must still be able to return the link.
+func addPublishShareMethods(ctx context.Context, svc *tracking.Service, api *tracking.WechatAPI, scope tracking.Scope, result map[string]any) {
+	content, ok := publishedContent(result)
+	if !ok {
+		return
+	}
+	existing, _ := result["share_methods"].(map[string]any)
+	result["share_methods"] = trackingShareMethods(ctx, svc, api, scope, content, existing)
+}
+
+// trackingPublishLinkTimeout bounds the WeChat call made after a publish has
+// already committed. The operator is waiting on this response, and a retry of the
+// publish returns the same link, so a slow WeChat is cut off early rather than
+// left to hold the request for the full interactive limit.
+var trackingPublishLinkTimeout = 10 * time.Second // a variable only so a test can shorten it
+
+// trackingShareMethods lists what the operator can use right after a publish.
+// The publish already succeeded, so a failure here is reported as a message and
+// never fails the request.
+func trackingShareMethods(ctx context.Context, svc *tracking.Service, api *tracking.WechatAPI, scope tracking.Scope, content tracking.Content, existing map[string]any) gin.H {
+	methods := gin.H{"message": "请在小程序自有素材页打开后使用原生分享。微信码与URL Link须完成服务端权限核验后开放。"}
+	for key, value := range existing {
+		methods[key] = value
+	}
+	if os.Getenv("TRACKING_WECHAT_CODE_ENABLED") == "true" {
+		methods["miniprogram_code_url"] = "/api/v1/management/tracking/contents/" + content.ID + "/code?version=" + strconv.Itoa(content.Version)
+		methods["message"] = "真实微信码由服务端按需请求，加载失败表示权限或配置尚未通过"
+	}
+	if trackingURLLinkEnabled() {
+		linkCtx, cancel := context.WithTimeout(ctx, trackingPublishLinkTimeout)
+		defer cancel()
+		link, err := trackingURLLink(linkCtx, svc, api, miniprogramCredentials(), scope, content.ID, content.Version)
+		if err != nil {
+			var wechat *tracking.WechatError
+			if errors.As(err, &wechat) {
+				log.Printf("[Tracking] url link: wechat errcode %d", wechat.Code)
+			}
+			methods["message"] = trackingURLLinkProblem(err)
+		} else {
+			methods["url_link"] = link.URL
+			methods["expires_at"] = link.Expires
+		}
+	}
+	return methods
+}
+
+// trackingSlotLimit reads a positive connection cap, falling back to the default
+// for empty or invalid values. It never disables the cap.
+func trackingSlotLimit(name string, fallback int) int {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 || value > 64 {
+		log.Printf("[Tracking] %s=%q 无效，使用默认值 %d", name, raw, fallback)
+		return fallback
+	}
+	return value
 }
 
 // Daily generations expire well before the associated 30-day share token.
