@@ -48,10 +48,14 @@ func loadMPSyncSettings(getenv func(string) string) mpSyncSettings {
 	if s.Config.Owner == "" {
 		bad("TRACKING_MP_OWNER 未配置：同步的草稿须有明确的跟进归属")
 	}
-	if s.Config.Rights == "" {
-		s.Config.Rights = "own"
-	}
-	if s.Config.Rights != "own" && s.Config.Rights != "authorized" {
+	// The rights declaration is recorded on every draft and in the audit trail, so
+	// it must be made deliberately: a default would assert "own" for articles
+	// nobody has vouched for.
+	switch s.Config.Rights {
+	case "own", "authorized":
+	case "":
+		bad("TRACKING_MP_RIGHTS 未配置：须明确声明对这些文章的使用权，own（自有）或 authorized（已获授权）")
+	default:
 		bad("TRACKING_MP_RIGHTS 只能是 own 或 authorized")
 	}
 	actor, err := strconv.ParseInt(strings.TrimSpace(getenv("TRACKING_MP_ACTOR")), 10, 64)

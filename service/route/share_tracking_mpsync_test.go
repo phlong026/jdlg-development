@@ -26,7 +26,7 @@ func envFrom(values map[string]string) func(string) string {
 }
 
 func validMPEnv() map[string]string {
-	return map[string]string{"TRACKING_MP_SYNC_ENABLED": "true", "TRACKING_MP_APPID": "wx-official", "TRACKING_MP_SECRET": "official-secret", "TRACKING_MP_OWNER": "owner-a", "TRACKING_MP_ACTOR": "7"}
+	return map[string]string{"TRACKING_MP_SYNC_ENABLED": "true", "TRACKING_MP_APPID": "wx-official", "TRACKING_MP_SECRET": "official-secret", "TRACKING_MP_OWNER": "owner-a", "TRACKING_MP_ACTOR": "7", "TRACKING_MP_RIGHTS": "own"}
 }
 
 func TestMPSyncSettingsDefaultOffAndRejectPartialConfiguration(t *testing.T) {
@@ -47,6 +47,7 @@ func TestMPSyncSettingsDefaultOffAndRejectPartialConfiguration(t *testing.T) {
 		"no actor":      {"TRACKING_MP_ACTOR": ""},
 		"zero actor":    {"TRACKING_MP_ACTOR": "0"},
 		"bad actor":     {"TRACKING_MP_ACTOR": "admin"},
+		"no rights":     {"TRACKING_MP_RIGHTS": ""},
 		"bad rights":    {"TRACKING_MP_RIGHTS": "public"},
 		"too many":      {"TRACKING_MP_MAX_ARTICLES": "5000"},
 		"zero articles": {"TRACKING_MP_MAX_ARTICLES": "0"},
@@ -67,6 +68,13 @@ func TestMPSyncSettingsDefaultOffAndRejectPartialConfiguration(t *testing.T) {
 				t.Errorf("%s: a problem message contains the secret", name)
 			}
 		}
+	}
+	// An article's rights declaration is never assumed: leaving it unset keeps the
+	// sync off and tells the operator which variable to set.
+	missing := validMPEnv()
+	delete(missing, "TRACKING_MP_RIGHTS")
+	if s := loadMPSyncSettings(envFrom(missing)); s.Enabled || len(s.Problems) != 1 || !strings.Contains(s.Problems[0], "TRACKING_MP_RIGHTS") || s.Config.Rights != "" {
+		t.Fatalf("an unset rights declaration must keep the sync off and name the variable: %+v", s)
 	}
 	env := validMPEnv()
 	env["TRACKING_MP_SYNC_INTERVAL_MINUTES"], env["TRACKING_MP_IMPORT_IMAGES"], env["TRACKING_MP_RIGHTS"], env["TRACKING_MP_MAX_ARTICLES"] = "60", "true", "authorized", "12"
