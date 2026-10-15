@@ -10,16 +10,17 @@ import (
 )
 
 type Config struct {
-	Enabled         bool
-	PaymentEnabled  bool
-	ProtocolVersion string
-	ProductID       string
-	PriceFen        int64
-	ManifestPath    string
-	LeaseDuration   time.Duration
-	JobTimeout      time.Duration
-	DownloadTTL     time.Duration
-	MaxAttempts     int
+	Enabled           bool
+	PaymentEnabled    bool
+	MultiAgentEnabled bool
+	ProtocolVersion   string
+	ProductID         string
+	PriceFen          int64
+	ManifestPath      string
+	LeaseDuration     time.Duration
+	JobTimeout        time.Duration
+	DownloadTTL       time.Duration
+	MaxAttempts       int
 }
 
 func LoadConfig() (Config, error) {
@@ -31,6 +32,14 @@ func LoadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("report config: invalid REPORT_PAYMENT_ENABLED")
 	}
+	multiAgent, err := strconv.ParseBool(valueOr("REPORT_MULTI_AGENT_ENABLED", "true"))
+	if err != nil {
+		return Config{}, fmt.Errorf("report config: invalid REPORT_MULTI_AGENT_ENABLED")
+	}
+	protocol, timeout, lease := "report-service-v1", 2*time.Minute, 150*time.Second
+	if multiAgent {
+		protocol, timeout, lease = "report-agents-v1", 5*time.Minute, 330*time.Second
+	}
 	price, err := strconv.ParseInt(valueOr("REPORT_PRICE_FEN", "0"), 10, 64)
 	if err != nil {
 		return Config{}, fmt.Errorf("report config: invalid REPORT_PRICE_FEN")
@@ -40,18 +49,19 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("report config: invalid REPORT_MAX_ATTEMPTS")
 	}
 	config := Config{
-		Enabled:         enabled,
-		PaymentEnabled:  paymentEnabled,
-		ProtocolVersion: valueOr("REPORT_PROTOCOL_VERSION", "report-service-v1"),
-		ProductID:       strings.TrimSpace(os.Getenv("REPORT_PRODUCT_ID")),
-		PriceFen:        price,
-		ManifestPath:    strings.TrimSpace(os.Getenv("REPORT_PACK_MANIFEST")),
-		LeaseDuration:   durationOr("REPORT_LEASE_DURATION", 150*time.Second),
-		JobTimeout:      durationOr("REPORT_JOB_TIMEOUT", 2*time.Minute),
-		DownloadTTL:     durationOr("REPORT_DOWNLOAD_TTL", 10*time.Minute),
-		MaxAttempts:     maxAttempts,
+		Enabled:           enabled,
+		PaymentEnabled:    paymentEnabled,
+		MultiAgentEnabled: multiAgent,
+		ProtocolVersion:   valueOr("REPORT_PROTOCOL_VERSION", protocol),
+		ProductID:         strings.TrimSpace(os.Getenv("REPORT_PRODUCT_ID")),
+		PriceFen:          price,
+		ManifestPath:      strings.TrimSpace(os.Getenv("REPORT_PACK_MANIFEST")),
+		LeaseDuration:     durationOr("REPORT_LEASE_DURATION", lease),
+		JobTimeout:        durationOr("REPORT_JOB_TIMEOUT", timeout),
+		DownloadTTL:       durationOr("REPORT_DOWNLOAD_TTL", 10*time.Minute),
+		MaxAttempts:       maxAttempts,
 	}
-	if config.ProtocolVersion == "" || config.PriceFen < 0 || config.MaxAttempts < 1 || config.MaxAttempts > 10 || config.LeaseDuration <= config.JobTimeout+10*time.Second || config.JobTimeout <= 0 || config.JobTimeout > 2*time.Minute || config.DownloadTTL <= 0 || config.DownloadTTL > time.Hour {
+	if config.ProtocolVersion == "" || config.PriceFen < 0 || config.MaxAttempts < 1 || config.MaxAttempts > 10 || config.LeaseDuration <= config.JobTimeout+10*time.Second || config.JobTimeout <= 0 || config.JobTimeout > 10*time.Minute || config.DownloadTTL <= 0 || config.DownloadTTL > time.Hour {
 		return Config{}, fmt.Errorf("report config: invalid bounded setting")
 	}
 	if paymentEnabled && (!enabled || config.ProductID == "" || config.PriceFen <= 0 || !filepath.IsAbs(config.ManifestPath)) {

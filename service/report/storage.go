@@ -3,9 +3,12 @@ package report
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,11 +40,23 @@ func (s *COSPrivateStorage) UploadPrivate(ctx context.Context, key string, data 
 	}
 	callCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
+	digest := sha256.Sum256(data)
+	checksum := hex.EncodeToString(digest[:])
+	metadata := http.Header{}
+	metadata.Set("x-cos-meta-report-sha256", checksum)
 	_, err := s.client.Object.Put(callCtx, key, bytes.NewReader(data), &cos.ObjectPutOptions{
-		ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: "application/pdf"},
+		ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: "application/pdf", XCosMetaXXX: &metadata},
 		ACLHeaderOptions:       &cos.ACLHeaderOptions{XCosACL: "private"},
 	})
 	if err != nil {
+		return errStorageUnavailable
+	}
+	// A successful PUT alone is not the delivery gate: verify the stored object
+	// before allowing the worker to publish its download reference.
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, s.timeout)
+	defer verifyCancel()
+	response, err := s.client.Object.Head(verifyCtx, key, nil)
+	if err != nil || response == nil || response.Header.Get("x-cos-meta-report-sha256") != checksum || response.Header.Get("Content-Length") != strconv.Itoa(len(data)) {
 		return errStorageUnavailable
 	}
 	return nil

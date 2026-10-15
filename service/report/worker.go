@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -16,14 +17,30 @@ type Worker struct {
 	catalog   PackCatalog
 	renderer  Renderer
 	storage   PrivateStorage
+	agents    AgentRunner
 }
 
-func NewWorker(config Config, store Store, generator SnapshotGenerator, catalog PackCatalog, renderer Renderer, storage PrivateStorage) (*Worker, error) {
+type WorkerOption func(*Worker)
+
+func WithAgentRunner(runner AgentRunner) WorkerOption {
+	return func(worker *Worker) { worker.agents = runner }
+}
+
+func NewWorker(config Config, store Store, generator SnapshotGenerator, catalog PackCatalog, renderer Renderer, storage PrivateStorage, options ...WorkerOption) (*Worker, error) {
 	missingOnlyOnePDFDependency := renderer == nil && storage != nil || renderer != nil && storage == nil
 	if store == nil || generator == nil || catalog == nil || config.MaxAttempts < 1 || config.JobTimeout <= 0 || config.LeaseDuration <= config.JobTimeout+10*time.Second || missingOnlyOnePDFDependency || config.PaymentEnabled && (renderer == nil || storage == nil) {
 		return nil, ErrInvalidInput
 	}
-	return &Worker{config: config, store: store, generator: generator, catalog: catalog, renderer: renderer, storage: storage}, nil
+	worker := &Worker{config: config, store: store, generator: generator, catalog: catalog, renderer: renderer, storage: storage}
+	for _, option := range options {
+		if option != nil {
+			option(worker)
+		}
+	}
+	if config.MultiAgentEnabled && worker.agents == nil {
+		return nil, ErrInvalidInput
+	}
+	return worker, nil
 }
 
 func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
@@ -41,7 +58,7 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	defer cancel()
 	if err := w.run(jobCtx, job); err != nil {
 		code := workerErrorCode(jobCtx, err)
-		retry := job.Report.AttemptCount < w.config.MaxAttempts
+		retry := job.Report.AttemptCount < w.config.MaxAttempts && !errors.Is(err, ErrAgentRejected)
 		if failErr := w.store.Fail(ctx, job.Report.ID, job.LeaseToken, job.Mode, code, retry); failErr != nil {
 			log.Printf("[report] report_id=%s stage=%s failure_persist=failed", job.Report.ID, job.Mode)
 			return true, ErrConflict
@@ -58,7 +75,14 @@ func (w *Worker) run(ctx context.Context, job *Job) error {
 	}
 	switch job.Mode {
 	case ModePreview:
-		snapshot, mode, err := w.generator.BuildPreview(ctx, job.Report)
+		var snapshot json.RawMessage
+		var mode string
+		var err error
+		if w.config.MultiAgentEnabled {
+			snapshot, mode, err = w.agents.Run(ctx, job.Report, ModePreview, nil)
+		} else {
+			snapshot, mode, err = w.generator.BuildPreview(ctx, job.Report)
+		}
 		if err != nil {
 			return err
 		}
@@ -85,7 +109,12 @@ func (w *Worker) run(ctx context.Context, job *Job) error {
 		if err != nil {
 			return ErrPackUnavailable
 		}
-		snapshot, err := w.generator.BuildFull(job.Report.PreviewSnapshot, pack)
+		var snapshot json.RawMessage
+		if w.config.MultiAgentEnabled {
+			snapshot, _, err = w.agents.Run(ctx, job.Report, ModeFull, &pack)
+		} else {
+			snapshot, err = w.generator.BuildFull(job.Report.PreviewSnapshot, pack)
+		}
 		if err != nil {
 			return err
 		}
@@ -112,6 +141,10 @@ func workerErrorCode(ctx context.Context, err error) string {
 		return "generation_timeout"
 	}
 	switch {
+	case errors.Is(err, ErrAgentRejected):
+		return "agent_review_rejected"
+	case errors.Is(err, ErrAgentUnavailable):
+		return "agent_unavailable"
 	case errors.Is(err, ErrPackUnavailable):
 		return "reviewed_pack_unavailable"
 	case errors.Is(err, ErrPaymentRequired):

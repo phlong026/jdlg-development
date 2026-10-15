@@ -2,7 +2,9 @@ package route
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -56,6 +58,11 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 	if err := store.VerifySchema(checkCtx); err != nil {
 		return nil, err
 	}
+	if cfg.MultiAgentEnabled {
+		if err := store.VerifyAgentSchema(checkCtx); err != nil {
+			return nil, err
+		}
+	}
 	pdfConfig := component.ReportPDFConfig{PythonPath: os.Getenv("REPORT_PDF_PYTHON"), ScriptPath: os.Getenv("REPORT_PDF_SCRIPT"), FontPath: os.Getenv("REPORT_PDF_FONT"), AssetRoot: os.Getenv("REPORT_ASSET_ROOT"), Timeout: 90 * time.Second}
 	var renderer report.Renderer
 	var storage report.PrivateStorage
@@ -72,6 +79,16 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		renderer, err = component.NewReportPDFRenderer(pdfConfig)
 		if err != nil {
 			return nil, err
+		}
+		if cfg.MultiAgentEnabled {
+			version, err := reportArtifactVersion(pdfConfig)
+			if err != nil {
+				return nil, err
+			}
+			renderer, err = report.NewCachedRenderer(renderer, os.Getenv("REPORT_ARTIFACT_DIR"), version)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if os.Getenv("REPORT_COS_BUCKET") != "" {
@@ -119,7 +136,7 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		return nil, err
 	}
 	var textClient report.TextClient
-	if os.Getenv("REPORT_TEXT_ENDPOINT") != "" {
+	if !cfg.MultiAgentEnabled && os.Getenv("REPORT_TEXT_ENDPOINT") != "" {
 		if !strings.HasPrefix(os.Getenv("REPORT_TEXT_ENDPOINT"), "https://") {
 			return nil, report.ErrInvalidInput
 		}
@@ -128,7 +145,19 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 			return nil, err
 		}
 	}
-	worker, err := report.NewWorker(cfg, store, report.NewGenerator(textClient), catalog, renderer, storage)
+	var workerOptions []report.WorkerOption
+	if cfg.MultiAgentEnabled {
+		agentClient, err := configuredReportAgentClient()
+		if err != nil {
+			return nil, err
+		}
+		agents, err := report.NewMultiAgentRunner(agentClient, store)
+		if err != nil {
+			return nil, err
+		}
+		workerOptions = append(workerOptions, report.WithAgentRunner(agents))
+	}
+	worker, err := report.NewWorker(cfg, store, report.NewGenerator(textClient), catalog, renderer, storage, workerOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +166,51 @@ func NewReportModule(ctx context.Context, db *sql.DB, appConfig *config.Config) 
 		module.Wecom = &reportwecom.Service{Provider: wecomProvider, Store: wecomStore, Identity: module, Binder: service, EmployeeID: wecomConfig.EmployeeID}
 	}
 	return module, nil
+}
+
+func configuredReportAgentClient() (*report.HTTPAgentClient, error) {
+	endpoint := strings.TrimSpace(os.Getenv("REPORT_TEXT_ENDPOINT"))
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return nil, report.ErrInvalidInput
+	}
+	model := strings.TrimSpace(os.Getenv("REPORT_TEXT_MODEL"))
+	roleModel := func(name string) string {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+		return model
+	}
+	version := strings.TrimSpace(os.Getenv("REPORT_AGENT_CONFIG_VERSION"))
+	if version == "" {
+		version = "v1"
+	}
+	return report.NewHTTPAgentClient(report.MultiAgentHTTPConfig{
+		Endpoint: endpoint, APIKey: os.Getenv("REPORT_TEXT_API_KEY"), ConfigVersion: version,
+		PlannerModel: roleModel("REPORT_AGENT_PLANNER_MODEL"), WriterModel: roleModel("REPORT_AGENT_WRITER_MODEL"),
+		VisualModel: roleModel("REPORT_AGENT_VISUAL_MODEL"), ReviewerModel: roleModel("REPORT_AGENT_REVIEWER_MODEL"),
+		Timeout: 20 * time.Second, MaxResponseBytes: 256 << 10,
+	}, &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})
+}
+
+func reportArtifactVersion(config component.ReportPDFConfig) (string, error) {
+	digest := sha256.New()
+	for _, source := range []string{config.ScriptPath, config.FontPath} {
+		file, err := os.Open(source)
+		if err != nil {
+			log.Printf("[report] error artifact_version=open_failed")
+			return "", report.ErrNotReady
+		}
+		written, readErr := io.Copy(digest, io.LimitReader(file, 128<<20+1))
+		closeErr := file.Close()
+		if readErr != nil || closeErr != nil || written > 128<<20 {
+			log.Printf("[report] error artifact_version=read_failed")
+			return "", report.ErrNotReady
+		}
+		_, _ = digest.Write([]byte{0})
+	}
+	_, _ = digest.Write([]byte(os.Getenv("REPORT_AGENT_CONFIG_VERSION")))
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
 func privateReportStorage(cfg *config.Config) (report.PrivateStorage, error) {

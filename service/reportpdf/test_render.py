@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
+import fitz
 from pypdf import PdfReader
-from render import render_report
+from pypdf import PdfWriter
+from render import render_report, verify_rendered_pdf
 
 HERE = Path(__file__).resolve().parent
 FONT = Path(os.environ.get('REPORT_PDF_FONT', '/System/Library/Fonts/Supplemental/Arial Unicode.ttf'))
@@ -71,6 +74,40 @@ class ReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.render('preview')
         self.assertEqual(self.output.read_bytes(), original)
+
+    def test_failed_artifact_verification_keeps_the_previous_valid_file(self):
+        self.render('preview')
+        original = self.output.read_bytes()
+        with mock.patch('render.verify_rendered_pdf', side_effect=ValueError('invalid artifact')):
+            with self.assertRaises(ValueError):
+                self.render('preview')
+        self.assertEqual(self.output.read_bytes(), original)
+
+    def test_rendered_artifact_has_embedded_font_and_bounded_text(self):
+        self.render('preview')
+        verify_rendered_pdf(self.output, expected_pages=4)
+
+    def test_artifact_verification_rejects_wrong_page_geometry(self):
+        self.render('preview')
+        reader = PdfReader(self.output)
+        reader.pages[0].mediabox.upper_right = (500, 700)
+        broken = Path(self.temp.name) / 'wrong-size.pdf'
+        with broken.open('wb') as output:
+            writer = PdfWriter()
+            writer.append_pages_from_reader(reader)
+            writer.write(output)
+        with self.assertRaisesRegex(ValueError, 'A4'):
+            verify_rendered_pdf(broken, expected_pages=4)
+
+    def test_artifact_verification_rejects_text_outside_the_page(self):
+        self.render('preview')
+        broken = Path(self.temp.name) / 'outside-text.pdf'
+        document = fitz.open(self.output)
+        document[0].insert_text((-30, 200), 'OUTSIDE')
+        document.save(broken)
+        document.close()
+        with self.assertRaisesRegex(ValueError, 'outside the page'):
+            verify_rendered_pdf(broken, expected_pages=4)
 
     def test_same_snapshot_renders_identical_pdf_bytes(self):
         self.render()
