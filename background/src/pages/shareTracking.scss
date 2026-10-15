@@ -333,7 +333,11 @@
   }
   @media (max-height: 500px) {
     .st-overlay { --st-dialog-gap: 8px; }
-    .st-dialog > header { position: static; }
+    // Keep the title and close button pinned on short screens too, with a compact header so the
+    // body keeps its room. Padding and the sticky offset are set together so they always match.
+    .st-dialog { padding: 12px 16px 16px; scroll-padding-top: 64px; }
+    .st-dialog > header { top: -12px; margin: -12px -16px 12px; padding: 4px 16px; }
+    .st-dialog h2 { font-size: 18px; }
     .st-dialog .st-media img, .st-dialog .st-media video { max-height: 50dvh; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; animation: none; transition: none; } }

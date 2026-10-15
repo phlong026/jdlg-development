@@ -86,7 +86,7 @@ func (s *Service) PlanRetention(ctx context.Context, scope Scope, p RetentionPol
 	if e := s.retentionAllowed(scope, p, rawBefore, summaryBefore); e != nil {
 		return plan, e
 	}
-	e := s.transaction(ctx, func(r Repository) error {
+	e := s.readTransaction(ctx, func(r Repository) error {
 		var err error
 		plan, _, err = retentionCandidates(r, scope, rawBefore, summaryBefore)
 		return err
@@ -148,7 +148,7 @@ func (s *Service) Diagnostics(ctx context.Context, scope Scope) (map[string]int,
 		return nil, e
 	}
 	counters := map[string]int{"accepted_events": 0, "malformed_events": 0, "sampling_gap": 0, "inferred_seek": 0, "queue_loss": 0, "late": 0, "self": 0, "preview": 0}
-	err := s.transaction(ctx, func(r Repository) error {
+	err := s.readTransaction(ctx, func(r Repository) error {
 		rows, e := r.List("event")
 		if e != nil {
 			return e

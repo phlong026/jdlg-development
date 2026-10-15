@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分享访问记录 · 后台仿真页</title>
+<style>
+:root{
+  --ink:#29221d;--muted:#6c6863;--line:#e9e2da;--accent:#94582f;--accent-h:#774322;--cream:#fbf3e9;
+  --surface:#fffefd;--bg:#f8f6f2;--metric:#c83916;--focus:#a74a20;--ok:#2f6b3a;--warn-bg:#fff4dc;--warn:#7a4a05;--err-bg:#fdebe6;--err:#a43416;
+  --side:#2f241b;--side-text:#e9dccb;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ink:#f1e9df;--muted:#b3a99d;--line:#4a3d32;--accent:#e0a572;--accent-h:#f0bf92;--cream:#3a2d22;--surface:#2a211a;--bg:#1f1812;
+  --metric:#ff8a68;--focus:#f0a070;--ok:#8fd19a;--warn-bg:#46361a;--warn:#f4cf8a;--err-bg:#4a2620;--err:#ffb199;--side:#150f0a;--side-text:#e9dccb}}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+h1,h2,h3,p,li,dd,dt,strong,small,span,label,button,a{overflow-wrap:anywhere}
+button,input,select,textarea{font:inherit;color:inherit}
+button{min-width:44px;min-height:44px;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer;line-height:1.4}
+button:hover:not(:disabled){border-color:var(--accent);background:var(--cream)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary:hover:not(:disabled){background:var(--accent-h);color:#fff}
+button.danger{color:var(--err);border-color:var(--err)}
+input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-height:44px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+textarea{min-height:90px;resize:vertical}
+label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+a{color:var(--accent)}
+.muted{color:var(--muted);font-size:13px}
+
+/* simulation chrome */
+.sim-bar{position:sticky;top:0;z-index:30;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:8px 16px;background:#3b2a1c;color:#fbeedb;font-size:13px}
+.sim-bar b{color:#ffd9a8}
+.sim-bar label{display:flex;align-items:center;gap:6px;color:#fbeedb}
+.sim-bar select{min-height:34px;width:auto;padding:3px 8px;background:#fff;color:#29221d}
+.sim-bar .grow{flex:1}
+.sim-tabs{display:flex;gap:6px}
+.sim-tabs button{min-height:34px;padding:3px 12px;background:transparent;color:#fbeedb;border-color:#7a5a3d}
+.sim-tabs button[aria-selected=true]{background:#fbeedb;color:#3b2a1c}
+
+/* admin shell */
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 52px)}
+.side{background:var(--side);color:var(--side-text);padding:16px 10px}
+.side .brand{font-weight:700;font-size:16px;padding:6px 10px 14px;letter-spacing:.5px}
+.side .grp{font-size:12px;opacity:.6;padding:10px 10px 4px}
+.side a{display:block;padding:9px 10px;border-radius:8px;color:var(--side-text);text-decoration:none;font-size:14px}
+.side a.on{background:#8b5e3c;color:#fff}
+.side a.off{opacity:.55;pointer-events:none}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+.content{min-width:0}
+.share-tracking{max-width:1200px;margin:0 auto;padding:14px 16px 60px}
+
+.st-heading{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end}
+.st-heading h1{font-size:30px;line-height:1.3;margin:2px 0 6px;letter-spacing:-.5px}
+.st-eyebrow{margin:0;color:var(--accent);font-size:13px;font-weight:600}
+.st-heading p{margin:0}
+.st-heading-actions{display:flex;gap:8px;flex-wrap:wrap}
+.st-tabs{display:flex;gap:6px;margin:16px 0 12px;border-bottom:1px solid var(--line)}
+.st-tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 18px;font-size:16px}
+.st-tabs button[aria-selected=true]{border-color:var(--accent);color:var(--accent);font-weight:700;background:none}
+.st-filters{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:12px}
+.st-range{display:flex;gap:6px;flex-wrap:wrap}
+.st-range button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.st-filter-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end}
+.st-search{display:contents}
+.st-warning{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 12px;margin:6px 0;font-size:13px}
+.st-list-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 4px;flex-wrap:wrap}
+.st-counts{display:flex;gap:16px;flex-wrap:wrap}
+.st-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-top:10px}
+.st-feedback{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:28px;text-align:center;margin-top:10px}
+.st-feedback.st-error{border-color:var(--err);background:var(--err-bg);color:var(--err)}
+.st-visitor,.st-content-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:8px;align-content:start}
+.st-card-main{display:grid;grid-template-columns:44px 1fr 20px;gap:10px;align-items:center;text-align:left;border:0;background:none;padding:0}
+.st-card-main small{display:block;color:var(--muted)}
+.st-avatar{width:44px;height:44px;border-radius:50%;background:var(--cream);color:var(--accent);display:grid;place-items:center;font-weight:700;border:1px solid var(--line)}
+.st-chevron{color:var(--muted);font-size:22px}
+.st-intent{font-size:13px;border-radius:8px;justify-self:start}
+.st-high{color:#a43416;background:#ffe4d3;border-color:#f1cfb5}
+.st-medium{color:#81430e;background:#fff0d7;border-color:#eed9b9}
+.st-low,.st-unknown{color:#635e57;background:#f0eeeb}
+.st-evidence{background:var(--cream);border-radius:10px;padding:10px 12px;font-size:13px;display:grid;gap:6px}
+.st-evidence ul{margin:0;padding-left:18px}
+.chip{display:inline-block;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:0 9px;font-size:12px;margin:2px 4px 2px 0;color:var(--muted)}
+.st-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.st-metrics div,.st-duration-pair div{background:var(--bg);border-radius:8px;padding:6px 10px}
+.st-metrics dt,.st-duration-pair dt{font-size:12px;color:var(--muted)}
+.st-metrics dd,.st-duration-pair dd{margin:0;font-weight:700;color:var(--metric);font-size:18px}
+.st-duration-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.st-duration-pair small{color:var(--muted);font-size:11px}
+.st-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.st-inline{border-top:1px dashed var(--line);padding-top:8px}
+.st-inline summary{cursor:pointer;color:var(--accent);min-height:36px;display:flex;align-items:center}
+.mini{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.mini:last-child{border:0}
+.mini .thumb{width:44px;height:44px}
+.thumb{background:linear-gradient(135deg,#d9b48c,#8b5e3c);border-radius:8px;display:grid;place-items:center;color:#fff;font-size:10px;text-align:center}
+.media{background:#efe7dc;border-radius:10px;display:grid;place-items:center;overflow:hidden;width:100%;max-height:260px}
+.media .ph{max-width:100%;max-height:260px;object-fit:contain;display:grid;place-items:center;color:#fff;font-size:12px;background:linear-gradient(160deg,#c99a6b,#7a4a2a)}
+.media .ph.r916{aspect-ratio:9/16;height:260px}
+.media .ph.r169{aspect-ratio:16/9;width:100%}
+.media .ph.r43{aspect-ratio:4/3;width:100%}
+.st-content-summary{display:grid;grid-template-columns:minmax(110px,150px) 1fr;gap:12px}
+.st-content-title{border:0;background:none;padding:0;text-align:left;font-weight:700;font-size:16px;color:var(--ink);min-height:0}
+.st-content-title:hover{background:none!important;color:var(--accent)}
+.badge{font-size:12px;padding:0 8px;border-radius:99px;border:1px solid var(--line)}
+.badge.pub{color:var(--ok);border-color:var(--ok)}
+.badge.rev{color:var(--err);border-color:var(--err)}
+.st-pager{display:flex;gap:12px;justify-content:center;align-items:center;margin:18px 0}
+.st-rules-note{margin-top:20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+
+/* dialog */
+.overlay{position:fixed;inset:0;z-index:50;background:rgba(30,20,10,.5);display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:24px 12px}
+.dialog{background:var(--bg);border-radius:16px;width:min(920px,100%);max-height:calc(100vh - 48px);overflow:auto;position:relative}
+.dialog>header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--surface);border-bottom:1px solid var(--line)}
+.dialog>header h2{margin:0;font-size:20px}
+.dialog .body{padding:16px 18px 24px;display:grid;gap:14px}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:8px}
+.sec h3{margin:0;font-size:16px}
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.tl{border-left:2px solid var(--line);margin-left:6px;padding-left:14px;display:grid;gap:8px}
+.tl .pv{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:13px}
+.tl .ev{font-size:12px;color:var(--muted);padding:2px 0 2px 10px;border-left:2px solid var(--cream)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:80;background:#3b2a1c;color:#fff;padding:10px 16px;border-radius:10px;max-width:90vw;font-size:13px}
+
+/* requirement view */
+.req{max-width:1200px;margin:0 auto;padding:20px 16px 60px}
+.req table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+.req th,.req td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.req th{background:var(--cream)}
+.st-ok{color:var(--ok);font-weight:600}.st-part{color:#b36b00;font-weight:600}.st-no{color:var(--err);font-weight:600}
+.req-scroll{overflow-x:auto}
+.callout{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:10px 14px;margin:10px 0}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{display:none}
+  .st-heading h1{font-size:24px}
+  .st-cards{grid-template-columns:1fr}
+  .st-content-summary{grid-template-columns:1fr}
+  .media .ph.r916{height:200px}
+}
+</style>
+</head>
+<body>
+<div class="sim-bar" role="region" aria-label="仿真控制">
+  <b>仿真原型</b><span>全部为虚构的合成数据，不连接后端，不写入任何真实记录</span>
+  <span class="grow"></span>
+  <div class="sim-tabs" role="tablist"><button role="tab" id="tabSim" aria-selected="true">后台页面</button><button role="tab" id="tabReq" aria-selected="false">需求对照</button></div>
+  <label>账号权限<select id="role"><option value="full">经营者（查看+管理+CRM+规则+删除）</option><option value="viewer">只读查看</option><option value="none">无访问记录权限</option></select></label>
+  <label>页面状态<select id="status"><option value="normal">正常</option><option value="loading">加载中</option><option value="empty">无结果</option><option value="error">读取失败</option></select></label>
+</div>
+
+<div id="simView" class="shell">
+  <aside class="side" aria-label="后台导航（示意）">
+    <div class="brand">经营管理后台</div>
+    <div class="grp">经营</div><a class="off">数据看板</a><a class="off">订单管理</a>
+    <div class="grp">客户</div><a class="off">客户管理</a><a class="off">企微客户</a>
+    <div class="grp">访问记录</div><a class="on" aria-current="page">分享访问记录</a>
+    <div class="grp">系统</div><a class="off">账号与权限</a><a class="off">操作日志</a>
+  </aside>
+  <div class="content">
+    <div class="topbar"><span>后台 / 访问记录 / 分享访问记录</span><span>Asia/Shanghai · 示例账号：运营经理（虚构）</span></div>
+    <main class="share-tracking" id="app"></main>
+  </div>
+</div>
+
+<div id="reqView" class="req" hidden></div>
+<div id="layer"></div>
+
+<script>
+'use strict';
+const TODAY = '2026-10-14';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dur = sec => sec < 60 ? `${sec}秒` : sec < 3600 ? `${Math.floor(sec/60)}分${sec%60}秒` : `${Math.floor(sec/3600)}小时${Math.floor(sec%3600/60)}分`;
+const daysAgo = d => Math.floor((Date.parse(TODAY) - Date.parse(d.slice(0,10))) / 86400000);
+const intentLabels = { high:'高意向参考', medium:'中意向参考', low:'低关注待观察', unknown:'待判断' };
+const eventLabels = { share_intent:'发起分享（非送达）', page_view:'页面访问', page_end:'页面离开', visible_segment:'可见分段', content_click:'内容点击（非已读）', image_open:'打开原图', outbound_click:'点击外部原文（外部停留未知）', scroll_depth:'滚动到达位置', video_progress:'播放进度（非观看完成）', business_action_confirmed:'已验证业务行为' };
+const owners = [{id:'o1',name:'上海一组 · 顾问甲（虚构）'},{id:'o2',name:'上海二组 · 顾问乙（虚构）'}];
+
+/* ---------- synthetic data ---------- */
+const RULE = { rule_version:'v3', window_days:30, medium_sessions:3, medium_favorites:1, high_business_results:1, daily_session_cap:3, daily_action_cap:5 };
+const visitors = [
+  { key:'u:1001', name:'林女士（示例）', state:'identified', crm:'客户 C-20261 · 全屋翻新', owner:'o1', last:'2026-10-14 09:12', pv:14, sessions:5, sec:1122,
+    latest:{start:'2026-10-14 09:12', sec:186}, level:'high', m:{sessions:5,favorites:2,biz:1},
+    reasons:['近30天独立有效会话 5 次（≥3）','已服务端确认收藏 2 次','已服务端确认咨询提交 1 次（高意向业务结果≥1）'],
+    mats:[{cid:'c1',v:3,pv:8,sec:640},{cid:'c2',v:1,pv:4,sec:402},{cid:'c4',v:2,pv:2,sec:80,gone:true}] },
+  { key:'u:1002', name:'陈先生（示例）', state:'identified', crm:'', owner:'o1', last:'2026-10-13 21:40', pv:7, sessions:3, sec:530,
+    latest:{start:'2026-10-13 21:40', sec:95}, level:'medium', m:{sessions:3,favorites:0,biz:0},
+    reasons:['近30天独立有效会话 3 次（≥3）','复访本身不会单独推高到高意向'],
+    mats:[{cid:'c1',v:3,pv:5,sec:380},{cid:'c3',v:1,pv:2,sec:150}] },
+  { key:'a:3f9c1e', name:'匿名访客 · 3f9c1e', state:'anonymous', crm:'', owner:'o1', last:'2026-10-12 18:05', pv:2, sessions:1, sec:64,
+    latest:{start:'2026-10-12 18:05', sec:64}, level:'low', m:{sessions:1,favorites:0,biz:0},
+    reasons:['仅 1 次有效会话，未达中意向阈值','匿名身份：不建立客户映射，不猜测身份'],
+    mats:[{cid:'c3',v:1,pv:2,sec:64}] },
+  { key:'u:1004', name:'王女士（示例）', state:'identified', crm:'客户 C-20188 · 旧房改造', owner:'o2', last:'2026-10-10 14:22', pv:9, sessions:4, sec:812,
+    latest:{start:'2026-10-10 14:22', sec:240}, level:'medium', m:{sessions:4,favorites:1,biz:0},
+    reasons:['近30天独立有效会话 4 次（≥3）','已服务端确认收藏 1 次'], override:{level:'high',reason:'电话沟通确认本周看样板间',expires:'2026-10-28',actor:'顾问乙（虚构）'}, origLevel:'medium',
+    mats:[{cid:'c2',v:1,pv:6,sec:700},{cid:'c1',v:2,pv:3,sec:112}] },
+  { key:'a:7be20d', name:'匿名访客 · 7be20d', state:'anonymous', crm:'', owner:'o2', last:'2026-09-30 11:03', pv:1, sessions:1, sec:12,
+    latest:{start:'2026-09-30 11:03', sec:12}, level:'unknown', m:{sessions:1,favorites:0,biz:0},
+    reasons:['可见时长过短，证据不足，待判断'], mats:[{cid:'c1',v:2,pv:1,sec:12}] },
+  { key:'u:1006', name:'已删除账号', state:'deleted', crm:'', owner:'o1', last:'2026-10-09 08:30', pv:3, sessions:2, sec:140,
+    latest:{start:'2026-10-09 08:30', sec:70}, level:'low', m:{sessions:2,favorites:0,biz:0},
+    reasons:['账号已按删除申请处理；旧事件不会复活'], mats:[] },
+];
+const contents = [
+  { id:'c1', title:'全屋装修避坑指南：十个最容易多花钱的细节', type:'图文', ver:3, status:'published', ratio:'r916', pv:86, uv:21, sec:5320, last:'2026-10-14 09:12', owner:'o1',
+    body:'本文由我司设计师撰写（自有内容）。第一章：水电隐蔽工程为什么必须拍照留档……' },
+  { id:'c2', title:'样板间视频：90㎡北欧风三居室全景', type:'视频', ver:1, status:'published', ratio:'r169', pv:44, uv:12, sec:4180, last:'2026-10-10 14:22', owner:'o2', body:'视频素材（自有）。' },
+  { id:'c3', title:'装修预算怎么分？一线城市 120㎡ 户型的材料、人工、设计费占比与常见超支项逐项拆解（超长标题示例）', type:'图文', ver:1, status:'published', ratio:'r43', pv:12, uv:6, sec:640, last:'2026-10-13 21:40', owner:'o1', body:'预算拆解正文……' },
+  { id:'c4', title:'十一特惠活动页（已撤回）', type:'图文', ver:2, status:'revoked', ratio:'r43', pv:9, uv:4, sec:300, last:'2026-10-08 10:00', owner:'o1', body:'' },
+];
+const trails = {
+  'u:1001':[
+    { id:'s5', start:'2026-10-14 09:12', source:'来自分享 · 顾问甲', pages:[
+      {t:'全屋装修避坑指南 v3', route:'reader', start:'09:12:04', sec:186, flags:[], ev:['page_view','visible_segment','scroll_depth','image_open']},
+      {t:'样板间视频 v1', route:'reader', start:'09:15:30', sec:92, flags:['离线或迟到补报'], ev:['page_view','video_progress','business_action_confirmed']} ]},
+    { id:'s4', start:'2026-10-12 20:01', source:'直接进入（不强行归历史分享）', pages:[
+      {t:'全屋装修避坑指南 v3', route:'reader', start:'20:01:11', sec:240, flags:[], ev:['page_view','visible_segment','scroll_depth']} ]} ],
+  'u:1002':[
+    { id:'s3', start:'2026-10-13 21:40', source:'来自分享 · 顾问甲', pages:[
+      {t:'全屋装修避坑指南 v3', route:'reader', start:'21:40:20', sec:95, flags:['结束事件缺失，记录不完整'], ev:['page_view','visible_segment']} ]} ],
+};
+function fallbackTrail(v){ return [{ id:'s'+v.sessions, start:v.latest.start, source:'来自分享', pages:[{t:'（示例页面）', route:'reader', start:v.latest.start.slice(11)+':00', sec:v.latest.sec, flags:[], ev:['page_view','visible_segment']}] }]; }
+
+/* ---------- state ---------- */
+const S = { view:'visitors', range:'7', start:'2026-10-01', end:'2026-10-14', identity:'', intent:'', owner:'', sort:'last_visit', dir:'desc', q:'', cq:'', vq:'', notice:'', role:'full', status:'normal', page:1, open:{ev:{},mat:{},cv:{}} };
+const can = () => ({ view:S.role!=='none', manage:S.role==='full', crm:S.role==='full', rules:S.role==='full', del:S.role==='full' });
+const $ = id => document.getElementById(id);
+const toast = m => { const t = document.createElement('div'); t.className='toast'; t.setAttribute('role','status'); t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),3200); };
+
+function inRange(date){
+  if (S.range==='all') return true;
+  if (S.range==='custom') return date.slice(0,10)>=S.start && date.slice(0,10)<=S.end;
+  return daysAgo(date) <= Number(S.range)-1;
+}
+function rangeText(){
+  if (S.range==='all') return '全部：当前权限内且仍在保留期的数据';
+  let a,b;
+  if (S.range==='custom'){ a=S.start; b=S.end; } else { b=TODAY; a=new Date(Date.parse(TODAY)-(Number(S.range)-1)*86400000).toISOString().slice(0,10); }
+  const next = new Date(Date.parse(b)+86400000).toISOString().slice(0,10);
+  return `${a} 00:00:00 ≤ 访问时间 < ${next} 00:00:00`;
+}
+function sorter(key){ return (x,y)=>{ const a = key==='last_visit'?x.last:key==='page_views'?x.pv:x.sec, b = key==='last_visit'?y.last:key==='page_views'?y.pv:y.sec; const c = a<b?-1:a>b?1:0; return (c||x.key?.localeCompare?.(y.key)||0) * (S.dir==='asc'?1:-1); }; }
+
+function filteredVisitors(){
+  let l = visitors.filter(v=>inRange(v.last) && (!S.identity||v.state===S.identity) && (!S.intent||(v.override?.level||v.level)===S.intent) && (!S.owner||v.owner===S.owner) && (!S.q||v.name.includes(S.q)||v.crm.includes(S.q)));
+  return l.sort(sorter(S.sort));
+}
+function filteredContents(){
+  let l = contents.filter(c=>inRange(c.last) && (!S.owner||c.owner===S.owner) && (!S.cq||c.title.includes(S.cq)));
+  if (S.vq||S.identity) l = l.filter(c=>visitors.some(v=>v.mats.some(m=>m.cid===c.id) && (!S.vq||v.name.includes(S.vq)) && (!S.identity||v.state===S.identity)));
+  l.sort((x,y)=>{ const k=S.sort; const a=k==='last_visit'?x.last:k==='page_views'?x.pv:x.sec, b=k==='last_visit'?y.last:k==='page_views'?y.pv:y.sec; return ((a<b?-1:a>b?1:0)||x.id.localeCompare(y.id))*(S.dir==='asc'?1:-1); });
+  return l;
+}
+const contentOf = id => contents.find(c=>c.id===id);
+const ph = (c,label) => `<div class="media"><div class="ph ${c.ratio}" role="img" aria-label="${esc(c.title)} 示意封面">${esc(label||'示意封面')}<br>${c.ratio==='r916'?'9:16':c.ratio==='r169'?'16:9':'4:3'} · 原比例 contain</div></div>`;
+
+/* ---------- main render ---------- */
+function render(){
+  const app = $('app'); const p = can();
+  if (!p.view){
+    app.innerHTML = `<section class="st-feedback"><h1>分享访问记录</h1><p>当前账号尚未获得访问记录权限。请由有权管理员配置明确的组织与跟进范围。</p><button id="recheck">重新检查权限</button></section>`;
+    $('recheck').onclick=()=>toast('仿真：重新检查权限（仍无权限，不会发起任何访客/素材查询）'); return;
+  }
+  const list = S.view==='visitors' ? filteredVisitors() : filteredContents();
+  const idCount = S.view==='visitors' ? list.filter(v=>v.state==='identified').length : 0;
+  const anCount = S.view==='visitors' ? list.filter(v=>v.state==='anonymous').length : 0;
+  const empty = S.status==='empty' || list.length===0;
+  app.innerHTML = `
+  <header class="st-heading"><div><p class="st-eyebrow">可观测访问 · 有依据的跟进</p><h1>分享访问记录</h1><p>客户与素材，共用同一套访问口径。累计仅涵盖当前筛选范围。</p></div>
+    <div class="st-heading-actions"><button id="bRules">意向规则与重算</button>${p.manage?'<button class="primary" id="bCreate">＋ 创建素材分享</button>':''}</div></header>
+  ${S.role==='viewer'?'<p class="st-warning" role="status">当前为只读账号：不显示“创建素材分享”，客户详情中的 CRM 映射、人工修正、删除均需要各自独立授权。</p>':''}
+  <div class="st-tabs" role="tablist" aria-label="记录视角"><button role="tab" aria-selected="${S.view==='visitors'}" data-view="visitors">客户视角</button><button role="tab" aria-selected="${S.view==='contents'}" data-view="contents">素材视角</button></div>
+  <section class="st-filters" aria-label="访问筛选">
+    <div class="st-range" role="group" aria-label="时间范围">${[['all','全部'],['3','近3天'],['7','近7天'],['30','近30天'],['custom','自定义']].map(([v,l])=>`<button aria-pressed="${S.range===v}" data-range="${v}">${l}</button>`).join('')}</div>
+    ${S.range==='custom'?`<div class="form-row"><label>开始日期<input type="date" id="fStart" value="${S.start}"></label><label>结束日期（包含当天）<input type="date" id="fEnd" value="${S.end}"></label></div>`:''}
+    <div class="st-filter-fields">
+      <label>身份<select id="fIdentity"><option value="">全部身份</option><option value="identified">已识别账号</option><option value="anonymous">匿名访客</option>${S.view==='visitors'?'<option value="deleted">已删除账号</option>':''}</select></label>
+      ${S.view==='visitors'?`<label>意向参考<select id="fIntent"><option value="">全部意向</option>${Object.entries(intentLabels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label>`:''}
+      <label>跟进归属<select id="fOwner"><option value="">全部授权归属</option>${owners.map(o=>`<option value="${o.id}">${o.name}</option>`).join('')}</select></label>
+      <label>排序<select id="fSort"><option value="last_visit">最近访问</option><option value="page_views">页面访问次数</option><option value="visible_ms">累计可见时长</option></select></label>
+      <label>方向<select id="fDir"><option value="desc">从高到低 / 最新优先</option><option value="asc">从低到高 / 最早优先</option></select></label>
+      ${S.view==='visitors'?`<label>查找访客<input type="search" id="fQ" maxlength="100" placeholder="授权昵称或客户业务编号" value="${esc(S.q)}"></label><button id="bQ">查询</button>`
+        :`<label>素材标题<input type="search" id="fCQ" maxlength="100" placeholder="搜索素材标题" value="${esc(S.cq)}"></label><label>访问者昵称或标识<input type="search" id="fVQ" maxlength="100" placeholder="搜索授权昵称或访客标识" value="${esc(S.vq)}"></label><button id="bCQ">查询</button>`}
+      <button id="bReset">清除筛选</button>
+    </div>
+    <p class="muted" style="margin:0">Asia/Shanghai · 自然日 · ${rangeText()} · 同值按稳定ID排序</p>
+    ${S.notice?`<p class="st-warning" role="status">${esc(S.notice)}</p>`:''}
+    ${S.view==='contents'?'<p class="muted" style="margin:0">标题筛选选择素材；访问者昵称和身份共同限定访客、访问及累计时长。各筛选同时生效，详情沿用相同范围。</p>':''}
+  </section>
+  <div class="st-list-heading"><div class="st-counts">${S.view==='visitors'?`<strong>已识别账号 ${idCount} 位</strong><strong>匿名访客 ${anCount} 个</strong>`:`<strong>素材 ${list.length} 篇</strong>`}</div><button id="bRefresh">刷新记录</button></div>
+  <p class="muted" style="margin:0">已计算至 ${TODAY} 10:00:00 · 指标 m1.4（仿真） · 迟到补报可能回补数字</p>
+  ${S.status==='loading'?'<div class="st-feedback" role="status">正在读取访问记录…</div>':S.status==='error'?'<div class="st-feedback st-error" role="alert"><p>读取失败（仿真）：服务暂不可用。</p><button id="bRetry">重试，保留筛选</button></div>':empty?'<div class="st-feedback">尚无符合条件的访问记录（不会用示例数据填充空状态）</div>'
+   :`<div class="st-cards" role="tabpanel" aria-label="${S.view==='visitors'?'客户访问列表':'素材访问列表'}">${list.map(S.view==='visitors'?visitorCard:contentCard).join('')}</div>
+   <nav class="st-pager" aria-label="记录分页"><button disabled>上一页</button><span>第 1 页</span><button disabled>下一页</button></nav>`}
+  <details class="st-rules-note"><summary>指标口径说明</summary><ul><li>页面访问（PV）仅在内容就绪且首次可见后计 1 次；“发起分享”不是送达，也不是访问。</li><li>可见时长只累加可证明的前台可见分段；后台、锁屏不计，强退不补造尾段。</li><li>意向仅用于跟进优先级参考，不代表真实需求或成交概率；规则按版本保留，不随列表筛选改变定义。</li></ul></details>`;
+  // restore control values
+  const set=(id,v)=>{ const e=$(id); if(e) e.value=v; };
+  set('fIdentity',S.identity); set('fIntent',S.intent); set('fOwner',S.owner); set('fSort',S.sort); set('fDir',S.dir);
+  bind();
+}
+function bind(){
+  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ if(S.view===b.dataset.view)return; S.view=b.dataset.view; S.notice=''; if(S.view==='contents'&&S.intent){ S.intent=''; S.notice='意向筛选仅用于客户视角，已清除；素材身份和访客筛选独立保留'; } render(); });
+  document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{ S.range=b.dataset.range; render(); });
+  const on=(id,key)=>{ const e=$(id); if(e) e.onchange=()=>{ S[key]=e.value; render(); }; };
+  on('fIdentity','identity'); on('fIntent','intent'); on('fOwner','owner'); on('fSort','sort'); on('fDir','dir'); on('fStart','start'); on('fEnd','end');
+  const q=$('bQ'); if(q) q.onclick=()=>{ S.q=$('fQ').value; render(); };
+  const cq=$('bCQ'); if(cq) cq.onclick=()=>{ S.cq=$('fCQ').value; S.vq=$('fVQ').value; render(); };
+  $('bReset').onclick=()=>{ Object.assign(S,{range:'7',identity:'',intent:'',owner:'',sort:'last_visit',dir:'desc',q:'',cq:'',vq:'',notice:''}); render(); };
+  $('bRefresh').onclick=()=>{ toast('仿真：已创建新快照并刷新（分页游标重置，筛选保留）'); };
+  const rt=$('bRetry'); if(rt) rt.onclick=()=>{ $('status').value='normal'; S.status='normal'; render(); };
+  $('bRules').onclick=openRules; const cr=$('bCreate'); if(cr) cr.onclick=()=>openEditor();
+  document.querySelectorAll('[data-evidence]').forEach(b=>b.onclick=()=>{ S.open.ev[b.dataset.evidence]=!S.open.ev[b.dataset.evidence]; render(); });
+  document.querySelectorAll('[data-vdetail]').forEach(b=>b.onclick=()=>openVisitor(b.dataset.vdetail,b.dataset.cid));
+  document.querySelectorAll('[data-crm]').forEach(b=>b.onclick=()=>toast(b.dataset.crm==='1'?'仿真：重验当前 CRM 权限与确切映射后，跳转到客户主档（客户 / 线索）':'该访客未建立明确 CRM 映射，不显示客户身份或线索'));
+  document.querySelectorAll('details[data-lazy]').forEach(d=>d.addEventListener('toggle',()=>{ S.open[d.dataset.lazy][d.dataset.id]=d.open; if(d.open&&!d.dataset.done){ d.dataset.done=1; d.querySelector('.lazy').innerHTML=lazyBody(d.dataset.lazy,d.dataset.id); bindLazy(d); } }));
+  document.querySelectorAll('[data-cdetail]').forEach(b=>b.onclick=()=>openContent(b.dataset.cdetail));
+  document.querySelectorAll('details[data-lazy]').forEach(d=>{ if(S.open[d.dataset.lazy][d.dataset.id]){ d.open=true; } });
+}
+function bindLazy(root){
+  root.querySelectorAll('[data-vdetail]').forEach(b=>b.onclick=()=>openVisitor(b.dataset.vdetail,b.dataset.cid));
+}
+function lazyBody(kind,id){
+  if(kind==='mat'){ const v=visitors.find(x=>x.key===id); if(!v.mats.length) return '<p class="muted">无可展示的素材访问记录。</p>';
+    return v.mats.map(m=>{ const c=contentOf(m.cid); return `<div class="mini"><div class="thumb">${c.gone||c.status==='revoked'?'已撤回':'封面'}</div><div><strong>${esc(c.status==='revoked'?'（内容已撤回，仅保留受权历史统计）':c.title)}</strong><br><small class="muted">v${m.v} · ${m.pv} 次访问 · 累计可见 ${dur(m.sec)}</small></div><button data-vdetail="${esc(id)}" data-cid="${m.cid}">查看该版本访问轨迹</button></div>`; }).join('')
+      +'<p class="muted">内容已撤回、过期或当前不可阅读时，仅展示有权访问的历史统计。</p>'; }
+  if(kind==='cv'){ const rows=visitors.filter(v=>v.mats.some(m=>m.cid===id)&&(!S.vq||v.name.includes(S.vq))&&(!S.identity||v.state===S.identity));
+    return rows.map(v=>{ const m=v.mats.find(x=>x.cid===id); return `<div class="mini"><div class="st-avatar">访</div><div><strong>${esc(v.name)}</strong><br><small class="muted">${esc(v.crm||'未关联客户')} · 本素材 ${m.pv} 次 · 累计可见 ${dur(m.sec)}</small></div><button data-vdetail="${esc(v.key)}" data-cid="${id}">展开轨迹</button></div>`; }).join('')||'<p class="muted">暂无符合筛选的访客。</p>'; }
+  return '';
+}
+function visitorCard(v){
+  const p=can(); const lvl=v.override?.level||v.level; const open=S.open.ev[v.key];
+  return `<article class="st-visitor">
+    <button class="st-card-main" data-vdetail="${esc(v.key)}"><span class="st-avatar">${v.state==='deleted'?'—':'访'}</span><span><strong>${esc(v.name)}</strong><small>${v.state==='identified'?'已登录账号 · ':''}${esc(v.crm||'未关联客户')}</small></span><span class="st-chevron" aria-hidden="true">›</span></button>
+    <button class="st-intent st-${lvl}" data-evidence="${esc(v.key)}" aria-expanded="${!!open}">${intentLabels[lvl]}${v.override?'（人工修正）':''} · 查看依据</button>
+    ${open?evidence(v):''}
+    <dl class="st-metrics"><div><dt>页面访问</dt><dd>${v.pv} 次</dd></div><div><dt>会话</dt><dd>${v.sessions} 次</dd></div></dl>
+    <dl class="st-duration-pair"><div><dt>最近一次（当前范围）</dt><dd>${dur(v.latest.sec)}</dd><small>进入 ${v.latest.start}:00</small></div><div><dt>当前范围累计可见</dt><dd>${dur(v.sec)}</dd></div></dl>
+    <p class="muted" style="margin:0">最近活动 ${v.last}:00</p>
+    <div class="st-card-actions">${p.crm?`<button data-crm="${v.crm?1:0}" ${v.state!=='identified'?'disabled':''}>查看客户 / 线索</button>`:''}<button data-vdetail="${esc(v.key)}">访问详情</button></div>
+    <details class="st-inline" data-lazy="mat" data-id="${esc(v.key)}"><summary>查看访问素材（${v.mats.length}）</summary><div class="lazy"></div></details>
+  </article>`;
+}
+function evidence(v){
+  const th=RULE; const o=v.override;
+  return `<div class="st-evidence">
+    <strong>规则 ${RULE.rule_version} · 近 ${th.window_days} 天（2026-09-15 至 2026-10-14）</strong>
+    <div>${chip('有效会话 '+v.m.sessions)}${chip('已确认收藏 '+v.m.favorites)}${chip('已确认业务结果 '+v.m.biz)}</div>
+    <ul>${v.reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul>
+    ${o?`<div><strong>原规则结果：</strong>${intentLabels[v.origLevel]}　<strong>人工修正：</strong>${intentLabels[o.level]}（原因：${esc(o.reason)}；有效至 ${o.expires}；操作人 ${esc(o.actor)}）</div>`:''}
+    <div class="muted">不计入：${['匿名身份','后台预览','分享人自访','测试流量','重复事件','客户端点击','未经服务端确认的业务行为','超过每日贡献上限的部分'].map(chip).join('')}</div>
+    <div class="muted">仅用于跟进优先级参考，不代表真实需求或成交概率。客户点击与已确认业务成功分别统计。</div></div>`;
+}
+const chip = t => `<span class="chip">${esc(t)}</span>`;
+function contentCard(c){
+  const open = S.open.cv[c.id];
+  return `<article class="st-content-card">
+    <div class="st-content-summary">${ph(c,'授权封面')}<div>
+      <button class="st-content-title" data-cdetail="${c.id}">${esc(c.status==='revoked'?c.title:c.title)}</button>
+      <p style="margin:4px 0">${c.type} · v${c.ver} · <span class="badge ${c.status==='published'?'pub':'rev'}">${c.status==='published'?'已发布':'已撤回'}</span></p>
+      <dl class="st-metrics"><div><dt>页面访问</dt><dd>${c.pv}</dd></div><div><dt>访客 UV</dt><dd>${c.uv}</dd></div></dl>
+      <p class="muted" style="margin:6px 0 0">当前范围累计可见 ${dur(c.sec)} · 最近 ${c.last}</p></div></div>
+    <div class="st-card-actions"><button data-cdetail="${c.id}">素材访问详情</button></div>
+    <details class="st-inline" data-lazy="cv" data-id="${c.id}"><summary>展开该素材的访客</summary><div class="lazy"></div></details>
+  </article>`;
+}
+
+/* ---------- dialogs ---------- */
+let lastFocus=null;
+function dialog(title, inner, opts={}){
+  lastFocus=document.activeElement;
+  $('layer').innerHTML=`<div class="overlay"><div class="dialog" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1"><header><h2>${esc(title)}</h2><button id="dClose" aria-label="关闭详情">关闭</button></header><div class="body">${inner}</div></div></div>`;
+  const d=$('layer').querySelector('.dialog'); d.focus(); document.body.style.overflow='hidden';
+  const close=()=>{ if(opts.dirty&&opts.dirty()&&!confirm('有未保存的修改，确认放弃并关闭？'))return; $('layer').innerHTML=''; document.body.style.overflow=''; lastFocus&&lastFocus.focus&&lastFocus.focus(); };
+  $('dClose').onclick=close;
+  d.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } });
+  $('layer').querySelector('.overlay').addEventListener('mousedown',e=>{ if(e.target.classList.contains('overlay')) close(); });
+  return {root:d, close};
+}
+
+function openVisitor(key, cid){
+  const v=visitors.find(x=>x.key===key); const p=can(); const lvl=v.override?.level||v.level;
+  const trail=(trails[key]||fallbackTrail(v)).filter(s=>true);
+  const trailHtml=trail.map(s=>`<details class="st-inline" open><summary><strong>会话 ${s.id}</strong> · ${s.start} · ${esc(s.source)}</summary><div class="tl">${s.pages.map((pg,i)=>`
+    <div class="pv"><strong>${esc(pg.t)}</strong> · ${pg.start} · 可见 ${dur(pg.sec)}${pg.flags.map(f=>` <span class="chip">${esc(f)}</span>`).join('')}
+      <details data-ev="${s.id}-${i}"><summary class="muted">查看事件（按需加载）</summary>${pg.ev.map(e=>`<div class="ev">${eventLabels[e]||e}</div>`).join('')}</details></div>`).join('')}</div></details>`).join('');
+  const matHtml=v.mats.map(m=>{ const c=contentOf(m.cid); return `<div class="mini"><div class="thumb">封面</div><div><strong>${esc(c.status==='revoked'?'（内容已撤回，仅保留受权历史统计）':c.title)}</strong><br><small class="muted">v${m.v} · ${m.pv} 次 · 累计 ${dur(m.sec)}</small></div>${cid===m.cid?'<span class="badge pub">当前查看</span>':''}</div>`; }).join('')||'<p class="muted">无素材访问。</p>';
+  const gov = v.state==='deleted' ? '<p class="muted">该账号已删除，不提供治理操作。</p>'
+    : (!p.crm&&!p.rules&&!p.del) ? '<p class="muted">当前账号没有适用于此访客的治理操作权限。</p>' : `
+    <label>治理归属范围<select id="gOwner"><option value="">请选择归属范围</option>${owners.map(o=>`<option ${o.id===v.owner?'selected':''}>${o.name}</option>`).join('')}</select></label>
+    <p class="muted" style="margin:0">CRM 映射和人工意向修正仅作用于所选归属；上方结果仍是当前列表筛选范围。删除操作不随此选择缩小。</p>
+    ${p.crm?`<div class="sec"><h3>明确 CRM 映射</h3>${v.state!=='identified'?'<p class="muted">匿名访客不能建立 CRM 映射；须先由服务端确认登录账号。</p>':v.crm?`<p>当前映射：${esc(v.crm)}</p><button id="gUnlink">解除 CRM 映射</button>`:`
+      <p class="muted" style="margin:0">只对已登录账号建立明确映射。客户 ID、业务编号及依据须通过上游业务关系与归属范围验证；昵称、头像、相似姓名或分享对象均不能作为自动匹配依据。验证未接入时服务端会拒绝。</p>
+      <div class="form-row"><label>CRM 客户 ID<input id="gCid"></label><label>业务编号<input id="gNo"></label></div><label>已验证业务关系依据<textarea id="gBasis"></textarea></label><button class="primary" id="gLink">确认并提交映射</button>`}</div>`:''}
+    ${p.rules?`<div class="sec"><h3>人工意向修正</h3><p class="muted" style="margin:0">须填写原因和有效期（最多 30 天）；操作人和时间由服务端记录。</p><div class="form-row"><label>修正等级<select id="gLvl">${Object.entries(intentLabels).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></label><label>有效至（当前设备时区）<input type="date" id="gExp" value="2026-11-02" max="2026-11-13"></label></div><label>修正原因<textarea id="gWhy"></textarea></label><button class="primary" id="gOverride">保存人工修正</button></div>`:''}
+    ${p.del?`<div class="sec"><h3>删除访问数据</h3><p class="muted" style="margin:0">删除当前授权范围内该访客的访问记录、汇总和身份映射；不会撤回已发布素材。缓存、授权导出副本和备份须按批准策略治理，不能据此认定备份已立即清除。</p><button class="danger" id="gDelStart">申请删除此访客数据</button><div id="gDel" hidden><p class="muted">此操作不可通过本页面恢复。每次删除都需要单独确认，请核对目标。</p><label>删除原因<textarea id="gDelWhy"></textarea></label><label>输入完整访客标识以确认（${esc(v.key)}）<input id="gDelKey" autocomplete="off"></label><div class="st-card-actions"><button class="danger" id="gDelGo" disabled>确认删除访问记录与映射</button><button id="gDelCancel">取消删除</button></div></div></div>`:''}`;
+  const dl=dialog('客户访问详情', `
+    <div class="sec"><div class="st-card-main" style="grid-template-columns:44px 1fr"><span class="st-avatar">访</span><span><strong style="font-size:18px">${esc(v.name)}</strong><small>${v.state==='identified'?'已登录账号 · ':''}${esc(v.crm||'未关联客户')}</small></span></div>
+      <button class="st-intent st-${lvl}" disabled style="opacity:1">${intentLabels[lvl]}${v.override?'（人工修正）':''}</button>
+      <dl class="st-metrics"><div><dt>页面访问</dt><dd>${v.pv} 次</dd></div><div><dt>会话</dt><dd>${v.sessions} 次</dd></div></dl>
+      <dl class="st-duration-pair"><div><dt>最近一次（当前范围）</dt><dd>${dur(v.latest.sec)}</dd></div><div><dt>当前范围累计可见</dt><dd>${dur(v.sec)}</dd></div></dl>
+      <p class="muted" style="margin:0">同账号多端按各自设备会话累计，不能解释为真人连续阅读。缺失末尾事件不补造时长。</p></div>
+    <div class="sec"><h3>身份与意向依据</h3>${evidence(v)}</div>
+    <div class="sec"><h3>访问的素材${cid?'（已定位到所选版本）':''}</h3>${matHtml}</div>
+    <div class="sec"><h3>会话轨迹</h3><p class="muted" style="margin:0">只读访问轨迹；后台和锁屏不计时，可见不代表读完。</p>${trailHtml}</div>
+    <div class="sec"><h3>专门授权操作</h3>${gov}</div>
+    <button id="dBack">返回列表筛选范围</button>`);
+  const r=dl.root, $$=s=>r.querySelector(s);
+  $$('#dBack').onclick=dl.close;
+  if($$('#gLink')) $$('#gLink').onclick=()=>{ if(!$$('#gCid').value||!$$('#gNo').value||!$$('#gBasis').value) return toast('请填写客户 ID、业务编号与已验证依据'); toast('仿真：已提交；真实环境由服务端独立校验上游业务关系，未验证即拒绝'); };
+  if($$('#gUnlink')) $$('#gUnlink').onclick=()=>toast('仿真：已解除映射并写入审计');
+  if($$('#gOverride')) $$('#gOverride').onclick=()=>{ if(!$$('#gWhy').value.trim()) return toast('必须填写修正原因'); toast('仿真：已保存人工修正；原规则结果与人工修正将分开显示'); };
+  if($$('#gDelStart')){ $$('#gDelStart').onclick=()=>{ $$('#gDel').hidden=false; };
+    const chk=()=>{ $$('#gDelGo').disabled=!($$('#gDelWhy').value.trim()&&$$('#gDelKey').value===v.key); };
+    $$('#gDelWhy').oninput=chk; $$('#gDelKey').oninput=chk; $$('#gDelCancel').onclick=()=>{ $$('#gDel').hidden=true; };
+    $$('#gDelGo').onclick=()=>toast('仿真：仅当服务端返回 status: completed 才视为删除成功；备份与导出副本不会立即清除'); }
+}
+
+function openContent(id){
+  const c=contentOf(id); const p=can();
+  const rows=visitors.filter(v=>v.mats.some(m=>m.cid===id));
+  dialog('素材访问详情', `
+    <div class="sec">${ph(c,'授权封面 / 原图')}<h3 style="font-size:18px">${esc(c.title)}</h3>
+      <p style="margin:0">${c.type} · v${c.ver} · <span class="badge ${c.status==='published'?'pub':'rev'}">${c.status==='published'?'已发布':'已撤回'}</span></p>
+      <dl class="st-metrics"><div><dt>页面访问</dt><dd>${c.pv}</dd></div><div><dt>访客 UV</dt><dd>${c.uv}</dd></div></dl>
+      <p class="muted" style="margin:0">当前范围累计可见 ${dur(c.sec)}。原页面内容快照，只读；不提供历史正文回放。素材 PV/UV 仅统计该素材。</p>
+      ${c.status==='published'?`<div class="st-card-actions"><button>打开授权原图</button>${p.manage?'<button id="cEdit">编辑草稿 / 发布与撤回</button>':''}</div>`:'<p class="st-warning">已撤回：所有旧入口不能继续读取正文；既有访问仍保留其历史版本统计。</p>'}</div>
+    <div class="sec"><h3>访问该素材的访客</h3>${rows.map(v=>{ const m=v.mats.find(x=>x.cid===id); return `<div class="mini"><div class="st-avatar">访</div><div><strong>${esc(v.name)}</strong><br><small class="muted">${esc(v.crm||'未关联客户')} · ${m.pv} 次 · 累计 ${dur(m.sec)}</small></div><button data-go="${esc(v.key)}">展开轨迹</button></div>`; }).join('')||'<p class="muted">暂无访客。</p>'}</div>`)
+  .root.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>openVisitor(b.dataset.go,id));
+  const e=$('layer').querySelector('#cEdit'); if(e) e.onclick=()=>openEditor(c);
+}
+
+function openRules(){
+  const p=can();
+  const dl=dialog('意向规则与重算', `
+    <p class="muted" style="margin:0">意向仅用于跟进优先级参考，不代表真实需求或成交概率。规则独立于访问列表的日期筛选，默认窗口为近 30 天。</p>
+    <div class="sec"><label>规则归属范围<select id="rOwner"><option value="">请选择单一授权归属</option>${owners.map(o=>`<option value="${o.id}">${o.name}</option>`).join('')}</select></label>
+      <p class="muted" id="rHint" style="margin:0">请明确选择有权查看的归属，随后读取该归属的当前规则及历史版本。</p></div>
+    <div id="rBody" hidden>
+      <div class="sec"><h3>当前生效规则</h3><div>${chip('版本 '+RULE.rule_version)}${chip('评估窗口 '+RULE.window_days+' 天')}${chip('中意向：有效会话 ≥ '+RULE.medium_sessions)}${chip('中意向：已确认收藏 ≥ '+RULE.medium_favorites)}${chip('高意向：业务结果 ≥ '+RULE.high_business_results)}${chip('每日会话上限 '+RULE.daily_session_cap)}${chip('每日动作上限 '+RULE.daily_action_cap)}</div></div>
+      ${p.rules?`<div class="sec"><h3>新建规则版本</h3><p class="muted" style="margin:0">保存会创建不可变版本并立即对所选归属生效、重算；历史版本保留。修改须记录原因；窗口 1–90 天，还受服务端已批准的数据保留期限制。高意向业务结果汇总咨询、预约、报价三类各自封顶后的贡献。</p>
+        <div class="form-row"><label>评估窗口（天）<input type="number" id="rW" min="1" max="90" value="${RULE.window_days}"></label><label>中意向：有效会话<input type="number" id="rS" value="${RULE.medium_sessions}"></label><label>中意向：已确认收藏<input type="number" id="rF" value="${RULE.medium_favorites}"></label><label>高意向：业务结果<input type="number" id="rB" value="${RULE.high_business_results}"></label></div>
+        <label>变更原因<textarea id="rWhy"></textarea></label><div class="st-card-actions"><button class="primary" id="rSave">保存新版本并重算</button></div></div>
+        <div class="sec"><h3>按当前版本重新计算</h3><p class="muted" style="margin:0">用于核对业务证据或数据调整后的结果；仅覆盖所选归属，不使用列表日期筛选。同一次失败重试沿用请求编号。</p><label>重算原因<textarea id="rcWhy"></textarea></label><button id="rRe">按当前版本重算</button></div>`
+        :'<div class="sec"><p class="muted" style="margin:0">当前账号仅可查看规则与历史，没有规则配置或重算权限。</p></div>'}
+      <div class="sec"><h3>历史版本</h3><div class="mini" style="grid-template-columns:1fr auto"><div>v2 · 窗口 30 天 · 有效会话≥3 · 原因：初始上线基线（虚构）</div><span class="muted">已被取代</span></div></div>
+    </div>`);
+  const r=dl.root; r.querySelector('#rOwner').onchange=e=>{ r.querySelector('#rBody').hidden=!e.target.value; r.querySelector('#rHint').hidden=!!e.target.value; };
+  const s=r.querySelector('#rSave'); if(s) s.onclick=()=>{ if(!r.querySelector('#rWhy').value.trim()) return toast('变更原因必填'); toast('仿真：已创建不可变新版本 v4 并重算（带版本并发校验与幂等请求编号）'); };
+  const rc=r.querySelector('#rRe'); if(rc) rc.onclick=()=>{ if(!r.querySelector('#rcWhy').value.trim()) return toast('重算原因必填'); toast('仿真：已重算，评估 6 位访客，变化 1 位'); };
+}
+
+function openEditor(c){
+  let dirty=false; let step=c&&c.status==='published'?'draft':'draft';
+  const dl=dialog('创建与管理素材分享', `
+    <p class="muted" style="margin:0">人工录入已有内容。不自动抓取公众号文章；来源链接仅供核对。发布后的修改先保存为新草稿，历史访问保留原版本。</p>
+    <div class="sec"><h3>① 录入正文</h3>
+      <label>标题（必填，最多80字）<input id="eT" maxlength="80" value="${c?esc(c.title):''}"></label>
+      <div class="form-row"><label>来源链接（仅供核对，不会被抓取）<input id="eU" placeholder="https://"></label><label>来源说明<input id="eN"></label></div>
+      <div class="form-row"><label>正文格式<select><option>纯文本（保留换行）</option><option>受控富文本（HTML 源码）</option></select></label><label>使用权属<select id="eR"><option value="own">自有内容</option><option value="auth">已获授权</option></select></label><label>跟进归属<select id="eO"><option value="">请选择</option>${owners.map(o=>`<option>${o.name}</option>`).join('')}</select></label></div>
+      <label>已有正文<textarea id="eB">${c?esc(c.body):''}</textarea></label>
+      <p class="muted" style="margin:0">富文本仅支持 p、br、strong、em、h2、h3、ul、ol、li、blockquote。保存时服务端移除所有属性、脚本及外部嵌入。</p>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="eC" style="width:auto;min-height:0"> 我确认正文、封面与媒体具有使用权</label></div>
+    <div class="sec"><h3>② 上传或选取授权媒体</h3><label>上传本地图片或视频（图片≤10MiB，MP4≤50MiB）<input type="file" accept="image/*,video/mp4" id="eF"></label>
+      <p class="muted" style="margin:0">服务端校验真实字节、类型与尺寸；上传本身不等于发布。暂无可选授权媒体时，缺少封面不能发布。原图/视频按 contain 完整展示、不拉伸。</p></div>
+    <div class="sec"><h3>③ 保存草稿并预览</h3><button id="eSave">保存草稿并预览</button><div id="ePrev" hidden>
+      <p class="st-warning">此处为后台预览，不进入客户访问统计。小程序排版与设备兼容仍需真机核验。编辑正文会使预览失效。</p>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="eOk" style="width:auto;min-height:0"> 已核对正文、媒体及归属，确认发布</label>
+      <button class="primary" id="ePub" disabled>发布并获取分享方式</button></div></div>
+    <div class="sec" id="eShare" hidden><h3>④ 分享方式</h3><p style="margin:0">已发布为不可变版本。</p>
+      <p class="st-warning" style="margin:0">当前未接通经核验的微信码 / URL Link：不生成假二维码，也不用普通 HTTPS 短链替代。请在小程序“我的 → 可分享素材”打开固定阅读页，用原生入口分享。后台不能直接发送微信卡片。</p></div>
+    ${c&&c.status==='published'?`<div class="sec"><h3>撤回已发布素材</h3><label>撤回原因<textarea id="eRvWhy"></textarea></label><button class="danger" id="eRv">撤回并停止旧入口阅读</button></div>`:''}`,
+    {dirty:()=>dirty});
+  const r=dl.root, g=s=>r.querySelector(s);
+  r.addEventListener('input',()=>{ dirty=true; if(g('#ePrev')&&!g('#ePrev').hidden){ g('#ePrev').hidden=true; g('#eSave').textContent='保存草稿并预览'; toast('正文已修改，预览已失效，请重新保存预览'); } });
+  g('#eSave').onclick=()=>{ if(!g('#eT').value.trim()) return toast('标题必填'); if(!g('#eC').checked) return toast('请先确认使用权'); if(!g('#eO').value) return toast('请选择跟进归属'); g('#ePrev').hidden=false; g('#eSave').textContent='重新保存草稿并预览'; dirty=false; };
+  g('#eOk').onchange=e=>{ g('#ePub').disabled=!e.target.checked; };
+  g('#ePub').onclick=()=>{ g('#eShare').hidden=false; g('#ePub').disabled=true; toast('仿真：已发布（带预览令牌与幂等键，重复提交不重复发布）'); };
+  if(g('#eRv')) g('#eRv').onclick=()=>{ if(!g('#eRvWhy').value.trim()) return toast('撤回原因必填'); toast('仿真：已撤回，所有旧入口不能继续读取；既有访问保留历史版本'); };
+}
+
+/* ---------- requirement view ---------- */
+const REQ = [
+ ['AT-01','FR-01~04','分享入口登记、取消分享零PV、打开后记录页面/分享/版本','小程序端（本后台页不含）','部分自动覆盖','双端逐页发起/取消/接收录屏；37个隐私排除源需业务确认'],
+ ['AT-02','FR-05','A→B→C 父子分享链与 UV 去重','服务端+小程序','部分自动覆盖','真实三账号传播链、复制旧链接对账'],
+ ['AT-03','ID-01~03','同账号跨端 UV、匿名会话关联、换号不串','服务端+小程序','自动证据通过（身份边界）','真实登录签名/Redis、双端同账号'],
+ ['AT-04','ID-04','CRM 明确映射、未映射不显示客户身份','✔ 详情页「明确 CRM 映射」','自动证据通过（授权/拒绝路径）','真实 CRM、映射前后截图审计'],
+ ['AT-05','UI-02~06','上海自然日、近3/7/30/自定义、排序分页、稳定快照','✔ 时间范围/排序/分页','自动证据通过','真实 SQL 对账'],
+ ['AT-06','UI-07~11','标题/封面可辨、图片原比例、逐层下钻返回','✔ 素材视角/展开访客/轨迹','部分自动覆盖','原比例像素证据、六宽度截图'],
+ ['AT-07','UI-10 FR-06','列表曝光/点击/详情 PV 分离、跨页可追溯','小程序端+轨迹展示','自动证据通过（源回调）','微信完整导航链复核'],
+ ['AT-08','CT-01~05','人工录入、预览不计统计、不可变发布、撤回','✔ 创建素材分享/发布/撤回','自动证据通过','真实发布→分享→接收→撤回全链路'],
+ ['AT-09','TM-01~04','前台可见 30+20≈50 秒，后台锁屏不计','小程序端','自动证据通过（模拟时钟）','iOS/Android 真机锁屏、强退'],
+ ['AT-10','TM-02~03','离线补报、幂等、乱序、冲突隔离','小程序+服务端','自动证据通过','真断网/进程重启、SQL 对账'],
+ ['AT-11','RD-02~05','视频墙钟/位置/覆盖分离，外跳仅点击','小程序端','部分自动覆盖','真播放器全屏/倍速/锁屏'],
+ ['AT-12','SEC-01 EV-01','服务端注入身份与归属，越权拒绝','✔ 权限三态 + 服务端校验','自动证据通过（权限负向）','真实多组织多角色会话'],
+ ['AT-13','SEC-02~03','富文本清洗、SSRF、限流重放','服务端','自动证据通过（规定输入）','隔离环境安全扫描/渗透'],
+ ['AT-14','PR-01~02','删除墓碑、保留清理、告知','✔ 详情页「删除访问数据」','自动证据通过（当前存储）','保留期批准；备份/缓存/导出副本演练'],
+ ['AT-15','IN-01~03','可解释意向规则、版本、重算、人工修正','✔ 意向规则与重算 / 人工修正','自动证据通过','预约/报价无成功源，企微聊天无身份桥；真实改规则联调'],
+ ['AT-16','UI-01~11','六宽度、短屏、44px、空/失败/重试状态','✔ 响应式 + 状态','部分自动覆盖','浏览器截图被沙箱阻塞，六宽度与真机均未验'],
+ ['AT-17','质量与降级','10万PV/日 P95<2s、故障降级、开关回滚','服务端','部分自动覆盖','压测、故障注入、回滚演练均未运行'],
+];
+function renderReq(){
+  $('reqView').innerHTML=`<h1 style="margin:0 0 6px">需求对照：本后台页面实现了什么</h1>
+  <p class="muted">依据：仓库内《开发任务与验收基线》《验收清单》对 PRD（AT-01~17）的映射，以及后台页面源码。</p>
+  <div class="callout"><strong>说明：</strong>正式 18 页 PRD 原文不在仓库中（仅被文档引用），本表依据仓库内对 PRD 的逐项映射对照，不是对原文逐条核对。本页是静态仿真，未渲染真实 React 页面，也不代表已通过浏览器/真机验收。</div>
+  <div class="req-scroll"><table><thead><tr><th>验收项</th><th>PRD 条款</th><th>需求内容</th><th>后台页面对应</th><th>仓库记录的验证状态</th><th>仍缺</th></tr></thead><tbody>
+  ${REQ.map(r=>`<tr><td><strong>${r[0]}</strong></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td class="${r[4].startsWith('自动')?'st-ok':'st-part'}">${r[4]}</td><td>${r[5]}</td></tr>`).join('')}
+  </tbody></table></div>
+  <h2>结论</h2><ul>
+  <li><strong>代码层面：</strong>后台页面覆盖 PRD 中属于后台的 P0：客户/素材双视角、时间与权限一致的筛选排序分页、轨迹下钻、素材录入—预览—发布—撤回、CRM 明确映射、意向规则与人工修正、删除治理。</li>
+  <li><strong>验收层面：</strong>17 项<strong class="st-no">均未整体签收</strong>。真实数据库/CRM/微信、六宽度浏览器截图、iOS/Android 真机、压测与回滚演练都未做。</li>
+  <li><strong>按设计未交付：</strong>公众号自动导入、URL Link / 微信码（无核验接口则不展示）、AI 评分（均为 P1 或待核验）。</li>
+  <li><strong>已知缺口：</strong>预约/报价没有可信成功源、企微聊天无身份桥；计时/队列阈值无运行时配置界面；朋友圈首次同步无令牌时不宣称可追踪。</li></ul>`;
+}
+
+/* ---------- boot ---------- */
+$('role').onchange=e=>{ S.role=e.target.value; render(); };
+$('status').onchange=e=>{ S.status=e.target.value; render(); };
+$('tabSim').onclick=()=>{ $('simView').hidden=false; $('reqView').hidden=true; $('tabSim').setAttribute('aria-selected',true); $('tabReq').setAttribute('aria-selected',false); };
+$('tabReq').onclick=()=>{ renderReq(); $('simView').hidden=true; $('reqView').hidden=false; $('tabReq').setAttribute('aria-selected',true); $('tabSim').setAttribute('aria-selected',false); };
+render();
+</script>
+</body>
+</html>

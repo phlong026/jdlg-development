@@ -23,17 +23,22 @@ export interface Content { identified_count?: number; anonymous_count?: number; 
 export interface PageView { page_view_id: string; route_key: string; title?: string; content_id?: string; content_version?: number; previous_page_view_id?: string; share_id?: string; started_at: string; ended_at?: string; visible_ms: number; quality_flags: string[]; }
 export interface Session { session_id: string; started_at: string; last_active_at: string; entry_share_id?: string; source: string; page_views: PageView[]; }
 export interface TrackingEvent { event_id: string; event_type: string; occurred_at: string; received_at: string; content_version?: number; target_content_id?: string; visible_delta_ms?: number; scroll_depth?: number; current_time_ms?: number; video_watch_ms?: number; unique_played_ms?: number; video_duration_ms?: number; quality_flags: string[]; }
-export interface Context { can_view: boolean; can_manage: boolean; can_crm?: boolean; can_rules?: boolean; can_delete?: boolean; owners: { id: string; name: string }[]; share_methods?: string[]; }
+export interface Context { can_view: boolean; can_manage: boolean; can_crm?: boolean; can_rules?: boolean; can_delete?: boolean; owners: { id: string; name: string }[]; share_methods?: string[]; mp_sync?: boolean; }
+export interface MPSyncCounts { fetched: number; created: number; updated: number; unchanged: number; skipped: number; conflicts: number; failed: number; images_imported: number; image_failures: number; }
+export interface MPSyncProblem { ref: string; reason: string; }
+export interface MPSyncRun { started_at: string; finished_at: string; counts: MPSyncCounts; problems: MPSyncProblem[]; }
+export interface MPSyncLastRun extends MPSyncRun { ok: boolean; error?: string; wechat_errcode?: number; }
+export interface MPSyncInfo { enabled: boolean; problems?: string[]; owner_id?: string; rights?: 'own' | 'authorized'; max_articles?: number; import_images?: boolean; interval_minutes?: number; publishes?: boolean; last_run?: MPSyncLastRun; }
 export interface DraftInput { title: string; body: string; body_format?: 'plain' | 'rich_text'; source_url: string; source_note: string; rights: 'own' | 'authorized'; owner_id: string; cover_media_id: string; media_ids: string[]; expected_revision?: number; }
 export interface ShareMethods { message?: string; miniprogram_code_url?: string; url_link?: string; expires_at?: string; }
 export interface PublishResult { content: Content; share_methods: ShareMethods; }
-export async function trackingRequest<T>(resource: string, options: { signal?: AbortSignal; params?: Record<string, unknown>; method?: string; body?: unknown } = {}): Promise<T> {
+export async function trackingRequest<T>(resource: string, options: { signal?: AbortSignal; params?: Record<string, unknown>; method?: string; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
     const started = captureTrackingAccessBoundary();
     const controller = new AbortController(); let timedOut = false;
     const abort = () => controller.abort();
     if (options.signal?.aborted) controller.abort();
     options.signal?.addEventListener('abort', abort, { once: true });
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, options.timeoutMs ?? 20000);
     try {
         const result = await request<T>(TRACKING_API + resource, { method: options.method || 'GET', cache: 'no-store', signal: controller.signal, shouldExpireSession: () => started === captureTrackingAccessBoundary() && !controller.signal.aborted, params: options.params, headers: { 'X-Tracking-Request': '1' }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
         if (result.data === undefined || result.data === null) throw new Error('服务未返回有效数据，请重试');
@@ -54,6 +59,8 @@ export const tracking = {
     deleteVisitor: (body: { visitor_key: string; reason: string }) => trackingRequest<{ status: string }>('/deletions', { method: 'POST', body }),
     crmTarget: (visitor: string, owner?: string, signal?: AbortSignal) => trackingRequest<CRMTarget>(`/visitors/${encodeURIComponent(visitor)}/crm-target`, { params: owner ? { owner } : {}, signal }),
     context: (signal?: AbortSignal) => trackingRequest<Context>('/context', { signal }),
+    mpSyncInfo: (signal?: AbortSignal) => trackingRequest<MPSyncInfo>('/mp-sync', { signal }),
+    mpSyncRun: () => trackingRequest<MPSyncRun>('/mp-sync', { method: 'POST', timeoutMs: 330000 }),
     visitors: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Visitor>>('/visitors', { params, signal }),
     contents: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Content>>('/contents', { params, signal }),
     content: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Content & Snapshot>(`/contents/${encodeURIComponent(id)}`, { params, signal }),

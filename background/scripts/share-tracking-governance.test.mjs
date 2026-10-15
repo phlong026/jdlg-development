@@ -63,6 +63,12 @@ test('delete is deliberate per-target confirmation and pending clicks produce on
 test('unconfirmed deletion response preserves reason and does not mark deleted',async()=>{
  const h=harness({can_delete:true},{deleteVisitor:async()=>({status:'queued'})});h.find('button','申请删除此访客数据').props.onClick();h.render();h.field('删除原因','申请');h.field('输入完整访客标识','u:42');h.find('button','确认删除访问记录与映射').props.onClick();await flush();h.render();assert.equal(h.calls.some(x=>x[0]==='deleted'),false);assert.match(h.text(),/未确认操作完成/);
 });
+test('in-progress deletion keeps the confirmation open and invites an identical retry',async()=>{
+ let requests=0;const h=harness({can_delete:true},{deleteVisitor:async()=>{requests++;return{status:requests<3?'in_progress':'completed'}}});
+ h.find('button','申请删除此访客数据').props.onClick();h.render();h.field('删除原因','申请');h.field('输入完整访客标识','u:42');
+ for(let attempt=0;attempt<2;attempt++){h.find('button','确认删除访问记录与映射').props.onClick();await flush();h.render();assert.equal(h.calls.some(x=>x[0]==='deleted'),false);assert.match(h.text(),/删除仍在进行/);assert.doesNotMatch(h.text(),/不要重复提交/);assert.ok(h.find('button','确认删除访问记录与映射'))}
+ h.find('button','确认删除访问记录与映射').props.onClick();await flush();h.render();assert.equal(requests,3);assert.ok(h.calls.some(x=>x[0]==='deleted'));assert.match(h.text(),/备份和副本仍按治理策略处理/);
+});
 test('missing original rule result is disclosed and overrides do not claim to be original',()=>{
  const h=harness({}, {}, {intent:{level:'high',manual_note:'人工修正',reasons:[]}});assert.match(h.text(),/接口尚未返回独立的原规则结果/);assert.match(h.text(),/人工修正/);
 });

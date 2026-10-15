@@ -34,8 +34,9 @@ page { overflow: visible; background: #ece4d9; }
 .ai-hotspot { left: 327.56rpx; top: 572.40rpx; width: 94rpx; height: 92.59rpx; }
 .ai-title { left: 99.36rpx; top: 678.84rpx; width: 550.41rpx; height: 57.15rpx; color: #593e24; font-size: 43.45rpx; font-weight: 600; line-height: 54rpx; text-align: center; white-space: nowrap; z-index: 3; }
 .photo-hotspot, .voice-hotspot { display: flex; align-items: center; justify-content: center; gap: 15rpx; color: #4b321e; font-size: 27rpx; white-space: nowrap; }
-.photo-hotspot { left: 153.87rpx; top: 742.09rpx; width: 182.00rpx; height: 51.88rpx; }
-.voice-hotspot { left: 394.78rpx; top: 742.09rpx; width: 196.95rpx; height: 51.88rpx; }
+/* 热区放大到 ≥100rpx 高，左右以分割线为界；padding 让图标和文字保持原视觉位置 */
+.photo-hotspot { left: 70rpx; top: 718.03rpx; width: 295.77rpx; height: 100rpx; padding-left: 53.97rpx; }
+.voice-hotspot { left: 365.77rpx; top: 718.03rpx; width: 324.23rpx; height: 100rpx; padding-right: 69.27rpx; }
 .photo-hotspot image { position: relative; top: -3rpx; width: 50rpx; height: 53rpx; }
 .photo-hotspot { gap: 10rpx; }
 .voice-hotspot image { width: 38rpx; height: 38rpx; }

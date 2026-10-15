@@ -14,7 +14,17 @@ type memoryStore struct {
 	mu   sync.Mutex
 	data map[string]map[string]Record
 }
-type memoryRepo struct{ data map[string]Record }
+type memoryRepo struct {
+	data     map[string]Record
+	readOnly bool
+}
+
+// ReadTransaction mirrors SQLStore: any write on a read path fails the test.
+func (m *memoryStore) ReadTransaction(_ context.Context, tenant string, fn func(Repository) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return fn(&memoryRepo{data: m.data[tenant], readOnly: true})
+}
 
 func (m *memoryStore) Transaction(_ context.Context, tenant string, fn func(Repository) error) error {
 	m.mu.Lock()
@@ -26,7 +36,7 @@ func (m *memoryStore) Transaction(_ context.Context, tenant string, fn func(Repo
 	for k, v := range m.data[tenant] {
 		next[k] = v
 	}
-	e := fn(&memoryRepo{next})
+	e := fn(&memoryRepo{data: next})
 	if e == nil {
 		m.data[tenant] = next
 	}
@@ -48,14 +58,29 @@ func (m *memoryRepo) List(k string) ([]Record, error) {
 	}
 	return out, nil
 }
-func (m *memoryRepo) Put(r Record) error { m.data[r.Kind+":"+r.ID] = r; return nil }
+func (m *memoryRepo) Put(r Record) error {
+	if m.readOnly {
+		return ErrReadOnly
+	}
+	m.data[r.Kind+":"+r.ID] = r
+	return nil
+}
 func (m *memoryRepo) Insert(r Record) error {
+	if m.readOnly {
+		return ErrReadOnly
+	}
 	if _, ok := m.data[r.Kind+":"+r.ID]; ok {
 		return errors.New("duplicate")
 	}
 	return m.Put(r)
 }
-func (m *memoryRepo) Remove(k, id string) error { delete(m.data, k+":"+id); return nil }
+func (m *memoryRepo) Remove(k, id string) error {
+	if m.readOnly {
+		return ErrReadOnly
+	}
+	delete(m.data, k+":"+id)
+	return nil
+}
 func fixture(t *testing.T) (*Service, Scope) {
 	t.Helper()
 	s := New(&memoryStore{}, Config{Enabled: true, ContentEnabled: true, VideoEnabled: true, IntentEnabled: true, Tenant: "org-a", DefaultOwner: "owner-a", ConsentVersion: "v1", RawDays: 90, Routes: map[string]Route{"pages/home/home": {Title: "首页", Public: true}, "pages/list/list": {Title: "列表", Public: true}, "pages/contentreader/contentreader": {Title: "文章", Public: true}}})

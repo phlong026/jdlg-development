@@ -22,10 +22,22 @@ type DailySummary struct {
 	Last            time.Time  `json:"last_observed_at"`
 	Ranges          [][2]int64 `json:"visible_ranges_utc_ms"`
 	BuiltAt         time.Time  `json:"built_at"`
+	// A segment with fresh visibility in this day ended after the day's end.
+	// Raw reduction caps such a segment's last observation at a day-aligned
+	// window end, which the compacted ranges alone cannot reproduce.
+	Spill bool `json:"segment_continues_next_day,omitempty"`
 }
 type summaryState struct {
 	Metric     string `json:"metric_version"`
 	RawExpired bool   `json:"raw_events_expired"`
+	// Complete marks states written by a projector that records every field
+	// summaryUsable needs; older states only serve expired sessions.
+	Complete bool      `json:"complete,omitempty"`
+	BuiltAt  time.Time `json:"built_at,omitempty"`
+	// DeferredFrom is the earliest accepted event left out because it occurred
+	// after the build time (a device clock slightly ahead). Until a rebuild, the
+	// projection is exact only for snapshots before that instant.
+	DeferredFrom *time.Time `json:"deferred_from,omitempty"`
 }
 
 var businessTimezone = time.FixedZone("Asia/Shanghai", 28800)
@@ -92,6 +104,7 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 		row   Record
 	}
 	events := []accepted{}
+	var deferred *time.Time
 	for _, row := range rows {
 		visitor := resolvedVisitor(r, row)
 		dead, e := tombstoned(r, "deletion", visitor)
@@ -105,7 +118,18 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 		if json.Unmarshal(row.Payload, &ev) != nil {
 			return ErrUnavailable
 		}
-		if ev.Received.After(now) || ev.Occurred.After(now) || hasFlag(ev, "self") || hasFlag(ev, "preview") || hasFlag(ev, "test") || hasFlag(ev, "abnormal") || hasFlag(ev, "duplicate") {
+		if hasFlag(ev, "self") || hasFlag(ev, "preview") || hasFlag(ev, "test") || hasFlag(ev, "abnormal") || hasFlag(ev, "duplicate") {
+			continue
+		}
+		if ev.Received.After(now) || ev.Occurred.After(now) {
+			// Raw reduction admits an event once both times are within as_of.
+			at := ev.Occurred
+			if ev.Received.After(at) {
+				at = ev.Received
+			}
+			if deferred == nil || at.Before(*deferred) {
+				deferred = &at
+			}
 			continue
 		}
 		events = append(events, accepted{ev, row})
@@ -189,6 +213,9 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 					x := get(p, at)
 					x.Ranges = append(x.Ranges, [2]int64{part.lo, end})
 					x.View.Visible += end - part.lo
+					if ev.Occurred.UnixMilli() >= businessDay(at).AddDate(0, 0, 1).UnixMilli() {
+						x.Spill = true
+					}
 					last := time.UnixMilli(end)
 					if last.After(x.Last) {
 						x.Last = last
@@ -197,8 +224,9 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 				}
 			}
 		}
-		key := ev.View + "\x00" + businessDay(ev.Occurred).Format("2006-01-02")
-		if x := summaries[key]; x != nil {
+		// Every attached event's day has a bucket, even without visibility, so a
+		// window's last observation (e.g. a page_end after midnight) is retained.
+		if x := get(p, ev.Occurred); x != nil {
 			if ev.Occurred.After(x.Last) {
 				x.Last = ev.Occurred
 			}
@@ -256,13 +284,25 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 			stateRow = rec
 		}
 	}
-	if len(summaries) > 0 {
-		stateRow.Kind = "summary_state"
-		stateRow.ID = session
-		stateRow.Payload = marshal(summaryState{Metric: MetricVersion})
-		return r.Put(stateRow)
+	state = summaryState{Metric: MetricVersion, Complete: true, BuiltAt: now, DeferredFrom: deferred}
+	if len(summaries) == 0 {
+		// Record that the session was projected and has nothing to show, so list
+		// queries need not rescan its raw events. Owner and visitor keep the state
+		// discoverable by owner scope and personal-data deletion.
+		entry, e := decode[Entry](r, "session", session)
+		if errors.Is(e, ErrNotFound) {
+			return r.Remove("summary_state", session)
+		}
+		if e != nil {
+			return e
+		}
+		stateRow = record("summary_state", session, entry.Owner, now, nil)
+		stateRow.Visitor, stateRow.Session = entry.Visitor, session
 	}
-	return r.Remove("summary_state", session)
+	stateRow.Kind = "summary_state"
+	stateRow.ID = session
+	stateRow.Payload = marshal(state)
+	return r.Put(stateRow)
 }
 
 // PrepareSummaryRetention freezes projections before deleting any raw events,
@@ -317,13 +357,44 @@ func (s *Service) PrepareSummaryRetention(r Repository, removed []Record, now ti
 
 // summaryFacts returns expired sessions in the authorized, relevant buckets.
 func (s *Service) summaryFacts(r Repository, scope Scope, f Filter) ([]factView, map[string]bool, error) {
-	return s.summaryFactsSelected(r, scope, f, factSelection{})
+	facts, summarized, _, err := s.summaryFactsSelected(r, scope, f, factSelection{}, false)
+	return facts, summarized, err
 }
-func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, map[string]bool, error) {
+
+// summaryWindowExact reports whether projections reproduce raw reduction for
+// the window: bucket days are wholly inside or outside it, or nothing observed
+// can lie at or beyond its end. Arbitrary historical windows use raw events.
+func summaryWindowExact(f Filter) bool {
+	aligned := func(t time.Time) bool { return t.Equal(businessDay(t)) }
+	return f.End.After(f.AsOf) || aligned(f.Start) && aligned(f.End)
+}
+
+// summaryUsable reports whether a current session's projection equals raw
+// reduction at asOf: every accepted event is in it (no acceptance or identity
+// change after BuiltAt, no deferred event admitted by asOf) and nothing newer is.
+func summaryUsable(state summaryState, asOf time.Time) bool {
+	return state.Complete && state.Metric == MetricVersion && !state.BuiltAt.After(asOf) && (state.DeferredFrom == nil || asOf.Before(*state.DeferredFrom))
+}
+
+// summaryFactsSelected reduces projections for expired sessions and, when
+// current is set, for current sessions whose projection is exact at f.AsOf.
+// It returns the facts, the sessions they fully represent, and sessions found
+// in projections that still need raw reduction.
+func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, selection factSelection, current bool) ([]factView, map[string]bool, []string, error) {
+	summarized := map[string]bool{}
 	expired := map[string]bool{}
+	raw := []string{}
 	rows, e := scopedRecords(r, "daily_summary", RecordQuery{Owners: permittedOwners(scope, f.Owner), Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: businessDay(f.Start), AtBefore: businessDay(f.End.Add(-time.Nanosecond)).AddDate(0, 0, 1)})
 	if e != nil {
-		return nil, nil, e
+		return nil, nil, nil, e
+	}
+	rowSessions := make([]string, 0, len(rows))
+	for _, row := range rows {
+		rowSessions = append(rowSessions, row.Session)
+	}
+	meta, err := loadSessionMeta(r, rowSessions, false, true, true)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	checked := map[string]bool{}
 	for _, row := range rows {
@@ -331,64 +402,82 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 			continue
 		}
 		checked[row.Session] = true
-		state, err := decode[summaryState](r, "summary_state", row.Session)
-		if err != nil && !errors.Is(err, ErrNotFound) {
-			return nil, nil, err
-		}
-		if state.RawExpired {
+		state, found := meta.state[row.Session]
+		switch {
+		case state.RawExpired:
 			expired[row.Session] = true
+			summarized[row.Session] = true
+		case current && found && summaryUsable(state, f.AsOf):
+			summarized[row.Session] = true
+		case current:
+			raw = append(raw, row.Session)
 		}
+	}
+	exact := summaryWindowExact(f)
+	hi := f.End
+	if f.AsOf.Before(hi) {
+		hi = f.AsOf
+	}
+	// One lookup per session, identity and visitor rather than per bucket row.
+	deadSessions, deadVisitors, resolved := meta.deleted, map[string]bool{}, map[string]string{}
+	tombstone := func(kind, id string, cache map[string]bool) (bool, error) {
+		dead, ok := cache[id]
+		if !ok {
+			var err error
+			if dead, err = tombstoned(r, kind, id); err != nil {
+				return false, err
+			}
+			cache[id] = dead
+		}
+		return dead, nil
 	}
 	by := map[string]*factView{}
 	for _, row := range rows {
-		if !expired[row.Session] || !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) {
+		if !summarized[row.Session] || !scope.Allows(row.Owner) || (f.Owner != "" && row.Owner != f.Owner) {
 			continue
 		}
-		dead, e := tombstoned(r, "deletion_session", row.Session)
-		if e != nil {
-			return nil, nil, e
-		}
-		if dead {
+		if deadSessions[row.Session] {
 			continue
 		}
 		var x DailySummary
 		if json.Unmarshal(row.Payload, &x) != nil {
-			return nil, nil, ErrUnavailable
+			return nil, nil, nil, ErrUnavailable
 		}
 		if x.Metric != MetricVersion {
 			continue
 		}
 		row.Visitor = x.OriginalVisitor
-		visitor := resolvedVisitorAt(r, row, f.AsOf)
+		identityKey := row.Session + "\x00" + row.Visitor
+		visitor, ok := resolved[identityKey]
+		if !ok {
+			visitor = resolvedVisitorAt(r, row, f.AsOf)
+			resolved[identityKey] = visitor
+		}
 		if !includes(selection.Visitors, visitor) {
 			continue
 		}
-		dead, e = tombstoned(r, "deletion", visitor)
+		dead, e := tombstone("deletion", visitor, deadVisitors)
 		if e != nil {
-			return nil, nil, e
+			return nil, nil, nil, e
 		}
 		if dead {
 			continue
 		}
-		if f.Content != "" && x.View.Content != f.Content {
+		if f.Content != "" && x.View.Content != f.Content || selection.View != "" && x.View.ID != selection.View {
 			continue
 		}
 		day, e := time.ParseInLocation("2006-01-02", x.Day, businessTimezone)
 		if e != nil {
-			return nil, nil, ErrUnavailable
+			return nil, nil, nil, ErrUnavailable
 		}
 		if !day.Before(f.End) || !day.AddDate(0, 0, 1).After(f.Start) {
 			continue
 		}
-		if x.BuiltAt.After(f.AsOf) {
-			return nil, nil, fail(409, "原始事件已过期，无法重建此历史收件快照")
+		if expired[row.Session] && x.BuiltAt.After(f.AsOf) {
+			return nil, nil, nil, fail(409, "原始事件已过期，无法重建此历史收件快照")
 		}
 		count := x.Count && within(x.View.Started, f)
 		visible := int64(0)
-		hi := f.End
-		if f.AsOf.Before(hi) {
-			hi = f.AsOf
-		}
 		for _, span := range x.Ranges {
 			a, b := span[0], span[1]
 			if a < f.Start.UnixMilli() {
@@ -401,15 +490,15 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 				visible += b - a
 			}
 		}
-		if !count && visible == 0 {
-			continue
-		}
 		key := row.Owner + "\x00" + visitor + "\x00" + row.Session + "\x00" + x.View.ID
 		v := by[key]
 		if v == nil {
-			v = &factView{PageView: x.View, Visitor: visitor, Owner: row.Owner, Session: row.Session, events: []Event{}}
+			// Raw reduction starts a PV's last observation at its start time.
+			v = &factView{PageView: x.View, Visitor: visitor, Owner: row.Owner, Session: row.Session, Last: x.View.Started, events: []Event{}}
 			v.Visible = 0
-			v.Flags = appendUnique(v.Flags, "raw_events_expired")
+			if expired[row.Session] {
+				v.Flags = appendUnique(v.Flags, "raw_events_expired")
+			}
 			by[key] = v
 		}
 		for _, flag := range x.View.Flags {
@@ -417,12 +506,18 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 		}
 		v.Count = v.Count || count
 		v.Visible += visible
-		last := x.Last
-		if !last.Before(f.End) {
-			last = f.End.Add(-time.Nanosecond)
+		// A bucket's last observation is its latest event or visible end that day.
+		// Raw reduction keeps in-window observations, and caps a fresh segment that
+		// continues past the window end at that end.
+		last := time.Time{}
+		if !x.Last.Before(f.Start) && x.Last.Before(f.End) && !x.Last.After(f.AsOf) {
+			last = x.Last
 		}
-		if last.After(f.AsOf) {
-			last = f.AsOf
+		if visible > 0 && (x.Spill && day.AddDate(0, 0, 1).Equal(f.End) || !exact && !x.Last.Before(f.End)) {
+			last = f.End.Add(-time.Nanosecond)
+			if last.After(f.AsOf) {
+				last = f.AsOf
+			}
 		}
 		if last.After(v.Last) {
 			v.Last = last
@@ -430,7 +525,9 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 	}
 	out := []factView{}
 	for _, v := range by {
-		out = append(out, *v)
+		if v.Count || v.Visible > 0 {
+			out = append(out, *v)
+		}
 	}
-	return out, expired, nil
+	return out, summarized, raw, nil
 }

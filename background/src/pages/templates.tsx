@@ -1724,7 +1724,8 @@ const Templates: React.FC = () => {
                                 <h3>添加模板</h3>
                                 <button className="modal-close" onClick={dismissTemplateEditor}>×</button>
                             </div>
-                            <fieldset className="modal-body" disabled={editorSaving}>
+                            <div className="modal-body">
+                            <fieldset className="modal-fields" disabled={editorSaving}>
                                 <div className="form-group">
                                     <label>名称 *</label>
                                     <input className="form-input" value={addFormData.name} onChange={(e) => updateAddForm(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
@@ -1825,6 +1826,7 @@ const Templates: React.FC = () => {
                                     </div>
                                 </div>
                             </fieldset>
+                            </div>
                             <div className="modal-footer">
                                 <button className="btn-secondary" onClick={dismissTemplateEditor}>取消</button>
                                 <button className="btn-primary" onClick={handleAddTemplate} disabled={uploading || editorSaving}>保存</button>
@@ -1841,7 +1843,8 @@ const Templates: React.FC = () => {
                                 <h3>编辑模板</h3>
                                 <button className="modal-close" onClick={dismissTemplateEditor}>×</button>
                             </div>
-                            <fieldset className="modal-body" disabled={templateWritesRef.current.has(selectedTemplate.id)}>
+                            <div className="modal-body">
+                            <fieldset className="modal-fields" disabled={templateWritesRef.current.has(selectedTemplate.id)}>
                                 <div className="form-group">
                                     <label>名称 *</label>
                                     <input className="form-input" value={editFormData.name} onChange={(e) => updateEditForm(f => ({ ...f, name: e.target.value }))} placeholder="模板名称" />
@@ -1974,6 +1977,7 @@ const Templates: React.FC = () => {
                                     </div>
                                 </div>
                             </fieldset>
+                            </div>
                             <div className="modal-footer">
                                 <button className="btn-secondary" onClick={dismissTemplateEditor}>取消</button>
                                 <button className="btn-primary" onClick={handleSaveEdit} disabled={uploading || editorSaving || templateWritesRef.current.has(selectedTemplate.id)}>保存</button>
@@ -2020,7 +2024,8 @@ const Templates: React.FC = () => {
                                 <h3>{selectedFeaturedGroup ? '编辑精选案例组' : '新建精选案例组'}</h3>
                                 <button className="modal-close" onClick={dismissFeaturedGroupEditor}>×</button>
                             </div>
-                            <fieldset className="modal-body" disabled={featuredGroupSaving}>
+                            <div className="modal-body">
+                            <fieldset className="modal-fields" disabled={featuredGroupSaving}>
                                 <div className="form-group">
                                     <label>组名称 *</label>
                                     <input
@@ -2107,6 +2112,7 @@ const Templates: React.FC = () => {
                                     />
                                 </div>
                             </fieldset>
+                            </div>
                             <div className="modal-footer">
                                 <button className="btn-secondary" onClick={dismissFeaturedGroupEditor}>取消</button>
                                 <button

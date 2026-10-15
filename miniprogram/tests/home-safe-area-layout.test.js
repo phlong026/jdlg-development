@@ -89,7 +89,7 @@ assert.equal(markup.split('<view class="content">')[1], oldMarkup.split('<view c
 const rules = value => new Map([...value.matchAll(/([^{}\n]+)\s*\{([^{}]*)\}/g)].map(match => [match[1].trim(), match[2].trim()]));
 const oldRules = rules(fs.readFileSync(path.join(original, 'index.scss'), 'utf8'));
 const newRules = rules(styles);
-const allowed = new Set(['.brand-backdrop::after', '.brand-symbol', '.brand-copy', '.brand-slogan', '.brand-name', '.brand-en', '.brand-slogan text', '.slogan-line', '.cost-title', '.estimate-note']);
+const allowed = new Set(['.brand-backdrop::after', '.brand-symbol', '.brand-copy', '.brand-slogan', '.brand-name', '.brand-en', '.brand-slogan text', '.slogan-line', '.cost-title', '.estimate-note', '.photo-hotspot', '.voice-hotspot']); // hotspots enlarged on purpose to fix missed taps
 for (const [selector, body] of oldRules) {
   if (!allowed.has(selector)) assert.equal(newRules.get(selector), body, `Protected style changed: ${selector}`);
 }
