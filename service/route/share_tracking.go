@@ -449,10 +449,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		}
 		v, e := svc.Publish(c.Request.Context(), sc(c), c.Param("id"), in.Revision, in.Preview, in.Key)
 		if e == nil {
-			if content, ok := v["content"].(tracking.Content); ok {
-				existing, _ := v["share_methods"].(map[string]any)
-				v["share_methods"] = trackingShareMethods(c.Request.Context(), svc, wechatAPI, sc(c), content, existing)
-			}
+			addPublishShareMethods(c.Request.Context(), svc, wechatAPI, sc(c), v)
 		}
 		trackingResponse(c, v, e)
 	})
@@ -606,6 +603,43 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 // bounds one HTTP request to a few tens of thousands of rows.
 const trackingDeletionPagesPerRequest = 60
 
+// publishedContent reads the content out of a publish result. A first publish
+// carries the typed value, but an idempotent replay returns the stored
+// publication, whose content is decoded JSON, so both shapes are accepted.
+func publishedContent(result map[string]any) (tracking.Content, bool) {
+	var content tracking.Content
+	switch value := result["content"].(type) {
+	case tracking.Content:
+		content = value
+	case map[string]any:
+		raw, err := json.Marshal(value)
+		if err != nil || json.Unmarshal(raw, &content) != nil {
+			return tracking.Content{}, false
+		}
+	default:
+		return tracking.Content{}, false
+	}
+	return content, content.ID != "" && content.Version > 0
+}
+
+// addPublishShareMethods adds the operator's share methods to a publish result.
+// It runs for a replay too: when the first response was lost or timed out after
+// the publication committed, the retry must still be able to return the link.
+func addPublishShareMethods(ctx context.Context, svc *tracking.Service, api *tracking.WechatAPI, scope tracking.Scope, result map[string]any) {
+	content, ok := publishedContent(result)
+	if !ok {
+		return
+	}
+	existing, _ := result["share_methods"].(map[string]any)
+	result["share_methods"] = trackingShareMethods(ctx, svc, api, scope, content, existing)
+}
+
+// trackingPublishLinkTimeout bounds the WeChat call made after a publish has
+// already committed. The operator is waiting on this response, and a retry of the
+// publish returns the same link, so a slow WeChat is cut off early rather than
+// left to hold the request for the full interactive limit.
+var trackingPublishLinkTimeout = 10 * time.Second // a variable only so a test can shorten it
+
 // trackingShareMethods lists what the operator can use right after a publish.
 // The publish already succeeded, so a failure here is reported as a message and
 // never fails the request.
@@ -619,7 +653,7 @@ func trackingShareMethods(ctx context.Context, svc *tracking.Service, api *track
 		methods["message"] = "真实微信码由服务端按需请求，加载失败表示权限或配置尚未通过"
 	}
 	if trackingURLLinkEnabled() {
-		linkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		linkCtx, cancel := context.WithTimeout(ctx, trackingPublishLinkTimeout)
 		defer cancel()
 		link, err := trackingURLLink(linkCtx, svc, api, miniprogramCredentials(), scope, content.ID, content.Version)
 		if err != nil {

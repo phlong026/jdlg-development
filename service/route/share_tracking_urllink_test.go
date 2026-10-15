@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"service/config"
 	"service/model"
 	"service/tracking"
 )
@@ -31,6 +32,7 @@ type urlLinkWorld struct {
 	tokens    int
 	links     []map[string]any
 	linkOut   string
+	linkDelay time.Duration
 }
 
 func newURLLinkWorld(t *testing.T) *urlLinkWorld {
@@ -45,6 +47,7 @@ func newURLLinkWorld(t *testing.T) *urlLinkWorld {
 			w.tokens++
 			io.WriteString(rw, `{"access_token":"tok"}`)
 		case "/wxa/generate_urllink":
+			time.Sleep(w.linkDelay)
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			w.links = append(w.links, body)
@@ -309,5 +312,112 @@ func TestTrackingWechatAPISharesTheMiniprogramTokenCache(t *testing.T) {
 	}
 	if bare := newTrackingWechatAPI(wechatCredentials{}); len(bare.SharedTokens) != 0 {
 		t.Fatalf("no mini-program app configured, nothing to share: %v", bare.SharedTokens)
+	}
+}
+
+// withMiniprogramCredentials gives the test process the mini-program credentials
+// that trackingShareMethods reads from global configuration.
+func withMiniprogramCredentials(t *testing.T) {
+	t.Helper()
+	wx := &config.Get().Wechat
+	saved := *wx
+	wx.AppID, wx.AppSecret = "app-id", "app-secret"
+	t.Cleanup(func() { *wx = saved })
+}
+
+// publishAgain publishes a fresh draft and then repeats the identical request, as
+// a client does when the first response was lost. It returns both results.
+func (w *urlLinkWorld) publishTwice(title string) (first, replay map[string]any) {
+	w.t.Helper()
+	ctx := context.Background()
+	saved, err := w.svc.SaveContent(ctx, w.scope, "", tracking.Draft{Title: title, Body: "正文内容", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	preview, err := w.svc.Preview(ctx, w.scope, saved.ID, saved.Revision)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	token := preview["preview_token"].(string)
+	if first, err = w.svc.Publish(ctx, w.scope, saved.ID, saved.Revision, token, "publish-key-retry"); err != nil {
+		w.t.Fatal(err)
+	}
+	if replay, err = w.svc.Publish(ctx, w.scope, saved.ID, saved.Revision, token, "publish-key-retry"); err != nil {
+		w.t.Fatal(err)
+	}
+	return first, replay
+}
+
+// When the first publish response is lost, the client retries with the same
+// idempotency key. The service answers from the stored publication, whose content
+// is decoded JSON rather than a typed value, and that retry must still return the
+// URL Link instead of silently dropping it.
+func TestPublishRetryStillReturnsTheURLLink(t *testing.T) {
+	w := newURLLinkWorld(t)
+	withMiniprogramCredentials(t)
+	first, replay := w.publishTwice("重试发布的文章")
+	if _, typed := first["content"].(tracking.Content); !typed {
+		t.Fatalf("test premise: a first publish carries typed content, got %T", first["content"])
+	}
+	if _, typed := replay["content"].(tracking.Content); typed {
+		t.Fatalf("test premise: a replay carries decoded content, got %T", replay["content"])
+	}
+	for name, result := range map[string]map[string]any{"first publish": first, "replay": replay} {
+		addPublishShareMethods(context.Background(), w.svc, w.api, w.scope, result)
+		methods, _ := result["share_methods"].(gin.H)
+		if methods["url_link"] != "https://wxaurl.cn/link-1" || methods["route_key"] != trackingReaderRoute {
+			t.Fatalf("%s: the link or the stored share fields are missing: %v", name, result["share_methods"])
+		}
+	}
+	if len(w.links) != 1 {
+		t.Fatalf("the retry must reuse the cached link, but WeChat generated %d", len(w.links))
+	}
+}
+
+func TestPublishedContentAcceptsTypedAndDecodedResults(t *testing.T) {
+	typed := map[string]any{"content": tracking.Content{ID: "c-1", Version: 2}}
+	if c, ok := publishedContent(typed); !ok || c.ID != "c-1" || c.Version != 2 {
+		t.Fatalf("typed content: %+v %v", c, ok)
+	}
+	decoded := map[string]any{"content": map[string]any{"content_id": "c-2", "version": float64(3)}}
+	if c, ok := publishedContent(decoded); !ok || c.ID != "c-2" || c.Version != 3 {
+		t.Fatalf("decoded content: %+v %v", c, ok)
+	}
+	for name, bad := range map[string]map[string]any{
+		"missing":    {},
+		"wrong type": {"content": "c-3"},
+		"no id":      {"content": map[string]any{"version": float64(1)}},
+		"draft":      {"content": map[string]any{"content_id": "c-4", "version": float64(0)}},
+		"bad field":  {"content": map[string]any{"content_id": "c-5", "version": "one"}},
+	} {
+		if c, ok := publishedContent(bad); ok {
+			t.Errorf("%s: accepted %+v", name, c)
+		}
+	}
+	untouched := map[string]any{"revision": 1}
+	addPublishShareMethods(context.Background(), nil, nil, tracking.Scope{}, untouched)
+	if _, added := untouched["share_methods"]; added {
+		t.Fatalf("a result without content must be left alone: %v", untouched)
+	}
+}
+
+// The publish already committed, so a slow WeChat must be cut off early and
+// reported as a message rather than holding the operator's request.
+func TestPublishLinkIsCutOffWhenWechatIsSlow(t *testing.T) {
+	w := newURLLinkWorld(t)
+	withMiniprogramCredentials(t)
+	saved := trackingPublishLinkTimeout
+	trackingPublishLinkTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { trackingPublishLinkTimeout = saved })
+	w.linkDelay = 400 * time.Millisecond
+	first, _ := w.publishTwice("慢速微信的文章")
+	started := time.Now()
+	addPublishShareMethods(context.Background(), w.svc, w.api, w.scope, first)
+	if elapsed := time.Since(started); elapsed > 300*time.Millisecond {
+		t.Fatalf("the publish response waited %v for WeChat", elapsed)
+	}
+	methods, _ := first["share_methods"].(gin.H)
+	if methods["url_link"] != nil || methods["message"] != "URL Link生成失败，请稍后重试" {
+		t.Fatalf("a timeout must be reported as a message only: %v", first["share_methods"])
 	}
 }

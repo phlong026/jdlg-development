@@ -10,6 +10,7 @@
 - 权限与微信码一致：开启开关、对素材归属有管理权限、该版本已发布且可读。服务端不接收调用方给出的路径或参数。
 - 有效期 29 天，早于分享令牌的 30 天到期。链接按账号、素材、版本、环境和 UTC 日缓存在 `TRACKING_MEDIA_DIR`，原子写入，同一天重复请求不重复生成。
 - 发布后在 `share_methods.url_link` 返回，后台编辑页已有“复制已核验 URL Link”按钮；生成失败只在 `message` 中说明，不影响发布。
+- 发布已经提交之后才调用微信，所以这一步最多等 10 秒，超时只在 `message` 中说明，不影响发布。如果发布响应丢失、客户端用同一个幂等标识重试，重试同样会返回 URL Link（同一天内复用已缓存的链接，不重复调用微信）。
 - 接口是 `POST /contents/:id/url-link?version=N`，不是 GET：生成会创建分享并消耗微信额度，必须带管理端写操作的来源校验（`X-Tracking-Request: 1` 与同源 `Origin`），且每个账号每分钟最多 20 次（超出 429）。
 - **access_token 不会每次重新申请。** 微信每个应用同一时刻只认一个有效 token，重复申请会让旧 token 在宽限期后失效。小程序的 token 与支付、用户资料、小程序码等功能共用 `function.GetAccessToken` 的进程内缓存，追踪不单独申请；公众号的 token 由追踪客户端自己缓存，到期前 5 分钟刷新，凭据轮换会换新 token，失败不缓存。
 
@@ -51,7 +52,7 @@
 | `TRACKING_MP_APPID` / `TRACKING_MP_SECRET` | 是 | **公众号自己的**凭据，不能用小程序的 |
 | `TRACKING_MP_OWNER` | 是 | 同步草稿的跟进归属 ID |
 | `TRACKING_MP_ACTOR` | 是 | 执行同步的后台账号 ID，须有该归属的 manage 授权 |
-| `TRACKING_MP_RIGHTS` | 否 | `own`（默认）或 `authorized`，即对这些文章的权属声明 |
+| `TRACKING_MP_RIGHTS` | 是 | `own`（自有）或 `authorized`（已获授权），即对这些文章的权属声明。**没有默认值**：它会写进每篇草稿和审计记录，必须由负责人明确声明；未配置时同步保持关闭，并在日志和 `GET /mp-sync` 中提示 |
 | `TRACKING_MP_MAX_ARTICLES` | 否 | 每次读取最新多少篇，1–200，默认 30 |
 | `TRACKING_MP_IMPORT_IMAGES=true` | 否 | 导入封面和正文配图，默认关闭，需要 `TRACKING_MEDIA_DIR` |
 | `TRACKING_MP_SYNC_INTERVAL_MINUTES` | 否 | 0 或不填：仅手动；否则 15–1440 分钟自动同步一次 |
