@@ -72,6 +72,10 @@ type MPSyncResult struct {
 	FinishedAt time.Time       `json:"finished_at"`
 	Counts     MPSyncCounts    `json:"counts"`
 	Problems   []MPSyncProblem `json:"problems"`
+	// StateSaveFailed reports that the run finished but its record (the "last run"
+	// the operator sees, and its audit entry) could not be written. The drafts and
+	// counts are real either way, so this is a notice, not a failed run.
+	StateSaveFailed bool `json:"state_save_failed,omitempty"`
 }
 
 // MPSyncState is what the operator sees about the latest run.
@@ -217,8 +221,11 @@ func (s *Service) SyncOfficialAccount(ctx context.Context, scope Scope, cfg MPSy
 		}
 	}
 	res.FinishedAt = s.Now()
-	if recordErr := s.recordMPSync(ctx, scope, cfg, res, err); recordErr != nil && err == nil {
-		err = recordErr
+	// The drafts are already written. A failure to record the run must not turn a
+	// finished sync into an error that hides its counts, so it is reported on the
+	// result instead.
+	if recordErr := s.recordMPSync(ctx, scope, cfg, res, err); recordErr != nil {
+		res.StateSaveFailed = true
 	}
 	return res, err
 }

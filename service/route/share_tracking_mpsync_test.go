@@ -89,6 +89,7 @@ type routeFakeSource struct {
 	err      error
 	block    chan struct{}
 	calls    int
+	after    func() // runs once the articles are listed, e.g. to cut the request off
 }
 
 func (f *routeFakeSource) Articles(ctx context.Context, limit int) ([]tracking.MPArticle, error) {
@@ -101,6 +102,9 @@ func (f *routeFakeSource) Articles(ctx context.Context, limit int) ([]tracking.M
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
+	}
+	if f.after != nil {
+		f.after()
 	}
 	return f.articles, f.err
 }
@@ -297,5 +301,42 @@ func TestMPMediaStoreAppliesTheUploadChecks(t *testing.T) {
 	t.Setenv("TRACKING_MEDIA_DIR", "relative/path")
 	if _, err := store(ctx, "owner-a", testPNG(t, 5, 5), "x"); err == nil {
 		t.Fatal("stored media without a protected absolute directory")
+	}
+}
+
+// A manual run cut off part-way has already saved what it handled. The operator
+// must be told that, with the counts, rather than get a generic "unavailable"
+// that suggests nothing happened, and the interrupted run must still be recorded.
+func TestMPSyncManualRunInterruptedSaysWhatWasSaved(t *testing.T) {
+	manager := tracking.Scope{Tenant: "tenant-a", Actor: 9, Owners: []string{"owner-a"}, View: true, Manage: true}
+	w := newMPWorld(t, manager)
+	w.source.articles = []tracking.MPArticle{
+		{ID: "pub-1#0", Title: "文章一", HTML: "<p>正文一</p>", URL: "https://mp.weixin.qq.com/s/a1"},
+		{ID: "pub-2#0", Title: "文章二", HTML: "<p>正文二</p>", URL: "https://mp.weixin.qq.com/s/a2"},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.source.after = cancel // the request is cut off as soon as the articles are listed
+	rec := httptest.NewRecorder()
+	w.router.ServeHTTP(rec, httptest.NewRequest("POST", "/mp-sync", nil).WithContext(ctx))
+	var body map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	message, _ := body["msg"].(string)
+	if rec.Code != 504 || !strings.Contains(message, "读取 2 篇") || !strings.Contains(message, "已保存") || !strings.Contains(message, "下次同步继续") {
+		t.Fatalf("an interrupted run must say what it did, got %d %q", rec.Code, message)
+	}
+	code, status := w.call("GET")
+	last, _ := status["data"].(map[string]any)["last_run"].(map[string]any)
+	if code != 200 || last == nil || last["ok"] != false || !strings.Contains(last["error"].(string), "中断") {
+		t.Fatalf("the interrupted run must still be recorded: %d %v", code, status)
+	}
+}
+
+func TestInterruptedSyncMessageStatesTheCounts(t *testing.T) {
+	got := interruptedSyncMessage(tracking.MPSyncCounts{Fetched: 30, Created: 4, Updated: 2, Unchanged: 9})
+	for _, want := range []string{"读取 30 篇", "新建 4", "更新 2", "无变化 9", "已处理的文章已保存"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q is missing %q", got, want)
+		}
 	}
 }

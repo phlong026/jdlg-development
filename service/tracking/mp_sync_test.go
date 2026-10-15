@@ -570,3 +570,47 @@ func TestMPSyncSettlesAMappingWrittenBeforePicturesWereTracked(t *testing.T) {
 		t.Fatalf("the article must settle as complete, got %q", stateOf())
 	}
 }
+
+// failMPStateStore fails only the write of the "last run" record, which is
+// the final step of a sync, after every draft has already been saved.
+type failMPStateStore struct{ Store }
+type failMPStateRepo struct{ Repository }
+
+func (s failMPStateStore) Transaction(ctx context.Context, tenant string, fn func(Repository) error) error {
+	return s.Store.Transaction(ctx, tenant, func(r Repository) error { return fn(failMPStateRepo{r}) })
+}
+
+func (r failMPStateRepo) Put(row Record) error {
+	if row.Kind == "mp_sync_state" {
+		return errors.New("state storage unavailable")
+	}
+	return r.Repository.Put(row)
+}
+
+// Bookkeeping that fails after the work is done must not turn a finished sync
+// into an error that hides its counts: the operator would see a failure while
+// the drafts exist.
+func TestMPSyncReportsFinishedWorkWhenItsRecordCannotBeSaved(t *testing.T) {
+	s, scope, cfg := mpFixture(t)
+	source := s.Store
+	s.Store = failMPStateStore{source}
+	src := &fakeMPSource{articles: []MPArticle{mpArticle(1, "<p>第一篇</p>"), mpArticle(2, "<p>第二篇</p>")}}
+	res, err := s.SyncOfficialAccount(context.Background(), scope, cfg, src, nil, nil)
+	if err != nil {
+		t.Fatalf("a finished run must not become an error because its record failed: %v", err)
+	}
+	if res.Counts.Created != 2 || !res.StateSaveFailed {
+		t.Fatalf("the counts and the notice must both reach the caller: %+v", res)
+	}
+	s.Store = source
+	if len(listContents(t, s)) != 2 {
+		t.Fatal("the drafts were not saved")
+	}
+	if _, found, _ := s.MPSyncStatus(context.Background(), scope, "owner-a"); found {
+		t.Fatal("test premise: no run record was written")
+	}
+	// A run whose record is saved never carries the notice.
+	if again := syncOnce(t, s, scope, cfg, src, nil); again.StateSaveFailed {
+		t.Fatalf("a recorded run must not report a save failure: %+v", again)
+	}
+}

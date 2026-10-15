@@ -130,7 +130,11 @@ func (m *mpSyncRunner) Run(ctx context.Context, manual bool) (tracking.MPSyncRes
 	if m.settings.Config.ImportImages && m.mediaStore != nil {
 		store = m.mediaStore(scope)
 	}
-	return m.svc.SyncOfficialAccount(ctx, scope, m.settings.Config, m.source, m.fetcher, store)
+	res, err := m.svc.SyncOfficialAccount(ctx, scope, m.settings.Config, m.source, m.fetcher, store)
+	if res.StateSaveFailed {
+		log.Printf("[Tracking] official account sync finished but its run record could not be saved; the drafts are unaffected")
+	}
+	return res, err
 }
 
 // Loop runs a sync every interval until ctx ends. It starts after a short random
@@ -231,6 +235,12 @@ func trackingMPMediaStore(svc *tracking.Service, scope tracking.Scope) tracking.
 	}
 }
 
+// interruptedSyncMessage tells the operator what a stopped run had already done.
+// Articles not reached are picked up by the next run.
+func interruptedSyncMessage(counts tracking.MPSyncCounts) string {
+	return "同步被中断（超时或连接断开）。已处理的文章已保存：读取 " + strconv.Itoa(counts.Fetched) + " 篇，新建 " + strconv.Itoa(counts.Created) + "、更新 " + strconv.Itoa(counts.Updated) + "、无变化 " + strconv.Itoa(counts.Unchanged) + "；其余将在下次同步继续"
+}
+
 // mpSyncVisible says whether the caller may see and trigger the sync.
 func mpSyncVisible(settings mpSyncSettings, scope tracking.Scope) bool {
 	return settings.Enabled && scope.Manage && scope.Allows(settings.Config.Owner)
@@ -276,6 +286,10 @@ func registerMPSyncRoutes(group *gin.RouterGroup, svc *tracking.Service, runner 
 		case errors.As(err, &wechat):
 			log.Printf("[Tracking] official account sync: wechat errcode %d", wechat.Code)
 			err = &tracking.Error{Status: 502, Message: "公众号接口返回错误（错误码 " + strconv.Itoa(wechat.Code) + "），请核对账号是否已认证并具备发布接口权限"}
+		case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled):
+			// The articles handled before the stop are saved. Say so, with the counts,
+			// instead of a generic "unavailable" that suggests nothing happened.
+			err = &tracking.Error{Status: 504, Message: interruptedSyncMessage(result.Counts)}
 		}
 		trackingResponse(c, result, err)
 	})
