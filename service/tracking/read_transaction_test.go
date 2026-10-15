@@ -268,3 +268,32 @@ func TestIntentEvaluationsSkipVisitorsDeletedAfterSnapshot(t *testing.T) {
 		return nil
 	})
 }
+
+// The CRM bridge's own client allows 20 seconds, so a bridge that hangs would
+// hold the operator's request that long. Linking must give up sooner.
+func TestLinkCRMStopsWaitingForAHungBridge(t *testing.T) {
+	s, _, scope := crmProbeFixture(t)
+	saved := crmLinkVerifyTimeout
+	crmLinkVerifyTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { crmLinkVerifyTimeout = saved })
+	sawDeadline := false
+	s.VerifyCRM = func(ctx context.Context, _ Scope, _, _, _ string) error {
+		_, sawDeadline = ctx.Deadline()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	started := time.Now()
+	err := s.LinkCRM(context.Background(), scope, "u:1", "customer-1", "B-1", "verified")
+	if err == nil {
+		t.Fatal("a bridge that never answered must not produce a mapping")
+	}
+	if !sawDeadline || time.Since(started) > 2*time.Second {
+		t.Fatalf("the verification must carry a deadline and return promptly: deadline=%v after %v", sawDeadline, time.Since(started))
+	}
+	_ = s.readTransaction(context.Background(), func(r Repository) error {
+		if _, e := r.Get("crm", privateKey("owner-a", "u:1")); !errors.Is(e, ErrNotFound) {
+			t.Fatalf("a timed-out verification left a mapping: %v", e)
+		}
+		return nil
+	})
+}

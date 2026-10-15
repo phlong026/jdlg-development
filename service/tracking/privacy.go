@@ -38,6 +38,12 @@ func privateOwner(r Repository, scope Scope, key string) (string, error) {
 	}
 	return "", ErrUnavailable
 }
+
+// crmLinkVerifyTimeout bounds the CRM check made when an operator links a visitor
+// to a customer. It is one explicit action, so it allows more than the 2 seconds
+// VisitorCRMTarget uses while drawing a list. A variable only so a test can shorten it.
+var crmLinkVerifyTimeout = 5 * time.Second
+
 func (s *Service) LinkCRM(ctx context.Context, scope Scope, key, customer, businessNumber, basis string) error {
 	if e := s.authorizeView(scope); e != nil {
 		return e
@@ -57,9 +63,12 @@ func (s *Service) LinkCRM(ctx context.Context, scope Scope, key, customer, busin
 	}); e != nil {
 		return e
 	}
-	// The CRM bridge is an external HTTP call (up to its client timeout). It must
-	// not run while holding the serialized tenant lock that fact acceptance needs.
-	if e := s.VerifyCRM(ctx, ownerScope(scope, owner), key, customer, businessNumber); e != nil {
+	// The CRM bridge is an external HTTP call. It must not run while holding the
+	// serialized tenant lock that fact acceptance needs, and it must not hold the
+	// operator's request for as long as the bridge's own 20 second client timeout.
+	verifyCtx, cancel := context.WithTimeout(ctx, crmLinkVerifyTimeout)
+	defer cancel()
+	if e := s.VerifyCRM(verifyCtx, ownerScope(scope, owner), key, customer, businessNumber); e != nil {
 		return e
 	}
 	return s.queryTransaction(ctx, func(r Repository) error {

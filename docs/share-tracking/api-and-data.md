@@ -40,7 +40,7 @@
 - `GET /contents/:id/code?version=N`：仅真实微信码开关及配置齐备时调用官方接口，超时/权限失败明确报错；不是伪造二维码。URL Link见下一条。
 - `POST /contents/:id/url-link?version=N`：会创建分享并占用微信生成额度，所以是写操作，而不是 GET：与管理端其他写接口一样要求 `X-Tracking-Request: 1` 头和同源 `Origin`（预取、图片标签、链接扫描器无法触发），且每个账号每分钟最多 20 次，超出返回 429。需TRACKING_WECHAT_URLLINK_ENABLED=true、对该素材归属有管理权限且该版本已发布；调用官方 generate_urllink 返回 `{url_link, expires_at}`，链接带该账号当日新建的分享令牌，有效期29天（早于令牌到期）。发布接口在开启后也会在 `share_methods.url_link` 返回。生成失败只返回说明，不影响发布。
 - `GET /mp-sync`、`POST /mp-sync`：需TRACKING_MP_SYNC_ENABLED=true及对配置归属的管理权限。GET返回配置摘要与最近一次同步结果（含 `publishes:false`）；POST立即同步一次（同一进程内同时只运行一次，手动触发间隔不少于1分钟，运行期间返回409，过于频繁返回429），返回各项计数与最多20条未同步原因。同步只生成或更新草稿，不发布、不撤回、不覆盖人工修改。
-- `POST /identity-links`、`DELETE /identity-links/:visitor`：明确依据、业务ID/编号、专门权限，必须经过当前操作者可信CRM接口的目标权限验证。
+- `POST /identity-links`、`DELETE /identity-links/:visitor`：明确依据、业务ID/编号、专门权限，必须经过当前操作者可信CRM接口的目标权限验证。关联时对CRM接口的核验最多等待5秒（列表里读取已有关联时为2秒），超时按核验失败处理、不写入映射。
 - `POST /intent-overrides`：等级、原因和≤30天有效期；仅专门规则权限。完整人工决定追加不可变历史并可按 as_of 回放，访客游标另绑定覆盖 revision；标签是跟进参考，不是购买概率。
 - `POST /deletions`：专门权限和原因；删除当前系统可控事实/映射，保留防重放墓碑；外部导出和备份治理另行核验，不虚称全副本即时清除。返回 `status`：`completed` 表示全部删除完成；`in_progress` 表示数据量超出单事务预算，已不可读取但未删完，重复同一请求继续。其他值或错误都不能当作完成。细节见 [权限、保留及删除维护](governance-maintenance.md)。
 - `GET /diagnostics/rejections?days=7`：需要查看权限；返回已授权归属最近 1–90 个 UTC 自然日、因事件时间超窗被拒的事件计数，按天倒序。`counts` 的键：`clock_ahead`（设备时间超前服务器 2 分钟以上）、`clock_behind`（事件早于本会话服务端开始时间 2 分钟以上）、`stale_queue`（离线队列超过 72 小时）。SDK 会丢弃被拒事件，所以计数持续增长说明有设备时钟偏差或积压，该用户在列表中会表现为“没有访问记录”。只含归属、日期和计数，不含访客、会话或事件标识。
