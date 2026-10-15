@@ -63,7 +63,12 @@
         "value": "assets/smart-service-icon.png"
       }
     ],
-    "include": []
+    "include": [
+      {
+        "type": "folder",
+        "value": "assets/share"
+      }
+    ]
   },
   "appid": "wx94fdc48861913ede"
 }

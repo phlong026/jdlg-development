@@ -16,6 +16,7 @@ import {
 } from '../../utils/enterpriseWechat'
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
+const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手'
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()
@@ -63,6 +64,12 @@ Page({
   onLoad() {
     this.syncBrandSafeArea();
     this.showHomeIntroPopupOnce();
+    wx.showShareMenu({
+      menus: ['shareAppMessage', 'shareTimeline'],
+      fail: (error) => {
+        console.warn('首页分享菜单开启失败', error);
+      },
+    });
   },
   syncBrandSafeArea() {
     if (typeof (wx as any).getWindowInfo !== 'function') return;
@@ -83,8 +90,16 @@ Page({
   },
   onShareAppMessage() {
     return {
-      title: '甲第灵光 · AI设计助手',
+      title: HOME_SHARE_TITLE,
       path: '/pages/index/index',
+      imageUrl: '/assets/share/home-chat.jpg',
+    };
+  },
+  onShareTimeline() {
+    return {
+      title: HOME_SHARE_TITLE,
+      query: '',
+      imageUrl: '/assets/share/home-timeline.jpg',
     };
   },
   onOpenPage(e: any) {

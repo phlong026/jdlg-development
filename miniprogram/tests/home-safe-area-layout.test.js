@@ -37,6 +37,7 @@ function pageFor(windowInfo, getWindowInfo) {
     getStorageSync: () => true,
     navigateTo: options => { route = options.url; },
     showToast() {},
+    showShareMenu() {},
   };
   if (windowInfo) wx.getWindowInfo = () => windowInfo;
   if (getWindowInfo) wx.getWindowInfo = getWindowInfo;
