@@ -1,9 +1,10 @@
 import { reportPageLoadError } from '../utils/pageLoadError';
-import React, { useEffect, useRef, useState } from 'react';
-import { FiAlertCircle, FiEye, FiRefreshCw, FiRotateCcw, FiSearch,
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FiAlertCircle, FiChevronDown, FiEye, FiFilter, FiRefreshCw, FiRotateCcw, FiSearch,
     FiDownload,
 } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useIsMobile } from '../component/useIsMobile';
 import {
     advanceVirtualPayOrder,
     createOrderSupportTicket,
@@ -240,6 +241,11 @@ const OrderCenter: React.FC = () => {
     const [refundPreviewError, setRefundPreviewError] = useState('');
     const refundPreviewRequestId = useRef(0);
     const refundPreviewTargetId = useRef<number | null>(null);
+    // 移动端适配：筛选默认收进「筛选」按钮，资金总览默认收起；桌面端不受影响
+    const isMobile = useIsMobile();
+    const [showMobileFilters, setShowMobileFilters] = useState(false);
+    // null = 用户未动过，跟随视口（桌面展开/手机收起）；用户手动展开或收起后锁定其选择
+    const [kpiUserChoice, setKpiUserChoice] = useState<boolean | null>(null);
     const renderedRefundPreviewRequestId = refundPreviewRequestId.current;
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -382,24 +388,30 @@ const OrderCenter: React.FC = () => {
     }, [searchParams]);
 
     // 详情抽屉打开时拉取该订单的微信推送日志（关联记录，一次轻量查询）
+    const [detailLogsError, setDetailLogsError] = useState('');
+    const loadDetailLogs = useCallback(async (orderNo: string) => {
+        try {
+            const data = await getXPayLogs({ keyword: orderNo, page: 1, page_size: 10 });
+            setDetailLogs(data.list || []);
+            setDetailLogsError('');
+        } catch (error: any) {
+            // 失败要与"确实没有推送"区分开：此前失败也被渲染成"暂无推送记录（无需担心）"，误导运营
+            const message = error?.message || '网络异常，请稍后重试';
+            setDetailLogs([]);
+            setDetailLogsError(message);
+            console.error('加载订单推送日志失败:', error);
+        }
+    }, []);
     useEffect(() => {
         if (!showDetailModal || !selectedDetail?.order?.order_no) {
             return;
         }
-        let cancelled = false;
-        void (async () => {
-            try {
-                const data = await getXPayLogs({ keyword: selectedDetail.order.order_no, page: 1, page_size: 10 });
-                if (!cancelled) setDetailLogs(data.list || []);
-            } catch (error) {
-                console.error('加载订单推送日志失败:', error);
-                if (!cancelled) setDetailLogs([]);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [showDetailModal, selectedDetail?.order?.order_no]);
+        setDetailLogsError('');
+        void loadDetailLogs(selectedDetail.order.order_no);
+    }, [showDetailModal, selectedDetail?.order?.order_no, loadDetailLogs]);
 
     const handleSearch = () => {
+        setShowMobileFilters(false);
         setCurrentPage(1);
         void loadOrders(buildOrderQueryParams({ page: 1 }));
     };
@@ -612,6 +624,14 @@ const OrderCenter: React.FC = () => {
     };
 
     const detailOrder = selectedDetail?.order;
+    // 「筛选」按钮角标：非默认条件的数量，提醒手机端有筛选在生效
+    const activeFilterCount = [
+        searchKeyword.trim() !== '',
+        typeFilter !== 'all',
+        categoryFilter !== 'all',
+        payChannelFilter !== 'all',
+        dateRange.start !== '' || dateRange.end !== '',
+    ].filter(Boolean).length;
 
     return (
         <>
@@ -633,7 +653,7 @@ const OrderCenter: React.FC = () => {
                                 className="search-input"
                             />
                         </div>
-                        <div className="filters">
+                        <div className={`filters mobile-collapsible ${showMobileFilters ? 'is-open' : ''}`}>
                             <select className="filter-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
                                 <option value="all">全部类型</option>
                                 <option value="recharge">充值</option>
@@ -673,7 +693,7 @@ const OrderCenter: React.FC = () => {
                             />
                         </div>
                     </div>
-                    <div className="toolbar-right">
+                    <div className={`toolbar-right mobile-collapsible ${showMobileFilters ? 'is-open' : ''}`}>
                         <button className={`btn-secondary ${onlyExceptions ? 'is-active' : ''}`} onClick={handleToggleExceptions} disabled={loading} aria-pressed={onlyExceptions}>
                             <FiAlertCircle />
                             {onlyExceptions ? '查看全部' : '仅看异常单'}
@@ -707,6 +727,15 @@ const OrderCenter: React.FC = () => {
                             {loading ? '刷新中...' : '重置并刷新'}
                         </button>
                     </div>
+                    <button
+                        type="button"
+                        className="btn-secondary mobile-filter-toggle"
+                        aria-expanded={showMobileFilters}
+                        onClick={() => setShowMobileFilters((value) => !value)}
+                    >
+                        <FiFilter />
+                        筛选{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
+                    </button>
                 </div>
 
                 <div className="order-summary-banner">
@@ -731,8 +760,18 @@ const OrderCenter: React.FC = () => {
                     </div>
                 </div>
 
-                {/* 全站资金统计带（G1）：口径全局，不随列表筛选变化；已消费 = 微信侧在账 − 本地可用 */}
-                <div className="order-center-stats fund-kpi-band">
+                {/* 全站资金统计带（G1）：口径全局，不随列表筛选变化；已消费 = 微信侧在账 − 本地可用。
+                    手机端默认收起成一行摘要（含今日充值），展开才看全部指标与口径说明；桌面端常开不受影响 */}
+                <details
+                    className="fund-kpi-wrap"
+                    open={kpiUserChoice ?? !isMobile}
+                    onToggle={(event) => setKpiUserChoice((event.target as HTMLDetailsElement).open)}
+                >
+                    <summary className="fund-kpi-summary">
+                        <span>资金总览{fundStats ? ` · 今日充值 ¥${(fundStats.today_recharge_fen / 100).toFixed(2)}` : ''}</span>
+                        <FiChevronDown className="fund-kpi-caret" aria-hidden />
+                    </summary>
+                    <div className="order-center-stats fund-kpi-band">
                     <div className="stat-item">
                         <span className="stat-label">今日充值（元）</span>
                         <span className="stat-value">¥{(((fundStats?.today_recharge_fen) || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -769,7 +808,13 @@ const OrderCenter: React.FC = () => {
                         <span className="stat-value is-danger">{fundStats?.exception_count ?? '-'}</span>
                         <span className="stat-sub">失败 + 待处理 + 卡发货/卡退款</span>
                     </button>
-                </div>
+                    </div>
+
+                    <div className="order-tip-card">
+                        <strong>说明：</strong>
+                        <span>订单数值按业务语义展示：支付金额列（元）为用户实付人民币；灵石列为到账/消耗数量。"微信侧在账"是该用户在微信虚拟支付账本中的代币余额（本地镜像），点击订单详情可看完整资金视图。</span>
+                    </div>
+                </details>
 
                 {/* 状态 Tab（G2）：计数为当前筛选（忽略状态维度）下的各状态数量 */}
                 <div className="status-tabs" role="tablist">
@@ -812,11 +857,82 @@ const OrderCenter: React.FC = () => {
                     ) : null}
                 </div>
 
-                <div className="order-tip-card">
-                    <strong>说明：</strong>
-                    <span>订单数值按业务语义展示：支付金额列（元）为用户实付人民币；灵石列为到账/消耗数量。"微信侧在账"是该用户在微信虚拟支付账本中的代币余额（本地镜像），点击订单详情可看完整资金视图。</span>
-                </div>
-
+                {isMobile ? (
+                    /* 手机端：卡片列表。390px 塞不下 12 列表格（横滑 4 屏、关键列全在屏外），
+                       卡片首屏直接给出金额/状态/用户/时间，订单号点击跳虚拟支付详情 */
+                    <div className="order-card-list">
+                        {records.length === 0 ? (
+                            <div className="empty-state">暂无订单记录</div>
+                        ) : records.map((record) => {
+                            const cardStatusMeta = formatStatus(record.status);
+                            const cardStuckRefunding = record.status === 'refunding';
+                            const cardAdvancable = record.pay_channel === 'virtualpay' && (record.status === 'pending' || record.status === 'delivering');
+                            return (
+                                <article
+                                    key={record.id}
+                                    className={`order-card ${record.status === 'failed' ? 'row-alert-failed' : record.status === 'pending' || record.status === 'delivering' || record.status === 'refunding' ? 'row-alert-pending' : ''}`}
+                                >
+                                    <div className="order-card-head">
+                                        <span className="order-card-type">{formatOrderType(record.type)} · {formatOrderCategory(record.order_category)}</span>
+                                        <span className={`status-badge ${cardStatusMeta.className}`}>{cardStatusMeta.label}</span>
+                                    </div>
+                                    <div className="order-card-amount">
+                                        <strong>{formatAmountYuan(record.amount_fen)}</strong>
+                                        <span className={`order-value ${isNegativeOrderValue(record) ? 'negative' : 'positive'}`}>{formatOrderValue(record)}</span>
+                                    </div>
+                                    {(record.title || record.description) && (
+                                        <div className="order-card-title">
+                                            <strong>{record.title || '-'}</strong>
+                                            {record.description && <span>{record.description}</span>}
+                                        </div>
+                                    )}
+                                    <button type="button" className="order-card-user" onClick={() => navigate(`/user-workbench?userId=${record.user_id}`)} title="进入用户详情">
+                                        {record.username || `用户${record.user_id}`}
+                                        <span>ID {record.user_id}</span>
+                                    </button>
+                                    <div className="order-card-meta">
+                                        {record.pay_channel === 'virtualpay' ? (
+                                            <button type="button" className="order-card-no is-link" onClick={() => navigate(`/virtualpay?keyword=${encodeURIComponent(record.order_no)}`)} title="查看虚拟支付推送">
+                                                {record.order_no}
+                                            </button>
+                                        ) : (
+                                            <span className="order-card-no">{record.order_no}</span>
+                                        )}
+                                        <span className="order-card-time">{formatDateTime(record.created_at)}</span>
+                                    </div>
+                                    <div className="order-card-actions">
+                                        <button className="btn-action btn-view" onClick={() => void handleViewDetail(record)} title="查看详情">
+                                            <FiEye size={14} />
+                                            <span>详情</span>
+                                        </button>
+                                        {cardStuckRefunding && (
+                                            <button className="btn-action btn-ticket" onClick={() => void handleVerifyRefund(record)} disabled={actingOrderId === record.id} title="查询微信侧真实退款状态：已 REFUND 则自动落终态">
+                                                <FiRefreshCw size={14} />
+                                                <span>{actingOrderId === record.id ? '核对中...' : '核对微信侧'}</span>
+                                            </button>
+                                        )}
+                                        {cardAdvancable && (
+                                            <button className="btn-action btn-ticket" onClick={() => void handleAdvanceOrder(record)} disabled={actingOrderId === record.id} title="手动触发一次发货推进（补偿任务每 60 秒也会自动推进）">
+                                                <FiRefreshCw size={14} />
+                                                <span>{actingOrderId === record.id ? '推进中...' : '立即推进'}</span>
+                                            </button>
+                                        )}
+                                        <button className="btn-action btn-ticket" onClick={() => void handleCreateSupportTicket(record)} disabled={creatingTicketOrderId === record.id} title="转异常工单">
+                                            <FiAlertCircle size={14} />
+                                            <span>{creatingTicketOrderId === record.id ? '转单中...' : '转工单'}</span>
+                                        </button>
+                                        {canRefundVirtualPayOrder(record) && (
+                                            <button className="btn-action btn-ticket" onClick={() => void openRefundPreview(record)} disabled={refundingOrderId === record.id} title="虚拟支付退款（先展示影响清单）">
+                                                <FiRotateCcw size={14} />
+                                                <span>{refundingOrderId === record.id ? '退款中...' : '退款'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                ) : (
                 <div className="order-center-table-container">
                     <table className="order-center-table">
                         <thead>
@@ -982,6 +1098,7 @@ const OrderCenter: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
+                )}
 
                 <div className="order-pagination">
                     <button className="btn-secondary" onClick={() => handlePageChange(currentPage - 1)} disabled={loading || currentPage <= 1}>上一页</button>
@@ -1116,7 +1233,17 @@ const OrderCenter: React.FC = () => {
 
                                 <div className="detail-section">
                                     <h4>关联推送（微信 → 我方）</h4>
-                                    {detailLogs.length === 0 ? (
+                                    {detailLogsError ? (
+                                        <div className="detail-empty is-error" role="alert">
+                                            推送记录加载失败：{detailLogsError}
+                                            <button
+                                                className="btn-mini"
+                                                onClick={() => detailOrder && void loadDetailLogs(detailOrder.order_no)}
+                                            >
+                                                重试
+                                            </button>
+                                        </div>
+                                    ) : detailLogs.length === 0 ? (
                                         <div className="detail-empty">该订单暂无推送记录（推送丢失时补偿任务会自动推进，无需担心）</div>
                                     ) : (
                                         <div className="related-logs">

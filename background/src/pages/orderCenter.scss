@@ -179,6 +179,158 @@
   line-height: 1.7;
 }
 
+/* ============ 手机端专属控件（桌面隐藏） ============ */
+/* 「筛选」折叠开关：手机端首屏只留 搜索+筛选 一行，高级筛选点开才显示 */
+.mobile-filter-toggle {
+  display: none;
+}
+
+/* 资金总览折叠壳：桌面端隐藏 summary、内容常开，与原 KPI 带视觉一致 */
+.fund-kpi-wrap > .fund-kpi-summary {
+  display: none;
+}
+
+/* ============ 手机端订单卡片列表 ============ */
+/* 仅在 ≤768px 由 useIsMobile 条件渲染，桌面端不存在该 DOM */
+.order-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.order-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #eee4d7;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(90, 62, 40, 0.05);
+
+  // 沿用表格行的异常底色语义，改为左侧色条更省空间
+  &.row-alert-failed {
+    border-left: 4px solid #dc2626;
+    background: linear-gradient(90deg, rgba(254, 226, 226, 0.55) 0%, #ffffff 30%);
+  }
+
+  &.row-alert-pending {
+    border-left: 4px solid #d97706;
+    background: linear-gradient(90deg, rgba(254, 243, 199, 0.55) 0%, #ffffff 30%);
+  }
+}
+
+.order-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  .order-card-type {
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.order-card-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+
+  strong {
+    font-size: 20px;
+    font-weight: 800;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.order-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #faf7f3;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #6b7280;
+
+  strong { color: #374151; }
+  span {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+.order-card-user {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8b5e3c;
+  cursor: pointer;
+
+  span { font-size: 12px; color: #b3a48e; font-weight: 400; }
+}
+
+.order-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  .order-card-no {
+    font-family: monospace;
+    font-size: 11.5px;
+    color: #8a7a66;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.is-link {
+      border: none;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      color: #8b5e3c;
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      transition: text-decoration-color 0.2s;
+
+      &:hover { text-decoration-color: #8b5e3c; }
+    }
+  }
+
+  .order-card-time {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #9ca3af;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.order-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #f3ede6;
+}
+
 .order-center-table-container {
   background: #ffffff;
   border: 1px solid #eee4d7;
@@ -513,14 +665,55 @@
     padding: 16px;
   }
 
+  /* 筛选区：首屏只留「搜索 + 筛选」一行（原 11 行 539px，压到约 2 行 ~100px），
+     3 个下拉 + 2 个日期 + 4 个按钮收进「筛选」展开面板 */
   .order-center-toolbar {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
   }
 
-  .toolbar-right {
+  .toolbar-left {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .search-box {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mobile-filter-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .mobile-collapsible {
+    display: none;
+
+    &.is-open {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+  }
+
+  .filters.is-open {
+    gap: 10px;
+  }
+
+  .filters.is-open .filter-select,
+  .filters.is-open .filter-date {
     width: 100%;
-    justify-content: stretch;
-    flex-wrap: wrap;
+  }
+
+  .toolbar-right.is-open {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .toolbar-right .btn-primary,
@@ -528,12 +721,71 @@
     flex: 1;
   }
 
-  .search-box {
-    min-width: 100%;
+  /* 筛选摘要压紧，把行高让给数据 */
+  .order-summary-banner {
+    padding: 12px 14px;
+  }
+
+  .order-summary-banner-meta,
+  .order-summary-banner-pagination {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+
+  /* 资金总览：手机端默认收起为一行摘要（今日充值常显） */
+  .fund-kpi-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border: 1px solid #eee4d7;
+    border-radius: 12px;
+    background: #fffdf8;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #5b4632;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .fund-kpi-caret {
+    color: #8b6b4c;
+    transition: transform 0.18s ease;
+    flex-shrink: 0;
+  }
+
+  .fund-kpi-wrap[open] .fund-kpi-caret {
+    transform: rotate(180deg);
+  }
+
+  /* 状态 Tab 一行横滑（原换行堆 4 行 144px） */
+  .status-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .status-tab {
+    flex-shrink: 0;
   }
 
   .order-center-stats {
     grid-template-columns: 1fr;
+  }
+
+  .order-tip-card {
+    margin-bottom: 14px;
   }
 
   .order-pagination {
@@ -766,6 +1018,31 @@
   border: 1px dashed #e9dfd0;
   border-radius: 10px;
   padding: 12px 14px;
+
+  // 加载失败态：与"确实没有记录"区分开，红字 + 重试
+  &.is-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: #b42323;
+    background: #fdf0f0;
+    border: 1px solid #f3c8c8;
+  }
+}
+
+.btn-mini {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #e3a7a7;
+  background: #ffffff;
+  color: #b42323;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 /* ============ 关联推送 ============ */
