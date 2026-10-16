@@ -102,6 +102,8 @@ const DesignerCenter: React.FC = () => {
     const [items, setItems] = useState<DesignerManagementItem[]>([]);
     const [summary, setSummary] = useState<Partial<DesignerManagementListSummary> | null>(null);
     const [selectedId, setSelectedId] = useState<number | null>(null);
+    // 移动端（≤1024px）两层导航：选列表项后全屏展示详情，返回按钮回到列表
+    const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
     const [detail, setDetail] = useState<DesignerManagementDetail | null>(null);
     const [detailError, setDetailError] = useState('');
     const [actionError, setActionError] = useState('');
@@ -129,6 +131,7 @@ const DesignerCenter: React.FC = () => {
         selectedIdRef.current = id;
         detailRequestId.current += 1;
         setSelectedId(id);
+        setMobileDetailOpen(id !== null);
         currentDetail.current = null;
         setDetail(null);
         setDetailError('');
@@ -475,7 +478,7 @@ const DesignerCenter: React.FC = () => {
                     <div className="designer-summary-status" role="status">{loading ? '统计加载中...' : '“—”表示暂未获取统计数据。'}</div>
                 )}
 
-                <div className="designer-center-grid">
+                <div className={`designer-center-grid${mobileDetailOpen ? ' mobile-detail-open' : ''}`}>
                     <div className="designer-list-panel section-card">
                         <div className="designer-list" aria-busy={loading}>
                             {loading ? (
@@ -529,6 +532,10 @@ const DesignerCenter: React.FC = () => {
                     </div>
 
                     <div className="designer-detail-panel section-card">
+                        {/* 移动端两层导航的返回按钮，桌面端隐藏（见 designerCenter.scss） */}
+                        <button className="designer-detail-back" onClick={() => setMobileDetailOpen(false)}>
+                            ‹ 返回设计师列表
+                        </button>
                         {!selectedId ? (
                             <div className="designer-empty">请先从左侧选择一个设计师。</div>
                         ) : detailLoading ? (

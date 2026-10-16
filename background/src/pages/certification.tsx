@@ -463,6 +463,64 @@ const Certification: React.FC = () => {
                             </tbody>
                         </table></div>
                     )}
+                    {/* 移动端卡片视图：≤768 隐藏表格改用卡片（双 DOM 切换见 certification.scss） */}
+                    {!(loading && list.length === 0) && (
+                        <div className="cert-cards">
+                            {list.length === 0 ? (
+                                <div className="cert-cards-empty">当前队列为空 🎉</div>
+                            ) : (
+                                list.map((app) => {
+                                    const wait = waitDuration(app.created_at);
+                                    const overdueRow = app.status === 'pending_review' && wait.level === 'bad';
+                                    const subject = app.type === 'enterprise'
+                                        ? (app.company_name || '-')
+                                        : (revealedSubject(app) || '-');
+                                    const subjectSub = app.type === 'enterprise'
+                                        ? (app.credit_code || '统一社会信用代码待补')
+                                        : (app.id_card_no || '证件号待提交');
+                                    return (
+                                        <div
+                                            key={app.id}
+                                            className={`cert-card${overdueRow ? ' card-overdue' : ''}`}
+                                            onClick={() => openDrawer(app)}
+                                        >
+                                            <div className="cert-card-head">
+                                                <span className="cert-card-name">{subject}</span>
+                                                <span className={`status-badge status-${app.status}`}>
+                                                    {STATUS_MAP[app.status] || app.status}
+                                                </span>
+                                            </div>
+                                            <div className="cert-card-sub">#{app.id} · 用户 {app.user_id} · {subjectSub}</div>
+                                            <div className="cert-card-tags">
+                                                <span className={`type-badge ${app.type}`}>{TYPE_MAP[app.type] || app.type}</span>
+                                                {app.identity_type ? <span className="cert-card-plain">{app.identity_type}</span> : null}
+                                                {app.aliyun_passed
+                                                    ? <span className="aliyun-badge ok">阿里云通过</span>
+                                                    : app.id_card_no || app.credit_code
+                                                        ? <span className="aliyun-badge bad">阿里云未通过</span>
+                                                        : <span className="aliyun-badge none">待提交材料</span>}
+                                            </div>
+                                            <div className="cert-card-meta">
+                                                <span className={`wait-${wait.level}`}>{wait.text}</span>
+                                                <span>{new Date(app.created_at).toLocaleString('zh-CN')}</span>
+                                            </div>
+                                            <div className="cert-card-actions" onClick={(e) => e.stopPropagation()}>
+                                                <button className="btn-action btn-view" onClick={() => openDrawer(app)}>审核</button>
+                                                {app.status === 'pending_review' && (
+                                                    <button
+                                                        className="btn-action btn-enter-workbench"
+                                                        onClick={() => openUserWorkbench(app.user_id)}
+                                                    >
+                                                        用户详情
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {totalPages > 1 && (

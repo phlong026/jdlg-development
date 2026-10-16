@@ -117,7 +117,9 @@ const Users: React.FC = () => {
     const convertRow = (apiUser: ApiUser): UserRow => ({
         id: String(apiUser.id),
         username: apiUser.username || `用户${apiUser.id}`,
-        displayName: apiUser.nickname?.trim() || apiUser.username || `用户${apiUser.id}`,
+        // 昵称为空时不再回退展示 openid 式用户名（如 wx_o_gjx…），避免主副标题重复且暴露内部 ID；
+        // username 仍保留在副标题与搜索中
+        displayName: apiUser.nickname?.trim() || `用户${apiUser.id}`,
         stones: apiUser.stones || 0,
         createdAt: apiUser.created_at,
         phone: apiUser.phone || '',
@@ -620,6 +622,83 @@ const Users: React.FC = () => {
                         )}
                     </tbody>
                 </table>
+                </div>
+                {/* 移动端卡片视图：≤768px 隐藏表格改用卡片（双 DOM 切换见 users.scss），桌面端不渲染影响 */}
+                <div className="users-cards">
+                    {rows.length === 0 ? (
+                        <div className="users-cards-empty">{loading ? '加载中...' : '没有符合当前筛选条件的用户'}</div>
+                    ) : (
+                        rows.map((row) => {
+                            const banned = row.status !== 'active';
+                            const fullPhone = revealedPhones[row.id];
+                            return (
+                                <div
+                                    key={row.id}
+                                    className={`user-card${banned ? ' card-banned' : ''}`}
+                                    onClick={() => navigate(`/user-workbench?userId=${row.id}`)}
+                                >
+                                    <div className="user-card-head">
+                                        <span className="user-avatar-letter">{row.displayName.slice(0, 1).toUpperCase()}</span>
+                                        <div className="user-card-identity">
+                                            <span className="user-name">{row.displayName}</span>
+                                            <span className="user-sub">ID {row.id} · {row.username}</span>
+                                        </div>
+                                        {banned
+                                            ? <span className="status-badge status-banned">已封禁</span>
+                                            : <span className="status-badge status-normal">正常</span>}
+                                    </div>
+                                    {(row.identityType || row.memberStatus || row.riskTags.length > 0) && (
+                                        <div className="user-card-tags">
+                                            {row.identityType && <span className="identity-type-badge">{row.identityType}</span>}
+                                            {row.memberStatus === 'active' && <span className="member-badge on" title={row.memberPlanTitle}>会员生效中</span>}
+                                            {row.memberStatus === 'expired' && <span className="member-badge expired">会员已到期</span>}
+                                            {row.riskTags.length > 0 && (
+                                                <span className="risk-tag">{row.riskTags.map((tag) => RISK_TAG_LABELS[tag] || tag).join('、')}</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="user-card-info">
+                                        <span className="points-balance">
+                                            <span style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }}>✦</span>
+                                            {row.stones.toLocaleString()}
+                                        </span>
+                                        <span className="user-card-time">{formatDateTime(row.createdAt)}</span>
+                                    </div>
+                                    {(fullPhone || row.phone) && (
+                                        <div className="user-card-info">
+                                            {fullPhone ? (
+                                                <span className="user-phone-text revealed" title="已展示完整号码，本次查看已记入审计">{fullPhone}</span>
+                                            ) : (
+                                                <span className="user-phone-text">
+                                                    {row.phone}
+                                                    <button
+                                                        className="phone-reveal"
+                                                        onClick={(e) => { e.stopPropagation(); handleRevealPhone(row); }}
+                                                        title="查看完整号码（记审计）"
+                                                    >
+                                                        <FiEye size={13} />
+                                                    </button>
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="user-card-actions" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            className="btn-action btn-enter-workbench"
+                                            onClick={() => navigate(`/user-workbench?userId=${row.id}`)}
+                                        >
+                                            用户详情
+                                        </button>
+                                        {banned ? (
+                                            <button className="btn-action btn-unban" onClick={() => openBanModal(row, 'unban')}>解封</button>
+                                        ) : (
+                                            <button className="btn-action btn-ban" onClick={() => openBanModal(row, 'ban')}>封禁</button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
                 <div className="users-pagination">
                     <div className="users-pagination-left">

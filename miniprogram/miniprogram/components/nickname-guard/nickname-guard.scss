@@ -1,0 +1,159 @@
+.nickname-guard-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10002;
+  background: rgba(46, 31, 20, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+  box-sizing: border-box;
+}
+
+.nickname-guard {
+  width: 100%;
+  max-width: 620rpx;
+  background: linear-gradient(180deg, #fffaf2 0%, #f7f2ea 100%);
+  border-radius: 28rpx;
+  padding: 40rpx 36rpx 32rpx;
+  box-sizing: border-box;
+  box-shadow: 0 20rpx 44rpx rgba(71, 53, 40, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.ng-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #4a3524;
+  text-align: center;
+}
+
+.ng-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #a08a72;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.ng-avatar-row {
+  margin-top: 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.ng-avatar-btn {
+  width: 128rpx;
+  height: 128rpx;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  background: rgba(169, 133, 91, 0.12);
+  border: 2rpx dashed #c9ab84;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.ng-avatar-btn::after {
+  border: none;
+}
+
+.ng-avatar-img {
+  width: 100%;
+  height: 100%;
+}
+
+.ng-avatar-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
+}
+
+.ng-avatar-placeholder-icon {
+  font-size: 40rpx;
+  color: #a9855b;
+  line-height: 1;
+}
+
+.ng-avatar-placeholder-text {
+  font-size: 20rpx;
+  color: #a9855b;
+}
+
+.ng-avatar-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.ng-avatar-tip-main {
+  font-size: 28rpx;
+  color: #4a3524;
+  font-weight: 500;
+}
+
+.ng-avatar-tip-sub {
+  font-size: 22rpx;
+  color: #a08a72;
+}
+
+.ng-field {
+  margin-top: 32rpx;
+}
+
+.ng-label {
+  display: block;
+  font-size: 26rpx;
+  color: #6b543c;
+  margin-bottom: 14rpx;
+}
+
+.ng-input {
+  width: 100%;
+  height: 92rpx;
+  box-sizing: border-box;
+  padding: 0 28rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid #e4d5bf;
+  font-size: 30rpx;
+  color: #4a3524;
+}
+
+.ng-input-placeholder {
+  color: #c2ad92;
+}
+
+.ng-confirm {
+  margin-top: 40rpx;
+  width: 100%;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: 46rpx;
+  background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: 600;
+  padding: 0;
+}
+
+.ng-confirm::after {
+  border: none;
+}
+
+.ng-confirm[disabled] {
+  opacity: 0.7;
+  color: #ffffff;
+  background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
+}

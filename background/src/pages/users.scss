@@ -796,4 +796,145 @@
     width: 100%;
   }
 }
+
+/* ─────────── 移动端（≤768）：表格 → 卡片视图，筛选/分页紧凑化 ─────────── */
+/* 卡片 DOM 常驻渲染（与表格双 DOM），桌面端整体隐藏，不影响桌面布局 */
+.users-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .users-table-wrap {
+    display: none;
+  }
+
+  .users-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .users-cards-empty {
+    background: #ffffff;
+    border-radius: var(--admin-radius-md, 14px);
+    padding: 32px 16px;
+    text-align: center;
+    color: #8b5e3c;
+    font-size: 14px;
+  }
+
+  .user-card {
+    background: #ffffff;
+    border-radius: var(--admin-radius-md, 14px);
+    padding: 14px 16px;
+    box-shadow: 0 1px 4px rgba(71, 53, 40, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .user-card.card-banned {
+    opacity: 0.75;
+  }
+
+  .user-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .user-card-identity {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .user-card-identity .user-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #3f2f1f;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-card-identity .user-sub {
+    font-size: 11.5px;
+    color: #a08a72;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .user-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .user-card-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    color: #6b543c;
+  }
+
+  .user-card-time {
+    font-size: 12px;
+    color: #a08a72;
+  }
+
+  .user-card-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f1e7d8;
+  }
+
+  .user-card-actions .btn-action {
+    flex: 1;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  /* 筛选：两列网格，替代竖排长列表 */
+  .filters {
+    display: grid !important;
+    flex-direction: initial !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .filters .filter-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* 分页：隐藏低频的每页条数，主行紧凑居中 */
+  .users-pagination {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .users-pagination-left {
+    order: 2;
+  }
+
+  .users-pagination-left .users-pagination-label,
+  .users-pagination-left .users-page-size-select {
+    display: none;
+  }
+
+  .users-pagination-right {
+    order: 1;
+    gap: 12px;
+  }
+}
 }

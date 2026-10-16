@@ -53,7 +53,8 @@
 
 .designer-center-grid {
   display: grid;
-  grid-template-columns: 420px minmax(0, 1fr);
+  /* 左列用弹性下限：1024-1280 区间不再固定 420px，避免详情面板被挤压溢出 */
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -496,14 +497,61 @@
   min-height: 96px;
 }
 
-@media (max-width: 1280px) {
+/* 移动端两层导航的返回按钮：桌面隐藏 */
+.designer-detail-back {
+  display: none;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #e4d5bf;
+  border-radius: 999px;
+  background: #fffaf2;
+  color: #8b5e3c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:active {
+    background: #f3e9d9;
+  }
+}
+
+/* ≤1024 与全局侧栏抽屉断点对齐：主从双栏切换为「列表页 → 详情页」两层导航 */
+@media (max-width: 1024px) {
   .designer-center-grid {
     grid-template-columns: 1fr;
+  }
+
+  .designer-center-grid .designer-detail-panel {
+    display: none;
+  }
+
+  .designer-center-grid.mobile-detail-open .designer-list-panel {
+    display: none;
+  }
+
+  .designer-center-grid.mobile-detail-open .designer-detail-panel {
+    display: flex;
+  }
+
+  .designer-center-grid.mobile-detail-open .designer-detail-back {
+    display: inline-flex;
+  }
+
+  /* 去掉列表的「页中页」内滚，改为页面自然滚动 */
+  .designer-list {
+    max-height: none;
+    overflow: visible;
   }
 }
 
 @media (max-width: 900px) {
-  .designer-summary-grid,
+  /* 统计卡与全局移动基座一致用两列；详情内的分区网格保持单列 */
+  .designer-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .designer-stat-grid,
   .designer-section-grid,
   .designer-work-grid {
@@ -523,6 +571,20 @@
 
   .designer-list-side {
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  /* 基础资料等 label/value 行改为上下堆叠，长用户名可断行，根治溢出截断 */
+  .designer-info-list > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .designer-info-list strong {
+    text-align: left;
+    overflow-wrap: anywhere;
   }
 }
 }

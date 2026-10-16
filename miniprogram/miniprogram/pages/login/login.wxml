@@ -244,6 +244,9 @@
     </view>
   </view>
 
+  <!-- 完善昵称弹窗（登录后强制） -->
+  <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" />
+
   <!-- 加载遮罩 -->
   <view class="loading-mask" wx:if="{{loading}}">
     <view class="loading-content">

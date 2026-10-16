@@ -187,7 +187,9 @@
   .st-error { color: #a82d24; }
   .st-warning { color: #805025; background: var(--st-cream); padding: 10px; border-radius: 8px; }
   .st-pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
-  .st-definitions { border-top: 1px solid var(--st-line); padding: 14px 0; font-size: 13px; line-height: 1.8; color: var(--st-muted); }
+  /* 访客详情底部的统计说明与管理操作折叠区：收拢成独立卡片，不再与分页条挤作一团 */
+  .st-footnote { font-size: 13px; line-height: 1.8; color: var(--st-muted); margin: 0; }
+  .st-definitions { margin-top: 12px; border: 1px solid var(--st-line); border-radius: 12px; background: var(--st-surface); padding: 6px 16px; font-size: 13px; line-height: 1.8; color: var(--st-muted); }
   .st-definitions summary { cursor: pointer; min-height: 44px; padding: 10px 0; color: var(--st-ink); }
   .st-definitions ul { padding-left: 20px; }
 

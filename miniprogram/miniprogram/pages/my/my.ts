@@ -540,9 +540,41 @@ Page({
         },
         ...resolveVipDisplays(true, res, mergedUserInfo),
       });
+
+      // 存量已登录用户昵称补检（登录流程已拦截新登录，这里兜底老用户）
+      this.maybePromptNickname(res);
     } catch (error: any) {
       console.error('获取用户资料失败:', error);
     }
+  },
+
+  /**
+   * 存量已登录用户昵称补检：昵称为空时弹出完善弹窗，
+   * 每个自然日最多提醒一次（保存成功后组件会清除该标记）。
+   */
+  maybePromptNickname(profile: any) {
+    if (String(profile?.nickname || '').trim()) {
+      return;
+    }
+    const now = new Date();
+    const dayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    if (wx.getStorageSync('nickname_prompt_day') === dayKey) {
+      return;
+    }
+    const guard = this.selectComponent('#nicknameGuard') as any;
+    if (!guard || typeof guard.show !== 'function') {
+      return;
+    }
+    wx.setStorageSync('nickname_prompt_day', dayKey);
+    guard.show({
+      nickname: '',
+      avatar: String(profile?.avatar || ''),
+    });
+  },
+
+  // 昵称弹窗保存成功后刷新资料展示
+  onNicknameGuardCompleted() {
+    void this.loadUserProfile();
   },
 
   /**
