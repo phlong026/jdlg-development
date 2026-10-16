@@ -41,7 +41,14 @@ function enabledConsent() {
 }
 function refreshConfig() {
   return api.request('/config').then(value => {
-    config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++; const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
+    config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++;
+    // 静默同意：告知见隐私政策与"设置-访问分析"开关，可随时关闭。
+    // 只对"从未选择"或"此前同意但告知已更新"的用户生效；明确拒绝过的不覆盖。
+    if (config.enabled===true && config.consent_version && config.privacy_notice) {
+      const choice = consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
+      if (!choice || (choice.accepted===true && (choice.version!==config.consent_version || choice.notice!==config.privacy_notice))) safely(()=>setConsent(true));
+    }
+    const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
     return config;
   }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });
 }
@@ -66,18 +73,22 @@ function showConsentChoices(page, manual=false) {
   if(consentRequest) return consentRequest;
   const request=refreshConfig().then(value=>{
     const target=manual?page:consentPage;
-    if(!target || target.__trackingConsentVisible!==true || (!manual&&!consentPublicPage(target)))return false;
+    // manual 由"我的"页主动触发，页面本身不是采集页，跳过采集页可见性校验。
+    if(!target || (!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))))return false;
     if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
     const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
     if(!manual && (enabledConsent() || (choice&&choice.version===value.consent_version&&(choice.notice===value.privacy_notice||(!choice.notice&&choice.accepted===false)))))return false;
     const version=value.consent_version, notice=value.privacy_notice, revision=consentRevision;
     return new Promise(resolve=>{
       // Pass the complete configured notice, without truncation or implicit consent.
-      try { wx.showModal({title:'访问分析（可选）',
-        content:'告知版本：'+version+'\n\n'+notice+'\n\n拒绝不影响阅读、分享或其他功能。可随时在“我的 → 访问分析隐私”撤回或重新选择。未同意前不采集访问分析。',
-        showCancel:true,confirmText:'同意分析',cancelText:'不同意',
+      const active = enabledConsent() === version;
+      try { wx.showModal({title:'访问分析说明',
+        content:notice+(active
+          ?'\n\n当前状态：已开启。关闭后我们不再记录浏览数据，不影响阅读、分享或其他功能，可随时回来开启。'
+          :'\n\n当前状态：未开启。开启后我们记录浏览与分享数据用于改进服务，可随时关闭，不影响任何功能。'),
+        showCancel:true,confirmText:active?'保持开启':'开启分析',cancelText:active?'关闭分析':'保持关闭',
         success(result){
-          if(target.__trackingConsentVisible!==true || (!manual&&!consentPublicPage(target)) || revision!==consentRevision || version!==config.consent_version || notice!==config.privacy_notice || config.enabled!==true){resolve(false);return;}
+          if((!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))) || revision!==consentRevision || version!==config.consent_version || notice!==config.privacy_notice || config.enabled!==true){resolve(false);return;}
           if(result.confirm!==true && result.cancel!==true){resolve(false);return;}
           const accepted=result.confirm===true;
           setConsent(accepted);
@@ -93,7 +104,8 @@ function showConsentChoices(page, manual=false) {
 }
 function consentPageVisible(page,visible) {
   page.__trackingConsentVisible=visible;
-  if(visible){consentPage=page;showConsentChoices(page);}
+  // 静默模式：不再随页面展示自动弹窗，开关见"设置-访问分析"。
+  if(visible){consentPage=page;}
   else if(consentPage===page)consentPage=null;
 }
 function splitPath(path, fallback) {

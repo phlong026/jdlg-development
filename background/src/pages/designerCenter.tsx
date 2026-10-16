@@ -131,7 +131,6 @@ const DesignerCenter: React.FC = () => {
         selectedIdRef.current = id;
         detailRequestId.current += 1;
         setSelectedId(id);
-        setMobileDetailOpen(id !== null);
         currentDetail.current = null;
         setDetail(null);
         setDetailError('');
@@ -496,7 +495,10 @@ const DesignerCenter: React.FC = () => {
                                         key={item.user_id}
                                         className={`designer-list-item ${selectedId === item.user_id ? 'active' : ''}`}
                                         onClick={() => {
-                                            if (mounted.current && listReady.current && renderedListRequestId === listRequestId.current) selectDesigner(item.user_id);
+                                            if (mounted.current && listReady.current && renderedListRequestId === listRequestId.current) {
+                                                selectDesigner(item.user_id);
+                                                setMobileDetailOpen(true);
+                                            }
                                         }}
                                     >
                                         <div className="designer-list-main">

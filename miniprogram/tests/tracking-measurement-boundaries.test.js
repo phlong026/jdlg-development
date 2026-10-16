@@ -11,16 +11,20 @@ const readerRoute = 'pages/contentreader/contentreader';
 
 // Only WeChat, the clock, and transport are substituted. These tests execute
 // the production reader callbacks, adapter/modal, core, and video tracker.
-function readerRuntime({ accepted = false } = {}) {
+function readerRuntime({ accepted = false, deferConfig = false } = {}) {
   let pageDefinition, appDefinition, mono = 1000, paused = 0;
   const storage = accepted ? { share_tracking_consent_v1: { version: 'v1' } } : {};
   const entries = [], sent = [], modals = [], credentials = new Map();
+  let pendingConfig = null;
   const configuration = { enabled: true, consent_version: 'v1', privacy_notice: 'Optional analytics; withdrawal leaves playback available.' };
   const api = {
     resolveReaderOptions: async options => options,
     mediaURL: value => value,
     async request(suffix, method, body) {
-      if (suffix === '/config') return configuration;
+      if (suffix === '/config') {
+        if (deferConfig) return new Promise(resolve => { pendingConfig = resolve; });
+        return configuration;
+      }
       if (suffix === '/entry') {
         entries.push(body);
         const old = credentials.get(body.previous_entry_token);
@@ -60,7 +64,7 @@ function readerRuntime({ accepted = false } = {}) {
   };
   const event = (type, detail = {}) => ({ type, detail, currentTarget: { dataset: { mediaId: 'video_asset' } } });
   return {
-    page, adapter, entries, sent, modals, storage,
+    page, adapter, entries, sent, modals, storage, resolveConfig() { pendingConfig(configuration); },
     async mount() { page.onLoad({ content_id: 'material_id', content_version: 1 }); page.onShow(); page.onReady(); await settle(); },
     progress(position, elapsed = 1000) { mono += elapsed; page.videoProgress(event('timeupdate', { currentTime: position, duration: 100 })); },
     play() { page.videoState(event('play')); },
@@ -69,22 +73,17 @@ function readerRuntime({ accepted = false } = {}) {
   };
 }
 
-for (const grant of ['reader button', 'global modal']) {
-  test('real reader excludes denied video coverage when consent arrives through ' + grant, async () => {
+test('real reader excludes denied video coverage until consent is granted via the reader button', async () => {
+  {
     const t = readerRuntime(); await t.mount();
     assert.equal(t.page.data.contentReady, true);
-    t.page.declineTracking(); t.play(); t.progress(0, 0);
+    t.page.declineTracking();
+    t.play(); t.progress(0, 0);
     for (let second = 1; second <= 60; second++) t.progress(second);
     assert.equal(t.player().snapshot().unique_played_ms, 0, 'denied playback never accumulates analytical coverage');
     assert.equal(t.videos().length, 0);
     const pauses = t.paused();
-    if (grant === 'reader button') t.page.acceptTracking();
-    else {
-      // Dismiss the obsolete initial prompt, then use the actual global modal.
-      t.modals[0].success({ cancel: true }); await settle();
-      const choosing = t.adapter.showConsentChoices(t.page); await settle();
-      t.modals.at(-1).success({ confirm: true }); await choosing;
-    }
+    t.page.acceptTracking();
     await settle(); t.progress(61); t.progress(62);
     const observed = t.videos();
     assert.equal(observed.length, 2);
@@ -94,8 +93,8 @@ for (const grant of ['reader button', 'global modal']) {
     assert.equal(observed[1].video_watch_ms, 1000);
     assert.deepEqual(observed.map(event => event.seq), [1, 2]);
     assert.equal(t.paused(), pauses, 'consent changes must not pause business video playback');
-  });
-}
+  }
+});
 
 test('withdrawal and regrant reset observations immediately without restarting playback', async () => {
   const t = readerRuntime({ accepted: true }); await t.mount();

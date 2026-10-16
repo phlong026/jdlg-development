@@ -168,6 +168,26 @@
             </view>
           </view>
 
+          <view class="setting-item">
+            <view class="item-left">
+              <view class="item-icon-wrap accent-soft">
+                <text class="item-icon">析</text>
+              </view>
+              <view class="item-texts">
+                <text class="item-title">访问分析</text>
+                <text class="item-desc">帮助我们改进内容与服务，关闭不影响任何功能</text>
+              </view>
+            </view>
+            <view class="item-tail">
+              <switch
+                class="item-switch"
+                checked="{{trackingEnabled}}"
+                color="#a9855b"
+                bindchange="onToggleTracking"
+              />
+            </view>
+          </view>
+
           <view class="setting-item" bindtap="onViewPersonalInfo">
             <view class="item-left">
               <view class="item-icon-wrap warm">

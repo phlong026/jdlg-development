@@ -155,7 +155,6 @@ export interface NavGroup {
 }
 
 export const navGroups: NavGroup[] = [
-    { id: 'share-tracking', label: '分享访问记录', icon: FiShare2, pages: [{ path: '/share-tracking', label: '分享访问记录' }] },
     { id: 'dashboard', label: '工作台', icon: FiHome, pages: [{ path: '/dashboard', label: '后台总控台' }] },
     {
         id: 'users', label: '用户账号', icon: FiUsers, hint: '已注册的小程序用户',
@@ -225,6 +224,9 @@ export const navGroups: NavGroup[] = [
             { path: '/distribution', label: '分销邀请' },
             { path: '/report-center', label: '报表导出' },
         ],
+    },
+    {
+        id: 'share-tracking', label: '分享访问记录', icon: FiShare2, pages: [{ path: '/share-tracking', label: '分享访问记录' }],
     },
     {
         id: 'settings', label: '系统设置', icon: FiSettings, pinned: true,

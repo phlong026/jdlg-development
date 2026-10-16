@@ -231,6 +231,7 @@
   .st-session { border: 1px solid var(--st-line); padding: 14px; border-radius: 12px; margin: 14px 0; background: var(--st-surface); }
   .st-session > button, .st-page-visit > button { text-align: left; width: 100%; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
   .st-page-visit { border-left: 3px solid #dcb99a; padding: 12px; margin: 14px 0; min-width: 0; }
+  .st-page-visit-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
   .st-page-visit p, .st-events p { font-size: 12px; }
   .st-events ol { padding-left: 20px; }
   .st-events li { padding: 10px 0; border-bottom: 1px solid var(--st-line); }

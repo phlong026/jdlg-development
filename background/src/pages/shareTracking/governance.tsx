@@ -46,7 +46,7 @@ export function VisitorGovernance({ visitor, context, onOpenEvidence, onBusyChan
     if (visitor.identity_state === 'deleted') return null;
     const original = visitor.intent?.original_rule;
     const override = visitor.intent?.override;
-    return <section className="st-governance" aria-label="访客治理"><h3>身份与意向依据</h3><p>目标账号 / 访客标识：{visitor.visitor_key}</p><p>{visitor.crm_label || '当前列表范围未提供 CRM 关联'}</p>
+    return <section className="st-governance" aria-label="访客治理"><h3>身份与意向依据</h3><p>{visitor.identity_state === 'anonymous' ? `匿名访客 · 尾号${visitor.visitor_key.slice(-6)}` : visitor.nickname || '访问账号'}{visitor.identity_state === 'identified' ? '（已登录账号）' : ''}</p><p>{visitor.crm_label || '当前列表范围未提供 CRM 关联'}</p>
         <h4>当前意向结果</h4>{visitor.intent && <IntentEvidenceDetails evidence={visitor.intent} onOpenRecords={onOpenEvidence} recordsLabel="按意向评估窗口查看来源会话" />}
         {(override || visitor.intent?.manual_note) && <p>人工修正：{override ? intentLabels[override.level] : intentLabels[visitor.intent.level]} · {override?.reason || visitor.intent.manual_note} · 操作者 {override?.actor || '接口未提供'} · 修正时间 {time(override?.created_at)} · 有效至 {time(override?.expires_at)}</p>}
         {original ? <><h4>原规则结果</h4><IntentEvidenceDetails evidence={original} /></> : <p className="st-warning">接口尚未返回独立的原规则结果；当前结果可能包含人工覆盖，不能当作原规则结果。</p>}

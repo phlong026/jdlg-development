@@ -12,12 +12,13 @@ const route = 'pages/contentreader/contentreader';
 const notice = '可选访问分析；可随时撤回，不影响阅读。';
 const sceneA = 'a'.repeat(32);
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const untilReady = async (page, tries = 20) => { for (let i = 0; i < tries && !page.data.contentReady; i++) await settle(); };
 const direct = { content_id: 'content_one', content_version: '1', st: 'original_share' };
 
-function runtime({ accepted = false, deferScene = false } = {}) {
+function runtime({ accepted = false, deferScene = false, deferConfig = false } = {}) {
   let pageDefinition, appDefinition, currentPage, mono = 1000;
   const storage = accepted ? { share_tracking_consent_v1: { version: 'v1' } } : {};
-  const entries = [], events = [], pendingScenes = [], modals = [];
+  const entries = [], events = [], pendingScenes = [], pendingConfigs = [], modals = [];
   const configuration = { enabled: true, consent_version: 'v1', privacy_notice: notice };
   const ok = (request, data) => request.success({ statusCode: 200, data: { code: 0, data } });
   const sceneResult = { route_key: route, content_id: 'content_one', content_version: 1, share_token: 'original_share' };
@@ -31,7 +32,11 @@ function runtime({ accepted = false, deferScene = false } = {}) {
     showModal: options => modals.push(options),
     request(request) {
       const suffix = request.url.split('/api/v1/miniprogram/tracking')[1];
-      if (suffix === '/config') return ok(request, configuration);
+      if (suffix === '/config') {
+        if (deferConfig) pendingConfigs.push(request);
+        else ok(request, configuration);
+        return;
+      }
       if (suffix === '/share-entry') {
         if (deferScene) pendingScenes.push(request);
         else ok(request, sceneResult);
@@ -77,7 +82,9 @@ function runtime({ accepted = false, deferScene = false } = {}) {
   };
   currentPage = page;
   return {
-    adapter, page, entries, events, storage, modals, pendingScenes,
+    adapter, page, entries, events, storage, modals, pendingScenes, pendingConfigs,
+    // 阅读器就绪流程会重发 /config，解析全部待定请求
+    resolveConfig() { while (pendingConfigs.length) ok(pendingConfigs.shift(), configuration); },
     async mount(options = direct) { page.onLoad({ ...options }); page.onShow(); page.onReady(); await settle(); },
     resolveScene(index = 0, value = sceneResult) { ok(pendingScenes[index], value); },
     grant() { assert.equal(adapter.setConsent(true), true); },
@@ -96,29 +103,29 @@ function runtime({ accepted = false, deferScene = false } = {}) {
 }
 
 for (const options of [direct, { scene: sceneA }]) {
-  test('real reader keeps the first unused ' + (options.scene ? 'scene' : 'st') + ' until explicit consent', async () => {
-    const t = runtime(); await t.mount(options);
-    assert.equal(t.entries.length, 0);
+  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until silent consent arrives with the config', async () => {
+    const t = runtime({ deferConfig: true }); await t.mount(options);
+    assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
+    t.resolveConfig(); await settle();
     assert.equal(t.page.data.contentReady, true);
-    t.grant(); await settle();
     assert.equal(t.entries.at(-1).share_token, 'original_share');
     assert.equal(t.views().at(-1).share_id, 'share:original_share');
   });
 }
 
-test('first consent while scene is still resolving preserves the legitimate initial share', async () => {
+test('silent consent arriving while the scene is still resolving preserves the legitimate initial share', async () => {
   const t = runtime({ deferScene: true }); await t.mount({ scene: sceneA });
-  t.grant(); t.resolveScene(); await settle();
+  t.resolveScene(); await settle();
   assert.equal(t.entries.at(-1).content_id, 'content_one');
   assert.equal(t.entries.at(-1).share_token, 'original_share');
   assert.equal(t.views().at(-1).share_id, 'share:original_share');
 });
 
-test('same-page content retry before first consent keeps its unconsumed valid share', async () => {
-  const t = runtime(); await t.mount();
+test('same-page content retry before consent keeps its unconsumed valid share', async () => {
+  const t = runtime({ deferConfig: true }); await t.mount();
   t.page.retryMedia(); await settle();
-  assert.equal(t.entries.length, 0);
-  t.grant(); await settle();
+  assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
+  t.resolveConfig(); await settle(); await untilReady(t.page); await settle();
   assert.equal(t.entries.at(-1).share_token, 'original_share');
   assert.equal(t.views().at(-1).share_id, 'share:original_share');
 });
@@ -134,10 +141,11 @@ test('real reader return cannot restore a share cleared by withdrawal and hidden
   assert.equal(t.views().at(-1).share_id, undefined);
 });
 
-test('real reader hide before first consent permanently discards that pending share', async () => {
-  const t = runtime(); await t.mount(); t.hide(); t.grant(); await t.show();
-  assert.equal(t.entries.at(-1).share_token, undefined);
-  assert.equal(t.views().at(-1).share_id, undefined);
+test('real reader hide before consent permanently discards that pending share', async () => {
+  const t = runtime({ deferConfig: true }); await t.mount(); t.hide(); t.resolveConfig(); await t.show();
+  await settle(); await untilReady(t.page); await settle();
+  assert.equal(t.entries.at(-1).share_token, undefined, 'hidden-before-consent re-entry is unattributed');
+  assert.ok(t.views().every(v => v.share_id === undefined), 'the discarded share never reappears on any view');
 });
 
 test('real reader return after account switch cannot restore a previous-account share', async () => {

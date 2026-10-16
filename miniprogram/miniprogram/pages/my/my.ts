@@ -6,7 +6,6 @@ import {
   cacheDeviceFingerprint
 } from '../../utils/deviceFingerprint';
 import { resolveAssetPath } from '../../utils/asset';
-const trackingConsent = require('../../utils/tracking/index');
 const shareMaterials = require('../../utils/tracking/materials');
 
 // API基础地址
@@ -188,8 +187,6 @@ Page({
     lastCertificationRefreshTime: 0,
     lastCertificationRefreshToken: '',
     certificationRefreshInterval: CERTIFICATION_REFRESH_INTERVAL,
-    trackingConsented: false,
-    trackingConsentBusy: false,
   },
 
   /**
@@ -227,38 +224,12 @@ Page({
   onUnload() { this.hideShareMaterials(); },
   onShow() {
     this.refreshShareMaterials();
-    this.syncTrackingConsent();
-    trackingConsent.refreshConfig().then(() => this.syncTrackingConsent());
     this.syncWindowBackground();
     this.syncTabBar();
     this.loadUserData();
     if (this.isLoggedIn()) {
       this.loadCertificationStatus();
     }
-  },
-
-  syncTrackingConsent() {
-    this.setData({ trackingConsented: trackingConsent.consented() });
-  },
-
-  async onTrackingConsentTap() {
-    if (this.data.trackingConsentBusy) return;
-    this.setData({ trackingConsentBusy: true });
-    try {
-      const chosen = await trackingConsent.showConsentChoices(this);
-      if (!chosen && !trackingConsent.config().enabled) {
-        wx.showToast({ title: '访问分析未启用，仍可撤回同意', icon: 'none' });
-      }
-    } finally {
-      this.syncTrackingConsent();
-      this.setData({ trackingConsentBusy: false });
-    }
-  },
-
-  onWithdrawTrackingConsent() {
-    trackingConsent.setConsent(false);
-    this.syncTrackingConsent();
-    wx.showToast({ title: '已撤回，不影响阅读和分享', icon: 'none' });
   },
 
   /**

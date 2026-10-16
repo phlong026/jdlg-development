@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTracking';
 import { duration, intentLabels, safeMediaURL, time } from './model';
-import { IntentEvidenceDetails } from './evidence';
 
 export function useResource<T>(loader: (signal: AbortSignal) => Promise<T>, key: string) {
     const [state, setState] = useState<{ data?: T; error: string; loading: boolean; key?: string }>({ error: '', loading: true });
@@ -24,7 +23,7 @@ export function Pager({ next, cursor, onNext, onPrevious }: { next?: string; cur
     return <nav className="st-pager" aria-label="记录分页"><button disabled={!cursor.length} onClick={onPrevious}>上一页</button><span>第 {cursor.length + 1} 页</span><button disabled={!next} onClick={() => next && onNext(next)}>下一页</button></nav>;
 }
 export function SnapshotInfo({ data }: { data?: { as_of: string; metric_version: string } }) {
-    return data ? <p className="st-muted">已计算至 {time(data.as_of)} · 指标 {data.metric_version || '未提供'} · 迟到补报可能回补数字</p> : null;
+    return data ? <p className="st-muted">数据统计到 {time(data.as_of)}，晚到的记录可能让数字略微增加</p> : null;
 }
 export function Counts({ data }: { data?: Page<unknown> }) { return data ? <div className="st-counts"><strong>已识别账号 {data.identified_count} 位</strong><strong>匿名访客 {data.anonymous_count} 个</strong></div> : null; }
 export function MediaPreview({ asset, title, original = false }: { asset?: Asset; title: string; original?: boolean }) {
@@ -32,16 +31,16 @@ export function MediaPreview({ asset, title, original = false }: { asset?: Asset
     useEffect(() => { setFailed(false); setAttempt(0); }, [asset?.url]);
     const url = safeMediaURL(asset?.url);
     if (!url || failed) return <div className="st-media st-media-failed"><span>{failed ? '图片或媒体加载失败' : '暂无可用预览'}</span>{failed && <button onClick={() => { setFailed(false); setAttempt(attempt + 1); }}>重试预览</button>}</div>;
-    return <div className="st-media">{asset?.kind === 'video' ? <video key={attempt} src={url} controls preload="metadata" onError={() => setFailed(true)} aria-label={title} /> : <img key={attempt} src={url} alt={title} loading="lazy" onError={() => setFailed(true)} />}{original && <a href={url} target="_blank" rel="noopener noreferrer">打开授权原始媒体</a>}</div>;
+    return <div className="st-media">{asset?.kind === 'video' ? <video key={attempt} src={url} controls preload="metadata" onError={() => setFailed(true)} aria-label={title} /> : <img key={attempt} src={url} alt={title} loading="lazy" onError={() => setFailed(true)} />}{original && <a href={url} target="_blank" rel="noopener noreferrer">查看原图</a>}</div>;
 }
 export function VisitDurations({ latest, cumulative }: { latest?: LatestVisit; cumulative: number }) {
-    return <dl className="st-duration-pair"><div><dt>最近一次（当前范围）</dt><dd>{latest ? duration(latest.visible_ms) : '单次记录未提供'}</dd>{latest && <small>进入 {time(latest.started_at)}</small>}</div><div><dt>当前范围累计可见</dt><dd>{duration(cumulative)}</dd></div></dl>;
+    return <dl className="st-duration-pair"><div><dt>最近一次停留</dt><dd>{latest ? duration(latest.visible_ms) : '单次记录未提供'}</dd>{latest && <small>进入 {time(latest.started_at)}</small>}</div><div><dt>这段时间累计停留</dt><dd>{duration(cumulative)}</dd></div></dl>;
 }
 export function VisitorCard({ visitor, onOpen, onOpenRecords = onOpen, children }: { visitor: Visitor; onOpen: () => void; onOpenRecords?: () => void; children?: React.ReactNode }) {
     const [evidence, setEvidence] = useState(false); const [avatarFailed, setAvatarFailed] = useState(false); const avatar = visitor.identity_state === 'identified' ? safeMediaURL(visitor.avatar_url) : undefined;
     useEffect(() => { setAvatarFailed(false); }, [avatar]);
-    const name = visitor.identity_state === 'anonymous' ? `匿名访客 · ${visitor.visitor_key.slice(-6)}` : visitor.identity_state === 'deleted' ? '已删除账号' : visitor.nickname || '未设置昵称';
-    return <article className="st-visitor"><button className="st-card-main" onClick={onOpen}><span className="st-avatar">{avatar && !avatarFailed ? <img src={avatar} alt="" onError={() => setAvatarFailed(true)} /> : '访'}</span><span><strong>{name}</strong><small>{visitor.identity_state === 'identified' ? '已登录账号 · ' : ''}{visitor.crm_label || '未关联客户'}</small></span><span className="st-chevron" aria-hidden="true">›</span></button><button className={`st-intent st-${visitor.intent?.level || 'unknown'}`} aria-expanded={evidence} onClick={() => setEvidence(!evidence)}>{intentLabels[visitor.intent?.level || 'unknown']} · 查看依据</button>{evidence && visitor.intent && <div className="st-evidence"><IntentEvidenceDetails evidence={visitor.intent} onOpenRecords={onOpenRecords} /></div>}<dl className="st-metrics"><div><dt>页面访问</dt><dd>{visitor.page_views} 次</dd></div><div><dt>会话</dt><dd>{visitor.session_count} 次</dd></div></dl><VisitDurations latest={visitor.latest_visit} cumulative={visitor.visible_ms} /><p className="st-muted">最近活动 {time(visitor.last_visit)}</p>{children}</article>;
+    const name = visitor.identity_state === 'anonymous' ? `匿名访客 · 尾号${visitor.visitor_key.slice(-6)}` : visitor.identity_state === 'deleted' ? '已删除账号' : visitor.nickname || '未设置昵称';
+    return <article className="st-visitor"><button className="st-card-main" onClick={onOpen}><span className="st-avatar">{avatar && !avatarFailed ? <img src={avatar} alt="" onError={() => setAvatarFailed(true)} /> : '访'}</span><span><strong>{name}</strong><small>{visitor.identity_state === 'identified' ? '已登录账号 · ' : ''}{visitor.crm_label || '未关联客户'}</small></span><span className="st-chevron" aria-hidden="true">›</span></button><span className={`st-intent st-${visitor.intent?.level || 'unknown'}`}>{intentLabels[visitor.intent?.level || 'unknown']}</span><dl className="st-metrics"><div><dt>看了几个页面</dt><dd>{visitor.page_views} 次</dd></div><div><dt>来过几次</dt><dd>{visitor.session_count} 次</dd></div></dl><VisitDurations latest={visitor.latest_visit} cumulative={visitor.visible_ms} /><p className="st-muted">最近访问 {time(visitor.last_visit)}</p>{children}</article>;
 }
 export function Dialog({ title, children, close, busy = false }: { title: string; children: React.ReactNode; close: () => void; busy?: boolean }) {
     const ref = useRef<HTMLDivElement>(null); const closeRef = useRef(close); closeRef.current = close;

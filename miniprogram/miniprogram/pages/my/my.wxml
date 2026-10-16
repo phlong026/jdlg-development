@@ -147,17 +147,6 @@
         </view>
       </view>
 
-      <view class="menu-section-title">访问分析隐私</view>
-      <view class="menu-card menu-list-card">
-        <view class="menu-list-item">
-          <view class="menu-list-main"><text class="menu-list-label">访问分析</text></view>
-          <text class="menu-list-meta">{{trackingConsented ? '已同意' : '未同意'}}</text>
-        </view>
-        <view class="menu-list-item"><text>由你选择，拒绝或撤回不影响阅读、分享及其他功能，无需登录。</text></view>
-        <button class="menu-list-item" bindtap="onTrackingConsentTap" loading="{{trackingConsentBusy}}" disabled="{{trackingConsentBusy}}" aria-label="查看完整访问分析告知并重新选择">查看告知 / 重新选择</button>
-        <button class="menu-list-item menu-list-item-last" bindtap="onWithdrawTrackingConsent" aria-label="立即撤回访问分析同意">立即撤回同意</button>
-      </view>
-
       <view class="logout-btn" wx:if="{{hasLoginToken}}" bindtap="onLogoutTap">退出登录</view>
     </view>
   </view>
