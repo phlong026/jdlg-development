@@ -72,6 +72,7 @@ function showConsentChoices(page, manual=false) {
   if(consentRequest) return consentRequest;
   const request=refreshConfig().then(value=>{
     const target=manual?page:consentPage;
+    // manual 由"我的"页主动触发，页面本身不是采集页，跳过采集页可见性校验。
     if(!target || (!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))))return false;
     if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
     const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);

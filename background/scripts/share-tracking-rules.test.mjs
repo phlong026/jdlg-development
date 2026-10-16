@@ -122,7 +122,7 @@ test('old rendered submit cannot commit obsolete form values',async()=>{
 test('evidence displays real metrics thresholds exclusions calculation override and capped source records',()=>{
  const {IntentEvidenceDetails}=load('src/pages/shareTracking/evidence.tsx',{'./model':model});const {renderToStaticMarkup}=require('react-dom/server');
  const evidence={level:'high',rule_version:'r2',window_start:'2026-09-11',window_end:'2026-10-11',calculated_at:'2026-10-11T12:00:00Z',timezone:'Asia/Shanghai',reasons:['服务端已确认预约'],metrics:{sessions:3,favorites:1,business_results:1},thresholds:base,exclusions:['测试流量'],participating_metrics:['sessions','favorites','business_results'],override_state:'active',evidence_truncated:true,evidence:[{kind:'business',record_id:'verified-42',session_id:'session-42',page_view_id:'pv-42',action:'appointment',occurred_at:'2026-10-10',content_id:'content-42',content_version:2}]};
- const html=renderToStaticMarkup(IntentEvidenceDetails({evidence,onOpenRecords(){}}));for(const value of ['计算时间','有效人工覆盖','有效会话 3 次','已确认收藏 1 次','测试流量','预约成功','verified-42','session-42','pv-42','content-42','v2','部分证据','查看有权访问'])assert.ok(html.includes(value),value);
+ const html=renderToStaticMarkup(IntentEvidenceDetails({evidence,onOpenRecords(){}}));for(const value of ['评估时间','有效人工覆盖','有效会话 3 次','已确认收藏 1 次','测试流量','预约成功','仅展示部分','查看有权访问'])assert.ok(html.includes(value),value);
  const scope=renderToStaticMarkup(IntentEvidenceDetails({evidence:{...evidence,scope_required:true,level:'unknown',override_state:'expired'}}));assert.match(scope,/请选择单一跟进归属/);assert.match(scope,/人工覆盖已过期/);
 });
 test('rule panel shares the single tracking menu and existing guarded dialog',()=>{
@@ -144,25 +144,28 @@ test('detail evidence navigation uses its own window and restores list scope wit
  const visitor={visitor_key:'u:42',identity_state:'identified',intent:{window_start:'2026-09-11',window_end:'2026-10-11',evidence:[{session_id:'source-session'}]}};
  const query={owner:'owner-a',start:'2026-10-09',end:'2026-10-12',as_of:'2026-10-11',limit:20};
  function render(){index=0;tree=VisitorDetails({visitor,query,contentId:'content-filter'});return tree}render();assert.equal(calls.at(-1)[1].content_id,'content-filter');
- nodes(tree).find(node=>node.type==='VisitorGovernance').props.onOpenEvidence();render();assert.equal(calls.at(-1)[1].owner,'owner-a');assert.equal(calls.at(-1)[1].start,'2026-09-11');assert.equal(calls.at(-1)[1].end,undefined);assert.equal(calls.at(-1)[1].as_of,'2026-10-11');assert.equal(calls.at(-1)[1].content_id,undefined);assert.match(text(tree),/意向来源范围/);
+ nodes(tree).find(node=>node.type==='VisitorGovernance').props.onOpenEvidence();render();assert.equal(calls.at(-1)[1].owner,'owner-a');assert.equal(calls.at(-1)[1].start,'2026-09-11');assert.equal(calls.at(-1)[1].end,undefined);assert.equal(calls.at(-1)[1].as_of,'2026-10-11');assert.equal(calls.at(-1)[1].content_id,undefined);assert.match(text(tree),/意向评估时间/);
  const page=nodes(tree).find(node=>typeof node.type==='function'&&node.type.name==='PageVisit');assert.ok(page);assert.equal(page.props.query.start,'2026-09-11');assert.equal(page.props.query.owner,'owner-a');
  nodes(tree).find(node=>node.type==='button'&&text(node)==='返回列表筛选范围').props.onClick();render();assert.equal(calls.at(-1)[1].start,'2026-10-09');assert.equal(calls.at(-1)[1].end,'2026-10-12');assert.equal(calls.at(-1)[1].content_id,'content-filter');
  visitor.intent.scope_required=true;render();assert.equal(nodes(tree).find(node=>node.type==='VisitorGovernance').props.onOpenEvidence,undefined);
 });
 
-test('actual version trajectory propagates the clicked page identity through PageVisit into Events',()=>{
- const React=require('react');let index=0,slots=[],eventPhase=false;const calls=[];
+test('page visit renders the customer-readable label and never fetches event-level detail',()=>{
+ const React=require('react');let index=0,slots=[];const calls=[];
  const react={...React,useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]}};
- for(const scenario of [{view:{page_view_id:'pv-A',content_id:'content-A',content_version:3},related:false},{view:{page_view_id:'pv-B',content_id:'content-B',content_version:8},related:true},{view:{page_view_id:'pv-page',route_key:'pages/home/home'},related:true}]){
-  slots=[];index=0;eventPhase=false;const session={session_id:'source-session',page_views:[scenario.view]};
-  const components={ContentBody:'ContentBody',Counts:'Counts',Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',SnapshotInfo:'SnapshotInfo',VisitorCard:'VisitorCard',useResource:loader=>{void loader(new AbortController().signal);return{data:{items:eventPhase?[]:[session]}}}};
+ for(const scenario of [{view:{page_view_id:'pv-A',content_id:'content-A',content_version:3,title:'精选案例'},label:'精选案例'},{view:{page_view_id:'pv-page',route_key:'pages/index/index'},label:'首页'}]){
+  slots=[];index=0;const session={session_id:'source-session',page_views:[scenario.view]};
+  const components={ContentBody:'ContentBody',Counts:'Counts',Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',SnapshotInfo:'SnapshotInfo',VisitorCard:'VisitorCard',useResource:loader=>{void loader(new AbortController().signal);return{data:{items:[session]}}}};
   const {VisitorDetails}=load('src/pages/shareTracking/details.tsx',{'react':react,'../../api/shareTracking':{tracking:{sessions:async()=>({items:[session]}),events:async(id,query)=>{calls.push({id,query});return{items:[]}}}},'./model':model,'./components':components,'./crmTarget':{CRMTargetButton:'CRMTargetButton'},'./governance':{VisitorGovernance:'VisitorGovernance'}});
   const props={visitor:{visitor_key:'u:42',identity_state:'identified'},query:{owner:'owner-a',as_of:'2026-10-12T00:00:00Z',content_version:3,content_q:'标题'},contentId:'content-A'};
-  let tree=VisitorDetails(props);if(scenario.related){nodes(tree).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});index=0;tree=VisitorDetails(props)}
+  let tree=VisitorDetails(props);
   nodes(tree).find(n=>n.type==='button'&&n.props['aria-expanded']===false).props.onClick();index=0;tree=VisitorDetails(props);
-  const page=nodes(tree).find(n=>typeof n.type==='function'&&n.type.name==='PageVisit');assert.ok(page);slots=[];index=0;let pageTree=page.type(page.props);nodes(pageTree).find(n=>n.type==='button').props.onClick();index=0;pageTree=page.type(page.props);
-  const events=nodes(pageTree).find(n=>typeof n.type==='function'&&n.type.name==='Events');assert.ok(events);slots=[];index=0;eventPhase=true;events.type(events.props);
-  const last=calls.at(-1);assert.equal(last.id,scenario.view.page_view_id);assert.equal(last.query.content_id,scenario.view.content_id);assert.equal(last.query.content_version,scenario.view.content_version);assert.equal(last.query.owner,'owner-a');assert.equal(last.query.as_of,props.query.as_of);assert.equal(last.query.content_q,scenario.related?undefined:'标题');
+  const page=nodes(tree).find(n=>typeof n.type==='function'&&n.type.name==='PageVisit');assert.ok(page);
+  slots=[];index=0;const pageTree=page.type(page.props);
+  assert.match(text(pageTree),new RegExp(scenario.label));
+  assert.match(text(pageTree),/停留/);
+  assert.equal(nodes(pageTree).find(n=>typeof n.type==='function'&&n.type.name==='Events'),undefined,'event-level detail is gone');
+  assert.equal(calls.length,0,'no event fetches from the visit trajectory');
  }
 });
 
