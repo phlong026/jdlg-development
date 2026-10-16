@@ -29,7 +29,7 @@ function runtime({storage={},configuration,configRequest,offlineEvents=false}={}
     Page:value=>{definition=value;},App:value=>{appDefinition=value;},setInterval:()=>1,setTimeout,clearTimeout,Date,Math,Promise,Uint8Array};
   vm.runInNewContext(fs.readFileSync(path.join(root,'utils/tracking/index.js'),'utf8'),sandbox);
   const adapter=sandbox.module.exports;
-  adapter.install();sandbox.App({});appDefinition.onShow({});
+  adapter.install();sandbox.App({});appDefinition.onLaunch({});appDefinition.onShow({});
   function register(route,custom={}) {
     sandbox.Page(custom);
     const page={...definition,route,data:JSON.parse(JSON.stringify(definition.data||{})),setData(value,done){Object.assign(this.data,value);if(done)done.call(this);}};
@@ -55,108 +55,126 @@ async function legacy(t) {
   await settle();return page;
 }
 
-test('real legacy public entry shows complete optional notice before any analytics and preserves sharing',async()=>{
+// ─────────── 静默同意模型：从未选择的用户随配置拉取自动开启；明确拒绝过的不覆盖 ───────────
+
+test('silent consent collects the first public visit without any dialog while reading and sharing keep working',async()=>{
   const t=runtime(),page=await legacy(t);
-  assert.equal(t.modals.length,1);assert.equal(t.entries.length,0);assert.equal(t.events.length,0);
+  assert.equal(t.modals.length,0,'no prompt is shown for the silent default');
   assert.equal(page.data.contentReady,true);assert.equal(page.data.tools[0].title,'可读工具');
-  assert.ok(t.modals[0].content.includes(notice));assert.ok(t.modals[0].content.endsWith('未同意前不采集访问分析。'));
-  assert.equal(t.modals[0].showCancel,true);assert.equal(t.modals[0].confirmText,'同意分析');assert.equal(t.modals[0].cancelText,'不同意');
-  const share=page.onShareAppMessage();assert.equal(share.path,'/pages/utilitytools/utilitytools');assert.equal(share.promise,undefined);
-});
-
-test('decline keeps real reading/sharing available and is remembered across pages and restarts for this notice',async()=>{
-  const t=runtime(),page=await legacy(t);t.answer(0,false);await settle();
-  assert.equal(page.data.contentReady,true);assert.equal(page.onShareAppMessage().path,'/pages/utilitytools/utilitytools');
-  assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);assert.equal(t.events.length,0);
-  page.onHide();page.onShow();await settle();assert.equal(t.modals.length,1);
-  const restarted=runtime({storage:t.storage});await legacy(restarted);assert.equal(restarted.modals.length,0);assert.equal(restarted.entries.length,0);
-});
-
-test('only explicit confirm enables collection for the real visible ready public page',async()=>{
-  const t=runtime();await legacy(t);assert.equal(t.adapter.getSDK().diagnostics().enabled,false);
-  t.answer(0,true);await settle();assert.equal(t.adapter.consented(),true);
   assert.equal(t.entries.length,1);assert.equal(t.entries[0].share_token,'incoming_share');
   assert.equal(t.events.filter(e=>e.event_type==='page_view').length,1);
   assert.equal(t.events.find(e=>e.event_type==='page_view').route_key,'pages/utilitytools/utilitytools');
+  const share=page.onShareAppMessage();assert.equal(share.path,'/pages/utilitytools/utilitytools');
 });
 
-test('every collectable route has the same reachable optional choice; private routes never automatically prompt',async()=>{
-  for(const [route,policy] of Object.entries(routes.ROUTES)) {
-    const t=runtime(),page=t.register(route,{data:{},onLoad(){},onShow(){return 'business';}});
-    t.mount(page);await settle();
-    assert.equal(t.modals.length,policy.collect?1:0,route);
-    if(!policy.collect)assert.equal(t.adapter.getSDK().get(page),undefined,route+' stays unregistered');
-    assert.equal(t.entries.length,0,route+' cannot collect before consent');
-  }
-  const t=runtime(),own=t.register('pages/designerhome/designerhome',{data:{isSelfHomepage:true}});
-  t.mount(own);await settle();assert.equal(t.modals.length,0,'self-management variant stays private');
+test('the settings switch can stop collection and the rejection survives config refreshes and restarts',async()=>{
+  const t=runtime(),page=await legacy(t);
+  assert.equal(t.adapter.setConsent(false),true);
+  const collected=t.entries.length;
+  page.onHide();page.onShow();await t.adapter.refreshConfig();await settle();
+  assert.equal(t.adapter.consented(),false);
+  assert.equal(t.entries.length,collected,'declined pages do not collect');
+  const eventsBeforeDecline=t.events.length;
+  page.onHide();page.onShow();await t.adapter.refreshConfig();await settle();
+  assert.equal(t.events.length,eventsBeforeDecline,'no new events after the switch is turned off');
+  const restarted=runtime({storage:t.storage});await legacy(restarted);
+  assert.equal(restarted.modals.length,0);assert.equal(restarted.entries.length,0,'rejection persists across restarts');
 });
 
-test('async configuration cannot open a public consent dialog after navigating to a private page',async()=>{
-  let finish;const t=runtime({configRequest:()=>new Promise(resolve=>{finish=resolve;})});
-  const page=t.register('pages/index/index');t.mount(page);page.onHide();t.mount(t.register('pages/login/login'));
-  finish({enabled:true,consent_version:'notice-v1',privacy_notice:notice});await settle();
-  assert.equal(t.modals.length,0);assert.equal(t.entries.length,0);
+test('a previously accepted notice is silently re-accepted after an update, and a rejection is never retried',async()=>{
+  const t=runtime(),page=await legacy(t);assert.equal(t.adapter.consented(),true);
+  t.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+'\n第二版新增说明。'});
+  await t.adapter.refreshConfig();await settle();
+  assert.equal(t.modals.length,0,'updated notice re-accepts silently for prior accepters');
+  assert.equal(t.adapter.consented(),true);assert.ok(t.entries.length>0);
+
+  const declined=runtime();assert.equal(declined.adapter.setConsent(false),true);
+  declined.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+'\n第二版新增说明。'});
+  await declined.adapter.refreshConfig();await settle();
+  assert.equal(declined.adapter.consented(),false,'explicit rejection is not overridden');
+  assert.equal(declined.modals.length,0);assert.equal(declined.entries.length,0);
 });
 
-test('modal failure and disabled or incomplete server configuration cannot grant consent or block business lifecycle',async()=>{
+test('incomplete or disabled server configuration cannot grant silent consent',async()=>{
   for(const configuration of [{enabled:false,consent_version:'v',privacy_notice:notice},{enabled:true,privacy_notice:notice},{enabled:true,consent_version:'v'}]){
     const t=runtime({configuration}),page=t.register('pages/index/index',{onShow(){return 'business-result';}});
     page.onLoad({});assert.equal(page.onShow(),'business-result');page.onReady();await settle();
     assert.equal(t.modals.length,0);assert.equal(t.entries.length,0);assert.equal(t.adapter.consented(),false);
   }
-  const t=runtime(),page=await legacy(t);t.modals[0].fail({errMsg:'unavailable'});await settle();
-  assert.equal(page.data.contentReady,true);assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);
 });
 
-test('real My page offers anonymous re-choice and immediate withdrawal without collecting private-page views',async()=>{
-  const t=runtime(),publicPage=await legacy(t);t.answer(0,false);await settle();publicPage.onHide();
-  const my=t.actual('my');my.onLoad({});my.onShow();my.onReady();await settle();
-  assert.equal(my.data.hasLoginToken,false);assert.equal(t.modals.length,1,'no automatic prompt in My');
-  const choice=my.onTrackingConsentTap();await settle();assert.equal(t.modals.length,2);
-  t.answer(1,true);await choice;assert.equal(my.data.trackingConsented,true);
-  assert.equal(t.adapter.getSDK().get(my),undefined);assert.equal(t.events.filter(e=>e.route_key==='pages/my/my').length,0);
-  my.onWithdrawTrackingConsent();assert.equal(my.data.trackingConsented,false);assert.equal(t.adapter.consented(),false);
-  assert.equal(t.adapter.getSDK().diagnostics().enabled,false);assert.equal(t.adapter.getSDK().diagnostics().queued,0);
-  my.onHide();publicPage.onShow();await settle();assert.equal(t.modals.length,2,'withdrawal is remembered, not immediately requested again');
+test('route policy still gates collection: collectable routes register, private and self-homepage never do',async()=>{
+  for(const [route,policy] of Object.entries(routes.ROUTES)) {
+    const t=runtime(),page=t.register(route,{data:{},onLoad(){},onShow(){return 'business';}});
+    t.mount(page);await settle();
+    if(policy.collect)assert.notEqual(t.adapter.getSDK().get(page),undefined,route+' is registered');
+    else assert.equal(t.adapter.getSDK().get(page),undefined,route+' stays unregistered');
+    if(!policy.collect)assert.equal(t.entries.length,0,route+' cannot collect');
+  }
+  const t=runtime(),own=t.register('pages/designerhome/designerhome',{data:{isSelfHomepage:true}});
+  t.mount(own);await settle();await settle();
+  assert.equal(t.events.filter(e=>e.route_key==='pages/designerhome/designerhome').length,0,'self-management visits stay unobserved');
 });
 
-test('withdrawal wins over a delayed confirm callback and needs no network request',async()=>{
-  const t=runtime();await legacy(t);t.adapter.setConsent(false);t.answer(0,true);await settle();
-  assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);assert.equal(t.adapter.getSDK().diagnostics().queued,0);
+test('async configuration with silent consent never collects private pages',async()=>{
+  let finish;const t=runtime({configRequest:()=>new Promise(resolve=>{finish=resolve;})});
+  const page=t.register('pages/index/index');t.mount(page);page.onHide();t.mount(t.register('pages/login/login'));
+  finish({enabled:true,consent_version:'notice-v1',privacy_notice:notice});await settle();
+  assert.equal(t.modals.length,0);
+  assert.equal(t.events.filter(e=>e.route_key==='pages/login/login').length,0,'login stays private');
 });
 
-test('repeated foreground callbacks do not stack dialogs and ambiguous results never mean acceptance',async()=>{
-  const t=runtime(),page=await legacy(t);page.onShow();page.onShow();await settle();assert.equal(t.modals.length,1);
-  t.modals[0].success({confirm:'true',cancel:false});await settle();assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);
-  t.adapter.setConsent('true');assert.equal(t.adapter.consented(),false);assert.equal(t.adapter.getSDK().diagnostics().enabled,false);
+test('manual modal keeps its race guards: withdrawal wins, ambiguous answers never grant, calls do not stack',async()=>{
+  const t=runtime(),page=await legacy(t);
+  // 手动查看完整告知：弹窗打开后发生撤回时，迟到的确认不能重新开启
+  const choosing=t.adapter.showConsentChoices(page);await settle();
+  assert.equal(t.modals.length,1);assert.ok(t.modals[0].content.includes(notice),'manual modal shows the complete notice');
+  t.adapter.setConsent(false);
+  t.answer(0,true);await choosing;await settle();
+  assert.equal(t.adapter.consented(),false,'withdrawal wins over a delayed confirm');
+  // 含糊的回调结果永远不等于同意
+  const second=t.adapter.showConsentChoices(page);await settle();
+  t.modals[1].success({confirm:'true',cancel:false});await second;await settle();
+  assert.equal(t.adapter.consented(),false);
+  // 重复调用复用同一请求，不叠弹窗
+  const a=t.adapter.showConsentChoices(page),b=t.adapter.showConsentChoices(page);await settle();
+  assert.equal(t.modals.length,3,'deduplicated request adds only one modal');
+  t.answer(2,true);await a;await b;await settle();
+  assert.equal(t.adapter.consented(),true,'answering the deduplicated modal still grants once');
 });
 
 test('withdrawal during a config outage purges queued analytics and remains declined after recovery/restart',async()=>{
   let outage=false;
   const t=runtime({offlineEvents:true,configRequest:async()=>{if(outage)throw new Error('offline');return{enabled:true,consent_version:'notice-v1',privacy_notice:notice};}});
-  const page=await legacy(t);t.answer(0,true);await settle();assert.ok(t.adapter.getSDK().diagnostics().queued>0);
+  const page=await legacy(t);assert.ok(t.adapter.getSDK().diagnostics().queued>0);
   outage=true;await t.adapter.refreshConfig();t.adapter.setConsent(false);
   assert.equal(t.adapter.getSDK().diagnostics().queued,0);assert.equal(t.adapter.consented(),false);
   const restarted=runtime({storage:t.storage});await legacy(restarted);assert.equal(restarted.modals.length,0);assert.equal(restarted.entries.length,0);
   assert.equal(page.data.contentReady,true);
 });
 
-test('new notice version requires a new explicit choice and the unchanged rejection is not retried',async()=>{
-  const t=runtime(),page=await legacy(t);t.answer(0,false);await settle();
-  page.onHide();t.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+'\n第二版新增说明。'});page.onShow();await settle();
-  assert.equal(t.modals.length,2);assert.ok(t.modals[1].content.includes('第二版新增说明。'));assert.equal(t.entries.length,0);
-  t.answer(1,false);await settle();page.onHide();page.onShow();await settle();assert.equal(t.modals.length,2);
-});
+// ─────────── 产物同步守卫：设置页持有开关，我的页旧授权 UI 与自动弹窗不得回归 ───────────
 
-test('My template binds visible disclosure, re-choice and withdrawal controls outside login-only conditions',()=>{
-  const source=fs.readFileSync(path.join(root,'pages/my/my.wxml'),'utf8');
-  const section=source.slice(source.indexOf('<view class="menu-section-title">访问分析隐私'));
-  assert.match(section,/bindtap="onTrackingConsentTap"/);assert.match(section,/bindtap="onWithdrawTrackingConsent"/);
-  assert.ok(section.indexOf('bindtap="onWithdrawTrackingConsent"')<section.indexOf('wx:if="{{hasLoginToken}}"'));
+test('settings page owns the switch and stale consent UI is gone from My and page prompts',()=>{
+  const settingsWxml=fs.readFileSync(path.join(root,'pages/settings/settings.wxml'),'utf8');
+  assert.match(settingsWxml,/bindchange="onToggleTracking"/);assert.match(settingsWxml,/checked="\{\{trackingEnabled\}\}"/);
+  for(const ext of ['ts','js']){
+    const code=fs.readFileSync(path.join(root,'pages/settings/settings.'+ext),'utf8');
+    assert.match(code,/onToggleTracking/,ext);
+    const handler=code.slice(code.indexOf('onToggleTracking('),code.indexOf('ensureLoggedIn'));
+    assert.doesNotMatch(handler,/isLoggedIn|ensureLoggedIn/,'switch must work without login requirements');
+    assert.match(code,/setConsent\(/,ext);
+    assert.match(code,/syncTrackingEnabled/,ext);
+  }
+  // 我的页不再承载授权 UI 与处理器（ts 与编译产物 js 都要干净）
+  const myWxml=fs.readFileSync(path.join(root,'pages/my/my.wxml'),'utf8');
+  assert.doesNotMatch(myWxml,/访问分析隐私|onTrackingConsentTap|onWithdrawTrackingConsent/);
   for(const ext of ['ts','js']){
     const code=fs.readFileSync(path.join(root,'pages/my/my.'+ext),'utf8');
-    const handler=code.slice(code.indexOf('async onTrackingConsentTap()'),code.indexOf('onWithdrawTrackingConsent()'));
-    assert.doesNotMatch(handler,/isLoggedIn|ensureLoggedIn/);assert.match(code,/trackingConsent\.setConsent\(false\)/);
+    assert.doesNotMatch(code,/onTrackingConsentTap|onWithdrawTrackingConsent|syncTrackingConsent/,ext);
   }
+  // 编译产物守卫：index.js 必须包含静默同意，且页面展示不再自动弹窗
+  const bundled=fs.readFileSync(path.join(root,'utils/tracking/index.js'),'utf8');
+  assert.match(bundled,/safely\(\(\)=>setConsent\(true\)\)/,'silent consent must exist in the shipped artifact');
+  assert.doesNotMatch(bundled,/if\(visible\)\{consentPage=page;showConsentChoices\(page\);\}/,'auto prompt must stay removed');
 });

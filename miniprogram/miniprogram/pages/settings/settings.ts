@@ -4,6 +4,8 @@ export {};
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter'
 import { getCachedDeviceFingerprint } from '../../utils/deviceFingerprint'
 
+const trackingConsent = require('../../utils/tracking/index')
+
 const SETTINGS_DARK_MODE_STORAGE_KEY = 'settings_dark_mode'
 const PRIVACY_SETTINGS_STORAGE_KEY = 'privacy_settings'
 const ACCOUNT_REQUEST_STORAGE_KEY = 'privacy_account_requests'
@@ -71,6 +73,7 @@ Page({
     identitySaving: false,
     dataSharingEnabled: true,
     recommendationEnabled: true,
+    trackingEnabled: false,
     permissionItems: [] as PermissionItem[],
     personalInfoItems: buildDefaultPersonalInfoItems(),
     personalInfoVisible: false,
@@ -97,6 +100,23 @@ Page({
     this.loadProfileIdentity()
     this.loadPersonalInfo()
     this.syncPermissionSettings()
+    this.syncTrackingEnabled()
+  },
+
+  syncTrackingEnabled() {
+    trackingConsent.refreshConfig().then(() => {
+      this.setData({ trackingEnabled: trackingConsent.consented() })
+    })
+  },
+
+  onToggleTracking(e: any) {
+    const enabled = !!e.detail.value
+    const ok = trackingConsent.setConsent(enabled)
+    this.setData({ trackingEnabled: ok ? enabled : !enabled })
+    wx.showToast({
+      title: !ok ? '暂时无法更改，请稍后再试' : enabled ? '已开启访问分析' : '已关闭访问分析',
+      icon: 'none',
+    })
   },
 
   ensureLoggedIn() {
