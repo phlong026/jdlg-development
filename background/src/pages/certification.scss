@@ -473,6 +473,118 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─────────── 移动端（≤768）：表格 → 卡片视图，队列 Tab 横滑 ─────────── */
+/* 卡片 DOM 常驻渲染，桌面端整体隐藏 */
+.cert-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .admin-table-region {
+    display: none;
+  }
+
+  .cert-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .cert-cards-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #8b5e3c;
+    font-size: 14px;
+  }
+
+  .cert-card {
+    background: #ffffff;
+    border: 1px solid #f1e7d8;
+    border-radius: 14px;
+    padding: 13px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .cert-card.card-overdue {
+    border-color: #fecaca;
+    background: #fff7f7;
+  }
+
+  .cert-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .cert-card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cert-card-sub {
+    font-size: 12px;
+    color: #9ca3af;
+    overflow-wrap: anywhere;
+  }
+
+  .cert-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .cert-card-plain {
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .cert-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .cert-card-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 9px;
+    border-top: 1px solid #f1e7d8;
+  }
+
+  .cert-card-actions .btn-action {
+    flex: 1;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  /* 队列 Tab：换行改单行横滑（SubNav 同款体验） */
+  .cert-queues {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    .cert-queue-tab {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+  }
+}
 /* ============ 队列 Tab ============ */
 .cert-queues {
   display: flex;

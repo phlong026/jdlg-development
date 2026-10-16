@@ -1172,5 +1172,64 @@
   .mode-toggle {
     flex-direction: column;
   }
+
+  /* 手机上打散双栏（display:contents 让两列子区块成为同一容器的排序单元），
+     按使用频率重排：高频操作 → 待处理 → 指标 → Tab 详情 → 账号安全 → 说明卡。
+     桌面端双栏布局不受影响（仅 ≤768 生效）。 */
+  .content-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .content-main,
+  .content-side {
+    display: contents;
+  }
+
+  .content-main > *,
+  .content-side > * {
+    order: 5;
+  }
+
+  .content-side > .section-card:nth-child(1) {
+    order: 1;
+  }
+
+  .content-main > .section-card:nth-child(1) {
+    order: 2;
+  }
+
+  .content-main > .summary-grid {
+    order: 3;
+  }
+
+  .content-main > .detail-tab-row {
+    order: 4;
+  }
+
+  .content-side > .section-card:nth-child(2) {
+    order: 6;
+  }
+
+  .content-side > .compact-note-card {
+    order: 7;
+  }
+
+  /* 详情 Tab 药丸改单行横滑，避免换行占多行 */
+  .detail-tab-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    .detail-tab-button {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+  }
 }
 }

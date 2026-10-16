@@ -328,6 +328,78 @@ const MembershipOperations: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                    {/* 移动端卡片视图：≤768 隐藏 1080px 宽表格改用卡片（双 DOM 切换见 membershipOperations.scss） */}
+                    <div className="membership-cards">
+                        {users.length === 0 ? (
+                            <div className="membership-cards-empty">暂无会员用户数据</div>
+                        ) : (
+                            users.map((item) => {
+                                const sourceOrder = item.source_order;
+                                const latestRecharge = item.latest_recharge_order;
+                                const permissionIssue = !item.template_download_enabled && !item.legacy_recharge_member;
+                                return (
+                                    <div
+                                        key={item.user_id}
+                                        className={`membership-card${permissionIssue ? ' card-perm-issue' : ''}`}
+                                    >
+                                        <div className="membership-card-head">
+                                            <div className="membership-card-identity">
+                                                <strong>{item.display_name || item.username}</strong>
+                                                <span>ID {item.user_id} · {item.username}</span>
+                                            </div>
+                                            <span className={`status-badge status-${item.status || 'inactive'}`}>
+                                                {item.lifetime_membership ? '终身会员' : (MEMBERSHIP_STATUS_MAP[item.status || 'inactive'] || item.status || '未知')}
+                                            </span>
+                                        </div>
+                                        <div className="membership-card-plan">
+                                            <span className="membership-card-plan-title">{item.plan_title || (item.legacy_recharge_member ? '旧版长期有效会员' : '未命名计划')}</span>
+                                            <RemainingDays item={item} />
+                                        </div>
+                                        <div className="membership-card-row">
+                                            <span className="membership-card-label">下载权限</span>
+                                            <span className={`perm-badge ${item.template_download_enabled ? 'enabled' : 'disabled'}`}>
+                                                {item.template_download_enabled ? '已开启' : '未开启'}
+                                            </span>
+                                        </div>
+                                        <div className="membership-card-row">
+                                            <span className="membership-card-label">有效期</span>
+                                            <span className="membership-card-value">
+                                                {item.granted_at_text || '暂无'} 起 · {item.lifetime_membership ? '永久有效' : (item.expired_at_text || '暂无')} 止
+                                            </span>
+                                        </div>
+                                        <div className="membership-card-row">
+                                            <span className="membership-card-label">来源订单</span>
+                                            <span className="membership-card-value">
+                                                {item.source_order_no || '暂无'}
+                                                {sourceOrder?.status ? `（${ORDER_STATUS_MAP[sourceOrder.status] || sourceOrder.status}）` : ''}
+                                            </span>
+                                        </div>
+                                        <div className="membership-card-row">
+                                            <span className="membership-card-label">最近充值</span>
+                                            <span className="membership-card-value">
+                                                {latestRecharge?.order_no || '暂无'}
+                                                {latestRecharge?.status ? `（${ORDER_STATUS_MAP[latestRecharge.status] || latestRecharge.status}）` : ''}
+                                            </span>
+                                        </div>
+                                        <div className="membership-card-actions">
+                                            <button className="btn-link" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>用户详情</button>
+                                            <button className="btn-link" onClick={() => navigate('/recharge')}>订单中心</button>
+                                            {permissionIssue && (
+                                                <button
+                                                    className="btn-link fix-perm"
+                                                    disabled={fixingUserId === item.user_id}
+                                                    onClick={() => handleFixPermission(item.user_id)}
+                                                    title="核对来源订单有效后，一键恢复下载权限（记审计）"
+                                                >
+                                                    {fixingUserId === item.user_id ? '修复中...' : '修复权限'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
             </div>
         </>

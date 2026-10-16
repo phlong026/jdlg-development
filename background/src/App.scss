@@ -112,7 +112,8 @@
     .layout-content [class*='summary-grid'],
     .layout-content [class*='-summary-grid'] {
         display: grid !important;
-        grid-template-columns: 1fr !important;
+        /* 统计卡窄屏用两列网格：一列一卡信息密度太低，一屏只能看一个数字 */
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 12px !important;
     }
 
@@ -121,7 +122,7 @@
     .layout-content .inspirations-stats,
     .layout-content .templates-stats {
         display: grid !important;
-        grid-template-columns: 1fr !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         padding: 14px !important;
     }
 

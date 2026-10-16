@@ -287,5 +287,121 @@
   }
 }
 
+/* ─────────── 移动端（≤768）：1080px 宽表格 → 卡片视图 ─────────── */
+/* 卡片 DOM 常驻渲染，桌面端整体隐藏 */
+.membership-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .membership-table-wrap {
+    display: none;
+  }
+
+  .membership-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .membership-cards-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #8b5e3c;
+    font-size: 14px;
+  }
+
+  .membership-card {
+    background: #ffffff;
+    border: 1px solid #f1e7d8;
+    border-radius: 14px;
+    padding: 13px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .membership-card.card-perm-issue {
+    border-color: #fecaca;
+    background: #fff7f7;
+  }
+
+  .membership-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .membership-card-identity {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .membership-card-identity strong {
+    font-size: 15px;
+    color: #1f2937;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .membership-card-identity span {
+    font-size: 11.5px;
+    color: #9ca3af;
+    overflow-wrap: anywhere;
+  }
+
+  .membership-card-plan {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px 10px;
+    background: #faf6ef;
+    border-radius: 10px;
+  }
+
+  .membership-card-plan-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #8b5e3c;
+  }
+
+  .membership-card-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+  }
+
+  .membership-card-label {
+    flex-shrink: 0;
+    color: #9ca3af;
+  }
+
+  .membership-card-value {
+    text-align: right;
+    color: #4b5563;
+    overflow-wrap: anywhere;
+  }
+
+  .membership-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 9px;
+    border-top: 1px solid #f1e7d8;
+  }
+
+  .membership-card-actions .btn-link {
+    min-height: 36px;
+  }
+}
+
 
 }
