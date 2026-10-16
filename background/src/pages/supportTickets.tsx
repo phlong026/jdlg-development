@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiAlertCircle, FiClipboard, FiRefreshCw, FiSearch, FiTool } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
+import { useIsMobile } from '../component/useIsMobile';
 import {
     assignSupportTicket,
     createSupportTicket,
@@ -138,6 +139,7 @@ const getSourceSummaryItems = (item?: SupportTicketItem | null) => {
 
 const SupportTickets: React.FC = () => {
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
     const [overview, setOverview] = useState<SupportTicketOverview | null>(null);
     const [list, setList] = useState<SupportTicketItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -502,6 +504,48 @@ const SupportTickets: React.FC = () => {
                 </div>
 
                 <div className="support-panel section-card">
+                    {isMobile ? (
+                        /* 手机端：工单卡片。8 列 1100px 表格在 390px 上要横滑 3 屏，卡片首屏直接给状态/优先级/标题 */
+                        <div className="ticket-card-list">
+                            {loading ? (
+                                <div className="empty-state" role="status">正在加载工单...</div>
+                            ) : loadError ? (
+                                <div className="empty-state" role="alert">{loadError}<button className="btn-inline" onClick={() => void loadLatest.current()}>重试加载</button></div>
+                            ) : list.length === 0 ? (
+                                <div className="empty-state">暂无工单数据</div>
+                            ) : list.map((item) => (
+                                <article key={item.id} className="ticket-card">
+                                    <div className="ticket-card-head">
+                                        <span className={`inline-tag ${item.status === 'closed' ? '' : item.status === 'in_progress' ? 'warning' : 'danger'}`}>{statusLabelMap[item.status] || item.status}</span>
+                                        <span className={`inline-tag ${item.priority === 'high' ? 'danger' : ''}`}>{priorityLabelMap[item.priority] || item.priority}</span>
+                                        <span className="ticket-card-type">{typeLabelMap[item.type] || item.type}</span>
+                                    </div>
+                                    <div className="ticket-card-title">
+                                        <strong>{item.title}</strong>
+                                        {item.content ? <span className="cell-clamp">{item.content}</span> : null}
+                                    </div>
+                                    <div className="ticket-card-meta">
+                                        <button type="button" className="ticket-card-user" onClick={() => item.user_id && navigate(`/user-workbench?userId=${item.user_id}`)} disabled={!item.user_id} title={item.user_id ? '进入用户详情' : '未关联用户'}>
+                                            {getDisplayName(item)}
+                                            <span>{item.user_id ? `ID ${item.user_id}` : '未关联用户'}</span>
+                                        </button>
+                                        <span className="ticket-card-time">{formatDateTime(item.created_at)}</span>
+                                    </div>
+                                    <div className="ticket-card-foot">
+                                        <span>{sourceTypeLabelMap[item.source_type] || item.source_type}{item.source_id ? ` · ${item.source_id}` : ''}</span>
+                                        <span>负责人：{item.assignee_name || '未分配'}</span>
+                                    </div>
+                                    <div className="action-group ticket-card-actions">
+                                        <button className="btn-inline" onClick={() => void handleViewDetail(item)}>详情</button>
+                                        {getSourceTarget(item) ? <button className="btn-inline" onClick={() => navigate(getSourceTarget(item)!.path)}>{getSourceTarget(item)!.label}</button> : null}
+                                        {!item.assignee_name && item.status !== 'closed' ? <button className="btn-inline" onClick={() => void handleAssign(item)} disabled={pendingIds.includes(item.id)}>分配给我</button> : null}
+                                        {item.status === 'open' ? <button className="btn-inline" onClick={() => void handleUpdateStatus(item, 'in_progress')} disabled={pendingIds.includes(item.id)}>开始处理</button> : null}
+                                        {item.status !== 'closed' ? <button className="btn-inline danger" onClick={() => void handleUpdateStatus(item, 'closed')} disabled={pendingIds.includes(item.id)}>关闭</button> : null}
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    ) : (
                     <div className="support-table-container">
                         <table className="support-table">
                             <thead>
@@ -568,6 +612,7 @@ const SupportTickets: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                    )}
                 </div>
 
                 <div className="support-pagination" aria-label="工单分页">

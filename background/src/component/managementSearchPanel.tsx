@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { FiFilter } from 'react-icons/fi';
+import { useIsMobile } from './useIsMobile';
 import './managementSearchPanel.scss';
 
 interface ManagementSearchPanelProps {
@@ -18,6 +20,10 @@ const ManagementSearchPanel: React.FC<ManagementSearchPanelProps> = ({
     summary,
     className = '',
 }) => {
+    // 手机端默认收起筛选控件与摘要，只留标题 + 「筛选」开关 + 动作按钮横排；
+    // 桌面端不渲染开关、全部常显，13 个使用方页面零改动受益。
+    const isMobile = useIsMobile();
+    const [showFilters, setShowFilters] = useState(false);
     const rootClassName = ['management-search-panel', 'section-card', className].filter(Boolean).join(' ');
 
     return (
@@ -28,9 +34,20 @@ const ManagementSearchPanel: React.FC<ManagementSearchPanelProps> = ({
                     {description ? <p>{description}</p> : null}
                 </div>
                 {actions ? <div className="management-search-panel__actions">{actions}</div> : null}
+                {isMobile ? (
+                    <button
+                        type="button"
+                        className="btn-secondary management-search-panel__toggle"
+                        aria-expanded={showFilters}
+                        onClick={() => setShowFilters((value) => !value)}
+                    >
+                        <FiFilter />
+                        {showFilters ? '收起筛选' : '筛选'}
+                    </button>
+                ) : null}
             </div>
-            <div className="management-search-panel__controls">{controls}</div>
-            {summary ? <div className="management-search-panel__summary">{summary}</div> : null}
+            {isMobile && !showFilters ? null : <div className="management-search-panel__controls">{controls}</div>}
+            {isMobile && !showFilters ? null : summary ? <div className="management-search-panel__summary">{summary}</div> : null}
         </div>
     );
 };

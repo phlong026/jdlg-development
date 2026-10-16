@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const labels = { groups: '同设备账号', changes: '设备换绑', alerts: '风险告警', users: '风险用户' };
 const keys = Object.keys(labels);
-const overview = { shared_devices: 3, device_risk_users: 42, recent_device_changes: 5, abnormal_payments: 6, failed_tasks: 7 };
+const overview = { shared_devices: 3, device_risk_users: 42, recent_device_changes: 5, abnormal_payments: 6, failed_tasks: 7, access_alerts: 0 };
 const user = id => ({ user_id: id, username: `user-${id}`, nickname: `昵称${id}` });
 const item = (kind, id) => ({
   groups: { device_id: `device-${id}`, user_count: 2, users: [user(String(id)), user(String(id + 100))], latest_activity_at: '' },
@@ -78,7 +78,8 @@ function harness() {
       fetch: (...args) => { forbidden.push(args); throw new Error('Unexpected direct network request'); },
       require(name) {
         if (name === 'react') return fakeReact;
-        if (name.endsWith('.scss')) return {};
+        if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
         if (name === 'react-icons/fi') return new Proxy({}, { get: (_, name) => name });
         if (name === 'react-router-dom') return { useNavigate: () => path => navigation.push(path) };
         if (name === '../utils/pageLoadError') return { reportPageLoadError: (error, source) => failures.push({ error, source }), reportPageLoadRecovered: source => recoveries.push(source) };
@@ -122,7 +123,7 @@ test('risk tables request real pages independently, show server totals and fixed
     assert.match(total(h, kind), /第 3 \/ 3 页/);
     click(h, `${labels[kind]}上一页`, true); await resolveList(h, kind, [11], 23);
   }
-  assert.equal(h.requests.overview.length, 1); assert.deepEqual(metrics(h), ['3', '42', '5', '6 / 7']);
+  assert.equal(h.requests.overview.length, 1); assert.deepEqual(metrics(h), ['3', '42', '5', '6 / 7', '0']);
 });
 
 test('search/Enter and reset apply to all tables, reset all pages and leave the global overview independent', async () => {
@@ -148,7 +149,7 @@ test('one failed table never hides successful modules; scoped retry recovers onl
   assert.match(textOf(table(h, 'alerts')), /风险告警加载失败：alerts offline/);
   assert.doesNotMatch(textOf(table(h, 'alerts')), /暂无风险告警/); assert.match(total(h, 'alerts'), /共 — 条/);
   for (const key of ['groups', 'changes', 'users']) assert.match(textOf(table(h, key)), /昵称1/);
-  assert.deepEqual(metrics(h), ['3', '42', '5', '6 / 7']);
+  assert.deepEqual(metrics(h), ['3', '42', '5', '6 / 7', '0']);
   const counts = Object.fromEntries(Object.entries(h.requests).map(([key, value]) => [key, value.length]));
   click(h, '重试风险告警');
   for (const key of Object.keys(h.requests)) assert.equal(h.requests[key].length, counts[key] + (key === 'alerts' ? 1 : 0));
@@ -159,14 +160,14 @@ test('one failed table never hides successful modules; scoped retry recovers onl
 
 test('loading, genuine zero, failed overview and successful empty tables remain distinct', async () => {
   const h = harness();
-  assert.deepEqual(metrics(h), ['—', '—', '—', '— / —']);
+  assert.deepEqual(metrics(h), ['—', '—', '—', '— / —', '—']);
   for (const key of keys) { assert.match(textOf(table(h, key)), /加载中/); assert.doesNotMatch(textOf(table(h, key)), /暂无/); assert.equal(named(h.page, `${labels[key]}下一页`).props.disabled, true); }
   h.requests.overview[0].reject(new Error('overview offline'));
   for (const key of keys) await resolveList(h, key, [], 0);
-  assert.deepEqual(metrics(h), ['—', '—', '—', '— / —']); assert.match(textOf(h.page.tree), /全局概览加载失败/);
+  assert.deepEqual(metrics(h), ['—', '—', '—', '— / —', '—']); assert.match(textOf(h.page.tree), /全局概览加载失败/);
   for (const key of keys) assert.match(total(h, key), /共 0 条/);
   click(h, '重试全局概览'); h.requests.overview[1].resolve(Object.fromEntries(Object.keys(overview).map(key => [key, 0]))); await settle(h);
-  assert.deepEqual(metrics(h), ['0', '0', '0', '0 / 0']); assert.equal(h.recoveries.at(-1), '加载风控全局概览失败');
+  assert.deepEqual(metrics(h), ['0', '0', '0', '0 / 0', '0']); assert.equal(h.recoveries.at(-1), '加载风控全局概览失败');
   assert.equal(h.requests.groups.length, 1);
 });
 
@@ -188,7 +189,7 @@ test('malformed list/count/page/item responses fail explicitly instead of lookin
 test('missing or malformed global metrics are unknown while list data remains usable', async () => {
   for (const bad of [null, {}, { ...overview, shared_devices: '3' }, { ...overview, failed_tasks: -1 }, { ...overview, abnormal_payments: Infinity }]) {
     const h = harness(); h.requests.overview[0].resolve(bad); await resolveList(h, 'users', [7], 1);
-    assert.deepEqual(metrics(h), ['—', '—', '—', '— / —']); assert.match(textOf(h.page.tree), /全局概览加载失败/); assert.match(textOf(table(h, 'users')), /昵称7/);
+    assert.deepEqual(metrics(h), ['—', '—', '—', '— / —', '—']); assert.match(textOf(h.page.tree), /全局概览加载失败/); assert.match(textOf(table(h, 'users')), /昵称7/);
   }
 });
 
@@ -241,7 +242,7 @@ test('Strict Mode replay and unmount ignore every late request without state upd
   await loaded(h, 12);
   h.requests.overview[0].resolve({ ...overview, shared_devices: 999 });
   for (const key of keys) if (key === 'groups') h.requests[key][0].reject(new Error('old replay')); else h.requests[key][0].resolve(envelope(h.requests[key][0], [item(key, 99)], 1));
-  await settle(h); assert.deepEqual(metrics(h), ['3', '42', '5', '6 / 7']); assert.equal(h.failures.length, 0);
+  await settle(h); assert.deepEqual(metrics(h), ['3', '42', '5', '6 / 7', '0']); assert.equal(h.failures.length, 0);
   click(h, '风险用户下一页', true); h.page.unmount();
   const updates = h.page.updates, reports = h.failures.length + h.recoveries.length, reads = h.requests.users.length;
   h.requests.users.at(-1).resolve(envelope(h.requests.users.at(-1), [], 0)); await settle(h);

@@ -43,6 +43,7 @@ function runtime(overrides={}) {
   if(name==='../api/supportTickets')return wrapped;
   if(name==='../utils/pageLoadError')return {reportPageLoadError:()=>h.notices.push('load-error'),reportPageLoadRecovered:()=>h.recovered++};
   if(name==='../component/managementSearchPanel')return ()=>null;
+  if(name.includes('useIsMobile'))return {useIsMobile:()=>false};
   if(name.endsWith('.scss'))return {};
   throw Error(name);
  }});

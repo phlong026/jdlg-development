@@ -82,7 +82,8 @@ function harness() {
       if (id === 'react-icons/fi') return new Proxy({}, { get: (_, key) => key });
       if (id === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
       if (id.endsWith('.scss')) return {};
-      throw new Error(`Unexpected import ${id}`);
+      if(typeof name==='string'&&name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  throw new Error(`Unexpected import ${id}`);
     },
   });
   page.render = () => { page.cursor = 0; page.tree = module.exports.default({}); };

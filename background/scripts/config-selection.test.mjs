@@ -72,7 +72,8 @@ function page(filename, api) {
       if (name === 'react-icons/fi') return new Proxy({}, { get: () => () => null });
       if (name.startsWith('../api/')) return api;
       if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => reports.push(args), reportPageLoadRecovered() {} };
-      if (name.endsWith('.scss')) return {};
+      if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
       throw new Error(`Unexpected dependency: ${name}`);
     },
     alert: (message) => alerts.push(message),

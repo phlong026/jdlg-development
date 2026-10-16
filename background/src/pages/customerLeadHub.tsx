@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiChevronRight, FiRefreshCw } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
+import { useIsMobile } from '../component/useIsMobile';
 import './customerLeadHub.scss';
 
 // 线索阶段：与 customer_leads.status 的四个取值一一对应，颜色沿用常见销售看板的蓝 / 黄 / 绿 / 灰
@@ -29,6 +30,10 @@ interface HubProps {
  * 客户 · 线索 · 商机 的入口卡片在布局层（SubNavCards），三个页面共用。
  */
 const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onRefresh }) => {
+    const isMobile = useIsMobile();
+    // 环图卡 447px 是线索列表沉到 1565px 的主因：手机端默认收起（摘要带总条数），桌面常开
+    const [stageOpen, setStageOpen] = useState<boolean | null>(null);
+    const stageExpanded = stageOpen ?? !isMobile;
     const total = overview.total_count || 0;
     const stages = STAGES.map((stage) => {
         const count = Number(overview[stage.key] || 0);
@@ -66,7 +71,15 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                 </div>
             </section>
 
-            <section className="lead-hub-card">
+            <details
+                className="lead-hub-card lead-hub-stage-wrap"
+                open={stageExpanded}
+                onToggle={(event) => setStageOpen((event.target as HTMLDetailsElement).open)}
+            >
+                <summary className="lead-hub-stage-summary">
+                    <span>线索阶段 · 共 {total} 条</span>
+                    <FiChevronDown className="lead-hub-stage-caret" aria-hidden />
+                </summary>
                 <header className="lead-hub-card-head">
                     <h2>线索阶段</h2>
                     <Link className="lead-hub-more" to="/customer-leads?queue=all">全部<FiChevronRight /></Link>
@@ -101,7 +114,7 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                         ))}
                     </ul>
                 </div>
-            </section>
+            </details>
         </div>
     );
 };

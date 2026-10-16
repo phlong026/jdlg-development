@@ -131,4 +131,41 @@
     .lead-hub-stage { flex-direction: column; gap: 24px; }
     .lead-hub-legend { flex: none; width: 100%; max-width: 320px; }
 }
+
+/* ============ 阶段环图折叠壳（手机端收起为一行摘要，桌面隐藏 summary 常开） ============ */
+.lead-hub-stage-summary {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .lead-hub-stage-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 14px 16px;
+        list-style: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+
+        &::-webkit-details-marker { display: none; }
+    }
+
+    /* 收起时隐藏卡片头（标题与摘要行重复） */
+    .lead-hub-stage-wrap:not([open]) .lead-hub-card-head {
+        display: none;
+    }
+
+    .lead-hub-stage-caret {
+        color: #8b5e3c;
+        transition: transform 0.18s ease;
+        flex-shrink: 0;
+    }
+
+    .lead-hub-stage-wrap[open] .lead-hub-stage-caret {
+        transform: rotate(180deg);
+    }
+}
 }

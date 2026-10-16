@@ -79,7 +79,8 @@ function mount() {
         if (name === '../utils/request') return { request: (endpoint, config) => new Promise((resolve, reject) => requests.push({ endpoint, ...config, resolve, reject })) };
         if (name === '../config/api') return { API_ENDPOINTS: { CONTENT_ANALYTICS: endpoints } };
         if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => reports.push(args), reportPageLoadRecovered: (...args) => recoveries.push(args) };
-        if (name.endsWith('.scss')) return {};
+        if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
         if (name.startsWith('.')) return load(path.posix.normalize(path.posix.join(path.posix.dirname(filename), name)) + (name.includes('/api/') ? '.ts' : '.tsx'));
         throw new Error(`Unexpected dependency: ${name}`);
       },

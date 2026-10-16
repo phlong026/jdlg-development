@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FiAward, FiGift, FiRefreshCw, FiSearch, FiShare2, FiUsers } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import { getDistributionInviters, getDistributionOverview, getDistributionRewards, type DistributionInviterItem, type DistributionOverview, type DistributionRewardItem, type DistributionListParams, type DistributionListResponse } from '../api/distribution';
+import { getShareAttribution, type ShareAttributionItem } from '../api/riskControl';
 import './distribution.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -99,6 +100,29 @@ const Distribution: React.FC = () => {
     const mounted = useRef(true);
     const inviterList = useDistributionList<DistributionInviterItem>(getDistributionInviters, '获取邀请人排行失败');
     const rewardList = useDistributionList<DistributionRewardItem>(getDistributionRewards, '获取奖励明细失败');
+    // 分享→账号归因（联动C）：独立生命周期，失败不影响概览与两张表
+    const [attribution, setAttribution] = useState<ShareAttributionItem[]>([]);
+    const [attributionLoading, setAttributionLoading] = useState(true);
+    const [attributionError, setAttributionError] = useState('');
+    const attributionVersion = useRef(0);
+    const loadAttribution = async () => {
+        if (!mounted.current) return;
+        const version = ++attributionVersion.current;
+        const isCurrent = () => mounted.current && version === attributionVersion.current;
+        setAttributionLoading(true);
+        setAttributionError('');
+        try {
+            const data = await getShareAttribution(30);
+            if (!isCurrent()) return;
+            setAttribution(data.list);
+        } catch (error) {
+            if (!isCurrent()) return;
+            setAttributionError(error instanceof Error ? error.message : '请重试');
+            reportPageLoadError(error, '获取分享归因失败');
+        } finally {
+            if (isCurrent()) setAttributionLoading(false);
+        }
+    };
     const inviters = inviterList.rows;
     const rewards = rewardList.rows;
     const loading = overviewLoading || inviterList.loading || rewardList.loading;
@@ -126,9 +150,10 @@ const Distribution: React.FC = () => {
     useEffect(() => {
         mounted.current = true;
         void loadOverview();
-        return () => { mounted.current = false; overviewVersion.current += 1; };
+        void loadAttribution();
+        return () => { mounted.current = false; overviewVersion.current += 1; attributionVersion.current += 1; };
     }, []);
-    const loadData = () => { void loadOverview(); void inviterList.load(); void rewardList.load(); };
+    const loadData = () => { void loadOverview(); void loadAttribution(); void inviterList.load(); void rewardList.load(); };
     const applyKeyword = (value: string) => {
         if (!mounted.current) return;
         setKeyword(value);
@@ -224,6 +249,58 @@ const Distribution: React.FC = () => {
                         <div className="stat-label">累计奖励灵石</div>
                         <div className="stat-value">{overview?.total_reward_amount ?? '—'}</div>
                         <div className="stat-desc">本月新增 {overview?.month_new_invites ?? '—'} 人，本月奖励 {overview?.month_reward_amount ?? '—'} 灵石</div>
+                    </div>
+                </div>
+
+                <div className="distribution-panel section-card">
+                    {/* 分享→账号归因（联动C）：素材分享带来多少访客、其中多少识别为账号 */}
+                    <div className="distribution-section">
+                        <div className="section-header">
+                            <div>
+                                <h3>分享归因（近 30 天）</h3>
+                                <p>每条素材分享带来的访客数与其中识别为账号的数量（含匿名进入后登录绑定的转化）。只统计已识别账号；追踪未启用或暂无分享访问时为空。</p>
+                            </div>
+                        </div>
+                        <div className="distribution-table-container">
+                            <table className="distribution-table compact" aria-label="分享归因">
+                                <thead>
+                                    <tr>
+                                        <th>分享内容</th>
+                                        <th>带来访客</th>
+                                        <th>识别为账号</th>
+                                        <th>最近进入</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colSpan={4} className="empty-state">
+                                            {attributionLoading ? <span role="status">分享归因加载中...</span>
+                                                : attributionError ? <span role="alert">分享归因加载失败：{attributionError}<button className="btn-secondary" onClick={() => void loadAttribution()}>重新加载</button></span>
+                                                    : attribution.length === 0 ? '暂无分享访问数据（追踪未启用或近 30 天没有带分享上下文的访问）'
+                                                        : null}
+                                        </td>
+                                    </tr>
+                                    {!attributionLoading && !attributionError && attribution.map((item) => (
+                                        <tr key={item.share_id}>
+                                            <td>
+                                                <div className="identity-cell">
+                                                    <strong>{item.content_title}</strong>
+                                                    <span className="mono-cell">{item.share_id}</span>
+                                                </div>
+                                            </td>
+                                            <td>{item.visitor_count}</td>
+                                            <td>
+                                                <div className="identity-cell">
+                                                    <strong>{item.identified_count}</strong>
+                                                    <span>识别率 {item.visitor_count > 0 ? Math.round((item.identified_count / item.visitor_count) * 100) : 0}%</span>
+                                                </div>
+                                            </td>
+                                            <td>{item.latest_entered_at ? new Date(item.latest_entered_at).toLocaleString('zh-CN') : '暂无'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 

@@ -241,14 +241,78 @@
   cursor: not-allowed;
 }
 
+/* 「筛选」开关：仅手机端由组件条件渲染，桌面隐藏兜底 */
+.management-search-panel__toggle {
+  display: none;
+  flex: 0 0 auto;
+}
+
 @media (max-width: 960px) {
-  .management-search-panel__actions,
-  .management-search-panel__controls {
-    width: 100%;
-    align-items: stretch;
+  .management-search-panel {
+    gap: 10px;
+    padding: 14px;
   }
 
+  .management-search-panel__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid #e7d8c6;
+    background: #ffffff;
+    color: #5f4a36;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  /* 收起态：标题一行 + 筛选开关；动作按钮在标题下方横滑，不再每个独占一行 */
   .management-search-panel__header {
+    align-items: center;
+    gap: 10px;
+  }
+
+  .management-search-panel__title-block h3 {
+    font-size: 16px;
+  }
+
+  .management-search-panel__title-block p {
+    font-size: 12px;
+  }
+
+  .management-search-panel__actions {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .management-search-panel__actions .btn-primary,
+  .management-search-panel__actions .btn-secondary {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 40px;
+    white-space: nowrap;
+  }
+
+  .management-search-panel__actions:empty {
+    display: none;
+  }
+
+  .management-search-panel__controls,
+  .management-search-panel__summary {
+    width: 100%;
     align-items: stretch;
   }
 

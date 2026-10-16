@@ -1,8 +1,9 @@
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiAlertTriangle, FiCpu, FiRefreshCw, FiRepeat, FiSearch, FiShield } from 'react-icons/fi';
+import { FiAlertTriangle, FiChevronDown, FiCpu, FiRefreshCw, FiRepeat, FiSearch, FiShield } from 'react-icons/fi';
 import ManagementSearchPanel from '../component/managementSearchPanel';
+import { useIsMobile } from '../component/useIsMobile';
 import {
     getRiskControlAlerts,
     getRiskControlDeviceChanges,
@@ -32,8 +33,13 @@ const isUser = (value: unknown) => isRecord(value) && isId(value.user_id) && typ
 const isDeviceGroup = (value: unknown) => isRecord(value) && typeof value.device_id === 'string' && isCount(value.user_count)
     && optionalText(value.latest_activity_at) && Array.isArray(value.users) && value.users.every(isUser);
 const isDeviceChange = (value: unknown) => isUser(value) && isRecord(value) && optionalText(value.device_id) && optionalText(value.last_device_change_time);
-const isAlert = (value: unknown) => isUser(value) && isRecord(value) && typeof value.alert_type === 'string'
-    && isCount(value.alert_count) && optionalText(value.latest_time) && optionalText(value.detail);
+const isAlert = (value: unknown) => {
+    if (!isRecord(value) || typeof value.alert_type !== 'string' || !isCount(value.alert_count)
+        || !optionalText(value.latest_time) || !optionalText(value.detail)) return false;
+    // 访问告警允许匿名访客（user_id=0，以 visitor_key 呈现）；其余类型要求真实用户
+    if (value.alert_type === 'access') return isCount(value.user_id) && optionalText(value.visitor_key);
+    return isUser(value);
+};
 const isRiskUser = (value: unknown) => isUser(value) && isRecord(value) && optionalText(value.device_id)
     && isCount(value.shared_device_count) && isCount(value.failed_task_count) && isCount(value.abnormal_payment_count)
     && optionalText(value.last_device_change_time) && (value.risk_tags == null || (Array.isArray(value.risk_tags) && value.risk_tags.every(tag => typeof tag === 'string')));
@@ -118,7 +124,7 @@ function useRiskOverview() {
         try {
             const data = await getRiskControlOverview();
             if (!isCurrent()) return;
-            if (!isRecord(data) || !['shared_devices', 'device_risk_users', 'recent_device_changes', 'abnormal_payments', 'failed_tasks'].every(key => isCount(data[key]))) {
+            if (!isRecord(data) || !['shared_devices', 'device_risk_users', 'recent_device_changes', 'abnormal_payments', 'failed_tasks', 'access_alerts'].every(key => isCount(data[key]))) {
                 throw new Error('返回数据格式异常，请重试');
             }
             setState({ data, loading: false, error: '', generation });
@@ -170,6 +176,10 @@ const formatDateTime = (value?: string) => {
 
 const RiskControl: React.FC = () => {
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
+    // 概览卡 773px：手机端收起为一行摘要（共用设备/换绑数常显），桌面常开
+    const [overviewOpen, setOverviewOpen] = useState<boolean | null>(null);
+    const overviewExpanded = overviewOpen ?? !isMobile;
     const overview = useRiskOverview();
     const groups = useRiskList(getRiskControlDeviceGroups, isDeviceGroup, '同设备账号');
     const changes = useRiskList(getRiskControlDeviceChanges, isDeviceChange, '设备换绑');
@@ -198,12 +208,22 @@ const RiskControl: React.FC = () => {
         navigate(`/user-workbench?userId=${userId}`);
     };
 
+    // 联动A：按已识别访客键跳分享访问记录（visitor 精确过滤），风控与访问行为同屏互证
+    const openVisitorTracking = (userId: number) => {
+        if (!Number.isSafeInteger(userId) || userId <= 0) return;
+        navigate(`/share-tracking?visitor=${encodeURIComponent(`u:${userId}`)}`);
+    };
+
     const openAlertSourcePage = (item: RiskControlAlertItem) => {
         if (item.alert_type === 'payment') {
             navigate('/recharge');
             return;
         }
         if (item.alert_type === 'task') navigate('/ai-tasks');
+        // 访问告警：直接带 visitor 精确过滤跳到分享访问记录（联动A/B 的打通点）
+        if (item.alert_type === 'access' && item.visitor_key) {
+            navigate(`/share-tracking?visitor=${encodeURIComponent(item.visitor_key)}`);
+        }
     };
 
     return (
@@ -254,6 +274,15 @@ const RiskControl: React.FC = () => {
                 />
 
                 <section className="risk-overview" aria-label="风控全局概览" aria-busy={overview.loading}>
+                    <details
+                        className="risk-overview-fold"
+                        open={overviewExpanded}
+                        onToggle={(event) => setOverviewOpen((event.target as HTMLDetailsElement).open)}
+                    >
+                        <summary className="risk-overview-summary">
+                            <span>全局概览 · 共用设备 {metric('shared_devices')} · 近30天换绑 {metric('recent_device_changes')}</span>
+                            <FiChevronDown className="risk-overview-caret" aria-hidden />
+                        </summary>
                     <div className="section-header">
                         <div><h3>全局概览</h3><p>不受关键词筛选影响，各项统计时间范围见下方说明。</p></div>
                         <button className="btn-secondary" onClick={overview.refresh} disabled={overview.loading}>刷新全局概览</button>
@@ -289,7 +318,14 @@ const RiskControl: React.FC = () => {
                         <div className="stat-value">{metric('abnormal_payments')} / {metric('failed_tasks')}</div>
                         <div className="stat-desc">近 7 天：异常支付含失败与待支付；任务仅统计失败。</div>
                     </div>
+                    <div className="stat-card section-card">
+                        <div className="stat-icon"><FiAlertTriangleIcon /></div>
+                        <div className="stat-label">异常访问（分享追踪）</div>
+                        <div className="stat-value">{metric('access_alerts')}</div>
+                        <div className="stat-desc">近 7 天单访客页面访问量超阈值的访客数，明细见下方风险告警。</div>
+                    </div>
                 </div>
+                    </details>
 
                 </section>
 
@@ -327,14 +363,17 @@ const RiskControl: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td>{formatDateTime(item.latest_activity_at)}</td>
-                                            <td>
-                                                <div className="table-action-stack">
-                                                    <button className="btn-text-link" onClick={() => navigate('/users')}>打开用户列表（未筛选）</button>
-                                                    {item.users[0] ? (
-                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.users[0].user_id)}>查看首个用户详情</button>
-                                                    ) : null}
-                                                </div>
-                                            </td>
+                                                <td>
+                                                    <div className="table-action-stack">
+                                                        <button className="btn-text-link" onClick={() => navigate('/users')}>打开用户列表（未筛选）</button>
+                                                        {item.users[0] ? (
+                                                            <button className="btn-text-link" onClick={() => openUserWorkbench(item.users[0].user_id)}>查看首个用户详情</button>
+                                                        ) : null}
+                                                        {item.users[0] && Number(item.users[0].user_id) > 0 ? (
+                                                            <button className="btn-text-link" onClick={() => openVisitorTracking(Number(item.users[0].user_id))}>查看首个用户访问记录</button>
+                                                        ) : null}
+                                                    </div>
+                                                </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -375,6 +414,7 @@ const RiskControl: React.FC = () => {
                                                 <td>
                                                     <div className="table-action-stack">
                                                         <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
+                                                        <button className="btn-text-link" onClick={() => openVisitorTracking(item.user_id)}>查看访问记录</button>
                                                         <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>打开工单中心（未筛选）</button>
                                                     </div>
                                                 </td>
@@ -413,14 +453,23 @@ const RiskControl: React.FC = () => {
                                                         <span>{item.detail || '暂无详情'}</span>
                                                     </div>
                                                 </td>
-                                                <td>{item.alert_type === 'payment' ? '支付异常' : item.alert_type === 'task' ? '任务异常' : `未知类型（${item.alert_type || '空值'}）`}</td>
+                                                <td>{item.alert_type === 'payment' ? '支付异常' : item.alert_type === 'task' ? '任务异常' : item.alert_type === 'access' ? '异常访问' : `未知类型（${item.alert_type || '空值'}）`}</td>
                                                 <td>{item.alert_count}</td>
                                                 <td>{formatDateTime(item.latest_time)}</td>
                                                 <td>
                                                     <div className="table-action-stack">
-                                                        <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
+                                                        {item.user_id > 0 ? (
+                                                            <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
+                                                        ) : null}
+                                                        {item.user_id > 0 && item.alert_type !== 'access' ? (
+                                                            <button className="btn-text-link" onClick={() => openVisitorTracking(item.user_id)}>查看访问记录</button>
+                                                        ) : null}
                                                         {item.alert_type === 'payment' || item.alert_type === 'task' ? (
                                                             <button className="btn-text-link" onClick={() => openAlertSourcePage(item)}>{item.alert_type === 'payment' ? '打开订单列表（未筛选）' : '打开AI任务列表（未筛选）'}</button>
+                                                        ) : item.alert_type === 'access' && item.visitor_key ? (
+                                                            <button className="btn-text-link" onClick={() => openAlertSourcePage(item)}>查看访问记录</button>
+                                                        ) : item.alert_type === 'access' ? (
+                                                            <span className="risk-unknown-source">缺少访客标识，无法跳转</span>
                                                         ) : <span className="risk-unknown-source">未知类型，无对应来源入口</span>}
                                                         <button className="btn-text-link" onClick={() => navigate('/support-tickets')}>打开工单中心（未筛选）</button>
                                                     </div>
@@ -477,6 +526,7 @@ const RiskControl: React.FC = () => {
                                             <td>
                                                 <div className="table-action-stack">
                                                     <button className="btn-text-link" onClick={() => openUserWorkbench(item.user_id)}>查看用户详情</button>
+                                                    <button className="btn-text-link" onClick={() => openVisitorTracking(item.user_id)}>查看访问记录</button>
                                                     <button className="btn-text-link" onClick={() => navigate(item.abnormal_payment_count > 0 ? '/recharge' : '/ai-tasks')}>
                                                         {item.abnormal_payment_count > 0 ? '打开订单列表（未筛选）' : '打开AI任务列表（未筛选）'}
                                                     </button>

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"crypto/sha256"
@@ -126,7 +127,7 @@ func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor 
 	return scope, nil
 }
 func trackingFilter(c *gin.Context) (tracking.Filter, error) {
-	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true"}
+	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor")}
 	for name, target := range map[string]*time.Time{"start": &f.Start, "end": &f.End, "as_of": &f.AsOf} {
 		if raw := c.Query(name); raw != "" {
 			t, e := time.Parse(time.RFC3339Nano, raw)
@@ -148,6 +149,57 @@ func trackingFilter(c *gin.Context) (tracking.Filter, error) {
 		return f, &tracking.Error{Status: 409, Message: "指标版本已变化，请刷新"}
 	}
 	return f, nil
+}
+
+// annotateVisitorRiskTags 给已识别访客（visitor_key = "u:<id>"）注入风控风险标签，
+// 让「分享访问记录」与「风控台」在同一个列表里互相印证。匿名访客不查：
+// 没有 user_id，且按隐私边界不做跨身份关联。标签查询失败只降级，不打断列表。
+func annotateVisitorRiskTags(users *model.UserModel, list tracking.List) (tracking.List, error) {
+	if users == nil || users.DB == nil {
+		return list, nil
+	}
+	raw, e := json.Marshal(list.Items)
+	if e != nil {
+		return list, nil
+	}
+	var visitors []map[string]any
+	if json.Unmarshal(raw, &visitors) != nil {
+		return list, nil
+	}
+	ids := make([]int64, 0, len(visitors))
+	for _, item := range visitors {
+		if state, _ := item["identity_state"].(string); state != "identified" {
+			continue
+		}
+		key, _ := item["visitor_key"].(string)
+		if !strings.HasPrefix(key, "u:") {
+			continue
+		}
+		if id, err := strconv.ParseInt(strings.TrimPrefix(key, "u:"), 10, 64); err == nil && id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return list, nil
+	}
+	tags, err := riskTagsByUserIDs(users.DB, ids)
+	if err != nil {
+		log.Printf("[Tracking] 访客风险标签查询失败: %v", err)
+		return list, nil
+	}
+	for _, item := range visitors {
+		key, _ := item["visitor_key"].(string)
+		if !strings.HasPrefix(key, "u:") {
+			continue
+		}
+		if id, err := strconv.ParseInt(strings.TrimPrefix(key, "u:"), 10, 64); err == nil {
+			if t, ok := tags[id]; ok {
+				item["risk_tags"] = t
+			}
+		}
+	}
+	list.Items = visitors
+	return list, nil
 }
 
 // Private annotations can target one authorized owner without changing the
@@ -337,6 +389,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Visitors(c.Request.Context(), sc(c), f)
+		if e == nil {
+			// 风控联动：已识别访客注入 risk_tags（查询失败只降级不打断列表）
+			v, e = annotateVisitorRiskTags(users, v)
+		}
 		trackingResponse(c, v, e)
 	})
 	mg.GET("/visitors/:id/contents", func(c *gin.Context) {

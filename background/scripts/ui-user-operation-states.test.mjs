@@ -56,7 +56,8 @@ const context = vm.createContext({
   require(name) {
     if (name === 'react') return fakeReact;
     if (name === 'react-router-dom') return { useNavigate: () => () => {}, useSearchParams: () => [new URLSearchParams(), () => {}] };
-    if (name.endsWith('.scss')) return {};
+    if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
     if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => pageErrors.push(args), reportPageLoadRecovered: () => {} };
     if (name === 'react-icons/fi') return new Proxy({}, { get: (_, icon) => icon });
     if (name === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };

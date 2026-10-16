@@ -18,6 +18,7 @@ import {
 } from '../api/customerLeads';
 import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
 import { getLeadOverviewSession, isLeadOverviewSessionCurrent, publishLeadOverview } from '../component/leadOverviewStore';
+import { useIsMobile } from '../component/useIsMobile';
 import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
 import './customerLeads.scss';
@@ -150,6 +151,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             ? '小程序线索已由统一客户档案接管，旧线索仅供查看；跟进与归属请在客户档案中处理。'
             : '当前页面仅可查看线索，暂不能修改跟进与归属。';
     const [params, setParams] = useSearchParams();
+    const isMobile = useIsMobile();
     const [overview, setOverview] = useState<CustomerLeadOverview>(defaultOverview);
     const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
     const [list, setList] = useState<CustomerLeadItem[]>([]);
@@ -530,6 +532,42 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                         </div>
                     ) : null}
 
+                    {isMobile ? (
+                        /* 手机端：线索卡片。原表 8 列被响应式规则堆到每行 ~650px 高，卡片化后每条 3-4 行 */
+                        <div className="customer-lead-cards">
+                            {list.map((item) => (
+                                <article key={item.id} className="customer-lead-card">
+                                    <div className="customer-lead-card-head">
+                                        <label className="customer-lead-card-check">
+                                            <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
+                                        </label>
+                                        <strong className="customer-lead-card-name">{getDisplayName(item)}</strong>
+                                        <span className={`intent-tag intent-${item.intent_level}`}>{intentLabelMap[item.intent_level] || item.intent_level || '-'}</span>
+                                        <span className={`status-tag status-${item.status}`}>{statusLabelMap[item.status] || item.status || '-'}</span>
+                                    </div>
+                                    <div className="customer-lead-card-demand">
+                                        <strong>{item.demand_summary || '暂无需求摘要'}</strong>
+                                        <span>{getContactText(item)}</span>
+                                    </div>
+                                    <div className="customer-lead-card-meta">
+                                        {item.user_id > 0
+                                            ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>查看用户账号 ›</Link>
+                                            : <span>未关联用户账号</span>}
+                                        <span>{formatDateTime(item.created_at)}</span>
+                                    </div>
+                                    <div className="customer-lead-card-foot">
+                                        <span>来源 {item.source || '-'}</span>
+                                        <span>{item.assigned_to || '未分配'}{item.next_followup_at ? ` · 下次跟进 ${formatDateTime(item.next_followup_at)}` : ''}</span>
+                                    </div>
+                                    <div className="customer-lead-actions customer-lead-card-actions">
+                                        <button type="button" className="customer-lead-link" onClick={() => void handleViewDetail(item)}>详情</button>
+                                        <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>跟进</button>
+                                    </div>
+                                </article>
+                            ))}
+                            {!loading && list.length === 0 ? <div className="customer-lead-empty">暂无客服线索</div> : null}
+                        </div>
+                    ) : (
                     <div className="customer-lead-table-wrap">
                         <table className="customer-lead-table">
                             <thead>
@@ -601,6 +639,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             </tbody>
                         </table>
                     </div>
+                    )}
 
                     <div className="customer-lead-pagination">
                         <span>共 {total} 条，第 {page} / {totalPages} 页</span>

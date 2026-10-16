@@ -110,6 +110,10 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if len(f.Search) > 100 || len(f.ContentSearch) > 100 || len(f.VisitorSearch) > 100 {
 		return f, fail(400, "搜索超限")
 	}
+	f.Visitor = strings.TrimSpace(f.Visitor)
+	if len(f.Visitor) > 200 {
+		return f, fail(400, "访客标识超限")
+	}
 	return f, nil
 }
 func resolvedVisitor(r Repository, row Record) string {
@@ -187,6 +191,22 @@ func (s *Service) facts(r Repository, scope Scope, f Filter) ([]factView, error)
 func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, error) {
 	if !scope.View {
 		return nil, fail(403, "无访问记录查看权限")
+	}
+	// f.Visitor 精确过滤复用 selection.Visitors 通道（与访客详情同一条已验证的路径）：
+	// 摘要与原始记录两条查询都按 VisitorKeys 收敛，聚合结果自然只含该访客。
+	if f.Visitor != "" {
+		if len(selection.Visitors) > 0 {
+			intersected := make([]string, 0, 1)
+			for _, key := range selection.Visitors {
+				if key == f.Visitor {
+					intersected = append(intersected, key)
+					break
+				}
+			}
+			selection.Visitors = intersected
+		} else {
+			selection.Visitors = []string{f.Visitor}
+		}
 	}
 	current := selection.Summaries && summaryWindowExact(f)
 	// expired holds every session its projections fully represent; raw rows of
