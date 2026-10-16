@@ -34,3 +34,72 @@ export function intentWindowQuery(query: Record<string, unknown>, evidence?: Int
     // Let the server include the exact as_of boundary; preserve its timestamp precision.
     return { ...query, start: evidence.window_start, end: undefined, as_of: evidence.window_end, cursor: undefined, content_id: undefined, content_version: undefined, content_q: undefined, visitor_q: undefined, identity: undefined, intent: undefined, q: undefined };
 }
+
+// 小程序页面路径 → 客户可读名称；未登记的路径一律显示"其他页面"，不暴露代码路径。
+const PAGE_NAMES: Record<string, string> = {
+  'pages/index/index': '首页',
+  'pages/template/template': '模板广场',
+  'pages/distribution/distribution': '设计师中心',
+  'pages/my/my': '我的',
+  'pages/customerservice/customerservice': '在线客服',
+  'pages/aitools/aitools': 'AI 工具',
+  'pages/aitooldetail/aitooldetail': 'AI 工具详情',
+  'pages/aitoolworkbench/aitoolworkbench': 'AI 工具工作台',
+  'pages/specadvisor/specadvisor': '建房顾问',
+  'pages/buildingcodedocs/buildingcodedocs': '规范资料',
+  'pages/newminnantool/newminnantool': '闽南工艺工具',
+  'pages/voicecall/voicecall': '语音通话',
+  'pages/login/login': '登录页',
+  'pages/passwordrecovery/passwordrecovery': '找回密码',
+  'pages/phonebind/phonebind': '绑定手机',
+  'pages/privacy/privacy': '隐私政策',
+  'pages/aigenerate/aigenerate': 'AI 生成',
+  'pages/generateprogress/generateprogress': '生成进度',
+  'pages/inspirationdetail/inspirationdetail': '灵感详情',
+  'pages/templatepreview/templatepreview': '模板预览',
+  'pages/settings/settings': '设置',
+  'pages/aicost/aicost': '造价测算',
+  'pages/aicostresult/aicostresult': '造价测算结果',
+  'pages/utilitytools/utilitytools': '实用工具',
+  'pages/utilitytooldetail/utilitytooldetail': '实用工具详情',
+  'pages/aivideo/aivideo': 'AI 视频',
+  'pages/real/real': '实景案例',
+  'pages/report/landing': '报告落地页',
+  'pages/report/questionnaire': '需求问卷',
+  'pages/report/preview': '报告预览',
+  'pages/report/delivery': '报告交付',
+  'pages/generatedetails/generatedetails': '作品详情',
+  'pages/Invitefriends/Invitefriends': '邀请好友',
+  'pages/chat/chat': 'AI 对话',
+  'pages/designerhome/designerhome': '设计师主页',
+  'pages/myInformationmodification/myInformationmodification': '资料修改',
+  'pages/templatesquaredetails/templatesquaredetails': '模板详情',
+  'pages/myplan/myplan': '我的方案',
+  'pages/myfavorites/myfavorites': '我的收藏',
+  'pages/ordermanagement/ordermanagement': '我的订单',
+  'pages/wallet/wallet': '钱包',
+  'pages/ruralvilladesign/ruralvilladesign': '乡村别墅设计',
+  'pages/Parentchildcreativity/Parentchildcreativity': '亲子创意',
+  'pages/topupcenter/topupcenter': '充值中心',
+  'pages/allrounddesign/allrounddesign': '全案设计',
+  'pages/release/release': '我要发布',
+  'pages/release/designerworkpublish': '作品发布',
+  'pages/buildingreplacement/buildingreplacement': '建筑改造',
+  'pages/checkin/checkin': '每日签到',
+  'pages/Identityauthen/Identityauthen': '身份认证',
+  'pages/generatehistory/generatehistory': '生成记录',
+  'pages/lingshidetails/lingshidetails': '灵石明细',
+  'pages/orderdetail/orderdetail': '订单详情',
+  'pages/messagecenter/messagecenter': '消息中心',
+  'pages/adminlogin/adminlogin': '后台登录',
+  'pages/adminhome/adminhome': '后台管理',
+  'pages/withdrawcenter/withdrawcenter': '提现中心',
+  'pages/contentreader/contentreader': '分享内容阅读',
+};
+export function pageLabel(routeKey?: string, title?: string): string {
+  const mapped = PAGE_NAMES[routeKey || ''];
+  if (mapped) return mapped;
+  // 小程序端可能把路由串当标题上报（如 pages/index/index），这种 title 不算可读名称。
+  if (title && !title.startsWith('pages/')) return title;
+  return '其他页面';
+}
