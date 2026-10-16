@@ -1,0 +1,37 @@
+<view wx:if="{{visible}}" class="nickname-guard-mask" catchtouchmove="true" catchtap="onMaskTap">
+  <view class="nickname-guard" catchtap="stopPropagation">
+    <text class="ng-title">完善个人资料</text>
+    <text class="ng-desc">昵称将展示在设计师主页、评价与社区互动中</text>
+
+    <view class="ng-avatar-row">
+      <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+        <image wx:if="{{avatarTemp || avatarUrl}}" class="ng-avatar-img" src="{{avatarTemp || avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="ng-avatar-placeholder">
+          <text class="ng-avatar-placeholder-icon">＋</text>
+          <text class="ng-avatar-placeholder-text">头像</text>
+        </view>
+      </button>
+      <view class="ng-avatar-tip">
+        <text class="ng-avatar-tip-main">点击设置头像</text>
+        <text class="ng-avatar-tip-sub">选填，可直接使用微信头像</text>
+      </view>
+    </view>
+
+    <view class="ng-field">
+      <text class="ng-label">昵称</text>
+      <input
+        class="ng-input"
+        type="nickname"
+        value="{{nickname}}"
+        maxlength="32"
+        placeholder="请输入昵称"
+        placeholder-class="ng-input-placeholder"
+        bindinput="onNicknameInput"
+      />
+    </view>
+
+    <button class="ng-confirm" loading="{{saving}}" disabled="{{saving}}" bindtap="onConfirm">
+      {{saving ? '保存中...' : '完 成'}}
+    </button>
+  </view>
+</view>

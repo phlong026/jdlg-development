@@ -117,7 +117,9 @@ const Users: React.FC = () => {
     const convertRow = (apiUser: ApiUser): UserRow => ({
         id: String(apiUser.id),
         username: apiUser.username || `用户${apiUser.id}`,
-        displayName: apiUser.nickname?.trim() || apiUser.username || `用户${apiUser.id}`,
+        // 昵称为空时不再回退展示 openid 式用户名（如 wx_o_gjx…），避免主副标题重复且暴露内部 ID；
+        // username 仍保留在副标题与搜索中
+        displayName: apiUser.nickname?.trim() || `用户${apiUser.id}`,
         stones: apiUser.stones || 0,
         createdAt: apiUser.created_at,
         phone: apiUser.phone || '',

@@ -161,4 +161,7 @@
       <view class="logout-btn" wx:if="{{hasLoginToken}}" bindtap="onLogoutTap">退出登录</view>
     </view>
   </view>
+
+  <!-- 存量用户昵称补检弹窗 -->
+  <nickname-guard id="nicknameGuard" bind:completed="onNicknameGuardCompleted" />
 </view>

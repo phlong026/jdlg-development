@@ -315,11 +315,7 @@ Page({
             }
             else {
                 this.closeLoginPanel();
-                wx.showToast({ title: '登录成功', icon: 'success', duration: 1000 });
-                this.setData({ loading: false });
-                setTimeout(() => {
-                    wx.switchTab({ url: '/pages/index/index', fail: () => wx.reLaunch({ url: '/pages/index/index' }) });
-                }, 1000);
+                await this.enterAppAfterLogin();
             }
         }
         catch (error) {
@@ -370,13 +366,68 @@ Page({
             wx.showToast({ title: error.message || '身份保存失败', icon: 'none' });
             return;
         }
+        // 选完身份紧接着检查昵称完善（新用户此时昵称必为空，会连续弹出完善弹窗）
+        await this.enterAppAfterLogin();
+    },
+    skipIdentity() {
+        wx.showToast({ title: '请选择身份后继续', icon: 'none' });
+    },
+    /**
+     * 登录成功后进入小程序：先检查昵称是否完善，
+     * 未完善则弹出强制完善弹窗（保存成功后经 completed 事件回到这里继续跳转）；
+     * 检查请求失败时放行，不因网络问题把用户挡在门外。
+     */
+    async enterAppAfterLogin() {
+        try {
+            const nickname = await this.fetchProfileNickname();
+            if (!String(nickname || '').trim()) {
+                const guard = this.selectComponent('#nicknameGuard');
+                if (guard && typeof guard.show === 'function') {
+                    this.setData({ loading: false });
+                    guard.show();
+                    return;
+                }
+            }
+        }
+        catch (error) {
+            console.error('昵称完善检查失败，放行进入:', error);
+        }
+        this.navigateToIndexAfterLogin();
+    },
+    async fetchProfileNickname() {
+        const token = wx.getStorageSync('token');
+        if (!token) {
+            return '';
+        }
+        const apiPath = '/api/v1/miniprogram/profile';
+        const deviceID = await this.ensureDeviceId();
+        const params = (0, parameter_1.generateRequestParams)(token, {}, apiPath, deviceID);
+        const headers = (0, parameter_1.paramsToHeaders)(params);
+        const res = await new Promise((resolve, reject) => {
+            wx.request({
+                url: `${API_BASE_URL}${apiPath}`,
+                method: 'GET',
+                header: headers,
+                success: resolve,
+                fail: reject,
+            });
+        });
+        const data = res.data || {};
+        if (res.statusCode !== 200 || data.code !== 0) {
+            throw new Error(data.msg || `请求失败: ${res.statusCode}`);
+        }
+        return String(data.data?.nickname || '');
+    },
+    navigateToIndexAfterLogin() {
         wx.showToast({ title: '登录成功', icon: 'success', duration: 1000 });
+        this.setData({ loading: false });
         setTimeout(() => {
             wx.switchTab({ url: '/pages/index/index', fail: () => wx.reLaunch({ url: '/pages/index/index' }) });
         }, 1000);
     },
-    skipIdentity() {
-        wx.showToast({ title: '请选择身份后继续', icon: 'none' });
+    // 昵称弹窗保存成功后的回调：延续登录流程进入首页
+    onNicknameCompleted() {
+        this.navigateToIndexAfterLogin();
     },
     toggleAgreement() {
         const nextValue = !this.data.agreedPrivacy;
@@ -511,23 +562,8 @@ Page({
                 return;
             }
             this.closeLoginPanel();
-            wx.showToast({
-                title: '登录成功',
-                icon: 'success',
-                duration: 1000,
-            });
-            // 5. 先关 loading，再延迟跳转（保证toast显示后再跳转）
-            this.setData({ loading: false });
-            setTimeout(() => {
-                wx.switchTab({
-                    url: '/pages/index/index',
-                    fail: () => {
-                        wx.reLaunch({
-                            url: '/pages/index/index',
-                        });
-                    }
-                });
-            }, 1000);
+            // 5. 检查昵称是否完善（未完善则弹强制弹窗，完成后由 completed 事件继续跳转）
+            await this.enterAppAfterLogin();
         }
         catch (error) {
             console.error('登录失败:', error);
@@ -600,23 +636,7 @@ Page({
                 return;
             }
             this.closeLoginPanel();
-            wx.showToast({
-                title: '登录成功',
-                icon: 'success',
-                duration: 1000,
-            });
-            // 延迟跳转（保证toast显示后再跳转）
-            this.setData({ loading: false });
-            setTimeout(() => {
-                wx.switchTab({
-                    url: '/pages/index/index',
-                    fail: () => {
-                        wx.reLaunch({
-                            url: '/pages/index/index',
-                        });
-                    }
-                });
-            }, 1000);
+            await this.enterAppAfterLogin();
         }
         catch (error) {
             console.error('登录失败:', error);
