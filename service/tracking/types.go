@@ -100,6 +100,7 @@ var BSideIdentities = map[string]bool{
 	"建材商":  true,
 	"机构用户": true,
 }
+
 type Record struct {
 	Tenant, Kind, ID, Owner, Visitor, Session, Content, Share string
 	At                                                        time.Time
@@ -137,6 +138,7 @@ type Content struct {
 	Identified  int        `json:"identified_count"`
 	Anonymous   int        `json:"anonymous_count"`
 	PageViews   int        `json:"page_views"`
+	Shares      int        `json:"share_count"`
 	VisibleMS   int64      `json:"visible_ms"`
 	LastVisit   *time.Time `json:"last_visit,omitempty"`
 }
@@ -238,15 +240,15 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 }
 type Filter struct {
-	ContentVersion                                     int
-	Start, End, AsOf                                   time.Time
-	Content, Identity, Intent, Search, ContentSearch   string
-	VisitorSearch, Owner, Sort, Direction, Cursor      string
+	ContentVersion                                   int
+	Start, End, AsOf                                 time.Time
+	Content, Identity, Intent, Search, ContentSearch string
+	VisitorSearch, Owner, Sort, Direction, Cursor    string
 	// Visitor 精确过滤（风控台「查看访问记录」跳转用）：只看该 visitor_key 的记录。
 	// 仅匹配解析后的已识别键（u:<id>）或原始匿名键，不做模糊搜索。
-	Visitor  string
-	Limit    int
-	Related  bool
+	Visitor string
+	Limit   int
+	Related bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`
@@ -317,14 +319,21 @@ type LatestVisit struct {
 	Version int       `json:"content_version,omitempty"`
 }
 type Visitor struct {
-	Key          string       `json:"visitor_key"`
-	Nickname     string       `json:"nickname"`
-	AvatarURL    string       `json:"avatar_url,omitempty"`
-	State        string       `json:"identity_state"`
-	IdentityType string       `json:"identity_type,omitempty"`
-	CRMLabel     string       `json:"crm_label,omitempty"`
-	Last         time.Time    `json:"last_visit"`
-	Views        int          `json:"page_views"`
+	Key          string    `json:"visitor_key"`
+	Nickname     string    `json:"nickname"`
+	AvatarURL    string    `json:"avatar_url,omitempty"`
+	State        string    `json:"identity_state"`
+	IdentityType string    `json:"identity_type,omitempty"`
+	CRMLabel     string    `json:"crm_label,omitempty"`
+	Last         time.Time `json:"last_visit"`
+	Views        int       `json:"page_views"`
+	Shares       int       `json:"share_count"`
+	// RecentViews/RecentShares tally the trailing 7 days regardless of the
+	// list filter. They are nil when the filter window does not reach the
+	// recent days, so the client can render "not covered" instead of a
+	// misleading zero.
+	RecentViews  *int         `json:"recent_page_views,omitempty"`
+	RecentShares *int         `json:"recent_share_count,omitempty"`
 	Visible      int64        `json:"visible_ms"`
 	LatestVisit  *LatestVisit `json:"latest_visit,omitempty"`
 	Sessions     int          `json:"session_count"`

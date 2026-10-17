@@ -420,6 +420,18 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.Sessions(c.Request.Context(), sc(c), c.Param("id"), f)
 		trackingResponse(c, v, e)
 	})
+	mg.GET("/visitors/:id/shares", func(c *gin.Context) {
+		if !view(c) {
+			return
+		}
+		f, e := trackingFilter(c)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.VisitorShares(c.Request.Context(), sc(c), c.Param("id"), f)
+		trackingResponse(c, v, e)
+	})
 	mg.GET("/page-views/:id/events", func(c *gin.Context) {
 		if !view(c) {
 			return

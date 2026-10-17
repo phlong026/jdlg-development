@@ -6,24 +6,30 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 )
 
 // VisitorContent is a historical visit projection, never an editor document or
 // a replay of revoked content. There is no body, source URL, or media list.
+// The video pair carries deduplicated watched milliseconds against the media
+// duration inside the query window, so the client can render a capped
+// progress instead of recomputing it from raw events.
 type VisitorContent struct {
-	ID          string       `json:"content_id"`
-	Version     int          `json:"content_version"`
-	Title       string       `json:"title"`
-	Type        string       `json:"type"`
-	Status      string       `json:"status"`
-	Cover       *Asset       `json:"cover,omitempty"`
-	Route       string       `json:"route_key,omitempty"`
-	Accessible  bool         `json:"content_accessible"`
-	PageViews   int          `json:"page_views"`
-	VisibleMS   int64        `json:"visible_ms"`
-	LatestVisit *LatestVisit `json:"latest_visit,omitempty"`
-	LastVisit   time.Time    `json:"last_visit"`
+	ID              string       `json:"content_id"`
+	Version         int          `json:"content_version"`
+	Title           string       `json:"title"`
+	Type            string       `json:"type"`
+	Status          string       `json:"status"`
+	Cover           *Asset       `json:"cover,omitempty"`
+	Route           string       `json:"route_key,omitempty"`
+	Accessible      bool         `json:"content_accessible"`
+	PageViews       int          `json:"page_views"`
+	VisibleMS       int64        `json:"visible_ms"`
+	VideoUniqueMS   int64        `json:"video_unique_ms,omitempty"`
+	VideoDurationMS int64        `json:"video_duration_ms,omitempty"`
+	LatestVisit     *LatestVisit `json:"latest_visit,omitempty"`
+	LastVisit       time.Time    `json:"last_visit"`
 }
 
 func (s *Service) visitedContent(ctx context.Context, r Repository, scope Scope, id string, version int, route string) (VisitorContent, error) {
@@ -140,6 +146,11 @@ func (s *Service) VisitorContents(ctx context.Context, scope Scope, key string, 
 		by := map[string]VisitorContent{}
 		effective := ownerScope(scope, f.Owner)
 		omitted := map[string]bool{}
+		// Per media, the running deduplicated coverage peaks at the last
+		// progress event: every report carries cumulative merged ranges. Peak
+		// unique over the window, summed across a content's media, is the
+		// honest "how far did they get" without double counting replays.
+		videoPeak := map[string]map[string][2]int64{}
 		for _, fact := range facts {
 			if fact.Visitor != key {
 				continue
@@ -163,6 +174,34 @@ func (s *Service) VisitorContents(ctx context.Context, scope Scope, key string, 
 			c.LatestVisit = latestCountedVisit(c.LatestVisit, fact)
 			if fact.Last.After(c.LastVisit) {
 				c.LastVisit = fact.Last
+			}
+			for _, ev := range fact.events {
+				if !strings.HasPrefix(ev.Type, "video_") || ev.Media == "" || ev.Duration <= 0 {
+					continue
+				}
+				peak := videoPeak[k]
+				if peak == nil {
+					peak = map[string][2]int64{}
+				}
+				current := peak[ev.Media]
+				if ev.Unique > current[0] {
+					current[0] = ev.Unique
+				}
+				if ev.Duration > current[1] {
+					current[1] = ev.Duration
+				}
+				peak[ev.Media] = current
+				videoPeak[k] = peak
+			}
+			by[k] = c
+		}
+		for k, c := range by {
+			for _, peak := range videoPeak[k] {
+				c.VideoUniqueMS += peak[0]
+				c.VideoDurationMS += peak[1]
+			}
+			if c.VideoDurationMS <= 0 {
+				c.VideoUniqueMS = 0
 			}
 			by[k] = c
 		}

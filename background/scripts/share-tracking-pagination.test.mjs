@@ -80,7 +80,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
     './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/mpSync': { MPSyncPanel: 'MPSyncPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
-    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './model': model }, globals);
+    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './visitorShares': { VisitorSharesPanel: 'VisitorSharesPanel' }, './model': model }, globals);
   function render() {
     let renders = 0;
     do {

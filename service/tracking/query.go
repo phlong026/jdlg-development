@@ -91,7 +91,7 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if f.Sort == "" {
 		f.Sort = "last_visit"
 	}
-	if f.Sort != "last_visit" && f.Sort != "page_views" && f.Sort != "visible_ms" {
+	if f.Sort != "last_visit" && f.Sort != "page_views" && f.Sort != "visible_ms" && f.Sort != "shares" {
 		return f, fail(400, "排序无效")
 	}
 	if f.Direction == "" {
@@ -662,6 +662,12 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			return e
 		}
 		out.ProfileRevision = profileRevision
+		shareTotals, shareRecent, recentCovered, e := shareCounts(r, scope, f)
+		if e != nil {
+			return e
+		}
+		recentCutoff := f.AsOf.Add(-7 * 24 * time.Hour)
+		recentViews := map[string]int{}
 		by := map[string]*Visitor{}
 		ss := map[string]map[string]bool{}
 		for _, v := range facts {
@@ -674,6 +680,9 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			}
 			if v.Count {
 				item.Views++
+				if recentCovered && !v.Started.Before(recentCutoff) {
+					recentViews[v.Visitor]++
+				}
 			}
 			item.Visible += v.Visible
 			item.LatestVisit = latestCountedVisit(item.LatestVisit, v)
@@ -689,6 +698,11 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		items := []Visitor{}
 		for key, v := range by {
 			v.Sessions = len(ss[key])
+			v.Shares = shareTotals[key]
+			if recentCovered {
+				views, shares := recentViews[key], shareRecent[key]
+				v.RecentViews, v.RecentShares = &views, &shares
+			}
 			v.Intent = s.intent(effective, key, f.AsOf, intentData)
 			if s.evaluationAudited(effective, v.Intent) {
 				pending = append(pending, pendingEvaluation{key: key, intent: v.Intent})
@@ -732,6 +746,8 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			switch f.Sort {
 			case "page_views":
 				cmp = a.Views - b.Views
+			case "shares":
+				cmp = a.Shares - b.Shares
 			case "visible_ms":
 				if a.Visible < b.Visible {
 					cmp = -1

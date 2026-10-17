@@ -46,6 +46,11 @@ func (c catalogSQLConn) QueryContext(_ context.Context, q string, args []driver.
 		return &mediaReproRows{lock: true, n: 1}, nil
 	}
 	c.state.calls++
+	if len(args) > 2 && args[2].Value == "share" {
+		// Share-metric tally bound to the same tenant/owner/window predicates.
+		// The fixture models no share rows, so the page resolves empty.
+		return &catalogSQLRows{s: c.state, n: 0}, nil
+	}
 	if !strings.Contains(q, "r.tenant_id=? AND r.kind=?") || !strings.Contains(q, "r.owner_id IN (?)") || !strings.Contains(q, catalogCreatedAtSQL+"<=?") {
 		c.state.t.Fatalf("missing tenant/owner/immutable catalog boundary: %s", q)
 	}
@@ -114,7 +119,7 @@ func TestCatalogSQLSnapshotMembershipIsBoundBeforeTransfer(t *testing.T) {
 			if first.Items.([]Content)[0].ID != "content-b" || second.Items.([]Content)[0].ID != "content-c" || second.Cursor != "" {
 				t.Fatal(first, second)
 			}
-			if state.calls != 4 || state.payloadRows != 4 || state.payloadBytes > 4096 {
+			if state.calls != 6 || state.payloadRows != 4 || state.payloadBytes > 4096 {
 				t.Fatalf("unrelated catalog entered budget: %+v", state)
 			}
 			t.Logf("20,001 post-snapshot 60KB rows excluded; transferred rows=%d bytes=%d across two pages", state.payloadRows, state.payloadBytes)

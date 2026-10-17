@@ -22,6 +22,14 @@ export function time(value?: string): string { if (!value) return '未记录'; c
 export function duration(ms = 0): string { const seconds = Math.floor(Math.max(0, ms) / 1000); return seconds < 60 ? `${seconds}秒` : seconds < 3600 ? `${Math.floor(seconds / 60)}分${seconds % 60}秒` : `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; }
 export function safeMediaURL(value?: string): string | undefined { if (!value) return; try { const url = new URL(value, window.location.origin); return (url.protocol === 'https:' || (url.origin === window.location.origin && url.protocol === window.location.protocol)) && !url.username && !url.password ? url.href : undefined; } catch { return; } }
 export const intentLabels = { high: '高意向参考', medium: '中意向参考', low: '低关注待观察', unknown: '待判断' };
+// 分享渠道来自 share_intent 事件；首次朋友圈分享事件丢失时渠道未知，显示“未记录”。
+export const channelLabels: Record<string, string> = { app_message: '聊天私发', timeline: '朋友圈' };
+export function channelLabel(channel?: string): string { return channel ? channelLabels[channel] || channel : '渠道未记录'; }
+// 视频进度 = 去重观看时长 / 视频总时长，封顶 100%（重复回看不放大数字）。
+export function videoPercent(unique?: number, total?: number): number | undefined {
+    if (!unique || !total || total <= 0) return undefined;
+    return Math.min(100, Math.round((unique / total) * 100));
+}
 // 精准客户门控展示口径，与后端 trackingLeadGate 一致：
 // 乡墅业主可转销售线索；设计师/施工队/建材商/机构用户是渠道而非客户；未选身份留给人工核实。
 const B_SIDE_IDENTITIES = new Set(['设计师', '施工队', '建材商', '机构用户']);
