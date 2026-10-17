@@ -117,7 +117,7 @@ function appendToken(value, token) {
   const cleaned=String(value||'').replace(/([?&])st=[^&]*(&?)/g,(_,lead,tail)=>tail?lead:'').replace(/[?&]$/,'');
   return cleaned+(cleaned.includes('?')?'&':'?')+'st='+encodeURIComponent(token);
 }
-async function prepareShare(page, original, channel, cacheKey) {
+async function prepareShare(page, original, channel, cacheKey, emitIntent = true) {
   const s=getSDK(), state=s && s.get(page);
   const accountAtStart=safely(()=>String(wx.getStorageSync('token')||''),'');
   if (!s || !s.diagnostics().enabled) return original;
@@ -136,9 +136,38 @@ async function prepareShare(page, original, channel, cacheKey) {
     if (!share.share_token || accountAtStart!==safely(()=>String(wx.getStorageSync('token')||''),'') || !s.diagnostics().enabled || (state && (s.get(page)!==state || state.context!==context))) return original;
     const cacheState=state || (page.__trackingShareState=page.__trackingShareState||{shareCache:{}});
     if(cacheKey) { cacheState.shareIds=cacheState.shareIds||{}; cacheState.shareIds[cacheKey]={id:share.share_id,context,route:state?state.route:target.route,content:state?state.content:content,expires:share.expires_at ? Date.parse(share.expires_at):Date.now()+300000}; }
-    s.shareIntent(context,state?state.route:target.route,state?state.content:content,share.share_id,channel);
+    if(emitIntent)s.shareIntent(context,state?state.route:target.route,state?state.content:content,share.share_id,channel);
     return channel==='timeline' ? { ...original,query:appendToken('?'+(original.query||''),share.share_token).replace(/^\?/,'') } : {...original,path:appendToken(original.path||'/'+state.route,share.share_token)};
   } catch (_) { return original; }
+}
+// Timeline sharing has no async completion (unlike onShareAppMessage's promise),
+// so the share-time wrapper cannot wait for token creation and the first tap used
+// to go out un-attributed. Call this once page content is ready: it waits for the
+// page entry to resolve (keeping parent_share_id linkage), then pre-creates the
+// timeline share with a deterministic idempotency key — one share record per
+// visitor per content, no share_intent until the user actually shares (the
+// share-time cache-hit path emits it).
+function preheatTimelineShare(page, original) {
+  const s=getSDK();
+  if (!s || !s.diagnostics().enabled || !original || typeof original!=='object') return;
+  const state=s.get(page);
+  if (!state) return;
+  const key=JSON.stringify(original);
+  const cached=state.shareCache && state.shareCache[key], meta=state.shareIds && state.shareIds[key];
+  if(cached&&meta&&meta.expires>Date.now())return;
+  const preheatKey='timeline-preheat:'+String(original.query||'');
+  let done=false, stop=null;
+  const run=()=>{
+    if(done)return; done=true;
+    if(stop)stop();
+    prepareShare(page,original,'timeline',preheatKey,false).then(value=>{if(s.get(page)===state)state.shareCache[key]=value;});
+  };
+  stop=s.observe(page,()=>{
+    const current=s.get(page);
+    if(!current||current!==state){if(stop)stop();return;}
+    // Token creation must wait for the page entry so the share chains to it.
+    if(state.entryReady&&state.context)run();
+  });
 }
 function updateReady(page) {
   const s=getSDK(); if (!s || !s.get(page)) return;
@@ -241,4 +270,4 @@ function resolvePageOptions(page, options, applyAttribution = true) {
  updateReady(page);
 }
 function captureEntryValidity(){const revision=entryInvalidation,account=safely(()=>String(wx.getStorageSync('token')||''),'');return()=>revision===entryInvalidation&&account===safely(()=>String(wx.getStorageSync('token')||''),'');}
-module.exports={observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+module.exports={observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,preheatTimelineShare,appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};

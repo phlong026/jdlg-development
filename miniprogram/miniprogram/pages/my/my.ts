@@ -661,6 +661,16 @@ Page({
   },
 
   /**
+   * 分享到朋友圈：与 onShareAppMessage 成对定义（微信要求先满足条件 1 才开放条件 2）。
+   * 单页模式无 path 概念，仅标题。
+   */
+  onShareTimeline() {
+    return {
+      title: '个人中心'
+    }
+  },
+
+  /**
    * 点击用户资料
    */
   onProfileTap() {

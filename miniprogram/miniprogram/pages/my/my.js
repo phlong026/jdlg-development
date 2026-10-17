@@ -604,6 +604,11 @@ Page({
             path: '/pages/my/my'
         };
     },
+    onShareTimeline() {
+        return {
+            title: '个人中心'
+        };
+    },
     /**
      * 点击用户资料
      */

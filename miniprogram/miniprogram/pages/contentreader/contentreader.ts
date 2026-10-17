@@ -36,7 +36,7 @@ Page({
    const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync(),width=Math.max(240,window.windowWidth-40);
    const media=(content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map((asset,index)=>({...asset,domId:'media-'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))}));
    if(content.cover)content.cover={...content.cover,url:api.mediaURL(content.cover.url)};
-   this.setData({content,media,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});});
+   this.setData({content,media,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
   }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
  },
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},
@@ -103,6 +103,8 @@ Page({
   try{const saved=wx.getStorageSync('share_reader_guide_v1');const record=saved&&typeof saved==='object'?saved:{};record.dismissedUntil=Date.now()+7*86400000;wx.setStorageSync('share_reader_guide_v1',record);}catch(e){}
  },
  onShareAppMessage(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',path:'/'+ROUTE+'?content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};},
- onShareTimeline(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};}
+ onShareTimeline(){return this.timelineShareValue();},
+ // 与 onShareTimeline 同源取值：预热（preheatTimelineShare）以此对象为缓存键，首次分享即带 st 归因令牌
+ timelineShareValue(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};}
 });
 export {};

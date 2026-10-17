@@ -42,14 +42,17 @@ test('reader native share uses the published target, title and cover, with menus
  let definition,resolveRead,rejectRead;const hidden=[],shown=[];
  const wx={hideShareMenu:()=>hidden.push(true),showShareMenu:x=>shown.push(x),getWindowInfo:()=>({windowWidth:375})};
  const api={resolveReaderOptions:async x=>x,mediaURL:x=>'https://api.jiadilingguang.com'+x,request:()=>new Promise((resolve,reject)=>{resolveRead=resolve;rejectRead=reject;})};
- const tracking={captureEntryValidity:()=>()=>true,resolvePageOptions(){},refreshConfig:async()=>({enabled:false}),consented:()=>false,block(){}};
+ const preheats=[];const tracking={captureEntryValidity:()=>()=>true,resolvePageOptions(){},refreshConfig:async()=>({enabled:false}),consented:()=>false,block(){},preheatTimelineShare(page,value){preheats.push(value);}};
  vm.runInNewContext(fs.readFileSync(path.join(root,route+'.js'),'utf8'),{Page:x=>definition=x,wx,exports:{},require:name=>name.endsWith('/tracking/index')?tracking:name.endsWith('/tracking/api')?api:{},Promise,Date});
  const page={...definition,data:JSON.parse(JSON.stringify(definition.data)),setData(v,callback){Object.assign(this.data,v);if(callback)callback();}};
  page.onLoad({content_id:material.content_id,content_version:2});page.onShow();await settle();assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(hidden.length,1);
  resolveRead({content_id:material.content_id,version:2,title:material.title,cover:material.cover,media:[]});await settle();
  const share=page.onShareAppMessage();assert.equal(share.title,material.title);assert.equal(share.path,'/'+route+'?content_id=material_one&content_version=2');assert.equal(share.imageUrl,'https://api.jiadilingguang.com'+material.cover.url);assert.equal(shown.length,1);
  assert.equal(page.onShareTimeline().query,'content_id=material_one&content_version=2');
- page.loadContent();await settle();rejectRead(new Error('revoked'));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);
+ assert.equal(preheats.length,1);const successShare=page.onShareTimeline();assert.deepEqual(preheats[0],successShare);
+ page.loadContent();await settle();rejectRead(new Error('revoked'));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');
+ // 预热缓存键一致性：预热收到的对象必须与 onShareTimeline 返回值完全一致，否则首次分享拿不到缓存令牌
+ assert.deepEqual(preheats[0],successShare);
 });
 
 test('reader WXML uses evaluated conditions for loading error consent media and sharing visibility',()=>{
