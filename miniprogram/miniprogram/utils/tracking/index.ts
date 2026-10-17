@@ -145,6 +145,13 @@ function updateReady(page) {
   const s=getSDK(); if (!s || !s.get(page)) return;
   s.ready(page,routes.ready(page.route,page.data||{},page.__trackingRendered),routes.binding(page.route,page.__trackingOptions||{}));
 }
+// 全页面默认分享：微信要求"发给朋友"（条件 1）与"朋友圈"（条件 2）成对开启，
+// 未自定义分享回调的页面注入产品名 + 当前页路径的默认实现；已自定义的页面不受影响。
+const DEFAULT_SHARE_TITLE='甲第灵光 · AI建房助手';
+function queryString(options) {
+  const pairs=Object.keys(options||{}).filter(key=>options[key]!=null&&options[key]!=='').map(key=>key+'='+encodeURIComponent(String(options[key])));
+  return pairs.length?'?'+pairs.join('&'):'';
+}
 function wrapPage(definition) {
   const result={...definition};
   const invoke=(name,page,args)=>typeof definition[name]==='function'?definition[name].apply(page,args):undefined;
@@ -182,6 +189,14 @@ function wrapPage(definition) {
     if(cached&&meta&&meta.expires>Date.now()){sdk.shareIntent(meta.context,meta.route,meta.content,meta.id,'timeline');return cached;}
     prepareShare(this,original,'timeline',key).then(value=>{if((sdk.get(this)||this.__trackingShareState)===state)state.shareCache[key]=value;});
     return original;
+  };
+  // 全页面开放右上角「转发给朋友」与「分享到朋友圈」（官方双条件成对开启）。
+  // 默认标题用产品名，path/query 取当前页；素材页等已自定义分享的页面不受影响。
+  if (typeof definition.onShareAppMessage!=='function') result.onShareAppMessage=function() {
+    return { title:DEFAULT_SHARE_TITLE, path:'/'+String(this.route||'')+queryString(this.__trackingOptions) };
+  };
+  if (typeof definition.onShareTimeline!=='function') result.onShareTimeline=function() {
+    return { title:DEFAULT_SHARE_TITLE, query:queryString(this.__trackingOptions).replace(/^\?/,'') };
   };
   // Preserve each business callback's receiver, arguments, return value and
   // exceptions. Analytics failures must never block an existing action.
