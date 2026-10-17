@@ -71,6 +71,7 @@ function environment() {
         if (name === '../component/leadOverviewStore' || name === './leadOverviewStore') return load('component/leadOverviewStore.ts');
         if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => env.reports.push(args) };
         if (name === './customerLeads') return load('customerLeads.tsx');
+        if (name === './customerLeadTrail') return { CustomerLeadTrail: 'CustomerLeadTrail' };
         if (name === './customerWorkflow') return load('customerWorkflow.tsx');
         if (name === './customerReportForm') return load('customerReportForm.tsx');
         if (name === './customerLeadHub' || name === '../component/WecomIdentityBinding') return { __esModule: true, default: name };

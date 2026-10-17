@@ -273,7 +273,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Set("tracking.scope", scope)
 		c.Next()
 	})
-	registerTrackingRuleRoutes(mg, svc)
+	registerTrackingRuleRoutes(mg, svc, customerServiceModel)
 	registerTrackingCRMTargetRoutes(mg, svc)
 	registerTrackingLeadRoutes(mg, svc, customerServiceModel, users)
 	sc := func(c *gin.Context) tracking.Scope { return c.MustGet("tracking.scope").(tracking.Scope) }

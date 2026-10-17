@@ -21,6 +21,7 @@ import { getLeadOverviewSession, isLeadOverviewSessionCurrent, publishLeadOvervi
 import { useIsMobile } from '../component/useIsMobile';
 import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
+import { CustomerLeadTrail } from './customerLeadTrail';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -725,6 +726,8 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             <div><span>更新时间</span><strong>{formatDateTime(activeLead.updated_at)}</strong></div>
                                         </div>
                                     </section>
+
+                                    <CustomerLeadTrail userId={activeLead.user_id} />
 
                                     <section className="customer-lead-detail-section">
                                         <h4>自动判断</h4>

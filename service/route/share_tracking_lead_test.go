@@ -199,3 +199,32 @@ func TestTrackingLeadEndpointRegisteredBehindAuth(t *testing.T) {
 		t.Fatalf("cache header %q", got)
 	}
 }
+
+// Contract: the recompute hook and the opt-in auto loop stay wired, and the
+// manual endpoint shares one conversion pipeline with automation.
+func TestTrackingLeadAutomationContract(t *testing.T) {
+	auto, err := os.ReadFile("share_tracking_lead_auto.go")
+	if err != nil {
+		t.Fatalf("read share_tracking_lead_auto.go: %v", err)
+	}
+	for _, want := range []string{
+		"feedbackIntentUpgrades",
+		`"intent_upgrade"`,
+		"ListEventsForLead",          // daily dedupe before appending
+		"TRACKING_LEAD_AUTO_ENABLED", // opt-in, default off
+		`"share_tracking_auto"`,
+		"convertVisitorToLead", // auto reuses the manual pipeline
+		"crmEnabled()",         // CRM handover stops automation cold
+	} {
+		if !strings.Contains(string(auto), want) {
+			t.Fatalf("automation contract missing %q", want)
+		}
+	}
+	rules, err := os.ReadFile("share_tracking_rules.go")
+	if err != nil {
+		t.Fatalf("read share_tracking_rules.go: %v", err)
+	}
+	if !strings.Contains(string(rules), "go feedbackIntentUpgrades(") {
+		t.Fatal("recompute does not trigger the upgrade feedback hook")
+	}
+}

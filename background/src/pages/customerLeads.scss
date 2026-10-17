@@ -959,3 +959,26 @@
         overflow: hidden;
     }
 }
+
+/* 线索详情内嵌的小程序访问轨迹（P1-4）：来自分享访问记录的最近会话摘要 */
+.layout-content[data-admin-page="/customer-leads"] .customer-lead-trail,
+.layout-content[data-admin-page="/customer-management"] .customer-lead-trail {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+
+  li {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid #ece7e1;
+    border-radius: 8px;
+    background: #faf8f5;
+    font-size: 12px;
+  }
+
+  strong { font-size: 12px; }
+  span { color: #7a6f63; }
+}

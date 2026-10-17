@@ -1,6 +1,7 @@
 package route
 
 import (
+	"context"
 	"log"
 	"strconv"
 	"strings"
@@ -158,6 +159,7 @@ func buildTrackingLeadEvidence(v tracking.Visitor, contents []tracking.VisitorCo
 
 func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, leads *model.CustomerServiceModel, users *model.UserModel) {
 	identities := model.NewUserIdentityModel(users.DB)
+	startTrackingLeadAutomation(svc, leads, identities, users)
 	group.POST("/visitors/:id/lead", func(c *gin.Context) {
 		scope := c.MustGet("tracking.scope").(tracking.Scope)
 		if !scope.CRM {
@@ -174,89 +176,96 @@ func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, l
 			trackingResponse(c, nil, &tracking.Error{Status: 503, Message: "客服线索服务不可用"})
 			return
 		}
-		key := c.Param("id")
-		userID, ok := trackingVisitorAccount(key)
-		if !ok {
-			trackingResponse(c, nil, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"})
-			return
-		}
-		list, e := svc.Visitors(c.Request.Context(), scope, tracking.Filter{Visitor: key})
-		if e != nil {
-			trackingResponse(c, nil, e)
-			return
-		}
-		items, _ := list.Items.([]tracking.Visitor)
-		if len(items) == 0 {
-			trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "访客不存在或无权访问"})
-			return
-		}
-		visitor := items[0]
-		if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
-			trackingResponse(c, nil, e)
-			return
-		}
-		phone := ""
-		if phones, err := identities.GetUserPhones(userID); err != nil {
-			log.Printf("[Tracking] lead conversion phone lookup failed user=%d: %v", userID, err)
-		} else if len(phones) > 0 {
-			phone = phones[0]
-		}
-		// Content taste is enriching context, never a blocker: on failure the
-		// snapshot simply carries no top contents and the summary says so.
-		contents := []tracking.VisitorContent{}
-		if cl, err := svc.VisitorContents(c.Request.Context(), scope, key, tracking.Filter{Limit: trackingLeadSummaryTopN}); err != nil {
-			log.Printf("[Tracking] lead conversion contents failed visitor=%s: %v", key, err)
-		} else if cs, ok := cl.Items.([]tracking.VisitorContent); ok {
-			contents = cs
-		}
-		existingID, err := leads.FindLatestOpenLeadID(userID)
-		if err != nil {
-			log.Printf("[Tracking] lead dedupe failed user=%d: %v", userID, err)
-			trackingResponse(c, nil, &tracking.Error{Status: 500, Message: "线索查重失败，请稍后重试"})
-			return
-		}
-		summary := buildTrackingLeadSummary(visitor, contents)
-		intentLevel := strings.TrimSpace(visitor.Intent.Level)
-		event := &model.CustomerServiceEventCreateInput{
-			UserID:        userID,
-			EventType:     trackingLeadEventType,
-			Source:        trackingLeadSource,
-			IntentLevel:   intentLevel,
-			DemandSummary: summary,
-			Payload:       buildTrackingLeadEvidence(visitor, contents, scope.Actor, time.Now()),
-		}
-		if existingID > 0 {
-			// Keep the open lead untouched; append the conversion evidence as a
-			// follow-up signal instead of silently rewriting its fields.
-			event.LeadID = existingID
-			if _, err := leads.CreateEvent(event); err != nil {
-				log.Printf("[Tracking] attach conversion event failed lead=%d: %v", existingID, err)
-				trackingResponse(c, nil, &tracking.Error{Status: 500, Message: "追加转化记录失败，请稍后重试"})
-				return
-			}
-			trackingResponse(c, gin.H{"lead_id": existingID, "existed": true, "intent_level": intentLevel, "demand_summary": summary}, nil)
-			return
-		}
-		leadID, err := leads.CreateLead(&model.CustomerLeadCreateInput{
-			UserID:        userID,
-			Name:          trackingLeadDisplayName(visitor.Nickname),
-			Phone:         phone,
-			Source:        trackingLeadSource,
-			IntentLevel:   intentLevel,
-			Status:        model.CustomerLeadStatusNew,
-			DemandSummary: summary,
-		})
-		if err != nil {
-			log.Printf("[Tracking] create lead from visitor=%s failed: %v", key, err)
-			trackingResponse(c, nil, &tracking.Error{Status: 500, Message: "创建线索失败，请稍后重试"})
-			return
-		}
-		event.LeadID = leadID
-		if _, err := leads.CreateEvent(event); err != nil {
-			// The lead exists; a missing snapshot degrades auditability, not the
-			// conversion itself. Surface it in logs and still report success.
-			log.Printf("[Tracking] conversion event for lead=%d failed: %v", leadID, err)
-		}
-		trackingResponse(c, gin.H{"lead_id": leadID, "existed": false, "intent_level": intentLevel, "demand_summary": summary}, nil)
+		outcome, err := convertVisitorToLead(c.Request.Context(), svc, leads, identities, scope, c.Param("id"), trackingLeadSource)
+		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary}, err)
 	})
+}
+
+type trackingLeadOutcome struct {
+	LeadID        int64
+	Existed       bool
+	IntentLevel   string
+	DemandSummary string
+}
+
+// convertVisitorToLead runs the shared gate → dedupe → convert pipeline for
+// the manual management endpoint and the off-by-default auto converter. All
+// decisions (identity gate, evidence snapshot, phone lookup) happen here so
+// the two entry points can never drift apart.
+func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *model.CustomerServiceModel, identities *model.UserIdentityModel, scope tracking.Scope, key, source string) (trackingLeadOutcome, error) {
+	userID, ok := trackingVisitorAccount(key)
+	if !ok {
+		return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"}
+	}
+	list, e := svc.Visitors(ctx, scope, tracking.Filter{Visitor: key})
+	if e != nil {
+		return trackingLeadOutcome{}, e
+	}
+	items, _ := list.Items.([]tracking.Visitor)
+	if len(items) == 0 {
+		return trackingLeadOutcome{}, &tracking.Error{Status: 404, Message: "访客不存在或无权访问"}
+	}
+	visitor := items[0]
+	if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
+		return trackingLeadOutcome{}, e
+	}
+	phone := ""
+	if phones, err := identities.GetUserPhones(userID); err != nil {
+		log.Printf("[Tracking] lead conversion phone lookup failed user=%d: %v", userID, err)
+	} else if len(phones) > 0 {
+		phone = phones[0]
+	}
+	// Content taste is enriching context, never a blocker: on failure the
+	// snapshot simply carries no top contents and the summary says so.
+	contents := []tracking.VisitorContent{}
+	if cl, err := svc.VisitorContents(ctx, scope, key, tracking.Filter{Limit: trackingLeadSummaryTopN}); err != nil {
+		log.Printf("[Tracking] lead conversion contents failed visitor=%s: %v", key, err)
+	} else if cs, ok := cl.Items.([]tracking.VisitorContent); ok {
+		contents = cs
+	}
+	existingID, err := leads.FindLatestOpenLeadID(userID)
+	if err != nil {
+		log.Printf("[Tracking] lead dedupe failed user=%d: %v", userID, err)
+		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "线索查重失败，请稍后重试"}
+	}
+	summary := buildTrackingLeadSummary(visitor, contents)
+	intentLevel := strings.TrimSpace(visitor.Intent.Level)
+	event := &model.CustomerServiceEventCreateInput{
+		UserID:        userID,
+		EventType:     trackingLeadEventType,
+		Source:        source,
+		IntentLevel:   intentLevel,
+		DemandSummary: summary,
+		Payload:       buildTrackingLeadEvidence(visitor, contents, scope.Actor, time.Now()),
+	}
+	if existingID > 0 {
+		// Keep the open lead untouched; append the conversion evidence as a
+		// follow-up signal instead of silently rewriting its fields.
+		event.LeadID = existingID
+		if _, err := leads.CreateEvent(event); err != nil {
+			log.Printf("[Tracking] attach conversion event failed lead=%d: %v", existingID, err)
+			return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "追加转化记录失败，请稍后重试"}
+		}
+		return trackingLeadOutcome{LeadID: existingID, Existed: true, IntentLevel: intentLevel, DemandSummary: summary}, nil
+	}
+	leadID, err := leads.CreateLead(&model.CustomerLeadCreateInput{
+		UserID:        userID,
+		Name:          trackingLeadDisplayName(visitor.Nickname),
+		Phone:         phone,
+		Source:        source,
+		IntentLevel:   intentLevel,
+		Status:        model.CustomerLeadStatusNew,
+		DemandSummary: summary,
+	})
+	if err != nil {
+		log.Printf("[Tracking] create lead from visitor=%s failed: %v", key, err)
+		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "创建线索失败，请稍后重试"}
+	}
+	event.LeadID = leadID
+	if _, err := leads.CreateEvent(event); err != nil {
+		// The lead exists; a missing snapshot degrades auditability, not the
+		// conversion itself. Surface it in logs and still report success.
+		log.Printf("[Tracking] conversion event for lead=%d failed: %v", leadID, err)
+	}
+	return trackingLeadOutcome{LeadID: leadID, Existed: false, IntentLevel: intentLevel, DemandSummary: summary}, nil
 }
