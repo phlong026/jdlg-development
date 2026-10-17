@@ -76,11 +76,11 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   const globals = { sessionStorage: { getItem: () => saved, setItem() {} }, document: { querySelector: () => ({ scrollTop: 5, scrollTo() {} }) }, window: { confirm: () => true } };
   const access = load('src/pages/shareTracking/access.ts', { react, './model': model }, globals);
   const module = kind === 'records'
-    ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, '../component/ManagementSession': { useManagementSession: () => ({ user: { id: 42 } }) }, './shareTracking/access': access, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' },
+    ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, '../component/ManagementSession': { useManagementSession: () => ({ user: { id: 42 } }) }, './shareTracking/access': access, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './shareTracking/convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './shareTracking/channels': { ChannelLeaderboard: 'ChannelLeaderboard' },
     './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
     './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/mpSync': { MPSyncPanel: 'MPSyncPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
-    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './model': model }, globals);
+    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './visitorShares': { VisitorSharesPanel: 'VisitorSharesPanel' }, './model': model }, globals);
   function render() {
     let renders = 0;
     do {

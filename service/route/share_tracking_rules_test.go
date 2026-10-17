@@ -28,7 +28,7 @@ func TestTrackingRuleRoutesRejectUnscopedWritesAndUnknownFields(t *testing.T) {
 			group.Use(func(c *gin.Context) {
 				c.Set("tracking.scope", tracking.Scope{Tenant: "tenant", Actor: 7, Owners: []string{"owner"}, View: true, Rules: tc.rules})
 			})
-			registerTrackingRuleRoutes(group, tracking.New(nil, tracking.Config{Tenant: "tenant", IntentEnabled: true}))
+			registerTrackingRuleRoutes(group, tracking.New(nil, tracking.Config{Tenant: "tenant", IntentEnabled: true}), nil)
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()

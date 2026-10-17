@@ -17,3 +17,15 @@ func LoadConfig() Config {
 	}
 	return c
 }
+
+// routeAudience resolves a page's consumption domain, defaulting to neutral so
+// unlabelled or future routes can never skew customer-domain gating.
+func (s *Service) routeAudience(route string) string {
+	if r, ok := s.Config.Routes[route]; ok {
+		switch r.Audience {
+		case RouteAudienceCustomer, RouteAudienceBSide:
+			return r.Audience
+		}
+	}
+	return RouteAudienceNeutral
+}

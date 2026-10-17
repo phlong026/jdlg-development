@@ -12,8 +12,12 @@ type SQLProfileQueryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 type UserProfilePresentation struct {
-	UserID           int64
-	Nickname, Avatar string
+	UserID   int64
+	Nickname string
+	Avatar   string
+	// IdentityType is the self-declared account audience (乡墅业主/设计师/…).
+	// Presentation-grade: it labels a visitor, it is never an authorization fact.
+	IdentityType string
 }
 
 // GetUserProfilePresentations reads only account presentation, never phones,
@@ -39,7 +43,7 @@ func GetUserProfilePresentations(ctx context.Context, q SQLProfileQueryer, ids [
 		placeholders = append(placeholders, "?")
 	}
 	// Joining users suppresses orphan profiles after an account is removed.
-	query := `SELECT p.user_id, COALESCE(p.nickname,''), COALESCE(p.avatar,'') FROM user_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id IN (` + strings.Join(placeholders, ",") + `) ORDER BY p.user_id LIMIT ?`
+	query := `SELECT p.user_id, COALESCE(p.nickname,''), COALESCE(p.avatar,''), COALESCE(p.identity_type,'') FROM user_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id IN (` + strings.Join(placeholders, ",") + `) ORDER BY p.user_id LIMIT ?`
 	args = append(args, len(ids)+1)
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -50,7 +54,7 @@ func GetUserProfilePresentations(ctx context.Context, q SQLProfileQueryer, ids [
 	for rows.Next() {
 		count++
 		var p UserProfilePresentation
-		if err := rows.Scan(&p.UserID, &p.Nickname, &p.Avatar); err != nil {
+		if err := rows.Scan(&p.UserID, &p.Nickname, &p.Avatar, &p.IdentityType); err != nil {
 			return nil, err
 		}
 		if count > len(ids) || !requested[p.UserID] {
@@ -59,7 +63,7 @@ func GetUserProfilePresentations(ctx context.Context, q SQLProfileQueryer, ids [
 		if _, duplicate := out[p.UserID]; duplicate {
 			return nil, fmt.Errorf("duplicate profile result")
 		}
-		if len(p.Nickname) > 1024 || len(p.Avatar) > 4096 {
+		if len(p.Nickname) > 1024 || len(p.Avatar) > 4096 || len(p.IdentityType) > 64 {
 			return nil, fmt.Errorf("profile presentation exceeds read bound")
 		}
 		out[p.UserID] = p

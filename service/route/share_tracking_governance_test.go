@@ -74,7 +74,7 @@ func governanceRouteFixture(t *testing.T, owners []string) (*gin.Engine, *govern
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	registered := gin.New()
-	svc := RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil)
+	svc := RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil, nil)
 	now := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 	store := &governanceTestStore{records: map[string]tracking.Record{}}
 	svc.Config.Tenant = "governance-tenant"

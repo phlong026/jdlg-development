@@ -218,7 +218,7 @@ func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (trackin
 	scope.Owners = []string{owners[0]}
 	return scope, nil
 }
-func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel) *tracking.Service {
+func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel, customerServiceModel *model.CustomerServiceModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
 	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
 		log.Printf("[Tracking] %s", warning)
@@ -273,8 +273,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Set("tracking.scope", scope)
 		c.Next()
 	})
-	registerTrackingRuleRoutes(mg, svc)
+	registerTrackingRuleRoutes(mg, svc, customerServiceModel)
 	registerTrackingCRMTargetRoutes(mg, svc)
+	registerTrackingLeadRoutes(mg, svc, customerServiceModel, users)
+	registerTrackingChannelRoutes(mg, svc, customerServiceModel)
 	sc := func(c *gin.Context) tracking.Scope { return c.MustGet("tracking.scope").(tracking.Scope) }
 	view := func(c *gin.Context) bool {
 		if !sc(c).View {
@@ -417,6 +419,18 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Sessions(c.Request.Context(), sc(c), c.Param("id"), f)
+		trackingResponse(c, v, e)
+	})
+	mg.GET("/visitors/:id/shares", func(c *gin.Context) {
+		if !view(c) {
+			return
+		}
+		f, e := trackingFilter(c)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.VisitorShares(c.Request.Context(), sc(c), c.Param("id"), f)
 		trackingResponse(c, v, e)
 	})
 	mg.GET("/page-views/:id/events", func(c *gin.Context) {

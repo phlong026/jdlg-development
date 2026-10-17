@@ -16,6 +16,9 @@ import (
 type VisitorProfile struct {
 	Nickname  string
 	AvatarURL string
+	// IdentityType labels the account audience (乡墅业主/设计师/…). It drives
+	// presentation badges and lead-conversion gating; it is not authorization.
+	IdentityType string
 }
 type VisitorProfileResolver func(context.Context, []int64) (map[int64]VisitorProfile, error)
 
@@ -138,13 +141,14 @@ func (s *Service) queryProfiles(ctx context.Context, r Repository, facts []factV
 			v := by[key]
 			p, exists := profiles[id]
 			if exists {
-				if len(p.Nickname) > 1024 || len(p.AvatarURL) > 4096 {
+				if len(p.Nickname) > 1024 || len(p.AvatarURL) > 4096 || len(p.IdentityType) > 64 {
 					return nil, "", ErrUnavailable
 				}
 				if name := strings.TrimSpace(p.Nickname); name != "" {
 					v.Nickname = name
 				}
 				v.AvatarURL = safeProfileAvatar(p.AvatarURL)
+				v.IdentityType = strings.TrimSpace(p.IdentityType)
 			}
 			if bounded, ok := r.(*queryRepository); ok {
 				if err := bounded.budget.consume(Record{Payload: marshal(p)}); err != nil {

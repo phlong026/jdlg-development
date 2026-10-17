@@ -4,7 +4,7 @@ import { defaultFilters, type Filters } from './model';
 
 const accessDeniedEvent = 'tracking-access-denied';
 const storagePrefix = 'tracking-view-v2:';
-type StoredView = { filters: Filters; view: 'visitors' | 'contents' };
+type StoredView = { filters: Filters; view: 'visitors' | 'contents' | 'channels' };
 type AccessState = { actorId?: number; data?: Context; loading: boolean; error: string; notice?: string; permissionBlocked?: boolean };
 
 export interface TrackingAccessBoundary { readonly actorId?: number; readonly revision: number; }
@@ -109,7 +109,7 @@ export function normalizeTrackingView(value: unknown, owners: Context['owners'])
         if (typeof value === 'string') filters[key] = value;
     }
     if (typeof filters.owner !== 'string' || !owners.some(owner => owner.id === filters.owner)) filters.owner = '';
-    const view = saved.view === 'contents' ? 'contents' : 'visitors';
+    const view = saved.view === 'contents' ? 'contents' : saved.view === 'channels' ? 'channels' : 'visitors';
     if (view === 'contents') filters.intent = '';
     return { filters, view };
 }

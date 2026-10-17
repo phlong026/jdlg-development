@@ -17,15 +17,34 @@ export function dateRange(filters: Filters, now = new Date()): { start?: string;
     }
     return { start: new Date(`${start}T00:00:00+08:00`).toISOString(), end: new Date(Date.parse(`${end}T00:00:00+08:00`) + 86400000).toISOString() };
 }
-export function queryFor(filters: Filters, now = new Date(), view: 'visitors' | 'contents' = 'visitors'): Record<string, unknown> { return { ...dateRange(filters, now), identity: filters.identity, ...(view === 'contents' ? { content_q: (filters.content_q || '').trim(), visitor_q: (filters.visitor_q || '').trim() } : { intent: filters.intent, q: filters.q.trim() }), owner: filters.owner, sort: filters.sort, direction: filters.direction, ...(filters.visitor && view === 'visitors' ? { visitor: filters.visitor } : {}), limit: 20 }; }
+export function queryFor(filters: Filters, now = new Date(), view: 'visitors' | 'contents' | 'channels' = 'visitors'): Record<string, unknown> { return { ...dateRange(filters, now), identity: view === 'channels' ? undefined : filters.identity, ...(view === 'contents' ? { content_q: (filters.content_q || '').trim(), visitor_q: (filters.visitor_q || '').trim() } : view === 'channels' ? {} : { intent: filters.intent, q: filters.q.trim() }), owner: filters.owner, sort: view === 'channels' ? undefined : filters.sort, direction: view === 'channels' ? undefined : filters.direction, ...(filters.visitor && view === 'visitors' ? { visitor: filters.visitor } : {}), limit: view === 'channels' ? 20 : 20 }; }
 export function time(value?: string): string { if (!value) return '未记录'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '时间不可用' : new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date); }
 export function duration(ms = 0): string { const seconds = Math.floor(Math.max(0, ms) / 1000); return seconds < 60 ? `${seconds}秒` : seconds < 3600 ? `${Math.floor(seconds / 60)}分${seconds % 60}秒` : `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; }
 export function safeMediaURL(value?: string): string | undefined { if (!value) return; try { const url = new URL(value, window.location.origin); return (url.protocol === 'https:' || (url.origin === window.location.origin && url.protocol === window.location.protocol)) && !url.username && !url.password ? url.href : undefined; } catch { return; } }
 export const intentLabels = { high: '高意向参考', medium: '中意向参考', low: '低关注待观察', unknown: '待判断' };
+// 分享渠道来自 share_intent 事件；首次朋友圈分享事件丢失时渠道未知，显示“未记录”。
+export const channelLabels: Record<string, string> = { app_message: '聊天私发', timeline: '朋友圈' };
+export function channelLabel(channel?: string): string { return channel ? channelLabels[channel] || channel : '渠道未记录'; }
+// 视频进度 = 去重观看时长 / 视频总时长，封顶 100%（重复回看不放大数字）。
+export function videoPercent(unique?: number, total?: number): number | undefined {
+    if (!unique || !total || total <= 0) return undefined;
+    return Math.min(100, Math.round((unique / total) * 100));
+}
+// 精准客户门控展示口径，与后端 trackingLeadGate 一致：
+// 乡墅业主可转销售线索；设计师/施工队/建材商/机构用户是渠道而非客户；未选身份留给人工核实。
+const B_SIDE_IDENTITIES = new Set(['设计师', '施工队', '建材商', '机构用户']);
+export function identityBadge(identityState: string, identityType?: string): { label: string; tone: 'customer' | 'bside' | 'unset' } | null {
+    if (identityState !== 'identified') return null;
+    const identity = (identityType || '').trim();
+    if (!identity) return { label: '身份未确认', tone: 'unset' };
+    if (identity === '乡墅业主') return { label: '乡墅业主', tone: 'customer' };
+    if (B_SIDE_IDENTITIES.has(identity)) return { label: `B端 · ${identity}`, tone: 'bside' };
+    return { label: identity, tone: 'unset' };
+}
 export const eventLabels: Record<string, string> = { share_intent: '发起分享（非送达）', page_view: '页面访问', page_end: '页面离开', visible_segment: '可见分段', content_click: '内容点击（非已读）', image_open: '打开原图', outbound_click: '点击外部原文（外部停留未知）', scroll_depth: '滚动到达位置', video_state: '播放状态', video_progress: '播放进度（非观看完成）', business_action_confirmed: '已验证业务行为' };
 export function qualityText(flags: string[] = []): string { const names: Record<string, string> = { late: '离线或迟到补报', incomplete: '结束事件缺失，记录不完整', inferred_seek: '推断播放跳转', sampling_gap: '采样间隔缺失', preview: '后台预览', self: '分享人自访', test: '测试流量', sequence_conflict: '分段序号冲突', clock_skew: '客户端时间偏差', clamped: '异常增量已封顶' }; return flags.map(flag => names[flag] || flag).join('、'); }
 export function intentMetricText(value: string): string { const labels: Record<string, string> = { sessions: '有效会话', independent_sessions: '独立会话', favorites: '已确认收藏', server_favorite: '服务端确认收藏', business_results: '已确认业务结果', server_consultation: '服务端确认咨询', server_appointment: '服务端确认预约', server_quote: '服务端确认报价' }; return labels[value] || value; }
-export function intentExclusionText(value: string): string { const labels: Record<string, string> = { anonymous_identity: '匿名身份', preview: '后台预览', self: '分享人自访', test: '测试流量', abnormal: '异常流量', duplicate: '重复事件', client_click: '客户端点击', unverified_business: '未经服务端确认的业务行为', daily_contribution_over_cap: '超过每日贡献上限的部分' }; return labels[value] || value; }
+export function intentExclusionText(value: string): string { const labels: Record<string, string> = { anonymous_identity: '匿名身份', preview: '后台预览', self: '分享人自访', test: '测试流量', abnormal: '异常流量', duplicate: '重复事件', client_click: '客户端点击', unverified_business: '未经服务端确认的业务行为', daily_contribution_over_cap: '超过每日贡献上限的部分', bside_identity: 'B端账号（仅渠道观察）' }; return labels[value] || value; }
 
 export function intentWindowQuery(query: Record<string, unknown>, evidence?: IntentEvidence): Record<string, unknown> | undefined {
     if (!evidence || evidence.scope_required) return;

@@ -220,6 +220,16 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 		summaries := map[string]Content{}
 		visitors := map[string]map[string]bool{}
 		totalVisitors := map[string]bool{}
+		shareTotals := map[string]int{}
+		shares, e := clientShares(r, scope, f)
+		if e != nil {
+			return e
+		}
+		for _, sh := range shares {
+			if sh.content != "" {
+				shareTotals[sh.content]++
+			}
+		}
 		for _, fact := range facts {
 			if fact.Content == "" {
 				continue
@@ -255,6 +265,7 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 			summary := summaries[c.ID]
 			c.PageViews, c.VisibleMS, c.LastVisit = summary.PageViews, summary.VisibleMS, summary.LastVisit
 			c.Identified, c.Anonymous = summary.Identified, summary.Anonymous
+			c.Shares = shareTotals[c.ID]
 			items = append(items, c)
 		}
 		for key := range totalVisitors {

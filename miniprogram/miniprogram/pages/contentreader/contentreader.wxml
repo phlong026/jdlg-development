@@ -23,5 +23,10 @@
   <button wx:if="{{content.source_url}}" bindtap="copySource">复制原文链接</button>
   <button open-type="share">分享此内容</button>
   <text class="limits">分享操作仅表示发起分享，不代表已送达。视频播放位置、有效观看时间与覆盖片段分别记录。</text>
+  <view wx:if="{{guideVisible}}" class="reader-guide">
+   <view class="reader-guide-text"><text class="reader-guide-title">想为这套方案估算建房造价？</text><text class="reader-guide-sub">AI 建房顾问可按您的宅基地情况给出参考报价</text></view>
+   <button class="reader-guide-cta" bindtap="openGuide">去咨询</button>
+   <button class="reader-guide-close" bindtap="dismissGuide" aria-label="暂不需要">✕</button>
+  </view>
  </block>
 </view>

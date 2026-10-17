@@ -252,7 +252,7 @@ func urlLinkRoutes(t *testing.T) *gin.Engine {
 	t.Setenv("TRACKING_WECHAT_URLLINK_ENABLED", "")
 	gin.SetMode(gin.TestMode)
 	registered := gin.New()
-	RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil)
+	RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil, nil)
 	router := gin.New()
 	for _, route := range registered.Routes() {
 		if strings.HasSuffix(route.Path, "/url-link") {

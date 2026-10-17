@@ -4,8 +4,8 @@ const api=require('../../utils/tracking/api');
 const {createVideoTracker}=require('../../utils/tracking/video');
 const ROUTE='pages/contentreader/contentreader';
 Page({
- data:{loading:true,error:'',content:null,contentReady:false,media:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false},
- onLoad(options){this.entryGeneration=1;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.loadContent();},
+ data:{loading:true,error:'',content:null,contentReady:false,media:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false},
+ onLoad(options){this.entryGeneration=1;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.evaluateGuide();this.loadContent();},
  onShow(){this.pageVisible=true;tracking.block(this,false);if(this.hasShown)this.loadContent();this.hasShown=true;this.syncPlayerVisibility();},
  onHide(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;this.pageVisible=false;this.syncPlayerVisibility();this.pausePlayers();},
  onUnload(){if(this.stopObservingTracking)this.stopObservingTracking();this.loadSequence=(this.loadSequence||0)+1;this.pageVisible=false;this.pausePlayers();this.observers.forEach(o=>o.disconnect());this.observers=[];},
@@ -81,6 +81,26 @@ Page({
   wx.createSelectorQuery().in(this).select('.reader').boundingClientRect(rect=>{if(!rect)return;const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync();tracking.emit(this,'scroll_depth',{scroll_depth:Math.min(100,Math.max(0,100*(event.scrollTop+window.windowHeight)/Math.max(1,rect.height)))});}).exec();
  },
  goBack(){wx.navigateBack({delta:1,fail:()=>wx.switchTab({url:'/pages/index/index'})});},
+ // 软引导：回访的阅读者引导去 AI 建房顾问留资（跳客服页带 source=content_reader 归因）。
+ // 阈值只依赖本地存储，独立于访问分析 SDK——关闭"访问分析"的用户同样可见。
+ evaluateGuide(){
+  const KEY='share_reader_guide_v1';let record={visits:0,dismissedUntil:0};
+  try{const saved=wx.getStorageSync(KEY);if(saved&&typeof saved==='object')record={visits:Number(saved.visits)||0,dismissedUntil:Number(saved.dismissedUntil)||0};}catch(e){}
+  record.visits+=1;
+  try{wx.setStorageSync(KEY,record);}catch(e){}
+  if(record.visits>=2&&Date.now()>=record.dismissedUntil){
+   this.setData({guideVisible:true});
+   tracking.emit(this,'content_click',{target_content_id:'guide',component_key:'reader_guide',action_key:'guide_impression'});
+  }
+ },
+ openGuide(){
+  tracking.emit(this,'content_click',{target_content_id:'guide',component_key:'reader_guide',action_key:'guide_consult'});
+  wx.navigateTo({url:'/pages/customerservice/customerservice?source=content_reader'});
+ },
+ dismissGuide(){
+  this.setData({guideVisible:false});
+  try{const saved=wx.getStorageSync('share_reader_guide_v1');const record=saved&&typeof saved==='object'?saved:{};record.dismissedUntil=Date.now()+7*86400000;wx.setStorageSync('share_reader_guide_v1',record);}catch(e){}
+ },
  onShareAppMessage(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',path:'/'+ROUTE+'?content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};},
  onShareTimeline(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};}
 });

@@ -1,12 +1,15 @@
 package route
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"service/model"
 	"service/tracking"
 )
 
 // The parent group supplies verified staff scope, session checks and mutation CSRF guards.
-func registerTrackingRuleRoutes(group *gin.RouterGroup, svc *tracking.Service) {
+func registerTrackingRuleRoutes(group *gin.RouterGroup, svc *tracking.Service, customerServiceModel *model.CustomerServiceModel) {
 	scopeFor := func(c *gin.Context) (tracking.Scope, error) {
 		scope := c.MustGet("tracking.scope").(tracking.Scope)
 		return trackingPrivateMutationScope(c, scope)
@@ -45,5 +48,10 @@ func registerTrackingRuleRoutes(group *gin.RouterGroup, svc *tracking.Service) {
 		}
 		value, e := svc.RecomputeIntents(c.Request.Context(), scope, input)
 		trackingResponse(c, value, e)
+		if e == nil && value.Changed > 0 {
+			// Recompute changed levels: tell the sales side asynchronously so
+			// an upgraded prospect surfaces on its open lead without delay.
+			go feedbackIntentUpgrades(c.Request.Context(), svc, customerServiceModel, scope, time.Now())
+		}
 	})
 }

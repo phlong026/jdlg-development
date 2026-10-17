@@ -91,7 +91,7 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if f.Sort == "" {
 		f.Sort = "last_visit"
 	}
-	if f.Sort != "last_visit" && f.Sort != "page_views" && f.Sort != "visible_ms" {
+	if f.Sort != "last_visit" && f.Sort != "page_views" && f.Sort != "visible_ms" && f.Sort != "shares" {
 		return f, fail(400, "排序无效")
 	}
 	if f.Direction == "" {
@@ -512,10 +512,20 @@ func (s *Service) intent(scope Scope, key string, now time.Time, data intentFact
 	sessionDays := map[string]int{}
 	validSessions := map[string]bool{}
 	evidence := []IntentEvidence{}
+	var customerMS, audienceMS int64
 	zone := time.FixedZone("Asia/Shanghai", 8*60*60)
 	for _, v := range facts {
 		if v.Visitor != key {
 			continue
+		}
+		// Content-domain share counts every collected page view before
+		// session dedupe: it measures what the visitor reads, not how the
+		// rule caps effective sessions.
+		if audience := s.routeAudience(v.Route); audience != RouteAudienceNeutral {
+			audienceMS += v.Visible
+			if audience == RouteAudienceCustomer {
+				customerMS += v.Visible
+			}
 		}
 		validSessions[v.Session] = true
 		if sessions[v.Session] {
@@ -573,6 +583,9 @@ func (s *Service) intent(scope Scope, key string, now time.Time, data intentFact
 	}
 	in.sourceFingerprint = hash(string(marshal(evidence)))
 	in.Evidence = evidence
+	if audienceMS > 0 {
+		in.CustomerShare = float64(customerMS) / float64(audienceMS)
+	}
 	if len(evidence) > 100 {
 		in.Evidence = append([]IntentEvidence{}, evidence[:100]...)
 		in.EvidenceTruncated = true
@@ -649,6 +662,12 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			return e
 		}
 		out.ProfileRevision = profileRevision
+		shareTotals, shareRecent, recentCovered, e := shareCounts(r, scope, f)
+		if e != nil {
+			return e
+		}
+		recentCutoff := f.AsOf.Add(-7 * 24 * time.Hour)
+		recentViews := map[string]int{}
 		by := map[string]*Visitor{}
 		ss := map[string]map[string]bool{}
 		for _, v := range facts {
@@ -661,6 +680,9 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			}
 			if v.Count {
 				item.Views++
+				if recentCovered && !v.Started.Before(recentCutoff) {
+					recentViews[v.Visitor]++
+				}
 			}
 			item.Visible += v.Visible
 			item.LatestVisit = latestCountedVisit(item.LatestVisit, v)
@@ -676,9 +698,23 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 		items := []Visitor{}
 		for key, v := range by {
 			v.Sessions = len(ss[key])
+			v.Shares = shareTotals[key]
+			if recentCovered {
+				views, shares := recentViews[key], shareRecent[key]
+				v.RecentViews, v.RecentShares = &views, &shares
+			}
 			v.Intent = s.intent(effective, key, f.AsOf, intentData)
 			if s.evaluationAudited(effective, v.Intent) {
 				pending = append(pending, pendingEvaluation{key: key, intent: v.Intent})
+			}
+			// B-side accounts are channels, not prospects. Downgrade the
+			// projected level after the audited evaluation so the rule's own
+			// output stays intact while designer activity never floods the
+			// high-intent list. Conversion hard-blocks separately in the route.
+			if v.State == "identified" && BSideIdentities[v.IdentityType] {
+				v.Intent.Level = "low"
+				v.Intent.Exclusions = append(v.Intent.Exclusions, "bside_identity")
+				v.Intent.Reasons = append([]string{"B端账号（" + v.IdentityType + "）仅作渠道观察，不参与客户意向"}, v.Intent.Reasons...)
 			}
 			if scope.CRM && len(effective.Owners) == 1 {
 				rec, ok := intentData.crm[privateKey(effective.Owners[0], key)]
@@ -710,6 +746,8 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 			switch f.Sort {
 			case "page_views":
 				cmp = a.Views - b.Views
+			case "shares":
+				cmp = a.Shares - b.Shares
 			case "visible_ms":
 				if a.Visible < b.Visible {
 					cmp = -1

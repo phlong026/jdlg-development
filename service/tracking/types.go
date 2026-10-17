@@ -78,7 +78,29 @@ type Config struct {
 type Route struct {
 	Title, Type string
 	Public      bool
+	// Audience labels the page's consumption domain for customer-vs-channel
+	// gating: "customer" (house-building prospects), "bside" (designers,
+	// builders, suppliers), "neutral" (shared plumbing). Empty or unknown
+	// routes resolve to neutral; excluded pages carry no page_view data.
+	Audience string
 }
+
+const (
+	RouteAudienceCustomer = "customer"
+	RouteAudienceBSide    = "bside"
+	RouteAudienceNeutral  = "neutral"
+)
+
+// BSideIdentities are channel accounts (designers, builder crews, material
+// suppliers, institutions). They distribute content; their own browsing never
+// counts as customer intent, and lead conversion hard-blocks on them.
+var BSideIdentities = map[string]bool{
+	"设计师":  true,
+	"施工队":  true,
+	"建材商":  true,
+	"机构用户": true,
+}
+
 type Record struct {
 	Tenant, Kind, ID, Owner, Visitor, Session, Content, Share string
 	At                                                        time.Time
@@ -116,6 +138,7 @@ type Content struct {
 	Identified  int        `json:"identified_count"`
 	Anonymous   int        `json:"anonymous_count"`
 	PageViews   int        `json:"page_views"`
+	Shares      int        `json:"share_count"`
 	VisibleMS   int64      `json:"visible_ms"`
 	LastVisit   *time.Time `json:"last_visit,omitempty"`
 }
@@ -217,15 +240,15 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 }
 type Filter struct {
-	ContentVersion                                     int
-	Start, End, AsOf                                   time.Time
-	Content, Identity, Intent, Search, ContentSearch   string
-	VisitorSearch, Owner, Sort, Direction, Cursor      string
+	ContentVersion                                   int
+	Start, End, AsOf                                 time.Time
+	Content, Identity, Intent, Search, ContentSearch string
+	VisitorSearch, Owner, Sort, Direction, Cursor    string
 	// Visitor 精确过滤（风控台「查看访问记录」跳转用）：只看该 visitor_key 的记录。
 	// 仅匹配解析后的已识别键（u:<id>）或原始匿名键，不做模糊搜索。
-	Visitor  string
-	Limit    int
-	Related  bool
+	Visitor string
+	Limit   int
+	Related bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`
@@ -274,9 +297,14 @@ type Intent struct {
 	Reasons      []string        `json:"reasons"`
 	Rule         string          `json:"rule_version"`
 	Start        time.Time       `json:"window_start"`
-	End          time.Time       `json:"window_end"`
-	Calculated   time.Time       `json:"calculated_at"`
-	Note         string          `json:"manual_note,omitempty"`
+	// CustomerShare is the fraction of window visible time spent on
+	// customer-domain pages over customer+bside pages (neutral excluded from
+	// the denominator so shared tooling does not dilute the signal). It gates
+	// gray-zone lead conversion for visitors without a declared identity.
+	CustomerShare float64   `json:"customer_share,omitempty"`
+	End           time.Time `json:"window_end"`
+	Calculated    time.Time `json:"calculated_at"`
+	Note          string    `json:"manual_note,omitempty"`
 }
 
 // LatestVisit describes one counted page view inside the active query scope.
@@ -291,17 +319,25 @@ type LatestVisit struct {
 	Version int       `json:"content_version,omitempty"`
 }
 type Visitor struct {
-	Key         string       `json:"visitor_key"`
-	Nickname    string       `json:"nickname"`
-	AvatarURL   string       `json:"avatar_url,omitempty"`
-	State       string       `json:"identity_state"`
-	CRMLabel    string       `json:"crm_label,omitempty"`
-	Last        time.Time    `json:"last_visit"`
-	Views       int          `json:"page_views"`
-	Visible     int64        `json:"visible_ms"`
-	LatestVisit *LatestVisit `json:"latest_visit,omitempty"`
-	Sessions    int          `json:"session_count"`
-	Intent      Intent       `json:"intent"`
+	Key          string    `json:"visitor_key"`
+	Nickname     string    `json:"nickname"`
+	AvatarURL    string    `json:"avatar_url,omitempty"`
+	State        string    `json:"identity_state"`
+	IdentityType string    `json:"identity_type,omitempty"`
+	CRMLabel     string    `json:"crm_label,omitempty"`
+	Last         time.Time `json:"last_visit"`
+	Views        int       `json:"page_views"`
+	Shares       int       `json:"share_count"`
+	// RecentViews/RecentShares tally the trailing 7 days regardless of the
+	// list filter. They are nil when the filter window does not reach the
+	// recent days, so the client can render "not covered" instead of a
+	// misleading zero.
+	RecentViews  *int         `json:"recent_page_views,omitempty"`
+	RecentShares *int         `json:"recent_share_count,omitempty"`
+	Visible      int64        `json:"visible_ms"`
+	LatestVisit  *LatestVisit `json:"latest_visit,omitempty"`
+	Sessions     int          `json:"session_count"`
+	Intent       Intent       `json:"intent"`
 }
 type PageView struct {
 	ID       string     `json:"page_view_id"`
