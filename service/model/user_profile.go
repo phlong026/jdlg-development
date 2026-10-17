@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -230,8 +231,16 @@ func (m *UserProfileModel) UpdateIdentityType(userID int64, identityType string)
 		return fmt.Errorf("不支持的用户身份类型")
 	}
 	query := `UPDATE user_profiles SET identity_type = ?, updated_at = NOW() WHERE user_id = ?`
-	_, err := m.DB.Exec(query, identityType, userID)
-	return err
+	if _, err := m.DB.Exec(query, identityType, userID); err != nil {
+		return err
+	}
+	// 线索按身份分流（销售 / 合作 / 身份待确认），身份变化同步到该账号的线索快照。
+	// 保留 updated_at：它是线索超时未跟进的口径，改身份不算跟进。
+	// 线索表不可用不影响身份保存本身，下次启动的回填会补齐空身份。
+	if _, err := m.DB.Exec(`UPDATE customer_leads SET identity_type = ?, updated_at = updated_at WHERE user_id = ? AND identity_type <> ?`, identityType, userID, identityType); err != nil {
+		log.Printf("同步线索身份失败 user=%d: %v", userID, err)
+	}
+	return nil
 }
 
 // UpdatePhone 更新用户手机号

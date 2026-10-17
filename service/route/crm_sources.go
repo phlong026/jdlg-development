@@ -23,7 +23,7 @@ func syncCRMLeads(db *sql.DB) error {
 	defer crmSourceWorker.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,l.phone,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.created_at,
+	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,l.phone,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.identity_type,l.created_at,
  SHA2(CONCAT_WS('|',l.name,l.phone,l.wechat,COALESCE(l.demand_summary,'')),256),COALESCE(d.history_cursor,0)
  FROM customer_leads l LEFT JOIN customer_lead_crm_delivery d ON d.lead_id=l.id
  WHERE (EXISTS(SELECT 1 FROM customer_lead_followups f WHERE f.lead_id=l.id AND f.id>COALESCE(d.history_cursor,0)) OR d.lead_id IS NULL OR d.source_hash<>SHA2(CONCAT_WS('|',l.name,l.phone,l.wechat,COALESCE(l.demand_summary,'')),256))
@@ -35,14 +35,14 @@ func syncCRMLeads(db *sql.DB) error {
 		id                                 int64
 		name, phone, wechat, summary, hash string
 		userID                             int64
-		channel                            string
+		channel, identity                  string
 		createdAt                          time.Time
 		historyCursor                      int64
 	}
 	var batch []lead
 	for rows.Next() {
 		var l lead
-		if err = rows.Scan(&l.id, &l.name, &l.phone, &l.wechat, &l.summary, &l.userID, &l.channel, &l.createdAt, &l.hash, &l.historyCursor); err != nil {
+		if err = rows.Scan(&l.id, &l.name, &l.phone, &l.wechat, &l.summary, &l.userID, &l.channel, &l.identity, &l.createdAt, &l.hash, &l.historyCursor); err != nil {
 			rows.Close()
 			return err
 		}
@@ -54,11 +54,14 @@ func syncCRMLeads(db *sql.DB) error {
 		return err
 	}
 	for _, l := range batch {
+		// identityType is deliberately outside source_hash: CRM only uses it to label a
+		// newly created record (B-side → 合作咨询), and adding it to the hash would replay
+		// every delivered lead once after deploy.
 		history, cursor, historyErr := crmLeadHistory(ctx, db, l.id, l.historyCursor)
 		if historyErr != nil {
 			return historyErr
 		}
-		body, _ := json.Marshal(map[string]any{"history": history, "submittedBy": strconv.FormatInt(l.userID, 10), "channel": crmSourceText(l.channel, 64), "createdAt": l.createdAt.UTC().Format(time.RFC3339), "externalId": strconv.FormatInt(l.id, 10), "name": l.name, "phone": l.phone, "wechat": crmSourceText(l.wechat, 80), "summary": crmSourceText(l.summary, 2000)})
+		body, _ := json.Marshal(map[string]any{"history": history, "submittedBy": strconv.FormatInt(l.userID, 10), "channel": crmSourceText(l.channel, 64), "identityType": crmSourceText(l.identity, 32), "createdAt": l.createdAt.UTC().Format(time.RFC3339), "externalId": strconv.FormatInt(l.id, 10), "name": l.name, "phone": l.phone, "wechat": crmSourceText(l.wechat, 80), "summary": crmSourceText(l.summary, 2000)})
 		status, data, _, remoteErr := crmRemote(ctx, "POST", "/ingest/miniprogram", "@source", 1, nil, body)
 		var ack struct {
 			CustomerID string `json:"customerId"`

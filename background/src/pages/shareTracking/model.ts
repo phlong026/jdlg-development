@@ -32,7 +32,7 @@ export function videoPercent(unique?: number, total?: number): number | undefine
 }
 // 精准客户门控展示口径，与后端 trackingLeadGate 一致：
 // 乡墅业主可转销售线索；设计师/施工队/建材商/机构用户是渠道而非客户；未选身份留给人工核实。
-const B_SIDE_IDENTITIES = new Set(['设计师', '施工队', '建材商', '机构用户']);
+export const B_SIDE_IDENTITIES = new Set(['设计师', '施工队', '建材商', '机构用户']);
 export function identityBadge(identityState: string, identityType?: string): { label: string; tone: 'customer' | 'bside' | 'unset' } | null {
     if (identityState !== 'identified') return null;
     const identity = (identityType || '').trim();

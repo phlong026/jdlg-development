@@ -17,33 +17,31 @@ import (
 
 func TestTrackingLeadGateIdentityMatrix(t *testing.T) {
 	cases := []struct {
-		name          string
-		state         string
-		identityType  string
-		customerShare float64
-		wantBlocked   bool
-		wantMessage   string
+		name         string
+		state        string
+		identityType string
+		wantType     string
+		wantMessage  string
 	}{
-		{name: "anonymous visitor blocked", state: "anonymous", identityType: "", wantBlocked: true, wantMessage: "匿名"},
-		{name: "deleted visitor blocked", state: "deleted", identityType: "乡墅业主", wantBlocked: true, wantMessage: "匿名"},
-		{name: "unselected identity below gray share blocked", state: "identified", identityType: "", customerShare: 0.69, wantBlocked: true, wantMessage: "尚未确认身份"},
-		{name: "unselected identity at gray share passes", state: "identified", identityType: "", customerShare: 0.7},
-		{name: "unselected identity with no signal blocked", state: "identified", identityType: "", customerShare: 0, wantBlocked: true, wantMessage: "尚未确认身份"},
-		{name: "designer excluded regardless of share", state: "identified", identityType: "设计师", customerShare: 0.95, wantBlocked: true, wantMessage: "B端用户"},
-		{name: "builder crew excluded", state: "identified", identityType: "施工队", wantBlocked: true, wantMessage: "B端用户"},
-		{name: "supplier excluded", state: "identified", identityType: "建材商", wantBlocked: true, wantMessage: "B端用户"},
-		{name: "institution excluded", state: "identified", identityType: "机构用户", wantBlocked: true, wantMessage: "B端用户"},
-		{name: "padded bside still excluded", state: "identified", identityType: " 设计师 ", wantBlocked: true, wantMessage: "B端用户"},
-		{name: "unknown identity fails closed", state: "identified", identityType: "魔法师", wantBlocked: true, wantMessage: "无法识别的访客身份"},
-		{name: "homeowner passes regardless of share", state: "identified", identityType: "乡墅业主", customerShare: 0, wantBlocked: false},
-		{name: "padded homeowner passes", state: "identified", identityType: " 乡墅业主 ", wantBlocked: false},
+		{name: "anonymous visitor blocked", state: "anonymous", identityType: "", wantMessage: "匿名"},
+		{name: "deleted visitor blocked", state: "deleted", identityType: "乡墅业主", wantMessage: "匿名"},
+		{name: "unselected identity becomes pending sales lead", state: "identified", identityType: "", wantType: model.CustomerLeadTypeIdentityPending},
+		{name: "blank identity becomes pending sales lead", state: "identified", identityType: "  ", wantType: model.CustomerLeadTypeIdentityPending},
+		{name: "designer becomes partner lead", state: "identified", identityType: "设计师", wantType: model.CustomerLeadTypePartner},
+		{name: "builder crew becomes partner lead", state: "identified", identityType: "施工队", wantType: model.CustomerLeadTypePartner},
+		{name: "supplier becomes partner lead", state: "identified", identityType: "建材商", wantType: model.CustomerLeadTypePartner},
+		{name: "institution becomes partner lead", state: "identified", identityType: "机构用户", wantType: model.CustomerLeadTypePartner},
+		{name: "padded bside still partner", state: "identified", identityType: " 设计师 ", wantType: model.CustomerLeadTypePartner},
+		{name: "unknown identity fails closed", state: "identified", identityType: "魔法师", wantMessage: "无法识别的访客身份"},
+		{name: "homeowner becomes sales lead", state: "identified", identityType: "乡墅业主", wantType: model.CustomerLeadTypeSales},
+		{name: "padded homeowner becomes sales lead", state: "identified", identityType: " 乡墅业主 ", wantType: model.CustomerLeadTypeSales},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := trackingLeadGate(tc.state, tc.identityType, tc.customerShare)
-			if tc.wantBlocked {
+			leadType, err := trackingLeadGate(tc.state, tc.identityType)
+			if tc.wantMessage != "" {
 				if err == nil {
-					t.Fatalf("expected block for state=%q identity=%q share=%.2f", tc.state, tc.identityType, tc.customerShare)
+					t.Fatalf("expected block for state=%q identity=%q, got type %q", tc.state, tc.identityType, leadType)
 				}
 				if err.Status != 422 || !strings.Contains(err.Message, tc.wantMessage) {
 					t.Fatalf("block mismatch: status=%d message=%q want contains %q", err.Status, err.Message, tc.wantMessage)
@@ -51,9 +49,31 @@ func TestTrackingLeadGateIdentityMatrix(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("expected pass for state=%q identity=%q share=%.2f, got %v", tc.state, tc.identityType, tc.customerShare, err)
+				t.Fatalf("expected pass for state=%q identity=%q, got %v", tc.state, tc.identityType, err)
+			}
+			if leadType != tc.wantType {
+				t.Fatalf("lead type for identity=%q = %q, want %q", tc.identityType, leadType, tc.wantType)
 			}
 		})
+	}
+}
+
+// 线索分流（model.PartnerIdentityTypes）与访问记录的 B 端判定（tracking.BSideIdentities）
+// 必须是同一份名单，否则同一个人在两处会被分到不同类别。
+func TestPartnerIdentitiesMatchTrackingBSide(t *testing.T) {
+	if len(model.PartnerIdentityTypes) != len(tracking.BSideIdentities) {
+		t.Fatalf("partner identities %v differ from tracking B-side %v", model.PartnerIdentityTypes, tracking.BSideIdentities)
+	}
+	for _, identity := range model.PartnerIdentityTypes {
+		if !tracking.BSideIdentities[identity] {
+			t.Fatalf("partner identity %q missing from tracking.BSideIdentities", identity)
+		}
+		if model.CustomerLeadTypeOf(identity) != model.CustomerLeadTypePartner {
+			t.Fatalf("%q should map to partner lead", identity)
+		}
+	}
+	if model.CustomerLeadTypeOf(trackingCustomerIdentity) != model.CustomerLeadTypeSales {
+		t.Fatalf("%s should map to sales lead", trackingCustomerIdentity)
 	}
 }
 

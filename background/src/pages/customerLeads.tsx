@@ -59,12 +59,36 @@ const intentLabelMap: Record<string, string> = {
 // 线索来源友好名；share_tracking = 分享访问记录的意向转化（管理端一键转化生成）。
 const sourceLabelMap: Record<string, string> = {
     share_tracking: '分享意向',
+    share_tracking_auto: '分享意向（自动）',
+    customer_service: '在线客服',
     structured_requirement: '客服需求表单',
     generate_click: '生成方案',
     handoff_human: '转人工留资',
     home: '在线客服',
 };
 const sourceLabel = (source?: string) => sourceLabelMap[source || ''] || source || '-';
+
+// 线索按账号身份分流：乡墅业主为销售线索；B 端身份为合作线索（不进销售待办）；未选身份照常跟进，联系时确认。
+// 名单与后端 model.PartnerIdentityTypes 一致；后端已返回 lead_type 时以后端为准。
+const PARTNER_IDENTITIES = ['设计师', '施工队', '建材商', '机构用户'];
+const leadTypeOf = (item: CustomerLeadItem) => {
+    if (item.lead_type) return item.lead_type;
+    const identity = (item.identity_type || '').trim();
+    if (PARTNER_IDENTITIES.includes(identity)) return 'partner';
+    return identity ? 'sales' : 'identity_pending';
+};
+const identityTag = (item: CustomerLeadItem) => {
+    const identity = (item.identity_type || '').trim();
+    switch (leadTypeOf(item)) {
+        case 'partner': return { className: 'identity-partner', label: `合作线索 · ${identity || 'B端'}` };
+        case 'identity_pending': return { className: 'identity-pending', label: '身份待确认' };
+        default: return { className: 'identity-sales', label: identity || '乡墅业主' };
+    }
+};
+const IdentityTag: React.FC<{ item: CustomerLeadItem }> = ({ item }) => {
+    const tag = identityTag(item);
+    return <span className={`identity-tag ${tag.className}`}>{tag.label}</span>;
+};
 
 const defaultAction = {
     status: 'contacted',
@@ -140,9 +164,11 @@ const getNextActionText = (lead: CustomerLeadItem | null) => {
     if (!lead) return '先查看线索详情';
     if (lead.status === 'converted') return '已成交，补充成交备注即可';
     if (lead.status === 'invalid') return '已标记无效，无需继续跟进';
-    if (lead.intent_level === 'high') return '建议优先电话或微信联系';
-    if (!lead.assigned_to) return '建议先分配负责人';
-    return '按下次跟进时间继续推进';
+    if (leadTypeOf(lead) === 'partner') return '合作线索：由管理员确认合作方式后统一处理';
+    const confirmIdentity = leadTypeOf(lead) === 'identity_pending' ? '，联系时确认是否为建房业主' : '';
+    if (lead.intent_level === 'high') return '建议优先电话或微信联系' + confirmIdentity;
+    if (!lead.assigned_to) return '建议先分配负责人' + confirmIdentity;
+    return '按下次跟进时间继续推进' + confirmIdentity;
 };
 
 // embedded：嵌在客户管理页的一个栏目里时，队列用页内卡片切换、不读写地址；
@@ -180,6 +206,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [intentFilter, setIntentFilter] = useState('all');
     const [assignedFilter, setAssignedFilter] = useState('all');
     const [sourceFilter, setSourceFilter] = useState('all');
+    const [leadTypeFilter, setLeadTypeFilter] = useState('all');
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [detail, setDetail] = useState<CustomerLeadDetailResponse | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -190,7 +217,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [loadError, setLoadError] = useState('');
     const [saveNotice, setSaveNotice] = useState('');
     const listRequest = useRef(0), detailRequest = useRef(0), actionSequence = useRef(0), saving = useRef(false);
-    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, session.user?.id]);
+    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, leadTypeFilter, session.user?.id]);
     const queryIdentity = useRef(queryKey);
     // Invalidate old responses during render, before the replacement effect runs.
     if (queryIdentity.current !== queryKey) { queryIdentity.current = queryKey; listRequest.current++; }
@@ -234,6 +261,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 intent_level: intentFilter === 'all' ? undefined : intentFilter,
                 assigned_to: assignedFilter === 'all' ? undefined : assignedFilter,
                 source: sourceFilter === 'all' ? undefined : sourceFilter,
+                lead_type: leadTypeFilter === 'all' ? undefined : leadTypeFilter,
             };
             const [overviewData, listData] = await Promise.all([
                 getCustomerLeadOverview(),
@@ -263,7 +291,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
 
     useEffect(() => {
         latestLoad.current();
-    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, session.user?.id]);
+    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, leadTypeFilter, session.user?.id]);
 
     // 切换队列 / 用户过滤时回到第一页并清空勾选
     useEffect(() => {
@@ -398,7 +426,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             <div className="customer-lead-page">
                 {saveNotice && <section className="customer-lead-panel" role="status">{saveNotice}</section>}
                 {loadError && <section className="customer-lead-panel" role="alert">读取失败：{loadError}。{updatedAt ? '当前显示上次成功读取的数据。' : '统计与列表尚未确认。'}<button type="button" disabled={loading} onClick={resetToFirstPage}>重新读取</button></section>}
-                <p>全平台小程序线索概览，不随下方队列、用户或搜索条件变化。待处理为新线索与跟进中；高意向仅计待处理线索；今日新增按服务端统计日期计算。</p>
+                <p>全平台小程序线索概览，不随下方队列、用户或搜索条件变化。待处理为新线索与跟进中；高意向仅计待处理线索；今日新增按服务端统计日期计算。设计师、施工队等合作线索单独放在「合作线索」，不计入以上销售统计。</p>
                 {!canWrite && <section className="customer-lead-panel" role="status">
                     <p>{writeBlockedText}</p>
                     {canOpenCustomers ? <Link className="customer-lead-btn" to="/customer-management?tab=customers">前往客户档案列表</Link> : <>
@@ -527,6 +555,12 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <option value="all">全部负责人</option>
                             <option value="unassigned">未分配</option>
                         </select>
+                        <select value={leadTypeFilter} aria-label="线索类型" onChange={(event) => { setLeadTypeFilter(event.target.value); setPage(1); }}>
+                            <option value="all">全部类型</option>
+                            <option value="sales">销售线索（含身份待确认）</option>
+                            <option value="identity_pending">身份待确认</option>
+                            <option value="partner">合作线索</option>
+                        </select>
                         <select value={sourceFilter} onChange={(event) => { setSourceFilter(event.target.value); setPage(1); }}>
                             <option value="all">全部来源</option>
                             <option value="share_tracking">分享意向</option>
@@ -559,6 +593,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
                                         </label>
                                         <strong className="customer-lead-card-name">{getDisplayName(item)}</strong>
+                                        <IdentityTag item={item} />
                                         <span className={`intent-tag intent-${item.intent_level}`}>{intentLabelMap[item.intent_level] || item.intent_level || '-'}</span>
                                         <span className={`status-tag status-${item.status}`}>{statusLabelMap[item.status] || item.status || '-'}</span>
                                     </div>
@@ -609,6 +644,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         </td>
                                         <td>
                                             <strong>{getDisplayName(item)}</strong>
+                                            <IdentityTag item={item} />
                                             {item.user_id > 0
                                                 ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>查看用户账号 ›</Link>
                                                 : <span>未关联用户账号</span>}
@@ -697,6 +733,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <h4>客户信息</h4>
                                         <div className="customer-lead-detail-grid">
                                             <div><span>用户</span><strong>{getDisplayName(activeLead)}</strong></div>
+                                            <div><span>用户身份</span><strong><IdentityTag item={activeLead} /></strong></div>
                                             <div><span>用户账号</span><strong>{activeLead.user_id > 0 ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${activeLead.user_id}`}>ID {activeLead.user_id} ›</Link> : '未关联'}</strong></div>
                                             <div><span>联系方式</span><strong>{getContactText(activeLead)}</strong></div>
                                             <div><span>负责人</span><strong>{activeLead.assigned_to || '未分配'}</strong></div>

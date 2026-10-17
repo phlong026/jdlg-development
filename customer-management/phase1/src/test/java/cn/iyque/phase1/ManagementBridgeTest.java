@@ -115,6 +115,10 @@ class ManagementBridgeTest {
   mvc.perform(signed("POST","/ingest/miniprogram","@source",1,body)).andExpect(status().isOk());
   mvc.perform(signed("POST","/ingest/miniprogram","@source",1,body)).andExpect(status().isOk());
   assertThat(workflow.sources().count()).isEqualTo(1);assertThat(customers.count()).isEqualTo(3);
+  // Go 来源同步带上账号身份（identityType）：B 端身份新建档案标为合作咨询
+  String partner="{\"externalId\":\"78\",\"name\":\"设计师来源\",\"phone\":\"13800007778\",\"identityType\":\"设计师\"}";
+  mvc.perform(signed("POST","/ingest/miniprogram","@source",1,partner)).andExpect(status().isOk());
+  assertThat(workflow.sourceCustomer("miniprogram","78").getCategory()).isEqualTo("合作咨询");
  }
  @Test void boundDisabledEmployeesStayBlockedButChannelAccountsMayLogin() throws Exception{
   Account channel=accounts.findById("managed-1").orElseThrow();channel.setEmployeeId(null);accounts.save(channel);

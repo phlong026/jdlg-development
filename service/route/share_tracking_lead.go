@@ -25,8 +25,9 @@ const (
 )
 
 // B-side accounts distribute and consume tooling; they are channels, never
-// house-building prospects. Fail closed on unknown identity values. The
-// canonical list lives in the tracking package (tracking.BSideIdentities).
+// house-building prospects, so their conversions are kept as partner leads.
+// Fail closed on unknown identity values. The canonical list lives in the
+// tracking package (tracking.BSideIdentities).
 
 func trackingVisitorAccount(key string) (int64, bool) {
 	if !strings.HasPrefix(key, "u:") {
@@ -41,30 +42,25 @@ func trackingVisitorAccount(key string) (int64, bool) {
 	return id, true
 }
 
-// trackingLeadGate keeps the intent→lead route reserved for identified
-// 乡墅业主 accounts. Anonymous visitors have no contactable UserID. Visitors
-// without a declared identity pass only when their customer-domain reading
-// share clears the gray-zone threshold (behaviour over self-declaration).
-const trackingLeadGrayShare = 0.7
-
-func trackingLeadGate(state, identityType string, customerShare float64) *tracking.Error {
+// trackingLeadGate decides whether an identified visitor may become a lead and
+// which kind. Anonymous visitors have no contactable UserID. 乡墅业主 and visitors
+// who have not picked an identity yet become sales leads (the latter flagged
+// 身份待确认 on the lead); B-side accounts become partner leads that admins
+// handle outside the sales queues. Unknown identity values still fail closed.
+func trackingLeadGate(state, identityType string) (string, *tracking.Error) {
 	if state != "identified" {
-		return &tracking.Error{Status: 422, Message: "匿名或已删除访客无法转化为线索，请先引导客户留资"}
+		return "", &tracking.Error{Status: 422, Message: "匿名或已删除访客无法转化为线索，请先引导客户留资"}
 	}
 	identityType = strings.TrimSpace(identityType)
-	if identityType == "" {
-		if customerShare >= trackingLeadGrayShare {
-			return nil
-		}
-		return &tracking.Error{Status: 422, Message: "该访客尚未确认身份，且客户域浏览占比不足70%，请人工核实后再转化"}
+	switch {
+	case identityType == "":
+		return model.CustomerLeadTypeIdentityPending, nil
+	case tracking.BSideIdentities[identityType]:
+		return model.CustomerLeadTypePartner, nil
+	case identityType == trackingCustomerIdentity:
+		return model.CustomerLeadTypeSales, nil
 	}
-	if tracking.BSideIdentities[identityType] {
-		return &tracking.Error{Status: 422, Message: "该访客为B端用户（" + identityType + "），不进入客户线索流程"}
-	}
-	if identityType != trackingCustomerIdentity {
-		return &tracking.Error{Status: 422, Message: "无法识别的访客身份：" + identityType}
-	}
-	return nil
+	return "", &tracking.Error{Status: 422, Message: "无法识别的访客身份：" + identityType}
 }
 
 // Placeholders leak no information and invite the salesperson to fill the
@@ -177,13 +173,14 @@ func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, l
 			return
 		}
 		outcome, err := convertVisitorToLead(c.Request.Context(), svc, leads, identities, scope, c.Param("id"), trackingLeadSource)
-		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary}, err)
+		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "lead_type": outcome.LeadType, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary}, err)
 	})
 }
 
 type trackingLeadOutcome struct {
 	LeadID        int64
 	Existed       bool
+	LeadType      string
 	IntentLevel   string
 	DemandSummary string
 }
@@ -206,7 +203,8 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		return trackingLeadOutcome{}, &tracking.Error{Status: 404, Message: "访客不存在或无权访问"}
 	}
 	visitor := items[0]
-	if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
+	leadType, e := trackingLeadGate(visitor.State, visitor.IdentityType)
+	if e != nil {
 		return trackingLeadOutcome{}, e
 	}
 	phone := ""
@@ -246,7 +244,7 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 			log.Printf("[Tracking] attach conversion event failed lead=%d: %v", existingID, err)
 			return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "追加转化记录失败，请稍后重试"}
 		}
-		return trackingLeadOutcome{LeadID: existingID, Existed: true, IntentLevel: intentLevel, DemandSummary: summary}, nil
+		return trackingLeadOutcome{LeadID: existingID, Existed: true, LeadType: leadType, IntentLevel: intentLevel, DemandSummary: summary}, nil
 	}
 	leadID, err := leads.CreateLead(&model.CustomerLeadCreateInput{
 		UserID:        userID,
@@ -267,5 +265,5 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		// conversion itself. Surface it in logs and still report success.
 		log.Printf("[Tracking] conversion event for lead=%d failed: %v", leadID, err)
 	}
-	return trackingLeadOutcome{LeadID: leadID, Existed: false, IntentLevel: intentLevel, DemandSummary: summary}, nil
+	return trackingLeadOutcome{LeadID: leadID, Existed: false, LeadType: leadType, IntentLevel: intentLevel, DemandSummary: summary}, nil
 }

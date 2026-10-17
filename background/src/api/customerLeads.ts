@@ -13,7 +13,15 @@ export interface CustomerLeadOverview {
     high_todo_count?: number;
     unassigned_count?: number;
     invalid_count?: number;
+    /** 合作线索（设计师、施工队等 B 端身份）：待处理条数与全部条数；以上其余计数只含销售线索 */
+    partner_todo_count?: number;
+    partner_count?: number;
+    /** 待处理销售线索中尚未选择身份的条数 */
+    identity_pending_count?: number;
 }
+
+/** sales=乡墅业主；partner=设计师/施工队/建材商/机构用户；identity_pending=账号尚未选择身份 */
+export type CustomerLeadType = 'sales' | 'partner' | 'identity_pending';
 
 export interface CustomerLeadItem {
     id: number;
@@ -36,6 +44,9 @@ export interface CustomerLeadItem {
     assigned_to?: string;
     next_followup_at?: string | null;
     remark?: string;
+    /** 线索写入时账号的自选身份（乡墅业主/设计师/…），空表示尚未选择 */
+    identity_type?: string;
+    lead_type?: CustomerLeadType | string;
     created_at: string;
     updated_at: string;
 }
@@ -78,6 +89,8 @@ export interface CustomerLeadListParams {
     intent_level?: string;
     queue?: string;
     assigned_to?: string;
+    source?: string;
+    lead_type?: string;
     user_id?: number;
     page?: number;
     page_size?: number;

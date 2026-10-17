@@ -34,9 +34,12 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
     // 环图卡 447px 是线索列表沉到 1565px 的主因：手机端默认收起（摘要带总条数），桌面常开
     const [stageOpen, setStageOpen] = useState<boolean | null>(null);
     const stageExpanded = stageOpen ?? !isMobile;
-    const total = overview.total_count || 0;
-    const stages = STAGES.map((stage) => {
-        const count = Number(overview[stage.key] || 0);
+    // 阶段只统计销售线索：合作线索（设计师、施工队等）不计入转化，另行标注条数
+    const counts = STAGES.map((stage) => Number(overview[stage.key] || 0));
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    const partnerCount = overview.partner_count || 0;
+    const stages = STAGES.map((stage, index) => {
+        const count = counts[index];
         return { ...stage, count, percent: total > 0 ? Math.round((count / total) * 100) : 0 };
     });
 
@@ -77,16 +80,16 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                 onToggle={(event) => setStageOpen((event.target as HTMLDetailsElement).open)}
             >
                 <summary className="lead-hub-stage-summary">
-                    <span>线索阶段 · 共 {total} 条</span>
+                    <span>销售线索阶段 · 共 {total} 条{partnerCount > 0 ? ` · 合作线索 ${partnerCount} 条另计` : ''}</span>
                     <FiChevronDown className="lead-hub-stage-caret" aria-hidden />
                 </summary>
                 <header className="lead-hub-card-head">
-                    <h2>线索阶段</h2>
+                    <h2>销售线索阶段</h2>
                     <Link className="lead-hub-more" to="/customer-leads?queue=all">全部<FiChevronRight /></Link>
                 </header>
                 <div className="lead-hub-stage">
                     <div className="lead-hub-donut">
-                        <svg viewBox="0 0 140 140" role="img" aria-label={`线索共 ${total} 条`}>
+                        <svg viewBox="0 0 140 140" role="img" aria-label={`销售线索共 ${total} 条`}>
                             <circle cx="70" cy="70" r={RADIUS} fill="none" stroke="#e8e8ee" strokeWidth="14" />
                             {arcs.map((arc) => (
                                 <circle
@@ -100,7 +103,7 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                         </svg>
                         <div className="lead-hub-donut-center">
                             <strong>{total}</strong>
-                            <span>线索量</span>
+                            <span>销售线索</span>
                         </div>
                         {updatedAt && <small>{pad(updatedAt.getHours())}:{pad(updatedAt.getMinutes())} 更新</small>}
                     </div>
@@ -112,6 +115,12 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                                 <b>{stage.count}({stage.percent}%)</b>
                             </li>
                         ))}
+                        {partnerCount > 0 && (
+                            <li className="lead-hub-legend-note">
+                                <span>合作线索另计</span>
+                                <b><Link to="/customer-leads?queue=partner">{partnerCount} 条</Link></b>
+                            </li>
+                        )}
                     </ul>
                 </div>
             </details>

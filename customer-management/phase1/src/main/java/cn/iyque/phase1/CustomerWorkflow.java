@@ -44,9 +44,17 @@ public class CustomerWorkflow {
   s.setName(CustomerService.text(name,200));s.setPhone(CustomerService.text(phone,80));s.setWechat(CustomerService.text(wechat,80));s.setSummary(CustomerService.text(summary,2000));sources.save(s);
  }
  public record SourceHistory(String externalId,String operator,String content,Instant createdAt){}
- public record Ingest(String externalId,String name,String phone,String wechat,String summary,String submittedBy,String channel,Instant createdAt,List<SourceHistory> history){public Ingest(String externalId,String name,String phone,String wechat,String summary){this(externalId,name,phone,wechat,summary,"","",null,List.of());}}
+ // 小程序账号自选身份：设计师等 B 端身份是合作方，新建档案标为合作咨询，由主管统一处理；空身份照常接入。
+ public static final Set<String> PARTNER_IDENTITIES=Set.of("设计师","施工队","建材商","机构用户");
+ public record Ingest(String externalId,String name,String phone,String wechat,String summary,String submittedBy,String channel,Instant createdAt,List<SourceHistory> history,String identityType){
+  public Ingest(String externalId,String name,String phone,String wechat,String summary){this(externalId,name,phone,wechat,summary,"","",null,List.of(),"");}
+  public Ingest(String externalId,String name,String phone,String wechat,String summary,String submittedBy,String channel,Instant createdAt,List<SourceHistory> history){this(externalId,name,phone,wechat,summary,submittedBy,channel,createdAt,history,"");}
+  public boolean partner(){return identityType!=null&&PARTNER_IDENTITIES.contains(identityType.trim());}
+ }
  @Transactional public Customer ingest(Ingest i){lock();if(i.externalId()==null||!i.externalId().matches("[1-9][0-9]{0,18}"))throw new ApiException(400,"来源标识无效");Customer c=sourceCustomer("miniprogram",i.externalId());
-  if(c==null){c=new Customer();c.setId("mini-"+UUID.randomUUID());number(c);c.setLifecycle("pending");c.setAddedTimeSource("miniprogram");c.setName(CustomerService.text(i.name(),200));c.setPhone(CustomerService.text(i.phone(),80));c.setWechat(CustomerService.text(i.wechat(),80));c.setDemand(CustomerService.text(i.summary(),2000));customers.saveAndFlush(c);audit(c,"system","source","小程序咨询接入，待分配及完善");notifyAdmins(c,"source:"+c.getId(),"新增小程序咨询待分配");}
+  if(c==null){c=new Customer();c.setId("mini-"+UUID.randomUUID());number(c);c.setLifecycle("pending");c.setAddedTimeSource("miniprogram");c.setName(CustomerService.text(i.name(),200));c.setPhone(CustomerService.text(i.phone(),80));c.setWechat(CustomerService.text(i.wechat(),80));c.setDemand(CustomerService.text(i.summary(),2000));if(i.partner())c.setCategory("合作咨询");customers.saveAndFlush(c);
+   if(i.partner()){audit(c,"system","source","小程序合作线索接入（"+i.identityType().trim()+"），待主管处理");notifyAdmins(c,"source:"+c.getId(),"新增小程序合作线索待处理");}
+   else{audit(c,"system","source","小程序咨询接入，待分配及完善");notifyAdmins(c,"source:"+c.getId(),"新增小程序咨询待分配");}}
   registerSource(c,"miniprogram",i.externalId(),i.name(),i.phone(),i.wechat(),i.summary());Source source=sources.findById(sourceKey("miniprogram",i.externalId())).orElseThrow();source.setSubmittedBy(CustomerService.text(i.submittedBy(),64));source.setChannel(CustomerService.text(i.channel(),64));if(i.createdAt()!=null)source.setCreatedAt(i.createdAt());sources.save(source);
   if(i.history()!=null){if(i.history().size()>5)throw new ApiException(400,"历史记录每批最多 5 条");for(SourceHistory row:i.history()){
    if(row.externalId()==null||!row.externalId().matches("[1-9][0-9]{0,18}"))throw new ApiException(400,"历史记录标识无效");String key="miniprogram:"+i.externalId()+":"+row.externalId();if(followups.existsByExternalKey(key))continue;

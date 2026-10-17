@@ -262,6 +262,16 @@ class CustomerIntegrationTest {
   String sourceId=workflow.sourceKey("miniprogram","88");workflow.unlink(admin(),main.getId(),sourceId,fresh(main).getVersion(),"核实为同电话不同户");
   assertThat(fresh(incoming).getMergedInto()).isNull();assertThat(fresh(incoming).getLifecycle()).isEqualTo("pending");assertThat(fresh(main).getProtectionExpiresAt()).isEqualTo(deadline);
  }
+ @Test void partnerIdentityIngestIsLabelledForSupervisorWithoutRelabellingExisting(){
+  Customer partner=workflow.ingest(new CustomerWorkflow.Ingest("700","设计师账号","13800007000","","合作咨询","7","customer_service",null,List.of()," 设计师 "));
+  assertThat(partner.getCategory()).isEqualTo("合作咨询");assertThat(partner.getLifecycle()).isEqualTo("pending");assertThat(partner.getOwnerUsername()).isNull();
+  Customer owner=workflow.ingest(new CustomerWorkflow.Ingest("701","业主","13800007001","","建房咨询","8","customer_service",null,List.of(),"乡墅业主"));
+  assertThat(owner.getCategory()).isEqualTo("待确认");
+  Customer pending=workflow.ingest(new CustomerWorkflow.Ingest("702","未选身份","13800007002","","咨询"));
+  assertThat(pending.getCategory()).isEqualTo("待确认");
+  // 已建档案再次接入不改人工维护的分类
+  assertThat(workflow.ingest(new CustomerWorkflow.Ingest("701","业主","13800007001","","再次咨询","8","customer_service",null,List.of(),"设计师")).getCategory()).isEqualTo("待确认");
+ }
  @Test void supervisorCompletingPendingDoesNotAcquireItsOwnership(){
   Customer c=workflow.ingest(new CustomerWorkflow.Ingest("89","客户","13800001234","","咨询"));
   c=workflow.transfer(admin(),c.getId(),new CustomerWorkflow.Transfer(c.getVersion(),"staff1","分配接待",false));

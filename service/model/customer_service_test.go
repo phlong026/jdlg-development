@@ -235,15 +235,69 @@ func TestCustomerLeadOverviewSharesQueueConditions(t *testing.T) {
 		t.Fatalf("read customer_service.go: %v", err)
 	}
 	content := string(source)
-	for _, cond := range []string{"leadQueueHighCond", "leadQueueUnassignedCond"} {
+	for _, cond := range []string{"leadQueueHighCond", "leadQueueUnassignedCond", "leadQueuePartnerCond", "leadQueueIdentityPendCond", "leadQueueOverdueCond"} {
 		// 定义 1 次 + ListLeads 用 1 次 + Overview 用 1 次
-		if got := strings.Count(content, cond); got != 3 {
+		if got := strings.Count(content, cond+" ") + strings.Count(content, cond+")"); got != 3 {
 			t.Fatalf("%s 应当被定义一次并在列表与总览各使用一次（共 3 处），实际 %d 处", cond, got)
 		}
 	}
-	for _, want := range []string{`json:"high_todo_count"`, `json:"unassigned_count"`, `json:"invalid_count"`} {
+	for _, want := range []string{`json:"high_todo_count"`, `json:"unassigned_count"`, `json:"invalid_count"`, `json:"partner_todo_count"`, `json:"identity_pending_count"`} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("overview should expose %s", want)
+		}
+	}
+}
+
+func TestCustomerLeadTypeOf(t *testing.T) {
+	cases := map[string]string{
+		"乡墅业主":   CustomerLeadTypeSales,
+		" 乡墅业主 ": CustomerLeadTypeSales,
+		"":       CustomerLeadTypeIdentityPending,
+		"   ":    CustomerLeadTypeIdentityPending,
+		"设计师":    CustomerLeadTypePartner,
+		"施工队":    CustomerLeadTypePartner,
+		"建材商":    CustomerLeadTypePartner,
+		"机构用户":   CustomerLeadTypePartner,
+		"其他身份":   CustomerLeadTypeSales,
+	}
+	for identity, want := range cases {
+		if got := CustomerLeadTypeOf(identity); got != want {
+			t.Fatalf("CustomerLeadTypeOf(%q) = %q, want %q", identity, got, want)
+		}
+	}
+}
+
+// 队列 SQL 里写死的 B 端名单必须与 PartnerIdentityTypes 一致；
+// 销售队列与转化统计必须排除合作线索。
+func TestCustomerLeadQueuesSeparatePartnerLeads(t *testing.T) {
+	list := "'" + strings.Join(PartnerIdentityTypes, "', '") + "'"
+	if leadSalesCond != "identity_type NOT IN ("+list+")" || leadPartnerCond != "identity_type IN ("+list+")" {
+		t.Fatalf("queue identity lists drifted from PartnerIdentityTypes: %q / %q", leadSalesCond, leadPartnerCond)
+	}
+	for name, cond := range map[string]string{
+		"todo": leadQueueTodoCond, "today": leadQueueTodayCond, "high": leadQueueHighCond,
+		"overdue": leadQueueOverdueCond, "unassigned": leadQueueUnassignedCond, "identity_pending": leadQueueIdentityPendCond,
+	} {
+		if !strings.HasPrefix(cond, leadSalesCond) {
+			t.Fatalf("sales queue %s must exclude partner leads: %q", name, cond)
+		}
+	}
+	if !strings.HasPrefix(leadQueuePartnerCond, leadPartnerCond) {
+		t.Fatalf("partner queue must select partner leads: %q", leadQueuePartnerCond)
+	}
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		"status = 'converted' AND ` + leadSalesCond",
+		"ADD COLUMN identity_type VARCHAR(32)",
+		"l.updated_at = l.updated_at",
+		"identity_type = IF(? = '', identity_type, ?)",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("customer_service.go missing %q", want)
 		}
 	}
 }
