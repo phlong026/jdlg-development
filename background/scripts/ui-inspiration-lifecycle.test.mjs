@@ -55,7 +55,8 @@ function harness() {
     fetch: (url, options) => { const request = { ...deferred(), url, options }; uploads.push(request); return request.promise; },
     require(name) {
       if (name === 'react') return fakeReact;
-      if (name.endsWith('.scss')) return {};
+      if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
       if (name === 'react-icons/fi') return new Proxy({}, { get: (_, name) => name });
       if (name === '../utils/pageLoadError') return { reportPageLoadError: (error, source) => failures.push({ error, source }), reportPageLoadRecovered: source => recoveries.push(source) };
       if (name === '../utils/token') return { tokenUtils: { getToken: () => 'fixture-session' } };

@@ -279,4 +279,43 @@ button:disabled {
         grid-template-columns: 1fr;
     }
 }
+
+/* ============ 全局概览折叠壳（手机端收起，桌面隐藏 summary 常开） ============ */
+.risk-overview-summary {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .risk-overview-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 14px;
+        list-style: none;
+        cursor: pointer;
+        border: 1px solid var(--admin-border, #eadfce);
+        border-radius: 12px;
+        background: #fffdf8;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #5b4632;
+
+        &::-webkit-details-marker { display: none; }
+    }
+
+    .risk-overview-caret {
+        color: #8b6b4c;
+        transition: transform 0.18s ease;
+        flex-shrink: 0;
+    }
+
+    .risk-overview-fold[open] .risk-overview-caret {
+        transform: rotate(180deg);
+    }
+
+    .risk-overview-fold[open] .risk-overview-summary {
+        margin-bottom: 12px;
+    }
+}
 }

@@ -121,6 +121,7 @@ function mount({ deferDetails = false } = {}) {
         });
       }
     },
+    useCallback(fn) { return fn; },
   };
   react.default = react;
   react.__esModule = true;
@@ -160,6 +161,7 @@ function mount({ deferDetails = false } = {}) {
       if (name === 'react-icons/fi') return new Proxy({}, { get: (_, key) => key });
       if (name === '../api/orders') return api;
       if (name === '../api/virtualPay') return { getXPayLogs: async () => ({ list: [] }) };
+      if (name === '../component/useIsMobile') return { useIsMobile: () => false };
       if (name === '../utils/pageLoadError') return { reportPageLoadError() {} };
       if (name === '../config/api') return { API_BASE_URL: '/fixture-only' };
       if (name.endsWith('.scss')) return {};
@@ -350,7 +352,8 @@ test('financial explanations are native touch/keyboard disclosures with original
     '微信侧在账 = 本地镜像（累计成功充值 − 已退款）；本地可用 = 用户当前灵石余额；已消费 = 两账净差额，含邀请/签到/手工调整等非虚拟支付来源灵石的净影响',
   ];
   for (const explanation of explanations) {
-    const matches = nodes(page.tree, node => node.type === 'details' && textOf(node).includes(explanation));
+    // 只约束 finance-help 口径说明（必须默认收起）；fund-kpi-wrap 是整段 KPI 的折叠壳，桌面端常开
+    const matches = nodes(page.tree, node => node.type === 'details' && String(node.props?.className || '').includes('finance-help') && textOf(node).includes(explanation));
     assert.ok(matches.length > 0, explanation);
     for (const disclosure of matches) {
       assert.equal(nodes(disclosure, node => node.type === 'summary').length, 1);

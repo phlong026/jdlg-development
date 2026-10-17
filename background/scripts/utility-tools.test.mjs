@@ -28,7 +28,8 @@ async function page(overrides={}) {
  };
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(new URL('../src/pages/utilityTools.tsx',import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
- vm.runInNewContext(code,{module:mod,exports:mod.exports,console:{error(){}},window:{confirm:m=>{h.confirms.push(m);return h.confirm;}},require(name){if(name==='react')return react;if(name==='react/jsx-runtime')return require(name);if(name==='react-icons/fi')return new Proxy({},{get:()=>()=>null});if(name==='../api/utilityTools')return api;if(name==='../component/managementSearchPanel')return ()=>null;if(name.endsWith('.scss'))return {};throw Error(name);}});
+ vm.runInNewContext(code,{module:mod,exports:mod.exports,console:{error(){}},window:{confirm:m=>{h.confirms.push(m);return h.confirm;}},require(name){if(name==='react')return react;if(name==='react/jsx-runtime')return require(name);if(name==='react-icons/fi')return new Proxy({},{get:()=>()=>null});if(name==='../api/utilityTools')return api;if(name==='../component/managementSearchPanel')return ()=>null;if(name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  if(name.endsWith('.scss'))return {};throw Error(name);}});
  h.render=()=>{cursor=0;dirty=false;tree=mod.exports.default();return tree;};h.tree=()=>tree;h.nodes=()=>nodes(tree);
  h.find=(predicate,scope=tree)=>{const n=nodes(scope).find(predicate);assert.ok(n,'Expected UI element');return n;};
  h.button=(label,scope)=>h.find(n=>n.type==='button'&&text(n).trim()===label,scope);

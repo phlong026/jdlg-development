@@ -106,7 +106,27 @@
   .st-chevron { margin-left: auto; flex-shrink: 0; color: var(--st-accent); font-size: 25px; }
   .st-avatar { background: #eee8e1; color: #746357; width: 48px; height: 48px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; overflow: hidden; }
   .st-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .st-intent { font-size: 13px; border-radius: 8px; margin: 4px 0 8px; }
+  /* 风控联动：访客卡上的风险标签角标 */
+.st-risk-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+
+  em {
+    font-style: normal;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #fbeae6;
+    color: #c0392b;
+    border: 1px solid #f0cfc7;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+.st-intent { font-size: 13px; border-radius: 8px; margin: 4px 0 8px; }
   .st-high { color: #a43416; background: #ffe4d3; border-color: #f1cfb5; }
   .st-medium { color: #81430e; background: #fff0d7; border-color: #eed9b9; }
   .st-low, .st-unknown { color: #635e57; background: #f0eeeb; }

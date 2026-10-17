@@ -97,7 +97,8 @@ function environment({ width = 390, localStorage = storage(), sessionStorage = s
       require(name) {
         if (name === 'react') return react;
         if (name === 'react-router-dom') return { Navigate: 'SyntheticNavigate', useLocation: () => env.location };
-        if (name.endsWith('.scss')) return {};
+        if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
         if (name in presentation) return presentation[name];
         if (name === './leadOverviewStore') return { resetLeadOverviewSession() {} };
         if (name === '../api/wecomCustomers') return { crm: async () => { throw new Error('CRM is outside this isolated session fixture'); } };

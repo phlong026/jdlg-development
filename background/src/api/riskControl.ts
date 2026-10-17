@@ -7,6 +7,7 @@ export interface RiskControlOverview {
     recent_device_changes: number;
     abnormal_payments: number;
     failed_tasks: number;
+    access_alerts: number;
 }
 
 export interface RiskControlListParams {
@@ -48,10 +49,12 @@ export interface RiskControlAlertItem {
     user_id: number;
     username: string;
     nickname?: string;
-    alert_type: 'payment' | 'task' | string;
+    alert_type: 'payment' | 'task' | 'access' | string;
     alert_count: number;
     latest_time?: string;
     detail?: string;
+    /** 访问告警专用：告警来源的追踪访客键（u:<id> 或匿名安装标识） */
+    visitor_key?: string;
 }
 
 export interface RiskControlUserItem {
@@ -102,6 +105,23 @@ export const getRiskControlUsers = async (params?: RiskControlListParams): Promi
     const response = await get<RiskControlListResponse<RiskControlUserItem>>(API_ENDPOINTS.RISK_CONTROL.USERS, params as Record<string, any>);
     if (!response.data) {
         throw new Error('获取风险用户失败');
+    }
+    return response.data;
+};
+
+export interface ShareAttributionItem {
+    share_id: string;
+    content_title: string;
+    visitor_count: number;
+    identified_count: number;
+    latest_entered_at?: string;
+}
+
+/** 分享→账号归因（联动C）：追踪未启用时后端返回空列表，前端按"暂无数据"呈现 */
+export const getShareAttribution = async (days = 30): Promise<{ list: ShareAttributionItem[]; days: number }> => {
+    const response = await get<{ list: ShareAttributionItem[]; days: number }>(API_ENDPOINTS.RISK_CONTROL.SHARE_ATTRIBUTION, { days } as Record<string, any>);
+    if (!response.data || !Array.isArray(response.data.list)) {
+        throw new Error('获取分享归因失败');
     }
     return response.data;
 };

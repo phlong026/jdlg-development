@@ -851,6 +851,102 @@
     .customer-lead-search { flex-basis: 100%; }
     .customer-lead-toolbar select { min-width: 0; max-width: 100%; }
 }
+
+/* ============ 手机端线索卡片列表（useIsMobile 条件渲染） ============ */
+.customer-lead-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.customer-lead-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid var(--admin-border, #eadfce);
+    border-radius: 12px;
+}
+
+.customer-lead-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .customer-lead-card-check { display: inline-flex; align-items: center; }
+    .customer-lead-card-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14.5px;
+        color: #1f2937;
+    }
+}
+
+.customer-lead-card-demand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: #faf7f3;
+    border-radius: 8px;
+
+    strong { font-size: 13px; color: #374151; }
+    span { font-size: 12px; color: #6b7280; overflow-wrap: anywhere; }
+}
+
+.customer-lead-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #8a7a66;
+
+    > span:last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+}
+
+.customer-lead-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #a08d76;
+    overflow-wrap: anywhere;
+}
+
+.customer-lead-card-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--admin-border, #eadfce);
+}
+
+@media (max-width: 768px) {
+    /* 队列条一行横滑 */
+    .customer-lead-queuebar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar { display: none; }
+    }
+
+    /* 筛选工具条压紧：搜索整行，三个下拉两列排布 */
+    .customer-lead-toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .customer-lead-search { grid-column: 1 / -1; }
+
+    .customer-lead-toolbar .customer-lead-btn:last-child { grid-column: 1 / -1; }
+}
 }
 
 // The mobile shared sheet uses .layout-content .customer-lead-action-modal.

@@ -43,8 +43,11 @@ function harness(name) {
       if (id === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
       if (id === '../utils/pageLoadError') return { reportPageLoadError: (error, source) => failures.push({ error, source }), reportPageLoadRecovered: source => recoveries.push(source) };
       if (id === '../api/distribution') return api;
+      if (id === '../api/riskControl') return { getShareAttribution: async () => ({ list: [], days: 30 }) };
+      if (id === '../component/useIsMobile') return { useIsMobile: () => false };
       if (id === '../config/api') return { API_BASE_URL: 'https://fixture.invalid', API_ENDPOINTS: { AUDIT: { LIST: '/audit' } } };
-      throw new Error(`Unexpected import ${id}`);
+      if(typeof name==='string'&&name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  throw new Error(`Unexpected import ${id}`);
     },
   });
   const source = fs.readFileSync(new URL(`../src/pages/${name}.tsx`, import.meta.url), 'utf8');

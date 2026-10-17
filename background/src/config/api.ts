@@ -47,6 +47,7 @@ export const API_ENDPOINTS = {
         DEVICE_CHANGES: '/api/v1/management/risk-control/device-changes',
         ALERTS: '/api/v1/management/risk-control/alerts',
         USERS: '/api/v1/management/risk-control/users',
+        SHARE_ATTRIBUTION: '/api/v1/management/risk-control/share-attribution',
     },
     SUPPORT_TICKETS: {
         OVERVIEW: '/api/v1/management/support-tickets/overview',

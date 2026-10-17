@@ -1043,6 +1043,65 @@
     padding: 16px 12px;
   }
 
+  // 手机端工具栏瘦身：标题下方 4 个管理按钮改横滑一行、两个下拉并排、
+  // 搜索/重置并排——原来竖排堆约 6 行 ~400px，把模板列表顶出首屏
+  .management-actions {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    overflow-x: auto;
+    gap: 8px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .management-actions .btn-secondary,
+  .management-actions .btn-primary {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 40px;
+    white-space: nowrap;
+  }
+
+  .toolbar-left {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .toolbar-left .search-box {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .toolbar-left .filters {
+    flex: 1 1 100%;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .toolbar-left .filter-select {
+    flex: 1 1 40%;
+    width: auto;
+    min-width: 0;
+  }
+
+  .search-actions {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .search-actions .btn-secondary,
+  .search-actions .btn-primary {
+    flex: 1;
+    width: auto;
+    min-height: 40px;
+  }
+
   .templates-grid {
     grid-template-columns: 1fr;
     gap: 16px;

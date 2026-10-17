@@ -449,4 +449,38 @@
   }
 }
 
+// 数据加载失败必须可见：红底横幅 + 重试（与 crm-feedback 同思路）
+.vp-load-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #f3c8c8;
+  border-radius: 10px;
+  background: #fdf0f0;
+  color: #b42323;
+  font-size: 13px;
+
+  span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  button {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid #e3a7a7;
+    background: #ffffff;
+    color: #b42323;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
 } /* end route scope */

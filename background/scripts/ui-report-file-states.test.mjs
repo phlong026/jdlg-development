@@ -87,7 +87,8 @@ function harness(name) {
       if (id === '../utils/pageLoadError') return { reportPageLoadError: (error, source) => errors.push({ error, source }), reportPageLoadRecovered: source => recovered.push(source) };
       if (id === '../api/reportCenter') return api;
       if (id === '../config/api') return { API_BASE_URL: 'https://fixture.invalid', API_ENDPOINTS: { OSS: { LIST: '/oss', DELETE: id => `/oss/${id}`, BATCH_DELETE: '/oss/batch', UPLOAD: '/oss/upload' } } };
-      throw new Error(`Unexpected import ${id}`);
+      if(typeof name==='string'&&name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  throw new Error(`Unexpected import ${id}`);
     },
   });
   const source = fs.readFileSync(new URL(`../src/pages/${name}.tsx`, import.meta.url), 'utf8');

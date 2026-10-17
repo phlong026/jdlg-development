@@ -217,11 +217,15 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 }
 type Filter struct {
-	ContentVersion                                                                                  int
-	Start, End, AsOf                                                                                time.Time
-	Content, Identity, Intent, Search, ContentSearch, VisitorSearch, Owner, Sort, Direction, Cursor string
-	Limit                                                                                           int
-	Related                                                                                         bool
+	ContentVersion                                     int
+	Start, End, AsOf                                   time.Time
+	Content, Identity, Intent, Search, ContentSearch   string
+	VisitorSearch, Owner, Sort, Direction, Cursor      string
+	// Visitor 精确过滤（风控台「查看访问记录」跳转用）：只看该 visitor_key 的记录。
+	// 仅匹配解析后的已识别键（u:<id>）或原始匿名键，不做模糊搜索。
+	Visitor  string
+	Limit    int
+	Related  bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`

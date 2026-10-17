@@ -57,7 +57,8 @@ const context = vm.createContext({
   require(name) {
     if (name === 'react') return fakeReact;
     if (name === 'react-router-dom') return { useNavigate: () => target => navigations.push(target), useSearchParams: () => [new URLSearchParams(), () => {}] };
-    if (name.endsWith('.scss')) return {};
+    if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
     if (name === '../utils/pageLoadError') return { reportPageLoadError: () => {} };
     if (name === '../api/aiOverview' || name === '../api/ai') return new Proxy({}, { get: (_, method) => (...args) => api[method](...args) });
     throw new Error(`Unexpected import: ${name}`);

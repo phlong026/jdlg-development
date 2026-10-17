@@ -44,7 +44,8 @@ function mount() {
     if (name === 'react-router-dom') return { useNavigate: () => () => {} };
     if (name === '../api/aiOverview') return { getAIOverview: () => new Promise((resolve, reject) => requests.push({ resolve, reject })) };
     if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => reports.push(args), reportPageLoadRecovered: (...args) => recoveries.push(args) };
-    if (name.endsWith('.scss')) return {};
+    if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
     throw new Error(name);
   } });
   const page = {

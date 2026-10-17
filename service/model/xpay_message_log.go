@@ -109,7 +109,14 @@ func (m *XPayMessageLogModel) GetByID(id int64) (*XPayMessageLog, error) {
 	return item, nil
 }
 
-func (m *XPayMessageLogModel) List(keyword, event string, processed *bool, limit, offset int) ([]*XPayMessageLog, int64, error) {
+// xpayLogCustomerJoin 反查客户用的两个 JOIN：order_no 在 user_orders 全表唯一（uk_order_no），
+// JOIN 不会放大行数，COUNT 与列表查询可以共用。
+const xpayLogCustomerJoin = " LEFT JOIN user_orders o ON o.order_no = l.out_trade_no LEFT JOIN users u ON u.id = o.user_id"
+
+// buildXPayLogWhere 构造推送日志筛选的 WHERE 子句与参数。
+// 注意：keyword 条件引用了 u.username，调用方必须拼接 xpayLogCustomerJoin，
+// 否则带关键词的 COUNT 会报 Unknown column 'u.username'。
+func buildXPayLogWhere(keyword, event string, processed *bool) (string, []interface{}) {
 	where := []string{"1=1"}
 	args := make([]interface{}, 0)
 	if keyword != "" {
@@ -130,18 +137,19 @@ func (m *XPayMessageLogModel) List(keyword, event string, processed *bool, limit
 			args = append(args, 0)
 		}
 	}
-	whereSQL := " WHERE " + strings.Join(where, " AND ")
+	return " WHERE " + strings.Join(where, " AND "), args
+}
+
+func (m *XPayMessageLogModel) List(keyword, event string, processed *bool, limit, offset int) ([]*XPayMessageLog, int64, error) {
+	whereSQL, args := buildXPayLogWhere(keyword, event, processed)
 	var total int64
-	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM xpay_message_logs l`+whereSQL, args...).Scan(&total); err != nil {
+	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM xpay_message_logs l`+xpayLogCustomerJoin+whereSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
-	// LEFT JOIN 反查客户：order_no 全表唯一，join 不会放大行数；COUNT 因此也无需 join。
 	rows, err := m.DB.Query(`SELECT l.id, l.msg_id, l.event, l.openid, l.out_trade_no, COALESCE(l.raw_payload, ''), l.processed, l.created_at,
 		COALESCE(o.user_id, 0), COALESCE(u.username, '')
-		FROM xpay_message_logs l
-		LEFT JOIN user_orders o ON o.order_no = l.out_trade_no
-		LEFT JOIN users u ON u.id = o.user_id`+whereSQL+` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`, queryArgs...)
+		FROM xpay_message_logs l`+xpayLogCustomerJoin+whereSQL+` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}

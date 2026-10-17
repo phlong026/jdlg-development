@@ -1,6 +1,6 @@
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
 import React, { useEffect, useState } from 'react';
-import { FiRefreshCw, FiSearch, FiZap } from 'react-icons/fi';
+import { FiAlertCircle, FiRefreshCw, FiSearch, FiZap } from 'react-icons/fi';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getCalibrationSummary,
@@ -20,6 +20,14 @@ const emptySummary: XPayLogSummary = {
     processed_count: 0,
     unprocessed_count: 0,
 };
+
+/** 事件码 → 中文名；未认识的码原样显示，避免造出误导性标签 */
+const eventLabels: Record<string, string> = {
+    xpay_goods_deliver_notify: '道具发货',
+    xpay_coin_pay_notify: '代币支付',
+    xpay_refund_notify: '退款通知',
+};
+const formatEvent = (event?: string) => (event ? eventLabels[event] || event : '-');
 
 const formatDateTime = (value?: string) => {
     if (!value) return '-';
@@ -43,6 +51,7 @@ const VirtualPay: React.FC = () => {
     const [processedFilter, setProcessedFilter] = useState('all');
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
+    const [loadError, setLoadError] = useState('');
     const pageSize = 20;
 
     const loadData = async (nextPage = page) => {
@@ -69,8 +78,12 @@ const VirtualPay: React.FC = () => {
             setTotal(Number(logData.total || 0));
             setPage(Number(logData.page || nextPage));
             if (calibData) setCalibration(calibData);
+            setLoadError('');
             reportPageLoadRecovered("加载虚拟支付监控失败", recoveryPage);
-        } catch (error) {
+        } catch (error: any) {
+            // 失败必须上屏：此前只写 console，运营看到的是旧数据，不知道查询已经失败
+            const message = error?.message || '网络异常，请稍后重试';
+            setLoadError(message);
             console.error('加载虚拟支付监控失败:', error);
             reportPageLoadError(error, '加载虚拟支付监控失败');
         } finally {
@@ -226,6 +239,14 @@ const VirtualPay: React.FC = () => {
                     <button className="btn-primary" onClick={handleSearch}><FiSearch />查询</button>
                 </div>
 
+                {loadError && (
+                    <div className="vp-load-error" role="alert">
+                        <FiAlertCircle />
+                        <span>推送日志加载失败：{loadError}</span>
+                        <button onClick={() => void loadData(page)} disabled={loading}>重试</button>
+                    </div>
+                )}
+
                 <div className="virtual-pay-table-wrap">
                     <table className="virtual-pay-table">
                         <thead>
@@ -245,7 +266,7 @@ const VirtualPay: React.FC = () => {
                                 <tr><td colSpan={8} className="empty-state">暂无推送日志</td></tr>
                             ) : logs.map((item) => (
                                 <tr key={item.id}>
-                                    <td>{item.event || '-'}</td>
+                                    <td title={item.event || ''}>{formatEvent(item.event)}</td>
                                     <td className="mono">{item.out_trade_no || '-'}</td>
                                     <td>
                                         {item.user_id > 0 ? (

@@ -77,7 +77,8 @@ function mount(kind, initialSearch = '', { emptyList = false, deferLists = false
       if (name === '../api/certification') return certApi;
       if (name === '../api/supportTickets') return supportApi;
       if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => page.errors.push(args), reportPageLoadRecovered() {} };
-      if (name.endsWith('.scss')) return {};
+      if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
+  if (name.endsWith('.scss')) return {};
       throw new Error(`Unexpected import: ${name}`);
     },
   });
