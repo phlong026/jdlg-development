@@ -202,7 +202,9 @@ export const navGroups: NavGroup[] = [
             { path: '/content-analytics', label: '内容分析' },
         ],
     },
-    { id: 'support', label: '异常工单', icon: FiFileText, pages: [{ path: '/support-tickets', label: '异常工单中心' }] },
+    {
+        id: 'share-tracking', label: '分享访问记录', icon: FiShare2, pages: [{ path: '/share-tracking', label: '分享访问记录' }],
+    },
     // 销售线索是高频的一级入口：不因启用 CRM 而隐藏（原侧栏里它始终独立可见）。
     // 与"用户账号"的区别：用户是已注册的账号（运营/审核处理），线索是在智能客服里留了联系方式、待销售跟进的人。
     // 分组内分三类，用入口卡片导航：客户（CRM，启用后才出现，见 visibleGroups）· 线索 · 商机（暂未启用）；
@@ -225,9 +227,7 @@ export const navGroups: NavGroup[] = [
             { path: '/report-center', label: '报表导出' },
         ],
     },
-    {
-        id: 'share-tracking', label: '分享访问记录', icon: FiShare2, pages: [{ path: '/share-tracking', label: '分享访问记录' }],
-    },
+    { id: 'support', label: '异常工单', icon: FiFileText, pages: [{ path: '/support-tickets', label: '异常工单中心' }] },
     {
         id: 'settings', label: '系统设置', icon: FiSettings, pinned: true,
         // AI 配置入口已迁至「AI 运营 → 定价与供应商」（/ai-config 路由保留可回滚）
