@@ -2,291 +2,349 @@
   "pages/index/index": {
     "Title": "pages/index/index",
     "Type": "home",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/customerservice/customerservice": {
     "Title": "pages/customerservice/customerservice",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/my/my": {
     "Title": "pages/my/my",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/template/template": {
     "Title": "pages/template/template",
     "Type": "list",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/aitools/aitools": {
     "Title": "pages/aitools/aitools",
     "Type": "catalog",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/aitooldetail/aitooldetail": {
     "Title": "pages/aitooldetail/aitooldetail",
     "Type": "detail",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/aitoolworkbench/aitoolworkbench": {
     "Title": "pages/aitoolworkbench/aitoolworkbench",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/specadvisor/specadvisor": {
     "Title": "pages/specadvisor/specadvisor",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/buildingcodedocs/buildingcodedocs": {
     "Title": "pages/buildingcodedocs/buildingcodedocs",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/newminnantool/newminnantool": {
     "Title": "pages/newminnantool/newminnantool",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "bside"
   },
   "pages/distribution/distribution": {
     "Title": "pages/distribution/distribution",
     "Type": "list",
-    "Public": true
+    "Public": true,
+    "Audience": "bside"
   },
   "pages/voicecall/voicecall": {
     "Title": "pages/voicecall/voicecall",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/login/login": {
     "Title": "pages/login/login",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/passwordrecovery/passwordrecovery": {
     "Title": "pages/passwordrecovery/passwordrecovery",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/phonebind/phonebind": {
     "Title": "pages/phonebind/phonebind",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/privacy/privacy": {
     "Title": "pages/privacy/privacy",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/aigenerate/aigenerate": {
     "Title": "pages/aigenerate/aigenerate",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/generateprogress/generateprogress": {
     "Title": "pages/generateprogress/generateprogress",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/inspirationdetail/inspirationdetail": {
     "Title": "pages/inspirationdetail/inspirationdetail",
     "Type": "detail",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/templatepreview/templatepreview": {
     "Title": "pages/templatepreview/templatepreview",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/settings/settings": {
     "Title": "pages/settings/settings",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/aicost/aicost": {
     "Title": "pages/aicost/aicost",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/aicostresult/aicostresult": {
     "Title": "pages/aicostresult/aicostresult",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/utilitytools/utilitytools": {
     "Title": "pages/utilitytools/utilitytools",
     "Type": "list",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/utilitytooldetail/utilitytooldetail": {
     "Title": "pages/utilitytooldetail/utilitytooldetail",
     "Type": "detail",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/aivideo/aivideo": {
     "Title": "pages/aivideo/aivideo",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "neutral"
   },
   "pages/real/real": {
     "Title": "pages/real/real",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/report/landing": {
     "Title": "pages/report/landing",
     "Type": "landing",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/report/questionnaire": {
     "Title": "pages/report/questionnaire",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/report/preview": {
     "Title": "pages/report/preview",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/report/delivery": {
     "Title": "pages/report/delivery",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/generatedetails/generatedetails": {
     "Title": "pages/generatedetails/generatedetails",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/Invitefriends/Invitefriends": {
     "Title": "pages/Invitefriends/Invitefriends",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/chat/chat": {
     "Title": "pages/chat/chat",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/designerhome/designerhome": {
     "Title": "pages/designerhome/designerhome",
     "Type": "detail",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/myInformationmodification/myInformationmodification": {
     "Title": "pages/myInformationmodification/myInformationmodification",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/templatesquaredetails/templatesquaredetails": {
     "Title": "pages/templatesquaredetails/templatesquaredetails",
     "Type": "detail",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/myplan/myplan": {
     "Title": "pages/myplan/myplan",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/myfavorites/myfavorites": {
     "Title": "pages/myfavorites/myfavorites",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/ordermanagement/ordermanagement": {
     "Title": "pages/ordermanagement/ordermanagement",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/wallet/wallet": {
     "Title": "pages/wallet/wallet",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/ruralvilladesign/ruralvilladesign": {
     "Title": "pages/ruralvilladesign/ruralvilladesign",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/Parentchildcreativity/Parentchildcreativity": {
     "Title": "pages/Parentchildcreativity/Parentchildcreativity",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/topupcenter/topupcenter": {
     "Title": "pages/topupcenter/topupcenter",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "customer"
   },
   "pages/allrounddesign/allrounddesign": {
     "Title": "pages/allrounddesign/allrounddesign",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/release/release": {
     "Title": "pages/release/release",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "bside"
   },
   "pages/release/designerworkpublish": {
     "Title": "pages/release/designerworkpublish",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "bside"
   },
   "pages/buildingreplacement/buildingreplacement": {
     "Title": "pages/buildingreplacement/buildingreplacement",
     "Type": "form",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   },
   "pages/checkin/checkin": {
     "Title": "pages/checkin/checkin",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/Identityauthen/Identityauthen": {
     "Title": "pages/Identityauthen/Identityauthen",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "bside"
   },
   "pages/generatehistory/generatehistory": {
     "Title": "pages/generatehistory/generatehistory",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/lingshidetails/lingshidetails": {
     "Title": "pages/lingshidetails/lingshidetails",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/orderdetail/orderdetail": {
     "Title": "pages/orderdetail/orderdetail",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/messagecenter/messagecenter": {
     "Title": "pages/messagecenter/messagecenter",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/adminlogin/adminlogin": {
     "Title": "pages/adminlogin/adminlogin",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/adminhome/adminhome": {
     "Title": "pages/adminhome/adminhome",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "neutral"
   },
   "pages/withdrawcenter/withdrawcenter": {
     "Title": "pages/withdrawcenter/withdrawcenter",
     "Type": "excluded",
-    "Public": false
+    "Public": false,
+    "Audience": "bside"
   },
   "pages/contentreader/contentreader": {
     "Title": "pages/contentreader/contentreader",
     "Type": "owned-content",
-    "Public": true
+    "Public": true,
+    "Audience": "customer"
   }
 }

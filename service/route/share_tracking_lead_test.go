@@ -17,30 +17,33 @@ import (
 
 func TestTrackingLeadGateIdentityMatrix(t *testing.T) {
 	cases := []struct {
-		name         string
-		state        string
-		identityType string
-		wantBlocked  bool
-		wantMessage  string
+		name          string
+		state         string
+		identityType  string
+		customerShare float64
+		wantBlocked   bool
+		wantMessage   string
 	}{
 		{name: "anonymous visitor blocked", state: "anonymous", identityType: "", wantBlocked: true, wantMessage: "匿名"},
 		{name: "deleted visitor blocked", state: "deleted", identityType: "乡墅业主", wantBlocked: true, wantMessage: "匿名"},
-		{name: "identified without identity needs human", state: "identified", identityType: "", wantBlocked: true, wantMessage: "尚未确认身份"},
-		{name: "designer excluded", state: "identified", identityType: "设计师", wantBlocked: true, wantMessage: "B端用户"},
+		{name: "unselected identity below gray share blocked", state: "identified", identityType: "", customerShare: 0.69, wantBlocked: true, wantMessage: "尚未确认身份"},
+		{name: "unselected identity at gray share passes", state: "identified", identityType: "", customerShare: 0.7},
+		{name: "unselected identity with no signal blocked", state: "identified", identityType: "", customerShare: 0, wantBlocked: true, wantMessage: "尚未确认身份"},
+		{name: "designer excluded regardless of share", state: "identified", identityType: "设计师", customerShare: 0.95, wantBlocked: true, wantMessage: "B端用户"},
 		{name: "builder crew excluded", state: "identified", identityType: "施工队", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "supplier excluded", state: "identified", identityType: "建材商", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "institution excluded", state: "identified", identityType: "机构用户", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "padded bside still excluded", state: "identified", identityType: " 设计师 ", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "unknown identity fails closed", state: "identified", identityType: "魔法师", wantBlocked: true, wantMessage: "无法识别的访客身份"},
-		{name: "homeowner passes", state: "identified", identityType: "乡墅业主", wantBlocked: false},
+		{name: "homeowner passes regardless of share", state: "identified", identityType: "乡墅业主", customerShare: 0, wantBlocked: false},
 		{name: "padded homeowner passes", state: "identified", identityType: " 乡墅业主 ", wantBlocked: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := trackingLeadGate(tc.state, tc.identityType)
+			err := trackingLeadGate(tc.state, tc.identityType, tc.customerShare)
 			if tc.wantBlocked {
 				if err == nil {
-					t.Fatalf("expected block for state=%q identity=%q", tc.state, tc.identityType)
+					t.Fatalf("expected block for state=%q identity=%q share=%.2f", tc.state, tc.identityType, tc.customerShare)
 				}
 				if err.Status != 422 || !strings.Contains(err.Message, tc.wantMessage) {
 					t.Fatalf("block mismatch: status=%d message=%q want contains %q", err.Status, err.Message, tc.wantMessage)
@@ -48,7 +51,7 @@ func TestTrackingLeadGateIdentityMatrix(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("expected pass for state=%q identity=%q, got %v", tc.state, tc.identityType, err)
+				t.Fatalf("expected pass for state=%q identity=%q share=%.2f, got %v", tc.state, tc.identityType, tc.customerShare, err)
 			}
 		})
 	}

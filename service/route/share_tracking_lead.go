@@ -24,13 +24,8 @@ const (
 )
 
 // B-side accounts distribute and consume tooling; they are channels, never
-// house-building prospects. Fail closed on unknown identity values.
-var trackingBSideIdentities = map[string]bool{
-	"设计师":  true,
-	"施工队":  true,
-	"建材商":  true,
-	"机构用户": true,
-}
+// house-building prospects. Fail closed on unknown identity values. The
+// canonical list lives in the tracking package (tracking.BSideIdentities).
 
 func trackingVisitorAccount(key string) (int64, bool) {
 	if !strings.HasPrefix(key, "u:") {
@@ -46,17 +41,23 @@ func trackingVisitorAccount(key string) (int64, bool) {
 }
 
 // trackingLeadGate keeps the intent→lead route reserved for identified
-// 乡墅业主 accounts. Anonymous visitors have no contactable UserID, and
-// unselected identities stay a human decision until P1 behaviour gating.
-func trackingLeadGate(state, identityType string) *tracking.Error {
+// 乡墅业主 accounts. Anonymous visitors have no contactable UserID. Visitors
+// without a declared identity pass only when their customer-domain reading
+// share clears the gray-zone threshold (behaviour over self-declaration).
+const trackingLeadGrayShare = 0.7
+
+func trackingLeadGate(state, identityType string, customerShare float64) *tracking.Error {
 	if state != "identified" {
 		return &tracking.Error{Status: 422, Message: "匿名或已删除访客无法转化为线索，请先引导客户留资"}
 	}
 	identityType = strings.TrimSpace(identityType)
 	if identityType == "" {
-		return &tracking.Error{Status: 422, Message: "该访客尚未确认身份，请先引导客户在小程序内选择身份"}
+		if customerShare >= trackingLeadGrayShare {
+			return nil
+		}
+		return &tracking.Error{Status: 422, Message: "该访客尚未确认身份，且客户域浏览占比不足70%，请人工核实后再转化"}
 	}
-	if trackingBSideIdentities[identityType] {
+	if tracking.BSideIdentities[identityType] {
 		return &tracking.Error{Status: 422, Message: "该访客为B端用户（" + identityType + "），不进入客户线索流程"}
 	}
 	if identityType != trackingCustomerIdentity {
@@ -190,7 +191,7 @@ func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, l
 			return
 		}
 		visitor := items[0]
-		if e := trackingLeadGate(visitor.State, visitor.IdentityType); e != nil {
+		if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
 			trackingResponse(c, nil, e)
 			return
 		}

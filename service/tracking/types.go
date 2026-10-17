@@ -78,6 +78,27 @@ type Config struct {
 type Route struct {
 	Title, Type string
 	Public      bool
+	// Audience labels the page's consumption domain for customer-vs-channel
+	// gating: "customer" (house-building prospects), "bside" (designers,
+	// builders, suppliers), "neutral" (shared plumbing). Empty or unknown
+	// routes resolve to neutral; excluded pages carry no page_view data.
+	Audience string
+}
+
+const (
+	RouteAudienceCustomer = "customer"
+	RouteAudienceBSide    = "bside"
+	RouteAudienceNeutral  = "neutral"
+)
+
+// BSideIdentities are channel accounts (designers, builder crews, material
+// suppliers, institutions). They distribute content; their own browsing never
+// counts as customer intent, and lead conversion hard-blocks on them.
+var BSideIdentities = map[string]bool{
+	"设计师":  true,
+	"施工队":  true,
+	"建材商":  true,
+	"机构用户": true,
 }
 type Record struct {
 	Tenant, Kind, ID, Owner, Visitor, Session, Content, Share string
@@ -274,9 +295,14 @@ type Intent struct {
 	Reasons      []string        `json:"reasons"`
 	Rule         string          `json:"rule_version"`
 	Start        time.Time       `json:"window_start"`
-	End          time.Time       `json:"window_end"`
-	Calculated   time.Time       `json:"calculated_at"`
-	Note         string          `json:"manual_note,omitempty"`
+	// CustomerShare is the fraction of window visible time spent on
+	// customer-domain pages over customer+bside pages (neutral excluded from
+	// the denominator so shared tooling does not dilute the signal). It gates
+	// gray-zone lead conversion for visitors without a declared identity.
+	CustomerShare float64   `json:"customer_share,omitempty"`
+	End           time.Time `json:"window_end"`
+	Calculated    time.Time `json:"calculated_at"`
+	Note          string    `json:"manual_note,omitempty"`
 }
 
 // LatestVisit describes one counted page view inside the active query scope.
