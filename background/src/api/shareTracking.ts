@@ -24,6 +24,8 @@ export interface VisitorShare { share_id: string; occurred_at: string; route_key
 export interface Content { identified_count?: number; anonymous_count?: number;  read_only?: boolean; route_key?: string; version_mode?: string; content_id: string; version: number; revision: number; title: string; type: string; status: 'draft' | 'published' | 'revoked'; cover?: Asset; media: Asset[]; body: string; body_format?: 'plain' | 'rich_text'; source_url?: string; source_note?: string; rights: 'own' | 'authorized'; owner_id?: string; page_views: number; /** 筛选范围内被客户主动转发的次数（不含后台生成的码/链接） */ share_count?: number; visible_ms: number; last_visit?: string; published_at?: string; }
 export interface PageView { page_view_id: string; route_key: string; title?: string; content_id?: string; content_version?: number; previous_page_view_id?: string; share_id?: string; started_at: string; ended_at?: string; visible_ms: number; quality_flags: string[]; }
 export interface Session { session_id: string; started_at: string; last_active_at: string; entry_share_id?: string; source: string; page_views: PageView[]; }
+/** 渠道视角：单个分享者（设计师/员工/客户）作为分发节点的聚合表现；converted_leads 由管理端路由补齐 */
+export interface ChannelSummary { visitor_key: string; nickname?: string; identity_type?: string; share_count: number; brought_visitors: number; brought_identified: number; brought_high: number; converted_leads: number; }
 export interface TrackingEvent { event_id: string; event_type: string; occurred_at: string; received_at: string; content_version?: number; target_content_id?: string; visible_delta_ms?: number; scroll_depth?: number; current_time_ms?: number; video_watch_ms?: number; unique_played_ms?: number; video_duration_ms?: number; quality_flags: string[]; }
 export interface Context { can_view: boolean; can_manage: boolean; can_crm?: boolean; can_rules?: boolean; can_delete?: boolean; owners: { id: string; name: string }[]; share_methods?: string[]; mp_sync?: boolean; }
 export interface MPSyncCounts { fetched: number; created: number; updated: number; unchanged: number; skipped: number; conflicts: number; failed: number; images_imported: number; image_failures: number; }
@@ -72,6 +74,7 @@ export const tracking = {
     visitorContents: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<VisitorContent>>(`/visitors/${encodeURIComponent(id)}/contents`, { params, signal }),
     sessions: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Session>>(`/visitors/${encodeURIComponent(id)}/sessions`, { params, signal }),
     visitorShares: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<VisitorShare>>(`/visitors/${encodeURIComponent(id)}/shares`, { params, signal }),
+    channels: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<ChannelSummary>>('/channels', { params, signal }),
     events: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<TrackingEvent>>(`/page-views/${encodeURIComponent(id)}/events`, { params, signal }),
     media: (signal?: AbortSignal, cursor?: string) => trackingRequest<Page<Asset>>('/media', { signal, params: { cursor, limit: 20 } }),
     upload: async (file: File, rights: 'own' | 'authorized', owner: string): Promise<Asset> => {

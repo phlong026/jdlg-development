@@ -387,4 +387,24 @@
     .st-dialog .st-media img, .st-dialog .st-media video { max-height: 50dvh; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; animation: none; transition: none; } }
+
+
+/* 渠道视角排行（P2-1）：按分享者聚合的分发节点表现 */
+  .st-channel-list { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--st-line, #e7e0d6); border-radius: 12px; overflow: hidden; margin-top: 12px; }
+  .st-channel-head, .st-channel-row { display: grid; grid-template-columns: minmax(160px, 2fr) repeat(4, minmax(72px, 1fr)); gap: 8px; align-items: center; padding: 10px 14px; }
+  .st-channel-head { background: #f4efe8; font-size: 12px; color: #6d6153; font-weight: 600; }
+  .st-channel-row { border-top: 1px solid #eee7dc; font-size: 13px; }
+  .st-channel-row > span { text-align: right; }
+  .st-channel-row > span:first-child { text-align: left; }
+  .st-channel-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .st-channel-name em { font-style: normal; width: 22px; height: 22px; border-radius: 50%; background: #ece5da; color: #7a6c5b; display: grid; place-items: center; font-size: 12px; flex-shrink: 0; }
+  .st-channel-row:first-of-type .st-channel-name em { background: #8a5a2b; color: #fff; }
+  .st-channel-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st-channel-high { color: #a43416; }
+  .st-channel-row small { color: #8a7d6d; }
+  @media (max-width: 640px) {
+    .st-channel-head { display: none; }
+    .st-channel-row { grid-template-columns: minmax(120px, 1.6fr) repeat(3, minmax(48px, 1fr)); }
+    .st-channel-row > span:nth-child(5) { display: none; }
+  }
 }

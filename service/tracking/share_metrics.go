@@ -210,3 +210,135 @@ func shareDownstream(r Repository, owners []string, ids []string, f Filter) (vis
 	}
 	return visitors, views, nil
 }
+
+// ChannelSummary ranks one forwarding visitor as a distribution channel: how
+// often they shared and what downstream traffic came back. VisitorKeys stays
+// internal — the management route joins converted-lead outcomes on it before
+// responding, so raw downstream rosters never reach the JSON surface.
+type ChannelSummary struct {
+	Sharer       string   `json:"visitor_key"`
+	Nickname     string   `json:"nickname,omitempty"`
+	IdentityType string   `json:"identity_type,omitempty"`
+	Shares       int      `json:"share_count"`
+	Visitors     int      `json:"brought_visitors"`
+	Identified   int      `json:"brought_identified"`
+	High         int      `json:"brought_high"`
+	VisitorKeys  []string `json:"-"`
+}
+
+// Channels aggregates the forwarding leaderboard inside the filter window:
+// per sharer, deduplicated downstream visitors plus how many of them read as
+// high-intent identified accounts. Designers and staff surface here as
+// channels — that is the point of the view — while conversion outcomes are
+// joined by the management route.
+func (s *Service) Channels(ctx context.Context, scope Scope, f Filter) (List, error) {
+	out := List{Items: []ChannelSummary{}}
+	if err := s.authorizeView(scope); err != nil {
+		return out, err
+	}
+	var err error
+	f, err = s.Normalize(f)
+	if err != nil {
+		return out, err
+	}
+	if f.Limit <= 0 || f.Limit > 100 {
+		f.Limit = 20
+	}
+	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
+	err = s.readQueryTransaction(ctx, func(r Repository) error {
+		shares, e := clientShares(r, scope, f)
+		if e != nil {
+			return e
+		}
+		bySharer := map[string][]shareFact{}
+		ids := make([]string, 0, len(shares))
+		for _, sh := range shares {
+			bySharer[sh.sharer] = append(bySharer[sh.sharer], sh)
+			ids = append(ids, sh.id)
+		}
+		if len(bySharer) == 0 {
+			return nil
+		}
+		owners := permittedOwners(scope, f.Owner)
+		downstream, _, e := shareDownstream(r, owners, ids, f)
+		if e != nil {
+			return e
+		}
+		summaries := make([]ChannelSummary, 0, len(bySharer))
+		for sharer, facts := range bySharer {
+			item := ChannelSummary{Sharer: sharer, Shares: len(facts), VisitorKeys: []string{}}
+			seen := map[string]bool{}
+			for _, sh := range facts {
+				for visitor := range downstream[sh.id] {
+					if visitor == sharer || seen[visitor] {
+						continue
+					}
+					seen[visitor] = true
+					item.VisitorKeys = append(item.VisitorKeys, visitor)
+					item.Visitors++
+					if _, identified := visitorAccount(visitor); identified {
+						item.Identified++
+					}
+				}
+			}
+			summaries = append(summaries, item)
+		}
+		sort.Slice(summaries, func(i, j int) bool {
+			if summaries[i].Visitors != summaries[j].Visitors {
+				return summaries[i].Visitors > summaries[j].Visitors
+			}
+			if summaries[i].Shares != summaries[j].Shares {
+				return summaries[i].Shares > summaries[j].Shares
+			}
+			return summaries[i].Sharer < summaries[j].Sharer
+		})
+		if len(summaries) > f.Limit {
+			summaries = summaries[:f.Limit]
+		}
+		// Intent is evaluated only for the leaderboard's downstream identified
+		// visitors, keeping the heavy rule pass bounded to one page of channels.
+		effective := ownerScope(scope, f.Owner)
+		window := []string{}
+		for _, item := range summaries {
+			for _, visitor := range item.VisitorKeys {
+				if _, identified := visitorAccount(visitor); identified {
+					window = append(window, visitor)
+				}
+			}
+		}
+		if len(window) > 0 {
+			intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, window)
+			if e != nil {
+				return e
+			}
+			for index := range summaries {
+				for _, visitor := range summaries[index].VisitorKeys {
+					if _, identified := visitorAccount(visitor); !identified {
+						continue
+					}
+					if in := s.intent(effective, visitor, f.AsOf, intentData); in.Level == "high" {
+						summaries[index].High++
+					}
+				}
+			}
+		}
+		// Sharer presentation comes from the same profile resolver as visitors.
+		sharerFacts := make([]factView, 0, len(summaries))
+		for _, item := range summaries {
+			sharerFacts = append(sharerFacts, factView{PageView: PageView{ID: "channel-" + item.Sharer}, Visitor: item.Sharer})
+		}
+		profiles, _, e := s.queryProfiles(ctx, r, sharerFacts)
+		if e != nil {
+			return e
+		}
+		for index := range summaries {
+			if profile, ok := profiles[summaries[index].Sharer]; ok {
+				summaries[index].Nickname = profile.Nickname
+				summaries[index].IdentityType = profile.IdentityType
+			}
+		}
+		out.Items = summaries
+		return nil
+	})
+	return out, err
+}

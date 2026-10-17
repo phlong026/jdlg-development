@@ -201,3 +201,57 @@ func findVisitorMetric(t *testing.T, list List, key string) Visitor {
 	t.Fatalf("visitor %q missing", key)
 	return Visitor{}
 }
+
+func seedBusinessFact(m reviewStore, id, owner, visitor, session, action string, at time.Time) {
+	rec := record("business", id, owner, at, map[string]string{"action": action})
+	rec.Visitor, rec.Session = visitor, session
+	_ = m.Put(rec)
+}
+
+func TestChannelsRankSharersByDownstreamReach(t *testing.T) {
+	s, m, scope, now := reviewFixture()
+	// Sharer u:1 forwards twice and brings an identified high-intent account
+	// plus an anonymous reader; sharer u:2 forwards once with one quiet visitor.
+	seedShareMetric(m, "c1", "one", "u:1", "session1", "content1", 1, now.Add(-3*time.Hour))
+	seedShareMetric(m, "c2", "one", "u:1", "session1", "content1", 1, now.Add(-2*time.Hour))
+	seedShareMetric(m, "c3", "one", "u:2", "session2", "content1", 1, now.Add(-time.Hour))
+	seedDownstreamView(m, "one", "u:9", "s9a", "sid-c1", now.Add(-2*time.Hour))
+	seedDownstreamView(m, "one", "u:9", "s9b", "sid-c1", now.Add(-90*time.Minute))
+	seedDownstreamView(m, "one", "a:anon1", "sa", "sid-c2", now.Add(-80*time.Minute))
+	seedDownstreamView(m, "one", "u:4", "s4", "sid-c3", now.Add(-30*time.Minute))
+	// Two sessions plus one server-confirmed consultation push u:9 to high.
+	seedBusinessFact(m, "biz-consult-1", "one", "u:9", "s9b", "consultation", now.Add(-80*time.Minute))
+	out, e := s.Channels(context.Background(), scope, Filter{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items, ok := out.Items.([]ChannelSummary)
+	if !ok || len(items) != 2 {
+		t.Fatalf("channels = %+v", out.Items)
+	}
+	first, second := items[0], items[1]
+	if first.Sharer != "u:1" || second.Sharer != "u:2" {
+		t.Fatalf("ranking = %s then %s, want u:1 (2 visitors) before u:2", first.Sharer, second.Sharer)
+	}
+	if first.Shares != 2 || first.Visitors != 2 || first.Identified != 1 || first.High != 1 {
+		t.Fatalf("u:1 summary = %+v", first)
+	}
+	if second.Shares != 1 || second.Visitors != 1 || second.High != 0 {
+		t.Fatalf("u:2 summary = %+v", second)
+	}
+	// Downstream rosters are an internal join surface and must never serialize.
+	if encoded := string(marshal(out)); bytesContains(encoded, "VisitorKeys") || bytesContains(encoded, "visitor_keys") {
+		t.Fatal("channel response leaks downstream visitor keys")
+	}
+}
+
+func bytesContains(haystack, needle string) bool {
+	return len(needle) > 0 && len(haystack) >= len(needle) && (func() bool {
+		for i := 0; i+len(needle) <= len(haystack); i++ {
+			if haystack[i:i+len(needle)] == needle {
+				return true
+			}
+		}
+		return false
+	})()
+}

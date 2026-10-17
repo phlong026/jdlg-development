@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -514,6 +515,46 @@ func (m *CustomerServiceModel) FindLatestOpenLeadID(userID int64) (int64, error)
 	return m.findLatestOpenLeadID(userID)
 }
 
+// HasLeadUsers reports which accounts have ever produced a lead row, for
+// channel reporting only. Any status counts: a converted or invalid history is
+// still a realized sales touch, not a prospect waiting to be surfaced.
+func (m *CustomerServiceModel) HasLeadUsers(userIDs []int64) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	if len(userIDs) == 0 || m.DB == nil {
+		return out, nil
+	}
+	if len(userIDs) > 200 {
+		return nil, fmt.Errorf("lead user batch exceeds read bound")
+	}
+	unique := map[int64]bool{}
+	args := make([]interface{}, 0, len(userIDs))
+	placeholders := make([]string, 0, len(userIDs))
+	for _, id := range userIDs {
+		if id <= 0 || unique[id] {
+			continue
+		}
+		unique[id] = true
+		args = append(args, id)
+		placeholders = append(placeholders, "?")
+	}
+	if len(args) == 0 {
+		return out, nil
+	}
+	rows, err := m.DB.Query(`SELECT DISTINCT user_id FROM customer_leads WHERE user_id IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
 func (m *CustomerServiceModel) updateExistingLead(id int64, input *CustomerLeadCreateInput) error {
 	_, err := m.DB.Exec(`
 		UPDATE customer_leads
@@ -788,7 +829,8 @@ func scanCustomerLeadRow(row *sql.Row) (*CustomerLead, error) {
 	return item, nil
 }
 
-func (m *CustomerServiceModel) ListEventsForLead(lead *CustomerLead, limit int) ([]*CustomerServiceEvent, error) {	if lead == nil || lead.ID <= 0 {
+func (m *CustomerServiceModel) ListEventsForLead(lead *CustomerLead, limit int) ([]*CustomerServiceEvent, error) {
+	if lead == nil || lead.ID <= 0 {
 		return []*CustomerServiceEvent{}, nil
 	}
 	if limit <= 0 || limit > 200 {
@@ -977,8 +1019,8 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 			COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END), 0) AS today_new_count,
 			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') THEN 1 ELSE 0 END), 0) AS todo_count,
 			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') AND (next_followup_at IS NULL OR next_followup_at <= NOW() OR updated_at <= DATE_SUB(NOW(), INTERVAL 1 DAY)) THEN 1 ELSE 0 END), 0) AS overdue_count,
-			COALESCE(SUM(CASE WHEN `+leadQueueHighCond+` THEN 1 ELSE 0 END), 0) AS high_todo_count,
-			COALESCE(SUM(CASE WHEN `+leadQueueUnassignedCond+` THEN 1 ELSE 0 END), 0) AS unassigned_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueueHighCond + ` THEN 1 ELSE 0 END), 0) AS high_todo_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueueUnassignedCond + ` THEN 1 ELSE 0 END), 0) AS unassigned_count,
 			COALESCE(SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid_count
 		FROM customer_leads`
 	if err := m.DB.QueryRow(query).Scan(

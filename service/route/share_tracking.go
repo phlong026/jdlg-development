@@ -276,6 +276,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	registerTrackingRuleRoutes(mg, svc, customerServiceModel)
 	registerTrackingCRMTargetRoutes(mg, svc)
 	registerTrackingLeadRoutes(mg, svc, customerServiceModel, users)
+	registerTrackingChannelRoutes(mg, svc, customerServiceModel)
 	sc := func(c *gin.Context) tracking.Scope { return c.MustGet("tracking.scope").(tracking.Scope) }
 	view := func(c *gin.Context) bool {
 		if !sc(c).View {
