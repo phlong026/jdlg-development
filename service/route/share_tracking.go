@@ -218,7 +218,7 @@ func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (trackin
 	scope.Owners = []string{owners[0]}
 	return scope, nil
 }
-func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel) *tracking.Service {
+func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel, customerServiceModel *model.CustomerServiceModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
 	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
 		log.Printf("[Tracking] %s", warning)
@@ -275,6 +275,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	})
 	registerTrackingRuleRoutes(mg, svc)
 	registerTrackingCRMTargetRoutes(mg, svc)
+	registerTrackingLeadRoutes(mg, svc, customerServiceModel, users)
 	sc := func(c *gin.Context) tracking.Scope { return c.MustGet("tracking.scope").(tracking.Scope) }
 	view := func(c *gin.Context) bool {
 		if !sc(c).View {

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTracking';
-import { duration, intentLabels, safeMediaURL, time } from './model';
+import { duration, identityBadge, intentLabels, safeMediaURL, time } from './model';
 
 export function useResource<T>(loader: (signal: AbortSignal) => Promise<T>, key: string) {
     const [state, setState] = useState<{ data?: T; error: string; loading: boolean; key?: string }>({ error: '', loading: true });
@@ -40,7 +40,8 @@ export function VisitorCard({ visitor, onOpen, onOpenRecords = onOpen, children 
     const [evidence, setEvidence] = useState(false); const [avatarFailed, setAvatarFailed] = useState(false); const avatar = visitor.identity_state === 'identified' ? safeMediaURL(visitor.avatar_url) : undefined;
     useEffect(() => { setAvatarFailed(false); }, [avatar]);
     const name = visitor.identity_state === 'anonymous' ? `匿名访客 · 尾号${visitor.visitor_key.slice(-6)}` : visitor.identity_state === 'deleted' ? '已删除账号' : visitor.nickname || '未设置昵称';
-    return <article className="st-visitor"><button className="st-card-main" onClick={onOpen}><span className="st-avatar">{avatar && !avatarFailed ? <img src={avatar} alt="" onError={() => setAvatarFailed(true)} /> : '访'}</span><span><strong>{name}</strong><small>{visitor.identity_state === 'identified' ? '已登录账号 · ' : ''}{visitor.crm_label || '未关联客户'}</small></span><span className="st-chevron" aria-hidden="true">›</span></button><span className={`st-intent st-${visitor.intent?.level || 'unknown'}`}>{intentLabels[visitor.intent?.level || 'unknown']}</span>{visitor.risk_tags?.length ? <span className="st-risk-tags" title="来自风控台的风险标签">{visitor.risk_tags.map(tag => <em key={tag}>{tag}</em>)}</span> : null}<dl className="st-metrics"><div><dt>看了几个页面</dt><dd>{visitor.page_views} 次</dd></div><div><dt>来过几次</dt><dd>{visitor.session_count} 次</dd></div></dl><VisitDurations latest={visitor.latest_visit} cumulative={visitor.visible_ms} /><p className="st-muted">最近访问 {time(visitor.last_visit)}</p>{children}</article>;
+    const identity = identityBadge(visitor.identity_state, visitor.identity_type);
+    return <article className="st-visitor"><button className="st-card-main" onClick={onOpen}><span className="st-avatar">{avatar && !avatarFailed ? <img src={avatar} alt="" onError={() => setAvatarFailed(true)} /> : '访'}</span><span><strong>{name}</strong><small>{visitor.identity_state === 'identified' ? '已登录账号 · ' : ''}{visitor.crm_label || '未关联客户'}</small>{identity && <span className={`st-identity st-identity-${identity.tone}`}>{identity.label}</span>}</span><span className="st-chevron" aria-hidden="true">›</span></button><span className={`st-intent st-${visitor.intent?.level || 'unknown'}`}>{intentLabels[visitor.intent?.level || 'unknown']}</span>{visitor.risk_tags?.length ? <span className="st-risk-tags" title="来自风控台的风险标签">{visitor.risk_tags.map(tag => <em key={tag}>{tag}</em>)}</span> : null}<dl className="st-metrics"><div><dt>看了几个页面</dt><dd>{visitor.page_views} 次</dd></div><div><dt>来过几次</dt><dd>{visitor.session_count} 次</dd></div></dl><VisitDurations latest={visitor.latest_visit} cumulative={visitor.visible_ms} /><p className="st-muted">最近访问 {time(visitor.last_visit)}</p>{children}</article>;
 }
 export function Dialog({ title, children, close, busy = false }: { title: string; children: React.ReactNode; close: () => void; busy?: boolean }) {
     const ref = useRef<HTMLDivElement>(null); const closeRef = useRef(close); closeRef.current = close;

@@ -71,7 +71,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	{
 		// 用户DB模型（共用）
 		userDBModel := model.NewUserModel(component.GetDB())
-		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel)
+		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
 		userFavoriteModel := model.NewUserFavoriteModel(component.GetDB())
 		_ = userFavoriteModel.InitTable()
 		setSharedTemplateSquareConfigModel(templateSquareConfigModel)

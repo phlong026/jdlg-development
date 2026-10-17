@@ -291,17 +291,18 @@ type LatestVisit struct {
 	Version int       `json:"content_version,omitempty"`
 }
 type Visitor struct {
-	Key         string       `json:"visitor_key"`
-	Nickname    string       `json:"nickname"`
-	AvatarURL   string       `json:"avatar_url,omitempty"`
-	State       string       `json:"identity_state"`
-	CRMLabel    string       `json:"crm_label,omitempty"`
-	Last        time.Time    `json:"last_visit"`
-	Views       int          `json:"page_views"`
-	Visible     int64        `json:"visible_ms"`
-	LatestVisit *LatestVisit `json:"latest_visit,omitempty"`
-	Sessions    int          `json:"session_count"`
-	Intent      Intent       `json:"intent"`
+	Key          string       `json:"visitor_key"`
+	Nickname     string       `json:"nickname"`
+	AvatarURL    string       `json:"avatar_url,omitempty"`
+	State        string       `json:"identity_state"`
+	IdentityType string       `json:"identity_type,omitempty"`
+	CRMLabel     string       `json:"crm_label,omitempty"`
+	Last         time.Time    `json:"last_visit"`
+	Views        int          `json:"page_views"`
+	Visible      int64        `json:"visible_ms"`
+	LatestVisit  *LatestVisit `json:"latest_visit,omitempty"`
+	Sessions     int          `json:"session_count"`
+	Intent       Intent       `json:"intent"`
 }
 type PageView struct {
 	ID       string     `json:"page_view_id"`

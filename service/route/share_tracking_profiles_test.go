@@ -18,7 +18,7 @@ import (
 
 type profileSQLState struct {
 	legacy    legacyTxState
-	profiles  map[int64][2]string
+	profiles  map[int64][3]string
 	query     string
 	args      []driver.NamedValue
 	batches   int
@@ -56,16 +56,16 @@ func (c *profileSQLConn) QueryContext(ctx context.Context, q string, args []driv
 	rows := &profileSQLRows{state: c.profile}
 	for _, arg := range args[:len(args)-1] {
 		id := arg.Value.(int64)
-		if p, ok := c.profile.profiles[id]; ok {
-			rows.values = append(rows.values, []driver.Value{id, p[0], p[1]})
+			if p, ok := c.profile.profiles[id]; ok {
+				rows.values = append(rows.values, []driver.Value{id, p[0], p[1], p[2]})
+			}
 		}
-	}
-	if c.profile.duplicate && len(rows.values) > 0 {
-		rows.values = append(rows.values, rows.values[0])
-	}
-	if c.profile.extra {
-		rows.values = append(rows.values, []driver.Value{int64(9999), "unrequested", ""})
-	}
+		if c.profile.duplicate && len(rows.values) > 0 {
+			rows.values = append(rows.values, rows.values[0])
+		}
+		if c.profile.extra {
+			rows.values = append(rows.values, []driver.Value{int64(9999), "unrequested", "", ""})
+		}
 	return rows, nil
 }
 
@@ -75,7 +75,7 @@ type profileSQLRows struct {
 	i      int
 }
 
-func (*profileSQLRows) Columns() []string { return []string{"user_id", "nickname", "avatar"} }
+func (*profileSQLRows) Columns() []string { return []string{"user_id", "nickname", "avatar", "identity_type"} }
 func (r *profileSQLRows) Close() error    { r.state.closed = true; return nil }
 func (r *profileSQLRows) Next(v []driver.Value) error {
 	if r.i >= len(r.values) {
@@ -87,7 +87,7 @@ func (r *profileSQLRows) Next(v []driver.Value) error {
 }
 
 func TestTrackingProfilesUseMinimalBatchSQLAndOneConnectionTransaction(t *testing.T) {
-	state := &profileSQLState{profiles: map[int64][2]string{1: {"真实账户昵称", "https://public.example/avatar.png"}, 2: {"", "wxfile://local"}, 3: {"跨权昵称", ""}, 4: {"已删除昵称", ""}}}
+	state := &profileSQLState{profiles: map[int64][3]string{1: {"真实账户昵称", "https://public.example/avatar.png", "乡墅业主"}, 2: {"", "wxfile://local", "设计师"}, 3: {"跨权昵称", "", ""}, 4: {"已删除昵称", "", "施工队"}}}
 	db := sql.OpenDB(profileSQLConnector{state})
 	defer db.Close()
 	db.SetMaxOpenConns(1)
@@ -147,13 +147,16 @@ func TestTrackingProfilesUseMinimalBatchSQLAndOneConnectionTransaction(t *testin
 	if by["u:1"].Nickname != "真实账户昵称" || by["u:1"].AvatarURL != "https://public.example/avatar.png" || by["u:2"].AvatarURL != "" {
 		t.Fatal(by)
 	}
+	if by["u:1"].IdentityType != "乡墅业主" || by["u:2"].IdentityType != "设计师" || by["a:anonymous"].IdentityType != "" {
+		t.Fatal("identity type not carried to visitor projection", by)
+	}
 	state.fail = errors.New("isolated profile SQL failure")
 	if _, err = s.Visitors(ctx, scope, tracking.Filter{Search: "名字"}); !errors.Is(err, state.fail) {
 		t.Fatal("source failure swallowed", err)
 	}
 }
 func TestProfileBatchModelReadBoundsAndUnexpectedRows(t *testing.T) {
-	state := &profileSQLState{profiles: map[int64][2]string{1: {"昵称", ""}}}
+	state := &profileSQLState{profiles: map[int64][3]string{1: {"昵称", "", "乡墅业主"}}}
 	db := sql.OpenDB(profileSQLConnector{state})
 	defer db.Close()
 	ctx := context.WithValue(context.Background(), legacyTxContextKey{}, "request")

@@ -14,7 +14,7 @@ func TestTrackingManagementResponsesNeverCacheAuthorizationFailures(t *testing.T
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(sessions.Sessions("test", cookie.NewStore([]byte("test-only-cookie-signing-key-32-bytes"))))
-	RegisterTrackingRoutes(router.Group("/api/v1"), &model.UserModel{}, nil)
+	RegisterTrackingRoutes(router.Group("/api/v1"), &model.UserModel{}, nil, nil)
 	for _, tc := range []struct{ method, path string }{{"GET", "/context"}, {"GET", "/visitors"}, {"POST", "/contents"}} {
 		req := httptest.NewRequest(tc.method, "/api/v1/management/tracking"+tc.path, nil)
 		w := httptest.NewRecorder()

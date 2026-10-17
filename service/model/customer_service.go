@@ -507,6 +507,13 @@ func (m *CustomerServiceModel) findLatestOpenLeadID(userID int64) (int64, error)
 	return id, err
 }
 
+// FindLatestOpenLeadID exposes the dedupe lookup for management-side lead
+// conversion: callers convert a tracking visitor, not a fresh form submit, and
+// must attach evidence to the existing open lead instead of creating a second one.
+func (m *CustomerServiceModel) FindLatestOpenLeadID(userID int64) (int64, error) {
+	return m.findLatestOpenLeadID(userID)
+}
+
 func (m *CustomerServiceModel) updateExistingLead(id int64, input *CustomerLeadCreateInput) error {
 	_, err := m.DB.Exec(`
 		UPDATE customer_leads

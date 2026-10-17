@@ -19,7 +19,7 @@ func makeTrackingProfileResolver(db *sql.DB) tracking.VisitorProfileResolver {
 		}
 		out := make(map[int64]tracking.VisitorProfile, len(profiles))
 		for id, p := range profiles {
-			out[id] = tracking.VisitorProfile{Nickname: p.Nickname, AvatarURL: sanitizePublicImageURL(p.Avatar)}
+			out[id] = tracking.VisitorProfile{Nickname: p.Nickname, AvatarURL: sanitizePublicImageURL(p.Avatar), IdentityType: p.IdentityType}
 		}
 		return out, nil
 	}

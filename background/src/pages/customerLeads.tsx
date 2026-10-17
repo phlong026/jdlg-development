@@ -55,6 +55,16 @@ const intentLabelMap: Record<string, string> = {
     high: '高意向',
 };
 
+// 线索来源友好名；share_tracking = 分享访问记录的意向转化（管理端一键转化生成）。
+const sourceLabelMap: Record<string, string> = {
+    share_tracking: '分享意向',
+    structured_requirement: '客服需求表单',
+    generate_click: '生成方案',
+    handoff_human: '转人工留资',
+    home: '在线客服',
+};
+const sourceLabel = (source?: string) => sourceLabelMap[source || ''] || source || '-';
+
 const defaultAction = {
     status: 'contacted',
     assignedTo: '',
@@ -168,6 +178,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [statusFilter, setStatusFilter] = useState('all');
     const [intentFilter, setIntentFilter] = useState('all');
     const [assignedFilter, setAssignedFilter] = useState('all');
+    const [sourceFilter, setSourceFilter] = useState('all');
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [detail, setDetail] = useState<CustomerLeadDetailResponse | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -178,7 +189,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [loadError, setLoadError] = useState('');
     const [saveNotice, setSaveNotice] = useState('');
     const listRequest = useRef(0), detailRequest = useRef(0), actionSequence = useRef(0), saving = useRef(false);
-    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, session.user?.id]);
+    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, session.user?.id]);
     const queryIdentity = useRef(queryKey);
     // Invalidate old responses during render, before the replacement effect runs.
     if (queryIdentity.current !== queryKey) { queryIdentity.current = queryKey; listRequest.current++; }
@@ -221,6 +232,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 status: statusFilter === 'all' ? undefined : statusFilter,
                 intent_level: intentFilter === 'all' ? undefined : intentFilter,
                 assigned_to: assignedFilter === 'all' ? undefined : assignedFilter,
+                source: sourceFilter === 'all' ? undefined : sourceFilter,
             };
             const [overviewData, listData] = await Promise.all([
                 getCustomerLeadOverview(),
@@ -250,7 +262,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
 
     useEffect(() => {
         latestLoad.current();
-    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, session.user?.id]);
+    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, session.user?.id]);
 
     // 切换队列 / 用户过滤时回到第一页并清空勾选
     useEffect(() => {
@@ -514,6 +526,10 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <option value="all">全部负责人</option>
                             <option value="unassigned">未分配</option>
                         </select>
+                        <select value={sourceFilter} onChange={(event) => { setSourceFilter(event.target.value); setPage(1); }}>
+                            <option value="all">全部来源</option>
+                            <option value="share_tracking">分享意向</option>
+                        </select>
                         <button type="button" className="customer-lead-btn" onClick={handleSearch}>
                             <FiSearchIcon />
                             查询
@@ -556,7 +572,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <span>{formatDateTime(item.created_at)}</span>
                                     </div>
                                     <div className="customer-lead-card-foot">
-                                        <span>来源 {item.source || '-'}</span>
+                                        <span>来源 {sourceLabel(item.source)}{item.source === 'share_tracking' ? '（访问动机转化）' : ''}</span>
                                         <span>{item.assigned_to || '未分配'}{item.next_followup_at ? ` · 下次跟进 ${formatDateTime(item.next_followup_at)}` : ''}</span>
                                     </div>
                                     <div className="customer-lead-actions customer-lead-card-actions">
@@ -602,7 +618,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             <span>{getContactText(item)}</span>
                                         </td>
                                         <td>
-                                            <strong>{item.source || '-'}</strong>
+                                            <strong>{sourceLabel(item.source)}</strong>
                                             <span>{item.source_task_no || item.session_no || '-'}</span>
                                         </td>
                                         <td>
@@ -703,7 +719,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                     <section className="customer-lead-detail-section">
                                         <h4>来源追踪</h4>
                                         <div className="customer-lead-detail-grid">
-                                            <div><span>来源</span><strong>{activeLead.source || '-'}</strong></div>
+                                            <div><span>来源</span><strong>{sourceLabel(activeLead.source)}</strong></div>
                                             <div><span>任务号</span><strong>{activeLead.source_task_no || '-'}</strong></div>
                                             <div><span>会话号</span><strong>{activeLead.session_no || '-'}</strong></div>
                                             <div><span>更新时间</span><strong>{formatDateTime(activeLead.updated_at)}</strong></div>

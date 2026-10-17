@@ -79,7 +79,7 @@ func TestMiniMaterialScopeIsExplicitAndServerOwned(t *testing.T) {
 func TestMiniMaterialsRoutesRequireRealSignedToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	RegisterTrackingRoutes(router.Group("/api/v1"), &model.UserModel{}, nil)
+	RegisterTrackingRoutes(router.Group("/api/v1"), &model.UserModel{}, nil, nil)
 	for _, path := range []string{"/api/v1/miniprogram/tracking/materials?owner=owner-a&user_id=1", "/api/v1/miniprogram/tracking/materials/material-one/versions/1"} {
 		for _, token := range []string{"", "client-asserted-token"} {
 			w := httptest.NewRecorder()
@@ -95,7 +95,7 @@ func TestMiniMaterialsRoutesRequireRealSignedToken(t *testing.T) {
 func TestMiniMaterialHandlersOnlyReturnScopedPublishedMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	registered := gin.New()
-	svc := RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil)
+	svc := RegisterTrackingRoutes(registered.Group("/api/v1"), &model.UserModel{}, nil, nil)
 	svc.Config.Tenant = "materials-test"
 	svc.Config.ContentEnabled = true
 	svc.Config.Routes = map[string]tracking.Route{"pages/contentreader/contentreader": {Public: true}}
