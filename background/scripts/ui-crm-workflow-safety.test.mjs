@@ -10,7 +10,7 @@ const submit = h => form(h).props.onSubmit(event);
 const area = h => h.find(n=>n.type==='textarea');
 const input = (h,label) => h.find(n=>n.type==='input'&&n.props['aria-label']===label);
 const editName = (h,value) => { input(h,'客户姓名').props.onChange({target:{value}});h.render(); };
-const click = (h,label) => {const result=h.button(label).props.onClick();h.render();return result;};
+const click = (h,label) => {const target=label==='row'?h.find(n=>n.type==='button'&&n.props.className==='sx-customer-row'):h.button(label);const result=target.props.onClick();h.render();return result;};
 function crmFixture(env,c=customer()) {
  const calls=[];const base=env.crm;
  env.crm=async(url,options={})=>{if(options.method){calls.push({url,...options});return c;}if(url==='/customers/'+c.id)return detail(c);if(url==='/employees'||url==='/owners')return [account(1)];return base(url,options)};
@@ -127,8 +127,8 @@ test('pool capability: late A detail cannot reopen claim or transfer pool eviden
 
 test('pool rows attach server-query evidence only while their own query result is current',async()=>{
  const env=environment();const opened=[];let pending=null;env.crm=async(url,o={})=>{if(url==='/employees')return [];if(url==='/customers')return pending?pending.promise:{list:[customer()],total:1};throw new Error(url)};
- const h=await env.mount('customerManagement.tsx','Customers',{supervisor:true,tasks:false,initialQueue:'pool',open:(...args)=>opened.push(args),report(){}});click(h,'查看 / 认领');assert.deepEqual(JSON.parse(JSON.stringify(opened[0])),['A',{customerId:'A',version:1}]);
- pending=deferred();h.props={...h.props,initialQueue:'all'};await h.flush();assert.equal(h.all(n=>n.type==='button'&&textOf(n)==='查看 / 认领').length,0);pending.resolve({list:[customer('B')],total:1});await h.flush();click(h,'查看 / 跟进');assert.deepEqual(opened[1],['B',undefined]);
+ const h=await env.mount('customerManagement.tsx','Customers',{supervisor:true,tasks:false,view:'pool',open:(...args)=>opened.push(args),report(){}});click(h,'row');assert.deepEqual(JSON.parse(JSON.stringify(opened[0])),['A',{customerId:'A',version:1}]);
+ pending=deferred();h.props={...h.props,view:'all'};await h.flush();assert.equal(h.all(n=>n.type==='button'&&n.props.className==='sx-customer-row').length,0);pending.resolve({list:[customer('B')],total:1});await h.flush();click(h,'row');assert.deepEqual(opened[1],['B',undefined]);
 });
 
 test('session cache: reset clears badges and rejects late publication, including the same user logging in again',()=>{
@@ -161,7 +161,7 @@ test('push retry: failures release only their own lock and a successful refresh 
 test('notice seen and sync retry both reject same-frame duplicate handlers',async()=>{
  const env=environment();let writes=0;const p=deferred();env.crm=async(url,o={})=>o.method?(writes++,p.promise):[{id:'N1',customerId:'A',content:'Notice',seen:false,createdAt:'2026-10-11'}];
  const notices=await env.mount('customerWorkflow.tsx','NoticePanel',{open(){}});const seen=notices.button('已读').props.onClick;const first=seen();await seen();assert.equal(writes,1);p.resolve();await first;notices.render();await seen();assert.equal(writes,1);
- const s=deferred();env.crm=async(url,o={})=>o.method?(writes++,s.promise):{configured:true,callbackConfigured:true,pending:0,failed:1,runs:[],events:[{id:'E1',status:'failed'}]};const sync=await env.mount('customerManagement.tsx','SyncPanel');const retry=sync.button('重试').props.onClick;const second=retry();await retry();assert.equal(writes,2);s.resolve();await second;
+ const s=deferred();env.crm=async(url,o={})=>o.method?(writes++,s.promise):{configured:true,callbackConfigured:true,pending:0,failed:1,runs:[],events:[{id:'E1',status:'failed'}]};const sync=await env.mount('customerAdminPanels.tsx', 'SyncPanel');const retry=sync.button('重试').props.onClick;const second=retry();await retry();assert.equal(writes,2);s.resolve();await second;
 });
 
 test('statistics: embedded high-intent count uses the pending queue and the long scope explanation is gone',async()=>{
@@ -215,7 +215,7 @@ test('standalone overview labels distinguish full pending totals from today new 
 
 test('sync accepted writes cannot replay through an old handler while its refresh fails',async()=>{
  const env=environment();let writes=0,reads=0;env.crm=async(url,o={})=>{if(o.method){writes++;return;}reads++;if(reads>1)throw new Error('refresh failed');return {configured:true,callbackConfigured:true,pending:0,failed:1,runs:[],events:[{id:'E1',status:'failed'}]}};
- const h=await env.mount('customerManagement.tsx','SyncPanel');const retry=h.button('重试').props.onClick;await retry();await h.flush();await retry();assert.equal(writes,1);assert.match(h.text(),/任务已提交/);
+ const h=await env.mount('customerAdminPanels.tsx', 'SyncPanel');const retry=h.button('重试').props.onClick;await retry();await h.flush();await retry();assert.equal(writes,1);assert.match(h.text(),/任务已提交/);
 });
 
 for(const lifecycle of ['won','archived','pending'])test(`pool evidence cannot grant claim or release for terminal/excluded ${lifecycle} state even at the same version`,async()=>{

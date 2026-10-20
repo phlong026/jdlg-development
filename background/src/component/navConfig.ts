@@ -37,6 +37,7 @@ export const platformSections: NavSection[] = [
         title: '经营驾驶舱',
         items: [
             { path: '/dashboard', label: '后台总控台', icon: FiHome },
+            { path: '/sales-overview', label: '销售总览', icon: FiTrendingUp },
             { path: '/users', label: '用户管理', icon: FiUsers },
             { path: '/user-workbench', label: '用户详情', icon: FiCompass },
             { path: '/recharge', label: '订单中心', icon: FiDollarSign },
@@ -79,6 +80,7 @@ export const platformSections: NavSection[] = [
             { path: '/membership-plans', label: '会员计划', icon: FiDollarSign },
             { path: '/oss', label: 'OSS管理', icon: FiCloud },
             { path: '/utility-tools', label: '实用工具管理', icon: FiTool },
+            { path: '/customer-settings', label: '客户系统设置', icon: FiSettings },
         ],
     },
 ];
@@ -205,17 +207,15 @@ export const navGroups: NavGroup[] = [
     {
         id: 'share-tracking', label: '分享访问记录', icon: FiShare2, pages: [{ path: '/share-tracking', label: '分享访问记录' }],
     },
-    // 销售线索是高频的一级入口：不因启用 CRM 而隐藏（原侧栏里它始终独立可见）。
-    // 与"用户账号"的区别：用户是已注册的账号（运营/审核处理），线索是在智能客服里留了联系方式、待销售跟进的人。
-    // 分组内分三类，用入口卡片导航：客户（CRM，启用后才出现，见 visibleGroups）· 线索 · 商机（暂未启用）；
-    // 线索自己的队列（待处理 / 高意向…）在线索页内，不占导航。
+    // 销售是高频的一级入口：总览 · 线索 · 客户（「客户」仅 platform_admin 的导航里出现，见 visibleGroups）。
+    // 线索自己的队列（待处理 / 高意向…）在线索页内，不占导航；商机已取消。
     {
-        id: 'leads', label: '销售线索', icon: FiUserCheck, hint: '留了联系方式，待跟进',
-        landing: '/customer-leads',
+        id: 'sales', label: '销售', icon: FiUserCheck,
+        landing: '/sales-overview',
         display: 'cards',
         pages: [
+            { path: '/sales-overview', label: '总览', icon: FiBarChart2, tone: 'blue' },
             { path: '/customer-leads', label: '线索', badgeKey: 'todo_count', icon: FiUserCheck, tone: 'orange' },
-            { path: '/opportunities', label: '商机', icon: FiTrendingUp, tone: 'gray', note: '未启用' },
         ],
     },
     { id: 'crm', label: '客户管理', icon: FiUsers, hint: '企业微信客户跟进', pages: [{ path: '/customer-management', label: '客户管理工作台' }] },
@@ -234,6 +234,7 @@ export const navGroups: NavGroup[] = [
         pages: [
             { path: '/oss', label: 'OSS 管理' },
             { path: '/logs', label: '操作审计' },
+            { path: '/customer-settings', label: '客户系统设置' },
         ],
     },
 ];
@@ -241,8 +242,8 @@ export const navGroups: NavGroup[] = [
 /**
  * 当前账号可见的新导航分组。
  * - 非 platform_admin（含 scope 缺失）：只有客户管理（fail-closed，与旧导航一致）；
- * - platform_admin：不单列"客户管理"，它作为"销售线索"的第一张卡片「客户」（客户 · 线索 · 商机）始终可见；
- *   未启用 CRM 时卡片为灰色并标注「未接入」（客户管理页里的线索栏目与账号权限栏目不依赖 CRM，仍可进入）。
+ * - platform_admin：不单列"客户管理"，它作为"销售"的第三张卡片「客户」（总览 · 线索 · 客户）始终可见；
+ *   未启用 CRM 时卡片标注「未接入」。
  */
 export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
     const crm = navGroups.find((g) => g.id === 'crm')!;
@@ -250,11 +251,11 @@ export function visibleGroups(scope: string | undefined, crmEnabled: boolean | u
     if (scope === 'crm_only') return [crm, navGroups.find((group) => group.id === 'share-tracking')!];
     return navGroups
         .filter((g) => g.id !== 'crm')
-        .map((g) => (g.id === 'leads' ? { ...g, pages: [
+        .map((g) => (g.id === 'sales' ? { ...g, pages: [
+            ...g.pages,
             crmEnabled
                 ? { path: crm.pages[0].path, label: '客户', icon: FiUsers, tone: 'blue' as const }
                 : { path: crm.pages[0].path, label: '客户', icon: FiUsers, tone: 'gray' as const, note: '未接入' },
-            ...g.pages,
         ] } : g));
 }
 

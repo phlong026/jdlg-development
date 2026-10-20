@@ -11,8 +11,7 @@
 .layout-content[data-admin-page='/content-analytics'],
 .layout-content[data-admin-page='/report-center'],
 .layout-content[data-admin-page='/oss'],
-.layout-content[data-admin-page='/logs'],
-.layout-content[data-admin-page='/opportunities'] {
+.layout-content[data-admin-page='/logs'] {
   .stat-card, .stat-item, .designer-summary-card, .designer-stat-box,
   .summary-chip, .section-card, .template-card { min-width: 0; max-width: 100%; }
   .stat-value, .stat-label, .stat-desc, .designer-summary-value,
@@ -82,12 +81,6 @@
   .item-header h4, .item-description, .upload-hint { min-width: 0; overflow-wrap: anywhere; }
   .image-upload-group { flex-wrap: wrap; }
 }
-.layout-content[data-admin-page='/opportunities'] .opportunities-card a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  overflow-wrap: anywhere;
-}
 
 // The body alone scrolls; header, cancel/save and close remain reachable on short screens.
 .layout-content[data-admin-page='/templates'],
@@ -134,8 +127,7 @@
   .layout-content[data-admin-page='/content-analytics'],
   .layout-content[data-admin-page='/report-center'],
   .layout-content[data-admin-page='/oss'],
-  .layout-content[data-admin-page='/logs'],
-  .layout-content[data-admin-page='/opportunities'] {
+  .layout-content[data-admin-page='/logs'] {
     .management-search-panel .management-search-panel__controls {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -161,8 +153,7 @@
   .layout-content[data-admin-page='/content-analytics'],
   .layout-content[data-admin-page='/report-center'],
   .layout-content[data-admin-page='/oss'],
-  .layout-content[data-admin-page='/logs'],
-  .layout-content[data-admin-page='/opportunities'] {
+  .layout-content[data-admin-page='/logs'] {
     .stat-value, .designer-summary-value { font-size: clamp(20px, 5.5vw, 28px); }
   }
   .layout-content[data-admin-page='/templates'] .modal-content,
@@ -217,8 +208,7 @@
   .layout-content[data-admin-page='/content-analytics'] .management-search-panel .management-search-panel__controls,
   .layout-content[data-admin-page='/report-center'] .management-search-panel .management-search-panel__controls,
   .layout-content[data-admin-page='/oss'] .management-search-panel .management-search-panel__controls,
-  .layout-content[data-admin-page='/logs'] .management-search-panel .management-search-panel__controls,
-  .layout-content[data-admin-page='/opportunities'] .management-search-panel .management-search-panel__controls {
+  .layout-content[data-admin-page='/logs'] .management-search-panel .management-search-panel__controls {
     grid-template-columns: minmax(0, 1fr);
   }
 }
