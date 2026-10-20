@@ -1,19 +1,10 @@
-// Customer records use a dedicated card layout; never restyle table cells as cards.
 .crm-page {
   min-width: 0;
-  .crm-customer-list { container-type: inline-size; }
-  .crm-customer-cards { display: none; }
-  .crm-customers-table { min-width: 900px; }
-  .crm-customers-table .crm-person { min-width: 210px; max-width: 280px; justify-content: flex-start; }
-  .crm-person > span:last-child { min-width: 0; }
-  .crm-person strong { overflow-wrap: anywhere; white-space: normal; }
-  .crm-customers-table .crm-customer-number { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .crm-drawer, .crm-drawer-body { min-height: 0; }
   .crm-drawer > header { flex-shrink: 0; gap: 12px; }
   .crm-drawer-body { overscroll-behavior: contain; }
   .crm-customer-heading > div { min-width: 0; overflow-wrap: anywhere; }
   .crm-customer-heading h2 { font-size: clamp(20px, 4vw, 26px); }
-  .crm-recent > div, .crm-action-row > div { min-width: 0; overflow-wrap: anywhere; }
   .crm-tabs { scrollbar-width: thin; }
   // Fade the side(s) that still have tabs beyond the edge (set by the tab strip's scroll handler).
   .crm-tabs[data-fade='right'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
@@ -21,46 +12,6 @@
   .crm-tabs[data-fade='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
   .crm-tabs button { flex-shrink: 0; }
   .crm-relation { flex-wrap: wrap; overflow-wrap: anywhere; }
-}
-
-@container (max-width: 900px) {
-  .crm-page .crm-customer-desktop { display: none; }
-  .crm-page .crm-customer-cards { display: grid; gap: 12px; }
-  .crm-page .crm-customer-card {
-    padding: 16px;
-    min-width: 0;
-    border: 1px solid var(--admin-border);
-    border-radius: 14px;
-    background: var(--admin-surface);
-  }
-  .crm-page .crm-customer-card .crm-person {
-    width: 100%;
-    justify-content: flex-start;
-    padding: 0;
-    min-height: 44px;
-    margin-bottom: 12px;
-  }
-  .crm-page .crm-card-number {
-    display: flex; gap: 10px; min-width: 0;
-    font-size: 12px; color: #64748b;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--admin-border);
-  }
-  .crm-page .crm-card-number > span:first-child { flex-shrink: 0; }
-  .crm-page .crm-card-number > span:last-child {
-    min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    font-variant-numeric: tabular-nums;
-  }
-  .crm-page .crm-card-fields {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 14px 16px; margin: 14px 0;
-  }
-  .crm-page .crm-card-fields > div { min-width: 0; }
-  .crm-page .crm-card-fields dt { color: #64748b; font-size: 12px; margin-bottom: 6px; }
-  .crm-page .crm-card-fields dd { margin: 0; overflow-wrap: anywhere; line-height: 1.6; }
-  .crm-page .crm-card-fields dd .crm-badge { margin-top: 2px; }
-  .crm-page .crm-card-protection { font-size: 12px; color: var(--admin-accent); background: var(--admin-surface-muted); border-radius: 8px; padding: 8px 10px; }
-  .crm-page .crm-card-open { width: 100%; min-height: 44px; margin-top: 12px; justify-content: space-between; }
 }
 
 @media (max-width: 768px) {
@@ -82,12 +33,10 @@
     .crm-heading > .crm-actions { width: 100%; }
     .crm-heading > .crm-actions .crm-primary { flex: 1; }
     .crm-action-row { flex-wrap: wrap; }
-    .crm-recent { flex-wrap: wrap; }
   }
 }
 
 @media (max-width: 380px) {
-  .crm-page .crm-card-fields { grid-template-columns: 1fr; gap: 10px; }
   .crm-page .crm-report-pair { grid-template-columns: 1fr; }
   .crm-page .crm-metrics button { padding: 14px; }
 }

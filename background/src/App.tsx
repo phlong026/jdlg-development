@@ -20,6 +20,8 @@ const App: React.FC = () => {
                 <div className="App">
                     <Routes>
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                        {/* 商机已取消：旧地址回到线索（登录与权限由 ProtectedRoute 处理，crm_only 会被带回客户管理） */}
+                        <Route path="/opportunities" element={<Navigate to="/customer-leads" replace />} />
                         {routes.filter((route) => PUBLIC_PATHS.includes(route.path)).map((route) => (
                             <Route key={route.path} path={route.path} element={route.element} />
                         ))}

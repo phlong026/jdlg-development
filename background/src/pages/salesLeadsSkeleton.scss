@@ -1,0 +1,28 @@
+// 线索页只套新骨架：标题、只读提示条、卡片圆角；列表与操作的样式仍由 customerLeads.scss 负责。
+.layout-content[data-admin-page='/customer-leads'] {
+  .sx-leads { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .sx-page-head h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--admin-text); }
+
+  // 只读提示：整块大卡片收成一行提示条
+  .customer-lead-page > .customer-lead-panel[role='status'] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #fcf5ea;
+    border: 1px solid #f0e4d0;
+    box-shadow: none;
+    p { margin: 0; font-size: 12px; line-height: 1.5; color: #866341; }
+    a { flex-shrink: 0; min-height: 36px; padding: 0 14px; font-size: 14px; border-radius: 12px; }
+  }
+
+  .lead-hub-card { border-radius: 16px; }
+}
+
+@media (max-width: 640px) {
+  .layout-content[data-admin-page='/customer-leads'] {
+    .customer-lead-page > .customer-lead-panel[role='status'] { flex-direction: column; align-items: stretch; a { min-height: 44px; } }
+  }
+}

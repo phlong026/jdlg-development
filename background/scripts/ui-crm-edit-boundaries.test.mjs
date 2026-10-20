@@ -56,18 +56,19 @@ test('legacy batch/detail actions and a saved handler cannot bypass global takeo
   assert.equal(env.leadWrites.length, 1);
 });
 
-test('customer management embeds the same session-gated lead component when CRM context fails', async () => {
-  const env = environment(); env.params = new URLSearchParams('tab=leads'); env.session.user.crmEnabled = true; env.session.crmError = '客户服务不可用';
-  const h = await env.mount('customerManagement.tsx');
-  const child = h.find(n => typeof n.type === 'function' && n.props.embedded === true);
-  const leads = await env.mount('customerLeads.tsx', 'default', child.props);
-  assert.equal(leads.button('跟进').props.disabled, true);
-  assert.match(leads.text(), /客户服务不可用/);
-  let refreshes = 0; env.session.refresh = () => refreshes++; leads.render(); leads.button('重新检查会话与客户权限').props.onClick(); assert.equal(refreshes, 1);
+test('旧地址 tab=leads|sync|access 对平台管理员重定向到新位置，其他账号不跳转', async () => {
+  const targets = { leads: '/customer-leads', sync: '/customer-settings?item=sync', access: '/customer-settings?item=access' };
+  for (const [tab, to] of Object.entries(targets)) {
+    const env = environment(); env.params = new URLSearchParams('tab=' + tab); env.session.user.crmEnabled = true; env.session.crmContext = { account: account(7), demo: false };
+    const h = await env.mount('customerManagement.tsx');
+    assert.equal(h.find(n => n.type === 'Navigate').props.to, to);
+    const staff = environment(); staff.params = new URLSearchParams('tab=' + tab); staff.session.user = { id: 8, scope: 'crm_only', crmEnabled: true }; staff.session.crmContext = { account: account(8), demo: false };
+    assert.equal((await staff.mount('customerManagement.tsx')).all(n => n.type === 'Navigate').length, 0, tab);
+  }
 });
 
 async function conflictFixture() {
-  const env = environment(); const h = await env.mount('customerManagement.tsx', 'AccessPanel'); h.choose(1); h.change('显示名称', 'My draft'); h.change('客户数据角色', 'admin');
+  const env = environment(); const h = await env.mount('customerAdminPanels.tsx', 'AccessPanel'); h.choose(1); h.change('显示名称', 'My draft'); h.change('客户数据角色', 'admin');
   const original = env.crm;
   env.crm = async (url, options = {}) => {
     if (options.method === 'POST') { env.accessWrites.push({ url, body: options.body }); throw new CRMError(409, '版本已变化'); }
@@ -108,7 +109,7 @@ test('access: unavailable latest permissions keep the conflict blocked and prese
 });
 
 test('access: non-conflict failures retain the original snapshot even if list reload advances its version', async () => {
-  const env = environment(); const h = await env.mount('customerManagement.tsx', 'AccessPanel'); h.choose(1); h.change('显示名称', 'Original draft');
+  const env = environment(); const h = await env.mount('customerAdminPanels.tsx', 'AccessPanel'); h.choose(1); h.change('显示名称', 'Original draft');
   const original = env.crm;
   env.crm = async (url, options = {}) => { if (options.method === 'POST') { env.accessWrites.push({ url, body: options.body }); throw new CRMError(503, 'service unavailable'); } return original(url, options); };
   env.access = { ...env.access, users: [user(1, { version: 5 }), user(2)] };
@@ -119,7 +120,7 @@ test('access: non-conflict failures retain the original snapshot even if list re
 for (const failure of [false, true]) test(`access: late ${failure ? 'failure' : 'success'} from A cannot close or modify a newer B editor`, async () => {
   const env = environment(); const pending = deferred(); const original = env.crm;
   env.crm = (url, options = {}) => options.method === 'POST' ? (env.accessWrites.push({ url, body: options.body }), pending.promise) : original(url, options);
-  const h = await env.mount('customerManagement.tsx', 'AccessPanel'); h.choose(1); h.change('显示名称', 'A draft');
+  const h = await env.mount('customerAdminPanels.tsx', 'AccessPanel'); h.choose(1); h.change('显示名称', 'A draft');
   const first = h.submit(); const duplicate = h.submit(); h.render(); assert.equal(env.accessWrites.length, 1); await duplicate;
   h.choose(2); h.change('显示名称', 'B draft');
   if (failure) pending.reject(new CRMError(409, 'late conflict')); else pending.resolve();
@@ -139,12 +140,12 @@ test('access: a late latest-version read cannot replace a newer selected account
 
 test('access: changing a platform administrator still requires the existing downgrade confirmation', async () => {
   const env = environment(); env.access.users[0] = user(1, { scope: 'platform_admin' }); env.confirmResult = false;
-  const h = await env.mount('customerManagement.tsx', 'AccessPanel'); h.choose(1); h.change('平台访问范围', 'crm_only'); await h.submit();
+  const h = await env.mount('customerAdminPanels.tsx', 'AccessPanel'); h.choose(1); h.change('平台访问范围', 'crm_only'); await h.submit();
   assert.equal(env.confirmations.length, 1); assert.equal(env.accessWrites.length, 0);
 });
 
 test('access: stale submit handlers cannot save A after selecting B or bypass a detected conflict', async () => {
-  const env = environment(); const h = await env.mount('customerManagement.tsx', 'AccessPanel'); h.choose(1);
+  const env = environment(); const h = await env.mount('customerAdminPanels.tsx', 'AccessPanel'); h.choose(1);
   const savedHandler = h.find(n => n.type === 'form').props.onSubmit;
   h.choose(2); await savedHandler({ preventDefault() {} }); assert.equal(env.accessWrites.length, 0);
   const pending = deferred(); const original = env.crm;

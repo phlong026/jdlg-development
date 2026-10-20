@@ -9,7 +9,7 @@ function escape(env,extra={}) {
 }
 async function newReport(){
  const env=environment();env.session={...env.session,user:{...env.session.user,crmEnabled:true},crmContext:{account:{role:'admin',username:'crm1',displayName:'Test'},demo:true}};
- const root=await env.mount('customerManagement.tsx');root.button('＋ 新增客户报备').props.onClick();root.render();const node=root.find(n=>typeof n.type==='function'&&n.type.name==='CustomerReportForm');
+ const root=await env.mount('customerManagement.tsx');root.button('＋ 新增客户').props.onClick();root.render();const node=root.find(n=>typeof n.type==='function'&&n.type.name==='CustomerReportForm');
  const child=await env.mount('customerReportForm.tsx','default',node.props);return {env,root,child};
 }
 const reportCount=root=>root.all(n=>typeof n.type==='function'&&n.type.name==='CustomerReportForm').length;

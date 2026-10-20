@@ -13,7 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const compile = file => postcss.parse(sass.compile(path.join(root, file), { logger: sass.Logger.silent }).css);
 const css = compile('src/responsive-remaining.scss');
-const pages = { templates: '/templates', utilityTools: '/utility-tools', inspirations: '/inspirations', designerCenter: '/designer-center', supportTickets: '/support-tickets', riskControl: '/risk-control', distribution: '/distribution', contentAnalytics: '/content-analytics', reportCenter: '/report-center', oss: '/oss', logs: '/logs', opportunities: '/opportunities' };
+const pages = { templates: '/templates', utilityTools: '/utility-tools', inspirations: '/inspirations', designerCenter: '/designer-center', supportTickets: '/support-tickets', riskControl: '/risk-control', distribution: '/distribution', contentAnalytics: '/content-analytics', reportCenter: '/report-center', oss: '/oss', logs: '/logs' };
 const widths = [320, 375, 390, 768, 769, 800, 900, 1024, 1440];
 const find = (node, predicate, out = []) => { if (predicate(node)) out.push(node); ts.forEachChild(node, child => { find(child, predicate, out); }); return out; };
 const parse = file => ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

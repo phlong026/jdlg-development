@@ -32,7 +32,7 @@ function environment() {
     throw new Error(`Unexpected CRM request: ${url}`);
   };
   let active;
-  env.leadApi = {getCustomerLeadList: async () => ({list:[lead],total:1}),getCustomerLeadOverview: async () => ({}),getCustomerLeadDetail: async () => ({lead,events:[],followups:[]}),updateCustomerLeadStatus: async (...args) => env.leadWrites.push({action:'status',args}),createCustomerLeadFollowup: async (...args) => env.leadWrites.push({action:'followup',args}),batchUpdateCustomerLeads: async (...args) => env.leadWrites.push({action:'batch',args})};
+  env.leadApi = {getCustomerLeadList: async () => ({list:[lead],total:1}),getCustomerLeadFunnel: async () => [{key:'a',label:'进入客服',count:10,conversion_rate:100},{key:'b',label:'提交线索',count:4,conversion_rate:40}],getCustomerLeadOverview: async () => ({}),getCustomerLeadDetail: async () => ({lead,events:[],followups:[]}),updateCustomerLeadStatus: async (...args) => env.leadWrites.push({action:'status',args}),createCustomerLeadFollowup: async (...args) => env.leadWrites.push({action:'followup',args}),batchUpdateCustomerLeads: async (...args) => env.leadWrites.push({action:'batch',args})};
   env.getMe = async () => env.session.user;
   const window = {alert: value => env.alerts.push(value), confirm: value => {env.confirmations.push(value);return env.confirmResult!==false}, scrollTo(){},addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn)},removeEventListener(name,fn){events.get(name)?.delete(fn)},dispatchEvent(event){events.get(event.type)?.forEach(fn=>fn(event))}};
   env.dispatch = name => window.dispatchEvent({type:name});
@@ -42,6 +42,7 @@ function environment() {
     useRef(initial) { const r = active, index = r.cursor++; if (!(index in r.slots)) r.slots[index] = { current: initial }; return r.slots[index]; },
     useSyncExternalStore(subscribe,getSnapshot) { return getSnapshot(); },
     useMemo(factory) { return factory(); },
+    useCallback(fn) { return fn; },
     useEffect(effect, deps) {
       const r = active, index = r.cursor++, previous = r.slots[index];
       if (!previous || !deps || deps.some((dep, i) => !Object.is(dep, previous.deps[i]))) {
@@ -53,7 +54,7 @@ function environment() {
   const cache = {};
   function load(filename) {
     if (cache[filename]) return cache[filename];
-    const source = fs.readFileSync(path.join(root, 'src', filename.includes('/') ? filename : 'pages/'+filename), 'utf8') + (filename === 'customerManagement.tsx' ? '\nexport { AccessPanel, CustomerDrawer, CustomerForm, Customers, SyncPanel, Home };' : '');
+    const source = fs.readFileSync(path.join(root, 'src', filename.includes('/') ? filename : 'pages/'+filename), 'utf8') + (filename === 'customerManagement.tsx' ? '\nexport { CustomerDrawer, CustomerForm, Customers };' : '');
     const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
     const module = { exports: {} };
     vm.runInNewContext(code, {
@@ -61,7 +62,7 @@ function environment() {
       require(name) {
         if (name === 'react') return react;
         if (name === 'react/jsx-runtime') return require(name);
-        if (name === 'react-router-dom') return { Link: 'a', useSearchParams: () => [env.params || new URLSearchParams(), (next, options) => { env.paramChanges ||= []; env.paramChanges.push({ params: new URLSearchParams(next).toString(), options }); env.params = new URLSearchParams(next); }] };
+        if (name === 'react-router-dom') return { Link: 'a', Navigate: 'Navigate', useSearchParams: () => [env.params || new URLSearchParams(), (next, options) => { env.paramChanges ||= []; env.paramChanges.push({ params: new URLSearchParams(next).toString(), options }); env.params = new URLSearchParams(next); }] };
         if (name === 'react-icons/fi') return new Proxy({}, { get: () => 'icon' });
         if (name === '../component/ManagementSession') return { useManagementSession: () => env.session };
         if (name === '../api/customerLeads') return env.leadApi;
@@ -73,6 +74,11 @@ function environment() {
         if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => env.reports.push(args) };
         if (name === './customerLeads') return load('customerLeads.tsx');
         if (name === './customerLeadTrail') return { CustomerLeadTrail: 'CustomerLeadTrail' };
+        if (name === '../component/SalesFunnel' || name === '../component/SalesDonut') return { __esModule: true, default: name.split('/').pop() };
+        if (name === './customerTabs') return load('customerTabs.ts');
+        if (name === './salesFormat') return load('salesFormat.ts');
+        if (name === './customerResource') return load('customerResource.tsx');
+        if (name === './customerAdminPanels') return env.stubPanels ? { SyncPanel: 'SyncPanel', AccessPanel: 'AccessPanel', BindingCheck: 'BindingCheck' } : load('customerAdminPanels.tsx');
         if (name === './customerWorkflow') return load('customerWorkflow.tsx');
         if (name === './customerReportForm') return load('customerReportForm.tsx');
         if (name === './customerLeadHub' || name === '../component/WecomIdentityBinding') return { __esModule: true, default: name };

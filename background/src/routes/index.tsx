@@ -29,8 +29,9 @@ const ShareTracking = lazy(() => import('../pages/shareTracking'));
 const ContentAnalytics = lazy(() => import('../pages/contentAnalytics'));
 const RiskControl = lazy(() => import('../pages/riskControl'));
 const SupportTickets = lazy(() => import('../pages/supportTickets'));
-const CustomerLeads = lazy(() => import('../pages/customerLeads'));
-const Opportunities = lazy(() => import('../pages/opportunities'));
+const CustomerLeads = lazy(() => import('../pages/customerLeadsPage'));
+const SalesOverview = lazy(() => import('../pages/salesOverview'));
+const CustomerSettings = lazy(() => import('../pages/customerSettings'));
 const CustomerManagement = lazy(() => import('../pages/customerManagement'));
 const ReportCenter = lazy(() => import('../pages/reportCenter'));
 const AITaskCenter = lazy(() => import('../pages/aiTaskCenter'));
@@ -136,16 +137,22 @@ export const routes: AppRoute[] = [
         icon: FiFileText,
     },
     {
+        path: '/sales-overview',
+        title: '销售总览',
+        element: withSuspense(<SalesOverview />),
+        icon: FiTrendingUp,
+    },
+    {
         path: '/customer-leads',
         title: '销售线索',
         element: withSuspense(<CustomerLeads />),
         icon: FiFileText,
     },
     {
-        path: '/opportunities',
-        title: '商机',
-        element: withSuspense(<Opportunities />),
-        icon: FiTrendingUp,
+        path: '/customer-settings',
+        title: '客户系统设置',
+        element: withSuspense(<CustomerSettings />),
+        icon: FiSettings,
     },
     {
         path: '/report-center',

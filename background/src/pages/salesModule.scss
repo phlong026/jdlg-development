@@ -1,0 +1,166 @@
+// 销售模块（总览 / 客户 / 客户系统设置）共用的骨架与客户列表样式。
+// 规范：页面标题 20/700、分区标题 16/700、正文 14、辅助 12；按钮 40（手机 44）、圆角 12；卡片圆角 16；主色 rgb(139,94,60)。
+
+.sx-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+
+  h1 { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.4; color: var(--admin-text); }
+}
+
+.sx-overview, .crm-page.sx-customers, .crm-page.sx-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.crm-page.sx-customers, .crm-page.sx-settings {
+  // 统一按钮高度与圆角：覆盖 customerManagement.scss 里的 38px / 10px
+  button { min-height: 40px; border-radius: 12px; font-size: 14px; }
+  .crm-primary { min-height: 40px; }
+  h2 { font-size: 16px; font-weight: 700; }
+  p { line-height: 1.6; }
+  .crm-caption { font-size: 12px; }
+}
+
+/* ───────── 客户：标签条 ───────── */
+.crm-page.sx-customers {
+  .sx-tabs {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 0;
+    border-bottom: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+
+    button {
+      flex-shrink: 0;
+      min-height: 36px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--admin-text-muted);
+      font-weight: 500;
+      &.active { background: var(--admin-accent); color: #fff; font-weight: 600; }
+      &:hover:not(.active):not(:disabled) { background: #f0e1cf; color: #7a5335; }
+    }
+    .sx-tabs-gap { flex: 1 0 12px; }
+    .sx-tab-extra { border: 1px solid var(--admin-border); background: var(--admin-surface); color: var(--admin-accent); }
+    .sx-tab-extra.active { border-color: var(--admin-accent); }
+  }
+
+  .sx-queue-tabs { display: flex; gap: 6px; overflow-x: auto; button { flex-shrink: 0; min-height: 36px; border-radius: 999px; } }
+  .sx-queue-tabs .active { background: #f0e1cf; color: #7a5335; font-weight: 700; }
+
+  /* 工具条：搜索 + 筛选 */
+  .sx-toolbar { display: flex; gap: 8px; }
+  .crm-search {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    border-radius: 12px;
+    input { height: 38px; min-height: 0; border: 0; padding-left: 0; }
+  }
+  .sx-filter-toggle {
+    gap: 6px;
+    padding: 0 14px;
+    b { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 9px; background: var(--admin-accent); color: #fff; font-size: 12px; }
+  }
+  .sx-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--admin-border);
+    border-radius: 16px;
+    background: var(--admin-surface);
+    select { min-height: 40px; border-radius: 12px; }
+    .sx-filters-export { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+  }
+
+  /* 客户列表：一张卡只放 姓名/意向/阶段/一句话需求/负责人/最近跟进 */
+  .sx-customer-panel { container-type: inline-size; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .sx-customer-list { display: flex; flex-direction: column; gap: 10px; }
+  .sx-customer-head { display: none; }
+  .sx-customer-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'name tags' 'demand demand' 'meta arrow';
+    gap: 6px 10px;
+    align-items: center;
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--admin-border);
+    border-radius: 16px;
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    text-align: left;
+    font-weight: 400;
+    box-shadow: var(--admin-shadow-soft);
+    &:hover:not(:disabled) { background: #fbf6ee; }
+  }
+  .sx-c-name { grid-area: name; display: flex; align-items: center; gap: 10px; min-width: 0; strong { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+  .sx-c-name .crm-avatar { width: 32px; height: 32px; font-size: 15px; }
+  .sx-c-tags { grid-area: tags; display: flex; align-items: center; gap: 6px; }
+  .sx-c-demand { grid-area: demand; color: var(--admin-text-muted); font-size: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .sx-c-meta { grid-area: meta; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--admin-text-muted); }
+  .sx-c-owner::before { content: ''; }
+  .sx-c-arrow { grid-area: arrow; justify-self: end; color: var(--admin-text-muted); }
+  .crm-intent { font-size: 12px; white-space: nowrap; }
+
+  .crm-pagination { font-size: 12px; }
+  .crm-empty { padding: 40px 16px; border: 1px dashed var(--admin-border); border-radius: 16px; background: var(--admin-surface); }
+}
+
+/* 电脑：同一份标记变成带表头的行 */
+@container (min-width: 760px) {
+  .crm-page.sx-customers .sx-customer-list { gap: 0; border: 1px solid var(--admin-border); border-radius: 16px; background: var(--admin-surface); overflow: hidden; }
+  .crm-page.sx-customers .sx-customer-head,
+  .crm-page.sx-customers .sx-customer-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1.1fr) 150px minmax(0, 2.2fr) minmax(120px, 0.9fr) 24px;
+    grid-template-areas: 'name tags demand meta arrow';
+    gap: 16px;
+    align-items: center;
+  }
+  .crm-page.sx-customers .sx-customer-head {
+    padding: 10px 20px;
+    background: #faf6ef;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .crm-page.sx-customers .sx-customer-row {
+    border: 0;
+    border-bottom: 1px solid #f0ebe4;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 14px 20px;
+    &:last-child { border-bottom: 0; }
+  }
+  .crm-page.sx-customers .sx-c-meta { flex-direction: column; gap: 2px; }
+}
+
+/* 抽屉容器（客户详情 / 新增客户）：只改外壳，内容与表单不动 */
+.crm-page.sx-customers {
+  .crm-drawer > header h2 { font-size: 16px; font-weight: 700; }
+  .crm-drawer-body h3 { font-size: 16px; font-weight: 700; }
+  .crm-drawer-body .crm-caption { font-size: 12px; }
+}
+@media (min-width: 769px) {
+  .crm-page.sx-customers .crm-drawer { border-radius: 16px 0 0 16px; }
+}
+
+@media (max-width: 768px) {
+  .crm-page.sx-customers, .crm-page.sx-settings { button, .crm-primary { min-height: 44px; } }
+  .crm-page.sx-customers .sx-tabs button { min-height: 40px; }
+  .crm-page.sx-customers .crm-search { height: 44px; input { height: 42px; } }
+}
