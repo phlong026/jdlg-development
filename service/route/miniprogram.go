@@ -93,7 +93,7 @@ func RegisterMiniprogramRoutes(r *gin.RouterGroup, authProcessor *processor.Auth
 				if userInviteCodeModel != nil {
 					inviterID, ok = userInviteCodeModel.ResolveInviteCodeToUserID(req.InviteCode)
 				} else {
-					inviterID, ok = model.ParseInviteCodeToUserID(req.InviteCode)
+					inviterID, ok = 0, false
 				}
 				if ok && inviterID > 0 && inviterID != inviteeID {
 					inviter, err := userDBModel.GetByID(inviterID)
@@ -326,7 +326,7 @@ func RegisterMiniprogramRoutes(r *gin.RouterGroup, authProcessor *processor.Auth
 				if userInviteCodeModel != nil {
 					inviterID, inviteOK = userInviteCodeModel.ResolveInviteCodeToUserID(req.InviteCode)
 				} else {
-					inviterID, inviteOK = model.ParseInviteCodeToUserID(req.InviteCode)
+					inviterID, inviteOK = 0, false
 				}
 				if inviteOK && inviterID > 0 && inviterID != inviteeID {
 					inviter, invErr := userDBModel.GetByID(inviterID)
@@ -3002,7 +3002,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 		if userInviteCodeModel != nil {
 			inviterID, ok = userInviteCodeModel.ResolveInviteCodeToUserID(inviteCode)
 		} else {
-			inviterID, ok = model.ParseInviteCodeToUserID(inviteCode)
+			inviterID, ok = 0, false
 		}
 		if !ok || inviterID <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "邀请码无效"})

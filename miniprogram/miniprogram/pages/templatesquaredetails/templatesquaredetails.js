@@ -6,6 +6,7 @@ const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const asset_1 = require("../../utils/asset");
 const perf_1 = require("../../utils/perf");
 const shareImage_1 = require("../../utils/shareImage");
+const favoriteApi_1 = require("../../utils/favoriteApi");
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
 const LOCAL_ENTERPRISE_WECHAT_QRCODE = (0, asset_1.resolveAssetPath)('/assets/企业微信二维码.png');
@@ -601,6 +602,69 @@ Page({
     },
     onEnterpriseWechatContentTap() {
     },
+    async verifyEnterpriseWechatPhoneCode(code) {
+        const token = this.getSimpleToken();
+        const result = await new Promise((resolve, reject) => {
+            wx.request({
+                url: `${API_BASE_URL}/api/v1/miniprogram/user/ai/wecom/verify-phone`,
+                method: 'POST',
+                header: {
+                    token,
+                    'Content-Type': 'application/json',
+                },
+                data: {
+                    code,
+                    ticket: String(this.data.enterpriseWechatBindTicket || '').trim(),
+                },
+                success: (res) => {
+                    if (res.statusCode === 200 && res.data) {
+                        const data = res.data;
+                        if (data.code === 0) {
+                            resolve(data.data || {});
+                            return;
+                        }
+                        reject(new Error(data.msg || '手机号验证失败'));
+                        return;
+                    }
+                    reject(new Error(`请求失败: ${res.statusCode}`));
+                },
+                fail: reject,
+            });
+        });
+        this.applyEnterpriseWechatConfig(result);
+        return result;
+    },
+    async onEnterpriseWechatPhoneAuth(e) {
+        const phoneCode = String(e?.detail?.code || '').trim();
+        const errorMessage = String(e?.detail?.errMsg || '').trim();
+        if (!phoneCode) {
+            if (errorMessage.includes('deny') || errorMessage.includes('cancel')) {
+                wx.showToast({ title: '你已取消手机号授权', icon: 'none' });
+                return;
+            }
+            wx.showToast({ title: '未获取到手机号授权', icon: 'none' });
+            return;
+        }
+        if (this.data.enterpriseWechatPhoneSubmitting) {
+            return;
+        }
+        this.setData({ enterpriseWechatPhoneSubmitting: true });
+        wx.showLoading({ title: '验证中...' });
+        try {
+            await this.verifyEnterpriseWechatPhoneCode(phoneCode);
+            wx.hideLoading();
+            this.stopEnterpriseWechatAutoCheck();
+            wx.showToast({ title: '验证成功，正在继续下载', icon: 'success' });
+            await this.resumePendingTemplateDownload();
+        }
+        catch (error) {
+            wx.hideLoading();
+            wx.showToast({ title: String(error?.message || '手机号验证失败'), icon: 'none' });
+        }
+        finally {
+            this.setData({ enterpriseWechatPhoneSubmitting: false });
+        }
+    },
     previewEnterpriseWechatQRCode() {
         const url = String(this.data.enterpriseWechatQRCodeUrl || '').trim();
         if (!url) {
@@ -938,43 +1002,12 @@ Page({
             return;
         }
         try {
-            const deviceID = (0, deviceFingerprint_1.getCachedDeviceFingerprint)() || '';
-            const apiPath = `/api/v1/miniprogram/templates/${this.data.templateId}/like`;
-            const requestBody = {};
-            const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath, deviceID);
-            const headers = {
-                ...(0, parameter_1.paramsToHeaders)(params),
-                'Content-Type': 'application/json',
-            };
-            const res = await new Promise((resolve, reject) => {
-                wx.request({
-                    url: `${API_BASE_URL}${apiPath}`,
-                    method: 'POST',
-                    header: headers,
-                    data: requestBody,
-                    success: (res) => {
-                        if (res.statusCode === 200 && res.data) {
-                            const data = res.data;
-                            if (data.code === 0) {
-                                resolve(data.data);
-                            }
-                            else {
-                                reject(new Error(data.msg || '收藏失败'));
-                            }
-                        }
-                        else {
-                            reject(new Error(`请求失败: ${res.statusCode}`));
-                        }
-                    },
-                    fail: (err) => {
-                        reject(err);
-                    }
-                });
-            });
-            const nextLiked = !!res.liked;
-            const nextLikeCount = typeof res.like_count === 'number'
-                ? res.like_count
-                : Math.max(0, this.data.likeCount + (nextLiked ? 1 : -1));
+            // 走统一收藏接口：服务端同步模板收藏数，并在带采集令牌时确认收藏回执（意向证据）
+            const wasLiked = !!this.data.isLiked;
+            const res = await (0, favoriteApi_1.toggleFavorite)('template', Number(this.data.templateId), wasLiked);
+            const nextLiked = !!res.favorited;
+            const delta = nextLiked === wasLiked ? 0 : (nextLiked ? 1 : -1);
+            const nextLikeCount = Math.max(0, this.data.likeCount + delta);
             this.setData({
                 'template.like_count': nextLikeCount,
                 likeCount: nextLikeCount,

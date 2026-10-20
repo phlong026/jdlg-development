@@ -11,6 +11,20 @@ const TABBAR_IMAGE_PATHS = [
   '/assets/tabbar/我的导航栏@2x.png'
 ];
 
+// 服务端邀请码固定 6 位字母数字。options.scene 是微信启动场景值（1007/1047 等），不是邀请码，
+// 小程序码携带的参数在 options.query.scene 里。格式不符一律忽略，避免把无关数字绑成邀请人。
+const INVITE_CODE_PATTERN = /^[A-Za-z0-9]{6}$/
+
+function captureInviteCode(options: any) {
+  if (options?.path === 'pages/contentreader/contentreader') return
+  const query = options?.query || {}
+  let code = String(query.invite_code || query.scene || '')
+  try { code = decodeURIComponent(code) } catch (e) { /* 保留原值，交给格式校验 */ }
+  if (INVITE_CODE_PATTERN.test(code)) {
+    wx.setStorageSync('pending_invite_code', code.toUpperCase())
+  }
+}
+
 let interceptModalHost: WechatMiniprogram.Component.TrivialInstance | null = null;
 
 App<IAppOption>({
@@ -39,19 +53,17 @@ App<IAppOption>({
     return false;
   },
 
+  // 热启动（小程序在后台时点分享卡片）不会触发 onLaunch
+  onShow(options: any) {
+    captureInviteCode(options)
+  },
+
   onLaunch(options: any) {
     // 展示本地存储能力
     const logs = wx.getStorageSync('logs') || []
     logs.unshift(Date.now())
     wx.setStorageSync('logs', logs)
-    // 扫码进入：scene 为邀请码；从分享链接进入：query.invite_code。登录时会读取并完成绑定
-    const scene = options?.scene
-    const query = options?.query || {}
-    if (options?.path !== 'pages/contentreader/contentreader' && scene != null && scene !== '') {
-      wx.setStorageSync('pending_invite_code', String(scene))
-    } else if (options?.path !== 'pages/contentreader/contentreader' && query.invite_code) {
-      wx.setStorageSync('pending_invite_code', query.invite_code)
-    }
+    captureInviteCode(options)
 
     TABBAR_IMAGE_PATHS.forEach((src) => {
       wx.getImageInfo({
