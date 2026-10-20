@@ -29,6 +29,12 @@
 --   第三步  确认无误后，把末尾 ROLLBACK 改成 COMMIT 再执行一次
 --   回滚    见「三、回滚」，依赖合并时写入的三张备份表
 --
+-- 重要：必须用 MySQL 客户端（mysql / Navicat 等）在同一会话里人工分步执行。
+--       本文件会被 go:embed 打进服务二进制、出现在 `service migrate --list` 里，
+--       但不要用 `service migrate` 执行：它按"整文件只跑一次"登记，且在一个事务里跑完全部语句，
+--       与"先预览、再 dry-run、再 COMMIT"的两步流程冲突（dry-run 一跑就会被标记为已执行）。
+--       它也不在启动自动迁移白名单(autoStartupMigrations)内，合并上线不会触发它。
+--
 -- 注意：
 --   · 建议先执行 backfill_customer_leads_phone.sql，再执行本脚本——
 --     这样合并时手机号更完整；反过来也可以，两者互不依赖
