@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,6 +87,7 @@ async function page(overrides = {}) {
       if (name === '../config/api') return { API_BASE_URL: '/fake-api', API_ENDPOINTS: { OSS: { UPLOAD: '/upload' } } };
       if (name === '../utils/pageLoadError') return { reportPageLoadError: error => alerts.push(error.message) };
       if (name.endsWith('.scss')) return {};
+      if (requireDisplayUtil(name)) return requireDisplayUtil(name);
       throw new Error(`Unexpected dependency: ${name}`);
     },
     URLSearchParams, FormData,

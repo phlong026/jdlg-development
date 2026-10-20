@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const require = createRequire(import.meta.url);
 const React = require('react');
@@ -165,6 +166,7 @@ function mount({ deferDetails = false } = {}) {
       if (name === '../utils/pageLoadError') return { reportPageLoadError() {} };
       if (name === '../config/api') return { API_BASE_URL: '/fixture-only' };
       if (name.endsWith('.scss')) return {};
+      if (requireDisplayUtil(name)) return requireDisplayUtil(name);
       throw new Error(`Unexpected import: ${name}`);
     },
   });

@@ -2,6 +2,7 @@
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const require = createRequire(import.meta.url);
 const fs = require('node:fs');
 const path = require('node:path');
@@ -14,6 +15,7 @@ const sourcePath = process.argv[2] || path.join(appRoot, 'src/pages/userWorkbenc
 const source = fs.readFileSync(sourcePath, 'utf8');
 const sourceJs = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
 const checks = [];
+let storedRecentUsers = null;
 const flush = () => new Promise(resolve => setImmediate(resolve));
 let activeRuntime = null;
 let api = {};
@@ -61,10 +63,11 @@ const context = vm.createContext({
     if (name === 'react-icons/fi') return new Proxy({}, { get: (_, icon) => icon });
     if (name === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
     if (name === '../api/users' || name === '../api/certification') return new Proxy({}, { get: (_, method) => (...args) => api[method](...args) });
+    if (requireDisplayUtil(name)) return requireDisplayUtil(name);
     throw new Error(`Unexpected import: ${name}`);
   },
   console: { ...console, error() {} }, URLSearchParams,
-  localStorage: { getItem: () => null, setItem: () => {} },
+  localStorage: { getItem: () => storedRecentUsers, setItem: () => {} },
   alert: message => alerts.push(message), window: { confirm: () => true, location: { search: '?userId=1', pathname: '/admin/user-workbench' } },
 });
 vm.runInContext(sourceJs, context, { filename: sourcePath });
@@ -225,4 +228,33 @@ test('User detail isolates selections and distinguishes failed modules from true
   assert.equal(calls[0].id, '1'); assert.equal(calls[0].payload.amount, 100);
   check('duplicate same-frame stone handler is locked; completing A write after selecting B never reloads A');
 
+});
+
+test('用户详情：最近访问、同设备账号、头部标签不外露 wx_ 登录名，任务场景与用户类型显示中文', async () => {
+  storedRecentUsers = JSON.stringify([{ id: '5', username: 'wx_o_old' }, { id: '6', username: '张工' }]);
+  try {
+    setup({ getUserWorkbenchSummary: async () => ({ ...summary(),
+      recent_tasks: [{ id: 1, task_type: 'image', task_no: '9d0fed07a1b2c3d4e5f60718293a4b5c', scene: 'ai_draw_single', status: 'failed', stones_used: 10, created_at: '2026-10-01T00:00:00Z' }],
+      device_risk: { ...summary().device_risk, same_device_account_count: 2, same_device_other_users: [{ user_id: 9, username: 'wx_o_peer', display_name: 'wx_o_peer' }] } }) });
+    const page = boot();
+    await settle(page);
+    // 旧版本地记录只有 username，同样按显示名口径兜底
+    const recent = nodes(page.tree, node => node.props?.className === 'recent-user-chip').map(textOf);
+    assert.deepEqual(recent, ['微信用户 #5', '张工 · 6']);
+    primaryRequests[0].resolve({ ...user(1), username: 'wx_o_self', nickname: '', user_type: 'miniprogram' });
+    await settle(page);
+    assert.equal(heading(page, '微信用户 #1').length, 1);
+    assert.match(nodes(page.tree, node => node.props?.className === 'recent-user-chip').map(textOf).join('|'), /微信用户 #1/);
+    const main = textOf(nodes(page.tree, node => node.props?.className === 'section-card user-main-card')[0]);
+    assert.match(main, /小程序用户/);
+    assert.doesNotMatch(main, /wx_o_self|miniprogram/);
+    const all = textOf(page.tree);
+    assert.match(all, /AI 绘画-单图/);
+    nodes(page.tree, node => node.type === 'button' && textOf(node) === '最近任务')[0].props.onClick(); page.render();
+    assert.match(textOf(page.tree), /任务 …3a4b5c/);
+    assert.doesNotMatch(textOf(page.tree), /9d0fed07a1b2/);
+    assert.doesNotMatch(all, /ai_draw_single|wx_o_peer|wx_o_old|9d0fed07a1b2/);
+  } finally {
+    storedRecentUsers = null;
+  }
 });

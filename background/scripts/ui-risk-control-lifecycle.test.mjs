@@ -7,6 +7,7 @@ import ts from 'typescript';
 import React from 'react';
 import * as sass from 'sass';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const labels = { groups: '同设备账号', changes: '设备换绑', alerts: '风险告警', users: '风险用户' };
@@ -85,6 +86,7 @@ function harness() {
         if (name === '../utils/pageLoadError') return { reportPageLoadError: (error, source) => failures.push({ error, source }), reportPageLoadRecovered: source => recoveries.push(source) };
         if (name === '../component/managementSearchPanel') return { __esModule: true, default: compile('../src/component/managementSearchPanel.tsx').default };
         if (name === '../api/riskControl') return new Proxy(api, { get(target, key) { if (!(key in target)) { forbidden.push(key); throw new Error(`Unexpected API ${String(key)}`); } return target[key]; } });
+        if (requireDisplayUtil(name)) return requireDisplayUtil(name);
         throw new Error(`Unexpected import ${name}`);
       },
     });
@@ -293,4 +295,34 @@ test('risk pagination and errors stay route-scoped, wrapping and accessible with
   assert.match(css, /\.risk-pagination-actions button[^}]*min-height: 44px/s);
   const h = harness(); assert.equal(nodes(h.page.tree, node => node.type === 'nav' && node.props?.['aria-label']?.endsWith('分页')).length, 4);
   assert.equal(nodes(h.page.tree, node => node.type === 'table' && node.props['aria-busy'] === true).length, 4);
+});
+
+test('风险告警写成一句话：不外露任务号、状态码、访客键和 wx_ 登录名', async () => {
+  const h = harness(); await loaded(h, 23);
+  click(h, '风险告警下一页', true);
+  const request = h.requests.alerts.at(-1);
+  request.resolve(envelope(request, [
+    { user_id: 4, username: 'wx_o_abc', nickname: '', alert_type: 'task', alert_count: 2, latest_time: '', detail: 'image / 6a3b4b7d9e0f11223344556677889900 / 图片处理失败' },
+    { user_id: 5, username: 'wx_o_def', nickname: '灿坤', alert_type: 'payment', alert_count: 3, latest_time: '', detail: 'ORD17920000000000001234 / pending / AI生成-ai_draw_single-3张' },
+    { user_id: 6, username: '用户6', nickname: '', alert_type: 'access', alert_count: 1, latest_time: '', detail: '近7天页面访问 320 次，达到异常阈值 200（访客 u:6）' },
+  ], 23));
+  await settle(h);
+  const text = textOf(table(h, 'alerts'));
+  assert.match(text, /微信用户 #4/);
+  assert.match(text, /近 7 天 2 次图片生成失败 · 最近：图片处理失败/);
+  assert.match(text, /灿坤/);
+  assert.match(text, /近 7 天 3 笔支付异常 · 最近一笔待支付：AI生成-AI 绘画-单图-3张/);
+  assert.match(text, /近7天页面访问 320 次，达到异常阈值 200/);
+  assert.doesNotMatch(text, /wx_|6a3b4b7d|ORD1792|pending|u:6|image \/|ai_draw/);
+});
+
+test('设备 ID 只显示尾号，完整值放在提示里', async () => {
+  const h = harness(); await loaded(h, 23);
+  click(h, '设备换绑下一页', true);
+  const request = h.requests.changes.at(-1);
+  request.resolve(envelope(request, [{ user_id: 7, username: 'wx_o_x', nickname: '', device_id: 'a1b2c3d4e5f6a7b8c9d0e1f2', last_device_change_time: '' }], 23));
+  await settle(h);
+  const text = textOf(table(h, 'changes'));
+  assert.match(text, /…d0e1f2/);
+  assert.doesNotMatch(text, /a1b2c3d4e5f6|wx_o_x/);
 });

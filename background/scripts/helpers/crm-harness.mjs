@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
+import { requireDisplayUtil } from './display-utils.mjs';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -78,6 +79,7 @@ function environment() {
         if (name === '../component/useIsMobile' || name === './useIsMobile') return { useIsMobile: () => false };
         if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
         if (name.endsWith('.scss')) return {};
+        if (requireDisplayUtil(name)) return requireDisplayUtil(name);
         throw new Error(`Unexpected dependency: ${name}`);
       },
       alert: value => env.alerts.push(value),

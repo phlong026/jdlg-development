@@ -91,7 +91,9 @@ test('dedicated table regions scroll before observer initialization and do not m
   for (const width of widths) for (const [route, prefix] of Object.entries(tables)) {
     const value = declarations(route, `.${prefix}-table-container`, width); assert.equal(value['overflow-x'], 'auto'); assert.equal(value['max-width'], '100%'); assert.equal(value['min-width'], '0');
   }
-  for (const route of ['/oss', '/logs']) assert.equal(declarations(route, `${route}-table`.replace('/', '.'))['min-width'], '980px');
+  assert.equal(declarations('/oss', '.oss-table')['min-width'], '980px');
+  // 审计改成「时间 / 一句话操作 / 结果 / 详情」四列，不再需要电脑表格宽度
+  assert.equal(declarations('/logs', '.logs-table')['min-width'], '560px');
   css.walkDecls('overflow-x', decl => assert.ok(decl.parent.selectors.every(selector => selector.endsWith('-table-container'))));
 });
 

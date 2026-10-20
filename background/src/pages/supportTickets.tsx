@@ -16,6 +16,8 @@ import {
     type SupportTicketItem,
     type SupportTicketOverview,
 } from '../api/supportTickets';
+import { formatUserName } from '../utils/displayName';
+import { humanizeTaskText, shortCode } from '../utils/displayLabels';
 import './supportTickets.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -58,7 +60,14 @@ const formatDateTime = (value?: string | null) => {
 
 const getDisplayName = (item?: SupportTicketItem | null) => {
     if (!item) return '';
-    return item.nickname?.trim() || item.username || (item.user_id ? `用户${item.user_id}` : '匿名用户');
+    return item.user_id || item.nickname?.trim() || item.username ? formatUserName(item, item.user_id) : '匿名用户';
+};
+
+// 任务来源 image-10308 显示成「图片任务 #10308」，订单号等长编号只留尾号
+const formatSourceId = (item: SupportTicketItem) => {
+    const matched = item.source_id.match(/^(image|video)-(\d+)$/);
+    if (item.source_type === 'task' && matched) return `${matched[1] === 'video' ? '视频任务' : '图片任务'} #${matched[2]}`;
+    return shortCode(item.source_id);
 };
 
 const getSourceTarget = (item?: SupportTicketItem | null) => {
@@ -521,8 +530,8 @@ const SupportTickets: React.FC = () => {
                                         <span className="ticket-card-type">{typeLabelMap[item.type] || item.type}</span>
                                     </div>
                                     <div className="ticket-card-title">
-                                        <strong>{item.title}</strong>
-                                        {item.content ? <span className="cell-clamp">{item.content}</span> : null}
+                                        <strong>{humanizeTaskText(item.title)}</strong>
+                                        {item.content ? <span className="cell-clamp">{humanizeTaskText(item.content)}</span> : null}
                                     </div>
                                     <div className="ticket-card-meta">
                                         <button type="button" className="ticket-card-user" onClick={() => item.user_id && navigate(`/user-workbench?userId=${item.user_id}`)} disabled={!item.user_id} title={item.user_id ? '进入用户详情' : '未关联用户'}>
@@ -532,7 +541,7 @@ const SupportTickets: React.FC = () => {
                                         <span className="ticket-card-time">{formatDateTime(item.created_at)}</span>
                                     </div>
                                     <div className="ticket-card-foot">
-                                        <span>{sourceTypeLabelMap[item.source_type] || item.source_type}{item.source_id ? ` · ${item.source_id}` : ''}</span>
+                                        <span>{sourceTypeLabelMap[item.source_type] || item.source_type}{item.source_id ? ` · ${formatSourceId(item)}` : ''}</span>
                                         <span>负责人：{item.assignee_name || '未分配'}</span>
                                     </div>
                                     <div className="action-group ticket-card-actions">
@@ -573,8 +582,8 @@ const SupportTickets: React.FC = () => {
                                     <tr key={item.id}>
                                         <td>
                                             <div className="identity-cell">
-                                                <strong>{item.title}</strong>
-                                                <span className="cell-clamp" title={item.content || undefined}>{item.content || '暂无说明'}</span>
+                                                <strong>{humanizeTaskText(item.title)}</strong>
+                                                <span className="cell-clamp" title={item.content || undefined}>{humanizeTaskText(item.content) || '暂无说明'}</span>
                                             </div>
                                         </td>
                                         <td>
@@ -586,7 +595,7 @@ const SupportTickets: React.FC = () => {
                                         <td>
                                             <div className="identity-cell">
                                                 <strong>{typeLabelMap[item.type] || item.type}</strong>
-                                                <span>{sourceTypeLabelMap[item.source_type] || item.source_type}{item.source_id ? ` · 来源 ${item.source_id}` : ''}</span>
+                                                <span>{sourceTypeLabelMap[item.source_type] || item.source_type}{item.source_id ? ` · 来源 ${formatSourceId(item)}` : ''}</span>
                                             </div>
                                         </td>
                                         <td><span className={`inline-tag ${item.priority === 'high' ? 'danger' : ''}`}>{priorityLabelMap[item.priority] || item.priority}</span></td>
@@ -677,13 +686,13 @@ const SupportTickets: React.FC = () => {
                                 {detailLoading ? <p role="status">正在读取最新工单...</p> : null}
                                 {detailError ? <div role="alert">{detailError}<button className="btn-inline" onClick={() => void readDetail(detail.id, detailSession.current)}>重新读取详情</button></div> : null}
                                 <div className="detail-block">
-                                    <strong>{detail.title}</strong>
-                                    <span>{detail.content || '暂无内容说明'}</span>
+                                    <strong>{humanizeTaskText(detail.title)}</strong>
+                                    <span>{humanizeTaskText(detail.content) || '暂无内容说明'}</span>
                                 </div>
                                 <div className="detail-grid">
                                     <div><label>用户</label><span>{getDisplayName(detail)}{detail.user_id ? `（ID ${detail.user_id}）` : ''}</span></div>
                                     <div><label>类型</label><span>{typeLabelMap[detail.type] || detail.type}</span></div>
-                                    <div><label>来源</label><span>{sourceTypeLabelMap[detail.source_type] || detail.source_type}{detail.source_id ? ` / ${detail.source_id}` : ''}</span></div>
+                                    <div><label>来源</label><span>{sourceTypeLabelMap[detail.source_type] || detail.source_type}{detail.source_id ? ` / ${formatSourceId(detail)}` : ''}</span></div>
                                     <div><label>优先级</label><span>{priorityLabelMap[detail.priority] || detail.priority}</span></div>
                                     <div><label>状态</label><span>{statusLabelMap[detail.status] || detail.status}</span></div>
                                     <div><label>负责人</label><span>{detail.assignee_name || '未分配'}</span></div>

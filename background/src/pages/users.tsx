@@ -17,6 +17,7 @@ import {
 import './users.scss';
 import MobileFold from '../component/MobileFold';
 import { useIsMobile } from '../component/useIsMobile';
+import { formatUserName, visibleUsername } from '../utils/displayName';
 
 interface UserRow {
     id: string;
@@ -119,10 +120,9 @@ const Users: React.FC = () => {
 
     const convertRow = (apiUser: ApiUser): UserRow => ({
         id: String(apiUser.id),
-        username: apiUser.username || `用户${apiUser.id}`,
-        // 昵称为空时不再回退展示 openid 式用户名（如 wx_o_gjx…），避免主副标题重复且暴露内部 ID；
-        // username 仍保留在副标题与搜索中
-        displayName: apiUser.nickname?.trim() || `用户${apiUser.id}`,
+        username: apiUser.username || '',
+        // 显示名按「昵称 → 脱敏手机号 → 微信用户 #ID」兜底；wx_ 登录名只在用户详情的账号与安全区展示
+        displayName: formatUserName(apiUser, apiUser.id),
         stones: apiUser.stones || 0,
         createdAt: apiUser.created_at,
         phone: apiUser.phone || '',
@@ -554,7 +554,7 @@ const Users: React.FC = () => {
                                                 <span className="user-avatar-letter">{row.displayName.slice(0, 1).toUpperCase()}</span>
                                                 <span>
                                                     <span className="user-name">{row.displayName}</span>
-                                                    <span className="user-sub">ID {row.id} · {row.username}</span>
+                                                    <span className="user-sub">ID {row.id}{visibleUsername(row.username) ? ` · ${row.username}` : ''}</span>
                                                 </span>
                                             </div>
                                         </td>
@@ -653,7 +653,7 @@ const Users: React.FC = () => {
                                         <span className="user-avatar-letter">{row.displayName.slice(0, 1).toUpperCase()}</span>
                                         <div className="user-card-identity">
                                             <span className="user-name">{row.displayName}</span>
-                                            <span className="user-sub">ID {row.id} · {row.username}</span>
+                                            <span className="user-sub">ID {row.id}{visibleUsername(row.username) ? ` · ${row.username}` : ''}</span>
                                         </div>
                                         {banned
                                             ? <span className="status-badge status-banned">已封禁</span>

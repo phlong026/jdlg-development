@@ -782,9 +782,14 @@ const Templates: React.FC = () => {
         return sourceType ? `未知来源（${sourceType}）` : '未提供';
     };
 
+    // 历史模板的 category 可能是标签配置里的值（如拼音缩写），两处都找不到时不外露代码
     const getCategoryLabel = (categoryId: string) => {
         const cat = categories.find(c => c.id === categoryId);
-        return cat ? cat.name : categoryId;
+        if (cat) return cat.name;
+        const tab = [...mainTabs, ...subTabs, ...thirdTabs].find(t => t.value === categoryId);
+        if (tab) return tab.label;
+        if (!categoryId || categories.length === 0) return categoryId;
+        return '其他分类';
     };
 
     const handleEdit = async (template: Template, linkedTargetId?: string) => {

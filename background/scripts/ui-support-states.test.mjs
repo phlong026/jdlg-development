@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
 import React from 'react';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const require = createRequire(import.meta.url);
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((y,n) => { resolve=y; reject=n; }); return { promise, resolve, reject }; };
@@ -45,6 +46,7 @@ function runtime(overrides={}) {
   if(name==='../component/managementSearchPanel')return ()=>null;
   if(name.includes('useIsMobile'))return {useIsMobile:()=>false};
   if(name.endsWith('.scss'))return {};
+  if (requireDisplayUtil(name)) return requireDisplayUtil(name);
   throw Error(name);
  }});
  h.render=()=>{h.cursor=0;h.tree=mod.exports.default();for(const f of h.pending.splice(0)) f();return h.tree;};
@@ -143,4 +145,17 @@ test('support: stale assignment/status/close handlers cannot operate after same-
 
 test('support: mismatched detail identity is blocked before any action can target it',async()=>{
  const h=await ready({getSupportTicketDetail:async()=>item(2)});await h.open(1);assert.match(text(h.dialog()),/返回的工单与请求对象不一致/);assert.match(text(h.dialog()),/Ticket1/);assert.doesNotMatch(text(h.dialog()),/Ticket2/);h.button('分配给我',h.dialog()).props.onClick();await h.settle();assert.equal(h.writes.length,0);
+});
+test('工单列表把系统生成的任务工单翻成中文：任务号尾号、失败、场景中文名、备用服务、用户显示名',async()=>{
+ const sys=item(5,{username:'wx_o_abc',nickname:'',source_type:'task',source_id:'image-10308',
+  title:'AI图片任务待排查：9d0fed07a1b2c3d4e5f60718293a4b5c',
+  content:'任务状态：failed；场景：ai_draw_single；模型：seedream-4-5-251128；灵石：10；错误信息：图片处理失败'});
+ const h=runtime({getSupportTicketList:async()=>({list:[sys],total:1,page:1,page_size:20})});
+ await h.settle();
+ const all=text(h.tree);
+ assert.match(all,/AI图片任务待排查：尾号 3a4b5c/);
+ assert.match(all,/任务状态：失败；场景：AI 绘画-单图；模型：备用服务/);
+ assert.match(all,/图片任务 #10308/);
+ assert.match(all,/微信用户 #5/);
+ assert.doesNotMatch(all,/failed|ai_draw_single|seedream|wx_o_abc|image-10308|9d0fed07a1b2/);
 });

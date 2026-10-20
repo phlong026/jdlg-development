@@ -367,7 +367,7 @@ const AIPricing: React.FC = () => {
                                 <tr>
                                     <th>场景</th>
                                     <th>定价</th>
-                                    <th>服务成本<span className="th-hint">¥/次 · 估算</span></th>
+                                    <th>近 7 日成本<span className="th-hint">估算</span></th>
                                     <th>毛利率</th>
                                     <th>近7日调用</th>
                                     <th>最近调价</th>
@@ -382,7 +382,6 @@ const AIPricing: React.FC = () => {
                                         <td>
                                             <div className="aip-scene-cell">
                                                 <b>{item.label}</b>
-                                                <details className="aip-scene-diagnostic"><summary>场景标识</summary><code>{item.scene}</code></details>
                                             </div>
                                         </td>
                                         <td><b>{item.stones}</b> 灵石</td>

@@ -13,6 +13,8 @@ export interface AITaskItem {
     task_no: string;
     user_id: number;
     username: string;
+    /** 后端目前未返回；返回后显示名自动优先用昵称 */
+    nickname?: string;
     scene?: string;
     model?: string;
     api_endpoint?: string;

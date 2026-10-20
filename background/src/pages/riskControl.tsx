@@ -15,6 +15,8 @@ import {
     type RiskControlListParams,
     type RiskControlListResponse,
 } from '../api/riskControl';
+import { formatUserName } from '../utils/displayName';
+import { humanizeTaskText, replaceSceneCodes, shortCode } from '../utils/displayLabels';
 import './riskControl.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -172,6 +174,24 @@ const formatDateTime = (value?: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString('zh-CN');
+};
+
+// 后端告警详情是拼接的原始字段（任务：类型 / 任务号 / 错误；支付：订单号 / 状态 / 标题；
+// 访问：带访客键的说明），这里改写成一句运营能看懂的话
+const formatAlertDetail = (item: RiskControlAlertItem) => {
+    const detail = String(item.detail || '').trim();
+    if (!detail) return '暂无详情';
+    const parts = detail.split(' / ');
+    if (item.alert_type === 'task' && parts.length >= 3) {
+        const kind = parts[0] === 'video' ? '视频' : '图片';
+        const reason = parts.slice(2).join(' / ').trim();
+        return `近 7 天 ${item.alert_count} 次${kind}生成失败${reason ? ` · 最近：${reason}` : ''}`;
+    }
+    if (item.alert_type === 'payment' && parts.length >= 3) {
+        const status = parts[1] === 'pending' ? '待支付' : parts[1] === 'failed' ? '支付失败' : '异常';
+        return `近 7 天 ${item.alert_count} 笔支付异常 · 最近一笔${status}：${replaceSceneCodes(parts.slice(2).join(' / '))}`;
+    }
+    return humanizeTaskText(detail.replace(/（访客 [^）]*）/, ''));
 };
 
 const RiskControl: React.FC = () => {
@@ -351,13 +371,13 @@ const RiskControl: React.FC = () => {
                                 <tbody>
                                     {tableFeedback(groups, 5, '当前筛选下暂无同设备账号分组') || groups.list.map((item) => (
                                         <tr key={item.device_id}>
-                                            <td className="mono-cell">{item.device_id}</td>
+                                            <td className="mono-cell" title={item.device_id}>{shortCode(item.device_id)}</td>
                                             <td>{item.user_count}</td>
                                             <td>
                                                 <div className="tag-list">
                                                     {item.users.map((user) => (
                                                         <span key={`${item.device_id}-${user.user_id}`} className="inline-tag">
-                                                            {user.nickname?.trim() || user.username || `用户${user.user_id}`}
+                                                            {formatUserName(user, user.user_id)}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -405,11 +425,11 @@ const RiskControl: React.FC = () => {
                                             <tr key={`change-${item.user_id}`}>
                                                 <td>
                                                     <div className="identity-cell">
-                                                        <strong>{item.nickname?.trim() || item.username || `用户${item.user_id}`}</strong>
+                                                        <strong>{formatUserName(item, item.user_id)}</strong>
                                                         <span>ID {item.user_id}</span>
                                                     </div>
                                                 </td>
-                                                <td className="mono-cell">{item.device_id || '暂无'}</td>
+                                                <td className="mono-cell" title={item.device_id || undefined}>{shortCode(item.device_id) || '暂无'}</td>
                                                 <td>{formatDateTime(item.last_device_change_time)}</td>
                                                 <td>
                                                     <div className="table-action-stack">
@@ -449,8 +469,8 @@ const RiskControl: React.FC = () => {
                                             <tr key={`${item.alert_type}-${item.user_id}`}>
                                                 <td>
                                                     <div className="identity-cell">
-                                                        <strong>{item.nickname?.trim() || item.username || `用户${item.user_id}`}</strong>
-                                                        <span>{item.detail || '暂无详情'}</span>
+                                                        <strong>{formatUserName(item, item.user_id)}</strong>
+                                                        <span>{formatAlertDetail(item)}</span>
                                                     </div>
                                                 </td>
                                                 <td>{item.alert_type === 'payment' ? '支付异常' : item.alert_type === 'task' ? '任务异常' : item.alert_type === 'access' ? '异常访问' : `未知类型（${item.alert_type || '空值'}）`}</td>
@@ -508,11 +528,11 @@ const RiskControl: React.FC = () => {
                                         <tr key={`user-${item.user_id}`}>
                                             <td>
                                                 <div className="identity-cell">
-                                                    <strong>{item.nickname?.trim() || item.username || `用户${item.user_id}`}</strong>
+                                                    <strong>{formatUserName(item, item.user_id)}</strong>
                                                     <span>ID {item.user_id} · 最近换绑 {formatDateTime(item.last_device_change_time)}</span>
                                                 </div>
                                             </td>
-                                            <td className="mono-cell">{item.device_id || '暂无'}</td>
+                                            <td className="mono-cell" title={item.device_id || undefined}>{shortCode(item.device_id) || '暂无'}</td>
                                             <td>{item.shared_device_count}</td>
                                             <td>{item.failed_task_count}</td>
                                             <td>{item.abnormal_payment_count}</td>

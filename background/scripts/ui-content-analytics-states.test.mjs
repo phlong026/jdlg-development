@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 import React from 'react';
 import ts from 'typescript';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const require = createRequire(import.meta.url);
 const root = new URL('../src/', import.meta.url);
@@ -17,6 +18,11 @@ const textOf = node => Array.isArray(node) ? node.map(textOf).join('') : node ==
 const endpoints = {
   OVERVIEW: '/overview', DOWNLOAD_RANKING: '/download-ranking', ENGAGEMENT_RANKING: '/engagement-ranking',
   NEW_TEMPLATES: '/new-templates', LOW_CONVERSION: '/low-conversion', FEATURED_CASES: '/featured-cases',
+};
+// 分类名来自模板分类与 Tab 配置；内容分析只读这两份数据，用于把 xsxmp 之类的代码翻成中文
+const templatesApi = {
+  getTemplateCategories: async () => [{ id: 'villa', name: '乡村别墅', sort_order: 1 }],
+  getTemplateTabConfig: async () => ({ main_tabs: [{ label: '新闽派', value: 'xsxmp' }], sub_tabs: [], third_tabs: [] }),
 };
 const list = items => ({ list: items, total: items.length, page: 1, page_size: 10 });
 const template = (overrides = {}) => ({
@@ -82,6 +88,8 @@ function mount() {
         if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
         if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
   if (name.endsWith('.scss')) return {};
+        if (requireDisplayUtil(name)) return requireDisplayUtil(name);
+        if (name === '../api/templates') return templatesApi;
         if (name.startsWith('.')) return load(path.posix.normalize(path.posix.join(path.posix.dirname(filename), name)) + (name.includes('/api/') ? '.ts' : '.tsx'));
         throw new Error(`Unexpected dependency: ${name}`);
       },
@@ -280,4 +288,15 @@ test('unmounted analytics callbacks cannot restart GETs or navigate', async () =
   assert.equal(page.requests.length, 6);
   assert.equal(page.updatesAfterUnmount, 0);
   assert.deepEqual(page.navigations, []);
+});
+
+test('分类列显示中文名：模板分类 → Tab 配置 → 其他分类，不外露拼音代码', async () => {
+  const page = mount();
+  await page.resolve(0, fixture({ '/download-ranking': list([template({ id: 31, category: 'villa' }), template({ id: 32, category: 'xsxmp' }), template({ id: 33, category: 'cjzbsj' })]) }));
+  await settle(); page.render();
+  const text = page.text();
+  assert.match(text, /乡村别墅/);
+  assert.match(text, /新闽派/);
+  assert.match(text, /其他分类/);
+  assert.doesNotMatch(text, /xsxmp|cjzbsj|>villa</);
 });

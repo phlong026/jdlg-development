@@ -194,7 +194,7 @@ const ReportCenter: React.FC = () => {
 
                 <div className="report-stats-grid">
                     <div className="stat-card section-card"><div className="stat-icon"><FiBarChart2Icon /></div><div className="stat-label">用户总量</div><div className="stat-value">{preview ? overview.total_users : '—'}</div></div>
-                    <div className="stat-card section-card"><div className="stat-icon"><FiBarChart2Icon /></div><div className="stat-label">累计收入</div><div className="stat-value">{preview ? overview.total_revenue : '—'}</div></div>
+                    <div className="stat-card section-card"><div className="stat-icon"><FiBarChart2Icon /></div><div className="stat-label">累计收入</div><div className="stat-value">{preview ? `${overview.total_revenue.toLocaleString('zh-CN')} 灵石` : '—'}</div></div>
                     <div className="stat-card section-card"><div className="stat-icon"><FiBarChart2Icon /></div><div className="stat-label">任务总量</div><div className="stat-value">{preview ? overview.total_tasks : '—'}</div></div>
                     <div className="stat-card section-card"><div className="stat-icon"><FiBarChart2Icon /></div><div className="stat-label">模板总量</div><div className="stat-value">{preview ? overview.total_templates : '—'}</div></div>
                     <div className="stat-card section-card"><div className="stat-icon"><FiBarChart2Icon /></div><div className="stat-label">设计师数量</div><div className="stat-value">{preview ? overview.designer_count : '—'}</div></div>
