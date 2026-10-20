@@ -50,6 +50,8 @@
     grid-template-areas: 'funnel todo' 'stage stage';
     gap: 16px;
   }
+  .sx-brief.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sx-grid.is-customers-only { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); grid-template-areas: 'todo stage'; }
   .sx-card-funnel { grid-area: funnel; }
   .sx-card-todo { grid-area: todo; }
   .sx-card-stage { grid-area: stage; }
@@ -103,7 +105,7 @@
 @media (max-width: 860px) {
   .sx-overview {
     gap: 12px;
-    .sx-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'todo' 'funnel' 'stage'; gap: 12px; }
+    .sx-grid, .sx-grid.is-customers-only { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'todo' 'funnel' 'stage'; gap: 12px; }
     .sx-brief { gap: 8px; div { padding: 12px; } strong { font-size: 24px; } }
     .sx-card { padding: 14px 16px; }
     .sx-segment button { min-height: 40px; }

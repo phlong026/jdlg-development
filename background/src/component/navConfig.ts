@@ -96,7 +96,7 @@ export const customerSection: NavSection = {
  */
 export function visibleSections(scope: string | undefined, crmEnabled: boolean | undefined): NavSection[] {
     if (scope !== 'platform_admin' && scope !== 'crm_only') return [customerSection];
-    if (scope === 'crm_only') return [customerSection, { title: '访问记录', items: [{ path: '/share-tracking', label: '分享访问记录', icon: FiShare2 }] }];
+    if (scope === 'crm_only') return [{ title: '销售', items: [{ path: '/sales-overview', label: '销售总览', icon: FiBarChart2 }, ...customerSection.items] }, { title: '访问记录', items: [{ path: '/share-tracking', label: '分享访问记录', icon: FiShare2 }] }];
     return crmEnabled ? [platformSections[0], customerSection, ...platformSections.slice(1)] : platformSections;
 }
 
@@ -248,7 +248,14 @@ export const navGroups: NavGroup[] = [
 export function visibleGroups(scope: string | undefined, crmEnabled: boolean | undefined): NavGroup[] {
     const crm = navGroups.find((g) => g.id === 'crm')!;
     if (scope !== 'platform_admin' && scope !== 'crm_only') return [crm];
-    if (scope === 'crm_only') return [crm, navGroups.find((group) => group.id === 'share-tracking')!];
+    // crm_only：销售总览（各看各的）+ 客户；线索与系统设置不开放
+    if (scope === 'crm_only') return [
+        { id: 'sales', label: '销售', icon: FiUserCheck, landing: '/sales-overview', display: 'cards', pages: [
+            { path: '/sales-overview', label: '总览', icon: FiBarChart2, tone: 'blue' },
+            { path: crm.pages[0].path, label: '客户', icon: FiUsers, tone: 'blue' },
+        ] },
+        navGroups.find((group) => group.id === 'share-tracking')!,
+    ];
     return navGroups
         .filter((g) => g.id !== 'crm')
         .map((g) => (g.id === 'sales' ? { ...g, pages: [

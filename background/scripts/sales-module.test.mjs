@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import ts from 'typescript';
 import { environment } from './helpers/crm-harness.mjs';
 
@@ -45,7 +46,9 @@ test('客户系统设置只给 platform_admin，其余账号与未知 scope 一�
   for (const scope of ['crm_only', undefined, '', 'admin', 'PLATFORM_ADMIN']) {
     const groups = nav.visibleGroups(scope, true);
     assert.ok(!paths(groups).includes('/customer-settings'), `scope=${scope}`);
-    assert.ok(!paths(groups).includes('/sales-overview'), `scope=${scope}`);
+    assert.ok(!paths(groups).includes('/customer-leads'), `scope=${scope}`);
+    // 总览只对 crm_only（各看各的）开放；缺失/未知 scope 仍然看不到
+    assert.equal(paths(groups).includes('/sales-overview'), scope === 'crm_only', `scope=${scope}`);
   }
   const sectionPaths = scope => nav.visibleSections(scope, true).flatMap(s => s.items.map(i => i.path));
   assert.ok(sectionPaths('platform_admin').includes('/customer-settings'));
@@ -173,4 +176,55 @@ test('总览：顾问没有团队切换，客户数字按本人 ownerId 统计�
   const customerCalls = env.calls.filter(c => c.url === '/customers');
   assert.ok(customerCalls.length > 0 && customerCalls.every(c => c.query.ownerId === 'wx1'));
   assert.ok(!env.calls.some(c => c.url === '/sync'));
+});
+
+
+// 三种账号的导航与页面访问：用真实的 ProtectedRoute 与 navConfig 判定
+function routeDecision(scope, pathname) {
+  const code = ts.transpileModule(read('src/component/ProtectedRoute.tsx'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
+  const module = { exports: {} };
+  const nodeRequire = createRequire(import.meta.url);
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => {
+    if (name === 'react') return nodeRequire('react');
+    if (name === 'react/jsx-runtime') return nodeRequire(name);
+    if (name === 'react-router-dom') return { Navigate: 'Navigate', useLocation: () => ({ pathname }) };
+    if (name === './ManagementSession') return { useManagementSession: () => ({ loading: false, error: '', user: { id: 1, scope } }) };
+    throw new Error(name);
+  } });
+  const tree = module.exports.default({ children: 'page' });
+  return tree.type === 'Navigate' ? 'redirect:' + tree.props.to : 'allow';
+}
+
+test('三种账号的页面访问：platform_admin 全开，crm 主管/顾问只多一个总览', () => {
+  const pages = ['/sales-overview', '/customer-management', '/share-tracking', '/customer-leads', '/customer-settings', '/dashboard', '/users'];
+  for (const page of pages) assert.equal(routeDecision('platform_admin', page), 'allow', 'platform_admin ' + page);
+  for (const role of ['crm_only']) { // crm 主管与顾问的 scope 相同，角色差异只在页内数据
+    for (const page of ['/sales-overview', '/customer-management', '/share-tracking']) assert.equal(routeDecision(role, page), 'allow', page);
+    for (const page of ['/customer-leads', '/customer-settings', '/dashboard', '/users', '/opportunities']) assert.equal(routeDecision(role, page), 'redirect:/customer-management', page);
+  }
+});
+
+test('三种账号的导航：crm 账号只有 总览 · 客户（无线索、无系统设置）', () => {
+  const nav = loadPure('src/component/navConfig.ts');
+  const labels = scope => nav.visibleGroups(scope, true).flatMap(g => g.pages.map(p => p.label));
+  const platform = labels('platform_admin');
+  for (const l of ['总览', '线索', '客户', '客户系统设置']) assert.ok(platform.includes(l), 'platform_admin ' + l);
+  eq(labels('crm_only'), ['总览', '客户', '分享访问记录']);
+  const sales = nav.visibleGroups('crm_only', true).find(g => g.id === 'sales');
+  assert.equal(sales.landing, '/sales-overview');
+});
+
+test('总览：crm 账号不请求线索接口，只显示客户数据；主管可切团队、顾问只看个人', async () => {
+  for (const [role, toggle] of [['admin', true], ['staff', false]]) {
+    const env = overviewEnv(role);
+    env.session.user = { id: 8, scope: 'crm_only', crmEnabled: true };
+    let leadCalls = 0;
+    for (const name of ['getCustomerLeadOverview', 'getCustomerLeadList', 'getCustomerLeadFunnel']) { const original = env.leadApi[name]; env.leadApi[name] = async (...a) => { leadCalls++; return original(...a); }; }
+    const h = await env.mount('salesOverview.tsx');
+    assert.equal(leadCalls, 0, role);
+    assert.ok(!/线索/.test(h.text()), role + ' 不显示线索内容');
+    assert.ok(h.text().includes('新增客户') && h.text().includes('公海待认领'), role);
+    assert.equal(h.text().includes('个人简报'), toggle, role);
+    assert.ok(h.all(n => n.type === 'SalesFunnel').length === 0, role);
+  }
 });

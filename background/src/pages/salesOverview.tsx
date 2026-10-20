@@ -17,14 +17,14 @@ const STAGE_COLORS: Record<Stage, string> = { new: '#d9a441', following: '#8b5e3
 const PERIODS = [{ days: 1, label: '今天' }, { days: 7, label: '近 7 天' }, { days: 30, label: '近 30 天' }];
 
 interface Snapshot {
-    brief: { newLeads: number; newCustomers: number; todo: number };
+    brief: { newLeads: number | null; newCustomers: number; todo: number };
     todos: { key: string; label: string; count: number; to: string }[];
     stages: DonutSlice[];
     problems: string[];
 }
 
 /** 读不到的部分返回 undefined 并记入 problems，页面其余部分照常显示。 */
-async function loadSnapshot(mode: Mode, account: { employeeId: string | null; displayName: string } | undefined): Promise<Snapshot> {
+async function loadSnapshot(mode: Mode, withLeads: boolean, account: { employeeId: string | null; displayName: string } | undefined): Promise<Snapshot> {
     const problems: string[] = [];
     const settle = async <T,>(name: string, job: Promise<T>): Promise<T | undefined> => {
         try { return await job; } catch { problems.push(name); return undefined; }
@@ -37,9 +37,10 @@ async function loadSnapshot(mode: Mode, account: { employeeId: string | null; di
     const noOwner = personal && crmReady && !account?.employeeId; // 渠道账号没有绑定员工，个人口径没有客户可统计
 
     const [leads, dash, today, added, overdue, ...stageTotals] = await Promise.all([
-        settle<CustomerLeadOverview | number[]>('线索', personal
+        // 线索接口是平台接口，crm_only 账号不请求
+        withLeads ? settle<CustomerLeadOverview | number[]>('线索', personal
             ? Promise.all([leadCount('today'), leadCount('overdue')])
-            : getCustomerLeadOverview()),
+            : getCustomerLeadOverview()) : Promise.resolve(undefined),
         crmReady ? settle<Dashboard>('客户', crm<Dashboard>('/dashboard')) : Promise.resolve(undefined),
         crmReady && !noOwner ? settle<number>('客户', customerCount({ queue: 'today' })) : Promise.resolve(undefined),
         crmReady && !noOwner ? settle<number>('客户', customerCount({ queue: 'added' })) : Promise.resolve(undefined),
@@ -52,9 +53,9 @@ async function loadSnapshot(mode: Mode, account: { employeeId: string | null; di
     const customerToday = personal ? today ?? 0 : dash?.overview.today ?? 0;
     const customerOverdue = personal ? overdue ?? 0 : dash?.overview.overdue ?? 0;
     return {
-        brief: { newLeads: leadToday, newCustomers: personal ? added ?? 0 : dash?.todayAdded ?? 0, todo: customerToday },
+        brief: { newLeads: withLeads ? leadToday : null, newCustomers: personal ? added ?? 0 : dash?.todayAdded ?? 0, todo: customerToday },
         todos: [
-            { key: 'lead-overdue', label: '线索超时未跟进', count: leadOverdue, to: '/customer-leads?queue=overdue' },
+            ...(withLeads ? [{ key: 'lead-overdue', label: '线索超时未跟进', count: leadOverdue, to: '/customer-leads?queue=overdue' }] : []),
             ...(crmReady ? [
                 { key: 'customer-overdue', label: '客户超时未跟进', count: customerOverdue, to: '/customer-management?tab=tasks&queue=overdue' },
                 { key: 'customer-today', label: '今日待跟进客户', count: customerToday, to: '/customer-management?tab=tasks&queue=today' },
@@ -69,6 +70,7 @@ async function loadSnapshot(mode: Mode, account: { employeeId: string | null; di
 const SalesOverview: React.FC = () => {
     const session = useManagementSession();
     const account = session.crmContext?.account;
+    const withLeads = session.user?.scope === 'platform_admin';
     const supervisor = account?.role === 'admin';
     // 主管可看团队也可看个人；顾问只有个人。没有客户账号的平台管理员只有全局线索数据（团队口径）。
     const [mode, setMode] = useState<Mode>(supervisor || !account ? 'team' : 'personal');
@@ -82,18 +84,19 @@ const SalesOverview: React.FC = () => {
     useEffect(() => {
         let active = true;
         setSnapshot(null);
-        loadSnapshot(effectiveMode, account ? { employeeId: account.employeeId, displayName: account.displayName } : undefined)
+        loadSnapshot(effectiveMode, withLeads, account ? { employeeId: account.employeeId, displayName: account.displayName } : undefined)
             .then((value) => { if (active) setSnapshot(value); });
         return () => { active = false; };
-    }, [effectiveMode, account?.username, account?.employeeId, version]);
+    }, [effectiveMode, withLeads, account?.username, account?.employeeId, version]);
 
     useEffect(() => {
+        if (!withLeads) return;
         let active = true;
         getCustomerLeadFunnel(days)
             .then((metrics) => { if (active) setFunnel({ steps: metrics.map((m) => ({ key: m.key, label: m.label, count: m.count })), error: false }); })
             .catch(() => { if (active) setFunnel({ steps: [], error: true }); });
         return () => { active = false; };
-    }, [days, version]);
+    }, [days, version, withLeads]);
 
     // 主管需要的接入状态：只读一行，读不到就不显示
     useEffect(() => {
@@ -123,14 +126,14 @@ const SalesOverview: React.FC = () => {
                 <div className="sx-feedback" role="alert"><FiAlertCircle /><span>{snapshot.problems.join('、')}数据未能读取</span><button type="button" onClick={retry}>重试</button></div>
             ) : null}
 
-            <section className="sx-brief" aria-label={effectiveMode === 'team' ? '团队简报' : '个人简报'}>
-                <div><strong>{snapshot ? snapshot.brief.newLeads : '—'}</strong><span>新增线索</span></div>
+            <section className={`sx-brief${withLeads ? '' : ' is-two'}`} aria-label={effectiveMode === 'team' ? '团队简报' : '个人简报'}>
+                {withLeads && <div><strong>{snapshot ? snapshot.brief.newLeads : '—'}</strong><span>新增线索</span></div>}
                 <div><strong>{snapshot ? snapshot.brief.newCustomers : '—'}</strong><span>新增客户</span></div>
                 <div><strong>{snapshot ? snapshot.brief.todo : '—'}</strong><span>待跟进</span></div>
             </section>
 
-            <div className="sx-grid">
-                <section className="sx-card sx-card-funnel">
+            <div className={`sx-grid${withLeads ? '' : ' is-customers-only'}`}>
+                {withLeads && <section className="sx-card sx-card-funnel">
                     <header className="sx-card-head">
                         <h2>线索漏斗</h2>
                         <select aria-label="漏斗周期" value={days} onChange={(event) => setDays(Number(event.target.value))}>
@@ -138,7 +141,7 @@ const SalesOverview: React.FC = () => {
                         </select>
                     </header>
                     {!funnel ? <p className="sx-muted">正在读取…</p> : funnel.error ? <p className="sx-muted">漏斗暂不可用</p> : <SalesFunnel steps={funnel.steps} label="线索漏斗" />}
-                </section>
+                </section>}
 
                 <section className="sx-card sx-card-todo">
                     <header className="sx-card-head"><h2>今日待办</h2></header>
