@@ -920,6 +920,13 @@
   white-space: nowrap;
 }
 
+/* 内容溢出产生横向滚动条，模拟器中常驻显示为一条横线，隐藏之 */
+.main-tabs::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .main-tab-item {
   flex-shrink: 0;
   display: flex;
