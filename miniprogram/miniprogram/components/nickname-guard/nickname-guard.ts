@@ -7,6 +7,8 @@ import { getCachedDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { blockUnsafeText } from '../../utils/promptReview';
 
 const API_BASE_URL = 'https://api.jiadilingguang.com';
+// 与「我的」页共用同一个标记：同一自然日内两处合计最多提醒一次；保存成功后组件会清除它。
+const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day';
 
 Component({
   data: {
@@ -28,6 +30,42 @@ Component({
         uploading: false,
         saving: false,
       });
+    },
+
+    // 已登录用户的昵称补检：昵称为空时弹窗，每个自然日最多提醒一次。
+    // 请求失败一律放行，且不占用当天的提醒次数，避免网络问题挡住用户。
+    async checkAndShow(): Promise<boolean> {
+      if (this.data.visible) {
+        return false;
+      }
+      const now = new Date();
+      const dayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      if (wx.getStorageSync(NICKNAME_PROMPT_DAY_KEY) === dayKey) {
+        return false;
+      }
+      const apiPath = '/api/v1/miniprogram/profile';
+      const headers = this.buildAuthHeaders(apiPath);
+      if (!headers) {
+        return false;
+      }
+      try {
+        const res = await new Promise<any>((resolve, reject) => {
+          wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, success: resolve, fail: reject });
+        });
+        const body = res.data || {};
+        if (res.statusCode !== 200 || body.code !== 0) {
+          return false;
+        }
+        if (String(body.data?.nickname || '').trim()) {
+          return false;
+        }
+        wx.setStorageSync(NICKNAME_PROMPT_DAY_KEY, dayKey);
+        this.show({ avatar: String(body.data?.avatar || '') });
+        return true;
+      } catch (error) {
+        console.error('昵称补检失败，放行:', error);
+        return false;
+      }
     },
 
     stopPropagation() {},
