@@ -14,7 +14,7 @@ public final class Models {
   @Column(length=128) private String ownerId;
   @Column(length=24) private String stage="new";
   @Column(length=24) private String category="待确认";
-  @Column(length=12) private String intent="medium";
+  @Column(length=12) private String intent="unknown";
   @Column(length=80) private String phone="";
   @Column(length=2000) private String demand="";
   @Column(length=40,unique=true) private String customerNumber;
@@ -83,6 +83,7 @@ public final class Models {
   @Column(length=128,nullable=false) private String originCustomerId;
   @Column(length=24) private String kind;
   @Column(length=128) private String externalId;
+  @Column(length=64) private String unionid;
   @Column(length=200) private String name="";
   @Column(length=80) private String phone="";
   @Column(length=80) private String wechat="";

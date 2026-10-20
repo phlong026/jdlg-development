@@ -158,7 +158,7 @@ func TestTrackingLeadConversionContract(t *testing.T) {
 	for _, want := range []string{
 		`"/visitors/:id/lead"`,
 		"!scope.CRM",
-		"crmEnabled()",
+		`"crm":`, // 响应告知前端：线索已交给 CRM 承接，由客户主管分配
 		"FindLatestOpenLeadID",
 		"CreateLead",
 		"CreateEvent",
@@ -170,6 +170,10 @@ func TestTrackingLeadConversionContract(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("lead conversion contract missing %q", want)
 		}
+	}
+	// CRM 开启后不再拦截：线索作为投递记录写入，由 outbox 送进 CRM，跟进统一在 CRM 里做。
+	if strings.Contains(content, "客户已统一纳管") || strings.Contains(content, "409") {
+		t.Fatal("conversion must not be blocked with 409 when the CRM bridge is on")
 	}
 	// The wiring must actually register the route with the lead model.
 	wiring, err := os.ReadFile("share_tracking.go")

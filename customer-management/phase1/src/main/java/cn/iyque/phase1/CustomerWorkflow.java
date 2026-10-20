@@ -37,6 +37,17 @@ public class CustomerWorkflow {
  public void audit(Customer c,String actor,String kind,String content){Followup f=new Followup();f.setCustomerId(c.getId());f.setOperatorId(actor);f.setKind(kind);f.setEffective(false);f.setContent(CustomerService.text(content,2000));f.setStage(c.getStage());followups.save(f);c.setUpdatedAt(Instant.now());}
  public void notice(String username,Customer c,String key,String content){if(username==null)return;String id=AuthService.hash(username+":"+key);if(notices.existsById(id))return;Notice n=new Notice();n.setId(id);n.setUsername(username);n.setCustomerId(c.getId());n.setContent(content);notices.save(n);}
  public void notifyAdmins(Customer c,String key,String content){accounts.findAll().stream().filter(a->a.isAdmin()&&a.isEnabled()).forEach(a->notice(a.getUsername(),c,key,content));}
+ /** 记录来源的 unionid；若另一位客户的来源也有同一 unionid，只通知主管核实，不自动合并（沿用《线索移交与跟进入口约定》）。 */
+ public void tagSourceUnionid(Customer c,String kind,String externalId,String unionid){
+  String u=CustomerService.text(unionid,64);if(u.isBlank())return;
+  Source mine=sources.findById(sourceKey(kind,externalId)).orElse(null);if(mine==null)return;mine.setUnionid(u);sources.save(mine);
+  for(Source s:sources.findByUnionid(u)){
+   if(s.getCustomerId().equals(c.getId()))continue;
+   Customer other=customers.findById(s.getCustomerId()).orElse(null);if(other==null||other.getMergedInto()!=null)continue;
+   String a=c.getId(),b=other.getId();
+   notifyAdmins(c,"unionid:"+(a.compareTo(b)<0?a+"|"+b:b+"|"+a),"疑似同一客户：企微与小程序账号的 unionid 一致（"+other.getCustomerNumber()+"），请核实后在客户详情中关联同一客户");
+  }
+ }
  public String sourceKey(String kind,String externalId){return kind+":"+AuthService.hash(externalId);}
  public Customer sourceCustomer(String kind,String externalId){return sources.findById(sourceKey(kind,externalId)).flatMap(s->customers.findById(s.getCustomerId())).orElse(null);}
  public void registerSource(Customer c,String kind,String externalId,String name,String phone,String wechat,String summary){
@@ -44,10 +55,11 @@ public class CustomerWorkflow {
   s.setName(CustomerService.text(name,200));s.setPhone(CustomerService.text(phone,80));s.setWechat(CustomerService.text(wechat,80));s.setSummary(CustomerService.text(summary,2000));sources.save(s);
  }
  public record SourceHistory(String externalId,String operator,String content,Instant createdAt){}
- public record Ingest(String externalId,String name,String phone,String wechat,String summary,String submittedBy,String channel,Instant createdAt,List<SourceHistory> history){public Ingest(String externalId,String name,String phone,String wechat,String summary){this(externalId,name,phone,wechat,summary,"","",null,List.of());}}
+ public record Ingest(String externalId,String name,String phone,String wechat,String summary,String submittedBy,String channel,Instant createdAt,List<SourceHistory> history,String intent,String unionid){public Ingest(String externalId,String name,String phone,String wechat,String summary){this(externalId,name,phone,wechat,summary,"","",null,List.of(),null,null);}
+  public Ingest(String externalId,String name,String phone,String wechat,String summary,String submittedBy,String channel,Instant createdAt,List<SourceHistory> history){this(externalId,name,phone,wechat,summary,submittedBy,channel,createdAt,history,null,null);}}
  @Transactional public Customer ingest(Ingest i){lock();if(i.externalId()==null||!i.externalId().matches("[1-9][0-9]{0,18}"))throw new ApiException(400,"来源标识无效");Customer c=sourceCustomer("miniprogram",i.externalId());
-  if(c==null){c=new Customer();c.setId("mini-"+UUID.randomUUID());number(c);c.setLifecycle("pending");c.setAddedTimeSource("miniprogram");c.setName(CustomerService.text(i.name(),200));c.setPhone(CustomerService.text(i.phone(),80));c.setWechat(CustomerService.text(i.wechat(),80));c.setDemand(CustomerService.text(i.summary(),2000));customers.saveAndFlush(c);audit(c,"system","source","小程序咨询接入，待分配及完善");notifyAdmins(c,"source:"+c.getId(),"新增小程序咨询待分配");}
-  registerSource(c,"miniprogram",i.externalId(),i.name(),i.phone(),i.wechat(),i.summary());Source source=sources.findById(sourceKey("miniprogram",i.externalId())).orElseThrow();source.setSubmittedBy(CustomerService.text(i.submittedBy(),64));source.setChannel(CustomerService.text(i.channel(),64));if(i.createdAt()!=null)source.setCreatedAt(i.createdAt());sources.save(source);
+  if(c==null){c=new Customer();c.setId("mini-"+UUID.randomUUID());number(c);c.setLifecycle("pending");c.setAddedTimeSource("miniprogram");if(Set.of("high","medium","low").contains(Objects.toString(i.intent(),"")))c.setIntent(i.intent());c.setName(CustomerService.text(i.name(),200));c.setPhone(CustomerService.text(i.phone(),80));c.setWechat(CustomerService.text(i.wechat(),80));c.setDemand(CustomerService.text(i.summary(),2000));customers.saveAndFlush(c);audit(c,"system","source","小程序咨询接入，待分配及完善");notifyAdmins(c,"source:"+c.getId(),"新增小程序咨询待分配");}
+  registerSource(c,"miniprogram",i.externalId(),i.name(),i.phone(),i.wechat(),i.summary());Source source=sources.findById(sourceKey("miniprogram",i.externalId())).orElseThrow();source.setSubmittedBy(CustomerService.text(i.submittedBy(),64));source.setChannel(CustomerService.text(i.channel(),64));if(i.createdAt()!=null)source.setCreatedAt(i.createdAt());sources.save(source);tagSourceUnionid(c,"miniprogram",i.externalId(),i.unionid());
   if(i.history()!=null){if(i.history().size()>5)throw new ApiException(400,"历史记录每批最多 5 条");for(SourceHistory row:i.history()){
    if(row.externalId()==null||!row.externalId().matches("[1-9][0-9]{0,18}"))throw new ApiException(400,"历史记录标识无效");String key="miniprogram:"+i.externalId()+":"+row.externalId();if(followups.existsByExternalKey(key))continue;
    Followup f=new Followup();f.setExternalKey(key);f.setCustomerId(source.getOriginCustomerId());f.setOperatorId(CustomerService.text(row.operator(),64));f.setContent(CustomerService.text(row.content(),2000));f.setCreatedAt(row.createdAt()==null?source.getCreatedAt():row.createdAt());f.setKind("source_history");f.setOutcome("imported");f.setEffective(false);f.setStage(c.getStage());followups.save(f);

@@ -14,7 +14,9 @@ public class WecomGateway {
  @Value("${crm.demo:false}") private boolean demo;
  private WxCpServiceImpl service;
  public record Relation(String employeeId,long addedAt,String state) {}
- public record Snapshot(String id,String name,String avatar,Integer type,List<Relation> relations) {}
+ public record Snapshot(String id,String name,String avatar,Integer type,List<Relation> relations,String unionid) {
+  public Snapshot(String id,String name,String avatar,Integer type,List<Relation> relations) {this(id,name,avatar,type,relations,null);}
+ }
  public boolean configured() { return !demo && !corp.isBlank() && !secret.isBlank(); }
  private synchronized WxCpServiceImpl client() {
   if(!configured()) throw new ApiException(503,"请先配置企微客户联系凭据");
@@ -48,7 +50,7 @@ public class WecomGateway {
     cursor=page.getNextCursor();
     if(cursor!=null && !cursor.isBlank() && !cursors.add(cursor)) throw new IllegalStateException("repeated cursor");
    } while(cursor!=null && !cursor.isBlank());
-   return new Snapshot(id,external.getName(),external.getAvatar(),external.getType(),relations);
+   return new Snapshot(id,external.getName(),external.getAvatar(),external.getType(),relations,external.getUnionId());
   } catch(ApiException e) {throw e;} catch(Exception e) {throw error(e);}
  }
 }
