@@ -18,21 +18,10 @@
         <image class="avatar" src="{{userProfile.avatar || defaultAvatarImage}}" mode="aspectFill" />
         <view class="user-info">
           <text class="nickname">{{userProfile.nickname || (userInfo ? userInfo.username : (hasLoginToken ? '加载中...' : '未登录'))}}</text>
-          <view class="vip-tags">
+          <view class="vip-tags" wx:if="{{userProfile.identityType || (certStatus === 'approved' && certIdentityType)}}">
             <view class="vip-tag vip-tag-dark">
-              <text>会员等级</text>
+              <text>{{userProfile.identityType || certIdentityType}}</text>
             </view>
-            <view class="vip-tag vip-tag-light">
-              <text>{{vipLevelText}}</text>
-            </view>
-          </view>
-          <view class="cert-info" wx:if="{{userProfile.identityType}}">
-            <text class="cert-badge">身份</text>
-            <text class="cert-text">{{userProfile.identityType}}</text>
-          </view>
-          <view class="cert-info" wx:elif="{{certStatus === 'approved'}}">
-            <text class="cert-badge">已认证</text>
-            <text class="cert-text">{{certRealName || certRealNameMasked}}{{certIdentityType ? ' · ' + certIdentityType : ''}}</text>
           </view>
           <view class="login-hint" wx:if="{{!hasLoginToken}}">点击登录后查看完整信息</view>
         </view>
