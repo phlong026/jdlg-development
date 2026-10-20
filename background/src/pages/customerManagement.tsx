@@ -165,4 +165,3 @@ function CustomerForm({customer:c,mode,cancel,saved,files,beginMutation}:{files:
  <footer className="crm-form-footer"><button type="button" disabled={busy} onClick={cancel}>取消</button><button type="submit" className="crm-primary" disabled={busy||conflict||operation.current.completed}>{busy?'正在保存…':mode==='edit'?'保存资料':'保存跟进'}</button></footer>
  </form>;
 }
-
