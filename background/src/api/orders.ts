@@ -5,6 +5,7 @@ export interface OrderListItem {
     id: number;
     user_id: number;
     username: string;
+    nickname?: string;
     designer_user_id: number;
     template_id?: number | null;
     order_no: string;
@@ -89,6 +90,7 @@ export interface OrderDetail {
     user?: {
         id: number;
         username: string;
+        nickname?: string;
         user_type: string;
         can_withdraw: boolean;
         created_at?: string;

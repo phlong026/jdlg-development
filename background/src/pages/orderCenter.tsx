@@ -47,9 +47,45 @@ const formatOrderCategory = (value: string) => {
         service: '设计服务',
         report: '建房报告',
         enterprise_recharge: '企业充值',
+        consume: 'AI消费',
     };
     return map[value] || value || '-';
 };
+
+// 卡片类型行：分类与类型译名相同（如 consume/consume）时只显示一次
+const formatOrderTypeLine = (type: string, category: string) => {
+    const typeLabel = formatOrderType(type);
+    const categoryLabel = formatOrderCategory(category);
+    return typeLabel === categoryLabel ? typeLabel : `${typeLabel} · ${categoryLabel}`;
+};
+
+// AI 场景中文名，与后端 service/route/ai_overview_management.go 的 aiSceneMeta 同源
+const aiSceneLabels: Record<string, string> = {
+    ai_draw_single: 'AI 绘画-单图',
+    ai_draw_multi: 'AI 绘画-多图',
+    new_minnan_tool_text_to_image: '新闽派工具-文生图',
+    new_minnan_tool_image_to_image: '新闽派工具-图生图',
+    ai_chat_single: 'AI 对话-单轮',
+    ai_chat_multi: 'AI 对话-多轮',
+    building_code_chat: '建规快查',
+    rural_villa_design: '乡村别墅设计',
+    allround_design: '全能设计',
+    building_replacement: '建筑换新',
+    parent_child_design: '亲子设计',
+    ai_cost_doc: 'AI 造价文档',
+    ai_video_1: 'AI 视频-1段',
+    ai_video_2: 'AI 视频-2段',
+    ai_video_3: 'AI 视频-3段',
+    ai_video_4: 'AI 视频-4段',
+};
+
+// 历史消费订单标题形如「AI生成-ai_draw_single-3张」，显示时把场景代码换成中文名
+const formatOrderTitle = (title?: string) =>
+    (title || '').replace(/[a-z][a-z0-9]*(?:_[a-z0-9]+)+/g, code => aiSceneLabels[code] || code);
+
+// 小程序默认用户名是 wx_xxxx，运营认不出人；有昵称时优先显示昵称
+const formatOrderUser = (user: { nickname?: string; username?: string } | null | undefined, userId: number) =>
+    user?.nickname?.trim() || user?.username || `用户${userId}`;
 
 // 状态中文映射（T4）：delivering/refunding 是资金流转的中间态，必须给中文，
 // 否则列表直接显示英文原值；卡单由"仅看异常单"的服务端条件兜底捕获。
@@ -585,7 +621,7 @@ const OrderCenter: React.FC = () => {
         const rows: string[][] = [
             ['项目', '内容'],
             ['订单号', o.order_no],
-            ['用户', `${selectedDetail.user?.username || `用户${o.user_id}`}（ID ${o.user_id}）`],
+            ['用户', `${formatOrderUser(selectedDetail.user, o.user_id)}（ID ${o.user_id}）`],
             ['业务类型', `${formatOrderType(o.type)} / ${formatOrderCategory(o.order_category)}`],
             ['支付金额(元)', o.amount_fen > 0 ? (o.amount_fen / 100).toFixed(2) : '-'],
             ['灵石变动', String(o.amount)],
@@ -873,7 +909,7 @@ const OrderCenter: React.FC = () => {
                                     className={`order-card ${record.status === 'failed' ? 'row-alert-failed' : record.status === 'pending' || record.status === 'delivering' || record.status === 'refunding' ? 'row-alert-pending' : ''}`}
                                 >
                                     <div className="order-card-head">
-                                        <span className="order-card-type">{formatOrderType(record.type)} · {formatOrderCategory(record.order_category)}</span>
+                                        <span className="order-card-type">{formatOrderTypeLine(record.type, record.order_category)}</span>
                                         <span className={`status-badge ${cardStatusMeta.className}`}>{cardStatusMeta.label}</span>
                                     </div>
                                     <div className="order-card-amount">
@@ -882,12 +918,12 @@ const OrderCenter: React.FC = () => {
                                     </div>
                                     {(record.title || record.description) && (
                                         <div className="order-card-title">
-                                            <strong>{record.title || '-'}</strong>
+                                            <strong>{formatOrderTitle(record.title) || '-'}</strong>
                                             {record.description && <span>{record.description}</span>}
                                         </div>
                                     )}
                                     <button type="button" className="order-card-user" onClick={() => navigate(`/user-workbench?userId=${record.user_id}`)} title="进入用户详情">
-                                        {record.username || `用户${record.user_id}`}
+                                        {formatOrderUser(record, record.user_id)}
                                         <span>ID {record.user_id}</span>
                                     </button>
                                     <div className="order-card-meta">
@@ -992,7 +1028,7 @@ const OrderCenter: React.FC = () => {
                                                         className="user-link-button"
                                                         onClick={() => navigate(`/user-workbench?userId=${record.user_id}`)}
                                                     >
-                                                        {record.username || `用户${record.user_id}`}
+                                                        {formatOrderUser(record, record.user_id)}
                                                     </button>
                                                     <span className="user-meta">ID {record.user_id}</span>
                                                 </div>
@@ -1035,7 +1071,7 @@ const OrderCenter: React.FC = () => {
                                             </td>
                                             <td>
                                                 <div className="order-title-cell">
-                                                    <strong>{record.title || '-'}</strong>
+                                                    <strong>{formatOrderTitle(record.title) || '-'}</strong>
                                                     <span className="cell-clamp" title={record.description || undefined}>{record.description || '-'}</span>
                                                 </div>
                                             </td>
@@ -1198,7 +1234,7 @@ const OrderCenter: React.FC = () => {
                                 <div className="detail-section">
                                     <h4>客户与订单</h4>
                                     <div className="detail-grid">
-                                        <div className="info-row"><span className="info-label">用户</span><span className="info-value">{selectedDetail.user?.username || `用户${detailOrder.user_id}`}（ID {detailOrder.user_id}）</span></div>
+                                        <div className="info-row"><span className="info-label">用户</span><span className="info-value">{formatOrderUser(selectedDetail.user, detailOrder.user_id)}（ID {detailOrder.user_id}）</span></div>
                                         <div className="info-row"><span className="info-label">订单类型</span><span className="info-value">{formatOrderType(detailOrder.type)}</span></div>
                                         <div className="info-row"><span className="info-label">业务分类</span><span className="info-value">{formatOrderCategory(detailOrder.order_category)}</span></div>
                                         <div className="info-row"><span className="info-label">支付金额</span><span className="info-value">{formatAmountYuan(detailOrder.amount_fen)}</span></div>
@@ -1210,7 +1246,7 @@ const OrderCenter: React.FC = () => {
                                                 <div className="info-row"><span className="info-label">发货上报</span><span className="info-value">{detailOrder.deliver_reported ? '已上报' : `未上报 / ${detailOrder.deliver_report_attempts || 0} 次`}</span></div>
                                             </>
                                         )}
-                                        <div className="info-row"><span className="info-label">标题</span><span className="info-value">{detailOrder.title || '-'}</span></div>
+                                        <div className="info-row"><span className="info-label">标题</span><span className="info-value">{formatOrderTitle(detailOrder.title) || '-'}</span></div>
                                         <div className="info-row"><span className="info-label">完成时间</span><span className="info-value">{formatDateTime(detailOrder.completed_at)}</span></div>
                                     </div>
                                     {detailOrder.description && (
