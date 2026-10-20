@@ -32,6 +32,7 @@ public final class Repositories {
  public interface Sources extends JpaRepository<Source,String> {
   List<Source> findByCustomerId(String id);
   List<Source> findByOriginCustomerId(String id);
+  List<Source> findByUnionid(String unionid);
  }
  public interface Attachments extends JpaRepository<Attachment,String> {List<Attachment> findByCustomerIdOrderByCreatedAtDesc(String id);long countByCustomerId(String id);}
  public interface Cases extends JpaRepository<ReviewCase,Long> {boolean existsByStatusAndApplicantAndKindAndCustomerId(String status,String applicant,String kind,String customerId);List<ReviewCase> findByCustomerIdOrderByCreatedAtDesc(String id);List<ReviewCase> findTop200ByStatusOrderByCreatedAtAsc(String status);}

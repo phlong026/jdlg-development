@@ -166,18 +166,14 @@ func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, l
 			trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "无客户跟进权限"})
 			return
 		}
-		// Same handover rule as the lead workbench: once the CRM bridge owns
-		// customers, conversions must happen there, not in the read-only lead view.
-		if crmEnabled() {
-			c.JSON(409, gin.H{"code": 409, "msg": "客户已统一纳管，请在客户档案中跟进、交接或申请成交"})
-			return
-		}
+		// CRM 开启后线索只是一条"投递记录"：由 crm_sources 的 outbox 送进 CRM，
+		// 线索工作台对它保持只读，销售的跟进统一在 CRM 客户档案里做。
 		if leads == nil || leads.DB == nil {
 			trackingResponse(c, nil, &tracking.Error{Status: 503, Message: "客服线索服务不可用"})
 			return
 		}
 		outcome, err := convertVisitorToLead(c.Request.Context(), svc, leads, identities, scope, c.Param("id"), trackingLeadSource)
-		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary}, err)
+		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary, "crm": crmEnabled()}, err)
 	})
 }
 

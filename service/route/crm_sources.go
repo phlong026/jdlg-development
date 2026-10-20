@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,7 +24,7 @@ func syncCRMLeads(db *sql.DB) error {
 	defer crmSourceWorker.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,l.phone,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.created_at,
+	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,l.phone,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.created_at,l.intent_level,COALESCE((SELECT u.unionid FROM users u WHERE u.id=l.user_id),''),
  SHA2(CONCAT_WS('|',l.name,l.phone,l.wechat,COALESCE(l.demand_summary,'')),256),COALESCE(d.history_cursor,0)
  FROM customer_leads l LEFT JOIN customer_lead_crm_delivery d ON d.lead_id=l.id
  WHERE (EXISTS(SELECT 1 FROM customer_lead_followups f WHERE f.lead_id=l.id AND f.id>COALESCE(d.history_cursor,0)) OR d.lead_id IS NULL OR d.source_hash<>SHA2(CONCAT_WS('|',l.name,l.phone,l.wechat,COALESCE(l.demand_summary,'')),256))
@@ -37,12 +38,13 @@ func syncCRMLeads(db *sql.DB) error {
 		userID                             int64
 		channel                            string
 		createdAt                          time.Time
+		intent, unionid                    string
 		historyCursor                      int64
 	}
 	var batch []lead
 	for rows.Next() {
 		var l lead
-		if err = rows.Scan(&l.id, &l.name, &l.phone, &l.wechat, &l.summary, &l.userID, &l.channel, &l.createdAt, &l.hash, &l.historyCursor); err != nil {
+		if err = rows.Scan(&l.id, &l.name, &l.phone, &l.wechat, &l.summary, &l.userID, &l.channel, &l.createdAt, &l.intent, &l.unionid, &l.hash, &l.historyCursor); err != nil {
 			rows.Close()
 			return err
 		}
@@ -58,7 +60,7 @@ func syncCRMLeads(db *sql.DB) error {
 		if historyErr != nil {
 			return historyErr
 		}
-		body, _ := json.Marshal(map[string]any{"history": history, "submittedBy": strconv.FormatInt(l.userID, 10), "channel": crmSourceText(l.channel, 64), "createdAt": l.createdAt.UTC().Format(time.RFC3339), "externalId": strconv.FormatInt(l.id, 10), "name": l.name, "phone": l.phone, "wechat": crmSourceText(l.wechat, 80), "summary": crmSourceText(l.summary, 2000)})
+		body, _ := json.Marshal(map[string]any{"history": history, "submittedBy": strconv.FormatInt(l.userID, 10), "channel": crmSourceText(l.channel, 64), "createdAt": l.createdAt.UTC().Format(time.RFC3339), "intent": crmIntent(l.intent), "unionid": crmSourceText(l.unionid, 64), "externalId": strconv.FormatInt(l.id, 10), "name": l.name, "phone": l.phone, "wechat": crmSourceText(l.wechat, 80), "summary": crmSourceText(l.summary, 2000)})
 		status, data, _, remoteErr := crmRemote(ctx, "POST", "/ingest/miniprogram", "@source", 1, nil, body)
 		var ack struct {
 			CustomerID string `json:"customerId"`
@@ -75,6 +77,16 @@ func syncCRMLeads(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// crmIntent 只放行 CRM 认识的三档意向；其余一律不传，由 CRM 记为"待判断"，
+// 避免把线索里的默认值当成系统判断过的结论。
+func crmIntent(level string) string {
+	switch v := strings.ToLower(strings.TrimSpace(level)); v {
+	case "high", "medium", "low":
+		return v
+	}
+	return ""
 }
 
 func registerCRMSources(g *gin.RouterGroup, db *sql.DB) {

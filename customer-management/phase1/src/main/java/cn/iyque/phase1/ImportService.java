@@ -59,7 +59,7 @@ public class ImportService {
   }
   if(c.getId().equals(snapshot.id())&&!c.isHistoricalReviewed()){c.setName(CustomerService.text(snapshot.name(),200));c.setAvatar(CustomerService.text(snapshot.avatar(),1024));}
   // Synchronization must not overwrite the manually managed stage, owner, notes or next follow-up.
-  customers.save(c);workflow.registerSource(c,"wecom",snapshot.id(),snapshot.name(),"","","企业微信好友同步");
+  customers.save(c);workflow.registerSource(c,"wecom",snapshot.id(),snapshot.name(),"","","企业微信好友同步");workflow.tagSourceUnionid(c,"wecom",snapshot.id(),snapshot.unionid());
   for(WecomGateway.Relation follow:follows) {
    String key=snapshot.id()+"&"+follow.employeeId();
    if(!newer(key,readStartedAt)) continue;

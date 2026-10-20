@@ -72,7 +72,7 @@ public class CustomerService {
   if(filter!=null) {
    if(present(filter.stage())&&!STAGES.contains(filter.stage())) throw new ApiException(400,"客户阶段无效");
    if(present(filter.category())&&!CATEGORIES.contains(filter.category())) throw new ApiException(400,"咨询类型无效");
-   if(present(filter.intent())&&!Set.of("high","medium","low").contains(filter.intent())) throw new ApiException(400,"意向无效");
+   if(present(filter.intent())&&!Set.of("high","medium","low","unknown").contains(filter.intent())) throw new ApiException(400,"意向无效");
    if(filter.keyword()!=null&&filter.keyword().length()>200) throw new ApiException(400,"搜索内容过长");
   }
   return (r,q,b)->{
@@ -142,7 +142,7 @@ public class CustomerService {
   if(!"legacy".equals(c.getLifecycle()) && !Objects.equals(c.getOwnerId(),e.ownerId()))throw new ApiException(409,"该客户已进入业务流转，不能在此调整负责人，请使用主管「分配 / 交接」");
   // Unchanged overdue schedules are valid when only profile fields are edited.
   if(!Objects.equals(c.getStage(),e.stage()) || !Objects.equals(c.getNextFollowupAt(),e.nextFollowupAt())) validate(e.stage(),e.nextFollowupAt());
-  if(!CATEGORIES.contains(e.category()==null?"":e.category()) || !Set.of("high","medium","low").contains(e.intent()==null?"":e.intent())) throw new ApiException(400,"分类或意向无效");
+  if(!CATEGORIES.contains(e.category()==null?"":e.category()) || !Set.of("high","medium","low","unknown").contains(e.intent()==null?"":e.intent())) throw new ApiException(400,"分类或意向无效");
   if(!a.isAdmin() && !Objects.equals(e.ownerId(),c.getOwnerId())) throw new ApiException(403,"只有管理员可以调整负责人");
   String owner=e.ownerId()==null||e.ownerId().isBlank()?null:e.ownerId();
   if(owner!=null && !employees.findById(owner).map(Employee::isActive).orElse(false)) throw new ApiException(400,"负责人不是有效员工");

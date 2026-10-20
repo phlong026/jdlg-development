@@ -32,7 +32,7 @@ export async function downloadCustomers(kind:'customers'|'followups',query:Filte
 }
 export const stages:Record<Stage,string>={new:'新客户',following:'跟进中',won:'已成交',paused:'暂缓',invalid:'无效'};
 export const categories=['待确认','建房咨询','设计咨询','造价咨询','合作咨询'];
-export const intents:Record<string,string>={high:'高',medium:'中',low:'低'};
+export const intents:Record<string,string>={high:'高',medium:'中',low:'低',unknown:'待判断'};
 export const dateTime=(s?:string|null)=>s?new Date(s).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'未安排';
 
 export interface Source {id:string;customerId:string;originCustomerId:string;kind:string;externalId:string;name:string;phone:string;wechat:string;summary:string;submittedBy:string;channel:string;createdAt:string}

@@ -343,6 +343,36 @@ class CustomerIntegrationTest {
   @SuppressWarnings("unchecked") List<ReviewCase> history=(List<ReviewCase>)customerService.detail(admin(),pending.getId()).get("cases");assertThat(history).extracting(ReviewCase::getId).contains(r.getId());assertThat(fresh(won).getLifecycle()).isEqualTo("won");
  }
 
+ @Test void intakeCarriesIntentAndCustomersWithoutJudgementStayUnknown(){
+  Customer high=workflow.ingest(new CustomerWorkflow.Ingest("501","分享访客","","","分享来源","7","share_tracking",null,List.of(),"high",null));
+  assertThat(fresh(high).getIntent()).isEqualTo("high");
+  assertThat(fresh(workflow.ingest(new CustomerWorkflow.Ingest("502","普通咨询","","","咨询"))).getIntent()).isEqualTo("unknown");
+  assertThat(fresh(workflow.ingest(new CustomerWorkflow.Ingest("503","乱传","","","咨询","7","mini",null,List.of(),"urgent",null))).getIntent()).isEqualTo("unknown");
+  workflow.ingest(new CustomerWorkflow.Ingest("501","分享访客","","","再次咨询","7","share_tracking",null,List.of(),"low",null));
+  assertThat(fresh(high).getIntent()).as("重复投递不改写已有客户的意向").isEqualTo("high");
+  long now=Instant.now().getEpochSecond();imports.snapshot(new WecomGateway.Snapshot("wx-intent","企微客户","",1,List.of(new WecomGateway.Relation("emp1",now,""))),now);
+  assertThat(customers.findById("wx-intent").orElseThrow().getIntent()).as("企微导入的客户不再默认中意向").isEqualTo("unknown");
+ }
+
+ @Test void sameUnionidAcrossMiniprogramAndWecomAsksSupervisorToConfirmWithoutMerging(){
+  Customer mini=workflow.ingest(new CustomerWorkflow.Ingest("601","小程序用户","","","咨询","9","mini",null,List.of(),null,"union-abc"));
+  long now=Instant.now().getEpochSecond();var relation=new WecomGateway.Relation("emp1",now,"");
+  imports.snapshot(new WecomGateway.Snapshot("wx-union","企微昵称","",1,List.of(relation),"union-abc"),now);
+  Customer wecom=customers.findById("wx-union").orElseThrow();
+  assertThat(fresh(mini).getMergedInto()).isNull();assertThat(wecom.getMergedInto()).as("不自动合并").isNull();
+  assertThat(workflow.notices().findTop100ByUsernameOrderByCreatedAtDesc("admin")).extracting(Notice::getContent).anyMatch(c->c.contains("疑似同一客户"));
+  assertThat(workflow.sources().findByUnionid("union-abc")).hasSize(2);
+ }
+
+ @Test void differentOrMissingUnionidRaisesNoSupervisorNotice(){
+  long before=workflow.notices().findTop100ByUsernameOrderByCreatedAtDesc("admin").stream().filter(n->n.getContent().contains("疑似同一客户")).count();
+  workflow.ingest(new CustomerWorkflow.Ingest("611","甲","","","咨询","9","mini",null,List.of(),null,"union-x"));
+  long now=Instant.now().getEpochSecond();var relation=new WecomGateway.Relation("emp1",now,"");
+  imports.snapshot(new WecomGateway.Snapshot("wx-other","乙","",1,List.of(relation),"union-y"),now);
+  imports.snapshot(new WecomGateway.Snapshot("wx-none","丙","",1,List.of(relation)),now);
+  assertThat(workflow.notices().findTop100ByUsernameOrderByCreatedAtDesc("admin").stream().filter(n->n.getContent().contains("疑似同一客户")).count()).isEqualTo(before);
+ }
+
  @Test void allThreeSourcesShareMasterAndWecomResyncCannotOverwriteManualFields(){
   Customer main=customerService.report(staff(1),reportInput("13800001234"));Instant deadline=fresh(main).getProtectionExpiresAt();
   long now=Instant.now().getEpochSecond();var relation=new WecomGateway.Relation("emp1",now,"trusted-event");imports.snapshot(new WecomGateway.Snapshot("wx-three","企微昵称","",1,List.of(relation)),now);Customer wecom=customers.findById("wx-three").orElseThrow();

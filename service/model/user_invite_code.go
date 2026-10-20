@@ -151,16 +151,19 @@ func isDuplicateKey(err error) bool {
 	return strings.Contains(s, "Duplicate") || strings.Contains(s, "1062") || strings.Contains(s, "UNIQUE")
 }
 
-// ResolveInviteCodeToUserID 解析邀请码为邀请人 user_id：先查 user_invite_codes，再兼容纯数字（旧邀请码）
+// ResolveInviteCodeToUserID 解析邀请码为邀请人 user_id，只认 user_invite_codes 表里的 6 位码。
+// 不再把纯数字当作 user_id：微信启动场景值（1007/1047 等）也是纯数字，会造成误绑定和灵石误发。
 func (m *UserInviteCodeModel) ResolveInviteCodeToUserID(inviteCode string) (int64, bool) {
+	return resolveInviteCode(inviteCode, m.GetUserIDByCode)
+}
+
+func resolveInviteCode(inviteCode string, lookup func(string) (int64, bool, error)) (int64, bool) {
 	if inviteCode == "" {
 		return 0, false
 	}
-	userID, ok, _ := m.GetUserIDByCode(inviteCode)
-	if ok && userID > 0 {
-		return userID, true
+	userID, ok, err := lookup(inviteCode)
+	if err != nil || !ok || userID <= 0 {
+		return 0, false
 	}
-	// 兼容旧逻辑：纯数字视为 user_id
-	id, ok := ParseInviteCodeToUserID(inviteCode)
-	return id, ok
+	return userID, true
 }
