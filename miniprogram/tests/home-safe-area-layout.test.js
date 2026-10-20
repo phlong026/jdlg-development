@@ -28,7 +28,7 @@ assert.deepEqual(entries, [
   { label: '庭院设计', url: '/pages/aigenerate/aigenerate?source=courtyard&amp;prompt=庭院景观设计', image: 'courtyard' },
   { label: '旧居翻新', url: '/pages/buildingreplacement/buildingreplacement', image: 'renovation' },
   { label: '造价测算', url: '/pages/aicost/aicost', image: 'calculator' },
-  { label: '建房顾问', url: '/pages/specadvisor/specadvisor', image: 'advisor' },
+  { label: '建规快查', url: '/pages/specadvisor/specadvisor', image: 'advisor' },
 ]);
 
 function pageFor(windowInfo, getWindowInfo) {

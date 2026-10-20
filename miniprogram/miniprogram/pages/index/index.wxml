@@ -44,9 +44,9 @@
           <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.calculator}}" mode="aspectFit" aria-hidden="true" /></view>
           <text class="service-label">造价测算</text>
         </view>
-        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建房顾问">
+        <view class="service-entry" bindtap="onOpenPage" data-url="/pages/specadvisor/specadvisor" role="button" aria-label="建规快查">
           <view class="service-icon-disc"><image class="service-icon" src="{{homeAssets.advisor}}" mode="aspectFit" aria-hidden="true" /></view>
-          <text class="service-label">建房顾问</text>
+          <text class="service-label">建规快查</text>
         </view>
       </view>
       <image class="ai-panel" src="{{homeAssets.aiPanel}}" mode="scaleToFill" aria-hidden="true" />

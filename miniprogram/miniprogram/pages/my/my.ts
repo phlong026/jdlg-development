@@ -60,7 +60,7 @@ function buildDefaultVipDisplays(hasLoginToken: boolean) {
 
   return {
     vipLevelShortDisplay: '--',
-    vipLevelText: 'VIP --',
+    vipLevelText: '非会员',
     vipLevelIsFallback: true,
   };
 }
@@ -179,7 +179,7 @@ Page({
     certRealName: '',        // 实名（个人：姓名，企业：企业名）
     certRealNameMasked: '',  // 脱敏后的实名
     vipLevelShortDisplay: '--',
-    vipLevelText: 'VIP --',
+    vipLevelText: '非会员',
     vipLevelIsFallback: true,
     lastProfileRefreshTime: 0,
     lastProfileRefreshToken: '',
@@ -345,7 +345,7 @@ Page({
         workbenchMenuItems: buildWorkbenchMenuItems({ hasLoginToken: false }),
         serviceMenuItems: buildServiceMenuItems(),
         vipLevelShortDisplay: '--',
-        vipLevelText: 'VIP --',
+        vipLevelText: '非会员',
         vipLevelIsFallback: true,
         lastProfileRefreshTime: 0,
         lastProfileRefreshToken: '',
