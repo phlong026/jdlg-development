@@ -787,19 +787,6 @@
   gap: 18px;
 }
 
-.compact-note-card {
-  background: var(--admin-surface-muted);
-}
-
-.mini-field-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #6b7280;
-}
-
 .empty-inline {
   display: flex;
   align-items: center;
@@ -1123,40 +1110,160 @@
     border-radius: 16px;
   }
 
-  .search-row,
   .user-main-card,
-  .entry-guidance-card,
-  .workbench-breadcrumb-row {
+  .entry-guidance-card {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .action-grid {
-    grid-template-columns: 1fr;
+  /* 本文件样式包在 :where 里（特异性 0），全局手机规则 `.layout-content button { min-height: 44px; justify-content: center }`
+     会盖过单类选择器。下面需要对抗全局规则的地方都带一层父级选择器。 */
+
+  /* 顶部三个跳转：一行横排的小胶囊，不再各占一整行居中 */
+  .workbench-breadcrumb-row {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+    /* 给按钮扩大的点击区域留出空间，否则会被横向滚动容器裁掉 */
+    margin: -5px 0;
+    padding: 5px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
   }
+
+  .workbench-breadcrumb-row .link-button {
+    flex: none;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 1px solid #eadfce;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 13px;
+    white-space: nowrap;
+    // 视觉 34px，伪元素把可点区域扩到 44px
+    position: relative;
+
+    &::after { content: ''; position: absolute; inset: -5px 0; }
+
+    &:focus-visible { outline: 2px solid #8b5e3c; outline-offset: -2px; }
+  }
+
+  /* 搜索框与按钮保持同一行：原先改成纵排后，搜索框的 flex: 1 变成高度基准，被压到 23px */
+  .search-row { gap: 8px; }
+
+  .search-row .workbench-search-box { height: 46px; padding: 0 12px; }
+
+  .search-row .btn-primary { flex: none; min-height: 46px; padding: 0 18px; }
+
+  /* 用户头卡：头像缩小，刷新按钮靠左不拉满 */
+  .user-main-left { align-items: flex-start; gap: 14px; }
+
+  .user-avatar-large { width: 56px; height: 56px; border-radius: 16px; font-size: 22px; }
+
+  .user-main-title-row h2 { font-size: 22px; }
+
+  .user-main-meta { flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+
+  .user-main-right { display: flex; }
+
+  .user-main-right .btn-secondary { min-height: 38px; }
+
+  /* 高频操作：两列，图标与文字横排。
+     App.scss 用 `.layout-content .action-grid { display: flex !important; flex-direction: column !important }` 把它改成了单列，
+     这里提高特异性并同样用 !important 才能覆盖 */
+  .user-workbench-page .content-side .action-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+  }
+
+  .action-grid .action-button {
+    min-height: 56px;
+    padding: 10px 12px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    text-align: left;
+
+    svg { flex: none; font-size: 18px; }
+  }
+
+  /* 任务 / 订单 / 会员摘要：三张卡在两列网格里会剩一张孤卡（App.scss 用 !important 强制两列），
+     改为单列紧凑行：标题与数值同一行 */
+  .user-workbench-page .content-main > .summary-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .summary-grid .summary-card {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 2px 12px;
+    padding: 14px 18px;
+  }
+
+  .summary-grid .summary-card-value { grid-column: 2; grid-row: 1; margin: 0; font-size: 18px; }
+
+  .summary-grid .summary-card-title { grid-column: 1; grid-row: 1; }
+
+  .summary-grid .summary-card-desc { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.6; }
+
+  .summary-grid .btn-link-action { grid-column: 1 / -1; justify-content: flex-start; min-height: 32px; margin-top: 4px; padding: 0; }
 
   .stone-overview-grid {
     grid-template-columns: 1fr;
   }
 
+  /* 待处理事项：序号缩成小圆标与标题同行，操作按钮放在说明下方左对齐 */
   .pending-item {
-    grid-template-columns: 1fr;
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: start;
+    gap: 4px 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
   }
 
-  .mini-record-item,
+  .pending-item .btn-inline {
+    grid-column: 2;
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0;
+    font-size: 13px;
+  }
+
+  .pending-item-title { font-size: 14px; line-height: 26px; }
+
+  .pending-item-desc { margin-top: 0; font-size: 12px; line-height: 1.6; }
+
   .detail-list-row {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .mini-record-side {
-    align-items: flex-start;
-    text-align: left;
+  /* 订单 / 任务 / 流水记录：左侧名称与状态，右侧金额与时间，一条两行。
+     App.scss 对 `.layout-content .mini-record-item` 用 !important 强制纵排，这里同样提高特异性覆盖 */
+  .user-workbench-page .content-main .mini-record-item {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: 10px;
+    padding: 12px 14px;
   }
 
+  .mini-record-main { min-width: 0; overflow-wrap: anywhere; }
+
+  .mini-record-side { flex-shrink: 0; }
+
   .pending-item-index {
-    width: 36px;
-    height: 36px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 13px;
   }
 
   .modal-overlay {
@@ -1174,7 +1281,7 @@
   }
 
   /* 手机上打散双栏（display:contents 让两列子区块成为同一容器的排序单元），
-     按使用频率重排：高频操作 → 待处理 → 指标 → Tab 详情 → 账号安全 → 说明卡。
+     按使用频率重排：高频操作 → 待处理 → 指标 → Tab 详情 → 账号安全。
      桌面端双栏布局不受影响（仅 ≤768 生效）。 */
   .content-grid {
     display: flex;
@@ -1210,10 +1317,6 @@
 
   .content-side > .section-card:nth-child(2) {
     order: 6;
-  }
-
-  .content-side > .compact-note-card {
-    order: 7;
   }
 
   /* 详情 Tab 药丸改单行横滑，避免换行占多行 */
