@@ -15,6 +15,36 @@ button, input, select, textarea {
   font-family: inherit;
 }
 
+// 全后台下拉框统一箭头：原生箭头在 iOS / 微信内置浏览器 / 安卓 Chrome 下位置、大小、颜色各不相同，
+// 有的贴边、有的消失。改为同一枚 chevron。
+// 页面样式常写 `background: #fff` 简写（会清掉 background-image）或 `padding: 0 12px`（文字压到箭头上），
+// 所以箭头相关属性与右内边距用 !important 兜底；背景色、边框等仍由各页面决定。
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b5e3c' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 14px 14px !important;
+  padding-right: 30px !important;
+  text-overflow: ellipsis;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b8b0a6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  }
+}
+
+// Windows 高对比度模式下固定颜色的箭头看不清，交还给系统原生外观
+@media (forced-colors: active) {
+  select:not([multiple]):not([size]) {
+    -webkit-appearance: auto;
+    appearance: auto;
+    background-image: none !important;
+  }
+}
+
 .index-layout {
   display: flex;
   height: 100vh;
