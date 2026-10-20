@@ -73,6 +73,8 @@
       <view class="estimate-note"><text>点击按钮视为同意</text><text class="privacy-link" bindtap="onOpenPage" data-url="/pages/privacy/privacy?type=privacy" role="link" aria-label="查看隐私协议">《隐私协议》</text></view>
     </view>
   </view>
+  <!-- 昵称为空的已登录用户：每天最多提醒一次（逻辑在组件内）；放在受保护的 content 之前 -->
+  <nickname-guard id="nicknameGuard" />
   <view class="content">
     <view class="case-section" wx:if="{{featuredGroups && featuredGroups.length > 0}}">
       <text class="case-title">精选案例对比</text>

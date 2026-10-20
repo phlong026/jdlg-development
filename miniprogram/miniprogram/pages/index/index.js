@@ -81,6 +81,16 @@ Page({
             return;
         this.syncTabBar();
         this.loadFeaturedGroups();
+        void this.promptNicknameIfMissing();
+    },
+    // 已登录但昵称为空时弹出完善资料弹窗；首页引导弹窗显示期间不叠加，等下次进入首页再检查。
+    async promptNicknameIfMissing() {
+        if (this.data.homeIntroPopupVisible)
+            return;
+        const guard = this.selectComponent('#nicknameGuard');
+        if (!guard || typeof guard.checkAndShow !== 'function')
+            return;
+        await guard.checkAndShow();
     },
     onShareAppMessage() {
         return {
