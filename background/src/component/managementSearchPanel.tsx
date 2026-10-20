@@ -20,11 +20,35 @@ const ManagementSearchPanel: React.FC<ManagementSearchPanelProps> = ({
     summary,
     className = '',
 }) => {
-    // 手机端默认收起筛选控件与摘要，只留标题 + 「筛选」开关 + 动作按钮横排；
+    // 手机端只留一行「筛选」开关：标题与说明在顶栏已有页名，不再重复；
+    // 刷新 / 重置 / 新增等动作和筛选条件一起收进展开区，首屏留给业务数据。
     // 桌面端不渲染开关、全部常显，13 个使用方页面零改动受益。
     const isMobile = useIsMobile();
     const [showFilters, setShowFilters] = useState(false);
     const rootClassName = ['management-search-panel', 'section-card', className].filter(Boolean).join(' ');
+
+    if (isMobile) {
+        return (
+            <div className={`${rootClassName} management-search-panel--mobile`}>
+                <button
+                    type="button"
+                    className="btn-secondary management-search-panel__toggle"
+                    aria-expanded={showFilters}
+                    onClick={() => setShowFilters((value) => !value)}
+                >
+                    <FiFilter />
+                    {showFilters ? '收起' : actions ? '筛选与操作' : '筛选'}
+                </button>
+                {showFilters ? (
+                    <>
+                        {actions ? <div className="management-search-panel__actions">{actions}</div> : null}
+                        <div className="management-search-panel__controls">{controls}</div>
+                        {summary ? <div className="management-search-panel__summary">{summary}</div> : null}
+                    </>
+                ) : null}
+            </div>
+        );
+    }
 
     return (
         <div className={rootClassName}>

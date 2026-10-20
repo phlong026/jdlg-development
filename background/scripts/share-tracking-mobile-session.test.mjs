@@ -95,6 +95,7 @@ function environment({ width = 390, localStorage = storage(), sessionStorage = s
     vm.runInNewContext(code, {
       ...globals, module, exports: module.exports,
       require(name) {
+        if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
         if (name === 'react') return react;
         if (name === 'react-router-dom') return { Navigate: 'SyntheticNavigate', useLocation: () => env.location };
         if (name.includes('useIsMobile')) return {useIsMobile:()=>false};

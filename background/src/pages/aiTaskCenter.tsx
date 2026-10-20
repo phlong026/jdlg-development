@@ -19,6 +19,8 @@ import {
 } from '../api/aiTasks';
 import { getSupportTicketDetail, updateSupportTicketResolutionNote, updateSupportTicketStatus } from '../api/supportTickets';
 import './aiTaskCenter.scss';
+import MobileFold from '../component/MobileFold';
+import { useIsMobile } from '../component/useIsMobile';
 
 const emptySummary: AITaskSummary = {
     total_count: 0,
@@ -181,6 +183,7 @@ const formatQuickActionTimestamp = () => new Date().toLocaleString('zh-CN');
 type TaskDetailTarget = { type: 'image' | 'video'; id: string };
 
 const AITaskCenter: React.FC = () => {
+    const isMobile = useIsMobile();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<'image' | 'video'>(() => searchParams.get('tab') === 'video' ? 'video' : 'image');
@@ -649,8 +652,8 @@ const AITaskCenter: React.FC = () => {
                             </button>
                         );
                     })}
-                    <span className="task-queue-help">{activeQueue.help}</span>
-                    {queue === 'failed' ? (
+                    {isMobile ? null : <span className="task-queue-help">{activeQueue.help}</span>}
+                    {queue === 'failed' && (!isMobile || selectedIds.size > 0) ? (
                         <button
                             className="task-batch-btn"
                             onClick={() => void handleBatchTickets()}
@@ -662,6 +665,7 @@ const AITaskCenter: React.FC = () => {
                 </div>
 
                 <div className="task-search-card section-card">
+                    {isMobile ? null : (
                     <div className="task-search-top">
                         <div className="task-search-title-block">
                             <h3>{activeTab === 'image' ? `${activeQueue.label} · 任务检索` : '视频任务检索'}</h3>
@@ -680,6 +684,7 @@ const AITaskCenter: React.FC = () => {
                             <button className="btn-secondary" onClick={handleReset} disabled={loading}>{loading ? '刷新中...' : '重置筛选'}</button>
                         </div>
                     </div>
+                    )}
                     <div className="task-toolbar">
                         <div className="task-toolbar-left">
                             <input
@@ -693,6 +698,7 @@ const AITaskCenter: React.FC = () => {
                                 }}
                                 placeholder={activeTab === 'image' ? '搜索任务号、用户ID、用户名' : '搜索视频任务号、用户ID、用户名、提示词'}
                             />
+                            <MobileFold label="筛选" activeCount={(queue === 'all' && status !== 'all' ? 1 : 0) + (activeTab === 'image' && scene !== 'all' ? 1 : 0)}>
                             {queue === 'all' ? (
                                 <select className="task-select" value={status} onChange={(event) => setStatus(event.target.value)}>
                                     <option value="all">全部状态</option>
@@ -711,10 +717,19 @@ const AITaskCenter: React.FC = () => {
                                     ))}
                                 </select>
                             )}
+                            {isMobile ? (
+                                <div className="task-toolbar-right compact-actions">
+                                    <button className="btn-secondary" onClick={handleReset} disabled={loading}>{loading ? '刷新中...' : '重置筛选'}</button>
+                                    <button className="btn-primary" onClick={handleSearch}>查询任务</button>
+                                </div>
+                            ) : null}
+                            </MobileFold>
                         </div>
-                        <div className="task-toolbar-right compact-actions">
-                            <button className="btn-primary" onClick={handleSearch}>查询任务</button>
-                        </div>
+                        {isMobile ? null : (
+                            <div className="task-toolbar-right compact-actions">
+                                <button className="btn-primary" onClick={handleSearch}>查询任务</button>
+                            </div>
+                        )}
                     </div>
                 </div>
 

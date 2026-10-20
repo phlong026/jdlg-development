@@ -1,0 +1,386 @@
+// 手机端紧凑层：首屏只留业务数据，任何筛选、工具、说明区块不超过屏幕 1/3。
+// 只在 ≤768px 生效，桌面端完全不受影响；最后加载，覆盖各页 responsive*.scss。
+
+@media (max-width: 768px) {
+  /* ── 共用筛选组件：收起态只有一行「筛选」开关 ── */
+  .layout-content .management-search-panel.management-search-panel--mobile {
+    padding: 8px;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .layout-content .management-search-panel--mobile .management-search-panel__toggle {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  .layout-content .management-search-panel--mobile .management-search-panel__actions {
+    flex-wrap: wrap;
+  }
+
+  .layout-content .management-search-panel--mobile .management-search-panel__actions > * {
+    flex: 1 1 calc(50% - 8px);
+    min-height: 40px;
+  }
+
+  /* ── MobileFold：页面自有的筛选 / 操作区折叠成一个按钮 ── */
+  .layout-content .mobile-fold {
+    margin-bottom: 12px;
+  }
+
+  .layout-content .mobile-fold__toggle {
+    width: 100%;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--admin-border, #e7d8c6);
+    border-radius: 12px;
+    background: var(--admin-surface, #fff);
+    color: #5f4a36;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .layout-content .mobile-fold__badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #8b5e3c;
+    color: #fff;
+    font-size: 11px;
+    font-style: normal;
+    line-height: 18px;
+  }
+
+  .layout-content .mobile-fold__chevron {
+    transition: transform 0.2s ease;
+  }
+
+  .layout-content .mobile-fold.is-open .mobile-fold__chevron {
+    transform: rotate(180deg);
+  }
+
+  .layout-content .mobile-fold__body {
+    margin-top: 8px;
+  }
+
+  // 展开后的操作按钮横排（App.scss 默认把 toolbar-actions 竖排成一列一个）
+  .layout-content .mobile-fold__body .toolbar-actions {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-bottom: 8px;
+
+    > button {
+      flex: 1 1 30% !important;
+      width: auto !important;
+      min-height: 38px;
+      padding: 0 8px !important;
+      white-space: nowrap;
+    }
+  }
+
+  /* ── 页面自有工具栏：只剩搜索框 + 折叠按钮，收紧外框 ── */
+  .layout-content .users-toolbar.section-card,
+  .layout-content .templates-toolbar.section-card {
+    padding: 8px !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .layout-content .users-toolbar .toolbar-left,
+  .layout-content .templates-toolbar .toolbar-left {
+    gap: 8px !important;
+  }
+
+  .layout-content .users-toolbar .mobile-fold,
+  .layout-content .templates-toolbar .mobile-fold {
+    margin-bottom: 0;
+  }
+
+  /* ── 队列 / 状态切换：一行横滑，不换行堆叠 ── */
+  .layout-content .task-queue-tabs,
+  .layout-content .cert-queues,
+  .layout-content .ticket-queues,
+  .layout-content .status-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    gap: 8px !important;
+    padding: 0 0 2px !important;
+    margin-bottom: 10px !important;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    > * {
+      flex: 0 0 auto !important;
+      white-space: nowrap;
+    }
+  }
+
+  /* ── AI 任务中心：检索卡只剩搜索框 + 筛选按钮 ── */
+  .layout-content .task-search-card.section-card {
+    padding: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .layout-content .task-search-card .task-toolbar,
+  .layout-content .task-search-card .task-toolbar-left {
+    gap: 8px !important;
+  }
+
+  .layout-content .task-search-card .mobile-fold {
+    margin-bottom: 0;
+  }
+
+  .layout-content .task-summary-banner {
+    padding: 8px 12px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .layout-content .task-summary-banner-meta {
+    display: none !important;
+  }
+
+  /* ── 分享访问记录：页头只留操作按钮一行 ── */
+  .layout-content .share-tracking .st-heading {
+    margin-bottom: 10px !important;
+    gap: 8px !important;
+  }
+
+  .layout-content .share-tracking .st-heading > div:first-child {
+    display: none !important;
+  }
+
+  .layout-content .share-tracking .st-heading-actions {
+    width: 100%;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    gap: 8px !important;
+    scrollbar-width: none;
+
+    > button {
+      flex: 1 0 auto !important;
+      min-height: 38px;
+      white-space: nowrap;
+    }
+  }
+
+  .layout-content .share-tracking .st-tabs {
+    margin-bottom: 10px !important;
+  }
+
+  /* ── 销售线索：搜索框 + 筛选按钮，下拉框收进折叠区 ── */
+  .layout-content .customer-lead-toolbar .mobile-fold {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+
+  .layout-content .customer-lead-toolbar .mobile-fold__body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+
+    .customer-lead-btn {
+      grid-column: 1 / -1;
+    }
+  }
+
+  /* ── 用户详情：三个链接压成一行，引导大卡片不显示（下方已有同样提示） ── */
+  .layout-content .workbench-breadcrumb-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    gap: 14px !important;
+    margin-bottom: 10px !important;
+    scrollbar-width: none;
+
+    > button {
+      flex: 0 0 auto;
+      min-height: 32px !important;
+      white-space: nowrap;
+    }
+  }
+
+  .layout-content .entry-guidance-card {
+    display: none !important;
+  }
+
+  /* ── 配置类页面：顶栏已有页名，标题与说明段落、提示卡不再重复 ── */
+  .layout-content {
+    .virtual-pay-toolbar > div > h3,
+    .virtual-pay-toolbar > div > p,
+    .pricing-toolbar > div > h3,
+    .pricing-toolbar > div > p,
+    .config-toolbar .toolbar-left > h3,
+    .config-toolbar .toolbar-desc,
+    .aio-pagehead > h1,
+    .aio-sub,
+    .aca-pagehead > h1,
+    .aca-sub,
+    .aip-pagehead > h1,
+    .pricing-note-card span,
+    .virtual-pay-notice,
+    .aip-notice,
+    .order-summary-banner-meta,
+    .order-summary-banner-pagination,
+    .task-pagination-left {
+      display: none !important;
+    }
+
+    .aca-pagehead:not(:has(> :not(h1):not(.aca-sub))) {
+      display: none !important;
+    }
+
+    .virtual-pay-toolbar,
+    .pricing-toolbar,
+    .config-toolbar,
+    .aio-pagehead,
+    .aip-pagehead {
+      gap: 8px !important;
+      margin-bottom: 10px !important;
+    }
+
+    .pricing-note-card,
+    .order-summary-banner {
+      padding: 10px 12px !important;
+      margin-bottom: 10px !important;
+    }
+
+    .task-pagination {
+      padding: 8px 0 !important;
+    }
+
+    .task-pagination-right {
+      width: 100%;
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+    }
+  }
+
+  /* ── 统计卡片：三列小卡，去图标与说明小字 ── */
+  .layout-content {
+    .users-stats,
+    .designer-summary-grid,
+    .cert-summary-grid,
+    .membership-summary-grid,
+    .analytics-stats-grid,
+    .distribution-stats-grid,
+    .report-stats-grid,
+    .support-stats-grid,
+    .oss-stats,
+    .templates-stats,
+    .inspirations-stats {
+      // App.scss 的通配规则以 !important 强制两列，这里同级覆盖
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: 8px !important;
+      padding: 0 !important;
+      margin-bottom: 12px;
+      background: none !important;
+      border: 0 !important;
+      box-shadow: none !important;
+
+      // 正好 4 项时排 2×2，避免第二行只剩一张孤卡
+      &:has(> :nth-child(4):last-child) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+    }
+
+    .users-stats .stat-item,
+    .oss-stats .stat-item,
+    .templates-stats .stat-item,
+    .inspirations-stats .stat-item {
+      background: var(--admin-surface, #fff);
+      border: 1px solid var(--admin-border, #eee3d6);
+    }
+
+    .users-stats .stat-item,
+    .oss-stats .stat-item,
+    .templates-stats .stat-item,
+    .inspirations-stats .stat-item,
+    .designer-summary-card,
+    .cert-summary-card,
+    .membership-summary-card,
+    .analytics-stats-grid .stat-card,
+    .distribution-stats-grid .stat-card,
+    .report-stats-grid .stat-card,
+    .support-stats-grid .stat-card {
+      min-height: 0;
+      padding: 10px;
+      gap: 2px;
+      border-radius: 12px;
+      box-shadow: none;
+    }
+
+    .stat-icon,
+    .stat-desc,
+    .stat-sub,
+    .designer-summary-icon,
+    .membership-summary-icon,
+    .membership-summary-desc,
+    .cert-summary-desc {
+      display: none;
+    }
+
+    .users-stats .stat-label,
+    .oss-stats .stat-label,
+    .templates-stats .stat-label,
+    .inspirations-stats .stat-label,
+    .analytics-stats-grid .stat-label,
+    .distribution-stats-grid .stat-label,
+    .report-stats-grid .stat-label,
+    .support-stats-grid .stat-label,
+    .designer-summary-title,
+    .cert-summary-title,
+    .membership-summary-title {
+      margin: 0;
+      font-size: 11.5px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .users-stats .stat-value,
+    .oss-stats .stat-value,
+    .templates-stats .stat-value,
+    .inspirations-stats .stat-value,
+    .analytics-stats-grid .stat-value,
+    .distribution-stats-grid .stat-value,
+    .report-stats-grid .stat-value,
+    .support-stats-grid .stat-value,
+    .designer-summary-value,
+    .cert-summary-value,
+    .membership-summary-value {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  /* ── 页面说明段落：顶栏已有页名，手机端不再重复解释 ── */
+  .layout-content {
+    .designer-summary-heading,
+    .distribution-scope-note,
+    .support-scope-note,
+    .report-preview-status {
+      display: none;
+    }
+  }
+}

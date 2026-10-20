@@ -4,6 +4,7 @@ import './App.scss';
 import './responsive.scss';
 import './responsive-priority.scss';
 import './responsive-remaining.scss';
+import './mobile-compact.scss';
 import routes from './routes';
 import AdminLayout from './component/layout';
 import ProtectedRoute from './component/ProtectedRoute';

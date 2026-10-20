@@ -76,6 +76,8 @@ async function page(overrides = {}) {
   vm.runInNewContext(code, {
     module, exports: module.exports,
     require(name) {
+      if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
+      if (name === '../component/useIsMobile') return { useIsMobile: () => false };
       if (name === 'react') return react;
       if (name === 'react/jsx-runtime') return require(name);
       if (name === 'react-router-dom') return { useLocation: () => location };

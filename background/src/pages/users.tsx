@@ -15,6 +15,8 @@ import {
     type UserMergePrecheck,
 } from '../api/users';
 import './users.scss';
+import MobileFold from '../component/MobileFold';
+import { useIsMobile } from '../component/useIsMobile';
 
 interface UserRow {
     id: string;
@@ -61,6 +63,7 @@ const formatDateTime = (value: string) => {
 
 const Users: React.FC = () => {
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
     // ?wechat=pending|verified：总控台「下载权限待核验」带参直达，落地即应用手机号授权筛选
     const [searchParams] = useSearchParams();
     const wechatParam = searchParams.get('wechat');
@@ -407,30 +410,36 @@ const Users: React.FC = () => {
     if (stonesFilter) filterChips.push({ label: `余额：${STONES_RANGES.find((r) => r.key === stonesFilter)?.label ?? ''}`, clear: () => setStonesFilter('') });
     if (riskFilter) filterChips.push({ label: '风险信号账号', clear: () => setRiskFilter(false) });
 
+    const toolbarActions = (
+        <>
+            <button
+                className="btn-secondary"
+                onClick={openMergeModal}
+                title="两个账号的资产对照与冲突预检（执行走 DBA 受控流程）"
+            >
+                账号合并预检
+            </button>
+            <button className="btn-secondary" onClick={refresh} disabled={loading}>
+                {loading ? '刷新中...' : '刷新数据'}
+            </button>
+            <button className="btn-secondary" onClick={resetFilters} disabled={!hasActiveFilters()}>
+                重置筛选
+            </button>
+        </>
+    );
+
     return (
         <div className="users-container">
             <div className="users-toolbar section-card">
-                <div className="toolbar-top">
-                    <div className="toolbar-title-block">
-                        <h3>用户检索与账号管理</h3>
-                        <p>找人、筛人、看账号状态与风险信号；订单、灵石、认证等单用户处理请进入用户详情。以下统计为全库真实口径。</p>
+                {isMobile ? null : (
+                    <div className="toolbar-top">
+                        <div className="toolbar-title-block">
+                            <h3>用户检索与账号管理</h3>
+                            <p>找人、筛人、看账号状态与风险信号；订单、灵石、认证等单用户处理请进入用户详情。以下统计为全库真实口径。</p>
+                        </div>
+                        <div className="toolbar-actions">{toolbarActions}</div>
                     </div>
-                    <div className="toolbar-actions">
-                        <button
-                            className="btn-secondary"
-                            onClick={openMergeModal}
-                            title="两个账号的资产对照与冲突预检（执行走 DBA 受控流程）"
-                        >
-                            账号合并预检
-                        </button>
-                        <button className="btn-secondary" onClick={refresh} disabled={loading}>
-                            {loading ? '刷新中...' : '刷新数据'}
-                        </button>
-                        <button className="btn-secondary" onClick={resetFilters} disabled={!hasActiveFilters()}>
-                            重置筛选
-                        </button>
-                    </div>
-                </div>
+                )}
                 <div className="toolbar-left">
                     <div className="search-box">
                         <span className="search-icon"><FiSearch size={14} /></span>
@@ -445,6 +454,8 @@ const Users: React.FC = () => {
                             className="search-input"
                         />
                     </div>
+                    <MobileFold label="筛选与操作" activeCount={filterChips.length}>
+                    {isMobile ? <div className="toolbar-actions">{toolbarActions}</div> : null}
                     <div className="filters">
                         <select className="filter-select" value={identityFilter} onChange={(e) => { setIdentityFilter(e.target.value); setPage(1); }}>
                             <option value="">身份类型：全部</option>
@@ -474,6 +485,7 @@ const Users: React.FC = () => {
                             {STONES_RANGES.map((range) => <option key={range.key} value={range.key}>{range.label}</option>)}
                         </select>
                     </div>
+                    </MobileFold>
                     {filterChips.length > 0 && (
                         <div className="filter-chips">
                             {filterChips.map((chip) => (

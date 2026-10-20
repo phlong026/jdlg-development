@@ -52,6 +52,7 @@ const moduleRef = { exports: {} };
 const context = vm.createContext({
   module: moduleRef, exports: moduleRef.exports,
   require(name) {
+    if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
     if (name === 'react') return fakeReact;
     if (name === 'react-router-dom') return { useNavigate: () => () => {}, useSearchParams: () => [new URLSearchParams(), () => {}] };
     if (name.includes('useIsMobile')) return {useIsMobile:()=>false};

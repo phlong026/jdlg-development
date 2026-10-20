@@ -76,6 +76,7 @@ function environment() {
         if (name === './customerReportForm') return load('customerReportForm.tsx');
         if (name === './customerLeadHub' || name === '../component/WecomIdentityBinding') return { __esModule: true, default: name };
         if (name === '../component/useIsMobile' || name === './useIsMobile') return { useIsMobile: () => false };
+        if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
         if (name.endsWith('.scss')) return {};
         throw new Error(`Unexpected dependency: ${name}`);
       },

@@ -34,6 +34,7 @@ import {
     type CertificationDetailResponse,
 } from '../api/certification';
 import './userWorkbench.scss';
+import MobileFold from '../component/MobileFold';
 
 interface RecentUserItem {
     id: string;
@@ -785,6 +786,7 @@ const UserWorkbench: React.FC = () => {
                     </div>
                 )}
 
+                <MobileFold label="切换用户" disabled={!selectedUser}>
                 <div className="section-card search-panel">
                     <div className="section-head compact">
                         <div>
@@ -847,6 +849,7 @@ const UserWorkbench: React.FC = () => {
                         </div>
                     )}
                 </div>
+                </MobileFold>
 
                 {!selectedUser ? (
                     <div className="section-card empty-panel compact-empty-panel">
