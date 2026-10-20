@@ -2,6 +2,7 @@ package route
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,19 +43,31 @@ func parseCustomerLeadNextFollowupAt(value string) (*time.Time, error) {
 	return nil, strconv.ErrSyntax
 }
 
+type leadPhoneLookup func(userID int64) []string
+
 func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *model.CustomerServiceModel, trackingServices ...*tracking.Service) {
 	var store customerLeadStore
+	var phoneLookup leadPhoneLookup
 	if customerServiceModel != nil && customerServiceModel.DB != nil {
 		store = customerServiceModel
+		identities := model.NewUserIdentityModel(customerServiceModel.DB)
+		phoneLookup = func(userID int64) []string {
+			phones, err := identities.GetUserPhones(userID)
+			if err != nil {
+				log.Printf("[CustomerService] lead phone autofill failed user=%d: %v", userID, err)
+				return nil
+			}
+			return phones
+		}
 	}
 	var confirmed consultationConfirmed
 	if len(trackingServices) > 0 && trackingServices[0] != nil {
 		confirmed = trackingServices[0].ConfirmConsultation
 	}
-	registerCustomerLeadRoutes(r, store, confirmed)
+	registerCustomerLeadRoutes(r, store, confirmed, phoneLookup)
 }
 
-func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel customerLeadStore, confirmed consultationConfirmed) {
+func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel customerLeadStore, confirmed consultationConfirmed, phoneLookup leadPhoneLookup) {
 	group := r.Group("/customer-service")
 
 	group.POST("/events", func(c *gin.Context) {
@@ -136,6 +149,16 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 			source := strings.TrimSpace(req.Source)
 			if source == "" {
 				source = "customer_service"
+			}
+			// Auto-fill the phone from the account's verified identity: leads
+			// used to land with no contact channel at all although the logged-in
+			// account owns a bound phone, leaving sales nothing to dial.
+			// updateExistingLead's IF(?='',…) keeps customer-entered numbers
+			// authoritative on repeat submits.
+			if strings.TrimSpace(req.Phone) == "" && codeSession.UserID > 0 && phoneLookup != nil {
+				if phones := phoneLookup(codeSession.UserID); len(phones) > 0 {
+					req.Phone = phones[0]
+				}
 			}
 			id, err := customerServiceModel.CreateLead(&model.CustomerLeadCreateInput{
 				UserID:                  codeSession.UserID,
@@ -262,7 +285,13 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "客服线索服务不可用"})
 			return
 		}
-		metrics, err := customerServiceModel.FunnelMetrics()
+		// Default window: trailing 30 days. days=0 means all time.
+		days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+		var start time.Time
+		if days > 0 {
+			start = time.Now().AddDate(0, 0, -days)
+		}
+		metrics, err := customerServiceModel.FunnelMetrics(start, time.Time{})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取客服漏斗数据失败: " + err.Error()})
 			return

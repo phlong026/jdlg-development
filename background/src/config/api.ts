@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
     },
     CUSTOMER_LEADS: {
         OVERVIEW: '/api/v1/management/customer-leads/overview',
+        FUNNEL: '/api/v1/management/customer-leads/funnel',
         LIST: '/api/v1/management/customer-leads',
         DETAIL: (id: string) => `/api/v1/management/customer-leads/${id}`,
         FOLLOWUPS: (id: string) => `/api/v1/management/customer-leads/${id}/followups`,

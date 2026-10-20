@@ -228,3 +228,22 @@ func TestTrackingLeadAutomationContract(t *testing.T) {
 		t.Fatal("recompute does not trigger the upgrade feedback hook")
 	}
 }
+
+// Contract: mini-program lead creation auto-fills the phone from the bound
+// account identity before CreateLead, closing the contactless-lead hole.
+func TestLeadPhoneAutofillContract(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		"leadPhoneLookup",
+		"GetUserPhones",
+		`strings.TrimSpace(req.Phone) == ""`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("phone autofill contract missing %q", want)
+		}
+	}
+}

@@ -169,3 +169,11 @@
     }
 }
 }
+
+/* 客服服务漏斗（近30天，按账号去重）：折叠卡，展开后逐层数字+相对底层的转化率 */
+.lead-hub-funnel-wrap { grid-column: 1 / -1; }
+.lead-hub-funnel { list-style: none; margin: 0; padding: 0 4px; display: grid; gap: 6px; }
+.lead-hub-funnel li { display: grid; grid-template-columns: minmax(72px, 1fr) auto auto; gap: 12px; align-items: center; padding: 7px 12px; border: 1px solid #ece7e1; border-radius: 8px; background: #faf8f5; font-size: 13px; }
+.lead-hub-funnel b { font-size: 15px; }
+.lead-hub-funnel small { color: #8a7d6d; min-width: 38px; text-align: right; }
+.lead-hub-funnel-note { color: #8a7d6d; font-size: 12px; margin: 8px 4px 0; }
