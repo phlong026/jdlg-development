@@ -39,6 +39,7 @@ type OrderManagementItem struct {
 	ID                    int64  `json:"id"`
 	UserID                int64  `json:"user_id"`
 	Username              string `json:"username"`
+	Nickname              string `json:"nickname"`
 	DesignerUserID        int64  `json:"designer_user_id"`
 	TemplateID            *int64 `json:"template_id,omitempty"`
 	OrderNo               string `json:"order_no"`
@@ -883,13 +884,14 @@ func (m *UserOrderModel) ListForManagement(keyword, orderType, orderCategory, st
 	}
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	query := `
-		SELECT o.id, o.user_id, COALESCE(u.username, ''), o.designer_user_id, o.template_id, o.order_no, o.type, o.order_category,
+		SELECT o.id, o.user_id, COALESCE(u.username, ''), COALESCE(p.nickname, ''), o.designer_user_id, o.template_id, o.order_no, o.type, o.order_category,
 		       o.amount, o.status, o.review_status, o.title, o.description,
 		       COALESCE(o.pay_channel, 'wechatpay'), COALESCE(o.pay_mode, ''), COALESCE(o.product_id, ''), COALESCE(o.amount_fen, 0),
 		       COALESCE(o.deliver_reported, 0), COALESCE(o.deliver_report_attempts, 0), o.completed_at, o.created_at,
 		       w.paid_fee_fen, COALESCE(w.amount_match, 'unknown'), COALESCE(w.wxpay_order_id, '')
 		FROM user_orders o
 		LEFT JOIN users u ON u.id = o.user_id
+		LEFT JOIN user_profiles p ON p.user_id = o.user_id
 		LEFT JOIN wechat_order_evidence w ON w.order_no = o.order_no` + whereSQL + `
 		ORDER BY o.created_at DESC
 		LIMIT ? OFFSET ?`
@@ -904,7 +906,7 @@ func (m *UserOrderModel) ListForManagement(keyword, orderType, orderCategory, st
 		var templateID sql.NullInt64
 		var completedAt sql.NullTime
 		var wechatPaidFen sql.NullInt64
-		if err := rows.Scan(&item.ID, &item.UserID, &item.Username, &item.DesignerUserID, &templateID, &item.OrderNo, &item.Type, &item.OrderCategory, &item.Amount, &item.Status, &item.ReviewStatus, &item.Title, &item.Description,
+		if err := rows.Scan(&item.ID, &item.UserID, &item.Username, &item.Nickname, &item.DesignerUserID, &templateID, &item.OrderNo, &item.Type, &item.OrderCategory, &item.Amount, &item.Status, &item.ReviewStatus, &item.Title, &item.Description,
 			&item.PayChannel, &item.PayMode, &item.ProductID, &item.AmountFen, &item.DeliverReported, &item.DeliverReportAttempts, &completedAt, &item.CreatedAt,
 			&wechatPaidFen, &item.WechatPayMatch, &item.WxpayOrderID); err != nil {
 			return nil, 0, err

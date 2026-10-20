@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -197,9 +198,15 @@ func RegisterOrderManagementRoutes(r *gin.RouterGroup, userOrderModel *model.Use
 						user.CanWithdraw = currentCanWithdraw
 					}
 				}
+				// 昵称只用于展示，读取失败时降级为用户名，不阻断订单详情
+				nickname, nicknameErr := userDBModel.GetNicknameByID(user.ID)
+				if nicknameErr != nil {
+					log.Printf("[OrderDetail] 读取用户 %d 昵称失败: %v", user.ID, nicknameErr)
+				}
 				userPayload = gin.H{
 					"id":           user.ID,
 					"username":     user.Username,
+					"nickname":     nickname,
 					"user_type":    user.UserType,
 					"can_withdraw": user.CanWithdraw,
 					"created_at":   user.CreatedAt,

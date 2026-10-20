@@ -242,6 +242,16 @@ func (m *UserModel) GetStonesByID(userID int64) (int64, error) {
 	return stones, err
 }
 
+// GetNicknameByID 读取用户资料里的昵称；没有资料行时返回空串，由调用方回退到用户名。
+func (m *UserModel) GetNicknameByID(userID int64) (string, error) {
+	var nickname string
+	err := m.DB.QueryRow(`SELECT COALESCE(nickname, '') FROM user_profiles WHERE user_id = ?`, userID).Scan(&nickname)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return nickname, err
+}
+
 // GetByUsername 根据用户名获取用户（管理后台用户）
 func (m *UserModel) GetByUsername(username string) (*User, error) {
 	user := &User{}
