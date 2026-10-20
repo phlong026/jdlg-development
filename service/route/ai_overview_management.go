@@ -89,6 +89,11 @@ func aiSceneLabel(scene string) string {
 	return scene
 }
 
+// aiConsumeTitle 消费订单/灵石明细标题，写入场景中文名，运营在订单中心直接可读
+func aiConsumeTitle(scene string, count int64) string {
+	return fmt.Sprintf("AI生成-%s-%d张", aiSceneLabel(scene), count)
+}
+
 // aiEstimateSceneCostYuan 场景级成本估算：成功收入灵石 ÷ 单价灵石 = 单位数，再乘单位成本
 func aiEstimateSceneCostYuan(scene string, stones int64, unitStones int64, dominantModel string) float64 {
 	if unitStones <= 0 || stones <= 0 {

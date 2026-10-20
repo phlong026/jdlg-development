@@ -686,7 +686,7 @@ func handleAIRequest(c *gin.Context, codeSessionModel *model.CodeSessionRedisMod
 			_ = tx.Rollback()
 		}
 	}()
-	consumeTitle := fmt.Sprintf("AI生成-%s-%d张", req.Scene, generateCount)
+	consumeTitle := aiConsumeTitle(req.Scene, generateCount)
 	if stoneRecordModel != nil {
 		if err := stoneRecordModel.CreateWithTx(tx, codeSession.UserID, "consume", totalStones, consumeTitle, ""); err != nil {
 			_ = userModel.AddStones(codeSession.UserID, totalStones)
