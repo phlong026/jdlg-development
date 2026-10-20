@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
@@ -83,6 +84,7 @@ function harness() {
       if (id === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
       if (id.endsWith('.scss')) return {};
       if(typeof name==='string'&&name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  if (requireDisplayUtil(id)) return requireDisplayUtil(id);
   throw new Error(`Unexpected import ${id}`);
     },
   });

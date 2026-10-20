@@ -2,6 +2,7 @@
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const require = createRequire(import.meta.url);
 const fs = require('node:fs');
 const path = require('node:path');
@@ -63,6 +64,7 @@ const context = vm.createContext({
     if (name === 'react-icons/fi') return new Proxy({}, { get: (_, icon) => icon });
     if (name === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
     if (name === '../api/users') return new Proxy({}, { get: (_, method) => (...args) => api[method](...args) });
+    if (requireDisplayUtil(name)) return requireDisplayUtil(name);
     throw new Error(`Unexpected import: ${name}`);
   },
   console: { ...console, error() {} }, URLSearchParams,
@@ -255,4 +257,21 @@ test('User operation failures stay local, preserve retry inputs and cannot leak 
   assert.equal(calls.length, 1); await Promise.all([firstMerge, duplicateMerge]);
   check('same-frame duplicate ban and merge-precheck handlers each issue exactly one request');
 
+});
+
+test('用户列表显示名：昵称 → 脱敏手机号 → 微信用户 #ID，列表不展示 wx_ 登录名', async () => {
+  setup({ getUserList: async () => ({ list: [
+    { id: 291, username: 'wx_o_gjx6abc', nickname: '', phone: '', stones: 0, status: 'active', created_at: '2026-10-01T00:00:00Z' },
+    { id: 292, username: 'wx_o_kkk', nickname: '', phone: '138****1234', stones: 0, status: 'active', created_at: '2026-10-01T00:00:00Z' },
+    { id: 293, username: 'wx_o_zzz', nickname: '灿坤', phone: '', stones: 0, status: 'active', created_at: '2026-10-01T00:00:00Z' },
+    { id: 294, username: 'zhangsan', nickname: '', phone: '', stones: 0, status: 'active', created_at: '2026-10-01T00:00:00Z' },
+  ], total: 4 }) });
+  const page = await boot();
+  const row = id => textOf(nodes(page.tree, node => node.type === 'tr' && node.key === String(id))[0]);
+  assert.match(row(291), /微信用户 #291/);
+  assert.match(row(292), /138\*\*\*\*1234/);
+  assert.match(row(293), /灿坤/);
+  assert.match(row(294), /zhangsan/, '人工设置的登录名仍可显示');
+  for (const id of [291, 292, 293]) assert.doesNotMatch(row(id), /wx_/);
+  assert.doesNotMatch(row(291), /用户291/);
 });

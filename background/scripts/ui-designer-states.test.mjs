@@ -2,6 +2,7 @@
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const require = createRequire(import.meta.url);
 const fs = require('node:fs');
 const path = require('node:path');
@@ -60,6 +61,7 @@ const context = vm.createContext({
     if (name === 'react-icons/fi') return new Proxy({}, { get: (_, icon) => icon });
     if (name === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
     if (name === '../api/designers') return new Proxy({}, { get: (_, method) => (...args) => api[method](...args) });
+    if (requireDisplayUtil(name)) return requireDisplayUtil(name);
     throw new Error(`Unexpected import: ${name}`);
   },
   console: { ...console, error() {} }, URLSearchParams,
@@ -212,4 +214,21 @@ test('Designer selection cannot display or write another user after asynchronous
   }
   check('same-frame repeated visibility/service handlers each issue exactly one write request');
 
+});
+
+test('设计师列表与详情不把 wx_ 登录名当名字', async () => {
+  const wxDesigners = [
+    { ...designers[0], user_id: 1, username: 'wx_o_abc', display_name: 'wx_o_abc' },
+    { ...designers[1], user_id: 2, username: 'wx_o_def', display_name: '王设计' },
+  ];
+  setup({ getDesignerManagementList: async () => ({ list: wxDesigners }) });
+  const page = await boot();
+  const item = id => textOf(nodes(page.tree, node => node.props?.className?.startsWith('designer-list-item ') && node.key === String(id))[0]);
+  assert.match(item(1), /微信用户 #1/);
+  assert.match(item(2), /王设计/);
+  assert.doesNotMatch(item(1) + item(2), /wx_/);
+  requests[0].resolve({ ...makeDetail(1), username: 'wx_o_abc', profile: { ...makeDetail(1).profile, nickname: '' } });
+  await flush(); page.render();
+  const heading = nodes(detailPanel(page), node => node.type === 'h3');
+  assert.equal(textOf(heading[0]), '微信用户 #1');
 });

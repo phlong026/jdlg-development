@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const require = createRequire(import.meta.url);
 const React = require('react');
@@ -97,6 +98,8 @@ async function render({ mobile, orderId }) {
       if (name === '../utils/pageLoadError') return { reportPageLoadError() {} };
       if (name === '../config/api') return { API_BASE_URL: '/fixture-only' };
       if (name.endsWith('.scss')) return {};
+      const util = requireDisplayUtil(name);
+      if (util) return util;
       throw new Error(`Unexpected import: ${name}`);
     },
   }));
@@ -130,8 +133,8 @@ test('手机订单卡片只显示中文类型、场景中文名和昵称', async
   assert.match(first, /张工/);
   assert.match(second, /AI消费 · AI生成/);
   assert.match(second, /AI生成-AI 绘画-多图-4张/);
-  // 没有昵称时回退到用户名，未知场景保持原样
-  assert.match(second, /wx_0f1e2d3c/);
+  // 没有昵称时显示「微信用户 #ID」，不外露 wx_ 登录名；未知场景保持原样
+  assert.match(second, /微信用户 #22/);
   assert.match(third, /AI生成-unknown_scene-1张/);
 });
 

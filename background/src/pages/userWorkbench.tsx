@@ -33,12 +33,16 @@ import {
     type CertificationApplication,
     type CertificationDetailResponse,
 } from '../api/certification';
+import { formatUserName, visibleUsername } from '../utils/displayName';
+import { formatAiScene, shortCode } from '../utils/displayLabels';
 import './userWorkbench.scss';
 import MobileFold from '../component/MobileFold';
 
 interface RecentUserItem {
     id: string;
     username: string;
+    /** 显示名；旧版本地记录没有该字段 */
+    name?: string;
 }
 
 interface PendingItem {
@@ -60,6 +64,17 @@ const USER_MODULE_LABELS: Record<UserModuleKey, string> = {
 };
 
 const RECENT_USERS_STORAGE_KEY = 'user-workbench-recent-users';
+
+const USER_TYPE_MAP: Record<string, string> = {
+    miniprogram: '小程序用户',
+    management: '后台账号',
+};
+
+// 旧版本地记录只存了 username（可能是 wx_ 登录名），没有 name 时按同一口径兜底
+const recentUserLabel = (item: RecentUserItem) => {
+    const label = item.name || formatUserName({ username: item.username }, item.id);
+    return label === formatUserName(null, item.id) ? label : `${label} · ${item.id}`;
+};
 
 const CERT_STATUS_MAP: Record<string, string> = {
     pending_payment: '待支付',
@@ -152,7 +167,7 @@ const formatDeviceText = (value?: string | null) => {
 
 const getUserDisplayName = (user: ApiUser | null) => {
     if (!user) return '';
-    return user.nickname?.trim() || user.username || `用户${user.id}`;
+    return formatUserName(user, user.id);
 };
 
 const getUserAvatarText = (user: ApiUser | null) => {
@@ -269,7 +284,7 @@ const UserWorkbench: React.FC = () => {
 
     const persistRecentUsers = (user: ApiUser) => {
         const next = [
-            { id: String(user.id), username: user.username || `用户${user.id}` },
+            { id: String(user.id), username: user.username || '', name: getUserDisplayName(user) },
             ...recentUsers.filter((item) => item.id !== String(user.id)),
         ].slice(0, 6);
         setRecentUsers(next);
@@ -715,7 +730,7 @@ const UserWorkbench: React.FC = () => {
                 title: '任务摘要',
                 value: failedTaskCount > 0 ? `失败${failedTaskCount}条` : recentTasks.length > 0 ? `最近${recentTasks.length}条` : '暂无任务',
                 description: latestTask
-                    ? `最近一条：${latestTask.task_type === 'video' ? '视频任务' : latestTask.scene} · ${TASK_STATUS_MAP[latestTask.status] || latestTask.status} · ${formatDateTime(latestTask.created_at)}`
+                    ? `最近一条：${latestTask.task_type === 'video' ? '视频任务' : formatAiScene(latestTask.scene)} · ${TASK_STATUS_MAP[latestTask.status] || latestTask.status} · ${formatDateTime(latestTask.created_at)}`
                     : '当前用户暂无生成记录。',
                 actionLabel: '查看AI任务中心',
                 disabled: false,
@@ -822,7 +837,7 @@ const UserWorkbench: React.FC = () => {
                                         className="recent-user-chip"
                                         onClick={() => void loadWorkbenchUser(item.id)}
                                     >
-                                        {item.username} · {item.id}
+                                        {recentUserLabel(item)}
                                     </button>
                                 ))}
                             </div>
@@ -841,7 +856,7 @@ const UserWorkbench: React.FC = () => {
                                         <span>ID {user.id}</span>
                                     </div>
                                     <div className="search-result-meta">
-                                        <span>{user.username}</span>
+                                        <span>{visibleUsername(user.username)}</span>
                                         <FiChevronRight />
                                     </div>
                                 </button>
@@ -869,7 +884,7 @@ const UserWorkbench: React.FC = () => {
                                         <span className="user-main-id">ID {selectedUser.id}</span>
                                     </div>
                                     <div className="user-main-meta">
-                                        <span>{selectedUser.user_type || '普通用户'}</span>
+                                        <span>{USER_TYPE_MAP[selectedUser.user_type || ''] || '普通用户'}</span>
                                         <span>{formatDateTime(selectedUser.created_at)} 注册</span>
                                         <span>{formatDateTime(selectedUser.updated_at)} 最近更新</span>
                                     </div>
@@ -888,10 +903,12 @@ const UserWorkbench: React.FC = () => {
                                                     ? CERT_STATUS_MAP[activeCertification.status] || activeCertification.status
                                                     : '暂无认证'}
                                         </span>
-                                        <span className="status-tag neutral">
-                                            <FiUser />
-                                            {selectedUser.username || `用户${selectedUser.id}`}
-                                        </span>
+                                        {visibleUsername(selectedUser.username) ? (
+                                            <span className="status-tag neutral">
+                                                <FiUser />
+                                                {selectedUser.username}
+                                            </span>
+                                        ) : null}
                                     </div>
                                 </div>
                             </div>
@@ -1035,8 +1052,8 @@ const UserWorkbench: React.FC = () => {
                                                 {(workbenchSummary?.recent_tasks || []).map((item) => (
                                                     <div key={item.task_no} className="mini-record-item">
                                                         <div className="mini-record-main">
-                                                            <strong>{item.task_type === 'video' ? '视频任务' : item.scene}</strong>
-                                                            <span>{TASK_STATUS_MAP[item.status] || item.status} · {item.task_no}</span>
+                                                            <strong>{item.task_type === 'video' ? '视频任务' : formatAiScene(item.scene)}</strong>
+                                                            <span title={item.task_no}>{TASK_STATUS_MAP[item.status] || item.status} · 任务 {shortCode(item.task_no)}</span>
                                                             {item.error_message ? <em>{item.error_message}</em> : null}
                                                         </div>
                                                         <div className="mini-record-side">
@@ -1118,8 +1135,8 @@ const UserWorkbench: React.FC = () => {
                                                 {(workbenchSummary?.device_risk?.same_device_other_users || []).map((item) => (
                                                     <div key={item.user_id} className="risk-peer-row">
                                                         <div className="risk-peer-main">
-                                                            <strong>{item.display_name || item.username || `用户${item.user_id}`}</strong>
-                                                            <span>ID {item.user_id} · {item.username || '未命名用户'}</span>
+                                                            <strong>{formatUserName(item, item.user_id)}</strong>
+                                                            <span>ID {item.user_id}{visibleUsername(item.username) ? ` · ${item.username}` : ''}</span>
                                                         </div>
                                                         <button className="btn-inline" onClick={() => void handleOpenRelatedUser(item.user_id)}>切到该用户</button>
                                                     </div>

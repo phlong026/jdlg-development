@@ -23,6 +23,7 @@ import { useIsMobile } from '../component/useIsMobile';
 import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
 import { CustomerLeadTrail } from './customerLeadTrail';
+import { formatLeadSource } from '../utils/displayLabels';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -57,20 +58,7 @@ const intentLabelMap: Record<string, string> = {
     high: '高意向',
 };
 
-// 线索来源友好名；share_tracking = 分享访问记录的意向转化（管理端一键转化生成）。
-const sourceLabelMap: Record<string, string> = {
-    share_tracking: '分享意向',
-    structured_requirement: '客服需求表单',
-    generate_click: '生成方案',
-    handoff_human: '转人工留资',
-    home: '在线客服',
-    // 小程序进入客服页时带的 source（见 miniprogram 各页面 customerservice?source=）
-    home_mascot: '首页客服入口',
-    generatedetails: '方案详情页',
-    aicost: 'AI 造价结果',
-    content_reader: '内容阅读页',
-};
-const sourceLabel = (source?: string) => sourceLabelMap[source || ''] || source || '-';
+const sourceLabel = formatLeadSource;
 
 const defaultAction = {
     status: 'contacted',

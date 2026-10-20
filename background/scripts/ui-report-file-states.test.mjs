@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -88,6 +89,7 @@ function harness(name) {
       if (id === '../api/reportCenter') return api;
       if (id === '../config/api') return { API_BASE_URL: 'https://fixture.invalid', API_ENDPOINTS: { OSS: { LIST: '/oss', DELETE: id => `/oss/${id}`, BATCH_DELETE: '/oss/batch', UPLOAD: '/oss/upload' } } };
       if(typeof name==='string'&&name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  if (requireDisplayUtil(id)) return requireDisplayUtil(id);
   throw new Error(`Unexpected import ${id}`);
     },
   });
@@ -407,4 +409,11 @@ test('OSS unmount silences late upload success, business failure and network rej
     else h.writes[0].resolve({ ok: true, json: async () => ({ code: outcome === 'success' ? 0 : 1, msg: 'late business', data: {} }) });
     await pending; await flush(); assert.equal(page.updates, updates, outcome); assert.equal(h.requests.length, reads, outcome); assert.equal(h.alerts.length, 0, outcome);
   }
+});
+
+test('report 累计收入带单位：按灵石数显示并标注单位', async () => {
+  const h = harness('reportCenter'), page = h.runtime; await resolveReport(h);
+  const card = nodes(page.tree, node => node.props?.className === 'stat-card section-card').map(textOf).find(text => text.includes('累计收入'));
+  assert.ok(card, '累计收入卡片');
+  assert.match(card, /125 灵石/);
 });

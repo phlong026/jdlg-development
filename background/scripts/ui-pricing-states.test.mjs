@@ -2,6 +2,7 @@
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const require = createRequire(import.meta.url);
 const fs = require('node:fs');
 const path = require('node:path');
@@ -61,6 +62,7 @@ const context = vm.createContext({
   if (name.endsWith('.scss')) return {};
     if (name === '../utils/pageLoadError') return { reportPageLoadError: () => {} };
     if (name === '../api/aiOverview' || name === '../api/ai') return new Proxy({}, { get: (_, method) => (...args) => api[method](...args) });
+    if (requireDisplayUtil(name)) return requireDisplayUtil(name);
     throw new Error(`Unexpected import: ${name}`);
   },
   console: { ...console, error() {} }, URLSearchParams,
@@ -285,14 +287,13 @@ test('AI pricing keeps confirmation, version and retry states consistent', async
 });
 
 
-test('pricing business details remain visible while identifiers are collapsed and advanced settings have a direct entry', async () => {
+test('pricing business details remain visible without scene identifiers and advanced settings have a direct entry', async () => {
   resetApi({ getAIPricingOpsList: async () => [{ ...baseItem, margin_rate: 0.2 }] });
   const page = mount(Pricing, {}); page.effects(); await flush(); page.render();
-  const diagnostic = nodes(page.tree, n => n.type === 'details' && n.props.className === 'aip-scene-diagnostic');
-  assert.equal(diagnostic.length, 1);
-  assert.notEqual(diagnostic[0].props.open, true);
-  assert.match(textOf(diagnostic[0]), /ai_draw_single/);
-  assert.equal(nodes(diagnostic[0], n => n.type === 'summary').length, 1);
+  // 场景代码不再以「场景标识」折叠块出现；成本列是近 7 日合计，不是单次
+  assert.equal(nodes(page.tree, n => n.type === 'details').length, 0);
+  assert.doesNotMatch(textOf(page.tree), /ai_draw_single|场景标识/);
+  assert.match(textOf(nodes(page.tree, n => n.type === 'thead')[0]), /近 7 日成本/);
   const row = nodes(page.tree, n => n.type === 'tr' && n.key === baseItem.scene)[0];
   assert.ok(row);
   const visible = row.props.children.filter(n => n?.type === 'td').slice(1).map(textOf).join('|');

@@ -7,13 +7,15 @@ import vm from 'node:vm';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const require = createRequire(path.join(root, 'package.json'));
 const React = require('react');
 const ts = require('typescript');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const time = '2026-10-10T10:00:00Z';
-const taskItem = (id, type = 'image') => ({ id, user_id: id + 1000, task_no: `${type}-${id}`, username: `task-user-${id}`, status: 'failed', stones_used: 12, error_message: 'fixture task error', created_at: time, updated_at: time });
+const taskOverrides = {};
+const taskItem = (id, type = 'image') => ({ id, user_id: id + 1000, task_no: `${type}-${id}`, username: `task-user-${id}`, status: 'failed', stones_used: 12, error_message: 'fixture task error', created_at: time, updated_at: time, ...taskOverrides[id] });
 const taskDetail = (id, type = 'image') => ({ ...taskItem(id, type), type });
 const application = id => ({ id, user_id: id + 1000, type: 'designer', real_name: `masked-name-${id}`, id_card_no: `masked-card-${id}`, company_name: '', credit_code: '', legal_person: '', aliyun_passed: true, aliyun_msg: '', extra_docs_remark: '', status: 'pending_review', admin_remark: '', created_at: time, updated_at: time });
 const certDetail = id => ({ application: application(id), user: { id: id + 1000, username: `cert-user-${id}`, can_withdraw: false } });
@@ -80,6 +82,7 @@ function mount(kind, initialSearch = '', { emptyList = false, deferLists = false
       if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => page.errors.push(args), reportPageLoadRecovered() {} };
       if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
   if (name.endsWith('.scss')) return {};
+      if (requireDisplayUtil(name)) return requireDisplayUtil(name);
       throw new Error(`Unexpected import: ${name}`);
     },
   });
@@ -541,5 +544,26 @@ test('backfill success and failure after unmount cannot set feedback, notify, or
     assert.equal(page.afterUnmountWrites, 0);
     assert.equal(page.listCalls.length, listsBeforeCompletion);
     assert.deepEqual(page.notices, []);
+  }
+});
+
+test('AI 任务列表：任务号只显示后 6 位，模型只说主力/备用服务，用户不显示 wx_ 登录名', async () => {
+  taskOverrides[101] = { task_no: '9d0fed07a1b2c3d4e5f60718293a4b5c', username: 'wx_o_abc', nickname: '', scene: 'ai_draw_single', model: 'seedream-4-5-251128' };
+  taskOverrides[202] = { username: 'wx_o_def', nickname: '灿坤', scene: 'ai_draw_multi', model: 'gpt-image-2-vip' };
+  try {
+    const page = await boot('task');
+    const first = textOf(nodes(page.tree, node => node.type === 'tr' && node.key === '9d0fed07a1b2c3d4e5f60718293a4b5c')[0]);
+    const second = textOf(row(page, 202));
+    assert.match(first, /…3a4b5c/);
+    assert.doesNotMatch(first, /9d0fed07a1b2/);
+    assert.match(first, /AI 绘画-单图/);
+    assert.match(first, /备用服务/);
+    assert.doesNotMatch(first, /seedream/);
+    assert.match(first, /微信用户 #1101/);
+    assert.match(second, /灿坤/);
+    assert.match(second, /主力服务/);
+    assert.doesNotMatch(first + second, /wx_|gpt-image|ai_draw|failed/);
+  } finally {
+    delete taskOverrides[101]; delete taskOverrides[202];
   }
 });

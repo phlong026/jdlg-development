@@ -27,6 +27,7 @@ import {
     type DesignerManagementReviewItem,
     type DesignerManagementWorkItem,
 } from '../api/designers';
+import { formatUserName, visibleUsername } from '../utils/displayName';
 import './designerCenter.scss';
 
     const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -87,7 +88,7 @@ const formatDateTime = (value?: string | null) => {
 const getDesignerDisplayName = (item?: DesignerManagementItem | DesignerManagementDetail | null) => {
     if (!item) return '未命名设计师';
     const profileName = 'profile' in item ? item.profile?.nickname : item.display_name;
-    return profileName || item.username || `用户${item.user_id}`;
+    return formatUserName({ nickname: profileName, username: item.username }, item.user_id);
 };
 
 const DesignerCenter: React.FC = () => {
@@ -503,10 +504,10 @@ const DesignerCenter: React.FC = () => {
                                     >
                                         <div className="designer-list-main">
                                             <div className="designer-avatar-wrap">
-                                                {item.avatar ? <img src={item.avatar} alt={item.display_name || item.username} className="designer-avatar" /> : <div className="designer-avatar placeholder"><FiUserIcon /></div>}
+                                                {item.avatar ? <img src={item.avatar} alt={getDesignerDisplayName(item)} className="designer-avatar" /> : <div className="designer-avatar placeholder"><FiUserIcon /></div>}
                                             </div>
                                             <div className="designer-list-info">
-                                                <div className="designer-list-title">{item.display_name || item.username}</div>
+                                                <div className="designer-list-title">{getDesignerDisplayName(item)}</div>
                                                 <div className="designer-list-subtitle">{item.service_title || '暂未填写服务标题'}</div>
                                                 <div className="designer-list-tags">
                                                     <span>{CERT_STATUS_MAP[item.certification_status || ''] || '未申请'}</span>
@@ -607,7 +608,7 @@ const DesignerCenter: React.FC = () => {
                                     <div className="designer-info-card">
                                         <h4>基础资料</h4>
                                         <div className="designer-info-list">
-                                            <div><span>用户名</span><strong>{detail.username}</strong></div>
+                                            {visibleUsername(detail.username) ? <div><span>用户名</span><strong>{detail.username}</strong></div> : null}
                                             <div><span>擅长方向</span><strong>{detail.profile?.specialty_styles || '暂未填写'}</strong></div>
                                             <div><span>设计经验</span><strong>{detail.profile?.designer_experience_years || 0} 年</strong></div>
                                             <div><span>服务报价</span><strong>{detail.profile?.service_quote || 0} 灵石</strong></div>

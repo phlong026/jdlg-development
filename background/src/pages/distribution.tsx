@@ -4,6 +4,7 @@ import { FiAward, FiGift, FiRefreshCw, FiSearch, FiShare2, FiUsers } from 'react
 import ManagementSearchPanel from '../component/managementSearchPanel';
 import { getDistributionInviters, getDistributionOverview, getDistributionRewards, type DistributionInviterItem, type DistributionOverview, type DistributionRewardItem, type DistributionListParams, type DistributionListResponse } from '../api/distribution';
 import { getShareAttribution, type ShareAttributionItem } from '../api/riskControl';
+import { formatUserName, visibleUsername } from '../utils/displayName';
 import './distribution.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -284,8 +285,9 @@ const Distribution: React.FC = () => {
                                         <tr key={item.share_id}>
                                             <td>
                                                 <div className="identity-cell">
-                                                    <strong>{item.content_title}</strong>
-                                                    <span className="mono-cell">{item.share_id}</span>
+                                                    {/* 后端查不到素材标题时用分享号兜底，这里不把 32 位分享号当标题 */}
+                                                    <strong>{item.content_title && item.content_title !== item.share_id ? item.content_title : '未识别素材'}</strong>
+                                                    <span title={item.share_id}>分享尾号 {String(item.share_id || '').slice(-6)}</span>
                                                 </div>
                                             </td>
                                             <td>{item.visitor_count}</td>
@@ -335,8 +337,8 @@ const Distribution: React.FC = () => {
                                             <tr key={item.user_id}>
                                                 <td>
                                                     <div className="identity-cell">
-                                                        <strong>{item.display_name || item.username}</strong>
-                                                        <span>ID {item.user_id} · {item.username}</span>
+                                                        <strong>{formatUserName(item, item.user_id)}</strong>
+                                                        <span>ID {item.user_id}{visibleUsername(item.username) ? ` · ${item.username}` : ''}</span>
                                                     </div>
                                                 </td>
                                                 <td>{item.invite_code || '暂无'}</td>
@@ -383,8 +385,8 @@ const Distribution: React.FC = () => {
                                             <tr key={item.id}>
                                                 <td>
                                                     <div className="identity-cell">
-                                                        <strong>{item.display_name || item.username}</strong>
-                                                        <span>ID {item.user_id} · {item.username}</span>
+                                                        <strong>{formatUserName(item, item.user_id)}</strong>
+                                                        <span>ID {item.user_id}{visibleUsername(item.username) ? ` · ${item.username}` : ''}</span>
                                                     </div>
                                                 </td>
                                                 <td>

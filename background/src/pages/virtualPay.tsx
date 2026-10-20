@@ -13,6 +13,7 @@ import {
     type XPayMessageLogItem,
     type XPayLogSummary,
 } from '../api/virtualPay';
+import { formatUserName } from '../utils/displayName';
 import './virtualPay.scss';
 
 const emptySummary: XPayLogSummary = {
@@ -200,7 +201,7 @@ const VirtualPay: React.FC = () => {
                             <div className="diff-list">
                                 {calibration.diffs.slice(0, 5).map((item) => (
                                     <button key={item.user_id} className="diff-row" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)} title="进入用户详情">
-                                        <b>{item.username || `用户${item.user_id}`}</b>
+                                        <b>{formatUserName(item, item.user_id)}</b>
                                         <span>ID {item.user_id} · 微信实测 {item.measured_balance.toLocaleString('zh-CN')} / 镜像 {item.local_mirror.toLocaleString('zh-CN')}</span>
                                         <em className={item.diff > 0 ? 'plus' : 'minus'}>{item.diff > 0 ? `+${item.diff}` : item.diff}</em>
                                     </button>
@@ -272,10 +273,10 @@ const VirtualPay: React.FC = () => {
                                         {item.user_id > 0 ? (
                                             <button
                                                 className="user-link-button"
-                                                title={`${item.username || '用户'} · 进入用户详情`}
+                                                title={`${formatUserName(item, item.user_id)} · 进入用户详情`}
                                                 onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}
                                             >
-                                                {item.username || `用户${item.user_id}`}
+                                                {formatUserName(item, item.user_id)}
                                                 <span className="user-id-meta"> ID {item.user_id}</span>
                                             </button>
                                         ) : (

@@ -21,6 +21,8 @@ import { getSupportTicketDetail, updateSupportTicketResolutionNote, updateSuppor
 import './aiTaskCenter.scss';
 import MobileFold from '../component/MobileFold';
 import { useIsMobile } from '../component/useIsMobile';
+import { formatUserName } from '../utils/displayName';
+import { formatAiModel, formatAiScene, isFallbackModel, shortCode } from '../utils/displayLabels';
 
 const emptySummary: AITaskSummary = {
     total_count: 0,
@@ -55,21 +57,13 @@ const formatStatus = (status: string) => {
     }
 };
 
-const sceneLabels: Record<string, string> = {
-    ai_draw_single: 'AI 绘画-单图',
-    ai_draw_multi: 'AI 绘画-多图',
-    new_minnan_tool_text_to_image: '新闽派-文生图',
-    new_minnan_tool_image_to_image: '新闽派-图生图',
-    ai_chat_single: 'AI 对话-单轮',
-    ai_chat_multi: 'AI 对话-多轮',
-    rural_villa_design: '乡村别墅设计',
-    allround_design: '全能设计',
-    building_replacement: '建筑换新',
-    parent_child_design: '亲子设计',
-    ai_cost_doc: 'AI 造价文档',
-};
-
-const sceneLabel = (scene?: string) => (scene ? sceneLabels[scene] || scene : '-');
+const sceneLabel = formatAiScene;
+// 图片任务的场景筛选只列图片任务会出现的场景，中文名取共用表
+const IMAGE_TASK_SCENES = [
+    'ai_draw_single', 'ai_draw_multi', 'new_minnan_tool_text_to_image', 'new_minnan_tool_image_to_image',
+    'ai_chat_single', 'ai_chat_multi', 'rural_villa_design', 'allround_design', 'building_replacement',
+    'parent_child_design', 'ai_cost_doc',
+];
 
 interface TaskQueueTab {
     key: AITaskQueue;
@@ -157,16 +151,6 @@ const resolveTaskModelText = (task?: { model?: string; api_endpoint?: string }, 
 };
 
 /** 主力生图模型（与后端降级链一致）：任务最终模型 ≠ 主力 即发生了降级 */
-const PRIMARY_DRAW_MODEL = 'gpt-image-2-vip';
-const FALLBACK_DRAW_MODELS = ['gemini-3-pro', 'seedream'];
-
-const isFallbackModel = (model?: string) => {
-    const value = String(model || '').toLowerCase();
-    if (!value || value === '模型待回填') return false;
-    if (value.startsWith(PRIMARY_DRAW_MODEL)) return false;
-    return FALLBACK_DRAW_MODELS.some((prefix) => value.startsWith(prefix));
-};
-
 const isLongRunningTask = (item: AITaskItem) => {
     if (!['pending', 'running', 'processing'].includes(item.status)) {
         return false;
@@ -712,8 +696,8 @@ const AITaskCenter: React.FC = () => {
                             {activeTab === 'image' && (
                                 <select className="task-select" value={scene} onChange={(event) => setScene(event.target.value)}>
                                     <option value="all">全部场景</option>
-                                    {Object.entries(sceneLabels).map(([value, label]) => (
-                                        <option key={value} value={value}>{label}</option>
+                                    {IMAGE_TASK_SCENES.map((value) => (
+                                        <option key={value} value={value}>{formatAiScene(value)}</option>
                                     ))}
                                 </select>
                             )}
@@ -796,11 +780,11 @@ const AITaskCenter: React.FC = () => {
                                                     />
                                                 </td>
                                             ) : null}
-                                            <td><span className="task-no">{item.task_no}</span></td>
+                                            <td><span className="task-no" title={item.task_no}>{shortCode(item.task_no)}</span></td>
                                             <td>
                                                 <div className="user-cell">
                                                     <button className="user-link-button" onClick={() => navigate(`/user-workbench?userId=${item.user_id}`)}>
-                                                        {item.username || `用户${item.user_id}`}
+                                                        {formatUserName(item, item.user_id)}
                                                     </button>
                                                     <span>ID {item.user_id}</span>
                                                 </div>
@@ -810,8 +794,7 @@ const AITaskCenter: React.FC = () => {
                                                     <div className="text-cell">
                                                         <strong>{sceneLabel(item.scene)}</strong>
                                                         <span>
-                                                            {resolvedModel}
-                                                            {degraded ? <em className="task-degrade-badge">备用服务</em> : null}
+                                                            {degraded ? <em className="task-degrade-badge">备用服务</em> : formatAiModel(resolvedModel)}
                                                         </span>
                                                     </div>
                                                 ) : (

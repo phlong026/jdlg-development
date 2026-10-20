@@ -10,6 +10,7 @@ import {
     type MembershipOperationsOverview,
     type MembershipOperationsUserItem,
 } from '../api/membershipOperations';
+import { formatUserName, visibleUsername } from '../utils/displayName';
 import './membershipOperations.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -264,8 +265,8 @@ const MembershipOperations: React.FC = () => {
                                             <tr key={item.user_id} className={rowClass}>
                                                 <td>
                                                     <div className="user-cell">
-                                                        <strong>{item.display_name || item.username}</strong>
-                                                        <span>ID {item.user_id} · {item.username}</span>
+                                                        <strong>{formatUserName(item, item.user_id)}</strong>
+                                                        <span>ID {item.user_id}{visibleUsername(item.username) ? ` · ${item.username}` : ''}</span>
                                                     </div>
                                                 </td>
                                                 <td>
@@ -344,8 +345,8 @@ const MembershipOperations: React.FC = () => {
                                     >
                                         <div className="membership-card-head">
                                             <div className="membership-card-identity">
-                                                <strong>{item.display_name || item.username}</strong>
-                                                <span>ID {item.user_id} · {item.username}</span>
+                                                <strong>{formatUserName(item, item.user_id)}</strong>
+                                                <span>ID {item.user_id}{visibleUsername(item.username) ? ` · ${item.username}` : ''}</span>
                                             </div>
                                             <span className={`status-badge status-${item.status || 'inactive'}`}>
                                                 {item.lifetime_membership ? '终身会员' : (MEMBERSHIP_STATUS_MAP[item.status || 'inactive'] || item.status || '未知')}

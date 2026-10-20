@@ -19,11 +19,12 @@ interface AuditItem {
     created_at: string;
 }
 
+// 筛选项仍按请求方法过滤（服务端参数），显示成运营能懂的操作类型
 const METHOD_LABELS: Record<string, string> = {
-    POST: 'POST',
-    PUT: 'PUT',
-    PATCH: 'PATCH',
-    DELETE: 'DELETE',
+    POST: '提交',
+    PUT: '修改',
+    PATCH: '修改（部分）',
+    DELETE: '删除',
 };
 
 const TARGET_LABELS: Record<string, string> = {
@@ -40,7 +41,42 @@ const TARGET_LABELS: Record<string, string> = {
 };
 
 function targetLabel(type: string): string {
-    return TARGET_LABELS[type] || type || '—';
+    return TARGET_LABELS[type] || '后台数据';
+}
+
+// 接口路径末段是动作名时用它描述操作（{x} 为对象，如「用户账号 #1」）；否则按请求方法兜底。
+// POST 也用于审核、同步等动作，未识别时只说「提交了…的操作」，不臆测为新增。
+const PATH_ACTIONS: Record<string, string> = {
+    publish: '发布了{x}',
+    unpublish: '下架了{x}',
+    ban: '封禁了{x}',
+    unban: '解封了{x}',
+    approve: '通过了{x}',
+    reject: '驳回了{x}',
+    review: '审核了{x}',
+    retry: '重试了{x}',
+    refund: '退款了{x}',
+    stones: '调整了{x}的灵石',
+    adjust: '调整了{x}',
+    featured: '调整了{x}的精选状态',
+    category: '调整了{x}的分类',
+    status: '修改了{x}的状态',
+    assign: '分派了{x}',
+    sync: '同步了{x}',
+};
+const METHOD_ACTIONS: Record<string, string> = {
+    POST: '提交了{x}的操作',
+    PUT: '修改了{x}',
+    PATCH: '修改了{x}',
+    DELETE: '删除了{x}',
+};
+
+function auditSentence(item: AuditItem): string {
+    // 编号后留空格，避免「#1的灵石」粘连；末尾多出的空格在返回前去掉
+    const target = item.target_id ? `${targetLabel(item.target_type)} #${item.target_id} ` : targetLabel(item.target_type);
+    const lastSegment = item.path.split('?')[0].split('/').filter(Boolean).pop() || '';
+    const template = PATH_ACTIONS[lastSegment] || METHOD_ACTIONS[item.method] || '操作了{x}';
+    return `${item.username || `后台账号 #${item.user_id}`} ${template.replace('{x}', target)}`.trim();
 }
 
 /**
@@ -142,7 +178,7 @@ const AuditLogs: React.FC = () => {
         <div className="logs-container">
             <ManagementSearchPanel
                 title="管理操作审计"
-                description="按操作人、资源和请求方法查询审计记录。POST 可能用于提交、审核或其他动作，具体操作请结合接口路径判断。"
+                description="查看谁在什么时候做了什么操作、是否成功。"
                 actions={<>
                     <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
                     <button className="btn-secondary" onClick={() => void fetchList()} disabled={loading}><FiRefreshCw />{loading ? '刷新中...' : '刷新'}</button>
@@ -159,12 +195,12 @@ const AuditLogs: React.FC = () => {
                         {Object.entries(TARGET_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                     <select className="management-search-select" aria-label="审计请求方法" value={query.method} onChange={(event) => changeQuery({ page: 1, method: event.target.value })}>
-                        <option value="">全部请求方法</option>
+                        <option value="">全部操作类型</option>
                         {Object.entries(METHOD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                     <button className="btn-secondary" onClick={handleSearch}><FiSearch />查询</button>
                 </>}
-                summary={<span>当前筛选共 {total ?? '—'} 条；管理端非 GET 请求自动记录，结果以 HTTP 状态码为准。</span>}
+                summary={<span>当前筛选共 {total ?? '—'} 条；后台的新增、修改、删除等操作会自动记录。</span>}
             />
 
             <div className="section-card logs-table-panel">
@@ -173,19 +209,15 @@ const AuditLogs: React.FC = () => {
                         <thead>
                             <tr>
                                 <th>时间</th>
-                                <th>操作人</th>
-                                <th>请求方法</th>
-                                <th>资源</th>
-                                <th>接口</th>
+                                <th>操作</th>
                                 <th>结果</th>
-                                <th>耗时</th>
-                                <th>来源 IP</th>
+                                <th>详情</th>
                             </tr>
                         </thead>
                         <tbody>
                             {items.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="empty-state">
+                                    <td colSpan={4} className="empty-state">
                                         {loading ? '加载中...' : error ? <span role="alert">审计加载失败：{error}<button className="btn-secondary" onClick={() => void fetchList()}>重新加载审计</button></span> : '暂无操作记录，管理端非 GET 请求会自动记录在这里'}
                                     </td>
                                 </tr>
@@ -193,18 +225,17 @@ const AuditLogs: React.FC = () => {
                                 items.map((item) => (
                                     <tr key={item.id}>
                                         <td>{new Date(item.created_at).toLocaleString('zh-CN')}</td>
-                                        <td>{item.username || `用户#${item.user_id}`}</td>
-                                        <td>{METHOD_LABELS[item.method] || item.method}</td>
+                                        <td className="audit-sentence">{auditSentence(item)}</td>
                                         <td>
-                                            {targetLabel(item.target_type)}
-                                            {item.target_id ? ` #${item.target_id}` : ''}
+                                            <span className={`level-badge ${statusClass(item.status)}`}>{item.status < 400 ? '成功' : '失败'}</span>
                                         </td>
-                                        <td className="audit-path" title={item.path}>{item.path}</td>
-                                        <td>
-                                            <span className={`level-badge ${statusClass(item.status)}`}>{item.status}</span>
+                                        <td className="audit-detail-cell">
+                                            <details>
+                                                <summary>查看</summary>
+                                                <div className="audit-path" title={item.path}>{item.method} {item.path}</div>
+                                                <div>状态码 {item.status} · 耗时 {item.duration_ms}ms · 来源 IP {item.ip || '—'}</div>
+                                            </details>
                                         </td>
-                                        <td>{item.duration_ms}ms</td>
-                                        <td>{item.ip || '—'}</td>
                                     </tr>
                                 ))
                             )}

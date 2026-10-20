@@ -23,6 +23,8 @@ import {
 } from '../api/orders';
 import { getXPayLogs, type XPayMessageLogItem } from '../api/virtualPay';
 import { API_BASE_URL } from '../config/api';
+import { formatUserName as formatOrderUser } from '../utils/displayName';
+import { replaceSceneCodes } from '../utils/displayLabels';
 import './orderCenter.scss';
 
 const formatOrderType = (value: string) => {
@@ -59,33 +61,8 @@ const formatOrderTypeLine = (type: string, category: string) => {
     return typeLabel === categoryLabel ? typeLabel : `${typeLabel} · ${categoryLabel}`;
 };
 
-// AI 场景中文名，与后端 service/route/ai_overview_management.go 的 aiSceneMeta 同源
-const aiSceneLabels: Record<string, string> = {
-    ai_draw_single: 'AI 绘画-单图',
-    ai_draw_multi: 'AI 绘画-多图',
-    new_minnan_tool_text_to_image: '新闽派工具-文生图',
-    new_minnan_tool_image_to_image: '新闽派工具-图生图',
-    ai_chat_single: 'AI 对话-单轮',
-    ai_chat_multi: 'AI 对话-多轮',
-    building_code_chat: '建规快查',
-    rural_villa_design: '乡村别墅设计',
-    allround_design: '全能设计',
-    building_replacement: '建筑换新',
-    parent_child_design: '亲子设计',
-    ai_cost_doc: 'AI 造价文档',
-    ai_video_1: 'AI 视频-1段',
-    ai_video_2: 'AI 视频-2段',
-    ai_video_3: 'AI 视频-3段',
-    ai_video_4: 'AI 视频-4段',
-};
-
 // 历史消费订单标题形如「AI生成-ai_draw_single-3张」，显示时把场景代码换成中文名
-const formatOrderTitle = (title?: string) =>
-    (title || '').replace(/[a-z][a-z0-9]*(?:_[a-z0-9]+)+/g, code => aiSceneLabels[code] || code);
-
-// 小程序默认用户名是 wx_xxxx，运营认不出人；有昵称时优先显示昵称
-const formatOrderUser = (user: { nickname?: string; username?: string } | null | undefined, userId: number) =>
-    user?.nickname?.trim() || user?.username || `用户${userId}`;
+const formatOrderTitle = replaceSceneCodes;
 
 // 状态中文映射（T4）：delivering/refunding 是资金流转的中间态，必须给中文，
 // 否则列表直接显示英文原值；卡单由"仅看异常单"的服务端条件兜底捕获。

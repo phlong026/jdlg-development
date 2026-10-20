@@ -406,3 +406,15 @@ test('a linked edit detail response cannot open after the URL target changes', a
   assert.equal(h.nodes().filter(node => node.props?.className === 'modal-overlay').length, 0);
   assert.doesNotMatch(textOf(h.render()), /Old editor/); assert.match(textOf(h.render()), /Linked 2/);
 });
+
+test('模板卡片分类显示中文名：分类表 → 标签配置 → 其他分类，不外露代码', async () => {
+  const meta = async category => {
+    const h = await page({ template: { category } });
+    return textOf(h.find(node => node.type === 'dl' && node.props.className === 'template-meta'));
+  };
+  assert.match(await meta('villa'), /分类Villa/);
+  assert.match(await meta('main'), /分类Main/);
+  const unknown = await meta('creative');
+  assert.match(unknown, /分类其他分类/);
+  assert.doesNotMatch(unknown, /creative/);
+});

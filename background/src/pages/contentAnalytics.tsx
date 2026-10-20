@@ -14,6 +14,7 @@ import {
     type ContentAnalyticsOverview,
     type ContentAnalyticsTemplateItem,
 } from '../api/contentAnalytics';
+import { getTemplateCategories, getTemplateTabConfig } from '../api/templates';
 import './contentAnalytics.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -45,6 +46,18 @@ type AnalyticsReport = {
 const conversionTypeLabelMap: Record<string, string> = {
     unlock: '付费解锁转化',
     download: '下载使用转化',
+};
+
+// 模板的 category 存的是代码（villa、xsxmp…），中文名来自模板分类和广场 Tab 配置
+const loadCategoryNames = async (): Promise<Record<string, string>> => {
+    const [categories, tabs] = await Promise.allSettled([getTemplateCategories(), getTemplateTabConfig()]);
+    if (categories.status === 'rejected' && tabs.status === 'rejected') throw categories.reason;
+    const names: Record<string, string> = {};
+    if (tabs.status === 'fulfilled') {
+        [...tabs.value.main_tabs, ...tabs.value.sub_tabs, ...tabs.value.third_tabs].forEach(tab => { names[tab.value] = tab.label; });
+    }
+    if (categories.status === 'fulfilled') categories.value.forEach(category => { names[category.id] = category.name; });
+    return names;
 };
 
 const ContentAnalytics: React.FC = () => {
@@ -121,6 +134,21 @@ const ContentAnalytics: React.FC = () => {
         void loadData();
         return () => { mountedRef.current = false; cancelLoad(); };
     }, []);
+
+    // 分类名只是显示辅助：读取失败时仍按原代码显示，不影响分析数据
+    const [categoryNames, setCategoryNames] = useState<Record<string, string> | null>(null);
+    useEffect(() => {
+        let active = true;
+        loadCategoryNames()
+            .then(names => { if (active) setCategoryNames(names); })
+            .catch(error => console.error('读取模板分类名失败:', error));
+        return () => { active = false; };
+    }, []);
+    const categoryLabel = (category: string) => {
+        if (!category) return '未分类';
+        if (!categoryNames) return category;
+        return categoryNames[category] || '其他分类';
+    };
 
     const applyKeyword = (nextKeyword: string) => {
         if (!mountedRef.current) return;
@@ -207,7 +235,7 @@ const ContentAnalytics: React.FC = () => {
                                             <span>{item.creator || '系统'} · {item.is_free ? '免费模板' : `${item.price} 灵石`}</span>
                                         </div>
                                     </td>
-                                    <td>{item.category || '未分类'}</td>
+                                    <td title={item.category || undefined}>{categoryLabel(item.category)}</td>
                                     <td>{item.download_count}</td>
                                     <td>{item.engagement_score}</td>
                                     <td>{item.like_count} / {item.comment_count} / {item.share_count}</td>

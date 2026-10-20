@@ -6,6 +6,8 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
 import * as sass from 'sass';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
+let attributionList = [];
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const clone = value => JSON.parse(JSON.stringify(value));
 function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
@@ -43,10 +45,11 @@ function harness(name) {
       if (id === '../component/managementSearchPanel') return { __esModule: true, default: 'ManagementSearchPanel' };
       if (id === '../utils/pageLoadError') return { reportPageLoadError: (error, source) => failures.push({ error, source }), reportPageLoadRecovered: source => recoveries.push(source) };
       if (id === '../api/distribution') return api;
-      if (id === '../api/riskControl') return { getShareAttribution: async () => ({ list: [], days: 30 }) };
+      if (id === '../api/riskControl') return { getShareAttribution: async () => ({ list: attributionList, days: 30 }) };
       if (id === '../component/useIsMobile') return { useIsMobile: () => false };
       if (id === '../config/api') return { API_BASE_URL: 'https://fixture.invalid', API_ENDPOINTS: { AUDIT: { LIST: '/audit' } } };
       if(typeof name==='string'&&name.includes('useIsMobile'))return {useIsMobile:()=>false};
+  if (requireDisplayUtil(id)) return requireDisplayUtil(id);
   throw new Error(`Unexpected import ${id}`);
     },
   });
@@ -64,13 +67,28 @@ async function tableResult(h, kind, rows, total, req = request(h, kind), extra =
 async function loadDistribution(h, total = 120) { request(h, 'Overview').resolve(overview); await tableResult(h, 'Inviters', [inviter(1)], total); await tableResult(h, 'Rewards', [reward(1)], total); }
 function searchDistribution(h, keyword) { change(h.page, '分销搜索', keyword); click(h.page, '搜索'); h.page.effects(); h.page.render(); }
 
-test('audit renders neutral HTTP methods with real badge styles and owns its cold-entry search styles', async () => {
-  const h = harness('logs'); await auditResult(h, 0, [audit(1), audit(2, { status: 403, method: 'PATCH' }), audit(3, { status: 500, method: 'DELETE' }), audit(4, { method: 'OPTIONS' })], 4);
-  const cells = nodes(h.page.tree, node => node.type === 'td').map(textOf);
-  assert.ok(cells.includes('POST')); assert.ok(cells.includes('OPTIONS')); assert.equal(cells.some(value => value === '创建'), false);
-  assert.equal(nodes(h.page.tree, node => node.props?.className === 'level-badge level-info').length, 2);
+test('audit renders one plain sentence per operation, keeps HTTP details folded and owns its cold-entry search styles', async () => {
+  const h = harness('logs'); await auditResult(h, 0, [
+    audit(1),
+    audit(2, { status: 403, method: 'PATCH', path: '/api/v1/management/templates/2', target_type: 'templates' }),
+    audit(3, { status: 500, method: 'DELETE', path: '/api/v1/management/ai-tools/3', target_type: 'ai-tools' }),
+    audit(4, { method: 'POST', path: '/api/v1/management/ai-tools/4/publish', target_type: 'ai-tools' }),
+    audit(5, { method: 'POST', path: '/api/v1/management/orders/5', target_type: 'orders' }),
+    audit(6, { method: 'POST', path: '/api/v1/management/membership-plans', target_type: 'membership-plans', target_id: '' }),
+  ], 6);
+  const rows = nodes(h.page.tree, node => node.props?.className === 'audit-sentence').map(textOf);
+  assert.deepEqual(rows, ['admin-1 调整了用户账号 #1 的灵石', 'admin-2 修改了模板 #2', 'admin-3 删除了AI 工具 #3', 'admin-4 发布了AI 工具 #4', 'admin-5 提交了订单 #5 的操作', 'admin-6 提交了会员计划的操作']);
+  const results = nodes(h.page.tree, node => String(node.props?.className || '').startsWith('level-badge')).map(textOf);
+  assert.deepEqual(results, ['成功', '失败', '失败', '成功', '成功', '成功']);
+  assert.equal(nodes(h.page.tree, node => node.props?.className === 'level-badge level-info').length, 4);
   assert.equal(nodes(h.page.tree, node => node.props?.className === 'level-badge level-warning').length, 1);
   assert.equal(nodes(h.page.tree, node => node.props?.className === 'level-badge level-error').length, 1);
+  // 接口路径、请求方法、状态码、耗时只出现在折叠的「详情」里
+  const visible = nodes(h.page.tree, node => node.type === 'td' && node.props?.className !== 'audit-detail-cell').map(textOf).join('|');
+  assert.doesNotMatch(visible, /\/api\/v1|POST|PATCH|DELETE|17ms|\b200\b/);
+  const details = nodes(h.page.tree, node => node.type === 'details').map(textOf);
+  assert.equal(details.length, 6);
+  assert.match(details[0], /POST.*\/api\/v1\/management\/users\/1\/stones.*200.*17ms/);
   assert.equal(nodes(h.page.tree, node => node.type === 'ManagementSearchPanel').length, 1);
   const source = fs.readFileSync(new URL('../src/pages/logs.tsx', import.meta.url), 'utf8');
   const panel = fs.readFileSync(new URL('../src/component/managementSearchPanel.tsx', import.meta.url), 'utf8');
@@ -166,4 +184,31 @@ test('distribution unmount ignores every pending module result and saved refresh
   h.page.unmount(); const updates = h.page.updates, count = h.requests.length; oldRefresh();
   request(h, 'Overview').resolve(overview); request(h, 'Inviters').reject(new Error('late')); request(h, 'Rewards').resolve({ list: [], total: 0, page: 1, page_size: 50 });
   await flush(); await flush(); assert.equal(h.page.updates, updates); assert.equal(h.requests.length, count); assert.equal(h.failures.length, 0);
+});
+
+test('分享归因显示素材标题；后端拿分享号兜底的标题显示为「未识别素材」，分享号只留尾号', async () => {
+  attributionList = [
+    { share_id: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', content_title: '乡村别墅效果图', visitor_count: 3, identified_count: 1 },
+    { share_id: 'ffeeddccbbaa99887766554433221100', content_title: 'ffeeddccbbaa99887766554433221100', visitor_count: 1, identified_count: 0 },
+  ];
+  try {
+    const h = harness('distribution'); await loadDistribution(h); await settle(h.page);
+    const text = textOf(named(h.page, '分享归因'));
+    assert.match(text, /乡村别墅效果图/);
+    assert.match(text, /未识别素材/);
+    assert.match(text, /分享尾号 7e8f90/);
+    assert.doesNotMatch(text, /a1b2c3d4e5f6|ffeeddccbbaa/);
+  } finally {
+    attributionList = [];
+  }
+});
+
+test('邀请人排行与奖励明细不把 wx_ 登录名当名字或副标题', async () => {
+  const h = harness('distribution');
+  request(h, 'Overview').resolve(overview);
+  await tableResult(h, 'Inviters', [{ ...inviter(1), username: 'wx_o_inv', display_name: 'wx_o_inv', nickname: '' }, { ...inviter(2), username: 'wx_o_two', display_name: '灿坤', nickname: '灿坤' }], 2);
+  await tableResult(h, 'Rewards', [{ ...reward(3), username: 'wx_o_rew', display_name: 'wx_o_rew' }], 1);
+  const text = textOf(h.page.tree);
+  assert.match(text, /微信用户 #1/); assert.match(text, /灿坤/); assert.match(text, /微信用户 #3/);
+  assert.doesNotMatch(text, /wx_o_/);
 });
