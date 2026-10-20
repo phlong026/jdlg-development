@@ -789,7 +789,6 @@ const UserWorkbench: React.FC = () => {
                     <div className="section-head compact">
                         <div>
                             <h2>{selectedUser ? '切换用户' : '查找用户'}</h2>
-                            <p>{selectedUser ? '输入用户信息，切换到另一位用户的详情。' : '支持按用户ID、用户名、手机号或企微联系方式快速定位用户。'}</p>
                         </div>
                     </div>
                     <div className="search-row">
@@ -803,7 +802,7 @@ const UserWorkbench: React.FC = () => {
                                         void handleSearch();
                                     }
                                 }}
-                                placeholder="请输入手机号、用户名或昵称（也支持用户ID）"
+                                placeholder="手机号、用户名、昵称、企微或用户ID"
                                 className="workbench-search-input"
                             />
                         </div>
@@ -913,7 +912,6 @@ const UserWorkbench: React.FC = () => {
                                     <div className="section-head">
                                         <div>
                                             <h3>当前待处理事项</h3>
-                                            <p>主页面只显示最值得优先处理的事项，避免信息过载。</p>
                                         </div>
                                     </div>
                                     {pendingItems.length === 0 ? (
@@ -976,7 +974,6 @@ const UserWorkbench: React.FC = () => {
                                         <div className="section-head compact">
                                             <div>
                                                 <h3>会员信息</h3>
-                                                <p>看当前会员状态、下载权限和会员来源订单。</p>
                                             </div>
                                         </div>
                                         {workbenchSummary?.membership ? (
@@ -998,7 +995,6 @@ const UserWorkbench: React.FC = () => {
                                         <div className="section-head compact">
                                             <div>
                                                 <h3>最近订单</h3>
-                                                <p>方便快速判断用户最近是充值、消费还是认证费。</p>
                                             </div>
                                         </div>
                                         {(workbenchSummary?.recent_orders || []).length === 0 ? (
@@ -1027,7 +1023,6 @@ const UserWorkbench: React.FC = () => {
                                         <div className="section-head compact">
                                             <div>
                                                 <h3>最近任务</h3>
-                                                <p>图片任务和视频任务会合并展示，便于排查失败。</p>
                                             </div>
                                         </div>
                                         {(workbenchSummary?.recent_tasks || []).length === 0 ? (
@@ -1057,7 +1052,6 @@ const UserWorkbench: React.FC = () => {
                                         <div className="section-head compact">
                                             <div>
                                                 <h3>灵石流水</h3>
-                                                <p>看最近变动、近30天消耗和累计签到获得。</p>
                                             </div>
                                         </div>
                                         <div className="stone-overview-grid">
@@ -1092,7 +1086,6 @@ const UserWorkbench: React.FC = () => {
                                         <div className="section-head compact">
                                             <div>
                                                 <h3>设备与风险信息</h3>
-                                                <p>看设备绑定、同设备账号和风险标签，便于快速判断是否要进风控台继续排查。</p>
                                             </div>
                                         </div>
                                         <div className="risk-card-header">
@@ -1143,7 +1136,6 @@ const UserWorkbench: React.FC = () => {
                                     <div className="section-head compact">
                                         <div>
                                             <h3>高频操作</h3>
-                                            <p>只保留最常用的处理动作。</p>
                                         </div>
                                     </div>
                                     <div className="action-grid">
@@ -1170,7 +1162,6 @@ const UserWorkbench: React.FC = () => {
                                     <div className="section-head compact">
                                         <div>
                                             <h3>账号与安全</h3>
-                                            <p>集中处理登录用户名、登录密码、手机号授权状态和账号风险提醒。</p>
                                         </div>
                                     </div>
                                     <div className="account-security-list">
@@ -1217,19 +1208,6 @@ const UserWorkbench: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="section-card compact-note-card">
-                                    <div className="section-head compact">
-                                        <div>
-                                            <h3>本页信息与操作</h3>
-                                        </div>
-                                    </div>
-                                    <div className="mini-field-list">
-                                        <div>身份：用户ID、显示名、用户名、用户类型</div>
-                                        <div>状态：灵石、企微验证、认证状态、会员状态、设备风险、最近更新时间</div>
-                                        <div>操作：调整灵石、修正权限、查看认证、刷新数据</div>
-                                        <div>摘要：待处理事项、任务/订单/会员摘要、灵石流水、设备与风险信息</div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </>

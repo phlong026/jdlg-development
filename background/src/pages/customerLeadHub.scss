@@ -53,25 +53,67 @@
     &:hover { color: #8b5e3c; }
 }
 
-// 注意：类名不要以 -stats / -summary-grid 结尾，否则会被 responsive.scss 的通配规则在手机宽度下强制改成单列
-.lead-hub-figures {
+// 线索队列格子：数字即入口，点击切换下方列表。3 列 × 2 行，桌面半宽卡片与手机都不用横滑。
+// 注意：类名不要以 -stats / -summary-grid 结尾，否则会被 App.scss 的通配规则在手机宽度下强制改成两列
+.lead-hub-queues {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    row-gap: 22px;
-    padding: 22px 8px;
-    text-align: center;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 14px;
+}
 
-    span { display: block; color: #6b7280; font-size: 14px; }
+.lead-hub-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 12px 12px 10px;
+    border: 1px solid #efe6da;
+    border-radius: 12px;
+    background: #fcfaf7;
+    color: #6b5a48;
+    text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+
+    span {
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 
     strong {
-        display: block;
-        margin-top: 6px;
-        color: #111827;
-        font-size: 30px;
+        color: #1f2937;
+        font-size: 26px;
+        font-weight: 600;
         line-height: 1.1;
-        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+    }
 
-        &.is-alert { color: #c2410c; }
+    // 需要人处理且有积压：数字转为警示色，左上角加一个小圆点
+    &.is-alert strong { color: #c2410c; }
+    &.is-alert span::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-right: 6px;
+        border-radius: 50%;
+        background: #c2410c;
+        vertical-align: 2px;
+    }
+
+    &:hover { border-color: #d9c4a8; }
+
+    &:focus-visible { outline: 2px solid #8b5e3c; outline-offset: 2px; }
+
+    &.is-active {
+        border-color: #8b5e3c;
+        background: #8b5e3c;
+        color: #f6e9da;
+
+        strong { color: #fff; }
+        span::before { background: #ffd2b0; }
     }
 }
 
@@ -89,8 +131,6 @@
     text-align: center;
 
     svg { display: block; width: 168px; height: 168px; }
-
-    small { display: block; margin-top: 8px; color: #9ca3af; font-size: 13px; }
 }
 
 .lead-hub-donut-center {
@@ -127,6 +167,14 @@
     .lead-hub { grid-template-columns: minmax(0, 1fr); }
 }
 
+// 窄屏三列格子每格约 76px，「超时未跟进」+ 告警圆点会被截断
+@media (max-width: 420px) {
+    .lead-hub-queues { gap: 6px; padding: 12px; }
+    .lead-hub-queue { padding: 10px 8px 8px; }
+    .lead-hub-queue span { font-size: 12px; }
+    .lead-hub-queue.is-alert span::before { margin-right: 4px; }
+}
+
 @media (max-width: 640px) {
     .lead-hub-stage { flex-direction: column; gap: 24px; }
     .lead-hub-legend { flex: none; width: 100%; max-width: 320px; }
@@ -158,6 +206,22 @@
         display: none;
     }
 
+    .lead-hub-stagebar {
+        display: flex;
+        flex: 1;
+        gap: 2px;
+        height: 6px;
+        max-width: 140px;
+        margin-left: auto;
+        border-radius: 3px;
+        overflow: hidden;
+        background: #eee8df;
+
+        i { display: block; min-width: 4px; }
+    }
+
+    .lead-hub-stage-wrap[open] .lead-hub-stagebar { visibility: hidden; }
+
     .lead-hub-stage-caret {
         color: #8b5e3c;
         transition: transform 0.18s ease;
@@ -171,7 +235,31 @@
 }
 
 /* 客服服务漏斗（近30天，按账号去重）：折叠卡，展开后逐层数字+相对底层的转化率 */
-.lead-hub-funnel-wrap { grid-column: 1 / -1; }
+.layout-content[data-admin-page="/customer-leads"] .lead-hub-funnel-wrap {
+    grid-column: 1 / -1;
+
+    .lead-hub-stage-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 14px 16px;
+        list-style: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2937;
+
+        &::-webkit-details-marker { display: none; }
+
+        // 卡片 overflow: hidden 会裁掉外侧焦点框，改为内描边
+        &:focus-visible { outline: 2px solid #8b5e3c; outline-offset: -2px; }
+    }
+
+    .lead-hub-stage-caret { color: #8b5e3c; transition: transform 0.18s ease; }
+    &[open] .lead-hub-stage-caret { transform: rotate(180deg); }
+    &[open] { padding-bottom: 12px; }
+}
 .lead-hub-funnel { list-style: none; margin: 0; padding: 0 4px; display: grid; gap: 6px; }
 .lead-hub-funnel li { display: grid; grid-template-columns: minmax(72px, 1fr) auto auto; gap: 12px; align-items: center; padding: 7px 12px; border: 1px solid #ece7e1; border-radius: 8px; background: #faf8f5; font-size: 13px; }
 .lead-hub-funnel b { font-size: 15px; }

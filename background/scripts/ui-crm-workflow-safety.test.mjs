@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 import { environment, CRMError, baseSession, account, lead, deferred, nodes, textOf, settle } from './helpers/crm-harness.mjs';
 const event = { preventDefault() {} };
 const customer = (id='A', overrides={}) => ({id,name:`Customer ${id}`,phone:'13800000000',wechat:'wx-contact',address:'Sample address',buildingArea:120,buildingType:'新建',expectedBuildTime:'2027-03',remark:'Existing note',version:1,stage:'following',lifecycle:'protected',category:'建房咨询',intent:'high',ownerId:'wx1',ownerUsername:'crm1',nextFollowupAt:'2027-01-01T00:00:00Z',protectionExpiresAt:'2026-10-12T00:00:00Z',poolAt:null,customerNumber:`KH${id}`,demand:'Existing demand',...overrides});
@@ -163,9 +164,19 @@ test('notice seen and sync retry both reject same-frame duplicate handlers',asyn
  const s=deferred();env.crm=async(url,o={})=>o.method?(writes++,s.promise):{configured:true,callbackConfigured:true,pending:0,failed:1,runs:[],events:[{id:'E1',status:'failed'}]};const sync=await env.mount('customerManagement.tsx','SyncPanel');const retry=sync.button('重试').props.onClick;const second=retry();await retry();assert.equal(writes,2);s.resolve();await second;
 });
 
-test('statistics: embedded high-intent count uses the pending queue and global scope is explicit under a user filter',async()=>{
+test('statistics: embedded high-intent count uses the pending queue and the long scope explanation is gone',async()=>{
  const env=environment();env.params=new URLSearchParams('user_id=5');env.leadApi.getCustomerLeadOverview=async()=>({total_count:20,todo_count:6,high_intent_count:12,high_todo_count:3});
- const h=await env.mount('customerLeads.tsx','default',{embedded:true});const card=h.find(n=>n.props?.className==='customer-lead-stat'&&textOf(n).includes('待跟进高意向'));assert.equal(nodes(card).find(n=>n.type==='strong').props.children,3);assert.match(h.text(),/全平台小程序线索概览，不随下方队列、用户或搜索条件变化/);
+ const h=await env.mount('customerLeads.tsx','default',{embedded:true});const card=h.find(n=>n.props?.className==='customer-lead-stat'&&textOf(n).includes('待跟进高意向'));assert.equal(nodes(card).find(n=>n.type==='strong').props.children,3);assert.doesNotMatch(h.text(),/全平台小程序线索概览/);
+});
+
+test('statistics: standalone user filter says the queue numbers above are global',async()=>{
+ const env=environment();env.params=new URLSearchParams('user_id=5');
+ const h=await env.mount('customerLeads.tsx','default',{});assert.match(h.text(),/仅显示用户 ID 5 的线索（上方队列数字为全量）/);
+});
+
+test('statistics: the high-intent queue counts only leads still to follow up',()=>{
+ const source=fs.readFileSync(new URL('../src/component/navConfig.ts',import.meta.url),'utf8');
+ assert.match(source,/key: 'high', label: '高意向', countKey: 'high_todo_count'/);
 });
 
 test('statistics: initial overview failure is unavailable, never a confirmed zero',async()=>{
@@ -198,8 +209,8 @@ test('legacy save detail completion after logout never refreshes the new session
 });
 
 test('standalone overview labels distinguish full pending totals from today new records',async()=>{
- const env=environment();const h=await env.mount('customerLeadHub.tsx','default',{overview:{total_count:8,today_new_count:1,todo_count:6,high_intent_count:5,high_todo_count:2},loading:false,updatedAt:null,onRefresh(){}});
- assert.match(h.text(),/全量概览/);assert.match(h.text(),/今日新增1/);assert.match(h.text(),/待跟进高意向2/);
+ const env=environment();env.leadQueues=[{key:'todo',label:'待处理',countKey:'todo_count',alert:true},{key:'today',label:'今日新增',countKey:'today_new_count'},{key:'high',label:'高意向',countKey:'high_todo_count',alert:true}];const h=await env.mount('customerLeadHub.tsx','default',{overview:{total_count:8,today_new_count:1,todo_count:6,high_intent_count:5,high_todo_count:2},loading:false,updatedAt:null,onRefresh(){},activeQueue:'todo',queueHref:(key)=>`/customer-leads?queue=${key}`});
+ assert.match(h.text(),/全量概览/);assert.match(h.text(),/今日新增1/);assert.match(h.text(),/待处理6/);assert.match(h.text(),/高意向2/);
 });
 
 test('sync accepted writes cannot replay through an old handler while its refresh fails',async()=>{

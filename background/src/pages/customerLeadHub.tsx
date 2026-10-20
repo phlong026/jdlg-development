@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FiChevronDown, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
 import { getCustomerLeadFunnel, CustomerFunnelMetric } from '../api/customerLeads';
+import { leadQueues } from '../component/navConfig';
 import { useIsMobile } from '../component/useIsMobile';
 import './customerLeadHub.scss';
 
@@ -35,21 +36,24 @@ const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
             .catch(() => { if (active) setState({ loading: false, error: '漏斗暂不可用', metrics: [] }); });
         return () => { active = false; };
     }, [refreshKey]);
+    // 漏斗是低频信息：桌面与手机都默认收起为一行摘要
     return <details className="lead-hub-card lead-hub-funnel-wrap">
-        <summary className="lead-hub-stage-summary"><span>客服服务漏斗 · 近30天</span><FiChevronDown className="lead-hub-stage-caret" aria-hidden /></summary>
-        <header className="lead-hub-card-head"><h2>客服服务漏斗</h2><span className="lead-hub-period">近30天 · 按账号去重</span></header>
-        {state.loading ? <p className="lead-hub-funnel-note">正在读取…</p> : state.error ? <p className="lead-hub-funnel-note">{state.error}</p> : <>
-            <ul className="lead-hub-funnel">
-                {state.metrics.map(metric => (
-                    <li key={metric.key}>
-                        <span>{metric.label}</span>
-                        <b>{metric.count}</b>
-                        <small>{metric.count > 0 ? `${metric.conversion_rate.toFixed(0)}%` : '—'}</small>
-                    </li>
-                ))}
-            </ul>
-            <p className="lead-hub-funnel-note">"提交线索/已成交"按登录账号去重；"进入客服"层在小程序新版埋点全量生效前偏低，仅覆盖留资会话。</p>
-        </>}
+        <summary className="lead-hub-stage-summary"><span>客服服务漏斗 · 近30天 · 按账号去重</span><FiChevronDown className="lead-hub-stage-caret" aria-hidden /></summary>
+        {state.loading ? <p className="lead-hub-funnel-note">正在读取…</p> : state.error ? <p className="lead-hub-funnel-note">{state.error}</p> : (
+            <>
+                <ul className="lead-hub-funnel">
+                    {state.metrics.map(metric => (
+                        <li key={metric.key}>
+                            <span>{metric.label}</span>
+                            <b>{metric.count}</b>
+                            <small>{metric.count > 0 ? `${metric.conversion_rate.toFixed(0)}%` : '—'}</small>
+                        </li>
+                    ))}
+                </ul>
+                {/* 数据口径提醒：底层偏低会让转化率看起来偏高，必须让看数的人知道 */}
+                <p className="lead-hub-funnel-note">「进入客服」暂只统计留资会话，转化率偏高。</p>
+            </>
+        )}
     </details>;
 };
 
@@ -58,13 +62,18 @@ interface HubProps {
     loading: boolean;
     updatedAt: Date | null;
     onRefresh: () => void;
+    /** 当前队列（?queue=），对应的格子高亮 */
+    activeQueue: string;
+    /** 生成切换到某个队列的地址：保留地址里的其他参数（如 user_id） */
+    queueHref: (key: string) => string;
 }
 
 /**
- * 销售线索的概览区：线索简报 + 线索阶段（环形图），桌面端左右并排，让下面的队列与列表尽早出现在首屏。
+ * 销售线索的概览区：线索简报 + 线索阶段（环形图），桌面端左右并排。
+ * 简报里的数字格子就是队列入口（点击切换下方列表），不再另放一条队列胶囊——原来两处显示同样的四个数字。
  * 客户 · 线索 · 商机 的入口卡片在布局层（SubNavCards），三个页面共用。
  */
-const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onRefresh }) => {
+const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onRefresh, activeQueue, queueHref }) => {
     const isMobile = useIsMobile();
     // 环图卡 447px 是线索列表沉到 1565px 的主因：手机端默认收起（摘要带总条数），桌面常开
     const [stageOpen, setStageOpen] = useState<boolean | null>(null);
@@ -91,19 +100,32 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
             <section className="lead-hub-card">
                 <header className="lead-hub-card-head">
                     <h2>线索简报</h2>
-                    <span className="lead-hub-period">全量概览</span>
+                    {/* 「全量」：数字不随下方用户过滤或搜索变化 */}
+                    <span className="lead-hub-period">全量概览{updatedAt ? ` · ${pad(updatedAt.getHours())}:${pad(updatedAt.getMinutes())} 更新` : ''}</span>
                     <button type="button" className="lead-hub-refresh" onClick={onRefresh} disabled={loading}>
                         <FiRefreshCw />
                         刷新
                     </button>
                 </header>
-                <div className="lead-hub-figures">
-                    <div><span>今日新增</span><strong>{overview.today_new_count || 0}</strong></div>
-                    <div><span>待处理</span><strong>{overview.todo_count || 0}</strong></div>
-                    {/* 与「高意向」队列同口径（只算还要跟进的），否则简报和 Tab 角标对不上 */}
-                    <div><span>待跟进高意向</span><strong>{overview.high_todo_count ?? '待确认'}</strong></div>
-                    <div><span>超时未跟进</span><strong className={overview.overdue_count ? 'is-alert' : ''}>{overview.overdue_count || 0}</strong></div>
-                </div>
+                <nav className="lead-hub-queues" aria-label="线索队列">
+                    {leadQueues.map((item) => {
+                        const count = Number(overview[item.countKey as keyof CustomerLeadOverview] || 0);
+                        const active = activeQueue === item.key;
+                        return (
+                            <Link
+                                key={item.key}
+                                to={queueHref(item.key)}
+                                className={`lead-hub-queue${active ? ' is-active' : ''}${item.alert && count > 0 ? ' is-alert' : ''}`}
+                                // 队列是页内筛选，页面级的 page 留给顶部「线索」卡片
+                                aria-current={active ? 'true' : undefined}
+                                title={item.help}
+                            >
+                                <span>{item.label}</span>
+                                <strong>{count}</strong>
+                            </Link>
+                        );
+                    })}
+                </nav>
             </section>
 
             <details
@@ -113,6 +135,12 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
             >
                 <summary className="lead-hub-stage-summary">
                     <span>线索阶段 · 共 {total} 条</span>
+                    {/* 收起时也能一眼看出阶段占比 */}
+                    <span className="lead-hub-stagebar" aria-hidden>
+                        {stages.filter((stage) => stage.count > 0).map((stage) => (
+                            <i key={stage.key} style={{ flexGrow: stage.count, background: stage.color }} />
+                        ))}
+                    </span>
                     <FiChevronDown className="lead-hub-stage-caret" aria-hidden />
                 </summary>
                 <header className="lead-hub-card-head">
@@ -137,7 +165,6 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                             <strong>{total}</strong>
                             <span>线索量</span>
                         </div>
-                        {updatedAt && <small>{pad(updatedAt.getHours())}:{pad(updatedAt.getMinutes())} 更新</small>}
                     </div>
                     <ul className="lead-hub-legend">
                         {stages.map((stage) => (
