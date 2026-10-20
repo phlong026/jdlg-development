@@ -73,48 +73,6 @@
     &:hover { text-decoration: underline; }
 }
 
-// 线索队列筛选条（单独打开时放在列表上方，取代原来顶部的 Tab）
-.customer-lead-queuebar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.customer-lead-queuepill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border: 1px solid #e0d2bf;
-    border-radius: 999px;
-    background: #fff;
-    color: #5b4a3b;
-    font-size: 14px;
-    text-decoration: none;
-
-    b {
-        min-width: 22px;
-        padding: 0 6px;
-        border-radius: 11px;
-        background: #f1ebe2;
-        color: #5b4a3b;
-        font-size: 12px;
-        line-height: 22px;
-        text-align: center;
-
-        &.is-alert { background: #c2410c; color: #fff; }
-    }
-
-    &:hover { border-color: #8b5e3c; }
-
-    &.active {
-        border-color: #8b5e3c;
-        background: #f0e1cf;
-        color: #7a5335;
-        font-weight: 600;
-    }
-}
-
 .customer-lead-queues {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -894,46 +852,85 @@
     background: #faf7f3;
     border-radius: 8px;
 
-    strong { font-size: 13px; color: #374151; }
+    strong {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.6;
+        color: #374151;
+    }
     span { font-size: 12px; color: #6b7280; overflow-wrap: anywhere; }
 }
 
 .customer-lead-card-meta {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
-    gap: 8px;
+    gap: 12px;
     font-size: 12px;
     color: #8a7a66;
 
-    > span:last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    > time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 }
 
-.customer-lead-card-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+.customer-lead-card-next {
     font-size: 12px;
-    color: #a08d76;
-    overflow-wrap: anywhere;
+    font-weight: 600;
+    color: #8b5e3c;
+    font-variant-numeric: tabular-nums;
 }
 
+// 卡片底栏：左侧跳转用户账号，右侧两个操作按钮
 .customer-lead-card-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
-    padding-top: 8px;
+    padding-top: 10px;
     border-top: 1px dashed var(--admin-border, #eadfce);
+    font-size: 12px;
+    color: #a08d76;
+
+    > :first-child { margin-right: auto; }
+}
+
+// 选择器带父级：盖过全局手机端 `.layout-content button { min-height: 44px }`（本文件样式包在 :where 里，特异性为 0）
+.customer-lead-card-actions .customer-lead-cardbtn {
+    min-height: 34px;
+    padding: 0 16px;
+    border: 1px solid #e0d2bf;
+    border-radius: 999px;
+    background: #fff;
+    color: #6b4a2e;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+
+    // 视觉高度 34px，用伪元素把可点区域扩到 44px（项目的触控目标约定）
+    position: relative;
+    &::after { content: ''; position: absolute; inset: -5px 0; }
+
+    &.primary { border-color: #8b5e3c; background: #8b5e3c; color: #fff; }
+    &:disabled { opacity: 0.45; cursor: not-allowed; }
+}
+
+// 嵌入客户管理页时 `.crm-page button:hover` 会把主按钮背景换成浅色、白字看不清，这里显式给悬停色
+.customer-lead-card .customer-lead-card-actions .customer-lead-cardbtn.primary:hover:not(:disabled) {
+    background: #744b2e;
+    color: #fff;
 }
 
 @media (max-width: 768px) {
-    /* 队列条一行横滑 */
-    .customer-lead-queuebar {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        scrollbar-width: none;
+    /* 用户过滤提示条：说明文字整行，链接与清除按钮在下一行，避免按钮被挤成竖排 */
+    .customer-lead-userfilter {
+        flex-wrap: wrap;
+        gap: 6px 14px;
 
-        &::-webkit-scrollbar { display: none; }
+        > span { flex: 1 1 100%; }
+        a, button { flex: none; white-space: nowrap; }
     }
 
     /* 筛选工具条压紧：搜索整行，三个下拉两列排布 */

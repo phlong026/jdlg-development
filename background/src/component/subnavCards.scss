@@ -56,7 +56,9 @@
 
 @media (max-width: 640px) {
   .layout-subnav-cards { padding: 10px 12px; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .subnav-card { height: 52px; padding: 0 10px; font-size: 16px; }
+  .subnav-card { height: 46px; padding: 0 10px; gap: 6px; border-radius: 12px; font-size: 15px; box-shadow: none; }
+  .subnav-card small { white-space: nowrap; font-size: 11px; }
+  .subnav-card.is-current { outline-width: 2px; }
   .subnav-card-icon, .subnav-card-arrow { display: none; }
 }
 

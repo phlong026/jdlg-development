@@ -63,6 +63,11 @@ const sourceLabelMap: Record<string, string> = {
     generate_click: '生成方案',
     handoff_human: '转人工留资',
     home: '在线客服',
+    // 小程序进入客服页时带的 source（见 miniprogram 各页面 customerservice?source=）
+    home_mascot: '首页客服入口',
+    generatedetails: '方案详情页',
+    aicost: 'AI 造价结果',
+    content_reader: '内容阅读页',
 };
 const sourceLabel = (source?: string) => sourceLabelMap[source || ''] || source || '-';
 
@@ -398,7 +403,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             <div className="customer-lead-page">
                 {saveNotice && <section className="customer-lead-panel" role="status">{saveNotice}</section>}
                 {loadError && <section className="customer-lead-panel" role="alert">读取失败：{loadError}。{updatedAt ? '当前显示上次成功读取的数据。' : '统计与列表尚未确认。'}<button type="button" disabled={loading} onClick={resetToFirstPage}>重新读取</button></section>}
-                <p>全平台小程序线索概览，不随下方队列、用户或搜索条件变化。待处理为新线索与跟进中；高意向仅计待处理线索；今日新增按服务端统计日期计算。</p>
                 {!canWrite && <section className="customer-lead-panel" role="status">
                     <p>{writeBlockedText}</p>
                     {canOpenCustomers ? <Link className="customer-lead-btn" to="/customer-management?tab=customers">前往客户档案列表</Link> : <>
@@ -443,12 +447,19 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 </div> : <p>{loading ? '正在读取线索统计…' : '线索统计尚未确认'}</p>}
                 </>
                 ) : updatedAt ? (
-                    <CustomerLeadHub overview={overview} loading={loading} updatedAt={updatedAt} onRefresh={resetToFirstPage} />
+                    <CustomerLeadHub
+                        overview={overview}
+                        loading={loading}
+                        updatedAt={updatedAt}
+                        onRefresh={resetToFirstPage}
+                        activeQueue={queue}
+                        queueHref={(key) => { const next = new URLSearchParams(params); next.set('queue', key); return `/customer-leads?${next.toString()}`; }}
+                    />
                 ) : <section className="customer-lead-panel">{loading ? '正在读取线索统计…' : '线索统计尚未确认'}<button type="button" disabled={loading} onClick={resetToFirstPage}>刷新</button></section>}
 
                 {userIdFilter > 0 && (
                     <div className="customer-lead-userfilter" role="status">
-                        <span>仅显示用户 ID <strong>{userIdFilter}</strong> 的线索</span>
+                        <span>仅显示用户 ID <strong>{userIdFilter}</strong> 的线索（上方队列数字为全量）</span>
                         <Link to={`/user-workbench?userId=${userIdFilter}`}>查看用户账号</Link>
                         <button type="button" onClick={() => { const next = new URLSearchParams(params); next.delete('user_id'); setParams(next); }}>
                             <FiX />清除
@@ -473,28 +484,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                         ))}
                     </div>
                 </section>
-                )}
-
-                {!embedded && (
-                    <nav className="customer-lead-queuebar" aria-label="线索队列">
-                        {leadQueues.map((item) => {
-                            const next = new URLSearchParams(params);
-                            next.set('queue', item.key);
-                            const count = getQueueCount(overview, item.countKey);
-                            return (
-                                <Link
-                                    key={item.key}
-                                    to={`/customer-leads?${next.toString()}`}
-                                    className={`customer-lead-queuepill ${queue === item.key ? 'active' : ''}`}
-                                    aria-current={queue === item.key ? 'page' : undefined}
-                                    title={item.help}
-                                >
-                                    {item.label}
-                                    <b className={item.alert && count > 0 ? 'is-alert' : ''}>{count}</b>
-                                </Link>
-                            );
-                        })}
-                    </nav>
                 )}
 
                 <section className="customer-lead-panel">
@@ -567,18 +556,17 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <span>{getContactText(item)}</span>
                                     </div>
                                     <div className="customer-lead-card-meta">
+                                        <span>{sourceLabel(item.source)} · {item.assigned_to || '未分配'}</span>
+                                        <time>{formatDateTime(item.created_at)}</time>
+                                    </div>
+                                    {/* 下次跟进单独一行：与来源挤在一行会被省略号截掉，销售看不到该何时联系 */}
+                                    {item.next_followup_at && <div className="customer-lead-card-next">下次跟进 {formatDateTime(item.next_followup_at)}</div>}
+                                    <div className="customer-lead-card-actions">
                                         {item.user_id > 0
-                                            ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>查看用户账号 ›</Link>
-                                            : <span>未关联用户账号</span>}
-                                        <span>{formatDateTime(item.created_at)}</span>
-                                    </div>
-                                    <div className="customer-lead-card-foot">
-                                        <span>来源 {sourceLabel(item.source)}{item.source === 'share_tracking' ? '（访问动机转化）' : ''}</span>
-                                        <span>{item.assigned_to || '未分配'}{item.next_followup_at ? ` · 下次跟进 ${formatDateTime(item.next_followup_at)}` : ''}</span>
-                                    </div>
-                                    <div className="customer-lead-actions customer-lead-card-actions">
-                                        <button type="button" className="customer-lead-link" onClick={() => void handleViewDetail(item)}>详情</button>
-                                        <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>跟进</button>
+                                            ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>用户账号 ›</Link>
+                                            : <span>未关联账号</span>}
+                                        <button type="button" className="customer-lead-cardbtn" onClick={() => void handleViewDetail(item)}>详情</button>
+                                        <button type="button" className="customer-lead-cardbtn primary" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>跟进</button>
                                     </div>
                                 </article>
                             ))}
@@ -790,7 +778,6 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <div className="customer-lead-modal-header">
                                 <div>
                                     <h3>{batchMode ? `批量处理 ${selectedIds.length} 条线索` : `跟进 ${actionTarget ? getDisplayName(actionTarget) : ''}`}</h3>
-                                    <p>填写记录后，其他同事能直接接上，不用重新翻聊天上下文。</p>
                                 </div>
                                 <button type="button" className="customer-lead-modal-close" disabled={savingAction} aria-disabled={savingAction} onClick={closeAction}>
                                     <FiXIcon />
