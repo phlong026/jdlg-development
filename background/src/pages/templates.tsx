@@ -28,6 +28,8 @@ import {
 } from '../api/templates';
 import { useLocation } from 'react-router-dom';
 import './templates.scss';
+import MobileFold from '../component/MobileFold';
+import { useIsMobile } from '../component/useIsMobile';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
 const FiPlusIcon = FiPlus as unknown as React.ComponentType<any>;
@@ -118,6 +120,7 @@ const getChildTabsByParent = (items: TabConfigItem[], parentValue: string) => {
 };
 
 const Templates: React.FC = () => {
+    const isMobile = useIsMobile();
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
     const initialKeyword = queryParams.get('keyword') || '';
@@ -1269,41 +1272,47 @@ const Templates: React.FC = () => {
         return handleEdit(visibleLinkedTemplate, requestedTemplateId);
     };
 
+    const templateManageActions = (
+        <div className="toolbar-actions management-actions">
+            <button className="btn-secondary" onClick={toggleFeaturedSection}>
+                精选案例组管理
+            </button>
+            <button className="btn-secondary" onClick={() => { setTabConfigSectionOpen(!tabConfigSectionOpen); if (!tabConfigSectionOpen) loadTabConfig(); }}>
+                标签配置
+            </button>
+            <button className="btn-secondary" onClick={() => setCategorySectionOpen(!categorySectionOpen)}>
+                <FiFolderIcon /> 分类管理
+            </button>
+            <button
+                className="btn-primary"
+                onClick={() => {
+                    if (!mainTabs.length || !subTabs.length) {
+                        loadTabConfig();
+                    }
+                    if (savePendingRef.current) return;
+                    closeTemplateEditor();
+                    setAddFormData({ ...defaultForm, imageUrls: [] });
+                    setShowAddModal(true);
+                }}
+            >
+                <FiPlusIcon /> 添加模板
+            </button>
+        </div>
+    );
+
     return (
         <>
             <div className="templates-container">
                 <div className="templates-toolbar section-card">
-                    <div className="templates-toolbar-top">
-                        <div className="toolbar-title-block">
-                            <h3>模板检索与内容运营</h3>
-                            <p>分类与状态筛选覆盖全部模板；关键词仅检索当前页。可审核模板、整理分类，或配置首页精选案例与标签。</p>
+                    {isMobile ? null : (
+                        <div className="templates-toolbar-top">
+                            <div className="toolbar-title-block">
+                                <h3>模板检索与内容运营</h3>
+                                <p>分类与状态筛选覆盖全部模板；关键词仅检索当前页。可审核模板、整理分类，或配置首页精选案例与标签。</p>
+                            </div>
+                            {templateManageActions}
                         </div>
-                        <div className="toolbar-actions management-actions">
-                            <button className="btn-secondary" onClick={toggleFeaturedSection}>
-                                精选案例组管理
-                            </button>
-                            <button className="btn-secondary" onClick={() => { setTabConfigSectionOpen(!tabConfigSectionOpen); if (!tabConfigSectionOpen) loadTabConfig(); }}>
-                                标签配置
-                            </button>
-                            <button className="btn-secondary" onClick={() => setCategorySectionOpen(!categorySectionOpen)}>
-                                <FiFolderIcon /> 分类管理
-                            </button>
-                            <button
-                                className="btn-primary"
-                                onClick={() => {
-                                    if (!mainTabs.length || !subTabs.length) {
-                                        loadTabConfig();
-                                    }
-                                    if (savePendingRef.current) return;
-                                    closeTemplateEditor();
-                                    setAddFormData({ ...defaultForm, imageUrls: [] });
-                                    setShowAddModal(true);
-                                }}
-                            >
-                                <FiPlusIcon /> 添加模板
-                            </button>
-                        </div>
-                    </div>
+                    )}
                     <div className="toolbar-left">
                         <div className="search-box">
                             <FiSearchIcon className="search-icon" />
@@ -1320,6 +1329,8 @@ const Templates: React.FC = () => {
                                 className="search-input"
                             />
                         </div>
+                        <MobileFold label="筛选与操作" activeCount={(categoryFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}>
+                        {isMobile ? templateManageActions : null}
                         <div className="filters">
                             <select
                                 className="filter-select"
@@ -1344,7 +1355,15 @@ const Templates: React.FC = () => {
                                 <option value="archived">已归档</option>
                             </select>
                         </div>
+                        {isMobile ? (
+                            <div className="toolbar-actions search-actions">
+                                <button className="btn-secondary" onClick={handleResetSearch}>重置筛选</button>
+                                <button className="btn-primary" onClick={handleSearch}>搜索本页</button>
+                            </div>
+                        ) : null}
+                        </MobileFold>
                     </div>
+                    {isMobile ? null : (
                     <div className="templates-toolbar-footer">
                         <div className="toolbar-summary">
                             {templatesLoaded ? <>本页显示 <strong>{filteredTemplates.length}</strong> / {templates.length} 个；筛选结果共 {templateTotal} 个模板</> : '模板列表尚未成功加载'}
@@ -1357,6 +1376,7 @@ const Templates: React.FC = () => {
                             <button className="btn-primary" onClick={handleSearch}>搜索本页</button>
                         </div>
                     </div>
+                    )}
                 </div>
 
                 {requestedTemplateId !== null && (
@@ -1632,7 +1652,7 @@ const Templates: React.FC = () => {
                     </div>
                 </div>
 
-                <p className="template-feedback">关键词搜索仅覆盖本页；当前接口未提供全库关键词检索。</p>
+                {isMobile ? null : <p className="template-feedback">关键词搜索仅覆盖本页；当前接口未提供全库关键词检索。</p>}
                 {templatesError && <div className="template-feedback" role="alert">{templatesError}{templatesLoaded ? '，当前显示上次加载的数据。' : '，尚不能确认列表为空。'}<button className="btn-secondary" onClick={loadTemplates}>重新加载模板</button></div>}
                 {loading ? (
                     <div className="loading-state">加载中...</div>

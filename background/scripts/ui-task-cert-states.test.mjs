@@ -69,6 +69,7 @@ function mount(kind, initialSearch = '', { emptyList = false, deferLists = false
   const context = vm.createContext({ module, exports: module.exports, URLSearchParams, console: { ...console, error() {} },
     alert: text => page.notices.push(text), window: { location: { pathname: kind === 'task' ? '/ai-tasks' : '/certification' }, confirm: () => true },
     require(name) {
+      if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
       if (name === 'react') return react;
       if (name === 'react-router-dom') return { useNavigate: () => value => page.navigations.push(value), useSearchParams: () => [searchParams, next => { searchParams = typeof next === 'function' ? next(searchParams) : next; changed(); }] };
       if (name === 'react-icons/fi') return new Proxy({}, { get: (_, key) => key });

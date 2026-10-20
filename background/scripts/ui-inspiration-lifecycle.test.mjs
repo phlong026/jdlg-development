@@ -54,6 +54,7 @@ function harness() {
     window: { confirm: text => { confirms.push(text); return settings.confirm(text); } },
     fetch: (url, options) => { const request = { ...deferred(), url, options }; uploads.push(request); return request.promise; },
     require(name) {
+      if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
       if (name === 'react') return fakeReact;
       if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
   if (name.endsWith('.scss')) return {};

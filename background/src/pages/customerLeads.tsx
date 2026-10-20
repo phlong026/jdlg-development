@@ -18,6 +18,7 @@ import {
 } from '../api/customerLeads';
 import { DEFAULT_LEAD_QUEUE, leadQueues } from '../component/navConfig';
 import { getLeadOverviewSession, isLeadOverviewSessionCurrent, publishLeadOverview } from '../component/leadOverviewStore';
+import MobileFold from '../component/MobileFold';
 import { useIsMobile } from '../component/useIsMobile';
 import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
@@ -499,6 +500,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                 placeholder="搜索用户、需求、微信、电话"
                             />
                         </div>
+                        <MobileFold label="筛选" activeCount={(statusFilter !== 'all' ? 1 : 0) + (intentFilter !== 'all' ? 1 : 0) + (assignedFilter !== 'all' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0)}>
                         <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
                             <option value="all">全部状态</option>
                             <option value="new">新线索</option>
@@ -524,6 +526,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <FiSearchIcon />
                             查询
                         </button>
+                        </MobileFold>
                     </div>
 
                     {selectedIds.length > 0 ? (

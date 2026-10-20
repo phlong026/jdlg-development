@@ -13,6 +13,8 @@ import {
 } from '../api/inspirations';
 import { tokenUtils } from '../utils/token';
 import './inspirations.scss';
+import MobileFold from '../component/MobileFold';
+import { useIsMobile } from '../component/useIsMobile';
 
 type TopicValue = 'scene' | 'style' | 'villa' | 'inspiration';
 type StatusValue = 'published' | 'pending' | 'draft' | 'archived';
@@ -115,6 +117,7 @@ const convertInspiration = (item: InspirationItem): Inspiration => ({
 });
 
 const Inspirations: React.FC = () => {
+    const isMobile = useIsMobile();
     const [list, setList] = useState<Inspiration[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchKeyword, setSearchKeyword] = useState('');
@@ -402,6 +405,11 @@ const Inspirations: React.FC = () => {
                             <FiSearch className="search-icon" />
                             <input className="search-input" placeholder="搜索标题、描述、场景或风格" aria-label="搜索灵感" value={searchKeyword} onChange={(e) => { if (e.target.value === searchKeyword && page === 1) return; invalidateList(); setPage(1); setSearchKeyword(e.target.value); }} />
                         </div>
+                        <MobileFold label="筛选与操作" activeCount={(topicFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}>
+                        {isMobile ? <div className="toolbar-actions">
+                            <button className="btn-secondary" onClick={() => void loadInspirations()} disabled={loading}>刷新列表</button>
+                            <button className="btn-primary" onClick={handleAdd}><FiPlus />新增灵感</button>
+                        </div> : null}
                         <div className="filters">
                             <select className="filter-select" aria-label="灵感话题" value={topicFilter} onChange={(e) => { if (e.target.value === topicFilter && page === 1) return; invalidateList(); setPage(1); setTopicFilter(e.target.value as 'all' | TopicValue); }}>
                                 <option value="all">全部话题</option>
@@ -411,11 +419,14 @@ const Inspirations: React.FC = () => {
                                 {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                         </div>
+                        </MobileFold>
                     </div>
-                    <div className="toolbar-actions">
-                        <button className="btn-secondary" onClick={() => void loadInspirations()} disabled={loading}>刷新列表</button>
-                        <button className="btn-primary" onClick={handleAdd}><FiPlus />新增灵感</button>
-                    </div>
+                    {isMobile ? null : (
+                        <div className="toolbar-actions">
+                            <button className="btn-secondary" onClick={() => void loadInspirations()} disabled={loading}>刷新列表</button>
+                            <button className="btn-primary" onClick={handleAdd}><FiPlus />新增灵感</button>
+                        </div>
+                    )}
                 </div>
 
                 {listActionError && <div className="inspiration-error" role="alert">{listActionError}</div>}
