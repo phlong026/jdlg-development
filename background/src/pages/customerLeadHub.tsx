@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiChevronDown, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
+import { getCustomerLeadFunnel, CustomerFunnelMetric } from '../api/customerLeads';
 import { useIsMobile } from '../component/useIsMobile';
 import './customerLeadHub.scss';
 
@@ -17,6 +18,40 @@ const RADIUS = 52;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * 客服服务漏斗（近 30 天，按登录账号去重）：
+ * ① 每层可与服务端 SQL 对账（"提交线索"按 customer_leads 去重账号统计，
+ *    不再被同人多次提交虚高）；② 底层"进入客服"依赖小程序埋点——旧版
+ * 小程序未发版期间该层数字偏低，只统计到留资过的会话，看板不代表真实进线量。
+ */
+const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
+    const [state, setState] = useState<{ loading: boolean; error: string; metrics: CustomerFunnelMetric[] }>({ loading: true, error: '', metrics: [] });
+    useEffect(() => {
+        let active = true;
+        setState(value => ({ ...value, loading: true, error: '' }));
+        getCustomerLeadFunnel(30)
+            .then(metrics => { if (active) setState({ loading: false, error: '', metrics }); })
+            .catch(() => { if (active) setState({ loading: false, error: '漏斗暂不可用', metrics: [] }); });
+        return () => { active = false; };
+    }, [refreshKey]);
+    return <details className="lead-hub-card lead-hub-funnel-wrap">
+        <summary className="lead-hub-stage-summary"><span>客服服务漏斗 · 近30天</span><FiChevronDown className="lead-hub-stage-caret" aria-hidden /></summary>
+        <header className="lead-hub-card-head"><h2>客服服务漏斗</h2><span className="lead-hub-period">近30天 · 按账号去重</span></header>
+        {state.loading ? <p className="lead-hub-funnel-note">正在读取…</p> : state.error ? <p className="lead-hub-funnel-note">{state.error}</p> : <>
+            <ul className="lead-hub-funnel">
+                {state.metrics.map(metric => (
+                    <li key={metric.key}>
+                        <span>{metric.label}</span>
+                        <b>{metric.count}</b>
+                        <small>{metric.count > 0 ? `${metric.conversion_rate.toFixed(0)}%` : '—'}</small>
+                    </li>
+                ))}
+            </ul>
+            <p className="lead-hub-funnel-note">"提交线索/已成交"按登录账号去重；"进入客服"层在小程序新版埋点全量生效前偏低，仅覆盖留资会话。</p>
+        </>}
+    </details>;
+};
 
 interface HubProps {
     overview: CustomerLeadOverview;
@@ -115,6 +150,7 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                     </ul>
                 </div>
             </details>
+            <ServiceFunnel refreshKey={updatedAt ? updatedAt.getTime() : 0} />
         </div>
     );
 };

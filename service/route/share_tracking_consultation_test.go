@@ -74,7 +74,7 @@ func TestConsultationHookOnlyAfterExplicitCommittedRequest(t *testing.T) {
 				}
 				calls <- [2]int64{account, lead}
 				return errors.New("analytics unavailable")
-			})
+			}, nil)
 			req := httptest.NewRequest(http.MethodPost, "/api/customer-service/"+tc.path, strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Tracking-Token", tc.token)
@@ -115,7 +115,7 @@ func TestConsultationAnalyticsNeverBlocksBusinessResponse(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	defer close(release)
-	registerCustomerLeadRoutes(router.Group("/api"), &consultationStoreFixture{}, func(context.Context, string, int64, int64) error { close(entered); <-release; return nil })
+	registerCustomerLeadRoutes(router.Group("/api"), &consultationStoreFixture{}, func(context.Context, string, int64, int64) error { close(entered); <-release; return nil }, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/customer-service/consultation-requests", strings.NewReader(`{"demand_summary":"test"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tracking-Token", "opaque")

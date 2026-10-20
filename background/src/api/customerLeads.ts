@@ -98,6 +98,16 @@ export interface CustomerLeadDetailResponse {
     intent_analysis: CustomerIntentAnalysis;
 }
 
+export interface CustomerFunnelMetric { key: string; label: string; count: number; conversion_rate: number; }
+
+export const getCustomerLeadFunnel = async (days = 30): Promise<CustomerFunnelMetric[]> => {
+    const response = await get<{ metrics: CustomerFunnelMetric[] }>(`${API_ENDPOINTS.CUSTOMER_LEADS.FUNNEL}?days=${days}`);
+    if (!response.data || !Array.isArray(response.data.metrics)) {
+        throw new Error('获取客服漏斗失败');
+    }
+    return response.data.metrics;
+};
+
 export const getCustomerLeadOverview = async (): Promise<CustomerLeadOverview> => {
     const response = await get<CustomerLeadOverview>(API_ENDPOINTS.CUSTOMER_LEADS.OVERVIEW);
     if (!response.data) {

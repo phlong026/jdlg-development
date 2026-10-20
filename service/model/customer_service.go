@@ -107,8 +107,12 @@ type CustomerLeadOverview struct {
 
 // 队列的 SQL 条件：ListLeads（列表）与 Overview（数量）共用，避免两边口径漂移。
 const (
-	leadQueueHighCond       = `intent_level = 'high' AND status IN ('new', 'contacted')`
-	leadQueueUnassignedCond = `status IN ('new', 'contacted') AND assigned_to = ''`
+	leadQueueHighCond = `intent_level = 'high' AND status IN ('new', 'contacted')`
+	// COALESCE 防御历史行的 NULL：assigned_to='' 对 NULL 不成立，会让未分配数虚低。
+	leadQueueUnassignedCond = `status IN ('new', 'contacted') AND COALESCE(assigned_to, '') = ''`
+	// 超时口径：已排期且到期立即算；从未排期的给 48 小时宽限——新线索落地
+	// 瞬间不再是"超时"，否则超时队列与待处理恒等，天天 100% 报警即失去意义。
+	leadQueueOverdueCond = `status IN ('new', 'contacted') AND ((next_followup_at IS NOT NULL AND next_followup_at <= NOW()) OR (next_followup_at IS NULL AND updated_at <= DATE_SUB(NOW(), INTERVAL 48 HOUR)))`
 )
 
 type CustomerFunnelMetric struct {
@@ -707,7 +711,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	case "high":
 		where = append(where, leadQueueHighCond)
 	case "overdue":
-		where = append(where, `status IN ('new', 'contacted') AND (next_followup_at IS NULL OR next_followup_at <= NOW() OR updated_at <= DATE_SUB(NOW(), INTERVAL 1 DAY))`)
+		where = append(where, leadQueueOverdueCond)
 	case "unassigned":
 		where = append(where, leadQueueUnassignedCond)
 	}
@@ -1018,7 +1022,7 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 			COALESCE(SUM(CASE WHEN status = 'converted' THEN 1 ELSE 0 END), 0) AS converted_count,
 			COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END), 0) AS today_new_count,
 			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') THEN 1 ELSE 0 END), 0) AS todo_count,
-			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') AND (next_followup_at IS NULL OR next_followup_at <= NOW() OR updated_at <= DATE_SUB(NOW(), INTERVAL 1 DAY)) THEN 1 ELSE 0 END), 0) AS overdue_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueueOverdueCond + ` THEN 1 ELSE 0 END), 0) AS overdue_count,
 			COALESCE(SUM(CASE WHEN ` + leadQueueHighCond + ` THEN 1 ELSE 0 END), 0) AS high_todo_count,
 			COALESCE(SUM(CASE WHEN ` + leadQueueUnassignedCond + ` THEN 1 ELSE 0 END), 0) AS unassigned_count,
 			COALESCE(SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid_count
@@ -1041,7 +1045,21 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 	return overview, nil
 }
 
-func (m *CustomerServiceModel) FunnelMetrics() ([]CustomerFunnelMetric, error) {
+// FunnelMetrics computes the service funnel inside an optional [start,end)
+// window (zero values mean all time). "提交线索" counts DISTINCT accounts
+// from customer_leads — not lead_submit events — because one account may
+// submit several times and event counts made the layer exceed its own
+// upstream (44 > 41 in production), inverting the funnel.
+func (m *CustomerServiceModel) FunnelMetrics(start, end time.Time) ([]CustomerFunnelMetric, error) {
+	timeCond, timeArgs := "", []interface{}{}
+	if !start.IsZero() {
+		timeCond = " AND created_at >= ?"
+		timeArgs = append(timeArgs, start)
+	}
+	if !end.IsZero() {
+		timeCond += " AND created_at < ?"
+		timeArgs = append(timeArgs, end)
+	}
 	eventKeys := []string{
 		"welcome_shown",
 		"structured_requirement_collected",
@@ -1060,9 +1078,9 @@ func (m *CustomerServiceModel) FunnelMetrics() ([]CustomerFunnelMetric, error) {
 	rows, err := m.DB.Query(`
 		SELECT event_type, COUNT(DISTINCT session_no) AS count
 		FROM customer_service_events
-		WHERE event_type IN ('welcome_shown', 'structured_requirement_collected', 'generate_click', 'human_handoff_triggered', 'lead_submit')
+		WHERE event_type IN ('welcome_shown', 'structured_requirement_collected', 'generate_click', 'human_handoff_triggered')`+timeCond+`
 		GROUP BY event_type
-	`)
+	`, timeArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -1079,8 +1097,24 @@ func (m *CustomerServiceModel) FunnelMetrics() ([]CustomerFunnelMetric, error) {
 		return nil, err
 	}
 
+	// lead_submit from the authoritative table, deduped by account and
+	// windowed on lead creation time.
+	leadTimeCond, leadTimeArgs := "", []interface{}{}
+	if !start.IsZero() {
+		leadTimeCond = " AND created_at >= ?"
+		leadTimeArgs = append(leadTimeArgs, start)
+	}
+	if !end.IsZero() {
+		leadTimeCond += " AND created_at < ?"
+		leadTimeArgs = append(leadTimeArgs, end)
+	}
+	var submitCount int64
+	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE user_id > 0`+leadTimeCond, leadTimeArgs...).Scan(&submitCount); err != nil {
+		return nil, err
+	}
+	counts["lead_submit"] = submitCount
 	var convertedCount int64
-	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM customer_leads WHERE status = 'converted'`).Scan(&convertedCount); err != nil {
+	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE status = 'converted' AND user_id > 0`+leadTimeCond, leadTimeArgs...).Scan(&convertedCount); err != nil {
 		return nil, err
 	}
 	counts["converted"] = convertedCount

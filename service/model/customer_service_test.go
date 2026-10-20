@@ -247,3 +247,28 @@ func TestCustomerLeadOverviewSharesQueueConditions(t *testing.T) {
 		}
 	}
 }
+
+// Contract: the 48h grace period and NULL-safe unassigned check stay in the
+// shared queue criteria used by both Overview and ListLeads; the funnel keeps
+// its per-account dedupe and windowed queries.
+func TestLeadQueueCriteriaContract(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		"INTERVAL 48 HOUR",                            // overdue grace period
+		"leadQueueOverdueCond",                        // shared constant, not inline SQL
+		"COALESCE(assigned_to, '') = ''",              // NULL-safe unassigned
+		"COUNT(DISTINCT user_id) FROM customer_leads", // funnel dedupes by account
+		"FunnelMetrics(start, end time.Time)",         // windowed signature
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("queue criteria contract missing %q", want)
+		}
+	}
+	if strings.Count(content, "next_followup_at IS NULL OR next_followup_at <= NOW()") != 0 {
+		t.Fatal("legacy no-grace overdue SQL still present")
+	}
+}
