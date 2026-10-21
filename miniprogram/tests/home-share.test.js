@@ -46,21 +46,14 @@ for (const extension of ['ts', 'js']) {
     assert.equal(share.path, undefined);
   });
 
-  test(`${extension}: 首页加载开启两种分享并保留原有初始化`, () => {
-    const { definition, menus, warnings } = loadPage(extension);
-    let safeAreaCalls = 0;
+  test(`${extension}: 首页加载保留初始化，分享菜单由统一生命周期管理`, () => {
+    const { definition, menus } = loadPage(extension);
     let introCalls = 0;
     definition.onLoad.call({
-      syncBrandSafeArea() { safeAreaCalls += 1; },
       showHomeIntroPopupOnce() { introCalls += 1; },
     });
-    assert.equal(safeAreaCalls, 1);
     assert.equal(introCalls, 1);
-    assert.equal(menus.length, 1);
-    assert.deepEqual(Array.from(menus[0].menus), ['shareAppMessage', 'shareTimeline']);
-    menus[0].fail({ errMsg: 'showShareMenu:fail' });
-    assert.equal(warnings.length, 1);
-    assert.equal(warnings[0][0], '首页分享菜单开启失败');
+    assert.equal(menus.length, 0, '单页模式禁止分享菜单，由全局 onShow 判断后再开启');
   });
 }
 

@@ -50,7 +50,14 @@ Page({
     quickCity: '',
     quickArea: '',
     homeAssets: HOME_ASSETS,
-    brandHeaderTop: 68,
+    heroBgImage: resolveAssetPath('/assets/home/logo+背景图.png'),
+    coreEntryImage: resolveAssetPath('/assets/home/核心输入区.png'),
+    dailyCheckinImage: resolveAssetPath('/assets/home/每日签到.png'),
+    inviteFriendImage: resolveAssetPath('/assets/home/邀请好友.png'),
+    ruralVillaImage: resolveAssetPath('/assets/home/乡村别墅.png'),
+    cityRenewalImage: resolveAssetPath('/assets/home/城市更新.png'),
+    parentWorkshopImage: resolveAssetPath('/assets/home/亲子工坊.png'),
+    allRoundDesignImage: resolveAssetPath('/assets/home/综合设计.png'),
     defaultCoverImage: resolveAssetPath('/assets/images/home.jpg'),
     introLogoImage: resolveAssetPath('/assets/home/intro-logo.png'),
     mascotBouncing: false,
@@ -62,26 +69,7 @@ Page({
     }
   },
   onLoad() {
-    this.syncBrandSafeArea();
     this.showHomeIntroPopupOnce();
-    wx.showShareMenu({
-      menus: ['shareAppMessage', 'shareTimeline'],
-      fail: (error) => {
-        console.warn('首页分享菜单开启失败', error);
-      },
-    });
-  },
-  syncBrandSafeArea() {
-    if (typeof (wx as any).getWindowInfo !== 'function') return;
-    try {
-      const info = (wx as any).getWindowInfo();
-      const width = Number(info.windowWidth) || 375;
-      const statusBarHeight = Number(info.statusBarHeight) || 44;
-      // 至少比旧版下移 24rpx，同时在手机状态栏下留出 12px。
-      this.setData({ brandHeaderTop: Math.max(85.55 * width / 750, statusBarHeight + 12) });
-    } catch (error) {
-      console.warn('首页品牌安全距离读取失败，保留默认位置', error);
-    }
   },
   onShow() {
     if (resumeReportAfterLogin()) return;

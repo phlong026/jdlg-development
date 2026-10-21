@@ -1,0 +1,58 @@
+[
+  {
+    "file": "logo+背景图.png",
+    "url": "https://static.jiadilingguang.com/assets/home/logo+背景图.png",
+    "bytes": 3421014,
+    "sha256": "bbaee841bde2dc7e593a19365a0add6c014d2cd51fc0b715d4d699abe44185b5",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "核心输入区.png",
+    "url": "https://static.jiadilingguang.com/assets/home/核心输入区.png",
+    "bytes": 575123,
+    "sha256": "a3ed038ee26d90757aa0d81344d4b37fa3888699e6aea57a56b95992dcb51cc9",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "每日签到.png",
+    "url": "https://static.jiadilingguang.com/assets/home/每日签到.png",
+    "bytes": 97713,
+    "sha256": "c86a5a26db3952ab53f6e9888c3c2fb5457462df0d337322c54379194491150c",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "邀请好友.png",
+    "url": "https://static.jiadilingguang.com/assets/home/邀请好友.png",
+    "bytes": 108802,
+    "sha256": "0125b2384a7b400c17841c223f19831c54d13ea7a3161442a0a2ce806c7bfe30",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "乡村别墅.png",
+    "url": "https://static.jiadilingguang.com/assets/home/乡村别墅.png",
+    "bytes": 44622,
+    "sha256": "83ea21945e154fb97f158d48bc3c11f905f7bbea4d0460e3d45e459725a1560d",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "城市更新.png",
+    "url": "https://static.jiadilingguang.com/assets/home/城市更新.png",
+    "bytes": 52104,
+    "sha256": "af7dfd7672864b8c6d3c50d80113a0e501d76e371531a27398e06bf691b54247",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "亲子工坊.png",
+    "url": "https://static.jiadilingguang.com/assets/home/亲子工坊.png",
+    "bytes": 43152,
+    "sha256": "cd9aff9feee41954844fac7a3a318d67f8bfc7fdd528530d374067a22aa49545",
+    "cloud_matches_backup_verified": true
+  },
+  {
+    "file": "综合设计.png",
+    "url": "https://static.jiadilingguang.com/assets/home/综合设计.png",
+    "bytes": 53256,
+    "sha256": "1b0aed71c420af6a0c3cb5928f0632462458539f5320d11bd91110a64e3b64aa",
+    "cloud_matches_backup_verified": true
+  }
+]
