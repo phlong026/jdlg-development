@@ -8,21 +8,45 @@ import (
 	"time"
 )
 
-// Visit is one card of the customer timeline: one session reading one
-// material. Refreshes inside the session merge; a later session is a new card.
+// Visit is one card of the customer timeline. In the legacy session grouping it
+// is one session reading one material; in batch/day grouping it is the same
+// visitor's continuous visits inside the window, across materials.
 // The nested Visitor is the same projection the customer list serves.
 type Visit struct {
-	ID       string         `json:"visit_id"`
-	Started  time.Time      `json:"started_at"`
-	Visible  int64          `json:"visible_ms"`
-	Visitor  Visitor        `json:"visitor"`
-	Content  VisitContent   `json:"content"`
-	Source   VisitSource    `json:"source"`
-	Progress *VisitProgress `json:"progress,omitempty"`
-	// ContentViews counts this visitor's page views of this material inside
-	// the filter window, the same figure as the visitor material card.
-	ContentViews int  `json:"content_page_views"`
-	Engaged      bool `json:"engaged"`
+	ID      string    `json:"visit_id"`
+	Started time.Time `json:"started_at"`
+	// Ended is set for batch/day cards; session cards omit it.
+	Ended   *time.Time `json:"ended_at,omitempty"`
+	Visible int64      `json:"visible_ms"`
+	Visitor Visitor    `json:"visitor"`
+	// Content is the primary material (longest visible in a batch), kept for
+	// older clients. Materials carries every material in the batch.
+	Content   VisitContent    `json:"content"`
+	Materials []VisitMaterial `json:"materials,omitempty"`
+	Source    VisitSource     `json:"source"`
+	Progress  *VisitProgress  `json:"progress,omitempty"`
+	// ContentViews counts this visitor's page views of the card's materials
+	// inside the filter window. For single-material cards it is that material's
+	// cumulative count; for batches it is the sum of each material's count.
+	ContentViews int `json:"content_page_views"`
+	// VisitCount is the number of distinct sessions inside a batch/day card.
+	VisitCount int  `json:"visit_count,omitempty"`
+	Engaged    bool `json:"engaged"`
+	// Group is batch or day; empty on legacy session cards.
+	Group string `json:"group,omitempty"`
+	// Date is the Beijing calendar day for day cards.
+	Date string `json:"date,omitempty"`
+}
+
+// VisitMaterial is one material inside a batch/day card.
+type VisitMaterial struct {
+	Content   VisitContent   `json:"content"`
+	Started   time.Time      `json:"started_at"`
+	Ended     time.Time      `json:"ended_at"`
+	Visible   int64          `json:"visible_ms"`
+	PageViews int            `json:"page_views"`
+	Progress  *VisitProgress `json:"progress,omitempty"`
+	Engaged   bool           `json:"engaged"`
 }
 
 // VisitContent is the historical title/cover projection, never a body.
@@ -81,10 +105,31 @@ const (
 	maxVisitPageSize = 50
 )
 
+// visitBatchGap is the inactivity gap that keeps one 客户查看 card together.
+// It matches the analytics session timeout used elsewhere, so a burst of
+// reopens across share entries becomes one card instead of ten.
+const visitBatchGap = 30 * time.Minute
+
+// visitZone is the business day used by the 按天 view. Asia/Shanghai has no DST.
+var visitZone = time.FixedZone("Asia/Shanghai", 8*60*60)
+
 type visitGroup struct {
 	Visit
 	session, owner, share string
 	views                 []string
+	// sessions and materials are only filled by batch/day grouping.
+	sessions  []string
+	end       time.Time
+	materials []*visitMaterialGroup
+}
+
+// visitMaterialGroup is the pre-resolution material aggregate inside a batch.
+type visitMaterialGroup struct {
+	content        VisitContent
+	started, ended time.Time
+	visible        int64
+	pageViews      int
+	views          []string
 }
 
 func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, error) {
@@ -144,9 +189,15 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 			}
 			items = append(items, g)
 		}
+		// Batch/day merge happens after the source filter, so a share-channel
+		// filter still sees each entry session before cards are combined.
+		if f.Group == "batch" || f.Group == "day" {
+			items = mergeVisitGroups(items, f.Group)
+		}
 		sort.Slice(items, func(i, j int) bool {
-			if !items[i].Started.Equal(items[j].Started) {
-				return items[i].Started.After(items[j].Started)
+			ti, tj := items[i].sortTime(), items[j].sortTime()
+			if !ti.Equal(tj) {
+				return ti.After(tj)
 			}
 			return items[i].ID < items[j].ID
 		})
@@ -226,6 +277,136 @@ func groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*vi
 		g.ContentViews = contentViews[g.Visitor.Key+"\x00"+contentKey(g.Content.ID, g.Content.Version)]
 	}
 	return groups
+}
+
+// sortTime is the latest activity a card represents. Legacy session cards sort
+// by their start; batch/day cards sort by their last visit so a long tail does
+// not sink below a newer short visit.
+func (g *visitGroup) sortTime() time.Time {
+	if !g.end.IsZero() {
+		return g.end
+	}
+	return g.Started
+}
+
+// groupEnd is the last moment covered by a legacy session card.
+func (g *visitGroup) groupEnd() time.Time {
+	if !g.end.IsZero() {
+		return g.end
+	}
+	return g.Started.Add(time.Duration(g.Visible) * time.Millisecond)
+}
+
+// mergeVisitGroups folds session×material cards into one card per visitor:
+// batch mode merges continuous visits whose inactivity gap is at most
+// visitBatchGap, across materials and share entries; day mode merges the same
+// visitor's visits inside one Beijing calendar day.
+func mergeVisitGroups(groups []*visitGroup, mode string) []*visitGroup {
+	ordered := append([]*visitGroup{}, groups...)
+	sort.Slice(ordered, func(i, j int) bool {
+		if !ordered[i].Started.Equal(ordered[j].Started) {
+			return ordered[i].Started.Before(ordered[j].Started)
+		}
+		return ordered[i].ID < ordered[j].ID
+	})
+	byKey := map[string]*visitGroup{}
+	out := []*visitGroup{}
+	for _, src := range ordered {
+		key := src.Visitor.Key
+		if mode == "day" {
+			key += ":" + src.Started.In(visitZone).Format("2006-01-02")
+		}
+		batch := byKey[key]
+		if batch == nil || mode == "batch" && src.Started.Sub(batch.end) > visitBatchGap {
+			batch = newVisitBatch(src, mode)
+			byKey[key] = batch
+			out = append(out, batch)
+		}
+		batch.addVisit(src)
+	}
+	for _, batch := range out {
+		batch.finalizeBatch()
+	}
+	return out
+}
+
+func newVisitBatch(src *visitGroup, mode string) *visitGroup {
+	batch := &visitGroup{
+		Visit: Visit{
+			ID:      "batch:" + src.Visitor.Key + ":" + src.ID,
+			Started: src.Started,
+			Visitor: src.Visitor,
+			Group:   mode,
+		},
+		owner: src.owner,
+		share: src.share,
+		end:   src.groupEnd(),
+	}
+	if mode == "day" {
+		day := src.Started.In(visitZone).Format("2006-01-02")
+		batch.ID = "day:" + src.Visitor.Key + ":" + day
+		batch.Date = day
+	}
+	return batch
+}
+
+func (b *visitGroup) addVisit(src *visitGroup) {
+	b.sessions = appendUnique(b.sessions, src.session)
+	if src.Started.Before(b.Started) {
+		b.Started = src.Started
+	}
+	if end := src.groupEnd(); end.After(b.end) {
+		b.end = end
+	}
+	var material *visitMaterialGroup
+	for _, candidate := range b.materials {
+		if contentKey(candidate.content.ID, candidate.content.Version) == contentKey(src.Content.ID, src.Content.Version) {
+			material = candidate
+			break
+		}
+	}
+	if material == nil {
+		material = &visitMaterialGroup{content: src.Content, started: src.Started, ended: src.groupEnd()}
+		b.materials = append(b.materials, material)
+	}
+	if src.Started.Before(material.started) {
+		material.started = src.Started
+	}
+	if end := src.groupEnd(); end.After(material.ended) {
+		material.ended = end
+	}
+	material.visible += src.Visible
+	// ContentViews is already cumulative for the whole filter window, so the
+	// same material must keep the maximum instead of being added again.
+	if src.ContentViews > material.pageViews {
+		material.pageViews = src.ContentViews
+	}
+	material.views = append(material.views, src.views...)
+}
+
+func (b *visitGroup) finalizeBatch() {
+	if len(b.materials) == 0 {
+		return
+	}
+	sort.SliceStable(b.materials, func(i, j int) bool {
+		if b.materials[i].visible != b.materials[j].visible {
+			return b.materials[i].visible > b.materials[j].visible
+		}
+		return b.materials[i].started.Before(b.materials[j].started)
+	})
+	b.Content = b.materials[0].content
+	b.Visible = 0
+	b.ContentViews = 0
+	for _, material := range b.materials {
+		b.Visible += material.visible
+		b.ContentViews += material.pageViews
+		if material.ended.After(b.end) {
+			b.end = material.ended
+		}
+	}
+	b.VisitCount = len(b.sessions)
+	ended := b.end
+	b.Ended = &ended
 }
 
 func visitSourceMatches(source VisitSource, channel string) bool {
@@ -417,6 +598,9 @@ func (s *Service) fillVisitPage(ctx context.Context, r Repository, scope, effect
 	sessions := []string{}
 	for _, g := range page {
 		sessions = appendUnique(sessions, g.session)
+		for _, session := range g.sessions {
+			sessions = appendUnique(sessions, session)
+		}
 	}
 	raw, err := s.factsSelected(r, scope, f, factSelection{Sessions: sessions})
 	if err != nil {
@@ -426,25 +610,59 @@ func (s *Service) fillVisitPage(ctx context.Context, r Repository, scope, effect
 	for _, fact := range raw {
 		events[fact.ID] = fact.events
 	}
-	materials := map[string]VisitContent{}
+	cache := map[string]VisitContent{}
+	resolve := func(material VisitContent) (VisitContent, error) {
+		key := material.Route + "\x00" + contentKey(material.ID, material.Version)
+		if hit, ok := cache[key]; ok {
+			return hit, nil
+		}
+		resolved, err := s.visitedContent(ctx, r, effective, material.ID, material.Version, material.Route)
+		if err != nil {
+			return VisitContent{}, err
+		}
+		content := VisitContent{ID: resolved.ID, Version: resolved.Version, Title: resolved.Title, Type: resolved.Type, Status: resolved.Status, Cover: resolved.Cover, Route: resolved.Route, Accessible: resolved.Accessible}
+		cache[key] = content
+		return content, nil
+	}
+	viewsOf := func(views []string) [][]Event {
+		out := make([][]Event, 0, len(views))
+		for _, view := range views {
+			out = append(out, events[view])
+		}
+		return out
+	}
 	for _, g := range page {
-		key := g.Content.Route + "\x00" + contentKey(g.Content.ID, g.Content.Version)
-		content, ok := materials[key]
-		if !ok {
-			resolved, err := s.visitedContent(ctx, r, effective, g.Content.ID, g.Content.Version, g.Content.Route)
+		if len(g.materials) == 0 {
+			content, err := resolve(g.Content)
 			if err != nil {
 				return err
 			}
-			content = VisitContent{ID: resolved.ID, Version: resolved.Version, Title: resolved.Title, Type: resolved.Type, Status: resolved.Status, Cover: resolved.Cover, Route: resolved.Route, Accessible: resolved.Accessible}
-			materials[key] = content
+			g.Content = content
+			g.Progress = visitProgress(viewsOf(g.views))
+			g.Engaged = g.Visible >= engagedVisibleMS || g.ContentViews >= engagedContentViews || g.Progress != nil && g.Progress.Kind == "video" && g.Progress.Percent >= engagedVideoPercent
+			continue
 		}
-		g.Content = content
-		viewEvents := make([][]Event, 0, len(g.views))
-		for _, view := range g.views {
-			viewEvents = append(viewEvents, events[view])
+		materials := make([]VisitMaterial, 0, len(g.materials))
+		for _, material := range g.materials {
+			content, err := resolve(material.content)
+			if err != nil {
+				return err
+			}
+			progress := visitProgress(viewsOf(material.views))
+			materials = append(materials, VisitMaterial{
+				Content:   content,
+				Started:   material.started,
+				Ended:     material.ended,
+				Visible:   material.visible,
+				PageViews: material.pageViews,
+				Progress:  progress,
+				Engaged:   material.visible >= engagedVisibleMS || material.pageViews >= engagedContentViews || progress != nil && progress.Kind == "video" && progress.Percent >= engagedVideoPercent,
+			})
 		}
-		g.Progress = visitProgress(viewEvents)
-		g.Engaged = g.Visible >= engagedVisibleMS || g.ContentViews >= engagedContentViews || g.Progress != nil && g.Progress.Kind == "video" && g.Progress.Percent >= engagedVideoPercent
+		g.Materials = materials
+		g.Content = materials[0].Content
+		g.Progress = materials[0].Progress
+		g.Engaged = materials[0].Engaged
 	}
 	return nil
 }

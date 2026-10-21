@@ -543,3 +543,90 @@ func TestVisitsChannelIgnoresIntentReceivedAfterSnapshot(t *testing.T) {
 		t.Fatalf("timeline filter at snapshot = %+v, want none", got)
 	}
 }
+
+// 客户查看默认按 30 分钟窗口合并：同一访客连续打开不同分享入口、看不同素材
+// 时，也应是一张卡；间隔超过 30 分钟才拆成新的一张。
+func TestVisitsBatchMergesAcrossSessionsAndMaterials(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-5 * time.Hour)
+	visitPV(m, "pv-b1", "one", "u:1", "sess1", "content1", "", at, 30000)
+	visitPV(m, "pv-b2", "one", "u:1", "sess1", "content1", "", at.Add(time.Minute), 20000)
+	visitPV(m, "pv-b3", "one", "u:1", "sess2", "content1", "", at.Add(10*time.Minute), 10000)
+	visitPV(m, "pv-b4", "one", "u:1", "sess3", "content2", "", at.Add(15*time.Minute), 15000)
+	// Two hours later: outside the 30 minute window, a new card.
+	visitPV(m, "pv-b5", "one", "u:1", "sess4", "content1", "", now.Add(-3*time.Hour), 5000)
+
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("batch cards = %d, want 2: %+v", len(items), items)
+	}
+	newest, older := items[0], items[1]
+	if newest.Group != "batch" || newest.VisitCount != 1 || newest.Content.ID != "content1" {
+		t.Fatalf("newest batch = %+v, want one content1 visit", newest)
+	}
+	if older.Group != "batch" || older.VisitCount != 3 {
+		t.Fatalf("older batch visit_count = %d, want 3 sessions", older.VisitCount)
+	}
+	if older.Visible != 75000 {
+		t.Fatalf("older batch visible = %d, want 75000", older.Visible)
+	}
+	if older.Content.ID != "content1" || older.ContentViews != 5 {
+		t.Fatalf("older batch primary = %s/%d, want content1 with 5 cumulative views", older.Content.ID, older.ContentViews)
+	}
+	if len(older.Materials) != 2 || older.Materials[0].Content.ID != "content1" || older.Materials[1].Content.ID != "content2" {
+		t.Fatalf("older batch materials = %+v, want content1 then content2", older.Materials)
+	}
+	if older.Materials[0].Visible != 60000 || older.Materials[1].Visible != 15000 {
+		t.Fatalf("material visible = %d/%d, want 60000/15000", older.Materials[0].Visible, older.Materials[1].Visible)
+	}
+	if older.Ended == nil || !older.Ended.Equal(at.Add(15*time.Minute+15*time.Second)) {
+		t.Fatalf("older batch ended = %v, want last visible end", older.Ended)
+	}
+	if older.Source.Kind != "direct" {
+		t.Fatalf("older batch source = %q, want direct", older.Source.Kind)
+	}
+}
+
+// 按天视图：同一访客同一天内的访问即使间隔超过 30 分钟也合并，跨自然日拆开。
+func TestVisitsDayMergesByBeijingDate(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	// now = 2026-10-11 20:00 Beijing; -22h/-21h are 10-10 22:00/23:00 Beijing.
+	visitPV(m, "pv-d1", "one", "u:1", "day1-a", "content1", "", now.Add(-22*time.Hour), 10000)
+	visitPV(m, "pv-d2", "one", "u:1", "day1-b", "content2", "", now.Add(-21*time.Hour), 20000)
+	// Current Beijing day, one hour apart: still one day card.
+	visitPV(m, "pv-d3", "one", "u:1", "day2-a", "content1", "", now.Add(-2*time.Hour), 30000)
+	visitPV(m, "pv-d4", "one", "u:1", "day2-b", "content2", "", now.Add(-time.Hour), 40000)
+
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "day"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("day cards = %d, want 2: %+v", len(items), items)
+	}
+	current, previous := items[0], items[1]
+	if current.Group != "day" || current.Date != "2026-10-11" || current.VisitCount != 2 {
+		t.Fatalf("current day card = %+v, want 2026-10-11 with 2 visits", current)
+	}
+	if previous.Group != "day" || previous.Date != "2026-10-10" || previous.VisitCount != 2 {
+		t.Fatalf("previous day card = %+v, want 2026-10-10 with 2 visits", previous)
+	}
+	if len(current.Materials) != 2 || len(previous.Materials) != 2 {
+		t.Fatalf("day materials = %d/%d, want 2/2", len(current.Materials), len(previous.Materials))
+	}
+	if current.Visible != 70000 || previous.Visible != 30000 {
+		t.Fatalf("day visible = %d/%d, want 70000/30000", current.Visible, previous.Visible)
+	}
+}
+
+func TestVisitsRejectsUnknownGroup(t *testing.T) {
+	s, _, scope, _ := visitsFixture(t)
+	if _, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "hour"}); e == nil {
+		t.Fatal("unknown group should be rejected")
+	}
+}
