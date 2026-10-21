@@ -38,6 +38,8 @@ export interface CustomerLeadItem {
     remark?: string;
     created_at: string;
     updated_at: string;
+    /** 最近一次留资时间（仅列表返回）：老客户再次留资只更新旧线索，created_at 不变 */
+    last_submitted_at?: string | null;
 }
 
 export interface CustomerServiceEventItem {
@@ -98,7 +100,7 @@ export interface CustomerLeadDetailResponse {
     intent_analysis: CustomerIntentAnalysis;
 }
 
-export interface CustomerFunnelMetric { key: string; label: string; count: number; conversion_rate: number; }
+export interface CustomerFunnelMetric { key: string; label: string; count: number; conversion_rate: number; anonymous_sessions?: number; }
 
 export const getCustomerLeadFunnel = async (days = 30): Promise<CustomerFunnelMetric[]> => {
     const response = await get<{ metrics: CustomerFunnelMetric[] }>(`${API_ENDPOINTS.CUSTOMER_LEADS.FUNNEL}?days=${days}`);

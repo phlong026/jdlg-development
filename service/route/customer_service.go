@@ -94,6 +94,12 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
 			return
 		}
+		// 这两类事件只由下方留资接口在线索落库后写入，是"提交线索"统计和列表排序的依据，
+		// 客户端自报会让任意线索被顶到最前。
+		if eventType := strings.TrimSpace(req.EventType); eventType == "lead_submit" || eventType == "consultation_request_submitted" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "该事件类型只能由服务端记录"})
+			return
+		}
 		id, err := customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{
 			UserID:        codeSession.UserID,
 			LeadID:        req.LeadID,
