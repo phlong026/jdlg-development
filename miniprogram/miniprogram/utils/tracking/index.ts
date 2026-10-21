@@ -194,7 +194,7 @@ function showTimelineShareMenu(page, hasCustomTimelineShare) {
   const contentBlocked=page.data&&Object.prototype.hasOwnProperty.call(page.data,'contentReady')&&page.data.contentReady!==true;
   const route=String(page.route||'').replace(/^\//,'');
   if(contentBlocked||(!routes.policy(route).collect&&!hasCustomTimelineShare)){
-    if(typeof wx.hideShareMenu==='function')wx.hideShareMenu({menus:['shareTimeline']});
+    if(typeof wx.hideShareMenu==='function')wx.hideShareMenu({menus:contentBlocked?['shareAppMessage','shareTimeline']:['shareTimeline']});
     return;
   }
   if(typeof wx.showShareMenu==='function')wx.showShareMenu({menus:['shareAppMessage','shareTimeline'],fail(error){console.warn('分享菜单开启失败',page.route,error);}});
@@ -207,8 +207,10 @@ function wrapPage(definition) {
   result.onLoad=function(options) {
     safely(() => {
       this.__trackingOptions=options||{};
-      const route=String(this.route||'').replace(/^\//,''); if (!routes.policy(route).collect) return;
-      const s=getSDK(); if (s) s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+      const route=String(this.route||'').replace(/^\//,'');
+      if (routes.policy(route).collect) {
+        const s=getSDK(); if (s) s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+      } else if (!hasCustomTimelineShare) return;
       const original=this.setData;
       if(typeof original!=='function')return;
       this.setData=function(data,callback) {

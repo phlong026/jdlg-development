@@ -242,3 +242,25 @@ test('My Plans fallback Moments title is readable Chinese', () => {
 
   assert.equal(share.title, '我的方案');
 });
+
+
+test('私人预算仅在自定义公开快照准备完后开放分享，仍保持不采集埋点', () => {
+  const shown = [], hidden = [];
+  const { wrapPage } = loadTracking({
+    showShareMenu: value => shown.push(value), hideShareMenu: value => hidden.push(value),
+  });
+  const wrapped = wrapPage({ onShareTimeline() { return { query: 'report_id=public-snapshot' }; } });
+  const page = { route: 'pages/aicostresult/aicostresult', data: { contentReady: false },
+    setData(value, callback) { Object.assign(this.data, value); if (callback) callback(); },
+  };
+  wrapped.onLoad.call(page, {});
+  wrapped.onShow.call(page);
+  assert.equal(shown.length, 0);
+  assert.deepEqual(Array.from(hidden[0].menus), ['shareAppMessage', 'shareTimeline']);
+  page.setData({ contentReady: true });
+  assert.equal(shown.length, 1);
+  wrapped.onHide.call(page);
+  page.setData({ contentReady: false });
+  page.setData({ contentReady: true });
+  assert.equal(shown.length, 1);
+});

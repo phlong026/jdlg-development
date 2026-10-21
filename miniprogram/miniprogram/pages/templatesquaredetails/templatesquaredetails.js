@@ -63,6 +63,7 @@ Page({
     data: {
         templateId: 0,
         template: null,
+        contentReady: false,
         unlocked: false,
         prompt: '',
         token: '',
@@ -96,6 +97,8 @@ Page({
         currentImageIndex: 0,
         shareImageUrl: '',
         shareImageSourceUrl: '',
+        timelineShareImageUrl: '',
+        timelineShareImageSourceUrl: '',
         navTop: 0,
         navBarHeight: 72,
         heroHeight: DEFAULT_HERO_HEIGHT_PX,
@@ -134,12 +137,27 @@ Page({
     enterpriseWechatAutoCheckTimer: null,
     detailLoadedToken: '',
     detailNeedsRefreshOnShow: false,
+    requestedShareImageRef: '',
     /**
      * 生命周期函数--监听页面加载
      */
     onLoad(options) {
         const token = wx.getStorageSync('token') || '';
-        this.setData({ token, previewShowMenu: false });
+        this.requestedShareImageRef = String(options.image_ref || '').trim().slice(0, 64);
+        this.setData({
+            token,
+            previewShowMenu: false,
+            contentReady: false,
+            template: null,
+            templateName: '',
+            mainImage: '',
+            imageList: [],
+            currentImageIndex: 0,
+            shareImageUrl: '',
+            shareImageSourceUrl: '',
+            timelineShareImageUrl: '',
+            timelineShareImageSourceUrl: '',
+        });
         this.syncWindowBackground();
         this.initLayoutMetrics();
         this.initUIData();
@@ -178,6 +196,7 @@ Page({
         this.stopEnterpriseWechatAutoCheck();
     },
     async loadCreatorCertificationStatus(userId) {
+        var _a;
         const safeUserId = Number(userId || 0);
         if (!safeUserId) {
             return;
@@ -198,20 +217,14 @@ Page({
                     fail: reject,
                 });
             });
-            const certStatusLabel = mapDesignerCertStatusLabel(String(data?.profile?.cert_status || ''));
+            const certStatusLabel = mapDesignerCertStatusLabel(String(((_a = data === null || data === void 0 ? void 0 : data.profile) === null || _a === void 0 ? void 0 : _a.cert_status) || ''));
             this.setData({
-                userInfo: {
-                    ...(this.data.userInfo || {}),
-                    certStatusLabel,
-                },
+                userInfo: Object.assign(Object.assign({}, (this.data.userInfo || {})), { certStatusLabel }),
             });
         }
         catch (error) {
             this.setData({
-                userInfo: {
-                    ...(this.data.userInfo || {}),
-                    certStatusLabel: '',
-                },
+                userInfo: Object.assign(Object.assign({}, (this.data.userInfo || {})), { certStatusLabel: '' }),
             });
         }
     },
@@ -251,10 +264,14 @@ Page({
      */
     onShareAppMessage() {
         const shareSourceUrl = this.getCurrentShareSourceUrl();
+        if (!this.data.contentReady || !this.data.template || !shareSourceUrl) {
+            return {};
+        }
+        const query = this.buildTemplateShareQuery(shareSourceUrl);
         return {
             title: this.data.templateName || '甲第灵光 · 模板详情',
-            path: `/pages/templatesquaredetails/templatesquaredetails?id=${this.data.templateId || 0}`,
-            imageUrl: this.data.shareImageUrl || shareSourceUrl,
+            path: `/pages/templatesquaredetails/templatesquaredetails?${query}`,
+            imageUrl: this.getPreparedShareImageUrl(shareSourceUrl),
             success: () => {
                 this.handleShareSuccess();
             },
@@ -262,10 +279,14 @@ Page({
     },
     onShareTimeline() {
         const shareSourceUrl = this.getCurrentShareSourceUrl();
+        const timelineImageUrl = this.getPreparedTimelineShareImageUrl(shareSourceUrl);
+        if (!this.data.contentReady || !this.data.template || !shareSourceUrl || !timelineImageUrl) {
+            return {};
+        }
         return {
-            title: this.data.templateName || '甲第灵光 · 模板详情',
-            query: `id=${this.data.templateId || 0}`,
-            imageUrl: this.data.shareImageUrl || shareSourceUrl,
+            title: `${this.data.templateName || '甲第灵光 · 模板详情'}，建别墅从这里开始`,
+            query: this.buildTemplateShareQuery(shareSourceUrl),
+            imageUrl: timelineImageUrl,
             success: () => {
                 this.handleShareSuccess();
             },
@@ -323,10 +344,7 @@ Page({
             const apiPath = `/api/v1/miniprogram/templates/${this.data.templateId}/comments`;
             const requestBody = { content };
             const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath, deviceID);
-            const headers = {
-                ...(0, parameter_1.paramsToHeaders)(params),
-                'Content-Type': 'application/json',
-            };
+            const headers = Object.assign(Object.assign({}, (0, parameter_1.paramsToHeaders)(params)), { 'Content-Type': 'application/json' });
             const response = await new Promise((resolve, reject) => {
                 wx.request({
                     url: `${API_BASE_URL}${apiPath}`,
@@ -363,7 +381,7 @@ Page({
         }
         catch (error) {
             wx.showToast({
-                title: error?.message || '评论发布失败',
+                title: (error === null || error === void 0 ? void 0 : error.message) || '评论发布失败',
                 icon: 'none',
             });
         }
@@ -396,7 +414,7 @@ Page({
                 });
             });
             const parsed = JSON.parse(fileContent || '{}');
-            const message = String(parsed?.msg || parsed?.message || '').trim();
+            const message = String((parsed === null || parsed === void 0 ? void 0 : parsed.msg) || (parsed === null || parsed === void 0 ? void 0 : parsed.message) || '').trim();
             return message || fallback;
         }
         catch (error) {
@@ -418,7 +436,7 @@ Page({
                 },
                 fail: (err) => {
                     wx.hideLoading();
-                    if (String(err?.errMsg || '').includes('auth deny')) {
+                    if (String((err === null || err === void 0 ? void 0 : err.errMsg) || '').includes('auth deny')) {
                         wx.showModal({
                             title: '提示',
                             content: '需要授权相册权限才能保存图片',
@@ -461,7 +479,7 @@ Page({
             },
             fail: (err) => {
                 wx.hideLoading();
-                wx.showToast({ title: String(err?.errMsg || '下载失败').includes('domain list') ? '下载域名未配置' : '下载失败', icon: 'none' });
+                wx.showToast({ title: String((err === null || err === void 0 ? void 0 : err.errMsg) || '下载失败').includes('domain list') ? '下载域名未配置' : '下载失败', icon: 'none' });
             },
         });
     },
@@ -635,8 +653,9 @@ Page({
         return result;
     },
     async onEnterpriseWechatPhoneAuth(e) {
-        const phoneCode = String(e?.detail?.code || '').trim();
-        const errorMessage = String(e?.detail?.errMsg || '').trim();
+        var _a, _b;
+        const phoneCode = String(((_a = e === null || e === void 0 ? void 0 : e.detail) === null || _a === void 0 ? void 0 : _a.code) || '').trim();
+        const errorMessage = String(((_b = e === null || e === void 0 ? void 0 : e.detail) === null || _b === void 0 ? void 0 : _b.errMsg) || '').trim();
         if (!phoneCode) {
             if (errorMessage.includes('deny') || errorMessage.includes('cancel')) {
                 wx.showToast({ title: '你已取消手机号授权', icon: 'none' });
@@ -659,7 +678,7 @@ Page({
         }
         catch (error) {
             wx.hideLoading();
-            wx.showToast({ title: String(error?.message || '手机号验证失败'), icon: 'none' });
+            wx.showToast({ title: String((error === null || error === void 0 ? void 0 : error.message) || '手机号验证失败'), icon: 'none' });
         }
         finally {
             this.setData({ enterpriseWechatPhoneSubmitting: false });
@@ -705,10 +724,7 @@ Page({
         const apiPath = `/api/v1/miniprogram/templates/${this.data.templateId}/download`;
         const requestBody = {};
         const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath, deviceID);
-        const headers = {
-            ...(0, parameter_1.paramsToHeaders)(params),
-            'Content-Type': 'application/json',
-        };
+        const headers = Object.assign(Object.assign({}, (0, parameter_1.paramsToHeaders)(params)), { 'Content-Type': 'application/json' });
         const result = await new Promise((resolve, reject) => {
             wx.request({
                 url: `${API_BASE_URL}${apiPath}`,
@@ -775,7 +791,7 @@ Page({
         }
         catch (error) {
             wx.hideLoading();
-            const message = String(error?.message || '图片下载失败');
+            const message = String((error === null || error === void 0 ? void 0 : error.message) || '图片下载失败');
             if (message.includes('手机号') || message.includes('企业微信') || message.includes('联系方式')) {
                 this.setData({ showEnterpriseWechatModal: true });
                 this.startEnterpriseWechatAutoCheck();
@@ -855,6 +871,7 @@ Page({
         if (!silent) {
             this.setData({ loading: true });
         }
+        this.setData({ contentReady: false });
         const token = this.data.token;
         const url = token
             ? `${API_BASE_URL}/api/v1/miniprogram/templates/${this.data.templateId}/detail`
@@ -869,8 +886,7 @@ Page({
                     ? `/api/v1/miniprogram/templates/${this.data.templateId}/detail`
                     : `/api/v1/miniprogram/templates/${this.data.templateId}`;
                 const headers = token
-                    ? { ...(0, parameter_1.paramsToHeaders)((0, parameter_1.generateRequestParams)(token, body, apiPath, deviceID)), 'Content-Type': 'application/json' }
-                    : {};
+                    ? Object.assign(Object.assign({}, (0, parameter_1.paramsToHeaders)((0, parameter_1.generateRequestParams)(token, body, apiPath, deviceID))), { 'Content-Type': 'application/json' }) : {};
                 wx.request({
                     url,
                     method: 'GET',
@@ -927,6 +943,26 @@ Page({
                     imageList = [mainImage, ...imageList.filter((item) => item !== mainImage)];
                 }
             }
+            const requestedImageRef = String(this.requestedShareImageRef || '').trim();
+            const currentSourceUrl = this.getCurrentShareSourceUrl();
+            let currentImageIndex = 0;
+            if (requestedImageRef) {
+                const matchedIndex = imageList.findIndex((imageUrl) => this.buildShareImageRef(imageUrl) === requestedImageRef);
+                if (matchedIndex >= 0) {
+                    currentImageIndex = matchedIndex;
+                }
+                else if (imageList.length) {
+                    wx.showToast({
+                        title: '分享图片已更新，已展示该模板最新图片',
+                        icon: 'none',
+                    });
+                }
+                this.requestedShareImageRef = '';
+            }
+            else if (silent && currentSourceUrl) {
+                const retainedIndex = imageList.indexOf(currentSourceUrl);
+                currentImageIndex = retainedIndex >= 0 ? retainedIndex : 0;
+            }
             let userInfo = this.data.userInfo;
             if (res.creator_info) {
                 userInfo = {
@@ -950,7 +986,7 @@ Page({
                 noteContent: res.description || this.data.noteContent,
                 mainImage: mainImage || '',
                 imageList,
-                currentImageIndex: 0,
+                currentImageIndex,
                 likeCount: Number(res.like_count || 0),
                 commentCount: Number(res.comment_count || 0),
                 shareCount: Number(res.share_count || 0),
@@ -971,7 +1007,7 @@ Page({
             this.prepareHeroImageHeights(imageList, Number(res.image_width || 0), Number(res.image_height || 0));
             this.detailLoadedToken = String(token || '').trim();
             void (0, perf_1.prefetchImages)([mainImage, ...imageList], 2);
-            void this.prepareCurrentShareImage(mainImage || imageList[0] || '');
+            await this.prepareCurrentShareImages(imageList[currentImageIndex] || mainImage || imageList[0] || '');
             if (Number(userInfo.userId) > 0) {
                 void this.loadCreatorCertificationStatus(Number(userInfo.userId));
             }
@@ -983,7 +1019,19 @@ Page({
             if (!silent) {
                 wx.showToast({ title: error.message || '加载失败', icon: 'none' });
             }
-            this.setData({ loading: false });
+            this.setData({
+                loading: false,
+                contentReady: false,
+                template: null,
+                templateName: '',
+                mainImage: '',
+                imageList: [],
+                currentImageIndex: 0,
+                shareImageUrl: '',
+                shareImageSourceUrl: '',
+                timelineShareImageUrl: '',
+                timelineShareImageSourceUrl: '',
+            });
         }
     },
     /**
@@ -1060,14 +1108,15 @@ Page({
         });
     },
     initLayoutMetrics() {
+        var _a;
         try {
             const menuRect = wx.getMenuButtonBoundingClientRect();
             const systemInfo = wx.getSystemInfoSync();
-            const safeTop = Number(systemInfo.statusBarHeight || systemInfo.safeArea?.top || 20);
+            const safeTop = Number(systemInfo.statusBarHeight || ((_a = systemInfo.safeArea) === null || _a === void 0 ? void 0 : _a.top) || 20);
             const heroHeight = Math.round((systemInfo.windowWidth || 375) * 0.72);
             this.setData({
-                navTop: Math.max(safeTop + 4, Number(menuRect?.top || safeTop + 8) - 2),
-                navBarHeight: Math.max(64, Number(menuRect?.height || 32) + 18),
+                navTop: Math.max(safeTop + 4, Number((menuRect === null || menuRect === void 0 ? void 0 : menuRect.top) || safeTop + 8) - 2),
+                navBarHeight: Math.max(64, Number((menuRect === null || menuRect === void 0 ? void 0 : menuRect.height) || 32) + 18),
                 heroHeight,
                 heroDefaultHeight: heroHeight,
             });
@@ -1211,10 +1260,7 @@ Page({
             const apiPath = `/api/v1/miniprogram/templates/${this.data.templateId}/unlock`;
             const requestBody = {};
             const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath, deviceID);
-            const headers = {
-                ...(0, parameter_1.paramsToHeaders)(params),
-                'Content-Type': 'application/json',
-            };
+            const headers = Object.assign(Object.assign({}, (0, parameter_1.paramsToHeaders)(params)), { 'Content-Type': 'application/json' });
             await new Promise((resolve, reject) => {
                 wx.request({
                     url: `${API_BASE_URL}${apiPath}`,
@@ -1248,7 +1294,7 @@ Page({
         catch (error) {
             wx.hideLoading();
             wx.showToast({
-                title: error?.message || '解锁失败',
+                title: (error === null || error === void 0 ? void 0 : error.message) || '解锁失败',
                 icon: 'none',
             });
             return false;
@@ -1287,15 +1333,56 @@ Page({
         }
     },
     onSwiperChange(e) {
-        const current = e.detail?.current ?? 0;
-        this.setData({ currentImageIndex: current });
+        var _a, _b;
+        const current = (_b = (_a = e.detail) === null || _a === void 0 ? void 0 : _a.current) !== null && _b !== void 0 ? _b : 0;
+        this.setData({ currentImageIndex: current, contentReady: false });
         this.refreshHeroHeightByIndex(current);
-        void this.prepareCurrentShareImage(this.getCurrentShareSourceUrl(current));
+        void this.prepareCurrentShareImages(this.getCurrentShareSourceUrl(current));
     },
     getCurrentShareSourceUrl(index) {
         const imageList = Array.isArray(this.data.imageList) ? this.data.imageList : [];
         const safeIndex = typeof index === 'number' ? Math.max(0, Number(index)) : Math.max(0, Number(this.data.currentImageIndex || 0));
         return String(imageList[safeIndex] || this.data.mainImage || imageList[0] || '').trim();
+    },
+    buildShareImageRef(sourceUrl) {
+        const normalizedUrl = (0, asset_1.normalizeCosUrl)(String(sourceUrl || '').trim());
+        let hash = 2166136261;
+        for (let index = 0; index < normalizedUrl.length; index += 1) {
+            hash = Math.imul(hash ^ normalizedUrl.charCodeAt(index), 16777619);
+        }
+        return normalizedUrl ? (hash >>> 0).toString(36) : '';
+    },
+    buildTemplateShareQuery(sourceUrl) {
+        const templateId = Number(this.data.templateId || 0);
+        const imageRef = this.buildShareImageRef(sourceUrl);
+        return `id=${templateId}${imageRef ? `&image_ref=${encodeURIComponent(imageRef)}` : ''}`;
+    },
+    getPreparedShareImageUrl(sourceUrl) {
+        return this.data.shareImageSourceUrl === sourceUrl && this.data.shareImageUrl
+            ? this.data.shareImageUrl
+            : sourceUrl;
+    },
+    getPreparedTimelineShareImageUrl(sourceUrl) {
+        return this.data.timelineShareImageSourceUrl === sourceUrl && this.data.timelineShareImageUrl
+            ? this.data.timelineShareImageUrl
+            : '';
+    },
+    async prepareCurrentShareImages(sourceUrl) {
+        const shareSourceUrl = String(sourceUrl || this.getCurrentShareSourceUrl()).trim();
+        this.setData({ contentReady: false });
+        await Promise.all([
+            this.prepareCurrentShareImage(shareSourceUrl),
+            this.prepareCurrentTimelineShareImage(shareSourceUrl),
+        ]);
+        if (shareSourceUrl
+            && this.data.template
+            && this.getCurrentShareSourceUrl() === shareSourceUrl
+            && this.data.shareImageSourceUrl === shareSourceUrl
+            && this.data.timelineShareImageSourceUrl === shareSourceUrl
+            && Boolean(this.data.shareImageUrl)
+            && Boolean(this.data.timelineShareImageUrl)) {
+            this.setData({ contentReady: true });
+        }
     },
     async prepareCurrentShareImage(sourceUrl) {
         const shareSourceUrl = String(sourceUrl || this.getCurrentShareSourceUrl()).trim();
@@ -1318,6 +1405,27 @@ Page({
             this.setData({ shareImageUrl });
         }
     },
+    async prepareCurrentTimelineShareImage(sourceUrl) {
+        const shareSourceUrl = String(sourceUrl || this.getCurrentShareSourceUrl()).trim();
+        if (!shareSourceUrl) {
+            this.setData({
+                timelineShareImageUrl: '',
+                timelineShareImageSourceUrl: '',
+            });
+            return;
+        }
+        this.setData({
+            timelineShareImageUrl: '',
+            timelineShareImageSourceUrl: shareSourceUrl,
+        });
+        const timelineShareImageUrl = await (0, shareImage_1.prepareTimelineShareImage)(shareSourceUrl);
+        if (this.data.timelineShareImageSourceUrl !== shareSourceUrl) {
+            return;
+        }
+        if (timelineShareImageUrl) {
+            this.setData({ timelineShareImageUrl });
+        }
+    },
     formatDateText(value, fallback = '刚刚发布') {
         if (!value) {
             return fallback;
@@ -1331,14 +1439,14 @@ Page({
         return `${month}-${day}`;
     },
     normalizeCommentItem(item) {
-        const userName = String(item?.author_name || item?.userName || '用户').trim() || '用户';
+        const userName = String((item === null || item === void 0 ? void 0 : item.author_name) || (item === null || item === void 0 ? void 0 : item.userName) || '用户').trim() || '用户';
         return {
-            id: String(item?.id || Date.now()),
+            id: String((item === null || item === void 0 ? void 0 : item.id) || Date.now()),
             userName,
-            userAvatar: String(item?.author_avatar || item?.userAvatar || '').trim(),
+            userAvatar: String((item === null || item === void 0 ? void 0 : item.author_avatar) || (item === null || item === void 0 ? void 0 : item.userAvatar) || '').trim(),
             userAvatarText: userName.slice(0, 1) || '用',
-            content: String(item?.content || '').trim(),
-            createdAt: this.formatDateText(item?.created_at, '刚刚'),
+            content: String((item === null || item === void 0 ? void 0 : item.content) || '').trim(),
+            createdAt: this.formatDateText(item === null || item === void 0 ? void 0 : item.created_at, '刚刚'),
         };
     },
     async loadComments() {
@@ -1449,10 +1557,7 @@ Page({
             const deviceID = (0, deviceFingerprint_1.getCachedDeviceFingerprint)() || '';
             const apiPath = '/api/v1/miniprogram/templates/liked-ids';
             const params = (0, parameter_1.generateRequestParams)(token, {}, apiPath, deviceID);
-            const headers = {
-                ...(0, parameter_1.paramsToHeaders)(params),
-                'Content-Type': 'application/json',
-            };
+            const headers = Object.assign(Object.assign({}, (0, parameter_1.paramsToHeaders)(params)), { 'Content-Type': 'application/json' });
             const data = await new Promise((resolve, reject) => {
                 wx.request({
                     url: `${API_BASE_URL}${apiPath}`,

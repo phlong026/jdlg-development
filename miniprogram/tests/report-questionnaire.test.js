@@ -109,3 +109,16 @@ test('house draft resumes separately and rejects invalid rooms before a request'
  h.page.addRoom();await h.page.next();assert.equal(h.requests.length,0);assert.equal(h.page.data.step,2);
  assert.ok(h.store.has('building_report_draft_house_v1'));assert.equal(h.store.has('building_report_draft_v1'),false);
 });
+
+
+test('预算分享登录返回只允许固定结果页，不接受伪造的报告或管理参数', () => {
+  const store = new Map(), redirects = [];
+  const api = load('utils/reportNavigation.ts', { wx: { getStorageSync: key => store.get(key), setStorageSync: (key, value) => store.set(key, value), removeStorageSync: key => store.delete(key), navigateTo() {}, showToast() {}, redirectTo: options => redirects.push(options), reLaunch() {} } });
+  const target = '/pages/aicostresult/aicostresult';
+  assert.equal(api.validReportPath(target), true);
+  for (const suffix of ['?report_id=x', '?token=x', '/../login', '#admin']) assert.equal(api.validReportPath(target + suffix), false);
+  assert.equal(api.requireReportLogin(target), false);
+  store.set('token', 'fixture');
+  assert.equal(api.resumeReportAfterLogin(), true);
+  assert.equal(redirects[0].url, target);
+});

@@ -7,6 +7,7 @@ const HOUSE_IMAGE_PATHS = [
 
 export type CostEstimateShareCard = {
   totalCost?: string;
+  totalLabel?: string;
   city: string;
   buildingArea: string;
   structureType: string;
@@ -35,7 +36,7 @@ function cleanAmount(totalCost: string): string {
 }
 
 function buildCacheKey(card: CostEstimateShareCard): string {
-  return [card.totalCost, card.city, card.buildingArea, card.structureType, card.windowStandard].join('|');
+  return [card.totalCost, card.totalLabel, card.city, card.buildingArea, card.structureType, card.windowStandard].join('|');
 }
 
 function canvasToDataURL(canvas: any): string {
@@ -146,7 +147,7 @@ function drawCardText(ctx: any, card: CostEstimateShareCard) {
   }
 
   ctx.font = '700 46px sans-serif';
-  ctx.fillText('建房造价测算', 62, 166);
+  ctx.fillText(card.totalLabel === '已测算部分合计' ? '已测算部分合计' : '建房造价测算', 62, 166);
   const amount = cleanAmount(card.totalCost);
   ctx.font = '700 52px sans-serif';
   const unitWidth = ctx.measureText('万元').width;
@@ -228,4 +229,45 @@ export function prepareCostEstimateShareImage(card: CostEstimateShareCard): Prom
       .finally(() => delete imageCache[cacheKey]);
   }
   return imageCache[cacheKey];
+}
+
+// Moments uses a square thumbnail, so keep its amount and villa inside that frame.
+export async function prepareCostEstimateTimelineImage(card: CostEstimateShareCard): Promise<string> {
+  if (!card.totalCost || typeof wx.createOffscreenCanvas !== 'function') return '';
+  try {
+    const canvas = (wx.createOffscreenCanvas as any)({ type: '2d', width: 1000, height: 1000 });
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return '';
+    ctx.fillStyle = '#fcf3e3';
+    ctx.fillRect(0, 0, 1000, 1000);
+    const image = await loadBundledHouseImage(canvas);
+    ctx.drawImage(image, 390, 250, 610, 610);
+    const seam = ctx.createLinearGradient(390, 0, 450, 0);
+    seam.addColorStop(0, '#fcf3e3');
+    seam.addColorStop(1, 'rgba(252, 243, 227, 0)');
+    ctx.fillStyle = seam;
+    ctx.fillRect(390, 250, 60, 610);
+    ctx.fillStyle = '#9c6a2c';
+    ctx.font = '700 48px sans-serif';
+    ctx.fillText('甲第灵光 ArchLight', 60, 100);
+    ctx.fillStyle = '#704416';
+    ctx.font = '600 58px sans-serif';
+    ctx.fillText(card.totalLabel === '已测算部分合计' ? '已测算部分合计' : '参考造价', 60, 245);
+    ctx.fillStyle = '#a65c25';
+    fitText(ctx, cleanAmount(card.totalCost), 800, 140, 350);
+    ctx.fillText(cleanAmount(card.totalCost), 60, 410);
+    ctx.font = '700 64px sans-serif';
+    ctx.fillText('万元', 60, 495);
+    ctx.fillStyle = '#704416';
+    fitText(ctx, `${card.buildingArea.replace(/\s/g, '')} · ${card.city}`, 600, 46, 330);
+    ctx.fillText(`${card.buildingArea.replace(/\s/g, '')} · ${card.city}`, 60, 625);
+    ctx.font = '500 32px sans-serif';
+    ctx.fillText('建房预算测算', 60, 690);
+    ctx.font = '600 48px sans-serif';
+    ctx.fillText('查看测算报告', 60, 935);
+    return await writeImage(`timeline-v2|${buildCacheKey(card)}`, canvasToDataURL(canvas));
+  } catch (error) {
+    console.warn('生成朋友圈预算封面失败:', error);
+    return '';
+  }
 }

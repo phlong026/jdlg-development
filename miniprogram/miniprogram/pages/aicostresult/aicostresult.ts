@@ -5,65 +5,21 @@ import {
   resolveEnterpriseWechatServiceConfig,
   tryOpenCustomerServiceDirect,
 } from '../../utils/enterpriseWechat';
-import { prepareCostEstimateShareImage } from '../../utils/costEstimateShareImage';
-
-type BasicInfoItem = { label: string; value: string; fullWidth?: boolean };
-type CostBreakdownItem = {
-  name: string;
-  amount: number;
-  amountText: string;
-  percent: number;
-  note: string;
-  estimable: boolean;
-  color?: string;
-};
-type CostEstimateResult = {
-  version: number;
-  estimatedTotalCost: string;
-  estimatedUnitCost: string;
-  totalLabel: string;
-  unitLabel: string;
-  basicInfo: BasicInfoItem[];
-  costBreakdown: CostBreakdownItem[];
-  dynamicNotes: string[];
-};
+import { prepareCostEstimateShareImage, prepareCostEstimateTimelineImage } from '../../utils/costEstimateShareImage';
+import {
+  CostEstimateBasicInfo as BasicInfoItem,
+  CostEstimateBreakdown as CostBreakdownItem,
+  CostEstimateShareResult,
+  createCostEstimateShare,
+  getCostEstimateShare,
+  isCostEstimateShareResult,
+  sanitizeCostEstimateShareResult,
+} from '../../utils/costEstimateShare';
+import { requireReportLogin } from '../../utils/reportNavigation';
 
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
-const RESULT_SCHEMA_VERSION = 4;
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 const chartColors = ['#c39b65', '#ab8154', '#d0af7b', '#94704d', '#bc9362', '#d7b989'];
-
-function isBasicInfoItem(item: unknown): item is BasicInfoItem {
-  if (!item || typeof item !== 'object') return false;
-  const value = item as Partial<BasicInfoItem>;
-  return typeof value.label === 'string' && !!value.label.trim()
-    && typeof value.value === 'string' && !!value.value.trim()
-    && (value.fullWidth === undefined || typeof value.fullWidth === 'boolean');
-}
-
-function isCostBreakdownItem(item: unknown): item is CostBreakdownItem {
-  if (!item || typeof item !== 'object') return false;
-  const value = item as Partial<CostBreakdownItem>;
-  return typeof value.name === 'string' && !!value.name.trim()
-    && typeof value.amount === 'number' && Number.isFinite(value.amount) && value.amount >= 0
-    && typeof value.amountText === 'string' && !!value.amountText.trim()
-    && typeof value.percent === 'number' && Number.isFinite(value.percent) && value.percent >= 0 && value.percent <= 100
-    && typeof value.note === 'string' && !!value.note.trim()
-    && typeof value.estimable === 'boolean';
-}
-
-function isCurrentResult(result: unknown): result is CostEstimateResult {
-  if (!result || typeof result !== 'object') return false;
-  const value = result as Partial<CostEstimateResult>;
-  return value.version === RESULT_SCHEMA_VERSION
-    && typeof value.estimatedTotalCost === 'string'
-    && typeof value.estimatedUnitCost === 'string'
-    && typeof value.totalLabel === 'string'
-    && typeof value.unitLabel === 'string'
-    && Array.isArray(value.basicInfo) && value.basicInfo.length === 14 && value.basicInfo.every(isBasicInfoItem)
-    && Array.isArray(value.costBreakdown) && (value.costBreakdown.length === 6 || value.costBreakdown.length === 7) && value.costBreakdown.every(isCostBreakdownItem)
-    && Array.isArray(value.dynamicNotes) && value.dynamicNotes.every(note => typeof note === 'string');
-}
 
 function withChartColors(items: CostBreakdownItem[]): CostBreakdownItem[] {
   return items.map((item, index) => ({ ...item, color: chartColors[index % chartColors.length] }));
@@ -78,7 +34,15 @@ function getCity(region: string): string {
   return parts[parts.length - 1] || '建房';
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  const message = String((error as any)?.message || '').trim();
+  return message || fallback;
+}
+
 Page({
+  pageDestroyed: false,
+  requestedReportId: '',
+  reportSnapshot: null as CostEstimateShareResult | null,
   data: {
     estimatedTotalCost: '',
     estimatedUnitCost: '',
@@ -91,20 +55,46 @@ Page({
     enterpriseWechatCustomerServiceCorpId: DEFAULT_CUSTOMER_SERVICE_CORP_ID,
     enterpriseWechatCustomerServiceUrl: DEFAULT_CUSTOMER_SERVICE_URL,
     enterpriseWechatConfigLoading: false,
+    reportLoading: false,
+    reportError: '',
+    sharePreparing: false,
+    shareReady: false,
+    shareReportId: '',
+    shareChatImage: '',
+    shareTimelineImage: '',
+    contentReady: false,
   },
 
-  onLoad() {
+  onLoad(options: Record<string, string | undefined> = {}) {
+    this.pageDestroyed = false;
+    const reportId = String(options.report_id || '').trim();
+    if (Object.prototype.hasOwnProperty.call(options, 'report_id')) {
+      this.requestedReportId = reportId;
+      this.setData({ reportLoading: true });
+      void this.loadSharedReport(reportId);
+      return;
+    }
     let result: unknown;
     try {
       result = wx.getStorageSync(RESULT_STORAGE_KEY);
     } catch (error) {
       console.error('读取造价测算结果失败:', error);
     }
-    if (!isCurrentResult(result)) {
+    if (!isCostEstimateShareResult(result)) {
       wx.showToast({ title: '测算数据已更新，请重新测算', icon: 'none' });
       setTimeout(() => wx.navigateBack(), 800);
       return;
     }
+    this.applyResult(sanitizeCostEstimateShareResult(result));
+    this.loadEnterpriseWechatServiceConfig();
+  },
+
+  onUnload() {
+    this.pageDestroyed = true;
+  },
+
+  applyResult(result: CostEstimateShareResult) {
+    this.reportSnapshot = result;
     this.setData({
       estimatedTotalCost: result.estimatedTotalCost,
       estimatedUnitCost: result.estimatedUnitCost,
@@ -113,29 +103,109 @@ Page({
       basicInfo: result.basicInfo,
       costBreakdown: withChartColors(result.costBreakdown),
       dynamicNotes: result.dynamicNotes,
+      reportLoading: false,
+      reportError: '',
     });
-    this.loadEnterpriseWechatServiceConfig();
   },
 
-  onShareAppMessage() {
+  async loadSharedReport(reportId: string) {
+    try {
+      const snapshot = await getCostEstimateShare(reportId);
+      if (this.pageDestroyed || this.requestedReportId !== reportId) return;
+      this.applyResult(snapshot.result);
+      this.setData({ shareReportId: snapshot.report_id });
+      this.loadEnterpriseWechatServiceConfig();
+    } catch (error) {
+      console.error('加载分享测算报告失败:', error);
+      if (this.pageDestroyed || this.requestedReportId !== reportId) return;
+      this.reportSnapshot = null;
+      this.setData({
+        reportLoading: false,
+        reportError: getErrorMessage(error, '分享报告已失效，请重新测算'),
+      });
+    }
+  },
+
+  onRetrySharedReport() {
+    if (this.data.reportLoading) return;
+    this.setData({ reportLoading: true, reportError: '' });
+    void this.loadSharedReport(this.requestedReportId);
+  },
+
+  onRecalculate() {
+    wx.redirectTo({ url: '/pages/aicost/aicost' });
+  },
+
+  getShareCard() {
     const city = getCity(findBasicInfoValue(this.data.basicInfo, '所在地区'));
     const buildingArea = findBasicInfoValue(this.data.basicInfo, '总建筑面积') || '--㎡';
     const structureType = findBasicInfoValue(this.data.basicInfo, '结构形式') || '建筑结构';
     const windowStandard = findBasicInfoValue(this.data.basicInfo, '门窗标准') || '标准型';
     const totalCost = this.data.estimatedTotalCost || '--万元';
-    const title = `${city}${buildingArea}建房参考造价${totalCost.replace('元', '')}，查看测算报告`;
-    const path = '/pages/aicost/aicost?source=cost-share';
+    return { city, buildingArea, structureType, windowStandard, totalCost, totalLabel: this.data.totalLabel };
+  },
+
+  getShareTitle() {
+    const card = this.getShareCard();
+    const costLabel = this.data.totalLabel === '已测算部分合计' ? '建房已测算部分合计' : '建房参考造价';
+    return `${card.city}${card.buildingArea}${costLabel}${card.totalCost.replace('元', '')}，查看测算报告`;
+  },
+
+  async onPrepareShareReport() {
+    if (this.data.sharePreparing || this.data.shareReady || !this.reportSnapshot) return;
+    if (!this.data.shareReportId && !wx.getStorageSync('token')) {
+      requireReportLogin('/pages/aicostresult/aicostresult');
+      return;
+    }
+    this.setData({ sharePreparing: true });
+    try {
+      const identity = this.data.shareReportId
+        ? { report_id: this.data.shareReportId }
+        : await createCostEstimateShare(this.reportSnapshot);
+      if (this.pageDestroyed) return;
+      // Keep the first immutable snapshot when cover generation needs a retry.
+      this.setData({ shareReportId: identity.report_id });
+      const card = this.getShareCard();
+      const [shareChatImage, shareTimelineImage] = await Promise.all([
+        prepareCostEstimateShareImage(card),
+        prepareCostEstimateTimelineImage(card),
+      ]);
+      if (this.pageDestroyed) return;
+      if (!shareChatImage || !shareTimelineImage) throw new Error('分享封面生成失败，请重试');
+      this.setData({
+        sharePreparing: false,
+        shareReady: true,
+        shareChatImage,
+        shareTimelineImage,
+        contentReady: true,
+      });
+      wx.showToast({ title: '分享卡片已准备好', icon: 'success' });
+    } catch (error) {
+      console.error('准备预算报告分享失败:', error);
+      if (this.pageDestroyed) return;
+      this.setData({ sharePreparing: false, shareReady: false, contentReady: false });
+      wx.showToast({ title: getErrorMessage(error, '分享准备失败，请重试'), icon: 'none' });
+    }
+  },
+
+  onShareAppMessage() {
+    if (!this.data.shareReady || !this.data.shareReportId) return {};
+    const title = this.getShareTitle();
+    const path = `/pages/aicostresult/aicostresult?report_id=${encodeURIComponent(this.data.shareReportId)}`;
     return {
       title,
       path,
-      promise: prepareCostEstimateShareImage({
-        totalCost,
-        city,
-        buildingArea,
-        structureType,
-        windowStandard,
-      }).then((imageUrl) => imageUrl ? { title, path, imageUrl } : { title, path }),
+      imageUrl: this.data.shareChatImage || undefined,
     } as any;
+  },
+
+  onShareTimeline() {
+    if (!this.data.contentReady || !this.data.shareReportId || !this.data.shareTimelineImage) return {};
+    return {
+      title: this.getShareTitle(),
+      query: `report_id=${encodeURIComponent(this.data.shareReportId)}`,
+      imageUrl: this.data.shareTimelineImage,
+    };
   },
 
   onViewCostDetails() {

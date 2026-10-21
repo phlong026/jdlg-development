@@ -12,6 +12,8 @@ type CostBreakdownItem = {
 };
 
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
+const BUDGET_TIMELINE_COVER = '/assets/share/budget-timeline-v2.jpg';
+const BUDGET_TIMELINE_TITLE = '10秒估算建房报价，建别墅从这里开始';
 function getCityOptions(province: string): string[] {
   return cityOptionsMap[province] || cityOptionsMap.福建;
 }
@@ -99,6 +101,7 @@ function estimateTotalCost(input: EstimateInput) {
 }
 
 Page({
+  shareCoverDestroyed: false,
   data: {
     province: '福建',
     provinceIndex: 0,
@@ -139,9 +142,13 @@ Page({
     decorationOptions: ['经济型', '标准型', '品质型'],
     facadeOptions: ['涂料外墙', '真石漆', '陶瓷砖外墙', '石材外墙', '铝板/金属外立面'],
     foundationOptions: ['独立基础', '条形基础', '筏板基础', '桩基础'],
+    budgetTimelineCover: '',
+    contentReady: false,
   },
 
   onLoad(options: Record<string, string | undefined> = {}) {
+    this.shareCoverDestroyed = false;
+    void this.prepareBudgetTimelineCover();
     const updates: Record<string, unknown> = {};
     const provinceIndex = provinceOptions.indexOf(options.province || '');
     const cityOptions = provinceIndex >= 0 ? getCityOptions(provinceOptions[provinceIndex]) : [];
@@ -168,8 +175,38 @@ Page({
     }
   },
 
+  onUnload() {
+    this.shareCoverDestroyed = true;
+  },
+
+  prepareBudgetTimelineCover() {
+    return new Promise<void>((resolve) => {
+      const finish = (budgetTimelineCover: string) => {
+        if (!this.shareCoverDestroyed) {
+          this.setData({ budgetTimelineCover, contentReady: !!budgetTimelineCover });
+        }
+        resolve();
+      };
+      try {
+        const destPath = `${wx.env.USER_DATA_PATH}/budget-timeline-v2.jpg`;
+        wx.getFileSystemManager().copyFile({
+          srcPath: BUDGET_TIMELINE_COVER,
+          destPath,
+          success: () => finish(destPath),
+          fail: (error) => {
+            console.warn('准备预算入口朋友圈封面失败', error);
+            finish('');
+          },
+        });
+      } catch (error) {
+        console.warn('准备预算入口朋友圈封面失败', error);
+        finish('');
+      }
+    });
+  },
+
   onShareAppMessage() {
-    const title = '10秒估算建房报价 平台大数据，造价更精准';
+    const title = BUDGET_TIMELINE_TITLE;
     const path = '/pages/aicost/aicost';
     return {
       title,
@@ -182,6 +219,15 @@ Page({
         windowStandard: '',
       }).then((imageUrl) => imageUrl ? { title, path, imageUrl } : { title, path }),
     } as any;
+  },
+
+  onShareTimeline() {
+    if (!this.data.contentReady) return {};
+    return {
+      title: BUDGET_TIMELINE_TITLE,
+      query: 'from=share',
+      imageUrl: this.data.budgetTimelineCover,
+    };
   },
 
   onFootprintAreaInput(e: any) {

@@ -9,7 +9,8 @@ function discardReportLoginReturn() {
     wx.removeStorageSync(RETURN_KEY);
 }
 function validReportPath(path) {
-    return typeof path === 'string' && /^\/pages\/report\/(landing|questionnaire|preview|delivery)(\?id=[A-Za-z0-9_-]{1,80})?$/.test(path);
+    return typeof path === 'string' && (path === '/pages/aicostresult/aicostresult'
+        || /^\/pages\/report\/(landing|questionnaire|preview|delivery)(\?id=[A-Za-z0-9_-]{1,80})?$/.test(path));
 }
 function requireReportLogin(path) {
     if (wx.getStorageSync('token'))

@@ -69,7 +69,7 @@ function loadShareImageHelper() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   vm.runInNewContext(source, context);
-  return { prepare: context.exports.prepareCostEstimateShareImage, writes, calls, imageSources, textCalls, imageCalls, clips, strokes, gradients, sizes, scales };
+  return { prepare: context.exports.prepareCostEstimateShareImage, timeline: context.exports.prepareCostEstimateTimelineImage, writes, calls, imageSources, textCalls, imageCalls, clips, strokes, gradients, sizes, scales };
 }
 
 test('share card exports a JPEG and returns the local image path to WeChat', async () => {
@@ -161,4 +161,19 @@ test('unestimated form card uses a question placeholder without claiming a price
   assert.ok(x + width <= 966, 'show the right facade inside the frame');
   assert.ok(!labels.includes('万元'));
   assert.ok(!labels.some(label => label.includes('建筑面积') || label.includes('--')));
+});
+
+
+test('朋友圈封面为方图，使用实际金额与城市面积，不含示例数据', async () => {
+  const helper = loadShareImageHelper();
+  assert.equal(typeof helper.timeline, 'function');
+  const result = await helper.timeline({ totalCost: '123.45万元', city: '成都', buildingArea: '456㎡', structureType: '砖混结构', windowStandard: '标准型' });
+  assert.ok(result.startsWith('wxfile://user-data/cost-estimate-share/'));
+  assert.equal(helper.sizes[0].width, helper.sizes[0].height);
+  const labels = helper.textCalls.map(item => item.text);
+  assert.ok(labels.includes('123.45'));
+  assert.ok(labels.includes('万元'));
+  assert.ok(labels.some(label => label.includes('成都') && label.includes('456㎡')));
+  assert.ok(!labels.some(label => label.includes('80万') || label.includes('320㎡') || label.includes('泉州')));
+  assert.ok(labels.includes('参考造价'));
 });

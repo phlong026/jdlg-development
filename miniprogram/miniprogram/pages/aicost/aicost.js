@@ -4,6 +4,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const costEstimateShareImage_1 = require("../../utils/costEstimateShareImage");
 const costRegions_1 = require("../../utils/costRegions");
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
+const BUDGET_TIMELINE_COVER = '/assets/share/budget-timeline-v2.jpg';
+const BUDGET_TIMELINE_TITLE = '10秒估算建房报价，建别墅从这里开始';
 function getCityOptions(province) {
     return costRegions_1.cityOptionsMap[province] || costRegions_1.cityOptionsMap.福建;
 }
@@ -58,21 +60,19 @@ function estimateTotalCost(input) {
             note: '不同地下室因方案不同，价格不同。', estimable: true });
     }
     // 分项与总价统一按九折展示，保留到分，避免明细和总价使用不同口径。
-    const discountedBreakdown = breakdown.map(item => ({ ...item, amount: Math.round(item.amount * 90) / 100 }));
+    const discountedBreakdown = breakdown.map(item => (Object.assign(Object.assign({}, item), { amount: Math.round(item.amount * 90) / 100 })));
     const totalCost = Math.round(discountedBreakdown.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
     return {
         totalCost,
         unitCost: (totalCost / buildingArea).toFixed(2),
         totalLabel: estimable ? '参考总造价' : '已测算部分合计',
         unitLabel: estimable ? '参考单价' : '已测算部分单价',
-        breakdown: discountedBreakdown.map(item => ({ ...item,
-            amountText: item.estimable ? formatWan(item.amount) : '按图纸核算',
-            percent: totalCost > 0 ? Math.round(item.amount / totalCost * 100) : 0,
-        })),
+        breakdown: discountedBreakdown.map(item => (Object.assign(Object.assign({}, item), { amountText: item.estimable ? formatWan(item.amount) : '按图纸核算', percent: totalCost > 0 ? Math.round(item.amount / totalCost * 100) : 0 }))),
         dynamicNotes: ['不同地基因方案不同，价格不同。', '不同屋顶因做法不同，价格不同。'],
     };
 }
 Page({
+    shareCoverDestroyed: false,
     data: {
         province: '福建',
         provinceIndex: 0,
@@ -113,8 +113,12 @@ Page({
         decorationOptions: ['经济型', '标准型', '品质型'],
         facadeOptions: ['涂料外墙', '真石漆', '陶瓷砖外墙', '石材外墙', '铝板/金属外立面'],
         foundationOptions: ['独立基础', '条形基础', '筏板基础', '桩基础'],
+        budgetTimelineCover: '',
+        contentReady: false,
     },
     onLoad(options = {}) {
+        this.shareCoverDestroyed = false;
+        void this.prepareBudgetTimelineCover();
         const updates = {};
         const provinceIndex = provinceOptions.indexOf(options.province || '');
         const cityOptions = provinceIndex >= 0 ? getCityOptions(provinceOptions[provinceIndex]) : [];
@@ -137,8 +141,37 @@ Page({
             this.setData(updates);
         }
     },
+    onUnload() {
+        this.shareCoverDestroyed = true;
+    },
+    prepareBudgetTimelineCover() {
+        return new Promise((resolve) => {
+            const finish = (budgetTimelineCover) => {
+                if (!this.shareCoverDestroyed) {
+                    this.setData({ budgetTimelineCover, contentReady: !!budgetTimelineCover });
+                }
+                resolve();
+            };
+            try {
+                const destPath = `${wx.env.USER_DATA_PATH}/budget-timeline-v2.jpg`;
+                wx.getFileSystemManager().copyFile({
+                    srcPath: BUDGET_TIMELINE_COVER,
+                    destPath,
+                    success: () => finish(destPath),
+                    fail: (error) => {
+                        console.warn('准备预算入口朋友圈封面失败', error);
+                        finish('');
+                    },
+                });
+            }
+            catch (error) {
+                console.warn('准备预算入口朋友圈封面失败', error);
+                finish('');
+            }
+        });
+    },
     onShareAppMessage() {
-        const title = '10秒估算建房报价 平台大数据，造价更精准';
+        const title = BUDGET_TIMELINE_TITLE;
         const path = '/pages/aicost/aicost';
         return {
             title,
@@ -150,6 +183,15 @@ Page({
                 structureType: '',
                 windowStandard: '',
             }).then((imageUrl) => imageUrl ? { title, path, imageUrl } : { title, path }),
+        };
+    },
+    onShareTimeline() {
+        if (!this.data.contentReady)
+            return {};
+        return {
+            title: BUDGET_TIMELINE_TITLE,
+            query: 'from=share',
+            imageUrl: this.data.budgetTimelineCover,
         };
     },
     onFootprintAreaInput(e) {

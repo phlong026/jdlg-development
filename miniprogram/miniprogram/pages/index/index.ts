@@ -16,9 +16,9 @@ import {
 } from '../../utils/enterpriseWechat'
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
-const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手'
+const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手，建别墅从这里开始'
 const HOME_CHAT_COVER = '/assets/share/home-chat.jpg'
-const HOME_TIMELINE_COVER = '/assets/share/home-timeline.jpg'
+const HOME_TIMELINE_COVER = '/assets/share/home-timeline-v2.jpg'
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()

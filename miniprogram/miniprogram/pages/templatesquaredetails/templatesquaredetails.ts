@@ -3,7 +3,7 @@ import { generateRequestParams, paramsToHeaders } from '../../utils/parameter';
 import { getCachedDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset';
 import { getPageCache, prefetchImages, setPageCache } from '../../utils/perf';
-import { prepareShareCardImage } from '../../utils/shareImage';
+import { prepareShareCardImage, prepareTimelineShareImage } from '../../utils/shareImage';
 import { toggleFavorite } from '../../utils/favoriteApi';
 
 // API基础地址
@@ -77,6 +77,7 @@ Page({
   data: {
     templateId: 0,
     template: null as any,
+    contentReady: false,
     unlocked: false,
     prompt: '',
     token: '',
@@ -110,6 +111,8 @@ Page({
     currentImageIndex: 0,
     shareImageUrl: '',
     shareImageSourceUrl: '',
+    timelineShareImageUrl: '',
+    timelineShareImageSourceUrl: '',
     navTop: 0,
     navBarHeight: 72,
     heroHeight: DEFAULT_HERO_HEIGHT_PX,
@@ -149,13 +152,28 @@ Page({
   enterpriseWechatAutoCheckTimer: null as any,
   detailLoadedToken: '',
   detailNeedsRefreshOnShow: false,
+  requestedShareImageRef: '',
 
   /**
    * 生命周期函数--监听页面加载
    */
   onLoad(options: any) {
     const token = wx.getStorageSync('token') || '';
-    this.setData({ token, previewShowMenu: false });
+    this.requestedShareImageRef = String(options.image_ref || '').trim().slice(0, 64);
+    this.setData({
+      token,
+      previewShowMenu: false,
+      contentReady: false,
+      template: null,
+      templateName: '',
+      mainImage: '',
+      imageList: [],
+      currentImageIndex: 0,
+      shareImageUrl: '',
+      shareImageSourceUrl: '',
+      timelineShareImageUrl: '',
+      timelineShareImageSourceUrl: '',
+    });
     this.syncWindowBackground();
     this.initLayoutMetrics();
     this.initUIData();
@@ -278,10 +296,14 @@ Page({
    */
   onShareAppMessage() {
     const shareSourceUrl = this.getCurrentShareSourceUrl();
+    if (!this.data.contentReady || !this.data.template || !shareSourceUrl) {
+      return {};
+    }
+    const query = this.buildTemplateShareQuery(shareSourceUrl);
     return {
       title: this.data.templateName || '甲第灵光 · 模板详情',
-      path: `/pages/templatesquaredetails/templatesquaredetails?id=${this.data.templateId || 0}`,
-      imageUrl: this.data.shareImageUrl || shareSourceUrl,
+      path: `/pages/templatesquaredetails/templatesquaredetails?${query}`,
+      imageUrl: this.getPreparedShareImageUrl(shareSourceUrl),
       success: () => {
         this.handleShareSuccess();
       },
@@ -290,10 +312,14 @@ Page({
 
   onShareTimeline() {
     const shareSourceUrl = this.getCurrentShareSourceUrl();
+    const timelineImageUrl = this.getPreparedTimelineShareImageUrl(shareSourceUrl);
+    if (!this.data.contentReady || !this.data.template || !shareSourceUrl || !timelineImageUrl) {
+      return {};
+    }
     return {
-      title: this.data.templateName || '甲第灵光 · 模板详情',
-      query: `id=${this.data.templateId || 0}`,
-      imageUrl: this.data.shareImageUrl || shareSourceUrl,
+      title: `${this.data.templateName || '甲第灵光 · 模板详情'}，建别墅从这里开始`,
+      query: this.buildTemplateShareQuery(shareSourceUrl),
+      imageUrl: timelineImageUrl,
       success: () => {
         this.handleShareSuccess();
       },
@@ -924,6 +950,7 @@ Page({
     if (!silent) {
       this.setData({ loading: true });
     }
+    this.setData({ contentReady: false });
 
     const token = this.data.token;
     const url = token
@@ -998,6 +1025,25 @@ Page({
         }
       }
 
+      const requestedImageRef = String(this.requestedShareImageRef || '').trim();
+      const currentSourceUrl = this.getCurrentShareSourceUrl();
+      let currentImageIndex = 0;
+      if (requestedImageRef) {
+        const matchedIndex = imageList.findIndex((imageUrl) => this.buildShareImageRef(imageUrl) === requestedImageRef);
+        if (matchedIndex >= 0) {
+          currentImageIndex = matchedIndex;
+        } else if (imageList.length) {
+          wx.showToast({
+            title: '分享图片已更新，已展示该模板最新图片',
+            icon: 'none',
+          });
+        }
+        this.requestedShareImageRef = '';
+      } else if (silent && currentSourceUrl) {
+        const retainedIndex = imageList.indexOf(currentSourceUrl);
+        currentImageIndex = retainedIndex >= 0 ? retainedIndex : 0;
+      }
+
       let userInfo = this.data.userInfo;
       if (res.creator_info) {
         userInfo = {
@@ -1023,7 +1069,7 @@ Page({
         noteContent: res.description || this.data.noteContent,
         mainImage: mainImage || '',
         imageList,
-        currentImageIndex: 0,
+        currentImageIndex,
         likeCount: Number(res.like_count || 0),
         commentCount: Number(res.comment_count || 0),
         shareCount: Number(res.share_count || 0),
@@ -1044,7 +1090,7 @@ Page({
       this.prepareHeroImageHeights(imageList, Number(res.image_width || 0), Number(res.image_height || 0));
       this.detailLoadedToken = String(token || '').trim();
       void prefetchImages([mainImage, ...imageList], 2);
-      void this.prepareCurrentShareImage(mainImage || imageList[0] || '');
+      await this.prepareCurrentShareImages(imageList[currentImageIndex] || mainImage || imageList[0] || '');
       if (Number(userInfo.userId) > 0) {
         void this.loadCreatorCertificationStatus(Number(userInfo.userId));
       }
@@ -1055,7 +1101,19 @@ Page({
       if (!silent) {
         wx.showToast({ title: error.message || '加载失败', icon: 'none' });
       }
-      this.setData({ loading: false });
+      this.setData({
+        loading: false,
+        contentReady: false,
+        template: null,
+        templateName: '',
+        mainImage: '',
+        imageList: [],
+        currentImageIndex: 0,
+        shareImageUrl: '',
+        shareImageSourceUrl: '',
+        timelineShareImageUrl: '',
+        timelineShareImageSourceUrl: '',
+      });
     }
   },
 
@@ -1381,15 +1439,62 @@ Page({
 
   onSwiperChange(e: any) {
     const current = e.detail?.current ?? 0;
-    this.setData({ currentImageIndex: current });
+    this.setData({ currentImageIndex: current, contentReady: false });
     this.refreshHeroHeightByIndex(current);
-    void this.prepareCurrentShareImage(this.getCurrentShareSourceUrl(current));
+    void this.prepareCurrentShareImages(this.getCurrentShareSourceUrl(current));
   },
 
   getCurrentShareSourceUrl(index?: number): string {
     const imageList = Array.isArray(this.data.imageList) ? this.data.imageList : [];
     const safeIndex = typeof index === 'number' ? Math.max(0, Number(index)) : Math.max(0, Number(this.data.currentImageIndex || 0));
     return String(imageList[safeIndex] || this.data.mainImage || imageList[0] || '').trim();
+  },
+
+  buildShareImageRef(sourceUrl: string): string {
+    const normalizedUrl = normalizeCosUrl(String(sourceUrl || '').trim());
+    let hash = 2166136261;
+    for (let index = 0; index < normalizedUrl.length; index += 1) {
+      hash = Math.imul(hash ^ normalizedUrl.charCodeAt(index), 16777619);
+    }
+    return normalizedUrl ? (hash >>> 0).toString(36) : '';
+  },
+
+  buildTemplateShareQuery(sourceUrl: string): string {
+    const templateId = Number(this.data.templateId || 0);
+    const imageRef = this.buildShareImageRef(sourceUrl);
+    return `id=${templateId}${imageRef ? `&image_ref=${encodeURIComponent(imageRef)}` : ''}`;
+  },
+
+  getPreparedShareImageUrl(sourceUrl: string): string {
+    return this.data.shareImageSourceUrl === sourceUrl && this.data.shareImageUrl
+      ? this.data.shareImageUrl
+      : sourceUrl;
+  },
+
+  getPreparedTimelineShareImageUrl(sourceUrl: string): string {
+    return this.data.timelineShareImageSourceUrl === sourceUrl && this.data.timelineShareImageUrl
+      ? this.data.timelineShareImageUrl
+      : '';
+  },
+
+  async prepareCurrentShareImages(sourceUrl?: string) {
+    const shareSourceUrl = String(sourceUrl || this.getCurrentShareSourceUrl()).trim();
+    this.setData({ contentReady: false });
+    await Promise.all([
+      this.prepareCurrentShareImage(shareSourceUrl),
+      this.prepareCurrentTimelineShareImage(shareSourceUrl),
+    ]);
+    if (
+      shareSourceUrl
+      && this.data.template
+      && this.getCurrentShareSourceUrl() === shareSourceUrl
+      && this.data.shareImageSourceUrl === shareSourceUrl
+      && this.data.timelineShareImageSourceUrl === shareSourceUrl
+      && Boolean(this.data.shareImageUrl)
+      && Boolean(this.data.timelineShareImageUrl)
+    ) {
+      this.setData({ contentReady: true });
+    }
   },
 
   async prepareCurrentShareImage(sourceUrl?: string) {
@@ -1411,6 +1516,28 @@ Page({
     }
     if (shareImageUrl) {
       this.setData({ shareImageUrl });
+    }
+  },
+
+  async prepareCurrentTimelineShareImage(sourceUrl?: string) {
+    const shareSourceUrl = String(sourceUrl || this.getCurrentShareSourceUrl()).trim();
+    if (!shareSourceUrl) {
+      this.setData({
+        timelineShareImageUrl: '',
+        timelineShareImageSourceUrl: '',
+      });
+      return;
+    }
+    this.setData({
+      timelineShareImageUrl: '',
+      timelineShareImageSourceUrl: shareSourceUrl,
+    });
+    const timelineShareImageUrl = await prepareTimelineShareImage(shareSourceUrl);
+    if (this.data.timelineShareImageSourceUrl !== shareSourceUrl) {
+      return;
+    }
+    if (timelineShareImageUrl) {
+      this.setData({ timelineShareImageUrl });
     }
   },
 

@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const ts = require('./report-runtime')('typescript');
 
 const root = path.resolve(__dirname, '..');
-const title = '甲第灵光 · AI建房助手';
+const title = '甲第灵光 · AI建房助手，建别墅从这里开始';
 
 function loadPage(extension, { resumeReportAfterLogin = () => false, discardReportLoginReturn = () => {}, copyFile } = {}) {
   let definition;
@@ -45,9 +45,9 @@ for (const extension of ['ts', 'js']) {
 
   test(`${extension}: 朋友圈使用方形封面并留在当前首页`, () => {
     const { definition } = loadPage(extension);
-    const share = definition.onShareTimeline.call({ data: { ...definition.data, contentReady: true, homeTimelineCover: 'wxfile://usr/home-timeline.jpg' } });
+    const share = definition.onShareTimeline.call({ data: { ...definition.data, contentReady: true, homeTimelineCover: 'wxfile://usr/home-timeline-v2.jpg' } });
     assert.equal(share.title, title);
-    assert.equal(share.imageUrl, 'wxfile://usr/home-timeline.jpg');
+    assert.equal(share.imageUrl, 'wxfile://usr/home-timeline-v2.jpg');
     assert.equal(share.query, 'from=share');
     assert.equal(share.path, undefined);
   });
@@ -57,9 +57,9 @@ for (const extension of ['ts', 'js']) {
     const { definition } = loadPage(extension, { copyFile(options) { copied.push(options); options.success(); } });
     const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
     await definition.prepareHomeShareCovers.call(page);
-    assert.deepEqual(copied.map(item => item.srcPath), ['/assets/share/home-chat.jpg', '/assets/share/home-timeline.jpg']);
+    assert.deepEqual(copied.map(item => item.srcPath), ['/assets/share/home-chat.jpg', '/assets/share/home-timeline-v2.jpg']);
     assert.equal(definition.onShareAppMessage.call(page).imageUrl, 'wxfile://usr/home-chat.jpg');
-    assert.equal(definition.onShareTimeline.call(page).imageUrl, 'wxfile://usr/home-timeline.jpg');
+    assert.equal(definition.onShareTimeline.call(page).imageUrl, 'wxfile://usr/home-timeline-v2.jpg');
   });
 
   test(`${extension}: 封面准备失败关闭朋友圈并记录原因`, async () => {
@@ -138,7 +138,7 @@ for (const extension of ['ts', 'js']) {
 test('两张分享封面在上传配置中显式包含，避免按未使用资源删除', () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'project.config.json'), 'utf8'));
   assert.ok(config.packOptions.include.some(item => item.type === 'folder' && item.value === 'assets/share'));
-  for (const name of ['home-chat.jpg', 'home-timeline.jpg']) {
+  for (const name of ['home-chat.jpg', 'home-timeline-v2.jpg']) {
     const bytes = fs.readFileSync(path.join(root, 'miniprogram/assets/share', name));
     assert.equal(bytes.readUInt16BE(0), 0xffd8);
     assert.ok(bytes.length < 300 * 1024, '封面应控制体积，避免占用过多代码包空间');
