@@ -88,7 +88,7 @@ test('朋友圈分享把当前第二张图的短标识与封面绑定到同一�
   await page.prepareCurrentShareImages(detail.images[1]);
   const share = page.onShareTimeline();
 
-  assert.equal(share.title, `${detail.name}，建别墅从这里开始`);
+  assert.equal(share.title, `${detail.name}\n建别墅从这里开始`);
   assert.equal(share.imageUrl, `timeline:${detail.images[1]}`);
   assert.match(share.query, /^id=21&image_ref=[a-z0-9]+$/);
   assert.doesNotMatch(share.query, /https|static\.example/);

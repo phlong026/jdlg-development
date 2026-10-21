@@ -5,7 +5,7 @@ const costEstimateShareImage_1 = require("../../utils/costEstimateShareImage");
 const costRegions_1 = require("../../utils/costRegions");
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
 const BUDGET_TIMELINE_COVER = '/assets/share/budget-timeline-v2.jpg';
-const BUDGET_TIMELINE_TITLE = '10秒估算建房报价，建别墅从这里开始';
+const BUDGET_TIMELINE_TITLE = '10秒估算建房报价\n建别墅从这里开始';
 function getCityOptions(province) {
     return costRegions_1.cityOptionsMap[province] || costRegions_1.cityOptionsMap.福建;
 }

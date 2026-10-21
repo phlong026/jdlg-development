@@ -317,7 +317,7 @@ Page({
       return {};
     }
     return {
-      title: `${this.data.templateName || '甲第灵光 · 模板详情'}，建别墅从这里开始`,
+      title: `${this.data.templateName || '甲第灵光 · 模板详情'}\n建别墅从这里开始`,
       query: this.buildTemplateShareQuery(shareSourceUrl),
       imageUrl: timelineImageUrl,
       success: () => {

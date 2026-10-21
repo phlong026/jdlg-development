@@ -13,7 +13,7 @@ type CostBreakdownItem = {
 
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
 const BUDGET_TIMELINE_COVER = '/assets/share/budget-timeline-v2.jpg';
-const BUDGET_TIMELINE_TITLE = '10秒估算建房报价，建别墅从这里开始';
+const BUDGET_TIMELINE_TITLE = '10秒估算建房报价\n建别墅从这里开始';
 function getCityOptions(province: string): string[] {
   return cityOptionsMap[province] || cityOptionsMap.福建;
 }

@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const ts = require('./report-runtime')('typescript');
 
 const root = path.resolve(__dirname, '..');
-const title = '甲第灵光 · AI建房助手，建别墅从这里开始';
+const title = '甲第灵光 · AI建房助手\n建别墅从这里开始';
 
 function loadPage(extension, { resumeReportAfterLogin = () => false, discardReportLoginReturn = () => {}, copyFile } = {}) {
   let definition;

@@ -73,7 +73,7 @@ test('budget form prepares a local square cover and exposes the same Moments lan
   page.onLoad({});
   assert.equal(page.data.contentReady, true);
   const timeline = page.onShareTimeline();
-  assert.equal(timeline.title, '10秒估算建房报价，建别墅从这里开始');
+  assert.equal(timeline.title, '10秒估算建房报价\n建别墅从这里开始');
   assert.equal(timeline.query, 'from=share');
   assert.equal(timeline.imageUrl, 'wxfile://user-data/budget-timeline-v2.jpg');
 });
