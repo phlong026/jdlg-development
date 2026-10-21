@@ -23,6 +23,7 @@ import { useIsMobile } from '../component/useIsMobile';
 import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
 import { CustomerLeadTrail } from './customerLeadTrail';
+import { customerArchiveHref } from './customerLeadLinks';
 import { formatLeadSource } from '../utils/displayLabels';
 import { resubmitHint } from './salesFormat';
 import './customerLeads.scss';
@@ -60,7 +61,6 @@ const intentLabelMap: Record<string, string> = {
 };
 
 const sourceLabel = formatLeadSource;
-const CUSTOMER_ARCHIVE = '/customer-management?tab=customers';
 
 const defaultAction = {
     status: 'contacted',
@@ -564,7 +564,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             : <span>未关联账号</span>}
                                         <button type="button" className="customer-lead-cardbtn" onClick={() => void handleViewDetail(item)}>详情</button>
                                         {handedOff
-                                            ? <Link className="customer-lead-cardbtn primary" to={CUSTOMER_ARCHIVE}>去客户档案跟进</Link>
+                                            ? <Link className="customer-lead-cardbtn primary" to={customerArchiveHref(item)}>去客户档案跟进</Link>
                                             : <button type="button" className="customer-lead-cardbtn primary" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>跟进</button>}
                                     </div>
                                 </article>
@@ -630,7 +630,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                                     详情
                                                 </button>
                                                 {handedOff ? (
-                                                    <Link className="customer-lead-link" to={CUSTOMER_ARCHIVE}>去客户档案跟进</Link>
+                                                    <Link className="customer-lead-link" to={customerArchiveHref(item)}>去客户档案跟进</Link>
                                                 ) : (
                                                     <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>
                                                         跟进
@@ -681,7 +681,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             <strong>{getNextActionText(activeLead)}</strong>
                                             <span>{detail?.summary || '暂无客户摘要。'}</span>
                                             {handedOff
-                                                ? <Link className="customer-lead-btn" to={CUSTOMER_ARCHIVE}>去客户档案跟进</Link>
+                                                ? <Link className="customer-lead-btn" to={customerArchiveHref(activeLead)}>去客户档案跟进</Link>
                                                 : <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(activeLead)}>记录跟进</button>}
                                         </div>
                                     </section>

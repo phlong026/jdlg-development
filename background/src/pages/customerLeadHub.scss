@@ -181,7 +181,7 @@
 
 }
 
-/* 客服服务漏斗：常开，占满一行，逐层数字 + 相对上一层的转化率 */
+/* 客服服务漏斗：常开，占满一行，逐层数字 + 相对进入客服的转化率 */
 .layout-content[data-admin-page="/customer-leads"] .lead-hub-funnel-wrap {
     grid-column: 1 / -1;
     padding-bottom: 12px;
