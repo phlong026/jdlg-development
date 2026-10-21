@@ -496,6 +496,16 @@
     padding: 0;
 }
 
+a.customer-lead-link {
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+// 交接态没有勾选列，表格最小宽度相应收窄，1440 宽下不再出现横向滚动
+.customer-lead-table.is-handoff {
+    min-width: 1080px;
+}
+
 .customer-lead-modal-overlay {
     --lead-modal-gap: 24px;
     position: fixed;
@@ -915,6 +925,14 @@
 
     &.primary { border-color: #8b5e3c; background: #8b5e3c; color: #fff; }
     &:disabled { opacity: 0.45; cursor: not-allowed; }
+}
+
+// 交接态的「去客户档案跟进」是链接，按按钮的样子排版
+a.customer-lead-cardbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
 }
 
 // 嵌入客户管理页时 `.crm-page button:hover` 会把主按钮背景换成浅色、白字看不清，这里显式给悬停色

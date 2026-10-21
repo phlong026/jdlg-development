@@ -157,7 +157,8 @@ function overviewEnv(role, employeeId = 'wx1') {
 test('总览：主管可切团队 / 个人并看到只读接入状态；只有数字与图表，没有新增入口', async () => {
   const h = await overviewEnv('admin').mount('salesOverview.tsx');
   assert.ok(h.text().includes('团队简报') && h.text().includes('个人简报'));
-  assert.match(h.text(), /企微接入正常 · 最近同步 5 分钟前/);
+  // 接入正常时不占版面；只有未接入或同步失败才提示
+  assert.ok(!/企微接入正常|最近同步/.test(h.text()));
   assert.ok(h.text().includes('今日待办') && h.text().includes('公海待认领'));
   assert.ok(!/新增线索[^\d]*按钮|＋|新增客户/.test(h.text().replace('新增线索', '').replace('新增客户', '')), '总览不放新增按钮');
   assert.ok(h.all(n => n.type === 'table' || n.type === 'tbody').length === 0, '总览不放列表');
@@ -165,8 +166,20 @@ test('总览：主管可切团队 / 个人并看到只读接入状态；只有�
   assert.match(h.text(), /5新增线索2新增客户4待跟进/);
   const links = h.all(n => n.type === 'a').map(n => n.props.to);
   assert.ok(links.includes('/customer-management?view=pool'));
-  assert.ok(links.includes('/customer-leads?queue=overdue'));
+  // CRM 接管后线索只读，「线索超时」不可处理，改为待分配客户
+  assert.ok(!links.includes('/customer-leads?queue=overdue'));
+  assert.ok(links.includes('/customer-management?tab=tasks&queue=unassigned'));
   assert.ok(links.includes('/customer-management?tab=tasks&queue=overdue'));
+});
+
+test('总览：企微同步失败或未接入时，主管仍能看到提示', async () => {
+  for (const [state, expected] of [[{ configured: true, failed: 2 }, '企微同步有 2 条失败事件'], [{ configured: false, failed: 0 }, '企微未接入']]) {
+    const env = overviewEnv('admin');
+    const base = env.crm;
+    env.crm = async (url, options) => url === '/sync' ? { ...state, pending: 0, callbackConfigured: true, runs: [], events: [] } : base(url, options);
+    const h = await env.mount('salesOverview.tsx');
+    assert.ok(h.text().includes(expected), expected);
+  }
 });
 
 test('总览：顾问没有团队切换，客户数字按本人 ownerId 统计，也不读接入状态', async () => {

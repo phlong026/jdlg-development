@@ -59,6 +59,7 @@ const intentLabelMap: Record<string, string> = {
 };
 
 const sourceLabel = formatLeadSource;
+const CUSTOMER_ARCHIVE = '/customer-management?tab=customers';
 
 const defaultAction = {
     status: 'contacted',
@@ -148,6 +149,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const sessionReady = !session.loading && !session.error && !!session.user;
     const canWrite = !readOnly && !session.crmLoading && sessionReady && session.user?.scope === 'platform_admin' && session.user.crmEnabled === false;
     const canOpenCustomers = sessionReady && !session.crmLoading && !!session.crmContext;
+    // 交接态：CRM 已接管且本账号能进客户档案。线索在这里只读，跟进统一去客户档案，
+    // 所以不再摆永远点不了的「跟进」按钮和勾选框，而是每条都给出去处。
+    const handedOff = !canWrite && canOpenCustomers && session.user?.crmEnabled === true;
     const writeAllowed = useRef(canWrite);
     writeAllowed.current = canWrite;
     const writeBlockedText = !sessionReady || session.user?.crmEnabled === undefined
@@ -392,7 +396,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
             <div className="customer-lead-page">
                 {saveNotice && <section className="customer-lead-panel" role="status">{saveNotice}</section>}
                 {loadError && <section className="customer-lead-panel" role="alert">读取失败：{loadError}。{updatedAt ? '当前显示上次成功读取的数据。' : '统计与列表尚未确认。'}<button type="button" disabled={loading} onClick={resetToFirstPage}>重新读取</button></section>}
-                {!canWrite && <section className="customer-lead-panel" role="status">
+                {!canWrite && !handedOff && <section className="customer-lead-panel" role="status">
                     <p>{writeBlockedText}</p>
                     {canOpenCustomers ? <Link className="customer-lead-btn" to="/customer-management?tab=customers">前往客户档案列表</Link> : <>
                         {session.user?.crmEnabled && <p>{session.crmError || '当前账号的客户访问尚未就绪，请重新检查；仍不可用时联系系统管理员。'}</p>}
@@ -535,9 +539,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             {list.map((item) => (
                                 <article key={item.id} className="customer-lead-card">
                                     <div className="customer-lead-card-head">
-                                        <label className="customer-lead-card-check">
+                                        {!handedOff && <label className="customer-lead-card-check">
                                             <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
-                                        </label>
+                                        </label>}
                                         <strong className="customer-lead-card-name">{getDisplayName(item)}</strong>
                                         <span className={`intent-tag intent-${item.intent_level}`}>{intentLabelMap[item.intent_level] || item.intent_level || '-'}</span>
                                         <span className={`status-tag status-${item.status}`}>{statusLabelMap[item.status] || item.status || '-'}</span>
@@ -557,7 +561,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>用户账号 ›</Link>
                                             : <span>未关联账号</span>}
                                         <button type="button" className="customer-lead-cardbtn" onClick={() => void handleViewDetail(item)}>详情</button>
-                                        <button type="button" className="customer-lead-cardbtn primary" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>跟进</button>
+                                        {handedOff
+                                            ? <Link className="customer-lead-cardbtn primary" to={CUSTOMER_ARCHIVE}>去客户档案跟进</Link>
+                                            : <button type="button" className="customer-lead-cardbtn primary" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>跟进</button>}
                                     </div>
                                 </article>
                             ))}
@@ -565,12 +571,12 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                         </div>
                     ) : (
                     <div className="customer-lead-table-wrap">
-                        <table className="customer-lead-table">
+                        <table className={`customer-lead-table${handedOff ? ' is-handoff' : ''}`}>
                             <thead>
                                 <tr>
-                                    <th className="checkbox-cell">
+                                    {!handedOff && <th className="checkbox-cell">
                                         <input type="checkbox" disabled={!canWrite} checked={list.length > 0 && selectedIds.length === list.length} onChange={toggleSelectPage} />
-                                    </th>
+                                    </th>}
                                     <th>用户</th>
                                     <th>需求与联系方式</th>
                                     <th>来源</th>
@@ -583,9 +589,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                             <tbody>
                                 {list.map((item) => (
                                     <tr key={item.id}>
-                                        <td className="checkbox-cell">
+                                        {!handedOff && <td className="checkbox-cell">
                                             <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
-                                        </td>
+                                        </td>}
                                         <td>
                                             <strong>{getDisplayName(item)}</strong>
                                             {item.user_id > 0
@@ -597,9 +603,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             <strong>{item.demand_summary || '暂无需求摘要'}</strong>
                                             <span>{getContactText(item)}</span>
                                         </td>
+                                        {/* 会话号、任务号是内部编号，只留在详情里 */}
                                         <td>
                                             <strong>{sourceLabel(item.source)}</strong>
-                                            <span>{item.source_task_no || item.session_no || '-'}</span>
                                         </td>
                                         <td>
                                             <strong>{item.assigned_to || '未分配'}</strong>
@@ -620,16 +626,20 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                                 <button type="button" className="customer-lead-link" onClick={() => void handleViewDetail(item)}>
                                                     详情
                                                 </button>
-                                                <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>
-                                                    跟进
-                                                </button>
+                                                {handedOff ? (
+                                                    <Link className="customer-lead-link" to={CUSTOMER_ARCHIVE}>去客户档案跟进</Link>
+                                                ) : (
+                                                    <button type="button" className="customer-lead-link" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(item)}>
+                                                        跟进
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
                                 {!loading && list.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="customer-lead-empty">暂无客服线索</td>
+                                        <td colSpan={handedOff ? 7 : 8} className="customer-lead-empty">暂无客服线索</td>
                                     </tr>
                                 ) : null}
                             </tbody>
@@ -667,8 +677,9 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <div className="customer-lead-next-action">
                                             <strong>{getNextActionText(activeLead)}</strong>
                                             <span>{detail?.summary || '暂无客户摘要。'}</span>
-                                            <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(activeLead)}>记录跟进</button>
-                                            {!canWrite && canOpenCustomers && <Link to="/customer-management?tab=customers">前往客户档案列表处理</Link>}
+                                            {handedOff
+                                                ? <Link className="customer-lead-btn" to={CUSTOMER_ARCHIVE}>去客户档案跟进</Link>
+                                                : <button type="button" className="customer-lead-btn" disabled={!canWrite} title={!canWrite ? writeBlockedText : undefined} onClick={() => openAction(activeLead)}>记录跟进</button>}
                                         </div>
                                     </section>
 
