@@ -62,6 +62,8 @@ type CustomerLead struct {
 	// 小程序线索同步到客户档案后的 CRM 客户 ID，用于「去客户档案跟进」直达详情。
 	// 尚未同步或未启用客户管理时为空，前端回退到客户列表。
 	CustomerID string `json:"customer_id,omitempty"`
+	// SubmissionCount 仅在 dedupe=user 的列表返回：同一小程序用户的留资条数。
+	SubmissionCount int `json:"submission_count,omitempty"`
 }
 
 type CustomerLeadCreateInput struct {
@@ -94,6 +96,9 @@ type CustomerLeadListParams struct {
 	AssignedTo  string
 	Limit       int
 	Offset      int
+	// Dedupe=user 时按小程序用户合并：每个 user_id 只返回最近一次留资，
+	// 并带 submission_count；未登录用户（user_id=0）仍一条一行。
+	Dedupe string
 }
 
 type CustomerLeadOverview struct {
@@ -725,8 +730,13 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	}
 
 	whereSQL := strings.Join(where, " AND ")
+	groupByUser := strings.EqualFold(strings.TrimSpace(params.Dedupe), "user")
 	var total int64
-	if err := m.DB.QueryRow(`SELECT COUNT(*) FROM customer_leads WHERE `+whereSQL, args...).Scan(&total); err != nil {
+	countSQL := `SELECT COUNT(*) FROM customer_leads WHERE ` + whereSQL
+	if groupByUser {
+		countSQL = `SELECT COUNT(DISTINCT CASE WHEN user_id > 0 THEN CONCAT('u', user_id) ELSE CONCAT('l', id) END) FROM customer_leads WHERE ` + whereSQL
+	}
+	if err := m.DB.QueryRow(countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -741,6 +751,35 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		WHERE ` + whereSQL + `
 		ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'contacted' THEN 2 WHEN 'converted' THEN 3 WHEN 'invalid' THEN 4 ELSE 99 END, FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC
 		LIMIT ? OFFSET ?`
+	if groupByUser {
+		// 同一小程序用户只保留最近一次留资；user_id=0 的匿名线索仍一条一行。
+		// 先算 last_submitted_at，再用窗口函数挑每组最新一条并计数。
+		query = `
+		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
+		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
+		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
+		       COALESCE(remark, ''), created_at, updated_at, last_submitted_at, submission_count
+		FROM (
+		    SELECT base.*,
+		           ROW_NUMBER() OVER (
+		               PARTITION BY CASE WHEN base.user_id > 0 THEN CONCAT('u', base.user_id) ELSE CONCAT('l', base.id) END
+		               ORDER BY base.last_submitted_at DESC, base.id DESC
+		           ) AS rn,
+		           COUNT(*) OVER (
+		               PARTITION BY CASE WHEN base.user_id > 0 THEN CONCAT('u', base.user_id) ELSE CONCAT('l', base.id) END
+		           ) AS submission_count
+		    FROM (
+		        SELECT customer_leads.*,
+		               COALESCE((SELECT MAX(e.created_at) FROM customer_service_events e
+		                         WHERE e.lead_id = customer_leads.id AND e.user_id = customer_leads.user_id AND e.event_type = 'lead_submit'), created_at) AS last_submitted_at
+		        FROM customer_leads
+		        WHERE ` + whereSQL + `
+		    ) base
+		) t
+		WHERE rn = 1
+		ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'contacted' THEN 2 WHEN 'converted' THEN 3 WHEN 'invalid' THEN 4 ELSE 99 END, FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC
+		LIMIT ? OFFSET ?`
+	}
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := m.DB.Query(query, queryArgs...)
 	if err != nil {
@@ -752,7 +791,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	for rows.Next() {
 		item := &CustomerLead{}
 		var nextFollowupAt, lastSubmittedAt sql.NullTime
-		if err := rows.Scan(
+		dest := []interface{}{
 			&item.ID,
 			&item.UserID,
 			&item.Name,
@@ -776,7 +815,11 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 			&item.CreatedAt,
 			&item.UpdatedAt,
 			&lastSubmittedAt,
-		); err != nil {
+		}
+		if groupByUser {
+			dest = append(dest, &item.SubmissionCount)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, 0, err
 		}
 		if nextFollowupAt.Valid {
