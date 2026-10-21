@@ -2,6 +2,55 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizeCosUrl = normalizeCosUrl;
 exports.resolveAssetPath = resolveAssetPath;
+// 不可变资源版本与 assets-cloud-manifest.json 保持一致，避免旧缓存覆盖新封面。
+const CLOUD_ASSET_RELEASE = 'https://static.jiadilingguang.com/assets/miniprogram-releases/20261022-292ba168e0ef';
+const CLOUD_IMAGE_PATHS = new Set([
+    '/assets/designer/设计师@4x.png',
+    '/assets/home-reference/hd/advisor.png',
+    '/assets/home-reference/hd/ai-medallion.png',
+    '/assets/home-reference/hd/ai-shell.png',
+    '/assets/home-reference/hd/ai-tools.png',
+    '/assets/home-reference/hd/backdrop.jpg',
+    '/assets/home-reference/hd/brand-en-old.png',
+    '/assets/home-reference/hd/brand-name-old.png',
+    '/assets/home-reference/hd/brand-symbol-old.png',
+    '/assets/home-reference/hd/calculator.png',
+    '/assets/home-reference/hd/camera.png',
+    '/assets/home-reference/hd/cost-stat-v2.png',
+    '/assets/home-reference/hd/courtyard.png',
+    '/assets/home-reference/hd/estimate-shell.png',
+    '/assets/home-reference/hd/interior.png',
+    '/assets/home-reference/hd/location.png',
+    '/assets/home-reference/hd/renovation.png',
+    '/assets/home-reference/hd/ruler.png',
+    '/assets/home-reference/hd/rural-villa.png',
+    '/assets/home-reference/hd/sparkles.png',
+    '/assets/home-reference/hd/templates.png',
+    '/assets/home-reference/hd/urban-building.png',
+    '/assets/home-reference/hd/villa.png',
+    '/assets/icons/send-plane.svg',
+    '/assets/icons/specadvisor/icon-advisor-avatar.svg',
+    '/assets/icons/specadvisor/icon-building-height.svg',
+    '/assets/icons/specadvisor/icon-fire-escape.svg',
+    '/assets/icons/specadvisor/icon-house-rules.svg',
+    '/assets/icons/specadvisor/icon-send.svg',
+    '/assets/icons/specadvisor/icon-source.svg',
+    '/assets/icons/specadvisor/icon-staircase.svg',
+    '/assets/images/cost-estimate-share-house.jpg',
+    '/assets/images/home.jpg',
+    '/assets/share/budget-timeline-v2.jpg',
+    '/assets/share/home-chat.jpg',
+    '/assets/share/home-timeline-v2.jpg',
+    '/assets/share/home-timeline.jpg',
+    '/assets/smart-service-icon.png',
+    '/assets/smart-service-mascot.png',
+    '/assets/tabbar/我的导航栏@2x.png',
+    '/assets/tabbar/未选中态@2x.png',
+    '/assets/tabbar/模板广场导航栏@2x.png',
+    '/assets/tabbar/设计师导航栏@2x.png',
+    '/assets/tabbar/首页导航栏@2x.png',
+    '/pages/Invitefriends/intro-logo.png',
+]);
 // 如果你已经把整个 miniprogram/miniprogram/assets 目录上传到了 COS，
 // 可以直接把下面这一项改成：
 // const ASSET_CDN_BASE = 'https://你的COS自定义域名/miniprogram';
@@ -35,7 +84,7 @@ const ASSET_CDN_MAP = {
     // 建规快查页面水墨风格背景图
     '/assets/specadvisor/bg-ink.png': 'https://static.jiadilingguang.com/assets/specadvisor/bg-ink.png',
     // 首页智能客服悬浮吉祥物图标
-    '/assets/home/smart-service-mascot.png': 'https://jiadilingguangcos-1393500756.cos.ap-chongqing.myqcloud.com/assets/home/smart-service-mascot.png',
+    '/assets/home/smart-service-mascot.png': 'https://static.jiadilingguang.com/assets/home/smart-service-mascot.png',
     // 示例：https://你的COS自定义域名/miniprogram/assets/企业logo.png
     '/assets/企业logo.png': '',
     // 示例：https://你的COS自定义域名/miniprogram/assets/企业微信二维码.png'
@@ -58,6 +107,9 @@ function resolveAssetPath(path) {
         return cleanPath;
     }
     const normalizedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+    if (CLOUD_IMAGE_PATHS.has(normalizedPath)) {
+        return `${CLOUD_ASSET_RELEASE}${normalizedPath}`;
+    }
     const mappedUrl = String(ASSET_CDN_MAP[normalizedPath] || '').trim();
     if (mappedUrl) {
         return mappedUrl;

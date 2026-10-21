@@ -9,7 +9,7 @@ import { resolveAssetPath } from '../../utils/asset';
 import { prepareShareCardImage } from '../../utils/shareImage';
 
 const API_BASE_URL = 'https://api.jiadilingguang.com';
-const INVITE_POSTER_LOGO = '/pages/Invitefriends/intro-logo.png';
+const INVITE_POSTER_LOGO = resolveAssetPath('/pages/Invitefriends/intro-logo.png');
 const DEFAULT_INVITE_AVATAR = resolveAssetPath('/assets/images/home.jpg');
 
 interface InviteRecord {

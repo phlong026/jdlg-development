@@ -1,0 +1,123 @@
+{
+  "size": {
+    "total": 2238354,
+    "packages": [
+      {
+        "name": "TOTAL",
+        "size": 2238354
+      },
+      {
+        "name": "main",
+        "size": 1304114
+      },
+      {
+        "name": "/pages/adminhome/",
+        "size": 441
+      },
+      {
+        "name": "/pages/adminlogin/",
+        "size": 458
+      },
+      {
+        "name": "/pages/allrounddesign/",
+        "size": 41984
+      },
+      {
+        "name": "/pages/buildingreplacement/",
+        "size": 18666
+      },
+      {
+        "name": "/pages/chat/",
+        "size": 35220
+      },
+      {
+        "name": "/pages/checkin/",
+        "size": 23995
+      },
+      {
+        "name": "/pages/contentreader/",
+        "size": 14437
+      },
+      {
+        "name": "/pages/designerhome/",
+        "size": 83732
+      },
+      {
+        "name": "/pages/generatedetails/",
+        "size": 107242
+      },
+      {
+        "name": "/pages/generatehistory/",
+        "size": 37810
+      },
+      {
+        "name": "/pages/Identityauthen/",
+        "size": 21044
+      },
+      {
+        "name": "/pages/Invitefriends/",
+        "size": 37270
+      },
+      {
+        "name": "/pages/lingshidetails/",
+        "size": 16572
+      },
+      {
+        "name": "/pages/messagecenter/",
+        "size": 1345
+      },
+      {
+        "name": "/pages/myfavorites/",
+        "size": 25743
+      },
+      {
+        "name": "/pages/myInformationmodification/",
+        "size": 36715
+      },
+      {
+        "name": "/pages/myplan/",
+        "size": 30455
+      },
+      {
+        "name": "/pages/orderdetail/",
+        "size": 16215
+      },
+      {
+        "name": "/pages/ordermanagement/",
+        "size": 40816
+      },
+      {
+        "name": "/pages/Parentchildcreativity/",
+        "size": 24258
+      },
+      {
+        "name": "/pages/release/",
+        "size": 58341
+      },
+      {
+        "name": "/pages/report/",
+        "size": 75061
+      },
+      {
+        "name": "/pages/ruralvilladesign/",
+        "size": 28022
+      },
+      {
+        "name": "/pages/templatesquaredetails/",
+        "size": 70379
+      },
+      {
+        "name": "/pages/topupcenter/",
+        "size": 51742
+      },
+      {
+        "name": "/pages/wallet/",
+        "size": 22423
+      },
+      {
+        "name": "/pages/withdrawcenter/",
+        "size": 13854
+      }
+    ]
+  }
+}

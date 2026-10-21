@@ -17,6 +17,8 @@ function formShare(overrides = {}, cover = 'wxfile://form-share.jpg') {
     Page(value) { definition = value; },
     require(request) {
       if (request === '../../utils/costRegions') return costRegions;
+      if (request === '../../utils/asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === '../../utils/cloudImage') return { prepareCloudImage: async () => 'wxfile://timeline.jpg' };
       return { prepareCostEstimateShareImage: async card => { cards.push(card); return cover; } };
     },
     wx: { getStorageSync() { throw new Error('must not reuse an earlier estimate'); } },

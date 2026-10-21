@@ -6,7 +6,7 @@ const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const asset_1 = require("../../utils/asset");
 const shareImage_1 = require("../../utils/shareImage");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
-const INVITE_POSTER_LOGO = '/pages/Invitefriends/intro-logo.png';
+const INVITE_POSTER_LOGO = (0, asset_1.resolveAssetPath)('/pages/Invitefriends/intro-logo.png');
 const DEFAULT_INVITE_AVATAR = (0, asset_1.resolveAssetPath)('/assets/images/home.jpg');
 Page({
     data: {

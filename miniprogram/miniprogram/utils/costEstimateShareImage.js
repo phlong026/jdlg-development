@@ -2,12 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.prepareCostEstimateShareImage = prepareCostEstimateShareImage;
 exports.prepareCostEstimateTimelineImage = prepareCostEstimateTimelineImage;
+const asset_1 = require("./asset");
+const cloudImage_1 = require("./cloudImage");
 const CARD_WIDTH = 1000;
 const CARD_HEIGHT = 800;
-const HOUSE_IMAGE_PATHS = [
-    '/assets/images/cost-estimate-share-house.jpg',
-    'assets/images/cost-estimate-share-house.jpg',
-];
+const HOUSE_IMAGE_URL = (0, asset_1.resolveAssetPath)('/assets/images/cost-estimate-share-house.jpg');
 const imageCache = {};
 function drawRoundedRect(ctx, x, y, width, height, radius) {
     const safeRadius = Math.min(radius, width / 2, height / 2);
@@ -40,17 +39,11 @@ function loadCanvasImage(canvas, source) {
         image.src = source;
     });
 }
-async function loadBundledHouseImage(canvas) {
-    let latestError;
-    for (const source of HOUSE_IMAGE_PATHS) {
-        try {
-            return await loadCanvasImage(canvas, source);
-        }
-        catch (error) {
-            latestError = error;
-        }
-    }
-    throw latestError || new Error('别墅分享主视觉加载失败');
+async function loadHouseImage(canvas) {
+    const source = await (0, cloudImage_1.prepareCloudImage)(HOUSE_IMAGE_URL, 'cost-estimate-share-house.jpg');
+    if (!source)
+        throw new Error('别墅分享主视觉下载失败');
+    return loadCanvasImage(canvas, source);
 }
 async function writeImage(cacheKey, dataUrl) {
     const payload = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
@@ -186,7 +179,7 @@ async function createShareImage(card) {
     background.addColorStop(1, '#f6e8ce');
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-    const houseImage = await loadBundledHouseImage(canvas);
+    const houseImage = await loadHouseImage(canvas);
     const hasEstimate = Boolean(card.totalCost);
     drawCardHouseImage(ctx, houseImage, hasEstimate);
     drawCardFrame(ctx, hasEstimate);
@@ -217,7 +210,7 @@ async function prepareCostEstimateTimelineImage(card) {
             return '';
         ctx.fillStyle = '#fcf3e3';
         ctx.fillRect(0, 0, 1000, 1000);
-        const image = await loadBundledHouseImage(canvas);
+        const image = await loadHouseImage(canvas);
         ctx.drawImage(image, 390, 250, 610, 610);
         const seam = ctx.createLinearGradient(390, 0, 450, 0);
         seam.addColorStop(0, '#fcf3e3');

@@ -51,24 +51,40 @@
   "packOptions": {
     "ignore": [
       {
-        "type": "file",
-        "value": "assets/smart-service-mascot.png"
-      },
-      {
         "type": "folder",
         "value": "assets/home-reference"
       },
       {
         "type": "file",
+        "value": "assets/smart-service-mascot.png"
+      },
+      {
+        "type": "file",
         "value": "assets/smart-service-icon.png"
-      }
-    ],
-    "include": [
+      },
       {
         "type": "folder",
         "value": "assets/share"
+      },
+      {
+        "type": "folder",
+        "value": "assets/images"
+      },
+      {
+        "type": "folder",
+        "value": "assets/icons"
+      },
+      {
+        "type": "folder",
+        "value": "assets/designer"
+      },
+      {
+        "type": "file",
+        "value": "pages/Invitefriends/intro-logo.png"
       }
-    ]
+    ],
+    "include": []
   },
-  "appid": "wx94fdc48861913ede"
+  "appid": "wx94fdc48861913ede",
+  "projectname": "甲第灵光-新版首页-云端图片"
 }

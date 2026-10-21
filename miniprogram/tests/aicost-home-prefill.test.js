@@ -16,6 +16,8 @@ function loadForm(options) {
     exports: {},
     require(request) {
       if (request === '../../utils/costRegions') return costRegions;
+      if (request === '../../utils/asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === '../../utils/cloudImage') return { prepareCloudImage: async () => '' };
       return { prepareCostEstimateShareImage: async () => '' };
     },
     Page(value) { definition = value; },

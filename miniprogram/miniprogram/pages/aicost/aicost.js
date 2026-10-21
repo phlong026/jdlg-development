@@ -3,8 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // pages/aicost/aicost.ts
 const costEstimateShareImage_1 = require("../../utils/costEstimateShareImage");
 const costRegions_1 = require("../../utils/costRegions");
+const asset_1 = require("../../utils/asset");
+const cloudImage_1 = require("../../utils/cloudImage");
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
-const BUDGET_TIMELINE_COVER = '/assets/share/budget-timeline-v2.jpg';
+const BUDGET_TIMELINE_COVER = (0, asset_1.resolveAssetPath)('/assets/share/budget-timeline-v2.jpg');
 const BUDGET_TIMELINE_TITLE = '10秒估算建房报价\n建别墅从这里开始';
 function getCityOptions(province) {
     return costRegions_1.cityOptionsMap[province] || costRegions_1.cityOptionsMap.福建;
@@ -144,31 +146,11 @@ Page({
     onUnload() {
         this.shareCoverDestroyed = true;
     },
-    prepareBudgetTimelineCover() {
-        return new Promise((resolve) => {
-            const finish = (budgetTimelineCover) => {
-                if (!this.shareCoverDestroyed) {
-                    this.setData({ budgetTimelineCover, contentReady: !!budgetTimelineCover });
-                }
-                resolve();
-            };
-            try {
-                const destPath = `${wx.env.USER_DATA_PATH}/budget-timeline-v2.jpg`;
-                wx.getFileSystemManager().copyFile({
-                    srcPath: BUDGET_TIMELINE_COVER,
-                    destPath,
-                    success: () => finish(destPath),
-                    fail: (error) => {
-                        console.warn('准备预算入口朋友圈封面失败', error);
-                        finish('');
-                    },
-                });
-            }
-            catch (error) {
-                console.warn('准备预算入口朋友圈封面失败', error);
-                finish('');
-            }
-        });
+    async prepareBudgetTimelineCover() {
+        const budgetTimelineCover = await (0, cloudImage_1.prepareCloudImage)(BUDGET_TIMELINE_COVER, 'budget-timeline-v2.jpg');
+        if (!this.shareCoverDestroyed) {
+            this.setData({ budgetTimelineCover, contentReady: !!budgetTimelineCover });
+        }
     },
     onShareAppMessage() {
         const title = BUDGET_TIMELINE_TITLE;

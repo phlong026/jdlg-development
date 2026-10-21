@@ -1,3 +1,4 @@
+import { resolveAssetPath } from '../../utils/asset'
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter'
 import { getCachedDeviceFingerprint } from '../../utils/deviceFingerprint'
 import { blockUnsafeText } from '../../utils/promptReview'
@@ -268,6 +269,7 @@ function getErrorStatusCode(error: any) {
 
 Page({
   data: {
+    sendIcon: resolveAssetPath('/assets/icons/send-plane.svg'),
     sessionNo: '',
     source: 'home',
     sourceTaskNo: '',

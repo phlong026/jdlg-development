@@ -1,6 +1,7 @@
 // index.ts
 // 获取应用实例
 import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset'
+import { prepareCloudImage } from '../../utils/cloudImage'
 import { HOME_ASSETS } from '../../utils/homeAssets'
 import { cityOptionsMap } from '../../utils/costRegions'
 import { discardReportLoginReturn, resumeReportAfterLogin } from '../../utils/reportNavigation'
@@ -17,8 +18,8 @@ import {
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
 const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始'
-const HOME_CHAT_COVER = '/assets/share/home-chat.jpg'
-const HOME_TIMELINE_COVER = '/assets/share/home-timeline-v2.jpg'
+const HOME_CHAT_COVER = resolveAssetPath('/assets/share/home-chat.jpg')
+const HOME_TIMELINE_COVER = resolveAssetPath('/assets/share/home-timeline-v2.jpg')
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()
@@ -94,28 +95,9 @@ Page({
     await guard.checkAndShow();
   },
   async prepareHomeShareCovers() {
-    // Package images load in the page but can fail in the native share preview.
-    // Copy the original bytes to a wxfile path; do not replace the chosen cover.
-    const prepare = (sourcePath: string) => new Promise<string>((resolve) => {
-      const fallback = (error: unknown) => {
-        console.warn('准备首页分享封面失败', sourcePath, error);
-        resolve('');
-      };
-      try {
-        const fileName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1);
-        const destPath = `${wx.env.USER_DATA_PATH}/${fileName}`;
-        wx.getFileSystemManager().copyFile({
-          srcPath: sourcePath,
-          destPath,
-          success: () => resolve(destPath),
-          fail: fallback,
-        });
-      } catch (error) {
-        fallback(error);
-      }
-    });
     const [homeChatCover, homeTimelineCover] = await Promise.all([
-      prepare(HOME_CHAT_COVER), prepare(HOME_TIMELINE_COVER),
+      prepareCloudImage(HOME_CHAT_COVER, 'home-chat.jpg'),
+      prepareCloudImage(HOME_TIMELINE_COVER, 'home-timeline-v2.jpg'),
     ]);
     this.setData({ homeChatCover, homeTimelineCover, contentReady: !!homeTimelineCover });
   },

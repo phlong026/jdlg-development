@@ -8,7 +8,7 @@ const ts = require('./report-runtime')('typescript');
 const root = path.resolve(__dirname, '..');
 const title = '甲第灵光 · AI建房助手\n建别墅从这里开始';
 
-function loadPage(extension, { resumeReportAfterLogin = () => false, discardReportLoginReturn = () => {}, copyFile } = {}) {
+function loadPage(extension, { resumeReportAfterLogin = () => false, discardReportLoginReturn = () => {}, prepareCloudImage } = {}) {
   let definition;
   const menus = [];
   const warnings = [];
@@ -22,12 +22,13 @@ function loadPage(extension, { resumeReportAfterLogin = () => false, discardRepo
       ? { resumeReportAfterLogin, discardReportLoginReturn }
       : name.endsWith('costRegions')
       ? require('../miniprogram/utils/costRegions.js')
-      : { resolveAssetPath: value => value },
+      : name.endsWith('cloudImage')
+      ? { prepareCloudImage: prepareCloudImage || (async (_url, fileName) => `wxfile://usr/cloud-images/${fileName}`) }
+      : { resolveAssetPath: value => `https://cdn.test${value}` },
     Page: value => { definition = value; },
     wx: {
       showShareMenu: options => menus.push(options),
       env: { USER_DATA_PATH: 'wxfile://usr' },
-      getFileSystemManager: () => ({ copyFile: copyFile || (options => options.success()) }),
     },
     console: { warn: (...args) => warnings.push(args) },
   });
@@ -52,39 +53,45 @@ for (const extension of ['ts', 'js']) {
     assert.equal(share.path, undefined);
   });
 
-  test(`${extension}: 分享封面准备为微信本地文件，保留各自原图`, async () => {
-    const copied = [];
-    const { definition } = loadPage(extension, { copyFile(options) { copied.push(options); options.success(); } });
+  test(`${extension}: 云端分享封面下载为微信本地文件，保留各自原图`, async () => {
+    const downloaded = [];
+    const { definition } = loadPage(extension, { prepareCloudImage: async (url, fileName) => {
+      downloaded.push({ url, fileName });
+      return `wxfile://usr/cloud-images/${fileName}`;
+    } });
     const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
     await definition.prepareHomeShareCovers.call(page);
-    assert.deepEqual(copied.map(item => item.srcPath), ['/assets/share/home-chat.jpg', '/assets/share/home-timeline-v2.jpg']);
-    assert.equal(definition.onShareAppMessage.call(page).imageUrl, 'wxfile://usr/home-chat.jpg');
-    assert.equal(definition.onShareTimeline.call(page).imageUrl, 'wxfile://usr/home-timeline-v2.jpg');
+    assert.deepEqual(downloaded, [
+      { url: 'https://cdn.test/assets/share/home-chat.jpg', fileName: 'home-chat.jpg' },
+      { url: 'https://cdn.test/assets/share/home-timeline-v2.jpg', fileName: 'home-timeline-v2.jpg' },
+    ]);
+    assert.equal(definition.onShareAppMessage.call(page).imageUrl, 'wxfile://usr/cloud-images/home-chat.jpg');
+    assert.equal(definition.onShareTimeline.call(page).imageUrl, 'wxfile://usr/cloud-images/home-timeline-v2.jpg');
   });
 
   test(`${extension}: 封面准备失败关闭朋友圈并记录原因`, async () => {
-    const { definition, warnings } = loadPage(extension, { copyFile(options) { options.fail({ errMsg: 'disk full' }); } });
+    const { definition, warnings } = loadPage(extension, { prepareCloudImage: async () => '' });
     const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
     await definition.prepareHomeShareCovers.call(page);
     assert.equal(page.data.contentReady, false);
     assert.equal(definition.onShareTimeline.call(page).imageUrl, undefined);
-    assert.equal(warnings.length, 2);
+    assert.equal(warnings.length, 0, '下载工具统一记录失败，页面只负责关闭分享');
   });
 
   test(`${extension}: 首次立即分享会等待封面且不会返回错误封面`, async () => {
     const pending = [];
-    const { definition } = loadPage(extension, { copyFile: options => pending.push(options) });
+    const { definition } = loadPage(extension, { prepareCloudImage: (url, fileName) => new Promise(resolve => pending.push({ url, fileName, resolve })) });
     const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
     page.shareCoversPromise = definition.prepareHomeShareCovers.call(page);
     const share = definition.onShareAppMessage.call(page);
     assert.equal(share.imageUrl, undefined);
     assert.equal(typeof share.promise?.then, 'function');
     assert.equal(Object.keys(definition.onShareTimeline.call(page)).length, 0);
-    pending.forEach(options => options.success());
+    pending.forEach(item => item.resolve(`wxfile://usr/cloud-images/${item.fileName}`));
     const readyShare = await share.promise;
     assert.equal(readyShare.title, title);
     assert.equal(readyShare.path, '/pages/index/index?from=share');
-    assert.equal(readyShare.imageUrl, 'wxfile://usr/home-chat.jpg');
+    assert.equal(readyShare.imageUrl, 'wxfile://usr/cloud-images/home-chat.jpg');
     assert.equal(page.data.contentReady, true);
   });
 
@@ -135,9 +142,9 @@ for (const extension of ['ts', 'js']) {
   });
 }
 
-test('两张分享封面在上传配置中显式包含，避免按未使用资源删除', () => {
+test('两张分享封面由云端加载，不再强制打进代码包', () => {
   const config = JSON.parse(fs.readFileSync(path.join(root, 'project.config.json'), 'utf8'));
-  assert.ok(config.packOptions.include.some(item => item.type === 'folder' && item.value === 'assets/share'));
+  assert.ok(!config.packOptions.include?.some(item => item.type === 'folder' && item.value === 'assets/share'));
   for (const name of ['home-chat.jpg', 'home-timeline-v2.jpg']) {
     const bytes = fs.readFileSync(path.join(root, 'miniprogram/assets/share', name));
     assert.equal(bytes.readUInt16BE(0), 0xffd8);

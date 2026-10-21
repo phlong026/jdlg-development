@@ -1,6 +1,8 @@
 // pages/aicost/aicost.ts
 import { prepareCostEstimateShareImage } from '../../utils/costEstimateShareImage';
 import { cityOptionsMap } from '../../utils/costRegions';
+import { resolveAssetPath } from '../../utils/asset';
+import { prepareCloudImage } from '../../utils/cloudImage';
 
 type CostBreakdownItem = {
   name: string;
@@ -12,7 +14,7 @@ type CostBreakdownItem = {
 };
 
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
-const BUDGET_TIMELINE_COVER = '/assets/share/budget-timeline-v2.jpg';
+const BUDGET_TIMELINE_COVER = resolveAssetPath('/assets/share/budget-timeline-v2.jpg');
 const BUDGET_TIMELINE_TITLE = '10秒估算建房报价\n建别墅从这里开始';
 function getCityOptions(province: string): string[] {
   return cityOptionsMap[province] || cityOptionsMap.福建;
@@ -179,30 +181,11 @@ Page({
     this.shareCoverDestroyed = true;
   },
 
-  prepareBudgetTimelineCover() {
-    return new Promise<void>((resolve) => {
-      const finish = (budgetTimelineCover: string) => {
-        if (!this.shareCoverDestroyed) {
-          this.setData({ budgetTimelineCover, contentReady: !!budgetTimelineCover });
-        }
-        resolve();
-      };
-      try {
-        const destPath = `${wx.env.USER_DATA_PATH}/budget-timeline-v2.jpg`;
-        wx.getFileSystemManager().copyFile({
-          srcPath: BUDGET_TIMELINE_COVER,
-          destPath,
-          success: () => finish(destPath),
-          fail: (error) => {
-            console.warn('准备预算入口朋友圈封面失败', error);
-            finish('');
-          },
-        });
-      } catch (error) {
-        console.warn('准备预算入口朋友圈封面失败', error);
-        finish('');
-      }
-    });
+  async prepareBudgetTimelineCover() {
+    const budgetTimelineCover = await prepareCloudImage(BUDGET_TIMELINE_COVER, 'budget-timeline-v2.jpg');
+    if (!this.shareCoverDestroyed) {
+      this.setData({ budgetTimelineCover, contentReady: !!budgetTimelineCover });
+    }
   },
 
   onShareAppMessage() {

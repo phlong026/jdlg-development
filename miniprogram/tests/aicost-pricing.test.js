@@ -6,9 +6,12 @@ const source = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/aicost
 const costRegions = require('../miniprogram/utils/costRegions');
 function form(overrides = {}, storageFails = false) {
   let config, saved, toast, route;
-  vm.runInNewContext(source, { exports: {}, require: request => request === '../../utils/costRegions'
-    ? costRegions
-    : { prepareCostEstimateShareImage: async () => '' }, Page: p => { config = p; }, wx: {
+  vm.runInNewContext(source, { exports: {}, require(request) {
+    if (request === '../../utils/costRegions') return costRegions;
+    if (request === '../../utils/asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+    if (request === '../../utils/cloudImage') return { prepareCloudImage: async () => '' };
+    return { prepareCostEstimateShareImage: async () => '' };
+  }, Page: p => { config = p; }, wx: {
     showToast: p => { toast = p.title; },
     setStorageSync: (key, value) => { if (storageFails) throw new Error('storage full'); saved = value; },
     navigateTo: p => { route = p.url; },

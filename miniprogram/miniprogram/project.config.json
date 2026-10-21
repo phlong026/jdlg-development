@@ -31,8 +31,36 @@
   "packOptions": {
     "ignore": [
       {
+        "type": "folder",
+        "value": "assets/home-reference"
+      },
+      {
         "type": "file",
         "value": "assets/smart-service-mascot.png"
+      },
+      {
+        "type": "file",
+        "value": "assets/smart-service-icon.png"
+      },
+      {
+        "type": "folder",
+        "value": "assets/share"
+      },
+      {
+        "type": "folder",
+        "value": "assets/images"
+      },
+      {
+        "type": "folder",
+        "value": "assets/icons"
+      },
+      {
+        "type": "folder",
+        "value": "assets/designer"
+      },
+      {
+        "type": "file",
+        "value": "pages/Invitefriends/intro-logo.png"
       }
     ],
     "include": []

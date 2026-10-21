@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // index.ts
 // 获取应用实例
 const asset_1 = require("../../utils/asset");
+const cloudImage_1 = require("../../utils/cloudImage");
 const homeAssets_1 = require("../../utils/homeAssets");
 const costRegions_1 = require("../../utils/costRegions");
 const reportNavigation_1 = require("../../utils/reportNavigation");
@@ -10,8 +11,8 @@ const perf_1 = require("../../utils/perf");
 const enterpriseWechat_1 = require("../../utils/enterpriseWechat");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始';
-const HOME_CHAT_COVER = '/assets/share/home-chat.jpg';
-const HOME_TIMELINE_COVER = '/assets/share/home-timeline-v2.jpg';
+const HOME_CHAT_COVER = (0, asset_1.resolveAssetPath)('/assets/share/home-chat.jpg');
+const HOME_TIMELINE_COVER = (0, asset_1.resolveAssetPath)('/assets/share/home-timeline-v2.jpg');
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2';
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000;
 const featuredDetailPrefetching = new Set();
@@ -89,29 +90,9 @@ Page({
         await guard.checkAndShow();
     },
     async prepareHomeShareCovers() {
-        // Package images load in the page but can fail in the native share preview.
-        // Copy the original bytes to a wxfile path; do not replace the chosen cover.
-        const prepare = (sourcePath) => new Promise((resolve) => {
-            const fallback = (error) => {
-                console.warn('准备首页分享封面失败', sourcePath, error);
-                resolve('');
-            };
-            try {
-                const fileName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1);
-                const destPath = `${wx.env.USER_DATA_PATH}/${fileName}`;
-                wx.getFileSystemManager().copyFile({
-                    srcPath: sourcePath,
-                    destPath,
-                    success: () => resolve(destPath),
-                    fail: fallback,
-                });
-            }
-            catch (error) {
-                fallback(error);
-            }
-        });
         const [homeChatCover, homeTimelineCover] = await Promise.all([
-            prepare(HOME_CHAT_COVER), prepare(HOME_TIMELINE_COVER),
+            (0, cloudImage_1.prepareCloudImage)(HOME_CHAT_COVER, 'home-chat.jpg'),
+            (0, cloudImage_1.prepareCloudImage)(HOME_TIMELINE_COVER, 'home-timeline-v2.jpg'),
         ]);
         this.setData({ homeChatCover, homeTimelineCover, contentReady: !!homeTimelineCover });
     },

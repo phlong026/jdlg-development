@@ -13,6 +13,7 @@ function loadShareImageHelper() {
   const imageSources = [];
   const textCalls = [];
   const imageCalls = [];
+  const cloudImages = [];
   const clips = [];
   const strokes = [];
   const gradients = [];
@@ -21,6 +22,16 @@ function loadShareImageHelper() {
   const context = {
     exports: {},
     console: { warn() {} },
+    require(request) {
+      if (request === './asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === './cloudImage') return {
+        prepareCloudImage: async (url, fileName) => {
+          cloudImages.push({ url, fileName });
+          return 'wxfile://house.jpg';
+        },
+      };
+      throw new Error(`unexpected require ${request}`);
+    },
     wx: {
       env: { USER_DATA_PATH: 'wxfile://user-data' },
       base64ToArrayBuffer(value) { return value; },
@@ -69,7 +80,7 @@ function loadShareImageHelper() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   vm.runInNewContext(source, context);
-  return { prepare: context.exports.prepareCostEstimateShareImage, timeline: context.exports.prepareCostEstimateTimelineImage, writes, calls, imageSources, textCalls, imageCalls, clips, strokes, gradients, sizes, scales };
+  return { prepare: context.exports.prepareCostEstimateShareImage, timeline: context.exports.prepareCostEstimateTimelineImage, writes, calls, imageSources, cloudImages, textCalls, imageCalls, clips, strokes, gradients, sizes, scales };
 }
 
 test('share card exports a JPEG and returns the local image path to WeChat', async () => {
@@ -87,7 +98,11 @@ test('share card exports a JPEG and returns the local image path to WeChat', asy
   assert.equal(imageUrl.startsWith('wxfile://user-data/cost-estimate-share/'), true);
   assert.equal(helper.writes.length, 1);
   assert.equal(helper.writes[0].data, 'c2hhcmUtY2FyZA==');
-  assert.equal(helper.imageSources[0], '/assets/images/cost-estimate-share-house.jpg', 'load from the package root before trying a page-relative path');
+  assert.deepEqual(helper.cloudImages, [{
+    url: 'https://cdn.test/assets/images/cost-estimate-share-house.jpg',
+    fileName: 'cost-estimate-share-house.jpg',
+  }]);
+  assert.equal(helper.imageSources[0], 'wxfile://house.jpg', 'Canvas 使用下载后的本地路径');
   const amount = helper.textCalls.find((item) => item.text === '71.17');
   const unit = helper.textCalls.find((item) => item.text === '万元');
   assert.ok(Number(amount.font.match(/(\d+)px/)[1]) >= 120);

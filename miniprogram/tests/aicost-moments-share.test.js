@@ -55,14 +55,18 @@ test('budget form prepares a local square cover and exposes the same Moments lan
     Page(value) { definition = value; },
     require(request) {
       if (request === '../../utils/costRegions') return costRegions;
+      if (request === '../../utils/asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === '../../utils/cloudImage') return {
+        prepareCloudImage: async (url, fileName) => {
+          assert.equal(url, 'https://cdn.test/assets/share/budget-timeline-v2.jpg');
+          assert.equal(fileName, 'budget-timeline-v2.jpg');
+          return 'wxfile://user-data/cloud-images/budget-timeline-v2.jpg';
+        },
+      };
       return { prepareCostEstimateShareImage: async () => 'wxfile://chat.jpg' };
     },
     console: { warn() {} },
     wx: {
-      env: { USER_DATA_PATH: 'wxfile://user-data' },
-      getFileSystemManager() {
-        return { copyFile({ destPath, success }) { assert.equal(destPath, 'wxfile://user-data/budget-timeline-v2.jpg'); success(); } };
-      },
     },
   });
   const page = {
@@ -71,11 +75,12 @@ test('budget form prepares a local square cover and exposes the same Moments lan
     setData(patch) { Object.assign(this.data, patch); },
   };
   page.onLoad({});
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(page.data.contentReady, true);
   const timeline = page.onShareTimeline();
   assert.equal(timeline.title, '10秒估算建房报价\n建别墅从这里开始');
   assert.equal(timeline.query, 'from=share');
-  assert.equal(timeline.imageUrl, 'wxfile://user-data/budget-timeline-v2.jpg');
+  assert.equal(timeline.imageUrl, 'wxfile://user-data/cloud-images/budget-timeline-v2.jpg');
 });
 
 function createResultHarness({ cached = currentResult, reportId, sharedResult = currentResult, sharedError = null, token = 'token', chatCover = 'wxfile://chat.jpg', timelineCover = 'wxfile://timeline.jpg' } = {}) {

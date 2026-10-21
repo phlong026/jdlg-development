@@ -1,9 +1,9 @@
+import { resolveAssetPath } from './asset';
+import { prepareCloudImage } from './cloudImage';
+
 const CARD_WIDTH = 1000;
 const CARD_HEIGHT = 800;
-const HOUSE_IMAGE_PATHS = [
-  '/assets/images/cost-estimate-share-house.jpg',
-  'assets/images/cost-estimate-share-house.jpg',
-];
+const HOUSE_IMAGE_URL = resolveAssetPath('/assets/images/cost-estimate-share-house.jpg');
 
 export type CostEstimateShareCard = {
   totalCost?: string;
@@ -52,16 +52,10 @@ function loadCanvasImage(canvas: any, source: string): Promise<any> {
   });
 }
 
-async function loadBundledHouseImage(canvas: any): Promise<any> {
-  let latestError: unknown;
-  for (const source of HOUSE_IMAGE_PATHS) {
-    try {
-      return await loadCanvasImage(canvas, source);
-    } catch (error) {
-      latestError = error;
-    }
-  }
-  throw latestError || new Error('别墅分享主视觉加载失败');
+async function loadHouseImage(canvas: any): Promise<any> {
+  const source = await prepareCloudImage(HOUSE_IMAGE_URL, 'cost-estimate-share-house.jpg');
+  if (!source) throw new Error('别墅分享主视觉下载失败');
+  return loadCanvasImage(canvas, source);
 }
 
 async function writeImage(cacheKey: string, dataUrl: string): Promise<string> {
@@ -208,7 +202,7 @@ async function createShareImage(card: CostEstimateShareCard): Promise<string> {
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
-  const houseImage = await loadBundledHouseImage(canvas);
+  const houseImage = await loadHouseImage(canvas);
   const hasEstimate = Boolean(card.totalCost);
   drawCardHouseImage(ctx, houseImage, hasEstimate);
   drawCardFrame(ctx, hasEstimate);
@@ -240,7 +234,7 @@ export async function prepareCostEstimateTimelineImage(card: CostEstimateShareCa
     if (!ctx) return '';
     ctx.fillStyle = '#fcf3e3';
     ctx.fillRect(0, 0, 1000, 1000);
-    const image = await loadBundledHouseImage(canvas);
+    const image = await loadHouseImage(canvas);
     ctx.drawImage(image, 390, 250, 610, 610);
     const seam = ctx.createLinearGradient(390, 0, 450, 0);
     seam.addColorStop(0, '#fcf3e3');
