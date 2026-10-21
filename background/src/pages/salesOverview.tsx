@@ -97,7 +97,7 @@ const SalesOverview: React.FC = () => {
         if (!withLeads) return;
         let active = true;
         getCustomerLeadFunnel(days)
-            .then((metrics) => { if (active) setFunnel({ steps: metrics.map((m) => ({ key: m.key, label: funnelStepLabel(m), count: m.count })), error: false }); })
+            .then((metrics) => { if (active) setFunnel({ steps: metrics.map((m) => ({ key: m.key, label: funnelStepLabel(m), count: m.count, rate: m.conversion_rate })), error: false }); })
             .catch(() => { if (active) setFunnel({ steps: [], error: true }); });
         return () => { active = false; };
     }, [days, version, withLeads]);

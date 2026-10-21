@@ -59,6 +59,9 @@ type CustomerLead struct {
 	// 最近一次留资时间（仅列表返回）：再次留资只更新旧线索，created_at 不变，
 	// 列表靠它把再次留资的客户排到前面。
 	LastSubmittedAt *time.Time `json:"last_submitted_at,omitempty"`
+	// 小程序线索同步到客户档案后的 CRM 客户 ID，用于「去客户档案跟进」直达详情。
+	// 尚未同步或未启用客户管理时为空，前端回退到客户列表。
+	CustomerID string `json:"customer_id,omitempty"`
 }
 
 type CustomerLeadCreateInput struct {
@@ -787,6 +790,8 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
+	rows.Close()
+	m.attachLeadCustomerIDs(list)
 	return list, total, nil
 }
 
@@ -798,7 +803,7 @@ type customerLeadDB interface {
 }
 
 func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
-	return scanCustomerLeadRow(m.DB.QueryRow(`
+	item, err := scanCustomerLeadRow(m.DB.QueryRow(`
 		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
@@ -806,6 +811,50 @@ func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
 		FROM customer_leads
 		WHERE id = ?
 	`, id))
+	if err != nil {
+		return nil, err
+	}
+	m.attachLeadCustomerIDs([]*CustomerLead{item})
+	return item, nil
+}
+
+// attachLeadCustomerIDs 补上「线索 → 客户档案」的客户 ID。
+// 交付表只在启用客户管理并完成同步后才有数据；表不存在或未同步时保持为空，
+// 不阻断线索列表本身，前端会回退到客户列表。
+func (m *CustomerServiceModel) attachLeadCustomerIDs(list []*CustomerLead) {
+	if m == nil || m.DB == nil || len(list) == 0 {
+		return
+	}
+	placeholders := make([]string, 0, len(list))
+	args := make([]interface{}, 0, len(list))
+	for _, item := range list {
+		if item == nil || item.ID <= 0 {
+			continue
+		}
+		placeholders = append(placeholders, "?")
+		args = append(args, item.ID)
+	}
+	if len(args) == 0 {
+		return
+	}
+	rows, err := m.DB.Query(`SELECT lead_id, customer_id FROM customer_lead_crm_delivery WHERE lead_id IN (`+strings.Join(placeholders, ",")+`) AND customer_id <> ''`, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	byLead := make(map[int64]string, len(args))
+	for rows.Next() {
+		var leadID int64
+		var customerID string
+		if rows.Scan(&leadID, &customerID) == nil {
+			byLead[leadID] = customerID
+		}
+	}
+	for _, item := range list {
+		if item != nil {
+			item.CustomerID = byLead[item.ID]
+		}
+	}
 }
 
 func scanCustomerLeadRow(row *sql.Row) (*CustomerLead, error) {

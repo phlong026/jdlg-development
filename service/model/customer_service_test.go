@@ -344,3 +344,26 @@ func TestFunnelAndListCountResubmissions(t *testing.T) {
 		t.Fatal("提交线索不应再按 customer_leads 新建时间计数")
 	}
 }
+
+// 「去客户档案跟进」需要客户 ID：线索列表/详情必须从同步交付表带出 customer_id，
+// 且表缺失或线索未同步时不能阻断线索列表。
+func TestCustomerLeadExposesCRMArchiveID(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		`json:"customer_id,omitempty"`,
+		"attachLeadCustomerIDs",
+		"FROM customer_lead_crm_delivery WHERE lead_id IN (",
+		"AND customer_id <> ''",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("lead customer id contract missing %q", want)
+		}
+	}
+	if strings.Count(content, "m.attachLeadCustomerIDs(") < 2 {
+		t.Fatal("线索列表和详情都应补 customer_id")
+	}
+}

@@ -11,9 +11,9 @@ interface Props {
 const SHADES = ['#8b5e3c', '#a2754f', '#b98c66', '#cfa57f', '#e0bf9f'];
 
 /**
- * 梯形漏斗：每层 [名称 | 梯形 | 人数 + 相对上一层转化率]。
+ * 梯形漏斗：每层 [名称 | 梯形 | 人数 + 相对进入客服的转化率]。
  * 梯形宽度最窄 18%（见 funnelLayers），文字放在梯形两侧，窄层也读得清。
- * 线索页、总览共用这一个组件。
+ * 线索页、总览共用同一口径：转化率都以第一层（进入客服）为基数。
  */
 const SalesFunnel: React.FC<Props> = ({ steps, label }) => {
     const layers = funnelLayers(steps);
@@ -38,7 +38,7 @@ const SalesFunnel: React.FC<Props> = ({ steps, label }) => {
                         </span>
                         <span className="sales-funnel-count">
                             <b>{layer.count}</b>
-                            <small>{layer.rate === null ? '' : `${layer.rate}%`}</small>
+                            <small>{layer.count > 0 && layer.rate !== null ? `${layer.rate}%` : '—'}</small>
                         </span>
                     </li>
                 );
