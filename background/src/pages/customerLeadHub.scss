@@ -25,10 +25,9 @@
     h2 { margin: 0; font-size: 18px; color: #1f2937; }
 }
 
-.lead-hub-period { margin-left: auto; color: #6b7280; font-size: 14px; }
-
 .lead-hub-refresh {
     display: inline-flex;
+    margin-left: auto;
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
@@ -180,85 +179,14 @@
     .lead-hub-legend { flex: none; width: 100%; max-width: 320px; }
 }
 
-/* ============ 阶段环图折叠壳（手机端收起为一行摘要，桌面隐藏 summary 常开） ============ */
-.lead-hub-stage-summary {
-    display: none;
 }
 
-@media (max-width: 768px) {
-    .lead-hub-stage-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 14px 16px;
-        list-style: none;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 700;
-        color: #1f2937;
-
-        &::-webkit-details-marker { display: none; }
-    }
-
-    /* 收起时隐藏卡片头（标题与摘要行重复） */
-    .lead-hub-stage-wrap:not([open]) .lead-hub-card-head {
-        display: none;
-    }
-
-    .lead-hub-stagebar {
-        display: flex;
-        flex: 1;
-        gap: 2px;
-        height: 6px;
-        max-width: 140px;
-        margin-left: auto;
-        border-radius: 3px;
-        overflow: hidden;
-        background: #eee8df;
-
-        i { display: block; min-width: 4px; }
-    }
-
-    .lead-hub-stage-wrap[open] .lead-hub-stagebar { visibility: hidden; }
-
-    .lead-hub-stage-caret {
-        color: #8b5e3c;
-        transition: transform 0.18s ease;
-        flex-shrink: 0;
-    }
-
-    .lead-hub-stage-wrap[open] .lead-hub-stage-caret {
-        transform: rotate(180deg);
-    }
-}
-}
-
-/* 客服服务漏斗（近30天，按账号去重）：折叠卡，展开后逐层数字+相对底层的转化率 */
+/* 客服服务漏斗：常开，占满一行，逐层数字 + 相对上一层的转化率 */
 .layout-content[data-admin-page="/customer-leads"] .lead-hub-funnel-wrap {
     grid-column: 1 / -1;
+    padding-bottom: 12px;
 
-    .lead-hub-stage-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 14px 16px;
-        list-style: none;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 700;
-        color: #1f2937;
-
-        &::-webkit-details-marker { display: none; }
-
-        // 卡片 overflow: hidden 会裁掉外侧焦点框，改为内描边
-        &:focus-visible { outline: 2px solid #8b5e3c; outline-offset: -2px; }
-    }
-
-    .lead-hub-stage-caret { color: #8b5e3c; transition: transform 0.18s ease; }
-    &[open] .lead-hub-stage-caret { transform: rotate(180deg); }
-    &[open] { padding-bottom: 12px; }
+    .lead-hub-funnel { padding: 12px 16px 0; }
 }
 .lead-hub-funnel { list-style: none; margin: 0; padding: 0 4px; display: grid; gap: 6px; }
 .lead-hub-funnel li { display: grid; grid-template-columns: minmax(72px, 1fr) auto auto; gap: 12px; align-items: center; padding: 7px 12px; border: 1px solid #ece7e1; border-radius: 8px; background: #faf8f5; font-size: 13px; }

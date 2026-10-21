@@ -210,7 +210,7 @@ test('legacy save detail completion after logout never refreshes the new session
 
 test('standalone overview labels distinguish full pending totals from today new records',async()=>{
  const env=environment();env.leadQueues=[{key:'todo',label:'待处理',countKey:'todo_count',alert:true},{key:'today',label:'今日新增',countKey:'today_new_count'},{key:'high',label:'高意向',countKey:'high_todo_count',alert:true}];const h=await env.mount('customerLeadHub.tsx','default',{overview:{total_count:8,today_new_count:1,todo_count:6,high_intent_count:5,high_todo_count:2},loading:false,updatedAt:null,onRefresh(){},activeQueue:'todo',queueHref:(key)=>`/customer-leads?queue=${key}`});
- assert.match(h.text(),/全量概览/);assert.match(h.text(),/今日新增1/);assert.match(h.text(),/待处理6/);assert.match(h.text(),/高意向2/);
+ assert.doesNotMatch(h.text(),/全量概览/);assert.match(h.text(),/今日新增1/);assert.match(h.text(),/待处理6/);assert.match(h.text(),/高意向2/);
 });
 
 test('sync accepted writes cannot replay through an old handler while its refresh fails',async()=>{

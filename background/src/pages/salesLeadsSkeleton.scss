@@ -1,7 +1,13 @@
 // 线索页只套新骨架：标题、只读提示条、卡片圆角；列表与操作的样式仍由 customerLeads.scss 负责。
 .layout-content[data-admin-page='/customer-leads'] {
   .sx-leads { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .sx-page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .sx-page-head h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--admin-text); }
+  .sx-page-head-gap { flex: 1; }
+  .sx-lead-add { height: 40px; padding: 0 16px; border: 0; border-radius: 12px; background: #8b5e3c; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .sx-lead-created { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: 12px; background: #e8f1ea; color: #3d7a4f; font-size: 13px; a { color: inherit; font-weight: 600; } }
+  // 报备抽屉复用客户页样式（都限定在 .crm-page 下），外层容器不占版面
+  .crm-page.sx-lead-report { display: contents; }
 
   // 只读提示：整块大卡片收成一行提示条
   .customer-lead-page > .customer-lead-panel[role='status'] {
