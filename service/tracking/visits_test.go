@@ -496,3 +496,50 @@ func TestVisitsPageSizeAndPageOnlyForwarders(t *testing.T) {
 		t.Fatalf("capped page = %d, want 50", got)
 	}
 }
+
+func seedTimedShareIntent(m reviewStore, owner, sharer, session, shareID, channel string, occurred, received time.Time) {
+	ev := Event{ID: "intent-" + shareID, Type: "share_intent", Session: session, Route: publishedReaderRoute, Share: shareID, SourceChannel: channel, Occurred: occurred, Received: received}
+	rec := record("event", ev.ID, owner, occurred, ev)
+	rec.Visitor, rec.Session = sharer, session
+	_ = m.Put(rec)
+}
+
+func TestVisitsChannelToleratesSharerClockBehind(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-3 * time.Hour)
+	seedShareMetric(m, "skew", "one", "u:3", "session-3", "content1", 1, at)
+	// The sharer's device runs 30 minutes slow: the accepted intent predates the share row.
+	seedTimedShareIntent(m, "one", "u:3", "session-3", "sid-skew", "timeline", at.Add(-30*time.Minute), at)
+	visitPV(m, "pv-skew", "one", "u:2", "session-2", "content1", "sid-skew", at.Add(time.Minute), 1000)
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Channel: "timeline"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if got := visitItems(t, list); len(got) != 1 || got[0].Source.Channel != "timeline" {
+		t.Fatalf("skewed intent = %+v, want the timeline visit", got)
+	}
+}
+
+func TestVisitsChannelIgnoresIntentReceivedAfterSnapshot(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-3 * time.Hour)
+	asOf := now.Add(-20 * time.Minute)
+	seedShareMetric(m, "late", "one", "u:3", "session-3", "content1", 1, at)
+	// Queued offline: occurred before the snapshot but uploaded after it.
+	seedTimedShareIntent(m, "one", "u:3", "session-3", "sid-late", "timeline", at, now.Add(-10*time.Minute))
+	visitPV(m, "pv-late", "one", "u:2", "session-2", "content1", "sid-late", at.Add(time.Minute), 1000)
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", AsOf: asOf})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if got := visitItems(t, list); len(got) != 1 || got[0].Source.Channel != "" {
+		t.Fatalf("snapshot source = %+v, want no channel before the intent was received", got)
+	}
+	filtered, e := s.Visits(context.Background(), scope, Filter{Owner: "one", AsOf: asOf, Channel: "timeline"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if got := visitItems(t, filtered); len(got) != 0 {
+		t.Fatalf("timeline filter at snapshot = %+v, want none", got)
+	}
+}

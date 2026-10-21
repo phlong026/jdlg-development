@@ -285,7 +285,6 @@ func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*vis
 		wanted[id] = true
 	}
 	sessions := []string{}
-	var earliest time.Time
 	for _, row := range rows {
 		var sh Share
 		if json.Unmarshal(row.Payload, &sh) != nil {
@@ -297,17 +296,14 @@ func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*vis
 		out[sh.ID] = entryShare{share: sh}
 		if sh.Session != "" {
 			sessions = appendUnique(sessions, sh.Session)
-			if earliest.IsZero() || row.At.Before(earliest) {
-				earliest = row.At
-			}
 		}
 	}
 	if len(sessions) == 0 {
 		return out, nil
 	}
-	// A share_intent never precedes its share; the bound skips the sharer's
-	// earlier reading in the same session.
-	events, err := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: sessions, AtFrom: earliest.Add(-time.Minute), AtThrough: f.AsOf})
+	// Read the whole sharer session: a slow device clock can date an accepted
+	// share_intent well before its share row, so the share time is no bound.
+	events, err := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: sessions, AtThrough: f.AsOf})
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +313,9 @@ func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*vis
 			return nil, ErrUnavailable
 		}
 		es, ok := out[ev.Share]
-		if ev.Type != "share_intent" || ev.SourceChannel == "" || !ok || es.channel != "" {
+		// Same snapshot rule as the fact reduction: an intent uploaded after
+		// as_of must not change a pinned page's source or filter membership.
+		if ev.Type != "share_intent" || ev.SourceChannel == "" || !ok || es.channel != "" || ev.Received.After(f.AsOf) {
 			continue
 		}
 		es.channel = ev.SourceChannel
