@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -675,10 +676,12 @@ func (s *Service) fillVisitPage(ctx context.Context, r Repository, scope, effect
 				Engaged:   material.visible >= engagedVisibleMS || material.pageViews >= engagedContentViews || progress != nil && progress.Kind == "video" && progress.Percent >= engagedVideoPercent,
 			})
 		}
+		materials = mergeVisitMaterials(materials)
 		g.Materials = materials
 		g.Content = materials[0].Content
 		g.Progress = materials[0].Progress
 		g.Engaged = materials[0].Engaged
+		g.Visible, g.ContentViews = visitMaterialTotals(materials)
 	}
 	return nil
 }
@@ -727,12 +730,95 @@ func (s *Service) fillVisitPageSparse(ctx context.Context, r Repository, effecti
 				Engaged:   material.visible >= engagedVisibleMS || material.pageViews >= engagedContentViews,
 			})
 		}
+		materials = mergeVisitMaterials(materials)
 		g.Materials = materials
 		g.Content = materials[0].Content
 		g.Progress = nil
 		g.Engaged = materials[0].Engaged
+		g.Visible, g.ContentViews = visitMaterialTotals(materials)
 	}
 	return nil
+}
+
+// visitMaterialTotals recomputes a batch card's totals after duplicate rows
+// were merged. A duplicate's page views are cumulative per content ID, so the
+// merged row keeps the maximum instead of double counting.
+func visitMaterialTotals(materials []VisitMaterial) (visible int64, views int) {
+	for _, material := range materials {
+		visible += material.Visible
+		views += material.PageViews
+	}
+	return visible, views
+}
+
+// mergeVisitMaterials collapses the same material republished under another
+// content ID. Title alone is not enough (generic titles like "新闽派" are
+// common), so require the same normalized title and the same cover media/URL.
+// Same title with a different cover stays separate.
+func mergeVisitMaterials(materials []VisitMaterial) []VisitMaterial {
+	if len(materials) < 2 {
+		return materials
+	}
+	out := make([]VisitMaterial, 0, len(materials))
+	for _, material := range materials {
+		key := visitMaterialDedupeKey(material)
+		merged := false
+		if key != "" {
+			for i := range out {
+				if visitMaterialDedupeKey(out[i]) == key {
+					out[i] = mergeVisitMaterialRow(out[i], material)
+					merged = true
+					break
+				}
+			}
+		}
+		if !merged {
+			out = append(out, material)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Visible != out[j].Visible {
+			return out[i].Visible > out[j].Visible
+		}
+		return out[i].Started.Before(out[j].Started)
+	})
+	return out
+}
+
+func visitMaterialDedupeKey(material VisitMaterial) string {
+	title := strings.Join(strings.Fields(strings.ReplaceAll(material.Content.Title, "\u3000", " ")), " ")
+	cover := ""
+	if material.Content.Cover != nil {
+		cover = material.Content.Cover.URL
+		if cover == "" {
+			cover = material.Content.Cover.ID
+		}
+	}
+	if title == "" || cover == "" {
+		return ""
+	}
+	return title + "\x00" + cover
+}
+
+func mergeVisitMaterialRow(a, b VisitMaterial) VisitMaterial {
+	if b.Visible > a.Visible {
+		a, b = b, a
+	}
+	if b.Started.Before(a.Started) {
+		a.Started = b.Started
+	}
+	if b.Ended.After(a.Ended) {
+		a.Ended = b.Ended
+	}
+	a.Visible += b.Visible
+	if b.PageViews > a.PageViews {
+		a.PageViews = b.PageViews
+	}
+	a.Engaged = a.Engaged || b.Engaged
+	if a.Progress == nil || b.Progress != nil && b.Progress.Percent > a.Progress.Percent {
+		a.Progress = b.Progress
+	}
+	return a
 }
 
 // visitProgress mirrors the material card's video reduction on one visit:

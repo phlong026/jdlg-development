@@ -630,3 +630,44 @@ func TestVisitsRejectsUnknownGroup(t *testing.T) {
 		t.Fatal("unknown group should be rejected")
 	}
 }
+
+// 同一素材被重复发布成不同 content_id 时，同一批次只保留一行；标题相同但封面不同
+// 视为不同素材，不能合并。
+func TestVisitsBatchMergesSameTitleAndCover(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	seed := func(id, cover string) {
+		c := Content{ID: id, Title: "建筑外立面改造", Owner: "one", Version: 1, Status: "published", Type: "image", Cover: &Asset{ID: cover, Kind: "image", URL: "/api/v1/miniprogram/tracking/media/" + cover}}
+		_ = m.Put(record("content", id, "one", now.Add(-48*time.Hour), c))
+		_ = m.Put(record("version", contentKey(id, 1), "one", now.Add(-48*time.Hour), c))
+		_ = m.Put(record("media", cover, "one", now.Add(-48*time.Hour), nil))
+	}
+	seed("dup-a", "cover-x")
+	seed("dup-b", "cover-x")
+	seed("dup-c", "cover-y")
+	at := now.Add(-4 * time.Hour)
+	visitPV(m, "pv-dup1", "one", "u:1", "dup-s1", "dup-a", "", at, 10000)
+	visitPV(m, "pv-dup2", "one", "u:1", "dup-s2", "dup-b", "", at.Add(2*time.Minute), 20000)
+	visitPV(m, "pv-dup3", "one", "u:1", "dup-s3", "dup-c", "", at.Add(4*time.Minute), 5000)
+
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items := visitItems(t, list)
+	if len(items) != 1 {
+		t.Fatalf("cards = %d, want 1: %+v", len(items), items)
+	}
+	materials := items[0].Materials
+	if len(materials) != 2 {
+		t.Fatalf("materials = %d, want 2 (same title+cover merged, different cover kept): %+v", len(materials), materials)
+	}
+	if materials[0].Content.ID != "dup-b" || materials[0].Visible != 30000 || materials[0].PageViews != 1 {
+		t.Fatalf("merged material = %+v, want dup-b with 30s and max 1 view", materials[0])
+	}
+	if materials[1].Content.ID != "dup-c" || materials[1].Visible != 5000 {
+		t.Fatalf("different-cover material = %+v, want dup-c with 5s", materials[1])
+	}
+	if items[0].Visible != 35000 || items[0].ContentViews != 2 {
+		t.Fatalf("card totals = %d/%d, want 35000/2", items[0].Visible, items[0].ContentViews)
+	}
+}
