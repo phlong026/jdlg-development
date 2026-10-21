@@ -3,6 +3,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"sort"
 	"time"
@@ -155,6 +156,7 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
 	effective := ownerScope(scope, f.Owner)
 	pending := []pendingEvaluation{}
+	var page []*visitGroup
 	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		p, e := s.projectVisitors(ctx, r, scope, f, overrideLimit)
 		if e != nil {
@@ -205,7 +207,7 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 		if e != nil {
 			return e
 		}
-		page := items[start:end]
+		page = items[start:end]
 		if !filterByShare {
 			if shares, e = s.entryShares(r, scope, f, page); e != nil {
 				return e
@@ -214,20 +216,34 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 		if e = s.attachSources(ctx, r, f, page, shares); e != nil {
 			return e
 		}
-		if e = s.fillVisitPage(ctx, r, scope, effective, f, page); e != nil {
-			return e
-		}
-		visits := make([]Visit, 0, len(page))
-		for _, g := range page {
-			visits = append(visits, g.Visit)
-		}
-		out.Items = visits
 		out.Cursor = withProfileRevision(cursor, p.profileRevision)
 		out.FirstCursor = withProfileRevision(overrideSnapshotCursor(f, 0, p.intentData.overrideRevision), p.profileRevision)
 		return nil
 	})
 	if err != nil {
 		return out, err
+	}
+	// Progress needs raw events. Batch/day cards can cover many sessions, so
+	// this enrichment gets its own read budget instead of sharing the list
+	// query's budget. If even that is too large, serve the cards without
+	// progress rather than failing the whole page.
+	if len(page) > 0 {
+		err = s.readQueryTransaction(ctx, func(r Repository) error {
+			return s.fillVisitPage(ctx, r, scope, effective, f, page)
+		})
+		if errors.Is(err, ErrQueryTooLarge) {
+			err = s.readQueryTransaction(ctx, func(r Repository) error {
+				return s.fillVisitPageSparse(ctx, r, effective, page)
+			})
+		}
+		if err != nil {
+			return out, err
+		}
+		visits := make([]Visit, 0, len(page))
+		for _, g := range page {
+			visits = append(visits, g.Visit)
+		}
+		out.Items = visits
 	}
 	// A served label is never left unaudited: failing to record fails the request.
 	if err = s.recordIntentEvaluations(ctx, effective, pending); err != nil {
@@ -662,6 +678,58 @@ func (s *Service) fillVisitPage(ctx context.Context, r Repository, scope, effect
 		g.Materials = materials
 		g.Content = materials[0].Content
 		g.Progress = materials[0].Progress
+		g.Engaged = materials[0].Engaged
+	}
+	return nil
+}
+
+// fillVisitPageSparse is the degraded enrichment path: it resolves material
+// titles and "看得认真" from aggregate counts, but skips raw video/scroll events.
+// The visit grouping stays correct; only the per-card progress is omitted.
+func (s *Service) fillVisitPageSparse(ctx context.Context, r Repository, effective Scope, page []*visitGroup) error {
+	cache := map[string]VisitContent{}
+	resolve := func(material VisitContent) (VisitContent, error) {
+		key := material.Route + "\x00" + contentKey(material.ID, material.Version)
+		if hit, ok := cache[key]; ok {
+			return hit, nil
+		}
+		resolved, err := s.visitedContent(ctx, r, effective, material.ID, material.Version, material.Route)
+		if err != nil {
+			return VisitContent{}, err
+		}
+		content := VisitContent{ID: resolved.ID, Version: resolved.Version, Title: resolved.Title, Type: resolved.Type, Status: resolved.Status, Cover: resolved.Cover, Route: resolved.Route, Accessible: resolved.Accessible}
+		cache[key] = content
+		return content, nil
+	}
+	for _, g := range page {
+		if len(g.materials) == 0 {
+			content, err := resolve(g.Content)
+			if err != nil {
+				return err
+			}
+			g.Content = content
+			g.Progress = nil
+			g.Engaged = g.Visible >= engagedVisibleMS || g.ContentViews >= engagedContentViews
+			continue
+		}
+		materials := make([]VisitMaterial, 0, len(g.materials))
+		for _, material := range g.materials {
+			content, err := resolve(material.content)
+			if err != nil {
+				return err
+			}
+			materials = append(materials, VisitMaterial{
+				Content:   content,
+				Started:   material.started,
+				Ended:     material.ended,
+				Visible:   material.visible,
+				PageViews: material.pageViews,
+				Engaged:   material.visible >= engagedVisibleMS || material.pageViews >= engagedContentViews,
+			})
+		}
+		g.Materials = materials
+		g.Content = materials[0].Content
+		g.Progress = nil
 		g.Engaged = materials[0].Engaged
 	}
 	return nil
