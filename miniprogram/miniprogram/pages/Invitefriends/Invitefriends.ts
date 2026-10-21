@@ -840,7 +840,7 @@ Page({
       if (typeof wx.showShareImageMenu !== 'function') {
         wx.showModal({
           title: '分享海报',
-          content: '请点击右上角"..."选择转发，或将海报保存到相册后分享',
+          content: '当前微信版本不支持图片分享菜单，请点击右上角“...”选择分享到朋友圈，或先保存图片后分享',
           showCancel: false,
         });
         return;
@@ -925,6 +925,7 @@ Page({
     
     return {
       title: `${nickname}邀请你使用甲第灵光AI，输入邀请码${inviteCode}即可获得50灵石奖励！`,
+      query: inviteCode ? `invite_code=${encodeURIComponent(inviteCode)}` : '',
       imageUrl: this.data.shareImageUrl || this.data.posterImageUrl || '',
     };
   },

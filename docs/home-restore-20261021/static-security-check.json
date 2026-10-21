@@ -1,0 +1,58 @@
+{
+  "secret_findings": [],
+  "javascript_syntax": [
+    {
+      "file": "miniprogram/miniprogram/pages/Invitefriends/Invitefriends.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/miniprogram/pages/generatedetails/generatedetails.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/miniprogram/pages/index/index.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/miniprogram/pages/myplan/myplan.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/miniprogram/utils/tracking/index.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/home-cloud-header-release.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/home-reference.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/home-safe-area-layout.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/home-share.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/home-smart-service-fixed.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/share-tracking.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/home-restored-layout.test.js",
+      "pass": true
+    },
+    {
+      "file": "miniprogram/tests/timeline-sharing.test.js",
+      "pass": true
+    }
+  ],
+  "files_scanned": 36
+}
