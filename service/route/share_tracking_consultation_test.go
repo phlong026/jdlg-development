@@ -19,6 +19,8 @@ type consultationStoreFixture struct {
 	events                []string
 	leadCalls, eventCalls int
 	user                  int64
+	submitFailures        int                                      // 前 N 次 lead_submit 写入失败
+	submitAttempts        []*model.CustomerServiceEventCreateInput // 每次 lead_submit 的入参
 }
 
 func (s *consultationStoreFixture) CreateLead(in *model.CustomerLeadCreateInput) (int64, error) {
@@ -33,6 +35,12 @@ func (s *consultationStoreFixture) CreateEvent(in *model.CustomerServiceEventCre
 	s.eventCalls++
 	s.lastEvent = in.EventType
 	s.events = append(s.events, in.EventType)
+	if in.EventType == "lead_submit" {
+		s.submitAttempts = append(s.submitAttempts, in)
+		if len(s.submitAttempts) <= s.submitFailures {
+			return 0, errors.New("payload too large")
+		}
+	}
 	if s.failEvent && in.EventType == "consultation_request_submitted" {
 		return 0, errors.New("event unavailable")
 	}
@@ -155,6 +163,42 @@ func TestGenericEventsRejectServerOnlyTypes(t *testing.T) {
 			router.ServeHTTP(rec, req)
 			if rec.Code != tc.status || (store.eventCalls > 0) != tc.stored {
 				t.Fatalf("status=%d events=%d, want status=%d stored=%v", rec.Code, store.eventCalls, tc.status, tc.stored)
+			}
+		})
+	}
+}
+
+// lead_submit 是"提交线索"统计与列表排序的依据，不能在写入失败时静默返回成功：
+// 先去掉 payload 与需求摘要重试一次（超长 payload 最常见），仍失败则返回 500 让客户端重试（同会话重试幂等）。
+func TestLeadSubmitEventFailureIsNotSilent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name     string
+		failures int
+		status   int
+		attempts int
+	}{
+		{"first write ok", 0, http.StatusOK, 1},
+		{"retry without payload succeeds", 1, http.StatusOK, 2},
+		{"retry also fails", 2, http.StatusInternalServerError, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &consultationStoreFixture{submitFailures: tc.failures}
+			router := gin.New()
+			router.Use(func(c *gin.Context) { c.Set("code_session", &model.CodeSession{UserID: 41}); c.Next() })
+			registerCustomerLeadRoutes(router.Group("/api"), store, nil, nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/customer-service/leads", strings.NewReader(`{"demand_summary":"三层 新闽派","payload":{"reason":"structured_requirement"}}`))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != tc.status || len(store.submitAttempts) != tc.attempts {
+				t.Fatalf("status=%d attempts=%d, want status=%d attempts=%d", rec.Code, len(store.submitAttempts), tc.status, tc.attempts)
+			}
+			if tc.attempts == 2 {
+				retry := store.submitAttempts[1]
+				if retry.Payload != nil || retry.DemandSummary != "" || retry.LeadID != 73 || retry.UserID != 41 {
+					t.Fatalf("retry should be minimal but keep lead/user, got %+v", retry)
+				}
 			}
 		})
 	}
