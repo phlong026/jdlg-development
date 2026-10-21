@@ -1,0 +1,35 @@
+{
+  "scope": "首页朋友圈封面与分享落地",
+  "relevantTests": {
+    "total": 269,
+    "passed": 269,
+    "failed": 0
+  },
+  "fullSuite": {
+    "total": 333,
+    "passed": 328,
+    "failed": 2,
+    "skipped": 3,
+    "baselineFailures": [
+      "customer-service-action-placement.test.js",
+      "customer-service-knowledge.test.js"
+    ]
+  },
+  "staticChecks": [
+    "TypeScript通过",
+    "JS语法通过",
+    "tracking构建一致性通过",
+    "58条路由清单一致",
+    "git diff --check通过"
+  ],
+  "security": {
+    "changedTextFiles": 13,
+    "secretFindings": [],
+    "productionDependencyVulnerabilities": 0
+  },
+  "review": "独立代码复核APPROVE",
+  "nativeEvidence": "模拟器-朋友圈封面已渲染.png",
+  "visualPreview": "分享卡片效果图-待确认.png",
+  "release": "仅本地，未上传、推送、合并或部署",
+  "remaining": "其余25入口的一致性审计方案及真实微信跨账号验收见分享一致性排查.md"
+}

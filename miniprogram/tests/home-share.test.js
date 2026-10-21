@@ -8,7 +8,7 @@ const ts = require('./report-runtime')('typescript');
 const root = path.resolve(__dirname, '..');
 const title = '甲第灵光 · AI建房助手';
 
-function loadPage(extension) {
+function loadPage(extension, { resumeReportAfterLogin = () => false, discardReportLoginReturn = () => {}, copyFile } = {}) {
   let definition;
   const menus = [];
   const warnings = [];
@@ -18,11 +18,17 @@ function loadPage(extension) {
     : source;
   vm.runInNewContext(code, {
     exports: {},
-    require: name => name.endsWith('costRegions')
+    require: name => name.endsWith('reportNavigation')
+      ? { resumeReportAfterLogin, discardReportLoginReturn }
+      : name.endsWith('costRegions')
       ? require('../miniprogram/utils/costRegions.js')
       : { resolveAssetPath: value => value },
     Page: value => { definition = value; },
-    wx: { showShareMenu: options => menus.push(options) },
+    wx: {
+      showShareMenu: options => menus.push(options),
+      env: { USER_DATA_PATH: 'wxfile://usr' },
+      getFileSystemManager: () => ({ copyFile: copyFile || (options => options.success()) }),
+    },
     console: { warn: (...args) => warnings.push(args) },
   });
   return { definition, menus, warnings };
@@ -33,27 +39,99 @@ for (const extension of ['ts', 'js']) {
     const { definition } = loadPage(extension);
     const share = definition.onShareAppMessage();
     assert.equal(share.title, title);
-    assert.equal(share.path, '/pages/index/index');
-    assert.equal(share.imageUrl, '/assets/share/home-chat.jpg');
+    assert.equal(share.path, '/pages/index/index?from=share');
+    assert.equal(share.imageUrl, undefined, '未准备好时不返回已知会破图的包内路径');
   });
 
   test(`${extension}: 朋友圈使用方形封面并留在当前首页`, () => {
     const { definition } = loadPage(extension);
-    const share = definition.onShareTimeline();
+    const share = definition.onShareTimeline.call({ data: { ...definition.data, contentReady: true, homeTimelineCover: 'wxfile://usr/home-timeline.jpg' } });
     assert.equal(share.title, title);
-    assert.equal(share.imageUrl, '/assets/share/home-timeline.jpg');
-    assert.equal(share.query, '');
+    assert.equal(share.imageUrl, 'wxfile://usr/home-timeline.jpg');
+    assert.equal(share.query, 'from=share');
     assert.equal(share.path, undefined);
+  });
+
+  test(`${extension}: 分享封面准备为微信本地文件，保留各自原图`, async () => {
+    const copied = [];
+    const { definition } = loadPage(extension, { copyFile(options) { copied.push(options); options.success(); } });
+    const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
+    await definition.prepareHomeShareCovers.call(page);
+    assert.deepEqual(copied.map(item => item.srcPath), ['/assets/share/home-chat.jpg', '/assets/share/home-timeline.jpg']);
+    assert.equal(definition.onShareAppMessage.call(page).imageUrl, 'wxfile://usr/home-chat.jpg');
+    assert.equal(definition.onShareTimeline.call(page).imageUrl, 'wxfile://usr/home-timeline.jpg');
+  });
+
+  test(`${extension}: 封面准备失败关闭朋友圈并记录原因`, async () => {
+    const { definition, warnings } = loadPage(extension, { copyFile(options) { options.fail({ errMsg: 'disk full' }); } });
+    const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
+    await definition.prepareHomeShareCovers.call(page);
+    assert.equal(page.data.contentReady, false);
+    assert.equal(definition.onShareTimeline.call(page).imageUrl, undefined);
+    assert.equal(warnings.length, 2);
+  });
+
+  test(`${extension}: 首次立即分享会等待封面且不会返回错误封面`, async () => {
+    const pending = [];
+    const { definition } = loadPage(extension, { copyFile: options => pending.push(options) });
+    const page = { data: { ...definition.data }, setData(value) { Object.assign(this.data, value); } };
+    page.shareCoversPromise = definition.prepareHomeShareCovers.call(page);
+    const share = definition.onShareAppMessage.call(page);
+    assert.equal(share.imageUrl, undefined);
+    assert.equal(typeof share.promise?.then, 'function');
+    assert.equal(Object.keys(definition.onShareTimeline.call(page)).length, 0);
+    pending.forEach(options => options.success());
+    const readyShare = await share.promise;
+    assert.equal(readyShare.title, title);
+    assert.equal(readyShare.path, '/pages/index/index?from=share');
+    assert.equal(readyShare.imageUrl, 'wxfile://usr/home-chat.jpg');
+    assert.equal(page.data.contentReady, true);
   });
 
   test(`${extension}: 首页加载保留初始化，分享菜单由统一生命周期管理`, () => {
     const { definition, menus } = loadPage(extension);
     let introCalls = 0;
     definition.onLoad.call({
+      prepareHomeShareCovers() {},
       showHomeIntroPopupOnce() { introCalls += 1; },
     });
     assert.equal(introCalls, 1);
     assert.equal(menus.length, 0, '单页模式禁止分享菜单，由全局 onShow 判断后再开启');
+  });
+
+  test(`${extension}: 首页分享清理旧报告记录，后来产生的新报告仍可恢复`, () => {
+      let pendingReport = true;
+      let resumeCalls = 0;
+      const { definition } = loadPage(extension, {
+        resumeReportAfterLogin: () => { resumeCalls++; return pendingReport; },
+        discardReportLoginReturn: () => { pendingReport = false; },
+      });
+      let contentLoads = 0;
+      const page = {
+        prepareHomeShareCovers() {},
+        showHomeIntroPopupOnce() {},
+        syncTabBar() {},
+        loadFeaturedGroups() { contentLoads++; },
+        promptNicknameIfMissing() {},
+      };
+      definition.onLoad.call(page, { from: 'share' });
+      definition.onShow.call(page);
+      assert.equal(resumeCalls, 1);
+      assert.equal(pendingReport, false);
+      assert.equal(contentLoads, 1);
+      pendingReport = true;
+      definition.onShow.call(page);
+      assert.equal(resumeCalls, 2, '同一首页实例仍可恢复新报告');
+      assert.equal(contentLoads, 1);
+  });
+
+  test(`${extension}: 普通登录返回首页仍可恢复报告`, () => {
+    let resumeCalls = 0;
+    const { definition } = loadPage(extension, { resumeReportAfterLogin: () => { resumeCalls++; return true; } });
+    const page = { prepareHomeShareCovers() {}, showHomeIntroPopupOnce() {}, syncTabBar() { assert.fail('应先恢复报告'); } };
+    definition.onLoad.call(page, {});
+    definition.onShow.call(page);
+    assert.equal(resumeCalls, 1);
   });
 }
 

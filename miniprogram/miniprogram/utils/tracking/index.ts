@@ -208,10 +208,15 @@ function wrapPage(definition) {
     safely(() => {
       this.__trackingOptions=options||{};
       const route=String(this.route||'').replace(/^\//,''); if (!routes.policy(route).collect) return;
-      const s=getSDK(); if (!s) return; s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+      const s=getSDK(); if (s) s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
       const original=this.setData;
+      if(typeof original!=='function')return;
       this.setData=function(data,callback) {
-        return original.call(this,data,()=>{ safely(()=>updateReady(this)); if(callback)callback.call(this); });
+        return original.call(this,data,()=>{ safely(()=>{
+          // Sharing readiness must work even when analytics is unavailable.
+          if(Object.prototype.hasOwnProperty.call(data,'contentReady')&&this.__trackingConsentVisible===true)showTimelineShareMenu(this,hasCustomTimelineShare);
+          updateReady(this);
+        }); if(callback)callback.call(this); });
       };
     });
     return invoke('onLoad',this,arguments);

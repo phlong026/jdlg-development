@@ -81,6 +81,29 @@ test('share menu stays closed for unread content and in Moments single-page mode
   assert.equal(menus.length, 0);
 });
 
+test('content readiness refreshes the menu only on the visible page, independently of tracking support', () => {
+  const shown = [], hidden = [];
+  const { wrapPage } = loadTracking({
+    showShareMenu: options => shown.push(options),
+    hideShareMenu: options => hidden.push(options),
+  });
+  const wrapped = wrapPage({ onShareTimeline() { return { title: '首页' }; } });
+  const page = {
+    route: 'pages/index/index', data: { contentReady: false },
+    setData(value, callback) { Object.assign(this.data, value); if (callback) callback(); },
+  };
+  wrapped.onLoad.call(page, {});
+  wrapped.onShow.call(page);
+  assert.equal(shown.length, 0);
+  assert.equal(hidden.length, 1);
+  page.setData({ contentReady: true });
+  assert.equal(shown.length, 1);
+  wrapped.onHide.call(page);
+  page.setData({ contentReady: false });
+  page.setData({ contentReady: true });
+  assert.equal(shown.length, 1, '离开首页后异步完成不能改变其他页面菜单');
+});
+
 test('share menu errors are logged and do not interrupt the page lifecycle', () => {
   const warnings = [];
   const originalWarn = console.warn;

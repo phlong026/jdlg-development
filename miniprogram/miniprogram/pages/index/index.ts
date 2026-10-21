@@ -3,7 +3,7 @@
 import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset'
 import { HOME_ASSETS } from '../../utils/homeAssets'
 import { cityOptionsMap } from '../../utils/costRegions'
-import { resumeReportAfterLogin } from '../../utils/reportNavigation'
+import { discardReportLoginReturn, resumeReportAfterLogin } from '../../utils/reportNavigation'
 import { getPageCache, prefetchImages, setPageCache } from '../../utils/perf'
 import {
   DEFAULT_ENTERPRISE_SERVICE_PHONE,
@@ -17,6 +17,8 @@ import {
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
 const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手'
+const HOME_CHAT_COVER = '/assets/share/home-chat.jpg'
+const HOME_TIMELINE_COVER = '/assets/share/home-timeline.jpg'
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()
@@ -26,8 +28,12 @@ function buildPublicTemplateDetailCacheKey(templateId: number) {
 }
 
 Page({
+  shareCoversPromise: null as Promise<void> | null,
   data: {
     featuredGroups: [] as any[],
+    homeChatCover: '',
+    homeTimelineCover: '',
+    contentReady: false,
     featuredGroupsLoading: false,
     lastFeaturedGroupsFetchTime: 0,
     homeIntroPopupVisible: false,
@@ -68,7 +74,10 @@ Page({
       tabBar.setCurrent(0)
     }
   },
-  onLoad() {
+  onLoad(options: Record<string, string | undefined> = {}) {
+    // Discard only the old intent; a later login may create a new report return.
+    if (options.from === 'share') discardReportLoginReturn();
+    this.shareCoversPromise = this.prepareHomeShareCovers();
     this.showHomeIntroPopupOnce();
   },
   onShow() {
@@ -84,18 +93,48 @@ Page({
     if (!guard || typeof guard.checkAndShow !== 'function') return;
     await guard.checkAndShow();
   },
+  async prepareHomeShareCovers() {
+    // Package images load in the page but can fail in the native share preview.
+    // Copy the original bytes to a wxfile path; do not replace the chosen cover.
+    const prepare = (sourcePath: string) => new Promise<string>((resolve) => {
+      const fallback = (error: unknown) => {
+        console.warn('准备首页分享封面失败', sourcePath, error);
+        resolve('');
+      };
+      try {
+        const fileName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1);
+        const destPath = `${wx.env.USER_DATA_PATH}/${fileName}`;
+        wx.getFileSystemManager().copyFile({
+          srcPath: sourcePath,
+          destPath,
+          success: () => resolve(destPath),
+          fail: fallback,
+        });
+      } catch (error) {
+        fallback(error);
+      }
+    });
+    const [homeChatCover, homeTimelineCover] = await Promise.all([
+      prepare(HOME_CHAT_COVER), prepare(HOME_TIMELINE_COVER),
+    ]);
+    this.setData({ homeChatCover, homeTimelineCover, contentReady: !!homeTimelineCover });
+  },
   onShareAppMessage() {
+    const share = { title: HOME_SHARE_TITLE, path: '/pages/index/index?from=share' };
     return {
-      title: HOME_SHARE_TITLE,
-      path: '/pages/index/index',
-      imageUrl: '/assets/share/home-chat.jpg',
+      ...share,
+      imageUrl: this.data.homeChatCover || undefined,
+      promise: Promise.resolve(this.shareCoversPromise).then(() => ({
+        ...share, imageUrl: this.data.homeChatCover || undefined,
+      })),
     };
   },
   onShareTimeline() {
+    if (!this.data.contentReady) return {};
     return {
       title: HOME_SHARE_TITLE,
-      query: '',
-      imageUrl: '/assets/share/home-timeline.jpg',
+      query: 'from=share',
+      imageUrl: this.data.homeTimelineCover,
     };
   },
   onOpenPage(e: any) {

@@ -79,6 +79,10 @@ test('login returns only to allowlisted native report paths and rejects expired 
   assert.equal(api.requireReportLogin(target), false);
   store.set('token', 'fixture'); assert.equal(api.resumeReportAfterLogin(), true); assert.equal(redirects[0].url, target);
   store.set('report_login_return', { path: target, expires: 1 }); assert.equal(api.resumeReportAfterLogin(), false);
+  store.set('report_login_return', { path: target, expires: Date.now() + 60000 });
+  api.discardReportLoginReturn();
+  assert.equal(store.has('report_login_return'), false);
+  assert.equal(store.get('token'), 'fixture', '丢弃旧入口不改变登录态');
 });
 
 test('enabled house questionnaire collects actual controls and submits the new protocol', async () => {
