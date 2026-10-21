@@ -56,6 +56,9 @@ type CustomerLead struct {
 	Remark                  string     `json:"remark"`
 	CreatedAt               time.Time  `json:"created_at"`
 	UpdatedAt               time.Time  `json:"updated_at"`
+	// 最近一次留资时间（仅列表返回）：再次留资只更新旧线索，created_at 不变，
+	// 列表靠它把再次留资的客户排到前面。
+	LastSubmittedAt *time.Time `json:"last_submitted_at,omitempty"`
 }
 
 type CustomerLeadCreateInput struct {
@@ -120,6 +123,8 @@ type CustomerFunnelMetric struct {
 	Label          string  `json:"label"`
 	Count          int64   `json:"count"`
 	ConversionRate float64 `json:"conversion_rate"`
+	// 只在"进入客服"层有值：其中匿名会话数（匿名用户无账号，按次计入 Count）
+	AnonymousSessions int64 `json:"anonymous_sessions,omitempty"`
 }
 
 type CustomerServiceEventCreateInput struct {
@@ -726,10 +731,12 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
-		       COALESCE(remark, ''), created_at, updated_at
+		       COALESCE(remark, ''), created_at, updated_at,
+		       COALESCE((SELECT MAX(e.created_at) FROM customer_service_events e
+		                 WHERE e.lead_id = customer_leads.id AND e.user_id = customer_leads.user_id AND e.event_type = 'lead_submit'), created_at) AS last_submitted_at
 		FROM customer_leads
 		WHERE ` + whereSQL + `
-		ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'contacted' THEN 2 WHEN 'converted' THEN 3 WHEN 'invalid' THEN 4 ELSE 99 END, FIELD(intent_level, 'high', 'medium', 'low'), created_at DESC
+		ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'contacted' THEN 2 WHEN 'converted' THEN 3 WHEN 'invalid' THEN 4 ELSE 99 END, FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC
 		LIMIT ? OFFSET ?`
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := m.DB.Query(query, queryArgs...)
@@ -741,7 +748,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	list := make([]*CustomerLead, 0, limit)
 	for rows.Next() {
 		item := &CustomerLead{}
-		var nextFollowupAt sql.NullTime
+		var nextFollowupAt, lastSubmittedAt sql.NullTime
 		if err := rows.Scan(
 			&item.ID,
 			&item.UserID,
@@ -765,11 +772,15 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 			&item.Remark,
 			&item.CreatedAt,
 			&item.UpdatedAt,
+			&lastSubmittedAt,
 		); err != nil {
 			return nil, 0, err
 		}
 		if nextFollowupAt.Valid {
 			item.NextFollowupAt = &nextFollowupAt.Time
+		}
+		if lastSubmittedAt.Valid {
+			item.LastSubmittedAt = &lastSubmittedAt.Time
 		}
 		list = append(list, item)
 	}
@@ -1045,11 +1056,67 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 	return overview, nil
 }
 
+// customerFunnelStepKeys 是漏斗各层的事件类型，顺序即展示顺序。
+var customerFunnelStepKeys = []string{
+	"welcome_shown",
+	"structured_requirement_collected",
+	"generate_click",
+	"human_handoff_triggered",
+	"lead_submit",
+}
+
+var customerFunnelStepLabels = map[string]string{
+	"welcome_shown":                    "进入客服",
+	"structured_requirement_collected": "完成需求采集",
+	"generate_click":                   "点击生成方案",
+	"human_handoff_triggered":          "转人工承接",
+	"lead_submit":                      "提交线索",
+	"converted":                        "已成交",
+}
+
+// customerFunnelCounts 是漏斗 SQL 的原始结果。
+// 进入客服拆成登录人数与匿名会话数：匿名用户没有账号，只能按会话计。
+type customerFunnelCounts struct {
+	EnteredUsers      int64
+	AnonymousSessions int64
+	Steps             map[string]int64
+	Converted         int64
+}
+
+// buildCustomerFunnel 把原始计数组装成漏斗：每层都是"人"，转化率相对第一层。
+func buildCustomerFunnel(counts customerFunnelCounts) []CustomerFunnelMetric {
+	base := counts.EnteredUsers + counts.AnonymousSessions
+	rateOf := func(count int64) float64 {
+		if base <= 0 {
+			return 0
+		}
+		return float64(count) * 100 / float64(base)
+	}
+	metrics := make([]CustomerFunnelMetric, 0, len(customerFunnelStepKeys)+1)
+	for index, key := range customerFunnelStepKeys {
+		metric := CustomerFunnelMetric{Key: key, Label: customerFunnelStepLabels[key], Count: counts.Steps[key]}
+		if index == 0 {
+			metric.Count = base
+			metric.AnonymousSessions = counts.AnonymousSessions
+		}
+		metric.ConversionRate = rateOf(metric.Count)
+		metrics = append(metrics, metric)
+	}
+	return append(metrics, CustomerFunnelMetric{
+		Key:            "converted",
+		Label:          customerFunnelStepLabels["converted"],
+		Count:          counts.Converted,
+		ConversionRate: rateOf(counts.Converted),
+	})
+}
+
 // FunnelMetrics computes the service funnel inside an optional [start,end)
-// window (zero values mean all time). "提交线索" counts DISTINCT accounts
-// from customer_leads — not lead_submit events — because one account may
-// submit several times and event counts made the layer exceed its own
-// upstream (44 > 41 in production), inverting the funnel.
+// window (zero values mean all time). Every layer counts people:
+//   - 进入客服: logged-in accounts + anonymous sessions (no account to dedupe);
+//   - later layers require login, so they dedupe by account;
+//   - 提交线索 counts accounts with a lead_submit event in the window. A repeat
+//     submission updates the account's open lead instead of inserting one, so
+//     counting customer_leads by created_at showed 0 for returning customers.
 func (m *CustomerServiceModel) FunnelMetrics(start, end time.Time) ([]CustomerFunnelMetric, error) {
 	timeCond, timeArgs := "", []interface{}{}
 	if !start.IsZero() {
@@ -1060,94 +1127,47 @@ func (m *CustomerServiceModel) FunnelMetrics(start, end time.Time) ([]CustomerFu
 		timeCond += " AND created_at < ?"
 		timeArgs = append(timeArgs, end)
 	}
-	eventKeys := []string{
-		"welcome_shown",
-		"structured_requirement_collected",
-		"generate_click",
-		"human_handoff_triggered",
-		"lead_submit",
-	}
-	eventLabels := map[string]string{
-		"welcome_shown":                    "进入客服",
-		"structured_requirement_collected": "完成需求采集",
-		"generate_click":                   "点击生成方案",
-		"human_handoff_triggered":          "转人工承接",
-		"lead_submit":                      "提交线索",
-	}
-	counts := map[string]int64{}
-	rows, err := m.DB.Query(`
-		SELECT event_type, COUNT(DISTINCT session_no) AS count
+	counts := customerFunnelCounts{Steps: map[string]int64{}}
+	if err := m.DB.QueryRow(`
+		SELECT COUNT(DISTINCT CASE WHEN user_id > 0 THEN user_id END),
+		       COUNT(DISTINCT CASE WHEN user_id = 0 THEN session_no END)
 		FROM customer_service_events
-		WHERE event_type IN ('welcome_shown', 'structured_requirement_collected', 'generate_click', 'human_handoff_triggered')`+timeCond+`
+		WHERE event_type = 'welcome_shown'`+timeCond, timeArgs...).Scan(&counts.EnteredUsers, &counts.AnonymousSessions); err != nil {
+		return nil, fmt.Errorf("count funnel entries: %w", err)
+	}
+
+	rows, err := m.DB.Query(`
+		SELECT event_type, COUNT(DISTINCT user_id) AS count
+		FROM customer_service_events
+		WHERE event_type IN ('structured_requirement_collected', 'generate_click', 'human_handoff_triggered') AND user_id > 0`+timeCond+`
 		GROUP BY event_type
 	`, timeArgs...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("count funnel steps: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var key string
 		var count int64
 		if err := rows.Scan(&key, &count); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan funnel step: %w", err)
 		}
-		counts[key] = count
+		counts.Steps[key] = count
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("iterate funnel steps: %w", err)
 	}
 
-	// lead_submit from the authoritative table, deduped by account and
-	// windowed on lead creation time.
-	leadTimeCond, leadTimeArgs := "", []interface{}{}
-	if !start.IsZero() {
-		leadTimeCond = " AND created_at >= ?"
-		leadTimeArgs = append(leadTimeArgs, start)
-	}
-	if !end.IsZero() {
-		leadTimeCond += " AND created_at < ?"
-		leadTimeArgs = append(leadTimeArgs, end)
-	}
 	var submitCount int64
-	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE user_id > 0`+leadTimeCond, leadTimeArgs...).Scan(&submitCount); err != nil {
-		return nil, err
+	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_service_events WHERE event_type = 'lead_submit' AND user_id > 0`+timeCond, timeArgs...).Scan(&submitCount); err != nil {
+		return nil, fmt.Errorf("count funnel submissions: %w", err)
 	}
-	counts["lead_submit"] = submitCount
-	var convertedCount int64
-	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE status = 'converted' AND user_id > 0`+leadTimeCond, leadTimeArgs...).Scan(&convertedCount); err != nil {
-		return nil, err
-	}
-	counts["converted"] = convertedCount
+	counts.Steps["lead_submit"] = submitCount
 
-	metrics := make([]CustomerFunnelMetric, 0, len(eventKeys)+1)
-	var base int64
-	for index, key := range eventKeys {
-		count := counts[key]
-		if index == 0 {
-			base = count
-		}
-		rate := 0.0
-		if base > 0 {
-			rate = float64(count) * 100 / float64(base)
-		}
-		metrics = append(metrics, CustomerFunnelMetric{
-			Key:            key,
-			Label:          eventLabels[key],
-			Count:          count,
-			ConversionRate: rate,
-		})
+	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE status = 'converted' AND user_id > 0`+timeCond, timeArgs...).Scan(&counts.Converted); err != nil {
+		return nil, fmt.Errorf("count funnel conversions: %w", err)
 	}
-	rate := 0.0
-	if base > 0 {
-		rate = float64(convertedCount) * 100 / float64(base)
-	}
-	metrics = append(metrics, CustomerFunnelMetric{
-		Key:            "converted",
-		Label:          "已成交",
-		Count:          convertedCount,
-		ConversionRate: rate,
-	})
-	return metrics, nil
+	return buildCustomerFunnel(counts), nil
 }
 
 func (m *CustomerServiceModel) UpdateLeadStatus(id int64, status string, remark string) error {

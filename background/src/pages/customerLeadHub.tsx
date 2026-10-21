@@ -4,6 +4,7 @@ import { FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
 import { getCustomerLeadFunnel, CustomerFunnelMetric } from '../api/customerLeads';
 import { leadQueues } from '../component/navConfig';
+import { funnelStepLabel } from './salesFormat';
 import './customerLeadHub.scss';
 
 // 线索阶段：与 customer_leads.status 的四个取值一一对应，颜色沿用常见销售看板的蓝 / 黄 / 绿 / 灰
@@ -18,9 +19,9 @@ const RADIUS = 52;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
- * 客服服务漏斗（近 30 天，按登录账号去重）：常开，只放标题和逐层数字。
- * 每层可与服务端 SQL 对账（"提交线索"按 customer_leads 去重账号统计）；
- * 底层"进入客服"依赖小程序埋点，旧版小程序期间偏低——口径说明留在代码里，不占页面。
+ * 客服服务漏斗（近 30 天，每层都是人数）：常开，只放标题和逐层数字。
+ * "进入客服" = 登录人数 + 匿名次数（匿名无账号，只能按次计），层名里标出匿名次数；
+ * "提交线索"按留资动作（lead_submit 事件）去重账号——老客户再次留资只更新旧线索，也要算进来。
  */
 export const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
     const [state, setState] = useState<{ loading: boolean; error: string; metrics: CustomerFunnelMetric[] }>({ loading: true, error: '', metrics: [] });
@@ -38,7 +39,7 @@ export const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) 
             <ul className="lead-hub-funnel">
                 {state.metrics.map(metric => (
                     <li key={metric.key}>
-                        <span>{metric.label}</span>
+                        <span>{funnelStepLabel(metric)}</span>
                         <b>{metric.count}</b>
                         <small>{metric.count > 0 ? `${metric.conversion_rate.toFixed(0)}%` : '—'}</small>
                     </li>

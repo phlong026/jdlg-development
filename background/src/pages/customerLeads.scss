@@ -894,6 +894,13 @@ a.customer-lead-link {
     font-variant-numeric: tabular-nums;
 }
 
+// 表格里"用户"格的再次留资提示，与卡片的下次跟进同色
+.customer-lead-table .customer-lead-resubmit {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b5e3c;
+}
+
 // 卡片底栏：左侧跳转用户账号，右侧两个操作按钮
 .customer-lead-card-actions {
     display: flex;

@@ -272,3 +272,75 @@ func TestLeadQueueCriteriaContract(t *testing.T) {
 		t.Fatal("legacy no-grace overdue SQL still present")
 	}
 }
+
+// 漏斗按"人"计：进入客服 = 登录人数 + 匿名会话数（匿名无法去重，按次计）；
+// 后续各层都要求登录，按账号去重；转化率都相对第一层。
+func TestBuildCustomerFunnel(t *testing.T) {
+	metrics := buildCustomerFunnel(customerFunnelCounts{
+		EnteredUsers:      4,
+		AnonymousSessions: 6,
+		Steps: map[string]int64{
+			"structured_requirement_collected": 2,
+			"human_handoff_triggered":          1,
+			"lead_submit":                      2,
+		},
+		Converted: 1,
+	})
+	want := []struct {
+		key       string
+		label     string
+		count     int64
+		anonymous int64
+		rate      float64
+	}{
+		{"welcome_shown", "进入客服", 10, 6, 100},
+		{"structured_requirement_collected", "完成需求采集", 2, 0, 20},
+		{"generate_click", "点击生成方案", 0, 0, 0},
+		{"human_handoff_triggered", "转人工承接", 1, 0, 10},
+		{"lead_submit", "提交线索", 2, 0, 20},
+		{"converted", "已成交", 1, 0, 10},
+	}
+	if len(metrics) != len(want) {
+		t.Fatalf("got %d metrics, want %d", len(metrics), len(want))
+	}
+	for i, w := range want {
+		got := metrics[i]
+		if got.Key != w.key || got.Label != w.label || got.Count != w.count || got.AnonymousSessions != w.anonymous || got.ConversionRate != w.rate {
+			t.Fatalf("metric[%d] = %+v, want %+v", i, got, w)
+		}
+	}
+}
+
+func TestBuildCustomerFunnelEmpty(t *testing.T) {
+	for _, metric := range buildCustomerFunnel(customerFunnelCounts{}) {
+		if metric.Count != 0 || metric.ConversionRate != 0 {
+			t.Fatalf("empty funnel should be all zero, got %+v", metric)
+		}
+	}
+}
+
+// 口径契约："提交线索"数留资动作（lead_submit 事件，按账号去重），
+// 同一账号再次留资只会更新旧线索，若按 customer_leads.created_at 计数会恒为 0。
+// 线索列表按最近一次留资时间排序，让再次留资的老客户冒到前面。
+func TestFunnelAndListCountResubmissions(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		"COUNT(DISTINCT user_id) FROM customer_service_events WHERE event_type = 'lead_submit' AND user_id > 0", // 提交线索按留资动作计
+		"COUNT(DISTINCT CASE WHEN user_id > 0 THEN user_id END)",                                                // 登录用户去重
+		"COUNT(DISTINCT CASE WHEN user_id = 0 THEN session_no END)",                                             // 匿名按会话
+		"FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC",                                  // 列表冒出再次留资
+		"AS last_submitted_at",
+		"e.user_id = customer_leads.user_id", // 只认线索本人的留资事件
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("funnel/list contract missing %q", want)
+		}
+	}
+	if strings.Contains(content, "COUNT(DISTINCT user_id) FROM customer_leads WHERE user_id > 0") {
+		t.Fatal("提交线索不应再按 customer_leads 新建时间计数")
+	}
+}

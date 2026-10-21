@@ -94,6 +94,12 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
 			return
 		}
+		// 这两类事件只由下方留资接口在线索落库后写入，是"提交线索"统计和列表排序的依据，
+		// 客户端自报会让任意线索被顶到最前。
+		if eventType := strings.TrimSpace(req.EventType); eventType == "lead_submit" || eventType == "consultation_request_submitted" {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "该事件类型只能由服务端记录"})
+			return
+		}
 		id, err := customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{
 			UserID:        codeSession.UserID,
 			LeadID:        req.LeadID,
@@ -183,7 +189,7 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建客服线索失败: " + err.Error()})
 				return
 			}
-			_, eventErr := customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{
+			submit := model.CustomerServiceEventCreateInput{
 				UserID:        codeSession.UserID,
 				LeadID:        id,
 				SessionNo:     req.SessionNo,
@@ -193,8 +199,24 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 				IntentLevel:   req.IntentLevel,
 				DemandSummary: req.DemandSummary,
 				Payload:       req.Payload,
-			})
-			if isConsultation && eventErr == nil && id > 0 {
+			}
+			_, eventErr := customerServiceModel.CreateEvent(&submit)
+			if eventErr != nil {
+				// lead_submit 是"提交线索"统计和列表排序的依据，不能静默丢失。
+				// 超长 payload 最常见，去掉 payload 与需求摘要（线索表里已有）再写一次。
+				log.Printf("[CustomerService] lead_submit event failed, retrying minimal user=%d lead=%d session=%s: %v", codeSession.UserID, id, req.SessionNo, eventErr)
+				minimal := submit
+				minimal.DemandSummary = ""
+				minimal.Payload = nil
+				_, eventErr = customerServiceModel.CreateEvent(&minimal)
+			}
+			if eventErr != nil {
+				// 线索已写入；客户端重试时同会话会更新同一条线索，不会重复建档。
+				log.Printf("[CustomerService] lead_submit event lost user=%d lead=%d session=%s: %v", codeSession.UserID, id, req.SessionNo, eventErr)
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "留资记录失败，请重试"})
+				return
+			}
+			if isConsultation && id > 0 {
 				// Preserve the existing lead_submit funnel and add a separate,
 				// minimal immutable proof of this explicit business command.
 				_, proofErr := customerServiceModel.CreateEvent(&model.CustomerServiceEventCreateInput{

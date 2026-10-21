@@ -7,6 +7,7 @@ import SalesDonut, { type DonutSlice } from '../component/SalesDonut';
 import type { FunnelStep } from '../component/salesFunnelMath';
 import { getCustomerLeadFunnel, getCustomerLeadList, getCustomerLeadOverview, type CustomerLeadOverview } from '../api/customerLeads';
 import { crm, stages, type CustomerPage, type Dashboard, type Stage, type SyncState } from '../api/wecomCustomers';
+import { funnelStepLabel } from './salesFormat';
 import './salesModule.scss';
 import './salesOverview.scss';
 
@@ -96,7 +97,7 @@ const SalesOverview: React.FC = () => {
         if (!withLeads) return;
         let active = true;
         getCustomerLeadFunnel(days)
-            .then((metrics) => { if (active) setFunnel({ steps: metrics.map((m) => ({ key: m.key, label: m.label, count: m.count })), error: false }); })
+            .then((metrics) => { if (active) setFunnel({ steps: metrics.map((m) => ({ key: m.key, label: funnelStepLabel(m), count: m.count })), error: false }); })
             .catch(() => { if (active) setFunnel({ steps: [], error: true }); });
         return () => { active = false; };
     }, [days, version, withLeads]);

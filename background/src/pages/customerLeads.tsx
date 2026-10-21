@@ -24,6 +24,7 @@ import CustomerLeadHub from './customerLeadHub';
 import { useManagementSession } from '../component/ManagementSession';
 import { CustomerLeadTrail } from './customerLeadTrail';
 import { formatLeadSource } from '../utils/displayLabels';
+import { resubmitHint } from './salesFormat';
 import './customerLeads.scss';
 
 const FiSearchIcon = FiSearch as unknown as React.ComponentType<any>;
@@ -554,6 +555,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         <span>{sourceLabel(item.source)} · {item.assigned_to || '未分配'}</span>
                                         <time>{formatDateTime(item.created_at)}</time>
                                     </div>
+                                    {resubmitHint(item) && <div className="customer-lead-card-next">{resubmitHint(item)}</div>}
                                     {/* 下次跟进单独一行：与来源挤在一行会被省略号截掉，销售看不到该何时联系 */}
                                     {item.next_followup_at && <div className="customer-lead-card-next">下次跟进 {formatDateTime(item.next_followup_at)}</div>}
                                     <div className="customer-lead-card-actions">
@@ -598,6 +600,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                                 ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>查看用户账号 ›</Link>
                                                 : <span>未关联用户账号</span>}
                                             <span>{formatDateTime(item.created_at)}</span>
+                                            {resubmitHint(item) && <span className="customer-lead-resubmit">{resubmitHint(item)}</span>}
                                         </td>
                                         <td className="customer-lead-demand">
                                             <strong>{item.demand_summary || '暂无需求摘要'}</strong>
