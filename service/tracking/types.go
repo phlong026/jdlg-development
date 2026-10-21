@@ -155,17 +155,21 @@ type Draft struct {
 	Revision   int      `json:"expected_revision"`
 }
 type Share struct {
-	ID        string    `json:"share_id"`
-	TokenHash string    `json:"-"`
-	Route     string    `json:"route_key"`
-	Content   string    `json:"content_id,omitempty"`
-	Version   int       `json:"content_version,omitempty"`
-	Owner     string    `json:"owner_id"`
-	Sharer    string    `json:"sharer_id"`
-	Session   string    `json:"session_id,omitempty"`
-	Parent    string    `json:"parent_share_id,omitempty"`
-	Expires   time.Time `json:"expires_at"`
-	Revoked   bool      `json:"revoked"`
+	ID        string `json:"share_id"`
+	TokenHash string `json:"-"`
+	Route     string `json:"route_key"`
+	Content   string `json:"content_id,omitempty"`
+	Version   int    `json:"content_version,omitempty"`
+	Owner     string `json:"owner_id"`
+	Sharer    string `json:"sharer_id"`
+	Session   string `json:"session_id,omitempty"`
+	Parent    string `json:"parent_share_id,omitempty"`
+	// Origin is set by the server: "console" for codes/URL Links minted in the
+	// management console, "miniprogram" for shares made inside the mini program.
+	// Older rows have none; there a missing session marks a console share.
+	Origin  string    `json:"origin,omitempty"`
+	Expires time.Time `json:"expires_at"`
+	Revoked bool      `json:"revoked"`
 }
 type EntryInput struct {
 	Route      string `json:"route_key"`
@@ -247,6 +251,9 @@ type Filter struct {
 	// Visitor 精确过滤（风控台「查看访问记录」跳转用）：只看该 visitor_key 的记录。
 	// 仅匹配解析后的已识别键（u:<id>）或原始匿名键，不做模糊搜索。
 	Visitor string
+	// Channel filters the visit timeline by source: app_message, timeline,
+	// code_link or direct. Other lists ignore it.
+	Channel string
 	Limit   int
 	Related bool
 }

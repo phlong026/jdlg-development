@@ -30,6 +30,7 @@
 
 - `GET /context` 返回独立能力和实际归属。
 - `GET /visitors`、`/contents`、`/contents/:id/visitors`：一致的时间、归属、排序、游标、as_of、metric_version。客户筛选另有identity/intent/q；切素材清除不适用客户筛选并提示。
+- `GET /visits`：后台「客户查看」时间线，一次访问一条，按开始时间倒序，权限、快照、游标和意向与 `/visitors` 同源（同一访客的计数与意向两处一致）。“一次访问”= 同一会话内对同一素材版本的已计数浏览合并；普通页面和窗口开始前已打开的浏览不列出。参数同 `/visitors`，另有 `channel`=app_message/timeline/code_link/direct（非法值 400），不接受排序；`limit` 默认 20、最大 50（每页要读原始事件算进度）。每项含 `visit_id,started_at,visible_ms,visitor`（完整访客投影），`content`（标题、类型、状态、封面，不含正文），`source{kind,channel?,forwarder?}`：kind=share（小程序内分享）、code_link（后台生成的码/URL Link）、direct；分享记录由服务端写入 `origin`：后台生成为 console（`CreateConsoleShare`），小程序内为 miniprogram（含已登录但无采集会话的分享），客户端不能指定；无 origin 的旧记录以“无小程序会话”判为 code_link。只有按私发/朋友圈/扫码筛选时才对整个窗口解析入口分享，否则只解析当前页；channel 取自分享人当时会话中的 share_intent，未回传则省略；forwarder 为直接上一级分享人（按同会话登录关联解析为登录身份），只对当前页解析；分享人是该素材归属的运营账号（`IsContentOperator`）、已删除或其会话处于分阶段删除中时省略。`progress{kind,percent,plays?}` 只对当前页读取原始事件：视频为各媒体去重播放峰值÷时长（封顶100%），plays 为本次播放增量累计÷时长（≥2才返回）；文章为最深 scroll_depth；无数据或原始事件已过期时省略。`content_page_views` 为该访客在筛选范围内看这个素材版本的次数；`engaged` 为本次可见≥60秒、或该素材累计≥3次、或视频≥80%，只表示浏览行为，不是意向等级。
 - `GET /visitors/:id/sessions`：可加content_id；`include_related=true`只展开访问过此素材的那些会话中的其他页面。
 - `GET /page-views/:id/events`：脱敏事件分页，含补报/不完整标记。原始事件已按批准策略过期则HTTP 410，并在保留访问记录上标raw_events_expired；不以空列表伪装从未发生。每层独立做范围检查。
 - `POST /contents`、`PATCH /contents/:id`：人工plain或rich_text草稿；expected_revision乐观锁；不能借编辑变更历史归属。富文本为受控HTML源码输入，支持p/br/strong/em/h2/h3/ul/ol/li/blockquote，移除所有属性、脚本、外部嵌入和危险命名空间；清洗后无正文则拒绝。图片/视频只走授权媒体。未指定格式保持纯文本兼容，保存后的清洗内容用于预览、发布及读取。
