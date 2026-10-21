@@ -1,6 +1,6 @@
-import type { IntentEvidence } from '../../api/shareTracking';
-export type Filters = { range: string; start: string; end: string; identity: string; intent: string; owner: string; q: string; sort: string; direction: string; content_q?: string; visitor_q?: string; visitor?: string };
-export const defaultFilters: Filters = { range: '7', start: '', end: '', identity: '', intent: '', owner: '', q: '', sort: 'last_visit', direction: 'desc' };
+import type { IntentEvidence, VisitProgress, VisitSource } from '../../api/shareTracking';
+export type Filters = { range: string; start: string; end: string; identity: string; intent: string; owner: string; q: string; sort: string; direction: string; content_q?: string; visitor_q?: string; visitor?: string; channel: string };
+export const defaultFilters: Filters = { range: '30', start: '', end: '', identity: '', intent: '', owner: '', q: '', sort: 'last_visit', direction: 'desc', channel: '' };
 export function shanghaiDate(now = new Date()): string { return new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10); }
 export function dateRange(filters: Filters, now = new Date()): { start?: string; end?: string } {
     if (filters.range === 'all') return {};
@@ -17,14 +17,47 @@ export function dateRange(filters: Filters, now = new Date()): { start?: string;
     }
     return { start: new Date(`${start}T00:00:00+08:00`).toISOString(), end: new Date(Date.parse(`${end}T00:00:00+08:00`) + 86400000).toISOString() };
 }
-export function queryFor(filters: Filters, now = new Date(), view: 'visitors' | 'contents' | 'channels' = 'visitors'): Record<string, unknown> { return { ...dateRange(filters, now), identity: view === 'channels' ? undefined : filters.identity, ...(view === 'contents' ? { content_q: (filters.content_q || '').trim(), visitor_q: (filters.visitor_q || '').trim() } : view === 'channels' ? {} : { intent: filters.intent, q: filters.q.trim() }), owner: filters.owner, sort: view === 'channels' ? undefined : filters.sort, direction: view === 'channels' ? undefined : filters.direction, ...(filters.visitor && view === 'visitors' ? { visitor: filters.visitor } : {}), limit: view === 'channels' ? 20 : 20 }; }
+// 客户查看（visitors）是按时间倒序的访问时间线：带意向、来源和搜索，不带排序；素材视角保留排序。
+export function queryFor(filters: Filters, now = new Date(), view: 'visitors' | 'contents' | 'channels' = 'visitors'): Record<string, unknown> {
+    const listed = view === 'contents';
+    return { ...dateRange(filters, now), identity: view === 'channels' ? undefined : filters.identity, ...(view === 'contents' ? { content_q: (filters.content_q || '').trim(), visitor_q: (filters.visitor_q || '').trim() } : view === 'channels' ? {} : { intent: filters.intent, q: filters.q.trim(), channel: filters.channel }), owner: filters.owner, sort: listed ? filters.sort : undefined, direction: listed ? filters.direction : undefined, ...(filters.visitor && view === 'visitors' ? { visitor: filters.visitor } : {}), limit: 20 };
+}
 export function time(value?: string): string { if (!value) return '未记录'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '时间不可用' : new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date); }
 export function duration(ms = 0): string { const seconds = Math.floor(Math.max(0, ms) / 1000); return seconds < 60 ? `${seconds}秒` : seconds < 3600 ? `${Math.floor(seconds / 60)}分${seconds % 60}秒` : `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; }
 export function safeMediaURL(value?: string): string | undefined { if (!value) return; try { const url = new URL(value, window.location.origin); return (url.protocol === 'https:' || (url.origin === window.location.origin && url.protocol === window.location.protocol)) && !url.username && !url.password ? url.href : undefined; } catch { return; } }
 export const intentLabels = { high: '高意向参考', medium: '中意向参考', low: '低关注待观察', unknown: '待判断' };
+// 卡片角标放不下“参考”二字；“仅供跟进参考”写在页面口径说明里。
+export const intentShortLabels = { high: '高意向', medium: '中意向', low: '低关注', unknown: '待判断' };
 // 分享渠道来自 share_intent 事件；首次朋友圈分享事件丢失时渠道未知，显示“未记录”。
-export const channelLabels: Record<string, string> = { app_message: '聊天私发', timeline: '朋友圈' };
+// 微信不区分私聊与群聊，“私发”含发到群。
+export const channelLabels: Record<string, string> = { app_message: '私发', timeline: '朋友圈' };
 export function channelLabel(channel?: string): string { return channel ? channelLabels[channel] || channel : '渠道未记录'; }
+// 访问来源：小程序内分享按渠道；后台生成的码/链接与直接进入单独标出；渠道未回传显示“未记录”。
+export const sourceOptions: [string, string][] = [['app_message', '私发'], ['timeline', '朋友圈'], ['code_link', '扫码·链接'], ['direct', '直接访问']];
+export function sourceLabel(source?: VisitSource): string {
+    if (!source || source.kind === 'direct') return '直接访问';
+    if (source.kind === 'code_link') return '扫码·链接';
+    return source.channel ? channelLabels[source.channel] || source.channel : '未记录';
+}
+export function forwarderText(source?: VisitSource): string {
+    const forwarder = source?.forwarder;
+    if (!forwarder) return '';
+    return `（${forwarder.identity_state === 'anonymous' ? '匿名访客' : forwarder.nickname || '已识别账号'}转发）`;
+}
+export function progressText(progress?: VisitProgress): string {
+    if (!progress) return '';
+    if (progress.kind === 'article') return `读到${progress.percent}%`;
+    return `进度${progress.percent}%${progress.plays ? ` · 看了${progress.plays}遍` : ''}`;
+}
+// 卡片时间：北京时间，今年内只显示月-日 时:分。
+export function visitTime(value: string, now = new Date()): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '时间不可用';
+    const parts = (d: Date) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map(part => [part.type, part.value]));
+    const at = parts(date), current = parts(now);
+    const clock = `${at.month}-${at.day} ${at.hour}:${at.minute}`;
+    return at.year === current.year ? clock : `${at.year}-${clock}`;
+}
 // 视频进度 = 去重观看时长 / 视频总时长，封顶 100%（重复回看不放大数字）。
 export function videoPercent(unique?: number, total?: number): number | undefined {
     if (!unique || !total || total <= 0) return undefined;

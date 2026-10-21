@@ -24,9 +24,10 @@ test('custom dates reject impossible, missing and reverse dates; leap day is val
   assert.equal(model.dateRange({ ...model.defaultFilters, range: 'custom', start: '2024-02-29', end: '2024-02-29' }).end, '2024-02-29T16:00:00.000Z');
   assert.deepEqual(normalized(model.dateRange({ ...model.defaultFilters, range: 'all' })), {});
 });
-test('query retains identity intent owner sort and authorized search with no client identity override', () => {
- const query = model.queryFor({ ...model.defaultFilters, range:'all', identity:'anonymous',intent:'unknown',owner:'allowed',q:'  名称  ',sort:'visible_ms',direction:'asc' });
- assert.deepEqual(normalized(query),{ identity:'anonymous', intent:'unknown', owner:'allowed', q:'名称',sort:'visible_ms',direction:'asc',limit:20 });
+test('query retains identity intent owner channel and authorized search with no client identity override', () => {
+ // 客户查看按时间倒序，不带排序；排序只用于素材视角。
+ const query = model.queryFor({ ...model.defaultFilters, range:'all', identity:'anonymous',intent:'unknown',owner:'allowed',q:'  名称  ',sort:'visible_ms',direction:'asc',channel:'direct' });
+ assert.deepEqual(normalized(query),{ identity:'anonymous', intent:'unknown', owner:'allowed', q:'名称',channel:'direct',limit:20 });
 });
 test('media URL rendering rejects executable protocols, cleartext external and embedded credentials', () => {
  for (const url of ['javascript:alert(1)','data:image/svg+xml,x','http://remote.test/a','https://user:secret@example.test/x']) assert.equal(model.safeMediaURL(url), undefined);
@@ -57,7 +58,7 @@ test('resource hook aborts and ignores late older responses and post-unmount com
 });
 test('UI preserves scope in same-session exploration and separates metrics and identities', () => {
  const detail=fs.readFileSync(new URL('src/pages/shareTracking/details.tsx',root),'utf8');const page=fs.readFileSync(new URL('src/pages/shareTracking.tsx',root),'utf8');
- assert.match(detail,/content_id: showingEvidence \? undefined : contentId, include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/saveTrackingView\(actorId, context.owners/);const access=fs.readFileSync(new URL('src/pages/shareTracking/access.ts',root),'utf8');assert.match(access,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
+ assert.match(detail,/content_id: showingEvidence \? undefined : scopedContent,/);assert.match(detail,/include_related: otherPages/);assert.match(page,/as_of: result.data\?\.as_of/);assert.match(page,/saveTrackingView\(actorId, context.owners/);const access=fs.readFileSync(new URL('src/pages/shareTracking/access.ts',root),'utf8');assert.match(access,/sessionStorage.setItem/);assert.match(page,/can_view/);assert.doesNotMatch(page,/mockData|fakeData|Math\.random/);
 });
 
 function editorHarness(overrides = {}, initial = {}) {

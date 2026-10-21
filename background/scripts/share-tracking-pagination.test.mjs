@@ -23,6 +23,7 @@ function load(file, overrides = {}, globals = {}) {
 }
 const model = load('src/pages/shareTracking/model.ts');
 const visitor = { visitor_key: 'visitor-1', identity_state: 'identified', nickname: '客户', page_views: 1, visible_ms: 10, session_count: 1, intent: { level: 'low', reasons: [], rule_version: 'rule-1' } };
+const visit = { visit_id: 'session-1:content-1:1', started_at: '2026-10-11T00:00:00Z', visible_ms: 10, content_page_views: 1, engaged: false, visitor, content: { content_id: 'visited-villa', content_version: 3, title: '别墅', type: 'article', status: 'published', content_accessible: true }, source: { kind: 'direct' } };
 const content = { content_id: 'content-1', title: '素材', type: 'article', version: 1, revision: 1, status: 'published', body: '正文', media: [], page_views: 1, visible_ms: 10 };
 const nodes = tree => Array.isArray(tree) ? tree.flatMap(nodes) : !tree || typeof tree !== 'object' ? [] : [tree, ...nodes(tree.props?.children)];
 const text = tree => Array.isArray(tree) ? tree.map(text).join('') : tree == null || typeof tree === 'boolean' ? '' : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
@@ -61,9 +62,9 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   const components = Object.fromEntries(Object.keys(actual).map(name => [name, name === 'useResource' ? actual[name] : name]));
   function page(method, params = {}) {
     const as_of = params.as_of || `2026-10-11T00:00:${String(++serial).padStart(2, '0')}Z`;
-    return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : visitor], identified_count: 1, anonymous_count: 0 };
+    return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : method === 'visits' ? visit : visitor], identified_count: 1, anonymous_count: 0 };
   }
-  const api = Object.fromEntries(['visitors', 'contents', 'contentVisitors', 'content'].map(method => [method, (...args) => {
+  const api = Object.fromEntries(['visits', 'visitors', 'contents', 'contentVisitors', 'content'].map(method => [method, (...args) => {
     const params = method.startsWith('content') && method !== 'contents' ? args[1] : args[0];
     const signal = args[args.length - 1];
     const call = { method, params: { ...params }, signal, id: method.startsWith('content') && method !== 'contents' ? args[0] : undefined };
@@ -77,10 +78,10 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   const access = load('src/pages/shareTracking/access.ts', { react, './model': model }, globals);
   const module = kind === 'records'
     ? load('src/pages/shareTracking.tsx', { react, '../api/shareTracking': { tracking: api }, '../component/ManagementSession': { useManagementSession: () => ({ user: { id: 42 } }) }, './shareTracking/access': access, './shareTracking/components': components, './shareTracking/details': { VisitorDetails: 'VisitorDetails', ContentDetails: 'ContentDetails' }, './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './shareTracking/convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './shareTracking/channels': { ChannelLeaderboard: 'ChannelLeaderboard' },
-    './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
+    './shareTracking/visitCard': { VisitCard: 'VisitCard' },
     './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/mpSync': { MPSyncPanel: 'MPSyncPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
-    : load('src/pages/shareTracking/details.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './visitorShares': { VisitorSharesPanel: 'VisitorSharesPanel' }, './model': model }, globals);
+    : load('src/pages/shareTracking/details.tsx', {'./visitorContents':{VisitorContentPanel:'VisitorContentPanel'}, react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './visitorShares': { VisitorSharesPanel: 'VisitorSharesPanel' }, './model': model }, globals);
   function render() {
     let renders = 0;
     do {
@@ -95,7 +96,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   render();
   return {
     calls, page, render, props, find, pager,
-    last: (method = kind === 'records' ? 'visitors' : 'contentVisitors') => calls.filter(call => call.method === method).at(-1),
+    last: (method = kind === 'records' ? 'visits' : 'contentVisitors') => calls.filter(call => call.method === method).at(-1),
     async settle() { await flush(); render(); },
     async act(action) { action(); render(); await flush(); render(); },
     async next() { await this.act(() => pager().onNext(pager().next)); },
@@ -128,7 +129,7 @@ test('explicit refresh, range, owner, sort, search, clear, and business changes 
   await h.next(); await h.click('刷新记录'); assertFresh();
   await h.next(); await h.click('近3天'); assertFresh(); assert.ok(h.last().params.start);
   await h.next(); await h.filter('跟进归属', 'owner-2'); assertFresh(); assert.equal(h.last().params.owner, 'owner-2');
-  await h.next(); await h.filter('排序', 'visible_ms'); assertFresh(); assert.equal(h.last().params.sort, 'visible_ms');
+  await h.next(); await h.filter('来源', 'timeline'); assertFresh(); assert.equal(h.last().params.channel, 'timeline'); assert.equal(h.last().params.sort, undefined);
   await h.next(); await h.act(() => h.find('input').props.onChange({ target: { value: '客户编号' } }));
   await h.act(() => h.find('form').props.onSubmit({ preventDefault() {} })); assertFresh(); assert.equal(h.last().params.q, '客户编号');
   await h.next(); await h.click('清除筛选'); assertFresh(); assert.equal(h.last().params.owner, '');
@@ -136,17 +137,17 @@ test('explicit refresh, range, owner, sort, search, clear, and business changes 
 });
 
 test('view switches reset cursor while retaining supported identity and omitting customer-only intent', async () => {
-  const h = harness(); await h.settle(); await h.filter('身份', 'anonymous'); await h.filter('意向参考', 'high'); await h.next();
+  const h = harness(); await h.settle(); await h.filter('身份', 'anonymous'); await h.filter('意向', 'high'); await h.next();
   await h.click('素材视角');
   assert.equal(h.last('contents').params.cursor, undefined); assert.equal(h.last('contents').params.as_of, undefined);
   assert.equal(h.last('contents').params.identity, 'anonymous'); assert.equal(h.last('contents').params.intent, undefined); assert.equal(h.last('contents').params.q, undefined);
-  await h.next(); await h.click('客户视角');
+  await h.next(); await h.click('客户查看');
   assert.equal(h.last().params.cursor, undefined); assert.equal(h.last().params.as_of, undefined); assert.equal(h.pager().cursor.length, 0);
 });
 
 test('failed pagination and page-one retry keep the same snapshot; refresh failure retries fresh', async () => {
   let fail = false;
-  const h = harness('records', { visitors: (_call, result) => fail ? Promise.reject(new Error('读取失败')) : Promise.resolve(result()) });
+  const h = harness('records', { visits: (_call, result) => fail ? Promise.reject(new Error('读取失败')) : Promise.resolve(result()) });
   await h.settle(); const first = h.find('SnapshotInfo').props.data;
   fail = true; await h.next(); assert.equal(h.find('Feedback').props.error, '读取失败');
   fail = false; await h.act(() => h.find('Feedback').props.retry());
@@ -160,10 +161,10 @@ test('failed pagination and page-one retry keep the same snapshot; refresh failu
 
 test('late superseded response cannot change visible data or pollute fresh snapshot', async () => {
   const old = deferred(); let firstRequest = true;
-  const h = harness('records', { visitors: (_call, result) => { if (firstRequest) { firstRequest = false; return old.promise; } return Promise.resolve(result()); } });
+  const h = harness('records', { visits: (_call, result) => { if (firstRequest) { firstRequest = false; return old.promise; } return Promise.resolve(result()); } });
   const oldCall = h.last(); await h.filter('跟进归属', 'owner-2'); const current = h.find('SnapshotInfo').props.data;
   assert.equal(oldCall.signal.aborted, true);
-  old.resolve({ ...h.page('visitors'), as_of: 'stale-as-of', first_cursor: 'stale-first' }); await h.settle();
+  old.resolve({ ...h.page('visits'), as_of: 'stale-as-of', first_cursor: 'stale-first' }); await h.settle();
   assert.equal(h.find('SnapshotInfo').props.data.as_of, current.as_of);
   await h.next(); await h.previous(); assert.equal(h.last().params.as_of, current.as_of); assert.equal(h.last().params.cursor, current.first_cursor);
 });
@@ -237,13 +238,13 @@ test('material title and visitor inputs submit distinct AND filters, preserve id
  await h.act(()=>h.find('form').props.onSubmit({preventDefault(){}}));const p=h.last('contents').params;
  assert.equal(p.content_q,'合成文章');assert.equal(p.visitor_q,'匿名标识');assert.equal(p.identity,'anonymous');assert.equal(p.q,undefined);assert.equal(p.cursor,undefined);assert.equal(p.as_of,undefined);
 });
-test('visitor card material drilldown carries actual version and fixed observation scope',async()=>{
- const h=harness();await h.settle();const panel=h.find('VisitorContentPanel');assert.equal(panel.props.visitor,'visitor-1');assert.ok(panel.props.query.as_of);
- await h.act(()=>panel.props.onOpen({content_id:'visited-villa',content_version:3}));const detail=h.find('VisitorDetails');assert.equal(detail.props.contentId,'visited-villa');assert.equal(detail.props.query.content_version,3);assert.equal(detail.props.query.as_of,panel.props.query.as_of);
+test('visit card opens the visitor detail on that material version with the list snapshot',async()=>{
+ const h=harness();await h.settle();const card=h.find('VisitCard');assert.equal(card.props.visit.visit_id,'session-1:content-1:1');const asOf=h.find('SnapshotInfo').props.data.as_of;
+ await h.act(()=>card.props.onOpen());const detail=h.find('VisitorDetails');assert.equal(detail.props.visitor.visitor_key,'visitor-1');assert.equal(detail.props.contentId,'visited-villa');assert.equal(detail.props.query.content_version,3);assert.equal(detail.props.query.as_of,asOf);
 });
 
 test('profile revision conflict offers an explicit fresh snapshot rather than replaying rejected cursor',async()=>{
- let fail=false;const h=harness('records',{visitors:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())});await h.settle();fail=true;await h.next();assert.match(h.find('Feedback').props.error,/请刷新/);fail=false;await h.act(()=>h.find('Feedback').props.resetSnapshot());assert.equal(h.last().params.cursor,undefined);assert.equal(h.last().params.as_of,undefined);assert.equal(h.pager().cursor.length,0);
+ let fail=false;const h=harness('records',{visits:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())});await h.settle();fail=true;await h.next();assert.match(h.find('Feedback').props.error,/请刷新/);fail=false;await h.act(()=>h.find('Feedback').props.resetSnapshot());assert.equal(h.last().params.cursor,undefined);assert.equal(h.last().params.as_of,undefined);assert.equal(h.pager().cursor.length,0);
 });
 test('content visitor profile refresh clears rejected first cursor while retaining content scope',async()=>{
  let fail=false;const h=harness('details',{contentVisitors:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())},{query:{owner:'owner-1',as_of:'2026-10-12T00:00:00Z'}});await h.settle();fail=true;await h.next();fail=false;await h.act(()=>nodes(h.render()).find(n=>n.type==='Feedback'&&n.props.error).props.resetSnapshot());assert.equal(h.last('contentVisitors').params.cursor,undefined);assert.equal(h.last('contentVisitors').params.owner,'owner-1');
