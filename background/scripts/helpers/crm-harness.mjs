@@ -66,7 +66,7 @@ function environment() {
         if (name === 'react-icons/fi') return new Proxy({}, { get: () => 'icon' });
         if (name === '../component/ManagementSession') return { useManagementSession: () => env.session };
         if (name === '../api/customerLeads') return env.leadApi;
-        if (name === '../api/wecomCustomers') return {crm:(...args)=>env.crm(...args),CRMError,dateTime:value=>value||'未安排',stages:{new:'新客户',following:'跟进中',won:'已成交',paused:'暂缓',invalid:'无效'},categories:['待确认','建房咨询'],intents:{high:'高',medium:'中',low:'低'},lifecycleNames:{pending:'待完善报备',legacy:'历史客户',protected:'专属保护',pool:'客户公海',won:'成交已确认',archived:'已归档'},sourceNames:{manual:'手动报备'},activityNames:{followup:'跟进'}};
+        if (name === '../api/wecomCustomers') return {crm:(...args)=>env.crm(...args),CRMError,dateTime:value=>value||'未安排',stages:{new:'新客户',following:'跟进中',won:'已成交',paused:'暂缓',invalid:'无效'},categories:['待确认','建房咨询'],intents:{high:'高',medium:'中',low:'低',unknown:'待判断'},lifecycleNames:{pending:'待完善报备',legacy:'历史客户',protected:'专属保护',pool:'客户公海',won:'成交已确认',archived:'已归档'},sourceNames:{manual:'手动报备'},activityNames:{followup:'跟进'}};
         if (name === '../api/auth') return {getMe:()=>env.getMe()};
         if (name === '../utils/token') return {tokenUtils:{setToken(){},removeToken(){}}};
         if (name === '../component/navConfig') return { DEFAULT_LEAD_QUEUE: 'all', leadQueues: env.leadQueues || [{ key: 'all', label: '全部', countKey: 'total_count' }] };

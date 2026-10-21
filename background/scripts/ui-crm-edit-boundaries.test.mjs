@@ -19,9 +19,17 @@ for (const embedded of [false, true]) {
   for (const fixture of cases) test(`legacy leads ${embedded ? 'embedded' : 'standalone'}: ${fixture.name}`, async () => {
     const env = environment(); env.session = { ...env.session, ...fixture.session };
     const h = await env.mount('customerLeads.tsx', 'default', { embedded, readOnly: fixture.readOnly });
+    assert.equal(h.all(n => n.type === 'a' && n.props.to === '/customer-management?tab=customers').length > 0, !!fixture.link);
+    if (fixture.link) {
+      // 交接态：没有写入口可点（不渲染跟进按钮与勾选框），只给去客户档案的链接
+      assert.equal(h.all(n => n.type === 'button' && textOf(n).trim() === '跟进').length, 0);
+      assert.equal(h.all(n => n.type === 'input' && n.props.type === 'checkbox').length, 0);
+      assert.equal(h.all(n => n.type === 'textarea').length, 0);
+      assert.equal(env.leadWrites.length, 0);
+      return;
+    }
     assert.equal(h.button('跟进').props.disabled, !fixture.allow);
     assert.equal(h.find(n => n.type === 'input' && n.props.type === 'checkbox').props.disabled, !fixture.allow);
-    assert.equal(h.all(n => n.type === 'a' && n.props.to === '/customer-management?tab=customers').length > 0, !!fixture.link);
     h.button('跟进').props.onClick(); h.render();
     const editor = h.all(n => n.type === 'textarea');
     assert.equal(editor.length, fixture.allow ? 1 : 0);

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiChevronDown, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
+import { FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import type { CustomerLeadOverview } from '../api/customerLeads';
 import { getCustomerLeadFunnel, CustomerFunnelMetric } from '../api/customerLeads';
 import { leadQueues } from '../component/navConfig';
-import { useIsMobile } from '../component/useIsMobile';
 import './customerLeadHub.scss';
 
 // 线索阶段：与 customer_leads.status 的四个取值一一对应，颜色沿用常见销售看板的蓝 / 黄 / 绿 / 灰
@@ -18,15 +17,12 @@ const STAGES: { key: keyof CustomerLeadOverview; label: string; color: string }[
 const RADIUS = 52;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
 /**
- * 客服服务漏斗（近 30 天，按登录账号去重）：
- * ① 每层可与服务端 SQL 对账（"提交线索"按 customer_leads 去重账号统计，
- *    不再被同人多次提交虚高）；② 底层"进入客服"依赖小程序埋点——旧版
- * 小程序未发版期间该层数字偏低，只统计到留资过的会话，看板不代表真实进线量。
+ * 客服服务漏斗（近 30 天，按登录账号去重）：常开，只放标题和逐层数字。
+ * 每层可与服务端 SQL 对账（"提交线索"按 customer_leads 去重账号统计）；
+ * 底层"进入客服"依赖小程序埋点，旧版小程序期间偏低——口径说明留在代码里，不占页面。
  */
-const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
+export const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
     const [state, setState] = useState<{ loading: boolean; error: string; metrics: CustomerFunnelMetric[] }>({ loading: true, error: '', metrics: [] });
     useEffect(() => {
         let active = true;
@@ -36,25 +32,20 @@ const ServiceFunnel: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
             .catch(() => { if (active) setState({ loading: false, error: '漏斗暂不可用', metrics: [] }); });
         return () => { active = false; };
     }, [refreshKey]);
-    // 漏斗是低频信息：桌面与手机都默认收起为一行摘要
-    return <details className="lead-hub-card lead-hub-funnel-wrap">
-        <summary className="lead-hub-stage-summary"><span>客服服务漏斗 · 近30天 · 按账号去重</span><FiChevronDown className="lead-hub-stage-caret" aria-hidden /></summary>
+    return <section className="lead-hub-card lead-hub-funnel-wrap">
+        <header className="lead-hub-card-head"><h2>客服服务漏斗</h2></header>
         {state.loading ? <p className="lead-hub-funnel-note">正在读取…</p> : state.error ? <p className="lead-hub-funnel-note">{state.error}</p> : (
-            <>
-                <ul className="lead-hub-funnel">
-                    {state.metrics.map(metric => (
-                        <li key={metric.key}>
-                            <span>{metric.label}</span>
-                            <b>{metric.count}</b>
-                            <small>{metric.count > 0 ? `${metric.conversion_rate.toFixed(0)}%` : '—'}</small>
-                        </li>
-                    ))}
-                </ul>
-                {/* 数据口径提醒：底层偏低会让转化率看起来偏高，必须让看数的人知道 */}
-                <p className="lead-hub-funnel-note">「进入客服」暂只统计留资会话，转化率偏高。</p>
-            </>
+            <ul className="lead-hub-funnel">
+                {state.metrics.map(metric => (
+                    <li key={metric.key}>
+                        <span>{metric.label}</span>
+                        <b>{metric.count}</b>
+                        <small>{metric.count > 0 ? `${metric.conversion_rate.toFixed(0)}%` : '—'}</small>
+                    </li>
+                ))}
+            </ul>
         )}
-    </details>;
+    </section>;
 };
 
 interface HubProps {
@@ -74,10 +65,6 @@ interface HubProps {
  * 客户 · 线索 · 商机 的入口卡片在布局层（SubNavCards），三个页面共用。
  */
 const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onRefresh, activeQueue, queueHref }) => {
-    const isMobile = useIsMobile();
-    // 环图卡 447px 是线索列表沉到 1565px 的主因：手机端默认收起（摘要带总条数），桌面常开
-    const [stageOpen, setStageOpen] = useState<boolean | null>(null);
-    const stageExpanded = stageOpen ?? !isMobile;
     const total = overview.total_count || 0;
     const stages = STAGES.map((stage) => {
         const count = Number(overview[stage.key] || 0);
@@ -100,8 +87,6 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
             <section className="lead-hub-card">
                 <header className="lead-hub-card-head">
                     <h2>线索简报</h2>
-                    {/* 「全量」：数字不随下方用户过滤或搜索变化 */}
-                    <span className="lead-hub-period">全量概览{updatedAt ? ` · ${pad(updatedAt.getHours())}:${pad(updatedAt.getMinutes())} 更新` : ''}</span>
                     <button type="button" className="lead-hub-refresh" onClick={onRefresh} disabled={loading}>
                         <FiRefreshCw />
                         刷新
@@ -128,21 +113,7 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                 </nav>
             </section>
 
-            <details
-                className="lead-hub-card lead-hub-stage-wrap"
-                open={stageExpanded}
-                onToggle={(event) => setStageOpen((event.target as HTMLDetailsElement).open)}
-            >
-                <summary className="lead-hub-stage-summary">
-                    <span>线索阶段 · 共 {total} 条</span>
-                    {/* 收起时也能一眼看出阶段占比 */}
-                    <span className="lead-hub-stagebar" aria-hidden>
-                        {stages.filter((stage) => stage.count > 0).map((stage) => (
-                            <i key={stage.key} style={{ flexGrow: stage.count, background: stage.color }} />
-                        ))}
-                    </span>
-                    <FiChevronDown className="lead-hub-stage-caret" aria-hidden />
-                </summary>
+            <section className="lead-hub-card lead-hub-stage-wrap">
                 <header className="lead-hub-card-head">
                     <h2>线索阶段</h2>
                     <Link className="lead-hub-more" to="/customer-leads?queue=all">全部<FiChevronRight /></Link>
@@ -176,7 +147,7 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                         ))}
                     </ul>
                 </div>
-            </details>
+            </section>
             <ServiceFunnel refreshKey={updatedAt ? updatedAt.getTime() : 0} />
         </div>
     );

@@ -7,7 +7,6 @@ import SalesDonut, { type DonutSlice } from '../component/SalesDonut';
 import type { FunnelStep } from '../component/salesFunnelMath';
 import { getCustomerLeadFunnel, getCustomerLeadList, getCustomerLeadOverview, type CustomerLeadOverview } from '../api/customerLeads';
 import { crm, stages, type CustomerPage, type Dashboard, type Stage, type SyncState } from '../api/wecomCustomers';
-import { timeAgo } from './salesFormat';
 import './salesModule.scss';
 import './salesOverview.scss';
 
@@ -24,7 +23,7 @@ interface Snapshot {
 }
 
 /** 读不到的部分返回 undefined 并记入 problems，页面其余部分照常显示。 */
-async function loadSnapshot(mode: Mode, withLeads: boolean, account: { employeeId: string | null; displayName: string } | undefined): Promise<Snapshot> {
+async function loadSnapshot(mode: Mode, withLeads: boolean, leadsHandedOff: boolean, account: { employeeId: string | null; displayName: string } | undefined): Promise<Snapshot> {
     const problems: string[] = [];
     const settle = async <T,>(name: string, job: Promise<T>): Promise<T | undefined> => {
         try { return await job; } catch { problems.push(name); return undefined; }
@@ -54,8 +53,11 @@ async function loadSnapshot(mode: Mode, withLeads: boolean, account: { employeeI
     const customerOverdue = personal ? overdue ?? 0 : dash?.overview.overdue ?? 0;
     return {
         brief: { newLeads: withLeads ? leadToday : null, newCustomers: personal ? added ?? 0 : dash?.todayAdded ?? 0, todo: customerToday },
+        // 待办只放能处理的事：CRM 接管后线索在线索页只读，它的「超时」永远消不掉，
+        // 改为提示主管去分配客户档案里还没有负责人的咨询。
         todos: [
-            ...(withLeads ? [{ key: 'lead-overdue', label: '线索超时未跟进', count: leadOverdue, to: '/customer-leads?queue=overdue' }] : []),
+            ...(withLeads && !leadsHandedOff ? [{ key: 'lead-overdue', label: '线索超时未跟进', count: leadOverdue, to: '/customer-leads?queue=overdue' }] : []),
+            ...(crmReady && leadsHandedOff && !personal ? [{ key: 'customer-unassigned', label: '待分配客户', count: dash?.overview.unassigned ?? 0, to: '/customer-management?tab=tasks&queue=unassigned' }] : []),
             ...(crmReady ? [
                 { key: 'customer-overdue', label: '客户超时未跟进', count: customerOverdue, to: '/customer-management?tab=tasks&queue=overdue' },
                 { key: 'customer-today', label: '今日待跟进客户', count: customerToday, to: '/customer-management?tab=tasks&queue=today' },
@@ -71,6 +73,7 @@ const SalesOverview: React.FC = () => {
     const session = useManagementSession();
     const account = session.crmContext?.account;
     const withLeads = session.user?.scope === 'platform_admin';
+    const leadsHandedOff = session.user?.crmEnabled === true;
     const supervisor = account?.role === 'admin';
     // 主管可看团队也可看个人；顾问只有个人。没有客户账号的平台管理员只有全局线索数据（团队口径）。
     const [mode, setMode] = useState<Mode>(supervisor || !account ? 'team' : 'personal');
@@ -84,10 +87,10 @@ const SalesOverview: React.FC = () => {
     useEffect(() => {
         let active = true;
         setSnapshot(null);
-        loadSnapshot(effectiveMode, withLeads, account ? { employeeId: account.employeeId, displayName: account.displayName } : undefined)
+        loadSnapshot(effectiveMode, withLeads, leadsHandedOff, account ? { employeeId: account.employeeId, displayName: account.displayName } : undefined)
             .then((value) => { if (active) setSnapshot(value); });
         return () => { active = false; };
-    }, [effectiveMode, withLeads, account?.username, account?.employeeId, version]);
+    }, [effectiveMode, withLeads, leadsHandedOff, account?.username, account?.employeeId, version]);
 
     useEffect(() => {
         if (!withLeads) return;
@@ -107,8 +110,8 @@ const SalesOverview: React.FC = () => {
     }, [supervisor, version]);
 
     const retry = useCallback(() => setVersion((v) => v + 1), []);
-    const lastSync = sync?.runs.find((run) => run.finishedAt)?.finishedAt;
-    const syncLine = !sync ? '' : !sync.configured ? '企微未接入' : sync.failed > 0 ? `企微同步有 ${sync.failed} 条失败事件` : `企微接入正常${lastSync ? ` · 最近同步 ${timeAgo(lastSync)}` : ''}`;
+    // 接入正常时不占版面，只在未接入或同步失败时提示主管
+    const syncLine = !sync ? '' : !sync.configured ? '企微未接入' : sync.failed > 0 ? `企微同步有 ${sync.failed} 条失败事件` : '';
 
     return (
         <div className="sx-overview">
@@ -121,7 +124,7 @@ const SalesOverview: React.FC = () => {
                     </div>
                 )}
             </header>
-            {syncLine && <p className={`sx-sync-line${sync && (!sync.configured || sync.failed > 0) ? ' is-warn' : ''}`}>{syncLine}</p>}
+            {syncLine && <p className="sx-sync-line is-warn">{syncLine}</p>}
             {snapshot?.problems.length ? (
                 <div className="sx-feedback" role="alert"><FiAlertCircle /><span>{snapshot.problems.join('、')}数据未能读取</span><button type="button" onClick={retry}>重试</button></div>
             ) : null}
@@ -156,6 +159,7 @@ const SalesOverview: React.FC = () => {
                             </li>
                         ))}
                         {!snapshot && <li className="sx-muted">正在读取…</li>}
+                        {snapshot?.todos.length === 0 && <li className="sx-muted">{account ? '暂无待办' : '客户账号未就绪，暂无可处理的待办'}</li>}
                     </ul>
                 </section>
 
