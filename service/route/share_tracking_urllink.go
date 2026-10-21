@@ -104,7 +104,7 @@ func trackingURLLink(ctx context.Context, svc *tracking.Service, api *tracking.W
 	environment := trackingWechatEnv()
 	key := trackingCodeCacheKey(svc.Config.Tenant, scope.Actor, contentID, version, environment+"/urllink", now)
 	// Creating the share first re-validates authorization even on a cache hit.
-	share, err := svc.CreateShare(ctx, tracking.ShareInput{Route: trackingReaderRoute, Content: contentID, Version: version, Key: "ul-" + key}, "", scope.Actor)
+	share, err := svc.CreateConsoleShare(ctx, tracking.ShareInput{Route: trackingReaderRoute, Content: contentID, Version: version, Key: "ul-" + key}, scope.Actor)
 	if err != nil {
 		return out, err
 	}

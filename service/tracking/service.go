@@ -232,7 +232,17 @@ type ShareInput struct {
 	Key     string `json:"idempotency_key"`
 }
 
+// CreateShare records a share made inside the mini program.
 func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, account int64) (map[string]any, error) {
+	return s.createShare(ctx, in, token, account, "miniprogram")
+}
+
+// CreateConsoleShare records a code or URL Link minted by a management account.
+func (s *Service) CreateConsoleShare(ctx context.Context, in ShareInput, actor int64) (map[string]any, error) {
+	return s.createShare(ctx, in, "", actor, "console")
+}
+
+func (s *Service) createShare(ctx context.Context, in ShareInput, token string, account int64, origin string) (map[string]any, error) {
 	var out map[string]any
 	if !s.Config.Enabled {
 		return out, fail(503, "采集未启用")
@@ -302,7 +312,7 @@ func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, 
 			return nil
 		}
 		tok := opaque()
-		sh := Share{ID: opaque(), Route: in.Route, Content: in.Content, Version: in.Version, Owner: owner, Sharer: visitor, Session: session, Parent: parent, Expires: now.Add(30 * 24 * time.Hour)}
+		sh := Share{ID: opaque(), Route: in.Route, Content: in.Content, Version: in.Version, Owner: owner, Sharer: visitor, Session: session, Parent: parent, Origin: origin, Expires: now.Add(30 * 24 * time.Hour)}
 		rec := record("share", hash(tok), owner, now, sh)
 		rec.Share, rec.Visitor, rec.Session = sh.ID, sh.Sharer, sh.Session
 		if e := r.Insert(rec); e != nil {

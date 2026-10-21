@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Context } from '../../api/shareTracking';
-import { defaultFilters, type Filters } from './model';
+import { defaultFilters, sourceOptions, type Filters } from './model';
 
 const accessDeniedEvent = 'tracking-access-denied';
 const storagePrefix = 'tracking-view-v2:';
@@ -110,7 +110,8 @@ export function normalizeTrackingView(value: unknown, owners: Context['owners'])
     }
     if (typeof filters.owner !== 'string' || !owners.some(owner => owner.id === filters.owner)) filters.owner = '';
     const view = saved.view === 'contents' ? 'contents' : saved.view === 'channels' ? 'channels' : 'visitors';
-    if (view === 'contents') filters.intent = '';
+    if (filters.channel && !sourceOptions.some(([value]) => value === filters.channel)) filters.channel = '';
+    if (view === 'contents') { filters.intent = ''; filters.channel = ''; }
     return { filters, view };
 }
 export function loadTrackingView(actorId: number | undefined, owners: Context['owners']): StoredView {

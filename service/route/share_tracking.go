@@ -127,7 +127,7 @@ func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor 
 	return scope, nil
 }
 func trackingFilter(c *gin.Context) (tracking.Filter, error) {
-	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor")}
+	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor"), Channel: c.Query("channel")}
 	for name, target := range map[string]*time.Time{"start": &f.Start, "end": &f.End, "as_of": &f.AsOf} {
 		if raw := c.Query(name); raw != "" {
 			t, e := time.Parse(time.RFC3339Nano, raw)
@@ -155,6 +155,18 @@ func trackingFilter(c *gin.Context) (tracking.Filter, error) {
 // 让「分享访问记录」与「风控台」在同一个列表里互相印证。匿名访客不查：
 // 没有 user_id，且按隐私边界不做跨身份关联。标签查询失败只降级，不打断列表。
 func annotateVisitorRiskTags(users *model.UserModel, list tracking.List) (tracking.List, error) {
+	return annotateRiskTags(users, list, func(item map[string]any) map[string]any { return item })
+}
+
+// annotateVisitRiskTags 同上，作用于访问时间线每张卡片里嵌套的访客。
+func annotateVisitRiskTags(users *model.UserModel, list tracking.List) (tracking.List, error) {
+	return annotateRiskTags(users, list, func(item map[string]any) map[string]any {
+		visitor, _ := item["visitor"].(map[string]any)
+		return visitor
+	})
+}
+
+func annotateRiskTags(users *model.UserModel, list tracking.List, visitorOf func(map[string]any) map[string]any) (tracking.List, error) {
 	if users == nil || users.DB == nil {
 		return list, nil
 	}
@@ -162,11 +174,19 @@ func annotateVisitorRiskTags(users *model.UserModel, list tracking.List) (tracki
 	if e != nil {
 		return list, nil
 	}
-	var visitors []map[string]any
-	if json.Unmarshal(raw, &visitors) != nil {
+	var items []map[string]any
+	if json.Unmarshal(raw, &items) != nil {
 		return list, nil
 	}
+	visitors := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if visitor := visitorOf(item); visitor != nil {
+			visitors = append(visitors, visitor)
+		}
+	}
+	// 时间线里同一访客会出现在多张卡上，查询前去重。
 	ids := make([]int64, 0, len(visitors))
+	seenIDs := map[int64]bool{}
 	for _, item := range visitors {
 		if state, _ := item["identity_state"].(string); state != "identified" {
 			continue
@@ -175,7 +195,8 @@ func annotateVisitorRiskTags(users *model.UserModel, list tracking.List) (tracki
 		if !strings.HasPrefix(key, "u:") {
 			continue
 		}
-		if id, err := strconv.ParseInt(strings.TrimPrefix(key, "u:"), 10, 64); err == nil && id > 0 {
+		if id, err := strconv.ParseInt(strings.TrimPrefix(key, "u:"), 10, 64); err == nil && id > 0 && !seenIDs[id] {
+			seenIDs[id] = true
 			ids = append(ids, id)
 		}
 	}
@@ -198,7 +219,7 @@ func annotateVisitorRiskTags(users *model.UserModel, list tracking.List) (tracki
 			}
 		}
 	}
-	list.Items = visitors
+	list.Items = items
 	return list, nil
 }
 
@@ -307,7 +328,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		}
 		key := trackingCodeCacheKey(cfg.Tenant, sc(c).Actor, c.Param("id"), version, os.Getenv("TRACKING_WECHAT_ENV"), svc.Now())
 		name := filepath.Join(root, "code-"+key)
-		share, e := svc.CreateShare(c.Request.Context(), tracking.ShareInput{Route: "pages/contentreader/contentreader", Content: c.Param("id"), Version: version, Key: "qr-" + key}, "", sc(c).Actor)
+		share, e := svc.CreateConsoleShare(c.Request.Context(), tracking.ShareInput{Route: "pages/contentreader/contentreader", Content: c.Param("id"), Version: version, Key: "qr-" + key}, sc(c).Actor)
 		if e != nil {
 			trackingResponse(c, nil, e)
 			return
@@ -394,6 +415,22 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if e == nil {
 			// 风控联动：已识别访客注入 risk_tags（查询失败只降级不打断列表）
 			v, e = annotateVisitorRiskTags(users, v)
+		}
+		trackingResponse(c, v, e)
+	})
+	// 客户查看时间线：一次访问一张卡（同会话同素材合并），与 /visitors 同一套权限、快照和意向。
+	mg.GET("/visits", func(c *gin.Context) {
+		if !view(c) {
+			return
+		}
+		f, e := trackingFilter(c)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.Visits(c.Request.Context(), sc(c), f)
+		if e == nil {
+			v, e = annotateVisitRiskTags(users, v)
 		}
 		trackingResponse(c, v, e)
 	})

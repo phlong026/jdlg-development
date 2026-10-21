@@ -106,6 +106,9 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if f.Intent != "" && f.Intent != "all" && f.Intent != "high" && f.Intent != "medium" && f.Intent != "low" && f.Intent != "unknown" {
 		return f, fail(400, "意向筛选无效")
 	}
+	if f.Channel != "" && f.Channel != "all" && !visitChannels[f.Channel] {
+		return f, fail(400, "来源筛选无效")
+	}
 	f.Search, f.ContentSearch, f.VisitorSearch = strings.TrimSpace(f.Search), strings.TrimSpace(f.ContentSearch), strings.TrimSpace(f.VisitorSearch)
 	if len(f.Search) > 100 || len(f.ContentSearch) > 100 || len(f.VisitorSearch) > 100 {
 		return f, fail(400, "搜索超限")
@@ -645,94 +648,17 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 	effective := ownerScope(scope, f.Owner)
 	pending := []pendingEvaluation{}
 	err = s.readQueryTransaction(ctx, func(r Repository) error {
-		facts, e := s.facts(r, scope, f)
+		p, e := s.projectVisitors(ctx, r, scope, f, overrideLimit)
 		if e != nil {
 			return e
 		}
-		facts, titleRevision, e := filterFactTitles(r, scope, f, facts)
-		if e != nil {
-			return e
-		}
-		profiles, profileRevision, e := s.queryProfiles(ctx, r, facts)
-		if e != nil {
-			return e
-		}
-		profileRevision = joinedQueryRevision(profileRevision, titleRevision)
-		if e = checkProfileRevision(f, profileRevision); e != nil {
-			return e
-		}
-		out.ProfileRevision = profileRevision
-		shareTotals, shareRecent, recentCovered, e := shareCounts(r, scope, f)
-		if e != nil {
-			return e
-		}
-		recentCutoff := f.AsOf.Add(-7 * 24 * time.Hour)
-		recentViews := map[string]int{}
-		by := map[string]*Visitor{}
-		ss := map[string]map[string]bool{}
-		for _, v := range facts {
-			item := by[v.Visitor]
-			if item == nil {
-				profile := profiles[v.Visitor]
-				item = &profile
-				by[v.Visitor] = item
-				ss[v.Visitor] = map[string]bool{}
-			}
-			if v.Count {
-				item.Views++
-				if recentCovered && !v.Started.Before(recentCutoff) {
-					recentViews[v.Visitor]++
-				}
-			}
-			item.Visible += v.Visible
-			item.LatestVisit = latestCountedVisit(item.LatestVisit, v)
-			if v.Last.After(item.Last) {
-				item.Last = v.Last
-			}
-			ss[v.Visitor][v.Session] = true
-		}
-		intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by), overrideLimit)
-		if e != nil {
-			return e
-		}
+		out.ProfileRevision, pending = p.profileRevision, p.pending
+		profileRevision, intentData := p.profileRevision, p.intentData
 		items := []Visitor{}
-		for key, v := range by {
-			v.Sessions = len(ss[key])
-			v.Shares = shareTotals[key]
-			if recentCovered {
-				views, shares := recentViews[key], shareRecent[key]
-				v.RecentViews, v.RecentShares = &views, &shares
-			}
-			v.Intent = s.intent(effective, key, f.AsOf, intentData)
-			if s.evaluationAudited(effective, v.Intent) {
-				pending = append(pending, pendingEvaluation{key: key, intent: v.Intent})
-			}
-			// B-side accounts are channels, not prospects. Downgrade the
-			// projected level after the audited evaluation so the rule's own
-			// output stays intact while designer activity never floods the
-			// high-intent list. Conversion hard-blocks separately in the route.
-			if v.State == "identified" && BSideIdentities[v.IdentityType] {
-				v.Intent.Level = "low"
-				v.Intent.Exclusions = append(v.Intent.Exclusions, "bside_identity")
-				v.Intent.Reasons = append([]string{"B端账号（" + v.IdentityType + "）仅作渠道观察，不参与客户意向"}, v.Intent.Reasons...)
-			}
-			if scope.CRM && len(effective.Owners) == 1 {
-				rec, ok := intentData.crm[privateKey(effective.Owners[0], key)]
-				if ok && rec.Owner == effective.Owners[0] && !rec.At.After(f.AsOf) {
-					var link map[string]string
-					if json.Unmarshal(rec.Payload, &link) == nil {
-						v.CRMLabel = link["business_number"]
-					}
-				}
-			}
-
-			if !visitorMatches(*v, f) {
+		for _, v := range p.visitors {
+			if !visitorListed(*v, f) {
 				continue
 			}
-			if f.Intent != "" && f.Intent != "all" && v.Intent.Level != f.Intent {
-				continue
-			}
-
 			if v.State == "identified" {
 				out.Identified++
 			} else {
@@ -787,6 +713,108 @@ func (s *Service) Visitors(ctx context.Context, scope Scope, f Filter) (List, er
 	}
 	return out, nil
 }
+
+// visitorProjection is the per-visitor reduction shared by the customer list
+// and the visit timeline, so both show the same counts, profile and intent.
+type visitorProjection struct {
+	facts           []factView
+	visitors        map[string]*Visitor
+	intentData      intentFacts
+	pending         []pendingEvaluation
+	profileRevision string
+}
+
+func (s *Service) projectVisitors(ctx context.Context, r Repository, scope Scope, f Filter, overrideLimit *int64) (visitorProjection, error) {
+	out := visitorProjection{}
+	effective := ownerScope(scope, f.Owner)
+	facts, e := s.facts(r, scope, f)
+	if e != nil {
+		return out, e
+	}
+	facts, titleRevision, e := filterFactTitles(r, scope, f, facts)
+	if e != nil {
+		return out, e
+	}
+	profiles, profileRevision, e := s.queryProfiles(ctx, r, facts)
+	if e != nil {
+		return out, e
+	}
+	profileRevision = joinedQueryRevision(profileRevision, titleRevision)
+	if e = checkProfileRevision(f, profileRevision); e != nil {
+		return out, e
+	}
+	shareTotals, shareRecent, recentCovered, e := shareCounts(r, scope, f)
+	if e != nil {
+		return out, e
+	}
+	recentCutoff := f.AsOf.Add(-7 * 24 * time.Hour)
+	recentViews := map[string]int{}
+	by := map[string]*Visitor{}
+	ss := map[string]map[string]bool{}
+	for _, v := range facts {
+		item := by[v.Visitor]
+		if item == nil {
+			profile := profiles[v.Visitor]
+			item = &profile
+			by[v.Visitor] = item
+			ss[v.Visitor] = map[string]bool{}
+		}
+		if v.Count {
+			item.Views++
+			if recentCovered && !v.Started.Before(recentCutoff) {
+				recentViews[v.Visitor]++
+			}
+		}
+		item.Visible += v.Visible
+		item.LatestVisit = latestCountedVisit(item.LatestVisit, v)
+		if v.Last.After(item.Last) {
+			item.Last = v.Last
+		}
+		ss[v.Visitor][v.Session] = true
+	}
+	intentData, e := s.loadIntentFacts(ctx, r, effective, f.AsOf, visitorKeys(by), overrideLimit)
+	if e != nil {
+		return out, e
+	}
+	pending := []pendingEvaluation{}
+	for key, v := range by {
+		v.Sessions = len(ss[key])
+		v.Shares = shareTotals[key]
+		if recentCovered {
+			views, shares := recentViews[key], shareRecent[key]
+			v.RecentViews, v.RecentShares = &views, &shares
+		}
+		v.Intent = s.intent(effective, key, f.AsOf, intentData)
+		if s.evaluationAudited(effective, v.Intent) {
+			pending = append(pending, pendingEvaluation{key: key, intent: v.Intent})
+		}
+		// B-side accounts are channels, not prospects. Downgrade the
+		// projected level after the audited evaluation so the rule's own
+		// output stays intact while designer activity never floods the
+		// high-intent list. Conversion hard-blocks separately in the route.
+		if v.State == "identified" && BSideIdentities[v.IdentityType] {
+			v.Intent.Level = "low"
+			v.Intent.Exclusions = append(v.Intent.Exclusions, "bside_identity")
+			v.Intent.Reasons = append([]string{"B端账号（" + v.IdentityType + "）仅作渠道观察，不参与客户意向"}, v.Intent.Reasons...)
+		}
+		if scope.CRM && len(effective.Owners) == 1 {
+			rec, ok := intentData.crm[privateKey(effective.Owners[0], key)]
+			if ok && rec.Owner == effective.Owners[0] && !rec.At.After(f.AsOf) {
+				var link map[string]string
+				if json.Unmarshal(rec.Payload, &link) == nil {
+					v.CRMLabel = link["business_number"]
+				}
+			}
+		}
+	}
+	return visitorProjection{facts: facts, visitors: by, intentData: intentData, pending: pending, profileRevision: profileRevision}, nil
+}
+
+// visitorListed applies the identity, search and intent filters.
+func visitorListed(v Visitor, f Filter) bool {
+	return visitorMatches(v, f) && (f.Intent == "" || f.Intent == "all" || v.Intent.Level == f.Intent)
+}
+
 func (s *Service) Contents(ctx context.Context, scope Scope, f Filter, id string) (List, error) {
 	return s.queryContents(ctx, scope, f, id)
 }

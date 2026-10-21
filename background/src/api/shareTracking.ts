@@ -17,6 +17,11 @@ export interface IntentEvidence { metrics?: { sessions: number; favorites: numbe
 export interface CRMTarget { target_kind: 'customer'; customer_id: string; business_number: string; owner_id: string; }
 export interface LatestVisit { page_view_id: string; started_at: string; visible_ms: number; content_id?: string; content_version?: number; }
 export interface Visitor { latest_visit?: LatestVisit; visitor_key: string; nickname?: string; avatar_url?: string; identity_state: 'identified' | 'anonymous' | 'deleted'; /** 账号自选身份（乡墅业主/设计师/施工队/建材商/机构用户），空=尚未确认；用于精准客户门控展示 */ identity_type?: string; crm_label?: string; last_visit: string; page_views: number; /** 当前筛选范围内主动发起转发的次数（不含后台生成的码/链接；微信不回传是否送达） */ share_count: number; /** 近7天浏览/转发小计；缺失表示筛选范围未覆盖近7天，显示“—”而非 0 */ recent_page_views?: number; recent_share_count?: number; visible_ms: number; session_count: number; intent: IntentEvidence; /** 风控联动：已识别访客的风险标签（同设备多账号/近期换绑/任务失败异常/支付异常） */ risk_tags?: string[]; }
+/** 客户查看时间线的一张卡：同一会话内对同一素材的浏览合并为一次访问 */
+export interface VisitSource { kind: 'share' | 'code_link' | 'direct'; /** app_message=私发，timeline=朋友圈；缺失=微信未回传 */ channel?: string; /** 直接上一级转发人；销售本人发出的不返回 */ forwarder?: { visitor_key: string; nickname: string; identity_state: 'identified' | 'anonymous' | 'deleted' }; }
+/** 视频：去重完成度（封顶100%）与完整重播遍数；文章：最深滚动位置；无数据时整体省略 */
+export interface VisitProgress { kind: 'video' | 'article'; percent: number; plays?: number; }
+export interface Visit { visit_id: string; started_at: string; visible_ms: number; visitor: Visitor; content: { content_id: string; content_version: number; title: string; type: string; status: string; cover?: Asset; route_key?: string; content_accessible: boolean }; source: VisitSource; progress?: VisitProgress; /** 此人在筛选范围内看这篇素材的总次数 */ content_page_views: number; /** 看得认真：本次≥60秒、本素材累计≥3次或视频≥80% */ engaged: boolean; }
 export interface Asset { media_id: string; kind: 'image' | 'video'; url: string; width: number; height: number; mime: string; title?: string; }
 export interface VisitorContent { latest_visit?: LatestVisit; content_id: string; content_version: number; title: string; type: string; status: string; cover?: Asset; page_views: number; visible_ms: number; /** 筛选范围内视频去重观看毫秒数与媒体总时长；进度按 min(100, 去重/时长) 封顶计算 */ video_unique_ms?: number; video_duration_ms?: number; last_visit: string; route_key?: string; content_accessible: boolean; }
 /** 访客发起的一次转发：素材、渠道与它带回来的下游流量（自访/预览/测试不计） */
@@ -68,6 +73,7 @@ export const tracking = {
     mpSyncInfo: (signal?: AbortSignal) => trackingRequest<MPSyncInfo>('/mp-sync', { signal }),
     mpSyncRun: () => trackingRequest<MPSyncRun>('/mp-sync', { method: 'POST', timeoutMs: 330000 }),
     visitors: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Visitor>>('/visitors', { params, signal }),
+    visits: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Visit>>('/visits', { params, signal }),
     contents: (params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Content>>('/contents', { params, signal }),
     content: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Content & Snapshot>(`/contents/${encodeURIComponent(id)}`, { params, signal }),
     contentVisitors: (id: string, params: Record<string, unknown>, signal?: AbortSignal) => trackingRequest<Page<Visitor>>(`/contents/${encodeURIComponent(id)}/visitors`, { params, signal }),

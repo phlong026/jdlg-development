@@ -407,4 +407,52 @@
     .st-channel-row { grid-template-columns: minmax(120px, 1.6fr) repeat(3, minmax(48px, 1fr)); }
     .st-channel-row > span:nth-child(5) { display: none; }
   }
+
+/* 客户查看：一次访问一张卡（对标“客户意向度追踪 → 客户查看”） */
+  .st-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .st-visit-quick { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+  .st-visit-quick .st-search { flex: 2 1 260px; }
+  .st-visit-quick > label { flex: 1 1 130px; }
+  .st-more-filters { margin: 10px 0 4px; }
+  .st-more-filters > summary { display: flex; align-items: center; min-height: 44px; color: var(--st-accent); cursor: pointer; }
+  .st-more-filters .st-filter-fields { padding-top: 4px; }
+  .st-visit-order { margin: 0; }
+  .st-visit-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 12px; }
+  .st-visit { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; border: 1px solid var(--st-line); border-radius: 14px; background: var(--st-surface); box-shadow: 0 2px 6px #5a3e2805; }
+  .st-visit-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; padding-right: 72px; }
+  .st-visit-person { display: inline-flex; align-items: center; gap: 10px; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; }
+  .st-visit-person:hover:not(:disabled) { background: transparent; }
+  .st-visit-person strong { font-size: 16px; }
+  .st-visit-person .st-avatar { width: 44px; height: 44px; }
+  .st-visit-copy { min-width: 36px; padding: 4px 8px; border-color: transparent; background: transparent; color: var(--st-muted); font-size: 15px; }
+  .st-visit-forward { color: var(--st-muted); font-size: 13px; }
+  .st-visit .st-intent { position: absolute; top: -1px; right: -1px; margin: 0; padding: 4px 12px; border-radius: 0 14px 0 12px; font-size: 12px; font-weight: 600; color: var(--st-muted); background: #f1eee9; }
+  .st-visit .st-intent.st-high { color: #a43416; background: #ffe4d3; }
+  .st-visit .st-intent.st-medium { color: #81430e; background: #fff0d7; }
+  .st-visit-head .st-identity { margin-top: 0; }
+  .st-visit-risk { padding: 2px 8px; border: 1px solid #f0cfc7; border-radius: 999px; background: #fbeae6; color: #c0392b; font-size: 11px; font-style: normal; font-weight: 600; white-space: nowrap; }
+  .st-visit-body { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; }
+  .st-visit-body:hover:not(:disabled) { background: transparent; }
+  .st-visit-body:hover .st-visit-title { color: var(--st-accent); }
+  .st-visit-thumb { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; border-radius: 8px; background: #eee8e1; color: var(--st-muted); font-size: 12px; }
+  .st-visit-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .st-visit-title { display: -webkit-box; overflow: hidden; font-size: 16px; line-height: 1.45; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .st-visit-source { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .st-visit-engaged { padding: 2px 8px; border-radius: 999px; background: #ffe4d3; color: #a43416; font-size: 11px; font-style: normal; }
+  .st-visit-metrics { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; color: var(--st-muted); font-size: 13px; line-height: 1.6; }
+  .st-visit-metrics time { color: var(--st-accent); font-weight: 600; }
+  .st-visit .st-lead-convert { align-self: flex-end; margin: 0; }
+  .st-visit .st-lead-convert button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+  .st-detail-summary { margin: 8px 0 12px; }
+  @media (max-width: 600px) {
+    .st-visit { padding: 12px; }
+    .st-visit-head { padding-right: 64px; }
+    .st-visit-body { grid-template-columns: 60px minmax(0, 1fr); gap: 4px 10px; }
+    .st-visit-thumb { grid-row: span 2; width: 60px; height: 60px; }
+    .st-visit-title { font-size: 15px; }
+    .st-visit-source { flex-direction: row; align-items: center; justify-content: flex-start; font-size: 13px; }
+    .st-visit-quick > label { flex-basis: calc(50% - 4px); }
+    .st-visit-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .st-visit-filters > p.st-muted { display: none; }
+  }
 }

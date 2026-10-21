@@ -79,7 +79,7 @@ function environment({ width = 390, localStorage = storage(), sessionStorage = s
   const presentation = {
     './shareTracking/details': { ContentDetails: 'ContentDetails', VisitorDetails: 'VisitorDetails' },
     './shareTracking/crmTarget': { CRMTargetButton: 'CRMTargetButton' },
-    './shareTracking/visitorContents': { VisitorContentPanel: 'VisitorContentPanel' },
+    './shareTracking/visitCard': { VisitCard: 'VisitCard' },
     './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' },
     './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' },
@@ -435,7 +435,7 @@ test('tracking records restore same-account filters on return but discard withdr
   access.saveTrackingView(user.id, capabilities.owners, { filters: { owner: 'synthetic-owner-a', q: 'same-account-search', range: 'all' }, view: 'visitors' });
   async function records(actorId, owners) {
     const h = env.mount('pages/shareTracking.tsx', 'TrackingRecords', { actorId, canManage: false, context: { ...capabilities, owners } }); await h.flush();
-    const last = env.calls.filter(call => call.url.includes('/tracking/visitors?')).at(-1);
+    const last = env.calls.filter(call => call.url.includes('/tracking/visits?')).at(-1);
     return { h, query: new URL(last.url, env.window.location.origin).searchParams };
   }
   const first = await records(user.id, capabilities.owners); assert.equal(first.query.get('owner'), 'synthetic-owner-a'); assert.equal(first.query.get('q'), 'same-account-search'); first.h.unmount();
