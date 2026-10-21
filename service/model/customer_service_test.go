@@ -345,6 +345,35 @@ func TestFunnelAndListCountResubmissions(t *testing.T) {
 	}
 }
 
+// 线索列表按客户合并：同一小程序用户只取最近一条，并返回 submission_count。
+// user_id=0 的匿名线索不能合并（按 id 区分）。
+func TestCustomerLeadListDedupesByUser(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatalf("read customer_service.go: %v", err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		"Dedupe string",
+		"groupByUser",
+		"ROW_NUMBER() OVER",
+		"COUNT(DISTINCT CASE WHEN user_id > 0 THEN CONCAT('u', user_id) ELSE CONCAT('l', id) END)",
+		"AS submission_count",
+		`json:"submission_count,omitempty"`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("lead user dedupe contract missing %q", want)
+		}
+	}
+	routeSource, err := os.ReadFile("../route/customer_service.go")
+	if err != nil {
+		t.Fatalf("read route customer_service.go: %v", err)
+	}
+	if !strings.Contains(string(routeSource), `c.DefaultQuery("dedupe", "all")`) {
+		t.Fatal("lead list route should read the dedupe query parameter")
+	}
+}
+
 // 「去客户档案跟进」需要客户 ID：线索列表/详情必须从同步交付表带出 customer_id，
 // 且表缺失或线索未同步时不能阻断线索列表。
 func TestCustomerLeadExposesCRMArchiveID(t *testing.T) {
