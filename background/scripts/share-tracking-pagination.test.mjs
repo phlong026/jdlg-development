@@ -25,6 +25,7 @@ const model = load('src/pages/shareTracking/model.ts');
 const visitor = { visitor_key: 'visitor-1', identity_state: 'identified', nickname: '客户', page_views: 1, visible_ms: 10, session_count: 1, intent: { level: 'low', reasons: [], rule_version: 'rule-1' } };
 const visit = { visit_id: 'session-1:content-1:1', started_at: '2026-10-11T00:00:00Z', visible_ms: 10, content_page_views: 1, engaged: false, visitor, content: { content_id: 'visited-villa', content_version: 3, title: '别墅', type: 'article', status: 'published', content_accessible: true }, source: { kind: 'direct' } };
 const content = { content_id: 'content-1', title: '素材', type: 'article', version: 1, revision: 1, status: 'published', body: '正文', media: [], page_views: 1, visible_ms: 10 };
+const channel = { visitor_key: 'u:channel-1', nickname: '渠道一', share_count: 3, brought_visitors: 2, brought_identified: 1, brought_high: 1, converted_leads: 1 };
 const nodes = tree => Array.isArray(tree) ? tree.flatMap(nodes) : !tree || typeof tree !== 'object' ? [] : [tree, ...nodes(tree.props?.children)];
 const text = tree => Array.isArray(tree) ? tree.map(text).join('') : tree == null || typeof tree === 'boolean' ? '' : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
 function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
@@ -62,9 +63,9 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   const components = Object.fromEntries(Object.keys(actual).map(name => [name, name === 'useResource' ? actual[name] : name]));
   function page(method, params = {}) {
     const as_of = params.as_of || `2026-10-11T00:00:${String(++serial).padStart(2, '0')}Z`;
-    return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : method === 'visits' ? visit : visitor], identified_count: 1, anonymous_count: 0 };
+    return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : method === 'visits' ? visit : method === 'channels' ? channel : visitor], identified_count: 1, anonymous_count: 0 };
   }
-  const api = Object.fromEntries(['visits', 'visitors', 'contents', 'contentVisitors', 'content'].map(method => [method, (...args) => {
+  const api = Object.fromEntries(['visits', 'visitors', 'contents', 'contentVisitors', 'content', 'channels'].map(method => [method, (...args) => {
     const params = method.startsWith('content') && method !== 'contents' ? args[1] : args[0];
     const signal = args[args.length - 1];
     const call = { method, params: { ...params }, signal, id: method.startsWith('content') && method !== 'contents' ? args[0] : undefined };
@@ -72,7 +73,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     return overrides[method] ? overrides[method](call, () => page(method, params)) : Promise.resolve(method === 'content' ? content : page(method, params));
   }]));
   const context = { can_view: true, can_manage: true, owners: [{ id: 'owner-1', name: '销售一' }, { id: 'owner-2', name: '销售二' }] };
-  const props = kind === 'records' ? { actorId: 42, canManage: true, context, initialVisitor: initial.initialVisitor || '' } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
+  const props = kind === 'records' ? { actorId: 42, canManage: true, context, initialVisitor: initial.initialVisitor || '' } : kind === 'channels' ? { query: initial.query || {}, refreshKey: initial.refreshKey || 0 } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
   const saved = JSON.stringify({ filters: { ...model.defaultFilters, range: 'all', ...initial.filters }, view: initial.view || 'visitors' });
   const globals = { sessionStorage: { getItem: () => saved, setItem() {} }, document: { querySelector: () => ({ scrollTop: 5, scrollTo() {} }) }, window: { confirm: () => true } };
   const access = load('src/pages/shareTracking/access.ts', { react, './model': model }, globals);
@@ -81,12 +82,14 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     './shareTracking/visitCard': { VisitCard: 'VisitCard' },
     './shareTracking/contentVisitors': { ContentVisitorPanel: 'ContentVisitorPanel' },
     './shareTracking/editor': { ContentEditor: 'ContentEditor' }, './shareTracking/rules': { IntentRulesPanel: 'IntentRulesPanel' }, './shareTracking/mpSync': { MPSyncPanel: 'MPSyncPanel' }, './shareTracking/model': model, './shareTracking.scss': {} }, globals)
-    : load('src/pages/shareTracking/details.tsx', {'./visitorContents':{VisitorContentPanel:'VisitorContentPanel'}, react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './visitorShares': { VisitorSharesPanel: 'VisitorSharesPanel' }, './model': model }, globals);
+    : kind === 'channels'
+      ? load('src/pages/shareTracking/channels.tsx', { react, '../../api/shareTracking': { tracking: api }, './components': components, './model': model }, globals)
+      : load('src/pages/shareTracking/details.tsx', {'./visitorContents':{VisitorContentPanel:'VisitorContentPanel'}, react, '../../api/shareTracking': { tracking: api }, './components': components, './crmTarget': { CRMTargetButton: 'CRMTargetButton' }, './governance': { VisitorGovernance: 'VisitorGovernance' }, './convertLead': { ConvertLeadButton: 'ConvertLeadButton' }, './visitorShares': { VisitorSharesPanel: 'VisitorSharesPanel' }, './model': model }, globals);
   function render() {
     let renders = 0;
     do {
       assert.ok(++renders < 20, 'component render settles'); dirty = false; index = 0; pending = [];
-      tree = kind === 'records' ? module.TrackingRecords(props) : module.ContentDetails(props);
+      tree = kind === 'records' ? module.TrackingRecords(props) : kind === 'channels' ? module.ChannelLeaderboard(props) : module.ContentDetails(props);
       pending.forEach(effect => effect());
     } while (dirty);
     return tree;
@@ -96,7 +99,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   render();
   return {
     calls, page, render, props, find, pager,
-    last: (method = kind === 'records' ? 'visits' : 'contentVisitors') => calls.filter(call => call.method === method).at(-1),
+    last: (method = kind === 'records' ? 'visits' : kind === 'channels' ? 'channels' : 'contentVisitors') => calls.filter(call => call.method === method).at(-1),
     async settle() { await flush(); render(); },
     async act(action) { action(); render(); await flush(); render(); },
     async next() { await this.act(() => pager().onNext(pager().next)); },
@@ -121,6 +124,29 @@ test('material view pins as_of when returning to page one without first_cursor',
   const h = harness('records', {}, { view: 'contents' }); await h.settle(); const first = h.find('SnapshotInfo').props.data;
   await h.next(); assert.equal(h.last('contents').params.as_of, first.as_of);
   await h.previous(); assert.equal(h.last('contents').params.as_of, first.as_of); assert.equal(h.last('contents').params.cursor, undefined);
+});
+
+test('channel view leaves counts snapshot feedback and pagination to its leaderboard', async () => {
+  const h = harness('records', {}, { view: 'channels' }); await h.settle();
+  assert.ok(h.find('ChannelLeaderboard'));
+  for (const parentOnly of ['Counts', 'SnapshotInfo', 'Feedback', 'Pager']) assert.equal(h.find(parentOnly), undefined, parentOnly);
+  assert.equal(h.find('ChannelLeaderboard').props.refreshKey, 0);
+  await h.click('刷新记录');
+  assert.equal(h.find('ChannelLeaderboard').props.refreshKey, 1);
+});
+
+test('channel leaderboard retains the API page snapshot and owns its feedback', async () => {
+  const h = harness('channels', {}, { query: { owner: 'owner-1' } }); await h.settle();
+  const call = h.last();
+  assert.equal(call.params.owner, 'owner-1');
+  assert.equal(call.params.identity, undefined);
+  assert.equal(h.find('SnapshotInfo').props.data.as_of, '2026-10-11T00:00:01Z');
+  assert.equal(h.find('SnapshotInfo').props.data.metric_version, 'v1');
+  assert.equal(h.find('Feedback').props.empty, false);
+  assert.match(text(h.render()), /渠道一/);
+  await h.act(() => { h.props.refreshKey = 1; });
+  assert.equal(h.calls.filter(item => item.method === 'channels').length, 2);
+  assert.equal(h.find('SnapshotInfo').props.data.as_of, '2026-10-11T00:00:02Z');
 });
 
 test('explicit refresh, range, owner, sort, search, clear, and business changes start fresh snapshots', async () => {
