@@ -136,6 +136,11 @@ test('batch card merges multiple materials and shows visit count', () => {
   assert.ok(html.includes('进度80%'));
 });
 
+test('visit card discloses an oversized progress fallback instead of looking like no progress events', () => {
+  const html = renderCard({ ...baseVisit, progress: undefined, progress_omitted: true });
+  assert.match(html, /进度因数据量过大未加载/);
+});
+
 test('day card shows the day badge and cross-session visit count', () => {
   const html = renderCard({
     ...baseVisit,

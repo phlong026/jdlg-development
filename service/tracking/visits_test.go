@@ -252,8 +252,25 @@ func TestVisitsOmitProgressWhenPageEnrichmentExceedsReadBudget(t *testing.T) {
 	if items[0].Progress != nil {
 		t.Fatalf("progress = %+v, want omitted after enrichment budget failure", items[0].Progress)
 	}
+	if !items[0].ProgressOmitted {
+		t.Fatal("oversized progress read must be explicit instead of looking like no engagement events")
+	}
 	if items[0].Content.Title != "南安石堤寺规划" || items[0].Visitor.Nickname != "灿坤" || items[0].Visible != 1000 || items[0].ContentViews != 1 {
 		t.Fatalf("degraded card lost authorized list data: %+v", items[0])
+	}
+}
+
+func TestVisitsKeepNormalMissingProgressDistinctFromBudgetOmission(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	visitPV(m, "pv-no-progress", "one", "u:1", "session-no-progress", "content1", "", now.Add(-time.Hour), 1000)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 1 || items[0].Progress != nil || items[0].ProgressOmitted {
+		t.Fatalf("normal visit without progress events = %+v", items)
 	}
 }
 
@@ -627,6 +644,52 @@ func TestVisitsBatchMergesAcrossSessionsAndMaterials(t *testing.T) {
 	}
 	if older.Source.Kind != "direct" {
 		t.Fatalf("older batch source = %q, want direct", older.Source.Kind)
+	}
+}
+
+func TestVisitsBatchUsesLastActivityAndPageEndForGapBoundary(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-6 * time.Hour)
+	visitPV(m, "pv-gap-1", "one", "u:1", "gap-1", "content1", "", at, 1000)
+	visitEvent(m, "segment-gap-1", "one", "u:1", "gap-1", "pv-gap-1", "content1", at.Add(20*time.Minute), Event{Type: "visible_segment", Delta: 1000})
+	// The page_end arrives after its occurrence time but before as_of; the
+	// reducer accepts it and the grouping must use that bounded fact.Ended.
+	ended := Event{ID: "end-gap-1", Type: "page_end", View: "pv-gap-1", Session: "gap-1", Route: publishedReaderRoute, Content: "content1", Version: 1, Occurred: at.Add(25 * time.Minute), Received: at.Add(26 * time.Minute)}
+	endedRecord := record("event", ended.ID, "one", ended.Occurred, ended)
+	endedRecord.Visitor, endedRecord.Session, endedRecord.Content = "u:1", "gap-1", "content1"
+	_ = m.Put(endedRecord)
+	// Exactly 30 minutes after the real page end: still the same batch.
+	visitPV(m, "pv-gap-2", "one", "u:1", "gap-2", "content2", "", at.Add(55*time.Minute), 1000)
+	// More than 30 minutes after the second visit's last activity: a new batch.
+	visitPV(m, "pv-gap-3", "one", "u:1", "gap-3", "content1", "", at.Add(85*time.Minute+2*time.Second), 1000)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("batch cards = %d, want 2: %+v", len(items), items)
+	}
+	older := items[1]
+	if older.VisitCount != 2 || older.Ended == nil || !older.Ended.Equal(at.Add(55*time.Minute+time.Second)) {
+		t.Fatalf("last-activity batch = %+v", older)
+	}
+}
+
+func TestVisitsBatchDoesNotCrossBeijingCalendarDay(t *testing.T) {
+	s, m, scope, _ := visitsFixture(t)
+	beforeMidnight := time.Date(2026, 10, 10, 15, 55, 0, 0, time.UTC)
+	visitPV(m, "pv-day-boundary-1", "one", "u:1", "day-boundary-1", "content1", "", beforeMidnight, 1000)
+	visitPV(m, "pv-day-boundary-2", "one", "u:1", "day-boundary-2", "content2", "", beforeMidnight.Add(10*time.Minute), 1000)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch", Start: beforeMidnight.Add(-time.Hour), End: beforeMidnight.Add(time.Hour), AsOf: beforeMidnight.Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("batch crossed Beijing midnight: %+v", items)
 	}
 }
 

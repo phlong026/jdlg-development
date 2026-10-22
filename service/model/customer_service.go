@@ -62,7 +62,8 @@ type CustomerLead struct {
 	// 小程序线索同步到客户档案后的 CRM 客户 ID，用于「去客户档案跟进」直达详情。
 	// 尚未同步或未启用客户管理时为空，前端回退到客户列表。
 	CustomerID string `json:"customer_id,omitempty"`
-	// SubmissionCount 仅在 dedupe=user 的列表返回：同一小程序用户的留资条数。
+	// SubmissionCount 仅在 dedupe=user 的列表返回：同一小程序用户的
+	// customer_leads 记录条数，不代表 lead_submit 动作次数。
 	SubmissionCount int `json:"submission_count,omitempty"`
 }
 
@@ -96,8 +97,8 @@ type CustomerLeadListParams struct {
 	AssignedTo  string
 	Limit       int
 	Offset      int
-	// Dedupe=user 时按小程序用户合并：每个 user_id 只返回最近一次留资，
-	// 并带 submission_count；未登录用户（user_id=0）仍一条一行。
+	// Dedupe=user 时按小程序用户合并：每个 user_id 只返回最近一条线索，
+	// 并带 customer_leads 记录数 submission_count；未登录用户（user_id=0）仍一条一行。
 	Dedupe string
 }
 
@@ -752,7 +753,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'contacted' THEN 2 WHEN 'converted' THEN 3 WHEN 'invalid' THEN 4 ELSE 99 END, FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC
 		LIMIT ? OFFSET ?`
 	if groupByUser {
-		// 同一小程序用户只保留最近一次留资；user_id=0 的匿名线索仍一条一行。
+		// 同一小程序用户只保留最近一条线索；user_id=0 的匿名线索仍一条一行。
 		// 先算 last_submitted_at，再用窗口函数挑每组最新一条并计数。
 		query = `
 		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,

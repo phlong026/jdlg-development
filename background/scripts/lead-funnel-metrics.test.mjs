@@ -46,6 +46,8 @@ test('线索列表：再次留资的线索标"再次留资 · N 天前"，只留
   const text = h.text();
   assert.equal(text.split('再次留资 · 3 天前').length - 1, 1, text);
   assert.equal(text.split('再次留资').length - 1, 1, '同一次会话里的连续写入不算再次留资');
-  assert.ok(text.includes('11 次留资'), '按客户合并后应显示留资次数');
-  assert.ok(text.includes('按客户合并') && text.includes('全部留资'), '应提供合并/全部留资切换');
+  assert.ok(text.includes('11 条线索记录'), '按客户合并后应明确显示合并的线索记录条数');
+  assert.equal(h.find(node => node.type === 'button' && node.props.title === '查看线索记录').props.title, '查看线索记录');
+  assert.ok(text.includes('按客户合并') && text.includes('全部线索记录'), '应提供合并/全部线索记录切换');
+  assert.ok(!text.includes('11 次留资') && !text.includes('全部留资'), '线索行数不能宣称为留资事件次数');
 });

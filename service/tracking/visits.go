@@ -27,6 +27,9 @@ type Visit struct {
 	Materials []VisitMaterial `json:"materials,omitempty"`
 	Source    VisitSource     `json:"source"`
 	Progress  *VisitProgress  `json:"progress,omitempty"`
+	// ProgressOmitted distinguishes an oversized progress-event read from a
+	// visit that genuinely has no video or article progress events.
+	ProgressOmitted bool `json:"progress_omitted,omitempty"`
 	// ContentViews counts this visitor's page views of the card's materials
 	// inside the filter window. For single-material cards it is that material's
 	// cumulative count; for batches it is the sum of each material's count.
@@ -236,6 +239,11 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 			err = s.readQueryTransaction(ctx, func(r Repository) error {
 				return s.fillVisitPageSparse(ctx, r, effective, page)
 			})
+			if err == nil {
+				for _, g := range page {
+					g.ProgressOmitted = true
+				}
+			}
 		}
 		if err != nil {
 			return out, err
@@ -280,9 +288,15 @@ func groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*vi
 		id := fact.Session + ":" + material
 		g := by[id]
 		if g == nil {
-			g = &visitGroup{Visit: Visit{ID: id, Started: fact.Started, Visitor: *visitor, Content: VisitContent{ID: fact.Content, Version: fact.Version, Route: fact.Route}}, session: fact.Session, owner: fact.Owner}
+			g = &visitGroup{Visit: Visit{ID: id, Started: fact.Started, Visitor: *visitor, Content: VisitContent{ID: fact.Content, Version: fact.Version, Route: fact.Route}}, session: fact.Session, owner: fact.Owner, end: fact.Started}
 			by[id] = g
 			groups = append(groups, g)
+		}
+		if fact.Last.After(g.end) {
+			g.end = fact.Last
+		}
+		if fact.Ended != nil && fact.Ended.After(g.end) {
+			g.end = *fact.Ended
 		}
 		if g.share == "" {
 			g.share = fact.Share
@@ -329,10 +343,10 @@ func mergeVisitGroups(groups []*visitGroup, mode string) []*visitGroup {
 	byKey := map[string]*visitGroup{}
 	out := []*visitGroup{}
 	for _, src := range ordered {
-		key := src.Visitor.Key
-		if mode == "day" {
-			key += ":" + src.Started.In(visitZone).Format("2006-01-02")
-		}
+		day := src.Started.In(visitZone).Format("2006-01-02")
+		// A new Beijing natural day always starts a new card, including in the
+		// default 30-minute batch view.
+		key := src.Visitor.Key + ":" + day
 		batch := byKey[key]
 		if batch == nil || mode == "batch" && src.Started.Sub(batch.end) > visitBatchGap {
 			batch = newVisitBatch(src, mode)

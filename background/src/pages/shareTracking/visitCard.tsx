@@ -99,6 +99,7 @@ export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit
             <span>{multi ? '本次共' : '本次观看'}{duration(visit.visible_ms)}</span>
             {!multi && visit.visit_count && visit.visit_count > 1 && <span>{visit.visit_count} 次访问</span>}
             {!multi && progress && <span>{progress}</span>}
+            {visit.progress_omitted && <span>进度因数据量过大未加载</span>}
             <span>累计浏览{visit.content_page_views}次</span>
         </p>
         <ConvertLeadButton visitor={visitor} canCRM={canCRM} />
