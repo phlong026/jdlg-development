@@ -1,52 +1,123 @@
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
-const source = fs.readFileSync(
-  path.join(root, 'miniprogram/utils/customerServiceKnowledge.ts'),
-  'utf8',
-);
-const servicePageSource = fs.readFileSync(
-  path.join(root, 'miniprogram/pages/customerservice/customerservice.ts'),
-  'utf8',
-);
 
-const expectations = [
-  ['怎么收费', '50、300、500', '收费知识库应包含充值档位'],
-  ['多少钱一张', '一张图 2 元', '收费知识库应包含单图价格'],
-  ['AI出的图能用吗', '设计水平也比较高', 'AI 出图说明应同步 Word 里的设计水平表述'],
-  ['新闽派和新中式', '现代元素组合融合', '新闽派说明应包含现代元素组合融合'],
-  ['施工队推荐', '自有团队承建', '施工队问题应说明自有团队承建'],
-  ['建三层大概多少钱', '造价生成', '建房造价应引导主页造价生成'],
-  ['装修预算', '外装一般约 500-1000 元/㎡', '装修预算应包含外装区间'],
-  ['几个房间', '5-8 个房间', '房间数量应更新为 5-8 个'],
-  ['福建建房', '风貌管控', '地域问题应覆盖风貌管控'],
-  ['砖混和框架哪个好', '闽南地区做框架结构比较多', '结构问题应包含闽南框架结构偏好'],
-  ['软地基', '打桩', '软地基问题应建议打桩到持力层'],
-  ['混凝土是商混还是自拌', 'C30', '混凝土问题应包含商混和 C30'],
-  ['水电预埋', '不含穿线', '水电预埋问题应说明不含穿线'],
-  ['钢筋品牌', '三钢', '材料品牌问题应包含钢筋品牌'],
-  ['签合同吗', '设计合同', '合同问题应说明签正式设计合同'],
-  ['售后怎么处理', '泉州有多家服务中心', '售后问题应包含泉州服务中心'],
-  ['厅做多大', '大厅小房', '闽南风俗问题应覆盖大厅小房'],
-  ['神龛', '风水位', '神龛问题应覆盖风水位'],
-  ['开大门', '纳气', '大门问题应覆盖纳气表述'],
-];
+function loadCustomerServicePage() {
+  let definition;
+  let chunkReceived;
+  let requestOptions;
+  const dependencies = {
+    '../../utils/asset': { resolveAssetPath: value => value },
+    '../../utils/parameter': {
+      generateRequestParams: () => ({}),
+      paramsToHeaders: () => ({}),
+    },
+    '../../utils/deviceFingerprint': { getCachedDeviceFingerprint: () => '' },
+    '../../utils/promptReview': { blockUnsafeText: () => false },
+    '../../utils/enterpriseWechat': {
+      DEFAULT_CUSTOMER_SERVICE_CORP_ID: '',
+      DEFAULT_CUSTOMER_SERVICE_URL: '',
+      openEnterpriseCustomerServiceChat: async () => ({ opened: false }),
+    },
+    '../../utils/tracking/consultation': { optionalConsultationHeaders: (_path, headers) => headers },
+  };
+  const wx = {
+    getStorageSync(key) {
+      return key === 'token' ? 'test-token' : '';
+    },
+    request(options) {
+      requestOptions = options;
+      return {
+        onChunkReceived(callback) {
+          chunkReceived = callback;
+        },
+      };
+    },
+  };
 
-for (const [keyword, replyFragment, message] of expectations) {
-  assert.match(source, new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${message}: missing keyword ${keyword}`);
-  assert.match(source, new RegExp(replyFragment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${message}: missing reply fragment ${replyFragment}`);
+  vm.runInNewContext(
+    fs.readFileSync(path.join(root, 'miniprogram/pages/customerservice/customerservice.js'), 'utf8'),
+    {
+      exports: {},
+      require(request) {
+        const dependency = dependencies[request];
+        if (!dependency) throw new Error(`Unexpected dependency: ${request}`);
+        return dependency;
+      },
+      Page(value) {
+        definition = value;
+      },
+      wx,
+      console: { log() {}, warn() {}, error() {} },
+      Promise,
+      Date,
+      Math,
+      Uint8Array,
+      setTimeout,
+      clearTimeout,
+    },
+  );
+
+  return {
+    definition,
+    getRequestOptions: () => requestOptions,
+    emitChunk(text) {
+      assert.ok(chunkReceived, 'stream request should register onChunkReceived');
+      const bytes = Buffer.from(text, 'utf8');
+      chunkReceived({ data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
+    },
+  };
 }
 
-assert.match(source, /category:\s*'technical'/, 'knowledge base should include technical category');
-assert.match(source, /category:\s*'custom'/, 'knowledge base should include custom category');
-assert.match(source, /category:\s*'competitor'/, 'knowledge base should include competitor category');
-assert.doesNotMatch(source, /现在元素/, 'knowledge base should use 现代元素 instead of the Word typo 现在元素');
+function createPage(definition) {
+  const collectorSteps = [];
+  const recordedEvents = [];
+  const page = {
+    ...definition,
+    data: JSON.parse(JSON.stringify(definition.data)),
+    setData(values) {
+      Object.assign(this.data, values);
+    },
+    scrollToBottom() {},
+    recordEvent(name, payload) {
+      recordedEvents.push({ name, payload });
+    },
+    showDemandCollector(step) {
+      collectorSteps.push(step);
+    },
+  };
+  return { page, collectorSteps, recordedEvents };
+}
 
-const knowledgeMatchIndex = servicePageSource.indexOf('const knowledgeHit = matchKnowledge(text)');
-const highIntentIndex = servicePageSource.indexOf("if (nextIntentLevel === 'high')", knowledgeMatchIndex);
-assert.ok(knowledgeMatchIndex > -1, 'customer service page should call matchKnowledge');
-assert.ok(highIntentIndex > knowledgeMatchIndex, 'knowledge base should be checked before unmatched high-intent handoff');
+test('小程序消费线上知识库 SSE 回复并执行引导动作', async () => {
+  const harness = loadCustomerServicePage();
+  const { page, collectorSteps, recordedEvents } = createPage(harness.definition);
 
-console.log('customer service knowledge checks passed');
+  await page.sendIntentStream('几个房间');
+
+  const request = harness.getRequestOptions();
+  assert.equal(request.url, 'https://api.jiadilingguang.com/api/v1/miniprogram/ai/intent/stream');
+  assert.equal(request.method, 'POST');
+  assert.equal(request.enableChunked, true);
+  assert.equal(request.data.text, '几个房间');
+
+  harness.emitChunk([
+    'data: {"type":"intent","intent_type":"knowledge_hit","intent_level":"medium","guide_action":"collect"}',
+    'data: {"type":"content","content":"一般三层可以规划 5-8 个房间。"}',
+    'data: {"type":"done"}',
+    '',
+  ].join('\n'));
+
+  assert.equal(page.data.messages.at(-1).content, '一般三层可以规划 5-8 个房间。');
+  assert.equal(page.data.aiStreaming, false);
+  assert.equal(page.data.waitingFirstChunk, false);
+  assert.deepEqual(collectorSteps, [1]);
+  assert.equal(recordedEvents.length, 1);
+  assert.equal(recordedEvents[0].name, 'intent_classified');
+  assert.equal(recordedEvents[0].payload.intent_type, 'knowledge_hit');
+  assert.equal(recordedEvents[0].payload.guide_action, 'collect');
+});
