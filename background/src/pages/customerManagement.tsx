@@ -65,7 +65,8 @@ export default function CustomerManagement(){
  return <><div className="crm-page sx-customers">
   <header className="sx-page-head"><h1>{titleOf[tab]}</h1><div className="crm-actions">{session.crmContext&&<button className="crm-primary" disabled={drawerBusy} onClick={()=>{if(drawerGate.current.pending)return;setCompletion('');setReporting(true)}}>＋ 新增客户</button>}</div></header>
   {params.get('from')==='share-tracking'&&<p className="crm-note"><Link to="/share-tracking">返回分享访问记录</Link> · 关联为人工核实关系，客户权限在此重新检查</p>}
-  {routeCustomer!==null&&!validRouteCustomer&&<p role="alert" className="crm-error">客户目标无效，请返回分享访问记录重新打开。</p>}
+  {params.get('from')==='customer-leads'&&<p className="crm-note"><Link to="/customer-leads">返回销售线索</Link> · 已按线索同步到的客户档案打开，客户权限在此重新检查</p>}
+  {routeCustomer!==null&&!validRouteCustomer&&<p role="alert" className="crm-error">客户目标无效，请返回{params.get('from')==='customer-leads'?'销售线索':'分享访问记录'}重新打开。</p>}
   {completion&&<div className="crm-note" role="status">{completion}</div>}
   {session.crmContext&&<nav className="crm-tabs sx-tabs" aria-label="客户栏目" ref={tabsRef}>{customerTabs.map(t=><button disabled={drawerBusy} key={t.key} className={tab==='customers'&&view===t.key?'active':''} onClick={()=>setView(t.key)}>{t.label}</button>)}<span className="sx-tabs-gap" aria-hidden/>{extraTabs.filter(t=>!t.supervisorOnly||supervisor).map(t=><button disabled={drawerBusy} key={t.key} className={'sx-tab-extra '+(tab===t.key?'active':'')} onClick={()=>go(t.key)}>{t.label}</button>)}</nav>}
   {session.crmContext?.demo&&<div className="crm-note">演示环境 · 虚构数据</div>}

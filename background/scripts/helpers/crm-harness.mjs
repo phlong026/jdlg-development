@@ -84,6 +84,7 @@ function environment() {
         if (name === './customerLeadHub' || name === '../component/WecomIdentityBinding') return { __esModule: true, default: name };
         if (name === '../component/useIsMobile' || name === './useIsMobile') return { useIsMobile: () => false };
         if (name === '../component/MobileFold') return { __esModule: true, default: ({ children }) => children };
+        if (name === './customerLeadLinks') return load('pages/customerLeadLinks.ts');
         if (name.endsWith('.scss')) return {};
         if (requireDisplayUtil(name)) return requireDisplayUtil(name);
         throw new Error(`Unexpected dependency: ${name}`);

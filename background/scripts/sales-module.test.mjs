@@ -64,17 +64,29 @@ test('路由：新增 /sales-overview 与 /customer-settings，/opportunities �
   assert.ok(!fs.existsSync(path.join(root, 'src/pages/opportunities.tsx')), '商机页面应删除');
 });
 
-test('漏斗：最窄不小于 18%，转化率按上一层计算', () => {
+test('漏斗：最窄不小于 18%，转化率统一按进入客服计算', () => {
   const { funnelLayers } = loadPure('src/component/salesFunnelMath.ts');
   const layers = funnelLayers([{ key: 'a', label: 'A', count: 120 }, { key: 'b', label: 'B', count: 80 }, { key: 'c', label: 'C', count: 35 }, { key: 'd', label: 'D', count: 0 }]);
   eq(layers.map(l => Math.round(l.width)), [100, 67, 29, 18]);
-  eq(layers.map(l => l.rate), [null, 67, 44, 0]);
+  eq(layers.map(l => l.rate), [100, 67, 29, 0]);
   assert.ok(layers.every(l => l.width >= 18));
   eq(funnelLayers([{ key: 'a', label: 'A', count: 0 }]).map(l => l.width), [100]);
   eq(funnelLayers([]), []);
+  // 后端返回了 conversion_rate 时直接用，两个页面不再各算一套
+  const withApiRates = funnelLayers([{ key: 'a', label: 'A', count: 18, rate: 100 }, { key: 'b', label: 'B', count: 1, rate: 5.55 }, { key: 'c', label: 'C', count: 0, rate: 0 }]);
+  eq(withApiRates.map(l => l.rate), [100, 6, 0]);
   // 下一层比上一层大（口径不一致）时不放大：宽度单调不增
   const odd = funnelLayers([{ key: 'a', label: 'A', count: 10 }, { key: 'b', label: 'B', count: 30 }]);
   assert.ok(odd[1].width <= odd[0].width);
+});
+
+test('线索跳客户档案：同步到客户 ID 时直达详情，未同步时回退客户列表', () => {
+  const { CUSTOMER_ARCHIVE, customerArchiveHref } = loadPure('src/pages/customerLeadLinks.ts');
+  eq(CUSTOMER_ARCHIVE, '/customer-management?tab=customers');
+  eq(customerArchiveHref({ customer_id: 'mini-abc' }), '/customer-management?tab=customers&customer=mini-abc&from=customer-leads');
+  eq(customerArchiveHref({ customer_id: 'a/b?c' }), '/customer-management?tab=customers&customer=a%2Fb%3Fc&from=customer-leads');
+  eq(customerArchiveHref({}), CUSTOMER_ARCHIVE);
+  eq(customerArchiveHref(null), CUSTOMER_ARCHIVE);
 });
 
 test('客户标签：全部 · 跟进中 · 已成交 · 暂缓 · 无效 · 公海，沿用现有阶段枚举', () => {

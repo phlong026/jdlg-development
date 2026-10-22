@@ -40,6 +40,8 @@ export interface CustomerLeadItem {
     updated_at: string;
     /** 最近一次留资时间（仅列表返回）：老客户再次留资只更新旧线索，created_at 不变 */
     last_submitted_at?: string | null;
+    /** 已同步到客户档案时的 CRM 客户 ID；未同步时为空 */
+    customer_id?: string;
 }
 
 export interface CustomerServiceEventItem {
