@@ -16,7 +16,11 @@ function load(file, overrides = {}, globals = {}) {
   }).outputText;
   vm.runInNewContext(code, {
     module, exports: module.exports,
-    require: name => name === '../component/MobileFold' ? { __esModule: true, default: ({ children }) => children } : name in overrides ? overrides[name] : require(name),
+    require: name => name === '../component/MobileFold'
+      ? { __esModule: true, default: ({ children }) => children }
+      : name === '../component/PageTitle'
+        ? { __esModule: true, default: ({ title, children }) => React.createElement('header', null, title, children) }
+        : name in overrides ? overrides[name] : require(name),
     Date, URL, Error, AbortController, AbortSignal, setTimeout, clearTimeout, ...globals,
   });
   return module.exports;

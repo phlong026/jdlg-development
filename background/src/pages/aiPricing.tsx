@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getAIOverview, getAIOpsSettings, getAIPricingOpsList, getAIPricingVersions, saveAIOpsSettings, type AIOpsSettings, type AIPricingOpsItem, type AIPricingVersion, type AIOverviewData } from '../api/aiOverview';
 import { getAIAPIConfigList, saveAIAPIConfig, saveAIPricing, testAIAPIConfig, type AIAPIConfig, type AIAPIConfigTestResult } from '../api/ai';
 import './aiPricing.scss';
+import PageTitle from '../component/PageTitle';
 
 const formatPercent = (value: number, digits = 1) => `${(value * 100).toFixed(digits)}%`;
 const formatYuan = (value: number) => `¥${value.toFixed(2)}`;
@@ -331,8 +332,7 @@ const AIPricing: React.FC = () => {
 
     return (
         <div className="ai-pricing-page">
-            <div className="aip-pagehead">
-                <h1>定价与供应商</h1>
+            <PageTitle title="定价与供应商" className="aip-pagehead">
                 <div className="aip-subtabs">
                     <button type="button" className={activeTab === 'pricing' ? 'on' : ''} onClick={() => switchTab('pricing')}>
                         定价管理 <small>运营</small>
@@ -344,7 +344,7 @@ const AIPricing: React.FC = () => {
                 <button type="button" className="aip-refresh" onClick={() => void loadData()} disabled={loading}>
                     {loading ? '刷新中…' : '刷新'}
                 </button>
-            </div>
+            </PageTitle>
 
             {feedback ? <div className="aip-feedback">{feedback}</div> : null}
 

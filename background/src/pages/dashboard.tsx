@@ -24,6 +24,7 @@ import {
     getDashboardTrends,
 } from '../api/stats';
 import './dashboard.scss';
+import PageTitle from '../component/PageTitle';
 
 interface RecentUserItem {
     id: string;
@@ -378,8 +379,7 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="dashboard-page">
-            <div className="dash-pagehead">
-                <h1>后台总控台</h1>
+            <PageTitle title="后台总控台" className="dash-pagehead">
                 <span className={`dash-health ${health.tone}`}><i />{health.label}</span>
                 <div className="dash-pagehead-tip" title={health.description}>{health.description}</div>
                 <div className="dash-meta">
@@ -389,7 +389,7 @@ const Dashboard: React.FC = () => {
                         {loading ? '刷新中…' : '刷新'}
                     </button>
                 </div>
-            </div>
+            </PageTitle>
 
             <section className="dash-kpi-band">
                 {kpiCards.map(card => (

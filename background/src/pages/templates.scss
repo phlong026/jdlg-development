@@ -28,14 +28,14 @@
   h3 {
     margin: 0;
     color: #111827;
-    font-size: 20px;
+    font-size: var(--admin-font-title);
     font-weight: 700;
   }
 
   p {
     margin: 0;
     color: #6b7280;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     line-height: 1.7;
   }
 }
@@ -69,7 +69,7 @@
   gap: 10px;
   flex-wrap: wrap;
   color: #6b7280;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
 
   strong {
     color: #111827;
@@ -84,7 +84,7 @@
   border-radius: 999px;
   background: #f6efe7;
   color: #8b5e3c;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 700;
 }
 
@@ -107,7 +107,7 @@
   padding: 10px 12px 10px 40px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   transition: border-color 0.2s;
 
@@ -125,7 +125,7 @@
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   cursor: pointer;
   background: white;
@@ -144,7 +144,7 @@
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
@@ -163,7 +163,7 @@
   color: #6b7280;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -191,12 +191,12 @@
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: var(--admin-font-title);
   font-weight: 600;
   color: #111827;
 }
@@ -295,7 +295,7 @@
 
 .template-name {
   flex: 1;
-  font-size: 16px;
+  font-size: var(--admin-font-section);
   font-weight: 600;
   color: #111827;
   margin: 0;
@@ -306,7 +306,7 @@
   display: inline-block;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 500;
 
   &.status-published {
@@ -331,7 +331,7 @@
 }
 
 .template-description {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
   margin: 0;
   line-height: 1.5;
@@ -471,8 +471,8 @@
 }
 
 .tab-config-management {
-  h4 { margin: 0 0 16px; font-size: 16px; }
-  h5 { margin: 0 0 12px; font-size: 14px; color: #6b7280; }
+  h4 { margin: 0 0 16px; font-size: var(--admin-font-section); }
+  h5 { margin: 0 0 12px; font-size: var(--admin-font-body); color: #6b7280; }
 }
 
 .tab-config-grid {
@@ -514,7 +514,7 @@
 
     h4 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--admin-font-section);
       font-weight: 600;
       color: #111827;
     }
@@ -522,7 +522,7 @@
 
   .section-desc {
     margin: 0 0 16px 0;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     color: #6b7280;
   }
 
@@ -559,7 +559,7 @@
 
     h5 {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--admin-font-section);
       font-weight: 600;
       color: #111827;
     }
@@ -569,7 +569,7 @@
       background: #e0e7ff;
       color: #4338ca;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--admin-font-caption);
       font-weight: 500;
     }
   }
@@ -590,7 +590,7 @@
   }
 
   .case-label {
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
@@ -614,11 +614,11 @@
 
   .case-missing {
     color: #ef4444;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
   }
 
   .case-divider {
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 700;
     color: #9ca3af;
     padding: 0 8px;
@@ -627,7 +627,7 @@
   .featured-group-meta {
     display: flex;
     gap: 16px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: #6b7280;
   }
 
@@ -647,14 +647,14 @@
 
   h4 {
     margin: 0 0 8px 0;
-    font-size: 16px;
+    font-size: var(--admin-font-section);
     color: #374151;
     font-weight: 600;
   }
 
   .section-desc {
     margin: 0 0 16px 0;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     color: #6b7280;
   }
 
@@ -708,7 +708,7 @@
       min-width: 0;
 
       .featured-name {
-        font-size: 14px;
+        font-size: var(--admin-font-body);
         font-weight: 500;
         color: #374151;
         margin-bottom: 4px;
@@ -720,7 +720,7 @@
       .featured-meta {
         display: flex;
         gap: 16px;
-        font-size: 12px;
+        font-size: var(--admin-font-caption);
         color: #6b7280;
 
         span {
@@ -740,7 +740,7 @@
 
   h4 {
     margin: 0 0 12px 0;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     color: #374151;
   }
 }
@@ -759,7 +759,7 @@
   padding: 8px 12px;
   background: #f9fafb;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .category-add {
@@ -773,7 +773,7 @@
   padding: 8px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
 
   &.small {
@@ -792,7 +792,7 @@
   label {
     display: block;
     margin-bottom: 6px;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     font-weight: 500;
     color: #374151;
   }
@@ -820,7 +820,7 @@
 .readonly-info-title {
   margin-bottom: 12px;
   color: #374151;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
 }
 
@@ -839,13 +839,13 @@
 
 .readonly-info-label {
   color: #94a3b8;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   line-height: 1.4;
 }
 
 .readonly-info-value {
   color: #475569;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -860,7 +860,7 @@
 
 .image-size-tip {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: #6b7280;
 }
 
@@ -891,7 +891,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: #6b7280;
 }
 
@@ -904,7 +904,7 @@
 
 .modal-hint {
   margin: 0 0 12px 0;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
@@ -915,7 +915,7 @@
 
   .text-muted {
     color: #9ca3af;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
   }
 }
 
@@ -955,7 +955,7 @@
 
   h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -964,7 +964,7 @@
 .modal-close {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: var(--admin-font-stat);
   color: #9ca3af;
   cursor: pointer;
   padding: 0;
@@ -1121,11 +1121,11 @@
   }
 
   .template-name {
-    font-size: 15px;
+    font-size: var(--admin-font-body);
   }
 
   .template-description {
-    font-size: 13px;
+    font-size: var(--admin-font-body);
   }
 
   .template-meta {
@@ -1138,11 +1138,11 @@
 }
 .modal-body { min-width: 0; border: 0; margin: 0; }
 .tab-config-grid { border: 0; padding: 0; margin: 0; min-width: 0; }
-.template-feedback { color: #596579; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.template-feedback { color: #596579; font-size: var(--admin-font-body); line-height: 1.6; overflow-wrap: anywhere; }
 .template-feedback[role="alert"] { color: #b42318; }
 .template-feedback button { margin-left: 12px; }
 .template-pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-.template-meta { margin: 12px 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
+.template-meta { margin: 12px 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: var(--admin-font-caption); }
 .template-meta dt { color: #667085; }
 .template-meta dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 

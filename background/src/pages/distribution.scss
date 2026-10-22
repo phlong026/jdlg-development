@@ -27,23 +27,23 @@
   justify-content: center;
   background: #f6efe7;
   color: #8c6239;
-  font-size: 20px;
+  font-size: var(--admin-font-title);
 }
 
 .stat-label {
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .stat-value {
   color: #111827;
-  font-size: 30px;
+  font-size: var(--admin-font-stat);
   font-weight: 700;
 }
 
 .stat-desc {
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   line-height: 1.7;
 }
 
@@ -77,14 +77,14 @@
   h3 {
     margin: 0;
     color: #111827;
-    font-size: 20px;
+    font-size: var(--admin-font-title);
     font-weight: 700;
   }
 
   p {
     margin: 0;
     color: #6b7280;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     line-height: 1.7;
   }
 }
@@ -101,7 +101,7 @@
   gap: 10px;
   flex-wrap: wrap;
   color: #6b7280;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
 
   strong {
     color: #111827;
@@ -116,7 +116,7 @@
   border-radius: 999px;
   background: #f6efe7;
   color: #8b5e3c;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 700;
 }
 
@@ -140,7 +140,7 @@
   border: 1px solid #eadfce;
   border-radius: 14px;
   background: #fffdfa;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #111827;
   outline: none;
 }
@@ -150,7 +150,7 @@
   min-height: 44px;
   padding: 0 18px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -179,13 +179,13 @@
 
 .section-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--admin-font-section);
   color: #111827;
 }
 
 .section-header p {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
@@ -209,7 +209,7 @@
 
 .distribution-table th {
   color: #6b7280;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   background: #fffcf8;
 }
@@ -226,12 +226,12 @@
 
 .identity-cell strong {
   color: #111827;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .identity-cell span {
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
 }
 
 .status-badge {
@@ -241,7 +241,7 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 600;
 }
 
@@ -286,7 +286,7 @@
     align-items: center;
     gap: 12px;
     margin-top: 12px;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     color: #475569;
 }
 .distribution-scope-note { color: #475569; line-height: 1.6; }

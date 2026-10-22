@@ -4,30 +4,24 @@ import {
     FiMenu,
     FiSearch,
     FiLogOut,
-    FiMonitor,
 } from 'react-icons/fi';
-import type { FeatherIcon } from '../compat/react-icons-fi';
 import { logout } from '../api/auth';
 import { useManagementSession } from './ManagementSession';
 import './topbar.scss';
 
 interface TopbarProps {
-    title?: string;
-    icon?: FeatherIcon;
     collapsed?: boolean;
     onToggleSidebar?: () => void;
     onSearch?: () => void;
 }
 
-const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', icon, collapsed = false, onToggleSidebar, onSearch }) => {
+const Topbar: React.FC<TopbarProps> = ({ collapsed = false, onToggleSidebar, onSearch }) => {
     const navigate = useNavigate();
     const session = useManagementSession();
     const [showUserMenu, setShowUserMenu] = useState(false);
 
     // 用户名直接取会话上下文：不再每次导航重复请求 /me
     const username = session.user?.username || '管理员';
-    const DisplayIcon = icon || FiMonitor;
-
     const handleLogout = async () => {
         try {
             await logout();
@@ -47,10 +41,6 @@ const Topbar: React.FC<TopbarProps> = ({ title = '管理后台', icon, collapsed
                         <FiMenu />
                     </button>
                 )}
-                <h1 className="topbar-title">
-                    <DisplayIcon className="topbar-title-icon" />
-                    <span>{title}</span>
-                </h1>
             </div>
             <div className="topbar-right">
                 {onSearch && (

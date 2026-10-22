@@ -15,12 +15,6 @@
     gap: 14px;
     flex-wrap: wrap;
 
-    h1 {
-        font-size: 19px;
-        font-weight: 700;
-        color: var(--admin-text);
-        margin: 0;
-    }
 }
 
 .aip-subtabs {
@@ -32,11 +26,11 @@
         background: var(--admin-surface);
         border-radius: 8px;
         padding: 5px 14px;
-        font-size: 13px;
+        font-size: var(--admin-font-body);
         cursor: pointer;
         color: var(--admin-text-muted);
 
-        small { font-size: 10px; color: var(--admin-text-muted); margin-left: 4px; }
+        small { font-size: var(--admin-font-caption); color: var(--admin-text-muted); margin-left: 4px; }
         &.on { background: rgba(139, 94, 60, .08); border-color: var(--admin-accent); color: var(--admin-accent); font-weight: 600; }
     }
 }
@@ -48,7 +42,7 @@
     color: var(--admin-text-muted);
     border-radius: 8px;
     padding: 4px 12px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     cursor: pointer;
 
     &:hover { color: var(--admin-accent); border-color: var(--admin-accent); }
@@ -64,7 +58,7 @@
     border: 1px solid var(--admin-border);
     border-radius: var(--admin-radius-md);
     padding: 9px 13px;
-    font-size: 12.5px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     line-height: 1.6;
 
@@ -82,7 +76,7 @@
     border: 1px solid #bfe0d0;
     border-radius: var(--admin-radius-md);
     padding: 9px 13px;
-    font-size: 12.5px;
+    font-size: var(--admin-font-caption);
     color: #2f8f6b;
 }
 
@@ -95,17 +89,17 @@
 .aip-card-head {
     padding: 12px 0 8px;
 
-    h3 { font-size: 14px; font-weight: 700; margin: 0; color: var(--admin-text); }
+    h3 { font-size: var(--admin-font-section); font-weight: 700; margin: 0; color: var(--admin-text); }
 }
 
 .aip-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
 
     thead th {
         text-align: left;
-        font-size: 11.5px;
+        font-size: var(--admin-font-caption);
         color: var(--admin-text-muted);
         font-weight: 600;
         padding: 9px 10px;
@@ -124,9 +118,9 @@
     tbody tr.row-warn { background: #fdf6e9; }
     tbody tr.row-warn:hover { background: #faf0da; }
 
-    &.slim tbody td { padding: 7px 8px; font-size: 12.5px; }
+    &.slim tbody td { padding: 7px 8px; font-size: var(--admin-font-caption); }
 
-    .th-hint { font-size: 10px; font-weight: 400; margin-left: 4px; }
+    .th-hint { font-size: var(--admin-font-caption); font-weight: 400; margin-left: 4px; }
 }
 
 .aip-scene-cell {
@@ -135,17 +129,17 @@
     line-height: 1.3;
 
     b { color: var(--admin-text); }
-    code { font-size: 10.5px; color: var(--admin-text-muted); }
+    code { font-size: var(--admin-font-caption); color: var(--admin-text-muted); }
 }
 
-.aip-dim { color: var(--admin-text-muted); font-size: 11.5px; }
+.aip-dim { color: var(--admin-text-muted); font-size: var(--admin-font-caption); }
 
 .aip-margin {
     display: inline-block;
     min-width: 52px;
     text-align: center;
     border-radius: 10px;
-    font-size: 11.5px;
+    font-size: var(--admin-font-caption);
     font-weight: 700;
     padding: 1px 8px;
 
@@ -154,7 +148,7 @@
     &.bad { background: #fbeae6; color: #c0392b; }
 }
 
-.aip-version-cell { font-size: 12px; color: var(--admin-text); }
+.aip-version-cell { font-size: var(--admin-font-caption); color: var(--admin-text); }
 
 .aip-op-links {
     display: flex;
@@ -166,7 +160,7 @@
     border: none;
     background: none;
     color: var(--admin-accent);
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     cursor: pointer;
     padding: 0;
 
@@ -178,7 +172,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 }
 
@@ -186,12 +180,12 @@
     padding: 22px 0;
     text-align: center;
     color: var(--admin-text-muted);
-    font-size: 13px;
+    font-size: var(--admin-font-body);
 }
 
 .aip-foot-note {
     margin-top: 10px;
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 }
 
@@ -202,7 +196,7 @@
     gap: 8px;
     flex-wrap: wrap;
     padding: 4px 0 8px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 }
 
@@ -215,12 +209,12 @@
     border-radius: 14px;
     padding: 3px 12px;
 
-    b { color: var(--admin-text); font-size: 12px; }
-    small { font-size: 10.5px; }
+    b { color: var(--admin-text); font-size: var(--admin-font-caption); }
+    small { font-size: var(--admin-font-caption); }
 }
 
 .aip-chain-arrow { color: var(--admin-text-muted); }
-.aip-chain-note { font-size: 11px; }
+.aip-chain-note { font-size: var(--admin-font-caption); }
 
 /* ───────── 供应商卡 ───────── */
 .aip-prov-grid {
@@ -242,7 +236,7 @@
     &.alerting { border-color: #c0392b; }
 
     h4 {
-        font-size: 13px;
+        font-size: var(--admin-font-body);
         margin: 6px 0 10px;
         display: flex;
         align-items: center;
@@ -251,7 +245,7 @@
         color: var(--admin-text);
 
         small {
-            font-size: 10.5px;
+            font-size: var(--admin-font-caption);
             font-weight: 400;
             color: var(--admin-text-muted);
             background: var(--admin-bg);
@@ -264,7 +258,7 @@
 .aip-prov-tags { display: flex; gap: 6px; }
 
 .aip-prov-tag {
-    font-size: 10.5px;
+    font-size: var(--admin-font-caption);
     border-radius: 9px;
     padding: 1px 9px;
     font-weight: 600;
@@ -282,15 +276,15 @@
     gap: 6px;
     text-align: center;
 
-    span { font-size: 10.5px; color: var(--admin-text-muted); display: block; }
-    b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--admin-text); }
+    span { font-size: var(--admin-font-caption); color: var(--admin-text-muted); display: block; }
+    b { font-size: var(--admin-font-body); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--admin-text); }
 
     b.good { color: #2f8f6b; }
     b.mid { color: #b97f1f; }
     b.bad { color: #c0392b; }
 }
 
-.aip-prov-note { margin-top: 8px; font-size: 11px; color: var(--admin-text-muted); }
+.aip-prov-note { margin-top: 8px; font-size: var(--admin-font-caption); color: var(--admin-text-muted); }
 
 /* ───────── 按钮 / 测试 ───────── */
 .aip-btn {
@@ -299,20 +293,20 @@
     color: var(--admin-text-muted);
     border-radius: 8px;
     padding: 5px 14px;
-    font-size: 12.5px;
+    font-size: var(--admin-font-caption);
     cursor: pointer;
 
     &:hover { color: var(--admin-accent); border-color: var(--admin-accent); }
     &.primary { background: var(--admin-accent); border-color: var(--admin-accent); color: #fff8ef; }
     &.primary.danger { background: #c0392b; border-color: #c0392b; }
-    &.sm { padding: 2px 10px; font-size: 11.5px; }
+    &.sm { padding: 2px 10px; font-size: var(--admin-font-caption); }
     &:disabled { opacity: .6; cursor: default; }
 }
 
 .aip-test-wrap { display: inline-flex; align-items: center; gap: 8px; }
 
 .aip-test-result {
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     max-width: 260px;
 
     &.ok { color: #2f8f6b; }
@@ -348,13 +342,13 @@
     padding: 14px 18px;
     border-bottom: 1px solid var(--admin-border);
 
-    h3 { font-size: 15px; margin: 0; color: var(--admin-text); }
+    h3 { font-size: var(--admin-font-section); margin: 0; color: var(--admin-text); }
 
     .aip-modal-close {
         margin-left: auto;
         border: none;
         background: none;
-        font-size: 15px;
+        font-size: var(--admin-font-body);
         cursor: pointer;
         color: var(--admin-text-muted);
     }
@@ -373,7 +367,7 @@
     .aip-btn.primary { margin-left: auto; }
 }
 
-.aip-foot-hint { font-size: 11px; color: var(--admin-text-muted); margin-right: auto; }
+.aip-foot-hint { font-size: var(--admin-font-caption); color: var(--admin-text-muted); margin-right: auto; }
 
 .aip-form-row {
     display: flex;
@@ -381,7 +375,7 @@
     gap: 12px;
     margin-bottom: 12px;
 
-    label { width: 110px; font-size: 13px; color: var(--admin-text-muted); flex-shrink: 0; }
+    label { width: 110px; font-size: var(--admin-font-body); color: var(--admin-text-muted); flex-shrink: 0; }
     b { color: var(--admin-text); }
 
     input {
@@ -389,7 +383,7 @@
         border: 1px solid var(--admin-border);
         border-radius: 8px;
         padding: 7px 10px;
-        font-size: 13px;
+        font-size: var(--admin-font-body);
         background: var(--admin-surface);
 
         &:focus { outline: none; border-color: var(--admin-accent); }
@@ -401,7 +395,7 @@
     border: 1px solid var(--admin-border);
     border-radius: 10px;
     padding: 10px 12px;
-    font-size: 12.5px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     line-height: 1.8;
 
@@ -421,7 +415,7 @@
   border: 1px dashed var(--admin-border);
   border-radius: 10px;
   padding: 9px 12px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: var(--admin-text-muted);
   line-height: 1.6;
 
@@ -442,7 +436,7 @@
 }
 
 /* 告警设置行 */
-.aip-card-sub { margin-left: 10px; font-size: 11.5px; color: var(--admin-text-muted); font-weight: 400; }
+.aip-card-sub { margin-left: 10px; font-size: var(--admin-font-caption); color: var(--admin-text-muted); font-weight: 400; }
 
 .aip-settings-row {
   display: flex;
@@ -455,7 +449,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
   }
 
@@ -464,7 +458,7 @@
     border: 1px solid var(--admin-border);
     border-radius: 8px;
     padding: 6px 10px;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     background: var(--admin-surface);
     color: var(--admin-text);
 
@@ -477,7 +471,7 @@
   align-items: center;
   gap: 6px;
   height: 33px;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   color: var(--admin-text);
 
   input { width: auto; cursor: pointer; }

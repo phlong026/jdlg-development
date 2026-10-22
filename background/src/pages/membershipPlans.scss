@@ -12,14 +12,14 @@
 
   h3 {
     margin: 0 0 8px 0;
-    font-size: 20px;
+    font-size: var(--admin-font-title);
     font-weight: 600;
     color: #111827;
   }
 
   .toolbar-desc {
     margin: 0;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     color: #6b7280;
     line-height: 1.6;
   }
@@ -30,7 +30,7 @@
   text-align: center;
   padding: 60px 20px;
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .config-content {
@@ -46,7 +46,7 @@
 .config-list {
   h4 {
     margin: 0 0 16px 0;
-    font-size: 16px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -82,13 +82,13 @@
       gap: 12px;
 
       .config-mode {
-        font-size: 14px;
+        font-size: var(--admin-font-body);
         font-weight: 600;
         color: #111827;
       }
 
       .config-status {
-        font-size: 12px;
+        font-size: var(--admin-font-caption);
         padding: 4px 8px;
         border-radius: 999px;
         white-space: nowrap;
@@ -106,7 +106,7 @@
     }
 
     .config-preview {
-      font-size: 12px;
+      font-size: var(--admin-font-caption);
       color: #6b7280;
       line-height: 1.7;
 
@@ -125,7 +125,7 @@
       padding: 6px 12px;
       border: 1px solid #e5e7eb;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: var(--admin-font-caption);
       cursor: pointer;
       transition: all 0.2s;
       background: white;
@@ -159,7 +159,7 @@
 
   h4 {
     margin: 0 0 20px 0;
-    font-size: 16px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -171,7 +171,7 @@
   label {
     display: block;
     margin-bottom: 6px;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     font-weight: 500;
     color: #374151;
   }
@@ -203,7 +203,7 @@
   margin: 20px 0 12px 0;
   padding-top: 16px;
   border-top: 1px solid #e5e7eb;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   color: #374151;
 }
@@ -213,7 +213,7 @@
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   transition: border-color 0.2s;
   box-sizing: border-box;
@@ -241,7 +241,7 @@
 .btn-secondary {
   border-radius: 8px;
   padding: 10px 20px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   cursor: pointer;
 }
 

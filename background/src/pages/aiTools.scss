@@ -9,7 +9,7 @@
   text-align: center;
   padding: 60px 20px;
   color: #8a6f55;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .ai-tools-list {
@@ -24,7 +24,7 @@
   gap: 16px;
   padding: 20px;
   background: linear-gradient(180deg, #fffdf9 0%, #fcf7f0 100%);
-  border-radius: 18px;
+  border-radius: var(--admin-radius-card);
   border: 1px solid #eadcca;
   transition: all 0.24s ease;
   box-shadow: 0 8px 20px rgba(120, 86, 52, 0.06);
@@ -62,7 +62,7 @@
 
     h4 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--admin-font-section);
       font-weight: 700;
       color: #2f241b;
     }
@@ -70,7 +70,7 @@
 
   .tool-code {
     margin-top: 6px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: #8a6f55;
   }
 
@@ -85,7 +85,7 @@
   .tool-status {
     padding: 4px 12px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     font-weight: 600;
   }
 
@@ -111,7 +111,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: #8a6f55;
     margin-bottom: 12px;
 
@@ -126,7 +126,7 @@
     flex-direction: column;
     gap: 8px;
     color: #5c4734;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     line-height: 1.6;
 
     p {
@@ -189,7 +189,7 @@
   border: 1px solid #8b5e3c;
   border-radius: 12px;
   padding: 10px 20px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -218,7 +218,7 @@
   border: 1px solid #eadcca;
   border-radius: 12px;
   padding: 10px 20px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -242,7 +242,7 @@
   border: 1px dashed #dcc3a8;
   border-radius: 999px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -299,7 +299,7 @@
 
   h3 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--admin-font-title);
     font-weight: 700;
     color: #2f241b;
   }
@@ -308,7 +308,7 @@
 .modal-close {
   background: #fffaf3;
   border: 1px solid #eadcca;
-  font-size: 22px;
+  font-size: var(--admin-font-title);
   color: #8a6f55;
   cursor: pointer;
   width: 36px;
@@ -350,7 +350,7 @@
   label {
     display: block;
     margin-bottom: 8px;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     font-weight: 700;
     color: #4c3928;
   }
@@ -388,7 +388,7 @@
     align-items: center;
     gap: 8px;
     margin-bottom: 0;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     font-weight: 600;
     color: #5c4734;
   }
@@ -406,7 +406,7 @@
   padding: 11px 14px;
   border: 1px solid #e7d8c6;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
   resize: vertical;
@@ -476,7 +476,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
 
 .image-reuse-title {
   margin-bottom: 12px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 700;
   color: #4c3928;
 }
@@ -496,7 +496,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
   strong {
     display: block;
     margin-bottom: 10px;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     color: #5c4734;
   }
 }
@@ -510,7 +510,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
 .editor-section {
   margin-top: 10px;
   padding: 22px;
-  border-radius: 18px;
+  border-radius: var(--admin-radius-card);
   border: 1px solid #eadcca;
   background: linear-gradient(180deg, #fffdfa 0%, #faf4eb 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
@@ -525,13 +525,13 @@ input[type='file'].form-input::-webkit-file-upload-button {
 
   h4 {
     margin: 0 0 6px;
-    font-size: 17px;
+    font-size: var(--admin-font-section);
     color: #2f241b;
   }
 
   p {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     color: #8a6f55;
     line-height: 1.6;
   }
@@ -543,7 +543,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
   border-radius: 14px;
   color: #8a6f55;
   background: #fffaf3;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .nested-editor-card {
@@ -562,7 +562,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
   margin-bottom: 12px;
 
   strong {
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     color: #4c3928;
   }
 }
@@ -624,12 +624,12 @@ input[type='file'].form-input::-webkit-file-upload-button {
 }
 
 .tool-spark-empty {
-  font-size: 11px;
+  font-size: var(--admin-font-caption);
   color: #b3a48e;
 }
 
 .tool-zero-hint {
-  font-size: 11px;
+  font-size: var(--admin-font-caption);
   color: #b97f1f;
   background: #faf0da;
   border: 1px solid #ecd9ae;
@@ -667,7 +667,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
 .btn-action.btn-publish {
   width: auto;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   background: #8b5e3c;
   color: #fff8ef;
   border: none;
@@ -686,7 +686,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
 .btn-action.btn-versions {
   width: auto;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   background: transparent;
   color: #8b5e3c;
   border: 1px solid #d8c7b2;
@@ -699,14 +699,14 @@ input[type='file'].form-input::-webkit-file-upload-button {
 
 .modal-draft-hint {
   padding: 10px 20px 14px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: #8a6f55;
   background: #fcfaf7;
   border-top: 1px dashed #eee4d7;
 }
 
 .form-help-inline {
-  font-size: 11px;
+  font-size: var(--admin-font-caption);
   color: #b3a48e;
   font-weight: 400;
 }
@@ -718,7 +718,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
 }
 
 .diff-summary {
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   color: #2f241b;
   margin-bottom: 8px;
 }
@@ -727,12 +727,12 @@ input[type='file'].form-input::-webkit-file-upload-button {
   padding: 24px 0;
   text-align: center;
   color: #8a6f55;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
 }
 
 .diff-empty.small {
   padding: 8px 0 0;
-  font-size: 11px;
+  font-size: var(--admin-font-caption);
   color: #b3a48e;
   text-align: left;
 }
@@ -740,12 +740,12 @@ input[type='file'].form-input::-webkit-file-upload-button {
 .diff-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--admin-font-caption);
 }
 
 .diff-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: var(--admin-font-caption);
   color: #8a6f55;
   padding: 6px 8px;
   border-bottom: 1px solid #eee4d7;
@@ -768,7 +768,7 @@ input[type='file'].form-input::-webkit-file-upload-button {
 .diff-kind {
   display: inline-block;
   font-style: normal;
-  font-size: 10px;
+  font-size: var(--admin-font-caption);
   border-radius: 4px;
   padding: 0 4px;
   margin-left: 5px;
@@ -783,13 +783,13 @@ input[type='file'].form-input::-webkit-file-upload-button {
 .diff-after { color: #2f241b; font-weight: 500; }
 .diff-none { color: #b3a48e; }
 .diff-stat { white-space: nowrap; color: #2f241b; }
-.diff-note { display: block; font-size: 11px; color: #b3a48e; }
+.diff-note { display: block; font-size: var(--admin-font-caption); color: #b3a48e; }
 
 .rollback-link {
   border: none;
   background: none;
   color: #8b5e3c;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   cursor: pointer;
   padding: 0;
   white-space: nowrap;

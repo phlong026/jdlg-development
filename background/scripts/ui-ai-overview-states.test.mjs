@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import React from 'react';
 import ts from 'typescript';
+import { requireDisplayUtil } from './helpers/display-utils.mjs';
 const source = fs.readFileSync(new URL('../src/pages/aiOverview.tsx', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true, target: ts.ScriptTarget.ES2020 } }).outputText;
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -46,6 +47,7 @@ function mount() {
     if (name === '../utils/pageLoadError') return { reportPageLoadError: (...args) => reports.push(args), reportPageLoadRecovered: (...args) => recoveries.push(args) };
     if (name.includes('useIsMobile')) return {useIsMobile:()=>false};
   if (name.endsWith('.scss')) return {};
+    if (requireDisplayUtil(name)) return requireDisplayUtil(name);
     throw new Error(name);
   } });
   const page = {

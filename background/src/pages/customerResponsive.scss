@@ -4,7 +4,8 @@
   .crm-drawer > header { flex-shrink: 0; gap: 12px; }
   .crm-drawer-body { overscroll-behavior: contain; }
   .crm-customer-heading > div { min-width: 0; overflow-wrap: anywhere; }
-  .crm-customer-heading h2 { font-size: clamp(20px, 4vw, 26px); }
+  .crm-customer-heading h2 { font-size: var(--admin-font-title); }
+  .crm-recent > div, .crm-action-row > div { min-width: 0; overflow-wrap: anywhere; }
   .crm-tabs { scrollbar-width: thin; }
   // Fade the side(s) that still have tabs beyond the edge (set by the tab strip's scroll handler).
   .crm-tabs[data-fade='right'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
@@ -22,7 +23,7 @@
     .crm-filters > .crm-search { grid-column: 1 / -1; min-width: 0; }
     .crm-filters > select { min-width: 0; width: 100%; }
     .crm-filters > button { min-height: 44px; }
-    .crm-report-fields input, .crm-report-fields select { font-size: 16px; }
+    .crm-report-fields input, .crm-report-fields select { font-size: var(--admin-font-section); }
     .crm-form-footer { flex-wrap: wrap; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
     .crm-form-footer button { min-width: 0; }
     .crm-profile { grid-template-columns: 76px minmax(0, 1fr); }

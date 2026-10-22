@@ -49,13 +49,13 @@
   width: fit-content;
   max-width: 100%;
   color: var(--admin-text-muted);
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
 }
 
 @media (max-width: 768px) {
   .layout-content [data-admin-table-scroll] > table { min-width: 720px; }
   .layout-content input:not([type='checkbox']):not([type='radio']),
-  .layout-content select, .layout-content textarea { font-size: 16px; }
+  .layout-content select, .layout-content textarea { font-size: var(--admin-font-section); }
   .layout-content { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }
 

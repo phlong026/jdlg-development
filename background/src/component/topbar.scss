@@ -32,7 +32,7 @@
   transition: all 0.2s ease;
 
   svg {
-    font-size: 18px;
+    font-size: var(--admin-font-section);
   }
 
   &:hover {
@@ -70,39 +70,12 @@
     gap: 10px;
   }
 
-  .topbar-title {
-    font-size: 15px;
-    flex: 1;
-  }
-
   .topbar-username {
     display: none;
   }
 
   .topbar-user {
     padding-right: 4px;
-  }
-}
-
-.topbar-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 500;
-  color: #111827;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  > span { overflow: hidden; text-overflow: ellipsis; }
-
-  .topbar-title-icon {
-    flex-shrink: 0;
-    font-size: 18px;
-    color: #4b5563;
   }
 }
 
@@ -127,7 +100,7 @@
   position: relative;
 
   svg {
-    font-size: 18px;
+    font-size: var(--admin-font-section);
   }
 
   &:hover {
@@ -163,20 +136,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 600;
   color: #ffffff;
   flex-shrink: 0;
 }
 
 .topbar-username {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #374151;
   font-weight: 500;
 }
 
 .topbar-user-icon {
-  font-size: 16px;
+  font-size: var(--admin-font-section);
   color: #9ca3af;
   flex-shrink: 0;
 }
@@ -201,7 +174,7 @@
   border: none;
   background: white;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #374151;
   cursor: pointer;
   display: flex;
@@ -215,7 +188,7 @@
   }
 
   svg {
-    font-size: 16px;
+    font-size: var(--admin-font-section);
     color: #6b7280;
   }
 }
@@ -231,7 +204,7 @@
   border-radius: 10px;
   background: #fcfaf7;
   color: #8a6f55;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   cursor: pointer;
 
   &:hover { border-color: #8b5e3c; color: #7a5335; }

@@ -31,7 +31,7 @@
     border: 0;
     outline: 0;
     background: transparent;
-    font-size: 15px;
+    font-size: var(--admin-font-body);
     color: #2f241b;
   }
 }
@@ -47,14 +47,14 @@
   border-radius: 10px;
   background: none;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #2f241b;
   cursor: pointer;
 
   &.on { background: #f0e1cf; color: #7a5335; }
 }
 
-.cmdk-group { color: #8a6f55; font-size: 13px; }
+.cmdk-group { color: #8a6f55; font-size: var(--admin-font-body); }
 .cmdk-empty { padding: 22px; text-align: center; color: #8a6f55; }
 
 @media (max-width: 640px) {

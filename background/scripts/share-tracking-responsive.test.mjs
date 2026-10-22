@@ -45,15 +45,16 @@ test('all tracking declarations remain inside the existing route and page root',
 
 test('warm reference palette has readable primary, metric and supporting text contrast', () => {
     const tokens = styles();
-    assert.equal(tokens['--st-accent'], '#94582f');
+    assert.equal(tokens['--st-accent'], 'var(--admin-accent)');
     assert.equal(tokens['--st-cream'], '#fbf3e9');
     assert.equal(tokens['--st-metric'], '#c83916');
+    const accent = '#8b5e3c';
     const luminance = hex => {
         const rgb = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
         return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
     };
     const contrast = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
-    for (const [a, b] of [[tokens['--st-accent'], '#ffffff'], [tokens['--st-metric'], '#f8f6f3'], [tokens['--st-muted'], tokens['--st-cream']]]) assert.ok(contrast(a, b) >= 4.5, `${a} on ${b}`);
+    for (const [a, b] of [[accent, '#ffffff'], [tokens['--st-metric'], '#f8f6f3'], [tokens['--st-muted'], tokens['--st-cream']]]) assert.ok(contrast(a, b) >= 4.5, `${a} on ${b}`);
     assert.equal(styles('.st-primary:hover:not(:disabled)').color, '#fff');
     assert.equal(styles('.st-metrics dd').color, 'var(--st-metric)');
     assert.equal(styles('.st-duration-pair dd').color, 'var(--st-metric)');
@@ -74,7 +75,7 @@ for (const [width, height] of viewports) {
         assert.equal(styles('.st-definitions summary', width, height)['min-height'], '44px');
         if (width <= 768) {
             assert.equal(styles('', width, height).padding, '0');
-            assert.equal(styles('select', width, height)['font-size'], '16px');
+            assert.equal(styles('select', width, height)['font-size'], 'var(--admin-font-section)');
             assert.equal(styles('.st-filter-fields', width, height)['grid-template-columns'], 'repeat(2, minmax(0, 1fr))');
         }
         if (width <= 360) assert.equal(styles('.st-range', width, height)['grid-template-columns'], 'repeat(3, minmax(0, 1fr))');

@@ -29,14 +29,14 @@
   h3 {
     margin: 0;
     color: #111827;
-    font-size: 20px;
+    font-size: var(--admin-font-title);
     font-weight: 700;
   }
 
   p {
     margin: 0;
     color: #6b7280;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     line-height: 1.7;
   }
 }
@@ -62,7 +62,7 @@
   gap: 10px;
   flex-wrap: wrap;
   color: #6b7280;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
 
   strong {
     color: #111827;
@@ -77,7 +77,7 @@
   border-radius: 999px;
   background: #f6efe7;
   color: #8b5e3c;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 700;
 }
 
@@ -100,7 +100,7 @@
   padding: 10px 12px 10px 40px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   transition: border-color 0.2s;
 
@@ -118,7 +118,7 @@
   color: #6b7280;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -138,7 +138,7 @@
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   cursor: pointer;
   background: white;
@@ -157,7 +157,7 @@
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
@@ -187,7 +187,7 @@
 .logs-table th {
   padding: 12px 16px;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   color: #374151;
   border-bottom: 1px solid #e5e7eb;
@@ -195,7 +195,7 @@
 
 .logs-table td {
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
   border-bottom: 1px solid #f3f4f6;
 }
@@ -208,7 +208,7 @@
   display: inline-block;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 500;
 
   &.level-info {
@@ -233,7 +233,7 @@
   border-radius: 6px;
   background: white;
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   cursor: pointer;
   transition: all 0.2s;
 
@@ -253,7 +253,7 @@
   text-align: center;
   padding: 40px;
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .pagination {
@@ -274,7 +274,7 @@
   border-radius: 6px;
   background: white;
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   cursor: pointer;
   transition: all 0.2s;
 
@@ -290,7 +290,7 @@
 }
 
 .page-info {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
@@ -324,7 +324,7 @@
 
   h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -375,7 +375,7 @@
 }
 
 .form-group label {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   color: #374151;
 }
@@ -384,7 +384,7 @@
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   transition: border-color 0.2s;
 
@@ -394,7 +394,7 @@
 }
 
 .form-hint {
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: #6b7280;
 }
 // 操作审计页：一句话操作为主，接口路径收在「详情」里（等宽字体，可换行）
@@ -408,12 +408,12 @@
 }
 
 .audit-detail-cell details[open] {
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
 }
 
 .audit-path {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: #6b7280;
   max-width: 320px;
   overflow-wrap: anywhere;
