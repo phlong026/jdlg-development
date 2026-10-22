@@ -72,7 +72,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     return overrides[method] ? overrides[method](call, () => page(method, params)) : Promise.resolve(method === 'content' ? content : page(method, params));
   }]));
   const context = { can_view: true, can_manage: true, owners: [{ id: 'owner-1', name: '销售一' }, { id: 'owner-2', name: '销售二' }] };
-  const props = kind === 'records' ? { actorId: 42, canManage: true, context } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
+  const props = kind === 'records' ? { actorId: 42, canManage: true, context, initialVisitor: initial.initialVisitor || '' } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
   const saved = JSON.stringify({ filters: { ...model.defaultFilters, range: 'all', ...initial.filters }, view: initial.view || 'visitors' });
   const globals = { sessionStorage: { getItem: () => saved, setItem() {} }, document: { querySelector: () => ({ scrollTop: 5, scrollTo() {} }) }, window: { confirm: () => true } };
   const access = load('src/pages/shareTracking/access.ts', { react, './model': model }, globals);
@@ -245,6 +245,39 @@ test('visit card opens the visitor detail on that material version with the list
 
 test('profile revision conflict offers an explicit fresh snapshot rather than replaying rejected cursor',async()=>{
  let fail=false;const h=harness('records',{visits:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())});await h.settle();fail=true;await h.next();assert.match(h.find('Feedback').props.error,/请刷新/);fail=false;await h.act(()=>h.find('Feedback').props.resetSnapshot());assert.equal(h.last().params.cursor,undefined);assert.equal(h.last().params.as_of,undefined);assert.equal(h.pager().cursor.length,0);
+});
+
+test('oversized queries offer staged time narrowing and preserve owner material and visitor filters', async () => {
+  const tooLarge = () => Promise.reject(Object.assign(new Error('查询范围过大，请缩小时间或归属、素材、访客范围'), { status: 422 }));
+  const h = harness('records', { visits: tooLarge }, {
+    initialVisitor: 'u:42',
+    filters: { range: 'all', owner: 'owner-2', q: '客户甲', content_q: '别墅', visitor_q: '雪峰' },
+  });
+  await h.settle();
+
+  let feedback = h.find('Feedback');
+  assert.equal(feedback.props.status, 422);
+  assert.equal(feedback.props.rangeRecovery.label, '改看近7天');
+  await h.act(() => feedback.props.rangeRecovery.onClick());
+  let params = h.last().params;
+  assert.ok(params.start); assert.ok(params.end);
+  assert.equal((Date.parse(params.end) - Date.parse(params.start)) / 86400000, 7);
+  assert.equal(params.owner, 'owner-2'); assert.equal(params.visitor, 'u:42'); assert.equal(params.q, '客户甲');
+
+  feedback = h.find('Feedback');
+  assert.equal(feedback.props.rangeRecovery.label, '改看近3天');
+  await h.act(() => feedback.props.rangeRecovery.onClick());
+  params = h.last().params;
+  assert.equal((Date.parse(params.end) - Date.parse(params.start)) / 86400000, 3);
+  assert.equal(params.owner, 'owner-2'); assert.equal(params.visitor, 'u:42'); assert.equal(params.q, '客户甲');
+
+  feedback = h.find('Feedback');
+  assert.equal(feedback.props.rangeRecovery, undefined);
+  assert.match(feedback.props.rangeLimitHint, /选择跟进归属、素材或访客/);
+
+  await h.click('素材视角');
+  const material = h.last('contents').params;
+  assert.equal(material.owner, 'owner-2'); assert.equal(material.content_q, '别墅'); assert.equal(material.visitor_q, '雪峰');
 });
 test('content visitor profile refresh clears rejected first cursor while retaining content scope',async()=>{
  let fail=false;const h=harness('details',{contentVisitors:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())},{query:{owner:'owner-1',as_of:'2026-10-12T00:00:00Z'}});await h.settle();fail=true;await h.next();fail=false;await h.act(()=>nodes(h.render()).find(n=>n.type==='Feedback'&&n.props.error).props.resetSnapshot());assert.equal(h.last('contentVisitors').params.cursor,undefined);assert.equal(h.last('contentVisitors').params.owner,'owner-1');

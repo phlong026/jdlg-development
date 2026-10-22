@@ -218,6 +218,45 @@ func TestVisitsProgressPlaysAndEngagement(t *testing.T) {
 	}
 }
 
+func TestVisitsOmitProgressWhenPageEnrichmentExceedsReadBudget(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-time.Hour)
+	const session = "session-progress-budget"
+	visitPV(m, "pv-progress-budget", "one", "u:1", session, "content1", "", at, 1000)
+	for i := 0; i < maxQueryRecords; i++ {
+		id := time.Unix(0, int64(i)+1).UTC().Format("150405.000000000")
+		visitEvent(m, "progress-"+id, "one", "u:1", session, "pv-progress-budget", "content1", at.Add(time.Duration(i+1)*time.Nanosecond), Event{Type: "video_progress", Media: "media1", Duration: 60000, Unique: 48000, Watch: 1000})
+	}
+
+	summary := DailySummary{
+		Metric: MetricVersion, Day: businessDay(at).Format("2006-01-02"), Timezone: "Asia/Shanghai",
+		View:    PageView{ID: "pv-progress-budget", Route: publishedReaderRoute, Content: "content1", Version: 1, Started: at, Visible: 1000},
+		Visitor: "u:1", OriginalVisitor: "u:1", Owner: "one", Session: session, Count: true,
+		Last: at.Add(time.Second), BuiltAt: now, Ranges: [][2]int64{{at.UnixMilli(), at.Add(time.Second).UnixMilli()}},
+	}
+	row := record("daily_summary", summaryID(summary), "one", businessDay(at).AddDate(0, 0, 1).Add(-time.Nanosecond), summary)
+	row.Session, row.Visitor, row.Content = session, "u:1", "content1"
+	_ = m.Put(row)
+	state := record("summary_state", session, "one", now, summaryState{Metric: MetricVersion, Complete: true, BuiltAt: now})
+	state.Session, state.Visitor = session, "u:1"
+	_ = m.Put(state)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one"})
+	if err != nil {
+		t.Fatalf("visit list failed instead of omitting oversized progress: %v", err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 1 {
+		t.Fatalf("visits = %d, want 1", len(items))
+	}
+	if items[0].Progress != nil {
+		t.Fatalf("progress = %+v, want omitted after enrichment budget failure", items[0].Progress)
+	}
+	if items[0].Content.Title != "南安石堤寺规划" || items[0].Visitor.Nickname != "灿坤" || items[0].Visible != 1000 || items[0].ContentViews != 1 {
+		t.Fatalf("degraded card lost authorized list data: %+v", items[0])
+	}
+}
+
 func TestVisitsEngagedByRepeatViewsAndCappedVideo(t *testing.T) {
 	s, m, scope, now := visitsFixture(t)
 	for i, session := range []string{"s1", "s2", "s3"} {

@@ -30,6 +30,18 @@ test('default range is the last 30 days and channel defaults to all', () => {
   assert.equal(model.defaultFilters.channel, '');
 });
 
+test('query range feedback renders the recovery action instead of a blind retry', () => {
+  const components = load('src/pages/shareTracking/components.tsx', { react: React, './model': model, './evidence': { IntentEvidenceDetails: () => null } });
+  const html = renderToStaticMarkup(React.createElement(components.Feedback, {
+    error: '查询范围过大，请缩小时间或归属、素材、访客范围',
+    status: 422,
+    retry() {},
+    rangeRecovery: { label: '改看近7天', onClick() {} },
+  }));
+  assert.match(html, /改看近7天/);
+  assert.doesNotMatch(html, /重试，保留筛选/);
+});
+
 test('source labels follow the timeline rules', () => {
   assert.equal(model.sourceLabel({ kind: 'share', channel: 'app_message' }), '私发');
   assert.equal(model.sourceLabel({ kind: 'share', channel: 'timeline' }), '朋友圈');
