@@ -1,11 +1,5 @@
 <!--pages/my/my.wxml-->
 <view class="page">
-  <!-- 隐藏的canvas用于生成设备指纹 -->
-  <canvas 
-    id="device-fingerprint-canvas" 
-    type="2d" 
-    style="position: fixed; left: -9999px; width: 100px; height: 100px;"
-  ></canvas>
   <image class="page-background" src="{{pageBgImage}}" mode="widthFix" lazy-load />
 
   <!-- 统一导航栏（Tab页不显示返回按钮） -->
