@@ -3,6 +3,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -77,6 +78,130 @@ func TestDailySummaryDuplicateLateCrossMidnight(t *testing.T) {
 	}
 	if total != 15000 {
 		t.Fatalf("late total %d", total)
+	}
+}
+
+func TestDailySummaryUsesEligibleEventWatermark(t *testing.T) {
+	s, _ := fixture(t)
+	r := &memoryRepo{data: map[string]Record{}}
+	now := s.Now()
+	future := now.Add(time.Minute)
+	farFuture := now.AddDate(1, 0, 0)
+
+	aggregateSeed(t, r, "owner-a", "u:1", "session-watermark", "view-watermark", "pv-watermark", "page_view", now.Add(-time.Minute), 0)
+	aggregateSeed(t, r, "owner-a", "u:1", "session-watermark", "view-watermark", "segment-watermark", "visible_segment", future, 1000)
+	excluded := Event{ID: "self-future", Type: "visible_segment", Session: "session-watermark", View: "view-watermark", Route: "pages/home/home", Occurred: farFuture, Received: farFuture, Delta: 1000, Flags: []string{"self"}}
+	excludedRow := record("event", excluded.ID, "owner-a", excluded.Occurred, excluded)
+	excludedRow.Session, excludedRow.Visitor = excluded.Session, "u:1"
+	if err := r.Put(excludedRow); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RebuildSessionSummaries(r, "session-watermark", now); err != nil {
+		t.Fatal(err)
+	}
+	state, err := decode[summaryState](r, "summary_state", "session-watermark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.DeferredFrom != nil || !state.BuiltAt.Equal(future) {
+		t.Fatalf("state = %+v, want eligible watermark %s without deferred marker", state, future)
+	}
+	if summaryUsable(state, now) || !summaryUsable(state, future) {
+		t.Fatalf("watermark usability is wrong at now=%v and future=%v", now, future)
+	}
+	for _, summary := range aggregateRows(t, r) {
+		if !summary.BuiltAt.Equal(future) {
+			t.Fatalf("summary built_at = %s, want %s", summary.BuiltAt, future)
+		}
+	}
+}
+
+func TestDailySummaryFutureOnlyBucketMatchesRawAcrossShanghaiMidnight(t *testing.T) {
+	s, scope := fixture(t)
+	r := &memoryRepo{data: map[string]Record{}}
+	beforeMidnight := time.Date(2026, 10, 11, 15, 59, 59, 0, time.UTC)
+	future := beforeMidnight.Add(2 * time.Second)
+	aggregateSeed(t, r, "owner-a", "u:1", "session-future-day", "view-future-day", "pv-future-day", "page_view", future, 0)
+
+	if err := s.RebuildSessionSummaries(r, "session-future-day", beforeMidnight); err != nil {
+		t.Fatal(err)
+	}
+	rows := aggregateRows(t, r)
+	if len(rows) != 1 || rows[0].Day != "2026-10-12" || !rows[0].BuiltAt.Equal(future) {
+		t.Fatalf("future bucket = %+v", rows)
+	}
+
+	checks := []Filter{
+		{Start: businessDay(beforeMidnight), End: businessDay(beforeMidnight).AddDate(0, 0, 1), AsOf: beforeMidnight},
+		{Start: businessDay(future), End: businessDay(future).AddDate(0, 0, 1), AsOf: future},
+	}
+	for _, f := range checks {
+		want, err := s.factsSelected(r, scope, f, factSelection{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.factsSelected(r, scope, f, factSelection{Summaries: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprint(comparableFacts(got)) != fmt.Sprint(comparableFacts(want)) {
+			t.Fatalf("as_of %s raw=%+v summary=%+v", f.AsOf, want, got)
+		}
+	}
+}
+
+func TestDailySummaryFutureSegmentBecomesUsableWithoutSecondRebuild(t *testing.T) {
+	s, scope := fixture(t)
+	r := &memoryRepo{data: map[string]Record{}}
+	beforeMidnight := time.Date(2026, 10, 11, 15, 59, 59, 0, time.UTC)
+	pvAt := time.Date(2026, 10, 11, 15, 59, 40, 0, time.UTC)
+	segmentAt := time.Date(2026, 10, 11, 16, 0, 5, 0, time.UTC)
+	aggregateSeed(t, r, "owner-a", "u:1", "session-midnight", "view-midnight", "pv-midnight", "page_view", pvAt, 0)
+	aggregateSeed(t, r, "owner-a", "u:1", "session-midnight", "view-midnight", "segment-midnight", "visible_segment", segmentAt, 15000)
+
+	if err := s.RebuildSessionSummaries(r, "session-midnight", beforeMidnight); err != nil {
+		t.Fatal(err)
+	}
+	state, err := decode[summaryState](r, "summary_state", "session-midnight")
+	if err != nil || state.DeferredFrom != nil || !state.BuiltAt.Equal(segmentAt) {
+		t.Fatalf("state = %+v, err=%v", state, err)
+	}
+
+	wholeWindow := Filter{Start: businessDay(pvAt), End: businessDay(pvAt).AddDate(0, 0, 2)}
+	for _, check := range []struct {
+		asOf    time.Time
+		count   bool
+		visible int64
+	}{
+		{asOf: beforeMidnight, count: true, visible: 0},
+		{asOf: segmentAt, count: true, visible: 15000},
+	} {
+		f := wholeWindow
+		f.AsOf = check.asOf
+		want, err := s.factsSelected(r, scope, f, factSelection{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.factsSelected(r, scope, f, factSelection{Summaries: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprint(comparableFacts(got)) != fmt.Sprint(comparableFacts(want)) {
+			t.Fatalf("as_of %s raw=%+v summary=%+v", f.AsOf, want, got)
+		}
+		if len(got) != 1 || got[0].Count != check.count || got[0].Visible != check.visible {
+			t.Fatalf("as_of %s fact=%+v", f.AsOf, got)
+		}
+	}
+
+	rows := aggregateRows(t, r)
+	visibleByDay := map[string]int64{}
+	for _, row := range rows {
+		visibleByDay[row.Day] += row.View.Visible
+	}
+	if visibleByDay["2026-10-11"] != 10000 || visibleByDay["2026-10-12"] != 5000 {
+		t.Fatalf("cross-midnight visibility = %+v", visibleByDay)
 	}
 }
 func TestDailySummaryRetentionScopeIdentityAndDeletion(t *testing.T) {

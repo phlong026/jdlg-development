@@ -37,7 +37,7 @@ test('线索列表：再次留资的线索标"再次留资 · N 天前"，只留
   const base = { user_id: 5, status: 'new', intent_level: 'high', source: 'home_mascot', session_no: '', source_task_no: '', demand_summary: '三层 新闽派' };
   env.leadApi.getCustomerLeadList = async () => ({
     list: [
-      { ...base, id: 1, created_at: '2026-08-19T02:00:00Z', last_submitted_at: '2026-10-18T09:00:00Z' },
+      { ...base, id: 1, created_at: '2026-08-19T02:00:00Z', last_submitted_at: '2026-10-18T09:00:00Z', submission_count: 11 },
       { ...base, id: 2, created_at: '2026-10-20T02:00:00Z', last_submitted_at: '2026-10-20T02:00:05Z' },
     ],
     total: 2,
@@ -46,4 +46,6 @@ test('线索列表：再次留资的线索标"再次留资 · N 天前"，只留
   const text = h.text();
   assert.equal(text.split('再次留资 · 3 天前').length - 1, 1, text);
   assert.equal(text.split('再次留资').length - 1, 1, '同一次会话里的连续写入不算再次留资');
+  assert.ok(text.includes('11 次留资'), '按客户合并后应显示留资次数');
+  assert.ok(text.includes('按客户合并') && text.includes('全部留资'), '应提供合并/全部留资切换');
 });

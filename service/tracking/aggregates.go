@@ -34,9 +34,9 @@ type summaryState struct {
 	// summaryUsable needs; older states only serve expired sessions.
 	Complete bool      `json:"complete,omitempty"`
 	BuiltAt  time.Time `json:"built_at,omitempty"`
-	// DeferredFrom is the earliest accepted event left out because it occurred
-	// after the build time (a device clock slightly ahead). Until a rebuild, the
-	// projection is exact only for snapshots before that instant.
+	// DeferredFrom is retained for projections written by the old projector,
+	// which omitted accepted events ahead of its build clock. New projections
+	// include those events and move BuiltAt to their receipt/occurrence watermark.
 	DeferredFrom *time.Time `json:"deferred_from,omitempty"`
 }
 
@@ -104,7 +104,7 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 		row   Record
 	}
 	events := []accepted{}
-	var deferred *time.Time
+	watermark := now
 	for _, row := range rows {
 		visitor := resolvedVisitor(r, row)
 		dead, e := tombstoned(r, "deletion", visitor)
@@ -121,16 +121,11 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 		if hasFlag(ev, "self") || hasFlag(ev, "preview") || hasFlag(ev, "test") || hasFlag(ev, "abnormal") || hasFlag(ev, "duplicate") {
 			continue
 		}
-		if ev.Received.After(now) || ev.Occurred.After(now) {
-			// Raw reduction admits an event once both times are within as_of.
-			at := ev.Occurred
-			if ev.Received.After(at) {
-				at = ev.Received
-			}
-			if deferred == nil || at.Before(*deferred) {
-				deferred = &at
-			}
-			continue
+		if ev.Received.After(watermark) {
+			watermark = ev.Received
+		}
+		if ev.Occurred.After(watermark) {
+			watermark = ev.Occurred
 		}
 		events = append(events, accepted{ev, row})
 	}
@@ -162,7 +157,7 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 				title = c.Title
 			}
 		}
-		x := &DailySummary{Metric: MetricVersion, Day: day.Format("2006-01-02"), Timezone: "Asia/Shanghai", View: PageView{ID: p.event.View, Route: p.event.Route, Title: title, Content: p.event.Content, Version: p.event.Version, Previous: resolvedPrevious(r, session, p.event.Previous), Share: p.event.Share, Started: p.event.Occurred, Flags: []string{"incomplete"}}, Visitor: resolvedVisitor(r, p.row), OriginalVisitor: p.row.Visitor, Owner: p.row.Owner, Session: session, Last: at, BuiltAt: now, Ranges: [][2]int64{}}
+		x := &DailySummary{Metric: MetricVersion, Day: day.Format("2006-01-02"), Timezone: "Asia/Shanghai", View: PageView{ID: p.event.View, Route: p.event.Route, Title: title, Content: p.event.Content, Version: p.event.Version, Previous: resolvedPrevious(r, session, p.event.Previous), Share: p.event.Share, Started: p.event.Occurred, Flags: []string{"incomplete"}}, Visitor: resolvedVisitor(r, p.row), OriginalVisitor: p.row.Visitor, Owner: p.row.Owner, Session: session, Last: at, BuiltAt: watermark, Ranges: [][2]int64{}}
 		summaries[key] = x
 		return x
 	}
@@ -284,7 +279,7 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 			stateRow = rec
 		}
 	}
-	state = summaryState{Metric: MetricVersion, Complete: true, BuiltAt: now, DeferredFrom: deferred}
+	state = summaryState{Metric: MetricVersion, Complete: true, BuiltAt: watermark}
 	if len(summaries) == 0 {
 		// Record that the session was projected and has nothing to show, so list
 		// queries need not rescan its raw events. Owner and visitor keep the state

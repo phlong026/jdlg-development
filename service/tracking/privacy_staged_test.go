@@ -320,7 +320,7 @@ func TestPageRecordsOrdersResumesAndTruncatesWithoutRepositoryHelp(t *testing.T)
 func TestScopedQuerySQLCursorAndLimit(t *testing.T) {
 	at := time.Date(2026, 10, 11, 1, 2, 3, 456789000, time.UTC)
 	query, args := buildScopedQuery("tenant", "event", RecordQuery{VisitorKeys: []string{"u:1"}, Limit: 50, AfterAt: at, AfterID: "row-9"}, maxQueryRecords+1)
-	for _, want := range []string{"(r.occurred_at>? OR (r.occurred_at=? AND r.record_id>?))", "ORDER BY r.occurred_at,r.record_id LIMIT ?"} {
+	for _, want := range []string{"(r.occurred_at>? OR (r.occurred_at=? AND BINARY r.record_id>BINARY ?))", "ORDER BY r.occurred_at,BINARY r.record_id LIMIT ?"} {
 		if !strings.Contains(query, want) {
 			t.Fatalf("missing %q in %s", want, query)
 		}

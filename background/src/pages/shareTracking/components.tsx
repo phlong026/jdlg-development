@@ -3,19 +3,27 @@ import { Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTrack
 import { duration, identityBadge, intentLabels, safeMediaURL, time } from './model';
 
 export function useResource<T>(loader: (signal: AbortSignal) => Promise<T>, key: string) {
-    const [state, setState] = useState<{ data?: T; error: string; loading: boolean; key?: string }>({ error: '', loading: true });
+    const [state, setState] = useState<{ data?: T; error: string; loading: boolean; key?: string; status?: number }>({ error: '', loading: true });
     const [retry, setRetry] = useState(0);
     useEffect(() => {
         const controller = new AbortController(); let active = true;
         setState({ error: '', loading: true, key });
-        loader(controller.signal).then(data => { if (active) setState({ data, error: '', loading: false, key }); }).catch(error => { if (active && !controller.signal.aborted) setState({ error: error instanceof Error ? error.message : '加载失败', loading: false, key }); });
+        loader(controller.signal).then(data => { if (active) setState({ data, error: '', loading: false, key }); }).catch(error => {
+            if (active && !controller.signal.aborted) {
+                const status = typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : undefined;
+                setState({ error: error instanceof Error ? error.message : '加载失败', loading: false, key, status });
+            }
+        });
         return () => { active = false; controller.abort(); };
     }, [key, retry]);
     return { ...(state.key === key ? state : { error: '', loading: true }), reload: () => setRetry(value => value + 1) };
 }
-export function Feedback({ loading, error, retry, empty, resetSnapshot }: { loading?: boolean; error?: string; retry?: () => void; empty?: boolean; resetSnapshot?: () => void }) {
+export function Feedback({ loading, error, status, retry, empty, resetSnapshot, rangeRecovery, rangeLimitHint }: { loading?: boolean; error?: string; status?: number; retry?: () => void; empty?: boolean; resetSnapshot?: () => void; rangeRecovery?: { label: string; onClick: () => void }; rangeLimitHint?: string }) {
     if (loading) return <div className="st-feedback" role="status">正在读取访问记录…</div>;
-    if (error) return <div className="st-feedback st-error" role="alert"><p>{error}</p>{resetSnapshot && error.includes('刷新') && /快照|游标|资料|搜索/.test(error) ? <button onClick={resetSnapshot}>刷新结果，保留筛选</button> : <button onClick={retry}>重试，保留筛选</button>}</div>;
+    if (error) {
+        if (status === 422) return <div className="st-feedback st-error" role="alert"><p>{error}</p>{rangeRecovery ? <button onClick={rangeRecovery.onClick}>{rangeRecovery.label}</button> : rangeLimitHint ? <p className="st-muted">{rangeLimitHint}</p> : null}</div>;
+        return <div className="st-feedback st-error" role="alert"><p>{error}</p>{resetSnapshot && error.includes('刷新') && /快照|游标|资料|搜索/.test(error) ? <button onClick={resetSnapshot}>刷新结果，保留筛选</button> : <button onClick={retry}>重试，保留筛选</button>}</div>;
+    }
     if (empty) return <div className="st-feedback">尚无符合条件的访问记录</div>;
     return null;
 }
