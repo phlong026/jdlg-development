@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.prepareShareCardImage = prepareShareCardImage;
+exports.prepareTimelineShareImage = prepareTimelineShareImage;
 exports.prefetchShareCardImage = prefetchShareCardImage;
 const asset_1 = require("./asset");
 const SHARE_CARD_WIDTH = 1000;
@@ -30,7 +31,7 @@ function ensureDirectory(dirPath) {
             recursive: true,
             success: () => resolve(),
             fail: (error) => {
-                const errorMessage = String(error?.errMsg || '');
+                const errorMessage = String((error === null || error === void 0 ? void 0 : error.errMsg) || '');
                 if (errorMessage.includes('file already exists')) {
                     resolve();
                     return;
@@ -58,14 +59,7 @@ function loadCanvasImage(canvas, src) {
     });
 }
 function canvasToDataURL(canvas) {
-    return new Promise((resolve, reject) => {
-        canvas.toDataURL({
-            type: 'image/jpeg',
-            quality: 0.92,
-            success: (res) => resolve(String(res?.data || '').trim()),
-            fail: reject,
-        });
-    });
+    return String(canvas.toDataURL('image/jpeg', 0.92) || '').trim();
 }
 function writeBase64Image(cacheKey, dataUrl) {
     return new Promise(async (resolve, reject) => {
@@ -143,7 +137,7 @@ function computeCoverRect(srcWidth, srcHeight, dstWidth, dstHeight) {
         height,
     };
 }
-async function createShareCardImage(sourceUrl) {
+async function createShareCardImage(sourceUrl, height) {
     if (typeof wx.createOffscreenCanvas === 'undefined') {
         return '';
     }
@@ -156,31 +150,31 @@ async function createShareCardImage(sourceUrl) {
     const canvas = createOffscreenCanvas({
         type: '2d',
         width: SHARE_CARD_WIDTH,
-        height: SHARE_CARD_HEIGHT,
+        height: height,
     });
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas === null || canvas === void 0 ? void 0 : canvas.getContext('2d');
     if (!canvas || !ctx) {
         return '';
     }
     const image = await loadCanvasImage(canvas, sourcePath);
     const sourceWidth = Number(imageInfo.width || image.width || 0);
     const sourceHeight = Number(imageInfo.height || image.height || 0);
-    const backgroundGradient = ctx.createLinearGradient(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+    const backgroundGradient = ctx.createLinearGradient(0, 0, SHARE_CARD_WIDTH, height);
     backgroundGradient.addColorStop(0, '#f5ecdf');
     backgroundGradient.addColorStop(1, '#e7d6c1');
     ctx.fillStyle = backgroundGradient;
-    ctx.fillRect(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
-    const backgroundRect = computeCoverRect(sourceWidth, sourceHeight, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+    ctx.fillRect(0, 0, SHARE_CARD_WIDTH, height);
+    const backgroundRect = computeCoverRect(sourceWidth, sourceHeight, SHARE_CARD_WIDTH, height);
     ctx.save();
     ctx.globalAlpha = 0.16;
     ctx.drawImage(image, backgroundRect.x, backgroundRect.y, backgroundRect.width, backgroundRect.height);
     ctx.restore();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
-    ctx.fillRect(0, 0, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT);
+    ctx.fillRect(0, 0, SHARE_CARD_WIDTH, height);
     const frameX = SHARE_CARD_OUTER_PADDING;
     const frameY = SHARE_CARD_OUTER_PADDING;
     const frameWidth = SHARE_CARD_WIDTH - SHARE_CARD_OUTER_PADDING * 2;
-    const frameHeight = SHARE_CARD_HEIGHT - SHARE_CARD_OUTER_PADDING * 2;
+    const frameHeight = height - SHARE_CARD_OUTER_PADDING * 2;
     ctx.save();
     ctx.shadowColor = 'rgba(82, 58, 32, 0.16)';
     ctx.shadowBlur = 30;
@@ -216,23 +210,24 @@ async function createShareCardImage(sourceUrl) {
     ctx.drawImage(image, finalImageX, finalImageY, containSize.width, containSize.height);
     ctx.restore();
     const dataUrl = await canvasToDataURL(canvas);
-    const cacheKey = buildShareImageCacheKey(sourceUrl);
+    const cacheKey = buildShareImageCacheKey(`${height}:${sourceUrl}`);
     return writeBase64Image(cacheKey, dataUrl);
 }
-async function prepareShareCardImage(sourceUrl) {
+async function prepareImage(sourceUrl, height) {
     const cleanUrl = normalizeShareSourceUrl(sourceUrl);
+    const key = `${height}:${cleanUrl}`;
     if (!cleanUrl) {
         return '';
     }
-    if (shareImageResultCache[cleanUrl]) {
-        return shareImageResultCache[cleanUrl];
+    if (shareImageResultCache[key]) {
+        return shareImageResultCache[key];
     }
-    if (!shareImagePromiseCache[cleanUrl]) {
-        shareImagePromiseCache[cleanUrl] = createShareCardImage(cleanUrl)
+    if (!shareImagePromiseCache[key]) {
+        shareImagePromiseCache[key] = createShareCardImage(cleanUrl, height)
             .then((result) => {
             const cleanResult = String(result || '').trim();
             if (cleanResult) {
-                shareImageResultCache[cleanUrl] = cleanResult;
+                shareImageResultCache[key] = cleanResult;
             }
             return cleanResult;
         })
@@ -241,10 +236,16 @@ async function prepareShareCardImage(sourceUrl) {
             return '';
         })
             .finally(() => {
-            delete shareImagePromiseCache[cleanUrl];
+            delete shareImagePromiseCache[key];
         });
     }
-    return shareImagePromiseCache[cleanUrl];
+    return shareImagePromiseCache[key];
+}
+function prepareShareCardImage(sourceUrl) {
+    return prepareImage(sourceUrl, SHARE_CARD_HEIGHT);
+}
+function prepareTimelineShareImage(sourceUrl) {
+    return prepareImage(sourceUrl, SHARE_CARD_WIDTH);
 }
 function prefetchShareCardImage(sourceUrl) {
     void prepareShareCardImage(sourceUrl);

@@ -16,6 +16,8 @@ function loadForm(options) {
     exports: {},
     require(request) {
       if (request === '../../utils/costRegions') return costRegions;
+      if (request === '../../utils/asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === '../../utils/cloudImage') return { prepareCloudImage: async () => '' };
       return { prepareCostEstimateShareImage: async () => '' };
     },
     Page(value) { definition = value; },
@@ -63,7 +65,10 @@ test('supported non-default region updates picker options and indices together',
 test('direct navigation without query preserves every default', () => {
   const { page, updates } = loadForm();
 
-  assert.equal(updates.length, 0);
+  assert.equal(updates.some((update) => (
+    ['province', 'city', 'buildingArea', 'regionIndex']
+      .some((key) => Object.prototype.hasOwnProperty.call(update, key))
+  )), false);
   assert.equal(page.data.province, '福建');
   assert.equal(page.data.city, '泉州');
   assert.equal(page.data.buildingArea, '');

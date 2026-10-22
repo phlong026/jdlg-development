@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const asset_1 = require("../../utils/asset");
 const parameter_1 = require("../../utils/parameter");
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const promptReview_1 = require("../../utils/promptReview");
@@ -200,6 +201,7 @@ function getErrorStatusCode(error) {
 }
 Page({
     data: {
+        sendIcon: (0, asset_1.resolveAssetPath)('/assets/icons/send-plane.svg'),
         sessionNo: '',
         source: 'home',
         sourceTaskNo: '',

@@ -1848,9 +1848,11 @@ Page({
   },
 
   onShareTimeline() {
+    const taskNo = String(this.data.taskData.task_no || '').trim();
     return {
       title: this.buildShareTitle(),
       imageUrl: this.getCurrentShareImageUrl(),
+      query: taskNo ? `task_no=${encodeURIComponent(taskNo)}` : '',
     };
   },
 

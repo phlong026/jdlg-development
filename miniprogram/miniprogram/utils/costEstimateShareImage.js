@@ -1,12 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.prepareCostEstimateShareImage = prepareCostEstimateShareImage;
+exports.prepareCostEstimateTimelineImage = prepareCostEstimateTimelineImage;
+const asset_1 = require("./asset");
+const cloudImage_1 = require("./cloudImage");
 const CARD_WIDTH = 1000;
 const CARD_HEIGHT = 800;
-const HOUSE_IMAGE_PATHS = [
-    '/assets/images/cost-estimate-share-house.jpg',
-    'assets/images/cost-estimate-share-house.jpg',
-];
+const HOUSE_IMAGE_URL = (0, asset_1.resolveAssetPath)('/assets/images/cost-estimate-share-house.jpg');
 const imageCache = {};
 function drawRoundedRect(ctx, x, y, width, height, radius) {
     const safeRadius = Math.min(radius, width / 2, height / 2);
@@ -26,7 +26,7 @@ function cleanAmount(totalCost) {
     return String(totalCost || '').replace(/万元$/, '').trim() || '--';
 }
 function buildCacheKey(card) {
-    return [card.totalCost, card.city, card.buildingArea, card.structureType, card.windowStandard].join('|');
+    return [card.totalCost, card.totalLabel, card.city, card.buildingArea, card.structureType, card.windowStandard].join('|');
 }
 function canvasToDataURL(canvas) {
     return String(canvas.toDataURL('image/jpeg', 0.98) || '').trim();
@@ -39,17 +39,11 @@ function loadCanvasImage(canvas, source) {
         image.src = source;
     });
 }
-async function loadBundledHouseImage(canvas) {
-    let latestError;
-    for (const source of HOUSE_IMAGE_PATHS) {
-        try {
-            return await loadCanvasImage(canvas, source);
-        }
-        catch (error) {
-            latestError = error;
-        }
-    }
-    throw latestError || new Error('别墅分享主视觉加载失败');
+async function loadHouseImage(canvas) {
+    const source = await (0, cloudImage_1.prepareCloudImage)(HOUSE_IMAGE_URL, 'cost-estimate-share-house.jpg');
+    if (!source)
+        throw new Error('别墅分享主视觉下载失败');
+    return loadCanvasImage(canvas, source);
 }
 async function writeImage(cacheKey, dataUrl) {
     const payload = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
@@ -64,7 +58,7 @@ async function writeImage(cacheKey, dataUrl) {
             dirPath: directory,
             recursive: true,
             success: () => resolve(),
-            fail: (error) => String(error?.errMsg || '').includes('file already exists') ? resolve() : reject(error),
+            fail: (error) => String((error === null || error === void 0 ? void 0 : error.errMsg) || '').includes('file already exists') ? resolve() : reject(error),
         });
     });
     await new Promise((resolve, reject) => {
@@ -129,7 +123,7 @@ function drawCardText(ctx, card) {
         return;
     }
     ctx.font = '700 46px sans-serif';
-    ctx.fillText('建房造价测算', 62, 166);
+    ctx.fillText(card.totalLabel === '已测算部分合计' ? '已测算部分合计' : '建房造价测算', 62, 166);
     const amount = cleanAmount(card.totalCost);
     ctx.font = '700 52px sans-serif';
     const unitWidth = ctx.measureText('万元').width;
@@ -176,7 +170,7 @@ async function createShareImage(card) {
     if (typeof createOffscreenCanvas !== 'function')
         return '';
     const canvas = createOffscreenCanvas({ type: '2d', width: CARD_WIDTH * 2, height: CARD_HEIGHT * 2 });
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas === null || canvas === void 0 ? void 0 : canvas.getContext('2d');
     if (!canvas || !ctx)
         return '';
     ctx.scale(2, 2);
@@ -185,7 +179,7 @@ async function createShareImage(card) {
     background.addColorStop(1, '#f6e8ce');
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-    const houseImage = await loadBundledHouseImage(canvas);
+    const houseImage = await loadHouseImage(canvas);
     const hasEstimate = Boolean(card.totalCost);
     drawCardHouseImage(ctx, houseImage, hasEstimate);
     drawCardFrame(ctx, hasEstimate);
@@ -204,4 +198,47 @@ function prepareCostEstimateShareImage(card) {
             .finally(() => delete imageCache[cacheKey]);
     }
     return imageCache[cacheKey];
+}
+// Moments uses a square thumbnail, so keep its amount and villa inside that frame.
+async function prepareCostEstimateTimelineImage(card) {
+    if (!card.totalCost || typeof wx.createOffscreenCanvas !== 'function')
+        return '';
+    try {
+        const canvas = wx.createOffscreenCanvas({ type: '2d', width: 1000, height: 1000 });
+        const ctx = canvas === null || canvas === void 0 ? void 0 : canvas.getContext('2d');
+        if (!ctx)
+            return '';
+        ctx.fillStyle = '#fcf3e3';
+        ctx.fillRect(0, 0, 1000, 1000);
+        const image = await loadHouseImage(canvas);
+        ctx.drawImage(image, 390, 250, 610, 610);
+        const seam = ctx.createLinearGradient(390, 0, 450, 0);
+        seam.addColorStop(0, '#fcf3e3');
+        seam.addColorStop(1, 'rgba(252, 243, 227, 0)');
+        ctx.fillStyle = seam;
+        ctx.fillRect(390, 250, 60, 610);
+        ctx.fillStyle = '#9c6a2c';
+        ctx.font = '700 48px sans-serif';
+        ctx.fillText('甲第灵光 ArchLight', 60, 100);
+        ctx.fillStyle = '#704416';
+        ctx.font = '600 58px sans-serif';
+        ctx.fillText(card.totalLabel === '已测算部分合计' ? '已测算部分合计' : '参考造价', 60, 245);
+        ctx.fillStyle = '#a65c25';
+        fitText(ctx, cleanAmount(card.totalCost), 800, 140, 350);
+        ctx.fillText(cleanAmount(card.totalCost), 60, 410);
+        ctx.font = '700 64px sans-serif';
+        ctx.fillText('万元', 60, 495);
+        ctx.fillStyle = '#704416';
+        fitText(ctx, `${card.buildingArea.replace(/\s/g, '')} · ${card.city}`, 600, 46, 330);
+        ctx.fillText(`${card.buildingArea.replace(/\s/g, '')} · ${card.city}`, 60, 625);
+        ctx.font = '500 32px sans-serif';
+        ctx.fillText('建房预算测算', 60, 690);
+        ctx.font = '600 48px sans-serif';
+        ctx.fillText('查看测算报告', 60, 935);
+        return await writeImage(`timeline-v2|${buildCacheKey(card)}`, canvasToDataURL(canvas));
+    }
+    catch (error) {
+        console.warn('生成朋友圈预算封面失败:', error);
+        return '';
+    }
 }

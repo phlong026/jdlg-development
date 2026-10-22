@@ -1,0 +1,18 @@
+[
+  {
+    "tool": "image_gen.imagegen",
+    "mode": "builtin",
+    "reference": "需求文档/20261021-朋友圈四页分享卡片效果/01-首页.png",
+    "asset": "miniprogram/miniprogram/assets/share/home-timeline-v2.jpg",
+    "optimization": "sips JPEG quality 70, then max 1000px / quality 60; visual reviewed",
+    "prompt": "从参考效果图中制作可直接用于微信小程序朋友圈 imageUrl 的正式封面文件。只输出一张正方形 1:1 封面，1024×1024 或更高，不要画板、手机、微信界面、左右对比、注释、边框、效果示意。严格沿用参考图左侧大封面的视觉，建筑为主，占画面六成左右，完整保留房屋轮廓，大图清楚。右侧留蓝天与少量奶油金底，右上放金色甲第灵光标志，下面品牌文字和主题文字，所有文字大而可读，正方形缩略图不会裁字。准确文字仅为：甲第灵光 ArchLight，AI建房助手。页面首页：白色法式别墅、明亮蓝天、金色品牌，主题 AI建房助手。不要增加其他文案或数字。最终输出只有可用正方形图片。"
+  },
+  {
+    "tool": "image_gen.imagegen",
+    "mode": "builtin",
+    "reference": "需求文档/20261021-朋友圈四页分享卡片效果/02-预算入口.png",
+    "asset": "miniprogram/miniprogram/assets/share/budget-timeline-v2.jpg",
+    "optimization": "sips JPEG quality 70, then max 1000px / quality 60; visual reviewed",
+    "prompt": "从参考效果图中制作可直接用于微信小程序朋友圈 imageUrl 的正式封面文件。只输出一张正方形 1:1 封面，1024×1024 或更高，不要画板、手机、微信界面、左右对比、注释、边框、效果示意。严格沿用参考图左侧大封面的视觉，建筑为主，占画面六成左右，完整保留房屋轮廓，大图清楚。右侧留蓝天与少量奶油金底，右上放金色甲第灵光标志，下面品牌文字和主题文字，所有文字大而可读，正方形缩略图不会裁字。准确文字仅为：甲第灵光 ArchLight，建房预算，10秒估算建房报价。页面预算入口：灰白现代别墅、温暖灯光、右侧大字建房预算，下方10秒估算建房报价，金色计算器小装饰。不要增加其他文案或数字。最终输出只有可用正方形图片。"
+  }
+]

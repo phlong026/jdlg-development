@@ -120,7 +120,7 @@
       <view class="poster-header">
         <view class="poster-heading">
           <text class="poster-title">分享海报</text>
-          <text class="poster-subtitle">保存或转发给好友，扫码即可进入小程序</text>
+          <text class="poster-subtitle">可发送给好友或分享到朋友圈，扫码即可进入小程序</text>
         </view>
         <view class="poster-close" bindtap="onClosePosterModal">
           <t-icon name="close" size="40rpx" color="#8a6546" />
@@ -152,7 +152,7 @@
         </view>
         <view class="poster-helper">
           <view class="poster-helper-dot"></view>
-          <text class="poster-helper-text">建议先保存图片；好友也可直接扫码右下角小程序码进入</text>
+          <text class="poster-helper-text">点击立即分享，在弹窗中选择好友或朋友圈</text>
         </view>
       </view>
       <view class="poster-actions">

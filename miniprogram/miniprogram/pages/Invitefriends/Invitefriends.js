@@ -6,7 +6,7 @@ const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const asset_1 = require("../../utils/asset");
 const shareImage_1 = require("../../utils/shareImage");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
-const INVITE_POSTER_LOGO = '/pages/Invitefriends/intro-logo.png';
+const INVITE_POSTER_LOGO = (0, asset_1.resolveAssetPath)('/pages/Invitefriends/intro-logo.png');
 const DEFAULT_INVITE_AVATAR = (0, asset_1.resolveAssetPath)('/assets/images/home.jpg');
 Page({
     data: {
@@ -790,7 +790,7 @@ Page({
             if (typeof wx.showShareImageMenu !== 'function') {
                 wx.showModal({
                     title: '分享海报',
-                    content: '请点击右上角"..."选择转发，或将海报保存到相册后分享',
+                    content: '当前微信版本不支持图片分享菜单，请点击右上角“...”选择分享到朋友圈，或先保存图片后分享',
                     showCancel: false,
                 });
                 return;
@@ -869,6 +869,7 @@ Page({
         const nickname = userInfo?.nickname || '好友';
         return {
             title: `${nickname}邀请你使用甲第灵光AI，输入邀请码${inviteCode}即可获得50灵石奖励！`,
+            query: inviteCode ? `invite_code=${encodeURIComponent(inviteCode)}` : '',
             imageUrl: this.data.shareImageUrl || this.data.posterImageUrl || '',
         };
     },

@@ -173,33 +173,60 @@ function updateReady(page) {
   const s=getSDK(); if (!s || !s.get(page)) return;
   s.ready(page,routes.ready(page.route,page.data||{},page.__trackingRendered),routes.binding(page.route,page.__trackingOptions||{}));
 }
-// 全页面默认分享：微信要求"发给朋友"（条件 1）与"朋友圈"（条件 2）成对开启，
-// 未自定义分享回调的页面注入产品名 + 当前页路径的默认实现；已自定义的页面不受影响。
 const DEFAULT_SHARE_TITLE='甲第灵光 · AI建房助手';
-function queryString(options) {
-  const pairs=Object.keys(options||{}).filter(key=>options[key]!=null&&options[key]!=='').map(key=>key+'='+encodeURIComponent(String(options[key])));
-  return pairs.length?'?'+pairs.join('&'):'';
+function publicShareQuery(page) {
+  const policy=routes.policy(String(page.route||'').replace(/^\//,''));
+  if(!policy.collect||!policy.idKey)return '';
+  const options=page.__trackingOptions||{};
+  const value=options[policy.idKey]??options[policy.idAlias];
+  return value==null||value===''?'':policy.idKey+'='+encodeURIComponent(String(value));
+}
+function timelineShareValue(value) {
+  if(!value||typeof value!=='object'||Object.prototype.hasOwnProperty.call(value,'query'))return value;
+  // An omitted query inherits the current page query in WeChat. Business pages
+  // must opt in to each safe parameter instead of exposing all launch options.
+  return {...value,query:''};
+}
+function showTimelineShareMenu(page, hasCustomTimelineShare) {
+  const launch=safely(()=>typeof wx.getLaunchOptionsSync==='function'?wx.getLaunchOptionsSync():null,null);
+  if(launch&&launch.scene===1154)return;
+  const contentBlocked=page.data&&Object.prototype.hasOwnProperty.call(page.data,'contentReady')&&page.data.contentReady!==true;
+  const route=String(page.route||'').replace(/^\//,'');
+  if(contentBlocked||(!routes.policy(route).collect&&!hasCustomTimelineShare)){
+    if(typeof wx.hideShareMenu==='function')wx.hideShareMenu({menus:contentBlocked?['shareAppMessage','shareTimeline']:['shareTimeline']});
+    return;
+  }
+  if(typeof wx.showShareMenu==='function')wx.showShareMenu({menus:['shareAppMessage','shareTimeline'],fail(error){console.warn('分享菜单开启失败',page.route,error);}});
 }
 function wrapPage(definition) {
   const result={...definition};
+  const hasCustomAppShare=typeof definition.onShareAppMessage==='function';
+  const hasCustomTimelineShare=typeof definition.onShareTimeline==='function';
   const invoke=(name,page,args)=>typeof definition[name]==='function'?definition[name].apply(page,args):undefined;
   result.onLoad=function(options) {
     safely(() => {
       this.__trackingOptions=options||{};
-      const route=String(this.route||'').replace(/^\//,''); if (!routes.policy(route).collect) return;
-      const s=getSDK(); if (!s) return; s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+      const route=String(this.route||'').replace(/^\//,'');
+      if (routes.policy(route).collect) {
+        const s=getSDK(); if (s) s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+      } else if (!hasCustomTimelineShare) return;
       const original=this.setData;
+      if(typeof original!=='function')return;
       this.setData=function(data,callback) {
-        return original.call(this,data,()=>{ safely(()=>updateReady(this)); if(callback)callback.call(this); });
+        return original.call(this,data,()=>{ safely(()=>{
+          // Sharing readiness must work even when analytics is unavailable.
+          if(Object.prototype.hasOwnProperty.call(data,'contentReady')&&this.__trackingConsentVisible===true)showTimelineShareMenu(this,hasCustomTimelineShare);
+          updateReady(this);
+        }); if(callback)callback.call(this); });
       };
     });
     return invoke('onLoad',this,arguments);
   };
   result.onReady=function() { const output=invoke('onReady',this,arguments); safely(()=>{this.__trackingRendered=true; updateReady(this);}); return output; };
-  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{const s=getSDK();if(s)s.show(this);updateReady(this);consentPageVisible(this,true);}); return output; };
+  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{showTimelineShareMenu(this,hasCustomTimelineShare);const s=getSDK();if(s)s.show(this);updateReady(this);consentPageVisible(this,true);}); return output; };
   result.onHide=function() { safely(()=>{consentPageVisible(this,false);if(sdk)sdk.hide(this,false);}); return invoke('onHide',this,arguments); };
   result.onUnload=function() { safely(()=>{consentPageVisible(this,false);if(sdk)sdk.hide(this,true);}); return invoke('onUnload',this,arguments); };
-  if (typeof definition.onShareAppMessage==='function') result.onShareAppMessage=function() {
+  if (hasCustomAppShare) result.onShareAppMessage=function() {
     const original=invoke('onShareAppMessage',this,arguments);
     if (!original || typeof original!=='object' || !sdk || !sdk.diagnostics().enabled) return original;
     // Original callback executes once. Preserve original synchronous fallback, title/image and original promise semantics.
@@ -208,8 +235,8 @@ function wrapPage(definition) {
       prepareShare(this,fallback,'app_message').then(result=>{clearTimeout(timeout);resolve(result);},()=>{clearTimeout(timeout);resolve(fallback);});
     })).catch(()=>original)};
   };
-  if (typeof definition.onShareTimeline==='function') result.onShareTimeline=function() {
-    const original=invoke('onShareTimeline',this,arguments);
+  if (hasCustomTimelineShare) result.onShareTimeline=function() {
+    const original=timelineShareValue(invoke('onShareTimeline',this,arguments));
     if (!original || !sdk || !sdk.diagnostics().enabled) return original;
     // Timeline has no reliable async completion. No invented delivery status; first call remains un-attributed.
     const state=sdk.get(this)||(this.__trackingShareState=this.__trackingShareState||{shareCache:{}}), key=JSON.stringify(original);
@@ -218,13 +245,14 @@ function wrapPage(definition) {
     prepareShare(this,original,'timeline',key).then(value=>{if((sdk.get(this)||this.__trackingShareState)===state)state.shareCache[key]=value;});
     return original;
   };
-  // 全页面开放右上角「转发给朋友」与「分享到朋友圈」（官方双条件成对开启）。
-  // 默认标题用产品名，path/query 取当前页；素材页等已自定义分享的页面不受影响。
-  if (typeof definition.onShareAppMessage!=='function') result.onShareAppMessage=function() {
-    return { title:DEFAULT_SHARE_TITLE, path:'/'+String(this.route||'')+queryString(this.__trackingOptions) };
+  if (!hasCustomAppShare) result.onShareAppMessage=function() {
+    const route=String(this.route||'').replace(/^\//,'');
+    const query=publicShareQuery(this);
+    return { title:DEFAULT_SHARE_TITLE, path:routes.policy(route).collect?'/'+route+(query?'?'+query:''):'/pages/index/index' };
   };
-  if (typeof definition.onShareTimeline!=='function') result.onShareTimeline=function() {
-    return { title:DEFAULT_SHARE_TITLE, query:queryString(this.__trackingOptions).replace(/^\?/,'') };
+  if (!hasCustomTimelineShare) result.onShareTimeline=function() {
+    const route=String(this.route||'').replace(/^\//,'');
+    return routes.policy(route).collect?{title:DEFAULT_SHARE_TITLE,query:publicShareQuery(this)}:{};
   };
   // Preserve each business callback's receiver, arguments, return value and
   // exceptions. Analytics failures must never block an existing action.

@@ -1,6 +1,10 @@
 const RETURN_KEY = 'report_login_return';
+export function discardReportLoginReturn(): void {
+    wx.removeStorageSync(RETURN_KEY);
+}
 export function validReportPath(path: unknown): path is string {
-    return typeof path === 'string' && /^\/pages\/report\/(landing|questionnaire|preview|delivery)(\?id=[A-Za-z0-9_-]{1,80})?$/.test(path);
+    return typeof path === 'string' && (path === '/pages/aicostresult/aicostresult'
+        || /^\/pages\/report\/(landing|questionnaire|preview|delivery)(\?id=[A-Za-z0-9_-]{1,80})?$/.test(path));
 }
 export function requireReportLogin(path: string): boolean {
     if (wx.getStorageSync('token'))

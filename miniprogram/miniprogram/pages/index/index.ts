@@ -1,9 +1,10 @@
 // index.ts
 // 获取应用实例
 import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset'
+import { prepareCloudImage } from '../../utils/cloudImage'
 import { HOME_ASSETS } from '../../utils/homeAssets'
 import { cityOptionsMap } from '../../utils/costRegions'
-import { resumeReportAfterLogin } from '../../utils/reportNavigation'
+import { discardReportLoginReturn, resumeReportAfterLogin } from '../../utils/reportNavigation'
 import { getPageCache, prefetchImages, setPageCache } from '../../utils/perf'
 import {
   DEFAULT_ENTERPRISE_SERVICE_PHONE,
@@ -16,7 +17,9 @@ import {
 } from '../../utils/enterpriseWechat'
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
-const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手'
+const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始'
+const HOME_CHAT_COVER = resolveAssetPath('/assets/share/home-chat.jpg')
+const HOME_TIMELINE_COVER = resolveAssetPath('/assets/share/home-timeline-v2.jpg')
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()
@@ -26,8 +29,12 @@ function buildPublicTemplateDetailCacheKey(templateId: number) {
 }
 
 Page({
+  shareCoversPromise: null as Promise<void> | null,
   data: {
     featuredGroups: [] as any[],
+    homeChatCover: '',
+    homeTimelineCover: '',
+    contentReady: false,
     featuredGroupsLoading: false,
     lastFeaturedGroupsFetchTime: 0,
     homeIntroPopupVisible: false,
@@ -50,7 +57,14 @@ Page({
     quickCity: '',
     quickArea: '',
     homeAssets: HOME_ASSETS,
-    brandHeaderTop: 68,
+    heroBgImage: resolveAssetPath('/assets/home/logo+背景图.png'),
+    coreEntryImage: resolveAssetPath('/assets/home/核心输入区.png'),
+    dailyCheckinImage: resolveAssetPath('/assets/home/每日签到.png'),
+    inviteFriendImage: resolveAssetPath('/assets/home/邀请好友.png'),
+    ruralVillaImage: resolveAssetPath('/assets/home/乡村别墅.png'),
+    cityRenewalImage: resolveAssetPath('/assets/home/城市更新.png'),
+    parentWorkshopImage: resolveAssetPath('/assets/home/亲子工坊.png'),
+    allRoundDesignImage: resolveAssetPath('/assets/home/综合设计.png'),
     defaultCoverImage: resolveAssetPath('/assets/images/home.jpg'),
     introLogoImage: resolveAssetPath('/assets/home/intro-logo.png'),
     mascotBouncing: false,
@@ -61,27 +75,11 @@ Page({
       tabBar.setCurrent(0)
     }
   },
-  onLoad() {
-    this.syncBrandSafeArea();
+  onLoad(options: Record<string, string | undefined> = {}) {
+    // Discard only the old intent; a later login may create a new report return.
+    if (options.from === 'share') discardReportLoginReturn();
+    this.shareCoversPromise = this.prepareHomeShareCovers();
     this.showHomeIntroPopupOnce();
-    wx.showShareMenu({
-      menus: ['shareAppMessage', 'shareTimeline'],
-      fail: (error) => {
-        console.warn('首页分享菜单开启失败', error);
-      },
-    });
-  },
-  syncBrandSafeArea() {
-    if (typeof (wx as any).getWindowInfo !== 'function') return;
-    try {
-      const info = (wx as any).getWindowInfo();
-      const width = Number(info.windowWidth) || 375;
-      const statusBarHeight = Number(info.statusBarHeight) || 44;
-      // 至少比旧版下移 24rpx，同时在手机状态栏下留出 12px。
-      this.setData({ brandHeaderTop: Math.max(85.55 * width / 750, statusBarHeight + 12) });
-    } catch (error) {
-      console.warn('首页品牌安全距离读取失败，保留默认位置', error);
-    }
   },
   onShow() {
     if (resumeReportAfterLogin()) return;
@@ -96,18 +94,29 @@ Page({
     if (!guard || typeof guard.checkAndShow !== 'function') return;
     await guard.checkAndShow();
   },
+  async prepareHomeShareCovers() {
+    const [homeChatCover, homeTimelineCover] = await Promise.all([
+      prepareCloudImage(HOME_CHAT_COVER, 'home-chat.jpg'),
+      prepareCloudImage(HOME_TIMELINE_COVER, 'home-timeline-v2.jpg'),
+    ]);
+    this.setData({ homeChatCover, homeTimelineCover, contentReady: !!homeTimelineCover });
+  },
   onShareAppMessage() {
+    const share = { title: HOME_SHARE_TITLE, path: '/pages/index/index?from=share' };
     return {
-      title: HOME_SHARE_TITLE,
-      path: '/pages/index/index',
-      imageUrl: '/assets/share/home-chat.jpg',
+      ...share,
+      imageUrl: this.data.homeChatCover || undefined,
+      promise: Promise.resolve(this.shareCoversPromise).then(() => ({
+        ...share, imageUrl: this.data.homeChatCover || undefined,
+      })),
     };
   },
   onShareTimeline() {
+    if (!this.data.contentReady) return {};
     return {
       title: HOME_SHARE_TITLE,
-      query: '',
-      imageUrl: '/assets/share/home-timeline.jpg',
+      query: 'from=share',
+      imageUrl: this.data.homeTimelineCover,
     };
   },
   onOpenPage(e: any) {

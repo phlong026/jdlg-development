@@ -7,6 +7,7 @@ const ts = require('./report-runtime')('typescript');
 
 const pagePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.ts');
 const shareCardPath = path.join(__dirname, '../miniprogram/utils/costEstimateShareImage.ts');
+const reportTemplatePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.wxml');
 
 function createHarness(cachedResult) {
   let definition;
@@ -19,14 +20,27 @@ function createHarness(cachedResult) {
   vm.runInNewContext(code, {
     exports: {},
     Page(value) { definition = value; },
-    require() {
-      return {
+    require(request) {
+      if (request === '../../utils/enterpriseWechat') return {
         DEFAULT_CUSTOMER_SERVICE_CORP_ID: 'corp',
         DEFAULT_CUSTOMER_SERVICE_URL: 'service-url',
         resolveEnterpriseWechatServiceConfig: value => value,
         tryOpenCustomerServiceDirect: async () => true,
-        prepareCostEstimateShareImage: async () => 'wxfile://cost-share.jpg',
       };
+      if (request === '../../utils/costEstimateShareImage') return {
+        prepareCostEstimateShareImage: async () => 'wxfile://cost-share.jpg',
+        prepareCostEstimateTimelineImage: async () => 'wxfile://timeline-share.jpg',
+      };
+      if (request === '../../utils/costEstimateShare') return {
+        isCostEstimateShareResult: value => Boolean(value && value.version === 4 && value.basicInfo?.length === 14 && value.costBreakdown?.length >= 6 && value.costBreakdown.every(item => typeof item.estimable === 'boolean')),
+        sanitizeCostEstimateShareResult: value => JSON.parse(JSON.stringify(value)),
+        createCostEstimateShare: async () => ({ report_id: 'AbcdEFghIJklMNopQRstUVwxYZ012345', expires_at: '2026-11-20T00:00:00Z' }),
+        getCostEstimateShare: async () => { throw new Error('unexpected public fetch'); },
+      };
+      if (request === '../../utils/reportNavigation') return {
+        requireReportLogin: () => true,
+      };
+      throw new Error(`unexpected require ${request}`);
     },
     setTimeout(callback) { callback(); },
     console: { ...console, error() {} },
@@ -36,6 +50,7 @@ function createHarness(cachedResult) {
           if (cachedResult instanceof Error) throw cachedResult;
           return cachedResult;
         }
+        if (key === 'token') return 'fixture-token';
         return '';
       },
       showToast(options) { toasts.push(options.title); },
@@ -86,7 +101,7 @@ const currentResult = {
   dynamicNotes: ['不同地基因方案不同，价格不同'],
 };
 
-test('report loads the complete version 2 estimate snapshot', () => {
+test('report loads the complete version 4 estimate snapshot', () => {
   const h = createHarness(currentResult);
   h.page.onLoad();
   assert.equal(h.page.data.estimatedTotalCost, '58.36万元');
@@ -97,16 +112,22 @@ test('report loads the complete version 2 estimate snapshot', () => {
   assert.equal(h.toasts.length, 0);
 });
 
-test('report share keeps the dynamic title and path when its cover finishes asynchronously', async () => {
+test('report omits the dedicated share preparation module and keeps the estimate disclaimer', () => {
+  const source = fs.readFileSync(reportTemplatePath, 'utf8');
+  assert.doesNotMatch(source, /分享这份测算报告/);
+  assert.doesNotMatch(source, /准备分享报告/);
+  assert.match(source, /以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认/);
+});
+
+test('report stays private before canvas readiness and still supports direct preparation', async () => {
   const h = createHarness(currentResult);
   h.page.onLoad();
+  assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
+  await h.page.onPrepareShareReport();
   const share = h.page.onShareAppMessage();
   assert.equal(share.title, '泉州320 ㎡建房参考造价58.36万，查看测算报告');
-  assert.equal(share.path, '/pages/aicost/aicost?source=cost-share');
-  const resolvedShare = await share.promise;
-  assert.equal(resolvedShare.title, '泉州320 ㎡建房参考造价58.36万，查看测算报告');
-  assert.equal(resolvedShare.path, '/pages/aicost/aicost?source=cost-share');
-  assert.equal(resolvedShare.imageUrl, 'wxfile://cost-share.jpg');
+  assert.equal(share.path, '/pages/aicostresult/aicostresult?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
+  assert.equal(share.imageUrl, 'wxfile://cost-share.jpg');
 });
 
 test('share cover uses the supplied villa visual without a line-art fallback', () => {
@@ -133,6 +154,7 @@ test('a partially estimated report labels both total and unit price clearly', ()
   assert.equal(h.page.data.totalLabel, '已测算部分合计');
   assert.equal(h.page.data.unitLabel, '已测算部分单价');
   assert.equal(h.page.data.costBreakdown[0].amountText, '按图纸核算');
+  assert.match(h.page.getShareTitle(), /建房已测算部分合计58\.36万/);
 });
 
 test('report rejects a version 2 cache with missing rows or malformed items', () => {
@@ -178,7 +200,7 @@ test('report template keeps the warm two-card layout and designer conversion ent
   assert.match(wxml, /costBreakdown/);
   assert.doesNotMatch(wxml, /cost-donut|donut-legend/);
   assert.match(scss, /#e6daca/);
-  assert.match(js, /RESULT_SCHEMA_VERSION\s*=\s*4/);
+  assert.match(js, /isCostEstimateShareResult/);
   assert.match(js, /timeout:\s*8000/);
 });
 

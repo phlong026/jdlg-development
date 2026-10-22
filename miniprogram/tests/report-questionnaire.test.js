@@ -79,6 +79,10 @@ test('login returns only to allowlisted native report paths and rejects expired 
   assert.equal(api.requireReportLogin(target), false);
   store.set('token', 'fixture'); assert.equal(api.resumeReportAfterLogin(), true); assert.equal(redirects[0].url, target);
   store.set('report_login_return', { path: target, expires: 1 }); assert.equal(api.resumeReportAfterLogin(), false);
+  store.set('report_login_return', { path: target, expires: Date.now() + 60000 });
+  api.discardReportLoginReturn();
+  assert.equal(store.has('report_login_return'), false);
+  assert.equal(store.get('token'), 'fixture', '丢弃旧入口不改变登录态');
 });
 
 test('enabled house questionnaire collects actual controls and submits the new protocol', async () => {
@@ -104,4 +108,17 @@ test('house draft resumes separately and rejects invalid rooms before a request'
  Object.assign(h.page.data.house,{permanent_count:2,returning_count:0,return_frequency:'none'});
  h.page.addRoom();await h.page.next();assert.equal(h.requests.length,0);assert.equal(h.page.data.step,2);
  assert.ok(h.store.has('building_report_draft_house_v1'));assert.equal(h.store.has('building_report_draft_v1'),false);
+});
+
+
+test('预算分享登录返回只允许固定结果页，不接受伪造的报告或管理参数', () => {
+  const store = new Map(), redirects = [];
+  const api = load('utils/reportNavigation.ts', { wx: { getStorageSync: key => store.get(key), setStorageSync: (key, value) => store.set(key, value), removeStorageSync: key => store.delete(key), navigateTo() {}, showToast() {}, redirectTo: options => redirects.push(options), reLaunch() {} } });
+  const target = '/pages/aicostresult/aicostresult';
+  assert.equal(api.validReportPath(target), true);
+  for (const suffix of ['?report_id=x', '?token=x', '/../login', '#admin']) assert.equal(api.validReportPath(target + suffix), false);
+  assert.equal(api.requireReportLogin(target), false);
+  store.set('token', 'fixture');
+  assert.equal(api.resumeReportAfterLogin(), true);
+  assert.equal(redirects[0].url, target);
 });

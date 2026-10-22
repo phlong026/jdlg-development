@@ -38,14 +38,14 @@
             class="message-item {{item.role === 'user' ? 'message-user' : 'message-ai'}}"
             id="msg-{{item.id}}"
           >
-            <image class="message-avatar" wx:if="{{item.role === 'ai' && util.showAvatar(messages, mi)}}" src="/assets/icons/specadvisor/icon-advisor-avatar.svg" mode="aspectFit" />
+            <image class="message-avatar" wx:if="{{item.role === 'ai' && util.showAvatar(messages, mi)}}" src="{{advisorIcon}}" mode="aspectFit" />
             <view class="avatar-placeholder" wx:elif="{{item.role === 'ai'}}"></view>
             <view class="message-bubble" data-id="{{item.id}}" bindlongpress="onCopyMessage">
               <text wx:if="{{item.role === 'user'}}" class="message-text">{{item.content}}</text>
               <view wx:else class="message-rich">
                 <wemark md="{{item.content}}" type="wemark" />
                 <view class="source-chip" wx:if="{{item.sourceText}}" data-id="{{item.id}}" catchtap="onSourceChipTap">
-                  <image class="source-icon" src="/assets/icons/specadvisor/icon-source.svg" mode="aspectFit" />
+                  <image class="source-icon" src="{{sourceIcon}}" mode="aspectFit" />
                   <text>{{item.sourceText}}</text>
                   <text class="source-chip-arrow" wx:if="{{item.quotes && item.quotes.length > 0}}">›</text>
                 </view>
@@ -64,7 +64,7 @@
         </block>
 
         <view class="thinking-row" wx:if="{{loading}}" id="msg-thinking">
-          <image class="message-avatar" src="/assets/icons/specadvisor/icon-advisor-avatar.svg" mode="aspectFit" />
+          <image class="message-avatar" src="{{advisorIcon}}" mode="aspectFit" />
           <view class="thinking-bubble">
             <text class="thinking-dot">●</text>
             <text class="thinking-dot">●</text>
@@ -96,7 +96,7 @@
       />
       <view class="send-btn {{loading ? 'send-btn-loading' : (inputText ? 'send-btn-active' : '')}}" bindtap="onSend">
         <view wx:if="{{loading}}" class="send-loading-spinner"></view>
-        <image wx:else class="send-icon" src="/assets/icons/specadvisor/icon-send.svg" mode="aspectFit" />
+        <image wx:else class="send-icon" src="{{sendIcon}}" mode="aspectFit" />
       </view>
     </view>
   </view>

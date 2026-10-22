@@ -17,6 +17,8 @@ function formShare(overrides = {}, cover = 'wxfile://form-share.jpg') {
     Page(value) { definition = value; },
     require(request) {
       if (request === '../../utils/costRegions') return costRegions;
+      if (request === '../../utils/asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === '../../utils/cloudImage') return { prepareCloudImage: async () => 'wxfile://timeline.jpg' };
       return { prepareCostEstimateShareImage: async card => { cards.push(card); return cover; } };
     },
     wx: { getStorageSync() { throw new Error('must not reuse an earlier estimate'); } },
@@ -27,7 +29,7 @@ function formShare(overrides = {}, cover = 'wxfile://form-share.jpg') {
 
 test('blank form shares the same poster without calculating or claiming a price', async () => {
   const { share, cards } = formShare();
-  assert.equal(share.title, '10秒估算建房报价 平台大数据，造价更精准');
+  assert.equal(share.title, '10秒估算建房报价\n建别墅从这里开始');
   assert.equal(share.path, '/pages/aicost/aicost');
   const result = await share.promise;
   assert.equal(result.imageUrl, 'wxfile://form-share.jpg');
@@ -41,7 +43,7 @@ test('blank form shares the same poster without calculating or claiming a price'
 test('form invitation does not present unfinished or default selections as report facts', async () => {
   const { share, cards } = formShare({ city: '厦门', buildingArea: '440', footprintArea: '', structureType: '钢结构', windowStandard: '品质型' });
   await share.promise;
-  assert.equal(share.title, '10秒估算建房报价 平台大数据，造价更精准');
+  assert.equal(share.title, '10秒估算建房报价\n建别墅从这里开始');
   assert.equal(cards[0].buildingArea, '');
   assert.equal(cards[0].structureType, '');
   assert.equal(cards[0].windowStandard, '');

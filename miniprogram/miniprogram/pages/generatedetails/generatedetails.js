@@ -1677,9 +1677,11 @@ Page({
         };
     },
     onShareTimeline() {
+        const taskNo = String(this.data.taskData.task_no || '').trim();
         return {
             title: this.buildShareTitle(),
             imageUrl: this.getCurrentShareImageUrl(),
+            query: taskNo ? `task_no=${encodeURIComponent(taskNo)}` : '',
         };
     },
     /** 视频类：下载视频到相册 */

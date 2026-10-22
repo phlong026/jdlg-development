@@ -1,0 +1,7 @@
+{
+  "method": "git apply --reverse --check --cached against staged binary patch",
+  "home_commit_reverse_check": "passed",
+  "combined_patch_reverse_check": "passed",
+  "migration": false,
+  "production_state_changed": false
+}

@@ -27,6 +27,64 @@
   box-shadow: 0 14rpx 32rpx rgba(99, 69, 47, 0.08);
 }
 
+.report-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 28rpx 0;
+  padding: 64rpx 40rpx;
+  border: 1px solid rgba(188, 155, 116, 0.28);
+  border-radius: 24rpx;
+  background: rgba(255, 251, 245, 0.96);
+  text-align: center;
+}
+
+.report-state-title {
+  color: #553927;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.report-state-copy {
+  margin-top: 16rpx;
+  color: #88735f;
+  font-size: 25rpx;
+  line-height: 1.6;
+}
+
+.report-state-actions {
+  width: 100%;
+  display: flex;
+  gap: 18rpx;
+  margin-top: 32rpx;
+}
+
+.state-secondary-btn,
+.state-primary-btn {
+  flex: 1;
+  height: 78rpx;
+  margin: 0;
+  border-radius: 14rpx;
+  font-size: 27rpx;
+  line-height: 78rpx;
+}
+
+.state-secondary-btn::after,
+.state-primary-btn::after {
+  border: none;
+}
+
+.state-secondary-btn {
+  color: #79573b;
+  border: 1px solid rgba(164, 120, 75, 0.54);
+  background: #fffdf9;
+}
+
+.state-primary-btn {
+  color: #fff;
+  background: #a77b4c;
+}
+
 .card-title {
   display: flex;
   align-items: center;

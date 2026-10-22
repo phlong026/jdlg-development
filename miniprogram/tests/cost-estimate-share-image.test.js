@@ -13,6 +13,7 @@ function loadShareImageHelper() {
   const imageSources = [];
   const textCalls = [];
   const imageCalls = [];
+  const cloudImages = [];
   const clips = [];
   const strokes = [];
   const gradients = [];
@@ -21,6 +22,16 @@ function loadShareImageHelper() {
   const context = {
     exports: {},
     console: { warn() {} },
+    require(request) {
+      if (request === './asset') return { resolveAssetPath: value => `https://cdn.test${value}` };
+      if (request === './cloudImage') return {
+        prepareCloudImage: async (url, fileName) => {
+          cloudImages.push({ url, fileName });
+          return 'wxfile://house.jpg';
+        },
+      };
+      throw new Error(`unexpected require ${request}`);
+    },
     wx: {
       env: { USER_DATA_PATH: 'wxfile://user-data' },
       base64ToArrayBuffer(value) { return value; },
@@ -69,7 +80,7 @@ function loadShareImageHelper() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   vm.runInNewContext(source, context);
-  return { prepare: context.exports.prepareCostEstimateShareImage, writes, calls, imageSources, textCalls, imageCalls, clips, strokes, gradients, sizes, scales };
+  return { prepare: context.exports.prepareCostEstimateShareImage, timeline: context.exports.prepareCostEstimateTimelineImage, writes, calls, imageSources, cloudImages, textCalls, imageCalls, clips, strokes, gradients, sizes, scales };
 }
 
 test('share card exports a JPEG and returns the local image path to WeChat', async () => {
@@ -87,7 +98,11 @@ test('share card exports a JPEG and returns the local image path to WeChat', asy
   assert.equal(imageUrl.startsWith('wxfile://user-data/cost-estimate-share/'), true);
   assert.equal(helper.writes.length, 1);
   assert.equal(helper.writes[0].data, 'c2hhcmUtY2FyZA==');
-  assert.equal(helper.imageSources[0], '/assets/images/cost-estimate-share-house.jpg', 'load from the package root before trying a page-relative path');
+  assert.deepEqual(helper.cloudImages, [{
+    url: 'https://cdn.test/assets/images/cost-estimate-share-house.jpg',
+    fileName: 'cost-estimate-share-house.jpg',
+  }]);
+  assert.equal(helper.imageSources[0], 'wxfile://house.jpg', 'Canvas 使用下载后的本地路径');
   const amount = helper.textCalls.find((item) => item.text === '71.17');
   const unit = helper.textCalls.find((item) => item.text === '万元');
   assert.ok(Number(amount.font.match(/(\d+)px/)[1]) >= 120);
@@ -161,4 +176,19 @@ test('unestimated form card uses a question placeholder without claiming a price
   assert.ok(x + width <= 966, 'show the right facade inside the frame');
   assert.ok(!labels.includes('万元'));
   assert.ok(!labels.some(label => label.includes('建筑面积') || label.includes('--')));
+});
+
+
+test('朋友圈封面为方图，使用实际金额与城市面积，不含示例数据', async () => {
+  const helper = loadShareImageHelper();
+  assert.equal(typeof helper.timeline, 'function');
+  const result = await helper.timeline({ totalCost: '123.45万元', city: '成都', buildingArea: '456㎡', structureType: '砖混结构', windowStandard: '标准型' });
+  assert.ok(result.startsWith('wxfile://user-data/cost-estimate-share/'));
+  assert.equal(helper.sizes[0].width, helper.sizes[0].height);
+  const labels = helper.textCalls.map(item => item.text);
+  assert.ok(labels.includes('123.45'));
+  assert.ok(labels.includes('万元'));
+  assert.ok(labels.some(label => label.includes('成都') && label.includes('456㎡')));
+  assert.ok(!labels.some(label => label.includes('80万') || label.includes('320㎡') || label.includes('泉州')));
+  assert.ok(labels.includes('参考造价'));
 });

@@ -48,14 +48,14 @@ assert.equal(api, 'switchTab');
 selected.onOpenPage({ currentTarget: { dataset: { url: '/pages/aitools/aitools' } } });
 assert.equal(api, 'navigateTo');
 const markup = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/index/index.wxml'), 'utf8');
-for (const name of ['建规快查', '造价测算', 'AI工具', '别墅设计', '装修设计', '庭院设计', '旧居翻新', '模板广场', '在线客服', '拍照上传', 'AI生图工具']) {
+for (const name of ['乡村别墅', '城市更新', '造价测算', '综合设计', '在线客服', '拍照上传', 'AI生图工具']) {
   assert.match(markup, new RegExp(`aria-label="${name}"`));
 }
 assert.match(markup, /bindchange="onQuickRegionChange"/);
 assert.match(markup, /bindinput="onQuickAreaInput"/);
 assert.match(markup, /bindtap="onQuickEstimate"/);
 assert.doesNotMatch(markup, /home-art\.png|project-rural\.png|project-urban\.png/);
-for (const name of ['advisor', 'calculator', 'aiTools', 'villa', 'interior', 'courtyard', 'renovation', 'templates']) {
+for (const name of ['costStats', 'ruralVilla', 'urbanBuilding', 'location', 'ruler', 'estimateButton']) {
   assert.match(markup, new RegExp(`src="\\{\\{homeAssets\\.${name}\\}\\}"`));
 }
 assert.equal(Object.keys(selected.data.homeAssets).length, 29);

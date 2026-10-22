@@ -2,6 +2,19 @@
 <view class="page">
   <navigation-bar title="造价测算报告" background="#e6daca" />
   <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="report-state-card" wx:if="{{reportLoading}}">
+      <text class="report-state-title">正在加载分享报告</text>
+      <text class="report-state-copy">请稍候，正在读取这份测算结果。</text>
+    </view>
+    <view class="report-state-card" wx:elif="{{reportError}}">
+      <text class="report-state-title">这份报告暂时无法打开</text>
+      <text class="report-state-copy">{{reportError}}</text>
+      <view class="report-state-actions">
+        <button class="state-secondary-btn" bindtap="onRetrySharedReport">重试</button>
+        <button class="state-primary-btn" bindtap="onRecalculate">重新测算</button>
+      </view>
+    </view>
+    <block wx:else>
     <view class="report-card basic-card">
       <view class="card-title"><view class="title-mark"></view><text>基础信息</text></view>
       <view class="basic-grid">
@@ -52,5 +65,6 @@
       <view class="breakdown-tip">室内装修另计。</view>
     </view>
     <view class="report-disclaimer">以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认。</view>
+    </block>
   </scroll-view>
 </view>

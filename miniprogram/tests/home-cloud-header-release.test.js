@@ -28,41 +28,20 @@ for (const property of ['brandScene', 'brandSymbol', 'brandName', 'brandEnglish'
 assert.match(pageSource, /import \{ HOME_ASSETS \} from '\.\.\/\.\.\/utils\/homeAssets'/);
 assert.match(pageSource, /homeAssets:\s*HOME_ASSETS/);
 assert.match(tabBarSource, /import \{ HOME_ASSETS \} from '\.\.\/utils\/homeAssets'/);
-assert.match(markup, /class="brand-backdrop"/);
-assert.match(markup, /src="\{\{homeAssets\.brandScene\}\}"/);
+assert.match(markup, /class="bg-image" src="\{\{heroBgImage\}\}"/);
+assert.match(pageSource, /heroBgImage: resolveAssetPath\('\/assets\/home\/logo\+背景图\.png'\)/);
 assert.doesNotMatch(markup, /src="\/assets\/(?:home-reference|smart-service-icon)/);
 
-for (const property of [
-  'backdrop', 'brandSymbol', 'brandName', 'brandEnglish', 'customerService',
-  'advisor', 'calculator', 'aiTools', 'villa', 'interior', 'courtyard',
-  'renovation', 'templates', 'aiPanel', 'aiOrb', 'camera', 'sparkles',
-  'costStats', 'ruralVilla', 'urbanBuilding', 'location', 'ruler', 'estimateButton',
-]) {
-  assert.match(markup, new RegExp(`src="\\{\\{homeAssets\\.${property}\\}\\}"`));
+for (const property of ['customerService', 'costStats', 'ruralVilla', 'urbanBuilding', 'location', 'ruler', 'estimateButton']) {
+  assert.ok(markup.includes('src="{{homeAssets.' + property + '}}"'));
 }
-
-assert.match(styles, /\.brand-backdrop\s*\{[^}]*pointer-events:\s*none;/s);
-assert.match(styles, /\.brand-header\s*\{[^}]*pointer-events:\s*none;/s);
-assert.match(styles, /\.brand-symbol\s*\{\s*left:\s*38\.69rpx;\s*top:\s*0;/);
-assert.match(styles, /\.brand-slogan\s*\{\s*left:\s*34\.29rpx;\s*top:\s*123\.62rpx;/);
-
-// Existing routes, event bindings and core geometry are release invariants.
-for (const route of [
-  '/pages/specadvisor/specadvisor', '/pages/aicost/aicost', '/pages/aitools/aitools',
-  '/pages/buildingreplacement/buildingreplacement', '/pages/template/template',
-]) {
-  assert.match(markup, new RegExp(route.replace(/[?]/g, '\\?')));
+for (const route of ['/pages/aicost/aicost', '/pages/allrounddesign/allrounddesign', '/pages/aitools/aitools', '/pages/checkin/checkin', '/pages/Invitefriends/Invitefriends']) {
+  assert.ok(markup.includes(route));
 }
 for (const binding of ['onMascotTap', 'onOpenPage', 'onQuickProjectChange', 'onQuickRegionChange', 'onQuickAreaInput', 'onQuickEstimate']) {
-  assert.match(markup, new RegExp(`(?:bindtap|bindchange|bindinput)="${binding}"`));
+  assert.ok(markup.includes('="' + binding + '"'));
 }
-for (const invariant of [
-  '.service-grid { left: 22.86rpx; top: 258.50rpx; width: 703.40rpx; height: 305.98rpx;',
-  '.ai-hotspot { left: 327.56rpx; top: 572.40rpx; width: 94rpx; height: 92.59rpx;',
-  '.cost-panel { left: 29.02rpx; top: 847.60rpx; width: 691.09rpx; height: 511.72rpx;',
-]) {
-  assert.ok(styles.includes(invariant), `missing geometry invariant: ${invariant}`);
-}
+assert.match(styles, /\.cost-estimator \{ position: relative;/);
 
 for (const property of ['defaultTabbar', 'homeTabbar', 'templateTabbar', 'designerTabbar', 'myTabbar']) {
   assert.match(tabBarSource, new RegExp(`HOME_ASSETS\\.${property}`));

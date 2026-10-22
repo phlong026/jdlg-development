@@ -3,13 +3,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // index.ts
 // 获取应用实例
 const asset_1 = require("../../utils/asset");
+const cloudImage_1 = require("../../utils/cloudImage");
 const homeAssets_1 = require("../../utils/homeAssets");
 const costRegions_1 = require("../../utils/costRegions");
 const reportNavigation_1 = require("../../utils/reportNavigation");
 const perf_1 = require("../../utils/perf");
 const enterpriseWechat_1 = require("../../utils/enterpriseWechat");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
-const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手';
+const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始';
+const HOME_CHAT_COVER = (0, asset_1.resolveAssetPath)('/assets/share/home-chat.jpg');
+const HOME_TIMELINE_COVER = (0, asset_1.resolveAssetPath)('/assets/share/home-timeline-v2.jpg');
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2';
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000;
 const featuredDetailPrefetching = new Set();
@@ -17,8 +20,12 @@ function buildPublicTemplateDetailCacheKey(templateId) {
     return `template-detail:public:${Number(templateId || 0)}`;
 }
 Page({
+    shareCoversPromise: null,
     data: {
         featuredGroups: [],
+        homeChatCover: '',
+        homeTimelineCover: '',
+        contentReady: false,
         featuredGroupsLoading: false,
         lastFeaturedGroupsFetchTime: 0,
         homeIntroPopupVisible: false,
@@ -41,7 +48,14 @@ Page({
         quickCity: '',
         quickArea: '',
         homeAssets: homeAssets_1.HOME_ASSETS,
-        brandHeaderTop: 68,
+        heroBgImage: (0, asset_1.resolveAssetPath)('/assets/home/logo+背景图.png'),
+        coreEntryImage: (0, asset_1.resolveAssetPath)('/assets/home/核心输入区.png'),
+        dailyCheckinImage: (0, asset_1.resolveAssetPath)('/assets/home/每日签到.png'),
+        inviteFriendImage: (0, asset_1.resolveAssetPath)('/assets/home/邀请好友.png'),
+        ruralVillaImage: (0, asset_1.resolveAssetPath)('/assets/home/乡村别墅.png'),
+        cityRenewalImage: (0, asset_1.resolveAssetPath)('/assets/home/城市更新.png'),
+        parentWorkshopImage: (0, asset_1.resolveAssetPath)('/assets/home/亲子工坊.png'),
+        allRoundDesignImage: (0, asset_1.resolveAssetPath)('/assets/home/综合设计.png'),
         defaultCoverImage: (0, asset_1.resolveAssetPath)('/assets/images/home.jpg'),
         introLogoImage: (0, asset_1.resolveAssetPath)('/assets/home/intro-logo.png'),
         mascotBouncing: false,
@@ -52,29 +66,12 @@ Page({
             tabBar.setCurrent(0);
         }
     },
-    onLoad() {
-        this.syncBrandSafeArea();
+    onLoad(options = {}) {
+        // Discard only the old intent; a later login may create a new report return.
+        if (options.from === 'share')
+            (0, reportNavigation_1.discardReportLoginReturn)();
+        this.shareCoversPromise = this.prepareHomeShareCovers();
         this.showHomeIntroPopupOnce();
-        wx.showShareMenu({
-            menus: ['shareAppMessage', 'shareTimeline'],
-            fail: (error) => {
-                console.warn('首页分享菜单开启失败', error);
-            },
-        });
-    },
-    syncBrandSafeArea() {
-        if (typeof wx.getWindowInfo !== 'function')
-            return;
-        try {
-            const info = wx.getWindowInfo();
-            const width = Number(info.windowWidth) || 375;
-            const statusBarHeight = Number(info.statusBarHeight) || 44;
-            // 至少比旧版下移 24rpx，同时在手机状态栏下留出 12px。
-            this.setData({ brandHeaderTop: Math.max(85.55 * width / 750, statusBarHeight + 12) });
-        }
-        catch (error) {
-            console.warn('首页品牌安全距离读取失败，保留默认位置', error);
-        }
     },
     onShow() {
         if ((0, reportNavigation_1.resumeReportAfterLogin)())
@@ -92,18 +89,24 @@ Page({
             return;
         await guard.checkAndShow();
     },
+    async prepareHomeShareCovers() {
+        const [homeChatCover, homeTimelineCover] = await Promise.all([
+            (0, cloudImage_1.prepareCloudImage)(HOME_CHAT_COVER, 'home-chat.jpg'),
+            (0, cloudImage_1.prepareCloudImage)(HOME_TIMELINE_COVER, 'home-timeline-v2.jpg'),
+        ]);
+        this.setData({ homeChatCover, homeTimelineCover, contentReady: !!homeTimelineCover });
+    },
     onShareAppMessage() {
-        return {
-            title: HOME_SHARE_TITLE,
-            path: '/pages/index/index',
-            imageUrl: '/assets/share/home-chat.jpg',
-        };
+        const share = { title: HOME_SHARE_TITLE, path: '/pages/index/index?from=share' };
+        return Object.assign(Object.assign({}, share), { imageUrl: this.data.homeChatCover || undefined, promise: Promise.resolve(this.shareCoversPromise).then(() => (Object.assign(Object.assign({}, share), { imageUrl: this.data.homeChatCover || undefined }))) });
     },
     onShareTimeline() {
+        if (!this.data.contentReady)
+            return {};
         return {
             title: HOME_SHARE_TITLE,
-            query: '',
-            imageUrl: '/assets/share/home-timeline.jpg',
+            query: 'from=share',
+            imageUrl: this.data.homeTimelineCover,
         };
     },
     onOpenPage(e) {

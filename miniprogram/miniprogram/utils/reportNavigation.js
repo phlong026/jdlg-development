@@ -1,11 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.discardReportLoginReturn = discardReportLoginReturn;
 exports.validReportPath = validReportPath;
 exports.requireReportLogin = requireReportLogin;
 exports.resumeReportAfterLogin = resumeReportAfterLogin;
 const RETURN_KEY = 'report_login_return';
+function discardReportLoginReturn() {
+    wx.removeStorageSync(RETURN_KEY);
+}
 function validReportPath(path) {
-    return typeof path === 'string' && /^\/pages\/report\/(landing|questionnaire|preview|delivery)(\?id=[A-Za-z0-9_-]{1,80})?$/.test(path);
+    return typeof path === 'string' && (path === '/pages/aicostresult/aicostresult'
+        || /^\/pages\/report\/(landing|questionnaire|preview|delivery)(\?id=[A-Za-z0-9_-]{1,80})?$/.test(path));
 }
 function requireReportLogin(path) {
     if (wx.getStorageSync('token'))

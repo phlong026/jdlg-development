@@ -205,7 +205,7 @@
             <text>+</text>
           </view>
           <view class="composer-action send {{inputText && !aiStreaming ? 'active' : 'disabled'}}" bindtap="onSend">
-            <image class="composer-send-icon" src="/assets/icons/send-plane.svg" mode="aspectFit" />
+            <image class="composer-send-icon" src="{{sendIcon}}" mode="aspectFit" />
           </view>
         </view>
       </view>

@@ -1,0 +1,33 @@
+{
+  "relevant": {
+    "tests": 252,
+    "pass": 252,
+    "fail": 0,
+    "skipped": 0
+  },
+  "baseline": {
+    "tests": 311,
+    "pass": 306,
+    "fail": 2,
+    "skipped": 3
+  },
+  "existing_failures": [
+    "customer-service-action-placement.test.js",
+    "customer-service-knowledge.test.js"
+  ],
+  "typecheck": "passed",
+  "tracking_build": "passed",
+  "route_inventory": "58 routes consistent",
+  "secret_scan": "no findings",
+  "npm_audit_vulnerabilities": 0,
+  "real_device_acceptance": false,
+  "wechat_upload": false,
+  "deployment": false,
+  "base_commit": "0567c582a12126e7e68cb66d146d86a6a9d3bcbf",
+  "full_suite": {
+    "tests": 322,
+    "pass": 317,
+    "fail": 2,
+    "skipped": 3
+  }
+}

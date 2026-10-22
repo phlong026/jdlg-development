@@ -1,14 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const asset_1 = require("../../utils/asset");
 const parameter_1 = require("../../utils/parameter");
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 const BUILDING_CODE_CHAT_API_PATH = '/api/v1/miniprogram/ai/building-code/chat';
 const quickPrompts = [
-    { iconSrc: '/assets/icons/specadvisor/icon-staircase.svg', text: '楼梯最小宽度怎么定？' },
-    { iconSrc: '/assets/icons/specadvisor/icon-fire-escape.svg', text: '消防疏散距离怎么查？' },
-    { iconSrc: '/assets/icons/specadvisor/icon-building-height.svg', text: '住宅层高有什么要求？' },
-    { iconSrc: '/assets/icons/specadvisor/icon-house-rules.svg', text: '自建房要注意哪些规范？' },
+    { iconSrc: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-staircase.svg'), text: '楼梯最小宽度怎么定？' },
+    { iconSrc: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-fire-escape.svg'), text: '消防疏散距离怎么查？' },
+    { iconSrc: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-building-height.svg'), text: '住宅层高有什么要求？' },
+    { iconSrc: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-house-rules.svg'), text: '自建房要注意哪些规范？' },
 ];
 const WELCOME_MESSAGE = {
     id: 'welcome',
@@ -17,6 +18,9 @@ const WELCOME_MESSAGE = {
 };
 Page({
     data: {
+        advisorIcon: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-advisor-avatar.svg'),
+        sourceIcon: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-source.svg'),
+        sendIcon: (0, asset_1.resolveAssetPath)('/assets/icons/specadvisor/icon-send.svg'),
         quickPrompts,
         inputText: '',
         loading: false,
