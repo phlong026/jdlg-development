@@ -40,7 +40,7 @@
       border: 1px solid var(--admin-border); border-radius: 16px; background: var(--admin-surface);
       box-shadow: var(--admin-shadow-soft);
     }
-    strong { font-size: 28px; line-height: 1.2; font-weight: 700; color: var(--admin-accent); font-variant-numeric: tabular-nums; }
+    strong { font-size: var(--admin-font-stat); line-height: 1.2; font-weight: 700; color: var(--admin-accent); font-variant-numeric: tabular-nums; }
     span { font-size: 12px; color: var(--admin-text-muted); }
   }
 

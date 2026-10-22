@@ -108,7 +108,7 @@
     &:hover:not(:disabled) { background: #fbf6ee; }
   }
   .sx-c-name { grid-area: name; display: flex; align-items: center; gap: 10px; min-width: 0; strong { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
-  .sx-c-name .crm-avatar { width: 32px; height: 32px; font-size: 15px; }
+  .sx-c-name .crm-avatar { width: 32px; height: 32px; font-size: var(--admin-font-body); }
   .sx-c-tags { grid-area: tags; display: flex; align-items: center; gap: 6px; }
   .sx-c-demand { grid-area: demand; color: var(--admin-text-muted); font-size: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
   .sx-c-meta { grid-area: meta; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--admin-text-muted); }

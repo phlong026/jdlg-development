@@ -16,21 +16,15 @@
     gap: 12px;
     flex-wrap: wrap;
 
-    h1 {
-        font-size: 19px;
-        font-weight: 700;
-        color: var(--admin-text);
-        margin: 0;
-    }
 }
 
 .dash-health {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border-radius: 20px;
+    border-radius: var(--admin-radius-card);
     padding: 3px 12px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     font-weight: 600;
 
     i {
@@ -46,7 +40,7 @@
 }
 
 .dash-pagehead-tip {
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 }
 
@@ -55,7 +49,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 }
 
@@ -68,7 +62,7 @@
     color: var(--admin-text-muted);
     border-radius: 8px;
     padding: 5px 12px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     cursor: pointer;
     font-family: inherit;
 
@@ -107,14 +101,14 @@ button.dash-kpi {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 
     svg { width: 13px; height: 13px; opacity: 0.7; }
 }
 
 .dash-kpi-value {
-    font-size: 24px;
+    font-size: var(--admin-font-stat);
     font-weight: 700;
     color: var(--admin-text);
     font-variant-numeric: tabular-nums;
@@ -122,7 +116,7 @@ button.dash-kpi {
 }
 
 .dash-kpi-delta {
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     border-radius: 5px;
     padding: 1px 6px;
     margin-top: 2px;
@@ -133,7 +127,7 @@ button.dash-kpi {
 }
 
 .dash-kpi-sub {
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     opacity: 0.85;
 }
@@ -169,7 +163,7 @@ button.dash-kpi {
     padding: 0 10px 10px;
 
     h3 {
-        font-size: 14px;
+        font-size: var(--admin-font-section);
         font-weight: 700;
         color: var(--admin-text);
         margin: 0;
@@ -180,14 +174,14 @@ button.dash-kpi {
     background: #fbeae6;
     color: #c0392b;
     border-radius: 10px;
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     padding: 1px 8px;
     font-weight: 600;
 }
 
 .dash-card-note {
     margin-left: auto;
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     opacity: 0.85;
 }
@@ -197,7 +191,7 @@ button.dash-kpi {
     margin: 4px 10px 8px;
     padding: 14px 12px;
     border-radius: 10px;
-    font-size: 12.5px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     background: var(--admin-surface-muted);
 }
@@ -247,14 +241,14 @@ button.dash-todo-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13.5px;
+    font-size: var(--admin-font-body);
     font-weight: 600;
     color: var(--admin-text);
 }
 
 .dash-todo-sub {
     display: block;
-    font-size: 11.5px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     margin-top: 1px;
     font-weight: 400;
@@ -262,7 +256,7 @@ button.dash-todo-row {
 
 .dash-tag-urgent {
     font-style: normal;
-    font-size: 10.5px;
+    font-size: var(--admin-font-caption);
     color: #fff;
     background: #c0392b;
     border-radius: 4px;
@@ -272,7 +266,7 @@ button.dash-todo-row {
 }
 
 .dash-todo-num {
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--admin-text);
@@ -309,12 +303,12 @@ button.dash-watch-row {
 
 .dash-watch-title {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     font-weight: 500;
 
     small {
         display: block;
-        font-size: 11px;
+        font-size: var(--admin-font-caption);
         font-weight: 400;
         color: var(--admin-text-muted);
         margin-top: 1px;
@@ -322,7 +316,7 @@ button.dash-watch-row {
 }
 
 .dash-watch-num {
-    font-size: 16px;
+    font-size: var(--admin-font-section);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 
@@ -359,7 +353,7 @@ button.dash-recent-row {
 .dash-recent-name {
     flex: 1;
     min-width: 0;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     font-weight: 600;
     color: var(--admin-text);
     white-space: nowrap;
@@ -368,7 +362,7 @@ button.dash-recent-row {
 }
 
 .dash-recent-id {
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
 }
 
@@ -397,7 +391,7 @@ button.dash-recent-row svg {
         border: none;
         background: none;
         font-family: inherit;
-        font-size: 12px;
+        font-size: var(--admin-font-caption);
         color: var(--admin-text-muted);
         padding: 3px 12px;
         border-radius: 6px;
@@ -433,7 +427,7 @@ button.dash-recent-row svg {
 
 .dash-chart-axis {
     fill: var(--admin-text-muted);
-    font-size: 10.5px;
+    font-size: var(--admin-font-caption);
     opacity: 0.8;
 }
 
@@ -463,7 +457,7 @@ button.dash-recent-row svg {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: var(--admin-font-caption);
     color: var(--admin-text-muted);
     font-weight: 400;
 
@@ -500,15 +494,15 @@ button.dash-recent-row svg {
     color: #f4ead9;
     border-radius: 8px;
     padding: 6px 11px;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     line-height: 1.6;
     white-space: nowrap;
     pointer-events: none;
     box-shadow: 0 6px 18px rgba(47, 36, 27, 0.35);
     z-index: 5;
 
-    b { color: #fff; font-size: 13px; }
-    .dash-chart-tip-date { color: #c9b8a0; font-size: 11px; }
+    b { color: #fff; font-size: var(--admin-font-body); }
+    .dash-chart-tip-date { color: #c9b8a0; font-size: var(--admin-font-caption); }
 }
 
 /* ───────── 窄屏 ───────── */

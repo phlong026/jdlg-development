@@ -43,7 +43,7 @@
   padding: 10px 12px 10px 40px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   transition: border-color 0.2s;
 
@@ -61,7 +61,7 @@
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   outline: none;
   cursor: pointer;
   background: white;
@@ -80,7 +80,7 @@
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
@@ -99,7 +99,7 @@
   color: #6b7280;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -119,7 +119,7 @@
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
@@ -146,12 +146,12 @@
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: var(--admin-font-title);
   font-weight: 600;
   color: #111827;
 }
@@ -175,7 +175,7 @@
 .oss-table th {
   padding: 12px 16px;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   color: #374151;
   border-bottom: 1px solid #e5e7eb;
@@ -183,7 +183,7 @@
 
 .oss-table td {
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
   border-bottom: 1px solid #f3f4f6;
 }
@@ -199,7 +199,7 @@
 }
 
 .file-icon {
-  font-size: 18px;
+  font-size: var(--admin-font-section);
 }
 
 .file-name {
@@ -210,14 +210,14 @@
 .file-path {
   color: #6b7280;
   font-family: monospace;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
 }
 
 .file-type-badge {
   display: inline-block;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 500;
   background: #e5e7eb;
   color: #374151;
@@ -273,7 +273,7 @@
   text-align: center;
   padding: 40px;
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .pagination {
@@ -294,7 +294,7 @@
   border-radius: 6px;
   background: white;
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   cursor: pointer;
   transition: all 0.2s;
 
@@ -310,7 +310,7 @@
 }
 
 .page-info {
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
@@ -344,7 +344,7 @@
 
   h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -380,7 +380,7 @@
   background: #3b82f6;
   color: white;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;

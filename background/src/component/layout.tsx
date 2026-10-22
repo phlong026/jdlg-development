@@ -7,6 +7,7 @@ import Topbar from './topbar';
 import SubNav from './SubNav';
 import SubNavCards from './SubNavCards';
 import CommandPalette from './CommandPalette';
+import PageTitle from './PageTitle';
 import { installAdminDialogKeyboard } from './adminDialogKeyboard';
 import { useManagementSession } from './ManagementSession';
 import { locate, searchablePages, visibleGroups } from './navConfig';
@@ -22,6 +23,9 @@ import './layout.scss';
  *   - 内容区类名 .layout-content，且 data-admin-page 等于当前路径；
  *   - 内容区内的 <table> 由下面的 MutationObserver 统一加上横向滚动提示。
  */
+// 这些页面在自己的页头里用 PageTitle 渲染标题（标题旁有状态、操作按钮）；客户管理工作台单独设计，不加统一标题
+const PAGES_WITH_OWN_TITLE = new Set(['/dashboard', '/sales-overview', '/customer-leads', '/customer-settings', '/ai-overview', '/ai-pricing', '/ai-content-audits', '/share-tracking', '/customer-management']);
+
 const AdminLayout: React.FC = () => {
     const { pathname } = useLocation();
     const [loadFailures, setLoadFailures] = useState<Record<string, string>>({});
@@ -37,6 +41,7 @@ const AdminLayout: React.FC = () => {
     // 在当前账号可见的分组里定位：启用 CRM 时 /customer-management 属于「销售线索」的二级页
     const where = locate(pathname, groups);
     const subnavGroup = where?.group;
+    const pageTitle = where?.page.label ?? current?.title;
 
     const toggleNavMode = () => {
         const next: NavMode = navMode === 'new' ? 'old' : 'new';
@@ -150,12 +155,13 @@ const AdminLayout: React.FC = () => {
             <Sidebar collapsed={collapsed} mobile={isMobile} mode={navMode} onNavigate={handleSidebarNavigate} onToggleMode={toggleNavMode} />
             {isMobile && !collapsed ? <button className="layout-overlay" type="button" onClick={handleToggleSidebar} aria-label="关闭侧边栏" /> : null}
             <div className="layout-main" {...(isMobile && !collapsed ? { inert: '' } : {})}>
-                <Topbar title={current?.title} icon={current?.icon} collapsed={collapsed} onToggleSidebar={handleToggleSidebar} onSearch={() => setSearchOpen(true)} />
+                <Topbar collapsed={collapsed} onToggleSidebar={handleToggleSidebar} onSearch={() => setSearchOpen(true)} />
                 {navMode === 'new' && where && subnavGroup
                     ? (subnavGroup.display === 'cards' ? <SubNavCards group={subnavGroup} location={where} /> : <SubNav group={subnavGroup} location={where} />)
                     : null}
                 <div className="layout-content" data-admin-page={pathname} ref={contentRef}>
                     {loadFailure && <div className="page-load-error" role="alert"><div><strong>页面数据未能加载</strong><p>{loadFailure}</p><small>部分数据未能加载，相关统计或列表可能不完整，请重试后再据此操作。</small></div><button type="button" onClick={() => window.location.reload()}>重新加载</button></div>}
+                    {pageTitle && !PAGES_WITH_OWN_TITLE.has(pathname) ? <PageTitle title={pageTitle} /> : null}
                     <Outlet />
                 </div>
             </div>

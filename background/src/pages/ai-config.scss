@@ -44,14 +44,14 @@
 
   h3 {
     margin: 0;
-    font-size: 20px;
+    font-size: var(--admin-font-title);
     font-weight: 700;
     color: #111827;
   }
 
   p {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     line-height: 1.7;
     color: #6b7280;
   }
@@ -69,7 +69,7 @@
   gap: 10px;
   flex-wrap: wrap;
   color: #6b7280;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
 
   strong {
     color: #111827;
@@ -84,7 +84,7 @@
   border-radius: 999px;
   background: #f6efe7;
   color: #8b5e3c;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   font-weight: 700;
 }
 
@@ -99,7 +99,7 @@
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #ffffff;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #111827;
   outline: none;
 
@@ -116,7 +116,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   color: #6b7280;
   cursor: pointer;
@@ -148,7 +148,7 @@
 
   h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -163,7 +163,7 @@
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
@@ -194,7 +194,7 @@
 .config-table th {
   padding: 12px 16px;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   color: #374151;
   border-bottom: 1px solid #e5e7eb;
@@ -202,7 +202,7 @@
 
 .config-table td {
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
   border-bottom: 1px solid #f3f4f6;
 }
@@ -216,7 +216,7 @@
   padding: 8px;
   background: #f3f4f6;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   max-width: 300px;
   overflow-x: auto;
   white-space: pre-wrap;
@@ -239,7 +239,7 @@
   border-radius: 6px;
   background: white;
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   cursor: pointer;
   transition: all 0.2s;
 
@@ -292,7 +292,7 @@
 
   h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--admin-font-section);
     font-weight: 600;
     color: #111827;
   }
@@ -301,7 +301,7 @@
 .modal-close {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: var(--admin-font-stat);
   color: #6b7280;
   cursor: pointer;
   padding: 0;
@@ -328,7 +328,7 @@
   label {
     display: block;
     margin-bottom: 8px;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     font-weight: 500;
     color: #374151;
   }
@@ -340,7 +340,7 @@
     padding: 10px 12px;
     border: 1px solid #e5e7eb;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     outline: none;
     transition: border-color 0.2s;
     font-family: inherit;
@@ -375,7 +375,7 @@
   border-radius: 6px;
   background: white;
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -418,7 +418,7 @@
 
 .form-hint {
   display: block;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   color: #6b7280;
   margin-top: 4px;
 }
@@ -447,7 +447,7 @@
       border: 1px solid #d1d5db;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: var(--admin-font-body);
       color: #374151;
       transition: all 0.2s;
 
@@ -467,7 +467,7 @@
       align-items: center;
       gap: 6px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: var(--admin-font-body);
       color: #374151;
 
       input[type="checkbox"] {
@@ -495,7 +495,7 @@
   margin-bottom: 20px;
 
   .form-section-title {
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     font-weight: 600;
     color: #374151;
     margin-bottom: 16px;
@@ -534,7 +534,7 @@
   display: block;
   margin-top: 4px;
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   line-height: 1.4;
 }
 

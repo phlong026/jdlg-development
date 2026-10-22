@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAIOverview, type AIOverviewData, type AIOverviewScene, type AIOverviewSupplier } from '../api/aiOverview';
 import './aiOverview.scss';
+import PageTitle from '../component/PageTitle';
 
 const formatPercent = (value: number, digits = 1) => `${(value * 100).toFixed(digits)}%`;
 
@@ -184,8 +185,7 @@ const AIOverview: React.FC = () => {
 
     return (
         <div className="ai-overview-page">
-            <div className="aio-pagehead">
-                <h1>AI 运营总览</h1>
+            <PageTitle title="AI 运营总览" className="aio-pagehead">
                 <span className="aio-sub">查看 AI 使用情况、收入成本与服务运行情况，及时处理异常任务。</span>
                 <button type="button" className="aio-refresh" onClick={() => void handleExportCSV()} disabled={!data}>
                     导出周报 CSV
@@ -193,7 +193,7 @@ const AIOverview: React.FC = () => {
                 <button type="button" className="aio-refresh" onClick={() => setRefreshVersion((version) => version + 1)} disabled={loading}>
                     {loading ? '刷新中…' : '刷新'}
                 </button>
-            </div>
+            </PageTitle>
 
             {!data ? (
                 <div className="section-card aio-empty" role={loadError ? 'alert' : 'status'}>

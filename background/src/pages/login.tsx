@@ -173,7 +173,7 @@ const Login: React.FC = () => {
                             </div>
                         </form>
                         {wecomEnabled&&<div className="form-actions"><a className="btn btn-login" href={API_BASE_URL+'/api/v1/management/wecom/start'}>企业微信登录</a></div>}
-                        {wecomEnabled&&<p style={{fontSize:13,marginTop:12}}>企微内打开可授权登录，电脑可扫码。角色由管理员预先配置。</p>}
+                        {wecomEnabled&&<p style={{fontSize:14,marginTop:12}}>企微内打开可授权登录，电脑可扫码。角色由管理员预先配置。</p>}
                     </div>
                 </div>
             </div>

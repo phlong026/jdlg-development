@@ -20,13 +20,13 @@
   border-radius: 16px;
   background: #fff;
   color: var(--admin-text, #3d3228);
-  font-size: 16px;
+  font-size: var(--admin-font-section);
   font-weight: 700;
   text-decoration: none;
   transition: background 0.15s ease, border-color 0.15s ease;
 
   &:hover { background: #fbf6ee; }
-  small { font-size: 12px; font-weight: 400; color: var(--admin-text-muted, #8a7b6c); }
+  small { font-size: var(--admin-font-caption); font-weight: 400; color: var(--admin-text-muted, #8a7b6c); }
 
   &.is-current {
     background: var(--admin-accent, rgb(139, 94, 60));
@@ -55,8 +55,8 @@
 
 @media (max-width: 640px) {
   .layout-subnav-cards { padding: 10px 12px; gap: 8px; }
-  .subnav-card { min-height: 44px; padding: 0 10px; gap: 6px; border-radius: 12px; font-size: 14px; justify-content: center; }
-  .subnav-card small { white-space: nowrap; }
+  .subnav-card { min-height: 44px; padding: 0 10px; gap: 6px; border-radius: 12px; font-size: var(--admin-font-body); justify-content: center; }
+  .subnav-card small { white-space: nowrap; font-size: var(--admin-font-caption); }
   .subnav-card-icon { width: 16px; height: 16px; }
   .subnav-card .subnav-badge { margin-left: 2px; }
 }

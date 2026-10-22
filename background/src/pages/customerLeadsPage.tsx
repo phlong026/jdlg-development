@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import CustomerLeads from './customerLeads';
 import CustomerReportForm from './customerReportForm';
 import { useManagementSession } from '../component/ManagementSession';
+import PageTitle from '../component/PageTitle';
 import './customerManagement.scss';
 import './customerResponsive.scss';
 import './salesModule.scss';
@@ -20,11 +21,10 @@ const CustomerLeadsPage: React.FC = () => {
 
     return (
         <div className="sx-leads">
-            <header className="sx-page-head">
-                <h1>线索</h1>
+            <PageTitle title="线索" className="sx-page-head">
                 <span className="sx-page-head-gap" aria-hidden />
                 {canReport && <button type="button" className="sx-lead-add" onClick={() => { setCreatedId(''); setReporting(true); }}>＋ 新增线索</button>}
-            </header>
+            </PageTitle>
             {createdId && (
                 <p className="sx-lead-created" role="status">
                     已新建客户档案（线索列表只显示小程序留资），可在客户档案里分配和跟进。

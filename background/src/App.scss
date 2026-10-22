@@ -5,11 +5,63 @@
    --admin-border: #eee4d7;
    --admin-shadow: 0 12px 32px rgba(90, 62, 40, 0.08);
    --admin-shadow-soft: 0 8px 24px rgba(125, 90, 52, 0.06);
-   --admin-radius-lg: 20px;
-   --admin-radius-md: 16px;
+   --admin-radius-lg: 16px;
+   --admin-radius-md: 14px;
    --admin-text: #2f241b;
    --admin-text-muted: #8a6f55;
    --admin-accent: #8b5e3c;
+   --admin-accent-hover: #74492b;
+   /* 排版档位（以后台总控台为基准）：页面标题 / 分区标题 / 正文 / 辅助 / 统计大数字 */
+   --admin-font-title: 20px;
+   --admin-font-section: 16px;
+   --admin-font-body: 14px;
+   --admin-font-caption: 12px;
+   --admin-font-stat: 24px;
+   --admin-control-height: 40px;
+   --admin-radius-control: 12px;
+   --admin-radius-card: 16px;
+ }
+
+ /* 一级页标题：布局层统一渲染（PageTitle），自带页头的页面也用同一个组件 */
+ .admin-page-head {
+     display: flex;
+     align-items: center;
+     gap: 12px;
+     flex-wrap: wrap;
+ }
+
+ /* 布局层渲染的标题（内容区第一个元素）与下方内容拉开间距 */
+ .layout-content > .admin-page-head {
+     margin-bottom: 16px;
+ }
+
+ .admin-page-title {
+     margin: 0;
+     font-size: var(--admin-font-title);
+     font-weight: 700;
+     line-height: 1.3;
+     color: var(--admin-text);
+ }
+
+ /* 按钮与卡片：全站同一套高度、圆角与主色；胶囊标签（999px）不受影响 */
+ .layout-content :is(.btn-primary, .btn-secondary, .btn-danger, .btn-page, .st-primary, .customer-lead-btn, .dash-btn-refresh) {
+     min-height: var(--admin-control-height);
+     border-radius: var(--admin-radius-control);
+ }
+
+ .layout-content :is(.btn-primary, .st-primary) {
+     background: var(--admin-accent);
+     border-color: var(--admin-accent);
+     color: #ffffff;
+ }
+
+ .layout-content :is(.btn-primary, .st-primary):hover:not(:disabled) {
+     background: var(--admin-accent-hover);
+     border-color: var(--admin-accent-hover);
+ }
+
+ .layout-content .section-card {
+     border-radius: var(--admin-radius-card);
  }
 
  .App {
@@ -58,7 +110,7 @@
      align-items: center;
      justify-content: center;
      color: #8b5e3c;
-     font-size: 16px;
+     font-size: var(--admin-font-section);
      font-weight: 700;
   }
 
@@ -66,6 +118,7 @@
     :root {
         --admin-radius-lg: 16px;
         --admin-radius-md: 14px;
+        --admin-control-height: 44px;
     }
 
     .App {
@@ -138,7 +191,7 @@
     .layout-content .btn-secondary,
     .layout-content .btn-danger,
     .layout-content .btn-page {
-        min-height: 40px;
+        min-height: var(--admin-control-height);
         justify-content: center;
     }
 

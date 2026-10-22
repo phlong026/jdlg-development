@@ -144,7 +144,7 @@
   .layout-content[data-admin-page='/dashboard'] {
     .dash-kpi-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dash-kpi { min-width: 0; padding: 12px; overflow-wrap: anywhere; }
-    .dash-kpi-value { font-size: clamp(18px, 5.5vw, 24px); }
+    .dash-kpi-value { font-size: var(--admin-font-title); }
     .dash-meta, .dash-trend-tools { max-width: 100%; flex-wrap: wrap; }
   }
 
@@ -168,7 +168,7 @@
   .layout-content[data-admin-page='/ai-overview'] {
     .aio-kpi-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .aio-kpi { padding: 12px; }
-    .aio-kpi b { font-size: clamp(18px, 5.5vw, 22px); }
+    .aio-kpi b { font-size: var(--admin-font-title); }
     .aio-card { padding: 14px; }
     .aio-alert-strip { flex-wrap: wrap; }
     .aio-alert-strip > div { min-width: 0; flex: 1 1 180px; overflow-wrap: anywhere; }
@@ -189,7 +189,7 @@
       display: block;
       margin-bottom: 4px;
       color: var(--admin-text-muted);
-      font-size: 11px;
+      font-size: var(--admin-font-caption);
       font-weight: 400;
     }
     .aio-prov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
@@ -294,7 +294,7 @@
     max-width: 34rem;
     margin: 6px 0 0;
     color: var(--admin-text-muted);
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     line-height: 1.6;
     font-weight: 400;
     white-space: normal;

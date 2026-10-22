@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiChevronRight, FiAlertCircle } from 'react-icons/fi';
 import { useManagementSession } from '../component/ManagementSession';
+import PageTitle from '../component/PageTitle';
 import SalesFunnel from '../component/SalesFunnel';
 import SalesDonut, { type DonutSlice } from '../component/SalesDonut';
 import type { FunnelStep } from '../component/salesFunnelMath';
@@ -116,15 +117,14 @@ const SalesOverview: React.FC = () => {
 
     return (
         <div className="sx-overview">
-            <header className="sx-page-head">
-                <h1>销售总览</h1>
+            <PageTitle title="销售总览" className="sx-page-head">
                 {supervisor && (
                     <div className="sx-segment" role="group" aria-label="简报范围">
                         <button type="button" className={mode === 'team' ? 'active' : ''} aria-pressed={mode === 'team'} onClick={() => setMode('team')}>团队简报</button>
                         <button type="button" className={mode === 'personal' ? 'active' : ''} aria-pressed={mode === 'personal'} onClick={() => setMode('personal')}>个人简报</button>
                     </div>
                 )}
-            </header>
+            </PageTitle>
             {syncLine && <p className="sx-sync-line is-warn">{syncLine}</p>}
             {snapshot?.problems.length ? (
                 <div className="sx-feedback" role="alert"><FiAlertCircle /><span>{snapshot.problems.join('、')}数据未能读取</span><button type="button" onClick={retry}>重试</button></div>

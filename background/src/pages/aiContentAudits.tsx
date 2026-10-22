@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAIContentAudits, reviewAIContentAudit, type AIContentAuditItem } from '../api/aiContentAudit';
 import './aiContentAudits.scss';
+import PageTitle from '../component/PageTitle';
 
 const statusMeta: Record<string, { label: string; className: string }> = {
     pending: { label: '待审核', className: 'pending' },
@@ -94,10 +95,9 @@ const AIContentAudits: React.FC = () => {
 
     return (
         <div className="ai-content-audits-page">
-            <div className="aca-pagehead">
-                <h1>内容抽检</h1>
+            <PageTitle title="内容抽检" className="aca-pagehead">
                 <span className="aca-sub">成功生成结果按比例随机抽入（默认 2%，比例在「定价与供应商 → 告警设置」调整）；审核不拦截用户侧结果，驳回仅记录并支持转工单跟进</span>
-            </div>
+            </PageTitle>
 
             <div className="aca-toolbar">
                 <div className="aca-status-tabs">

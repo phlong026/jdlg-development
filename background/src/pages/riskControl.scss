@@ -27,22 +27,22 @@
     justify-content: center;
     background: rgba(99, 102, 241, 0.12);
     color: #4f46e5;
-    font-size: 18px;
+    font-size: var(--admin-font-section);
 }
 
 .stat-label {
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     color: #64748b;
 }
 
 .stat-value {
-    font-size: 28px;
+    font-size: var(--admin-font-stat);
     font-weight: 700;
     color: #0f172a;
 }
 
 .stat-desc {
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     line-height: 1.7;
     color: #94a3b8;
 }
@@ -81,7 +81,7 @@
     border: 1px solid #dbe2ea;
     background: #fff;
     padding: 0 14px 0 42px;
-    font-size: 14px;
+    font-size: var(--admin-font-body);
     outline: none;
 }
 
@@ -105,7 +105,7 @@
 
     h3 {
         margin: 0 0 6px;
-        font-size: 18px;
+        font-size: var(--admin-font-section);
     }
 
     p {
@@ -137,7 +137,7 @@
         text-align: left;
         border-bottom: 1px solid #edf2f7;
         vertical-align: top;
-        font-size: 14px;
+        font-size: var(--admin-font-body);
     }
 
     th {
@@ -181,7 +181,7 @@
     border-radius: 999px;
     background: #eef2ff;
     color: #4338ca;
-    font-size: 12px;
+    font-size: var(--admin-font-caption);
     font-weight: 600;
 
     &.danger {
@@ -207,7 +207,7 @@
     background: transparent;
     padding: 0;
     color: #8b5e3c;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     font-weight: 700;
     cursor: pointer;
 
@@ -241,7 +241,7 @@
 
 .risk-unknown-source {
     color: #64748b;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
 }
 
 .risk-pagination {
@@ -251,7 +251,7 @@
     justify-content: space-between;
     gap: 12px;
     color: #64748b;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
 }
 
 .risk-pagination-actions {
@@ -297,7 +297,7 @@ button:disabled {
         border: 1px solid var(--admin-border, #eadfce);
         border-radius: 12px;
         background: #fffdf8;
-        font-size: 13.5px;
+        font-size: var(--admin-font-body);
         font-weight: 700;
         color: #5b4632;
 

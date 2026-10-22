@@ -3,6 +3,7 @@ import {Navigate,useSearchParams} from 'react-router-dom';
 import {useManagementSession} from '../component/ManagementSession';
 import {SyncPanel,AccessPanel,BindingCheck} from './customerAdminPanels';
 import {PushStatus} from './customerWorkflow';
+import PageTitle from '../component/PageTitle';
 import './customerManagement.scss';
 import './customerResponsive.scss';
 import './salesModule.scss';
@@ -17,7 +18,7 @@ export default function CustomerSettings(){
  const active=items.find(i=>i.key===params.get('item'))?.key||'sync';
  const choose=(key:string)=>setParams({item:key});
  return <div className="crm-page sx-settings">
-  <header className="sx-page-head"><h1>客户系统设置</h1></header>
+  <PageTitle title="客户系统设置" className="sx-page-head" />
   <div className="sx-settings-layout">
    <nav className="sx-settings-nav" aria-label="客户系统设置">{items.map(i=><button key={i.key} className={active===i.key?'active':''} aria-current={active===i.key?'page':undefined} onClick={()=>choose(i.key)}>{i.label}</button>)}</nav>
    <div className="sx-settings-body">

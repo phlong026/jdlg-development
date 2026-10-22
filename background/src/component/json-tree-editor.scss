@@ -21,7 +21,7 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: var(--admin-font-body);
       transition: background 0.2s;
 
       &:hover:not(:disabled) {
@@ -40,7 +40,7 @@
     max-height: 500px;
     overflow-y: auto;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 13px;
+    font-size: var(--admin-font-body);
     line-height: 1.6;
 
     .empty-tree {
@@ -168,7 +168,7 @@
             cursor: pointer;
             color: #6b7280;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: var(--admin-font-caption);
             transition: all 0.2s;
             white-space: nowrap;
 
@@ -178,7 +178,7 @@
             }
 
             &.placeholder-btn {
-              font-size: 10px;
+              font-size: var(--admin-font-caption);
               padding: 4px 8px;
               background: #fef3c7;
               color: #d97706;

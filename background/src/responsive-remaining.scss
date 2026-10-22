@@ -62,7 +62,7 @@
   // 手机上四列直接排满一屏：时间换行、一句话操作自动折行，不再需要左右滑
   @media (max-width: 767px) {
     .logs-table { min-width: 0; }
-    .logs-table th, .logs-table td { padding: 10px 8px; font-size: 13px; }
+    .logs-table th, .logs-table td { padding: 10px 8px; font-size: var(--admin-font-body); }
     .logs-table td:first-child { width: 6.5em; }
     .logs-table th:nth-child(n+3), .logs-table td:nth-child(n+3) { width: 1%; white-space: nowrap; }
   }
@@ -161,7 +161,7 @@
   .layout-content[data-admin-page='/report-center'],
   .layout-content[data-admin-page='/oss'],
   .layout-content[data-admin-page='/logs'] {
-    .stat-value, .designer-summary-value { font-size: clamp(20px, 5.5vw, 28px); }
+    .stat-value, .designer-summary-value { font-size: var(--admin-font-title); }
   }
   .layout-content[data-admin-page='/templates'] .modal-content,
   .layout-content[data-admin-page='/utility-tools'] .modal-content,

@@ -27,23 +27,23 @@
   justify-content: center;
   background: #f6efe7;
   color: #8c6239;
-  font-size: 20px;
+  font-size: var(--admin-font-title);
 }
 
 .stat-label {
   color: #6b7280;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .stat-value {
   color: #111827;
-  font-size: 28px;
+  font-size: var(--admin-font-stat);
   font-weight: 700;
 }
 
 .stat-desc {
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
   line-height: 1.7;
 }
 
@@ -79,7 +79,7 @@
   border: 1px solid #eadfce;
   border-radius: 14px;
   background: #fffdfa;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
   color: #111827;
   outline: none;
 }
@@ -92,13 +92,13 @@
 
 .section-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--admin-font-section);
   color: #111827;
 }
 
 .section-header p {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   color: #6b7280;
 }
 
@@ -122,7 +122,7 @@
 
 .analytics-table th {
   color: #6b7280;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   font-weight: 600;
   background: #fffcf8;
 }
@@ -139,12 +139,12 @@
 
 .identity-cell strong {
   color: #111827;
-  font-size: 14px;
+  font-size: var(--admin-font-body);
 }
 
 .identity-cell span {
   color: #6b7280;
-  font-size: 12px;
+  font-size: var(--admin-font-caption);
 }
 
 .table-action-stack {
@@ -159,7 +159,7 @@
   background: transparent;
   padding: 0;
   color: #8b5e3c;
-  font-size: 13px;
+  font-size: var(--admin-font-body);
   font-weight: 700;
   cursor: pointer;
 
