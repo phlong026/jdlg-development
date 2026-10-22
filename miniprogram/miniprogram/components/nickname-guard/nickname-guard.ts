@@ -72,6 +72,9 @@ Component({
 
     // 微信官方头像填写能力：e.detail.avatarUrl 为微信头像临时文件
     onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
+      if (this.data.uploading) {
+        return;
+      }
       const tempFilePath = e?.detail?.avatarUrl;
       if (!tempFilePath) {
         return;
@@ -90,7 +93,7 @@ Component({
         console.error('头像上传失败:', error);
         wx.showToast({ title: error.message || '头像上传失败，可稍后在资料页重试', icon: 'none' });
       } finally {
-        this.setData({ uploading: false });
+        this.setData({ uploading: false, avatarTemp: '' });
       }
     },
 
@@ -159,11 +162,12 @@ Component({
       this.setData({ nickname: e.detail.value });
     },
 
-    async onConfirm() {
+    async onConfirm(e: WechatMiniprogram.CustomEvent<{ value: { nickname: string } }>) {
       if (this.data.saving) {
         return;
       }
-      const nickname = String(this.data.nickname || '').trim();
+      // 微信昵称点选和安全检测后的最终值以表单为准，不能依赖 input 事件缓存。
+      const nickname = String(e.detail.value.nickname || '').trim();
       if (!nickname) {
         wx.showToast({ title: '请填写昵称', icon: 'none' });
         return;
@@ -172,7 +176,7 @@ Component({
         wx.showToast({ title: '昵称最多 32 个字', icon: 'none' });
         return;
       }
-      if (this.data.avatarTemp) {
+      if (this.data.uploading) {
         wx.showToast({ title: '头像上传中，请稍候', icon: 'none' });
         return;
       }
