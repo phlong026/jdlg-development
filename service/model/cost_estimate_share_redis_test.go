@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -113,5 +116,159 @@ func TestCostEstimateShareDoesNotReuseOrModifyOtherSnapshot(t *testing.T) {
 	got, err := store.Get(context.Background(), first.ReportID)
 	if err != nil || got.Result.EstimatedTotalCost != "80.00万元" {
 		t.Fatalf("old snapshot changed: %+v, %v", got, err)
+	}
+}
+
+func TestCostEstimateShareCreationLimitIsSharedAcrossInstances(t *testing.T) {
+	first, mr := newTestCostEstimateShareStore(t)
+	second := NewCostEstimateShareRedisModel(first.Redis)
+	for i := 0; i < 10; i++ {
+		store := []*CostEstimateShareRedisModel{first, second}[i%2]
+		if _, err := store.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); err != nil {
+			t.Fatal(i, err)
+		}
+	}
+	if _, err := second.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); !errors.Is(err, ErrCostEstimateShareRateLimited) {
+		t.Fatal("a new application instance bypassed the creation limit", err)
+	}
+	if _, err := second.Create(context.Background(), 43, CostEstimateShareResult{Version: 4}); err != nil {
+		t.Fatal("unrelated owner was blocked", err)
+	}
+	mr.FastForward(time.Minute)
+	if _, err := first.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); err != nil {
+		t.Fatal("creation window did not expire", err)
+	}
+}
+
+func TestCostEstimateShareActiveQuotaAndRevokeReleaseAreShared(t *testing.T) {
+	first, mr := newTestCostEstimateShareStore(t)
+	second := NewCostEstimateShareRedisModel(first.Redis)
+	var created *CostEstimateShareSnapshot
+	for i := 0; i < 100; i++ {
+		if i%10 == 0 {
+			mr.FastForward(time.Minute)
+		}
+		var err error
+		created, err = first.Create(context.Background(), 42, CostEstimateShareResult{Version: 4})
+		if err != nil {
+			t.Fatal(i, err)
+		}
+	}
+	mr.FastForward(time.Minute)
+	if _, err := second.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); !errors.Is(err, ErrCostEstimateShareQuotaExceeded) {
+		t.Fatal("active reports can grow without an owner quota", err)
+	}
+	if err := second.Revoke(context.Background(), created.ReportID, 43); !errors.Is(err, ErrCostEstimateShareNotFound) {
+		t.Fatal("foreign owner revoked a snapshot", err)
+	}
+	if _, err := second.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); err == nil {
+		t.Fatal("foreign revoke released the quota")
+	}
+	if err := second.Revoke(context.Background(), created.ReportID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); err != nil {
+		t.Fatal("owner revoke did not release the quota", err)
+	}
+	snapshots := 0
+	for _, key := range mr.Keys() {
+		if validCostEstimateShareID(strings.TrimPrefix(key, "cost_estimate:share:")) {
+			snapshots++
+		}
+	}
+	if snapshots != 100 {
+		t.Fatalf("stored snapshots = %d, want 100", snapshots)
+	}
+	mr.FastForward(CostEstimateShareTTL)
+	if _, err := second.Create(context.Background(), 42, CostEstimateShareResult{Version: 4}); err != nil {
+		t.Fatal("expired snapshots did not release the quota", err)
+	}
+}
+
+func TestCostEstimateSharePrunesExpiredOwnerEntries(t *testing.T) {
+	store, _ := newTestCostEstimateShareStore(t)
+	ctx := context.Background()
+	for i := 0; i < CostEstimateShareMaxActive; i++ {
+		if err := store.Redis.ZAdd(ctx, costEstimateShareOwnerKey(42), redis.Z{Score: 1, Member: fmt.Sprintf("expired-%d", i)}).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.Create(ctx, 42, CostEstimateShareResult{Version: 4}); err != nil {
+		t.Fatal("expired index members blocked a fresh report", err)
+	}
+	if count, err := store.Redis.ZCard(ctx, costEstimateShareOwnerKey(42)).Result(); err != nil || count != 1 {
+		t.Fatalf("active index count = %d, %v", count, err)
+	}
+}
+
+func TestCostEstimateShareConcurrentQuotaCannotCreateUnindexedReports(t *testing.T) {
+	store, mr := newTestCostEstimateShareStore(t)
+	ctx := context.Background()
+	for i := 0; i < CostEstimateShareMaxActive-1; i++ {
+		if i%10 == 0 {
+			mr.FastForward(time.Minute)
+		}
+		if _, err := store.Create(ctx, 42, CostEstimateShareResult{Version: 4}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mr.FastForward(time.Minute)
+	results := make(chan error, 10)
+	var work sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		work.Add(1)
+		go func() {
+			defer work.Done()
+			_, err := NewCostEstimateShareRedisModel(store.Redis).Create(ctx, 42, CostEstimateShareResult{Version: 4})
+			results <- err
+		}()
+	}
+	work.Wait()
+	close(results)
+	created := 0
+	for err := range results {
+		if err == nil {
+			created++
+		} else if !errors.Is(err, ErrCostEstimateShareQuotaExceeded) {
+			t.Fatal(err)
+		}
+	}
+	if created != 1 {
+		t.Fatalf("created %d reports for one remaining slot", created)
+	}
+	snapshots := 0
+	for _, key := range mr.Keys() {
+		if validCostEstimateShareID(strings.TrimPrefix(key, "cost_estimate:share:")) {
+			snapshots++
+		}
+	}
+	if count, err := store.Redis.ZCard(ctx, costEstimateShareOwnerKey(42)).Result(); err != nil || count != 100 || snapshots != 100 {
+		t.Fatalf("owner index=%d, stored snapshots=%d, err=%v", count, snapshots, err)
+	}
+}
+
+func TestCostEstimateShareConcurrentInstancesDoNotExceedCreationLimit(t *testing.T) {
+	first, _ := newTestCostEstimateShareStore(t)
+	second := NewCostEstimateShareRedisModel(first.Redis)
+	results := make(chan error, 30)
+	var work sync.WaitGroup
+	for i := 0; i < 30; i++ {
+		work.Add(1)
+		go func(index int) {
+			defer work.Done()
+			_, err := []*CostEstimateShareRedisModel{first, second}[index%2].Create(context.Background(), 42, CostEstimateShareResult{Version: 4})
+			results <- err
+		}(i)
+	}
+	work.Wait()
+	close(results)
+	created := 0
+	for err := range results {
+		if err == nil {
+			created++
+		}
+	}
+	if created != 10 {
+		t.Fatalf("concurrent creations = %d, want 10", created)
 	}
 }

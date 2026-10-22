@@ -139,6 +139,14 @@ func bindCostEstimateShare(c *gin.Context) (model.CostEstimateShareResult, bool)
 }
 
 func costEstimateShareFailure(c *gin.Context, operation string, err error) {
+	if errors.Is(err, model.ErrCostEstimateShareRateLimited) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"code": 429, "msg": "分享过于频繁，请稍后再试"})
+		return
+	}
+	if errors.Is(err, model.ErrCostEstimateShareQuotaExceeded) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"code": 429, "msg": "有效分享报告已达上限，请撤销旧报告或等待过期"})
+		return
+	}
 	if errors.Is(err, model.ErrCostEstimateShareNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "分享报告已失效或不存在"})
 		return
@@ -150,16 +158,11 @@ func costEstimateShareFailure(c *gin.Context, operation string, err error) {
 // The public group can only read a deliberately shared, immutable snapshot;
 // it never reads private AI tasks, paid reports or a visitor's local estimate.
 func RegisterCostEstimateShareRoutes(public, auth *gin.RouterGroup, store *model.CostEstimateShareRedisModel) {
-	createLimiter := newTrackingPeerLimiter(10000, 10, time.Now)
 	auth.POST("/ai/cost/shares", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		session := GetTokenCodeSession(c)
 		if session == nil || session.UserID <= 0 {
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "请先登录后分享报告"})
-			return
-		}
-		if !createLimiter.allow(strconv.FormatInt(session.UserID, 10)) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"code": 429, "msg": "分享过于频繁，请稍后再试"})
 			return
 		}
 		result, ok := bindCostEstimateShare(c)

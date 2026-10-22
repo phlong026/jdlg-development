@@ -13,8 +13,35 @@ import (
 )
 
 const CostEstimateShareTTL = 30 * 24 * time.Hour
+const CostEstimateShareMaxActive = 100
+const costEstimateShareCreateLimit = 10
 
 var ErrCostEstimateShareNotFound = errors.New("cost estimate share not found")
+var ErrCostEstimateShareRateLimited = errors.New("cost estimate share creation rate exceeded")
+var ErrCostEstimateShareQuotaExceeded = errors.New("cost estimate share active quota exceeded")
+
+// Both limits live with the snapshots so another process cannot reset them.
+// Every owner index is bounded, and its TTL follows the newest snapshot.
+const createCostEstimateShareScript = `
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now)
+if redis.call('ZCARD', KEYS[2]) >= tonumber(ARGV[4]) then return -1 end
+local count = tonumber(redis.call('GET', KEYS[3]) or '0')
+if count >= tonumber(ARGV[5]) then return -2 end
+if not redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2], 'NX') then return 0 end
+redis.call('ZADD', KEYS[2], now + tonumber(ARGV[2]) * 1000, ARGV[3])
+redis.call('EXPIRE', KEYS[2], ARGV[2])
+redis.call('INCR', KEYS[3])
+if count == 0 then redis.call('EXPIRE', KEYS[3], 60) end
+return 1
+`
+
+const revokeCostEstimateShareScript = `
+if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+redis.call('ZREM', KEYS[2], ARGV[1])
+return redis.call('DEL', KEYS[1])
+`
 
 type CostEstimateBasicInfo struct {
 	Label     string `json:"label"`
@@ -60,6 +87,10 @@ func NewCostEstimateShareRedisModel(client *redis.Client) *CostEstimateShareRedi
 
 func costEstimateShareKey(id string) string { return "cost_estimate:share:" + id }
 
+func costEstimateShareOwnerKey(ownerID int64) string {
+	return fmt.Sprintf("cost_estimate:share:owner:%d", ownerID)
+}
+
 func validCostEstimateShareID(id string) bool {
 	if len(id) != 32 {
 		return false
@@ -92,11 +123,20 @@ func (m *CostEstimateShareRedisModel) Create(ctx context.Context, ownerID int64,
 		if err != nil {
 			return nil, fmt.Errorf("encode cost estimate share: %w", err)
 		}
-		created, err := m.Redis.SetNX(ctx, costEstimateShareKey(snapshot.ReportID), payload, CostEstimateShareTTL).Result()
+		ownerKey := costEstimateShareOwnerKey(ownerID)
+		created, err := m.Redis.Eval(ctx, createCostEstimateShareScript,
+			[]string{costEstimateShareKey(snapshot.ReportID), ownerKey, ownerKey + ":rate"},
+			payload, int64(CostEstimateShareTTL/time.Second), snapshot.ReportID,
+			CostEstimateShareMaxActive, costEstimateShareCreateLimit).Int64()
 		if err != nil {
 			return nil, fmt.Errorf("save cost estimate share: %w", err)
 		}
-		if created {
+		switch created {
+		case -1:
+			return nil, ErrCostEstimateShareQuotaExceeded
+		case -2:
+			return nil, ErrCostEstimateShareRateLimited
+		case 1:
 			return snapshot, nil
 		}
 	}
@@ -137,7 +177,8 @@ func (m *CostEstimateShareRedisModel) Revoke(ctx context.Context, id string, own
 	}
 	// IDs are never overwritten or reused: a concurrent expiry/revoke cannot
 	// cause this owner check to delete somebody else's report.
-	deleted, err := m.Redis.Del(ctx, costEstimateShareKey(id)).Result()
+	deleted, err := m.Redis.Eval(ctx, revokeCostEstimateShareScript,
+		[]string{costEstimateShareKey(id), costEstimateShareOwnerKey(ownerID)}, id).Int64()
 	if err != nil {
 		return fmt.Errorf("revoke cost estimate share: %w", err)
 	}

@@ -1,12 +1,14 @@
 package route
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"service/model"
 
@@ -37,10 +39,15 @@ func validCostEstimateShareResult() model.CostEstimateShareResult {
 
 func newCostEstimateShareRouter(t *testing.T) (*gin.Engine, *miniredis.Miniredis) {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
 	t.Cleanup(func() { _ = client.Close() })
+	return costEstimateShareRouterForStore(t, model.NewCostEstimateShareRedisModel(client)), mr
+}
+
+func costEstimateShareRouterForStore(t *testing.T, store *model.CostEstimateShareRedisModel) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	public := router.Group("/api/v1/miniprogram")
 	auth := public.Group("")
@@ -53,8 +60,8 @@ func newCostEstimateShareRouter(t *testing.T) (*gin.Engine, *miniredis.Miniredis
 			c.Set("code_session", &model.CodeSession{UserID: 43})
 		}
 	})
-	RegisterCostEstimateShareRoutes(public, auth, model.NewCostEstimateShareRedisModel(client))
-	return router, mr
+	RegisterCostEstimateShareRoutes(public, auth, store)
+	return router
 }
 
 func costShareRequest(router *gin.Engine, method, path, body, user string) *httptest.ResponseRecorder {
@@ -213,8 +220,17 @@ func TestCostEstimateShareRateLimitExpiryAndUnavailableStore(t *testing.T) {
 	if got := costShareRequest(router, http.MethodPost, "", string(body), "43"); got.Code != 200 {
 		t.Fatal("unrelated account rate limited", got.Code)
 	}
-	keys := mr.Keys()
-	id := strings.TrimPrefix(keys[0], "cost_estimate:share:")
+	var id string
+	for _, key := range mr.Keys() {
+		candidate := strings.TrimPrefix(key, "cost_estimate:share:")
+		if len(candidate) == 32 && !strings.Contains(candidate, ":") {
+			id = candidate
+			break
+		}
+	}
+	if id == "" {
+		t.Fatal("no report snapshot was created")
+	}
 	mr.FastForward(model.CostEstimateShareTTL)
 	if got := costShareRequest(router, http.MethodGet, "/"+id, "", ""); got.Code != 404 {
 		t.Fatal("expired share readable", got.Code)
@@ -222,5 +238,56 @@ func TestCostEstimateShareRateLimitExpiryAndUnavailableStore(t *testing.T) {
 	mr.SetError("redis unavailable with private infrastructure details")
 	if got := costShareRequest(router, http.MethodGet, "/12345678901234567890123456789012", "", ""); got.Code != 503 || strings.Contains(got.Body.String(), "infrastructure") {
 		t.Fatal("unavailable store error exposed or hidden", got.Code, got.Body.String())
+	}
+}
+
+func TestCostEstimateShareRouterRestartCannotResetRateLimit(t *testing.T) {
+	router, mr := newCostEstimateShareRouter(t)
+	body, _ := json.Marshal(validCostEstimateShareResult())
+	for i := 0; i < 10; i++ {
+		if got := costShareRequest(router, http.MethodPost, "", string(body), "42"); got.Code != 200 {
+			t.Fatal(i, got.Code, got.Body.String())
+		}
+	}
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
+	t.Cleanup(func() { _ = client.Close() })
+	restarted := costEstimateShareRouterForStore(t, model.NewCostEstimateShareRedisModel(client))
+	if got := costShareRequest(restarted, http.MethodPost, "", string(body), "42"); got.Code != 429 {
+		t.Fatal("restarting the application reset the rate limit", got.Code)
+	}
+	mr.FastForward(time.Minute)
+	if got := costShareRequest(restarted, http.MethodPost, "", string(body), "42"); got.Code != 200 {
+		t.Fatal("expired creation window is still blocked", got.Code)
+	}
+}
+
+func TestCostEstimateShareActiveQuotaReturns429AndOwnerRevokeReleasesIt(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
+	t.Cleanup(func() { _ = client.Close() })
+	store := model.NewCostEstimateShareRedisModel(client)
+	result := validCostEstimateShareResult()
+	var last *model.CostEstimateShareSnapshot
+	for i := 0; i < model.CostEstimateShareMaxActive; i++ {
+		if i%10 == 0 {
+			mr.FastForward(time.Minute)
+		}
+		var err error
+		last, err = store.Create(context.Background(), 42, result)
+		if err != nil {
+			t.Fatal(i, err)
+		}
+	}
+	mr.FastForward(time.Minute)
+	router := costEstimateShareRouterForStore(t, model.NewCostEstimateShareRedisModel(client))
+	body, _ := json.Marshal(result)
+	if got := costShareRequest(router, http.MethodPost, "", string(body), "42"); got.Code != 429 || !strings.Contains(got.Body.String(), "已达上限") {
+		t.Fatal("active quota was not reported", got.Code, got.Body.String())
+	}
+	if got := costShareRequest(router, http.MethodDelete, "/"+last.ReportID, "", "42"); got.Code != 200 {
+		t.Fatal("owner revoke failed", got.Code, got.Body.String())
+	}
+	if got := costShareRequest(router, http.MethodPost, "", string(body), "42"); got.Code != 200 {
+		t.Fatal("owner revoke did not release the HTTP quota", got.Code, got.Body.String())
 	}
 }
