@@ -42,6 +42,8 @@ export interface CustomerLeadItem {
     last_submitted_at?: string | null;
     /** 已同步到客户档案时的 CRM 客户 ID；未同步时为空 */
     customer_id?: string;
+    /** dedupe=user 时同一小程序用户的合并线索记录条数，不是留资动作次数 */
+    submission_count?: number;
 }
 
 export interface CustomerServiceEventItem {
@@ -83,6 +85,8 @@ export interface CustomerLeadListParams {
     queue?: string;
     assigned_to?: string;
     user_id?: number;
+    /** user=同一小程序用户只返回最近一条并带 submission_count；all=全部线索记录 */
+    dedupe?: 'user' | 'all' | string;
     page?: number;
     page_size?: number;
 }

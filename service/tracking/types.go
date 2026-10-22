@@ -254,6 +254,10 @@ type Filter struct {
 	// Channel filters the visit timeline by source: app_message, timeline,
 	// code_link or direct. Other lists ignore it.
 	Channel string
+	// Group controls visit timeline grouping: session (legacy, one session +
+	// one material), batch (same visitor within 30 minutes, across materials)
+	// or day (same visitor and Beijing calendar day). Empty means session.
+	Group   string
 	Limit   int
 	Related bool
 }

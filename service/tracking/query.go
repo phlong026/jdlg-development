@@ -109,6 +109,12 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 	if f.Channel != "" && f.Channel != "all" && !visitChannels[f.Channel] {
 		return f, fail(400, "来源筛选无效")
 	}
+	if f.Group == "" {
+		f.Group = "session"
+	}
+	if f.Group != "session" && f.Group != "batch" && f.Group != "day" {
+		return f, fail(400, "访问分组方式无效")
+	}
 	f.Search, f.ContentSearch, f.VisitorSearch = strings.TrimSpace(f.Search), strings.TrimSpace(f.ContentSearch), strings.TrimSpace(f.VisitorSearch)
 	if len(f.Search) > 100 || len(f.ContentSearch) > 100 || len(f.VisitorSearch) > 100 {
 		return f, fail(400, "搜索超限")

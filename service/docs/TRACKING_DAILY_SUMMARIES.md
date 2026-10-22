@@ -67,9 +67,13 @@ instead of raw events whenever the result is provably identical:
   arbitrary historical API windows use raw events.
 - The session's `summary_state` must be `complete` (written by this projector),
   carry the current metric version, have `built_at` at or before as_of (no
-  acceptance or identity link since) and no `deferred_from` at or before as_of.
-  `deferred_from` is the earliest event the build left out because it occurred
-  after the build time (a device clock up to two minutes ahead).
+  acceptance or identity link since) and no legacy `deferred_from` at or before
+  as_of. A current projection includes accepted events whose device clock is
+  slightly ahead. Its `built_at`, and every daily bucket's `built_at`, are the
+  maximum of the real rebuild time and every eligible event's received/occurred
+  time. The projection therefore becomes usable when that watermark is reached,
+  without requiring another event or rebuild. Preview, self, test, abnormal and
+  duplicate events never advance the watermark.
 - Every attached event's day gets a bucket, even without visibility, so a
   window's last observation (for example a page_end after midnight) survives.
   `segment_continues_next_day` marks a bucket whose fresh visibility came from a
@@ -89,6 +93,44 @@ from both reductions across day, "all", intent and arbitrary windows and
 historical snapshots between batches. Mutation checks confirmed it fails when
 any of the conditions above is removed. Flags, end time and predecessor are not
 compared and list responses do not expose them; drilldowns keep raw reduction.
+
+## One-time deferred-state reconciliation
+
+Deployments that ran the old projector can retain `summary_state` rows with an
+already-due `deferred_from`. Use the bounded `reconcile_tracking_summaries` CLI
+after backing up derived rows and preserving raw hashes. It never deletes raw
+events, never changes the query budgets, and skips `raw_events_expired` states.
+The actor must name an explicit tenant and owner scope; the tenant must equal
+`TRACKING_TENANT`, and every named owner must have a current enabled management
+grant with both tracking-management and rule permissions. The actor must be a
+`platform_admin`; CRM-only accounts cannot run this non-CRM maintenance command.
+Dry-run is the default:
+
+```sh
+./reconcile_tracking_summaries \
+  --tenant "$TRACKING_TENANT" --actor 123 --owners owner-a \
+  --limit 50 --as-of 2026-10-22T12:00:00Z
+```
+
+Review `sessions`, then repeat with the same snapshot and `--apply`. Each due
+session is revalidated and rebuilt in a separate transaction. A session above
+the existing 20,000-row/32-MiB budget is rolled back and listed in
+`failed_sessions`; smaller sessions in the page continue. Use `next_at` and
+`next_id` with `--after-at` and `--after-id` while `has_more` is true. Keep the
+same `--as-of` across dry-run and apply pages. The JSON also reports `apply`,
+`scanned`, `candidates`, `rebuilt`, `skipped`, and `failed`. Every failed session
+also has a `failures` entry with `session_id`, a stable category such as
+`query_too_large`, and the underlying operation error; no configuration or DSN
+is included in that result.
+
+The CLI accepts an optional `--env /absolute/path/.env` containing literal
+`KEY=value` lines. Otherwise it only uses existing process variables; it does
+not search the working directory for an environment file. `MYSQL_DSN` must be
+explicit, so the command cannot fall back to the application's local database.
+Run apply only after the new projector binary is deployed, then verify the
+3/7/30-day management queries and narrowed material and channel queries.
+Retrying a page is safe because rebuilt rows no longer satisfy the due
+legacy-deferred predicate.
 
 ## Boundaries and validation
 

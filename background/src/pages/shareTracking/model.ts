@@ -58,6 +58,16 @@ export function visitTime(value: string, now = new Date()): string {
     const clock = `${at.month}-${at.day} ${at.hour}:${at.minute}`;
     return at.year === current.year ? clock : `${at.year}-${clock}`;
 }
+
+// 批次时间范围：同一天显示「10-21 03:06–03:12」，跨天则两端都带日期。
+export function visitRange(start: string, end?: string, now = new Date()): string {
+    const first = visitTime(start, now);
+    if (!end) return first;
+    const last = visitTime(end, now);
+    if (first === '时间不可用' || last === '时间不可用' || first === last) return first;
+    const sameDay = first.slice(0, 5) === last.slice(0, 5);
+    return sameDay ? `${first}–${last.slice(-5)}` : `${first}–${last}`;
+}
 // 视频进度 = 去重观看时长 / 视频总时长，封顶 100%（重复回看不放大数字）。
 export function videoPercent(unique?: number, total?: number): number | undefined {
     if (!unique || !total || total <= 0) return undefined;

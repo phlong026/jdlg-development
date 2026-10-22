@@ -218,6 +218,62 @@ func TestVisitsProgressPlaysAndEngagement(t *testing.T) {
 	}
 }
 
+func TestVisitsOmitProgressWhenPageEnrichmentExceedsReadBudget(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-time.Hour)
+	const session = "session-progress-budget"
+	visitPV(m, "pv-progress-budget", "one", "u:1", session, "content1", "", at, 1000)
+	for i := 0; i < maxQueryRecords; i++ {
+		id := time.Unix(0, int64(i)+1).UTC().Format("150405.000000000")
+		visitEvent(m, "progress-"+id, "one", "u:1", session, "pv-progress-budget", "content1", at.Add(time.Duration(i+1)*time.Nanosecond), Event{Type: "video_progress", Media: "media1", Duration: 60000, Unique: 48000, Watch: 1000})
+	}
+
+	summary := DailySummary{
+		Metric: MetricVersion, Day: businessDay(at).Format("2006-01-02"), Timezone: "Asia/Shanghai",
+		View:    PageView{ID: "pv-progress-budget", Route: publishedReaderRoute, Content: "content1", Version: 1, Started: at, Visible: 1000},
+		Visitor: "u:1", OriginalVisitor: "u:1", Owner: "one", Session: session, Count: true,
+		Last: at.Add(time.Second), BuiltAt: now, Ranges: [][2]int64{{at.UnixMilli(), at.Add(time.Second).UnixMilli()}},
+	}
+	row := record("daily_summary", summaryID(summary), "one", businessDay(at).AddDate(0, 0, 1).Add(-time.Nanosecond), summary)
+	row.Session, row.Visitor, row.Content = session, "u:1", "content1"
+	_ = m.Put(row)
+	state := record("summary_state", session, "one", now, summaryState{Metric: MetricVersion, Complete: true, BuiltAt: now})
+	state.Session, state.Visitor = session, "u:1"
+	_ = m.Put(state)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one"})
+	if err != nil {
+		t.Fatalf("visit list failed instead of omitting oversized progress: %v", err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 1 {
+		t.Fatalf("visits = %d, want 1", len(items))
+	}
+	if items[0].Progress != nil {
+		t.Fatalf("progress = %+v, want omitted after enrichment budget failure", items[0].Progress)
+	}
+	if !items[0].ProgressOmitted {
+		t.Fatal("oversized progress read must be explicit instead of looking like no engagement events")
+	}
+	if items[0].Content.Title != "南安石堤寺规划" || items[0].Visitor.Nickname != "灿坤" || items[0].Visible != 1000 || items[0].ContentViews != 1 {
+		t.Fatalf("degraded card lost authorized list data: %+v", items[0])
+	}
+}
+
+func TestVisitsKeepNormalMissingProgressDistinctFromBudgetOmission(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	visitPV(m, "pv-no-progress", "one", "u:1", "session-no-progress", "content1", "", now.Add(-time.Hour), 1000)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 1 || items[0].Progress != nil || items[0].ProgressOmitted {
+		t.Fatalf("normal visit without progress events = %+v", items)
+	}
+}
+
 func TestVisitsEngagedByRepeatViewsAndCappedVideo(t *testing.T) {
 	s, m, scope, now := visitsFixture(t)
 	for i, session := range []string{"s1", "s2", "s3"} {
@@ -541,5 +597,224 @@ func TestVisitsChannelIgnoresIntentReceivedAfterSnapshot(t *testing.T) {
 	}
 	if got := visitItems(t, filtered); len(got) != 0 {
 		t.Fatalf("timeline filter at snapshot = %+v, want none", got)
+	}
+}
+
+// 客户查看默认按 30 分钟窗口合并：同一访客连续打开不同分享入口、看不同素材
+// 时，也应是一张卡；间隔超过 30 分钟才拆成新的一张。
+func TestVisitsBatchMergesAcrossSessionsAndMaterials(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-5 * time.Hour)
+	visitPV(m, "pv-b1", "one", "u:1", "sess1", "content1", "", at, 30000)
+	visitPV(m, "pv-b2", "one", "u:1", "sess1", "content1", "", at.Add(time.Minute), 20000)
+	visitPV(m, "pv-b3", "one", "u:1", "sess2", "content1", "", at.Add(10*time.Minute), 10000)
+	visitPV(m, "pv-b4", "one", "u:1", "sess3", "content2", "", at.Add(15*time.Minute), 15000)
+	// Two hours later: outside the 30 minute window, a new card.
+	visitPV(m, "pv-b5", "one", "u:1", "sess4", "content1", "", now.Add(-3*time.Hour), 5000)
+
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("batch cards = %d, want 2: %+v", len(items), items)
+	}
+	newest, older := items[0], items[1]
+	if newest.Group != "batch" || newest.VisitCount != 1 || newest.Content.ID != "content1" {
+		t.Fatalf("newest batch = %+v, want one content1 visit", newest)
+	}
+	if older.Group != "batch" || older.VisitCount != 3 {
+		t.Fatalf("older batch visit_count = %d, want 3 sessions", older.VisitCount)
+	}
+	if older.Visible != 75000 {
+		t.Fatalf("older batch visible = %d, want 75000", older.Visible)
+	}
+	if older.Content.ID != "content1" || older.ContentViews != 5 {
+		t.Fatalf("older batch primary = %s/%d, want content1 with 5 cumulative views", older.Content.ID, older.ContentViews)
+	}
+	if len(older.Materials) != 2 || older.Materials[0].Content.ID != "content1" || older.Materials[1].Content.ID != "content2" {
+		t.Fatalf("older batch materials = %+v, want content1 then content2", older.Materials)
+	}
+	if older.Materials[0].Visible != 60000 || older.Materials[1].Visible != 15000 {
+		t.Fatalf("material visible = %d/%d, want 60000/15000", older.Materials[0].Visible, older.Materials[1].Visible)
+	}
+	if older.Ended == nil || !older.Ended.Equal(at.Add(15*time.Minute+15*time.Second)) {
+		t.Fatalf("older batch ended = %v, want last visible end", older.Ended)
+	}
+	if older.Source.Kind != "direct" {
+		t.Fatalf("older batch source = %q, want direct", older.Source.Kind)
+	}
+}
+
+func TestVisitsBatchUsesLastActivityAndPageEndForGapBoundary(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	at := now.Add(-6 * time.Hour)
+	visitPV(m, "pv-gap-1", "one", "u:1", "gap-1", "content1", "", at, 1000)
+	visitEvent(m, "segment-gap-1", "one", "u:1", "gap-1", "pv-gap-1", "content1", at.Add(20*time.Minute), Event{Type: "visible_segment", Delta: 1000})
+	// The page_end arrives after its occurrence time but before as_of; the
+	// reducer accepts it and the grouping must use that bounded fact.Ended.
+	ended := Event{ID: "end-gap-1", Type: "page_end", View: "pv-gap-1", Session: "gap-1", Route: publishedReaderRoute, Content: "content1", Version: 1, Occurred: at.Add(25 * time.Minute), Received: at.Add(26 * time.Minute)}
+	endedRecord := record("event", ended.ID, "one", ended.Occurred, ended)
+	endedRecord.Visitor, endedRecord.Session, endedRecord.Content = "u:1", "gap-1", "content1"
+	_ = m.Put(endedRecord)
+	// Exactly 30 minutes after the real page end: still the same batch.
+	visitPV(m, "pv-gap-2", "one", "u:1", "gap-2", "content2", "", at.Add(55*time.Minute), 1000)
+	// More than 30 minutes after the second visit's last activity: a new batch.
+	visitPV(m, "pv-gap-3", "one", "u:1", "gap-3", "content1", "", at.Add(85*time.Minute+2*time.Second), 1000)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("batch cards = %d, want 2: %+v", len(items), items)
+	}
+	older := items[1]
+	if older.VisitCount != 2 || older.Ended == nil || !older.Ended.Equal(at.Add(55*time.Minute+time.Second)) {
+		t.Fatalf("last-activity batch = %+v", older)
+	}
+}
+
+func TestVisitsBatchDoesNotCrossBeijingCalendarDay(t *testing.T) {
+	s, m, scope, _ := visitsFixture(t)
+	beforeMidnight := time.Date(2026, 10, 10, 15, 55, 0, 0, time.UTC)
+	visitPV(m, "pv-day-boundary-1", "one", "u:1", "day-boundary-1", "content1", "", beforeMidnight, 1000)
+	visitPV(m, "pv-day-boundary-2", "one", "u:1", "day-boundary-2", "content2", "", beforeMidnight.Add(10*time.Minute), 1000)
+
+	list, err := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch", Start: beforeMidnight.Add(-time.Hour), End: beforeMidnight.Add(time.Hour), AsOf: beforeMidnight.Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("batch crossed Beijing midnight: %+v", items)
+	}
+}
+
+func TestVisitsGroupsSplitSameSessionAndMaterialAtBeijingMidnight(t *testing.T) {
+	for _, group := range []string{"batch", "day"} {
+		t.Run(group, func(t *testing.T) {
+			s, m, scope, _ := visitsFixture(t)
+			beforeMidnight := time.Date(2026, 10, 10, 15, 55, 0, 0, time.UTC)
+			const session = "session-across-midnight"
+			visitPV(m, "pv-before-midnight", "one", "u:1", session, "content1", "", beforeMidnight, 1000)
+			visitEvent(m, "progress-before-midnight", "one", "u:1", session, "pv-before-midnight", "content1", beforeMidnight.Add(2*time.Second), Event{Type: "video_progress", Media: "media1", Duration: 60000, Unique: 12000})
+			visitPV(m, "pv-after-midnight", "one", "u:1", session, "content1", "", beforeMidnight.Add(10*time.Minute), 3000)
+			visitEvent(m, "progress-after-midnight", "one", "u:1", session, "pv-after-midnight", "content1", beforeMidnight.Add(10*time.Minute+5*time.Second), Event{Type: "video_progress", Media: "media1", Duration: 60000, Unique: 48000})
+
+			list, err := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: group, Start: beforeMidnight.Add(-time.Hour), End: beforeMidnight.Add(time.Hour)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			items := visitItems(t, list)
+			if len(items) != 2 {
+				t.Fatalf("same-session %s visits across Beijing midnight = %+v, want two cards", group, items)
+			}
+			newer, older := items[0], items[1]
+			if newer.Group != group || older.Group != group {
+				t.Fatalf("cross-day groups = %q/%q, want %q", newer.Group, older.Group, group)
+			}
+			if newer.Started.In(visitZone).Format("2006-01-02") != "2026-10-11" || older.Started.In(visitZone).Format("2006-01-02") != "2026-10-10" {
+				t.Fatalf("cross-day visit dates = %s/%s", newer.Started.In(visitZone), older.Started.In(visitZone))
+			}
+			if group == "day" && (newer.Date != "2026-10-11" || older.Date != "2026-10-10") {
+				t.Fatalf("day response dates = %q/%q", newer.Date, older.Date)
+			}
+			if newer.Visible != 3000 || older.Visible != 1000 {
+				t.Fatalf("cross-day visible time = %d/%d, want 3000/1000", newer.Visible, older.Visible)
+			}
+			if newer.Progress == nil || newer.Progress.Percent != 80 || older.Progress == nil || older.Progress.Percent != 20 {
+				t.Fatalf("cross-day progress = %+v/%+v, want 80%%/20%%", newer.Progress, older.Progress)
+			}
+			if len(newer.Materials) != 1 || len(older.Materials) != 1 || newer.Materials[0].Content.ID != "content1" || older.Materials[0].Content.ID != "content1" {
+				t.Fatalf("cross-day materials = %+v/%+v, want one content1 row per day", newer.Materials, older.Materials)
+			}
+			if newer.Materials[0].Visible != 3000 || older.Materials[0].Visible != 1000 || newer.Materials[0].Progress == nil || newer.Materials[0].Progress.Percent != 80 || older.Materials[0].Progress == nil || older.Materials[0].Progress.Percent != 20 {
+				t.Fatalf("cross-day material metrics = %+v/%+v", newer.Materials[0], older.Materials[0])
+			}
+		})
+	}
+}
+
+// 按天视图：同一访客同一天内的访问即使间隔超过 30 分钟也合并，跨自然日拆开。
+func TestVisitsDayMergesByBeijingDate(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	// now = 2026-10-11 20:00 Beijing; -22h/-21h are 10-10 22:00/23:00 Beijing.
+	visitPV(m, "pv-d1", "one", "u:1", "day1-a", "content1", "", now.Add(-22*time.Hour), 10000)
+	visitPV(m, "pv-d2", "one", "u:1", "day1-b", "content2", "", now.Add(-21*time.Hour), 20000)
+	// Current Beijing day, one hour apart: still one day card.
+	visitPV(m, "pv-d3", "one", "u:1", "day2-a", "content1", "", now.Add(-2*time.Hour), 30000)
+	visitPV(m, "pv-d4", "one", "u:1", "day2-b", "content2", "", now.Add(-time.Hour), 40000)
+
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "day"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items := visitItems(t, list)
+	if len(items) != 2 {
+		t.Fatalf("day cards = %d, want 2: %+v", len(items), items)
+	}
+	current, previous := items[0], items[1]
+	if current.Group != "day" || current.Date != "2026-10-11" || current.VisitCount != 2 {
+		t.Fatalf("current day card = %+v, want 2026-10-11 with 2 visits", current)
+	}
+	if previous.Group != "day" || previous.Date != "2026-10-10" || previous.VisitCount != 2 {
+		t.Fatalf("previous day card = %+v, want 2026-10-10 with 2 visits", previous)
+	}
+	if len(current.Materials) != 2 || len(previous.Materials) != 2 {
+		t.Fatalf("day materials = %d/%d, want 2/2", len(current.Materials), len(previous.Materials))
+	}
+	if current.Visible != 70000 || previous.Visible != 30000 {
+		t.Fatalf("day visible = %d/%d, want 70000/30000", current.Visible, previous.Visible)
+	}
+}
+
+func TestVisitsRejectsUnknownGroup(t *testing.T) {
+	s, _, scope, _ := visitsFixture(t)
+	if _, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "hour"}); e == nil {
+		t.Fatal("unknown group should be rejected")
+	}
+}
+
+// 同一素材被重复发布成不同 content_id 时，同一批次只保留一行；标题相同但封面不同
+// 视为不同素材，不能合并。
+func TestVisitsBatchMergesSameTitleAndCover(t *testing.T) {
+	s, m, scope, now := visitsFixture(t)
+	seed := func(id, cover string) {
+		c := Content{ID: id, Title: "建筑外立面改造", Owner: "one", Version: 1, Status: "published", Type: "image", Cover: &Asset{ID: cover, Kind: "image", URL: "/api/v1/miniprogram/tracking/media/" + cover}}
+		_ = m.Put(record("content", id, "one", now.Add(-48*time.Hour), c))
+		_ = m.Put(record("version", contentKey(id, 1), "one", now.Add(-48*time.Hour), c))
+		_ = m.Put(record("media", cover, "one", now.Add(-48*time.Hour), nil))
+	}
+	seed("dup-a", "cover-x")
+	seed("dup-b", "cover-x")
+	seed("dup-c", "cover-y")
+	at := now.Add(-4 * time.Hour)
+	visitPV(m, "pv-dup1", "one", "u:1", "dup-s1", "dup-a", "", at, 10000)
+	visitPV(m, "pv-dup2", "one", "u:1", "dup-s2", "dup-b", "", at.Add(2*time.Minute), 20000)
+	visitPV(m, "pv-dup3", "one", "u:1", "dup-s3", "dup-c", "", at.Add(4*time.Minute), 5000)
+
+	list, e := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: "batch"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	items := visitItems(t, list)
+	if len(items) != 1 {
+		t.Fatalf("cards = %d, want 1: %+v", len(items), items)
+	}
+	materials := items[0].Materials
+	if len(materials) != 2 {
+		t.Fatalf("materials = %d, want 2 (same title+cover merged, different cover kept): %+v", len(materials), materials)
+	}
+	if materials[0].Content.ID != "dup-b" || materials[0].Visible != 30000 || materials[0].PageViews != 1 {
+		t.Fatalf("merged material = %+v, want dup-b with 30s and max 1 view", materials[0])
+	}
+	if materials[1].Content.ID != "dup-c" || materials[1].Visible != 5000 {
+		t.Fatalf("different-cover material = %+v, want dup-c with 5s", materials[1])
+	}
+	if items[0].Visible != 35000 || items[0].ContentViews != 2 {
+		t.Fatalf("card totals = %d/%d, want 35000/2", items[0].Visible, items[0].ContentViews)
 	}
 }

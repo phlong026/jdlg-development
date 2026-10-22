@@ -26,8 +26,8 @@ type RecordQuery struct {
 	AtFrom, AtBefore, AtThrough, IdentityAsOf  time.Time
 	CatalogAsOf                                time.Time // Immutable catalog membership; never mutable occurred_at.
 	// WithoutExactSummary keeps only rows whose session lacks a complete
-	// projection without deferred events, i.e. one that may hold facts in days
-	// that have no projected bucket.
+	// projection without a legacy deferred marker. Current projections include
+	// future accepted events and create all their buckets; BuiltAt gates their use.
 	WithoutExactSummary bool
 	// Limit caps the rows returned (0: only the read budget applies). A cursor
 	// (AfterAt, AfterID) resumes after a row of the same ORDER BY occurred_at,

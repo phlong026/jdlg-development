@@ -34,13 +34,13 @@ func TestTrackingFilterReadsVisitChannel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/visits?channel=code_link&intent=high", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/visits?channel=code_link&intent=high&group=day", nil)
 	f, e := trackingFilter(c)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if f.Channel != "code_link" || f.Intent != "high" {
-		t.Fatalf("filter = %+v, want channel code_link and intent high", f)
+	if f.Channel != "code_link" || f.Intent != "high" || f.Group != "day" {
+		t.Fatalf("filter = %+v, want channel code_link, intent high and group day", f)
 	}
 }
 

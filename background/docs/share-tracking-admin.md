@@ -14,6 +14,10 @@ All list and detail requests use the same `start` / exclusive `end` UTC timestam
 
 For content-specific visitor sessions, `content_id` remains set when `include_related=true`; only sessions that visited that content may expand to their other pages. This flag must not turn into all historical sessions for the account.
 
+The default visit card groups one visitor's activity within a 30-minute inactivity gap, but never crosses an Asia/Shanghai calendar day. The batch end uses the latest accepted activity or `page_end` within the server-selected scope and `as_of` boundary. When progress-event enrichment exceeds the bounded read budget, the API returns `progress_omitted=true` and the card says `进度因数据量过大未加载`; an absent progress object without that flag still means no progress event was available.
+
+`submission_count` on the customer lead list counts merged `customer_leads` rows. It is displayed as `N 条线索记录`; it does not claim to count repeated `lead_submit` actions, because an open lead may be reused by later submissions.
+
 ## Authoring
 
 Manual plain text and server-sanitized allowlisted rich text are implemented; arbitrary embeds and script attributes are removed. Existing public source cards are read-only metadata snapshots and do not promise historical body playback. Source URLs are retained for review, never fetched. Images and MP4 can be uploaded from the local device to the authenticated `/media` multipart endpoint with `file`, `rights` and explicit authorized `owner_id`; client limits are advisory and the server must validate actual bytes, type, dimensions, authorization and 10MiB image / 50MiB video limits. Authorized media can also be paged and selected.

@@ -30,6 +30,18 @@ test('default range is the last 30 days and channel defaults to all', () => {
   assert.equal(model.defaultFilters.channel, '');
 });
 
+test('query range feedback renders the recovery action instead of a blind retry', () => {
+  const components = load('src/pages/shareTracking/components.tsx', { react: React, './model': model, './evidence': { IntentEvidenceDetails: () => null } });
+  const html = renderToStaticMarkup(React.createElement(components.Feedback, {
+    error: '查询范围过大，请缩小时间或归属、素材、访客范围',
+    status: 422,
+    retry() {},
+    rangeRecovery: { label: '改看近7天', onClick() {} },
+  }));
+  assert.match(html, /改看近7天/);
+  assert.doesNotMatch(html, /重试，保留筛选/);
+});
+
 test('source labels follow the timeline rules', () => {
   assert.equal(model.sourceLabel({ kind: 'share', channel: 'app_message' }), '私发');
   assert.equal(model.sourceLabel({ kind: 'share', channel: 'timeline' }), '朋友圈');
@@ -55,6 +67,9 @@ test('visit time is Beijing month-day within the year and adds the year otherwis
   assert.equal(model.visitTime('2025-12-31T17:00:00Z', now), '01-01 01:00');
   assert.equal(model.visitTime('2025-06-01T02:05:00Z', now), '2025-06-01 10:05');
   assert.equal(model.visitTime('bad', now), '时间不可用');
+  assert.equal(model.visitRange('2026-10-20T22:53:00Z', '2026-10-20T23:02:00Z', now), '10-21 06:53–07:02');
+  assert.equal(model.visitRange('2026-10-20T15:00:00Z', '2026-10-21T01:00:00Z', now), '10-20 23:00–10-21 09:00');
+  assert.equal(model.visitRange('2026-10-20T22:53:00Z', undefined, now), '10-21 06:53');
   assert.equal(model.intentShortLabels.high, '高意向'); assert.equal(model.intentShortLabels.low, '低关注');
 });
 
@@ -98,6 +113,43 @@ test('B-side visitor shows channel badge and no lead conversion', () => {
 test('revoked material keeps the card but shows the safe title', () => {
   const html = renderCard({ ...baseVisit, content: { ...baseVisit.content, title: '素材已撤回', status: 'revoked', content_accessible: false } });
   assert.ok(html.includes('素材已撤回'));
+});
+
+test('batch card merges multiple materials and shows visit count', () => {
+  const html = renderCard({
+    ...baseVisit,
+    visit_id: 'batch:u:2:s1:content1',
+    ended_at: '2026-10-20T22:58:00Z',
+    visible_ms: 90000,
+    content_page_views: 5,
+    visit_count: 2,
+    group: 'batch',
+    materials: [
+      { content: baseVisit.content, started_at: baseVisit.started_at, ended_at: '2026-10-20T22:53:50Z', visible_ms: 50000, page_views: 3, progress: { kind: 'video', percent: 80 }, engaged: false },
+      { content: { content_id: 'content2', content_version: 1, title: '闽南古厝改造', type: 'rich_text', status: 'published', content_accessible: true }, started_at: '2026-10-20T22:57:00Z', ended_at: '2026-10-20T22:58:00Z', visible_ms: 40000, page_views: 2, engaged: true },
+    ],
+  });
+  for (const want of ['2 个素材', '2 次访问', '本次共1分30秒', '闽南古厝改造', '累计3次', '累计2次', '10-21 06:53–06:58', '看得认真']) {
+    assert.ok(html.includes(want), `batch card missing ${want}: ${html}`);
+  }
+  assert.ok(html.includes('累计浏览5次'));
+  assert.ok(html.includes('进度80%'));
+});
+
+test('visit card discloses an oversized progress fallback instead of looking like no progress events', () => {
+  const html = renderCard({ ...baseVisit, progress: undefined, progress_omitted: true });
+  assert.match(html, /进度因数据量过大未加载/);
+});
+
+test('day card shows the day badge and cross-session visit count', () => {
+  const html = renderCard({
+    ...baseVisit,
+    group: 'day',
+    date: '2026-10-21',
+    visit_count: 3,
+    materials: [{ content: baseVisit.content, started_at: baseVisit.started_at, ended_at: baseVisit.started_at, visible_ms: 50000, page_views: 2, engaged: false }],
+  });
+  for (const want of ['按天汇总', '3 次访问', '累计浏览2次']) assert.ok(html.includes(want), `day card missing ${want}: ${html}`);
 });
 
 test('API calls the visit timeline endpoint', async () => {

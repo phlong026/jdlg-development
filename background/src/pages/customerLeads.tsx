@@ -35,6 +35,7 @@ const FiUserCheckIcon = FiUserCheck as unknown as React.ComponentType<any>;
 const FiXIcon = FiX as unknown as React.ComponentType<any>;
 const FiClockIcon = FiClock as unknown as React.ComponentType<any>;
 const FiActivityIcon = FiActivity as unknown as React.ComponentType<any>;
+const HISTORY_PAGE_SIZE = 100;
 
 const defaultOverview: CustomerLeadOverview = {
     total_count: 0,
@@ -179,6 +180,10 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [intentFilter, setIntentFilter] = useState('all');
     const [assignedFilter, setAssignedFilter] = useState('all');
     const [sourceFilter, setSourceFilter] = useState('all');
+    const [dedupe, setDedupe] = useState<'user' | 'all'>('user');
+    const [history, setHistory] = useState<{ user: number; items: CustomerLeadItem[]; total: number; page: number; loading: boolean } | null>(null);
+    const historyRequest = useRef(0);
+    const historyPending = useRef('');
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [detail, setDetail] = useState<CustomerLeadDetailResponse | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -189,14 +194,16 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
     const [loadError, setLoadError] = useState('');
     const [saveNotice, setSaveNotice] = useState('');
     const listRequest = useRef(0), detailRequest = useRef(0), actionSequence = useRef(0), saving = useRef(false);
-    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, session.user?.id]);
+    // 进单一用户详情时展开全部线索记录，否则按客户合并显示最近一条。
+    const effectiveDedupe = dedupe === 'user' && !userIdFilter ? 'user' : 'all';
+    const queryKey = JSON.stringify([page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, effectiveDedupe, session.user?.id]);
     const queryIdentity = useRef(queryKey);
     // Invalidate old responses during render, before the replacement effect runs.
     if (queryIdentity.current !== queryKey) { queryIdentity.current = queryKey; listRequest.current++; }
     const latestLoad = useRef<(afterSave?: boolean) => Promise<boolean>>(async () => false);
     const actionEpoch = actionSequence.current;
     const alive = useRef(true);
-    useEffect(() => { alive.current = true; return () => { alive.current = false; listRequest.current++; detailRequest.current++; actionSequence.current++; }; }, []);
+    useEffect(() => { alive.current = true; return () => { alive.current = false; listRequest.current++; detailRequest.current++; historyRequest.current++; historyPending.current = ''; actionSequence.current++; }; }, []);
 
     useEffect(() => {
         actionSequence.current++;
@@ -233,6 +240,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 intent_level: intentFilter === 'all' ? undefined : intentFilter,
                 assigned_to: assignedFilter === 'all' ? undefined : assignedFilter,
                 source: sourceFilter === 'all' ? undefined : sourceFilter,
+                dedupe: effectiveDedupe,
             };
             const [overviewData, listData] = await Promise.all([
                 getCustomerLeadOverview(),
@@ -262,7 +270,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
 
     useEffect(() => {
         latestLoad.current();
-    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, session.user?.id]);
+    }, [page, pageSize, keyword, queue, userIdFilter, statusFilter, intentFilter, assignedFilter, sourceFilter, effectiveDedupe, session.user?.id]);
 
     // 切换队列 / 用户过滤时回到第一页并清空勾选
     useEffect(() => {
@@ -302,6 +310,40 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
         } finally {
             if (request === detailRequest.current) setDetailLoading(false);
         }
+    };
+
+    const loadHistoryPage = async (user: number, nextPage: number) => {
+        const pendingKey = `${user}:${nextPage}`;
+        if (historyPending.current === pendingKey) return;
+        historyPending.current = pendingKey;
+        const request = ++historyRequest.current;
+        setHistory((current) => current?.user === user
+            ? { ...current, loading: true }
+            : { user, items: [], total: 0, page: nextPage, loading: true });
+        try {
+            const data = await getCustomerLeadList({ user_id: user, dedupe: 'all', page: nextPage, page_size: HISTORY_PAGE_SIZE });
+            if (request === historyRequest.current) {
+                const items = data.list || [];
+                setHistory({ user, items, total: typeof data.total === 'number' ? data.total : items.length, page: nextPage, loading: false });
+            }
+        } catch (error) {
+            if (request === historyRequest.current) {
+                setHistory((current) => current?.user === user ? { ...current, loading: false } : null);
+                reportPageLoadError(error, error instanceof Error ? error.message : '加载历史留资失败');
+            }
+        } finally {
+            if (request === historyRequest.current) historyPending.current = '';
+        }
+    };
+
+    const openHistory = (item: CustomerLeadItem) => {
+        if (item.user_id) void loadHistoryPage(item.user_id, 1);
+    };
+
+    const closeHistory = () => {
+        historyRequest.current++;
+        historyPending.current = '';
+        setHistory(null);
     };
 
     const handleCloseDetail = () => {
@@ -493,6 +535,10 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                 placeholder="搜索用户、需求、微信、电话"
                             />
                         </div>
+                        <div className="customer-lead-dedupe" role="group" aria-label="线索合并方式">
+                            <button type="button" aria-pressed={effectiveDedupe === 'user'} onClick={() => { setDedupe('user'); setPage(1); }}>按客户合并</button>
+                            <button type="button" aria-pressed={effectiveDedupe === 'all'} onClick={() => { setDedupe('all'); setPage(1); }}>全部线索记录</button>
+                        </div>
                         <MobileFold label="筛选" activeCount={(statusFilter !== 'all' ? 1 : 0) + (intentFilter !== 'all' ? 1 : 0) + (assignedFilter !== 'all' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0)}>
                         <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
                             <option value="all">全部状态</option>
@@ -544,6 +590,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                             <input type="checkbox" disabled={!canWrite} checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
                                         </label>}
                                         <strong className="customer-lead-card-name">{getDisplayName(item)}</strong>
+                                        {item.submission_count && item.submission_count > 1 ? <button type="button" className="customer-lead-history-link" onClick={() => void openHistory(item)} title="查看线索记录">{item.submission_count} 条线索记录</button> : null}
                                         <span className={`intent-tag intent-${item.intent_level}`}>{intentLabelMap[item.intent_level] || item.intent_level || '-'}</span>
                                         <span className={`status-tag status-${item.status}`}>{statusLabelMap[item.status] || item.status || '-'}</span>
                                     </div>
@@ -596,6 +643,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         </td>}
                                         <td>
                                             <strong>{getDisplayName(item)}</strong>
+                                            {item.submission_count && item.submission_count > 1 ? <button type="button" className="customer-lead-history-link" onClick={() => void openHistory(item)} title="查看线索记录">{item.submission_count} 条线索记录</button> : null}
                                             {item.user_id > 0
                                                 ? <Link className="customer-lead-userlink" to={`/user-workbench?userId=${item.user_id}`}>查看用户账号 ›</Link>
                                                 : <span>未关联用户账号</span>}
@@ -822,6 +870,43 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                                         保存跟进
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+                {history ? (
+                    <div className="customer-lead-modal-overlay" onClick={closeHistory}>
+                        <div className="customer-lead-modal" onClick={(event) => event.stopPropagation()}>
+                            <div className="customer-lead-modal-header">
+                                <div>
+                                    <h3>线索记录</h3>
+                                    <p>{history.loading ? '正在读取线索记录…' : `用户${history.user} · 共 ${history.total} 条，第 ${history.page} / ${Math.max(1, Math.ceil(history.total / HISTORY_PAGE_SIZE))} 页`}</p>
+                                </div>
+                                <button type="button" className="customer-lead-modal-close" onClick={closeHistory}><FiXIcon /></button>
+                            </div>
+                            <div className="customer-lead-modal-body">
+                                {history.loading ? (
+                                    <div className="customer-lead-modal-empty">正在读取线索记录...</div>
+                                ) : history.items.length > 0 ? (
+                                    <>
+                                        <div className="customer-lead-history-list">
+                                            {history.items.map((lead) => (
+                                                <article key={lead.id} className="customer-lead-history-item">
+                                                    <div>
+                                                        <strong>{formatDateTime(lead.last_submitted_at || lead.created_at)}</strong>
+                                                        <span className={`status-tag status-${lead.status}`}>{statusLabelMap[lead.status] || lead.status || '-'}</span>
+                                                    </div>
+                                                    <p>{lead.demand_summary || '暂无需求摘要'}</p>
+                                                    <small>{getContactText(lead)} · {sourceLabel(lead.source)} · {lead.assigned_to || '未分配'}</small>
+                                                </article>
+                                            ))}
+                                        </div>
+                                        <div className="customer-lead-pagination">
+                                            <button type="button" className="customer-lead-btn secondary" disabled={history.page <= 1} onClick={() => void loadHistoryPage(history.user, history.page - 1)}>上一页</button>
+                                            <button type="button" className="customer-lead-btn secondary" disabled={history.page >= Math.max(1, Math.ceil(history.total / HISTORY_PAGE_SIZE))} onClick={() => void loadHistoryPage(history.user, history.page + 1)}>下一页</button>
+                                        </div>
+                                    </>
+                                ) : <div className="customer-lead-modal-empty">没有线索记录</div>}
                             </div>
                         </div>
                     </div>
