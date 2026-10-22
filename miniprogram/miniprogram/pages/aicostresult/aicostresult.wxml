@@ -44,21 +44,6 @@
       <view class="designer-tip">一户一档，可由设计师进一步深化方案。</view>
     </view>
 
-    <view class="report-card share-card">
-      <view class="card-title compact-title"><view class="title-mark"></view><text>分享这份测算报告</text></view>
-      <view class="share-card-body">
-        <text class="share-card-copy" wx:if="{{!shareReady}}">生成专属分享卡片后，好友打开会看到当前这份测算结果。分享链接30天内有效。</text>
-        <button class="share-prepare-btn" wx:if="{{!shareReady}}" loading="{{sharePreparing}}" disabled="{{sharePreparing}}" bindtap="onPrepareShareReport">
-          {{sharePreparing ? '正在准备分享卡片' : '准备分享报告'}}
-        </button>
-        <block wx:else>
-          <text class="share-ready-title">分享卡片已准备好</text>
-          <text class="share-card-copy">可直接发送给好友；分享到朋友圈请点击右上角“···”。</text>
-          <button class="share-friend-btn" open-type="share">发送给好友</button>
-        </block>
-      </view>
-    </view>
-
     <view class="report-card detail-panel" wx:if="{{showCostDetails}}">
       <view class="card-title compact-title"><view class="title-mark"></view><text>费用明细</text></view>
       <view class="cost-chart">

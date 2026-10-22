@@ -7,6 +7,7 @@ const ts = require('./report-runtime')('typescript');
 
 const pagePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.ts');
 const shareCardPath = path.join(__dirname, '../miniprogram/utils/costEstimateShareImage.ts');
+const reportTemplatePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.wxml');
 
 function createHarness(cachedResult) {
   let definition;
@@ -111,7 +112,14 @@ test('report loads the complete version 4 estimate snapshot', () => {
   assert.equal(h.toasts.length, 0);
 });
 
-test('report stays private until the user prepares an immutable share', async () => {
+test('report omits the dedicated share preparation module and keeps the estimate disclaimer', () => {
+  const source = fs.readFileSync(reportTemplatePath, 'utf8');
+  assert.doesNotMatch(source, /分享这份测算报告/);
+  assert.doesNotMatch(source, /准备分享报告/);
+  assert.match(source, /以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认/);
+});
+
+test('report stays private before canvas readiness and still supports direct preparation', async () => {
   const h = createHarness(currentResult);
   h.page.onLoad();
   assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);

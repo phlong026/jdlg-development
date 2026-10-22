@@ -70,9 +70,7 @@
 }
 
 .state-secondary-btn::after,
-.state-primary-btn::after,
-.share-prepare-btn::after,
-.share-friend-btn::after {
+.state-primary-btn::after {
   border: none;
 }
 
@@ -85,37 +83,6 @@
 .state-primary-btn {
   color: #fff;
   background: #a77b4c;
-}
-
-.share-card-body {
-  display: flex;
-  flex-direction: column;
-  padding: 26rpx 28rpx 30rpx;
-}
-
-.share-card-copy {
-  color: #80684f;
-  font-size: 25rpx;
-  line-height: 1.6;
-}
-
-.share-ready-title {
-  margin-bottom: 8rpx;
-  color: #704a2c;
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
-.share-prepare-btn,
-.share-friend-btn {
-  height: 82rpx;
-  margin: 24rpx 0 0;
-  border-radius: 14rpx;
-  color: #fffaf0;
-  font-size: 28rpx;
-  font-weight: 750;
-  line-height: 82rpx;
-  background: linear-gradient(135deg, #d0ac76 0%, #a77b4c 100%);
 }
 
 .card-title {

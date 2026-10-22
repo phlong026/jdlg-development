@@ -85,6 +85,7 @@ test('budget form prepares a local square cover and exposes the same Moments lan
 
 function createResultHarness({ cached = currentResult, reportId, sharedResult = currentResult, sharedError = null, token = 'token', chatCover = 'wxfile://chat.jpg', timelineCover = 'wxfile://timeline.jpg' } = {}) {
   let definition;
+  let currentToken = token;
   const calls = { create: [], get: [], login: [] };
   const api = {
     createCostEstimateShare: async (result) => {
@@ -118,7 +119,7 @@ function createResultHarness({ cached = currentResult, reportId, sharedResult = 
     console: { ...console, error() {}, warn() {} },
     setTimeout(callback) { callback(); },
     wx: {
-      getStorageSync(key) { return key === 'aicostEstimateResult' ? cached : key === 'token' ? token : ''; },
+      getStorageSync(key) { return key === 'aicostEstimateResult' ? cached : key === 'token' ? currentToken : ''; },
       showToast() {}, navigateBack() {}, navigateTo() {},
     },
   });
@@ -131,7 +132,7 @@ function createResultHarness({ cached = currentResult, reportId, sharedResult = 
   api.isCostEstimateShareResult = value => Boolean(value && value.version === 4 && value.basicInfo?.length === 14 && value.costBreakdown?.length >= 6);
   api.sanitizeCostEstimateShareResult = value => JSON.parse(JSON.stringify(value, (key, item) => key === 'color' ? undefined : item));
   page.onLoad(reportId === undefined ? {} : { report_id: reportId });
-  return { page, calls };
+  return { page, calls, setToken(value) { currentToken = value; } };
 }
 
 test('preparing a local report publishes once, then both share channels point to that exact report', async () => {
@@ -151,6 +152,47 @@ test('preparing a local report publishes once, then both share channels point to
   assert.equal(friend.imageUrl, 'wxfile://chat.jpg');
 });
 
+test('a local report prepares both share channels automatically after canvas readiness', async () => {
+  const h = createResultHarness();
+  h.page.onReady();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.create.length, 1);
+  assert.equal(h.page.data.shareReady, true);
+  assert.equal(h.page.onShareAppMessage().path, '/pages/aicostresult/aicostresult?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
+  assert.equal(h.page.onShareTimeline().query, 'report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
+});
+
+test('automatic preparation waits silently when the local report has no signed-in account', async () => {
+  const h = createResultHarness({ token: '' });
+  h.page.onReady();
+  h.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.create.length, 0);
+  assert.deepEqual(h.calls.login, []);
+  assert.equal(h.page.data.shareReady, false);
+});
+
+test('onShow prepares the local report after login returns without another page entry', async () => {
+  const h = createResultHarness({ token: '' });
+  h.page.onReady();
+  h.setToken('signed-in-token');
+  h.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.create.length, 1);
+  assert.equal(h.page.data.shareReady, true);
+});
+
+test('an anonymous visitor automatically prepares covers for the requested immutable report', async () => {
+  const reportId = 'abcDEF0123456789abcDEF0123456789';
+  const h = createResultHarness({ reportId, token: '' });
+  h.page.onReady();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.create.length, 0);
+  assert.equal(h.page.data.shareReady, true);
+  assert.equal(h.page.onShareAppMessage().path, `/pages/aicostresult/aicostresult?report_id=${reportId}`);
+  assert.equal(h.page.onShareTimeline().query, `report_id=${reportId}`);
+});
+
 test('opening a shared report fetches only that immutable snapshot and reshares the same id', async () => {
   const h = createResultHarness({ cached: { corrupted: true }, reportId: 'abcDEF0123456789abcDEF0123456789' });
   await new Promise(resolve => setImmediate(resolve));
@@ -161,10 +203,10 @@ test('opening a shared report fetches only that immutable snapshot and reshares 
   assert.equal(h.page.onShareTimeline().query, 'report_id=abcDEF0123456789abcDEF0123456789');
 });
 
-test('share preparation sends an unauthenticated owner through the existing login return flow', async () => {
+test('manual share preparation also stays silent for an unauthenticated owner', async () => {
   const h = createResultHarness({ token: '' });
   await h.page.onPrepareShareReport();
-  assert.deepEqual(h.calls.login, ['/pages/aicostresult/aicostresult']);
+  assert.deepEqual(h.calls.login, []);
   assert.equal(h.calls.create.length, 0);
   assert.equal(h.page.data.shareReady, false);
 });
@@ -193,4 +235,14 @@ test('report sharing stays closed if either prepared cover is unavailable', asyn
   assert.equal(h.page.data.shareReady, false);
   assert.equal(h.page.data.contentReady, false);
   assert.equal(h.page.data.shareReportId, 'AbcdEFghIJklMNopQRstUVwxYZ012345', 'retry keeps the already-published immutable report');
+});
+
+test('automatic retry reuses the first immutable report after cover preparation fails', async () => {
+  const h = createResultHarness({ chatCover: '' });
+  h.page.onReady();
+  await new Promise(resolve => setImmediate(resolve));
+  h.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.create.length, 1);
+  assert.equal(h.page.data.shareReportId, 'AbcdEFghIJklMNopQRstUVwxYZ012345');
 });

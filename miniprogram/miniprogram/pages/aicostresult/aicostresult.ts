@@ -15,7 +15,6 @@ import {
   isCostEstimateShareResult,
   sanitizeCostEstimateShareResult,
 } from '../../utils/costEstimateShare';
-import { requireReportLogin } from '../../utils/reportNavigation';
 
 const RESULT_STORAGE_KEY = 'aicostEstimateResult';
 const API_BASE_URL = 'https://api.jiadilingguang.com';
@@ -41,6 +40,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 Page({
   pageDestroyed: false,
+  pageReady: false,
   requestedReportId: '',
   reportSnapshot: null as CostEstimateShareResult | null,
   data: {
@@ -67,6 +67,7 @@ Page({
 
   onLoad(options: Record<string, string | undefined> = {}) {
     this.pageDestroyed = false;
+    this.pageReady = false;
     const reportId = String(options.report_id || '').trim();
     if (Object.prototype.hasOwnProperty.call(options, 'report_id')) {
       this.requestedReportId = reportId;
@@ -87,6 +88,15 @@ Page({
     }
     this.applyResult(sanitizeCostEstimateShareResult(result));
     this.loadEnterpriseWechatServiceConfig();
+  },
+
+  onReady() {
+    this.pageReady = true;
+    this.maybePrepareShareReport();
+  },
+
+  onShow() {
+    this.maybePrepareShareReport();
   },
 
   onUnload() {
@@ -115,6 +125,7 @@ Page({
       this.applyResult(snapshot.result);
       this.setData({ shareReportId: snapshot.report_id });
       this.loadEnterpriseWechatServiceConfig();
+      this.maybePrepareShareReport();
     } catch (error) {
       console.error('加载分享测算报告失败:', error);
       if (this.pageDestroyed || this.requestedReportId !== reportId) return;
@@ -151,12 +162,15 @@ Page({
     return `${card.city}${card.buildingArea}${costLabel}${card.totalCost.replace('元', '')}，查看测算报告`;
   },
 
+  maybePrepareShareReport() {
+    if (!this.pageReady || this.pageDestroyed || this.data.sharePreparing || this.data.shareReady || !this.reportSnapshot) return;
+    if (!this.data.shareReportId && !wx.getStorageSync('token')) return;
+    void this.onPrepareShareReport();
+  },
+
   async onPrepareShareReport() {
     if (this.data.sharePreparing || this.data.shareReady || !this.reportSnapshot) return;
-    if (!this.data.shareReportId && !wx.getStorageSync('token')) {
-      requireReportLogin('/pages/aicostresult/aicostresult');
-      return;
-    }
+    if (!this.data.shareReportId && !wx.getStorageSync('token')) return;
     this.setData({ sharePreparing: true });
     try {
       const identity = this.data.shareReportId
@@ -179,12 +193,10 @@ Page({
         shareTimelineImage,
         contentReady: true,
       });
-      wx.showToast({ title: '分享卡片已准备好', icon: 'success' });
     } catch (error) {
       console.error('准备预算报告分享失败:', error);
       if (this.pageDestroyed) return;
       this.setData({ sharePreparing: false, shareReady: false, contentReady: false });
-      wx.showToast({ title: getErrorMessage(error, '分享准备失败，请重试'), icon: 'none' });
     }
   },
 
