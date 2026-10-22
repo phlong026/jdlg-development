@@ -1,0 +1,16 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.jiadilingguang.com/api/v1/miniprogram/ai/cost/shares/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "status": 404,
+    "contentType": "text/plain",
+    "body": "404 page not found"
+  },
+  {
+    "method": "POST",
+    "url": "https://api.jiadilingguang.com/api/v1/miniprogram/ai/cost/shares",
+    "status": 404,
+    "contentType": "text/plain",
+    "body": "404 page not found"
+  }
+]
