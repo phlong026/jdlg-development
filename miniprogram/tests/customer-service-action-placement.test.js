@@ -1,6 +1,8 @@
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
 
@@ -8,35 +10,110 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-const serviceWxml = read('miniprogram/pages/customerservice/customerservice.wxml');
-const serviceTs = read('miniprogram/pages/customerservice/customerservice.ts');
-const serviceJs = read('miniprogram/pages/customerservice/customerservice.js');
-const sendIcon = read('miniprogram/assets/icons/send-plane.svg');
+function loadCustomerServicePage() {
+  let definition;
+  const navigations = [];
+  const wx = {
+    navigateTo(options) {
+      navigations.push(options.url);
+    },
+  };
+  const dependencies = {
+    '../../utils/asset': { resolveAssetPath: value => value },
+    '../../utils/parameter': {
+      generateRequestParams: () => ({}),
+      paramsToHeaders: () => ({}),
+    },
+    '../../utils/deviceFingerprint': { getCachedDeviceFingerprint: () => '' },
+    '../../utils/promptReview': { blockUnsafeText: () => false },
+    '../../utils/enterpriseWechat': {
+      DEFAULT_CUSTOMER_SERVICE_CORP_ID: '',
+      DEFAULT_CUSTOMER_SERVICE_URL: '',
+      openEnterpriseCustomerServiceChat: async () => ({ opened: false }),
+    },
+    '../../utils/tracking/consultation': { optionalConsultationHeaders: (_path, headers) => headers },
+  };
 
-const summaryCardMatch = serviceWxml.match(/<view wx:if="\{\{demandSummaryVisible\}\}" class="demand-summary-card">([\s\S]*?)<\/view>\s*<\/view>/);
-assert.ok(summaryCardMatch, 'customer service page should render a demand summary card');
+  vm.runInNewContext(read('miniprogram/pages/customerservice/customerservice.js'), {
+    exports: {},
+    require(request) {
+      const dependency = dependencies[request];
+      if (!dependency) throw new Error(`Unexpected dependency: ${request}`);
+      return dependency;
+    },
+    Page(value) {
+      definition = value;
+    },
+    wx,
+    console: { log() {}, warn() {}, error() {} },
+    Promise,
+    Date,
+    Math,
+    setTimeout,
+    clearTimeout,
+  });
 
-const summaryCard = summaryCardMatch[0];
-assert.match(summaryCard, /一键生成专属方案/, 'demand summary card should keep the generate CTA');
-assert.doesNotMatch(summaryCard, /了解造价/, 'demand summary card should not include cost consultation');
-assert.doesNotMatch(summaryCard, /对接设计老师/, 'demand summary card should not include designer handoff');
-assert.doesNotMatch(summaryCard, /修改户型/, 'demand summary card should not include floor-plan edit');
-
-assert.match(serviceWxml, /bottom-panel[\s\S]*quick-actions[\s\S]*input-panel/, 'quick actions should stay above the chat input panel');
-assert.match(serviceWxml, /class="composer-shell"/, 'chat input should use a rounded composer shell');
-assert.match(serviceWxml, /class="composer-add" bindtap="onComposerAdd"/, 'chat input should expose a left add button');
-assert.match(serviceWxml, /placeholder="继续补充一句需求"/, 'chat input should use the confirmed supplemental-demand placeholder');
-assert.match(serviceWxml, /auto-height="\{\{true\}\}"/, 'chat input should grow only when the user types multiple lines');
-assert.match(serviceWxml, /class="composer-action send \{\{inputText \? 'active' : 'disabled'\}\}" bindtap="onSend"/, 'chat input should always show the send button');
-assert.match(serviceWxml, /src="\/assets\/icons\/send-plane\.svg"/, 'send button should use the local paper-plane image');
-assert.doesNotMatch(serviceWxml, /onVoicePlaceholder|\)\)\)|class="composer-action voice"/, 'chat input should not keep a voice entry');
-assert.match(sendIcon, /<svg[\s\S]*viewBox=/, 'send paper-plane icon should be a local SVG image');
-
-for (const source of [serviceTs, serviceJs]) {
-  assert.match(source, /label:\s*'了解造价'/, 'bottom quick actions should include cost consultation');
-  assert.match(source, /label:\s*'对接设计老师'/, 'bottom quick actions should include designer handoff');
-  assert.match(source, /onComposerAdd\(\)/, 'left add button should have a handler');
-  assert.doesNotMatch(source, /onVoicePlaceholder\(\)/, 'voice placeholder handler should be removed');
+  return { definition, navigations };
 }
 
-console.log('customer service action placement checks passed');
+function createPage(definition) {
+  const handoffs = [];
+  const page = {
+    ...definition,
+    data: JSON.parse(JSON.stringify(definition.data)),
+    setData(values) {
+      Object.assign(this.data, values);
+    },
+    touchFlow() {},
+    pushUserChoice() {},
+    pushAIMessage() {},
+    recordEvent() {},
+    showDemandCollector() {},
+    handoffHuman() {
+      handoffs.push('human');
+    },
+  };
+  return { page, handoffs };
+}
+
+const serviceWxml = read('miniprogram/pages/customerservice/customerservice.wxml');
+const sendIcon = read('miniprogram/assets/icons/send-plane.svg');
+
+test('需求摘要卡保留生成方案和设计师承接两个可执行 CTA', () => {
+  const summaryCardMatch = serviceWxml.match(/<view wx:if="\{\{demandSummaryVisible\}\}" class="demand-summary-card">([\s\S]*?)<\/view>\s*<\/view>/);
+  assert.ok(summaryCardMatch, 'customer service page should render a demand summary card');
+
+  const summaryCard = summaryCardMatch[0];
+  assert.match(summaryCard, /bindtap="goGenerate">一键生成专属方案<\/view>/);
+  assert.match(summaryCard, /bindtap="handoffHuman">对接设计老师<\/view>/);
+  assert.doesNotMatch(summaryCard, /了解造价|修改户型/);
+});
+
+test('需求采集后快捷操作能进入造价页并交给设计老师', () => {
+  const { definition, navigations } = loadCustomerServicePage();
+  const { page, handoffs } = createPage(definition);
+
+  page.onQuickAction({ currentTarget: { dataset: { key: 'build' } } });
+  assert.deepEqual(
+    Array.from(page.data.quickActions, item => [item.key, item.label]),
+    [['cost', '了解造价'], ['human', '找设计老师']],
+  );
+
+  page.onQuickAction({ currentTarget: { dataset: { key: 'cost' } } });
+  page.onQuickAction({ currentTarget: { dataset: { key: 'human' } } });
+  assert.deepEqual(navigations, ['/pages/aicost/aicost']);
+  assert.equal(handoffs.length, 1);
+});
+
+test('底部快捷操作和输入区保持在同一操作面板', () => {
+  assert.match(serviceWxml, /bottom-panel[\s\S]*quick-actions[\s\S]*input-panel/);
+  assert.match(serviceWxml, /wx:for="\{\{quickActions\}\}"[\s\S]*bindtap="onQuickAction"[\s\S]*data-key="\{\{item\.key\}\}"/);
+  assert.match(serviceWxml, /class="composer-shell"/);
+  assert.match(serviceWxml, /class="composer-add" bindtap="onComposerAdd"/);
+  assert.match(serviceWxml, /placeholder="\{\{aiStreaming \? 'AI 正在回复中\.\.\.' : '继续补充一句需求'\}\}"/);
+  assert.match(serviceWxml, /<textarea[\s\S]*?\sauto-height\s/);
+  assert.match(serviceWxml, /class="composer-action send \{\{inputText && !aiStreaming \? 'active' : 'disabled'\}\}" bindtap="onSend"/);
+  assert.match(serviceWxml, /src="\{\{sendIcon\}\}"/);
+  assert.doesNotMatch(serviceWxml, /onVoicePlaceholder|\)\)\)|class="composer-action voice"/);
+  assert.match(sendIcon, /<svg[\s\S]*viewBox=/);
+});
