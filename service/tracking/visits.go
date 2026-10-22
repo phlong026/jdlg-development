@@ -285,7 +285,10 @@ func groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*vi
 		if visitor == nil || !visitorListed(*visitor, f) {
 			continue
 		}
-		id := fact.Session + ":" + material
+		// A session may remain active across Beijing midnight. Split it before
+		// material folding so visibility and progress stay on their natural day.
+		day := fact.Started.In(visitZone).Format("2006-01-02")
+		id := fact.Session + ":" + material + ":" + day
 		g := by[id]
 		if g == nil {
 			g = &visitGroup{Visit: Visit{ID: id, Started: fact.Started, Visitor: *visitor, Content: VisitContent{ID: fact.Content, Version: fact.Version, Route: fact.Route}}, session: fact.Session, owner: fact.Owner, end: fact.Started}

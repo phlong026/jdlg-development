@@ -693,6 +693,51 @@ func TestVisitsBatchDoesNotCrossBeijingCalendarDay(t *testing.T) {
 	}
 }
 
+func TestVisitsGroupsSplitSameSessionAndMaterialAtBeijingMidnight(t *testing.T) {
+	for _, group := range []string{"batch", "day"} {
+		t.Run(group, func(t *testing.T) {
+			s, m, scope, _ := visitsFixture(t)
+			beforeMidnight := time.Date(2026, 10, 10, 15, 55, 0, 0, time.UTC)
+			const session = "session-across-midnight"
+			visitPV(m, "pv-before-midnight", "one", "u:1", session, "content1", "", beforeMidnight, 1000)
+			visitEvent(m, "progress-before-midnight", "one", "u:1", session, "pv-before-midnight", "content1", beforeMidnight.Add(2*time.Second), Event{Type: "video_progress", Media: "media1", Duration: 60000, Unique: 12000})
+			visitPV(m, "pv-after-midnight", "one", "u:1", session, "content1", "", beforeMidnight.Add(10*time.Minute), 3000)
+			visitEvent(m, "progress-after-midnight", "one", "u:1", session, "pv-after-midnight", "content1", beforeMidnight.Add(10*time.Minute+5*time.Second), Event{Type: "video_progress", Media: "media1", Duration: 60000, Unique: 48000})
+
+			list, err := s.Visits(context.Background(), scope, Filter{Owner: "one", Group: group, Start: beforeMidnight.Add(-time.Hour), End: beforeMidnight.Add(time.Hour)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			items := visitItems(t, list)
+			if len(items) != 2 {
+				t.Fatalf("same-session %s visits across Beijing midnight = %+v, want two cards", group, items)
+			}
+			newer, older := items[0], items[1]
+			if newer.Group != group || older.Group != group {
+				t.Fatalf("cross-day groups = %q/%q, want %q", newer.Group, older.Group, group)
+			}
+			if newer.Started.In(visitZone).Format("2006-01-02") != "2026-10-11" || older.Started.In(visitZone).Format("2006-01-02") != "2026-10-10" {
+				t.Fatalf("cross-day visit dates = %s/%s", newer.Started.In(visitZone), older.Started.In(visitZone))
+			}
+			if group == "day" && (newer.Date != "2026-10-11" || older.Date != "2026-10-10") {
+				t.Fatalf("day response dates = %q/%q", newer.Date, older.Date)
+			}
+			if newer.Visible != 3000 || older.Visible != 1000 {
+				t.Fatalf("cross-day visible time = %d/%d, want 3000/1000", newer.Visible, older.Visible)
+			}
+			if newer.Progress == nil || newer.Progress.Percent != 80 || older.Progress == nil || older.Progress.Percent != 20 {
+				t.Fatalf("cross-day progress = %+v/%+v, want 80%%/20%%", newer.Progress, older.Progress)
+			}
+			if len(newer.Materials) != 1 || len(older.Materials) != 1 || newer.Materials[0].Content.ID != "content1" || older.Materials[0].Content.ID != "content1" {
+				t.Fatalf("cross-day materials = %+v/%+v, want one content1 row per day", newer.Materials, older.Materials)
+			}
+			if newer.Materials[0].Visible != 3000 || older.Materials[0].Visible != 1000 || newer.Materials[0].Progress == nil || newer.Materials[0].Progress.Percent != 80 || older.Materials[0].Progress == nil || older.Materials[0].Progress.Percent != 20 {
+				t.Fatalf("cross-day material metrics = %+v/%+v", newer.Materials[0], older.Materials[0])
+			}
+		})
+	}
+}
+
 // 按天视图：同一访客同一天内的访问即使间隔超过 30 分钟也合并，跨自然日拆开。
 func TestVisitsDayMergesByBeijingDate(t *testing.T) {
 	s, m, scope, now := visitsFixture(t)
