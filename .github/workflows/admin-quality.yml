@@ -39,9 +39,18 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Audit production and development dependencies
+        run: npm audit --audit-level=high
+
       # npm test includes TypeScript, all registered routes and the full UI suite.
       - name: Run type, route and UI regression checks
         run: npm test
+
+      # The mini-program runtime tests resolve TypeScript and Sass from the
+      # locked background dependencies installed above, without WeChat secrets.
+      - name: Run complete mini-program regression tests
+        working-directory: miniprogram
+        run: node --test tests/*.test.js
 
       - name: Build production assets
         run: npm run build
