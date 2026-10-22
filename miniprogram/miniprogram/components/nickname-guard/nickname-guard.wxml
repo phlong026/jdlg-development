@@ -4,7 +4,7 @@
     <text class="ng-desc">昵称将展示在设计师主页、评价与社区互动中</text>
 
     <view class="ng-avatar-row">
-      <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{uploading}}">
+      <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{uploading || saving}}">
         <image wx:if="{{avatarTemp || avatarUrl}}" class="ng-avatar-img" src="{{avatarTemp || avatarUrl}}" mode="aspectFill" />
         <view wx:else class="ng-avatar-placeholder">
           <text class="ng-avatar-placeholder-icon">＋</text>

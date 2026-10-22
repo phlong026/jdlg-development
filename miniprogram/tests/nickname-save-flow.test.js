@@ -7,7 +7,7 @@ const ts = require('./report-runtime')('typescript');
 
 const root = path.resolve(__dirname, '..');
 
-function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false } = {}) {
+function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false } = {}) {
   let definition;
   const storage = { token: 'test-token', userInfo: { id: 101, username: 'wx_test' } };
   const requests = [], events = [], toasts = [], uploads = [];
@@ -29,6 +29,7 @@ function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpl
       removeStorageSync: key => { delete storage[key]; },
       request(options) {
         requests.push(options);
+        if (deferSave && options.url.endsWith('/profile/nickname')) return;
         options.success({ statusCode: saveFails ? 500 : 200, data: saveFails ? { code: 500, msg: '保存失败' } : { code: 0 } });
       },
       uploadFile(options) {
@@ -139,6 +140,20 @@ for (const extension of ['ts', 'js']) {
     assert.equal(instance.data.saving, false);
     assert.equal(events.length, 0);
   });
+
+  test(`${extension}: 昵称保存期间选择头像不会启动上传或在离开页面后写资料`, async () => {
+    const { instance, requests, uploads, events } = loadGuard(extension, { deferSave: true });
+    const saving = instance.onConfirm(formEvent('保存中的昵称'));
+    assert.equal(instance.data.saving, true);
+    instance.onChooseAvatar({ detail: { avatarUrl: 'wxfile://late-avatar' } });
+    assert.equal(uploads.length, 0);
+    assert.equal(instance.data.avatarTemp, '');
+    assert.equal(requests.length, 1);
+    requests[0].success({ statusCode: 200, data: { code: 0 } });
+    await saving;
+    assert.equal(instance.data.visible, false);
+    assert.equal(events.length, 1);
+  });
 }
 
 test('昵称通过命名表单字段提交，完成按钮触发表单而不是读取旧输入缓存', () => {
@@ -146,4 +161,5 @@ test('昵称通过命名表单字段提交，完成按钮触发表单而不是�
   assert.match(wxml, /<form\b[^>]*bindsubmit="onConfirm"/);
   assert.match(wxml, /<input\b[^>]*name="nickname"[^>]*type="nickname"/);
   assert.match(wxml, /<button\b[^>]*form-type="submit"/);
+  assert.match(wxml, /<button\b[^>]*open-type="chooseAvatar"[^>]*disabled="{{uploading \|\| saving}}"/);
 });

@@ -69,7 +69,7 @@ Component({
         stopPropagation() { },
         // 微信官方头像填写能力：e.detail.avatarUrl 为微信头像临时文件
         onChooseAvatar(e) {
-            if (this.data.uploading) {
+            if (this.data.uploading || this.data.saving) {
                 return;
             }
             const tempFilePath = e?.detail?.avatarUrl;
