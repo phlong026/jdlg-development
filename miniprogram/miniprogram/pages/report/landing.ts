@@ -51,5 +51,7 @@ Page({
         if (this.data.enabled)
             wx.navigateTo({ url: '/pages/report/questionnaire', fail: () => this.setData({ error: '页面打开失败，请重试。' }) });
     },
+    getTimelineSharePayload() { return this.data.enabled && !this.data.loading && !this.data.error ? { title: '先想清楚怎么住，再决定怎么建', query: '' } : {}; },
+    onShareTimeline() { return this.getTimelineSharePayload(); },
     onShareAppMessage() { return { title: '先想清楚怎么住，再决定怎么建', path: '/pages/report/landing' }; },
 });

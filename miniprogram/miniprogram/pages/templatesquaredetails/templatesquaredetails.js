@@ -56,6 +56,21 @@ function mapDesignerCertStatusLabel(status) {
         return '未通过';
     return '';
 }
+function getTimelineSharePayload() {
+    const shareSourceUrl = this.getCurrentShareSourceUrl();
+    const timelineImageUrl = this.getPreparedTimelineShareImageUrl(shareSourceUrl);
+    if (!this.data.contentReady || !this.data.template || !shareSourceUrl || !timelineImageUrl) {
+        return {};
+    }
+    return {
+        title: `${this.data.templateName || '甲第灵光 · 模板详情'}\n建别墅从这里开始`,
+        query: this.buildTemplateShareQuery(shareSourceUrl),
+        imageUrl: timelineImageUrl,
+        success: () => {
+            this.handleShareSuccess();
+        },
+    };
+}
 Page({
     /**
      * 页面的初始数据
@@ -277,21 +292,8 @@ Page({
             },
         };
     },
-    onShareTimeline() {
-        const shareSourceUrl = this.getCurrentShareSourceUrl();
-        const timelineImageUrl = this.getPreparedTimelineShareImageUrl(shareSourceUrl);
-        if (!this.data.contentReady || !this.data.template || !shareSourceUrl || !timelineImageUrl) {
-            return {};
-        }
-        return {
-            title: `${this.data.templateName || '甲第灵光 · 模板详情'}\n建别墅从这里开始`,
-            query: this.buildTemplateShareQuery(shareSourceUrl),
-            imageUrl: timelineImageUrl,
-            success: () => {
-                this.handleShareSuccess();
-            },
-        };
-    },
+    getTimelineSharePayload,
+    onShareTimeline() { return getTimelineSharePayload.call(this); },
     noop() {
     },
     /**

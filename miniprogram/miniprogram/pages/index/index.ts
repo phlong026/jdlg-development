@@ -28,6 +28,15 @@ function buildPublicTemplateDetailCacheKey(templateId: number) {
   return `template-detail:public:${Number(templateId || 0)}`
 }
 
+function getTimelineSharePayload(this: any) {
+  if (!this.data.contentReady) return {};
+  return {
+    title: HOME_SHARE_TITLE,
+    query: 'from=share',
+    imageUrl: this.data.homeTimelineCover,
+  };
+}
+
 Page({
   shareCoversPromise: null as Promise<void> | null,
   data: {
@@ -111,14 +120,8 @@ Page({
       })),
     };
   },
-  onShareTimeline() {
-    if (!this.data.contentReady) return {};
-    return {
-      title: HOME_SHARE_TITLE,
-      query: 'from=share',
-      imageUrl: this.data.homeTimelineCover,
-    };
-  },
+  getTimelineSharePayload,
+  onShareTimeline() { return getTimelineSharePayload.call(this); },
   onOpenPage(e: any) {
     const { url } = e.currentTarget.dataset;
 
