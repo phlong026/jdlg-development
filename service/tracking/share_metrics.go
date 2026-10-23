@@ -12,28 +12,89 @@ import (
 // they are distribution inputs, not visitor forwarding behavior, and never
 // count toward anyone's share metrics.
 type shareFact struct {
-	id, sharer, route, content string
-	version                    int
-	at                         time.Time
+	id, sharer, route, content, channel, owner, session string
+	version                                             int
+	at                                                  time.Time
 }
 
 func clientShares(r Repository, scope Scope, f Filter) ([]shareFact, error) {
-	rows, err := scopedRecords(r, "share", RecordQuery{Owners: permittedOwners(scope, f.Owner), AtFrom: f.Start, AtBefore: f.End, AtThrough: f.AsOf})
+	// Shares retain the existing creation-window metric. A preparation before
+	// the window followed by an intent inside it is intentionally omitted;
+	// discovering those IDs would require another window-wide event scan.
+	// Missing intents can undercount gestures, never establish delivery.
+	owners := permittedOwners(scope, f.Owner)
+	rows, err := scopedRecords(r, "share", RecordQuery{Owners: owners, AtFrom: f.Start, AtBefore: f.End, AtThrough: f.AsOf})
 	if err != nil {
 		return nil, err
 	}
-	out := []shareFact{}
+	type candidate struct {
+		share Share
+		at    time.Time
+	}
+	candidates := []candidate{}
+	sessions := []string{}
 	for _, row := range rows {
 		var sh Share
-		if json.Unmarshal(row.Payload, &sh) != nil {
+		if json.Unmarshal(row.Payload, &sh) != nil || sh.Session == "" || sh.Sharer == "" || sh.Sharer != row.Visitor || sh.Owner != row.Owner {
 			continue
 		}
-		if sh.Session == "" || sh.Sharer == "" || sh.Sharer != row.Visitor {
-			continue
+		candidates = append(candidates, candidate{sh, row.At})
+		if sh.Prepared {
+			sessions = appendUnique(sessions, sh.Session)
 		}
-		out = append(out, shareFact{id: sh.ID, sharer: sh.Sharer, route: sh.Route, content: sh.Content, version: sh.Version, at: row.At})
+	}
+	intents := map[string][]struct {
+		row   Record
+		event Event
+	}{}
+	if len(sessions) > 0 {
+		events, err := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: sessions, AtFrom: f.Start, AtBefore: f.End, AtThrough: f.AsOf})
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range events {
+			var ev Event
+			if json.Unmarshal(row.Payload, &ev) != nil || ev.Type != "share_intent" || ev.Received.After(f.AsOf) {
+				continue
+			}
+			intents[ev.Share] = append(intents[ev.Share], struct {
+				row   Record
+				event Event
+			}{row, ev})
+		}
+	}
+	out := []shareFact{}
+	for _, candidate := range candidates {
+		sh := candidate.share
+		if sh.Prepared {
+			initiated := false
+			for _, intent := range intents[sh.ID] {
+				if shareIntentMatches(sh, candidate.at, intent.row, intent.event) {
+					initiated = true
+					break
+				}
+			}
+			if !initiated {
+				continue
+			} // Preheating is not an observed user gesture.
+		}
+		channel := sh.Channel
+		if !validShareChannel(channel) {
+			channel = ""
+		}
+		out = append(out, shareFact{id: sh.ID, sharer: sh.Sharer, route: sh.Route, content: sh.Content, version: sh.Version, at: candidate.at, channel: channel, owner: sh.Owner, session: sh.Session})
 	}
 	return out, nil
+}
+
+// The event's page binding is validated against its signed entry on acceptance;
+// its page may differ from the public target being shared. The share is bound
+// by owner/account/session, and a stored channel cannot be rewritten by an event.
+func shareIntentMatches(sh Share, created time.Time, row Record, ev Event) bool {
+	return ev.Type == "share_intent" && ev.Share == sh.ID && validShareChannel(ev.SourceChannel) &&
+		row.Owner == sh.Owner && row.Visitor == sh.Sharer && row.Session != "" && ev.Session == row.Session &&
+		(sh.Session == "" || row.Session == sh.Session) && (sh.Channel == "" || sh.Channel == ev.SourceChannel) &&
+		!ev.Received.IsZero() && !ev.Received.Before(created)
 }
 
 // shareCounts tallies client-initiated forwards per visitor inside the filter
@@ -114,7 +175,7 @@ func (s *Service) VisitorShares(ctx context.Context, scope Scope, key string, f 
 			return nil
 		}
 		owners := permittedOwners(scope, f.Owner)
-		channels, e := shareChannels(r, owners, key, f)
+		channels, e := shareChannels(r, owners, key, f, filtered)
 		if e != nil {
 			return e
 		}
@@ -160,25 +221,36 @@ func (s *Service) VisitorShares(ctx context.Context, scope Scope, key string, f 
 	return out, err
 }
 
-// shareChannels maps created share IDs to the channel the visitor shared
-// through, read from their share_intent events. Timeline shares reusing a
-// cached intent keep their channel; a share without a matching event (first
-// timeline tap, lost event) stays empty and the client says "未记录".
-func shareChannels(r Repository, owners []string, key string, f Filter) (map[string]string, error) {
-	rows, err := scopedRecords(r, "event", RecordQuery{Owners: owners, VisitorKeys: []string{key}, AtFrom: f.Start, AtBefore: f.End})
+// The declared target channel is immutable on the share record. Legacy rows
+// without it may use an authorized, validated share_intent; neither proves delivery.
+func shareChannels(r Repository, owners []string, key string, f Filter, shares []shareFact) (map[string]string, error) {
+	out := map[string]string{}
+	wanted := map[string]shareFact{}
+	for _, sh := range shares {
+		if validShareChannel(sh.channel) {
+			out[sh.id] = sh.channel
+		} else {
+			wanted[sh.id] = sh
+		}
+	}
+	if len(wanted) == 0 {
+		return out, nil
+	}
+	rows, err := scopedRecords(r, "event", RecordQuery{Owners: owners, VisitorKeys: []string{key}, AtFrom: f.Start, AtBefore: f.End, AtThrough: f.AsOf})
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]string{}
 	for _, row := range rows {
 		var ev Event
-		if json.Unmarshal(row.Payload, &ev) != nil {
+		if json.Unmarshal(row.Payload, &ev) != nil || ev.Received.After(f.AsOf) {
 			continue
 		}
-		if ev.Type != "share_intent" || ev.Share == "" || ev.SourceChannel == "" {
+		sh, ok := wanted[ev.Share]
+		if !ok || out[ev.Share] != "" {
 			continue
 		}
-		if _, ok := out[ev.Share]; !ok {
+		binding := Share{ID: sh.id, Owner: sh.owner, Sharer: sh.sharer, Session: sh.session, Route: sh.route, Content: sh.content, Version: sh.version}
+		if shareIntentMatches(binding, sh.at, row, ev) {
 			out[ev.Share] = ev.SourceChannel
 		}
 	}

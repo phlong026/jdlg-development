@@ -73,6 +73,7 @@ type VisitContent struct {
 // the direct upstream sharer unless that sharer operates the material.
 type VisitSource struct {
 	Kind      string          `json:"kind"`
+	Reason    string          `json:"reason,omitempty"`
 	Channel   string          `json:"channel,omitempty"`
 	Forwarder *VisitForwarder `json:"forwarder,omitempty"`
 }
@@ -101,7 +102,7 @@ const (
 )
 
 // visitChannels are the accepted source filters.
-var visitChannels = map[string]bool{"app_message": true, "timeline": true, "code_link": true, "direct": true}
+var visitChannels = map[string]bool{"app_message": true, "timeline": true, "code_link": true, "direct": true, "unknown": true}
 
 // The timeline reads raw engagement events for every served card, so its page
 // is smaller than the customer list's.
@@ -120,8 +121,8 @@ var visitZone = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 type visitGroup struct {
 	Visit
-	session, owner, share string
-	views                 []string
+	session, owner, share, attribution string
+	views                              []string
 	// sessions and materials are only filled by batch/day grouping.
 	sessions  []string
 	end       time.Time
@@ -173,7 +174,7 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 		// Only a share-based source filter needs every entry share resolved;
 		// otherwise the served page is enough.
 		shares := map[string]entryShare{}
-		filterByShare := f.Channel == "app_message" || f.Channel == "timeline" || f.Channel == "code_link"
+		filterByShare := f.Channel == "app_message" || f.Channel == "timeline" || f.Channel == "code_link" || f.Channel == "unknown"
 		if filterByShare {
 			if shares, e = s.entryShares(r, scope, f, groups); e != nil {
 				return e
@@ -182,7 +183,7 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 		items := make([]*visitGroup, 0, len(groups))
 		seen := map[string]bool{}
 		for _, g := range groups {
-			if filterByShare && !visitSourceMatches(sourceOf(g.share, shares), f.Channel) || f.Channel == "direct" && g.share != "" {
+			if filterByShare && !visitSourceMatches(sourceOf(g.share, shares, g.attribution), f.Channel) || f.Channel == "direct" && sourceOf(g.share, shares, g.attribution).Kind != "direct" {
 				continue
 			}
 			if !seen[g.Visitor.Key] {
@@ -290,7 +291,7 @@ func (s *Service) groupVisits(facts []factView, visitors map[string]*Visitor, f 
 		id := fact.Session + ":" + material + ":" + day
 		g := by[id]
 		if g == nil {
-			g = &visitGroup{Visit: Visit{ID: id, Started: fact.Started, Visitor: *visitor, Content: VisitContent{ID: fact.Content, Version: fact.Version, Route: fact.Route}}, session: fact.Session, owner: fact.Owner, end: fact.Started}
+			g = &visitGroup{Visit: Visit{ID: id, Started: fact.Started, Visitor: *visitor, Content: VisitContent{ID: fact.Content, Version: fact.Version, Route: fact.Route}}, session: fact.Session, owner: fact.Owner, attribution: fact.Attribution, end: fact.Started}
 			by[id] = g
 			groups = append(groups, g)
 		}
@@ -378,9 +379,10 @@ func newVisitBatch(src *visitGroup, mode string) *visitGroup {
 			Visitor: src.Visitor,
 			Group:   mode,
 		},
-		owner: src.owner,
-		share: src.share,
-		end:   src.groupEnd(),
+		owner:       src.owner,
+		share:       src.share,
+		attribution: src.attribution,
+		end:         src.groupEnd(),
 	}
 	if mode == "day" {
 		day := src.Started.In(visitZone).Format("2006-01-02")
@@ -455,6 +457,8 @@ func visitSourceMatches(source VisitSource, channel string) bool {
 		return true
 	case "app_message", "timeline":
 		return source.Kind == "share" && source.Channel == channel
+	case "unknown":
+		return source.Kind == "unknown" || source.Kind == "share" && source.Channel == ""
 	default:
 		return source.Kind == channel
 	}
@@ -468,8 +472,11 @@ type entryShare struct {
 
 // sourceOf classifies an entry share. A share record that is gone or belongs
 // to an unauthorized owner still reads as a share with no channel.
-func sourceOf(id string, shares map[string]entryShare) VisitSource {
+func sourceOf(id string, shares map[string]entryShare, attribution ...string) VisitSource {
 	if id == "" {
+		if len(attribution) > 0 && attribution[0] != "" && attribution[0] != "direct" {
+			return VisitSource{Kind: "unknown", Reason: attribution[0]}
+		}
 		return VisitSource{Kind: "direct"}
 	}
 	es, ok := shares[id]
@@ -483,8 +490,8 @@ func sourceOf(id string, shares map[string]entryShare) VisitSource {
 }
 
 // entryShares resolves the given groups' entry shares inside the authorized
-// owners, and each share's channel from the share_intent recorded in the
-// sharer's session (event rows index the entry share, not the created one).
+// owners. Stored channels need no intent upload; legacy rows may fall back to
+// a validated intent in the sharer's session (whose event index is the entry share).
 func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*visitGroup) (map[string]entryShare, error) {
 	out := map[string]entryShare{}
 	ids := []string{}
@@ -497,7 +504,7 @@ func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*vis
 		return out, nil
 	}
 	owners := permittedOwners(scope, f.Owner)
-	rows, err := scopedRecords(r, "share", RecordQuery{Owners: owners, Shares: ids})
+	rows, err := scopedRecords(r, "share", RecordQuery{Owners: owners, Shares: ids, AtThrough: f.AsOf})
 	if err != nil {
 		return nil, err
 	}
@@ -511,11 +518,15 @@ func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*vis
 		if json.Unmarshal(row.Payload, &sh) != nil {
 			return nil, ErrUnavailable
 		}
-		if !wanted[sh.ID] || !scope.Allows(row.Owner) {
+		if !wanted[sh.ID] || !scope.Allows(row.Owner) || sh.Owner != row.Owner || sh.Sharer != row.Visitor || sh.ID != row.Share {
 			continue
 		}
-		out[sh.ID] = entryShare{share: sh}
-		if sh.Session != "" {
+		channel := sh.Channel
+		if !validShareChannel(channel) {
+			channel = ""
+		}
+		out[sh.ID] = entryShare{share: sh, channel: channel}
+		if channel == "" && sh.Session != "" {
 			sessions = appendUnique(sessions, sh.Session)
 		}
 	}
@@ -536,7 +547,7 @@ func (s *Service) entryShares(r Repository, scope Scope, f Filter, groups []*vis
 		es, ok := out[ev.Share]
 		// Same snapshot rule as the fact reduction: an intent uploaded after
 		// as_of must not change a pinned page's source or filter membership.
-		if ev.Type != "share_intent" || ev.SourceChannel == "" || !ok || es.channel != "" || ev.Received.After(f.AsOf) {
+		if !ok || es.channel != "" || ev.Received.After(f.AsOf) || !shareIntentMatches(es.share, time.Time{}, row, ev) {
 			continue
 		}
 		es.channel = ev.SourceChannel
@@ -564,7 +575,7 @@ func (s *Service) attachSources(ctx context.Context, r Repository, f Filter, pag
 	forwarders := map[string]*VisitForwarder{}
 	sharers := []factView{}
 	for _, g := range page {
-		g.Source = sourceOf(g.share, shares)
+		g.Source = sourceOf(g.share, shares, g.attribution)
 		es, ok := shares[g.share]
 		if g.Source.Kind != "share" || !ok || es.share.Sharer == "" {
 			continue

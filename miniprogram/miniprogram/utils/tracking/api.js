@@ -20,8 +20,14 @@ function request(suffix, method = 'GET', body = {}, credential, authenticated = 
     success(response) {
       const result = response.data || {};
       if (response.statusCode >= 200 && response.statusCode < 300 && result.code === 0) resolve(result.data || {});
-      else reject(Object.assign(new Error('访问记录服务暂不可用'), { statusCode: response.statusCode }));
-    }, fail: () => reject(new Error('访问记录网络不可用'))
+      else reject(Object.assign(new Error('访问记录服务暂不可用'), {
+        statusCode: response.statusCode,
+        code: Number.isInteger(result.code) ? result.code : undefined,
+        operation: suffix.split('?')[0]
+      }));
+    }, fail: () => reject(Object.assign(new Error('访问记录网络不可用'), {
+      networkError: true, operation: suffix.split('?')[0]
+    }))
   }));
 }
 function mediaURL(value) { const url=String(value||''); return url.startsWith(ROOT+'/media/') ? ORIGIN+url : /^https:\/\//.test(url) ? url : ''; }

@@ -379,7 +379,7 @@ func TestVisitsPagination(t *testing.T) {
 func TestShareOriginMarksConsoleAndMiniProgramShares(t *testing.T) {
 	s, _ := fixture(t)
 	ctx := context.Background()
-	en := enter(t, s, 0)
+	en := enter(t, s, 42)
 	read := func(token string) Share {
 		t.Helper()
 		var sh Share
@@ -392,12 +392,12 @@ func TestShareOriginMarksConsoleAndMiniProgramShares(t *testing.T) {
 		}
 		return sh
 	}
-	mini, e := s.CreateShare(ctx, ShareInput{Route: en.Route, Key: "share-origin-mini"}, "", 42)
+	mini, e := s.CreateShare(ctx, ShareInput{Route: en.Route, Key: "share-origin-mini"}, en.Token, 42)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if got := read(mini["share_token"].(string)); got.Origin != "miniprogram" || got.Session != "" {
-		t.Fatalf("logged-in share without entry = %+v, want miniprogram origin and no session", got)
+	if got := read(mini["share_token"].(string)); got.Origin != "miniprogram" || got.Session != en.Session {
+		t.Fatalf("logged-in share = %+v, want miniprogram origin and signed session", got)
 	}
 	console, e := s.CreateConsoleShare(ctx, ShareInput{Route: en.Route, Key: "share-origin-console"}, 7)
 	if e != nil {

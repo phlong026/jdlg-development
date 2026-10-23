@@ -28,15 +28,19 @@ export function safeMediaURL(value?: string): string | undefined { if (!value) r
 export const intentLabels = { high: '高意向参考', medium: '中意向参考', low: '低关注待观察', unknown: '待判断' };
 // 卡片角标放不下“参考”二字；“仅供跟进参考”写在页面口径说明里。
 export const intentShortLabels = { high: '高意向', medium: '中意向', low: '低关注', unknown: '待判断' };
-// 分享渠道来自 share_intent 事件；首次朋友圈分享事件丢失时渠道未知，显示“未记录”。
+// 分享渠道来自创建时保存的目标渠道；旧记录回退到合法 share_intent，均不证明送达。
 // 微信不区分私聊与群聊，“私发”含发到群。
 export const channelLabels: Record<string, string> = { app_message: '私发', timeline: '朋友圈' };
 export function channelLabel(channel?: string): string { return channel ? channelLabels[channel] || channel : '渠道未记录'; }
 // 访问来源：小程序内分享按渠道；后台生成的码/链接与直接进入单独标出；渠道未回传显示“未记录”。
-export const sourceOptions: [string, string][] = [['app_message', '私发'], ['timeline', '朋友圈'], ['code_link', '扫码·链接'], ['direct', '直接访问']];
+export const sourceOptions: [string, string][] = [['app_message', '私发'], ['timeline', '朋友圈'], ['code_link', '扫码·链接'], ['direct', '直接访问'], ['unknown', '来源未确认']];
 export function sourceLabel(source?: VisitSource): string {
     if (!source || source.kind === 'direct') return '直接访问';
     if (source.kind === 'code_link') return '扫码·链接';
+    if (source.kind === 'unknown') {
+        const reasons: Record<string, string> = { invalid_share: '分享链接无效', expired_share: '分享链接已过期', revoked_share: '分享链接已停用', mismatched_share: '分享链接与页面不符' };
+        return reasons[source.reason || ''] || '来源未确认';
+    }
     return source.channel ? channelLabels[source.channel] || source.channel : '未记录';
 }
 export function visitorName(visitor: { visitor_key: string; nickname?: string; identity_state?: string }): string {

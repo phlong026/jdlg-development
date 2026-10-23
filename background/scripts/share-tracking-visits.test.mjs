@@ -55,6 +55,13 @@ test('source labels follow the timeline rules', () => {
   assert.equal(model.sourceLabel({ kind: 'share' }), '未记录');
   assert.equal(model.sourceLabel({ kind: 'code_link' }), '扫码·链接');
   assert.equal(model.sourceLabel({ kind: 'direct' }), '直接访问');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'unattributed' }), '来源未确认');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'invalid_share' }), '分享链接无效');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'expired_share' }), '分享链接已过期');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'revoked_share' }), '分享链接已停用');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'mismatched_share' }), '分享链接与页面不符');
+  assert.ok(model.sourceOptions.some(([value, label]) => value === 'unknown' && label === '来源未确认'));
+  assert.equal(model.queryFor({ ...model.defaultFilters, range: 'all', channel: 'unknown' }).channel, 'unknown');
   assert.equal(model.forwarderText({ kind: 'share', forwarder: { visitor_key: 'u:3', nickname: '心随我动', identity_state: 'identified' } }), '（心随我动转发）');
   assert.equal(model.forwarderText({ kind: 'share', forwarder: { visitor_key: 'a:x', nickname: '匿名访客 abcdef', identity_state: 'anonymous' } }), '（匿名访客转发）');
   assert.equal(model.forwarderText({ kind: 'share' }), '');

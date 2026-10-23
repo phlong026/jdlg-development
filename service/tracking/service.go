@@ -47,14 +47,24 @@ func (s *Service) entry(r Repository, token string) (Entry, error) {
 		return en, fail(401, "采集凭据无效")
 	}
 	en, e := decode[Entry](r, "entry", hash(token))
-	if e != nil || s.Now().After(en.Expires) {
+	if e != nil {
+		if !errors.Is(e, ErrNotFound) {
+			return en, e
+		}
+		return en, fail(401, "采集凭据已失效")
+	}
+	if !s.Now().Before(en.Expires) {
 		return en, fail(401, "采集凭据已失效")
 	}
 	if _, e = r.Get("deletion_session", en.Session); e == nil {
 		return en, fail(410, "访问记录已删除")
+	} else if !errors.Is(e, ErrNotFound) {
+		return en, e
 	}
 	if _, e = r.Get("deletion", en.Visitor); e == nil {
 		return en, fail(410, "访问记录已删除")
+	} else if !errors.Is(e, ErrNotFound) {
+		return en, e
 	}
 	return en, nil
 }
@@ -124,6 +134,7 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		now := s.Now()
 		owner := s.Config.DefaultOwner
 		share := ""
+		attribution := "unattributed"
 		self := false
 		if in.Route == publishedReaderRoute {
 			content, err := decode[Content](r, "version", contentKey(in.Content, in.Version))
@@ -139,10 +150,21 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 			}
 		}
 		if in.ShareToken != "" {
-			sh, e := decode[Share](r, "share", hash(in.ShareToken))
-			if e == nil && sh.Route == in.Route && sh.Content == in.Content && sh.Version == in.Version && !sh.Revoked && now.Before(sh.Expires) {
-				share = sh.ID
-				owner = sh.Owner
+			sh, err := decode[Share](r, "share", hash(in.ShareToken))
+			switch {
+			case errors.Is(err, ErrNotFound):
+				attribution = "invalid_share"
+			case err != nil:
+				return err // An unavailable repository is not proof of an invalid token.
+			case sh.Revoked:
+				attribution = "revoked_share"
+			case !now.Before(sh.Expires):
+				attribution = "expired_share"
+			case sh.Route != in.Route || sh.Content != in.Content || sh.Version != in.Version:
+				attribution = "mismatched_share"
+			default:
+				attribution = "share"
+				share, owner = sh.ID, sh.Owner
 				self = self || account > 0 && sh.Sharer == "u:"+strconv.FormatInt(account, 10)
 			}
 		}
@@ -160,7 +182,7 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		if _, e := r.Get("deletion", visitor); e == nil {
 			return fail(410, "访问记录已删除")
 		}
-		out = Entry{Route: in.Route, Content: in.Content, Version: in.Version, Session: opaque(), Visitor: visitor, Anonymous: anon, Account: account, Client: in.Client, Owner: owner, Share: share, Started: now, LastActive: now, Expires: now.Add(72 * time.Hour), Accessible: true, Self: self}
+		out = Entry{Attribution: attribution, Route: in.Route, Content: in.Content, Version: in.Version, Session: opaque(), Visitor: visitor, Anonymous: anon, Account: account, Client: in.Client, Owner: owner, Share: share, Started: now, LastActive: now, Expires: now.Add(72 * time.Hour), Accessible: true, Self: self}
 		if in.Previous != "" && in.ShareToken == "" {
 			old, err := s.entry(r, in.Previous)
 			linked := false
@@ -179,12 +201,14 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 				out.Session = old.Session
 				out.Started = old.Started
 				out.Share = old.Share
+				out.Attribution = old.Attribution
 				out.Owner = old.Owner
 				out.Self = out.Self || old.Self
 			} else if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == 0 && account > 0 && (in.Route != publishedReaderRoute || old.Owner == owner) {
 				out.Session = old.Session
 				out.Started = old.Started
 				out.Share = old.Share
+				out.Attribution = old.Attribution
 				out.Owner = old.Owner
 				out.OriginalVisitor = old.Visitor
 				if !linked {
@@ -224,12 +248,13 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 }
 
 type ShareInput struct {
-	Route   string `json:"route_key"`
-	Content string `json:"content_id"`
-	Version int    `json:"content_version"`
-	Parent  string `json:"parent_share_id"`
-	Channel string `json:"channel"`
-	Key     string `json:"idempotency_key"`
+	Prepared bool   `json:"prepared,omitempty"`
+	Route    string `json:"route_key"`
+	Content  string `json:"content_id"`
+	Version  int    `json:"content_version"`
+	Parent   string `json:"parent_share_id"`
+	Channel  string `json:"channel"`
+	Key      string `json:"idempotency_key"`
 }
 
 // CreateShare records a share made inside the mini program.
@@ -246,6 +271,9 @@ func (s *Service) createShare(ctx context.Context, in ShareInput, token string, 
 	var out map[string]any
 	if !s.Config.Enabled {
 		return out, fail(503, "采集未启用")
+	}
+	if in.Channel != "" && !validShareChannel(in.Channel) || origin == "console" && in.Channel != "" {
+		return out, fail(400, "分享渠道无效")
 	}
 	if !validID(in.Key) {
 		return out, fail(400, "缺少幂等标识")
@@ -280,8 +308,8 @@ func (s *Service) createShare(ctx context.Context, in ShareInput, token string, 
 			if in.Parent != "" && in.Parent == en.Share {
 				parent = in.Parent
 			}
-		} else if account <= 0 {
-			return fail(401, "需要有效访问上下文或登录")
+		} else if origin == "miniprogram" || account <= 0 {
+			return e
 		}
 		if account > 0 {
 			visitor = "u:" + strconv.FormatInt(account, 10)
@@ -312,7 +340,7 @@ func (s *Service) createShare(ctx context.Context, in ShareInput, token string, 
 			return nil
 		}
 		tok := opaque()
-		sh := Share{ID: opaque(), Route: in.Route, Content: in.Content, Version: in.Version, Owner: owner, Sharer: visitor, Session: session, Parent: parent, Origin: origin, Expires: now.Add(30 * 24 * time.Hour)}
+		sh := Share{Channel: in.Channel, Prepared: in.Prepared, ID: opaque(), Route: in.Route, Content: in.Content, Version: in.Version, Owner: owner, Sharer: visitor, Session: session, Parent: parent, Origin: origin, Expires: now.Add(30 * 24 * time.Hour)}
 		rec := record("share", hash(tok), owner, now, sh)
 		rec.Share, rec.Visitor, rec.Session = sh.ID, sh.Sharer, sh.Session
 		if e := r.Insert(rec); e != nil {
@@ -349,8 +377,11 @@ func (s *Service) batchAvailability(ctx context.Context, r Repository) availabil
 	}
 }
 
+func validShareChannel(channel string) bool { return channel == "app_message" || channel == "timeline" }
+
 func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *Event, available availabilityCheck) error {
 	now := s.Now()
+	e.Attribution = en.Attribution
 	if e.Schema != 1 || !validID(e.ID) || (e.Type != "share_intent" && !validID(e.View)) || e.Session != en.Session {
 		return fail(400, "事件版本或上下文无效")
 	}
@@ -430,7 +461,7 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 		return fail(400, "分享归因不一致")
 	}
 	if e.Type == "share_intent" && e.Share != "" {
-		shares, err := scopedRecords(r, "share", RecordQuery{Shares: []string{e.Share}})
+		shares, err := scopedRecords(r, "share", RecordQuery{Owners: []string{en.Owner}, Shares: []string{e.Share}})
 		if err != nil {
 			return err
 		}
@@ -438,7 +469,9 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 		for _, sr := range shares {
 			var sh Share
 			_ = json.Unmarshal(sr.Payload, &sh)
-			if sh.ID == e.Share && sh.Sharer == en.Visitor && (sh.Session == "" || sh.Session == en.Session) && sh.Owner == en.Owner && sh.Route == e.Route && sh.Content == e.Content && sh.Version == e.Version {
+			// The event belongs to its signed page context; the selected public
+			// share target may be another page. Bind the action to this session.
+			if sh.ID == e.Share && sh.Sharer == en.Visitor && (sh.Session == "" || sh.Session == en.Session) && sh.Owner == en.Owner && !sh.Revoked && now.Before(sh.Expires) && (sh.Channel == "" || sh.Channel == e.SourceChannel) {
 				ok = true
 			}
 		}
