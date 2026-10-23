@@ -524,23 +524,8 @@ Page({
    * 每个自然日最多提醒一次（保存成功后组件会清除该标记）。
    */
   maybePromptNickname(profile: any) {
-    if (String(profile?.nickname || '').trim()) {
-      return;
-    }
-    const now = new Date();
-    const dayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-    if (wx.getStorageSync('nickname_prompt_day') === dayKey) {
-      return;
-    }
     const guard = this.selectComponent('#nicknameGuard') as any;
-    if (!guard || typeof guard.show !== 'function') {
-      return;
-    }
-    wx.setStorageSync('nickname_prompt_day', dayKey);
-    guard.show({
-      nickname: '',
-      avatar: String(profile?.avatar || ''),
-    });
+    if (guard && typeof guard.showIfMissing === 'function') guard.showIfMissing(profile);
   },
 
   // 昵称弹窗保存成功后刷新资料展示

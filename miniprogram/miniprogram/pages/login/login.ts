@@ -50,15 +50,8 @@ Page({
     const agreedPrivacy = wx.getStorageSync(LOGIN_PRIVACY_AGREEMENT_STORAGE_KEY) === true;
     const username = options.username || '';
     if (token) {
-      // 已登录，跳转到首页
-      wx.switchTab({
-        url: '/pages/index/index',
-        fail: () => {
-          wx.reLaunch({
-            url: '/pages/index/index',
-          })
-        }
-      });
+      // A valid session does not imply that profile setup finished.
+      void this.enterAppAfterLogin();
       return;
     }
 
@@ -448,6 +441,10 @@ Page({
   },
 
   // 昵称弹窗保存成功后的回调：延续登录流程进入首页
+  onNicknameSkipped() {
+    this.navigateToIndexAfterLogin();
+  },
+
   onNicknameCompleted() {
     this.navigateToIndexAfterLogin();
   },

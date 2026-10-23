@@ -232,7 +232,7 @@ Page({
     this.rememberHomeIntroPopupSeen();
     this.setData({
       homeIntroPopupVisible: false,
-    });
+    }, () => { void this.promptNicknameIfMissing(); });
   },
   onHomeIntroTopup() {
     this.closeHomeIntroPopup();

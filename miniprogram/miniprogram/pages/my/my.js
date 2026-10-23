@@ -472,23 +472,9 @@ Page({
      * 每个自然日最多提醒一次（保存成功后组件会清除该标记）。
      */
     maybePromptNickname(profile) {
-        if (String(profile?.nickname || '').trim()) {
-            return;
-        }
-        const now = new Date();
-        const dayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-        if (wx.getStorageSync('nickname_prompt_day') === dayKey) {
-            return;
-        }
         const guard = this.selectComponent('#nicknameGuard');
-        if (!guard || typeof guard.show !== 'function') {
-            return;
-        }
-        wx.setStorageSync('nickname_prompt_day', dayKey);
-        guard.show({
-            nickname: '',
-            avatar: String(profile?.avatar || ''),
-        });
+        if (guard && typeof guard.showIfMissing === 'function')
+            guard.showIfMissing(profile);
     },
     // 昵称弹窗保存成功后刷新资料展示
     onNicknameGuardCompleted() {
@@ -604,6 +590,10 @@ Page({
             path: '/pages/my/my'
         };
     },
+    /**
+     * 分享到朋友圈：与 onShareAppMessage 成对定义（微信要求先满足条件 1 才开放条件 2）。
+     * 单页模式无 path 概念，仅标题。
+     */
     onShareTimeline() {
         return {
             title: '个人中心'
