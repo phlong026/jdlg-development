@@ -34,19 +34,12 @@ function getSDK() {
 }
 function enabledConsent() {
   const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
-  if(choice) return choice.accepted===true && choice.version===config.consent_version && choice.notice===config.privacy_notice ? choice.version : '';
-  const accepted = safely(() => wx.getStorageSync(CONSENT), null);
-  return accepted && accepted.version === config.consent_version && config.privacy_notice ? accepted.version : '';
+  return choice && choice.accepted===true && choice.explicit===true && choice.version===config.consent_version && choice.notice===config.privacy_notice ? choice.version : '';
 }
 function refreshConfig() {
   return api.request('/config').then(value => {
     config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++;
-    // 静默同意：告知见隐私政策与"设置-访问分析"开关，可随时关闭。
-    // 只对"从未选择"或"此前同意但告知已更新"的用户生效；明确拒绝过的不覆盖。
-    if (config.enabled===true && config.consent_version && config.privacy_notice) {
-      const choice = consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
-      if (!choice || (choice.accepted===true && (choice.version!==config.consent_version || choice.notice!==config.privacy_notice))) safely(()=>setConsent(true));
-    }
+    // Missing, legacy implicit, declined and outdated choices never grant analytics.
     const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
     return config;
   }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });
@@ -56,7 +49,7 @@ function setConsent(accepted) {
   if (accepted && (config.enabled!==true || !config.consent_version || !config.privacy_notice)) return false;
   consentRevision++; if(accepted!==true)entryInvalidation++;
   const previous=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null) || safely(()=>wx.getStorageSync(CONSENT),null) || {};
-  consentChoice={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,at:new Date().toISOString()};
+  consentChoice={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,explicit:true,at:new Date().toISOString()};
   safely(()=>wx.setStorageSync(CONSENT_CHOICE,consentChoice));
   safely(() => accepted ? wx.setStorageSync(CONSENT,{version:config.consent_version,at:new Date().toISOString()}) : wx.removeStorageSync(CONSENT));
   const s=getSDK(); if (s) s.configure(config.enabled===true,accepted ? config.consent_version : ''); return true;
@@ -82,7 +75,7 @@ function showConsentChoices(page, manual=false) {
       // Pass the complete configured notice, without truncation or implicit consent.
       const active = enabledConsent() === version;
       try { wx.showModal({title:'访问分析说明',
-        content:notice+(active
+        content:notice+'\n\n登录后，已获访问权限的管理人员可见账号昵称、头像及访问记录；不公开手机号或输入正文。分析为自愿选择。'+(active
           ?'\n\n当前状态：已开启。关闭后我们不再记录浏览数据，不影响阅读、分享或其他功能，可随时回来开启。'
           :'\n\n当前状态：未开启。开启后我们记录浏览与分享数据用于改进服务，可随时关闭，不影响任何功能。'),
         showCancel:true,confirmText:active?'保持开启':'开启分析',cancelText:active?'关闭分析':'保持关闭',
@@ -103,7 +96,7 @@ function showConsentChoices(page, manual=false) {
 }
 function consentPageVisible(page,visible) {
   page.__trackingConsentVisible=visible;
-  // 静默模式：不再随页面展示自动弹窗，开关见"设置-访问分析"。
+  // Reading stays available without choosing. Explicit choices live in Settings.
   if(visible){consentPage=page;}
   else if(consentPage===page)consentPage=null;
 }

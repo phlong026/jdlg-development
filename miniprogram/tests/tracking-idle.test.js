@@ -253,7 +253,7 @@ test('actual adapter config-fetch failure preserves cold-start queue, and succes
   const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
   const saved = restoredQueue(), sent = [], storage = {
     share_tracking_queue_v1: saved,
-    share_tracking_consent_v1: { version: 'notice-v1' }
+    share_tracking_consent_choice_v1: { accepted:true, explicit:true, version: 'notice-v1', notice:'purpose and categories' }
   };
   let configFails = true;
   const api = { async request(suffix, method, body) {

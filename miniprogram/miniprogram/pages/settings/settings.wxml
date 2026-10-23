@@ -175,7 +175,7 @@
               </view>
               <view class="item-texts">
                 <text class="item-title">访问分析</text>
-                <text class="item-desc">帮助我们改进内容与服务，关闭不影响任何功能</text>
+                <text class="item-desc">自愿开启；授权人员可见昵称、头像及公开页访问记录，关闭不影响浏览</text>
               </view>
             </view>
             <view class="item-tail">

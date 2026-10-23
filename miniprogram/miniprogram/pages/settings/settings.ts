@@ -109,14 +109,16 @@ Page({
     })
   },
 
-  onToggleTracking(e: any) {
-    const enabled = !!e.detail.value
-    const ok = trackingConsent.setConsent(enabled)
-    this.setData({ trackingEnabled: ok ? enabled : !enabled })
-    wx.showToast({
-      title: !ok ? '暂时无法更改，请稍后再试' : enabled ? '已开启访问分析' : '已关闭访问分析',
-      icon: 'none',
-    })
+  async onToggleTracking(e: any) {
+    if (e.detail.value === true) {
+      this.setData({ trackingEnabled: false })
+      await trackingConsent.showConsentChoices(this)
+      this.setData({ trackingEnabled: trackingConsent.consented() })
+      return
+    }
+    trackingConsent.setConsent(false)
+    this.setData({ trackingEnabled: false })
+    wx.showToast({ title: '已关闭访问分析', icon: 'none' })
   },
 
   ensureLoggedIn() {
