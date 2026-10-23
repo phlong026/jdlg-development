@@ -62,3 +62,5 @@ python3 /workspace/jdlg-fix-evidence/UI/capture.py original-before
 ```
 
 业务回归、类型和构建由总任务统一运行；本报告不以截图替代功能测试，也不声称线上或微信真机验收。
+
+后续交付复核：保留两个原 UI 提交并合入最新 `main`（`1cf864c`）后，后台 `npm test` 748/748、类型/路由/构建均通过。桌面/390px 的分享、客户、线索与关键弹层重新渲染共 38 个状态，0 JS 错误、0 外网/写请求、0 横向溢出或弹层越界。补充截图与日志在 `/workspace/jdlg-ui-pr-evidence/`。用户已授权单独推送/PR；未授权合并该 UI PR 或部署。

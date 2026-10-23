@@ -2,9 +2,12 @@ import { visitorName } from './model';
 import React, { useEffect, useState } from 'react';
 import type { Visit, VisitMaterial } from '../../api/shareTracking';
 import { ConvertLeadButton } from './convertLead';
-import { duration, forwarderText, identityBadge, intentShortLabels, progressText, safeMediaURL, sourceLabel, visitRange } from './model';
+import { duration, forwarderText, identityBadge, intentShortLabels, progressText, safeMediaURL, sourceLabel, visitRange, pageLabel } from './model';
 
 const typeLabels: Record<string, string> = { image: '图片', video: '视频', rich_text: '图文', article: '图文', page: '页面' };
+
+const contentTitle = (content: Visit['content']) => content.type === 'page'
+    ? pageLabel(content.route_key, content.title) : content.title || '历史素材信息不可用';
 
 function MaterialThumb({ material }: { material: VisitMaterial }) {
     const cover = material.content.content_accessible ? safeMediaURL(material.content.cover?.url) : undefined;
@@ -78,7 +81,7 @@ export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit
                     {materials.map(material => <span className="st-visit-material" key={`${material.content.route_key}:${material.content.content_id}:${material.content.content_version}`}>
                         <MaterialThumb material={material} />
                         <span className="st-visit-material-info">
-                            <strong>{material.content.title || '历史素材信息不可用'}</strong>
+                            <strong>{contentTitle(material.content)}</strong>
                             <small>{typeLabels[material.content.type] || '素材'} · 本次{duration(material.visible_ms)} · 累计{material.page_views}次</small>
                         </span>
                         {progressText(material.progress) && <small className="st-visit-material-progress">{progressText(material.progress)}</small>}
@@ -87,9 +90,9 @@ export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit
                 </span>
             </button>
         ) : (
-            <button className="st-visit-body" onClick={onOpen} aria-label={`查看${name}看「${content.title || '历史素材'}」的记录`}>
+            <button className="st-visit-body" onClick={onOpen} aria-label={`查看${name}看「${contentTitle(content)}」的记录`}>
                 <span className="st-visit-thumb">{cover && !coverFailed ? <img src={cover} alt="" loading="lazy" onError={() => setCoverFailed(true)} /> : <span>{typeLabels[content.type] || '素材'}</span>}</span>
-                <span className="st-visit-title">{content.title || '历史素材信息不可用'}</span>
+                <span className="st-visit-title">{contentTitle(content)}</span>
                 <span className="st-visit-source">
                     <span>来源:{sourceLabel(source)}</span>
                     {visit.engaged && <em className="st-visit-engaged" title="本次观看≥60秒，或本素材累计浏览≥3次，或视频看到80%以上；只反映浏览行为，不是意向等级">看得认真</em>}

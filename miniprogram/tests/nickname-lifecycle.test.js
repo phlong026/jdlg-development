@@ -63,3 +63,35 @@ for (const ext of ['ts','js']) {
     const other=load(guard,ext,{storage});assert.equal(await other.instance.checkAndShow(),true);
   });
 }
+
+for (const ext of ['ts','js']) {
+  test(`${ext}: returning login trusts the same-account server nickname over stale cache`,async()=>{
+    let shows=0;
+    const storage={token:'verified-same-account',userInfo:{id:101,nickname:'旧缓存昵称'}};
+    const f=load('pages/login/login',ext,{storage,component:{show(){shows++;}},request:o=>o.success({statusCode:200,data:{code:0,data:{id:101,nickname:'  当前服务端昵称  '}}})});
+    await f.instance.enterAppAfterLogin();
+    assert.equal(shows,0);assert.equal(storage.userInfo.id,101);
+    assert.equal(storage.userInfo.nickname,'当前服务端昵称');
+    assert.equal(f.requests.length,1);assert.equal(f.requests[0].method,'GET');
+    assert.deepEqual(f.navigation,['/pages/index/index']);
+  });
+  test(`${ext}: blank or invalid server nickname resumes optional completion without writing an empty name`,async()=>{
+    for(const value of [null,'   ','名'.repeat(33)]){
+      let shows=0;
+      const storage={token:'verified-same-account',userInfo:{id:101,nickname:'缓存不能当作已保存证据'}};
+      const f=load('pages/login/login',ext,{storage,component:{show(){shows++;}},request:o=>o.success({statusCode:200,data:{code:0,data:{id:101,nickname:value}}})});
+      await f.instance.enterAppAfterLogin();assert.equal(shows,1);
+      assert.equal(storage.userInfo.id,101);assert.equal(storage.userInfo.nickname,'缓存不能当作已保存证据');
+      assert.equal(f.requests.length,1);assert.equal(f.requests[0].method,'GET');
+      const g=load(guard,ext,{storage});assert.equal(g.instance.showIfMissing({id:101,nickname:value}),true);
+    }
+  });
+  test(`${ext}: late profile from another token or mismatched account cannot replace the current nickname`,async()=>{
+    for(const changedToken of [true,false]){
+      const storage={token:'current-token',userInfo:{id:101,nickname:'当前账号昵称'}};
+      const f=load('pages/login/login',ext,{storage,request:o=>{if(changedToken)storage.token='new-token';o.success({statusCode:200,data:{code:0,data:{id:changedToken?101:202,nickname:'不属于当前账号'}}});}});
+      await assert.rejects(f.instance.fetchProfileNickname(),/账号/);
+      assert.equal(storage.userInfo.id,101);assert.equal(storage.userInfo.nickname,'当前账号昵称');
+    }
+  });
+}

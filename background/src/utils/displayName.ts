@@ -32,10 +32,11 @@ export const maskPhone = (phone?: string | null): string => {
 export const formatUserName = (user: UserNameSource | null | undefined, id?: number | string | null): string => {
     // display_name 等于登录名时只是后端兜底，不算真正的昵称
     const displayName = user?.display_name && user.display_name !== user.username ? user.display_name : '';
-    for (const name of [user?.nickname, displayName]) {
-        const value = visibleUsername(name);
-        if (value) return value;
-    }
+    // A saved profile nickname is presentation, even if its text starts with wx_.
+    const nickname = String(user?.nickname || '').trim();
+    if (nickname) return nickname;
+    const visibleDisplayName = visibleUsername(displayName);
+    if (visibleDisplayName) return visibleDisplayName;
     const phone = maskPhone(user?.phone);
     if (phone) return phone;
     const username = visibleUsername(user?.username);
