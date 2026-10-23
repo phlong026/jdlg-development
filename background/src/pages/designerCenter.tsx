@@ -87,8 +87,9 @@ const formatDateTime = (value?: string | null) => {
 
 const getDesignerDisplayName = (item?: DesignerManagementItem | DesignerManagementDetail | null) => {
     if (!item) return '未命名设计师';
-    const profileName = 'profile' in item ? item.profile?.nickname : item.display_name;
-    return formatUserName({ nickname: profileName, username: item.username }, item.user_id);
+    return formatUserName('profile' in item
+        ? { nickname: item.profile?.nickname, username: item.username }
+        : { display_name: item.display_name, username: item.username }, item.user_id);
 };
 
 const DesignerCenter: React.FC = () => {
