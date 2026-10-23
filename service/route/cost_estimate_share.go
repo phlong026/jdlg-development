@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"service/model"
+	"service/tracking"
 
 	"github.com/gin-gonic/gin"
 )
@@ -191,7 +192,10 @@ func RegisterCostEstimateShareRoutes(public, auth *gin.RouterGroup, store *model
 			costEstimateShareFailure(c, "read", errors.New("stored report schema invalid"))
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"report_id": snapshot.ReportID, "expires_at": snapshot.ExpiresAt, "result": snapshot.Result}})
+		metadata := costSnapshotMetadata(snapshot)
+		c.JSON(http.StatusOK, gin.H{"code": 0, "data": gin.H{"report_id": snapshot.ReportID, "expires_at": snapshot.ExpiresAt, "result": snapshot.Result,
+			"tracking": gin.H{"route_key": tracking.CostSnapshotRoute, "content_id": tracking.CostSnapshotID(snapshot.ReportID), "content_version": tracking.SourceSnapshotVersion(metadata)},
+		}})
 	})
 	auth.DELETE("/ai/cost/shares/:id", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")

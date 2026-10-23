@@ -129,6 +129,12 @@ const ROUTES = {
     "readiness": "rendered",
     "collect": true
   },
+  "pages/aicostshare/aicostshare": {
+    "kind": "detail",
+    "readiness": "explicit",
+    "collect": true,
+    "idKey": "report_id"
+  },
   "pages/aicostresult/aicostresult": {
     "kind": "excluded",
     "readiness": "excluded-private-estimate",
@@ -357,6 +363,7 @@ function binding(route, options) {
  if (!p.idKey || !value) return {};
  const raw=String(value).slice(0,80);
  if (p.kind==='owned-content') return {id:raw,version:Number(options.content_version)||undefined};
+ if (route==='pages/aicostshare/aicostshare') return /^[A-Za-z0-9_-]{32}$/.test(raw) ? {id:'costsnapshot:'+raw} : {};
  let hash=2166136261; for(let i=0;i<route.length;i++) hash=Math.imul(hash ^ route.charCodeAt(i),16777619);
  return {id:'legacy:'+(hash>>>0).toString(16)+':'+raw.replace(/[^A-Za-z0-9_-]/g,'')};
 }

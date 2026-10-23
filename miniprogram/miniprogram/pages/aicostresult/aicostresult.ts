@@ -5,13 +5,11 @@ import {
   resolveEnterpriseWechatServiceConfig,
   tryOpenCustomerServiceDirect,
 } from '../../utils/enterpriseWechat';
-import { prepareCostEstimateShareImage, prepareCostEstimateTimelineImage } from '../../utils/costEstimateShareImage';
 import {
   CostEstimateBasicInfo as BasicInfoItem,
   CostEstimateBreakdown as CostBreakdownItem,
   CostEstimateShareResult,
   createCostEstimateShare,
-  getCostEstimateShare,
   isCostEstimateShareResult,
   sanitizeCostEstimateShareResult,
 } from '../../utils/costEstimateShare';
@@ -42,6 +40,7 @@ Page({
   pageDestroyed: false,
   pageReady: false,
   requestedReportId: '',
+  requestedShareToken: '',
   reportSnapshot: null as CostEstimateShareResult | null,
   data: {
     estimatedTotalCost: '',
@@ -71,8 +70,8 @@ Page({
     const reportId = String(options.report_id || '').trim();
     if (Object.prototype.hasOwnProperty.call(options, 'report_id')) {
       this.requestedReportId = reportId;
-      this.setData({ reportLoading: true });
-      void this.loadSharedReport(reportId);
+      this.requestedShareToken = String(options.st || '');
+      this.openPublicSnapshot();
       return;
     }
     let result: unknown;
@@ -118,30 +117,13 @@ Page({
     });
   },
 
-  async loadSharedReport(reportId: string) {
-    try {
-      const snapshot = await getCostEstimateShare(reportId);
-      if (this.pageDestroyed || this.requestedReportId !== reportId) return;
-      this.applyResult(snapshot.result);
-      this.setData({ shareReportId: snapshot.report_id });
-      this.loadEnterpriseWechatServiceConfig();
-      this.maybePrepareShareReport();
-    } catch (error) {
-      console.error('加载分享测算报告失败:', error);
-      if (this.pageDestroyed || this.requestedReportId !== reportId) return;
-      this.reportSnapshot = null;
-      this.setData({
-        reportLoading: false,
-        reportError: getErrorMessage(error, '分享报告已失效，请重新测算'),
-      });
-    }
+  openPublicSnapshot() {
+    const token = this.requestedShareToken ? `&st=${encodeURIComponent(this.requestedShareToken)}` : '';
+    wx.redirectTo({ url: `/pages/aicostshare/aicostshare?report_id=${encodeURIComponent(this.requestedReportId)}${token}`,
+      fail: () => this.setData({ reportLoading: false, reportError: '公开报告页面暂时无法打开，请重新进入分享链接。' }) });
   },
 
-  onRetrySharedReport() {
-    if (this.data.reportLoading) return;
-    this.setData({ reportLoading: true, reportError: '' });
-    void this.loadSharedReport(this.requestedReportId);
-  },
+  onRetrySharedReport() { this.openPublicSnapshot(); },
 
   onRecalculate() {
     wx.redirectTo({ url: '/pages/aicost/aicost' });
@@ -163,62 +145,32 @@ Page({
   },
 
   maybePrepareShareReport() {
-    if (!this.pageReady || this.pageDestroyed || this.data.sharePreparing || this.data.shareReady || !this.reportSnapshot) return;
-    if (!this.data.shareReportId && !wx.getStorageSync('token')) return;
-    void this.onPrepareShareReport();
+    // Displaying or returning to a private result is never permission to publish.
   },
 
   async onPrepareShareReport() {
-    if (this.data.sharePreparing || this.data.shareReady || !this.reportSnapshot) return;
-    if (!this.data.shareReportId && !wx.getStorageSync('token')) return;
+    if (this.data.sharePreparing || !this.reportSnapshot) return;
+    if (!this.data.shareReportId && !wx.getStorageSync('token')) {
+      wx.showToast({ title: '请先登录后公开分享', icon: 'none' });
+      return;
+    }
     this.setData({ sharePreparing: true });
     try {
       const identity = this.data.shareReportId
         ? { report_id: this.data.shareReportId }
         : await createCostEstimateShare(this.reportSnapshot);
       if (this.pageDestroyed) return;
-      // Keep the first immutable snapshot when cover generation needs a retry.
-      this.setData({ shareReportId: identity.report_id });
-      const card = this.getShareCard();
-      const [shareChatImage, shareTimelineImage] = await Promise.all([
-        prepareCostEstimateShareImage(card),
-        prepareCostEstimateTimelineImage(card),
-      ]);
-      if (this.pageDestroyed) return;
-      if (!shareChatImage || !shareTimelineImage) throw new Error('分享封面生成失败，请重试');
-      this.setData({
-        sharePreparing: false,
-        shareReady: true,
-        shareChatImage,
-        shareTimelineImage,
-        contentReady: true,
-      });
+      this.setData({ shareReportId: identity.report_id, sharePreparing: false });
+      wx.navigateTo({ url: `/pages/aicostshare/aicostshare?report_id=${encodeURIComponent(identity.report_id)}` });
     } catch (error) {
-      console.error('准备预算报告分享失败:', error);
       if (this.pageDestroyed) return;
-      this.setData({ sharePreparing: false, shareReady: false, contentReady: false });
+      this.setData({ sharePreparing: false });
+      wx.showToast({ title: getErrorMessage(error, '公开分享失败，请重试'), icon: 'none' });
     }
   },
 
-  onShareAppMessage() {
-    if (!this.data.shareReady || !this.data.shareReportId) return {};
-    const title = this.getShareTitle();
-    const path = `/pages/aicostresult/aicostresult?report_id=${encodeURIComponent(this.data.shareReportId)}`;
-    return {
-      title,
-      path,
-      imageUrl: this.data.shareChatImage || undefined,
-    } as any;
-  },
-
-  onShareTimeline() {
-    if (!this.data.contentReady || !this.data.shareReportId || !this.data.shareTimelineImage) return {};
-    return {
-      title: this.getShareTitle(),
-      query: `report_id=${encodeURIComponent(this.data.shareReportId)}`,
-      imageUrl: this.data.shareTimelineImage,
-    };
-  },
+  onShareAppMessage() { return {}; },
+  onShareTimeline() { return {}; },
 
   onViewCostDetails() {
     this.setData({ showCostDetails: !this.data.showCostDetails });

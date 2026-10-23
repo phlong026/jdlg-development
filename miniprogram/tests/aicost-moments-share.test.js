@@ -83,166 +83,93 @@ test('budget form prepares a local square cover and exposes the same Moments lan
   assert.equal(timeline.imageUrl, 'wxfile://user-data/cloud-images/budget-timeline-v2.jpg');
 });
 
-function createResultHarness({ cached = currentResult, reportId, sharedResult = currentResult, sharedError = null, token = 'token', chatCover = 'wxfile://chat.jpg', timelineCover = 'wxfile://timeline.jpg' } = {}) {
-  let definition;
-  let currentToken = token;
-  const calls = { create: [], get: [], login: [] };
+function createResultHarness({ cached = currentResult, options = {}, token = 'token', publishError = null, redirectError = false } = {}) {
+  let definition, currentToken = token;
+  const calls = { create: [], navigation: [], redirects: [], toasts: [] };
   const api = {
     createCostEstimateShare: async (result) => {
       calls.create.push(result);
+      if (publishError) throw publishError;
       return { report_id: 'AbcdEFghIJklMNopQRstUVwxYZ012345', expires_at: '2026-11-20T00:00:00Z' };
     },
-    getCostEstimateShare: async (id) => {
-      calls.get.push(id);
-      if (sharedError) throw sharedError;
-      return { report_id: id, expires_at: '2026-11-20T00:00:00Z', result: sharedResult };
-    },
+    isCostEstimateShareResult: value => Boolean(value && value.version === 4 && value.basicInfo?.length === 14 && value.costBreakdown?.length >= 6),
+    sanitizeCostEstimateShareResult: value => JSON.parse(JSON.stringify(value, (key, item) => key === 'color' ? undefined : item)),
   };
   vm.runInNewContext(transpile(resultPath), {
-    exports: {},
-    Page(value) { definition = value; },
+    exports: {}, Page(value) { definition = value; },
     require(request) {
       if (request === '../../utils/enterpriseWechat') return {
         DEFAULT_CUSTOMER_SERVICE_CORP_ID: 'corp', DEFAULT_CUSTOMER_SERVICE_URL: 'service',
         resolveEnterpriseWechatServiceConfig: value => value, tryOpenCustomerServiceDirect: async () => true,
       };
-      if (request === '../../utils/costEstimateShareImage') return {
-        prepareCostEstimateShareImage: async () => chatCover,
-        prepareCostEstimateTimelineImage: async () => timelineCover,
-      };
       if (request === '../../utils/costEstimateShare') return api;
-      if (request === '../../utils/reportNavigation') return {
-        requireReportLogin(pathname) { calls.login.push(pathname); return Boolean(token); },
-      };
       throw new Error(`unexpected require ${request}`);
     },
-    console: { ...console, error() {}, warn() {} },
-    setTimeout(callback) { callback(); },
+    console: { error() {}, warn() {} }, setTimeout(callback) { callback(); },
     wx: {
       getStorageSync(key) { return key === 'aicostEstimateResult' ? cached : key === 'token' ? currentToken : ''; },
-      showToast() {}, navigateBack() {}, navigateTo() {},
+      showToast(value) { calls.toasts.push(value.title); }, navigateBack() {},
+      navigateTo(value) { calls.navigation.push(value.url); },
+      redirectTo(value) { calls.redirects.push(value.url); if (redirectError) value.fail(); },
     },
   });
-  const page = {
-    ...definition,
-    data: JSON.parse(JSON.stringify(definition.data)),
-    setData(patch) { Object.assign(this.data, patch); },
-    loadEnterpriseWechatServiceConfig() {},
-  };
-  api.isCostEstimateShareResult = value => Boolean(value && value.version === 4 && value.basicInfo?.length === 14 && value.costBreakdown?.length >= 6);
-  api.sanitizeCostEstimateShareResult = value => JSON.parse(JSON.stringify(value, (key, item) => key === 'color' ? undefined : item));
-  page.onLoad(reportId === undefined ? {} : { report_id: reportId });
+  const page = { ...definition, data: JSON.parse(JSON.stringify(definition.data)),
+    setData(patch) { Object.assign(this.data, patch); }, loadEnterpriseWechatServiceConfig() {} };
+  page.onLoad(options);
   return { page, calls, setToken(value) { currentToken = value; } };
 }
 
-test('preparing a local report publishes once, then both share channels point to that exact report', async () => {
+test('private result lifecycle never publishes automatically, including login return', async () => {
+  const h = createResultHarness({ token: '' });
+  h.page.onReady(); h.page.onShow(); h.setToken('signed-in'); h.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.create.length, 0);
+  assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
+  assert.equal(Object.keys(h.page.onShareTimeline()).length, 0);
+});
+
+test('explicit publishing creates one immutable snapshot and opens its public landing', async () => {
   const h = createResultHarness();
   await h.page.onPrepareShareReport();
   assert.equal(h.calls.create.length, 1);
-  assert.equal(h.page.data.shareReady, true);
-  assert.equal(h.page.data.contentReady, true);
-  const expectedTitle = '泉州320㎡建房参考造价58.36万，查看测算报告';
-  const timeline = h.page.onShareTimeline();
-  assert.equal(timeline.title, expectedTitle);
-  assert.equal(timeline.query, 'report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
-  assert.equal(timeline.imageUrl, 'wxfile://timeline.jpg');
-  const friend = h.page.onShareAppMessage();
-  assert.equal(friend.title, expectedTitle);
-  assert.equal(friend.path, '/pages/aicostresult/aicostresult?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
-  assert.equal(friend.imageUrl, 'wxfile://chat.jpg');
+  assert.equal(h.page.data.contentReady, false, 'private source must remain excluded');
+  assert.equal(h.calls.navigation[0], '/pages/aicostshare/aicostshare?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
+  await h.page.onPrepareShareReport();
+  assert.equal(h.calls.create.length, 1, 'reopening reuses the published snapshot');
+  assert.equal(h.calls.navigation.length, 2);
+  assert.equal(Object.keys(h.page.onShareTimeline()).length, 0);
 });
 
-test('a local report prepares both share channels automatically after canvas readiness', async () => {
-  const h = createResultHarness();
-  h.page.onReady();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.calls.create.length, 1);
-  assert.equal(h.page.data.shareReady, true);
-  assert.equal(h.page.onShareAppMessage().path, '/pages/aicostresult/aicostresult?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
-  assert.equal(h.page.onShareTimeline().query, 'report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
-});
-
-test('automatic preparation waits silently when the local report has no signed-in account', async () => {
+test('anonymous private owner cannot publish and viewing never triggers login', async () => {
   const h = createResultHarness({ token: '' });
-  h.page.onReady();
-  h.page.onShow();
-  await new Promise(resolve => setImmediate(resolve));
+  h.page.onReady(); h.page.onShow();
+  assert.equal(h.calls.toasts.length, 0);
+  await h.page.onPrepareShareReport();
   assert.equal(h.calls.create.length, 0);
-  assert.deepEqual(h.calls.login, []);
-  assert.equal(h.page.data.shareReady, false);
+  assert.deepEqual(h.calls.toasts, ['请先登录后公开分享']);
 });
 
-test('onShow prepares the local report after login returns without another page entry', async () => {
-  const h = createResultHarness({ token: '' });
-  h.page.onReady();
-  h.setToken('signed-in-token');
-  h.page.onShow();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.calls.create.length, 1);
-  assert.equal(h.page.data.shareReady, true);
+test('publish failure remains private and is retryable', async () => {
+  const h = createResultHarness({ publishError: new Error('网络连接失败') });
+  await h.page.onPrepareShareReport();
+  assert.equal(h.page.data.sharePreparing, false);
+  assert.equal(h.page.data.shareReportId, '');
+  assert.equal(h.calls.navigation.length, 0);
+  assert.deepEqual(h.calls.toasts, ['网络连接失败']);
 });
 
-test('an anonymous visitor automatically prepares covers for the requested immutable report', async () => {
+test('old public report links redirect without reading private cache and preserve st', () => {
   const reportId = 'abcDEF0123456789abcDEF0123456789';
-  const h = createResultHarness({ reportId, token: '' });
-  h.page.onReady();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.calls.create.length, 0);
-  assert.equal(h.page.data.shareReady, true);
-  assert.equal(h.page.onShareAppMessage().path, `/pages/aicostresult/aicostresult?report_id=${reportId}`);
-  assert.equal(h.page.onShareTimeline().query, `report_id=${reportId}`);
-});
-
-test('opening a shared report fetches only that immutable snapshot and reshares the same id', async () => {
-  const h = createResultHarness({ cached: { corrupted: true }, reportId: 'abcDEF0123456789abcDEF0123456789' });
-  await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(h.calls.get, ['abcDEF0123456789abcDEF0123456789']);
-  assert.equal(h.page.data.estimatedTotalCost, '58.36万元');
-  await h.page.onPrepareShareReport();
-  assert.equal(h.calls.create.length, 0, 'resharing must not create a different report');
-  assert.equal(h.page.onShareTimeline().query, 'report_id=abcDEF0123456789abcDEF0123456789');
-});
-
-test('manual share preparation also stays silent for an unauthenticated owner', async () => {
-  const h = createResultHarness({ token: '' });
-  await h.page.onPrepareShareReport();
-  assert.deepEqual(h.calls.login, []);
-  assert.equal(h.calls.create.length, 0);
-  assert.equal(h.page.data.shareReady, false);
-});
-
-test('a failed shared-report fetch stays in an error state and never falls back to local cache', async () => {
-  const h = createResultHarness({ reportId: 'badBAD0123456789badBAD0123456789', cached: currentResult, sharedError: new Error('分享报告已失效或不存在') });
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.page.data.reportError, '分享报告已失效或不存在');
-  assert.equal(h.page.data.estimatedTotalCost, '', 'visitor cache must not replace the requested report');
-});
-
-test('a blank report id is treated as a broken shared link instead of opening local data', async () => {
-  const h = createResultHarness({ reportId: '', cached: currentResult, sharedError: new Error('无效的分享报告链接') });
-  await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(h.calls.get, ['']);
-  assert.equal(h.page.data.reportError, '无效的分享报告链接');
+  const h = createResultHarness({ cached: { corrupted: true }, token: '', options: { report_id: reportId, st: 'upstream-token' } });
+  assert.equal(h.calls.redirects[0], `/pages/aicostshare/aicostshare?report_id=${reportId}&st=upstream-token`);
   assert.equal(h.page.data.estimatedTotalCost, '');
-  h.page.onRetrySharedReport();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(h.calls.get, ['', '']);
+  assert.equal(h.calls.create.length, 0);
 });
 
-test('report sharing stays closed if either prepared cover is unavailable', async () => {
-  const h = createResultHarness({ chatCover: '' });
-  await h.page.onPrepareShareReport();
-  assert.equal(h.page.data.shareReady, false);
-  assert.equal(h.page.data.contentReady, false);
-  assert.equal(h.page.data.shareReportId, 'AbcdEFghIJklMNopQRstUVwxYZ012345', 'retry keeps the already-published immutable report');
-});
-
-test('automatic retry reuses the first immutable report after cover preparation fails', async () => {
-  const h = createResultHarness({ chatCover: '' });
-  h.page.onReady();
-  await new Promise(resolve => setImmediate(resolve));
-  h.page.onShow();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.calls.create.length, 1);
-  assert.equal(h.page.data.shareReportId, 'AbcdEFghIJklMNopQRstUVwxYZ012345');
+test('broken legacy public links cannot fall back to a visitors local estimate', () => {
+  const h = createResultHarness({ options: { report_id: '' }, redirectError: true });
+  assert.equal(h.calls.redirects[0], '/pages/aicostshare/aicostshare?report_id=');
+  assert.equal(h.page.data.estimatedTotalCost, '');
+  assert.match(h.page.data.reportError, /公开报告页面暂时无法打开/);
+  h.page.onRetrySharedReport(); assert.equal(h.calls.redirects.length, 2);
 });

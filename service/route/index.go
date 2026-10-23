@@ -72,6 +72,8 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 用户DB模型（共用）
 		userDBModel := model.NewUserModel(component.GetDB())
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
+		costShareStore := model.NewCostEstimateShareRedisModel(component.GetRedis())
+		trackingService.ResolvePublicSnapshot = makeTrackingCostSnapshotResolver(costShareStore)
 		userFavoriteModel := model.NewUserFavoriteModel(component.GetDB())
 		_ = userFavoriteModel.InitTable()
 		setSharedTemplateSquareConfigModel(templateSquareConfigModel)
@@ -97,7 +99,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterAICostRoutes(miniprogramAI, codeSessionModel, userModel, pricingModel, taskModel, stoneRecordModel, userOrderModel, inviteRelationModel, cfg)
 		costShareAuth := miniprogram.Group("")
 		costShareAuth.Use(costEstimateShareBodyLimit(), TokenAuthRequired(codeSessionModel), MiniprogramBannedBlock(userDBModel))
-		RegisterCostEstimateShareRoutes(miniprogram, costShareAuth, model.NewCostEstimateShareRedisModel(component.GetRedis()))
+		RegisterCostEstimateShareRoutes(miniprogram, costShareAuth, costShareStore)
 		// AI任务信息接口（需要token验证）
 		RegisterAITaskInfoRoutes(miniprogramAI, codeSessionModel, taskModel)
 		// AI流式聊天接口（需要token验证）

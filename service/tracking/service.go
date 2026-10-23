@@ -17,6 +17,7 @@ type Service struct {
 	IsContentOperator      func(context.Context, int64, string) (bool, error)
 	ResolveLegacy          func(string, int64) (LegacyMetadata, error)
 	ResolveLegacyContext   func(context.Context, string, int64) (LegacyMetadata, error)
+	ResolvePublicSnapshot  func(context.Context, string) (LegacyMetadata, error)
 	VerifyCRM              func(context.Context, Scope, string, string, string) error
 	ResolveVisitorProfiles VisitorProfileResolver
 	Store                  Store

@@ -64,6 +64,10 @@
       </view>
       <view class="breakdown-tip">室内装修另计。</view>
     </view>
+    <view class="report-card">
+      <text class="report-state-copy">仅在你点击后公开这份固定快照。链接持有人可查看其中的地区、面积、基础信息和造价明细，有效期30天。</text>
+      <button class="state-primary-btn" bindtap="onPrepareShareReport" loading="{{sharePreparing}}" disabled="{{sharePreparing}}">{{shareReportId ? '打开公开分享页' : '公开分享这份快照'}}</button>
+    </view>
     <view class="report-disclaimer">以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认。</view>
     </block>
   </scroll-view>
