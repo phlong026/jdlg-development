@@ -3,8 +3,11 @@ package model
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var allowedUserIdentityTypes = map[string]bool{
@@ -56,7 +59,7 @@ func NewUserProfileModel(db *sql.DB) *UserProfileModel {
 	return &UserProfileModel{DB: db}
 }
 
-const userProfileSelectColumns = `id, user_id, nickname, avatar, designer_bio, specialty_styles, designer_experience_years, service_title, service_quote, service_intro, service_enabled, designer_visible, enterprise_wechat_verified, enterprise_wechat_verified_at, enterprise_wechat_contact, device_id, device_bind_time, last_device_change_time, has_password, phone, identity_type, created_at, updated_at`
+const userProfileSelectColumns = `id, user_id, COALESCE(nickname, '') AS nickname, COALESCE(avatar, '') AS avatar, COALESCE(designer_bio, '') AS designer_bio, COALESCE(specialty_styles, '') AS specialty_styles, designer_experience_years, COALESCE(service_title, '') AS service_title, service_quote, COALESCE(service_intro, '') AS service_intro, service_enabled, designer_visible, enterprise_wechat_verified, enterprise_wechat_verified_at, COALESCE(enterprise_wechat_contact, '') AS enterprise_wechat_contact, COALESCE(device_id, '') AS device_id, device_bind_time, last_device_change_time, has_password, COALESCE(phone, '') AS phone, COALESCE(identity_type, '') AS identity_type, created_at, updated_at`
 
 func scanUserProfile(scanner interface {
 	Scan(dest ...interface{}) error
@@ -158,6 +161,10 @@ func (m *UserProfileModel) GetOrCreate(userID int64, deviceID string) (*UserProf
 		return profile, nil
 	}
 
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
 	// 不存在则创建
 	now := time.Now()
 	profile = &UserProfile{
@@ -186,9 +193,26 @@ func (m *UserProfileModel) GetOrCreate(userID int64, deviceID string) (*UserProf
 }
 
 // UpdateNickname 更新昵称
-func (m *UserProfileModel) UpdateNickname(userID int64, nickname string) error {
-	query := `UPDATE user_profiles SET nickname = ?, updated_at = NOW() WHERE user_id = ?`
-	_, err := m.DB.Exec(query, nickname, userID)
+func NormalizeNickname(raw string) (string, error) {
+	nickname := strings.TrimSpace(raw)
+	if nickname == "" || !utf8.ValidString(nickname) || utf8.RuneCountInString(nickname) > 32 {
+		return "", fmt.Errorf("昵称须为 1 至 32 个字符")
+	}
+	return nickname, nil
+}
+
+func (m *UserProfileModel) UpdateNickname(userID int64, raw string) error {
+	nickname, err := NormalizeNickname(raw)
+	if err != nil {
+		return err
+	}
+	if userID <= 0 {
+		return fmt.Errorf("无效用户")
+	}
+	// Atomic upsert also handles a missing profile and unchanged values. No
+	// check/update gap and no assumption that RowsAffected==0 means failure.
+	_, err = m.DB.Exec(`INSERT INTO user_profiles (user_id, nickname) VALUES (?, ?)
+ ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), updated_at = NOW()`, userID, nickname)
 	return err
 }
 

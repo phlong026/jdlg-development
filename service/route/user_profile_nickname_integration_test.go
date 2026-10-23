@@ -110,4 +110,5 @@ func TestUserProfileNicknamePersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertAllReads("山居访客")
+	testNicknameHTTPRoundTrip(t, db, primaryUser.ID, assertAllReads)
 }
