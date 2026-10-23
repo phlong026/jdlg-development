@@ -110,3 +110,10 @@ test('审查补充：display_name 只是后端拿登录名兜底时，不抢在�
     assert.equal(formatUserName({ display_name: 'zhangsan', username: 'zhangsan', phone: '13812341234' }, 5), '138****1234');
     assert.equal(formatUserName({ display_name: '张工', username: 'zhangsan', phone: '13812341234' }, 5), '张工');
 });
+
+test('真实 profile 昵称不按生成登录名的前缀隐藏', () => {
+    assert.equal(formatUserName({ nickname: ' wx_林间访客 ', username: 'wx_generated', phone: '13812341234' }, 42), 'wx_林间访客');
+    assert.equal(formatUserName({ nickname: 'WX_Studio', username: 'WX_Studio' }, 42), 'WX_Studio');
+    assert.equal(formatUserName({ nickname: '', username: 'wx_generated' }, 42), '微信用户 #42');
+    assert.equal(visibleUsername('wx_generated'), '');
+});
