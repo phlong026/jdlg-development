@@ -29,7 +29,7 @@ const model = load('src/pages/shareTracking/model.ts');
 const visitor = { visitor_key: 'visitor-1', identity_state: 'identified', nickname: '客户', page_views: 1, visible_ms: 10, session_count: 1, intent: { level: 'low', reasons: [], rule_version: 'rule-1' } };
 const visit = { visit_id: 'session-1:content-1:1', started_at: '2026-10-11T00:00:00Z', visible_ms: 10, content_page_views: 1, engaged: false, visitor, content: { content_id: 'visited-villa', content_version: 3, title: '别墅', type: 'article', status: 'published', content_accessible: true }, source: { kind: 'direct' } };
 const content = { content_id: 'content-1', title: '素材', type: 'article', version: 1, revision: 1, status: 'published', body: '正文', media: [], page_views: 1, visible_ms: 10 };
-const channel = { visitor_key: 'u:channel-1', nickname: '渠道一', share_count: 3, brought_visitors: 2, brought_identified: 1, brought_high: 1, converted_leads: 1 };
+const channel = { visitor_key: 'u:43', identity_state: 'identified', nickname: '渠道一', share_count: 3, brought_visitors: 2, brought_identified: 1, brought_high: 1, converted_leads: 1 };
 const nodes = tree => Array.isArray(tree) ? tree.flatMap(nodes) : !tree || typeof tree !== 'object' ? [] : [tree, ...nodes(tree.props?.children)];
 const text = tree => Array.isArray(tree) ? tree.map(text).join('') : tree == null || typeof tree === 'boolean' ? '' : typeof tree === 'object' ? text(tree.props?.children) : String(tree);
 function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }

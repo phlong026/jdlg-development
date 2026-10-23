@@ -1,0 +1,7 @@
+<view style="padding:32rpx">
+  <text>观测：额外监听 change、blur、nicknamereview，不用这些事件修改输入框。</text>
+  <form bindsubmit="onSubmit">
+    <input name="nickname" type="nickname" value="{{nickname}}" maxlength="32" placeholder="选择微信昵称或手输" bindinput="onInput" bindchange="onObserved" bindblur="onObserved" bindnicknamereview="onObserved" />
+    <button form-type="submit" loading="{{saving}}">完成（只记录本机事件）</button>
+  </form>
+</view>
