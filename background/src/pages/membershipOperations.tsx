@@ -162,7 +162,6 @@ const MembershipOperations: React.FC = () => {
             <div className="membership-operations-page">
                 <ManagementSearchPanel
                     title="会员检索与权益排查"
-                    description="先按用户、会员状态和下载权限缩小范围，再进入用户详情或订单中心核查来源订单与权限异常。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>

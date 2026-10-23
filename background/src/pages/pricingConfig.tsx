@@ -151,7 +151,7 @@ const PricingConfig: React.FC = () => {
             <div className="pricing-toolbar">
                 <div>
                     <h3>定价配置</h3>
-                    <p>充值档位与认证道具价格，保存后立即生效，无需发版。</p>
+                    <p>价格保存后立即生效。</p>
                 </div>
                 <div className="pricing-toolbar-actions">
                     <span className={`source-badge ${source === 'db' ? 'is-db' : ''}`}>

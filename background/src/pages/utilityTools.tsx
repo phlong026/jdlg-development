@@ -272,7 +272,6 @@ const UtilityTools: React.FC = () => {
             <div className="utility-tools-container">
                 <ManagementSearchPanel
                     title="实用工具检索与内容维护"
-                    description="先按分类、发布状态和关键词找到目标内容，再决定新增、编辑还是下线，避免只在前端本地列表里假搜索。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>

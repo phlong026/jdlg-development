@@ -310,7 +310,7 @@ const Certification: React.FC = () => {
         <div className="certification-container">
             <ManagementSearchPanel
                 title="认证审核队列"
-                description="按队列处理认证申请：待审核优先、超时红标；点开右侧抽屉核对材料后一键通过/拒绝。以下统计为全库真实口径。"
+                description="以下统计为全库真实口径。"
                 actions={(
                     <>
                         <button className="btn-secondary" onClick={refreshAll} disabled={loading}>

@@ -435,7 +435,7 @@ const Users: React.FC = () => {
                     <div className="toolbar-top">
                         <div className="toolbar-title-block">
                             <h3>用户检索与账号管理</h3>
-                            <p>找人、筛人、看账号状态与风险信号；订单、灵石、认证等单用户处理请进入用户详情。以下统计为全库真实口径。</p>
+                            <p>以下统计为全库真实口径。</p>
                         </div>
                         <div className="toolbar-actions">{toolbarActions}</div>
                     </div>

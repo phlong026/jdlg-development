@@ -354,7 +354,6 @@ const RiskControl: React.FC = () => {
                         <div className="section-header">
                             <div>
                                 <h3>多账号同设备识别</h3>
-                                <p>一个设备绑定多个账号时，优先看是不是工作室批量号、共享号，或者被重复注册滥用。</p>
                             </div>
                         </div>
                         <div className="risk-table-container">

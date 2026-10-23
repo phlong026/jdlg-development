@@ -203,7 +203,7 @@ const ContentAnalytics: React.FC = () => {
             <div className="section-header">
                 <div>
                     <h3>{title}</h3>
-                    <p>{desc}</p>
+                    {desc && <p>{desc}</p>}
                 </div>
             </div>
             <div className="analytics-table-container">
@@ -277,7 +277,7 @@ const ContentAnalytics: React.FC = () => {
             <div className="content-analytics-page">
                 <ManagementSearchPanel
                     title="模板检索与内容分析"
-                    description="按模板名、创建者或分类检索已发布内容，观察下载、互动和新创建模板表现。创建者仅提供名称，同名搜索需自行核对设计师身份。"
+                    description="创建者仅提供名称，同名搜索需自行核对设计师身份。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
@@ -363,16 +363,15 @@ const ContentAnalytics: React.FC = () => {
 
                 <div className="analytics-panel section-card">
                     <p className="analytics-scope-note">以下每个排行及模板观察区最多显示 10 条，精选案例最多显示 10 组，均非完整清单；概览统计不受此展示数量限制。</p>
-                    {renderPerformanceTable('模板下载排行', '优先找出最常被真正使用的模板。', report.downloadRanking, 'download')}
-                    {renderPerformanceTable('点赞 / 评论 / 分享排行', '互动高的内容代表更容易引发讨论和传播。', report.engagementRanking, 'engagement')}
+                    {renderPerformanceTable('模板下载排行', '', report.downloadRanking, 'download')}
+                    {renderPerformanceTable('点赞 / 评论 / 分享排行', '', report.engagementRanking, 'engagement')}
                     {renderPerformanceTable('近 14 天新创建模板表现', '仅展示已发布且创建于近 14 天的模板，按创建时间统计，不代表首次上架时间。', report.newTemplates, 'new')}
-                    {renderPerformanceTable('低转化模板识别', '有互动但没形成下载或解锁，通常说明内容吸引力和成交力之间断层明显。', report.lowConversionTemplates, 'low')}
+                    {renderPerformanceTable('低转化模板识别', '有互动但未形成下载或解锁。', report.lowConversionTemplates, 'low')}
 
                     <div className="analytics-section">
                         <div className="section-header">
                             <div>
                                 <h3>精选案例效果观察</h3>
-                                <p>判断首页精选位和案例对比位，是不是在真正带动使用和互动。</p>
                             </div>
                         </div>
                         <div className="analytics-table-container">

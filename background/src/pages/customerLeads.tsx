@@ -450,8 +450,7 @@ const CustomerLeads: React.FC<{ readOnly?:boolean; embedded?:boolean }> = ({ rea
                 <>
                 <div className="customer-lead-hero">
                     <div>
-                        <p>管理后台 / 客服线索工作台</p>
-                        <h2>把智能客服里的意向用户推进到可跟进、可分配、可复盘</h2>
+                        <h2>客服线索</h2>
                     </div>
                     <button type="button" className="customer-lead-btn secondary" onClick={resetToFirstPage} disabled={loading}>
                         <FiRefreshCwIcon />

@@ -335,10 +335,10 @@ const AIPricing: React.FC = () => {
             <PageTitle title="定价与供应商" className="aip-pagehead">
                 <div className="aip-subtabs">
                     <button type="button" className={activeTab === 'pricing' ? 'on' : ''} onClick={() => switchTab('pricing')}>
-                        定价管理 <small>运营</small>
+                        定价管理
                     </button>
                     <button type="button" className={activeTab === 'provider' ? 'on' : ''} onClick={() => switchTab('provider')}>
-                        供应商管理 <small>技术</small>
+                        供应商管理
                     </button>
                 </div>
                 <button type="button" className="aip-refresh" onClick={() => void loadData()} disabled={loading}>

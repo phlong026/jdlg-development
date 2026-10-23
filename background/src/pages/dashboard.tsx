@@ -381,7 +381,7 @@ const Dashboard: React.FC = () => {
         <div className="dashboard-page">
             <PageTitle title="后台总控台" className="dash-pagehead">
                 <span className={`dash-health ${health.tone}`}><i />{health.label}</span>
-                <div className="dash-pagehead-tip" title={health.description}>{health.description}</div>
+                {health.tone !== 'success' && <div className="dash-pagehead-tip" title={health.description}>{health.description}</div>}
                 <div className="dash-meta">
                     <span>{loadedAtText} · 每分钟自动刷新</span>
                     <button className="dash-btn-refresh" onClick={() => void loadDashboard()} disabled={loading}>
@@ -412,7 +412,6 @@ const Dashboard: React.FC = () => {
                         <div className="dash-card-head">
                             <h3>今日待办</h3>
                             {urgentCount > 0 && <span className="dash-badge-urgent">{urgentCount} 项超时</span>}
-                            <span className="dash-card-note">处理完成后实时减少</span>
                         </div>
                         {actionItems.length === 0 ? (
                             <div className="dash-empty-ok">当前没有需要处理的待办。</div>
@@ -564,7 +563,6 @@ const Dashboard: React.FC = () => {
                     <section className="dash-card">
                         <div className="dash-card-head">
                             <h3>异常监控</h3>
-                            <span className="dash-card-note">只看计数，明细进各模块页</span>
                         </div>
                         <div className="dash-watch-list">
                             {watchItems.map(item => (

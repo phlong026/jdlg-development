@@ -276,7 +276,6 @@ const OSS: React.FC = () => {
             <div className="oss-container">
                 <ManagementSearchPanel
                     title="OSS 文件检索与资产管理"
-                    description="先按文件名、来源和类型找到目标资产，再做上传、预览、下载或删除，避免只在当前页本地过滤。"
                     actions={(
                         <>
                             {selectedOnPage.length > 0 && (
