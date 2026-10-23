@@ -653,11 +653,6 @@ const AITaskCenter: React.FC = () => {
                     <div className="task-search-top">
                         <div className="task-search-title-block">
                             <h3>{activeTab === 'image' ? `${activeQueue.label} · 任务检索` : '视频任务检索'}</h3>
-                            <p>
-                                {activeTab === 'image'
-                                    ? '按任务状态、任务号、用户或场景查找。失败任务可查看原因、转工单，或进入用户详情跟进。'
-                                    : '按任务号、用户和状态缩小范围，再查看失败原因或转异常工单。'}
-                            </p>
                         </div>
                         <div className="task-toolbar-right">
                             {activeTab === 'image' && (

@@ -141,7 +141,6 @@ const VirtualPay: React.FC = () => {
                 <div className="virtual-pay-toolbar">
                     <div>
                         <h3>小程序虚拟支付链路</h3>
-                        <p>检查配置完整性、虚拟支付订单状态、发货上报缺口与微信支付消息推送处理情况。</p>
                     </div>
                     <button className="btn-secondary" onClick={() => void loadData(page)} disabled={loading}>
                         <FiRefreshCw />

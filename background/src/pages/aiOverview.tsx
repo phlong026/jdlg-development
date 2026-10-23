@@ -186,7 +186,6 @@ const AIOverview: React.FC = () => {
     return (
         <div className="ai-overview-page">
             <PageTitle title="AI 运营总览" className="aio-pagehead">
-                <span className="aio-sub">查看 AI 使用情况、收入成本与服务运行情况，及时处理异常任务。</span>
                 <button type="button" className="aio-refresh" onClick={() => void handleExportCSV()} disabled={!data}>
                     导出周报 CSV
                 </button>
@@ -308,9 +307,6 @@ const AIOverview: React.FC = () => {
                                 {index > 0 ? <span className="aio-chain-arrow">→</span> : null}
                                 <span className="aio-chain-node">
                                     {node.provider_name}
-                                    {node.role !== 'primary' && data.fallback_out_7d > 0 ? (
-                                        <em>（近7日备用服务使用情况见上方）</em>
-                                    ) : null}
                                 </span>
                             </React.Fragment>
                         ))}
@@ -334,7 +330,7 @@ const AIOverview: React.FC = () => {
                             </div>
                         ))
                     ) : (
-                        <div className="aio-empty">近 7 日无失败任务 🎉</div>
+                        <div className="aio-empty">近 7 日无失败任务</div>
                     )}
                     <div className="aio-foot-note">失败任务的退款情况与已退灵石金额，请在任务列表中核对。</div>
                 </section>
@@ -358,7 +354,7 @@ const AIOverview: React.FC = () => {
                 </section>
             </div>
 
-            <div className="aio-foot-note">{data?.kpi.cost_note}。调价入口见「定价与供应商」，失败任务处理见「AI 任务中心」队列。</div>
+            <div className="aio-foot-note">{data?.kpi.cost_note}</div>
             </>}
         </div>
     );

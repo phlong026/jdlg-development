@@ -147,7 +147,6 @@ const ReportCenter: React.FC = () => {
             <div className="report-center-page">
                 <ManagementSearchPanel
                     title="报表筛选与导出"
-                    description="先选报表类型、统计周期和时间范围，再刷新预览，确认无误后导出当前报表。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={() => void loadData()} disabled={loading || Boolean(dateError)}>

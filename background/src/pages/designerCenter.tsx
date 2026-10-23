@@ -392,7 +392,6 @@ const DesignerCenter: React.FC = () => {
             <div className="designer-center-page">
                 <ManagementSearchPanel
                     title="设计师检索与运营处理"
-                    description="先按认证状态、公开状态和关键词找到设计师，再查看详情、切换主页展示或处理接单状态。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>

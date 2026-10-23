@@ -1313,7 +1313,7 @@ const Templates: React.FC = () => {
                         <div className="templates-toolbar-top">
                             <div className="toolbar-title-block">
                                 <h3>模板检索与内容运营</h3>
-                                <p>分类与状态筛选覆盖全部模板；关键词仅检索当前页。可审核模板、整理分类，或配置首页精选案例与标签。</p>
+                                <p>分类与状态筛选覆盖全部模板；关键词搜索仅覆盖本页。</p>
                             </div>
                             {templateManageActions}
                         </div>
@@ -1521,7 +1521,7 @@ const Templates: React.FC = () => {
                                 <FiPlusIcon /> 新建案例组
                             </button>
                         </div>
-                        <p className="section-desc">案例组会显示在小程序首页的精选案例区域，每组可配置 1-2 个案例，支持对比、并排和普通模式。</p>
+                        <p className="section-desc">每组可配置 1–2 个案例。</p>
                         {featuredGroupsError && <div className="template-feedback" role="alert">{featuredGroupsError}{featuredGroupsLoaded ? '（保留上次成功结果）' : ''}<button className="btn-secondary" onClick={loadFeaturedGroups}>重新加载案例组</button></div>}
                         {loadingFeaturedGroups ? (
                             <div className="loading-state">加载中...</div>
@@ -1657,7 +1657,6 @@ const Templates: React.FC = () => {
                     </div>
                 </div>
 
-                {isMobile ? null : <p className="template-feedback">关键词搜索仅覆盖本页；当前接口未提供全库关键词检索。</p>}
                 {templatesError && <div className="template-feedback" role="alert">{templatesError}{templatesLoaded ? '，当前显示上次加载的数据。' : '，尚不能确认列表为空。'}<button className="btn-secondary" onClick={loadTemplates}>重新加载模板</button></div>}
                 {loading ? (
                     <div className="loading-state">加载中...</div>
@@ -2020,7 +2019,6 @@ const Templates: React.FC = () => {
                                 <button className="modal-close" onClick={dismissMoveCategory}>×</button>
                             </div>
                             <div className="modal-body">
-                                <p className="modal-hint">点击目标分类完成移动。</p>
                                 <div className="move-category-btns">
                                     {categories.filter(c => c.id !== moveTargetTemplate.category).map(c => (
                                         <button

@@ -205,9 +205,6 @@ const AIConfig: React.FC = () => {
             <div className="ai-config-container">
                 <ManagementSearchPanel
                     title={activeTab === 'pricing' ? 'AI 计费检索' : 'AI 接口检索'}
-                    description={activeTab === 'pricing'
-                        ? '按场景、灵石数量或额外配置快速找到需要调整的计费项。'
-                        : '按任务类型、接口地址、请求方法或字段路径快速找到接口配置。'}
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>

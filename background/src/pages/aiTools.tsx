@@ -560,7 +560,6 @@ const AITools: React.FC = () => {
             <div className="ai-tools-container">
                 <ManagementSearchPanel
                     title="AI 工具检索与配置维护"
-                    description="先找到目标工具，再维护默认提示词、风格卡片、用户预览图、AI引用图和上下线状态，避免每次都改代码发版。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
@@ -814,7 +813,6 @@ const AITools: React.FC = () => {
                                     <div className="editor-section-header">
                                         <div>
                                             <h4>使用提示模块</h4>
-                                            <p>控制详情页是否显示“使用提示”，并支持后台直接修改标题和内容。</p>
                                         </div>
                                     </div>
                                     <div className="form-grid three-columns">

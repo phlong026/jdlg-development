@@ -181,7 +181,6 @@ const Distribution: React.FC = () => {
             <div className="distribution-page">
                 <ManagementSearchPanel
                     title="邀请检索与奖励追踪"
-                    description="先用关键词找到邀请人或奖励记录，再结合下方分销概览判断谁值得重点扶持、哪笔奖励需要排查。"
                     actions={(
                         <>
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>

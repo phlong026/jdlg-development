@@ -791,8 +791,7 @@ const UserWorkbench: React.FC = () => {
                             <FiUser />
                         </div>
                         <div className="entry-guidance-content">
-                            <h3>选择用户，查看详情并处理问题</h3>
-                            <p>从总控台的待处理事项或用户账号列表进入，也可以在下方直接搜索用户。</p>
+                            <h3>选择用户</h3>
                             <div className="entry-guidance-actions">
                                 <button className="btn-secondary" onClick={() => navigate('/dashboard')}>返回总控台</button>
                                 <button className="btn-primary" onClick={() => navigate('/users')}>进入用户账号</button>
@@ -869,7 +868,6 @@ const UserWorkbench: React.FC = () => {
                 {!selectedUser ? (
                     <div className="section-card empty-panel compact-empty-panel">
                         <h3>{loading ? '正在加载所选用户…' : userLoadError ? '用户资料未加载' : '尚未选择用户'}</h3>
-                        {!loading && !userLoadError ? <p>你可以返回总控台看待处理队列，或回到用户账号列表点击某个用户进入用户详情。</p> : null}
                     </div>
                 ) : (
                     <>

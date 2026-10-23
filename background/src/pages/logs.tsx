@@ -178,7 +178,6 @@ const AuditLogs: React.FC = () => {
         <div className="logs-container">
             <ManagementSearchPanel
                 title="管理操作审计"
-                description="查看谁在什么时候做了什么操作、是否成功。"
                 actions={<>
                     <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
                     <button className="btn-secondary" onClick={() => void fetchList()} disabled={loading}><FiRefreshCw />{loading ? '刷新中...' : '刷新'}</button>
@@ -218,7 +217,7 @@ const AuditLogs: React.FC = () => {
                             {items.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="empty-state">
-                                        {loading ? '加载中...' : error ? <span role="alert">审计加载失败：{error}<button className="btn-secondary" onClick={() => void fetchList()}>重新加载审计</button></span> : '暂无操作记录，管理端非 GET 请求会自动记录在这里'}
+                                        {loading ? '加载中...' : error ? <span role="alert">审计加载失败：{error}<button className="btn-secondary" onClick={() => void fetchList()}>重新加载审计</button></span> : '暂无操作记录'}
                                     </td>
                                 </tr>
                             ) : (
