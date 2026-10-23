@@ -367,7 +367,7 @@ Page({
     },
     /**
      * 登录成功后进入小程序：先检查昵称是否完善，
-     * 未完善则弹出强制完善弹窗（保存成功后经 completed 事件回到这里继续跳转）；
+     * 未完善则弹出可稍后填写的昵称弹窗，保存确认后继续跳转；
      * 检查请求失败时放行，不因网络问题把用户挡在门外。
      */
     async enterAppAfterLogin() {
@@ -409,7 +409,15 @@ Page({
         if (res.statusCode !== 200 || data.code !== 0) {
             throw new Error(data.msg || `请求失败: ${res.statusCode}`);
         }
-        return String(data.data?.nickname || '');
+        if (token !== wx.getStorageSync('token')) throw new Error('账号已变化，请重新检查资料');
+        const profile = data.data || {};
+        const cached = wx.getStorageSync('userInfo') || {};
+        if (profile.id && cached.id && Number(profile.id) !== Number(cached.id)) throw new Error('账号资料不匹配');
+        const nickname = String(profile.nickname || '').trim();
+        if (!nickname || Array.from(nickname).length > 32) return '';
+        // Reuse only the authenticated server value; an empty response never overwrites a saved name.
+        wx.setStorageSync('userInfo', { ...cached, ...(profile.id ? { id: profile.id } : {}), nickname });
+        return nickname;
     },
     navigateToIndexAfterLogin() {
         wx.showToast({ title: '登录成功', icon: 'success', duration: 1000 });
