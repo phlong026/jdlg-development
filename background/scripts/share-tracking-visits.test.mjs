@@ -18,6 +18,13 @@ function load(file, overrides = {}) {
 const model = load('src/pages/shareTracking/model.ts');
 const normalized = value => JSON.parse(JSON.stringify(value));
 
+test('identified accounts without nicknames have a stable account label, anonymous visitors stay anonymous', () => {
+  assert.equal(model.visitorName({ visitor_key: 'u:293', identity_state: 'identified', nickname: '' }), '用户 #293 · 未设置昵称');
+  assert.equal(model.visitorName({ visitor_key: 'u:293', identity_state: 'identified', nickname: ' 林间访客 ' }), '林间访客');
+  assert.match(model.visitorName({ visitor_key: 'a:random', identity_state: 'anonymous', nickname: '不可使用的账号昵称' }), /^匿名访客/);
+  assert.equal(model.visitorName({ visitor_key: 'u:293', identity_state: 'deleted', nickname: '旧昵称' }), '已删除账号');
+});
+
 test('customer timeline query sends source channel and drops list-only sort', () => {
   const filters = { ...model.defaultFilters, range: 'all', intent: 'high', channel: 'timeline', q: ' 雪峰 ', sort: 'visible_ms', direction: 'asc' };
   assert.deepEqual(normalized(model.queryFor(filters)), { identity: '', intent: 'high', q: '雪峰', channel: 'timeline', owner: '', limit: 20 });

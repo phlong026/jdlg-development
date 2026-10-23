@@ -39,10 +39,18 @@ export function sourceLabel(source?: VisitSource): string {
     if (source.kind === 'code_link') return '扫码·链接';
     return source.channel ? channelLabels[source.channel] || source.channel : '未记录';
 }
+export function visitorName(visitor: { visitor_key: string; nickname?: string; identity_state?: string }): string {
+    if (visitor.identity_state === 'deleted') return '已删除账号';
+    if (visitor.identity_state === 'anonymous' || (!visitor.identity_state && !/^u:[1-9]\d*$/.test(visitor.visitor_key))) return `匿名访客 · 尾号${visitor.visitor_key.slice(-6)}`;
+    const name = visitor.nickname?.trim();
+    if (name) return name;
+    const id = /^u:([1-9]\d*)$/.exec(visitor.visitor_key)?.[1];
+    return id ? `用户 #${id} · 未设置昵称` : '已登录用户 · 未设置昵称';
+}
 export function forwarderText(source?: VisitSource): string {
     const forwarder = source?.forwarder;
     if (!forwarder) return '';
-    return `（${forwarder.identity_state === 'anonymous' ? '匿名访客' : forwarder.nickname || '已识别账号'}转发）`;
+    return `（${forwarder.identity_state === 'anonymous' ? '匿名访客' : visitorName(forwarder)}转发）`;
 }
 export function progressText(progress?: VisitProgress): string {
     if (!progress) return '';

@@ -1,3 +1,4 @@
+import { visitorName } from './model';
 import React from 'react';
 import { ChannelSummary, Page, tracking } from '../../api/shareTracking';
 import { Feedback, SnapshotInfo, useResource } from './components';
@@ -19,7 +20,7 @@ export function ChannelLeaderboard({ query, refreshKey }: { query: Record<string
                 return <div className="st-channel-row" role="row" key={item.visitor_key}>
                     <span className="st-channel-name">
                         <em>{index + 1}</em>
-                        <strong>{item.nickname || (item.visitor_key.startsWith('u:') ? '已识别账号' : '匿名访客 · 尾号' + item.visitor_key.slice(-6))}</strong>
+                        <strong>{visitorName(item)}</strong>
                         {identity && <span className={`st-identity st-identity-${identity.tone}`}>{identity.label}</span>}
                     </span>
                     <span>{item.share_count} 次</span>

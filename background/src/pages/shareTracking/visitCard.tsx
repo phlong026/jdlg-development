@@ -1,3 +1,4 @@
+import { visitorName } from './model';
 import React, { useEffect, useState } from 'react';
 import type { Visit, VisitMaterial } from '../../api/shareTracking';
 import { ConvertLeadButton } from './convertLead';
@@ -17,7 +18,7 @@ function MaterialThumb({ material }: { material: VisitMaterial }) {
 export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit; onOpen: () => void; canCRM?: boolean; now?: Date }) {
     const { visitor, content, source } = visit;
     const anonymous = visitor.identity_state !== 'identified';
-    const name = anonymous ? '匿名访客' : visitor.nickname || '已识别账号';
+    const name = anonymous ? '匿名访客' : visitorName(visitor);
     const avatar = anonymous ? undefined : safeMediaURL(visitor.avatar_url);
     const materials: VisitMaterial[] = visit.materials?.length ? visit.materials : [{
         content,

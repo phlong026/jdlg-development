@@ -32,7 +32,7 @@ func visitorAccount(key string) (int64, bool) {
 	return id, err == nil && id > 0 && key == "u:"+strconv.FormatInt(id, 10)
 }
 func visitorPresentation(key string) Visitor {
-	v := Visitor{Key: key, State: "identified", Nickname: "已识别账号"}
+	v := Visitor{Key: key, State: "identified"}
 	if strings.HasPrefix(key, "a:") {
 		suffix := key
 		if len(suffix) > 6 {
