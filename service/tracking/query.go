@@ -340,7 +340,7 @@ func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection f
 				versions[key] = title
 			}
 		}
-		views[ev.View] = &factView{PageView: PageView{ID: ev.View, Route: ev.Route, Title: title, Content: ev.Event.Content, Version: ev.Version, Previous: resolvedPrevious(r, ev.Record.Session, ev.Previous), Share: ev.Event.Share, Started: ev.Occurred, Flags: []string{"incomplete"}}, Visitor: ev.Record.Visitor, Owner: ev.Owner, Session: ev.Record.Session, Count: within(ev.Occurred, f), Last: ev.Occurred, events: []Event{}}
+		views[ev.View] = &factView{PageView: PageView{Attribution: ev.Attribution, ID: ev.View, Route: ev.Route, Title: title, Content: ev.Event.Content, Version: ev.Version, Previous: resolvedPrevious(r, ev.Record.Session, ev.Previous), Share: ev.Event.Share, Started: ev.Occurred, Flags: []string{"incomplete"}}, Visitor: ev.Record.Visitor, Owner: ev.Owner, Session: ev.Record.Session, Count: within(ev.Occurred, f), Last: ev.Occurred, events: []Event{}}
 	}
 	covered := map[string][]interval{}
 	for _, x := range events {
@@ -880,6 +880,8 @@ func (s *Service) Sessions(ctx context.Context, scope Scope, key string, f Filte
 				ss = &Session{ID: v.Session, Started: v.Started, Last: v.Started, Share: v.Share, Source: "direct", Views: []PageView{}}
 				if v.Share != "" {
 					ss.Source = "share"
+				} else if v.Attribution != "" && v.Attribution != "direct" {
+					ss.Source = "unknown"
 				}
 				by[v.Session] = ss
 			}

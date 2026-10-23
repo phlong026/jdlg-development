@@ -2,7 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const parameter_1 = require("../../utils/parameter");
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
-const trackingConsent_1 = require("../../utils/tracking/index");
+const perf_1 = require("../../utils/perf");
+const trackingConsent = require('../../utils/tracking/index');
 const SETTINGS_DARK_MODE_STORAGE_KEY = 'settings_dark_mode';
 const PRIVACY_SETTINGS_STORAGE_KEY = 'privacy_settings';
 const ACCOUNT_REQUEST_STORAGE_KEY = 'privacy_account_requests';
@@ -12,7 +13,6 @@ const SUPPORT_EMAIL = 'service@jiadilingguang.com';
 const DEFAULT_PRIVACY_SETTINGS = {
     dataSharingEnabled: true,
     recommendationEnabled: true,
-    trackingEnabled: false,
 };
 const PERMISSION_CONFIG = [
     { key: 'scope.camera', label: '相机权限', desc: '拍照上传、图像生成时使用' },
@@ -49,6 +49,7 @@ Page({
         identitySaving: false,
         dataSharingEnabled: true,
         recommendationEnabled: true,
+        trackingEnabled: false,
         permissionItems: [],
         personalInfoItems: buildDefaultPersonalInfoItems(),
         personalInfoVisible: false,
@@ -76,18 +77,20 @@ Page({
         this.syncTrackingEnabled();
     },
     syncTrackingEnabled() {
-        trackingConsent_1.refreshConfig().then(() => {
-            this.setData({ trackingEnabled: trackingConsent_1.consented() });
+        trackingConsent.refreshConfig().then(() => {
+            this.setData({ trackingEnabled: trackingConsent.consented() });
         });
     },
-    onToggleTracking(e) {
-        const enabled = !!e.detail.value;
-        const ok = trackingConsent_1.setConsent(enabled);
-        this.setData({ trackingEnabled: ok ? enabled : !enabled });
-        wx.showToast({
-            title: !ok ? '暂时无法更改，请稍后再试' : enabled ? '已开启访问分析' : '已关闭访问分析',
-            icon: 'none',
-        });
+    async onToggleTracking(e) {
+        if (e.detail.value === true) {
+            this.setData({ trackingEnabled: false });
+            await trackingConsent.showConsentChoices(this);
+            this.setData({ trackingEnabled: trackingConsent.consented() });
+            return;
+        }
+        trackingConsent.setConsent(false);
+        this.setData({ trackingEnabled: false });
+        wx.showToast({ title: '已关闭访问分析', icon: 'none' });
     },
     ensureLoggedIn() {
         const token = wx.getStorageSync('token');
@@ -541,34 +544,15 @@ Page({
     onClearCache() {
         wx.showModal({
             title: '清理缓存',
-            content: '确定要清理临时缓存吗？系统会保留登录状态、账号资料和主题设置。',
+            content: '确定要清理临时缓存吗？系统会保留登录状态、隐私选择、账号资料及草稿。',
             success: (res) => {
                 if (res.confirm) {
-                    const token = wx.getStorageSync('token');
-                    const userInfo = wx.getStorageSync('userInfo');
-                    const darkMode = wx.getStorageSync(SETTINGS_DARK_MODE_STORAGE_KEY);
-                    const privacySettings = wx.getStorageSync(PRIVACY_SETTINGS_STORAGE_KEY);
-                    wx.clearStorage({
-                        success: () => {
-                            if (token) {
-                                wx.setStorageSync('token', token);
-                            }
-                            if (userInfo) {
-                                wx.setStorageSync('userInfo', userInfo);
-                            }
-                            if (darkMode !== '') {
-                                wx.setStorageSync(SETTINGS_DARK_MODE_STORAGE_KEY, darkMode);
-                            }
-                            if (privacySettings) {
-                                wx.setStorageSync(PRIVACY_SETTINGS_STORAGE_KEY, privacySettings);
-                            }
-                            wx.showToast({
-                                title: '缓存已清理',
-                                icon: 'none',
-                            });
-                            this.initCacheSize();
-                        },
-                    });
+                    // Remove known disposable caches only. Session signing dependencies,
+                    // consent choices, drafts and account data are not caches.
+                    (0, perf_1.clearPageCaches)();
+                    wx.removeStorageSync('interception_pool_cache_v1');
+                    wx.showToast({ title: '临时缓存已清理', icon: 'none' });
+                    this.initCacheSize();
                 }
             },
         });

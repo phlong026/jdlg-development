@@ -1,0 +1,9 @@
+<view style="padding:32rpx">
+  <text>基线：与 main 一样只绑定 input，提交读取 form；不会上传或保存任何资料。</text>
+  <form bindsubmit="onSubmit">
+    <input name="nickname" type="nickname" value="{{nickname}}" maxlength="32" placeholder="选择微信昵称或手输" bindinput="onInput" />
+    <button form-type="submit" loading="{{saving}}">完成（只记录本机事件）</button>
+  </form>
+  <button bindtap="openObserved">切换事件观测页</button>
+  <text>请在开发者工具或真机调试 console 查看 [nickname-probe]；日志只含长度、布尔值和时间，不含昵称正文。</text>
+</view>

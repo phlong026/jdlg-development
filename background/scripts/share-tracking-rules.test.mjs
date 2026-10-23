@@ -186,3 +186,28 @@ test('session detail pagination replays first cursor and reset after explicit re
  props={...props,visitor:{...props.visitor,visitor_key:'u:43'}};render();await flush();assert.equal(calls.at(-1)[0],'u:43');assert.equal(calls.at(-1)[1].cursor,undefined);
  props={...props,visitor:{...props.visitor,visitor_key:'u:42'}};render();await flush();assert.equal(calls.at(-1)[1].cursor,undefined);
 });
+
+test('visitor session detail preserves unknown attribution and share-count semantics',()=>{
+ const React=require('react');
+ for(const scenario of [
+  {source:'unknown',expected:'来源未确认'},
+  {source:'unknown',entry_share_id:'inconsistent-old-share',expected:'来源未确认'},
+  {source:'share',entry_share_id:'valid-share',expected:'通过分享进入'},
+  {source:'direct',expected:'直接访问'},
+  {expected:'直接访问'},
+ ]){
+  let index=0;const slots=[];
+  const react={...React,useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]}};
+  const session={session_id:'source-session',started_at:'2026-10-23',last_active_at:'2026-10-23',page_views:[],...scenario};
+  const components={Feedback:'Feedback',Pager:'Pager',useResource:()=>({data:{items:[session]}})};
+  const {VisitorDetails}=load('src/pages/shareTracking/details.tsx',{'react':react,'../../api/shareTracking':{tracking:{}},'./model':model,'./components':components,'./visitorContents':{VisitorContentPanel:'VisitorContentPanel'},'./crmTarget':{CRMTargetButton:'CRMTargetButton'},'./governance':{VisitorGovernance:'VisitorGovernance'},'./convertLead':{ConvertLeadButton:'ConvertLeadButton'},'./visitorShares':{VisitorSharesPanel:'VisitorSharesPanel'}});
+  const tree=VisitorDetails({visitor:{visitor_key:'u:42',identity_state:'identified'},query:{owner:'owner-a'},context:{}});
+  const row=nodes(tree).find(n=>n.type==='article'&&n.props.className==='st-session');
+  assert.match(text(row),new RegExp(scenario.expected));
+  if(scenario.source==='unknown')assert.doesNotMatch(text(row),/直接访问/);
+  const summary=nodes(tree).find(n=>typeof n.type==='function'&&n.type.name==='VisitorSummary');
+  const tooltip=nodes(summary.type(summary.props)).find(n=>n.props?.title)?.props.title;
+  assert.doesNotMatch(tooltip,/多次点击分别计/);
+  assert.match(tooltip,/预热不计/);
+ }
+});

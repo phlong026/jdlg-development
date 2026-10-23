@@ -1,5 +1,5 @@
 // components/nickname-guard/nickname-guard.ts
-// 登录后强制完善昵称弹窗：昵称必填（微信键盘一键预填），头像选填（open-type=chooseAvatar 一键取微信头像）。
+// 昵称完善提示：用户可稍后填写；保存时昵称必填，头像选填。
 // 用法：页面 wxml 放置 <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" />，
 // 调用方通过 this.selectComponent('#nicknameGuard').show({ nickname, avatar }) 唤起。
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter';
@@ -8,7 +8,7 @@ import { blockUnsafeText } from '../../utils/promptReview';
 
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 // 与「我的」页共用同一个标记：同一自然日内两处合计最多提醒一次；保存成功后组件会清除它。
-const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day';
+const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day:';
 
 Component({
   data: {
@@ -18,12 +18,14 @@ Component({
     avatarTemp: '',
     uploading: false,
     saving: false,
+    promptUserID: 0,
   },
 
   methods: {
-    show(options: { nickname?: string; avatar?: string } = {}) {
+    show(options: { nickname?: string; avatar?: string; userID?: number } = {}) {
       this.setData({
         visible: true,
+        promptUserID: Number(options.userID || wx.getStorageSync('userInfo')?.id || 0),
         nickname: String(options.nickname || ''),
         avatarUrl: String(options.avatar || ''),
         avatarTemp: '',
@@ -38,34 +40,46 @@ Component({
       if (this.data.visible) {
         return false;
       }
-      const now = new Date();
-      const dayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-      if (wx.getStorageSync(NICKNAME_PROMPT_DAY_KEY) === dayKey) {
-        return false;
-      }
       const apiPath = '/api/v1/miniprogram/profile';
       const headers = this.buildAuthHeaders(apiPath);
       if (!headers) {
         return false;
       }
+      const tokenAtStart = wx.getStorageSync('token');
       try {
         const res = await new Promise<any>((resolve, reject) => {
           wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, success: resolve, fail: reject });
         });
         const body = res.data || {};
-        if (res.statusCode !== 200 || body.code !== 0) {
+        if (tokenAtStart !== wx.getStorageSync('token') || res.statusCode !== 200 || body.code !== 0) {
           return false;
         }
-        if (String(body.data?.nickname || '').trim()) {
-          return false;
-        }
-        wx.setStorageSync(NICKNAME_PROMPT_DAY_KEY, dayKey);
-        this.show({ avatar: String(body.data?.avatar || '') });
-        return true;
+        return this.showIfMissing(body.data || {});
       } catch (error) {
         console.error('昵称补检失败，放行:', error);
         return false;
       }
+    },
+
+    showIfMissing(profile: any) {
+      const nickname = String(profile?.nickname || '').trim();
+      if (this.data.visible || (nickname && Array.from(nickname).length <= 32)) return false;
+      const userID = Number(profile?.id || wx.getStorageSync('userInfo')?.id || 0);
+      const now = new Date();
+      const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      if (userID && wx.getStorageSync(NICKNAME_PROMPT_DAY_KEY + userID) === day) return false;
+      this.show({ userID, avatar: String(profile?.avatar || '') });
+      return true;
+    },
+
+    onSkip() {
+      if (this.data.saving) return;
+      const now = new Date();
+      const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      // Only an explicit postponement limits reminders, never merely showing one.
+      if (this.data.promptUserID) wx.setStorageSync(NICKNAME_PROMPT_DAY_KEY + this.data.promptUserID, day);
+      this.setData({ visible: false });
+      this.triggerEvent('skipped');
     },
 
     stopPropagation() {},
@@ -172,7 +186,7 @@ Component({
         wx.showToast({ title: '请填写昵称', icon: 'none' });
         return;
       }
-      if (nickname.length > 32) {
+      if (Array.from(nickname).length > 32) {
         wx.showToast({ title: '昵称最多 32 个字', icon: 'none' });
         return;
       }
@@ -184,6 +198,7 @@ Component({
         return;
       }
 
+      const tokenAtStart = wx.getStorageSync('token');
       this.setData({ saving: true });
       try {
         const apiPath = '/api/v1/miniprogram/profile/nickname';
@@ -205,10 +220,19 @@ Component({
         if (res.statusCode !== 200 || res.data.code !== 0) {
           throw new Error(res.data?.msg || '保存失败');
         }
+        const profilePath = '/api/v1/miniprogram/profile';
+        const readback: any = await new Promise((resolve, reject) => {
+          wx.request({ url: `${API_BASE_URL}${profilePath}`, method: 'GET',
+            header: this.buildAuthHeaders(profilePath) || {}, success: resolve, fail: reject });
+        });
+        if (tokenAtStart !== wx.getStorageSync('token')) throw new Error('账号已变化，请重新确认资料');
+        if (readback.statusCode !== 200 || readback.data?.code !== 0 || String(readback.data?.data?.nickname || '').trim() !== nickname) {
+          throw new Error('昵称保存结果未确认，请重试');
+        }
         const cachedUserInfo = wx.getStorageSync('userInfo') || {};
+        if (readback.data.data.id && cachedUserInfo.id && readback.data.data.id !== cachedUserInfo.id) throw new Error('账号资料不匹配');
         wx.setStorageSync('userInfo', { ...cachedUserInfo, nickname });
-        // 已完善资料，清除「我的」页当日补检标记
-        wx.removeStorageSync('nickname_prompt_day');
+        if (cachedUserInfo.id) wx.removeStorageSync(NICKNAME_PROMPT_DAY_KEY + cachedUserInfo.id);
         this.setData({ visible: false, saving: false });
         this.triggerEvent('completed', { nickname });
       } catch (error: any) {
@@ -218,9 +242,9 @@ Component({
       }
     },
 
-    // 强制完善：点遮罩不放行，只做提示（与登录页身份选择弹窗行为一致）
+    // 资料填写可以稍后继续，不要求为浏览公开页面披露昵称。
     onMaskTap() {
-      wx.showToast({ title: '请完善昵称后继续', icon: 'none' });
+      wx.showToast({ title: '可选择稍后完善，继续浏览', icon: 'none' });
     },
 
     buildAuthHeaders(apiPath: string, body: any = {}) {

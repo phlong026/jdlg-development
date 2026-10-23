@@ -157,7 +157,7 @@ func (s *Service) RebuildSessionSummaries(r Repository, session string, now time
 				title = c.Title
 			}
 		}
-		x := &DailySummary{Metric: MetricVersion, Day: day.Format("2006-01-02"), Timezone: "Asia/Shanghai", View: PageView{ID: p.event.View, Route: p.event.Route, Title: title, Content: p.event.Content, Version: p.event.Version, Previous: resolvedPrevious(r, session, p.event.Previous), Share: p.event.Share, Started: p.event.Occurred, Flags: []string{"incomplete"}}, Visitor: resolvedVisitor(r, p.row), OriginalVisitor: p.row.Visitor, Owner: p.row.Owner, Session: session, Last: at, BuiltAt: watermark, Ranges: [][2]int64{}}
+		x := &DailySummary{Metric: MetricVersion, Day: day.Format("2006-01-02"), Timezone: "Asia/Shanghai", View: PageView{Attribution: p.event.Attribution, ID: p.event.View, Route: p.event.Route, Title: title, Content: p.event.Content, Version: p.event.Version, Previous: resolvedPrevious(r, session, p.event.Previous), Share: p.event.Share, Started: p.event.Occurred, Flags: []string{"incomplete"}}, Visitor: resolvedVisitor(r, p.row), OriginalVisitor: p.row.Visitor, Owner: p.row.Owner, Session: session, Last: at, BuiltAt: watermark, Ranges: [][2]int64{}}
 		summaries[key] = x
 		return x
 	}

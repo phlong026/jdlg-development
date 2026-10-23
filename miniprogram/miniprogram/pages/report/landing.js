@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const api_1 = require("./api");
 const asset_1 = require("../../utils/asset");
 Page({
-    data: { enabled: false, loading: true, error: '', recent: null, recentError: '', background: (0, asset_1.resolveAssetPath)('/assets/home/logo+背景图.png') },
+    data: { enabled: false, houseEnabled: false, loading: true, error: '', recent: null, recentError: '', background: (0, asset_1.resolveAssetPath)('/assets/home/logo+背景图.png') },
     onLoad() { this.loadConfig(); },
     onShow() {
         if (this.data.enabled)
@@ -13,7 +13,7 @@ Page({
         this.setData({ loading: true, error: '' });
         try {
             const config = await (0, api_1.reportRequest)('/config');
-            this.setData({ enabled: config.enabled === true, error: config.enabled ? '' : '建房报告服务正在准备中，开放后即可填写。' });
+            this.setData({ enabled: config.enabled === true, houseEnabled: config.house_enabled === true, error: config.enabled ? '' : '建房报告服务正在准备中，开放后即可填写。' });
             if (config.enabled)
                 this.loadRecent();
         }
@@ -53,5 +53,7 @@ Page({
         if (this.data.enabled)
             wx.navigateTo({ url: '/pages/report/questionnaire', fail: () => this.setData({ error: '页面打开失败，请重试。' }) });
     },
+    getTimelineSharePayload() { return this.data.enabled && !this.data.loading && !this.data.error ? { title: '先想清楚怎么住，再决定怎么建', query: '' } : {}; },
+    onShareTimeline() { return this.getTimelineSharePayload(); },
     onShareAppMessage() { return { title: '先想清楚怎么住，再决定怎么建', path: '/pages/report/landing' }; },
 });

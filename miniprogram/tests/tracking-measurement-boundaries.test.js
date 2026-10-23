@@ -17,6 +17,7 @@ function readerRuntime({ accepted = false, deferConfig = false } = {}) {
   const entries = [], sent = [], modals = [], credentials = new Map();
   let pendingConfig = null;
   const configuration = { enabled: true, consent_version: 'v1', privacy_notice: 'Optional analytics; withdrawal leaves playback available.' };
+  if(accepted) storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:configuration.consent_version,notice:configuration.privacy_notice};
   const api = {
     resolveReaderOptions: async options => options,
     mediaURL: value => value,

@@ -18,6 +18,13 @@ function load(file, overrides = {}) {
 const model = load('src/pages/shareTracking/model.ts');
 const normalized = value => JSON.parse(JSON.stringify(value));
 
+test('identified accounts without nicknames have a stable account label, anonymous visitors stay anonymous', () => {
+  assert.equal(model.visitorName({ visitor_key: 'u:293', identity_state: 'identified', nickname: '' }), '用户 #293 · 未设置昵称');
+  assert.equal(model.visitorName({ visitor_key: 'u:293', identity_state: 'identified', nickname: ' 林间访客 ' }), '林间访客');
+  assert.match(model.visitorName({ visitor_key: 'a:random', identity_state: 'anonymous', nickname: '不可使用的账号昵称' }), /^匿名访客/);
+  assert.equal(model.visitorName({ visitor_key: 'u:293', identity_state: 'deleted', nickname: '旧昵称' }), '已删除账号');
+});
+
 test('customer timeline query sends source channel and drops list-only sort', () => {
   const filters = { ...model.defaultFilters, range: 'all', intent: 'high', channel: 'timeline', q: ' 雪峰 ', sort: 'visible_ms', direction: 'asc' };
   assert.deepEqual(normalized(model.queryFor(filters)), { identity: '', intent: 'high', q: '雪峰', channel: 'timeline', owner: '', limit: 20 });
@@ -48,6 +55,13 @@ test('source labels follow the timeline rules', () => {
   assert.equal(model.sourceLabel({ kind: 'share' }), '未记录');
   assert.equal(model.sourceLabel({ kind: 'code_link' }), '扫码·链接');
   assert.equal(model.sourceLabel({ kind: 'direct' }), '直接访问');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'unattributed' }), '来源未确认');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'invalid_share' }), '分享链接无效');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'expired_share' }), '分享链接已过期');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'revoked_share' }), '分享链接已停用');
+  assert.equal(model.sourceLabel({ kind: 'unknown', reason: 'mismatched_share' }), '分享链接与页面不符');
+  assert.ok(model.sourceOptions.some(([value, label]) => value === 'unknown' && label === '来源未确认'));
+  assert.equal(model.queryFor({ ...model.defaultFilters, range: 'all', channel: 'unknown' }).channel, 'unknown');
   assert.equal(model.forwarderText({ kind: 'share', forwarder: { visitor_key: 'u:3', nickname: '心随我动', identity_state: 'identified' } }), '（心随我动转发）');
   assert.equal(model.forwarderText({ kind: 'share', forwarder: { visitor_key: 'a:x', nickname: '匿名访客 abcdef', identity_state: 'anonymous' } }), '（匿名访客转发）');
   assert.equal(model.forwarderText({ kind: 'share' }), '');
@@ -139,6 +153,17 @@ test('batch card merges multiple materials and shows visit count', () => {
 test('visit card discloses an oversized progress fallback instead of looking like no progress events', () => {
   const html = renderCard({ ...baseVisit, progress: undefined, progress_omitted: true });
   assert.match(html, /进度因数据量过大未加载/);
+});
+
+test('plain public page cards show the route title and page presentation', () => {
+  const html = renderCard({ ...baseVisit,
+    content: { content_id: '', content_version: 0, route_key: 'pages/index/index', title: 'pages/index/index', type: 'page', status: 'published', content_accessible: true },
+    progress: undefined, materials: undefined,
+  });
+  assert.match(html, /首页/);
+  assert.match(html, /页面/);
+  assert.match(html, /本次停留/);
+  assert.doesNotMatch(html, /素材暂不可访问|历史素材信息不可用|pages\/index\/index/);
 });
 
 test('day card shows the day badge and cross-session visit count', () => {

@@ -9,9 +9,10 @@ const root=path.join(__dirname,'../miniprogram');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const notice='为分析分享内容的访问效果，记录公开页面访问、可见时长、明确点击、分享发起和可观测媒体播放。使用随机安装标识，登录后仅由服务端关联账号。\n不记录输入正文、联系人、位置或设备指纹；分享不代表送达，时长不代表理解。\n原始数据保留90天，汇总180天。处理者与删除渠道：本次测试配置的完整告知末尾。';
 
-function runtime({storage={},configuration,configRequest,offlineEvents=false}={}) {
+function runtime({storage={},configuration,configRequest,offlineEvents=false,accepted=false}={}) {
   let definition,appDefinition,clock=1000;
   let config=configuration||{enabled:true,consent_version:'notice-v1',privacy_notice:notice};
+  if(accepted) storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:config.consent_version,notice:config.privacy_notice};
   const modals=[],business=[],entries=[],events=[],toasts=[];
   const api={async request(suffix,method,body){
     if(suffix==='/config')return configRequest?configRequest():config;
@@ -55,44 +56,40 @@ async function legacy(t) {
   await settle();return page;
 }
 
-// ─────────── 静默同意模型：从未选择的用户随配置拉取自动开启；明确拒绝过的不覆盖 ───────────
-
-test('silent consent collects the first public visit without any dialog while reading and sharing keep working',async()=>{
+test('unselected users can read and share without granting analytics',async()=>{
   const t=runtime(),page=await legacy(t);
-  assert.equal(t.modals.length,0,'no prompt is shown for the silent default');
-  assert.equal(page.data.contentReady,true);assert.equal(page.data.tools[0].title,'可读工具');
-  assert.equal(t.entries.length,1);assert.equal(t.entries[0].share_token,'incoming_share');
-  assert.equal(t.events.filter(e=>e.event_type==='page_view').length,1);
-  assert.equal(t.events.find(e=>e.event_type==='page_view').route_key,'pages/utilitytools/utilitytools');
-  const share=page.onShareAppMessage();assert.equal(share.path,'/pages/utilitytools/utilitytools');
+  assert.equal(t.modals.length,0);assert.equal(t.adapter.consented(),false);
+  assert.equal(t.entries.length,0);assert.equal(t.events.length,0);
+  assert.equal(t.storage.share_tracking_consent_choice_v1,undefined);
+  assert.equal(page.data.contentReady,true);
+  assert.equal(page.onShareAppMessage().path,'/pages/utilitytools/utilitytools');
 });
 
-test('the settings switch can stop collection and the rejection survives config refreshes and restarts',async()=>{
-  const t=runtime(),page=await legacy(t);
-  assert.equal(t.adapter.setConsent(false),true);
-  const collected=t.entries.length;
+test('explicit withdrawal survives config refresh and restart',async()=>{
+  const t=runtime({accepted:true}),page=await legacy(t);assert.equal(t.entries.length,1);
+  t.adapter.setConsent(false);const count=t.entries.length;
   page.onHide();page.onShow();await t.adapter.refreshConfig();await settle();
-  assert.equal(t.adapter.consented(),false);
-  assert.equal(t.entries.length,collected,'declined pages do not collect');
-  const eventsBeforeDecline=t.events.length;
-  page.onHide();page.onShow();await t.adapter.refreshConfig();await settle();
-  assert.equal(t.events.length,eventsBeforeDecline,'no new events after the switch is turned off');
+  assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,count);
   const restarted=runtime({storage:t.storage});await legacy(restarted);
-  assert.equal(restarted.modals.length,0);assert.equal(restarted.entries.length,0,'rejection persists across restarts');
+  assert.equal(restarted.entries.length,0);assert.equal(restarted.adapter.consented(),false);
 });
 
-test('a previously accepted notice is silently re-accepted after an update, and a rejection is never retried',async()=>{
-  const t=runtime(),page=await legacy(t);assert.equal(t.adapter.consented(),true);
-  t.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+'\n第二版新增说明。'});
-  await t.adapter.refreshConfig();await settle();
-  assert.equal(t.modals.length,0,'updated notice re-accepts silently for prior accepters');
-  assert.equal(t.adapter.consented(),true);assert.ok(t.entries.length>0);
-
-  const declined=runtime();assert.equal(declined.adapter.setConsent(false),true);
-  declined.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+'\n第二版新增说明。'});
-  await declined.adapter.refreshConfig();await settle();
-  assert.equal(declined.adapter.consented(),false,'explicit rejection is not overridden');
-  assert.equal(declined.modals.length,0);assert.equal(declined.entries.length,0);
+test('legacy implicit and outdated accepted choices need a new explicit choice',async()=>{
+  for(const old of [
+    {share_tracking_consent_v1:{version:'notice-v1'}},
+    {share_tracking_consent_choice_v1:{accepted:true,version:'notice-v1',notice}},
+    {share_tracking_consent_choice_v1:{accepted:true,explicit:true,version:'old',notice}},
+  ]){
+    const t=runtime({storage:old}),page=await legacy(t);
+    assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);
+    const choosing=t.adapter.showConsentChoices(page);await settle();
+    assert.ok(t.modals[0].content.includes('昵称、头像'));
+    t.answer(0,true);await choosing;await settle();
+    assert.equal(t.adapter.consented(),true);assert.equal(t.storage.share_tracking_consent_choice_v1.explicit,true);
+  }
+  const declined=runtime();declined.adapter.setConsent(false);
+  declined.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+' changed'});
+  await declined.adapter.refreshConfig();assert.equal(declined.adapter.consented(),false);
 });
 
 test('incomplete or disabled server configuration cannot grant silent consent',async()=>{
@@ -145,7 +142,7 @@ test('manual modal keeps its race guards: withdrawal wins, ambiguous answers nev
 
 test('withdrawal during a config outage purges queued analytics and remains declined after recovery/restart',async()=>{
   let outage=false;
-  const t=runtime({offlineEvents:true,configRequest:async()=>{if(outage)throw new Error('offline');return{enabled:true,consent_version:'notice-v1',privacy_notice:notice};}});
+  const t=runtime({accepted:true,offlineEvents:true,configRequest:async()=>{if(outage)throw new Error('offline');return{enabled:true,consent_version:'notice-v1',privacy_notice:notice};}});
   const page=await legacy(t);assert.ok(t.adapter.getSDK().diagnostics().queued>0);
   outage=true;await t.adapter.refreshConfig();t.adapter.setConsent(false);
   assert.equal(t.adapter.getSDK().diagnostics().queued,0);assert.equal(t.adapter.consented(),false);
@@ -175,6 +172,7 @@ test('settings page owns the switch and stale consent UI is gone from My and pag
   }
   // 编译产物守卫：index.js 必须包含静默同意，且页面展示不再自动弹窗
   const bundled=fs.readFileSync(path.join(root,'utils/tracking/index.js'),'utf8');
-  assert.match(bundled,/safely\(\(\)=>setConsent\(true\)\)/,'silent consent must exist in the shipped artifact');
+  assert.doesNotMatch(bundled,/safely\(\(\)=>setConsent\(true\)\)/,'configuration cannot imply agreement');
+  assert.match(bundled,/choice\.explicit===true/);
   assert.doesNotMatch(bundled,/if\(visible\)\{consentPage=page;showConsentChoices\(page\);\}/,'auto prompt must stay removed');
 });

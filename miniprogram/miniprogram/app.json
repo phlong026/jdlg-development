@@ -23,6 +23,7 @@
     "pages/settings/settings",
     "pages/aicost/aicost",
     "pages/aicostresult/aicostresult",
+    "pages/aicostshare/aicostshare",
     "pages/utilitytools/utilitytools",
     "pages/utilitytooldetail/utilitytooldetail",
     "pages/aivideo/aivideo",

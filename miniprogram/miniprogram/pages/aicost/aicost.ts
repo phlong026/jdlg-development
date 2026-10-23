@@ -102,6 +102,15 @@ function estimateTotalCost(input: EstimateInput) {
   };
 }
 
+function getTimelineSharePayload(this: any) {
+  if (!this.data.contentReady) return {};
+  return {
+    title: BUDGET_TIMELINE_TITLE,
+    query: 'from=share',
+    imageUrl: this.data.budgetTimelineCover,
+  };
+}
+
 Page({
   shareCoverDestroyed: false,
   data: {
@@ -204,14 +213,8 @@ Page({
     } as any;
   },
 
-  onShareTimeline() {
-    if (!this.data.contentReady) return {};
-    return {
-      title: BUDGET_TIMELINE_TITLE,
-      query: 'from=share',
-      imageUrl: this.data.budgetTimelineCover,
-    };
-  },
+  getTimelineSharePayload,
+  onShareTimeline() { return getTimelineSharePayload.call(this); },
 
   onFootprintAreaInput(e: any) {
     this.setData({ footprintArea: e.detail.value });

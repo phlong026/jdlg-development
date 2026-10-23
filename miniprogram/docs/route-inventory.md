@@ -2,7 +2,9 @@
 
 基线 c4e761d7a54cead8b1f43bec9fe391d7bcf3db89，实际配置57个既有页面，另新增1个通用阅读页。表中均为静态代码审计，不是设备验收。统一适配器保留所有既有分享回调与返回值；采集开关及独立告知同意均默认关闭。
 
-代码复核后，20个既有公开页面及1个新增正文页允许在同意、成功就绪、可见三项同时满足后采集；37个账户/私人业务/管理页面明确排除源页面轨迹（逐类依据见下文），其原生分享功能不删除。私有源页面分享至公开目标时仍保留公开目标归因；分享至排除目标保持原生行为、不附加追踪。模板广场、设计师列表、工具列表已采用真实接口成功信号：有效空数组允许页面PV，失败或畸形响应不允许。静态表单只表示打开表单，不采集输入、生成结果或业务成功。首页只表示固定首页已渲染，不推断推荐素材已读。尚无真机证据，不能宣称全部P0验收通过。
+2026-10-23：新增独立公开造价快照页后共59条策略，22条公开源、37条排除源。原始测算结果、问卷、预览和交付继续排除。原始结果仅在用户点击“公开分享这份快照”后创建固定快照；公开页 GET 成功后才就绪，服务端以 `costsnapshot:<report_id>` 绑定仍有效的快照和版本，撤销或过期即拒绝。原结果页旧 `report_id` 链接跳转至公开页并保留 `st`。
+
+代码复核后，20个既有公开页面、1个新增正文页及1个公开造价快照页允许在同意、成功就绪、可见三项同时满足后采集；37个账户/私人业务/管理页面明确排除源页面轨迹（逐类依据见下文），其原生分享功能不删除。私有源页面分享至公开目标时仍保留公开目标归因；分享至排除目标保持原生行为、不附加追踪。模板广场、设计师列表、工具列表已采用真实接口成功信号：有效空数组允许页面PV，失败或畸形响应不允许。静态表单只表示打开表单，不采集输入、生成结果或业务成功。首页只表示固定首页已渲染，不推断推荐素材已读。尚无真机证据，不能宣称全部P0验收通过。
 
 | 路由 | 类型 | 既有原生分享入口 | 原代码目标path/业务参数（原样保留） | 成功就绪依据 | 设备证据 |
 |---|---|---|---|---|---|
@@ -28,6 +30,7 @@
 | pages/templatepreview/templatepreview | excluded | onShareAppMessage | /pages/template/template | excluded-private-generated-content | 未真机验证 |
 | pages/settings/settings | excluded | onShareAppMessage | /pages/settings/settings | excluded-private-account | 未真机验证 |
 | pages/aicost/aicost | form | onShareAppMessage | 按原回调/无静态path | rendered | 未真机验证 |
+| pages/aicostshare/aicostshare | detail | onShareAppMessage, onShareTimeline | /pages/aicostshare/aicostshare?report_id=<opaque-id> | 明确公开且快照读取成功；contentReady | 未真机验证 |
 | pages/aicostresult/aicostresult | excluded | onShareAppMessage | 按原回调/无静态path | excluded-private-estimate | 未真机验证 |
 | pages/utilitytools/utilitytools | list | onShareAppMessage | /pages/utilitytools/utilitytools | explicit | 未真机验证 |
 | pages/utilitytooldetail/utilitytooldetail | detail | onShareAppMessage | /pages/utilitytooldetail/utilitytooldetail?id=${this.data.toolId 或 0}（按原回调） | nonempty:tool | 未真机验证 |

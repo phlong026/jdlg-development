@@ -155,6 +155,8 @@ type Draft struct {
 	Revision   int      `json:"expected_revision"`
 }
 type Share struct {
+	Channel   string `json:"channel,omitempty"`
+	Prepared  bool   `json:"prepared,omitempty"`
 	ID        string `json:"share_id"`
 	TokenHash string `json:"-"`
 	Route     string `json:"route_key"`
@@ -182,6 +184,7 @@ type EntryInput struct {
 	Previous   string `json:"previous_entry_token"`
 }
 type Entry struct {
+	Attribution     string    `json:"attribution_status,omitempty"`
 	Route           string    `json:"route_key"`
 	Content         string    `json:"content_id,omitempty"`
 	Version         int       `json:"content_version,omitempty"`
@@ -202,6 +205,8 @@ type Entry struct {
 	Self            bool      `json:"is_self_visit,omitempty"`
 }
 type Event struct {
+	// Attribution is overwritten by the server from the signed entry context.
+	Attribution   string     `json:"attribution_status,omitempty"`
 	SourceChannel string     `json:"source_channel,omitempty"`
 	Schema        int        `json:"schema_version"`
 	ID            string     `json:"event_id"`
@@ -351,17 +356,18 @@ type Visitor struct {
 	Intent       Intent       `json:"intent"`
 }
 type PageView struct {
-	ID       string     `json:"page_view_id"`
-	Route    string     `json:"route_key"`
-	Title    string     `json:"title"`
-	Content  string     `json:"content_id,omitempty"`
-	Version  int        `json:"content_version,omitempty"`
-	Previous string     `json:"previous_page_view_id,omitempty"`
-	Share    string     `json:"share_id,omitempty"`
-	Started  time.Time  `json:"started_at"`
-	Ended    *time.Time `json:"ended_at,omitempty"`
-	Visible  int64      `json:"visible_ms"`
-	Flags    []string   `json:"quality_flags"`
+	Attribution string     `json:"attribution_status,omitempty"`
+	ID          string     `json:"page_view_id"`
+	Route       string     `json:"route_key"`
+	Title       string     `json:"title"`
+	Content     string     `json:"content_id,omitempty"`
+	Version     int        `json:"content_version,omitempty"`
+	Previous    string     `json:"previous_page_view_id,omitempty"`
+	Share       string     `json:"share_id,omitempty"`
+	Started     time.Time  `json:"started_at"`
+	Ended       *time.Time `json:"ended_at,omitempty"`
+	Visible     int64      `json:"visible_ms"`
+	Flags       []string   `json:"quality_flags"`
 }
 type Session struct {
 	ID      string     `json:"session_id"`

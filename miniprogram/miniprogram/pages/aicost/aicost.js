@@ -73,6 +73,15 @@ function estimateTotalCost(input) {
         dynamicNotes: ['不同地基因方案不同，价格不同。', '不同屋顶因做法不同，价格不同。'],
     };
 }
+function getTimelineSharePayload() {
+    if (!this.data.contentReady)
+        return {};
+    return {
+        title: BUDGET_TIMELINE_TITLE,
+        query: 'from=share',
+        imageUrl: this.data.budgetTimelineCover,
+    };
+}
 Page({
     shareCoverDestroyed: false,
     data: {
@@ -167,15 +176,8 @@ Page({
             }).then((imageUrl) => imageUrl ? { title, path, imageUrl } : { title, path }),
         };
     },
-    onShareTimeline() {
-        if (!this.data.contentReady)
-            return {};
-        return {
-            title: BUDGET_TIMELINE_TITLE,
-            query: 'from=share',
-            imageUrl: this.data.budgetTimelineCover,
-        };
-    },
+    getTimelineSharePayload,
+    onShareTimeline() { return getTimelineSharePayload.call(this); },
     onFootprintAreaInput(e) {
         this.setData({ footprintArea: e.detail.value });
     },

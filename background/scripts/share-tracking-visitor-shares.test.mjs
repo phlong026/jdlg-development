@@ -58,7 +58,11 @@ test('转发记录展示素材、渠道与下游流量文案',async()=>{
  assert.match(text(h),/带来访客/);
  assert.match(text(h),/人 · 浏览 /);
  assert.ok(text(h).includes('"brought_visitors":2') && text(h).includes('"brought_views":3'));
- assert.match(text(h),/多次点击分别计/);
+ assert.match(text(h),/同一缓存标识只计一次/);
+ assert.match(text(h),/预热不计/);
+ assert.match(text(h),/可能少计/);
+ assert.match(text(h),/转发不代表送达/);
+ assert.doesNotMatch(text(h),/多次点击分别计/);
 });
 
 test('未知渠道显示未记录而非空白，撤回素材带状态标注',async()=>{

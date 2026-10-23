@@ -19,6 +19,15 @@ const featuredDetailPrefetching = new Set();
 function buildPublicTemplateDetailCacheKey(templateId) {
     return `template-detail:public:${Number(templateId || 0)}`;
 }
+function getTimelineSharePayload() {
+    if (!this.data.contentReady)
+        return {};
+    return {
+        title: HOME_SHARE_TITLE,
+        query: 'from=share',
+        imageUrl: this.data.homeTimelineCover,
+    };
+}
 Page({
     shareCoversPromise: null,
     data: {
@@ -100,15 +109,8 @@ Page({
         const share = { title: HOME_SHARE_TITLE, path: '/pages/index/index?from=share' };
         return Object.assign(Object.assign({}, share), { imageUrl: this.data.homeChatCover || undefined, promise: Promise.resolve(this.shareCoversPromise).then(() => (Object.assign(Object.assign({}, share), { imageUrl: this.data.homeChatCover || undefined }))) });
     },
-    onShareTimeline() {
-        if (!this.data.contentReady)
-            return {};
-        return {
-            title: HOME_SHARE_TITLE,
-            query: 'from=share',
-            imageUrl: this.data.homeTimelineCover,
-        };
-    },
+    getTimelineSharePayload,
+    onShareTimeline() { return getTimelineSharePayload.call(this); },
     onOpenPage(e) {
         const { url } = e.currentTarget.dataset;
         if (!url) {
@@ -226,7 +228,7 @@ Page({
         this.rememberHomeIntroPopupSeen();
         this.setData({
             homeIntroPopupVisible: false,
-        });
+        }, () => { void this.promptNicknameIfMissing(); });
     },
     onHomeIntroTopup() {
         this.closeHomeIntroPopup();

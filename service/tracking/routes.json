@@ -346,5 +346,11 @@
     "Type": "owned-content",
     "Public": true,
     "Audience": "customer"
+  },
+  "pages/aicostshare/aicostshare": {
+    "Title": "公开造价测算报告",
+    "Type": "detail",
+    "Public": true,
+    "Audience": "customer"
   }
 }

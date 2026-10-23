@@ -33,9 +33,9 @@ npm run check:tracking-routes
 
 - `test:tracking` 执行 SDK、真实公开回调、闲置与身份边界、告知同意、阅读入口竞态，授权素材入口、明确咨询成功指令，以及路由检查器自身的正反例回归。
 - `check:tracking` 只比对确定性 TS → JS 产物，不重写源码或生成文件。
-- `check:tracking-routes` 从真实 app.json 的主包、分包提取全部 58 条路径；拒绝重复、不规范路径及未经更新的路由数量变化。前端 `ROUTES` 和 Go `routes.json` 必须与 app 路径逐项、大小写完全一致，不允许额外项或遗漏。
+- `check:tracking-routes` 从真实 app.json 的主包、分包提取全部 59 条路径；拒绝重复、不规范路径及未经更新的路由数量变化。前端 `ROUTES` 和 Go `routes.json` 必须与 app 路径逐项、大小写完全一致，不允许额外项或遗漏。
 - 逐项校验前端 `collect` 与后端 `Public` 为显式布尔值且相同、`kind` 与 `Type` 相同、后端标题非空。公开页必须有受支持的就绪策略；私有页必须使用 excluded 类型、具体排除理由和对应就绪值。实际 runtime policy（含前导斜线形式）必须返回同一策略，未知路径必须关闭采集。
-- 当前结果为 21 个公开源页面（含通用阅读页）和 37 个排除源页面。新增路由或调整隐私边界，需要审查后同步 app、两端策略、检查器基线及测试；不能靠忽略失败放行。
+- 当前结果为 22 个公开源页面（含通用阅读页和主动公开的不可变造价快照页）和 37 个排除源页面。新增路由或调整隐私边界，需要审查后同步 app、两端策略、检查器基线及测试；不能靠忽略失败放行。
 
 ## 本地实际验证记录
 
@@ -67,3 +67,5 @@ node --test tests/*.test.js
 既有失败背景亦见 `miniprogram/docs/share-tracking-verification.md`。聚焦门禁成功不代表该债务已修复；不得将全量命令改为忽略失败来制造通过。微信真机、实际平台权限、部署环境与生产采集开启审批仍按验收文档独立完成，Node/Go 自动测试不能代替。
 
 PR3 评审修复同时把 service/model 纳入跟踪普通/race 门禁，覆盖收藏事务回执源测试；小程序正式 test:tracking 命令包含新增 measurement-boundaries 套件，后台新增分页行为测试由原 scripts/*.test.mjs 通配纳入。模型包既有外部数据库测试仍按缺少隔离 DSN 明确跳过，不提供真实数据库验收替代。
+
+2026-10-23：专项新增实际SDK包装器、TS/JS页面和昵称回访用例，Tracking mini-program job 也先按 background/package-lock.json 安装既有编译运行时。此前干净runner缺TypeScript已在PR39日志复现；保留全部测试与门禁，不通过删除测试或依赖本机全局包来规避。

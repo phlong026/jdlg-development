@@ -10,7 +10,7 @@ const day = () => { const n = new Date(); return `${n.getFullYear()}-${n.getMont
 
 function load(extension, { token = 'tk', profile = { code: 0, data: { nickname: '', avatar: 'a.png' } }, status = 200, fail = false } = {}) {
   let definition;
-  const storage = { token };
+  const storage = { token, userInfo: { id: 101 } };
   const requests = [];
   const source = fs.readFileSync(path.join(root, `miniprogram/components/nickname-guard/nickname-guard.${extension}`), 'utf8');
   const code = extension === 'ts'
@@ -31,26 +31,30 @@ function load(extension, { token = 'tk', profile = { code: 0, data: { nickname: 
     },
     console: { error() {}, warn() {}, log() {} },
   });
-  const instance = { data: { ...definition.data }, setData(v) { Object.assign(this.data, v); }, ...definition.methods };
+  const instance = { data: { ...definition.data }, setData(v) { Object.assign(this.data, v); }, ...definition.methods, triggerEvent() {} };
   return { instance, storage, requests };
 }
 
 for (const extension of ['ts', 'js']) {
-  test(`${extension}: 昵称为空时弹窗，并记下今天已提醒`, async () => {
+  test(`${extension}: 昵称为空时提示，但展示不等于完成或推迟`, async () => {
     const { instance, storage, requests } = load(extension);
     assert.equal(await instance.checkAndShow(), true);
     assert.equal(instance.data.visible, true);
     assert.equal(instance.data.avatarUrl, 'a.png');
-    assert.equal(storage.nickname_prompt_day, day());
+    assert.equal(storage['nickname_prompt_day:101'], undefined);
     assert.equal(requests.length, 1);
   });
 
-  test(`${extension}: 同一天不再提醒，也不再请求资料`, async () => {
+  test(`${extension}: 明确稍后完善后按账号限制提醒，不影响其他账号`, async () => {
     const { instance, storage, requests } = load(extension);
-    storage.nickname_prompt_day = day();
+    assert.equal(await instance.checkAndShow(), true);
+    instance.onSkip();
+    assert.equal(storage['nickname_prompt_day:101'], day());
     assert.equal(await instance.checkAndShow(), false);
     assert.equal(instance.data.visible, false);
-    assert.equal(requests.length, 0);
+    storage.userInfo = { id: 102 };
+    assert.equal(await instance.checkAndShow(), true);
+    assert.equal(requests.length, 3);
   });
 
   test(`${extension}: 已有昵称、未登录都不弹窗`, async () => {

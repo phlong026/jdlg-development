@@ -232,3 +232,12 @@ test('设计师列表与详情不把 wx_ 登录名当名字', async () => {
   const heading = nodes(detailPanel(page), node => node.type === 'h3');
   assert.equal(textOf(heading[0]), '微信用户 #1');
 });
+
+test('设计师真实 profile 昵称保留 wx_ 前缀，列表登录名兜底仍隐藏', async () => {
+  setup({ getDesignerManagementList: async () => ({ list: [{ ...designers[0], username: 'wx_generated', display_name: 'wx_generated' }] }) });
+  const page = await boot();
+  requests[0].resolve({ ...makeDetail(1), username: 'wx_generated', profile: { ...makeDetail(1).profile, nickname: 'wx_设计师自选昵称' } });
+  await flush(); page.render();
+  const heading = nodes(detailPanel(page), node => node.type === 'h3');
+  assert.equal(textOf(heading[0]), 'wx_设计师自选昵称');
+});

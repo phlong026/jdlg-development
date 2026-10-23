@@ -210,7 +210,11 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			}
 
 			// 获取用户扩展信息
-			profileData, _ := userProfileModel.GetByUserID(codeSession.UserID)
+			profileData, profileErr := userProfileModel.GetByUserID(codeSession.UserID)
+                if profileErr != nil && !errors.Is(profileErr, sql.ErrNoRows) {
+                    c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取用户资料失败"})
+                    return
+                }
 
 			response := gin.H{
 				"id":         user.ID,
@@ -273,7 +277,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			}
 
 			var req struct {
-				Nickname string `json:"nickname" binding:"required,max=32"`
+				Nickname string `json:"nickname" binding:"required"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
@@ -283,17 +287,13 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				return
 			}
 
-			// 确保profile存在
-			_, err := userProfileModel.GetOrCreate(codeSession.UserID, "")
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "获取用户信息失败",
-				})
-				return
-			}
+			nickname, err := model.NormalizeNickname(req.Nickname)
+                if err != nil {
+                    c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+                    return
+                }
 
-			if err := userProfileModel.UpdateNickname(codeSession.UserID, req.Nickname); err != nil {
+                if err := userProfileModel.UpdateNickname(codeSession.UserID, nickname); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "修改昵称失败: " + err.Error(),
@@ -304,6 +304,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			c.JSON(http.StatusOK, gin.H{
 				"code": 0,
 				"msg":  "修改成功",
+                "data": gin.H{"nickname": nickname},
 			})
 		})
 
@@ -564,7 +565,11 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			}
 
 			// 获取profile检查是否已设置密码
-			profileData, _ := userProfileModel.GetByUserID(codeSession.UserID)
+			profileData, profileErr := userProfileModel.GetByUserID(codeSession.UserID)
+                if profileErr != nil && !errors.Is(profileErr, sql.ErrNoRows) {
+                    c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取用户资料失败"})
+                    return
+                }
 			if profileData != nil && profileData.HasPassword {
 				// 已设置密码，需要验证旧密码
 				if req.OldPassword == "" {

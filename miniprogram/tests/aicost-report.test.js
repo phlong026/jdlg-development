@@ -12,6 +12,7 @@ const reportTemplatePath = path.join(__dirname, '../miniprogram/pages/aicostresu
 function createHarness(cachedResult) {
   let definition;
   const toasts = [];
+  const navigation = [];
   let navigatedBack = 0;
   const code = ts.transpileModule(fs.readFileSync(pagePath, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
@@ -55,7 +56,7 @@ function createHarness(cachedResult) {
       },
       showToast(options) { toasts.push(options.title); },
       navigateBack() { navigatedBack += 1; },
-      navigateTo() {},
+      navigateTo(value) { navigation.push(value.url); },
     },
   });
 
@@ -65,7 +66,7 @@ function createHarness(cachedResult) {
     setData(patch) { Object.assign(this.data, patch); },
     loadEnterpriseWechatServiceConfig() {},
   };
-  return { page, toasts, get navigatedBack() { return navigatedBack; } };
+  return { page, toasts, navigation, get navigatedBack() { return navigatedBack; } };
 }
 
 const currentResult = {
@@ -112,22 +113,21 @@ test('report loads the complete version 4 estimate snapshot', () => {
   assert.equal(h.toasts.length, 0);
 });
 
-test('report omits the dedicated share preparation module and keeps the estimate disclaimer', () => {
+test('report explains explicit public snapshot creation and keeps the estimate disclaimer', () => {
   const source = fs.readFileSync(reportTemplatePath, 'utf8');
-  assert.doesNotMatch(source, /分享这份测算报告/);
-  assert.doesNotMatch(source, /准备分享报告/);
+  assert.match(source, /仅在你点击后公开这份固定快照/);
+  assert.match(source, /bindtap="onPrepareShareReport"/);
   assert.match(source, /以上为快速估算结果，最终价格需结合图纸、现场情况和施工范围确认/);
 });
 
-test('report stays private before canvas readiness and still supports direct preparation', async () => {
+test('report publishes only after explicit action and opens a separate public snapshot', async () => {
   const h = createHarness(currentResult);
-  h.page.onLoad();
+  h.page.onLoad(); h.page.onReady();
   assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
+  assert.equal(h.navigation.length, 0);
   await h.page.onPrepareShareReport();
-  const share = h.page.onShareAppMessage();
-  assert.equal(share.title, '泉州320 ㎡建房参考造价58.36万，查看测算报告');
-  assert.equal(share.path, '/pages/aicostresult/aicostresult?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
-  assert.equal(share.imageUrl, 'wxfile://cost-share.jpg');
+  assert.equal(h.navigation[0], '/pages/aicostshare/aicostshare?report_id=AbcdEFghIJklMNopQRstUVwxYZ012345');
+  assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
 });
 
 test('share cover uses the supplied villa visual without a line-art fallback', () => {

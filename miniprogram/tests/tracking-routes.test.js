@@ -15,7 +15,7 @@ function fixture() {
 }
 
 test('actual app, runtime policies and Go inventory agree for every reviewed route', () => {
-  assert.deepEqual(checkRepository(), { total: 58, public: 21, excluded: 37 });
+  assert.deepEqual(checkRepository(), { total: 59, public: 22, excluded: 37 });
 });
 
 const mutations = [
@@ -45,3 +45,16 @@ for (const [name, mutate, error] of mutations) {
     assert.throws(() => validateTrackingRoutes(data), error);
   });
 }
+
+
+test('only deliberately public immutable cost snapshots acquire report tracking identity', () => {
+  const routes = require('../miniprogram/utils/tracking/routes.js');
+  const id = 'AbcdEFghIJklMNopQRstUVwxYZ012345';
+  assert.equal(routes.policy('pages/aicostshare/aicostshare').collect, true);
+  assert.deepEqual(routes.binding('pages/aicostshare/aicostshare', { report_id: id }), { id: 'costsnapshot:' + id });
+  assert.deepEqual(routes.binding('pages/aicostshare/aicostshare', { report_id: 'private-task-id' }), {});
+  assert.equal(routes.ready('pages/aicostshare/aicostshare', { contentReady: false }, true), false);
+  for (const route of ['pages/aicostresult/aicostresult', 'pages/report/questionnaire', 'pages/report/preview', 'pages/report/delivery']) {
+    assert.equal(routes.policy(route).collect, false, route);
+  }
+});

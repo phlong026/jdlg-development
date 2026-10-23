@@ -80,18 +80,20 @@ function createTracker(io) {
   }
   function boundary(reason) {
     stop(active, true); epoch++; anonymousLink = null; context = null; previous = ''; previousSession = ''; opening = null; lastActivity = null;
-    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; discardPending(p); p.shareCache = {}; notifyObservation(p); }
+    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; discardPending(p); p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = ''; notifyObservation(p); }
     if (io.onBoundary) io.onBoundary(reason);
   }
   function checkAccount() {
     // Check before begin/sample can refresh activity, including warm app/page
     // recovery with an already-ready entry. Zero is a valid monotonic timestamp.
-    if (lastActivity !== null && io.mono() - lastActivity > SESSION_IDLE) boundary('idle');
+    if (lastActivity !== null && io.mono() - lastActivity > SESSION_IDLE) { lastActivity = null; boundary('idle'); }
     const current = io.account();
-    if (current !== account) { const prior=!account && current ? context : null; boundary('identity_change'); anonymousLink=prior; account = current; }
+    // Observers run synchronously during boundary(); publish the new account
+    // first so a nested observation cannot repeat the same identity boundary.
+    if (current !== account) { const prior=!account && current ? context : null; account = current; boundary('identity_change'); anonymousLink=prior; }
   }
   async function enter(p, share, fresh) {
-    if (!enabled || !consent || suspended || !p) return;
+    if (!enabled || !consent || suspended || !p || !p.ready || !p.visible || active !== p || !foreground) return;
     checkAccount();
     if (fresh) {
       boundary('external_entry');
@@ -192,7 +194,7 @@ function createTracker(io) {
         // Preserve that newer input, but never rebind an old pending share to
         // a replacement content/version merely because its request failed.
         if (p.pendingEntry && p.shareRevision === p.pendingEntry.shareRevision) p.share = '';
-        p.pendingEntry = null; p.content = content; p.entryReady = false; p.context = null; p.shareCache = {};
+        p.pendingEntry = null; p.content = content; p.entryReady = false; p.context = null; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = '';
         p.request = (p.request || 0) + 1; p.entering = false;
       }
       p.ready = available === true;

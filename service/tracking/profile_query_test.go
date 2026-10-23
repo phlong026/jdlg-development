@@ -42,7 +42,7 @@ func TestAuthorizedProfilePresentationAndChineseSearch(t *testing.T) {
 	if by["u:1"].Nickname != "林间访客" || by["u:1"].AvatarURL != "https://images.example/avatar.png" {
 		t.Fatal(by)
 	}
-	if by["u:2"].Nickname != "已识别账号" || by["u:2"].AvatarURL != "" || by["a:anonymous1"].AvatarURL != "" {
+	if by["u:2"].Nickname != "" || by["u:2"].AvatarURL != "" || by["a:anonymous1"].AvatarURL != "" {
 		t.Fatal(by)
 	}
 	got, err := s.Visitors(context.Background(), scope, Filter{Search: "林间"})

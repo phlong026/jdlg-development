@@ -7,7 +7,7 @@ const ts = require('./report-runtime')('typescript');
 
 const root = path.resolve(__dirname, '..');
 
-function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false } = {}) {
+function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false, readbackFails = false } = {}) {
   let definition;
   const storage = { token: 'test-token', userInfo: { id: 101, username: 'wx_test' } };
   const requests = [], events = [], toasts = [], uploads = [];
@@ -29,6 +29,11 @@ function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpl
       removeStorageSync: key => { delete storage[key]; },
       request(options) {
         requests.push(options);
+        if (options.method === 'GET') {
+          const nickname = requests.findLast(r => r.url.endsWith('/profile/nickname'))?.data.nickname || '';
+          options.success({ statusCode: 200, data: { code: 0, data: { id: 101, nickname: readbackFails ? '' : nickname } } });
+          return;
+        }
         if (deferSave && options.url.endsWith('/profile/nickname')) return;
         options.success({ statusCode: saveFails ? 500 : 200, data: saveFails ? { code: 500, msg: '保存失败' } : { code: 0 } });
       },
@@ -57,7 +62,7 @@ for (const extension of ['ts', 'js']) {
   test(`${extension}: 微信点选昵称没有触发 input 时，提交表单仍保存昵称并完成登录引导`, async () => {
     const { instance, storage, requests, events } = loadGuard(extension);
     await instance.onConfirm(formEvent('  微信选中的昵称  '));
-    assert.equal(requests.length, 1);
+    assert.equal(requests.length, 2);
     assert.equal(requests[0].method, 'PUT');
     assert.ok(requests[0].url.endsWith('/profile/nickname'));
     assert.equal(requests[0].data.nickname, '微信选中的昵称');
@@ -66,6 +71,14 @@ for (const extension of ['ts', 'js']) {
     assert.equal(instance.data.visible, false);
     assert.equal(events[0]?.name, 'completed');
     assert.equal(events[0]?.detail.nickname, '微信选中的昵称');
+  });
+
+  test(`${extension}: 保存后的真实回读不一致时不宣告完成`, async () => {
+    const { instance, storage, events } = loadGuard(extension, { readbackFails: true });
+    await instance.onConfirm(formEvent('待确认昵称'));
+    assert.equal(events.length, 0);
+    assert.equal(instance.data.visible, true);
+    assert.equal(storage.userInfo.nickname, undefined);
   });
 
   test(`${extension}: 提交值覆盖旧 input 状态，微信清空昵称时不会保存旧值`, async () => {
