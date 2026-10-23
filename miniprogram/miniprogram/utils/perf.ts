@@ -59,6 +59,11 @@ export function setPageCache<T>(key: string, value: T, ttlMs: number) {
   trimMap(pageCacheStore, MAX_CACHE_ENTRIES);
 }
 
+export function clearPageCaches() {
+  pageCacheStore.clear();
+  prefetchedImageStore.clear();
+}
+
 export function clearPageCache(key: string) {
   const cacheKey = String(key || '').trim();
   if (!cacheKey) {

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPageCache = getPageCache;
 exports.setPageCache = setPageCache;
+exports.clearPageCaches = clearPageCaches;
 exports.clearPageCache = clearPageCache;
 exports.prefetchImage = prefetchImage;
 exports.prefetchImages = prefetchImages;
@@ -50,6 +51,10 @@ function setPageCache(key, value, ttlMs) {
         expiresAt: Date.now() + Math.max(1000, Number(ttlMs || 0)),
     });
     trimMap(pageCacheStore, MAX_CACHE_ENTRIES);
+}
+function clearPageCaches() {
+    pageCacheStore.clear();
+    prefetchedImageStore.clear();
 }
 function clearPageCache(key) {
     const cacheKey = String(key || '').trim();
