@@ -151,7 +151,7 @@
 
 /* 抽屉容器（客户详情 / 新增客户）：只改外壳，内容与表单不动 */
 .crm-page.sx-customers {
-  .crm-drawer > header h2 { font-size: 16px; font-weight: 700; }
+  .crm-drawer > header h2 { font-size: var(--admin-font-title); font-weight: 700; }
   .crm-drawer-body h3 { font-size: 16px; font-weight: 700; }
   .crm-drawer-body .crm-caption { font-size: 12px; }
 }

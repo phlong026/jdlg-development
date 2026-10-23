@@ -251,8 +251,16 @@
     background: #2f241b70;
   }
   .st-dialog {
+    --st-ink: var(--admin-text);
+    --st-muted: var(--admin-text-muted);
+    --st-line: var(--admin-border);
+    --st-surface: var(--admin-surface);
+    --st-metric: var(--admin-text);
+    --st-focus: var(--admin-accent);
+    color: var(--st-ink);
+    font-size: var(--admin-font-body);
     background: var(--st-surface);
-    border-radius: 14px;
+    border-radius: var(--admin-radius-card);
     width: min(960px, 100%);
     min-width: 0;
     min-height: 0;
@@ -267,6 +275,8 @@
   .st-dialog > header { position: sticky; top: -20px; z-index: 1; display: flex; gap: 12px; justify-content: space-between; align-items: center; margin: -20px -20px 20px; padding: 16px 20px; border-bottom: 1px solid var(--st-line); background: var(--st-surface); }
   .st-dialog > header > button { flex-shrink: 0; }
   .st-dialog h2 { min-width: 0; margin: 0; }
+  .st-dialog > section > h3:first-child { margin-top: 0; }
+  .st-dialog button { min-height: var(--admin-control-height); border-radius: var(--admin-radius-control); }
   .st-dialog .st-media img, .st-dialog .st-media video { height: auto; max-height: min(560px, 60dvh); width: 100%; object-fit: contain; }
   .st-dialog .st-media-failed { min-height: 160px; }
   .st-dialog .st-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }

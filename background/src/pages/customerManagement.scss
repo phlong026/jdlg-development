@@ -36,3 +36,27 @@
 }
 
 .crm-page .crm-workflow {margin-top:24px;border-top:1px solid #e9e2d9;padding-top:12px;overflow-wrap:anywhere}.crm-page .crm-source-row {padding:12px 0;border-bottom:1px solid #ede7df;display:grid;gap:6px}.crm-page .crm-source-row small{color:#766d63;word-break:break-all}.crm-page .crm-workflow-form {margin-top:16px;padding:16px;background:#faf7f2;border-radius:12px}.crm-page .crm-file-input{display:grid;gap:8px;margin:12px 0}.crm-page .crm-file-input input{max-width:100%}.crm-page details{padding:16px 0;border-bottom:1px solid #ede7df}.crm-page summary{cursor:pointer;font-weight:600}.crm-page fieldset{min-width:0;border:1px solid #e9e2d9;border-radius:8px;padding:12px}.crm-page .crm-check input{width:18px;min-height:18px;flex-shrink:0}
+
+// Detail and edit drawers use the same typography and surfaces as the workbench.
+.crm-page .crm-drawer {
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  font-size: var(--admin-font-body);
+
+  > header h2 { font-size: var(--admin-font-title); }
+  > header button { min-width: 44px; min-height: 44px; }
+  button { border-radius: var(--admin-radius-control); }
+  p, .crm-profile dt, .crm-timeline small, .crm-form small { color: var(--admin-text-muted); }
+  .crm-demand, .crm-timeline p { color: var(--admin-text); }
+  .crm-profile, .crm-demand, .crm-workflow-form { background: var(--admin-surface-muted); }
+  .crm-profile + .crm-profile { margin-top: 12px; }
+  .crm-form > label:not(.crm-check) { font-weight: 600; }
+  input:not([type='checkbox']):not([type='radio']), select, textarea {
+    border-color: var(--admin-border);
+    border-radius: var(--admin-radius-control);
+    color: var(--admin-text);
+    font-weight: 400;
+  }
+  .crm-primary { background: var(--admin-accent); border-color: var(--admin-accent); }
+  .crm-primary:hover:not(:disabled) { background: var(--admin-accent-hover); }
+}
