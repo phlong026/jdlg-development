@@ -67,3 +67,5 @@ node --test tests/*.test.js
 既有失败背景亦见 `miniprogram/docs/share-tracking-verification.md`。聚焦门禁成功不代表该债务已修复；不得将全量命令改为忽略失败来制造通过。微信真机、实际平台权限、部署环境与生产采集开启审批仍按验收文档独立完成，Node/Go 自动测试不能代替。
 
 PR3 评审修复同时把 service/model 纳入跟踪普通/race 门禁，覆盖收藏事务回执源测试；小程序正式 test:tracking 命令包含新增 measurement-boundaries 套件，后台新增分页行为测试由原 scripts/*.test.mjs 通配纳入。模型包既有外部数据库测试仍按缺少隔离 DSN 明确跳过，不提供真实数据库验收替代。
+
+2026-10-23：专项新增实际SDK包装器、TS/JS页面和昵称回访用例，Tracking mini-program job 也先按 background/package-lock.json 安装既有编译运行时。此前干净runner缺TypeScript已在PR39日志复现；保留全部测试与门禁，不通过删除测试或依赖本机全局包来规避。

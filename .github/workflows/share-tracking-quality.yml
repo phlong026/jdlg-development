@@ -67,8 +67,13 @@ jobs:
           node-version: '24.19.0'
           package-manager-cache: false
 
-      # These focused tests and checks use only Node built-ins and checked-in
-      # sources. No npm dependency install or WeChat credentials are necessary.
+      # SDK integration tests execute both TS and JS business pages. Reuse the
+      # checked-in admin lockfile's compiler runtime, just like Admin quality.
+      # This installs no WeChat credentials and leaves the lockfile unchanged.
+      - name: Install locked compiler runtime for page integration tests
+        working-directory: background
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Run focused tracking regression tests
         run: npm run test:tracking
 
