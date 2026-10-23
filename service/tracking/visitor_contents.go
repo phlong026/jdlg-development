@@ -34,6 +34,10 @@ type VisitorContent struct {
 
 func (s *Service) visitedContent(ctx context.Context, r Repository, scope Scope, id string, version int, route string) (VisitorContent, error) {
 	out := VisitorContent{ID: id, Version: version, Route: route, Title: "素材暂不可访问", Status: "unavailable"}
+	if id == "" && s.Config.validateRoute(route) == nil {
+		out.Title, out.Type, out.Status, out.Accessible = s.Config.Routes[route].Title, "page", "published", true
+		return out, nil
+	}
 	if id == "" || version <= 0 || s.Config.validateRoute(route) != nil {
 		return out, nil
 	}

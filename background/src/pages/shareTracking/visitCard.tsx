@@ -4,7 +4,7 @@ import type { Visit, VisitMaterial } from '../../api/shareTracking';
 import { ConvertLeadButton } from './convertLead';
 import { duration, forwarderText, identityBadge, intentShortLabels, progressText, safeMediaURL, sourceLabel, visitRange } from './model';
 
-const typeLabels: Record<string, string> = { image: '图片', video: '视频', rich_text: '图文', article: '图文' };
+const typeLabels: Record<string, string> = { image: '图片', video: '视频', rich_text: '图文', article: '图文', page: '页面' };
 
 function MaterialThumb({ material }: { material: VisitMaterial }) {
     const cover = material.content.content_accessible ? safeMediaURL(material.content.cover?.url) : undefined;
@@ -30,6 +30,7 @@ export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit
         engaged: visit.engaged,
     }];
     const multi = materials.length > 1;
+    const materialLabel = materials.some(item => item.content.type === 'page') ? '个页面或素材' : '个素材';
     const cover = content.content_accessible ? safeMediaURL(content.cover?.url) : undefined;
     const [avatarFailed, setAvatarFailed] = useState(false);
     const [coverFailed, setCoverFailed] = useState(false);
@@ -66,15 +67,15 @@ export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit
             <span className={`st-intent st-${level}`} title="按意向规则计算，仅供跟进参考；点开详情查看依据">{intentShortLabels[level]}</span>
         </div>
         {multi ? (
-            <button className="st-visit-body st-visit-body-multi" onClick={onOpen} aria-label={`查看${name}本次访问的 ${materials.length} 个素材`}>
+            <button className="st-visit-body st-visit-body-multi" onClick={onOpen} aria-label={`查看${name}本次访问的 ${materials.length} ${materialLabel}`}>
                 <span className="st-visit-batch-head">
                     <span>来源:{sourceLabel(source)}</span>
-                    <span>{materials.length} 个素材</span>
+                    <span>{materials.length} {materialLabel}</span>
                     {visit.visit_count && visit.visit_count > 1 && <span>{visit.visit_count} 次访问</span>}
                     {visit.engaged && <em className="st-visit-engaged" title="本次观看≥60秒，或本素材累计浏览≥3次，或视频看到80%以上；只反映浏览行为，不是意向等级">看得认真</em>}
                 </span>
                 <span className="st-visit-materials">
-                    {materials.map(material => <span className="st-visit-material" key={`${material.content.content_id}:${material.content.content_version}`}>
+                    {materials.map(material => <span className="st-visit-material" key={`${material.content.route_key}:${material.content.content_id}:${material.content.content_version}`}>
                         <MaterialThumb material={material} />
                         <span className="st-visit-material-info">
                             <strong>{material.content.title || '历史素材信息不可用'}</strong>
@@ -97,7 +98,7 @@ export function VisitCard({ visit, onOpen, canCRM = false, now }: { visit: Visit
         )}
         <p className="st-visit-metrics">
             <time dateTime={visit.started_at}>{range}</time>
-            <span>{multi ? '本次共' : '本次观看'}{duration(visit.visible_ms)}</span>
+            <span>{multi ? '本次共' : content.type === 'page' ? '本次停留' : '本次观看'}{duration(visit.visible_ms)}</span>
             {!multi && visit.visit_count && visit.visit_count > 1 && <span>{visit.visit_count} 次访问</span>}
             {!multi && progress && <span>{progress}</span>}
             {visit.progress_omitted && <span>进度因数据量过大未加载</span>}

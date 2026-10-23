@@ -169,7 +169,7 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 		// Like the customer list, every projected label is audited, not only
 		// the served cards: both screens share one evaluation trail.
 		out.ProfileRevision, pending = p.profileRevision, p.pending
-		groups := groupVisits(p.facts, p.visitors, f)
+		groups := s.groupVisits(p.facts, p.visitors, f)
 		// Only a share-based source filter needs every entry share resolved;
 		// otherwise the served page is enough.
 		shares := map[string]entryShare{}
@@ -262,9 +262,8 @@ func (s *Service) Visits(ctx context.Context, scope Scope, f Filter) (List, erro
 }
 
 // groupVisits merges counted material views of listed visitors per session and
-// material version. Plain pages and views started before the window never
-// open a card.
-func groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*visitGroup {
+// material version or public route. Views before the window never open a card.
+func (s *Service) groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*visitGroup {
 	ordered := append([]factView{}, facts...)
 	sort.Slice(ordered, func(i, j int) bool {
 		if !ordered[i].Started.Equal(ordered[j].Started) {
@@ -276,10 +275,10 @@ func groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*vi
 	by := map[string]*visitGroup{}
 	groups := []*visitGroup{}
 	for _, fact := range ordered {
-		if fact.Content == "" || !fact.Count {
+		if !fact.Count || fact.Content == "" && s.Config.validateRoute(fact.Route) != nil {
 			continue
 		}
-		material := contentKey(fact.Content, fact.Version)
+		material := visitContentKey(VisitContent{ID: fact.Content, Version: fact.Version, Route: fact.Route})
 		contentViews[fact.Visitor+"\x00"+material]++
 		visitor := visitors[fact.Visitor]
 		if visitor == nil || !visitorListed(*visitor, f) {
@@ -308,9 +307,16 @@ func groupVisits(facts []factView, visitors map[string]*Visitor, f Filter) []*vi
 		g.views = append(g.views, fact.ID)
 	}
 	for _, g := range groups {
-		g.ContentViews = contentViews[g.Visitor.Key+"\x00"+contentKey(g.Content.ID, g.Content.Version)]
+		g.ContentViews = contentViews[g.Visitor.Key+"\x00"+visitContentKey(g.Content)]
 	}
 	return groups
+}
+
+func visitContentKey(content VisitContent) string {
+	if content.ID == "" {
+		return "page:" + content.Route
+	}
+	return contentKey(content.ID, content.Version)
 }
 
 // sortTime is the latest activity a card represents. Legacy session cards sort
@@ -394,7 +400,7 @@ func (b *visitGroup) addVisit(src *visitGroup) {
 	}
 	var material *visitMaterialGroup
 	for _, candidate := range b.materials {
-		if contentKey(candidate.content.ID, candidate.content.Version) == contentKey(src.Content.ID, src.Content.Version) {
+		if visitContentKey(candidate.content) == visitContentKey(src.Content) {
 			material = candidate
 			break
 		}

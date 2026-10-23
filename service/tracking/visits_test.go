@@ -77,7 +77,7 @@ func TestVisitsOneCardPerSessionAndContent(t *testing.T) {
 	// Session 1: two views of content1 (a refresh) merge into one card.
 	visitPV(m, "pv-a1", "one", "u:1", "session1", "content1", "", now.Add(-5*time.Hour), 30000)
 	visitPV(m, "pv-a2", "one", "u:1", "session1", "content1", "", now.Add(-5*time.Hour+time.Minute), 20000)
-	// A plain page without material never becomes a card.
+	// A legitimate public page also has its own route-based card.
 	reviewPV(m, "pv-home", "one", "u:1", "session1", "", now.Add(-5*time.Hour+2*time.Minute))
 	// Session 2: the same person comes back the next day.
 	visitPV(m, "pv-a3", "one", "u:1", "session2", "content1", "", now.Add(-time.Hour), 10000)
@@ -88,13 +88,13 @@ func TestVisitsOneCardPerSessionAndContent(t *testing.T) {
 		t.Fatal(e)
 	}
 	items := visitItems(t, list)
-	if len(items) != 3 {
-		t.Fatalf("visits = %d, want 3 (refresh merged, plain page excluded): %+v", len(items), items)
+	if len(items) != 4 {
+		t.Fatalf("visits = %d, want 4 (refresh merged, public page included): %+v", len(items), items)
 	}
 	if items[0].Visitor.Key != "u:1" || items[1].Visitor.Key != "u:2" || items[2].Visitor.Key != "u:1" {
 		t.Fatalf("order = %s,%s,%s, want newest first", items[0].Visitor.Key, items[1].Visitor.Key, items[2].Visitor.Key)
 	}
-	older := items[2]
+	older := items[3]
 	if older.Visible != 50000 {
 		t.Fatalf("merged visible = %d, want 50000", older.Visible)
 	}

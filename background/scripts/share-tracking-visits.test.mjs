@@ -148,6 +148,17 @@ test('visit card discloses an oversized progress fallback instead of looking lik
   assert.match(html, /进度因数据量过大未加载/);
 });
 
+test('plain public page cards show the route title and page presentation', () => {
+  const html = renderCard({ ...baseVisit,
+    content: { content_id: '', content_version: 0, route_key: 'pages/index/index', title: '首页', type: 'page', status: 'published', content_accessible: true },
+    progress: undefined, materials: undefined,
+  });
+  assert.match(html, /首页/);
+  assert.match(html, /页面/);
+  assert.match(html, /本次停留/);
+  assert.doesNotMatch(html, /素材暂不可访问|历史素材信息不可用/);
+});
+
 test('day card shows the day badge and cross-session visit count', () => {
   const html = renderCard({
     ...baseVisit,
