@@ -104,11 +104,11 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
 }
 
 for (const options of [direct, { scene: sceneA }]) {
-  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until explicit consent follows the config', async () => {
+  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until the config arrives, then silent consent collects it', async () => {
     const t = runtime({ deferConfig: true }); await t.mount(options);
     assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
     t.resolveConfig(); await settle();
-    assert.equal(t.entries.length,0);t.grant();await settle();
+    assert.ok(t.entries.length >= 1, 'silent consent collects once the config arrives');
     assert.equal(t.page.data.contentReady, true);
     assert.equal(t.entries.at(-1).share_token, 'original_share');
     assert.equal(t.views().at(-1).share_id, 'share:original_share');

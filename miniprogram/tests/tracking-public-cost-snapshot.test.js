@@ -10,10 +10,11 @@ const result = {version:4, estimatedTotalCost:'58.36万元', estimatedUnitCost:'
   basicInfo: Array.from({length:14}, (_,i)=>({label:i===0?'所在地区':i===1?'总建筑面积':'公开项目'+i,value:i===0?'福建 / 泉州':i===1?'320㎡':'普通配置'})),
   costBreakdown:Array.from({length:6},(_,i)=>({name:'费用'+i,amount:100,amountText:'0.01万元',percent:10,note:'公开参考',estimable:true})),dynamicNotes:[]};
 const settle = () => new Promise(resolve => setImmediate(resolve));
-function runtime({accepted=true, enabled=true, account='', ext='ts', badSnapshot=false}={}) {
+function runtime({accepted=true, declined=false, enabled=true, account='', ext='ts', badSnapshot=false}={}) {
   let definition,app,sequence=0,revoked=false,clock=100;
   const requests=[],menus=[],storage={token:account,share_tracking_instance_v1:'random-installation-only'};
-  if(accepted)storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:'v1',notice};
+  if(declined)storage.share_tracking_consent_choice_v1={accepted:false,explicit:true,version:'v1',notice};
+  else if(accepted)storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:'v1',notice};
   const wx={getStorageSync:k=>storage[k],setStorageSync:(k,v)=>storage[k]=v,removeStorageSync:k=>delete storage[k],
     getPerformance:()=>({now:()=>clock}),onNetworkStatusChange(){},getLaunchOptionsSync:()=>({scene:1001}),
     showShareMenu:o=>menus.push({show:o.menus}),hideShareMenu:o=>menus.push({hide:o.menus}),navigateTo(){},
@@ -73,8 +74,8 @@ for(const ext of ['ts','js'])for(const account of ['', 'existing-account'])test(
   assert.doesNotMatch(h.page.onShareTimeline().query||'',/st=/);
   h.close();
 });
-test('disabled or unchosen analytics leaves explicit public report reading and ordinary forwarding available',async()=>{
-  for(const options of [{enabled:false},{accepted:false}]){
+test('disabled or declined analytics leaves explicit public report reading and ordinary forwarding available',async()=>{
+  for(const options of [{enabled:false},{declined:true}]){
     const h=runtime(options);await h.mount();assert.equal(h.page.data.contentReady,true);
     assert.equal(h.entries().length,0);assert.equal(h.shares().length,0);
     assert.equal(h.page.onShareTimeline().query,'report_id='+id);
