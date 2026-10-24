@@ -842,7 +842,18 @@ Page({
         style_reference: selectedStyleReference,
       },
     }
-    return await this.postCustomerService(apiPath, body)
+    const result = await this.postCustomerService(apiPath, body)
+    // 留资与转人工都汇聚到 createLead：提交成功即是引导补昵称的恰当时机（组件内含每日频控，未登录自动跳过）。
+    this.promptNicknameIfMissing()
+    return result
+  },
+
+  promptNicknameIfMissing() {
+    const select = (this as any).selectComponent
+    if (typeof select !== 'function') return
+    const guard = select.call(this, '#nicknameGuard') as any
+    if (!guard || typeof guard.checkAndShow !== 'function') return
+    void guard.checkAndShow()
   },
 
   async recordEvent(eventType: string, payload: Record<string, any> = {}) {

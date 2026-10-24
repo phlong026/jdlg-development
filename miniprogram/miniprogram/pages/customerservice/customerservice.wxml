@@ -214,4 +214,5 @@
   </view>
 
   <intercept-modal />
+  <nickname-guard id="nicknameGuard" />
 </view>
