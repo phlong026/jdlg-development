@@ -4,10 +4,11 @@ const ts=require('./report-runtime')('typescript');
 const root=path.join(__dirname,'../miniprogram');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const notice='Optional public visit analytics, account nickname and avatar for authorized operators.';
-function runtime({accepted=true,enabled=true,account='',deferShares=false,failShares=false,attributionStatus,shareLifetime=60000}={}) {
+function runtime({accepted=true,declined=false,enabled=true,account='',deferShares=false,failShares=false,attributionStatus,shareLifetime=60000}={}) {
   let definition,app,clock=1000,wall=1700000000000,shareSequence=0,entrySequence=0;
   const storage={token:account,share_tracking_instance_v1:'random-installation-only'};
-  if(accepted)storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:'v1',notice};
+  if(declined)storage.share_tracking_consent_choice_v1={accepted:false,explicit:true,version:'v1',notice};
+  else if(accepted)storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:'v1',notice};
   const entries=[],shares=[],events=[],pending=[],menus=[],timers=new Map();
   let nextTimer=0;
   const schedule=(callback,delay)=>{const timer=++nextTimer;timers.set(timer,{callback,at:wall+delay});return timer;};
@@ -119,7 +120,7 @@ test('late preparation after hide/reopen cannot replace the newer request metada
   t.close(page);
 });
 test('disabled or declined analytics keeps normal business sharing and makes no tracking calls',async()=>{
-  for(const options of [{enabled:false},{accepted:false}]){
+  for(const options of [{enabled:false},{declined:true}]){
     const t=runtime(options),page=t.custom();await t.mount(page);
     assert.equal(page.onShareTimeline().query,'from=share');assert.equal(t.entries.length,0);assert.equal(t.shares.length,0);
     assert.ok(t.menus.some(m=>m.show?.includes('shareTimeline')));t.close(page);

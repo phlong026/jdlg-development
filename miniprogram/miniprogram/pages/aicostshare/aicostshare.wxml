@@ -27,4 +27,5 @@
     </block>
     <button class="start" bindtap="startOwnEstimate">我也测算自己的方案</button>
   </scroll-view>
+  <nickname-guard id="nicknameGuard" />
 </view>

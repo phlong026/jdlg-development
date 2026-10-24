@@ -34,13 +34,16 @@ function getSDK() {
   return sdk;
 }
 function enabledConsent() {
+  if(config.enabled!==true || !config.consent_version || !config.privacy_notice) return '';
   const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
-  return choice && choice.accepted===true && choice.explicit===true && choice.version===config.consent_version && choice.notice===config.privacy_notice ? choice.version : '';
+  // Silent consent: absent, implicit and outdated accepted choices all record under the
+  // current notice; only an explicit decline stays effective across notice versions.
+  if(choice && choice.accepted===false) return '';
+  return config.consent_version;
 }
 function refreshConfig() {
   return api.request('/config').then(value => {
     config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++;
-    // Missing, legacy implicit, declined and outdated choices never grant analytics.
     const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
     return config;
   }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });

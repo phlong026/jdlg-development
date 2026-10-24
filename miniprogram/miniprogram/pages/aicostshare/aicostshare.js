@@ -41,6 +41,8 @@ Page({
             const area = result.basicInfo.find(item => item.label === '总建筑面积')?.value || '';
             this.setData({ result, loading: false, contentReady: true,
                 shareTitle: `${city}${area}${result.totalLabel}${result.estimatedTotalCost}，查看公开测算报告` });
+            // 报告就绪即可被转发：已登录但缺昵称的访客在此补全，分享链路上的两端都能显示可读名称。
+            this.promptNicknameIfMissing();
             void this.prepareCovers();
         }
         catch (error) {
@@ -80,4 +82,13 @@ Page({
     retry() { if (!this.data.loading)
         void this.loadPublicSnapshot(); },
     startOwnEstimate() { wx.navigateTo({ url: '/pages/aicost/aicost' }); },
+    promptNicknameIfMissing() {
+        const select = this.selectComponent;
+        if (typeof select !== 'function')
+            return;
+        const guard = select.call(this, '#nicknameGuard');
+        if (!guard || typeof guard.checkAndShow !== 'function')
+            return;
+        void guard.checkAndShow();
+    },
 });
