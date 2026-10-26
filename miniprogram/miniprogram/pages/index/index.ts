@@ -96,12 +96,12 @@ Page({
     this.loadFeaturedGroups();
     void this.promptNicknameIfMissing();
   },
-  // 已登录但昵称为空时弹出完善资料弹窗；首页引导弹窗显示期间不叠加，等下次进入首页再检查。
+  // 已登录但昵称为空时强制完善资料（登录即完善，新老用户一致）；首页引导弹窗显示期间不叠加，等下次进入首页再检查。
   async promptNicknameIfMissing() {
     if (this.data.homeIntroPopupVisible) return;
     const guard = this.selectComponent('#nicknameGuard') as any;
     if (!guard || typeof guard.checkAndShow !== 'function') return;
-    await guard.checkAndShow();
+    await guard.checkAndShow({ required: true });
   },
   async prepareHomeShareCovers() {
     const [homeChatCover, homeTimelineCover] = await Promise.all([

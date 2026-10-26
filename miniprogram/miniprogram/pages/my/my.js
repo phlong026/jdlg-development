@@ -468,13 +468,13 @@ Page({
         }
     },
     /**
-     * 存量已登录用户昵称补检：昵称为空时弹出完善弹窗，
-     * 每个自然日最多提醒一次（保存成功后组件会清除该标记）。
+     * 存量已登录用户昵称补检：昵称为空时强制完善（登录即完善，新老用户一致），
+     * 不设每日频控，保存成功后组件自动关闭。
      */
     maybePromptNickname(profile) {
         const guard = this.selectComponent('#nicknameGuard');
         if (guard && typeof guard.showIfMissing === 'function')
-            guard.showIfMissing(profile);
+            guard.showIfMissing(profile, true);
     },
     // 昵称弹窗保存成功后刷新资料展示
     onNicknameGuardCompleted() {

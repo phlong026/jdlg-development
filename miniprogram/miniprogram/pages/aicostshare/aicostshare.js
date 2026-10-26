@@ -89,6 +89,6 @@ Page({
         const guard = select.call(this, '#nicknameGuard');
         if (!guard || typeof guard.checkAndShow !== 'function')
             return;
-        void guard.checkAndShow();
+        void guard.checkAndShow({ required: true });
     },
 });

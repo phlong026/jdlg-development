@@ -1,7 +1,7 @@
 <view wx:if="{{visible}}" class="nickname-guard-mask" catchtouchmove="true" catchtap="onMaskTap">
   <form class="nickname-guard" catchtap="stopPropagation" bindsubmit="onConfirm">
     <text class="ng-title">完善个人资料</text>
-    <text class="ng-desc">昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。可稍后完善。</text>
+    <text class="ng-desc">{{required ? '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。' : '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。可稍后完善。'}}</text>
 
     <view class="ng-avatar-row">
       <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{uploading || saving}}">
@@ -34,6 +34,6 @@
     <button class="ng-confirm" loading="{{saving}}" disabled="{{saving}}" form-type="submit">
       {{saving ? '保存中...' : '完 成'}}
     </button>
-    <button class="ng-skip" bindtap="onSkip" disabled="{{saving}}">稍后完善，继续浏览</button>
+    <button wx:if="{{!required}}" class="ng-skip" bindtap="onSkip" disabled="{{saving}}">稍后完善，继续浏览</button>
   </form>
 </view>

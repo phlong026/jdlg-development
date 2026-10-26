@@ -76,6 +76,6 @@ Page({
     if (typeof select !== 'function') return;
     const guard = select.call(this, '#nicknameGuard') as any;
     if (!guard || typeof guard.checkAndShow !== 'function') return;
-    void guard.checkAndShow();
+    void guard.checkAndShow({ required: true });
   },
 });

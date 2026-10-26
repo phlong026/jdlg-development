@@ -367,7 +367,7 @@ Page({
     },
     /**
      * 登录成功后进入小程序：先检查昵称是否完善，
-     * 未完善则弹出可稍后填写的昵称弹窗，保存确认后继续跳转；
+     * 未完善则弹出必须填写的昵称弹窗（登录即完善），保存确认后继续跳转；
      * 检查请求失败时放行，不因网络问题把用户挡在门外。
      */
     async enterAppAfterLogin() {
@@ -377,7 +377,7 @@ Page({
                 const guard = this.selectComponent('#nicknameGuard');
                 if (guard && typeof guard.show === 'function') {
                     this.setData({ loading: false });
-                    guard.show();
+                    guard.show({ required: true });
                     return;
                 }
             }

@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 // components/nickname-guard/nickname-guard.ts
-// 昵称完善提示：用户可稍后填写；保存时昵称必填，头像选填。
+// 昵称完善提示：软模式可稍后填写（每日频控）；required 模式（登录即完善）必须填写完成才关闭。
+// 保存时昵称必填，头像选填。
 // 用法：页面 wxml 放置 <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" />，
-// 调用方通过 this.selectComponent('#nicknameGuard').show({ nickname, avatar }) 唤起。
+// 调用方通过 this.selectComponent('#nicknameGuard').show({ nickname, avatar, required }) 唤起。
 const parameter_1 = require("../../utils/parameter");
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const promptReview_1 = require("../../utils/promptReview");
@@ -13,6 +14,7 @@ const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day:';
 Component({
     data: {
         visible: false,
+        required: false,
         nickname: '',
         avatarUrl: '',
         avatarTemp: '',
@@ -24,6 +26,7 @@ Component({
         show(options = {}) {
             this.setData({
                 visible: true,
+                required: !!options.required,
                 promptUserID: Number(options.userID || wx.getStorageSync('userInfo')?.id || 0),
                 nickname: String(options.nickname || ''),
                 avatarUrl: String(options.avatar || ''),
@@ -32,9 +35,10 @@ Component({
                 saving: false,
             });
         },
-        // 已登录用户的昵称补检：昵称为空时弹窗，每个自然日最多提醒一次。
+        // 已登录用户的昵称补检：昵称为空时弹窗。软模式每个自然日最多提醒一次；
+        // required 模式（登录即完善）不受每日频控约束，直到填写完成才放行。
         // 请求失败一律放行，且不占用当天的提醒次数，避免网络问题挡住用户。
-        async checkAndShow() {
+        async checkAndShow(options = {}) {
             if (this.data.visible) {
                 return false;
             }
@@ -52,27 +56,27 @@ Component({
                 if (tokenAtStart !== wx.getStorageSync('token') || res.statusCode !== 200 || body.code !== 0) {
                     return false;
                 }
-                return this.showIfMissing(body.data || {});
+                return this.showIfMissing(body.data || {}, !!options.required);
             }
             catch (error) {
                 console.error('昵称补检失败，放行:', error);
                 return false;
             }
         },
-        showIfMissing(profile) {
+        showIfMissing(profile, required = false) {
             const nickname = String(profile?.nickname || '').trim();
             if (this.data.visible || (nickname && Array.from(nickname).length <= 32))
                 return false;
             const userID = Number(profile?.id || wx.getStorageSync('userInfo')?.id || 0);
             const now = new Date();
             const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-            if (userID && wx.getStorageSync(NICKNAME_PROMPT_DAY_KEY + userID) === day)
+            if (!required && userID && wx.getStorageSync(NICKNAME_PROMPT_DAY_KEY + userID) === day)
                 return false;
-            this.show({ userID, avatar: String(profile?.avatar || '') });
+            this.show({ userID, avatar: String(profile?.avatar || ''), required });
             return true;
         },
         onSkip() {
-            if (this.data.saving)
+            if (this.data.saving || this.data.required)
                 return;
             const now = new Date();
             const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
@@ -241,9 +245,10 @@ Component({
                 this.setData({ saving: false });
             }
         },
-        // 资料填写可以稍后继续，不要求为浏览公开页面披露昵称。
+        // 资料填写可以稍后继续，不要求为浏览公开页面披露昵称；
+        // required 模式下（登录即完善）这里是唯一的提醒出口，填写完成才关闭。
         onMaskTap() {
-            wx.showToast({ title: '可选择稍后完善，继续浏览', icon: 'none' });
+            wx.showToast({ title: this.data.required ? '请填写昵称后继续' : '可选择稍后完善，继续浏览', icon: 'none' });
         },
         buildAuthHeaders(apiPath, body = {}) {
             const token = wx.getStorageSync('token');
