@@ -1683,11 +1683,21 @@
 .trait-filter-row {
   margin-top: 18rpx;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* 单排横滑，模拟器常驻滚动条隐藏（与 .main-tabs 同法） */
+.trait-filter-row::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .trait-filter-chip {
+  flex-shrink: 0;
   min-height: 56rpx;
   padding: 0 18rpx;
   border-radius: 999rpx;
