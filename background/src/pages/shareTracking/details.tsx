@@ -43,8 +43,10 @@ export function VisitorDetails({ visitor, query, contentId, ...governance }: { v
     const [expanded, setExpanded] = useState<string[]>([]); const [otherPages, setOtherPages] = useState(false);
     // 从客户查看卡片进来时默认只看这篇素材；可切到全部访问，或从“看过的素材”另选一篇。
     const [material, setMaterial] = useState<{ content_id?: string; content_version?: number }>();
-    const scopedContent = material ? material.content_id : contentId;
-    const params = { ...selectedQuery, content_id: showingEvidence ? undefined : scopedContent, content_version: showingEvidence ? undefined : material ? material.content_version : selectedQuery.content_version, include_related: otherPages };
+    const scopedContent = (material ? material.content_id : contentId)?.trim() || undefined;
+    const contentVersion = material ? material.content_version : selectedQuery.content_version;
+    // 普通页面没有素材版本；会话筛选只接受成对的素材 ID 与正整数版本。
+    const params = { ...selectedQuery, content_id: showingEvidence ? undefined : scopedContent, content_version: !showingEvidence && scopedContent && typeof contentVersion === 'number' && Number.isInteger(contentVersion) && contentVersion > 0 ? contentVersion : undefined, include_related: otherPages };
     // 版本号只对会话列表有意义（与 content_id 成对）；按人的素材和转发列表单独带版本会被后端拒绝。
     const personQuery = { ...selectedQuery, content_version: undefined };
     const pickMaterial = (next: { content_id?: string; content_version?: number }) => { setMaterial(next); setOtherPages(false); setCursors([]); setExpanded([]); };

@@ -69,15 +69,16 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     const as_of = params.as_of || `2026-10-11T00:00:${String(++serial).padStart(2, '0')}Z`;
     return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : method === 'visits' ? visit : method === 'channels' ? channel : visitor], identified_count: 1, anonymous_count: 0 };
   }
-  const api = Object.fromEntries(['visits', 'visitors', 'contents', 'contentVisitors', 'content', 'channels'].map(method => [method, (...args) => {
-    const params = method.startsWith('content') && method !== 'contents' ? args[1] : args[0];
+  const api = Object.fromEntries(['visits', 'visitors', 'contents', 'contentVisitors', 'content', 'channels', 'sessions'].map(method => [method, (...args) => {
+    const hasID = method === 'sessions' || (method.startsWith('content') && method !== 'contents');
+    const params = hasID ? args[1] : args[0];
     const signal = args[args.length - 1];
-    const call = { method, params: { ...params }, signal, id: method.startsWith('content') && method !== 'contents' ? args[0] : undefined };
+    const call = { method, params: { ...params }, signal, id: hasID ? args[0] : undefined };
     calls.push(call);
     return overrides[method] ? overrides[method](call, () => page(method, params)) : Promise.resolve(method === 'content' ? content : page(method, params));
   }]));
   const context = { can_view: true, can_manage: true, owners: [{ id: 'owner-1', name: '销售一' }, { id: 'owner-2', name: '销售二' }] };
-  const props = kind === 'records' ? { actorId: 42, canManage: true, context, initialVisitor: initial.initialVisitor || '' } : kind === 'channels' ? { query: initial.query || {}, refreshKey: initial.refreshKey || 0 } : { content, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
+  const props = kind === 'records' ? { actorId: 42, canManage: true, context, initialVisitor: initial.initialVisitor || '' } : kind === 'channels' ? { query: initial.query || {}, refreshKey: initial.refreshKey || 0 } : { content, visitor, query: {}, manage: true, edit() {}, context, changed() {}, ...initial };
   const saved = JSON.stringify({ filters: { ...model.defaultFilters, range: 'all', ...initial.filters }, view: initial.view || 'visitors' });
   const globals = { sessionStorage: { getItem: () => saved, setItem() {} }, document: { querySelector: () => ({ scrollTop: 5, scrollTo() {} }) }, window: { confirm: () => true } };
   const access = load('src/pages/shareTracking/access.ts', { react, './model': model }, globals);
@@ -93,7 +94,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     let renders = 0;
     do {
       assert.ok(++renders < 20, 'component render settles'); dirty = false; index = 0; pending = [];
-      tree = kind === 'records' ? module.TrackingRecords(props) : kind === 'channels' ? module.ChannelLeaderboard(props) : module.ContentDetails(props);
+      tree = kind === 'records' ? module.TrackingRecords(props) : kind === 'channels' ? module.ChannelLeaderboard(props) : kind === 'visitor' ? module.VisitorDetails(props) : module.ContentDetails(props);
       pending.forEach(effect => effect());
     } while (dirty);
     return tree;
@@ -103,7 +104,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
   render();
   return {
     calls, page, render, props, find, pager,
-    last: (method = kind === 'records' ? 'visits' : kind === 'channels' ? 'channels' : 'contentVisitors') => calls.filter(call => call.method === method).at(-1),
+    last: (method = kind === 'records' ? 'visits' : kind === 'channels' ? 'channels' : kind === 'visitor' ? 'sessions' : 'contentVisitors') => calls.filter(call => call.method === method).at(-1),
     async settle() { await flush(); render(); },
     async act(action) { action(); render(); await flush(); render(); },
     async next() { await this.act(() => pager().onNext(pager().next)); },
@@ -271,6 +272,101 @@ test('material title and visitor inputs submit distinct AND filters, preserve id
 test('visit card opens the visitor detail on that material version with the list snapshot',async()=>{
  const h=harness();await h.settle();const card=h.find('VisitCard');assert.equal(card.props.visit.visit_id,'session-1:content-1:1');const asOf=h.find('SnapshotInfo').props.data.as_of;
  await h.act(()=>card.props.onOpen());const detail=h.find('VisitorDetails');assert.equal(detail.props.visitor.visitor_key,'visitor-1');assert.equal(detail.props.contentId,'visited-villa');assert.equal(detail.props.query.content_version,3);assert.equal(detail.props.query.as_of,asOf);
+});
+
+// Keep the production sessions API and request serializer; replace only fetch.
+function sessionTransport() {
+  const urls = [];
+  const transport = { urls, fail: false };
+  const request = load('src/utils/request.ts', {
+    '../config/api': { API_BASE_URL: 'https://example.test' },
+    './token': { tokenUtils: { getToken: () => null } }, './session': { expireSession() {} },
+  }, {
+    URLSearchParams, DOMException, console: { error() {} }, window: { location: { pathname: '/admin/share-tracking' } },
+    fetch: async url => {
+      urls.push(new URL(url));
+      return { ok: !transport.fail, status: transport.fail ? 503 : 200, json: async () => transport.fail
+        ? { message: '读取失败' }
+        : { code: 0, data: { items: [], as_of: '2026-10-11T00:00:01Z', metric_version: 'v1', first_cursor: 'sessions:first', next_cursor: 'sessions:next' } } };
+    },
+  });
+  const { tracking } = load('src/api/shareTracking.ts', {
+    '../utils/request': request, '../config/api': { API_BASE_URL: 'https://example.test' }, '../utils/session': { expireSession() {} },
+    '../pages/shareTracking/access': { captureTrackingAccessBoundary: () => 1, notifyTrackingAccessDenied() {} },
+  });
+  transport.sessions = call => tracking.sessions(call.id, call.params, call.signal);
+  return transport;
+}
+
+for (const group of ['batch', 'day']) {
+  for (const route of ['pages/index/index', 'pages/aicost/aicost']) {
+    test(`${group} public-page card (${route}) opens sessions without a material version and preserves filters on pagination/retry`, async () => {
+      const plain = { content_id: '', content_version: 0, route_key: route, title: route, type: 'page', status: 'published', content_accessible: true };
+      const cardVisit = { ...visit, content: plain, group, materials: [
+        { content: plain, started_at: visit.started_at, ended_at: visit.started_at, visible_ms: 10, page_views: 1, engaged: false },
+        { content: visit.content, started_at: visit.started_at, ended_at: visit.started_at, visible_ms: 10, page_views: 1, engaged: false },
+      ] };
+      const records = harness('records', { visits: (_call, page) => Promise.resolve({ ...page(), items: [cardVisit] }) }, {
+        filters: { range: 'custom', start: '2026-10-10', end: '2026-10-11', owner: 'owner-2', identity: 'identified', channel: 'direct', intent: 'low', q: '客户' },
+      });
+      await records.settle();
+      if (group === 'day') await records.click('按天');
+      assert.equal(records.last().params.group, group);
+      await records.act(() => records.find('VisitCard').props.onOpen());
+      const props = records.find('VisitorDetails').props;
+      const transport = sessionTransport();
+      const detail = harness('visitor', { sessions: transport.sessions }, props);
+      try {
+        await detail.settle();
+        const first = transport.urls.at(-1);
+        assert.equal(first.pathname, '/api/v1/management/tracking/visitors/visitor-1/sessions');
+        assert.equal(first.searchParams.get('content_id'), null);
+        assert.equal(first.searchParams.get('content_version'), null);
+        for (const key of ['start', 'end', 'owner', 'identity', 'channel', 'intent', 'q', 'limit', 'as_of', 'metric_version']) {
+          assert.equal(first.searchParams.get(key), String(props.query[key]), key);
+        }
+        await detail.next();
+        assert.equal(transport.urls.at(-1).searchParams.get('cursor'), 'sessions:next');
+        transport.fail = true;
+        await detail.previous();
+        assert.equal(detail.find('Feedback').props.status, 503);
+        transport.fail = false;
+        await detail.act(() => detail.find('Feedback').props.retry());
+        for (const url of transport.urls.slice(1)) {
+          assert.equal(url.searchParams.get('content_version'), null);
+          const params = new URLSearchParams(url.search); params.delete('cursor');
+          assert.equal(params.toString(), first.searchParams.toString());
+        }
+        assert.equal(transport.urls.at(-1).searchParams.get('cursor'), 'sessions:first');
+        assert.equal(detail.find('Feedback').props.error, '');
+      } finally { records.unmount(); detail.unmount(); }
+    });
+  }
+}
+
+test('material card and detail material selection send only a paired positive integer version', async () => {
+  const records = harness(); await records.settle();
+  await records.act(() => records.find('VisitCard').props.onOpen());
+  const transport = sessionTransport();
+  const detail = harness('visitor', { sessions: transport.sessions }, records.find('VisitorDetails').props);
+  const assertScope = (id, version) => {
+    const params = transport.urls.at(-1).searchParams;
+    assert.equal(params.get('content_id'), id || null);
+    assert.equal(params.get('content_version'), version);
+  };
+  try {
+    await detail.settle(); assertScope('visited-villa', '3');
+    await detail.next(); assertScope('visited-villa', '3');
+    transport.fail = true; await detail.previous(); transport.fail = false;
+    await detail.act(() => detail.find('Feedback').props.retry()); assertScope('visited-villa', '3');
+    for (const content_version of [0, -1, 1.5, undefined, '3']) {
+      await detail.act(() => detail.find('VisitorContentPanel').props.onOpen({ content_id: 'visited-villa', content_version }));
+      assertScope('visited-villa', null);
+    }
+    await detail.act(() => detail.find('VisitorContentPanel').props.onOpen({ content_id: '', content_version: 3 })); assertScope('', null);
+    await detail.act(() => detail.find('VisitorContentPanel').props.onOpen({ content_id: 'material-2', content_version: 2 })); assertScope('material-2', '2');
+    await detail.click('查看该客户全部访问'); assertScope('', null);
+  } finally { records.unmount(); detail.unmount(); }
 });
 
 test('profile revision conflict offers an explicit fresh snapshot rather than replaying rejected cursor',async()=>{
