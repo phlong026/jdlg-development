@@ -543,6 +543,18 @@ Page({
     },
     onLoad() {
         this.setData(getNavLayout());
+        // 模板广场须登录后浏览：未登录时 login-guard 挡住列表，登录成功后再初始化加载。
+        // 防御式调用：Node 测试环境无组件时跳过门禁，直接初始化。
+        const select = this.selectComponent;
+        if (typeof select === 'function') {
+            const guard = select.call(this, '#loginGuard');
+            if (guard && typeof guard.check === 'function' && !guard.check())
+                return;
+        }
+        this.initializePage();
+    },
+    onLoginSucceeded() {
+        // 登录（含一键建号）成功后初始化模板广场。
         this.initializePage();
     },
     onShow() {

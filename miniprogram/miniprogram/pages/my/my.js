@@ -468,17 +468,100 @@ Page({
         }
     },
     /**
-     * 存量已登录用户昵称补检：昵称为空时弹出完善弹窗，
-     * 每个自然日最多提醒一次（保存成功后组件会清除该标记）。
+     * 存量已登录用户昵称补检：昵称为空时强制完善（登录即完善，新老用户一致），
+     * 不设每日频控，保存成功后组件自动关闭。
      */
     maybePromptNickname(profile) {
         const guard = this.selectComponent('#nicknameGuard');
         if (guard && typeof guard.showIfMissing === 'function')
-            guard.showIfMissing(profile);
+            guard.showIfMissing(profile, true);
     },
     // 昵称弹窗保存成功后刷新资料展示
     onNicknameGuardCompleted() {
         void this.loadUserProfile();
+    },
+    // 官方头像填写能力：点头像即弹微信头像面板（默认预选微信头像），选完自动上传并保存。
+    async onChooseAvatar(e) {
+        const tempFilePath = e?.detail?.avatarUrl;
+        if (!tempFilePath)
+            return;
+        const token = wx.getStorageSync('token');
+        if (!token) {
+            wx.navigateTo({ url: '/pages/login/login' });
+            return;
+        }
+        wx.showLoading({ title: '上传头像中...', mask: true });
+        try {
+            const avatarUrl = await this.uploadAvatarImage(tempFilePath);
+            await this.saveAvatarProfile(avatarUrl);
+            this.setData({ 'userProfile.avatar': avatarUrl });
+            const cached = wx.getStorageSync('userInfo') || {};
+            wx.setStorageSync('userInfo', { ...cached, avatar: avatarUrl });
+        }
+        catch (error) {
+            console.error('头像上传失败:', error);
+            wx.showToast({ title: error.message || '头像上传失败，请稍后重试', icon: 'none' });
+        }
+        finally {
+            wx.hideLoading();
+        }
+    },
+    // 头像按钮自身不冒泡到 user-profile 的跳资料页点击
+    stopAvatarTap() { },
+    uploadAvatarImage(tempFilePath) {
+        const token = wx.getStorageSync('token');
+        const apiPath = '/api/v1/miniprogram/ai/upload-reference-image';
+        const params = (0, parameter_1.generateRequestParams)(token, '{}', apiPath, (0, deviceFingerprint_1.getCachedDeviceFingerprint)() || '');
+        const headers = (0, parameter_1.paramsToHeaders)(params);
+        return new Promise((resolve, reject) => {
+            wx.uploadFile({
+                url: `${API_BASE_URL}${apiPath}`,
+                filePath: tempFilePath,
+                name: 'file',
+                header: headers,
+                success: (res) => {
+                    if (res.statusCode !== 200) {
+                        reject(new Error(`上传失败: ${res.statusCode}`));
+                        return;
+                    }
+                    try {
+                        const data = JSON.parse(res.data);
+                        if (data.code === 0 && data.data?.url) {
+                            resolve(String(data.data.url));
+                            return;
+                        }
+                        reject(new Error(data.msg || '头像上传失败'));
+                    }
+                    catch (error) {
+                        reject(new Error('头像上传响应解析失败'));
+                    }
+                },
+                fail: (err) => reject(err),
+            });
+        });
+    },
+    saveAvatarProfile(avatarUrl) {
+        const apiPath = '/api/v1/miniprogram/profile/avatar';
+        const body = { avatar: avatarUrl };
+        const token = wx.getStorageSync('token');
+        const params = (0, parameter_1.generateRequestParams)(token, body, apiPath, (0, deviceFingerprint_1.getCachedDeviceFingerprint)() || '');
+        const headers = { ...(0, parameter_1.paramsToHeaders)(params), 'Content-Type': 'application/json' };
+        return new Promise((resolve, reject) => {
+            wx.request({
+                url: `${API_BASE_URL}${apiPath}`,
+                method: 'PUT',
+                header: headers,
+                data: body,
+                success: (res) => {
+                    if (res.statusCode === 200 && res.data.code === 0) {
+                        resolve();
+                        return;
+                    }
+                    reject(new Error(res.data?.msg || '头像保存失败'));
+                },
+                fail: (err) => reject(err),
+            });
+        });
     },
     /**
      * 加载灵石余额

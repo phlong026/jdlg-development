@@ -1,7 +1,8 @@
 {
   "usingComponents": {
     "navigation-bar": "/components/navigation-bar/navigation-bar",
-    "nickname-guard": "/components/nickname-guard/nickname-guard"
+    "nickname-guard": "/components/nickname-guard/nickname-guard",
+    "login-guard": "/components/login-guard/login-guard"
   },
   "navigationBarTitleText": "公开造价报告",
   "navigationStyle": "custom"

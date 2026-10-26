@@ -843,26 +843,6 @@
   box-sizing: border-box;
 }
 
-.filter-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  margin-bottom: 18rpx;
-}
-
-.filter-title {
-  font-size: 28rpx;
-  line-height: 1.2;
-  font-weight: 600;
-  color: #503d2c;
-}
-
-.filter-desc {
-  font-size: 20rpx;
-  line-height: 1.7;
-  color: #85715f;
-}
-
 .designer-search-bar {
   display: flex;
   align-items: center;
@@ -988,49 +968,6 @@
   font-size: 20rpx;
   line-height: 1;
   color: #7d6b56;
-}
-
-.feed-toolbar {
-  width: 694rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14rpx;
-}
-
-.feed-toolbar-copy {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.feed-toolbar-title {
-  font-size: 28rpx;
-  line-height: 1.2;
-  font-weight: 600;
-  color: #503d2c;
-}
-
-.feed-toolbar-desc {
-  font-size: 18rpx;
-  line-height: 1.2;
-  color: #8c7553;
-}
-
-.feed-toolbar-tip {
-  flex-shrink: 0;
-  padding: 8rpx 14rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1rpx solid rgba(188, 168, 145, 0.34);
-}
-
-.feed-toolbar-tip-text {
-  font-size: 18rpx;
-  line-height: 1;
-  color: #7a6450;
 }
 
 .featured-scroll {
@@ -1683,11 +1620,21 @@
 .trait-filter-row {
   margin-top: 18rpx;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* 单排横滑，模拟器常驻滚动条隐藏（与 .main-tabs 同法） */
+.trait-filter-row::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .trait-filter-chip {
+  flex-shrink: 0;
   min-height: 56rpx;
   padding: 0 18rpx;
   border-radius: 999rpx;
@@ -1712,10 +1659,6 @@
 
 .trait-filter-chip.active .trait-filter-chip-text {
   color: #fff8ef;
-}
-
-.simple-feed-toolbar {
-  margin-top: 2rpx;
 }
 
 .designer-traits {

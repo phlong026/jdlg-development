@@ -745,7 +745,7 @@ Page({
             },
         };
         const result = await this.postCustomerService(apiPath, body);
-        // 留资与转人工都汇聚到 createLead：提交成功即是引导补昵称的恰当时机（组件内含每日频控，未登录自动跳过）。
+        // 留资与转人工都汇聚到 createLead：提交成功即以强制模式引导补昵称（登录即完善，未登录自动跳过）。
         this.promptNicknameIfMissing();
         return result;
     },
@@ -756,7 +756,7 @@ Page({
         const guard = select.call(this, '#nicknameGuard');
         if (!guard || typeof guard.checkAndShow !== 'function')
             return;
-        void guard.checkAndShow();
+        void guard.checkAndShow({ required: true });
     },
     async recordEvent(eventType, payload = {}) {
         const token = wx.getStorageSync('token');

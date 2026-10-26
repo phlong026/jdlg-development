@@ -6,10 +6,6 @@
 
     <view class="content">
       <view class="tabs-card">
-        <view class="filter-copy">
-          <text class="filter-title">搜索设计师</text>
-          <text class="filter-desc">参考模板广场的搜索方式，这里可以按设计师姓名、方向和特征标签筛选。</text>
-        </view>
         <view class="designer-search-bar">
           <input
             class="designer-search-input"
@@ -33,13 +29,6 @@
           <view class="trait-filter-chip {{selectedTrait === item ? 'active' : ''}}" wx:for="{{traitFilters}}" wx:key="*this" bindtap="onTraitFilterTap" data-index="{{index}}">
             <text class="trait-filter-chip-text">{{item}}</text>
           </view>
-        </view>
-      </view>
-
-      <view class="feed-toolbar simple-feed-toolbar">
-        <view class="feed-toolbar-copy">
-          <text class="feed-toolbar-title">设计师列表</text>
-          <text class="feed-toolbar-desc">当前方向：{{currentCategoryLabel}} · {{designerCountText}} 位设计师</text>
         </view>
       </view>
 
