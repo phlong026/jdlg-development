@@ -141,4 +141,5 @@
       </view>
     </view>
   </view>
+  <login-guard id="loginGuard" bind:loginsucceeded="onLoginSucceeded" />
 </view>

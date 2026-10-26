@@ -388,6 +388,27 @@ page {
   box-shadow: 0 12rpx 26rpx rgba(142, 111, 73, 0.14);
 }
 
+/* 官方头像填写按钮：视觉与原头像一致，点击弹出微信头像面板（默认预选微信头像） */
+.page .avatar-btn {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  line-height: 1;
+  width: 124rpx;
+  height: 124rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.page .avatar-btn::after {
+  border: none;
+}
+
 .page .user-info {
   flex: 1;
   min-width: 0;
