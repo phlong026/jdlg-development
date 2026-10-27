@@ -80,6 +80,32 @@ type Store interface {
 
 任一校验失败都返回 `ErrIntegrity`，不向上层返回部分内容。
 
+## 服务端范围流读取
+
+`COSStore.Open` 为服务端代理播放提供有界流，不把整个对象读入内存：
+
+```go
+type Stream struct {
+    Body         io.ReadCloser
+    Status       int
+    Size         int64
+    Length       int64
+    MIME         string
+    ContentRange string
+}
+
+func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string) (*Stream, error)
+```
+
+- 先执行已签名 `HEAD`，校验完整对象的长度、MIME 和 SHA256 元数据；随后才发起 `GET`。
+- 只接受单段 `bytes` 范围，支持闭区间、开放结尾和后缀长度。多段、语法错误或越界返回 `RangeError{Size: fullSize}`，并可通过 `errors.Is(err, ErrRangeNotSatisfiable)` 识别。
+- 范围请求会被归一化为明确的 `bytes=start-end`，COS 只返回选中字节；上游必须返回 206、精确 `Content-Range`、精确 `Content-Length` 和一致 MIME。
+- 无范围请求要求上游返回 200，读到 EOF 时边计算 SHA256 边与元数据比较，全程不缓存完整对象。
+- 返回的 `Body` 会把可读字节严格限制在 `Length`；提前 EOF 或额外字节返回 `ErrIntegrity`。调用方必须持续读到 EOF 并关闭 `Body`，才能完成末端校验。
+- 部分范围无法单独重算完整对象 SHA256，因此只校验选中长度与上游范围响应。完整对象一致性依赖 HTTPS 传输、调用前的已签名 `HEAD` 和不可变对象契约。
+
+路由层应使用不大于 32KiB 的固定缓冲区转发 `Body`，并在应用级限制同时打开的 COS 流数量；这两项属于路由集成边界，不在存储包内建立全局状态。
+
 ## 上线前必须完成的真实环境验收
 
 当前自动化测试全部使用可控 HTTP transport，没有使用真实凭据或访问真实 COS。部署前需要在非生产私有前缀完成：
