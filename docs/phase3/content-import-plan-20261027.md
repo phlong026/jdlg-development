@@ -1,6 +1,6 @@
 # 公众号与短视频导入：依据、实现和验收边界
 
-日期：2026-10-27。工作分支 `feat/phase3-content-sharing`，主仓库 `phlong026/jdlg-development`。生产未部署、未执行生产新迁移、未读取真实 Cookie/网关密钥、未发送微信消息。现有COS凭据仅在原服务器内用于自生成测试图片，已通过私有读写实测；隔离MySQL核心链路也已通过。最新证据及配置缺口见[补齐与联调记录](completion-and-live-verification-20261027.md)。
+日期：2026-10-27。工作分支 `feat/phase3-content-sharing`，主仓库 `phlong026/jdlg-development`。主业务未发布、未执行生产新迁移、未读取真实 Cookie/网关密钥、未发送微信消息。现有COS凭据仅在原服务器内用于自生成测试图片，已通过私有读写实测；隔离MySQL核心链路也已通过。独立公众号视频采集环境及仅本机可调用的反向代理已部署，实际网络隔离、renderer sandbox、本机 HTTPS 和重启恢复检查通过；真实来源采集仍待链接验收。最新证据见[采集部署](capture-deployment.md)及[三模块补漏验收](capture-and-module-audit-20261027.md)。
 
 ## 1. 已找到的参考文件
 
@@ -77,7 +77,7 @@ COS：已实现私有适配，复用现有服务端COS凭据和桶/地域配置�
 
 | 方法 | 路径 | 行为 |
 | --- | --- | --- |
-| GET | `/capabilities` | 返回 enabled/platforms、配置门禁原因及文内视频配置状态；不代表上游当前可用或导入已成功 |
+| GET | `/capabilities` | 返回 enabled/platforms、配置门禁原因及采集服务短期探测状态；探测失败明确显示未就绪，不代表来源文章已导入成功 |
 | POST | 根路径 | source_url、owner_id、rights(own/authorized)、idempotency_key；返回任务，不同步等待视频完成 |
 | GET | 根路径 | 当前账号、当前授权归属的最近 20 条任务 |
 | GET | `/:id` | 当前账号任务；不暴露租约、内部 Document、媒体临时地址或密钥 |
@@ -108,6 +108,7 @@ COS：已实现私有适配，复用现有服务端COS凭据和桶/地域配置�
 | CONTENT_IMPORT_YUANBAO_ENABLED=true | 独立实验通道开关 |
 | CONTENT_IMPORT_YUANBAO_COOKIE_FILE | 服务器自有绝对路径、普通文件、权限0600，最大16KiB；不读用户浏览器 Profile |
 | CONTENT_IMPORT_CAPTURE_URL / CONTENT_IMPORT_CAPTURE_SECRET | 固定HTTPS Capture Worker入口和至少32字符共享密钥；不从用户链接推断入口 |
+| CONTENT_IMPORT_CAPTURE_HEALTH_URL / CONTENT_IMPORT_CAPTURE_DIAL_ADDRESS | 明确的 readiness 路径和可选本机固定 Dial；保持域名 TLS 校验，专用 transport 不走环境代理 |
 
 独立浏览器进程还需 `CONTENT_CAPTURE_ENABLED`、`CONTENT_CAPTURE_NETWORK_ISOLATED`、本机 `CONTENT_CAPTURE_CDP_URL`、`CONTENT_CAPTURE_SECRET`。主服务的 CONTENT_IMPORT_CAPTURE_SECRET 与采集进程的 CONTENT_CAPTURE_SECRET 必须一致。详见 `service/contentcapture/README.md`。必须有独立 Profile、Chromium sandbox、网络命名空间及出口防火墙；DNS预检不等于浏览器连接被钉住，不能用一个环境变量代替实际隔离。Worker仅监听本机地址，经受控HTTPS反代接入；不连接用户当前浏览器、不使用 --no-sandbox。
 
@@ -119,7 +120,7 @@ COS：已实现私有适配，复用现有服务端COS凭据和桶/地域配置�
 
 1. 隔离MySQL核心流程已通过；部署前仍须按真实目标数据库版本、备份和权限核验迁移及回退。
 2. 配置供应商账号、受保护的元宝登录态；逐平台真实样例跑通“链接→完整媒体→草稿→播放”，验证无水印结果，不只验证HTTP200。
-3. 部署隔离Chromium，验证公众号文内视频真实采集、签名资源转存及风险控制失败状态。
+3. 隔离Chromium环境已部署并通过实机检查；主业务需在发布时显式加载独立 `main-service.env`，再验证真实文内视频采集、签名资源转存及风控状态。
 4. 以用户后期补充的真实链接验收原排版、完整图集和COS转存组合；复杂样式逐篇比较，存量素材切换COS前完成受检迁移。
 5. 微信开发者工具编译WXML，真机验证文章排版和上传/导入视频播放；原生卡片和自有域名链接分别验证实际分享人、浏览事件、提醒对象。
 6. 服务号独立AppID、模板字段、关注/身份绑定和真实投递条件仍需核验；现有“华匠邦建科”账号名称不能代替这些配置。URL Link真实调用、Nginx候选配置加载和服务号送达仍未发生。
