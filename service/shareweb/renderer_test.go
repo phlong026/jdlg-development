@@ -76,3 +76,36 @@ func TestShareWebRendererAppliesArticleSpacingToMediaAndCaption(t *testing.T) {
 		t.Fatalf("spacing or caption style missing: %s", html)
 	}
 }
+
+func TestShareWebRendererUsesSanitizedLayoutAndLocalMediaURLs(t *testing.T) {
+	content := tracking.Content{
+		ID: "layout-article", Version: 1, Title: "原排版", Status: "published", BodyFormat: "article_v2",
+		Body:  `{"schema":1,"layout_html":"<section style=\"padding:12px;background:url(https://evil.test/x)\"><p>前文</p><img data-media-id=\"layout-image-one\"><blockquote>引用<jd-video data-media-id=\"layout-video-one\"></jd-video></blockquote><script>alert(1)</script></section>","blocks":[{"kind":"paragraph","text":"兼容正文"}]}`,
+		Media: []tracking.Asset{{ID: "layout-image-one", Kind: "image"}, {ID: "layout-video-one", Kind: "video"}},
+	}
+	var output bytes.Buffer
+	if err := Render(&output, Page{Code: "opaque-code-123456", Content: content}); err != nil {
+		t.Fatal(err)
+	}
+	html := output.String()
+	for _, wanted := range []string{`class="original-layout"`, `<p>前文</p>`, `/api/v1/share-web/media/opaque-code-123456/layout-image-one`, `/api/v1/share-web/media/opaque-code-123456/layout-video-one`, `<video `} {
+		if !strings.Contains(html, wanted) {
+			t.Fatalf("missing %q in %s", wanted, html)
+		}
+	}
+	for _, unsafe := range []string{"evil.test", "alert(1)", "jd-video", "data-media-id"} {
+		if strings.Contains(html, unsafe) {
+			t.Fatalf("unsafe placeholder %q survived: %s", unsafe, html)
+		}
+	}
+}
+
+func TestShareWebRendererRejectsMissingLayoutMedia(t *testing.T) {
+	content := tracking.Content{
+		ID: "layout-missing", Version: 1, Title: "原排版", Status: "published", BodyFormat: "article_v2",
+		Body: `{"schema":1,"layout_html":"<img data-media-id=\"layout-image-one\">","blocks":[{"kind":"paragraph","text":"兼容正文"}]}`,
+	}
+	if err := Render(&bytes.Buffer{}, Page{Code: "opaque-code-123456", Content: content}); err == nil {
+		t.Fatal("rendered layout with missing media")
+	}
+}

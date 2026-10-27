@@ -38,6 +38,7 @@ type viewPage struct {
 	Blocks                 []viewBlock
 	Trackable              bool
 	RichHTML               template.HTML
+	LayoutHTML             template.HTML
 }
 
 var readerTemplate = template.Must(template.ParseFS(files, "templates/reader.html"))
@@ -46,13 +47,13 @@ func Render(w io.Writer, page Page) error {
 	if !codePattern.MatchString(page.Code) || page.Content.Status != "published" || page.Content.ID == "" || page.Content.Version <= 0 {
 		return errors.New("content unavailable")
 	}
-	blocks, richHTML, err := renderBlocks(page)
+	blocks, richHTML, layoutHTML, err := renderBlocks(page)
 	if err != nil {
 		return err
 	}
 	return readerTemplate.ExecuteTemplate(w, "reader.html", viewPage{
 		Code: page.Code, Title: page.Content.Title, ContentID: page.Content.ID,
-		Version: page.Content.Version, Blocks: blocks, Trackable: page.Trackable, RichHTML: richHTML,
+		Version: page.Content.Version, Blocks: blocks, Trackable: page.Trackable, RichHTML: richHTML, LayoutHTML: layoutHTML,
 	})
 }
 
@@ -69,16 +70,23 @@ func RenderLanding(w io.Writer, code, title string) error {
 	}})
 }
 
-func renderBlocks(page Page) ([]viewBlock, template.HTML, error) {
+func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) {
 	switch page.Content.BodyFormat {
 	case "article_v2":
 		var document tracking.ArticleDocument
 		if err := json.Unmarshal([]byte(page.Content.Body), &document); err != nil || document.Schema != 1 || len(document.Blocks) == 0 {
-			return nil, "", errors.New("article unavailable")
+			return nil, "", "", errors.New("article unavailable")
 		}
 		media := map[string]tracking.Asset{}
 		for _, asset := range page.Content.Media {
 			media[asset.ID] = asset
+		}
+		if document.LayoutHTML != "" {
+			layout, err := renderArticleLayout(page.Code, document.LayoutHTML, media)
+			if err != nil {
+				return nil, "", "", err
+			}
+			return nil, "", template.HTML(layout), nil // layout is re-sanitized and receives only local media URLs.
 		}
 		out := make([]viewBlock, 0, len(document.Blocks))
 		for _, block := range document.Blocks {
@@ -86,24 +94,24 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, error) {
 			if block.Kind == "image" || block.Kind == "video" {
 				asset, ok := media[block.MediaID]
 				if !ok || asset.Kind != block.Kind {
-					return nil, "", errors.New("article media unavailable")
+					return nil, "", "", errors.New("article media unavailable")
 				}
 				item.MediaURL = "/api/v1/share-web/media/" + page.Code + "/" + asset.ID
 			}
 			out = append(out, item)
 		}
-		return out, "", nil
+		return out, "", "", nil
 	case "plain", "rich_text":
 		body := strings.TrimSpace(page.Content.Body)
 		if body == "" {
-			return nil, "", errors.New("content unavailable")
+			return nil, "", "", errors.New("content unavailable")
 		}
 		out := []viewBlock{}
 		var rich template.HTML
 		if page.Content.BodyFormat == "rich_text" {
 			clean, err := tracking.SanitizePublishedRichText(body)
 			if err != nil {
-				return nil, "", errors.New("content unavailable")
+				return nil, "", "", errors.New("content unavailable")
 			}
 			rich = template.HTML(clean) // clean is produced by tracking's element-only whitelist.
 		} else {
@@ -111,14 +119,42 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, error) {
 		}
 		for _, asset := range page.Content.Media {
 			if (asset.Kind != "image" && asset.Kind != "video") || !codePattern.MatchString(asset.ID) {
-				return nil, "", errors.New("content media unavailable")
+				return nil, "", "", errors.New("content media unavailable")
 			}
 			out = append(out, viewBlock{Kind: asset.Kind, MediaURL: "/api/v1/share-web/media/" + page.Code + "/" + asset.ID})
 		}
-		return out, rich, nil
+		return out, rich, "", nil
 	default:
-		return nil, "", errors.New("content unavailable")
+		return nil, "", "", errors.New("content unavailable")
 	}
+}
+
+func renderArticleLayout(code, input string, media map[string]tracking.Asset) (string, error) {
+	layout, err := tracking.NormalizeArticleLayoutHTML(input)
+	if err != nil {
+		return "", errors.New("article unavailable")
+	}
+	refs, err := tracking.ArticleLayoutMediaReferences(layout)
+	if err != nil {
+		return "", errors.New("article unavailable")
+	}
+	for id, kind := range refs {
+		asset, ok := media[id]
+		if !ok || asset.Kind != kind || !codePattern.MatchString(asset.ID) {
+			return "", errors.New("article media unavailable")
+		}
+		url := "/api/v1/share-web/media/" + code + "/" + asset.ID
+		if kind == "image" {
+			layout = strings.ReplaceAll(layout, `<img data-media-id="`+id+`"`, `<img src="`+url+`"`)
+		} else {
+			layout = strings.ReplaceAll(layout, `<jd-video data-media-id="`+id+`"`, `<video src="`+url+`" controls playsinline preload="metadata"`)
+		}
+	}
+	layout = strings.ReplaceAll(layout, "</jd-video>", "</video>")
+	if strings.Contains(layout, "data-media-id=") || strings.Contains(layout, "jd-video") {
+		return "", errors.New("article media unavailable")
+	}
+	return layout, nil
 }
 
 func styleClass(style tracking.ArticleStyle) string {

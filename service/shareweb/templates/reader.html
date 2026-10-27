@@ -11,6 +11,7 @@
   <main class="reader">
     <header><span>甲第灵光</span><h1>{{.Title}}</h1></header>
     <article>
+      {{if .LayoutHTML}}<div class="original-layout">{{.LayoutHTML}}</div>{{end}}
       {{if .RichHTML}}<div class="legacy-rich">{{.RichHTML}}</div>{{end}}
       {{range .Blocks}}
         {{if eq .Kind "heading"}}{{if eq .Level 2}}<h2 class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</h2>{{else}}<h3 class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</h3>{{end}}{{end}}
