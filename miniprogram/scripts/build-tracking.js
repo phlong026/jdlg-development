@@ -10,6 +10,7 @@ const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsW
  'pages/contentworkbench/contentworkbench.ts',
  'pages/contentedit/contentedit.ts',
  'pages/contentwriting/contentwriting.ts',
+ 'pages/nativereferences/nativereferences.ts',
  'pages/sharevisits/sharevisits.ts',
  'pages/visitdetail/visitdetail.ts'
 ]);

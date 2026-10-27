@@ -218,6 +218,10 @@
     {
       "root": "pages/projectnoteview",
       "pages": ["projectnoteview"]
+    },
+    {
+      "root": "pages/nativereferences",
+      "pages": ["nativereferences"]
     }
   ],
   "tabBar": {

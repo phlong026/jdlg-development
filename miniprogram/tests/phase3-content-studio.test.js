@@ -91,5 +91,5 @@ test('link import is an explicit view and paste reuses the existing submission f
 test('studio offers real destinations for existing assets and visits', () => {
   const { page, navigations } = runtime();
   page.openExistingAssets(); page.openShareVisits();
-  assert.deepEqual(navigations, ['/pages/generatehistory/generatehistory', '/pages/sharevisits/sharevisits']);
+  assert.deepEqual(navigations, ['/pages/nativereferences/nativereferences', '/pages/sharevisits/sharevisits']);
 });

@@ -59,6 +59,12 @@ function submitImport(input) { return request(IMPORTS, 'POST', input); }
 function getImport(id) { return request(IMPORTS + '/' + encodeURIComponent(id)); }
 function retryImport(id) { return request(IMPORTS + '/' + encodeURIComponent(id) + '/retry', 'POST', {}); }
 
+function listNativeReferenceCandidates(query) { return request(WORKBENCH + '/native-reference-candidates', 'GET', {}, query); }
+function listNativeReferences(query) { return request(WORKBENCH + '/native-references', 'GET', {}, query); }
+function saveNativeReference(id, version, key) { return request(WORKBENCH + '/native-references', 'POST', { content_id: id, content_version: Number(version), idempotency_key: key }); }
+function deleteNativeReference(id) { return request(WORKBENCH + '/native-references/' + encodeURIComponent(id), 'DELETE'); }
+function getNativeReferenceTarget(id) { return request(WORKBENCH + '/native-references/' + encodeURIComponent(id) + '/target'); }
+
 function projectNotePath(path) { return PROJECT_NOTES + path; }
 function listProjectNoteProjects(query) { return request(projectNotePath('/projects'), 'GET', {}, query); }
 function createProjectNoteProject(input) { return request(projectNotePath('/projects'), 'POST', input); }
@@ -145,4 +151,5 @@ module.exports = {
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
   addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
   uploadProjectNoteMedia,
+  listNativeReferenceCandidates, listNativeReferences, saveNativeReference, deleteNativeReference, getNativeReferenceTarget,
 };
