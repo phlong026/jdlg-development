@@ -358,22 +358,45 @@ func (s *COSStore) resolveWriteRace(ctx context.Context, key string, want Metada
 func (s *COSStore) provePrivate(ctx context.Context, key string) error {
 	objectURL := *s.bucketURL
 	objectURL.Path = "/" + key
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, objectURL.String(), nil)
+	status, err := s.anonymousProbe(ctx, http.MethodHead, objectURL.String(), false)
 	if err != nil {
-		return ErrUnavailable
+		return err
+	}
+	if err := classifyAnonymousStatus(status); err != nil {
+		return err
+	}
+	status, err = s.anonymousProbe(ctx, http.MethodGet, objectURL.String(), true)
+	if err != nil {
+		return err
+	}
+	return classifyAnonymousStatus(status)
+}
+
+func (s *COSStore) anonymousProbe(ctx context.Context, method, objectURL string, withRange bool) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, method, objectURL, nil)
+	if err != nil {
+		return 0, ErrUnavailable
+	}
+	if withRange {
+		req.Header.Set("Range", "bytes=0-0")
+		req.Header.Set("Accept-Encoding", "identity")
 	}
 	resp, err := s.anonymous.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return 0, ctx.Err()
 		}
-		return ErrUnavailable
+		return 0, ErrUnavailable
 	}
 	defer resp.Body.Close()
-	switch resp.StatusCode {
+	return resp.StatusCode, nil
+}
+
+func classifyAnonymousStatus(status int) error {
+	switch status {
 	case http.StatusForbidden, http.StatusNotFound:
 		return nil
-	case http.StatusOK:
+	case http.StatusOK, http.StatusPartialContent:
 		return ErrPublicObject
 	default:
 		return ErrUnavailable

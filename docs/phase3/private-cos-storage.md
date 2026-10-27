@@ -61,12 +61,12 @@ type Store interface {
 `Put` 按以下顺序失败关闭：
 
 1. 在同一存储桶和私有前缀下创建随机 `_privacy-canary` 对象。Canary 只包含固定的非敏感探测字节，使用与真实对象相同的私有 ACL、条件写和元数据校验。
-2. 对 canary 执行已签名 `HEAD` 和匿名 `HEAD`。只有匿名返回 403/404 且 canary 成功删除，才允许继续。任一失败都保证真实用户字节上传次数为零。
+2. 对 canary 执行已签名 `HEAD`，然后用独立匿名客户端先执行 `HEAD`，再执行携带 `Range: bytes=0-0` 的 `GET`。两次匿名请求都返回 403/404 且 canary 成功删除，才允许继续。这可以识别“拒绝 HEAD 但允许 GET”的策略漏口；任一失败都保证真实用户字节上传次数为零。
 3. 使用已签名 `HEAD Object` 查询真实目标键。已有对象的长度、MIME 或 SHA256 不一致时返回 `ErrConflict`，不写入。
 4. 上传请求同时携带 `x-cos-acl: private`、`If-None-Match: *` 和 `x-cos-forbid-overwrite: true`，并将 SHA256 保存为 `x-cos-meta-sha256`。
 5. 如果条件写返回 409/412，重新读取对象。只有元数据完全相同才视为幂等成功，否则返回 `ErrConflict`。
 6. 上传后再使用已签名 `HEAD Object` 确认长度、MIME 和 SHA256。
-7. 最后使用完全独立、无签名、无 Cookie Jar 的 HTTP 客户端，对 COS 官方存储桶域名执行匿名 `HEAD`。只有 403 或 404 表示隐私验证通过；200 返回 `ErrPublicObject`，重定向或其他状态返回 `ErrUnavailable`。
+7. 最后使用完全独立、无签名、无 Cookie Jar 的 HTTP 客户端，对 COS 官方存储桶域名依次执行匿名 `HEAD` 和单字节范围 `GET`。只有两次都返回 403 或 404 才表示隐私验证通过；200 或 206 返回 `ErrPublicObject`，重定向或其他状态返回 `ErrUnavailable`。范围 `GET` 响应体只关闭，不读取用户字节。
 
 已存在且内容一致的对象也会重新执行第 7 步，不因幂等快速返回而跳过隐私证明。对于本次调用刚刚创建的真实对象，写后完整性或隐私校验失败时会用独立的短超时上下文删除；删除失败统一返回 `ErrUnavailable`。代码不会删除调用前已经存在的对象。
 
@@ -110,12 +110,12 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 
 当前自动化测试全部使用可控 HTTP transport，没有使用真实凭据或访问真实 COS。部署前需要在非生产私有前缀完成：
 
-1. 触发一次 canary 预检，确认官方 COS 域名匿名 `HEAD` 返回 403 或 404，且 canary 已删除。
+1. 触发一次 canary 预检，确认官方 COS 域名匿名 `HEAD` 和单字节范围 `GET` 都返回 403 或 404，且 canary 已删除。
 2. 用已鉴权服务端执行 `Head` 和 `Get`，确认元数据与字节完整。
 3. 用同一 `assetID` 尝试写入不同内容，确认返回冲突且旧对象未改变。
 4. 检查存储桶版本控制状态。腾讯云官方 `PUT Object` 文档明确说明：版本控制已开启或已暂停时，`x-cos-forbid-overwrite` 无效。因此必须在目标存储桶上实测 409/412 竞态行为，不能仅以本地模拟测试作为不覆盖验收证据。
 
-本次实现不会修改存储桶策略或存储桶 ACL。如果新对象写后匿名检查发现 200，系统会删除该次调用刚创建的对象，且该次导入不得进入“已就绪”状态。调用前已存在的对象即使隐私检查失败也不会被删除。
+本次实现不会修改存储桶策略或存储桶 ACL。如果新对象写后的任一匿名检查发现 200/206，系统会删除该次调用刚创建的对象，且该次导入不得进入“已就绪”状态。调用前已存在的对象即使隐私检查失败也不会被删除。
 
 ## 官方依据
 
@@ -123,3 +123,4 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 - [腾讯云 COS ACL](https://cloud.tencent.com/document/product/436/30752)：对象私有权限与官方域名访问语义。
 - [腾讯云 COS 访问控制基本概念](https://cloud.tencent.com/document/product/436/30749)：默认私有原则和匿名访问边界。
 - [腾讯云 COS 查询对象元数据](https://cloud.tencent.com/document/product/436/112227)：`HEAD Object` 及 `x-cos-meta-*` 元数据。
+- [腾讯云 COS 下载对象](https://cloud.tencent.com/document/product/436/112225)：`GET Object` 需要对象读取权限，匿名客户端不携带密钥。

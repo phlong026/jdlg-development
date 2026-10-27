@@ -136,6 +136,9 @@ func TestPutSignsPrivateConditionalWriteAndProvesAnonymousDenied(t *testing.T) {
 		if req.URL.Scheme != "https" || req.URL.Host != "bucket-1250000000.cos.ap-guangzhou.myqcloud.com" {
 			t.Fatalf("anonymous probe URL = %s", req.URL.Redacted())
 		}
+		if req.Method == http.MethodGet && req.Header.Get("Range") != "bytes=0-0" {
+			t.Fatalf("anonymous GET Range = %q", req.Header.Get("Range"))
+		}
 		return response(req, http.StatusForbidden, nil, ""), nil
 	})
 	store := newTestStore(t, auth, anonymous)
@@ -145,8 +148,8 @@ func TestPutSignsPrivateConditionalWriteAndProvesAnonymousDenied(t *testing.T) {
 	if got, want := strings.Join(methods, ","), "HEAD,PUT,HEAD"; got != want {
 		t.Fatalf("methods = %s, want %s", got, want)
 	}
-	if anonymousCalls != 1 {
-		t.Fatalf("anonymous calls = %d, want 1", anonymousCalls)
+	if anonymousCalls != 2 {
+		t.Fatalf("anonymous calls = %d, want 2", anonymousCalls)
 	}
 }
 
@@ -355,6 +358,61 @@ func TestPublicCanaryPreventsUserDataUpload(t *testing.T) {
 	}
 	if userPuts != 0 || canaryDeletes != 1 {
 		t.Fatalf("user puts/canary deletes = %d/%d", userPuts, canaryDeletes)
+	}
+}
+
+func TestAnonymousGETCanExposeCanaryEvenWhenHEADIsForbidden(t *testing.T) {
+	userPuts := 0
+	canaryDeletes := 0
+	getBody := &trackingReadCloser{Reader: strings.NewReader("x")}
+	auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !isCanaryRequest(req) {
+			if req.Method == http.MethodPut {
+				userPuts++
+			}
+			t.Fatalf("user object request reached COS after public canary GET: %s %s", req.Method, req.URL.Path)
+		}
+		switch req.Method {
+		case http.MethodPut:
+			body, _ := io.ReadAll(req.Body)
+			return successfulPutResponse(req, body), nil
+		case http.MethodHead:
+			data := []byte(privateCanaryData)
+			hash := sha256.Sum256(data)
+			return metadataResponse(req, data, privateCanaryMIME, hex.EncodeToString(hash[:])), nil
+		case http.MethodDelete:
+			canaryDeletes++
+			return response(req, http.StatusNoContent, nil, ""), nil
+		default:
+			t.Fatalf("unexpected canary method %s", req.Method)
+			return nil, nil
+		}
+	})
+	anonymous := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Header.Get("Authorization") != "" || req.Header.Get("Cookie") != "" {
+			t.Fatalf("anonymous probe carried credentials: %#v", req.Header)
+		}
+		switch req.Method {
+		case http.MethodHead:
+			return response(req, http.StatusForbidden, nil, ""), nil
+		case http.MethodGet:
+			if req.Header.Get("Range") != "bytes=0-0" {
+				t.Fatalf("anonymous GET Range = %q", req.Header.Get("Range"))
+			}
+			resp := response(req, http.StatusPartialContent, nil, privateCanaryMIME)
+			resp.Body = getBody
+			return resp, nil
+		default:
+			t.Fatalf("unexpected anonymous method %s", req.Method)
+			return nil, nil
+		}
+	})
+	store := newRawTestStore(t, auth, anonymous)
+	if err := store.Put(context.Background(), "tenant", testAssetID, []byte("real-user-bytes"), "video/mp4"); !errors.Is(err, ErrPublicObject) {
+		t.Fatalf("Put error = %v, want ErrPublicObject", err)
+	}
+	if userPuts != 0 || canaryDeletes != 1 || !getBody.closed {
+		t.Fatalf("user puts/canary deletes/get closed = %d/%d/%v", userPuts, canaryDeletes, getBody.closed)
 	}
 }
 
