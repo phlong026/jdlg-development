@@ -32,6 +32,6 @@ if [ "${1:-}" = "--installed" ]; then
     printf '%s\n' 'resolve = "api.jiadilingguang.com:443:127.0.0.1"'
     printf '%s\n' 'url = "https://api.jiadilingguang.com/_internal/content-capture/ready"'
   } >"$CURL_CONFIG"
-  BODY=$(curl --config "$CURL_CONFIG")
+  BODY=$(curl --noproxy '*' --max-time 10 --config "$CURL_CONFIG")
   test "$BODY" = '{"ready":true}'
 fi
