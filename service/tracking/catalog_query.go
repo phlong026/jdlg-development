@@ -221,13 +221,15 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 		visitors := map[string]map[string]bool{}
 		totalVisitors := map[string]bool{}
 		shareTotals := map[string]int{}
-		shares, e := clientShares(r, scope, f)
-		if e != nil {
-			return e
-		}
-		for _, sh := range shares {
-			if sh.content != "" {
-				shareTotals[sh.content]++
+		if scope.View {
+			shares, e := clientShares(r, scope, f)
+			if e != nil {
+				return e
+			}
+			for _, sh := range shares {
+				if sh.content != "" {
+					shareTotals[sh.content]++
+				}
 			}
 		}
 		for _, fact := range facts {

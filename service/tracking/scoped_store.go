@@ -25,6 +25,9 @@ type RecordQuery struct {
 	Content, View                              string
 	AtFrom, AtBefore, AtThrough, IdentityAsOf  time.Time
 	CatalogAsOf                                time.Time // Immutable catalog membership; never mutable occurred_at.
+	// ExactVisitors disables identity-link expansion. It is used when a server
+	// selected principal (for example Share.Sharer) must match exactly.
+	ExactVisitors bool
 	// WithoutExactSummary keeps only rows whose session lacks a complete
 	// projection without a legacy deferred marker. Current projections include
 	// future accepted events and create all their buckets; BuiltAt gates their use.
@@ -36,9 +39,16 @@ type RecordQuery struct {
 	Limit   int
 	AfterAt time.Time
 	AfterID string
+	// Descending plus BeforeAt/BeforeID provides newest-first keyset paging.
+	// It is intentionally opt-in so established ascending callers do not move.
+	Descending bool
+	BeforeAt   time.Time
+	BeforeID   string
 }
 
-func (q RecordQuery) hasCursor() bool { return q.AfterID != "" || !q.AfterAt.IsZero() }
+func (q RecordQuery) hasAfterCursor() bool  { return q.AfterID != "" || !q.AfterAt.IsZero() }
+func (q RecordQuery) hasBeforeCursor() bool { return q.BeforeID != "" || !q.BeforeAt.IsZero() }
+func (q RecordQuery) hasCursor() bool       { return q.hasAfterCursor() || q.hasBeforeCursor() }
 
 // pageRecords is the portable way to read one page. Repositories (and test
 // doubles) that ignore Limit or the cursor still return exactly the same page,
@@ -50,14 +60,20 @@ func pageRecords(r Repository, kind string, q RecordQuery) ([]Record, error) {
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].At.Equal(rows[j].At) {
+			if q.Descending {
+				return rows[i].ID > rows[j].ID
+			}
 			return rows[i].ID < rows[j].ID
+		}
+		if q.Descending {
+			return rows[i].At.After(rows[j].At)
 		}
 		return rows[i].At.Before(rows[j].At)
 	})
 	if q.hasCursor() {
 		kept := rows[:0:0]
 		for _, row := range rows {
-			if rowAfterCursor(row, q) {
+			if rowMatchesCursor(row, q) {
 				kept = append(kept, row)
 			}
 		}
@@ -70,6 +86,12 @@ func pageRecords(r Repository, kind string, q RecordQuery) ([]Record, error) {
 }
 func rowAfterCursor(row Record, q RecordQuery) bool {
 	return row.At.After(q.AfterAt) || row.At.Equal(q.AfterAt) && row.ID > q.AfterID
+}
+func rowBeforeCursor(row Record, q RecordQuery) bool {
+	return row.At.Before(q.BeforeAt) || row.At.Equal(q.BeforeAt) && row.ID < q.BeforeID
+}
+func rowMatchesCursor(row Record, q RecordQuery) bool {
+	return (!q.hasAfterCursor() || rowAfterCursor(row, q)) && (!q.hasBeforeCursor() || rowBeforeCursor(row, q))
 }
 
 type ScopedRecordLister interface {
@@ -194,7 +216,13 @@ func scopedRecords(r Repository, kind string, q RecordQuery) ([]Record, error) {
 	if q.Limit > 0 && len(out) > q.Limit {
 		sort.Slice(out, func(i, j int) bool {
 			if out[i].At.Equal(out[j].At) {
+				if q.Descending {
+					return out[i].ID > out[j].ID
+				}
 				return out[i].ID < out[j].ID
+			}
+			if q.Descending {
+				return out[i].At.After(out[j].At)
 			}
 			return out[i].At.Before(out[j].At)
 		})
@@ -217,7 +245,7 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 	if !q.AtThrough.IsZero() && row.At.Truncate(time.Microsecond).After(q.AtThrough.Truncate(time.Microsecond)) {
 		return false, nil
 	}
-	if q.hasCursor() && !rowAfterCursor(row, q) {
+	if q.hasCursor() && !rowMatchesCursor(row, q) {
 		return false, nil
 	}
 	// Apply authoritative scalar predicates before touching JSON. This keeps
@@ -330,6 +358,9 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 		return false, nil
 	}
 	if q.VisitorKeys != nil && !includes(q.VisitorKeys, original) && !(row.Kind == "daily_summary" && includes(q.VisitorKeys, row.Visitor)) {
+		if q.ExactVisitors {
+			return false, nil
+		}
 		rec, err := r.Get("identity", session)
 		if errors.Is(err, ErrNotFound) {
 			return false, nil

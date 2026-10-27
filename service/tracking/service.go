@@ -12,17 +12,23 @@ import (
 )
 
 type Service struct {
-	VerifyBusiness func(context.Context, BusinessProof) (bool, error)
+	// Projection participants run inside the tracking write transaction.
+	OnNoticeEvent        func(context.Context, NoticeEvent) error
+	OnRemoveNoticeEvents func(context.Context, []string) error
+	OnContentRevoke      func(context.Context, string) error
+	VerifyBusiness       func(context.Context, BusinessProof) (bool, error)
 	// Server-side, current account grant lookup. Never derived from client fields.
-	IsContentOperator      func(context.Context, int64, string) (bool, error)
-	ResolveLegacy          func(string, int64) (LegacyMetadata, error)
-	ResolveLegacyContext   func(context.Context, string, int64) (LegacyMetadata, error)
-	ResolvePublicSnapshot  func(context.Context, string) (LegacyMetadata, error)
-	VerifyCRM              func(context.Context, Scope, string, string, string) error
-	ResolveVisitorProfiles VisitorProfileResolver
-	Store                  Store
-	Config                 Config
-	Now                    func() time.Time
+	IsContentOperator         func(context.Context, int64, string) (bool, error)
+	ResolveLegacy             func(string, int64) (LegacyMetadata, error)
+	ResolveLegacyContext      func(context.Context, string, int64) (LegacyMetadata, error)
+	ResolveLegacyBatchContext func(context.Context, string, []string) (map[string]LegacyMetadata, error)
+	ResolvePublicSnapshot     func(context.Context, string) (LegacyMetadata, error)
+	VerifyCRM                 func(context.Context, Scope, string, string, string) error
+	ResolveVisitorProfiles    VisitorProfileResolver
+	Store                     Store
+	Config                    Config
+	NoticeRules               NoticeRules
+	Now                       func() time.Time
 	// Tests only: take the staged deletion path even when the atomic plan fits.
 	forceStagedDeletion bool
 }
@@ -609,6 +615,22 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			}
 			if err = r.Insert(record("event_hash", e.ID, en.Owner, e.Occurred, map[string]string{"fingerprint": fingerprint})); err != nil {
 				return err
+			}
+			notice, createNotice, err := browseNotice(r, en, e, s.NoticeRules)
+			if err != nil {
+				return err
+			}
+			if createNotice {
+				nr := record("notice_event", notice.ID, en.Owner, notice.OccurredAt, notice)
+				nr.Visitor, nr.Content, nr.Share, nr.Session = notice.VisitorKey, notice.ContentID, notice.ShareID, en.Session
+				if err = r.Insert(nr); err != nil {
+					return err
+				}
+				if s.OnNoticeEvent != nil {
+					if err = s.OnNoticeEvent(sourceReadContext(ctx, r), notice); err != nil {
+						return err
+					}
+				}
 			}
 			res.Status = "accepted"
 			out = append(out, res)

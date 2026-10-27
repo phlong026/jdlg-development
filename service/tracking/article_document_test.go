@@ -1,0 +1,118 @@
+package tracking
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func TestArticleDocumentKeepsMediaOrderAndNormalizesStyles(t *testing.T) {
+	input := `{"schema":1,"blocks":[{"kind":"paragraph","text":"第一段","style":{"align":"center","font_size":"large","spacing_before":12,"spacing_after":18,"border":"box"}},{"kind":"image","media_id":"asset-0001","caption":"平面图"},{"kind":"paragraph","text":"第二段"}]}`
+	got, format, err := normalizeBody(input, "article_v2")
+	if err != nil || format != "article_v2" {
+		t.Fatalf("format=%s error=%v", format, err)
+	}
+	var doc ArticleDocument
+	if err := json.Unmarshal([]byte(got), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Blocks) != 3 || doc.Blocks[0].Kind != "paragraph" || doc.Blocks[1].Kind != "image" || doc.Blocks[2].Text != "第二段" {
+		t.Fatalf("图文顺序丢失: %+v", doc.Blocks)
+	}
+	if doc.Blocks[0].Style.Align != "center" || doc.Blocks[0].Style.FontSize != "large" || doc.Blocks[0].Style.SpacingBefore != 12 || doc.Blocks[0].Style.SpacingAfter != 18 || doc.Blocks[0].Style.Border != "box" {
+		t.Fatalf("白名单样式丢失: %+v", doc.Blocks[0].Style)
+	}
+	again, _, err := normalizeBody(got, "article_v2")
+	if err != nil || again != got {
+		t.Fatalf("归一化非幂等: %q %v", again, err)
+	}
+}
+
+func TestArticleDocumentRejectsInvalidShapeAndLimits(t *testing.T) {
+	invalid := []string{
+		`{"schema":1,"script":"evil()","blocks":[{"kind":"paragraph","text":"正文"}]}`,
+		`{"schema":1,"blocks":[{"kind":"paragraph","text":"正文","onclick":"evil()"}]}`,
+		`{"schema":1,"blocks":[{"kind":"paragraph","text":"正文","style":{"color":"red"}}]}`,
+		`{"schema":2,"blocks":[{"kind":"paragraph","text":"正文"}]}`,
+		`{"schema":1,"blocks":[]}`,
+		`{"schema":1,"blocks":[{"kind":"paragraph","text":" "}]}`,
+		`{"schema":1,"blocks":[{"kind":"embed","url":"https://evil.test/frame"}]}`,
+		`{"schema":1,"blocks":[{"kind":"heading","level":1,"text":"越界标题"}]}`,
+		`{"schema":1,"blocks":[{"kind":"image","media_id":"bad/id"}]}`,
+		`{"schema":1,"blocks":[{"kind":"paragraph","text":"正文","style":{"align":"absolute","spacing_after":999}}]}`,
+	}
+	for _, body := range invalid {
+		if _, _, err := normalizeBody(body, "article_v2"); err == nil {
+			t.Fatalf("接受了无效文档: %s", body)
+		}
+	}
+	blocks := make([]ArticleBlock, 501)
+	for i := range blocks {
+		blocks[i] = ArticleBlock{Kind: "paragraph", Text: "正文"}
+	}
+	body, _ := json.Marshal(ArticleDocument{Schema: 1, Blocks: blocks})
+	if _, _, err := normalizeBody(string(body), "article_v2"); err == nil {
+		t.Fatal("接受了超长文档")
+	}
+}
+
+func TestArticleDocumentRequiresAuthorizedMediaAndPreservesRepeatedReferences(t *testing.T) {
+	s, scope := fixture(t)
+	ctx := context.Background()
+	for _, asset := range []Asset{
+		{ID: "asset-0001", Kind: "image", URL: "/api/v1/miniprogram/tracking/media/asset-0001", Width: 1200, Height: 800, MIME: "image/jpeg"},
+		{ID: "asset-0002", Kind: "video", URL: "/api/v1/miniprogram/tracking/media/asset-0002", Width: 1280, Height: 720, MIME: "video/mp4"},
+		{ID: "asset-extra", Kind: "image", URL: "/api/v1/miniprogram/tracking/media/asset-extra", Width: 640, Height: 480, MIME: "image/jpeg"},
+	} {
+		if err := s.AddMedia(ctx, scope, asset, "owner-a"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := `{"schema":1,"blocks":[{"kind":"image","media_id":"asset-0001"},{"kind":"paragraph","text":"中间"},{"kind":"image","media_id":"asset-0001"},{"kind":"video","media_id":"asset-0002"}]}`
+	saved, err := s.SaveContent(ctx, scope, "", Draft{Title: "原排版", Body: body, BodyFormat: "article_v2", Rights: "own", Owner: "owner-a", MediaIDs: []string{"asset-0001", "asset-0002", "asset-extra"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.BodyFormat != "article_v2" || strings.Count(saved.Body, `"media_id":"asset-0001"`) != 2 || len(saved.Media) != 2 {
+		t.Fatalf("重复引用或媒体归一化错误: %+v", saved)
+	}
+	preview, err := s.Preview(ctx, scope, saved.ID, saved.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Publish(ctx, scope, saved.ID, saved.Revision, preview["preview_token"].(string), "publish-article-v2"); err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.ReadContent(ctx, saved.ID, 1)
+	if err != nil || read.Body != saved.Body || read.BodyFormat != "article_v2" {
+		t.Fatalf("发布版本未保留原排版文档: %+v %v", read, err)
+	}
+	if len(read.Media) != 2 {
+		t.Fatalf("未引用媒体被写入公开版本: %+v", read.Media)
+	}
+	_, err = s.Media(ctx, nil, "asset-extra")
+	requireQueryError(t, err, 404)
+	for name, draft := range map[string]Draft{
+		"missing authorization": {Title: "缺失授权", Body: `{"schema":1,"blocks":[{"kind":"image","media_id":"asset-0001"}]}`, BodyFormat: "article_v2", Rights: "own", Owner: "owner-a"},
+		"wrong media kind":      {Title: "类型不符", Body: `{"schema":1,"blocks":[{"kind":"video","media_id":"asset-0001"}]}`, BodyFormat: "article_v2", Rights: "own", Owner: "owner-a", MediaIDs: []string{"asset-0001"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := s.SaveContent(ctx, scope, "", draft); err == nil {
+				t.Fatal("应拒绝不完整媒体文档")
+			}
+		})
+	}
+}
+
+func TestArticleDocumentKeepsLegacyFormats(t *testing.T) {
+	for _, tc := range []struct{ body, format, want string }{
+		{"<b>literal</b>", "plain", "<b>literal</b>"},
+		{"<p><strong>正文</strong></p>", "rich_text", "<p><strong>正文</strong></p>"},
+	} {
+		got, format, err := normalizeBody(tc.body, tc.format)
+		if err != nil || got != tc.want || format != tc.format {
+			t.Fatalf("旧格式兼容破坏: %q %q %v", got, format, err)
+		}
+	}
+}

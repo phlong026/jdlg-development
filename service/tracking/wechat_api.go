@@ -187,8 +187,30 @@ type URLLinkResult struct {
 // WechatURLLink asks WeChat for a mini-program URL Link to page with query. The
 // returned link is checked to be a plain https URL before it is handed on.
 func WechatURLLink(ctx context.Context, api *WechatAPI, appID, secret, page, query, environment string, now time.Time) (URLLinkResult, error) {
+	payload := map[string]any{"path": page, "query": query, "env_version": environment, "expire_type": 1, "expire_interval": URLLinkValidDays}
+	return wechatURLLink(ctx, api, appID, secret, page, query, environment, payload, now.UTC().Add(URLLinkValidDays*24*time.Hour))
+}
+
+// WechatURLLinkUntil generates an absolute-expiry URL Link which never remains
+// valid after the share token embedded in its query. WeChat documents
+// expire_type=0 + expire_time as a Unix timestamp and requires is_expire=true.
+func WechatURLLinkUntil(ctx context.Context, api *WechatAPI, appID, secret, page, query, environment string, now, shareExpires time.Time) (URLLinkResult, error) {
+	deadline := shareExpires.UTC()
+	maximum := now.UTC().Add(URLLinkValidDays * 24 * time.Hour)
+	if deadline.After(maximum) {
+		deadline = maximum
+	}
+	deadline = time.Unix(deadline.Unix(), 0).UTC()
+	if !deadline.After(now.UTC()) {
+		return URLLinkResult{}, ErrUnavailable
+	}
+	payload := map[string]any{"path": page, "query": query, "env_version": environment, "is_expire": true, "expire_type": 0, "expire_time": deadline.Unix()}
+	return wechatURLLink(ctx, api, appID, secret, page, query, environment, payload, deadline)
+}
+
+func wechatURLLink(ctx context.Context, api *WechatAPI, appID, secret, page, query, environment string, payload map[string]any, expires time.Time) (URLLinkResult, error) {
 	var out URLLinkResult
-	if page == "" || strings.HasPrefix(page, "/") || strings.Contains(page, "?") || len(query) > 1024 || (environment != "release" && environment != "trial" && environment != "develop") {
+	if api == nil || page == "" || strings.HasPrefix(page, "/") || strings.Contains(page, "?") || len(query) > 1024 || (environment != "release" && environment != "trial" && environment != "develop") {
 		return out, ErrUnavailable
 	}
 	token, err := api.Token(ctx, appID, secret)
@@ -198,7 +220,6 @@ func WechatURLLink(ctx context.Context, api *WechatAPI, appID, secret, page, que
 	var res struct {
 		Link string `json:"url_link"`
 	}
-	payload := map[string]any{"path": page, "query": query, "env_version": environment, "expire_type": 1, "expire_interval": URLLinkValidDays}
 	if err = api.PostJSON(ctx, "/wxa/generate_urllink", token, payload, &res, 64<<10); err != nil {
 		return out, err
 	}
@@ -206,5 +227,5 @@ func WechatURLLink(ctx context.Context, api *WechatAPI, appID, secret, page, que
 	if perr != nil || link.Scheme != "https" || link.Hostname() == "" || link.User != nil || len(res.Link) > 512 {
 		return out, errors.New("url link response invalid")
 	}
-	return URLLinkResult{URL: res.Link, Expires: now.UTC().Add(URLLinkValidDays * 24 * time.Hour)}, nil
+	return URLLinkResult{URL: res.Link, Expires: expires}, nil
 }

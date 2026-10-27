@@ -37,7 +37,7 @@ func (legacyTestConn) QueryContext(_ context.Context, q string, args []driver.Na
 		n := strings.TrimSpace(raw)
 		var v driver.Value = ""
 		switch n {
-		case "id":
+		case "id", "user_id":
 			v = id
 		case "created_at", "updated_at":
 			v = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -82,7 +82,7 @@ func (legacyTestConn) QueryContext(_ context.Context, q string, args []driver.Na
 			v = nil
 		case "password", "COALESCE(openid, '')", "COALESCE(unionid, '')", "phone", "device_id", "enterprise_wechat_contact":
 			v = "private-account-data"
-		case "price", "is_free", "is_featured", "download_count", "like_count", "creator_user_id", "original_task_id", "sort_order", "show_usage_tips", "is_common", "usage_count", "view_count", "COALESCE(can_withdraw,0)", "user_id", "designer_experience_years", "service_quote", "service_enabled", "enterprise_wechat_verified", "has_password":
+		case "price", "is_free", "is_featured", "download_count", "like_count", "creator_user_id", "original_task_id", "sort_order", "show_usage_tips", "is_common", "usage_count", "view_count", "COALESCE(can_withdraw,0)", "designer_experience_years", "service_quote", "service_enabled", "enterprise_wechat_verified", "has_password":
 			v = int64(0)
 		}
 		r.values = append(r.values, v)

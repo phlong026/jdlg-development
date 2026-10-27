@@ -115,6 +115,27 @@ type Asset struct {
 	MIME   string `json:"mime"`
 	Title  string `json:"title,omitempty"`
 }
+type ArticleStyle struct {
+	Align         string `json:"align,omitempty"`
+	FontSize      string `json:"font_size,omitempty"`
+	SpacingBefore int    `json:"spacing_before,omitempty"`
+	SpacingAfter  int    `json:"spacing_after,omitempty"`
+	Border        string `json:"border,omitempty"`
+}
+type ArticleBlock struct {
+	Kind    string       `json:"kind"`
+	Text    string       `json:"text,omitempty"`
+	Level   int          `json:"level,omitempty"`
+	Items   []string     `json:"items,omitempty"`
+	Ordered bool         `json:"ordered,omitempty"`
+	MediaID string       `json:"media_id,omitempty"`
+	Caption string       `json:"caption,omitempty"`
+	Style   ArticleStyle `json:"style,omitempty"`
+}
+type ArticleDocument struct {
+	Schema int            `json:"schema"`
+	Blocks []ArticleBlock `json:"blocks"`
+}
 type Content struct {
 	ReadOnly    bool       `json:"read_only,omitempty"`
 	Route       string     `json:"route_key,omitempty"`

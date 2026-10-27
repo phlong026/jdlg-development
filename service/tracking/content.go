@@ -39,6 +39,31 @@ func (s *Service) validateDraft(scope Scope, in Draft) (Draft, error) {
 		return in, err
 	}
 	in.Body, in.BodyFormat = body, format
+	if format == "article_v2" {
+		refs, e := articleMediaReferences(body)
+		if e != nil {
+			return in, e
+		}
+		authorized := map[string]bool{}
+		for _, id := range in.MediaIDs {
+			authorized[id] = true
+		}
+		for id := range refs {
+			if !authorized[id] {
+				return in, fail(400, "原排版正文引用了未授权媒体")
+			}
+		}
+		// Public article media comes from body references, never extra editor selections.
+		mediaIDs := make([]string, 0, len(refs))
+		seen := map[string]bool{}
+		for _, id := range in.MediaIDs {
+			if refs[id] != "" && !seen[id] {
+				seen[id] = true
+				mediaIDs = append(mediaIDs, id)
+			}
+		}
+		in.MediaIDs = mediaIDs
+	}
 	return in, nil
 }
 
@@ -71,6 +96,10 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	}
 	media := []Asset{}
 	var cover *Asset
+	articleRefs := map[string]string{}
+	if in.BodyFormat == "article_v2" {
+		articleRefs, _ = articleMediaReferences(in.Body)
+	}
 	seen := map[string]bool{}
 	for _, mid := range append(append([]string{}, in.MediaIDs...), in.CoverID) {
 		if mid == "" || seen[mid] {
@@ -92,7 +121,12 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 			c := a
 			cover = &c
 		}
-		media = append(media, a)
+		if expected := articleRefs[mid]; expected != "" && a.Kind != expected {
+			return out, fail(400, "原排版正文媒体类型与授权文件不符")
+		}
+		if in.BodyFormat != "article_v2" || articleRefs[mid] != "" {
+			media = append(media, a)
+		}
 	}
 	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
 	if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
@@ -214,6 +248,17 @@ func (s *Service) Revoke(ctx context.Context, scope Scope, id string, revision i
 		}
 		if e = r.Insert(record("revocation", requestKey, c.Owner, s.Now(), c)); e != nil {
 			return e
+		}
+		if s.OnContentRevoke != nil {
+			notices, e := scopedRecords(r, "notice_event", RecordQuery{Content: id, Limit: 1})
+			if e != nil {
+				return e
+			}
+			if len(notices) > 0 {
+				if e = s.OnContentRevoke(sourceReadContext(ctx, r), id); e != nil {
+					return e
+				}
+			}
 		}
 		return audit(r, c.Owner, "revoke_content", scope.Actor, id, s.Now(), map[string]string{"reason_hash": hash(reason)})
 	})
