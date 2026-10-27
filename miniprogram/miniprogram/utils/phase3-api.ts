@@ -3,6 +3,7 @@
 
 const ORIGIN = 'https://api.jiadilingguang.com';
 const WORKBENCH = '/api/v1/miniprogram/workbench';
+const IMPORTS = WORKBENCH + '/imports';
 const MY_SHARES = '/api/v1/miniprogram/tracking/my-shares';
 let mutationSequence = 0;
 
@@ -52,6 +53,11 @@ function publishContent(id, revision, previewToken, key) { return request(WORKBE
 function revokeContent(id, revision, reason, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/revoke', 'POST', { expected_revision: revision, reason, idempotency_key: key }); }
 function listMyShares(query) { return request(MY_SHARES, 'GET', {}, query); }
 function listMyShareVisits(id, query) { return request(MY_SHARES + '/' + encodeURIComponent(id) + '/visits', 'GET', {}, query); }
+function importCapabilities() { return request(IMPORTS + '/capabilities'); }
+function listImports() { return request(IMPORTS); }
+function submitImport(input) { return request(IMPORTS, 'POST', input); }
+function getImport(id) { return request(IMPORTS + '/' + encodeURIComponent(id)); }
+function retryImport(id) { return request(IMPORTS + '/' + encodeURIComponent(id) + '/retry', 'POST', {}); }
 
 function downloadWorkbenchMedia(id) {
   const path = WORKBENCH + '/media/' + encodeURIComponent(id);
@@ -88,6 +94,7 @@ function mutationKey(prefix) {
 module.exports = {
   ORIGIN, WORKBENCH, MY_SHARES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
   saveContent, previewContent, publishContent, revokeContent, listMyShares, listMyShareVisits,
+  importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
 };
 export {};

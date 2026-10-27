@@ -9,6 +9,26 @@
     <block wx:else>
       <view class="intro"><text class="title">我的内容</text><text class="hint">草稿、预览、发布和撤回均以服务端当前版本为准。</text></view>
       <button class="primary" bindtap="createContent">+新建内容</button>
+      <view class="import-panel">
+        <view class="section-heading"><text class="section-title">链接导入</text><text class="hint">支持的平台以当前服务能力为准，导入完成后生成可编辑草稿。</text></view>
+        <view class="capabilities">
+          <text wx:for="{{importPlatforms}}" wx:key="platform" class="capability {{item.available ? 'available' : ''}}">{{item.label}} · {{item.available ? (item.reason || '可用') : (item.reason || '暂不可用')}}</text>
+        </view>
+        <view wx:if="{{!importEnabled}}" class="import-gate">{{importCapabilityReason || '链接导入暂未开通'}}</view>
+        <block wx:else>
+          <label class="field"><text>分享链接</text><input value="{{importURL}}" bindinput="setImportURL" placeholder="粘贴公众号、抖音、小红书或视频号分享链接" /></label>
+          <label class="field"><text>内容归属</text><picker mode="selector" range="{{context.owners}}" value="{{importOwnerIndex}}" bindchange="setImportOwner"><view class="picker-value">{{importOwner || '请选择内容归属'}}</view></picker></label>
+          <view class="field"><text>素材权属（必选）</text><radio-group class="rights" bindchange="setImportRights"><label><radio value="own" checked="{{importRights === 'own'}}" />自有</label><label><radio value="authorized" checked="{{importRights === 'authorized'}}" />已获授权</label></radio-group></view>
+          <button class="import-submit" bindtap="submitImport" loading="{{importBusy}}" disabled="{{importBusy}}">开始导入</button>
+        </block>
+        <view wx:if="{{importError}}" class="import-error">{{importError}}</view>
+        <view wx:for="{{imports}}" wx:key="import_id" class="import-card" bindtap="openImport" data-id="{{item.import_id}}">
+          <view class="card-main"><text class="card-title">{{item.platform_text}}</text><text class="meta">{{item.status_text}}</text><text wx:if="{{item.status === 'uncertain' || item.error_text}}" class="attention">{{item.status === 'uncertain' ? '系统无法确认本次解析结果，请勿重复提交。' : item.error_text}}</text></view>
+          <button wx:if="{{(item.status === 'failed' || item.status === 'blocked') && item.error_code === 'media_source_expired'}}" class="retry-button" catchtap="prepareReimport" data-id="{{item.import_id}}">重新发起</button>
+          <button wx:if="{{item.can_retry && item.status !== 'uncertain' && item.error_code !== 'media_source_expired'}}" class="retry-button" catchtap="retryImport" data-id="{{item.import_id}}" disabled="{{importBusy}}">重试</button>
+          <text wx:elif="{{item.status === 'ready'}}" class="arrow">›</text>
+        </view>
+      </view>
       <view wx:if="{{!items.length}}" class="state">暂无内容，可先新建一篇。</view>
       <button wx:for="{{items}}" wx:key="content_id" class="card" bindtap="editContent" data-id="{{item.content_id}}">
         <view class="card-main"><text class="card-title">{{item.title}}</text><text class="meta">{{item.status === 'published' ? '已发布' : item.status === 'revoked' ? '已撤回' : '草稿'}} · 草稿版 {{item.revision}} · 公开版 {{item.version}}</text></view><text class="arrow">›</text>
