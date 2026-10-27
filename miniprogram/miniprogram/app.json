@@ -200,6 +200,10 @@
       "pages": ["contentedit"]
     },
     {
+      "root": "pages/contentwriting",
+      "pages": ["contentwriting"]
+    },
+    {
       "root": "pages/sharevisits",
       "pages": ["sharevisits"]
     },

@@ -127,3 +127,5 @@
 三期新增 contentworkbench、contentedit、sharevisits、visitdetail 共4个私有子页面，均 excluded-private-workbench，不采集、不开放分享。当前63路由中22个公开、41个排除。
 
 本次四条新增路由分别为`pages/contentworkbench/contentworkbench`、`pages/contentedit/contentedit`、`pages/sharevisits/sharevisits`、`pages/visitdetail/visitdetail`，均显式使用private-workbench排除策略。上文历史59条基线保留日期，不作为当前总数。
+
+2026-10-27 内容制作前端：新增 `pages/contentwriting/contentwriting` AI文案私有工作页，明确 excluded-private-workbench，不采集输入和生成正文。当前共64条路由：22条公开、42条排除；已同步前后端清单及路由门禁。

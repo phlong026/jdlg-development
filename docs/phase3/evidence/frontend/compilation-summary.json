@@ -1,0 +1,102 @@
+[
+  {
+    "page": "my",
+    "type": "wxml",
+    "result": {
+      "success": true,
+      "codeLength": 39210
+    }
+  },
+  {
+    "page": "chat",
+    "type": "wxml",
+    "result": {
+      "success": true,
+      "codeLength": 39210
+    }
+  },
+  {
+    "page": "contentworkbench",
+    "type": "wxml",
+    "result": {
+      "success": true,
+      "codeLength": 39210
+    }
+  },
+  {
+    "page": "contentworkbench",
+    "type": "wxss",
+    "result": {
+      "success": true,
+      "files": 2,
+      "fileList": [
+        "comm",
+        "page"
+      ],
+      "totalCodeLength": 4448
+    }
+  },
+  {
+    "page": "contentedit",
+    "type": "wxml",
+    "result": {
+      "success": true,
+      "codeLength": 39210
+    }
+  },
+  {
+    "page": "contentedit",
+    "type": "wxss",
+    "result": {
+      "success": true,
+      "files": 2,
+      "fileList": [
+        "comm",
+        "page"
+      ],
+      "totalCodeLength": 4448
+    }
+  },
+  {
+    "page": "contentreader",
+    "type": "wxml",
+    "result": {
+      "success": true,
+      "codeLength": 39210
+    }
+  },
+  {
+    "page": "contentreader",
+    "type": "wxss",
+    "result": {
+      "success": true,
+      "files": 2,
+      "fileList": [
+        "comm",
+        "page"
+      ],
+      "totalCodeLength": 4448
+    }
+  },
+  {
+    "page": "contentwriting",
+    "type": "wxml",
+    "result": {
+      "success": true,
+      "codeLength": 39210
+    }
+  },
+  {
+    "page": "contentwriting",
+    "type": "wxss",
+    "result": {
+      "success": true,
+      "files": 2,
+      "fileList": [
+        "comm",
+        "page"
+      ],
+      "totalCodeLength": 4448
+    }
+  }
+]

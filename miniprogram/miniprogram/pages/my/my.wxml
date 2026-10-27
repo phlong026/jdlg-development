@@ -1,12 +1,10 @@
 <!--pages/my/my.wxml-->
 <view class="page">
-  <image class="page-background" src="{{pageBgImage}}" mode="widthFix" lazy-load />
-
   <!-- 统一导航栏（Tab页不显示返回按钮） -->
-  <navigation-bar back="{{false}}" background="#e6daca" />
+  <navigation-bar back="{{false}}" background="#fbfaf7" />
 
-  <!-- 用户资料区域 -->
   <view class="page-content">
+    <view class="page-title">我的</view>
     <view class="profile-section">
       <view class="user-profile" bindtap="onProfileTap">
         <button class="avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" catchtap="stopAvatarTap">
@@ -14,89 +12,63 @@
         </button>
         <view class="user-info">
           <text class="nickname">{{userProfile.nickname || (userInfo ? userInfo.username : (hasLoginToken ? '加载中...' : '未登录'))}}</text>
-          <view class="vip-tags" wx:if="{{userProfile.identityType || (certStatus === 'approved' && certIdentityType)}}">
-            <view class="vip-tag vip-tag-dark">
-              <text>{{userProfile.identityType || certIdentityType}}</text>
+          <view class="identity-line" wx:if="{{userProfile.identityType || certIdentityType || hasLoginToken}}">
+            <view class="vip-tag vip-tag-light">
+              <text>{{userProfile.identityType || certIdentityType || '普通用户'}}{{certStatus === 'approved' ? ' · 已认证' : ''}}</text>
             </view>
+            <text class="organization-name" wx:if="{{hasLoginToken}}">{{brandOrganization}}</text>
           </view>
           <view class="login-hint" wx:if="{{!hasLoginToken}}">点击登录后查看完整信息</view>
         </view>
+        <view class="profile-edit"><text>{{hasLoginToken ? '编辑资料' : '登录'}}</text><text class="profile-edit-arrow">›</text></view>
       </view>
     </view>
 
     <view class="content">
-      <!-- 数据展示区域 -->
-      <view class="stats-card">
-        <view class="stats-item">
-          <text class="stats-value {{vipLevelIsFallback ? 'stats-value-muted' : ''}}">{{vipLevelShortDisplay}}</text>
-          <text class="stats-label">会员等级</text>
+      <view class="menu-section-title">我的账户</view>
+      <view class="account-card">
+        <view class="account-summary">
+          <view class="account-stat">
+            <text class="account-value {{vipLevelIsFallback ? 'account-value-small' : ''}}">{{vipLevelText}}</text>
+            <text class="account-label">会员等级</text>
+          </view>
+          <view class="account-divider"></view>
+          <view class="account-stat" bindtap="goToWallet">
+            <text class="account-value">{{stonesDisplay || 0}}</text>
+            <text class="account-label">灵石余额</text>
+          </view>
+          <view class="account-divider"></view>
+          <view class="account-recharge" bindtap="goToTopupCenter">充值中心 <text>›</text></view>
         </view>
-        <view class="stats-divider"></view>
-        <view class="stats-item" bindtap="goToGenerateHistory">
-          <text class="stats-value">{{taskCount || 0}}</text>
-          <text class="stats-label">生成记录</text>
-        </view>
-        <view class="stats-divider"></view>
-        <view class="stats-item" bindtap="goToWallet">
-          <text class="stats-value">{{stonesDisplay || 0}}</text>
-          <text class="stats-label">灵石余额</text>
+        <view class="account-order" bindtap="onProjectMenuTap" data-action="orders">
+          <view class="account-order-main"><t-icon class="account-order-icon" name="order-list" size="22px" /><text class="account-order-title">我的订单</text><text class="account-order-meta">交易与服务记录</text></view>
+          <text class="menu-list-arrow">›</text>
         </view>
       </view>
 
-      <!-- 未登录提示 -->
       <view class="login-prompt" wx:if="{{!hasLoginToken}}">
         <text class="prompt-text">请先登录后查看会员与账户信息</text>
       </view>
 
-      <view class="menu-section-title">常用功能</view>
-      <view class="menu-card menu-list-card project-card">
-        <view
-          wx:for="{{commonMenuItems}}"
-          wx:key="action"
-          wx:if="{{true}}"
-          class="menu-list-item {{index === commonMenuItems.length - 1 ? 'menu-list-item-last' : ''}}"
-          bindtap="onProjectMenuTap"
-          data-action="{{item.action}}"
-        >
-          <view class="menu-list-main">
-            <view class="menu-list-icon">
-              <text>{{item.shortLabel}}</text>
-            </view>
-            <text class="menu-list-label">{{item.label}}</text>
+      <view class="menu-section-title">设计师工作台</view>
+      <view class="workbench-card">
+        <view class="workbench-grid">
+          <view wx:for="{{workbenchMenuItems}}" wx:key="action" class="workbench-item {{item.available === false ? 'workbench-item-disabled' : ''}}" bindtap="onWorkbenchMenuTap" data-action="{{item.action}}">
+            <t-icon class="workbench-icon" name="{{item.icon}}" size="25px" />
+            <text class="workbench-label">{{item.label}}</text>
+            <text class="workbench-description">{{item.available === false ? item.meta : item.description}}</text>
           </view>
-          <view class="menu-list-tail">
-            <text class="menu-list-meta" wx:if="{{item.meta}}">{{item.meta}}</text>
-            <text class="menu-list-arrow">›</text>
-          </view>
+        </view>
+        <view class="share-visits-entry" bindtap="onWorkbenchMenuTap" data-action="shareVisits">
+          <view><t-icon class="share-visits-icon" name="share" size="20px" /><text class="share-visits-title">我的分享访问</text><text class="share-visits-meta">仅查看本人分享</text></view>
+          <text class="menu-list-arrow">›</text>
         </view>
       </view>
 
-      <view class="menu-section-title">我的工作台</view>
-      <view class="menu-card menu-list-card workbench-card">
-        <view
-          wx:for="{{workbenchMenuItems}}"
-          wx:key="action"
-          class="menu-list-item {{index === workbenchMenuItems.length - 1 ? 'menu-list-item-last' : ''}}"
-          bindtap="onWorkbenchMenuTap"
-          data-action="{{item.action}}"
-        >
-          <view class="menu-list-main">
-            <view class="menu-list-icon menu-list-icon-secondary">
-              <text>{{item.shortLabel}}</text>
-            </view>
-            <text class="menu-list-label">{{item.label}}</text>
-          </view>
-          <view class="menu-list-tail">
-            <text class="menu-list-meta" wx:if="{{item.meta}}">{{item.meta}}</text>
-            <text class="menu-list-arrow">›</text>
-          </view>
-        </view>
-      </view>
-
-      <view wx:if="{{hasLoginToken && shareMaterialsState !== 'hidden'}}" class="share-materials-section">
+      <view id="shareMaterialsPanel" wx:if="{{showShareMaterialsPanel && hasLoginToken && shareMaterialsState !== 'hidden'}}" class="share-materials-section">
         <view class="menu-section-title">可分享素材</view>
         <view class="menu-card share-materials-card">
-          <text class="share-materials-caption">仅展示已授权的已发布版本，打开后可原生分享。</text>
+          <view class="share-materials-head"><text class="share-materials-caption">仅展示已授权的已发布版本，打开后可原生分享。</text><text class="share-materials-close" bindtap="hideShareMaterialsPanel">收起</text></view>
           <view wx:if="{{shareMaterialsState === 'loading' && !shareMaterials.length}}" class="share-materials-state" role="status">正在加载素材…</view>
           <view wx:elif="{{shareMaterialsState === 'error'}}" class="share-materials-state">素材暂时加载失败，请重试。</view>
           <view wx:elif="{{shareMaterialsState === 'empty'}}" class="share-materials-state">暂无已发布的可分享素材。</view>
@@ -110,29 +82,31 @@
         </view>
       </view>
 
-      <view class="menu-section-title">账户与工具</view>
-      <view class="menu-card menu-list-card service-card">
-        <view
-          wx:for="{{serviceMenuItems}}"
-          wx:key="action"
-          class="menu-list-item {{index === serviceMenuItems.length - 1 ? 'menu-list-item-last' : ''}}"
-          bindtap="onAccountMenuTap"
-          data-action="{{item.action}}"
-        >
-          <view class="menu-list-main">
-            <view class="menu-list-icon menu-list-icon-secondary">
-              <text>{{item.shortLabel}}</text>
-            </view>
-            <text class="menu-list-label">{{item.label}}</text>
-          </view>
-          <view class="menu-list-tail">
-            <text class="menu-list-meta" wx:if="{{item.meta}}">{{item.meta}}</text>
-            <text class="menu-list-arrow">›</text>
-          </view>
+      <view class="menu-section-title">我的资料</view>
+      <view class="section-grid section-grid-two">
+        <view wx:for="{{commonMenuItems}}" wx:key="action" class="section-grid-item" bindtap="onProjectMenuTap" data-action="{{item.action}}">
+          <t-icon class="section-grid-icon" name="{{item.icon}}" size="22px" />
+          <view class="section-grid-copy"><text class="section-grid-label">{{item.label}}</text><text class="section-grid-meta">{{item.meta}}</text></view>
+          <text class="menu-list-arrow">›</text>
         </view>
       </view>
 
-      <view class="logout-btn" wx:if="{{hasLoginToken}}" bindtap="onLogoutTap">退出登录</view>
+      <view class="menu-section-title">账号与服务</view>
+      <view class="section-grid section-grid-service">
+        <view wx:for="{{serviceMenuItems}}" wx:key="action" class="section-grid-item" bindtap="onAccountMenuTap" data-action="{{item.action}}">
+          <t-icon class="section-grid-icon" name="{{item.icon}}" size="22px" />
+          <view class="section-grid-copy"><text class="section-grid-label">{{item.label}}</text><text class="section-grid-meta">{{item.meta}}</text></view>
+          <text class="menu-list-arrow">›</text>
+        </view>
+      </view>
+      <view class="admin-entry" bindtap="onAccountMenuTap" data-action="adminLogin">
+        <view><t-icon class="section-grid-icon" name="user" size="22px" /><text class="admin-entry-title">管理员登录</text></view>
+        <view><text class="admin-entry-meta">进入管理后台</text><text class="menu-list-arrow">›</text></view>
+      </view>
+
+      <view class="logout-btn" wx:if="{{hasLoginToken}}" bindtap="onLogoutTap">
+        <t-icon class="logout-icon" name="logout" size="20px" /><text>退出登录</text>
+      </view>
     </view>
   </view>
 

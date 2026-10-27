@@ -1,1 +1,8 @@
-{"navigationBarTitleText":"分享访问详情","navigationStyle":"custom","enablePullDownRefresh":true,"enableShareAppMessage":false,"enableShareTimeline":false}
+{
+  "navigationBarTitleText": "分享访问详情",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

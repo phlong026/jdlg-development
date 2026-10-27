@@ -1,5 +1,5 @@
 page {
-  background: #ece4d9;
+  background: #fbfaf7;
 }
 
 /* pages/my/my.wxss */
@@ -323,7 +323,7 @@ page {
 }
 
 .page {
-  background: linear-gradient(180deg, #e6daca 0%, #ece4d9 100%);
+  background: #fbfaf7;
   padding-bottom: 0;
   overflow-x: hidden;
   position: relative;
@@ -341,7 +341,7 @@ page {
   z-index: 0;
   width: 750rpx;
   height: auto;
-  display: block;
+  display: none;
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -856,3 +856,170 @@ page {
 .share-material-status { color: #526347; font-size: 24rpx; margin-top: 8rpx; }
 .share-material-open { color: #756046; font-size: 24rpx; margin-top: 8rpx; }
 .share-material-refresh { margin-top: 16rpx; font-size: 26rpx; }
+
+/* 三期“我的”页：对应已确认的左侧暖金工作台方案。 */
+.page .page-content { padding-top: 12rpx; }
+.page .page-title {
+  width: 694rpx;
+  margin: 0 auto;
+  color: #2f190d;
+  font-size: 52rpx;
+  line-height: 1.2;
+  font-weight: 700;
+}
+.page .profile-section {
+  width: 694rpx;
+  margin-top: 24rpx;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.page .user-profile { width: 100%; gap: 20rpx; }
+.page .avatar-btn,
+.page .avatar { width: 92rpx; height: 92rpx; }
+.page .avatar { border-width: 2rpx; box-shadow: 0 8rpx 20rpx rgba(98, 65, 34, 0.12); }
+.page .user-info { gap: 8rpx; }
+.page .nickname { max-width: 260rpx; font-size: 34rpx; color: #2f190d; }
+.page .identity-line { display: flex; align-items: center; gap: 14rpx; min-width: 0; }
+.page .vip-tag { height: 42rpx; padding: 0 16rpx; }
+.page .vip-tag-light { background: linear-gradient(90deg, #f5e5cf 0%, #f8edde 100%); }
+.page .vip-tag-light text { color: #8b5d2e; font-size: 22rpx; }
+.page .organization-name { color: #5b3822; font-size: 24rpx; white-space: nowrap; }
+.page .profile-edit { display: flex; align-items: center; gap: 8rpx; color: #4d2b17; font-size: 25rpx; white-space: nowrap; }
+.page .profile-edit-arrow { color: #a66f37; font-size: 38rpx; line-height: 1; }
+.page .content { padding-top: 6rpx; }
+.page .menu-section-title {
+  margin-top: 34rpx;
+  padding: 0;
+  color: #2f190d;
+  font-size: 36rpx;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.page .account-card {
+  width: 694rpx;
+  margin: 20rpx auto 0;
+  overflow: hidden;
+  border: 1rpx solid rgba(224, 204, 180, 0.64);
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12rpx 28rpx rgba(117, 82, 46, 0.08);
+}
+.page .account-summary {
+  min-height: 120rpx;
+  display: flex;
+  align-items: center;
+  padding: 0 20rpx;
+  background: linear-gradient(90deg, #f7ead8 0%, #f5e4ca 58%, #efd5af 100%);
+}
+.page .account-stat { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 7rpx; }
+.page .account-value { max-width: 170rpx; overflow: hidden; color: #3e210f; font-size: 34rpx; line-height: 1.1; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.page .account-value-small { font-size: 27rpx; }
+.page .account-label { color: #8d643b; font-size: 21rpx; }
+.page .account-divider { width: 1rpx; height: 60rpx; background: rgba(154, 108, 66, 0.42); }
+.page .account-recharge {
+  min-width: 166rpx;
+  height: 66rpx;
+  margin-left: 20rpx;
+  padding: 0 22rpx;
+  border-radius: 36rpx;
+  background: linear-gradient(90deg, #c39158 0%, #af7537 100%);
+  color: #fffaf3;
+  font-size: 26rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  box-sizing: border-box;
+}
+.page .account-order { min-height: 92rpx; padding: 0 26rpx; display: flex; align-items: center; justify-content: space-between; }
+.page .account-order-main { display: flex; align-items: center; gap: 18rpx; min-width: 0; }
+.page .account-order-icon { color: #6a3b1e; font-size: 38rpx; }
+.page .account-order-title { color: #3d2211; font-size: 27rpx; font-weight: 600; white-space: nowrap; }
+.page .account-order-meta { color: #8c7d70; font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.page .workbench-card {
+  width: 694rpx;
+  margin: 20rpx auto 0;
+  border: 1rpx solid rgba(225, 210, 192, 0.72);
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 12rpx 28rpx rgba(117, 82, 46, 0.08);
+  overflow: hidden;
+}
+.page .workbench-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+.page .workbench-item {
+  min-height: 164rpx;
+  padding: 20rpx 8rpx 16rpx;
+  border-right: 1rpx solid rgba(221, 207, 189, 0.62);
+  border-bottom: 1rpx solid rgba(221, 207, 189, 0.62);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.page .workbench-item:nth-child(4n) { border-right: 0; }
+.page .workbench-item:nth-child(n+5) { border-bottom: 0; }
+.page .workbench-item-disabled { background: rgba(247, 243, 237, 0.45); }
+.page .workbench-icon { height: 48rpx; color: #492613; font-size: 43rpx; line-height: 48rpx; }
+.page .workbench-label { margin-top: 10rpx; color: #342014; font-size: 25rpx; line-height: 1.2; font-weight: 600; white-space: nowrap; }
+.page .workbench-description { margin-top: 8rpx; max-width: 148rpx; color: #93877b; font-size: 19rpx; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page .workbench-item-disabled .workbench-icon,
+.page .workbench-item-disabled .workbench-label { color: #9b8a7b; }
+.page .share-visits-entry { min-height: 84rpx; padding: 0 24rpx; border-top: 1rpx solid rgba(221, 207, 189, 0.62); display: flex; align-items: center; justify-content: space-between; }
+.page .share-visits-entry > view { display: flex; align-items: center; gap: 14rpx; min-width: 0; }
+.page .share-visits-icon { color: #6b3a1d; font-size: 32rpx; }
+.page .share-visits-title { color: #3d2211; font-size: 25rpx; font-weight: 600; white-space: nowrap; }
+.page .share-visits-meta { color: #93877b; font-size: 20rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.page .section-grid {
+  width: 694rpx;
+  margin: 20rpx auto 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  overflow: hidden;
+  border: 1rpx solid rgba(225, 210, 192, 0.72);
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 12rpx 28rpx rgba(117, 82, 46, 0.07);
+}
+.page .section-grid-item { min-height: 94rpx; padding: 0 18rpx; display: flex; align-items: center; gap: 14rpx; box-sizing: border-box; border-right: 1rpx solid rgba(221, 207, 189, 0.62); }
+.page .section-grid-item:nth-child(2n) { border-right: 0; }
+.page .section-grid-service .section-grid-item { border-bottom: 1rpx solid rgba(221, 207, 189, 0.62); }
+.page .section-grid-service .section-grid-item:nth-child(n+3) { border-bottom: 0; }
+.page .section-grid-icon { width: 44rpx; flex: 0 0 44rpx; color: #4d2915; font-size: 37rpx; line-height: 1; text-align: center; }
+.page .section-grid-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5rpx; }
+.page .section-grid-label { color: #352014; font-size: 25rpx; font-weight: 600; white-space: nowrap; }
+.page .section-grid-meta { color: #90857a; font-size: 19rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page .menu-list-arrow { color: #9b6736; font-size: 34rpx; }
+.page .admin-entry {
+  width: 694rpx;
+  min-height: 86rpx;
+  margin: 14rpx auto 0;
+  padding: 0 22rpx;
+  border: 1rpx solid rgba(225, 210, 192, 0.72);
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.84);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+.page .admin-entry > view { display: flex; align-items: center; gap: 14rpx; }
+.page .admin-entry-title { color: #352014; font-size: 26rpx; font-weight: 600; }
+.page .admin-entry-meta { color: #90857a; font-size: 21rpx; }
+.page .logout-btn { height: 76rpx; margin-top: 18rpx; border: 0; background: linear-gradient(90deg, #f7e8d4 0%, #f2dcc0 100%); color: #9a622e; box-shadow: none; gap: 12rpx; }
+.page .logout-icon { font-size: 32rpx; }
+.page .share-materials-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; }
+.page .share-materials-caption { flex: 1; }
+.page .share-materials-close { flex-shrink: 0; color: #9a622e; font-size: 24rpx; }
+.page .login-prompt {
+  border: 1rpx solid rgba(225, 210, 192, 0.72);
+  background: rgba(255, 255, 255, 0.72);
+}
+.page .login-prompt .prompt-text { color: #8c7d70; }

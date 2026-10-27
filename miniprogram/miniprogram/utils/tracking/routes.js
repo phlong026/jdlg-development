@@ -361,6 +361,12 @@ const ROUTES = {
     "collect": false,
     "exclusionReason": "private-workbench"
   },
+  "pages/contentwriting/contentwriting": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
   "pages/sharevisits/sharevisits": {
     "kind": "excluded",
     "readiness": "excluded-private-workbench",

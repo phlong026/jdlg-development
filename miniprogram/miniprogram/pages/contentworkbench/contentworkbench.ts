@@ -14,21 +14,40 @@ const errorText = code => ({
   invalid_media: '素材文件格式校验未通过', invalid_document: '导入内容结构无法识别', invalid_draft: '导入草稿未通过校验', missing_video: '未能取得完整视频', media_too_large: '素材超过当前导入大小限制',
 }[code] || '请稍后重试或联系管理员核对');
 const decorateImport = item => Object.assign({}, item, { status_text: statusText(item.status), platform_text: platformText(item.platform), error_text: item.error_code ? errorText(item.error_code) : '' });
+function contentKind(item) {
+  if (item.type === 'note' || item.type === 'project_note') return 'note';
+  if (item.type === 'document') return 'document';
+  if (item.type === 'video' || (item.media || []).some(asset => asset.kind === 'video')) return 'video';
+  return 'article';
+}
+function contentRow(item) {
+  const kind = contentKind(item);
+  const date = item.created_at ? new Date(item.created_at) : null;
+  return Object.assign({}, item, {
+    kind, kind_label: { note: '项目笔记', document: '文档资料', video: '视频', article: '图文' }[kind],
+    status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
+    date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
+    cover_path: '', cover_error: false,
+  });
+}
 
 Page({
   data: {
+    view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [],
+    categories: [{ key: 'all', label: '全部' }, { key: 'note', label: '笔记', unavailable: true }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档', unavailable: true }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
     importRights: '', importBusy: false, importError: '', imports: [], importPolling: false,
   },
+  onLoad(options) { this.setData({ view: options && options.view === 'import' ? 'import' : 'studio' }); },
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
     this.stopImportPoll();
     this._visible = true; this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
     this.setData({
-      context: null, items: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false,
+      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false,
       loginRequired: !token, loading: !!token, loadingMore: false, importEnabled: false, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
       importError: '', imports: [], importPolling: false,
@@ -48,7 +67,7 @@ Page({
     if (!this._token || !reset && (this._morePending || !this.data.next_cursor)) return;
     const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
     if (!reset) this._morePending = true;
-    if (reset) this.setData({ loading: true, error: '', denied: false, disabled: false, items: [], next_cursor: '', snapshot: null });
+    if (reset) this.setData({ loading: true, error: '', denied: false, disabled: false, items: [], visibleItems: [], next_cursor: '', snapshot: null });
     else this.setData({ loadingMore: true, error: '' });
     try {
       let context = this.data.context;
@@ -59,6 +78,7 @@ Page({
         return;
       }
       const query = { limit: 20 };
+      if (this.data.searchTerm) query.content_q = this.data.searchTerm;
       if (!reset && this.data.next_cursor) query.cursor = this.data.next_cursor;
       if (!reset && this.data.snapshot) { query.as_of = this.data.snapshot.as_of; query.metric_version = this.data.snapshot.metric_version; }
       const page = await api.listContents(query);
@@ -67,14 +87,61 @@ Page({
       const owners = context.owners || [];
       const selectedOwner = owners.includes(this.data.importOwner) ? this.data.importOwner : (owners[0] || '');
       this.setData({
-        context, items: reset ? (page.items || []) : this.data.items.concat(page.items || []), next_cursor: page.next_cursor || '', snapshot,
+        context, items: reset ? (page.items || []).map(contentRow) : this.data.items.concat((page.items || []).map(contentRow)), next_cursor: page.next_cursor || '', snapshot,
         importOwner: selectedOwner, importOwnerIndex: Math.max(0, owners.indexOf(selectedOwner)), loading: false, loadingMore: false,
       });
+      this.filterItems();
+      this.loadCovers(epoch, page.items || []);
       if (reset) await this.loadImports(epoch);
     } catch (error) {
       if (this.current(epoch)) this.setData({ error: error.message || '内容工作台加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false });
     } finally { if (this.current(epoch)) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
   },
+  filterItems() { this.setData({ visibleItems: this.data.items.filter(item => this.data.category === 'all' || item.kind === this.data.category) }); },
+  setKeyword(event) { this.setData({ keyword: String(event.detail.value || '').slice(0, 30) }); },
+  searchContents() { this.stopImportPoll(); this.setData({ searchTerm: this.data.keyword.trim() }); return this.load(true); },
+  clearSearch() { this.setData({ keyword: '', searchTerm: '' }); return this.load(true); },
+  selectCategory(event) {
+    const category = this.data.categories.find(item => item.key === event.currentTarget.dataset.key);
+    if (!category) return;
+    if (category.unavailable) { wx.showToast({ title: category.label + '资料尚未开通', icon: 'none' }); return; }
+    this.setData({ category: category.key }); this.filterItems();
+  },
+  async loadCovers(epoch, rows) {
+    if (!api.downloadWorkbenchMedia) return;
+    if (!this._coverState || this._coverState.epoch !== epoch) this._coverState = { epoch, queue: [], seen: new Set(), running: false };
+    const state = this._coverState;
+    rows.filter(item => item.cover && item.cover.kind === 'image').forEach(item => {
+      if (!state.seen.has(item.content_id)) { state.seen.add(item.content_id); state.queue.push(item); }
+    });
+    if (state.running) return;
+    state.running = true;
+    // Two workers share the queue across pages; full video files are never fetched as covers.
+    const consume = async () => {
+      while (state.queue.length && this.current(epoch)) {
+        const item = state.queue.shift();
+        let local = '';
+        try { local = await api.downloadWorkbenchMedia(item.cover.media_id); } catch (_) { /* A failed cover keeps the content row usable. */ }
+        if (!this.current(epoch)) return;
+        const index = this.data.items.findIndex(row => row.content_id === item.content_id);
+        const visible = this.data.visibleItems.findIndex(row => row.content_id === item.content_id);
+        const patch = {};
+        if (index >= 0) { patch['items.' + index + '.cover_path'] = local; patch['items.' + index + '.cover_error'] = !local; }
+        if (visible >= 0) { patch['visibleItems.' + visible + '.cover_path'] = local; patch['visibleItems.' + visible + '.cover_error'] = !local; }
+        this.setData(patch);
+      }
+    };
+    await Promise.all([consume(), consume()]);
+    state.running = false;
+  },
+  navigate(url) { wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }); },
+  openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
+  openExistingAssets() { this.navigate('/pages/generatehistory/generatehistory'); },
+  openShareVisits() { this.navigate('/pages/sharevisits/sharevisits'); },
+  openNotes() { wx.showToast({ title: '项目协作开通后可管理笔记', icon: 'none' }); },
+  openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
+  pasteImportLink() { wx.getClipboardData({ success: result => this.setImportURL({ detail: { value: result.data } }), fail: () => wx.showToast({ title: '未能读取剪贴板，请手动粘贴', icon: 'none' }) }); },
+  refreshImportList() { return this.loadImports(this._epoch); },
   async loadImports(epoch) {
     try {
       const capability = await api.importCapabilities();
@@ -83,7 +150,6 @@ Page({
       const available = capability.enabled === true && platforms.some(item => item.available);
       const reason = capability.reason || (!available ? platforms.map(item => item.reason).filter(Boolean).join('；') : '');
       this.setData({ importEnabled: available, importCapabilityReason: reason, importPlatforms: platforms, importError: '' });
-      if (!available) return;
       await this.refreshImports(epoch);
     } catch (error) {
       if (this.current(epoch)) this.setData({ importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: error.message || '导入能力加载失败' });

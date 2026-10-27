@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "AI内容策划",
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

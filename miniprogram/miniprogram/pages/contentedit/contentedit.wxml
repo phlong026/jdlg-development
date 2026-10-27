@@ -1,72 +1,58 @@
 <view class="private-page">
- <navigation-bar title="{{id ? '编辑内容' : '新建内容'}}" back="{{true}}" background="#f7f3ee" />
+ <navigation-bar title="{{id ? '编辑内容' : '新建内容'}}" back="{{true}}" background="#fff" />
  <view class="page-body">
   <view wx:if="{{loading}}" class="state" role="status">正在加载授权素材…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>请先登录后编辑内容。</text><button bindtap="goLogin">去登录</button></view>
-  <view wx:elif="{{denied}}" class="state"><text>当前账号没有内容管理权限。</text><button bindtap="retry">重新检查</button></view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>请先登录后编辑内容。</text><button class="primary compact" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{denied}}" class="state"><text>当前账号没有内容管理权限。</text><button class="secondary compact" bindtap="retry">重新检查</button></view>
   <view wx:elif="{{disabled}}" class="state">手机内容制作暂未开通。</view>
   <block wx:else>
+   <view class="editor-hero"><view><text class="eyebrow">内容制作</text><text class="hero-title">{{id ? '编辑内容' : '创建新内容'}}</text></view><view class="status-badge {{status}}">{{status === 'published' ? '已发布' : status === 'revoked' ? '已撤回' : '草稿'}}</view></view>
    <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="notice">{{notice}}</view>
    <block wx:if="{{legacyReadOnly}}">
     <view class="notice">该内容使用旧 {{body_format}} 格式，小程序仅读展示原文，请前往后台编辑。</view>
-    <view class="panel"><text class="section-title">{{title}}</text><rich-text wx:if="{{body_format === 'rich_text'}}" nodes="{{legacyBody}}" /><text wx:else user-select="true">{{legacyBody}}</text></view>
-    <view wx:if="{{legacyMedia.length}}" class="section-title">原内容媒体</view>
-    <view wx:for="{{legacyMedia}}" wx:key="media_id" class="panel media-row">
-     <image wx:if="{{item.kind === 'image' && item.local_path}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.local_path}}" src="{{item.local_path}}" controls /><view wx:else class="muted">私有媒体预览暂不可用</view>
-    </view>
+    <view class="panel legacy-panel"><text class="section-title">{{title}}</text><rich-text wx:if="{{body_format === 'rich_text'}}" nodes="{{legacyBody}}" /><text wx:else user-select="true">{{legacyBody}}</text></view>
+    <view wx:if="{{legacyMedia.length}}" class="section-heading"><text class="section-title">原内容媒体</text></view>
+    <view wx:for="{{legacyMedia}}" wx:key="media_id" class="panel media-row"><image wx:if="{{item.kind === 'image' && item.local_path}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.local_path}}" src="{{item.local_path}}" controls /><view wx:else class="muted">私有媒体预览暂不可用</view></view>
    </block>
    <block wx:else>
-   <view class="panel">
-    <label>标题<input value="{{title}}" maxlength="80" data-field="title" bindinput="setField" /></label>
-    <label>内容归属<picker range="{{context.owners}}" bindchange="setOwner"><view class="picker">{{owner_id || '请选择'}}</view></picker></label>
-    <label>使用权属<radio-group bindchange="setRights"><label><radio value="own" checked="{{rights === 'own'}}" />自有</label><label><radio value="authorized" checked="{{rights === 'authorized'}}" />已获授权</label></radio-group></label>
-    <label>来源说明<input value="{{source_note}}" maxlength="2000" data-field="source_note" bindinput="setField" /></label>
-    <label>原文 HTTPS 链接<input value="{{source_url}}" data-field="source_url" bindinput="setField" /></label>
-   </view>
-   <view wx:if="{{layoutReadOnly}}" class="notice">公众号原排版正文为只读结构。可修改标题、归属和来源信息；保存与发布会完整保留导入正文，不会按兼容 blocks 扁平化。</view>
-   <view wx:if="{{layoutReadOnly}}" class="panel article-layout-preview">
-    <block wx:for="{{layoutBlocks}}" wx:key="key">
-     <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
-     <view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view>
-    </block>
-   </view>
-   <block wx:if="{{!layoutReadOnly}}">
-   <view class="section-title">正文顺序</view>
-   <view wx:for="{{renderedBlocks}}" wx:key="index" class="panel block">
-    <textarea wx:if="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" value="{{item.text}}" data-index="{{index}}" bindinput="editBlock" auto-height maxlength="10000" placeholder="输入段落" />
-    <view wx:elif="{{item.kind === 'list'}}" class="muted">已保留列表块：{{item.list_text}}</view>
-    <block wx:else><image wx:if="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" controls /><view wx:else class="muted">私有媒体预览暂不可用</view></block>
-    <view class="actions"><button data-index="{{index}}" data-step="-1" bindtap="moveBlock" disabled="{{index === 0}}">上移</button><button data-index="{{index}}" data-step="1" bindtap="moveBlock" disabled="{{index === renderedBlocks.length - 1}}">下移</button><button data-index="{{index}}" bindtap="removeBlock">删除</button></view>
-   </view>
-   <button bindtap="addParagraph">+添加段落</button><button bindtap="chooseMedia" disabled="{{busy || !context.media_upload_configured}}">+上传图片/视频</button>
-   <view class="section-title">已授权媒体</view>
-   <view wx:if="{{!media.length}}" class="state">暂无授权媒体。</view>
-   <view wx:for="{{media}}" wx:key="media_id" class="panel media-row">
-    <image wx:if="{{item.kind === 'image' && item.local_path}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.local_path}}" src="{{item.local_path}}" controls />
-    <text class="muted">{{item.kind === 'image' ? '图片' : '视频'}} · {{item.title || item.media_id}}</text>
-    <view class="actions"><button wx:if="{{!item.local_path}}" data-index="{{index}}" bindtap="previewMedia">安全预览</button><button data-index="{{index}}" bindtap="addMediaBlock">加入正文</button><button wx:if="{{item.kind === 'image'}}" data-index="{{index}}" bindtap="setCover">{{cover_media_id === item.media_id ? '已设封面' : '设为封面'}}</button></view>
-   </view>
-   </block>
-   <button class="primary" bindtap="saveAndPreview" loading="{{busy}}" disabled="{{busy}}">保存草稿并预览</button>
-   <view wx:if="{{preview}}" class="preview">
-    <text class="section-title">服务端发布前预览</text><text class="title">{{preview.content.title}}</text>
-    <image wx:if="{{previewCover && previewCover.local_path}}" src="{{previewCover.local_path}}" mode="aspectFit" />
-    <view wx:elif="{{previewCover}}" class="muted">封面预览加载失败<button data-media-id="{{previewCover.media_id}}" bindtap="retryPreviewMedia" disabled="{{busy}}">重试封面</button></view>
-    <block wx:if="{{previewLayoutReadOnly}}" wx:for="{{previewLayoutBlocks}}" wx:key="key">
-     <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
-     <view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view>
-    </block>
-    <view wx:else wx:for="{{previewBlocks}}" wx:key="index" class="preview-block">
-     <view wx:if="{{item.kind === 'list'}}"><text wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex">{{item.ordered ? (listIndex + 1) + '. ' : '• '}}{{listItem}}\n</text></view>
-     <text wx:elif="{{item.text}}">{{item.text}}</text>
-     <image wx:elif="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" />
-     <video wx:elif="{{item.kind === 'video' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" controls />
-     <view wx:else class="muted">媒体预览加载失败<button data-media-id="{{item.media_id}}" bindtap="retryPreviewMedia" disabled="{{busy}}">重试媒体</button></view>
-     <text wx:if="{{item.caption}}" class="muted">{{item.caption}}</text>
+    <view class="panel form-panel">
+     <view class="section-heading"><text class="section-title">基本信息</text><text class="section-caption">标题、来源与内容归属</text></view>
+     <label class="field"><text class="field-label">标题</text><input value="{{title}}" maxlength="80" data-field="title" bindinput="setField" placeholder="请输入内容标题" /></label>
+     <view class="field-row"><label class="field"><text class="field-label">内容归属</text><picker range="{{context.owners}}" bindchange="setOwner"><view class="picker">{{owner_id || '请选择'}}</view></picker></label><view class="field"><text class="field-label">素材权属</text><radio-group class="rights" bindchange="setRights"><label><radio value="own" checked="{{rights === 'own'}}" color="#a87943" />自有</label><label><radio value="authorized" checked="{{rights === 'authorized'}}" color="#a87943" />已授权</label></radio-group></view></view>
+     <label class="field"><text class="field-label">来源说明</text><input value="{{source_note}}" maxlength="2000" data-field="source_note" bindinput="setField" placeholder="如：原创内容、公众号导入" /></label>
+     <label class="field"><text class="field-label">原文链接</text><input value="{{source_url}}" data-field="source_url" bindinput="setField" placeholder="https://" /></label>
     </view>
-    <button class="primary" bindtap="publish" loading="{{busy}}" disabled="{{busy}}">确认发布</button>
-   </view>
-   <button wx:if="{{version > 0 && status !== 'revoked'}}" class="danger" bindtap="revoke" disabled="{{busy}}">撤回已发布内容</button>
+    <view wx:if="{{layoutReadOnly}}" class="notice">公众号原排版正文为只读结构，已安全保留。可修改标题、归属和来源；保存与发布不会压平原正文。</view>
+    <view wx:if="{{layoutReadOnly}}" class="panel article-layout-preview">
+     <view class="section-heading"><text class="section-title">导入正文</text><text class="section-caption">保留原排版 · 正文只读</text></view>
+     <block wx:for="{{layoutBlocks}}" wx:key="key"><rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" /><view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view></block>
+    </view>
+    <block wx:if="{{!layoutReadOnly}}">
+     <view class="section-heading content-heading"><view><text class="section-title">正文内容</text><text class="section-caption">按顺序组合文字、图片和视频</text></view><view class="heading-actions"><button wx:if="{{!id}}" class="text-action ai-action" bindtap="openAIWriting">AI 文案</button><button class="text-action" bindtap="addParagraph">＋ 添加段落</button></view></view>
+     <view wx:for="{{renderedBlocks}}" wx:key="index" class="panel block">
+      <textarea wx:if="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" value="{{item.text}}" data-index="{{index}}" bindinput="editBlock" auto-height maxlength="10000" placeholder="输入段落" />
+      <view wx:elif="{{item.kind === 'list'}}" class="muted">已保留列表块：{{item.list_text}}</view>
+      <block wx:else><image wx:if="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" controls /><view wx:else class="muted media-placeholder">私有媒体预览暂不可用</view></block>
+      <view class="actions"><button data-index="{{index}}" data-step="-1" bindtap="moveBlock" disabled="{{index === 0}}">上移</button><button data-index="{{index}}" data-step="1" bindtap="moveBlock" disabled="{{index === renderedBlocks.length - 1}}">下移</button><button class="remove" data-index="{{index}}" bindtap="removeBlock">删除</button></view>
+     </view>
+     <view class="section-heading content-heading"><view><text class="section-title">素材库</text><text class="section-caption">上传后可加入正文或设为封面</text></view><button class="text-action" bindtap="chooseMedia" disabled="{{busy || !context.media_upload_configured}}">＋ 上传素材</button></view>
+     <view wx:if="{{!media.length}}" class="state empty-state">暂无授权媒体，可从相册或相机上传。</view>
+     <view wx:for="{{media}}" wx:key="media_id" class="panel media-row">
+      <image wx:if="{{item.kind === 'image' && item.local_path}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.local_path}}" src="{{item.local_path}}" controls />
+      <view class="media-info"><text>{{item.kind === 'image' ? '图片资料' : '视频资料'}}</text><text class="muted">{{item.title || item.media_id}}</text></view>
+      <view class="actions"><button wx:if="{{!item.local_path}}" data-index="{{index}}" bindtap="previewMedia">安全预览</button><button data-index="{{index}}" bindtap="addMediaBlock">加入正文</button><button wx:if="{{item.kind === 'image'}}" class="{{cover_media_id === item.media_id ? 'selected' : ''}}" data-index="{{index}}" bindtap="setCover">{{cover_media_id === item.media_id ? '已设封面' : '设为封面'}}</button></view>
+     </view>
+    </block>
+    <view wx:if="{{preview}}" class="preview">
+     <view class="preview-heading"><view><text class="eyebrow">发布前预览</text><text class="preview-title">{{preview.content.title}}</text></view><text class="preview-tag">服务端版本</text></view>
+     <image wx:if="{{previewCover && previewCover.local_path}}" class="preview-cover" src="{{previewCover.local_path}}" mode="aspectFit" /><view wx:elif="{{previewCover}}" class="muted media-placeholder">封面预览加载失败<button data-media-id="{{previewCover.media_id}}" bindtap="retryPreviewMedia" disabled="{{busy}}">重试封面</button></view>
+     <block wx:if="{{previewLayoutReadOnly}}" wx:for="{{previewLayoutBlocks}}" wx:key="key"><rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" /><view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view></block>
+     <view wx:else wx:for="{{previewBlocks}}" wx:key="index" class="preview-block"><view wx:if="{{item.kind === 'list'}}"><text wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex">{{item.ordered ? (listIndex + 1) + '. ' : '• '}}{{listItem}}\n</text></view><text wx:elif="{{item.text}}">{{item.text}}</text><image wx:elif="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" controls /><view wx:else class="muted media-placeholder">媒体预览加载失败<button data-media-id="{{item.media_id}}" bindtap="retryPreviewMedia" disabled="{{busy}}">重试媒体</button></view><text wx:if="{{item.caption}}" class="muted caption">{{item.caption}}</text></view>
+     <button class="primary publish-button" bindtap="publish" loading="{{busy}}" disabled="{{busy}}">确认发布</button>
+    </view>
+    <view wx:if="{{status === 'published' && version > 0}}" class="published-card"><view><text class="published-title">内容已发布</text><text class="muted">公开版 V{{version}} 可阅读和分享</text></view><button class="secondary compact" bindtap="openPublished">查看并分享</button></view>
+    <button wx:if="{{version > 0 && status !== 'revoked'}}" class="danger revoke-button" bindtap="revoke" disabled="{{busy}}">撤回已发布内容</button>
+    <view class="editor-actions"><button class="secondary" bindtap="saveDraft" loading="{{busy}}" disabled="{{busy}}">保存草稿</button><button class="primary" bindtap="saveAndPreview" loading="{{busy}}" disabled="{{busy}}">保存并预览</button></view>
    </block>
   </block>
  </view>

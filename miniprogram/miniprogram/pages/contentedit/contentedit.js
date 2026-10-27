@@ -38,6 +38,9 @@ Page({
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
+    const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+    const sourceToken = String(wx.getStorageSync('token') || '');
+    if (channel && channel.on) channel.on('prefillContent', payload => this.receivePrefill(payload, sourceToken));
   },
   onShow() {
     wx.hideShareMenu();
@@ -83,10 +86,58 @@ Page({
       const legacyIDs = new Set(associated.map(asset => asset.media_id));
       const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, media, this.editorWidth(), 'contentedit-layout') : [];
       this.setData({ context, media, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? media.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      this.applyPendingPrefill();
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '编辑器加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false }); }
   },
   editorWidth() { const window = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync ? wx.getSystemInfoSync() : { windowWidth: 375 }; return Math.max(240, Number(window.windowWidth || 375) - 64); },
   pauseLayoutVideos() { [...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || [])].filter(block => block.kind === 'video').forEach(block => wx.createVideoContext(block.domId, this).pause()); },
+  draftSignature() {
+    return JSON.stringify({ id: this.data.id, title: this.data.title, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks });
+  },
+  rejectWritingReturn(message) {
+    this.setData({ notice: message });
+    wx.showToast({ title: '文案未采用', icon: 'none' });
+  },
+  receiveWritingReturn(payload, launch) {
+    if (launch.handled) { this.setData({ notice: 'AI 文案已处理，未重复追加' }); return; }
+    launch.handled = true;
+    if (launch.token !== String(wx.getStorageSync('token') || '')) { this.rejectWritingReturn('账号已变化，AI 文案未采用；原内容保持不变'); return; }
+    if (this.data.id || this.data.busy) { this.rejectWritingReturn('草稿已保存或正在保存，AI 文案未采用；原内容保持不变'); return; }
+    if (launch.signature !== this.draftSignature()) { this.rejectWritingReturn('编辑内容已发生变化，AI 文案未采用；原内容保持不变'); return; }
+    const title = String(payload && payload.title || '').trim();
+    const text = String(payload && payload.text || '').trim();
+    if (!title && !text) { this.rejectWritingReturn('返回的 AI 文案为空，未采用'); return; }
+    const blocks = this.validBlocks();
+    if (!String(this.data.title || '').trim() && !blocks.length) { this.receivePrefill({ title, text }, launch.token); return; }
+    if (!text) { this.rejectWritingReturn('AI 文案没有正文，未采用；原内容保持不变'); return; }
+    if (blocks.some(block => String(block.text || '').trim() === text)) { this.setData({ notice: 'AI 文案已处理，正文中已存在，未重复追加' }); return; }
+    const next = blocks.concat(textBlock(text));
+    this.setData({ blocks: next, renderedBlocks: decorateBlocks(next, this.data.media), preview: null, notice: 'AI 文案已追加到正文末尾，请核对后保存' });
+  },
+  receivePrefill(payload, sourceToken) {
+    if (this.data.id || this.data.busy) return;
+    const title = String(payload && payload.title || '').trim();
+    const text = String(payload && payload.text || '').trim();
+    if (!title && !text) return;
+    this._pendingPrefill = { title, text, token: String(sourceToken === undefined ? wx.getStorageSync('token') || '' : sourceToken) };
+    this.applyPendingPrefill();
+  },
+  applyPendingPrefill() {
+    const pending = this._pendingPrefill;
+    if (!pending || !this._loaded || !this.data.context) return;
+    delete this._pendingPrefill;
+    if (this.data.id || pending.token !== String(wx.getStorageSync('token') || '') || String(this.data.title || '').trim() || this.validBlocks().length) return;
+    const blocks = pending.text ? [textBlock(pending.text)] : this.data.blocks;
+    this.setData({ title: pending.title, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: 'AI 文案已带入，请核对后保存' });
+  },
+  openAIWriting() {
+    if (this.data.busy || this.data.id) return;
+    const launch = { token: String(wx.getStorageSync('token') || ''), signature: this.draftSignature(), handled: false };
+    wx.navigateTo({
+      url: '/pages/contentwriting/contentwriting?source=editor',
+      events: { prefillContent: payload => this.receiveWritingReturn(payload, launch) },
+    });
+  },
   async loadPrivatePaths(items, previews) {
     return Promise.all(items.map(async asset => {
       if (!previews.has(asset.media_id)) return { ...asset, local_path: '' };
@@ -158,6 +209,30 @@ Page({
   validBlocks() {
     return this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video' || block.kind === 'list' && (block.items || []).some(Boolean) || String(block.text || '').trim());
   },
+  draftInput() {
+    if (this.data.legacyReadOnly) { this.setData({ error: '旧格式内容仅支持查看，请前往后台编辑，避免自动转换破坏原文。' }); return null; }
+    const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
+    if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return null; }
+    const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks));
+    return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), expected_revision: this.data.revision } };
+  },
+  async persistDraft(input, epoch) {
+    const saved = await api.saveContent(input.draft, this.data.id);
+    if (!this.current(epoch)) return null;
+    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks: input.blocks, renderedBlocks: decorateBlocks(input.blocks, this.data.media) });
+    return saved;
+  },
+  async saveDraft() {
+    if (this.data.busy) return;
+    const input = this.draftInput();
+    if (!input) return;
+    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    try {
+      const saved = await this.persistDraft(input, epoch);
+      if (!saved || !this.current(epoch)) return;
+      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '草稿已保存，可继续编辑或生成发布预览' });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
+  },
   publishKey() {
     const signature = JSON.stringify([this.data.id, this.data.revision, this.data.preview && this.data.preview.preview_token]);
     if (signature !== this._publishSignature) { this._publishSignature = signature; this._publishKey = api.mutationKey('publish'); }
@@ -192,20 +267,17 @@ Page({
   },
   async saveAndPreview() {
     if (this.data.busy) return;
-    if (this.data.legacyReadOnly) { this.setData({ error: '旧格式内容仅支持查看，请前往后台编辑，避免自动转换破坏原文。' }); return; }
-    const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
-    if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return; }
+    const input = this.draftInput();
+    if (!input) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
-      const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks));
-      const draft = { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), expected_revision: this.data.revision };
-      const saved = await api.saveContent(draft, this.data.id);
-      if (!this.current(epoch)) return;
+      const saved = await this.persistDraft(input, epoch);
+      if (!saved || !this.current(epoch)) return;
       const preview = await api.previewContent(saved.content_id, saved.revision);
       if (!this.current(epoch)) return;
       const view = await this.previewView(preview);
       if (!this.current(epoch)) return;
-      this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '草稿已保存，请核对服务端预览后发布' });
+      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '预览已生成，请核对后发布' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
@@ -217,6 +289,10 @@ Page({
       this._publishSignature = ''; this._publishKey = '';
       this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布。分享请从已发布阅读页使用小程序原生入口。' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '发布失败' }); }
+  },
+  openPublished() {
+    if (!this.data.id || this.data.status !== 'published' || this.data.version < 1) return;
+    wx.navigateTo({ url: '/pages/contentreader/contentreader?content_id=' + encodeURIComponent(this.data.id) + '&content_version=' + encodeURIComponent(String(this.data.version)) });
   },
   revoke() {
     if (!this.data.id || this.data.version < 1 || this.data.busy) return;
