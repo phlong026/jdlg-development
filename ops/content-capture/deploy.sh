@@ -44,7 +44,7 @@ test ! -e "$ROOT/worker.env"
 test ! -e "$ROOT/main-service.env"
 if [ "$SOURCE_DIR" = "$ROOT/ops" ]; then
   OPS_PRESTAGED=true
-  for file in network.py stale_socket.py rollback.sh; do
+  for file in network.py stale_socket.py rollback.sh runtime_probe.py; do
     test -f "$SOURCE_DIR/$file" && test ! -L "$SOURCE_DIR/$file"
     test "$(stat -c '%U' "$SOURCE_DIR/$file")" = root
     test "$((0$(stat -c '%a' "$SOURCE_DIR/$file") & 0022))" -eq 0
@@ -53,6 +53,7 @@ else
   test ! -e "$ROOT/ops/network.py"
   test ! -e "$ROOT/ops/stale_socket.py"
   test ! -e "$ROOT/ops/rollback.sh"
+  test ! -e "$ROOT/ops/runtime_probe.py"
 fi
 test ! -e "$NGINX_TARGET"
 test ! -e "$APPARMOR_TARGET"
@@ -109,6 +110,7 @@ if [ "$OPS_PRESTAGED" = false ]; then
   install -m 0755 -o root -g root "$SOURCE_DIR/network.py" "$ROOT/ops/network.py"
   install -m 0755 -o root -g root "$SOURCE_DIR/stale_socket.py" "$ROOT/ops/stale_socket.py"
   install -m 0755 -o root -g root "$SOURCE_DIR/rollback.sh" "$ROOT/ops/rollback.sh"
+  install -m 0755 -o root -g root "$SOURCE_DIR/runtime_probe.py" "$ROOT/ops/runtime_probe.py"
 fi
 [ "$OPS_PRESTAGED" = true ] || touch "$OWNED/ops"
 

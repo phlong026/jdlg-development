@@ -35,4 +35,5 @@ if [ "${1:-}" = "--installed" ]; then
   } >"$CURL_CONFIG"
   BODY=$(curl --noproxy '*' --max-time 10 --config "$CURL_CONFIG")
   test "$BODY" = '{"ready":true}'
+  python3 /opt/jdlg-content-capture/ops/runtime_probe.py
 fi

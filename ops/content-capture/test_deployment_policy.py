@@ -58,6 +58,14 @@ class DeploymentPolicyTest(unittest.TestCase):
         self.assertIn('CONTENT_CAPTURE_CDP_DISCOVERY_URL=http://127.0.0.1:9222/json/version', example)
         self.assertNotIn('CONTENT_CAPTURE_SECRET=', example)
 
+    def test_installed_gate_includes_effective_runtime_network_and_process_probe(self):
+        deploy = self.read('deploy.sh')
+        verify = self.read('verify.sh')
+        rollback = self.read('rollback.sh')
+        self.assertIn('"$SOURCE_DIR/runtime_probe.py" "$ROOT/ops/runtime_probe.py"', deploy)
+        self.assertIn('python3 /opt/jdlg-content-capture/ops/runtime_probe.py', verify)
+        self.assertIn('"$ROOT/ops/runtime_probe.py"', rollback)
+
     def test_browser_restart_does_not_remove_worker_health_endpoint(self):
         unit = self.read('systemd/jdlg-content-capture-worker.service')
         self.assertIn('Requires=jdlg-content-capture-network.service\n', unit)
