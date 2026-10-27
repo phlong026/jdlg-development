@@ -298,3 +298,7 @@ result, err := strategy.Login(ctx, req)
 ## 三期内容、分享和通知
 
 首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](../docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
+
+## 三期内容链接导入
+
+导入默认关闭，运行变量、独立迁移、平台适配范围及恢复规则见 [导入方案](../docs/phase3/content-import-plan-20261027.md)。主服务只使用服务端供应商配置和受保护的Cookie文件；公众号视频浏览器采集为独立进程，部署门禁见 [Capture Worker](contentcapture/README.md)。不要把配置已填、单元测试或临时媒体地址当作已导入/已发布/生产验收完成。

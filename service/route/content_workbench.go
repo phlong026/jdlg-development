@@ -52,7 +52,7 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service)
 			"media_upload_configured":     media,
 			"url_link_configured":         media && trackingURLLinkEnabled() && miniprogramCredentials().AppID != "" && miniprogramCredentials().Secret != "",
 			"official_account_configured": os.Getenv("OFFICIAL_ACCOUNT_APP_ID") != "" && os.Getenv("OFFICIAL_ACCOUNT_APP_SECRET") != "",
-			"imports":                     gin.H{"wechat_article": "unavailable", "channels": "unavailable", "xiaohongshu": "unavailable"},
+			"import_capabilities_path":    "/api/v1/miniprogram/workbench/imports/capabilities",
 		}, nil)
 	})
 	// Keep draft listing separate from visit analytics: a content-management grant

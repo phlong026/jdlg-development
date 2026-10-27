@@ -100,3 +100,7 @@ func (f *SafeMediaFetcher) Fetch(ctx context.Context, rawURL string, maxBytes in
 	}
 	return data, nil
 }
+
+// IsPublicImportAddress reuses the media-fetch boundary for content imports.
+// Call it on the address being connected to, not only a preflight DNS result.
+func IsPublicImportAddress(address netip.Addr) bool { return publicIP(address) }

@@ -52,6 +52,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	// 虚拟支付补偿任务：随服务关闭先停，避免 tick 与 DB/Redis 关闭赛跑
 	var virtualPayCompensator *VirtualPayCompensator
 	stopPhase3 := func() {}
+	stopImports := func() {}
 	reportModule, reportErr := NewReportModule(reportContext, component.GetDB(), cfg)
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
@@ -73,6 +74,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 用户DB模型（共用）
 		userDBModel := model.NewUserModel(component.GetDB())
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
+		stopImports = registerContentImports(reportContext, v1, trackingService, userDBModel, codeSessionModel)
 		costShareStore := model.NewCostEstimateShareRedisModel(component.GetRedis())
 		trackingService.ResolvePublicSnapshot = makeTrackingCostSnapshotResolver(costShareStore)
 		registerShareWebRoutes(r, v1, trackingService, newTrackingWechatAPI(miniprogramCredentials()), userDBModel, codeSessionModel)
@@ -227,6 +229,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterUtilityToolRoutes(miniprogram, utilityToolModel)
 	}
 	return func() {
+		stopImports()
 		stopPhase3()
 		virtualPayCompensator.Stop()
 		stopReports()
