@@ -164,7 +164,7 @@ func failureState(err error) (string, string) {
 			return Uncertain, code
 		}
 		switch code {
-		case "disabled", "provider_not_configured", "browser_required", "requires_login", "verification_required", "rate_limited", "unsupported_encryption", "unsupported_embed", "unsupported_video", "risk_control", "media_source_expired":
+		case "disabled", "provider_not_configured", "browser_required", "requires_login", "verification_required", "rate_limited", "unsupported_encryption", "unsupported_embed", "unsupported_video", "risk_control", "media_source_expired", "private_storage_required", "xhs_unknown_source", "invalid_xhs_response":
 			return Blocked, code
 		}
 		return Failed, code

@@ -6,13 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
-	"io"
 	"net/http"
-	"os"
-	"path/filepath"
+	"net/url"
 	"strings"
 
 	"service/contentimport"
@@ -23,7 +20,7 @@ type importMediaFetch func(context.Context, contentimport.Platform, string, int6
 
 func saveImportedMedia(ctx context.Context, svc *tracking.Service, scope tracking.Scope, job contentimport.Job, index int, source contentimport.RemoteMedia, fetch importMediaFetch) (tracking.Asset, error) {
 	var out tracking.Asset
-	if scope.Actor != job.Actor || scope.Tenant != job.Tenant || !scope.Manage || !scope.Allows(job.Owner) || !workbenchMediaConfigured() {
+	if scope.Actor != job.Actor || scope.Tenant != job.Tenant || !scope.Manage || !scope.Allows(job.Owner) || !contentMediaConfigured(svc) {
 		return out, tracking.ErrUnavailable
 	}
 	scope.Owners = []string{job.Owner}
@@ -31,38 +28,31 @@ func saveImportedMedia(ctx context.Context, svc *tracking.Service, scope trackin
 	if sourceKey == "" {
 		sourceKey = job.ID + ":" + fmt.Sprint(index)
 	}
-	sum := sha256.Sum256([]byte(job.Tenant + ":" + job.Owner + ":" + string(job.Platform) + ":" + source.Kind + ":" + sourceKey))
+	if job.Platform == contentimport.Xiaohongshu && source.Kind == "image" {
+		parsed, err := url.Parse(source.URL)
+		if err != nil {
+			return out, &contentimport.ResolveError{Code: "invalid_media"}
+		}
+		query := parsed.Query()
+		for _, key := range []string{"sign", "signature", "expires", "token", "auth_key", "wsSecret", "wsTime"} {
+			query.Del(key)
+		}
+		sourceKey += ":" + parsed.Hostname() + parsed.EscapedPath() + "?" + query.Encode()
+	}
+	identity, _ := json.Marshal([]string{job.Tenant, job.Owner, string(job.Platform), source.Kind, sourceKey})
+	sum := sha256.Sum256(identity)
 	id := base64.RawURLEncoding.EncodeToString(sum[:24])
-	root := os.Getenv("TRACKING_MEDIA_DIR")
-	path := filepath.Join(root, id)
 	max := int64(10 << 20)
 	if source.Kind == "video" {
 		max = 50 << 20
 	} else if source.Kind != "image" {
 		return out, &contentimport.ResolveError{Code: "invalid_media"}
 	}
-	var data []byte
-	info, err := os.Lstat(path)
-	fileMissing := errors.Is(err, os.ErrNotExist)
-	if err == nil {
-		if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > max {
-			return out, &contentimport.ResolveError{Code: "invalid_stored_media"}
-		}
-		file, openErr := os.Open(path)
-		if openErr != nil {
-			return out, openErr
-		}
-		data, err = io.ReadAll(io.LimitReader(file, max+1))
-		closeErr := file.Close()
-		if err != nil {
-			return out, err
-		}
-		if closeErr != nil {
-			return out, closeErr
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	data, found, err := readContentMedia(ctx, svc, id, max)
+	if err != nil {
 		return out, err
-	} else {
+	}
+	if !found {
 		data, _, err = fetch(ctx, job.Platform, source.URL, max)
 		if err != nil {
 			return out, err
@@ -74,7 +64,7 @@ func saveImportedMedia(ctx context.Context, svc *tracking.Service, scope trackin
 	mime := http.DetectContentType(data)
 	width, height := 0, 0
 	if source.Kind == "image" {
-		if mime != "image/png" && mime != "image/jpeg" && mime != "image/gif" {
+		if mime != "image/png" && mime != "image/jpeg" && mime != "image/gif" && mime != "image/webp" {
 			return out, &contentimport.ResolveError{Code: "invalid_media"}
 		}
 		cfg, _, e := image.DecodeConfig(bytes.NewReader(data))
@@ -95,31 +85,27 @@ func saveImportedMedia(ctx context.Context, svc *tracking.Service, scope trackin
 	if out.Title == "" {
 		out.Title = "链接导入素材"
 	}
+	if svc.MediaObjects != nil {
+		digest := sha256.Sum256(data)
+		operation, _, err := svc.PrepareMediaObject(ctx, scope, out, job.Owner, fmt.Sprintf("%x", digest), "import:"+string(job.Platform))
+		if err != nil {
+			return tracking.Asset{}, err
+		}
+		if err = storeContentMedia(ctx, svc, id, data, mime); err != nil {
+			return tracking.Asset{}, err
+		}
+		return svc.FinalizeMediaObject(ctx, scope, id, operation)
+	}
+	if !found {
+		if err = storeContentMedia(ctx, svc, id, data, mime); err != nil {
+			return tracking.Asset{}, err
+		}
+	}
 	if old, e := svc.Media(ctx, &scope, id); e == nil {
 		if old.Kind != out.Kind || old.MIME != out.MIME || old.Width != out.Width || old.Height != out.Height {
 			return tracking.Asset{}, &contentimport.ResolveError{Code: "invalid_stored_media"}
 		}
-		if !fileMissing {
-			return old, nil
-		}
-	}
-	if fileMissing {
-		temp, e := os.CreateTemp(root, ".import-")
-		if e != nil {
-			return out, e
-		}
-		name := temp.Name()
-		defer os.Remove(name)
-		if _, e = temp.Write(data); e != nil {
-			temp.Close()
-			return out, e
-		}
-		if e = temp.Close(); e != nil {
-			return out, e
-		}
-		if e = os.Link(name, path); e != nil && !errors.Is(e, os.ErrExist) {
-			return out, e
-		}
+		return old, nil
 	}
 	if e := svc.AddMedia(ctx, scope, out, job.Owner); e != nil {
 		old, readErr := svc.Media(ctx, &scope, id)

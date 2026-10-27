@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -229,7 +228,7 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		out, err := svc.Accept(c.Request.Context(), input.Token, input.Events)
 		trackingResponse(c, out, err)
 	})
-	web.GET("/media/:code/:id", func(c *gin.Context) {
+	web.Match([]string{http.MethodGet, http.MethodHead}, "/media/:code/:id", func(c *gin.Context) {
 		if _, ok := shareWebOrigin(); !ok {
 			c.Status(http.StatusNotFound)
 			return
@@ -260,26 +259,7 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			c.Status(http.StatusNotFound)
 			return
 		}
-		root := os.Getenv("TRACKING_MEDIA_DIR")
-		if !filepath.IsAbs(root) || strings.ContainsAny(asset.ID, "/\\.") {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		file, err := os.Open(filepath.Join(root, asset.ID))
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		defer file.Close()
-		info, err := file.Stat()
-		if err != nil || !info.Mode().IsRegular() {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Header("Content-Type", asset.MIME)
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("Cache-Control", "private, no-store")
-		http.ServeContent(c.Writer, c.Request, asset.ID, info.ModTime(), file)
+		serveContentMediaBytes(c, svc, asset)
 	})
 	web.POST("/open-miniprogram", mutation, mutationRateLimit, func(c *gin.Context) {
 		var input struct {

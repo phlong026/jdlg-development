@@ -371,3 +371,10 @@ func TestSnapshotRetryOnlyAllowsRecoverableFailures(t *testing.T) {
 		t.Fatal("free article GET not retryable")
 	}
 }
+func TestPersistedXHSURLRetainsPublicPageSourceParameter(t *testing.T) {
+	raw := "https://www.xiaohongshu.com/explore/0123456789abcdef01234567?xsec_token=public-share&xsec_source=pc_feed"
+	normalized, platform, err := normalizeImportURL(raw)
+	if err != nil || platform != Xiaohongshu || !strings.Contains(normalized, "xsec_source=pc_feed") || !strings.Contains(normalized, "xsec_token=public-share") {
+		t.Fatal(normalized, platform, err)
+	}
+}

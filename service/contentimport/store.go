@@ -393,8 +393,15 @@ func normalizeImportURL(raw string) (string, Platform, error) {
 		return "", "", errInvalidRequest
 	}
 	normalized := parsed.String()
-	if platform == Douyin || platform == Xiaohongshu {
+	if platform == Douyin {
 		normalized = canonicalProviderURL(platform, parsed)
+	}
+	if platform == Xiaohongshu {
+		link, err := ParseSourceLink(parsed.String())
+		if err != nil {
+			return "", "", errInvalidRequest
+		}
+		normalized = link.URL
 	}
 	if len(normalized) > 2048 {
 		return "", "", errInvalidRequest
@@ -412,7 +419,7 @@ func canRetryJob(job Job) bool {
 	// A saved resolution avoids a second provider charge. Only errors that can
 	// recover while using the same snapshot may resume its downloads/draft write.
 	switch job.ErrorCode {
-	case "download_failed", "partial_media", "import_failed", "draft_save_failed", "permission_revoked":
+	case "download_failed", "partial_media", "import_failed", "draft_save_failed", "permission_revoked", "private_storage_required":
 		return true
 	}
 	return false
@@ -437,7 +444,7 @@ func validTerminal(status, contentID, errorCode string) bool {
 }
 
 func retryableConfigurationError(code string) bool {
-	return code == "provider_not_configured" || code == "browser_required" || code == "requires_login" || code == "capture_timeout" || code == "capture_failed" || code == "article_fetch_failed"
+	return code == "provider_not_configured" || code == "browser_required" || code == "requires_login" || code == "capture_timeout" || code == "capture_failed" || code == "article_fetch_failed" || code == "xhs_page_fetch_failed"
 }
 
 func secureStoreToken() (string, error) {

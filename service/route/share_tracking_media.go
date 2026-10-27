@@ -2,8 +2,11 @@ package route
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"github.com/gin-gonic/gin"
+	_ "golang.org/x/image/webp"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -31,7 +34,11 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "无媒体上传权限"})
 		return
 	}
-	root, e := trackingMediaRoot()
+	root := ""
+	var e error
+	if s == nil || s.MediaObjects == nil {
+		root, e = trackingMediaRoot()
+	}
 	if e != nil {
 		trackingResponse(c, nil, e)
 		return
@@ -65,12 +72,12 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 	kind := "image"
 	max := int64(10 << 20)
 	switch mime {
-	case "image/png", "image/jpeg", "image/gif":
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
 	case "video/mp4":
 		kind = "video"
 		max = 50 << 20
 	default:
-		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "仅支持经过类型校验的PNG/JPEG/GIF和MP4文件"})
+		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "仅支持经过类型校验的PNG/JPEG/GIF/WebP和MP4文件"})
 		return
 	}
 	if header.Size > max {
@@ -110,6 +117,30 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		return
 	}
 	id := base64.RawURLEncoding.EncodeToString(bytes)
+	if s.MediaObjects != nil {
+		data, err := io.ReadAll(io.LimitReader(source, max+1))
+		if err != nil || int64(len(data)) > max {
+			trackingResponse(c, nil, &tracking.Error{Status: 413, Message: "上传失败或超出限制"})
+			return
+		}
+		asset := tracking.Asset{ID: id, Kind: kind, URL: "/api/v1/miniprogram/tracking/media/" + id, Width: width, Height: height, MIME: mime, Title: filepath.Base(header.Filename)}
+		if len(asset.Title) > 200 {
+			asset.Title = "已上传媒体"
+		}
+		digest := sha256.Sum256(data)
+		operation, _, err := s.PrepareMediaObject(c.Request.Context(), scope, asset, owner, fmt.Sprintf("%x", digest), "upload")
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		if err = storeContentMedia(c.Request.Context(), s, id, data, mime); err != nil {
+			importResponse(c, nil, err)
+			return
+		}
+		saved, err := s.FinalizeMediaObject(c.Request.Context(), scope, id, operation)
+		trackingResponse(c, saved, err)
+		return
+	}
 	file, e := os.OpenFile(filepath.Join(root, id), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if e != nil {
 		trackingResponse(c, nil, e)
@@ -143,25 +174,5 @@ func serveTrackingMedia(c *gin.Context, s *tracking.Service, scope *tracking.Sco
 		trackingResponse(c, nil, e)
 		return
 	}
-	root, e := trackingMediaRoot()
-	if e != nil {
-		trackingResponse(c, nil, e)
-		return
-	}
-	f, e := os.Open(filepath.Join(root, id))
-	if e != nil {
-		trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "媒体不可访问"})
-		return
-	}
-	defer f.Close()
-	info, e := f.Stat()
-	if e != nil || !info.Mode().IsRegular() {
-		trackingResponse(c, nil, tracking.ErrUnavailable)
-		return
-	}
-	c.Header("Content-Type", asset.MIME)
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("Cache-Control", "private, no-store")
-	c.Header("Content-Security-Policy", "default-src 'none'")
-	http.ServeContent(c.Writer, c.Request, asset.ID, info.ModTime(), f)
+	serveContentMediaBytes(c, s, asset)
 }

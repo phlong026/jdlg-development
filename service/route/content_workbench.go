@@ -44,7 +44,7 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service) {
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
 	g.GET("/context", func(c *gin.Context) {
-		media := workbenchMediaConfigured()
+		media := contentMediaConfigured(svc)
 		trackingResponse(c, gin.H{
 			"enabled": workbenchEnabled(), "can_manage": true, "owners": scope(c).Owners,
 			"publish_enabled":             svc.Config.ContentEnabled,
@@ -149,12 +149,12 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service)
 		out, err := svc.ListMedia(c.Request.Context(), scope(c))
 		trackingResponse(c, out, err)
 	})
-	g.GET("/media/:id", func(c *gin.Context) {
+	g.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
 		current := scope(c)
 		serveTrackingMedia(c, svc, &current)
 	})
 	writes.POST("/media", func(c *gin.Context) {
-		if !workbenchMediaConfigured() {
+		if !contentMediaConfigured(svc) {
 			trackingResponse(c, nil, &tracking.Error{Status: 503, Message: "素材存储尚未配置，请联系管理员"})
 			return
 		}

@@ -74,7 +74,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		// 用户DB模型（共用）
 		userDBModel := model.NewUserModel(component.GetDB())
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
-		stopImports = registerContentImports(reportContext, v1, trackingService, userDBModel, codeSessionModel)
+		stopImports = registerContentImports(reportContext, v1, trackingService, userDBModel, codeSessionModel, cfg)
 		costShareStore := model.NewCostEstimateShareRedisModel(component.GetRedis())
 		trackingService.ResolvePublicSnapshot = makeTrackingCostSnapshotResolver(costShareStore)
 		registerShareWebRoutes(r, v1, trackingService, newTrackingWechatAPI(miniprogramCredentials()), userDBModel, codeSessionModel)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"service/config"
 	"service/contentimport"
 	"service/model"
 	"service/tracking"
@@ -158,12 +159,17 @@ func importCookieFile(path string) (string, error) {
 	return value, nil
 }
 
-func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) func() {
+func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel, configs ...*config.Config) func() {
+	var appConfig *config.Config
+	if len(configs) > 0 {
+		appConfig = configs[0]
+	}
+	configureContentMedia(svc, appConfig)
 	ctx, cancel := context.WithCancel(parent)
 	var jobs sync.WaitGroup
 	enabled := os.Getenv("CONTENT_IMPORT_ENABLED") == "true"
 	var store contentimport.JobStore
-	if enabled && workbenchEnabled() && workbenchMediaConfigured() {
+	if enabled && workbenchEnabled() && contentMediaConfigured(svc) {
 		sqlStore, err := contentimport.NewSQLStore(users.DB, svc.Config.Tenant)
 		if err == nil {
 			verifyCtx, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -180,11 +186,12 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 	capture := contentimport.NewCaptureWorker(contentimport.CaptureWorkerConfig{Endpoint: os.Getenv("CONTENT_IMPORT_CAPTURE_URL"), Secret: os.Getenv("CONTENT_IMPORT_CAPTURE_SECRET")})
 	resolvers := map[contentimport.Platform]contentimport.DocumentResolver{contentimport.WechatArticle: &contentimport.ArticleResolver{Fetcher: fetcher, VideoCapture: capture}}
 	appID, secret := os.Getenv("CONTENT_IMPORT_DOUYIDOU_APP_ID"), os.Getenv("CONTENT_IMPORT_DOUYIDOU_APP_SECRET")
+	var video contentimport.Resolver
 	if strings.TrimSpace(appID) != "" && strings.TrimSpace(secret) != "" {
-		resolver := contentimport.VideoDocumentResolver{Resolver: contentimport.NewDouyidouResolver(contentimport.DouyidouConfig{AppID: appID, AppSecret: secret})}
-		resolvers[contentimport.Douyin] = resolver
-		resolvers[contentimport.Xiaohongshu] = resolver
+		video = contentimport.NewDouyidouResolver(contentimport.DouyidouConfig{AppID: appID, AppSecret: secret})
+		resolvers[contentimport.Douyin] = contentimport.VideoDocumentResolver{Resolver: video}
 	}
+	resolvers[contentimport.Xiaohongshu] = contentimport.VideoDocumentResolver{Resolver: contentimport.XHSResolver{Fetcher: fetcher, Video: video}}
 	if enabled && os.Getenv("CONTENT_IMPORT_YUANBAO_ENABLED") == "true" {
 		cookie, err := importCookieFile(os.Getenv("CONTENT_IMPORT_YUANBAO_COOKIE_FILE"))
 		if err != nil {
@@ -194,7 +201,7 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 		}
 	}
 	capabilities := func() importCapabilities {
-		ready := store != nil && enabled && workbenchEnabled() && workbenchMediaConfigured()
+		ready := store != nil && enabled && workbenchEnabled() && contentMediaConfigured(svc)
 		out := importCapabilities{Enabled: ready, Platforms: []importPlatformCapability{}}
 		for _, platform := range []contentimport.Platform{contentimport.WechatArticle, contentimport.Douyin, contentimport.Xiaohongshu, contentimport.Channels} {
 			p := importPlatformCapability{Platform: platform, Available: ready && resolvers[platform] != nil}
@@ -206,6 +213,9 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 				if !p.EmbeddedVideo {
 					p.Reason = "图文可导入；文内视频待采集服务配置"
 				}
+			}
+			if platform == contentimport.Xiaohongshu && p.Available && video == nil {
+				p.Reason = "需公开页可读取的完整分享链接；视频需配置解析服务"
 			}
 			if platform == contentimport.Channels && p.Available {
 				p.Reason = "实验接入，受登录状态和视频格式限制"
@@ -258,7 +268,7 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 			if err != nil {
 				return "", err
 			}
-			provenance := map[string]string{"platform": string(doc.Source.Platform), "source_id": doc.Source.ID, "source_account_id": doc.SourceAccountID, "source_account_name": doc.SourceAccountName}
+			provenance := map[string]string{"platform": string(doc.Source.Platform), "source_id": doc.Source.ID, "source_account_id": doc.SourceAccountID, "source_account_name": doc.SourceAccountName, "source_author": doc.Source.Author}
 			out, err := svc.SaveImportedDraft(ctx, scope, job.ID, draft, provenance)
 			return out.ID, err
 		}}

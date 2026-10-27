@@ -12,6 +12,7 @@ import (
 )
 
 type Service struct {
+	MediaObjects MediaObjectStore
 	// Projection participants run inside the tracking write transaction.
 	OnNoticeEvent        func(context.Context, NoticeEvent) error
 	OnRemoveNoticeEvents func(context.Context, []string) error

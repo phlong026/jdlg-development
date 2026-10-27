@@ -661,7 +661,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
 		trackingResponse(c, v, e)
 	})
-	pub.GET("/media/:id", func(c *gin.Context) {
+	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
 		var selected *tracking.Scope
 		if e == nil {
