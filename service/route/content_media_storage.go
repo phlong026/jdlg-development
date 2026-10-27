@@ -73,7 +73,10 @@ func readContentMedia(ctx context.Context, svc *tracking.Service, id string, max
 	if !validStoredMediaID(id) {
 		return nil, false, contentstorage.ErrInvalidInput
 	}
-	if svc.MediaObjects != nil {
+	if os.Getenv("CONTENT_MEDIA_STORAGE") == "cos" && (svc == nil || svc.MediaObjects == nil) {
+		return nil, false, contentstorage.ErrUnavailable
+	}
+	if svc != nil && svc.MediaObjects != nil {
 		data, _, err := svc.MediaObjects.Get(ctx, svc.Config.Tenant, id, max)
 		if errors.Is(err, contentstorage.ErrNotFound) {
 			return nil, false, nil
@@ -116,7 +119,10 @@ func storeContentMedia(ctx context.Context, svc *tracking.Service, id string, da
 	if !validStoredMediaID(id) {
 		return contentstorage.ErrInvalidInput
 	}
-	if svc.MediaObjects != nil {
+	if os.Getenv("CONTENT_MEDIA_STORAGE") == "cos" && (svc == nil || svc.MediaObjects == nil) {
+		return contentstorage.ErrUnavailable
+	}
+	if svc != nil && svc.MediaObjects != nil {
 		if err := svc.MediaObjects.Put(ctx, svc.Config.Tenant, id, data, mime); err != nil {
 			log.Printf("[content-media] error asset=%s operation=private_put error_type=%T", id, err)
 			if errors.Is(err, contentstorage.ErrPublicObject) {
@@ -159,8 +165,12 @@ func serveContentMediaBytes(c *gin.Context, svc *tracking.Service, asset trackin
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Cache-Control", "private, no-store")
 	c.Header("Content-Security-Policy", "default-src 'none'")
+	if os.Getenv("CONTENT_MEDIA_STORAGE") == "cos" && (svc == nil || svc.MediaObjects == nil) {
+		c.Status(http.StatusServiceUnavailable)
+		return
+	}
 	root := os.Getenv("TRACKING_MEDIA_DIR")
-	if svc.MediaObjects == nil && filepath.IsAbs(root) {
+	if (svc == nil || svc.MediaObjects == nil) && filepath.IsAbs(root) {
 		path := filepath.Join(root, asset.ID)
 		info, err := os.Lstat(path)
 		if err == nil {
@@ -182,7 +192,7 @@ func serveContentMediaBytes(c *gin.Context, svc *tracking.Service, asset trackin
 			return
 		}
 	}
-	if svc.MediaObjects == nil {
+	if svc == nil || svc.MediaObjects == nil {
 		c.Status(http.StatusNotFound)
 		return
 	}

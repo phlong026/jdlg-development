@@ -34,6 +34,10 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "无媒体上传权限"})
 		return
 	}
+	if os.Getenv("CONTENT_MEDIA_STORAGE") == "cos" && (s == nil || s.MediaObjects == nil) {
+		trackingResponse(c, nil, tracking.ErrUnavailable)
+		return
+	}
 	root := ""
 	var e error
 	if s == nil || s.MediaObjects == nil {

@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -176,6 +177,75 @@ func TestCOSProxyNeverUsesSameIDLocalFileAndStreamsRanges(t *testing.T) {
 	r.ServeHTTP(w, request)
 	if w.Code != 416 || w.Header().Get("Content-Range") != "bytes */10" {
 		t.Fatal(w.Code, w.Header())
+	}
+}
+
+func TestCOSConfigurationFailureNeverFallsBackToFilesystem(t *testing.T) {
+	t.Setenv("CONTENT_MEDIA_STORAGE", "cos")
+	root := t.TempDir()
+	t.Setenv("TRACKING_MEDIA_DIR", root)
+	id := strings.Repeat("f", 32)
+	localPath := filepath.Join(root, id)
+	if err := os.WriteFile(localPath, []byte("legacy-local-object"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	_, svc := newWorkbenchHandlerFixture(t, &scope)
+
+	if data, found, err := readContentMedia(context.Background(), svc, id, 10<<20); data != nil || found || !errors.Is(err, contentstorage.ErrUnavailable) {
+		t.Fatal("COS read used filesystem fallback", data, found, err)
+	}
+	if err := storeContentMedia(context.Background(), svc, strings.Repeat("w", 32), []byte("new-object"), "image/png"); !errors.Is(err, contentstorage.ErrUnavailable) {
+		t.Fatal("COS write used filesystem fallback", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, strings.Repeat("w", 32))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("COS write created a local object", err)
+	}
+
+	r := gin.New()
+	r.GET("/media", func(c *gin.Context) {
+		serveContentMediaBytes(c, svc, tracking.Asset{ID: id, Kind: "image", MIME: "image/png"})
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/media", nil))
+	if w.Code != http.StatusServiceUnavailable || w.Body.String() == "legacy-local-object" {
+		t.Fatal("COS proxy used filesystem fallback", w.Code, w.Body.String())
+	}
+
+	var imageBytes bytes.Buffer
+	if err := png.Encode(&imageBytes, image.NewRGBA(image.Rect(0, 0, 2, 3))); err != nil {
+		t.Fatal(err)
+	}
+	var upload bytes.Buffer
+	writer := multipart.NewWriter(&upload)
+	if err := writer.WriteField("owner_id", "owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("rights", "own"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("file", "picture.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write(imageBytes.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	uploadRouter := gin.New()
+	uploadRouter.POST("/media", func(c *gin.Context) { uploadTrackingMedia(c, svc, scope) })
+	request := httptest.NewRequest(http.MethodPost, "/media", &upload)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	w = httptest.NewRecorder()
+	uploadRouter.ServeHTTP(w, request)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatal("COS upload used filesystem fallback", w.Code, w.Body.String())
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 1 || entries[0].Name() != id {
+		t.Fatal("COS upload changed local storage", entries, err)
 	}
 }
 func TestXHSPictureCacheChangesWhenCDNObjectPathChanges(t *testing.T) {
