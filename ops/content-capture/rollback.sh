@@ -52,6 +52,7 @@ fi
 [ ! -e "$OWNED/resolver" ] || rm -f /etc/netns/jdlg-content-capture/resolv.conf
 [ ! -e "$OWNED/resolver" ] || rmdir /etc/netns/jdlg-content-capture 2>/dev/null || true
 [ ! -e "$OWNED/worker-env" ] || rm -f "$ROOT/worker.env"
+[ ! -e "$OWNED/main-env" ] || rm -f "$ROOT/main-service.env"
 if [ -e "$OWNED/ops" ]; then
   rm -f "$ROOT/ops/network.py" "$ROOT/ops/stale_socket.py" "$ROOT/ops/rollback.sh"
   rmdir "$ROOT/ops" 2>/dev/null || true
@@ -59,7 +60,7 @@ fi
 [ ! -e "$OWNED/worker-user" ] || userdel jdlgcap-worker 2>/dev/null || true
 [ ! -e "$OWNED/browser-user" ] || userdel jdlgcap-browser 2>/dev/null || true
 rm -f "$OWNED/nginx-extension-dir" "$OWNED/nginx" "$OWNED/units" \
-  "$OWNED/apparmor" "$OWNED/resolver" "$OWNED/worker-env" "$OWNED/ops" \
+  "$OWNED/apparmor" "$OWNED/resolver" "$OWNED/worker-env" "$OWNED/main-env" "$OWNED/ops" \
   "$OWNED/worker-user" "$OWNED/browser-user" "$OWNED/browser-ldd-report"
 rmdir "$OWNED"
 echo 'owned content capture deployment resources were removed'

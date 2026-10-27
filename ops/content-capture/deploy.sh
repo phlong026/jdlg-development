@@ -41,6 +41,7 @@ test "$(stat -c '%U' "$ROOT/bin/content-capture-worker")" = root
 test "$((0$(stat -c '%a' "$BROWSER_BINARY") & 0022))" -eq 0
 test "$((0$(stat -c '%a' "$ROOT/bin/content-capture-worker") & 0022))" -eq 0
 test ! -e "$ROOT/worker.env"
+test ! -e "$ROOT/main-service.env"
 if [ "$SOURCE_DIR" = "$ROOT/ops" ]; then
   OPS_PRESTAGED=true
   for file in network.py stale_socket.py rollback.sh; do
@@ -119,6 +120,16 @@ SECRET=$(openssl rand -hex 32)
 chown root:root "$ROOT/worker.env"
 chmod 0600 "$ROOT/worker.env"
 touch "$OWNED/worker-env"
+
+{
+  printf '%s\n' 'CONTENT_IMPORT_CAPTURE_URL=https://api.jiadilingguang.com/_internal/content-capture/v1/capture'
+  printf '%s\n' 'CONTENT_IMPORT_CAPTURE_HEALTH_URL=https://api.jiadilingguang.com/_internal/content-capture/ready'
+  printf '%s\n' 'CONTENT_IMPORT_CAPTURE_DIAL_ADDRESS=127.0.0.1:443'
+  printf 'CONTENT_IMPORT_CAPTURE_SECRET=%s\n' "$SECRET"
+} >"$ROOT/main-service.env"
+chown root:root "$ROOT/main-service.env"
+chmod 0600 "$ROOT/main-service.env"
+touch "$OWNED/main-env"
 
 install -d -m 0755 -o root -g root /etc/netns/jdlg-content-capture
 printf '%s\n' 'nameserver 119.29.29.29' >/etc/netns/jdlg-content-capture/resolv.conf

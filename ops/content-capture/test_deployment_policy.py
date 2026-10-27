@@ -108,6 +108,33 @@ class DeploymentPolicyTest(unittest.TestCase):
         self.assertIn('runuser -u jdlgcap-browser -- "$BROWSER_BINARY" --version', deploy)
         self.assertNotIn('"$BROWSER_BINARY" --version |', deploy)
 
+    def test_verify_discovers_tests_from_its_own_directory(self):
+        verify = self.read('verify.sh')
+        self.assertIn("python3 -m unittest discover -s \"$SOURCE_DIR\" -p 'test_*.py'", verify)
+        self.assertNotIn('"$SOURCE_DIR/test_network.py"', verify)
+        self.assertIn("curl --noproxy '*' --max-time 10", verify)
+
+    def test_main_service_env_is_independent_restricted_and_owned(self):
+        deploy = self.read('deploy.sh')
+        rollback = self.read('rollback.sh')
+        self.assertIn('test ! -e "$ROOT/main-service.env"', deploy)
+        self.assertEqual(deploy.count('CONTENT_IMPORT_CAPTURE_'), 4)
+        for setting in (
+            'CONTENT_IMPORT_CAPTURE_URL=https://api.jiadilingguang.com/_internal/content-capture/v1/capture',
+            'CONTENT_IMPORT_CAPTURE_HEALTH_URL=https://api.jiadilingguang.com/_internal/content-capture/ready',
+            'CONTENT_IMPORT_CAPTURE_DIAL_ADDRESS=127.0.0.1:443',
+            'CONTENT_IMPORT_CAPTURE_SECRET=%s',
+        ):
+            self.assertIn(setting, deploy)
+        self.assertIn('chmod 0600 "$ROOT/main-service.env"', deploy)
+        self.assertIn('chown root:root "$ROOT/main-service.env"', deploy)
+        self.assertIn('touch "$OWNED/main-env"', deploy)
+        verify = self.read('verify.sh')
+        self.assertIn('main-service.env)" = "600:root:root"', verify)
+        self.assertIn('test "$MAIN_SECRET" = "$SECRET"', verify)
+        self.assertIn('[ ! -e "$OWNED/main-env" ] || rm -f "$ROOT/main-service.env"', rollback)
+        self.assertIn('"$OWNED/main-env"', rollback)
+
     def test_rollback_requires_ownership_and_removes_only_dedicated_resources(self):
         rollback = self.read('rollback.sh')
         self.assertIn('test -d "$OWNED"', rollback)

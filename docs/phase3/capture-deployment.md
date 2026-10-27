@@ -11,6 +11,7 @@
 - CDP 只监听 namespace 内 `127.0.0.1:9222`，不对主机网络或公网开放。Chrome 保留 sandbox，未使用 `--no-sandbox`、`SYS_ADMIN` 或 seccomp 绕过。
 - AppArmor 仅给上述 Chrome 绝对路径的 `flags=(unconfined)` profile 增加 `userns,`，不修改全局 sysctl。
 - `/opt/jdlg-content-capture/worker.env` 在服务器上生成，为 `0600 root:root`，不进入 Git。
+- `/opt/jdlg-content-capture/main-service.env` 也由部署脚本生成为 `0600 root:root`，与 Worker 共用当次随机 secret。这是供未来主业务部署显式加载的独立配置；采集部署不修改现有应用 `.env`，不重启主业务。
 - network lifecycle unit 必须在宿主 mount namespace 中运行，否则 `ip netns add` 创建的 `/run/netns/jdlg-content-capture` bind mount 不会传播给宿主，systemd 后续无法加入该 namespace。因此该 root oneshot 不使用 `ProtectSystem`、`ProtectHome`、`PrivateTmp` 或 `ReadWritePaths`，但保留 `NoNewPrivileges=true`，并把 capability 严格限定为 `CAP_NET_ADMIN CAP_SYS_ADMIN`。`CAP_SYS_ADMIN` 不会授予 Browser 或 Worker。
 - Browser 和 Worker 均使用 `InaccessiblePaths=/www` 与 `ProtectProc=invisible`。Worker 保留 `Group=www` 以便 Nginx 访问 Unix socket，但专用进程无法借此组身份读取 `/www` 下的其他站点配置。
 
@@ -67,6 +68,17 @@ sudo systemctl status \
 
 `--installed` 会检查 unit 状态、env/socket 所有权、namespace 内 CDP 监听，并通过本机 TLS + Nginx 内部路由校验严格响应 `{"ready":true}`。该过程不打印 secret。
 
+`main-service.env` 只包含下列四个键，可供真实 Go 客户端完成域名 TLS 校验与本机固定 Dial 诊断：
+
+```dotenv
+CONTENT_IMPORT_CAPTURE_URL=https://api.jiadilingguang.com/_internal/content-capture/v1/capture
+CONTENT_IMPORT_CAPTURE_HEALTH_URL=https://api.jiadilingguang.com/_internal/content-capture/ready
+CONTENT_IMPORT_CAPTURE_DIAL_ADDRESS=127.0.0.1:443
+CONTENT_IMPORT_CAPTURE_SECRET=<与 Worker 一致的服务器随机值>
+```
+
+主业务只能在自身发布流程中加载该文件，不应把内容复制到 Git、日志或命令行。
+
 ## 陈旧 socket 处理
 
 Worker 自身拒绝任何已存在的 socket。systemd `ExecStartPre` 只对 `/run/jdlg-content-capture/capture.sock` 做以下证明后才删除：
@@ -85,7 +97,7 @@ sudo /opt/jdlg-content-capture/ops/rollback.sh \
   --nginx-extension-dir /www/server/panel/vhost/nginx/extension/api.jiadilingguang.com
 ```
 
-回滚要求部署脚本创建的 `/opt/jdlg-content-capture/.deployment-owned` 标记，并校验当初的 Nginx 扩展目录。它只停止并删除 `jdlg-content-capture-*` 专用 unit、专用 namespace/规则、专用 Nginx extension、专用 AppArmor profile、服务器生成的 env 和两个服务账号。它不删除预先放置的 Chrome 或 Worker 二进制，不修改其他 Nginx 文件。Nginx 回滚后仍会先执行 `nginx -t`，检查失败时不 reload。
+回滚要求部署脚本创建的 `/opt/jdlg-content-capture/.deployment-owned` 标记，并校验当初的 Nginx 扩展目录。它只停止并删除 `jdlg-content-capture-*` 专用 unit、专用 namespace/规则、专用 Nginx extension、专用 AppArmor profile、本次生成的 `worker.env`/`main-service.env` 和两个服务账号。它不删除预先放置的 Chrome 或 Worker 二进制，不修改其他 Nginx 文件。Nginx 回滚后仍会先执行 `nginx -t`，检查失败时不 reload。
 
 ## 已知的上线门槛
 
