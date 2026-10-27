@@ -142,6 +142,8 @@ function buildWorkbenchMenuItems(options: {
     { action: 'identity', label: '认证资料', shortLabel: '认', meta: identityMeta },
     { action: 'designerHome', label: '设计师主页', shortLabel: '页', meta: hasDesignerAccess ? '进入主页' : '登录后可用' },
     { action: 'publish', label: '我的发布', shortLabel: '发', meta: hasDesignerAccess ? '上传作品' : '登录后可用' },
+    { action: 'contentWorkbench', label: '内容工作台', shortLabel: '文', meta: hasLoginToken ? '需管理授权' : '登录后可用' },
+    { action: 'shareVisits', label: '我的分享访问', shortLabel: '访', meta: hasLoginToken ? '仅本人分享' : '登录后可用' },
   ];
 }
 
@@ -1023,6 +1025,16 @@ Page({
 
     if (action === 'publish') {
       this.onPostTap({ currentTarget: { dataset: { type: 'publish' } } });
+      return;
+    }
+
+    if (action === 'contentWorkbench') {
+      wx.navigateTo({ url: '/pages/contentworkbench/contentworkbench', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'shareVisits') {
+      wx.navigateTo({ url: '/pages/sharevisits/sharevisits', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
       return;
     }
 

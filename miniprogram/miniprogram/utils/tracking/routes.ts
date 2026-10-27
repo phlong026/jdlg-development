@@ -349,6 +349,30 @@ const ROUTES = {
     "collect": true,
     "readiness": "explicit",
     "idKey": "content_id"
+  },
+  "pages/contentworkbench/contentworkbench": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
+  "pages/contentedit/contentedit": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
+  "pages/sharevisits/sharevisits": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
+  "pages/visitdetail/visitdetail": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
   }
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }

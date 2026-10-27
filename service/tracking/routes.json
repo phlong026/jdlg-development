@@ -352,5 +352,29 @@
     "Type": "detail",
     "Public": true,
     "Audience": "customer"
+  },
+  "pages/contentworkbench/contentworkbench": {
+    "Title": "pages/contentworkbench/contentworkbench",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/contentedit/contentedit": {
+    "Title": "pages/contentedit/contentedit",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/sharevisits/sharevisits": {
+    "Title": "pages/sharevisits/sharevisits",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/visitdetail/visitdetail": {
+    "Title": "pages/visitdetail/visitdetail",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
   }
 }

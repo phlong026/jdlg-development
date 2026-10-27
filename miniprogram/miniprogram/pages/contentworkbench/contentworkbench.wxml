@@ -1,0 +1,19 @@
+<view class="private-page">
+  <navigation-bar title="内容工作台" back="{{true}}" background="#f7f3ee" />
+  <view class="page-body">
+    <view wx:if="{{loading}}" class="state" role="status">正在核验权限并加载内容…</view>
+    <view wx:elif="{{loginRequired}}" class="state"><text>请先登录后使用内容工作台。</text><button bindtap="goLogin">去登录</button></view>
+    <view wx:elif="{{denied}}" class="state"><text>当前账号没有内容管理权限。</text><button bindtap="retry">重新检查</button></view>
+    <view wx:elif="{{disabled}}" class="state"><text>手机内容制作暂未开通。</text></view>
+    <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="retry">重试</button></view>
+    <block wx:else>
+      <view class="intro"><text class="title">我的内容</text><text class="hint">草稿、预览、发布和撤回均以服务端当前版本为准。</text></view>
+      <button class="primary" bindtap="createContent">+新建内容</button>
+      <view wx:if="{{!items.length}}" class="state">暂无内容，可先新建一篇。</view>
+      <button wx:for="{{items}}" wx:key="content_id" class="card" bindtap="editContent" data-id="{{item.content_id}}">
+        <view class="card-main"><text class="card-title">{{item.title}}</text><text class="meta">{{item.status === 'published' ? '已发布' : item.status === 'revoked' ? '已撤回' : '草稿'}} · 草稿版 {{item.revision}} · 公开版 {{item.version}}</text></view><text class="arrow">›</text>
+      </button>
+      <button wx:if="{{next_cursor}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
+    </block>
+  </view>
+</view>

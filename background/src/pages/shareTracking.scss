@@ -282,6 +282,17 @@
   .st-dialog .st-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
   .st-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; margin: 20px 0; }
   .st-body img, .st-body video { max-width: 100%; height: auto; object-fit: contain; }
+  .st-article-body { white-space: normal; }
+  .st-article-block { margin: 18px 0; white-space: pre-wrap; }
+  .st-article-heading { margin-top: 28px; color: var(--st-text); font-size: var(--admin-font-title); font-weight: 650; line-height: 1.5; }
+  .st-article-heading-3 { font-size: var(--admin-font-section); }
+  .st-article-quote { padding: 12px 16px; border-left: 4px solid var(--st-accent); background: var(--st-cream); color: var(--st-muted); }
+  .st-article-list ul, .st-article-list ol { margin: 0; padding-left: 24px; }
+  .st-article-caption { margin: -4px 0 18px; color: var(--st-muted); font-size: var(--admin-font-caption); text-align: center; }
+  .st-article-align-left { text-align: left; } .st-article-align-center { text-align: center; } .st-article-align-right { text-align: right; }
+  .st-article-size-small { font-size: 14px; } .st-article-size-normal { font-size: 16px; } .st-article-size-large { font-size: 20px; }
+  .st-article-border-left { padding-left: 14px; border-left: 3px solid var(--st-accent); }
+  .st-article-border-box { padding: 14px; border: 1px solid var(--st-line); border-radius: 8px; }
   .st-session { border: 1px solid var(--st-line); padding: 14px; border-radius: 12px; margin: 14px 0; background: var(--st-surface); }
   .st-session > button, .st-page-visit > button { text-align: left; width: 100%; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
   .st-page-visit { border-left: 3px solid #dcb99a; padding: 12px; margin: 14px 0; min-width: 0; }

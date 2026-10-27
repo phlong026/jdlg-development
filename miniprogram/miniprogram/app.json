@@ -190,6 +190,22 @@
       "pages": [
         "contentreader"
       ]
+    },
+    {
+      "root": "pages/contentworkbench",
+      "pages": ["contentworkbench"]
+    },
+    {
+      "root": "pages/contentedit",
+      "pages": ["contentedit"]
+    },
+    {
+      "root": "pages/sharevisits",
+      "pages": ["sharevisits"]
+    },
+    {
+      "root": "pages/visitdetail",
+      "pages": ["visitdetail"]
     }
   ],
   "tabBar": {

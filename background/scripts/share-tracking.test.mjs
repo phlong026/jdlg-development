@@ -103,6 +103,19 @@ test('rich text renders only the explicit persisted format; legacy body remains 
  assert.ok(!editor.includes('<ContentBody content={form}'));
 });
 
+test('article_v2 preview keeps interleaved blocks and never interprets document text as HTML', () => {
+ const { ContentBody }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
+ const content={body_format:'article_v2',body:JSON.stringify({schema:1,blocks:[{kind:'heading',level:2,text:'标题'},{kind:'paragraph',text:'<script>literal</script>'},{kind:'image',media_id:'asset-1'},{kind:'quote',text:'引用'}]}),media:[{media_id:'asset-1',kind:'image',url:'/authorized/media/1',width:1200,height:800}]};
+ const html=renderToStaticMarkup(React.createElement(ContentBody,{content}));
+ assert.ok(html.indexOf('&lt;script&gt;literal&lt;/script&gt;')<html.indexOf('<img'));
+ assert.ok(html.indexOf('<img')<html.indexOf('引用'));
+ assert.doesNotMatch(html,/<script>/);
+ assert.match(html,/class="st-article-block st-article-heading st-article-heading-2"/);
+ const editor=fs.readFileSync(new URL('src/pages/shareTracking/editor.tsx',root),'utf8');
+ assert.match(editor,/value="article_v2"/);
+});
+
 test('published draft keeps current public version and revokes without publishing unfinished edits',async()=>{
  const h=editorHarness({}, {status:'draft',version:4,revision:9});
  assert.match(h.text(),/当前公开版本：v4/);assert.match(h.text(),/无需发布草稿即可撤回/);

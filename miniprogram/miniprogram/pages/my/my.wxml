@@ -71,7 +71,7 @@
         </view>
       </view>
 
-      <view class="menu-section-title">设计师工作台</view>
+      <view class="menu-section-title">我的工作台</view>
       <view class="menu-card menu-list-card workbench-card">
         <view
           wx:for="{{workbenchMenuItems}}"

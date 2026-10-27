@@ -1,12 +1,23 @@
 <view class="page">
-  <!-- 统一导航栏 -->
   <navigation-bar title="消息中心" background="#e6daca" />
-
   <view class="content">
-    <view class="empty-card">
-      <view class="empty-badge">消息</view>
-      <text class="empty-title">暂时还没有新的消息</text>
-      <text class="empty-desc">后续系统通知、审核进度、订单提醒和互动消息都会统一收进这里。</text>
+    <view class="binding-card">
+      <text class="binding-name">浏览提醒</text><text class="empty-desc">{{bindingLabel}}</text>
+      <button wx:if="{{canBind}}" bindtap="onBind" loading="{{bindingBusy}}">连接服务号</button>
+      <button wx:elif="{{!loginRequired}}" bindtap="loadBinding" size="mini">刷新提醒状态</button>
     </view>
+    <view wx:if="{{loginRequired}}" class="empty-card"><text class="empty-title">登录后查看消息</text><text class="empty-desc">分享内容的浏览提醒会保留在这里</text><button bindtap="onLogin">登录</button></view>
+    <block wx:else>
+      <view class="toolbar"><text>未读 {{unread}}</text><button bindtap="onReadAll" size="mini" disabled="{{!unread}}">全部已读</button></view>
+      <view wx:if="{{error}}" class="status-card"><text>{{error}}</text><button bindtap="onRetry" size="mini">重试</button></view>
+      <view wx:for="{{messages}}" wx:key="notification_id" class="message-card {{item.read_at ? 'read' : ''}}" bindtap="onOpenMessage" data-id="{{item.notification_id}}">
+        <view class="message-heading"><text class="empty-title">{{item.title}}</text><text wx:if="{{!item.read_at}}" class="unread-dot"></text></view>
+        <text class="message-body">{{item.body}}</text><text class="message-time">{{item.timeLabel}}</text>
+        <text class="message-action">{{item.cancelled_at ? '提醒已失效' : '查看访问记录 ›'}}</text>
+      </view>
+      <view wx:if="{{loading}}" class="status-card">正在加载…</view>
+      <view wx:elif="{{!error &amp;&amp; !messages.length}}" class="empty-card"><view class="empty-badge">消息</view><text class="empty-title">暂时没有浏览提醒</text><text class="empty-desc">有人浏览你分享的内容后，提醒会出现在这里。</text></view>
+      <button wx:if="{{cursor}}" bindtap="onLoadMore" loading="{{loading}}">加载更多</button>
+    </block>
   </view>
 </view>

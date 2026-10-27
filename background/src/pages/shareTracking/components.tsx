@@ -1,6 +1,6 @@
 import { visitorName } from './model';
 import React, { useEffect, useRef, useState } from 'react';
-import { Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTracking';
+import { ArticleDocument, Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTracking';
 import { duration, identityBadge, intentLabels, safeMediaURL, time } from './model';
 
 export function useResource<T>(loader: (signal: AbortSignal) => Promise<T>, key: string) {
@@ -73,8 +73,29 @@ export function Dialog({ title, children, close, busy = false }: { title: string
 }
 
 // Only use persisted server responses here. Unsaved editor input must never reach HTML rendering.
-export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body_format'> }) {
-    return content.body_format === 'rich_text'
-        ? <div className="st-body st-rich-body" dangerouslySetInnerHTML={{ __html: content.body }} />
-        : <div className="st-body">{content.body}</div>;
+export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body_format'> & Partial<Pick<Content, 'media'>> }) {
+    if (content.body_format === 'rich_text') return <div className="st-body st-rich-body" dangerouslySetInnerHTML={{ __html: content.body }} />;
+    if (content.body_format !== 'article_v2') return <div className="st-body">{content.body}</div>;
+    let document: ArticleDocument;
+    try { document = JSON.parse(content.body) as ArticleDocument; } catch { return <div className="st-warning">原排版正文无法预览，请重新保存。</div>; }
+    if (document.schema !== 1 || !Array.isArray(document.blocks) || !document.blocks.length) return <div className="st-warning">原排版正文无法预览，请重新保存。</div>;
+    const media = new Map((content.media || []).map(asset => [asset.media_id, asset]));
+    const align = { left: 'left', center: 'center', right: 'right' } as const;
+    const size = { small: 'small', normal: 'normal', large: 'large' } as const;
+    const border = { left: 'left', box: 'box' } as const;
+    return <div className="st-body st-article-body">{document.blocks.map((block, index) => {
+        const classes = ['st-article-block'];
+        if (block.kind === 'heading') classes.push('st-article-heading', `st-article-heading-${block.level}`);
+        else classes.push(`st-article-${block.kind}`);
+        if (block.style?.align && align[block.style.align]) classes.push(`st-article-align-${align[block.style.align]}`);
+        if (block.style?.font_size && size[block.style.font_size]) classes.push(`st-article-size-${size[block.style.font_size]}`);
+        if (block.style?.border && block.style.border !== 'none' && border[block.style.border]) classes.push(`st-article-border-${border[block.style.border]}`);
+        const style = { marginTop: block.style?.spacing_before, marginBottom: block.style?.spacing_after };
+        if (block.kind === 'image' || block.kind === 'video') {
+            const asset = block.media_id ? media.get(block.media_id) : undefined;
+            return <div className={classes.join(' ')} style={style} key={index}><MediaPreview asset={asset} title={block.caption || asset?.title || '文章媒体'} />{block.caption && <p className="st-article-caption">{block.caption}</p>}</div>;
+        }
+        if (block.kind === 'list') return <div className={classes.join(' ')} style={style} key={index}>{block.ordered ? <ol>{block.items?.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ol> : <ul>{block.items?.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>}</div>;
+        return <div className={classes.join(' ')} style={style} key={index}>{block.text}</div>;
+    })}</div>;
 }

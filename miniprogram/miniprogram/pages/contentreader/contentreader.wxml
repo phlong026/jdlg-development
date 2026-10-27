@@ -13,15 +13,28 @@
   </view>
   <!-- rich_text is persisted server-allowlisted HTML; legacy content remains escaped text. -->
   <rich-text wx:if="{{content.body_format === 'rich_text'}}" class="body" nodes="{{content.body}}" selectable="{{true}}" />
+  <block wx:elif="{{content.body_format === 'article_v2'}}" wx:for="{{articleBlocks}}" wx:key="key">
+   <view wx:if="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+   <view wx:elif="{{item.kind === 'list'}}" class="{{item.className}}" style="{{item.style}}">
+    <view wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex" class="article-list-item"><text class="article-list-marker">{{item.ordered ? (listIndex + 1) + '.' : '•'}}</text><text selectable="{{true}}">{{listItem}}</text></view>
+   </view>
+   <view wx:else class="{{item.className}}" style="{{item.style}}">
+    <image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.caption || item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" bindtap="openImage" binderror="mediaError" />
+    <video wx:else id="{{item.domId}}" style="width:100%;height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" data-player-key="{{item.playerKey}}" data-error-key="{{item.errorKey}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+    <text wx:if="{{item.caption}}" class="article-caption" selectable="{{true}}">{{item.caption}}</text>
+    <view wx:if="{{mediaErrors[item.errorKey]}}" class="error"><text>{{mediaErrors[item.errorKey]}}</text><button bindtap="retryMedia">重新加载媒体</button></view>
+   </view>
+  </block>
   <text wx:else class="body" selectable="{{true}}">{{content.body}}</text>
-  <view wx:for="{{media}}" wx:key="media_id" class="media-frame">
-   <image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" bindtap="openImage" binderror="mediaError" />
-   <video wx:else id="{{item.domId}}" style="width:100%;height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
-   <view wx:if="{{mediaErrors[item.media_id]}}" class="error"><text>{{mediaErrors[item.media_id]}}</text><button bindtap="retryMedia">重新加载媒体</button></view>
+  <view wx:if="{{content.body_format !== 'article_v2'}}" wx:for="{{media}}" wx:key="media_id" class="media-frame">
+   <image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" bindtap="openImage" binderror="mediaError" />
+   <video wx:else id="{{item.domId}}" style="width:100%;height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" data-player-key="{{item.playerKey}}" data-error-key="{{item.errorKey}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+   <view wx:if="{{mediaErrors[item.errorKey]}}" class="error"><text>{{mediaErrors[item.errorKey]}}</text><button bindtap="retryMedia">重新加载媒体</button></view>
   </view>
   <view wx:if="{{content.source_note}}" class="source">来源说明：{{content.source_note}}</view>
   <button wx:if="{{content.source_url}}" bindtap="copySource">复制原文链接</button>
   <button open-type="share">分享此内容</button>
+  <button bindtap="copyWebLink" loading="{{webLinkBusy}}" disabled="{{webLinkBusy}}">复制跟踪分享链接</button>
   <text class="limits">分享操作仅表示发起分享，不代表已送达。视频播放位置、有效观看时间与覆盖片段分别记录。</text>
   <view wx:if="{{guideVisible}}" class="reader-guide">
    <view class="reader-guide-text"><text class="reader-guide-title">想为这套方案估算建房造价？</text><text class="reader-guide-sub">AI 建房顾问可按您的宅基地情况给出参考报价</text></view>

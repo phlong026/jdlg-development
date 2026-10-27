@@ -142,6 +142,23 @@ async function prepareShare(page, original, channel, cacheKey, emitIntent = true
     return original;
   }
 }
+// Confirm an actual copy gesture using its prepared Share; never mint a second
+// Share merely to record the action. Account/context changes invalidate it.
+function confirmPreparedShare(page, key, channel) {
+  return safely(() => {
+    const s = getSDK();
+    if (!s || !s.diagnostics().enabled) return false;
+    s.observation(page);
+    const state = s.get(page), meta = state && state.shareIds && state.shareIds[key];
+    if (!meta || meta.context !== state.context || meta.view !== state.view || meta.expires <= Date.now() ||
+        meta.account !== String(wx.getStorageSync('token') || '') || meta.validity !== entryInvalidation) return false;
+    if (!meta.intentConfirmed) {
+      s.shareIntent(meta.context, meta.route, meta.content, meta.id, channel);
+      meta.intentConfirmed = true;
+    }
+    return true;
+  }, false);
+}
 // A timeline callback must return synchronously. Prepare at page readiness,
 // never by pretending its return value can await a network request.
 function timelineCacheKey(original) { return JSON.stringify(original); }
@@ -390,4 +407,4 @@ function shareDiagnostics(page){
     ? {...(state.shareFailure||{}),attribution_status:status} : state.shareFailure||null;
 }
 function captureEntryValidity(){const revision=entryInvalidation,account=safely(()=>String(wx.getStorageSync('token')||''),'');return()=>revision===entryInvalidation&&account===safely(()=>String(wx.getStorageSync('token')||''),'');}
-module.exports={observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+module.exports={observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,confirmPreparedShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
