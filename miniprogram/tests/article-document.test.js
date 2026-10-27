@@ -40,7 +40,7 @@ test('article renderer rejects missing media instead of silently dropping part o
 });
 
 test('article renderer keeps sanitized layout and splits nested video into a native segment', () => {
-  const body = JSON.stringify({ schema: 1, layout_html: '<section style="padding:12px"><p>前文</p><img data-media-id="asset-0001"><blockquote>引用<jd-video data-media-id="asset-0002"></jd-video>后文</blockquote></section>', blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
+  const body = JSON.stringify({ schema: 1, layout_html: '<section style="padding:12px"><p>前文</p><img data-media-id="asset-0001"><table style="width:100%"><tbody><tr><td style="background-color:#fff"><blockquote style="border-left:2px solid #ddd">引用<jd-video data-media-id="asset-0002" style="margin:8px"></jd-video>后文</blockquote></td></tr></tbody></table></section>', blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
   const media = [
     { media_id: 'asset-0001', kind: 'image', url: 'https://example.test/image?a=1&b=2', width: 1200, height: 800 },
     { media_id: 'asset-0002', kind: 'video', url: 'https://example.test/video', width: 1280, height: 720 },
@@ -50,8 +50,24 @@ test('article renderer keeps sanitized layout and splits nested video into a nat
   assert.match(blocks[0].html, /<img src="https:\/\/example\.test\/image\?a=1&amp;b=2">/);
   assert.match(blocks[0].html, /前文/);
   assert.equal(blocks[1].media_id, 'asset-0002');
+  assert.match(blocks[1].style, /padding:12px/);
+  assert.match(blocks[1].style, /background-color:#fff/);
+  assert.match(blocks[1].style, /border-left:2px solid #ddd/);
+  assert.match(blocks[1].style, /margin:8px/);
+  for (const tag of ['section', 'table', 'tbody', 'tr', 'td', 'blockquote']) assert.match(blocks[1].className, new RegExp(`article-layout-native-${tag}`));
   assert.match(blocks[2].html, /后文/);
   assert.doesNotMatch(blocks.map(block => block.html || '').join(''), /data-media-id|jd-video/);
+  const balanced = html => {
+    const stack = [];
+    for (const token of html.match(/<[^>]*>/g) || []) {
+      const match = /^<\/?([a-z0-9-]+)/.exec(token); if (!match || ['img', 'br', 'hr'].includes(match[1])) continue;
+      if (token.startsWith('</')) assert.equal(stack.pop(), match[1], `unbalanced fragment: ${html}`); else stack.push(match[1]);
+    }
+    assert.deepEqual(stack, [], `unclosed fragment: ${html}`);
+  };
+  blocks.filter(block => block.kind === 'layout').forEach(block => balanced(block.html));
+  assert.match(blocks[0].html, /<section[^>]*>.*<blockquote[^>]*>引用<\/blockquote><\/td><\/tr><\/tbody><\/table><\/section>/);
+  assert.match(blocks[2].html, /^<section[^>]*><table[^>]*><tbody><tr><td[^>]*><blockquote[^>]*>后文<\/blockquote>/);
 });
 
 test('article renderer rejects unsafe or incomplete layout at the client boundary', () => {

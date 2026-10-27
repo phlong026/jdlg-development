@@ -30,8 +30,17 @@ function loadAPI() {
 function pageHarness(name, api, wxOverrides = {}) {
   let definition;
   const source = fs.readFileSync(path.join(root, `pages/${name}/${name}.js`), 'utf8');
-  const wx = Object.assign({ getStorageSync: () => 'session-token', redirectTo() {}, navigateTo() {}, stopPullDownRefresh() {}, showToast() {}, showModal() {} }, wxOverrides);
-  vm.runInNewContext(source, { Page(value) { definition = value; }, wx, require(id) { if (id === '../../utils/phase3-api') return api; throw new Error(`unexpected require ${id}`); }, console, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent });
+  const wx = Object.assign({
+    getStorageSync: () => 'session-token',
+    getWindowInfo: () => ({ windowWidth: 375 }),
+    createVideoContext: () => ({ pause() {} }),
+    redirectTo() {}, navigateTo() {}, stopPullDownRefresh() {}, showToast() {}, showModal() {},
+  }, wxOverrides);
+  vm.runInNewContext(source, { Page(value) { definition = value; }, wx, require(id) {
+    if (id === '../../utils/phase3-api') return api;
+    if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
+    throw new Error(`unexpected require ${id}`);
+  }, console, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent });
   const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values) { Object.assign(this.data, values); } }, definition);
   return page;
 }
@@ -234,6 +243,57 @@ test('publish preview renders normalized server content and only its signed priv
   assert.match(wxml, /item\.items/);
   assert.match(wxml, /item\.caption/);
   assert.match(wxml, /retryPreviewMedia/);
+});
+
+test('editor renders and previews preserved layout with native video without flattening fallback blocks', async () => {
+  const body = JSON.stringify({
+    schema: 1,
+    layout_html: '<section style="padding:12px"><blockquote style="border-left:2px solid #ddd">前<jd-video data-media-id="layout-video-0001" style="margin:8px"></jd-video>后</blockquote></section>',
+    blocks: [{ kind: 'paragraph', text: '不能代替原排版的兼容正文' }],
+  });
+  const content = {
+    title: '公众号原排版', owner_id: 'owner-a', rights: 'own', revision: 2, version: 0, status: 'draft', body_format: 'article_v2', body,
+    media: [{ media_id: 'layout-video-0001', kind: 'video', width: 1280, height: 720 }],
+  };
+  let savedDraft;
+  const paused = [];
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    getContent: async () => content,
+    downloadWorkbenchMedia: async id => 'wxfile://' + id,
+    saveContent: async draft => { savedDraft = draft; return { content_id: 'content-layout', revision: 3, version: 0, status: 'draft' }; },
+    previewContent: async () => ({ preview_token: 'preview-layout', content: { ...content, revision: 3 } }),
+  }, {
+    createVideoContext: id => ({ pause() { paused.push(id); } }),
+  });
+  page.setData({ id: 'content-layout' });
+  await page.load();
+
+  assert.equal(page.data.layoutReadOnly, true);
+  assert.deepEqual(Array.from(page.data.layoutBlocks, block => block.kind), ['layout', 'video', 'layout']);
+  assert.match(page.data.layoutBlocks[0].html, /前<\/blockquote><\/section>$/);
+  assert.match(page.data.layoutBlocks[2].html, /^<section[^>]*><blockquote[^>]*>后/);
+  assert.equal(page.data.layoutBlocks[1].url, 'wxfile://layout-video-0001');
+  assert.match(page.data.layoutBlocks[1].style, /padding:12px/);
+  assert.match(page.data.layoutBlocks[1].style, /border-left:2px solid #ddd/);
+  assert.match(page.data.layoutBlocks[1].domId, /^contentedit-layout-media-/);
+
+  await page.saveAndPreview();
+  assert.equal(savedDraft.body, body);
+  assert.deepEqual(Array.from(savedDraft.media_ids), ['layout-video-0001']);
+  assert.equal(page.data.previewLayoutReadOnly, true);
+  assert.deepEqual(Array.from(page.data.previewLayoutBlocks, block => block.kind), ['layout', 'video', 'layout']);
+  assert.match(page.data.previewLayoutBlocks[1].domId, /^contentedit-preview-media-/);
+  assert.equal(page.data.previewBlocks[0].text, '不能代替原排版的兼容正文');
+
+  page.onHide();
+  assert.deepEqual(paused.sort(), [page.data.layoutBlocks[1].domId, page.data.previewLayoutBlocks[1].domId].sort());
+
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /layoutBlocks/);
+  assert.match(wxml, /previewLayoutBlocks/);
+  assert.match(wxml, /<video[^>]+controls/);
 });
 
 test('publish and revoke reuse the same idempotency key after a lost response', async () => {

@@ -10,6 +10,7 @@ page{background:#faf8f4;color:#302c27}.reader{box-sizing:border-box;width:100%;p
 
 .article-block{box-sizing:border-box;max-width:100%;margin:18px 0;font-size:17px;line-height:1.85;white-space:pre-wrap}
 .article-layout{display:block;box-sizing:border-box;max-width:100%;font-size:17px;line-height:1.85;overflow-wrap:anywhere}
+.article-layout-native{box-sizing:border-box;max-width:100%;margin:18px 0}
 .article-heading{margin-top:28px;font-size:22px;font-weight:600;line-height:1.5;color:#2d2924}
 .article-heading-3{font-size:20px}
 .article-heading.article-size-small{font-size:19px}.article-heading.article-size-large{font-size:25px}

@@ -24,6 +24,12 @@
     <label>原文 HTTPS 链接<input value="{{source_url}}" data-field="source_url" bindinput="setField" /></label>
    </view>
    <view wx:if="{{layoutReadOnly}}" class="notice">公众号原排版正文为只读结构。可修改标题、归属和来源信息；保存与发布会完整保留导入正文，不会按兼容 blocks 扁平化。</view>
+   <view wx:if="{{layoutReadOnly}}" class="panel article-layout-preview">
+    <block wx:for="{{layoutBlocks}}" wx:key="key">
+     <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
+     <view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view>
+    </block>
+   </view>
    <block wx:if="{{!layoutReadOnly}}">
    <view class="section-title">正文顺序</view>
    <view wx:for="{{renderedBlocks}}" wx:key="index" class="panel block">
@@ -46,7 +52,11 @@
     <text class="section-title">服务端发布前预览</text><text class="title">{{preview.content.title}}</text>
     <image wx:if="{{previewCover && previewCover.local_path}}" src="{{previewCover.local_path}}" mode="aspectFit" />
     <view wx:elif="{{previewCover}}" class="muted">封面预览加载失败<button data-media-id="{{previewCover.media_id}}" bindtap="retryPreviewMedia" disabled="{{busy}}">重试封面</button></view>
-    <view wx:for="{{previewBlocks}}" wx:key="index" class="preview-block">
+    <block wx:if="{{previewLayoutReadOnly}}" wx:for="{{previewLayoutBlocks}}" wx:key="key">
+     <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
+     <view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view>
+    </block>
+    <view wx:else wx:for="{{previewBlocks}}" wx:key="index" class="preview-block">
      <view wx:if="{{item.kind === 'list'}}"><text wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex">{{item.ordered ? (listIndex + 1) + '. ' : '• '}}{{listItem}}\n</text></view>
      <text wx:elif="{{item.text}}">{{item.text}}</text>
      <image wx:elif="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" />
