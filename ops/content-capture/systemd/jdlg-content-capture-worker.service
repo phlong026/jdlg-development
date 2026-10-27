@@ -1,6 +1,7 @@
 [Unit]
 Description=JDLG content capture worker
-Requires=jdlg-content-capture-network.service jdlg-content-capture-browser.service
+Requires=jdlg-content-capture-network.service
+Wants=jdlg-content-capture-browser.service
 After=jdlg-content-capture-network.service jdlg-content-capture-browser.service
 
 [Service]

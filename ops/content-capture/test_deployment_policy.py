@@ -58,6 +58,12 @@ class DeploymentPolicyTest(unittest.TestCase):
         self.assertIn('CONTENT_CAPTURE_CDP_DISCOVERY_URL=http://127.0.0.1:9222/json/version', example)
         self.assertNotIn('CONTENT_CAPTURE_SECRET=', example)
 
+    def test_browser_restart_does_not_remove_worker_health_endpoint(self):
+        unit = self.read('systemd/jdlg-content-capture-worker.service')
+        self.assertIn('Requires=jdlg-content-capture-network.service\n', unit)
+        self.assertIn('Wants=jdlg-content-capture-browser.service\n', unit)
+        self.assertNotIn('Requires=jdlg-content-capture-network.service jdlg-content-capture-browser.service', unit)
+
     def test_nginx_locations_are_loopback_only_and_do_not_log_requests(self):
         nginx = self.read('nginx/content-capture.conf')
         for path in ('/_internal/content-capture/v1/capture', '/_internal/content-capture/ready'):
