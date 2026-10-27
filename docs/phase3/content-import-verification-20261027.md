@@ -1,5 +1,7 @@
 # 链接导入增量验证记录
 
+此文保留前一增量的阶段性证据；原排版、图集、COS及实库验证的后续进度以[补齐与真实联调记录](completion-and-live-verification-20261027.md)为准。
+
 2026-10-27，工作树 `开发版916/.worktrees/phase3-content-sharing`，分支 `feat/phase3-content-sharing`，仓库 `phlong026/jdlg-development`。接续首批实现基线 `b67c73a`。
 
 ## 本地完成

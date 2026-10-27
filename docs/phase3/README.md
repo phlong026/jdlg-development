@@ -2,6 +2,8 @@
 
 本目录记录2026-10-27的服务器核对及首批本地实现。生产仍是既有版本；没有加载Nginx候选配置、建立线上目录、执行迁移或发送微信通知。
 
+最新进度以[原排版、图文及COS补齐与真实联调记录](completion-and-live-verification-20261027.md)为准。已补齐安全原排版、小红书公开页图文和私有COS集成；真实COS及隔离MySQL核心链路通过，真实来源链接到服务号实发尚未完成。
+
 ## 复用与新增
 
 | 模块 | 直接复用 | 本批新增 |
@@ -15,12 +17,14 @@
 
 ## 本地运行配置
 
-默认新能力关闭；迁移不会自动启用功能。先在隔离环境应用service/sql中原有3组phase3_*_up.sql及对应down.sql，并分别验证。应用不自动迁移新表。
+默认新能力关闭；迁移不会自动启用功能。当前包含service/sql中的4组phase3_*_up.sql及对应down.sql（通知、服务号绑定、分享人索引、内容导入），应先在隔离环境分别验证。应用不自动迁移新表。
 
 | 变量 | 启用条件/用途 |
 | --- | --- |
 | CONTENT_WORKBENCH_ENABLED=true | 手机编辑操作；还需当前小程序账号明确can_manage授权 |
-| TRACKING_MEDIA_DIR | 官网root之外已有绝对私有目录，建议权限0700，进程可读写。当前生产未配；不复用公共assets/COS承载草稿 |
+| CONTENT_MEDIA_STORAGE=cos | 使用受控私有COS；复用服务器现有凭据，桶/地域默认取原配置，可显式覆盖；客户端只访问授权代理 |
+| CONTENT_MEDIA_COS_PREFIX | 默认jd-content-private；与历史公共资源分离，写入前后验证匿名HEAD和GET均被拒绝 |
+| TRACKING_MEDIA_DIR | 仅filesystem模式必需；官网root之外的绝对私有目录、权限0700。切换COS前须受检转存既有素材，COS模式不回退本地文件 |
 | SHARE_WEB_ENABLED=true | 自有域名页面/兑换入口；PUBLIC_SHARE_ORIGIN设为已验证固定HTTPS来源 |
 | PUBLIC_SHARE_ORIGIN=https://www.jiadilingguang.com | 生成分享网页及服务号授权返回，不从Host头推断 |
 | TRACKING_WECHAT_URLLINK_ENABLED=true | 本小程序真实URL Link接口核验后启用，仍使用原有小程序凭据/共享token缓存 |
@@ -64,4 +68,4 @@
 
 ## 链接导入增量（2026-10-27）
 
-新增独立 `phase3_content_import_up/down.sql` 和默认关闭的导入模块，复用草稿、私有媒体、发布后的分享/通知。已接公众号顺序正文/文内视频、豆一豆抖音/小红书视频适配器及元宝视频号实验适配器。完整参考代码位置、配置、任务接口、错误恢复和未完成的原排版/图集/COS/真实验收见 [导入统一方案](content-import-plan-20261027.md)。
+新增独立 `phase3_content_import_up/down.sql` 和默认关闭的导入模块，复用草稿、私有媒体、发布后的分享/通知。已接公众号安全原排版及文内视频适配、小红书公开图文、豆一豆视频适配器及元宝视频号实验适配器。媒体可选择已实测的私有COS。完整参考代码位置、配置、任务接口、错误恢复和真实验收边界见 [导入统一方案](content-import-plan-20261027.md)。

@@ -108,7 +108,7 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 
 ## 上线前必须完成的真实环境验收
 
-当前自动化测试全部使用可控 HTTP transport，没有使用真实凭据或访问真实 COS。部署前需要在非生产私有前缀完成：
+默认自动化测试使用可控HTTP transport；显式启用的 `TestLivePrivateCOSRoundTrip` 已在原服务器真实COS通过，凭据未离开该服务器。实际使用随机测试ID及自生成74字节PNG，验证了匿名HEAD和GET拒绝、SHA256、单段Range、覆盖冲突及自身对象清理，结果见[实测记录](completion-and-live-verification-20261027.md)。部署前仍需完成或复核：
 
 1. 触发一次 canary 预检，确认官方 COS 域名匿名 `HEAD` 和单字节范围 `GET` 都返回 403 或 404，且 canary 已删除。
 2. 用已鉴权服务端执行 `Head` 和 `Get`，确认元数据与字节完整。

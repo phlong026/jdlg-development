@@ -1,5 +1,7 @@
 # 首批实现验证记录（2026-10-27）
 
+此文保留首批实现的阶段性证据；后续原排版、图集、COS及实库进度以[补齐与真实联调记录](completion-and-live-verification-20261027.md)为准。
+
 分支feat/phase3-content-sharing，基线73c36d8174fb5e446459468bb9cd692b902abd66。当前仓库为开发版916下JDLG创建的独立worktree，原main与既有CRM修改均未混入。
 
 ## 本次可核验的增量
