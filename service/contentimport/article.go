@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stdhtml "html"
 	"net/url"
 	"regexp"
 	"service/tracking"
@@ -114,11 +115,17 @@ func ParseArticleHTML(articleURL, raw string) (Document, error) {
 		mediaByKey: make(map[string]int),
 		warningSet: make(map[string]bool),
 	}
+	layout, err := builder.buildLayout(bodyRoot)
+	if err != nil {
+		return Document{}, err
+	}
+	builder.document.LayoutHTML = layout
 	builder.flowChildren(bodyRoot, tracking.ArticleStyle{})
 	builder.flush()
 	if builder.err != nil {
 		return Document{}, builder.err
 	}
+	builder.ensureFallbackMediaBlocks()
 	if len(builder.document.Blocks) == 0 {
 		return Document{}, fail("article_body_missing")
 	}
@@ -199,10 +206,6 @@ func (builder *articleBuilder) flow(node *html.Node, inherited tracking.ArticleS
 		return
 	}
 	style := mergeArticleStyle(inherited, styleOf(node))
-	if (tag == "blockquote" || tag == "ul" || tag == "ol" || isHeadingTag(tag)) && hasNestedArticleMedia(node) {
-		builder.err = fail("unsupported_embed")
-		return
-	}
 	switch tag {
 	case "mp-common-videosnap", "mpvideo", "mp-video":
 		builder.flush()
@@ -316,6 +319,16 @@ func (builder *articleBuilder) flush() {
 }
 
 func (builder *articleBuilder) addMedia(media RemoteMedia) {
+	ref := builder.registerMedia(media)
+	if ref == "" {
+		return
+	}
+	builder.document.Blocks = append(builder.document.Blocks, tracking.ArticleBlock{
+		Kind: media.Kind, MediaID: ref, Caption: media.Caption,
+	})
+}
+
+func (builder *articleBuilder) registerMedia(media RemoteMedia) string {
 	key := media.Kind + "\x00" + firstNonEmpty(media.ID, media.URL)
 	index, exists := builder.mediaByKey[key]
 	if !exists {
@@ -323,9 +336,148 @@ func (builder *articleBuilder) addMedia(media RemoteMedia) {
 		builder.mediaByKey[key] = index
 		builder.media = append(builder.media, media)
 	}
-	builder.document.Blocks = append(builder.document.Blocks, tracking.ArticleBlock{
-		Kind: media.Kind, MediaID: remoteMediaID(index), Caption: media.Caption,
-	})
+	return remoteMediaID(index)
+}
+
+func (builder *articleBuilder) ensureFallbackMediaBlocks() {
+	referenced := map[string]bool{}
+	for _, block := range builder.document.Blocks {
+		if block.Kind == "image" || block.Kind == "video" {
+			referenced[block.MediaID] = true
+		}
+	}
+	for index, media := range builder.media {
+		ref := remoteMediaID(index)
+		if !referenced[ref] {
+			builder.document.Blocks = append(builder.document.Blocks, tracking.ArticleBlock{Kind: media.Kind, MediaID: ref, Caption: media.Caption})
+		}
+	}
+}
+
+func (builder *articleBuilder) buildLayout(root *html.Node) (string, error) {
+	var candidate strings.Builder
+	for child := root.FirstChild; child != nil; child = child.NextSibling {
+		if err := builder.writeLayoutNode(&candidate, child); err != nil {
+			return "", err
+		}
+	}
+	if builder.err != nil {
+		return "", builder.err
+	}
+	layout, err := tracking.NormalizeArticleLayoutHTML(candidate.String())
+	if err != nil {
+		return "", fail("article_too_large")
+	}
+	return layout, nil
+}
+
+func (builder *articleBuilder) writeLayoutNode(out *strings.Builder, node *html.Node) error {
+	if node.Type == html.TextNode {
+		out.WriteString(stdhtml.EscapeString(node.Data))
+		return nil
+	}
+	if node.Type != html.ElementNode {
+		return nil
+	}
+	tag := strings.ToLower(node.Data)
+	if isProhibitedArticleTag(tag) || isDroppedArticleNode(node) {
+		return nil
+	}
+	if tag == "img" {
+		source := firstAttribute(node, "data-src", "src")
+		cleaned := cleanArticleMediaURL(source)
+		if cleaned == "" {
+			builder.warn("missing_image")
+			return nil
+		}
+		ref := builder.registerMedia(RemoteMedia{ID: safeMediaSourceID("", cleaned), Kind: "image", URL: cleaned, Caption: normalizedText(firstAttribute(node, "alt"))})
+		out.WriteString(`<img data-media-id="` + stdhtml.EscapeString(ref) + `"`)
+		if alt := normalizedText(firstAttribute(node, "alt")); alt != "" {
+			out.WriteString(` alt="` + stdhtml.EscapeString(alt) + `"`)
+		}
+		out.WriteByte('>')
+		return nil
+	}
+	if tag == "iframe" || tag == "video" || tag == "mp-common-videosnap" || tag == "mpvideo" || tag == "mp-video" {
+		media, ok := layoutVideoMedia(node, tag)
+		if !ok {
+			if tag == "iframe" {
+				builder.warn("unsupported_iframe_removed")
+				return nil
+			}
+			return fail("unsupported_video")
+		}
+		ref := builder.registerMedia(media)
+		out.WriteString(`<jd-video data-media-id="` + stdhtml.EscapeString(ref) + `"></jd-video>`)
+		return nil
+	}
+	if !isArticleLayoutTag(tag) {
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			if err := builder.writeLayoutNode(out, child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	out.WriteByte('<')
+	out.WriteString(tag)
+	if style := firstAttribute(node, "style"); style != "" {
+		out.WriteString(` style="` + stdhtml.EscapeString(style) + `"`)
+	}
+	if (tag == "td" || tag == "th") && firstAttribute(node, "colspan") != "" {
+		out.WriteString(` colspan="` + stdhtml.EscapeString(firstAttribute(node, "colspan")) + `"`)
+	}
+	if (tag == "td" || tag == "th") && firstAttribute(node, "rowspan") != "" {
+		out.WriteString(` rowspan="` + stdhtml.EscapeString(firstAttribute(node, "rowspan")) + `"`)
+	}
+	out.WriteByte('>')
+	if tag == "br" || tag == "hr" {
+		return nil
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if err := builder.writeLayoutNode(out, child); err != nil {
+			return err
+		}
+	}
+	out.WriteString("</")
+	out.WriteString(tag)
+	out.WriteByte('>')
+	return nil
+}
+
+func layoutVideoMedia(node *html.Node, tag string) (RemoteMedia, bool) {
+	if tag == "iframe" || tag == "mp-common-videosnap" || tag == "mpvideo" || tag == "mp-video" {
+		id := embeddedWXVID(node)
+		if tag != "iframe" {
+			id = embeddedWXVAttribute(node)
+		}
+		if id == "" {
+			return RemoteMedia{}, false
+		}
+		return RemoteMedia{ID: id, Kind: "video", URL: cleanCapturedVideoURL(firstAttribute(node, "data-video-url", "data-url"), id)}, true
+	}
+	id := firstAttribute(node, "data-mpvid", "data-vid", "data-id")
+	source := firstAttribute(node, "src", "data-src")
+	if source == "" {
+		source = firstDescendantAttribute(node, "source", "src")
+	}
+	cleaned := cleanArticleMediaURL(source)
+	if cleaned != "" {
+		id = safeMediaSourceID(id, cleaned)
+	}
+	if id == "" || (cleaned == "" && !wxvIDPattern.MatchString(id)) {
+		return RemoteMedia{}, false
+	}
+	return RemoteMedia{ID: id, Kind: "video", URL: cleaned}, true
+}
+
+func isArticleLayoutTag(tag string) bool {
+	switch tag {
+	case "section", "div", "p", "span", "strong", "b", "em", "i", "u", "s", "br", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li", "figure", "figcaption", "table", "thead", "tbody", "tfoot", "tr", "td", "th", "hr", "code", "pre":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateArticleDocumentLimits(document tracking.ArticleDocument, mediaCount int) error {
@@ -365,29 +517,6 @@ func validateArticleDocumentLimits(document tracking.ArticleDocument, mediaCount
 		return fail("article_too_large")
 	}
 	return nil
-}
-
-func isHeadingTag(tag string) bool {
-	return len(tag) == 2 && tag[0] == 'h' && tag[1] >= '1' && tag[1] <= '6'
-}
-
-func hasNestedArticleMedia(node *html.Node) bool {
-	for child := node.FirstChild; child != nil; child = child.NextSibling {
-		if child.Type == html.ElementNode {
-			tag := strings.ToLower(child.Data)
-			if isProhibitedArticleTag(tag) || isDroppedArticleNode(child) {
-				continue
-			}
-			switch tag {
-			case "img", "iframe", "video", "mp-common-videosnap", "mpvideo", "mp-video":
-				return true
-			}
-		}
-		if hasNestedArticleMedia(child) {
-			return true
-		}
-	}
-	return false
 }
 
 func (builder *articleBuilder) warn(code string) {

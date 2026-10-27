@@ -22,6 +22,13 @@ func normalizeArticleDocument(body string) (string, error) {
 		return "", fail(400, "原排版正文块数无效")
 	}
 	out := ArticleDocument{Schema: 1, Blocks: make([]ArticleBlock, 0, len(input.Blocks))}
+	if input.LayoutHTML != "" {
+		layout, err := NormalizeArticleLayoutHTML(input.LayoutHTML)
+		if err != nil {
+			return "", fail(400, "原排版正文布局无效")
+		}
+		out.LayoutHTML = layout
+	}
 	for _, block := range input.Blocks {
 		normalized, err := normalizeArticleBlock(block)
 		if err != nil {
@@ -115,6 +122,18 @@ func articleMediaReferences(body string) (map[string]string, error) {
 			return nil, fail(400, "同一媒体不能同时作为图片和视频")
 		}
 		refs[block.MediaID] = block.Kind
+	}
+	if doc.LayoutHTML != "" {
+		layoutRefs, err := ArticleLayoutMediaReferences(doc.LayoutHTML)
+		if err != nil {
+			return nil, fail(400, "原排版正文布局无效")
+		}
+		for id, kind := range layoutRefs {
+			if old := refs[id]; old != "" && old != kind {
+				return nil, fail(400, "同一媒体不能同时作为图片和视频")
+			}
+			refs[id] = kind
+		}
 	}
 	return refs, nil
 }

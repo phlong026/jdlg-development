@@ -218,7 +218,7 @@ func TestParseArticleHTMLRejectsOversizedTextWithoutTruncating(t *testing.T) {
 	}
 }
 
-func TestParseArticleHTMLRejectsMediaNestedInFlattenedBlocks(t *testing.T) {
+func TestParseArticleHTMLPreservesNestedMediaInSanitizedLayout(t *testing.T) {
 	tests := map[string]string{
 		"heading image": `<h2>标题<img data-src="https://mmbiz.qpic.cn/a.jpg"></h2>`,
 		"quote video":   `<blockquote>引用<video src="https://mpvideo.qpic.cn/a.mp4?vid=direct_12345678"></video></blockquote>`,
@@ -226,12 +226,35 @@ func TestParseArticleHTMLRejectsMediaNestedInFlattenedBlocks(t *testing.T) {
 	}
 	for name, body := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseArticleHTML("https://mp.weixin.qq.com/s/nested", `<div id="js_content">`+body+`</div>`)
-			var resolved *ResolveError
-			if !errors.As(err, &resolved) || resolved.Code != "unsupported_embed" {
-				t.Fatalf("error=%v, want unsupported_embed", err)
+			doc, err := ParseArticleHTML("https://mp.weixin.qq.com/s/nested", `<div id="js_content"><section style="padding:12px;border:1px solid #ddd">`+body+`</section></div>`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if doc.Body.LayoutHTML == "" || len(doc.Source.Media) != 1 || !strings.Contains(doc.Body.LayoutHTML, `data-media-id="remote-0000"`) {
+				t.Fatalf("nested layout/media missing: %#v", doc)
+			}
+			if strings.Contains(doc.Body.LayoutHTML, "mp.weixin.qq.com") || strings.Contains(doc.Body.LayoutHTML, "mpvideo.qpic.cn") {
+				t.Fatalf("external resource survived: %s", doc.Body.LayoutHTML)
+			}
+			if !strings.Contains(doc.Body.LayoutHTML, `style="padding:12px;border:1px solid #ddd"`) {
+				t.Fatalf("safe box style lost: %s", doc.Body.LayoutHTML)
 			}
 		})
+	}
+}
+
+func TestParseArticleHTMLSanitizesEventsScriptsAndUnsafeCSS(t *testing.T) {
+	doc, err := ParseArticleHTML("https://mp.weixin.qq.com/s/safe", `<div id="js_content"><section onclick="evil()" style="color:#123; background:url(https://evil.test/a); position:fixed"><p>正文<script>alert(1)</script></p><img data-src="https://mmbiz.qpic.cn/a.jpg" onerror="evil()"></section></div>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unsafe := range []string{"onclick", "onerror", "evil.test", "position", "script", "alert(1)", "data-src", " src="} {
+		if strings.Contains(doc.Body.LayoutHTML, unsafe) {
+			t.Fatalf("unsafe value %q survived: %s", unsafe, doc.Body.LayoutHTML)
+		}
+	}
+	if !strings.Contains(doc.Body.LayoutHTML, `style="color:#123"`) || !strings.Contains(doc.Body.LayoutHTML, `<img data-media-id="remote-0000">`) {
+		t.Fatalf("safe layout lost: %s", doc.Body.LayoutHTML)
 	}
 }
 

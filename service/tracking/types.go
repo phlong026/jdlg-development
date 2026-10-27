@@ -133,8 +133,9 @@ type ArticleBlock struct {
 	Style   ArticleStyle `json:"style,omitempty"`
 }
 type ArticleDocument struct {
-	Schema int            `json:"schema"`
-	Blocks []ArticleBlock `json:"blocks"`
+	Schema     int            `json:"schema"`
+	LayoutHTML string         `json:"layout_html,omitempty"`
+	Blocks     []ArticleBlock `json:"blocks"`
 }
 type Content struct {
 	ReadOnly    bool       `json:"read_only,omitempty"`

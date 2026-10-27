@@ -3,6 +3,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -114,5 +115,56 @@ func TestArticleDocumentKeepsLegacyFormats(t *testing.T) {
 		if err != nil || got != tc.want || format != tc.format {
 			t.Fatalf("旧格式兼容破坏: %q %q %v", got, format, err)
 		}
+	}
+}
+
+func TestArticleDocumentNormalizesSafeLayoutAndRejectsExternalCapabilities(t *testing.T) {
+	body := `{"schema":1,"layout_html":"<section style=\"text-align:center;color:#123;background-image:url(https://evil.test/a.png)\" onclick=\"evil()\"><p>正文</p><img data-media-id=\"asset-0001\" src=\"https://evil.test/a.png\"><script>alert(1)</script></section>","blocks":[{"kind":"paragraph","text":"正文"}]}`
+	got, _, err := normalizeBody(body, "article_v2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unsafe := range []string{"onclick", "evil.test", "background-image", "script", "alert(1)", " src="} {
+		if strings.Contains(got, unsafe) {
+			t.Fatalf("unsafe layout survived: %s", got)
+		}
+	}
+	var document ArticleDocument
+	if err := json.Unmarshal([]byte(got), &document); err != nil || document.LayoutHTML != `<section style="text-align:center;color:#123"><p>正文</p><img data-media-id="asset-0001"></section>` {
+		t.Fatalf("safe layout lost: %s err=%v", got, err)
+	}
+	again, _, err := normalizeBody(got, "article_v2")
+	if err != nil || again != got {
+		t.Fatalf("layout round trip changed: %s err=%v", again, err)
+	}
+	refs, err := articleMediaReferences(got)
+	if err != nil || refs["asset-0001"] != "image" {
+		t.Fatalf("layout media refs=%v err=%v", refs, err)
+	}
+}
+
+func TestArticleDocumentLayoutMediaMustBeAuthorizedAndTyped(t *testing.T) {
+	s, scope := fixture(t)
+	ctx := context.Background()
+	asset := Asset{ID: "asset-0001", Kind: "image", URL: "/api/v1/miniprogram/tracking/media/asset-0001", Width: 1200, Height: 800, MIME: "image/jpeg"}
+	if err := s.AddMedia(ctx, scope, asset, "owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	base := Draft{Title: "原排版", BodyFormat: "article_v2", Rights: "own", Owner: "owner-a"}
+	for name, layout := range map[string]string{
+		"missing authorization": `<img data-media-id="asset-0001">`,
+		"wrong kind":            `<jd-video data-media-id="asset-0001"></jd-video>`,
+		"missing resource":      `<img data-media-id="asset-missing">`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			draft := base
+			draft.Body = `{"schema":1,"layout_html":` + strconv.Quote(layout) + `,"blocks":[{"kind":"paragraph","text":"正文"}]}`
+			if name != "missing authorization" {
+				draft.MediaIDs = []string{"asset-0001"}
+			}
+			if _, err := s.SaveContent(ctx, scope, "", draft); err == nil {
+				t.Fatal("应拒绝未授权、错误类型或缺失的 layout 媒体")
+			}
+		})
 	}
 }

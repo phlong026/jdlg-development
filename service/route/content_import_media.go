@@ -142,9 +142,8 @@ func importDraft(job contentimport.Job, doc contentimport.Document, assets []tra
 		}
 		refs[fmt.Sprintf("remote-%04d", i)] = a
 	}
-	body := tracking.ArticleDocument{Schema: doc.Body.Schema, Blocks: append([]tracking.ArticleBlock{}, doc.Body.Blocks...)}
-	ids := []string{}
-	seen := map[string]bool{}
+	body := tracking.ArticleDocument{Schema: doc.Body.Schema, LayoutHTML: doc.Body.LayoutHTML, Blocks: append([]tracking.ArticleBlock{}, doc.Body.Blocks...)}
+	replacements := map[string]string{}
 	for i, block := range body.Blocks {
 		if block.Kind == "image" || block.Kind == "video" {
 			asset, ok := refs[block.MediaID]
@@ -152,10 +151,39 @@ func importDraft(job contentimport.Job, doc contentimport.Document, assets []tra
 				return draft, &contentimport.ResolveError{Code: "missing_media"}
 			}
 			body.Blocks[i].MediaID = asset.ID
-			if !seen[asset.ID] {
-				ids = append(ids, asset.ID)
-				seen[asset.ID] = true
-			}
+		}
+	}
+	for remoteID, asset := range refs {
+		replacements[remoteID] = asset.ID
+	}
+	if body.LayoutHTML != "" {
+		rewritten, rewriteErr := tracking.RewriteArticleLayoutMediaIDs(body.LayoutHTML, replacements)
+		if rewriteErr != nil {
+			return draft, &contentimport.ResolveError{Code: "missing_media"}
+		}
+		body.LayoutHTML = rewritten
+	}
+	articleRefs := map[string]string{}
+	for _, block := range body.Blocks {
+		if block.Kind == "image" || block.Kind == "video" {
+			articleRefs[block.MediaID] = block.Kind
+		}
+	}
+	if body.LayoutHTML != "" {
+		layoutRefs, refErr := tracking.ArticleLayoutMediaReferences(body.LayoutHTML)
+		if refErr != nil {
+			return draft, &contentimport.ResolveError{Code: "missing_media"}
+		}
+		for id, kind := range layoutRefs {
+			articleRefs[id] = kind
+		}
+	}
+	ids := make([]string, 0, len(articleRefs))
+	seen := map[string]bool{}
+	for _, asset := range assets {
+		if articleRefs[asset.ID] != "" && !seen[asset.ID] {
+			ids = append(ids, asset.ID)
+			seen[asset.ID] = true
 		}
 	}
 	encoded, err := json.Marshal(body)

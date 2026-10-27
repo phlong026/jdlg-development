@@ -87,3 +87,14 @@ func TestImportDraftRepeatedImageUsesOneAssetGrant(t *testing.T) {
 		t.Fatal(draft, err)
 	}
 }
+
+func TestImportDraftRewritesLayoutOnlyNestedMediaAndKeepsGrant(t *testing.T) {
+	doc := contentimport.Document{
+		Source: contentimport.Source{Title: "嵌套视频", SourceURL: "https://mp.weixin.qq.com/s/example", Media: []contentimport.RemoteMedia{{Kind: "video"}}},
+		Body:   tracking.ArticleDocument{Schema: 1, LayoutHTML: `<blockquote>引用<jd-video data-media-id="remote-0000"></jd-video></blockquote>`, Blocks: []tracking.ArticleBlock{{Kind: "quote", Text: "引用"}}},
+	}
+	draft, err := importDraft(contentimport.Job{Owner: "one", Rights: "authorized"}, doc, []tracking.Asset{{ID: "stored-video-one", Kind: "video"}})
+	if err != nil || len(draft.MediaIDs) != 1 || draft.MediaIDs[0] != "stored-video-one" || strings.Contains(draft.Body, "remote-0000") || !strings.Contains(draft.Body, "stored-video-one") {
+		t.Fatalf("layout-only media not rewritten: %+v err=%v", draft, err)
+	}
+}
