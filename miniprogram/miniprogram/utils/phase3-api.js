@@ -69,6 +69,7 @@ function projectNotePath(path) { return PROJECT_NOTES + path; }
 function listProjectNoteProjects(query) { return request(projectNotePath('/projects'), 'GET', {}, query); }
 function createProjectNoteProject(input) { return request(projectNotePath('/projects'), 'POST', input); }
 function getProjectNoteProject(id) { return request(projectNotePath('/projects/' + encodeURIComponent(id))); }
+function getProjectNoteVersion(projectID, versionID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/versions/' + encodeURIComponent(versionID))); }
 function inviteProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'POST', {}); }
 function revokeProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'DELETE', {}); }
 function setProjectNoteConfirmer(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/confirmer'), 'PUT', { account_id: Number(accountID) }); }
@@ -82,6 +83,26 @@ function getSharedProjectNote(token) { return request(projectNotePath('/shared/'
 function openSharedProjectNote(token, eventID) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/open'), 'POST', { event_id: eventID }); }
 function addSharedProjectNoteFeedback(token, text, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/feedback'), 'POST', { text, idempotency_key: key }); }
 function confirmSharedProjectNote(token, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/confirm'), 'POST', { idempotency_key: key }); }
+
+function downloadProjectNoteFile(path, timeout, message) {
+  return new Promise((resolve, reject) => wx.downloadFile({
+    url: ORIGIN + path, header: authHeaders(path, {}), timeout,
+    success(response) {
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.tempFilePath) resolve(response.tempFilePath);
+      else reject(responseError(response, message));
+    },
+    fail() { reject(new Error(message)); },
+  }));
+}
+function downloadProjectNoteMedia(projectID, mediaID) {
+  return downloadProjectNoteFile(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/media/' + encodeURIComponent(mediaID)), 15000, '固定版本素材加载失败');
+}
+function downloadProjectNoteWord(projectID, versionID) {
+  return downloadProjectNoteFile(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/versions/' + encodeURIComponent(versionID) + '/export.docx'), 30000, 'Word 导出失败，请重试');
+}
+function downloadSharedProjectNoteWord(token) {
+  return downloadProjectNoteFile(projectNotePath('/shared/' + encodeURIComponent(token) + '/export.docx'), 30000, 'Word 导出失败，请确认分享仍有效');
+}
 
 function uploadProjectNoteMedia(projectID, filePath) {
   const path = projectNotePath('/projects/' + encodeURIComponent(projectID) + '/media');
@@ -151,5 +172,6 @@ module.exports = {
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
   addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
   uploadProjectNoteMedia,
+  getProjectNoteVersion, downloadProjectNoteMedia, downloadProjectNoteWord, downloadSharedProjectNoteWord,
   listNativeReferenceCandidates, listNativeReferences, saveNativeReference, deleteNativeReference, getNativeReferenceTarget,
 };

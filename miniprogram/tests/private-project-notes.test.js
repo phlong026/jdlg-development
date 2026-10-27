@@ -74,6 +74,23 @@ test('private project-note API helpers use signed member-checked endpoints and p
   assert.doesNotMatch(calls[4].options.url, /[?&](?:token|authorization)=/i);
 });
 
+test('fixed-version and Word downloads sign their exact private routes without query credentials', async () => {
+  const { api, calls } = loadAPI();
+  await api.getProjectNoteVersion('project-one', 'version-one');
+  await api.downloadProjectNoteMedia('project-one', 'asset-one');
+  await api.downloadProjectNoteWord('project-one', 'version-one');
+  await api.downloadSharedProjectNoteWord('private-share-one');
+  assert.deepEqual(calls.map(call => call.options.header.signedPath), [
+    '/api/v1/miniprogram/project-notes/projects/project-one/versions/version-one',
+    '/api/v1/miniprogram/project-notes/projects/project-one/media/asset-one',
+    '/api/v1/miniprogram/project-notes/projects/project-one/versions/version-one/export.docx',
+    '/api/v1/miniprogram/project-notes/shared/private-share-one/export.docx',
+  ]);
+  for (const call of calls) assert.doesNotMatch(call.options.url, /[?&](?:token|authorization)=/i);
+  assert.equal(calls[2].options.timeout, 30000);
+  assert.equal(calls[3].options.timeout, 30000);
+});
+
 test('private pages are registered and explicitly excluded from public tracking', () => {
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
   const routes = require(path.join(root, 'utils/tracking/routes.js'));
@@ -266,22 +283,129 @@ test('private media upload unwraps the project-only asset response', async () =>
   assert.equal(page.data.noteMedia[0].title, '现场.jpg');
 });
 
-test('project list follows next_cursor and exact missing version never falls back to first fifty', async () => {
+test('project list follows next_cursor and exact version outside the first fifty remains readable', async () => {
   const projects = Array.from({ length: 31 }, (_, index) => ({ project_id: `project-${index + 1}`, name: `项目${index + 1}` }));
   const listCalls = [];
   const page = pageHarness('projectnotes', {
     listProjectNoteProjects: async query => { listCalls.push(query || {}); return listCalls.length === 1 ? { items: projects.slice(0, 30), next_cursor: 'page-2' } : { items: projects.slice(30) }; },
     workbenchContext: async () => ({ owners: ['owner-one'] }),
     getProjectNoteProject: async () => ({ project: projects[30], notes: [{ note_id: 'note-first', title: '错误草稿', body: 'wrong', body_format: 'plain_text' }], versions: Array.from({ length: 50 }, (_, index) => ({ version_id: `old-${index}`, note_id: 'note-first' })), shares: [], feedbacks: [{ feedback_id: 'wrong', version_id: 'old-0' }], confirmations: [{ confirmation_id: 'wrong', version_id: 'old-0' }], truncated: { versions: true } }),
+    getProjectNoteVersion: async (project, version) => { assert.equal(project, 'project-31'); assert.equal(version, 'wanted-51'); return { project_id: project, version_id: version, note_id: 'note-first', revision: 1, title: '真正历史版本', body_format: 'plain', body: '固定正文', media: [] }; },
   });
   page._visible = true; page._token = 'session-token'; page._epoch = 1; page._targetProjectID = 'project-31'; page._targetVersionID = 'wanted-51';
   await page.loadProjects(1);
   assert.equal(page.data.projects.length, 31);
   assert.equal(listCalls[1].cursor, 'page-2');
-  assert.equal(page.data.frozenVersion, null);
+  assert.equal(page.data.frozenVersion.version_id, 'wanted-51');
   assert.equal(page.data.note, null);
   assert.equal(page.data.feedbacks.length, 0);
-  assert.match(page.data.historyNotice, /历史|未加载/);
+  assert.equal(page.data.historyMode, true);
+  assert.equal(page.data.versionView.body, '固定正文');
+});
+
+test('a V1 notification never renders or edits the latest V2 draft', async () => {
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', revision: 2, title: '新标题', body: '这是V2正文', body_format: 'plain' }], versions: [{ version_id: 'version-one', note_id: 'note-one', revision: 1 }], shares: [], feedbacks: [] }),
+    getProjectNoteVersion: async () => ({ project_id: 'project-one', version_id: 'version-one', note_id: 'note-one', revision: 1, title: '旧标题', body: '这是V1正文', body_format: 'plain', media: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._targetVersionID = 'version-one';
+  await page.openProject('project-one', 1);
+  assert.equal(page.data.versionView.body, '这是V1正文');
+  assert.equal(page.data.note, null);
+  assert.equal(page.data.noteBody, '');
+  assert.equal(page.data.historyMode, true);
+});
+
+test('failed exact version does not replace the requested historical view with a latest draft', async () => {
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', body: 'V2' }], versions: [{ version_id: 'version-two', note_id: 'note-one' }] }),
+    getProjectNoteVersion: async () => { throw new Error('版本不可访问'); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._targetVersionID = 'version-one';
+  await page.openProject('project-one', 1);
+  assert.equal(page.data.versionView, null); assert.equal(page.data.note, null);
+  assert.match(page.data.error, /不可访问/);
+});
+
+test('late fixed-version result after account change cannot restore private content', async () => {
+  let token = 'account-a', finish;
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'project-one' }, notes: [], versions: [] }),
+    getProjectNoteVersion: () => new Promise(resolve => { finish = resolve; }),
+  }, { getStorageSync: key => key === 'token' ? token : '' });
+  page._visible = true; page._token = token; page._epoch = 1; page._targetVersionID = 'version-one';
+  const pending = page.openProject('project-one', 1); await new Promise(resolve => setTimeout(resolve, 0));
+  token = 'account-b'; page._token = token; page._epoch += 1; page.clearProtected();
+  finish({ project_id: 'project-one', version_id: 'version-one', body_format: 'plain', body: 'A的正文', media: [] });
+  await pending;
+  assert.equal(page.data.versionView, null); assert.equal(page.data.frozenVersion, null);
+});
+
+test('a failed fixed-version media load never renders a partial snapshot or continues queued downloads', async () => {
+  const downloads = []; let finishSecond;
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'project-one' }, notes: [], versions: [] }),
+    getProjectNoteVersion: async () => ({ project_id: 'project-one', version_id: 'version-one', body_format: 'plain', body: '固定正文', media: [{ media_id: 'image-one', kind: 'image' }, { media_id: 'image-two', kind: 'image' }, { media_id: 'image-three', kind: 'image' }] }),
+    downloadProjectNoteMedia: async (_project, id) => { downloads.push(id); if (id === 'image-one') throw new Error('素材缺失'); return new Promise(resolve => { finishSecond = resolve; }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._targetVersionID = 'version-one';
+  await page.openProject('project-one', 1);
+  finishSecond('/tmp/image-two.png'); await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(downloads, ['image-one', 'image-two']);
+  assert.equal(page.data.versionView, null); assert.equal(page.data.versionMedia.length, 0);
+  assert.match(page.data.error, /不可访问/);
+});
+
+test('Word opens the selected fixed version and late download cannot open across accounts', async () => {
+  let token = 'account-a', finish; const opened = [], requested = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteWord: async (project, version) => { requested.push([project, version]); return new Promise(resolve => { finish = resolve; }); },
+  }, { getStorageSync: key => key === 'token' ? token : '', openDocument: options => { opened.push(options); options.success(); } });
+  page._visible = true; page._token = token; page._epoch = 1; page.setData({ selectedProject: { project_id: 'project-one' }, frozenVersion: { version_id: 'version-one' } });
+  const pending = page.exportProjectNoteWord();
+  token = 'account-b'; page._token = token; page._epoch += 1; page.clearProtected();
+  finish('/tmp/v1.docx'); await pending;
+  assert.deepEqual(requested, [['project-one', 'version-one']]); assert.equal(opened.length, 0);
+});
+
+test('shared Word download opens only after success and image saving reauthorizes original bytes', async () => {
+  const opened = [], saved = [], downloads = [];
+  const page = pageHarness('projectnoteview', {
+    downloadSharedProjectNoteWord: async token => { downloads.push(['word', token]); return '/tmp/shared-v1.docx'; },
+    downloadSharedProjectNoteMedia: async (token, id) => { downloads.push(['image', token, id]); return '/tmp/rechecked-original.png'; },
+  }, { openDocument: options => { opened.push(options); options.success(); }, saveImageToPhotosAlbum: options => { saved.push(options.filePath); options.success(); } });
+  page.onLoad({ pns: 'private-share-one' }); page._accountToken = 'session-token'; page._epoch = 1;
+  page.setData({ view: { version: { version_id: 'version-one' } }, media: [{ media_id: 'image-one', kind: 'image', local_path: '/tmp/old-cache.png' }, { media_id: 'video-one', kind: 'video' }] });
+  await page.exportSharedProjectNoteWord();
+  assert.equal(opened[0].filePath, '/tmp/shared-v1.docx'); assert.equal(opened[0].fileType, 'docx'); assert.equal(opened[0].showMenu, true);
+  await page.saveOriginalImage({ currentTarget: { dataset: { id: 'image-one' } } });
+  await page.saveOriginalImage({ currentTarget: { dataset: { id: 'video-one' } } });
+  assert.deepEqual(saved, ['/tmp/rechecked-original.png']);
+  assert.deepEqual(downloads, [['word', 'private-share-one'], ['image', 'private-share-one', 'image-one']]);
+});
+
+test('failed shared export or revoked original image never opens or saves a cached file', async () => {
+  const opened = [], saved = [];
+  const page = pageHarness('projectnoteview', {
+    downloadSharedProjectNoteWord: async () => { throw new Error('分享已撤回'); },
+    downloadSharedProjectNoteMedia: async () => { throw new Error('分享已撤回'); },
+  }, { openDocument: options => opened.push(options), saveImageToPhotosAlbum: options => saved.push(options) });
+  page.onLoad({ pns: 'private-share-one' }); page._accountToken = 'session-token'; page._epoch = 1;
+  page.setData({ view: { version: { version_id: 'version-one' } }, media: [{ media_id: 'image-one', kind: 'image', local_path: '/tmp/old-cache.png' }] });
+  await page.exportSharedProjectNoteWord();
+  await page.saveOriginalImage({ currentTarget: { dataset: { id: 'image-one' } } });
+  assert.equal(opened.length, 0); assert.equal(saved.length, 0); assert.match(page.data.notice, /撤回/);
+});
+
+test('an in-flight Word download cannot open after switching the selected project version', async () => {
+  let finish; const opened = [];
+  const page = pageHarness('projectnotes', { downloadProjectNoteWord: () => new Promise(resolve => { finish = resolve; }) }, { openDocument: options => { opened.push(options); options.success(); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'project-one' }, frozenVersion: { version_id: 'version-one' } });
+  const pending = page.exportProjectNoteWord();
+  page.setData({ selectedProject: { project_id: 'project-two' }, frozenVersion: { version_id: 'version-two' }, busy: false });
+  finish('/tmp/old-version.docx'); await pending;
+  assert.equal(opened.length, 0);
 });
 
 test('member mutations refresh active members and confirmer is selected from them', async () => {

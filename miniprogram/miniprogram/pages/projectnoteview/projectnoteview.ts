@@ -119,6 +119,28 @@ Page({
       this.setData({ view: Object.assign({}, this.data.view, { confirmation }), confirmed: true, busy: false, notice: '已确认当前固定版本。设计师后续新版本需另行确认。' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '版本确认失败' }); }
   },
+  async exportSharedProjectNoteWord() {
+    if (!this.data.view || this.data.busy) return;
+    const epoch = this._epoch; this.setData({ busy: true, notice: '' });
+    try {
+      const filePath = await api.downloadSharedProjectNoteWord(this._shareToken);
+      if (!this.current(epoch)) return;
+      await new Promise((resolve, reject) => wx.openDocument({ filePath, fileType: 'docx', showMenu: true, success: resolve, fail: () => reject(new Error('Word 文件打开失败，请重试')) }));
+      if (this.current(epoch)) this.setData({ busy: false, notice: '已打开当前固定版本的 Word 文件。' });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || 'Word 导出失败' }); }
+  },
+  async saveOriginalImage(event) {
+    if (!this.data.view || this.data.busy) return;
+    const mediaID = String(event.currentTarget.dataset.id || '');
+    if (!this.data.media.some(item => item.media_id === mediaID && item.kind === 'image')) return;
+    const epoch = this._epoch; this.setData({ busy: true, notice: '' });
+    try {
+      const filePath = await api.downloadSharedProjectNoteMedia(this._shareToken, mediaID);
+      if (!this.current(epoch)) return;
+      await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath, success: resolve, fail: () => reject(new Error('原图未保存，请检查相册权限后重试')) }));
+      if (this.current(epoch)) this.setData({ busy: false, notice: '原图已保存到相册。' });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '原图保存失败，请确认分享仍有效' }); }
+  },
   openImage(event) {
     const mediaID = String(event.currentTarget.dataset.id || '');
     const asset = this.data.media.find(item => item.media_id === mediaID && item.kind === 'image');

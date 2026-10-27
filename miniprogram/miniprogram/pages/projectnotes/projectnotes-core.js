@@ -1,12 +1,14 @@
 // @ts-nocheck
 'use strict';
 const api = require('../../utils/phase3-api');
+const { renderArticleDocument } = require('../../utils/article-document');
 
 const blankProtected = () => ({
   projects: [], owners: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
   members: [], activeMembers: [], confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '', memberAccount: '',
   note: null, noteTitle: '', noteBody: '', bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
+  historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
@@ -26,7 +28,7 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this._token = token; this._epoch = (this._epoch || 0) + 1;
-      this._issuedShare = null; this._shareAttempt = null; this._selectedProjectID = ''; this.clearProtected();
+      this._issuedShare = null; this._shareAttempt = null; this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
     }
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
@@ -82,31 +84,62 @@ Page({
       if (this.current(epoch)) { this._selectedProjectID = project.project_id; this.setData({ projects: [project, ...this.data.projects], selectedProject: project, projectName: '', busy: false, notice: '项目已创建，可邀请业主并建立笔记。' }); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },
-  async selectProject(event) { return this.openProject(String(event.currentTarget.dataset.id || ''), this._epoch); },
+  async selectProject(event) { this._targetVersionID = ''; this._selectedVersionID = ''; return this.openProject(String(event.currentTarget.dataset.id || ''), this._epoch); },
   async openProject(projectID, epoch, notice) {
     if (!projectID) return;
+    const request = this._projectRequest = (this._projectRequest || 0) + 1;
+    const requested = this._targetVersionID || this._selectedVersionID || '';
+    this._selectedProjectID = projectID; this._selectedVersionID = requested; this._targetVersionID = '';
     const kept = { projects: this.data.projects, owners: this.data.owners, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this.setData(Object.assign(blankProtected(), kept, { busy: true, error: '', notice: notice || '' }));
     try {
       const result = await api.getProjectNoteProject(projectID);
-      if (this.current(epoch)) this.applyProjectDetail(result, notice);
+      if (!this.current(epoch) || request !== this._projectRequest) return;
+      let fixed = null;
+      if (requested) {
+        fixed = await api.getProjectNoteVersion(projectID, requested);
+        if (!this.current(epoch) || request !== this._projectRequest) return;
+        if (fixed.project_id !== projectID || fixed.version_id !== requested) throw new Error('固定版本不匹配');
+      }
+      const presentation = fixed ? await this.fixedVersionPresentation(projectID, fixed, epoch, request) : null;
+      if (this.current(epoch) && request === this._projectRequest) this.applyProjectDetail(result, notice, fixed, presentation);
     } catch (_) {
-      if (!this.current(epoch)) return;
-      this.clearProtected(); this.setData(Object.assign({}, kept, { error: '私人项目暂不可访问。', busy: false }));
+      if (!this.current(epoch) || request !== this._projectRequest) return;
+      this.clearProtected(); this.setData(Object.assign({}, kept, { error: requested ? '目标固定版本暂不可访问，未切换到其他版本。' : '私人项目暂不可访问。', busy: false }));
     }
   },
-  applyProjectDetail(result, notice) {
+  async fixedVersionPresentation(projectID, fixed, epoch, request) {
+    const assets = [], seen = new Set();
+    for (const asset of [fixed.cover, ...(fixed.media || [])]) {
+      if (asset && !seen.has(asset.media_id)) { seen.add(asset.media_id); assets.push(asset); }
+    }
+    const media = new Array(assets.length); let cursor = 0, failed = false;
+    const consume = async () => {
+      while (cursor < assets.length) {
+        if (failed || !this.current(epoch) || request !== this._projectRequest) return;
+        const index = cursor++, asset = assets[index];
+        try { media[index] = Object.assign({}, asset, { local_path: await api.downloadProjectNoteMedia(projectID, asset.media_id) }); }
+        catch (error) { failed = true; throw error; }
+      }
+    };
+    await Promise.all([consume(), consume()]);
+    if (!this.current(epoch) || request !== this._projectRequest) return null;
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const blocks = fixed.body_format === 'article_v2' ? renderArticleDocument(fixed.body, media, Math.max(240, windowInfo.windowWidth - 40), 'fixed-note') : [];
+    return { media, blocks };
+  },
+  applyProjectDetail(result, notice, fixed, presentation) {
     const project = result.project || result, notes = result.notes || [], versions = result.versions || [], shares = result.shares || [];
-    const requested = this._targetVersionID;
-    const version = requested ? versions.find(item => item.version_id === requested) || null : result.latest_version || versions[0] || null;
+    const requested = this._selectedVersionID || this._targetVersionID;
+    const version = fixed || (requested ? null : result.latest_version || versions[0] || null);
     const targetID = version && version.version_id || requested;
-    const note = version ? notes.find(item => item.note_id === version.note_id) || null : (!requested ? notes[0] || result.note || null : null);
+    const note = requested ? null : version ? notes.find(item => item.note_id === version.note_id) || null : notes[0] || result.note || null;
     let share = result.active_share && (!targetID || result.active_share.version_id === targetID) ? result.active_share : shares.find(item => !item.revoked && (!targetID || item.version_id === targetID)) || null;
     if (share && this._issuedShare && this._issuedShare.share_token && share.share_id === this._issuedShare.share_id) share = Object.assign({}, share, { share_token: this._issuedShare.share_token });
     const members = result.members || [], available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
     const confirmerChoices = [{ actor_id: '', label: '请选择受邀账号' }, ...available.map(item => Object.assign({}, item, { label: '账号 ' + item.actor_id }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
-    const historyNotice = requested && !version ? '目标历史版本未加载（详情最多返回50条），未自动切换到其他版本。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
+    const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this.setData({
       selectedProject: project, members, activeMembers: available, confirmerChoices,
@@ -114,13 +147,28 @@ Page({
       note, noteTitle: note && note.title || '', noteBody: note && note.body || '', bodyReadOnly,
       noteMedia: note ? ((note.media && note.media.length ? note.media.map(assetOf) : (note.media_ids || []).map(id => ({ media_id: id, kind: id === note.cover_media_id ? 'image' : 'private' }))).map(item => Object.assign({}, item, { media_id: mediaID(item) }))) : [],
       frozenVersion: version, activeShare: share,
+      historyMode: !!requested, versionView: fixed || null, versionMedia: presentation && presentation.media || [], versionBlocks: presentation && presentation.blocks || [],
       feedbacks: (result.feedbacks || []).filter(item => !targetID || item.version_id === targetID),
       confirmations: (result.confirmations || []).filter(item => !targetID || item.version_id === targetID),
       truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
       error: share && !share.share_token ? '该分享入口凭证不再保存在当前会话中，请撤回后重新生成。' : '',
     });
   },
-  async refreshProject(notice) { const project = this.data.selectedProject, epoch = this._epoch; if (!project) return; const result = await api.getProjectNoteProject(project.project_id); if (this.current(epoch)) this.applyProjectDetail(result, notice); },
+  async refreshProject(notice) { const project = this.data.selectedProject; if (project) await this.openProject(project.project_id, this._epoch, notice); },
+  async returnToDraft() { const project = this.data.selectedProject; if (!project || this.data.busy) return; this._targetVersionID = ''; this._selectedVersionID = ''; await this.openProject(project.project_id, this._epoch); },
+  async exportProjectNoteWord() {
+    const project = this.data.selectedProject, version = this.data.frozenVersion;
+    if (!project || !version || this.data.busy) return;
+    const epoch = this._epoch;
+    const selected = () => this.current(epoch) && this.data.selectedProject && this.data.selectedProject.project_id === project.project_id && this.data.frozenVersion && this.data.frozenVersion.version_id === version.version_id;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      const filePath = await api.downloadProjectNoteWord(project.project_id, version.version_id);
+      if (!selected()) return;
+      await new Promise((resolve, reject) => wx.openDocument({ filePath, fileType: 'docx', showMenu: true, success: resolve, fail: () => reject(new Error('Word 文件打开失败，请重试')) }));
+      if (selected()) this.setData({ busy: false, notice: '已打开所选固定版本的 Word 文件。' });
+    } catch (error) { if (selected()) this.setData({ busy: false, error: error.message || 'Word 导出失败' }); }
+  },
 
   async inviteProjectNoteMember() { return this.memberMutation(false); },
   async revokeProjectNoteMember(event) { return this.memberMutation(true, event && event.currentTarget.dataset.account); },
