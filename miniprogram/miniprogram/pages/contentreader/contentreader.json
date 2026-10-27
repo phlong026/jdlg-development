@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "内容阅读",
-  "navigationStyle": "custom"
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
 }

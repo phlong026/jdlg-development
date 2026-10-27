@@ -180,5 +180,5 @@ test('editor and reader implement the selected warm-gold content studio hierarch
   assert.match(readerWxml, /open-type="share"/);
   assert.match(readerWxml, /bindtap="copyWebLink"/);
   assert.match(readerStyle, /#a87943/i);
-  assert.match(readerStyle, /position:\s*sticky/);
+  assert.match(readerStyle, /\.reader-actions\s*\{[^}]*position:\s*fixed/);
 });

@@ -5,12 +5,15 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const project = path.resolve(__dirname, '..');
-const output = path.resolve(project, '../docs/phase3/evidence/frontend');
+const output = process.env.PHASE3_UI_EVIDENCE_DIR || path.resolve(project, '../docs/phase3/evidence/frontend');
 const cli = process.env.WECHATIDE_CLI || '/Applications/wechatwebdevtools.app/Contents/MacOS/wechatide';
 fs.mkdirSync(output, { recursive: true });
 const steps = [];
+const installedMocks = [];
+let storageChanged = false;
 let completed = false;
-let failure = "";
+let failure = '';
+const cleanupErrors = [];
 function call(tool, args = {}) {
   const argv = ['-c', 'Codex', tool, '--project', project];
   for (const [key, value] of Object.entries(args)) argv.push('--' + key, typeof value === 'object' ? JSON.stringify(value) : String(value));
@@ -21,6 +24,8 @@ function call(tool, args = {}) {
   if (!result.ok) throw new Error(tool + ': ' + result.message);
   return result.result;
 }
+const evaluate = fn => call('automation_evaluate', { 'fn-source': fn }).result.result;
+const mock = (method, fn) => { call('automation_wx_api', { action: 'mock', method, 'function-declaration': fn }); installedMocks.push(method); };
 const navigate = url => call('automation_navigate', { action: 'navigateTo', url });
 const patch = value => call('automation_page_action', { action: 'setData', patch: JSON.stringify(value) });
 const data = field => call('automation_page_action', { action: 'getData', 'data-path': field });
@@ -47,12 +52,43 @@ const fixtureFunction = function (options) {
   } else if (url.includes('/tracking/config')) result = { enabled: false, content_enabled: true };
   else if (url.includes('/contents/') && url.includes('/versions/')) result = Object.assign({}, content);
   else if (url.includes('/ai/pricing')) result = { prices: { ai_chat_single: 1 } };
+  else {
+    app.phase3UIUnknownRequests = (app.phase3UIUnknownRequests || []).concat(url);
+    return { statusCode: 501, data: { code: 501, msg: '未配置此界面验收请求' }, header: {} };
+  }
   return { statusCode: 200, data: { code: 0, data: result }, header: {} };
 };
+// Paste this source into the selected native console if the IDE automation bridge
+// targets a different runtime. The restore function keeps the override reversible.
+if (process.argv.includes('--console-source')) {
+  process.stdout.write(`(function(){
+    const app=getApp();
+    if(app.phase3UINativeRestore) return 'fixtures already active';
+    const request=wx.request, clipboard=wx.getClipboardData, token=wx.getStorageSync('token');
+    const respond=${fixtureFunction.toString()};
+    wx.request=function(options){
+      const result=respond(options);
+      Promise.resolve().then(function(){if(options.success)options.success(result);if(options.complete)options.complete(result);});
+      return {abort:function(){}};
+    };
+    wx.getClipboardData=function(options){const result={data:'https://mp.weixin.qq.com/s/fixture'};if(options.success)options.success(result);if(options.complete)options.complete(result);};
+    wx.setStorageSync('token','phase3-ui-fixture');
+    app.phase3UINativeRestore=function(){
+      wx.request=request;wx.getClipboardData=clipboard;
+      if(token)wx.setStorageSync('token',token);else wx.removeStorageSync('token');
+      delete app.phase3UIFixture;delete app.phase3UIUnknownRequests;delete app.phase3UINativeRestore;
+      return 'native fixtures restored';
+    };
+    return 'isolated native fixtures active';
+  })();\n`);
+  process.exit(0);
+}
 try {
-  call('automation_wx_api', { action: 'mock', method: 'getStorageSync', 'function-declaration': 'function(key){return key === "token" ? "phase3-ui-fixture" : "";}' });
-  call('automation_wx_api', { action: 'mock', method: 'request', 'function-declaration': fixtureFunction.toString() });
-  call('automation_wx_api', { action: 'mock', method: 'getClipboardData', 'function-declaration': 'function(){return {data:"https://mp.weixin.qq.com/s/fixture"};}' });
+  assert.equal(evaluate('function(){return typeof wx.getStorageSync;}'), 'function', 'native storage API must be ready');
+  mock('request', fixtureFunction.toString());
+  mock('getClipboardData', 'function(){return {data:"https://mp.weixin.qq.com/s/fixture"};}');
+  evaluate('function(){getApp().phase3UIOriginalToken=wx.getStorageSync("token");wx.setStorageSync("token","phase3-ui-fixture");return true;}');
+  storageChanged = true;
   call('automation_navigate', { action: 'switchTab', url: '/pages/my/my' });
   patch({ hasLoginToken: true, userProfile: { nickname: '界面验证账号', identityType: '设计师' }, certStatus: 'approved', vipLevelText: '普通', stonesDisplay: '--' });
   screenshot('01-my-top');
@@ -61,8 +97,10 @@ try {
   passed('my page renders account, workbench and services');
   navigate('/pages/contentworkbench/contentworkbench');
   call('automation_page_action', { action: 'querySelectorAll', selector: '.content-row', 'wait-for-selector': '.content-row' });
+  assert.equal(call('automation_page_action', {action: 'querySelectorAll', selector: '.empty-state'}).elements.length, 0, 'loaded rows must not show the empty state');
   screenshot('03-content-studio');
   tap('.creation-tool:nth-child(2)');
+  call('automation_runtime_info', { action: 'currentPage' });
   tap('.paste-button');
   const pasted = data('importURL');
   assert.ok(JSON.stringify(pasted).includes('mp.weixin.qq.com/s/fixture'));
@@ -95,8 +133,13 @@ try {
   failure = error.message;
   throw error;
 } finally {
-  for (const method of ['request', 'getStorageSync', 'getClipboardData']) {
-    try { call('automation_wx_api', { action: 'restore', method }); } catch (error) { process.stderr.write('Restore failed: ' + method + ': ' + error.message + '\n'); process.exitCode = 1; }
+  if (storageChanged) {
+    try { evaluate('function(){var app=getApp();if(app.phase3UIOriginalToken){wx.setStorageSync("token",app.phase3UIOriginalToken);}else{wx.removeStorageSync("token");}delete app.phase3UIOriginalToken;delete app.phase3UIFixture;delete app.phase3UIUnknownRequests;return true;}'); }
+    catch (error) { cleanupErrors.push('Storage restoration failed: ' + error.message); process.exitCode = 1; }
   }
-  fs.writeFileSync(path.join(output, 'native-verification.json'), JSON.stringify({ status: completed ? 'passed' : 'incomplete', environment: 'WeChat DevTools, isolated in-memory fixtures', production: false, modelCalled: false, steps, failure }, null, 2) + '\n');
+  for (const method of installedMocks.reverse()) {
+    try { call('automation_wx_api', { action: 'restore', method }); } catch (error) { cleanupErrors.push('Restore failed: ' + method + ': ' + error.message); process.exitCode = 1; }
+  }
+  cleanupErrors.forEach(message => process.stderr.write(message + '\n'));
+  fs.writeFileSync(path.join(output, 'native-verification.json'), JSON.stringify({ status: completed && !cleanupErrors.length ? 'passed' : 'incomplete', cleanupErrors, environment: 'WeChat DevTools, isolated in-memory fixtures', production: false, modelCalled: false, steps, failure }, null, 2) + '\n');
 }

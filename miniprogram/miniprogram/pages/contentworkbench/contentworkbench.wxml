@@ -5,7 +5,7 @@
     <view wx:elif="{{denied}}" class="state-card"><text class="state-title">暂未获得内容管理权限</text><text class="muted">请联系管理员开通后再使用</text><button class="outline-button" bindtap="retry">重新检查</button></view>
     <view wx:elif="{{disabled}}" class="state-card"><text class="state-title">内容制作暂未开通</text><text class="muted">开通后可在手机上创建、导入与分享内容</text><button class="outline-button" bindtap="retry">重新检查</button></view>
     <view wx:elif="{{loading}}" class="state-card" role="status"><view class="loading-mark"></view><text>正在加载你的内容…</text></view>
-    <view wx:elif="{{error &amp;&amp; !items.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
+    <view wx:elif="{{error && !items.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
     <block wx:else>
       <block wx:if="{{view === 'studio'}}">
         <view class="search-row"><view class="search-box"><text class="search-symbol">⌕</text><input value="{{keyword}}" bindinput="setKeyword" bindconfirm="searchContents" confirm-type="search" maxlength="30" placeholder="搜索资料、笔记或文案" aria-label="搜索内容标题" /><button wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清空搜索">×</button></view><button class="gold-button new-small" bindtap="createContent">＋ 新建</button></view>
@@ -18,13 +18,15 @@
         <view class="category-tabs" role="tablist"><button wx:for="{{categories}}" wx:key="key" class="category-tab {{category === item.key ? 'active' : ''}} {{item.unavailable ? 'unavailable' : ''}}" aria-disabled="{{item.unavailable}}" data-key="{{item.key}}" bindtap="selectCategory" role="tab" aria-selected="{{category === item.key}}">{{item.label}}</button></view>
         <view wx:if="{{searchTerm}}" class="filter-note">“{{searchTerm}}”的搜索结果<button class="text-button" bindtap="clearSearch">清空</button></view>
         <view class="content-list">
-          <view wx:for="{{visibleItems}}" wx:key="content_id" class="content-row" data-id="{{item.content_id}}" bindtap="editContent" role="button" aria-label="{{item.title}}">
-            <view class="content-cover"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFill" /><view wx:else class="cover-placeholder"><t-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="32px" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
-            <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}</text><text class="content-date">{{item.date_label || '打开查看详情'}}{{item.read_only ? ' · 仅查看' : ''}}</text></view><text class="row-chevron">›</text>
-          </view>
-          <view wx:if="{{!visibleItems.length}}" class="empty-state"><t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : category === 'all' ? '还没有创作内容' : '暂无这类资料'}}</text><text class="muted">{{category === 'note' ? '项目笔记协作尚未开通，普通图文可先新建保存' : next_cursor ? '当前已加载资料中没有匹配项，可继续加载' : '从一篇图文、一次上传或一条分享链接开始'}}</text></view>
+          <block wx:if="{{visibleItems.length > 0}}">
+            <view wx:for="{{visibleItems}}" wx:key="content_id" class="content-row" data-id="{{item.content_id}}" bindtap="editContent" role="button" aria-label="{{item.title}}">
+              <view class="content-cover"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFill" /><view wx:else class="cover-placeholder"><t-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="32px" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
+              <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}</text><text class="content-date">{{item.date_label || '打开查看详情'}}{{item.read_only ? ' · 仅查看' : ''}}</text></view><text class="row-chevron">›</text>
+            </view>
+          </block>
+          <view wx:else class="empty-state"><t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : category === 'all' ? '还没有创作内容' : '暂无这类资料'}}</text><text class="muted">{{category === 'note' ? '项目笔记协作尚未开通，普通图文可先新建保存' : next_cursor ? '当前已加载资料中没有匹配项，可继续加载' : '从一篇图文、一次上传或一条分享链接开始'}}</text></view>
         </view>
-        <text wx:if="{{category !== 'all' &amp;&amp; next_cursor}}" class="pagination-note">分类显示已加载内容，可继续加载更多资料</text>
+        <text wx:if="{{category !== 'all' && next_cursor}}" class="pagination-note">分类显示已加载内容，可继续加载更多资料</text>
         <view wx:if="{{error}}" class="inline-error">{{error}}</view>
         <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
         <view class="existing-assets"><text class="divider-line"></text><button class="text-button" bindtap="openExistingAssets">已有生成记录、模板与作品可直接选用 ›</button><text class="divider-line"></text></view>
@@ -40,9 +42,9 @@
         <view wx:if="{{importError}}" class="inline-error">{{importError}}</view>
         <view class="recent-heading"><text>最近导入</text><button class="text-button" bindtap="refreshImportList" disabled="{{importPolling}}">{{importPolling ? '刷新中' : '刷新记录'}} ↻</button></view>
         <view wx:if="{{!imports.length}}" class="empty-state compact"><text class="muted">暂无导入记录</text></view>
-        <view wx:for="{{imports}}" wx:key="import_id" class="import-row" bindtap="openImport" data-id="{{item.import_id}}"><view class="import-job-icon {{item.status}}"><t-icon name="{{item.status === 'ready' ? 'check-circle' : item.status === 'failed' || item.status === 'blocked' ? 'error-circle' : 'time'}}" size="26px" /></view><view class="import-job-body"><text class="content-title">{{item.platform_text}}</text><text class="job-state {{item.status}}">{{item.status_text}}</text><text wx:if="{{item.status === 'uncertain' || item.error_text}}" class="job-error">{{item.status === 'uncertain' ? '本次结果需要人工核对，请勿重复提交' : item.error_text}}</text></view><button wx:if="{{(item.status === 'failed' || item.status === 'blocked') &amp;&amp; item.error_code === 'media_source_expired'}}" class="retry-button" catchtap="prepareReimport" data-id="{{item.import_id}}">重新发起</button><button wx:elif="{{item.can_retry &amp;&amp; item.status !== 'uncertain'}}" class="retry-button" catchtap="retryImport" data-id="{{item.import_id}}" disabled="{{importBusy}}">重试</button><text wx:elif="{{item.status === 'ready'}}" class="row-chevron">›</text></view>
+        <view wx:for="{{imports}}" wx:key="import_id" class="import-row" bindtap="openImport" data-id="{{item.import_id}}"><view class="import-job-icon {{item.status}}"><t-icon name="{{item.status === 'ready' ? 'check-circle' : item.status === 'failed' || item.status === 'blocked' ? 'error-circle' : 'time'}}" size="26px" /></view><view class="import-job-body"><text class="content-title">{{item.platform_text}}</text><text class="job-state {{item.status}}">{{item.status_text}}</text><text wx:if="{{item.status === 'uncertain' || item.error_text}}" class="job-error">{{item.status === 'uncertain' ? '本次结果需要人工核对，请勿重复提交' : item.error_text}}</text></view><button wx:if="{{(item.status === 'failed' || item.status === 'blocked') && item.error_code === 'media_source_expired'}}" class="retry-button" catchtap="prepareReimport" data-id="{{item.import_id}}">重新发起</button><button wx:elif="{{item.can_retry && item.status !== 'uncertain'}}" class="retry-button" catchtap="retryImport" data-id="{{item.import_id}}" disabled="{{importBusy}}">重试</button><text wx:elif="{{item.status === 'ready'}}" class="row-chevron">›</text></view>
       </block>
     </block>
   </view>
-  <view wx:if="{{view === 'studio' &amp;&amp; !loading &amp;&amp; !loginRequired &amp;&amp; !denied &amp;&amp; !disabled}}" class="studio-footer"><button class="gold-button" bindtap="createContent">＋ 新建内容</button></view>
+  <view wx:if="{{view === 'studio' && !loading && !loginRequired && !denied && !disabled}}" class="studio-footer"><button class="gold-button" bindtap="createContent">＋ 新建内容</button></view>
 </view>

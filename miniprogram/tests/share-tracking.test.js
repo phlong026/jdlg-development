@@ -140,8 +140,12 @@ test('public readiness hooks have matching TypeScript and JavaScript transitions
 test('reader uses rich-text only for explicit server format and retains escaped legacy text',()=>{
  const fs=require('node:fs'),path=require('node:path');
  const template=fs.readFileSync(path.join(__dirname,'../miniprogram/pages/contentreader/contentreader.wxml'),'utf8');
- assert.match(template,/<rich-text wx:if="\{\{content\.body_format === 'rich_text'\}\}"[^>]+nodes="\{\{content\.body\}\}"/);
- assert.match(template,/<text wx:else class="body"[^>]*>\{\{content\.body\}\}<\/text>/);
+ const rich=template.match(/<block wx:if="\{\{content\.body_format === 'rich_text'\}\}"><rich-text ([^>]+)\s*\/><\/block>/);
+ assert.ok(rich,'rich_text format must gate one rich-text body branch');
+ assert.match(rich[1],/class="body"/);assert.match(rich[1],/nodes="\{\{content\.body\}\}"/);assert.match(rich[1],/selectable="\{\{true\}\}"/);
+ assert.match(template,/<block wx:else><text class="body"[^>]*>\{\{content\.body\}\}<\/text><\/block>/);
+ const image=template.match(/<image wx:if="\{\{item\.kind === 'image'\}\}"([^>]+)\/>/);
+ assert.ok(image,'article image branch must remain explicit');assert.match(image[1],/bindtap="openImage"/);assert.match(image[1],/data-media-id="\{\{item\.media_id\}\}"/);assert.match(image[1],/src="\{\{item\.url\}\}"/);
 });
 
 test('source snapshot version is propagated to observed legacy events',async()=>{

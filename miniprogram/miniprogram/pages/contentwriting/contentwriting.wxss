@@ -91,7 +91,9 @@ page {
 }
 
 .field input {
-  height: 80rpx;
+  height: 88rpx;
+  padding: 0 20rpx;
+  line-height: normal;
 }
 
 .field textarea {
@@ -222,6 +224,12 @@ page {
 
 .primary::after, .secondary::after {
   border: 0;
+}
+
+.writing-footer .primary, .writing-footer .secondary {
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .writing-footer .secondary {

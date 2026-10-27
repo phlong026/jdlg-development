@@ -1,102 +1,72 @@
-[
-  {
-    "page": "my",
-    "type": "wxml",
-    "result": {
+{
+  "method": "direct native wcc; official compile_wxml metadata is not a syntax gate",
+  "results": [
+    {
+      "file": "pages/my/my.wxml",
       "success": true,
-      "codeLength": 39210
-    }
-  },
-  {
-    "page": "chat",
-    "type": "wxml",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/chat/chat.wxml",
       "success": true,
-      "codeLength": 39210
-    }
-  },
-  {
-    "page": "contentworkbench",
-    "type": "wxml",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentworkbench/contentworkbench.wxml",
       "success": true,
-      "codeLength": 39210
-    }
-  },
-  {
-    "page": "contentworkbench",
-    "type": "wxss",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentedit/contentedit.wxml",
       "success": true,
-      "files": 2,
-      "fileList": [
-        "comm",
-        "page"
-      ],
-      "totalCodeLength": 4448
-    }
-  },
-  {
-    "page": "contentedit",
-    "type": "wxml",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentreader/contentreader.wxml",
       "success": true,
-      "codeLength": 39210
-    }
-  },
-  {
-    "page": "contentedit",
-    "type": "wxss",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentwriting/contentwriting.wxml",
       "success": true,
-      "files": 2,
-      "fileList": [
-        "comm",
-        "page"
-      ],
-      "totalCodeLength": 4448
-    }
-  },
-  {
-    "page": "contentreader",
-    "type": "wxml",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/sharevisits/sharevisits.wxml",
       "success": true,
-      "codeLength": 39210
-    }
-  },
-  {
-    "page": "contentreader",
-    "type": "wxss",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/visitdetail/visitdetail.wxml",
       "success": true,
-      "files": 2,
-      "fileList": [
-        "comm",
-        "page"
-      ],
-      "totalCodeLength": 4448
-    }
-  },
-  {
-    "page": "contentwriting",
-    "type": "wxml",
-    "result": {
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/messagecenter/messagecenter.wxml",
       "success": true,
-      "codeLength": 39210
+      "compiler": "native wcc"
     }
-  },
-  {
-    "page": "contentwriting",
-    "type": "wxss",
-    "result": {
+  ],
+  "styles": [
+    {
+      "file": "pages/contentworkbench/contentworkbench.wxss",
       "success": true,
-      "files": 2,
-      "fileList": [
-        "comm",
-        "page"
-      ],
-      "totalCodeLength": 4448
+      "parser": "installed sass"
+    },
+    {
+      "file": "pages/contentedit/contentedit.wxss",
+      "success": true,
+      "parser": "installed sass"
+    },
+    {
+      "file": "pages/contentreader/contentreader.wxss",
+      "success": true,
+      "parser": "installed sass"
+    },
+    {
+      "file": "pages/contentwriting/contentwriting.wxss",
+      "success": true,
+      "parser": "installed sass"
     }
-  }
-]
+  ]
+}

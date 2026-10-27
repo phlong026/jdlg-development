@@ -16,7 +16,7 @@
         <text class="message-action">{{item.cancelled_at ? '提醒已失效' : '查看访问记录 ›'}}</text>
       </view>
       <view wx:if="{{loading}}" class="status-card">正在加载…</view>
-      <view wx:elif="{{!error &amp;&amp; !messages.length}}" class="empty-card"><view class="empty-badge">消息</view><text class="empty-title">暂时没有浏览提醒</text><text class="empty-desc">有人浏览你分享的内容后，提醒会出现在这里。</text></view>
+      <view wx:elif="{{!error && !messages.length}}" class="empty-card"><view class="empty-badge">消息</view><text class="empty-title">暂时没有浏览提醒</text><text class="empty-desc">有人浏览你分享的内容后，提醒会出现在这里。</text></view>
       <button wx:if="{{cursor}}" bindtap="onLoadMore" loading="{{loading}}">加载更多</button>
     </block>
   </view>

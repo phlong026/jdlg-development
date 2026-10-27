@@ -7,32 +7,13 @@ page {
   box-sizing: border-box;
   width: 100%;
   min-height: 100vh;
-  padding: calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 112px);
+  padding: 0 18px calc(env(safe-area-inset-bottom) + 112px);
   overflow-wrap: anywhere;
 }
 
-.navigation {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  margin-bottom: 12px;
-  font-size: 17px;
-  font-weight: 600;
-}
-
-.navigation .back {
-  width: 42px;
-  min-height: 42px;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  font-size: 34px;
-  line-height: 40px;
-}
-
-.nav-space {
-  width: 42px;
+.reader-navigation {
+  display: block;
+  margin: 0 -18px 12px;
 }
 
 .reader-brand {
@@ -218,12 +199,14 @@ page {
 }
 
 .reader-actions {
-  position: sticky;
+  position: fixed;
   z-index: 20;
   bottom: 0;
   display: flex;
   gap: 10px;
-  margin: 28px -18px calc(-112px - env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  margin: 0;
   padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid #e8e0d8;
   background: rgba(255, 255, 255, 0.97);
@@ -293,17 +276,21 @@ button::after {
 }
 
 .reader-guide-title {
+  line-height: 1.6;
   color: #3d3226;
   font-size: 15px;
   font-weight: 600;
 }
 
 .reader-guide-sub {
+  line-height: 1.6;
   color: #8a7d6d;
   font-size: 12px;
 }
 
-.reader-guide-cta {
+.reader-guide .reader-guide-cta {
+  width: auto;
+  flex-shrink: 0;
   min-height: 32px;
   margin: 0;
   padding: 0 16px;
@@ -314,7 +301,9 @@ button::after {
   line-height: 32px;
 }
 
-.reader-guide-close {
+.reader-guide .reader-guide-close {
+  width: 32px;
+  flex: none;
   min-height: 32px;
   margin: 0;
   padding: 0 8px;

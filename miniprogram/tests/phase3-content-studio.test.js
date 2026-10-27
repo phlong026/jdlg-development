@@ -7,8 +7,8 @@ const vm = require('node:vm');
 const source = path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.js');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test('private pages explicitly register their custom navigation component', () => {
-  for (const name of ['contentworkbench', 'contentedit', 'sharevisits', 'visitdetail']) {
+test('content pages explicitly register their custom navigation component', () => {
+  for (const name of ['contentworkbench', 'contentedit', 'contentwriting', 'contentreader', 'sharevisits', 'visitdetail']) {
     const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../miniprogram/pages', name, name + '.json'), 'utf8'));
     assert.equal(config.usingComponents && config.usingComponents['navigation-bar'], '/components/navigation-bar/navigation-bar');
   }
