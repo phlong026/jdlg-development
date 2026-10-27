@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"regexp"
@@ -52,6 +53,7 @@ type Config struct {
 	Enabled         bool
 	NetworkIsolated bool
 	CDPURL          string
+	CDPDiscoveryURL string
 	AllowedHosts    []string
 	Dialer          CDPDialer
 	Resolver        HostResolver
@@ -62,15 +64,18 @@ type Config struct {
 }
 
 type Capture struct {
-	ready       bool
-	cdpURL      string
-	dialer      CDPDialer
-	resolver    HostResolver
-	timeout     time.Duration
-	quietWindow time.Duration
-	maxEvents   int
-	maxBytes    int64
-	allowed     []string
+	ready           bool
+	cdpURL          string
+	discoveryURL    string
+	discoveryClient *http.Client
+	dialer          CDPDialer
+	resolver        HostResolver
+	timeout         time.Duration
+	quietWindow     time.Duration
+	maxEvents       int
+	maxBytes        int64
+	allowed         []string
+	slot            chan struct{}
 }
 
 func New(config Config) *Capture {
@@ -111,16 +116,23 @@ func New(config Config) *Capture {
 	if len(allowed) > 32 {
 		validHosts = false
 	}
+	endpointValid := validCDPURL(config.CDPURL)
+	if config.CDPDiscoveryURL != "" {
+		endpointValid = validDiscoveryURL(config.CDPDiscoveryURL)
+	}
 	return &Capture{
-		ready:       config.Enabled && config.NetworkIsolated && validCDPURL(config.CDPURL) && validHosts,
-		cdpURL:      config.CDPURL,
-		dialer:      dialer,
-		resolver:    resolver,
-		timeout:     timeout,
-		quietWindow: quietWindow,
-		maxEvents:   maxEvents,
-		maxBytes:    maxBytes,
-		allowed:     allowed,
+		ready:           config.Enabled && config.NetworkIsolated && endpointValid && validHosts,
+		cdpURL:          config.CDPURL,
+		discoveryURL:    config.CDPDiscoveryURL,
+		discoveryClient: newDiscoveryClient(),
+		dialer:          dialer,
+		resolver:        resolver,
+		timeout:         timeout,
+		quietWindow:     quietWindow,
+		maxEvents:       maxEvents,
+		maxBytes:        maxBytes,
+		allowed:         allowed,
+		slot:            make(chan struct{}, 1),
 	}
 }
 
@@ -131,9 +143,17 @@ func (capture *Capture) Capture(ctx context.Context, articleURL string, ids []st
 	if !validArticleURL(articleURL) || !validVideoIDs(ids) {
 		return nil, fail("invalid_request")
 	}
+	if !capture.acquire() {
+		return nil, fail("busy")
+	}
+	defer capture.release()
 	captureContext, cancel := context.WithTimeout(ctx, capture.timeout)
 	defer cancel()
-	connection, err := capture.dialer.Dial(captureContext, capture.cdpURL)
+	endpoint, err := capture.endpoint(captureContext)
+	if err != nil {
+		return nil, fail("cdp_unavailable")
+	}
+	connection, err := capture.dialer.Dial(captureContext, endpoint)
 	if err != nil {
 		return nil, fail("cdp_unavailable")
 	}
@@ -185,6 +205,52 @@ func (capture *Capture) Capture(ctx context.Context, articleURL string, ids []st
 	}
 	return capture.collect(captureContext, ctx, connection, attached.SessionID, ids)
 }
+
+func (capture *Capture) Ready(ctx context.Context) error {
+	if capture == nil || !capture.ready {
+		return fail("disabled")
+	}
+	if !capture.acquire() {
+		return fail("busy")
+	}
+	defer capture.release()
+	probeContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	endpoint, err := capture.endpoint(probeContext)
+	if err != nil {
+		return fail("cdp_unavailable")
+	}
+	connection, err := capture.dialer.Dial(probeContext, endpoint)
+	if err != nil {
+		return fail("cdp_unavailable")
+	}
+	defer connection.Close()
+	var version struct {
+		Product string `json:"product"`
+	}
+	if err := connection.Call(probeContext, "", "Browser.getVersion", map[string]any{}, &version); err != nil {
+		return fail("cdp_failed")
+	}
+	return nil
+}
+
+func (capture *Capture) endpoint(ctx context.Context) (string, error) {
+	if capture.discoveryURL == "" {
+		return capture.cdpURL, nil
+	}
+	return discoverCDPEndpoint(ctx, capture.discoveryClient, capture.discoveryURL)
+}
+
+func (capture *Capture) acquire() bool {
+	select {
+	case capture.slot <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (capture *Capture) release() { <-capture.slot }
 
 func (capture *Capture) collect(captureContext, callerContext context.Context, connection CDPConnection, sessionID string, ids []string) ([]Video, error) {
 	expected := make(map[string]bool, len(ids))

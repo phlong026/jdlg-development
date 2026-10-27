@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"service/contentcapture"
 	"strconv"
 	"strings"
@@ -15,13 +16,19 @@ import (
 	"time"
 )
 
+const (
+	captureSocketDirectory = "/run/jdlg-content-capture"
+	captureSocketPath      = captureSocketDirectory + "/capture.sock"
+)
+
 type settings struct {
-	listenAddress string
-	secret        string
-	enabled       bool
-	networkGate   bool
-	cdpURL        string
-	allowedHosts  []string
+	listenAddress   string
+	secret          string
+	enabled         bool
+	networkGate     bool
+	cdpURL          string
+	cdpDiscoveryURL string
+	allowedHosts    []string
 }
 
 func main() {
@@ -29,9 +36,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	listener, err := net.Listen("tcp", configuration.listenAddress)
+	listener, err := listenCapture(configuration.listenAddress)
 	if err != nil {
-		log.Fatal("capture worker loopback listener unavailable")
+		log.Fatal("capture worker local listener unavailable")
 	}
 	defer listener.Close()
 
@@ -39,11 +46,14 @@ func main() {
 		Enabled:         configuration.enabled,
 		NetworkIsolated: configuration.networkGate,
 		CDPURL:          configuration.cdpURL,
+		CDPDiscoveryURL: configuration.cdpDiscoveryURL,
 		AllowedHosts:    configuration.allowedHosts,
 	})
-	handlerEnabled := configuration.enabled && configuration.networkGate && configuration.cdpURL != ""
+	handlerEnabled := configuration.enabled && configuration.networkGate && (configuration.cdpURL != "" || configuration.cdpDiscoveryURL != "")
 	mux := http.NewServeMux()
-	mux.Handle("/v1/capture", contentcapture.NewHandler(handlerEnabled, configuration.secret, capturer))
+	handler := contentcapture.NewHandler(handlerEnabled, configuration.secret, capturer)
+	mux.Handle("/v1/capture", handler)
+	mux.Handle("/health/ready", handler)
 	server := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -60,7 +70,7 @@ func main() {
 		defer cancel()
 		_ = server.Shutdown(context)
 	}()
-	log.Print("content capture worker listening on loopback")
+	log.Print("content capture worker listening locally")
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal("capture worker stopped unexpectedly")
 	}
@@ -68,11 +78,12 @@ func main() {
 
 func loadSettings(getenv func(string) string) (settings, error) {
 	configuration := settings{
-		listenAddress: strings.TrimSpace(getenv("CONTENT_CAPTURE_LISTEN")),
-		secret:        getenv("CONTENT_CAPTURE_SECRET"),
-		enabled:       environmentBool(getenv("CONTENT_CAPTURE_ENABLED")),
-		networkGate:   environmentBool(getenv("CONTENT_CAPTURE_NETWORK_ISOLATED")),
-		cdpURL:        strings.TrimSpace(getenv("CONTENT_CAPTURE_CDP_URL")),
+		listenAddress:   strings.TrimSpace(getenv("CONTENT_CAPTURE_LISTEN")),
+		secret:          getenv("CONTENT_CAPTURE_SECRET"),
+		enabled:         environmentBool(getenv("CONTENT_CAPTURE_ENABLED")),
+		networkGate:     environmentBool(getenv("CONTENT_CAPTURE_NETWORK_ISOLATED")),
+		cdpURL:          strings.TrimSpace(getenv("CONTENT_CAPTURE_CDP_URL")),
+		cdpDiscoveryURL: strings.TrimSpace(getenv("CONTENT_CAPTURE_CDP_DISCOVERY_URL")),
 	}
 	if configuration.listenAddress == "" {
 		configuration.listenAddress = "127.0.0.1:19091"
@@ -80,8 +91,8 @@ func loadSettings(getenv func(string) string) (settings, error) {
 	if len(configuration.secret) < 32 {
 		return settings{}, errors.New("CONTENT_CAPTURE_SECRET must contain at least 32 characters")
 	}
-	if !loopbackListenAddress(configuration.listenAddress) {
-		return settings{}, errors.New("CONTENT_CAPTURE_LISTEN must be a numeric loopback address")
+	if !validListenAddress(configuration.listenAddress) {
+		return settings{}, errors.New("CONTENT_CAPTURE_LISTEN must be numeric loopback or the dedicated unix socket")
 	}
 	for _, host := range strings.Split(getenv("CONTENT_CAPTURE_ALLOWED_HOSTS"), ",") {
 		if host = strings.TrimSpace(host); host != "" {
@@ -89,6 +100,44 @@ func loadSettings(getenv func(string) string) (settings, error) {
 		}
 	}
 	return configuration, nil
+}
+
+func validListenAddress(raw string) bool {
+	if strings.HasPrefix(raw, "unix:") {
+		return raw == "unix:"+captureSocketPath
+	}
+	return loopbackListenAddress(raw)
+}
+
+func listenCapture(raw string) (net.Listener, error) {
+	if strings.HasPrefix(raw, "unix:") {
+		return listenUnixCapture(strings.TrimPrefix(raw, "unix:"), captureSocketDirectory)
+	}
+	return net.Listen("tcp", raw)
+}
+
+func listenUnixCapture(path, requiredDirectory string) (net.Listener, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path || filepath.Dir(path) != requiredDirectory || filepath.Base(path) != "capture.sock" {
+		return nil, errors.New("capture socket path is outside the dedicated runtime directory")
+	}
+	directory, err := os.Lstat(requiredDirectory)
+	if err != nil || !directory.IsDir() || directory.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("capture socket runtime directory is unavailable or unsafe")
+	}
+	if _, err := os.Lstat(path); err == nil {
+		return nil, errors.New("capture socket already exists; remove it before startup only after the prior service stops")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, errors.New("capture socket path cannot be inspected")
+	}
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(path, 0660); err != nil {
+		_ = listener.Close()
+		return nil, errors.New("capture socket permissions cannot be restricted")
+	}
+	return listener, nil
 }
 
 func environmentBool(raw string) bool {

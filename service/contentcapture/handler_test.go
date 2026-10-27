@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +15,17 @@ type captureFunc func(context.Context, string, []string) ([]Video, error)
 func (function captureFunc) Capture(ctx context.Context, articleURL string, ids []string) ([]Video, error) {
 	return function(ctx, articleURL, ids)
 }
+
+type runtimeFunc struct {
+	capture captureFunc
+	ready   func(context.Context) error
+}
+
+func (runtime runtimeFunc) Capture(ctx context.Context, articleURL string, ids []string) ([]Video, error) {
+	return runtime.capture(ctx, articleURL, ids)
+}
+
+func (runtime runtimeFunc) Ready(ctx context.Context) error { return runtime.ready(ctx) }
 
 func TestHandlerRequiresBearerAuthentication(t *testing.T) {
 	handler := NewHandler(true, "12345678901234567890123456789012", captureFunc(func(context.Context, string, []string) ([]Video, error) {
@@ -79,6 +91,42 @@ func TestHandlerReturnsOnlyVideoEnvelope(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, validCaptureRequest())
 	if response.Code != http.StatusOK || response.Body.String() != "{\"videos\":[{\"source_id\":\"wxv_11111111\",\"url\":\"https://mpvideo.qpic.cn/a.mp4?vid=wxv_11111111\",\"format_id\":10002}]}\n" {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestHandlerReadinessIsAuthenticatedAndUsesRuntimeProbe(t *testing.T) {
+	probes := 0
+	handler := NewHandler(true, "12345678901234567890123456789012", runtimeFunc{
+		capture: func(context.Context, string, []string) ([]Video, error) { return nil, nil },
+		ready: func(context.Context) error {
+			probes++
+			return errors.New("chrome unavailable")
+		},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || probes != 0 {
+		t.Fatalf("unauthorized status=%d probes=%d", response.Code, probes)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	request.Header.Set("Authorization", "Bearer 12345678901234567890123456789012")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || probes != 1 || response.Body.String() != "{\"ready\":false}\n" {
+		t.Fatalf("status=%d probes=%d body=%s", response.Code, probes, response.Body.String())
+	}
+}
+
+func TestHandlerMapsBusyCaptureToServiceUnavailable(t *testing.T) {
+	handler := NewHandler(true, "12345678901234567890123456789012", captureFunc(func(context.Context, string, []string) ([]Video, error) {
+		return nil, fail("busy")
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, validCaptureRequest())
+	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }

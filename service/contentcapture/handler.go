@@ -1,6 +1,7 @@
 package contentcapture
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"io"
@@ -16,6 +17,10 @@ type Handler struct {
 	capturer Capturer
 }
 
+type readinessProbe interface {
+	Ready(context.Context) error
+}
+
 func NewHandler(enabled bool, secret string, capturer Capturer) *Handler {
 	return &Handler{enabled: enabled, secret: secret, capturer: capturer}
 }
@@ -23,6 +28,10 @@ func NewHandler(enabled bool, secret string, capturer Capturer) *Handler {
 func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	response.Header().Set("X-Content-Type-Options", "nosniff")
+	if request.URL.Path == "/health/ready" {
+		handler.serveReadiness(response, request)
+		return
+	}
 	if request.Method != http.MethodPost {
 		response.Header().Set("Allow", http.MethodPost)
 		handler.write(response, http.StatusMethodNotAllowed, nil)
@@ -68,6 +77,24 @@ func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Re
 	handler.write(response, http.StatusOK, videos)
 }
 
+func (handler *Handler) serveReadiness(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		response.Header().Set("Allow", http.MethodGet)
+		handler.writeReady(response, http.StatusMethodNotAllowed, false)
+		return
+	}
+	if !handler.authorized(request.Header.Get("Authorization")) {
+		handler.writeReady(response, http.StatusUnauthorized, false)
+		return
+	}
+	probe, ok := handler.capturer.(readinessProbe)
+	if !handler.enabled || !ok || probe.Ready(request.Context()) != nil {
+		handler.writeReady(response, http.StatusServiceUnavailable, false)
+		return
+	}
+	handler.writeReady(response, http.StatusOK, true)
+}
+
 func (handler *Handler) authorized(raw string) bool {
 	if len(handler.secret) < 32 || !strings.HasPrefix(raw, "Bearer ") {
 		return false
@@ -87,4 +114,11 @@ func (handler *Handler) write(response http.ResponseWriter, status int, videos [
 	_ = json.NewEncoder(response).Encode(struct {
 		Videos []Video `json:"videos"`
 	}{Videos: videos})
+}
+
+func (handler *Handler) writeReady(response http.ResponseWriter, status int, ready bool) {
+	response.WriteHeader(status)
+	_ = json.NewEncoder(response).Encode(struct {
+		Ready bool `json:"ready"`
+	}{Ready: ready})
 }

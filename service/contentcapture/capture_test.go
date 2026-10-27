@@ -61,6 +61,12 @@ func (dialer fakeDialer) Dial(context.Context, string) (CDPConnection, error) {
 	return dialer.connection, nil
 }
 
+type dialerFunc func(context.Context, string) (CDPConnection, error)
+
+func (function dialerFunc) Dial(ctx context.Context, endpoint string) (CDPConnection, error) {
+	return function(ctx, endpoint)
+}
+
 type fakeResolver struct{ ips []net.IP }
 
 func (resolver fakeResolver) LookupIP(context.Context, string, string) ([]net.IP, error) {
@@ -259,6 +265,43 @@ func TestCapturerRespectsCallerCancellation(t *testing.T) {
 	_, err := New(testCaptureConfig(fake)).Capture(ctx, "https://mp.weixin.qq.com/s/article", []string{"wxv_11111111"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestCapturerRejectsConcurrentCaptureAsBusy(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	configuration := testCaptureConfig(newFakeCDP())
+	configuration.Dialer = dialerFunc(func(context.Context, string) (CDPConnection, error) {
+		close(started)
+		<-release
+		return nil, errors.New("stopped")
+	})
+	capturer := New(configuration)
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := capturer.Capture(context.Background(), "https://mp.weixin.qq.com/s/article", []string{"wxv_11111111"})
+		firstDone <- err
+	}()
+	<-started
+	_, err := capturer.Capture(context.Background(), "https://mp.weixin.qq.com/s/article", []string{"wxv_22222222"})
+	if !IsCode(err, "busy") {
+		t.Fatalf("error=%v", err)
+	}
+	close(release)
+	if err := <-firstDone; !IsCode(err, "cdp_unavailable") {
+		t.Fatalf("first error=%v", err)
+	}
+}
+
+func TestReadyDialsBrowserAndCallsGetVersion(t *testing.T) {
+	fake := newFakeCDP()
+	capturer := New(testCaptureConfig(fake))
+	if err := capturer.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if methods := fake.methods(); !reflect.DeepEqual(methods, []string{":Browser.getVersion"}) {
+		t.Fatalf("methods=%v", methods)
 	}
 }
 
