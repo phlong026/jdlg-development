@@ -2,7 +2,9 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -287,6 +289,35 @@ func (s *fakeDurableStore) CancelPending(_ context.Context, contentID, shareID s
 
 func browseEvent(id string, recipient int64) Event {
 	return Event{ID: id, Kind: "browse", Owner: "owner-a", RecipientID: recipient, VisitorKey: "u:7", ShareID: "share-0001", ContentID: "content-0001", Route: "pages/contentreader/contentreader", OccurredAt: time.Date(2026, 10, 27, 1, 0, 0, 0, time.UTC)}
+}
+
+func TestProjectNoteOpenNoticeUsesGenericPrivateRoute(t *testing.T) {
+	event := Event{ID: "project-open-event-1", Kind: "project_note_open", Owner: "owner-a", RecipientID: 42, VisitorKey: "u:101", ShareID: "share-private-1", ContentID: "version-private-1", ProjectID: "project-private-1", Route: "project_note_share", OccurredAt: time.Date(2026, 10, 27, 1, 0, 0, 0, time.UTC)}
+	if !validEvent(event) {
+		t.Fatal("valid private project event was rejected")
+	}
+	notice := noticeFromEvent(event)
+	if notice.Route != "pages/projectnotes/projectnotes?project_id=project-private-1&version_id=version-private-1" || notice.Title != "私人项目有新访问" {
+		t.Fatalf("notice = %#v", notice)
+	}
+	encoded, err := json.Marshal(notice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"share_token", "private-note-body", "download_url"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("private notice leaked %q: %s", forbidden, encoded)
+		}
+	}
+	event.ProjectID = ""
+	if validEvent(event) {
+		t.Fatal("private project event without project id was accepted")
+	}
+	event.ProjectID = strings.Repeat("p", 100)
+	event.ContentID = strings.Repeat("v", 100)
+	if validEvent(event) {
+		t.Fatal("private project event with an oversized persisted route was accepted")
+	}
 }
 
 func consumerFor(t *testing.T, store ConsumerStore, now time.Time) *Consumer {

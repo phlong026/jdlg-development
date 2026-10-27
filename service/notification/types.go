@@ -32,6 +32,7 @@ type Event struct {
 	VisitorKey  string    `json:"visitor_key"`
 	ShareID     string    `json:"share_id"`
 	ContentID   string    `json:"content_id,omitempty"`
+	ProjectID   string    `json:"project_id,omitempty"`
 	Route       string    `json:"route_key"`
 	OccurredAt  time.Time `json:"occurred_at"`
 }

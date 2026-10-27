@@ -254,6 +254,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	svc.ResolveLegacyBatchContext = makeTrackingLegacyBatchResolver(users.DB)
 	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
 	registerContentWorkbenchRoutes(v1, svc, users, codes)
+	registerProjectNoteRoutes(v1, svc, users, codes)
 	// This is a separate capability group, not an implicit platform-admin data grant.
 	mpSettings := loadMPSyncSettings(os.Getenv)
 	for _, problem := range mpSettings.Problems {

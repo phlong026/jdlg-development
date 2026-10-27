@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -622,11 +623,32 @@ func (s *SQLStore) DeleteVisitorData(ctx context.Context, visitorKey string, at 
 }
 
 func validEvent(event Event) bool {
-	return event.ID != "" && len(event.ID) <= 128 && event.Kind == "browse" && event.Owner != "" && len(event.Owner) <= 64 && event.RecipientID > 0 && event.ShareID != "" && len(event.ShareID) <= 128 && len(event.ContentID) <= 128 && event.Route != "" && len(event.Route) <= 128 && !event.OccurredAt.IsZero()
+	common := event.ID != "" && len(event.ID) <= 128 && event.Owner != "" && len(event.Owner) <= 64 && event.RecipientID > 0 && event.ShareID != "" && len(event.ShareID) <= 128 && len(event.ContentID) <= 128 && event.Route != "" && len(event.Route) <= 128 && !event.OccurredAt.IsZero()
+	if !common {
+		return false
+	}
+	switch event.Kind {
+	case "browse":
+		return true
+	case "project_note_open":
+		route := projectNoteNotificationRoute(event)
+		return event.ProjectID != "" && len(event.ProjectID) <= 128 && event.ContentID != "" && event.Route == "project_note_share" && strings.HasPrefix(event.VisitorKey, "u:") && len(event.VisitorKey) <= 128 && len(route) <= 128
+	default:
+		return false
+	}
 }
 
 func noticeFromEvent(event Event) Notification {
-	return Notification{ID: event.ID, EventID: event.ID, RecipientID: event.RecipientID, Kind: event.Kind, Title: "分享内容有新访问", Body: "有人浏览了你分享的内容", Route: event.Route, ContentID: event.ContentID, ShareID: event.ShareID, CreatedAt: event.OccurredAt.UTC()}
+	title, body, route := "分享内容有新访问", "有人浏览了你分享的内容", event.Route
+	if event.Kind == "project_note_open" {
+		title, body = "私人项目有新访问", "有受邀账号查看了你分享的固定版本"
+		route = projectNoteNotificationRoute(event)
+	}
+	return Notification{ID: event.ID, EventID: event.ID, RecipientID: event.RecipientID, Kind: event.Kind, Title: title, Body: body, Route: route, ContentID: event.ContentID, ShareID: event.ShareID, CreatedAt: event.OccurredAt.UTC()}
+}
+
+func projectNoteNotificationRoute(event Event) string {
+	return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&version_id=" + url.QueryEscape(event.ContentID)
 }
 
 func randomToken() (string, error) {

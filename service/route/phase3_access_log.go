@@ -9,7 +9,7 @@ import (
 
 func SkipPhase3RawAccessLog(c *gin.Context) bool {
 	path := c.Request.URL.Path
-	for _, prefix := range []string{"/share", "/api/v1/share-web", "/api/v1/wechat/official", "/api/v1/miniprogram/workbench", "/api/v1/miniprogram/notifications", "/api/v1/miniprogram/official-account", "/api/v1/miniprogram/tracking/my-shares"} {
+	for _, prefix := range []string{"/share", "/api/v1/share-web", "/api/v1/wechat/official", "/api/v1/miniprogram/workbench", "/api/v1/miniprogram/project-notes", "/api/v1/miniprogram/notifications", "/api/v1/miniprogram/official-account", "/api/v1/miniprogram/tracking/my-shares"} {
 		if path == prefix || strings.HasPrefix(path, prefix+"/") {
 			return true
 		}

@@ -113,7 +113,15 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 		return func() { cancel(); jobs.Wait() }
 	}
 	eligible := func(ctx context.Context, event notification.Event) (bool, error) {
-		scope, err := loadMiniTrackingMyScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
+		var (
+			scope tracking.Scope
+			err   error
+		)
+		if event.Kind == "project_note_open" {
+			scope, err = loadMiniTrackingMaterialScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
+		} else {
+			scope, err = loadMiniTrackingMyScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
+		}
 		if err != nil {
 			var denied *tracking.Error
 			if errors.As(err, &denied) && (denied.Status == 401 || denied.Status == 403) {
@@ -121,10 +129,7 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 			}
 			return false, err
 		}
-		if event.Owner != "" && !scope.Allows(event.Owner) {
-			return false, nil
-		}
-		return svc.NoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
+		return phase3NoticeEligible(ctx, svc, event, scope)
 	}
 	svc.OnNoticeEvent = func(ctx context.Context, event tracking.NoticeEvent) error {
 		tx, ok := tracking.NoticeWriteTx(ctx)
@@ -171,7 +176,7 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 			return officialaccount.SendRequest{DetailQuery: url.Values{"notification_id": {job.Notice.ID}}.Encode(), Data: data}, nil
 		})
 		worker, err := notification.NewDeliveryWorker(inbox, notification.DeliveryWorkerConfig{Channel: "official_account", PollInterval: 2 * time.Second, LeaseDuration: time.Minute, ErrorBackoff: 10 * time.Second, RetryBase: 30 * time.Second, RetryMax: 30 * time.Minute, MaxAttempts: 5, Send: send, Eligibility: func(ctx context.Context, job notification.DeliveryJob) (bool, error) {
-			ok, err := eligible(ctx, notification.Event{ID: job.Notice.EventID, RecipientID: job.Delivery.RecipientID})
+			ok, err := eligible(ctx, deliveryNoticeEvent(job))
 			if err != nil || !ok {
 				return false, err
 			}
@@ -188,4 +193,18 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 		}
 	}
 	return func() { cancel(); jobs.Wait() }
+}
+
+func deliveryNoticeEvent(job notification.DeliveryJob) notification.Event {
+	return notification.Event{ID: job.Notice.EventID, Kind: job.Notice.Kind, RecipientID: job.Delivery.RecipientID}
+}
+
+func phase3NoticeEligible(ctx context.Context, svc *tracking.Service, event notification.Event, scope tracking.Scope) (bool, error) {
+	if event.Owner != "" && !scope.Allows(event.Owner) {
+		return false, nil
+	}
+	if event.Kind == "project_note_open" {
+		return svc.ProjectNoteNoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
+	}
+	return svc.NoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
 }
