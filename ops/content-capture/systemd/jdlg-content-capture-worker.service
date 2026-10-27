@@ -1,0 +1,43 @@
+[Unit]
+Description=JDLG content capture worker
+Requires=jdlg-content-capture-network.service jdlg-content-capture-browser.service
+After=jdlg-content-capture-network.service jdlg-content-capture-browser.service
+
+[Service]
+Type=simple
+User=jdlgcap-worker
+Group=www
+UMask=0007
+RuntimeDirectory=jdlg-content-capture
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+EnvironmentFile=/opt/jdlg-content-capture/worker.env
+NetworkNamespacePath=/run/netns/jdlg-content-capture
+BindReadOnlyPaths=/etc/netns/jdlg-content-capture/resolv.conf:/etc/resolv.conf
+ExecStartPre=/usr/bin/python3 /opt/jdlg-content-capture/ops/stale_socket.py --user jdlgcap-worker
+ExecStart=/opt/jdlg-content-capture/bin/content-capture-worker
+Restart=on-failure
+RestartSec=2s
+TimeoutStartSec=20s
+TimeoutStopSec=10s
+ProtectSystem=strict
+ProtectHome=true
+ProtectProc=invisible
+InaccessiblePaths=/www
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+NoNewPrivileges=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=512M
+TasksMax=128
+CPUQuota=100%
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target

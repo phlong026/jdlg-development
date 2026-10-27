@@ -1,0 +1,14 @@
+[Unit]
+Description=Refresh JDLG content capture destination allowlist
+Requires=jdlg-content-capture-network.service
+After=jdlg-content-capture-network.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/jdlg-content-capture/ops/network.py refresh
+TimeoutStartSec=45s
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/opt/jdlg-content-capture
