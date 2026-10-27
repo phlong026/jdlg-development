@@ -51,6 +51,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	var auditWriter *model.AuditWriter
 	// 虚拟支付补偿任务：随服务关闭先停，避免 tick 与 DB/Redis 关闭赛跑
 	var virtualPayCompensator *VirtualPayCompensator
+	stopPhase3 := func() {}
 	reportModule, reportErr := NewReportModule(reportContext, component.GetDB(), cfg)
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
@@ -74,12 +75,14 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
 		costShareStore := model.NewCostEstimateShareRedisModel(component.GetRedis())
 		trackingService.ResolvePublicSnapshot = makeTrackingCostSnapshotResolver(costShareStore)
+		registerShareWebRoutes(r, v1, trackingService, newTrackingWechatAPI(miniprogramCredentials()), userDBModel, codeSessionModel)
 		userFavoriteModel := model.NewUserFavoriteModel(component.GetDB())
 		_ = userFavoriteModel.InitTable()
 		setSharedTemplateSquareConfigModel(templateSquareConfigModel)
 
 		// 小程序API
 		miniprogram := v1.Group("/miniprogram")
+		stopPhase3 = registerPhase3Notifications(reportContext, v1, miniprogram, trackingService, userDBModel, codeSessionModel)
 		RegisterMiniprogramRoutes(miniprogram, authProcessor, codeSessionModel, userModel, stoneRecordModel, inviteRelationModel, userDBModel, userInviteCodeModel, userProfileModel, aiToolModel, templateSquareConfigModel)
 		RegisterAIPublicRoutes(miniprogram, pricingModel)
 		// 签到接口（简化token认证）
@@ -224,6 +227,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterUtilityToolRoutes(miniprogram, utilityToolModel)
 	}
 	return func() {
+		stopPhase3()
 		virtualPayCompensator.Stop()
 		stopReports()
 		auditWriter.Stop()

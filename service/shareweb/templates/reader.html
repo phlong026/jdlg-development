@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/share/assets/reader.css">
+</head>
+<body data-code="{{.Code}}" data-trackable="{{.Trackable}}">
+  <main class="reader">
+    <header><span>甲第灵光</span><h1>{{.Title}}</h1></header>
+    <article>
+      {{if .RichHTML}}<div class="legacy-rich">{{.RichHTML}}</div>{{end}}
+      {{range .Blocks}}
+        {{if eq .Kind "heading"}}{{if eq .Level 2}}<h2 class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</h2>{{else}}<h3 class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</h3>{{end}}{{end}}
+        {{if eq .Kind "paragraph"}}<p class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</p>{{end}}
+        {{if eq .Kind "quote"}}<blockquote class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</blockquote>{{end}}
+        {{if eq .Kind "list"}}{{if .Ordered}}<ol class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{range .Items}}<li>{{.}}</li>{{end}}</ol>{{else}}<ul class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{range .Items}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
+        {{if eq .Kind "image"}}<figure class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px"><img src="{{.MediaURL}}" alt="{{.Caption}}" loading="lazy">{{if .Caption}}<figcaption>{{.Caption}}</figcaption>{{end}}</figure>{{end}}
+        {{if eq .Kind "video"}}<figure class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px"><video src="{{.MediaURL}}" controls playsinline preload="metadata"></video>{{if .Caption}}<figcaption>{{.Caption}}</figcaption>{{end}}</figure>{{end}}
+      {{end}}
+    </article>
+    {{if .Trackable}}<section class="notice"><p>同意后记录本次阅读与停留，用于让分享人及时跟进。</p><button id="consent" type="button">同意并继续阅读</button><span id="tracking-state"></span></section>{{end}}
+    <button id="open-mini" type="button">在甲第灵光中打开</button>
+  </main>
+  <script src="/share/assets/reader.js" defer></script>
+</body>
+</html>

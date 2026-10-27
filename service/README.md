@@ -294,3 +294,7 @@ authProcessor.RegisterStrategy(myStrategy)
 strategy, _ := authProcessor.GetStrategy("my_auth")
 result, err := strategy.Login(ctx, req)
 ```
+
+## 三期内容、分享和通知
+
+首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](../docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
