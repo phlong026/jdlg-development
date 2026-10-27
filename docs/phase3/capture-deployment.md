@@ -1,5 +1,22 @@
 # 公众号视频采集环境部署
 
+## 2026-10-27 实际部署结果
+
+已在 `162.14.210.252` 完成独立采集环境部署，Chrome for Testing Headless Shell 为 `156.0.8078.47`。网络、浏览器、Worker 和出口刷新 timer 均已启用；新增的 API Nginx exact location 已通过 `nginx -t` 并加载。原甲第主业务仍为原有唯一进程，未替换程序或加载采集客户端配置。
+
+实际验收通过：
+
+- `verify.sh --installed`：26 项部署策略测试，以及真实服务、文件权限、Unix socket、本机 HTTPS readiness 和运行时网络探针。
+- namespace 内允许的微信 HTTPS 地址可正常完成证书校验；元数据地址、私网、宿主业务端口、非白名单公网、其他 DNS 和 IPv6 均不能连接；宿主无法连接 CDP。
+- 通过真实 CDP 创建临时页面并渲染，再读取实际 renderer PID，验证专用非 root UID、seccomp 过滤、NoNewPrivileges、零 capability 及专用 AppArmor label。该 AppArmor profile 只提供该路径所需的 userns 许可，文件隔离由 systemd 约束。
+- 使用真实 Go `CaptureWorker`、服务器私有配置、域名 TLS 和本机固定 Dial，readiness/Probe/Available 均通过；外部访问内部 readiness 返回 403。
+- 停止 Chrome 后 Worker 保持运行并返回 503；重新启动 Chrome 后自动发现新 CDP 地址并恢复 200，Worker PID 不变，临时 profile 已更新。
+- 验收用临时测试二进制按散列匹配清理。发布元数据保存在服务器 `/opt/jdlg-content-capture/releases/20261027/deployment-metadata.json`，配置密钥未复制出服务器。
+
+以上证明环境和接入客户端可用。尚未部署主业务的新代码及配置，也未使用真实含视频文章采集，因此不能据此认定生产公众号导入已开通。用户已说明真实链接后期补充。
+
+证据：[最终验收](evidence/capture-final-acceptance-20261027.png)、[网络隔离](evidence/capture-network-isolation-pass-20261027.png)、[renderer 与真实 HTTPS](evidence/capture-sandbox-and-https-pass-20261027.png)、[重启恢复](evidence/capture-restart-recovery-pass-20261027.png)。实际 Linux 诊断在 `service/contentcapture/live_test.go`，默认跳过，须在上述隔离服务器显式启用；普通测试不读取真实配置。
+
 本部署只新增独立采集资源，不修改现有甲第主服务、全局 DNS、`/etc/hosts` 或全局 user namespace 策略。采集流量通过 `jdlg-content-capture` network namespace 隔离，只允许固定 DNS 和已解析的微信 HTTPS 目标。
 
 ## 部署契约
