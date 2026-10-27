@@ -9,6 +9,7 @@ const errorText = code => ({
   rate_limited: '来源平台请求频繁，请稍后重试', unsupported_encryption: '该视频暂不支持安全导入', unsupported_embed: '正文含暂不支持的嵌入内容',
   media_source_expired: '媒体临时地址已失效或无法访问，可重新发起导入', unsupported_video: '该文章的视频格式暂不支持', article_too_large: '文章超出当前导入容量，请分篇处理', capture_timeout: '视频采集超时，可稍后重试', capture_failed: '视频采集失败，可稍后重试', risk_control: '来源平台要求人工验证，请联系管理员',
   provider_not_configured: '该平台解析服务尚未配置', article_fetch_failed: '公众号文章暂时无法读取，请稍后重试', invalid_link: '分享链接无法识别',
+  private_storage_required: '素材存储私有访问验证未通过，请联系管理员', invalid_xhs_response: '公开页面未返回完整图文，请更新完整分享链接或手动上传素材', xhs_unknown_source: '该小红书内容类型暂不支持', xhs_gallery_incomplete: '图集中的图片未完整取得，请更新链接或手动上传', xhs_page_fetch_failed: '小红书页面暂时无法读取，请稍后重试',
   invalid_media: '素材文件格式校验未通过', invalid_document: '导入内容结构无法识别', invalid_draft: '导入草稿未通过校验', missing_video: '未能取得完整视频', media_too_large: '素材超过当前导入大小限制',
 }[code] || '请稍后重试或联系管理员核对');
 const decorateImport = item => Object.assign({}, item, { status_text: statusText(item.status), platform_text: platformText(item.platform), error_text: item.error_code ? errorText(item.error_code) : '' });
