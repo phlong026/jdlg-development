@@ -79,6 +79,10 @@ export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body
     let document: ArticleDocument;
     try { document = JSON.parse(content.body) as ArticleDocument; } catch { return <div className="st-warning">原排版正文无法预览，请重新保存。</div>; }
     if (document.schema !== 1 || !Array.isArray(document.blocks) || !document.blocks.length) return <div className="st-warning">原排版正文无法预览，请重新保存。</div>;
+	if (document.layout_html) {
+		const layout = renderAdminArticleLayout(document.layout_html, content.media || []);
+		return layout ? <div className="st-body st-original-layout" dangerouslySetInnerHTML={{ __html: layout }} /> : <div className="st-warning">原排版正文或媒体无法安全预览，请重新导入。</div>;
+	}
     const media = new Map((content.media || []).map(asset => [asset.media_id, asset]));
     const align = { left: 'left', center: 'center', right: 'right' } as const;
     const size = { small: 'small', normal: 'normal', large: 'large' } as const;
@@ -98,4 +102,24 @@ export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body
         if (block.kind === 'list') return <div className={classes.join(' ')} style={style} key={index}>{block.ordered ? <ol>{block.items?.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ol> : <ul>{block.items?.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>}</div>;
         return <div className={classes.join(' ')} style={style} key={index}>{block.text}</div>;
     })}</div>;
+}
+
+const layoutTag = /^<\/?(?:section|div|p|span|strong|b|em|i|u|s|br|h[1-6]|blockquote|ul|ol|li|figure|figcaption|table|thead|tbody|tfoot|tr|td|th|hr|code|pre)(?: (?:style="[^"]*"|colspan="\d+"|rowspan="\d+"))*?>$/;
+const layoutImageTag = /^<img data-media-id="[A-Za-z0-9_-]{8,128}"(?: alt="[^"]*")?(?: style="[^"]*")?>$/;
+const layoutVideoTag = /^(?:<jd-video data-media-id="[A-Za-z0-9_-]{8,128}"(?: style="[^"]*")?>|<\/jd-video>)$/;
+function escapeLayoutAttribute(value: string): string { return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+export function renderAdminArticleLayout(layout: string, media: Asset[]): string | undefined {
+	if (/(?:\b(?:src|href|on[a-z]+)=|<\/?(?:script|style|iframe|object|embed|svg|audio|link|meta)\b|url\s*\(|expression\s*\(|@import|\\|(?:position|z-index|transform|filter|visibility|opacity|content|behavior)\s*:)/i.test(layout)) return;
+	for (const token of layout.match(/<[^>]*>/g) || []) if (!layoutTag.test(token) && !layoutImageTag.test(token) && !layoutVideoTag.test(token)) return;
+	const assets = new Map(media.map(asset => [asset.media_id, asset]));
+	let safe = layout.replace(/<img data-media-id="([A-Za-z0-9_-]{8,128})"((?: alt="[^"]*")?(?: style="[^"]*")?)>/g, (_, id: string, attrs: string) => {
+		const asset = assets.get(id), url = safeMediaURL(asset?.url);
+		return asset?.kind === 'image' && url ? `<img src="${escapeLayoutAttribute(url)}"${attrs}>` : '<invalid-media>';
+	});
+	safe = safe.replace(/<jd-video data-media-id="([A-Za-z0-9_-]{8,128})"((?: style="[^"]*")?)><\/jd-video>/g, (_, id: string, attrs: string) => {
+		const asset = assets.get(id), url = safeMediaURL(asset?.url);
+		return asset?.kind === 'video' && url ? `<video src="${escapeLayoutAttribute(url)}" controls playsinline preload="metadata"${attrs}></video>` : '<invalid-media>';
+	});
+	if (safe.includes('<invalid-media>') || /data-media-id|jd-video/.test(safe)) return;
+	return safe;
 }

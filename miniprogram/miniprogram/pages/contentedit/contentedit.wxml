@@ -23,6 +23,8 @@
     <label>来源说明<input value="{{source_note}}" maxlength="2000" data-field="source_note" bindinput="setField" /></label>
     <label>原文 HTTPS 链接<input value="{{source_url}}" data-field="source_url" bindinput="setField" /></label>
    </view>
+   <view wx:if="{{layoutReadOnly}}" class="notice">公众号原排版正文为只读结构。可修改标题、归属和来源信息；保存与发布会完整保留导入正文，不会按兼容 blocks 扁平化。</view>
+   <block wx:if="{{!layoutReadOnly}}">
    <view class="section-title">正文顺序</view>
    <view wx:for="{{renderedBlocks}}" wx:key="index" class="panel block">
     <textarea wx:if="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" value="{{item.text}}" data-index="{{index}}" bindinput="editBlock" auto-height maxlength="10000" placeholder="输入段落" />
@@ -38,6 +40,7 @@
     <text class="muted">{{item.kind === 'image' ? '图片' : '视频'}} · {{item.title || item.media_id}}</text>
     <view class="actions"><button wx:if="{{!item.local_path}}" data-index="{{index}}" bindtap="previewMedia">安全预览</button><button data-index="{{index}}" bindtap="addMediaBlock">加入正文</button><button wx:if="{{item.kind === 'image'}}" data-index="{{index}}" bindtap="setCover">{{cover_media_id === item.media_id ? '已设封面' : '设为封面'}}</button></view>
    </view>
+   </block>
    <button class="primary" bindtap="saveAndPreview" loading="{{busy}}" disabled="{{busy}}">保存草稿并预览</button>
    <view wx:if="{{preview}}" class="preview">
     <text class="section-title">服务端发布前预览</text><text class="title">{{preview.content.title}}</text>

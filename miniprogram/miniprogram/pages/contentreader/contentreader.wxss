@@ -9,6 +9,7 @@ page{background:#faf8f4;color:#302c27}.reader{box-sizing:border-box;width:100%;p
 .reader-guide-close{margin:0;padding:0 8px;min-height:32px;background:transparent;color:#b0a494;font-size:15px;line-height:32px}
 
 .article-block{box-sizing:border-box;max-width:100%;margin:18px 0;font-size:17px;line-height:1.85;white-space:pre-wrap}
+.article-layout{display:block;box-sizing:border-box;max-width:100%;font-size:17px;line-height:1.85;overflow-wrap:anywhere}
 .article-heading{margin-top:28px;font-size:22px;font-weight:600;line-height:1.5;color:#2d2924}
 .article-heading-3{font-size:20px}
 .article-heading.article-size-small{font-size:19px}.article-heading.article-size-large{font-size:25px}

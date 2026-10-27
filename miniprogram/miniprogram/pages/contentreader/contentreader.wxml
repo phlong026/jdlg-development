@@ -14,7 +14,8 @@
   <!-- rich_text is persisted server-allowlisted HTML; legacy content remains escaped text. -->
   <rich-text wx:if="{{content.body_format === 'rich_text'}}" class="body" nodes="{{content.body}}" selectable="{{true}}" />
   <block wx:elif="{{content.body_format === 'article_v2'}}" wx:for="{{articleBlocks}}" wx:key="key">
-   <view wx:if="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+   <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
+   <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
    <view wx:elif="{{item.kind === 'list'}}" class="{{item.className}}" style="{{item.style}}">
     <view wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex" class="article-list-item"><text class="article-list-marker">{{item.ordered ? (listIndex + 1) + '.' : '•'}}</text><text selectable="{{true}}">{{listItem}}</text></view>
    </view>

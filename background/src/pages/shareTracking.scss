@@ -283,6 +283,10 @@
   .st-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; margin: 20px 0; }
   .st-body img, .st-body video { max-width: 100%; height: auto; object-fit: contain; }
   .st-article-body { white-space: normal; }
+	.st-original-layout { white-space: normal; overflow-wrap: anywhere; }
+	.st-original-layout img, .st-original-layout video { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+	.st-original-layout video { width: 100%; background: #000; }
+	.st-original-layout table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
   .st-article-block { margin: 18px 0; white-space: pre-wrap; }
   .st-article-heading { margin-top: 28px; color: var(--st-text); font-size: var(--admin-font-title); font-weight: 650; line-height: 1.5; }
   .st-article-heading-3 { font-size: var(--admin-font-section); }

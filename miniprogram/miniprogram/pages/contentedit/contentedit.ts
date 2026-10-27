@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use strict';
 const api = require('../../utils/phase3-api');
+const { preserveLayoutBody } = require('../../utils/article-document');
 
 function textBlock(text = '') { return { kind: 'paragraph', text }; }
 function mediaIDs(blocks) { return [...new Set(blocks.filter(block => block.media_id).map(block => block.media_id))]; }
@@ -34,6 +35,7 @@ Page({
     title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
     blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null,
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
+		layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [],
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
@@ -42,7 +44,7 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
     }
@@ -68,6 +70,8 @@ Page({
       const mediaPage = values[0] || {}, content = values[1];
       const bodyFormat = content ? content.body_format || 'plain' : 'article_v2';
       const legacyReadOnly = !!content && bodyFormat !== 'article_v2';
+			let layoutReadOnly = false;
+			if (content && bodyFormat === 'article_v2') { try { const document = JSON.parse(content.body); layoutReadOnly = typeof document.layout_html === 'string' && !!document.layout_html; } catch (_) {} }
       const blocks = initialBlocks(content);
       const associated = mergeAssets(content && content.media || [], content && content.cover || []);
       const assets = mergeAssets(mediaPage.items || [], associated);
@@ -77,7 +81,7 @@ Page({
       if (!this.current(epoch)) return;
       this._loaded = true;
       const legacyIDs = new Set(associated.map(asset => asset.media_id));
-      this.setData({ context, media, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? media.filter(asset => legacyIDs.has(asset.media_id)) : [], blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      this.setData({ context, media, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? media.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '编辑器加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false }); }
   },
   async loadPrivatePaths(items, previews) {
@@ -102,12 +106,14 @@ Page({
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
   setOwner(event) { const owner = (this.data.context.owners || [])[Number(event.detail.value)] || ''; this.setData({ owner_id: owner, preview: null }); },
   editBlock(event) {
+		if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     blocks[index] = { ...blocks[index], text: event.detail.value };
     this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
-  addParagraph() { const blocks = this.data.blocks.concat(textBlock('')); this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null }); },
+  addParagraph() { if (this.data.layoutReadOnly) return; const blocks = this.data.blocks.concat(textBlock('')); this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null }); },
   addMediaBlock(event) {
+		if (this.data.layoutReadOnly) return;
     const asset = this.data.media[Number(event.currentTarget.dataset.index)];
     if (!asset) return;
     const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
@@ -115,12 +121,14 @@ Page({
   },
   setCover(event) { const asset = this.data.media[Number(event.currentTarget.dataset.index)]; if (asset && asset.kind === 'image') this.setData({ cover_media_id: asset.media_id, preview: null }); },
   moveBlock(event) {
+		if (this.data.layoutReadOnly) return;
     const from = Number(event.currentTarget.dataset.index), to = from + Number(event.currentTarget.dataset.step), blocks = this.data.blocks.slice();
     if (to < 0 || to >= blocks.length) return;
     const item = blocks.splice(from, 1)[0]; blocks.splice(to, 0, item);
     this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
   },
   removeBlock(event) {
+		if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.filter((_, index) => index !== Number(event.currentTarget.dataset.index));
     const next = blocks.length ? blocks : [textBlock('')];
     this.setData({ blocks: next, renderedBlocks: decorateBlocks(next, this.data.media), preview: null });
@@ -183,7 +191,8 @@ Page({
     if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return; }
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
-      const draft = { title, body: articleBody(blocks), body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: mediaIDs(blocks), expected_revision: this.data.revision };
+      const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks));
+			const draft = { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), expected_revision: this.data.revision };
       const saved = await api.saveContent(draft, this.data.id);
       if (!this.current(epoch)) return;
       const preview = await api.previewContent(saved.content_id, saved.revision);

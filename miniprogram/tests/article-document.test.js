@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.join(__dirname, '../miniprogram');
-const { renderArticleDocument } = require(path.join(root, 'utils/article-document'));
+const { renderArticleDocument, preserveLayoutBody } = require(path.join(root, 'utils/article-document'));
 
 test('article renderer keeps text and repeated media in document order on a narrow screen', () => {
   const body = JSON.stringify({ schema: 1, blocks: [
@@ -39,10 +39,46 @@ test('article renderer rejects missing media instead of silently dropping part o
   assert.throws(() => renderArticleDocument(body, [], 320), /媒体/);
 });
 
+test('article renderer keeps sanitized layout and splits nested video into a native segment', () => {
+  const body = JSON.stringify({ schema: 1, layout_html: '<section style="padding:12px"><p>前文</p><img data-media-id="asset-0001"><blockquote>引用<jd-video data-media-id="asset-0002"></jd-video>后文</blockquote></section>', blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
+  const media = [
+    { media_id: 'asset-0001', kind: 'image', url: 'https://example.test/image?a=1&b=2', width: 1200, height: 800 },
+    { media_id: 'asset-0002', kind: 'video', url: 'https://example.test/video', width: 1280, height: 720 },
+  ];
+  const blocks = renderArticleDocument(body, media, 280);
+  assert.deepEqual(blocks.map(block => block.kind), ['layout', 'video', 'layout']);
+  assert.match(blocks[0].html, /<img src="https:\/\/example\.test\/image\?a=1&amp;b=2">/);
+  assert.match(blocks[0].html, /前文/);
+  assert.equal(blocks[1].media_id, 'asset-0002');
+  assert.match(blocks[2].html, /后文/);
+  assert.doesNotMatch(blocks.map(block => block.html || '').join(''), /data-media-id|jd-video/);
+});
+
+test('article renderer rejects unsafe or incomplete layout at the client boundary', () => {
+  const media = [{ media_id: 'asset-0001', kind: 'image', url: 'https://example.test/image' }];
+  for (const layout of ['<script>alert(1)</script>', '<img src="https://evil.test/x">', '<img data-media-id="asset-missing">']) {
+    const body = JSON.stringify({ schema: 1, layout_html: layout, blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
+    assert.throws(() => renderArticleDocument(body, media, 320), /排版|媒体/);
+  }
+});
+
+test('article editor save keeps the complete imported layout body byte-for-byte', () => {
+  const original = JSON.stringify({ schema: 1, layout_html: '<p>原排版</p>', blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
+  const rebuilt = JSON.stringify({ schema: 1, blocks: [{ kind: 'paragraph', text: '被扁平化' }] });
+  assert.equal(preserveLayoutBody(original, rebuilt), original);
+  assert.equal(preserveLayoutBody(rebuilt, rebuilt), rebuilt);
+});
+
 test('reader has an article branch and does not append article media as legacy attachments', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
   assert.match(wxml, /body_format === 'article_v2'/);
   assert.match(wxml, /wx:for="\{\{articleBlocks\}\}"/);
   assert.match(wxml, /body_format !== 'article_v2'/);
   assert.match(wxml, /data-player-key="\{\{item\.playerKey\}\}"/);
+  assert.match(wxml, /item\.kind === 'layout'/);
+	const editor = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.js'), 'utf8');
+	const editorView = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+	assert.match(editor, /preserveLayoutBody\(this\.data\.layoutBody/);
+	assert.match(editor, /layoutMediaIDs/);
+	assert.match(editorView, /公众号原排版正文为只读结构/);
 });
