@@ -58,3 +58,28 @@ test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
   assert.doesNotMatch(wxml, /page-background/);
   assert.match(scss, /background:\s*#fbfaf7/);
 });
+
+test('项目笔记已有页面时我的入口可用且保留登录门禁', () => {
+  const vm = require('node:vm');
+  let page;
+  const navigations = [], toasts = [];
+  vm.runInNewContext(read('my.js'), {
+    exports: {},
+    require: () => ({ resolveAssetPath: value => value }),
+    Page: definition => { page = definition; },
+    wx: { getStorageSync: () => '', navigateTo: options => navigations.push(options.url), showToast: options => toasts.push(options.title) },
+  });
+  const event = { currentTarget: { dataset: { action: 'projectNotes' } } };
+  page.data = { ...page.data, token: '', hasLoginToken: false };
+  page.onWorkbenchMenuTap(event);
+  assert.equal(navigations.length, 0);
+  assert.equal(toasts[0], '请先登录');
+  page.data.token = 'fixture-session';
+  page.onWorkbenchMenuTap(event);
+  assert.deepEqual(navigations, ['/pages/projectnotes/projectnotes']);
+  for (const file of ['my.ts', 'my.js']) {
+    const source = read(file);
+    assert.match(source, /action: 'projectNotes'[^\n]+available: true/);
+    assert.match(source, /\/pages\/projectnotes\/projectnotes/);
+  }
+});

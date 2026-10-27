@@ -1,0 +1,68 @@
+{
+  "status": "passed",
+  "method": "CUA native window and selected native console; actual input/clicks plus explicit in-memory fixtures",
+  "environment": "WeChat DevTools 2.02.2608080, library 3.16.3, runtimeid=1, devid=s2",
+  "production": false,
+  "modelCalled": false,
+  "steps": [
+    {
+      "name": "我的账户、两排四列工作台、资料与服务原生渲染",
+      "status": "passed",
+      "evidence": [
+        "01-my-top.jpg",
+        "02-my-services.jpg"
+      ]
+    },
+    {
+      "name": "内容制作加载三条隔离资料，空状态不与列表同时显示",
+      "status": "passed",
+      "evidence": [
+        "03-content-studio.jpg"
+      ]
+    },
+    {
+      "name": "原生点击链接导入、点击粘贴、显示成功及可重试失败记录",
+      "status": "passed",
+      "evidence": [
+        "04-content-import.jpg"
+      ]
+    },
+    {
+      "name": "原生输入标题与正文、保存草稿、生成预览、确认发布、打开公开阅读页",
+      "status": "passed",
+      "evidence": [
+        "05-content-editor.jpg",
+        "05-content-editor-top.jpg",
+        "06-published-reader.jpg"
+      ]
+    },
+    {
+      "name": "原生输入策划资料与可编辑结果，点击保存后EventChannel回填新编辑器",
+      "status": "passed",
+      "evidence": [
+        "07-ai-writing.jpg"
+      ],
+      "model_called": false
+    },
+    {
+      "name": "最终原生布局复看：搜索按钮、策划底栏、编辑顶部、阅读导航与咨询卡片",
+      "status": "passed"
+    },
+    {
+      "name": "恢复wx.request、wx.getClipboardData及原本地token，移除fixture状态",
+      "status": "passed",
+      "observed_result": {
+        "restored": true,
+        "fixtureToken": false
+      }
+    }
+  ],
+  "cli_automation_result": "incomplete: official automation bridge selected a different app-service frame; its old CLI success/timeout results are not the native interaction evidence",
+  "unverified": [
+    "real external imports and media upload",
+    "paid model generation",
+    "cross-account device sharing and attribution",
+    "production deployment or Mini Program upload"
+  ],
+  "screenshots": "cropped from CUA window screenshots; no fabricated UI"
+}

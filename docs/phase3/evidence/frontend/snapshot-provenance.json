@@ -1,0 +1,31 @@
+{
+  "base_commit": "358399c",
+  "project": "/private/tmp/jdlg-phase3-ui-01a17be0/miniprogram",
+  "overlays": {
+    "miniprogram/pages/contentworkbench/contentworkbench.wxml": "7a112367815bbfda7c904d089364d673ae9c8b9130dd0f1fa6a918c760243257",
+    "miniprogram/pages/contentworkbench/contentworkbench.wxss": "4acd9c2737fa079466a527ab50c83d501506d92098548af1324d2ae085a6f522",
+    "miniprogram/pages/contentedit/contentedit.wxml": "d97cb2eecf91cdd3e3f877fcb78bddac41f8edac14f22f00be9b9f0bdf3031a2",
+    "miniprogram/pages/contentedit/contentedit.wxss": "89c96b27b4896fcc804bf5d6dc01f0dc8efa988830d3198e3b47cab3aa50e14c",
+    "miniprogram/pages/contentreader/contentreader.wxml": "d4fb707a8ea46873accad6aef9bfccb42f7ea2142d59bf7c87bfdf52ef13d269",
+    "miniprogram/pages/contentreader/contentreader.wxss": "cfa2170d18206b5f1ac3d73e8de0de27bd51b8719551d2dd2d7c850e5210f7d0",
+    "miniprogram/pages/contentreader/contentreader.json": "00bd1f64e33e4cf58a23d85e89020c7066690f11e1d5db8619160fdb408ae01c",
+    "miniprogram/pages/contentwriting/contentwriting.wxss": "fb8c7f84eb558f319c99e64e12050e011842e67048c530ae3a26ba12d56e8826",
+    "miniprogram/pages/messagecenter/messagecenter.wxml": "7446edaa1d25f4f398c2047ab7a5551ca2dcfd46877ad1ebf57d994f85302d81",
+    "verification/phase3-frontend.cjs": "a9ddb16c96352b481166d61b75738d0d163e4f7bff7936c09543ce1670a2d0c1",
+    "tests/phase3-wxml-compile.test.js": "5ea13ab1f14a934fabfdca6eecbd4f5a6bbf3e21027e3da569b3c13595095411",
+    "tests/phase3-verification.test.js": "a04176bee4f31a983a615f107922387779300fe19263d0e0e96a2f75e4e96d78",
+    "tests/phase3-content-editor-ui.test.js": "80e952605c03b8ecc61b953ae88a4523ebd0a3b54cfc993ad32b73d1ac88ca7c",
+    "tests/phase3-content-studio.test.js": "2627533a8ad367ab46f1e8a9c381cfbaf3c1238804a2ac5fb2b4b736ded29fd3",
+    "miniprogram/pages/my/my.ts": "5c0bafb23b678ae31340015119efbabf1365fd61ce636df44c7b7cbede06925b",
+    "miniprogram/pages/my/my.js": "cf30b987dd3d4b85a244c53f34a91508f97d0f45cd21a904dbfaa5555af091fa"
+  },
+  "reader_contract_test_updated": true,
+  "excludes_parallel_project_notes_and_handoff_changes": true,
+  "my_notes_navigation": "Destination is verified in current-tree runtime tests; isolated base does not include the parallel projectnotes subpackage.",
+  "isolated_suite": {
+    "total": 568,
+    "passed": 565,
+    "failed": 0,
+    "skipped": 3
+  }
+}
