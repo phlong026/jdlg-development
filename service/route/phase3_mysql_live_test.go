@@ -10,8 +10,10 @@ import (
 	"image/png"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -82,6 +84,7 @@ func TestPhase3MySQLLiveLifecycle(t *testing.T) {
 	scope := tracking.Scope{Tenant: phase3MySQLLiveTenant, Actor: 202, Owners: []string{"owner-phase3"}, View: true, Manage: true}
 	content := exercisePhase3ImportLifecycle(t, ctx, importStore, svc, scope)
 	exercisePhase3ShareNoticeLifecycle(t, ctx, db, inbox, svc, scope, content)
+	exerciseProjectNoteMySQLLifecycle(t, ctx, db, inbox, svc, scope)
 }
 
 func openPhase3MySQLLiveDB(t *testing.T) *sql.DB {
@@ -116,6 +119,7 @@ func openPhase3MySQLLiveDB(t *testing.T) *sql.DB {
 	if err != nil || parsed.Net != "tcp" || (host != "127.0.0.1" && host != "localhost") || parsed.DBName != "phase3_verify" {
 		t.Fatal("refusing any database except loopback phase3_verify")
 	}
+	parsed.Addr = phase3MySQLContainerAddr(t, live.Container)
 	parsed.ParseTime = true
 	parsed.MultiStatements = true
 	parsed.Loc = time.UTC
@@ -145,6 +149,29 @@ func openPhase3MySQLLiveDB(t *testing.T) *sql.DB {
 		t.Fatal("database selection guard failed")
 	}
 	return db
+}
+
+func phase3MySQLContainerAddr(t *testing.T, container string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	state, err := exec.CommandContext(ctx, "docker", "inspect", "-f", `{{index .Config.Labels "codex.phase3.verify"}} {{.State.Status}}`, container).Output()
+	if err != nil || strings.TrimSpace(string(state)) != "true running" {
+		t.Fatal("live-test container must be running and carry the disposable verification label")
+	}
+	port, err := exec.CommandContext(ctx, "docker", "port", container, "3306/tcp").Output()
+	if err != nil {
+		t.Fatal("cannot resolve disposable mysql loopback port")
+	}
+	lines := strings.Fields(string(port))
+	if len(lines) != 1 {
+		t.Fatal("disposable mysql must expose exactly one loopback port")
+	}
+	host, value, err := net.SplitHostPort(lines[0])
+	if err != nil || host != "127.0.0.1" || value == "" {
+		t.Fatal("disposable mysql port must stay bound to IPv4 loopback")
+	}
+	return net.JoinHostPort(host, value)
 }
 
 func applyPhase3MySQLMigrations(t *testing.T, db *sql.DB) {
@@ -455,5 +482,146 @@ func exercisePhase3ShareNoticeLifecycle(t *testing.T, ctx context.Context, db *s
 		ShareToken: share["share_token"].(string), Client: "late-client-0001", Anonymous: "late-anonymous-0001", Consent: "v1",
 	}, 0); err == nil {
 		t.Fatal("revoked share still opened revoked content")
+	}
+}
+
+func exerciseProjectNoteMySQLLifecycle(t *testing.T, ctx context.Context, db *sql.DB, inbox *notification.SQLStore, svc *tracking.Service, scope tracking.Scope) {
+	t.Helper()
+	svc.IsContentOperator = func(context.Context, int64, string) (bool, error) { return true, nil }
+
+	const (
+		ownerA    = int64(303)
+		ownerB    = int64(304)
+		openEvent = "mysql-live-project-open-0001"
+	)
+	project, err := svc.ProjectNoteCreateProject(ctx, scope, tracking.ProjectNoteProjectInput{Name: "MySQL 私人方案", Owner: scope.Owners[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, actor := range []int64{ownerA, ownerB} {
+		if _, err = svc.ProjectNoteInviteMember(ctx, scope, project.ID, actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = svc.ProjectNoteSetConfirmer(ctx, scope, project.ID, ownerA); err != nil {
+		t.Fatal(err)
+	}
+
+	asset := tracking.Asset{
+		ID: "mysql-private-media-0001", Kind: "image", MIME: "image/png", Width: 3, Height: 2,
+		URL: "/api/v1/miniprogram/project-notes/projects/" + project.ID + "/media/mysql-private-media-0001",
+	}
+	operation, already, err := svc.ProjectNotePrepareMedia(ctx, scope, project.ID, asset, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "upload")
+	if err != nil || already {
+		t.Fatalf("prepare private media: already=%v err=%v", already, err)
+	}
+	if _, err = svc.ProjectNoteFinalizeMedia(ctx, scope, project.ID, asset.ID, operation); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Media(ctx, nil, asset.ID); err == nil {
+		t.Fatal("private project media leaked into the enterprise media catalog")
+	}
+
+	v1Body := `{"schema":1,"blocks":[{"kind":"paragraph","text":"固定版本一"},{"kind":"image","media_id":"mysql-private-media-0001"}]}`
+	note, err := svc.ProjectNoteCreateNote(ctx, scope, project.ID, tracking.ProjectNoteDraft{
+		Title: "方案一", Body: v1Body, BodyFormat: "article_v2", MediaIDs: []string{asset.ID}, CoverID: asset.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1, err := svc.ProjectNoteFreezeVersion(ctx, scope, note.ID, note.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	share1, err := svc.ProjectNoteCreateShare(ctx, scope, v1.ID, svc.Now().Add(time.Hour), "mysql-private-share-v1")
+	if err != nil || share1.Token == "" {
+		t.Fatalf("create fixed-version share: %+v err=%v", share1, err)
+	}
+	var plaintextTokens int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracking_records WHERE tenant_id=? AND payload LIKE ?`, phase3MySQLLiveTenant, "%"+share1.Token+"%").Scan(&plaintextTokens); err != nil || plaintextTokens != 0 {
+		t.Fatalf("raw private share token persisted: count=%d err=%v", plaintextTokens, err)
+	}
+
+	feedback, err := svc.ProjectNoteAddFeedback(ctx, share1.Token, ownerA, "门厅需要调整", "mysql-private-feedback-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.ProjectNoteResolveFeedback(ctx, scope, feedback.ID, "设计师已处理", "mysql-private-resolve-v1"); err != nil {
+		t.Fatal(err)
+	}
+	confirmedV1, err := svc.ProjectNoteConfirmShare(ctx, share1.Token, ownerA, "mysql-private-confirm-a-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	note, err = svc.ProjectNoteSaveNote(ctx, scope, note.ID, tracking.ProjectNoteDraft{Title: "方案二", Body: "更新后的方案二", BodyFormat: "plain"}, note.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := svc.ProjectNoteFreezeVersion(ctx, scope, note.ID, note.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	share2, err := svc.ProjectNoteCreateShare(ctx, scope, v2.ID, svc.Now().Add(2*time.Hour), "mysql-private-share-v2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.ProjectNoteSetConfirmer(ctx, scope, project.ID, ownerB); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.ProjectNoteConfirmShare(ctx, share1.Token, ownerB, "mysql-private-confirm-b-v1"); err == nil {
+		t.Fatal("changed confirmer created a second confirmation for fixed version one")
+	}
+	v1View, err := svc.ProjectNoteReadShare(ctx, share1.Token, ownerB)
+	if err != nil || v1View.Version.ID != v1.ID || v1View.Version.Body != v1.Body || v1View.Confirmation == nil || v1View.Confirmation.ID != confirmedV1.ID {
+		t.Fatalf("fixed version changed after note update: version=%s body=%q confirmation=%+v err=%v", v1View.Version.ID, v1View.Version.Body, v1View.Confirmation, err)
+	}
+	confirmedV2, err := svc.ProjectNoteConfirmShare(ctx, share2.Token, ownerB, "mysql-private-confirm-b-v2")
+	if err != nil || confirmedV2.VersionID != v2.ID {
+		t.Fatalf("designated owner could not confirm version two: %+v err=%v", confirmedV2, err)
+	}
+	for _, versionID := range []string{v1.ID, v2.ID} {
+		var count int
+		if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracking_records WHERE tenant_id=? AND kind='note_confirm' AND content_id=?`, phase3MySQLLiveTenant, versionID).Scan(&count); err != nil || count != 1 {
+			t.Fatalf("confirmation uniqueness for version %s: count=%d err=%v", versionID, count, err)
+		}
+	}
+
+	opened, err := svc.ProjectNoteOpenShare(ctx, share2.Token, ownerA, openEvent)
+	if err != nil || !opened.Notify || opened.ActualSharerID != scope.Actor || opened.VersionID != v2.ID {
+		t.Fatalf("private open attribution mismatch: %+v err=%v", opened, err)
+	}
+	for _, kind := range []string{"note_open", "notice_event"} {
+		var count int
+		if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracking_records WHERE tenant_id=? AND kind=? AND record_id=?`, phase3MySQLLiveTenant, kind, openEvent).Scan(&count); err != nil || count != 1 {
+			t.Fatalf("private open transaction %s count=%d err=%v", kind, count, err)
+		}
+	}
+	var jobCount int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mini_notification_event_jobs WHERE tenant_id=? AND event_id=? AND status='pending'`, phase3MySQLLiveTenant, openEvent).Scan(&jobCount); err != nil || jobCount != 1 {
+		t.Fatalf("private open notification job count=%d err=%v", jobCount, err)
+	}
+
+	consumer, err := notification.NewConsumer(inbox, notification.ConsumerConfig{
+		Channel: "official_account", PollInterval: time.Millisecond, LeaseDuration: time.Minute, MaxAttempts: 3,
+		Eligibility: func(ctx context.Context, event notification.Event) (bool, error) {
+			return svc.ProjectNoteNoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	worked, err := consumer.RunOnce(ctx)
+	if err != nil || !worked {
+		t.Fatalf("private notification consumer did not materialize: worked=%v err=%v", worked, err)
+	}
+	var recipient int64
+	var kind, route, contentID string
+	if err = db.QueryRowContext(ctx, `SELECT recipient_id,kind,route_key,content_id FROM mini_notifications WHERE tenant_id=? AND event_id=?`, phase3MySQLLiveTenant, openEvent).Scan(&recipient, &kind, &route, &contentID); err != nil {
+		t.Fatal(err)
+	}
+	wantRoute := "pages/projectnotes/projectnotes?project_id=" + project.ID + "&version_id=" + v2.ID
+	if recipient != scope.Actor || kind != "project_note_open" || route != wantRoute || contentID != v2.ID {
+		t.Fatalf("private notification projection mismatch: recipient=%d kind=%s route=%s content=%s", recipient, kind, route, contentID)
 	}
 }
