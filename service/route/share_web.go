@@ -194,6 +194,7 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 	mutationRateLimit := trackingEntryRateLimit()
 	mutation := func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		c.Header("Cache-Control", "private, no-store")
 		if !shareWebMutationAllowed(c) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 403, "msg": "网页请求来源无效"})
 			return
@@ -214,7 +215,7 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "分享入口无效"})
 			return
 		}
-		entry, err := svc.Enter(c.Request.Context(), tracking.EntryInput{Route: share.Route, Content: share.Content, Version: share.Version, ShareToken: input.Code, Client: input.Client, Consent: input.Consent}, 0)
+		entry, err := svc.Enter(c.Request.Context(), tracking.EntryInput{Route: share.Route, Content: share.Content, Version: share.Version, ShareToken: input.Code, Client: input.Client, Consent: input.Consent, WebSource: true}, 0)
 		trackingResponse(c, entry, err)
 	})
 	web.POST("/events", mutation, mutationRateLimit, func(c *gin.Context) {
@@ -263,7 +264,10 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 	})
 	web.POST("/open-miniprogram", mutation, mutationRateLimit, func(c *gin.Context) {
 		var input struct {
-			Code string `json:"code"`
+			Code             string `json:"code"`
+			SourceEntryToken string `json:"source_entry_token"`
+			SourceEventID    string `json:"source_page_view_event_id"`
+			HandoffToken     string `json:"handoff_token"`
 		}
 		if !trackingBind(c, &input) {
 			return
@@ -271,6 +275,11 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		credentials := miniprogramCredentials()
 		if !trackingURLLinkEnabled() || credentials.AppID == "" || credentials.Secret == "" || api == nil {
 			trackingResponse(c, nil, &tracking.Error{Status: 503, Message: "URL Link尚未配置"})
+			return
+		}
+		handoff, err := svc.CreateShareHandoff(c.Request.Context(), input.Code, input.SourceEntryToken, input.SourceEventID, input.HandoffToken)
+		if err != nil {
+			trackingResponse(c, nil, err)
 			return
 		}
 		share, err := svc.ResolveShareRecord(c.Request.Context(), input.Code)
@@ -283,17 +292,32 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			trackingResponse(c, nil, err)
 			return
 		}
+		cacheKey := share.ID
+		if handoff.Ready {
+			values, parseErr := url.ParseQuery(query)
+			if parseErr != nil {
+				trackingResponse(c, nil, tracking.ErrUnavailable)
+				return
+			}
+			values.Set("ht", input.HandoffToken)
+			query = values.Encode()
+			cacheKey += ":" + input.HandoffToken
+		}
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 		defer cancel()
-		link, err := urlLinks.load(ctx, share.ID, svc.Now(), func() (tracking.URLLinkResult, error) {
+		link, err := urlLinks.load(ctx, cacheKey, svc.Now(), func() (tracking.URLLinkResult, error) {
 			if !urlLinkLimiter.allow(share.ID) {
 				return tracking.URLLinkResult{}, &tracking.Error{Status: 429, Message: "生成URL Link过于频繁，请稍后再试"}
 			}
 			return tracking.WechatURLLinkUntil(ctx, api, credentials.AppID, credentials.Secret, path, query, trackingWechatEnv(), svc.Now(), share.Expires)
 		})
 		if err != nil {
-			log.Printf("[ShareWeb] URL Link generation failed for share_id=%s: %v", share.ID, err)
+			log.Printf("[ShareWeb] error operation=url_link share_id=%s error_type=%T", share.ID, err)
 		}
-		trackingResponse(c, link, err)
+		out := gin.H{"url_link": link.URL, "expires_at": link.Expires, "handoff_ready": handoff.Ready}
+		if handoff.Ready {
+			out["handoff_expires_at"] = handoff.Expires
+		}
+		trackingResponse(c, out, err)
 	})
 }

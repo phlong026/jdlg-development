@@ -85,6 +85,94 @@ func TestPhase3MySQLLiveLifecycle(t *testing.T) {
 	content := exercisePhase3ImportLifecycle(t, ctx, importStore, svc, scope)
 	exercisePhase3ShareNoticeLifecycle(t, ctx, db, inbox, svc, scope, content)
 	exerciseProjectNoteMySQLLifecycle(t, ctx, db, inbox, svc, scope)
+	exerciseNativeReferenceHandoffMySQL(t, ctx, db, inbox, svc, scope)
+}
+
+func exerciseNativeReferenceHandoffMySQL(t *testing.T, ctx context.Context, db *sql.DB, inbox *notification.SQLStore, svc *tracking.Service, scope tracking.Scope) {
+	t.Helper()
+	svc.IsContentOperator = func(_ context.Context, actor int64, owner string) (bool, error) {
+		return actor == scope.Actor && scope.Allows(owner), nil
+	}
+	draft, err := svc.SaveContent(ctx, scope, "", tracking.Draft{Title: "数据库交接验证", Body: "独立两端访问事实", BodyFormat: "plain", Owner: scope.Owners[0], Rights: "own"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := svc.Preview(ctx, scope, draft.ID, draft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := svc.Publish(ctx, scope, draft.ID, draft.Revision, preview["preview_token"].(string), "mysql-handoff-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := result["content"].(tracking.Content)
+	ref, err := svc.CreateNativeReference(ctx, scope, tracking.NativeReferenceInput{ContentID: content.ID, ContentVersion: content.Version, IdempotencyKey: "mysql-native-reference"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target, err := svc.NativeReferenceTarget(ctx, scope, ref.ReferenceID); err != nil || !strings.Contains(target["path"], "content_version=1") {
+		t.Fatal(target, err)
+	}
+	actorEntry, err := svc.Enter(ctx, tracking.EntryInput{Route: "pages/contentreader/contentreader", Content: content.ID, Version: content.Version, Client: "mysql-handoff-sharer-client", Consent: "v1"}, scope.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.CreateShare(ctx, tracking.ShareInput{Route: actorEntry.Route, Content: content.ID, Version: content.Version, Channel: "app_message", Key: "mysql-handoff-share"}, actorEntry.Token, scope.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := created["share_token"].(string)
+	web, err := svc.Enter(ctx, tracking.EntryInput{Route: actorEntry.Route, Content: content.ID, Version: content.Version, ShareToken: code, Client: "mysql-web-client", Anonymous: "mysql-web-anonymous", Consent: "v1", WebSource: true}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventFor := func(entry tracking.Entry, id string) tracking.Event {
+		return tracking.Event{Schema: 1, ID: id, Type: "page_view", Session: entry.Session, View: id + "-view", Route: entry.Route, Content: entry.Content, Version: entry.Version, Share: entry.Share, Occurred: svc.Now(), AppState: "foreground", PageState: "visible", Monotonic: 1000}
+	}
+	webEvent := eventFor(web, "mysql-handoff-web-page")
+	if accepted, err := svc.Accept(ctx, web.Token, []tracking.Event{webEvent}); err != nil || len(accepted) != 1 || accepted[0].Status != "accepted" {
+		t.Fatal(accepted, err)
+	}
+	handoffToken := strings.Repeat("h", 32)
+	proof, err := svc.CreateShareHandoff(ctx, code, web.Token, webEvent.ID, handoffToken)
+	if err != nil || !proof.Ready {
+		t.Fatal(proof, err)
+	}
+	mini, err := svc.Enter(ctx, tracking.EntryInput{Route: web.Route, Content: content.ID, Version: content.Version, ShareToken: code, Client: "mysql-mini-client", Consent: "v1", HandoffToken: handoffToken}, 404)
+	if err != nil {
+		t.Fatal(err)
+	}
+	miniEvent := eventFor(mini, "mysql-handoff-mini-page")
+	if accepted, err := svc.Accept(ctx, mini.Token, []tracking.Event{miniEvent}); err != nil || len(accepted) != 1 || accepted[0].Status != "accepted" {
+		t.Fatal(accepted, err)
+	}
+	for kind, want := range map[string]int{"event": 2, "notice_event": 1} {
+		var count int
+		if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracking_records WHERE tenant_id=? AND kind=? AND record_id IN (?,?)`, phase3MySQLLiveTenant, kind, webEvent.ID, miniEvent.ID).Scan(&count); err != nil || count != want {
+			t.Fatalf("handoff %s count=%d want=%d err=%v", kind, count, want, err)
+		}
+	}
+	var merged int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracking_records WHERE tenant_id=? AND kind='identity' AND record_id IN (?,?)`, phase3MySQLLiveTenant, web.Session, mini.Session).Scan(&merged); err != nil || merged != 0 {
+		t.Fatalf("cross-device identity merged=%d err=%v", merged, err)
+	}
+	consumer, err := notification.NewConsumer(inbox, notification.ConsumerConfig{Channel: "official_account", PollInterval: time.Millisecond, LeaseDuration: time.Minute, MaxAttempts: 3, Eligibility: func(ctx context.Context, event notification.Event) (bool, error) {
+		return svc.NoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := consumer.RunOnce(ctx); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	var count int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mini_notifications WHERE tenant_id=? AND recipient_id=? AND event_id IN (?,?)`, phase3MySQLLiveTenant, scope.Actor, webEvent.ID, miniEvent.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("handoff inbox count=%d err=%v", count, err)
+	}
+	var refs int
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracking_records WHERE tenant_id=? AND kind='native_ref' AND record_id=?`, phase3MySQLLiveTenant, ref.ReferenceID).Scan(&refs); err != nil || refs != 1 {
+		t.Fatal(refs, err)
+	}
 }
 
 func openPhase3MySQLLiveDB(t *testing.T) *sql.DB {

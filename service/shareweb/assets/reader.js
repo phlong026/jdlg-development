@@ -62,6 +62,9 @@
       this.visibleSince = null;
       this.sequence = 0;
       this.viewID = null;
+      this.pageViewEventID = null;
+      this.pageViewAccepted = false;
+      this.handoffToken = null;
       this.outbox = [];
       this.pumping = null;
       this.retryTimer = null;
@@ -123,6 +126,7 @@
         return false;
       }
       this.outbox.push(event);
+      if (type === 'page_view') this.pageViewEventID = eventID;
       this.pump();
       return true;
     }
@@ -135,7 +139,8 @@
         while (!this.closed && this.outbox.length && this.isOnline()) {
           const event = this.outbox[0];
           try {
-            await this.send(token, event);
+            const response = await this.send(token, event);
+            if (event.event_id === this.pageViewEventID && response && Array.isArray(response.results) && response.results.some(result => result.event_id === event.event_id && ['accepted', 'duplicate'].includes(result.status))) this.pageViewAccepted = true;
           } catch (_) {
             this.scheduleRetry();
             return;
@@ -171,6 +176,18 @@
 
     drain() {
       return this.pumping || Promise.resolve();
+    }
+
+    async handoffProof() {
+      if (this.closed || !this.entry) return {};
+      let timer;
+      try {
+        await Promise.race([this.drain(), new Promise(resolve => { timer = this.schedule(resolve, 1000); })]);
+      } finally { if (timer !== undefined) this.cancelSchedule(timer); }
+      if (this.closed || !this.entry || !this.pageViewAccepted || !this.pageViewEventID) return {};
+      if (!this.handoffToken) this.handoffToken = this.makeID();
+      if (!this.handoffToken) return {};
+      return { source_entry_token: this.entry.entry_token, source_page_view_event_id: this.pageViewEventID, handoff_token: this.handoffToken };
     }
 
     outboxSize() {
@@ -259,6 +276,8 @@
       this.interval = null;
       this.retryTimer = null;
       this.entry = null;
+      this.pageViewAccepted = false;
+      this.handoffToken = null;
       this.visibleSince = null;
       this.outbox.length = 0;
     }
@@ -580,8 +599,16 @@
     window.addEventListener('unload', cleanup, { once: true });
     const open = document.getElementById('open-mini');
     if (open) open.addEventListener('click', async () => {
-      try { const out = await post('/api/v1/share-web/open-miniprogram', { code }); location.href = out.url_link; }
+      if (open.disabled) return;
+      open.disabled = true;
+      const source = tracking;
+      try {
+        const proof = source ? await source.handoffProof() : {};
+        const out = await post('/api/v1/share-web/open-miniprogram', { code, ...(source === tracking && source && !source.closed ? proof : {}) });
+        location.href = out.url_link;
+      }
       catch (_) { open.textContent = '暂时无法打开小程序'; }
+      finally { open.disabled = false; }
     });
   }
   if (typeof window !== 'undefined') window.addEventListener('DOMContentLoaded', boot);

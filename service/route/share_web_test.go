@@ -328,3 +328,75 @@ func TestShareURLLinkSingleflightDoesNotBlockDifferentShares(t *testing.T) {
 	close(release)
 	<-firstDone
 }
+
+func TestShareWebHandoffsCarryOnlyTheirOwnTokenAndReuseOnlyTheirOwnURLLink(t *testing.T) {
+	t.Setenv("TRACKING_WECHAT_URLLINK_ENABLED", "true")
+	withMiniprogramCredentials(t)
+	_, svc, _, code, content := shareWebFixture(t)
+	source, err := svc.Enter(context.Background(), tracking.EntryInput{Route: trackingReaderRoute, Content: content.ID, Version: content.Version, Client: "web-handoff-http-client", Consent: "v1", ShareToken: code, WebSource: true}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := tracking.Event{Schema: 1, ID: "web-handoff-http-source-event", Type: "page_view", Session: source.Session, View: "web-handoff-http-source-view", Route: source.Route, Content: source.Content, Version: source.Version, Share: source.Share, Occurred: svc.Now(), AppState: "foreground", PageState: "visible", Monotonic: 1}
+	if results, err := svc.Accept(context.Background(), source.Token, []tracking.Event{event}); err != nil || len(results) != 1 || results[0].Status != "accepted" {
+		t.Fatal(results, err)
+	}
+	queries := []url.Values{}
+	wechat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/cgi-bin/token":
+			_, _ = io.WriteString(w, `{"access_token":"handoff-test-token"}`)
+		case "/wxa/generate_urllink":
+			var payload map[string]any
+			if json.NewDecoder(r.Body).Decode(&payload) != nil {
+				t.Error("bad request")
+			}
+			q, err := url.ParseQuery(payload["query"].(string))
+			if err != nil {
+				t.Error(err)
+			}
+			queries = append(queries, q)
+			_, _ = io.WriteString(w, `{"errcode":0,"url_link":"https://wxaurl.cn/handoff-test"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer wechat.Close()
+	api := tracking.NewWechatAPI()
+	api.Base = wechat.URL
+	router := gin.New()
+	registerShareWebHandlers(router, router.Group("/api/v1"), svc, api)
+	tokens := []string{strings.Repeat("a", 43), strings.Repeat("b", 43), strings.Repeat("a", 43), ""}
+	for _, token := range tokens {
+		payload := map[string]string{"code": code, "source_entry_token": source.Token, "source_page_view_event_id": event.ID, "handoff_token": token}
+		body, _ := json.Marshal(payload)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/share-web/open-miniprogram", bytes.NewReader(body))
+		req.Header.Set("Origin", "https://www.jiadilingguang.com")
+		req.Header.Set("X-Share-Web", "1")
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d %s", w.Code, w.Body.String())
+		}
+		var result struct {
+			Data struct {
+				Ready   bool      `json:"handoff_ready"`
+				Expires time.Time `json:"handoff_expires_at"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Data.Ready != (token != "") {
+			t.Fatal(w.Body.String())
+		}
+		if result.Data.Ready && result.Data.Expires.IsZero() {
+			t.Fatal("ready without expiry")
+		}
+	}
+	if len(queries) != 3 || queries[0].Get("ht") != tokens[0] || queries[1].Get("ht") != tokens[1] || queries[2].Get("ht") != "" {
+		t.Fatalf("handoff URL cache leaked: %v", queries)
+	}
+	for _, q := range queries {
+		if q.Get("st") != code || q.Get("content_id") != content.ID {
+			t.Fatal(q)
+		}
+	}
+}

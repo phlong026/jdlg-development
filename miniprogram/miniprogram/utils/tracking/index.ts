@@ -111,7 +111,13 @@ function splitPath(path, fallback) {
 }
 function appendToken(value, token) {
   // Preserve business query byte-for-byte. Only replace this SDK's own tracking parameter.
-  const cleaned=String(value||'').replace(/([?&])st=[^&]*(&?)/g,(_,lead,tail)=>tail?lead:'').replace(/[?&]$/,'');
+  const original=String(value||''),question=original.indexOf('?');
+  const path=question<0?original:original.slice(0,question);
+  const query=question<0?'':original.slice(question+1).split('&').filter(part=>{
+    if(!part)return false;
+    try {const key=decodeURIComponent(part.split('=')[0]);return key!=='st'&&key!=='ht';}catch(_){return true;}
+  }).join('&');
+  const cleaned=path+(query?'?'+query:'');
   return cleaned+(cleaned.includes('?')?'&':'?')+'st='+encodeURIComponent(token);
 }
 async function prepareShare(page, original, channel, cacheKey, emitIntent = true, isCurrent = () => true) {
@@ -313,7 +319,7 @@ function wrapPage(definition) {
       const route=String(this.route||'').replace(/^\//,'');
       if (routes.policy(route).collect) {
         const s=getSDK(); if (s) {
-          s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+          s.register(this,route,routes.binding(route,options||{}),(options||{}).st,(options||{}).ht);
           this.__trackingTimelineStop=s.observe(this,()=>{if(this.__trackingConsentVisible===true){safely(()=>warmTimeline(this));showTimelineShareMenu(this,hasCustomTimelineShare);}});
         }
       } else if (!hasCustomTimelineShare) return;
@@ -398,7 +404,7 @@ function install() {
 }
 function resolvePageOptions(page, options, applyAttribution = true) {
  page.__trackingOptions=options;
- const s=getSDK(),p=s&&s.get(page);if(p&&applyAttribution){p.share=options.st||'';p.shareRevision=(p.shareRevision||0)+1;}
+ const s=getSDK(),p=s&&s.get(page);if(p&&applyAttribution){p.share=options.st||'';p.handoff=p.share?options.ht||'':'';p.shareRevision=(p.shareRevision||0)+1;}
  updateReady(page);
 }
 function shareDiagnostics(page){

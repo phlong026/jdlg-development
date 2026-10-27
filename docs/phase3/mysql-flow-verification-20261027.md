@@ -69,3 +69,9 @@ ok service/route
 新增验证结果：两个受邀账号中只有当前指定业主可确认；修改草稿并冻结 V2 后，V1 正文、媒体快照和确认均不改变；更换确认人也不会给 V1 新增第二条确认，V2 可由新确认人独立确认。设计师反馈处理保持独立记录。项目媒体元数据不能经普通素材目录读取，分享 raw token 不出现在数据库 payload。
 
 受邀账号打开 V2 后，`note_open`、`notice_event`、通知队列各有一条持久记录；消费者生成的消息只发给实际分享人，路由精确携带项目与版本。原子失败回滚另由领域回归测试覆盖。本次项目媒体验证只覆盖元数据和授权隔离，未调用 COS 写真实字节；没有微信外发或生产数据操作。
+
+## 原生引用与跨端交接复验
+
+同日新增 `exerciseNativeReferenceHandoffMySQL`，使用新建的合成已发布正文，真实保存并读取当前账号的精确版本引用；实际分享人再创建原生 Share。H5 匿名 Entry 的已接受 page_view 生成五分钟证明，小程序账号兑换并接受自己的 page_view，数据库保留两条 event，仅一条 notice_event；消费者随后仅向原实际分享人写一条消息中心记录。两端 session 均没有 identity 合并记录。
+
+实际命令 `JDLG_PHASE3_MYSQL_LIVE_CONFIG=<private-config> CGO_ENABLED=0 go test ./route -run '^TestPhase3MySQLLiveLifecycle$' -count=1 -v` 返回 `PASS / ok service/route 3.160s`。只启动已有且带验证标签的回环容器，完成后恢复 exited。没有调用真实微信、平台解析、COS 或生产数据库；URL Link 内部 query 和缓存隔离另通过本地 HTTP 假服务验证。

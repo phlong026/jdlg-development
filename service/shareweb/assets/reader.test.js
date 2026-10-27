@@ -5,6 +5,29 @@ const { Tracker, ReaderTracking, VideoTracking, bindVideos, createPost } = requi
 let nextID = 0;
 const makeID = () => `secure-test-id-${String(++nextID).padStart(4, '0')}`;
 
+test('handoff proof requires an acknowledged page view and stays stable for retries', async () => {
+  const f = sessionFixture({ send: async (_token, event) => ({ results: [{ event_id: event.event_id, status: 'accepted' }] }) });
+  await f.session.enable(); await f.session.drain();
+  const first = await f.session.handoffProof();
+  assert.equal(first.source_entry_token, 'entry-token-0001');
+  assert.ok(first.source_page_view_event_id); assert.ok(first.handoff_token);
+  assert.deepEqual(await f.session.handoffProof(), first);
+  f.session.close(); assert.deepEqual(await f.session.handoffProof(), {});
+});
+test('handoff proof never treats an empty or rejected delivery response as acceptance', async () => {
+  for (const result of [undefined, { results: [{ event_id: 'wrong-event', status: 'accepted' }] }, { results: [] }]) {
+    const f = sessionFixture({ send: async () => result }); await f.session.enable(); await f.session.drain();
+    assert.deepEqual(await f.session.handoffProof(), {});
+  }
+});
+test('a stalled page view cannot hold opening the mini program indefinitely', async () => {
+  let finishTimer;
+  const f = sessionFixture({ send: () => new Promise(() => {}), setTimeout: callback => { finishTimer = callback; return 1; } });
+  await f.session.enable();
+  const pending = f.session.handoffProof(); finishTimer();
+  assert.deepEqual(await pending, {}); f.session.close();
+});
+
 test('refusal and hidden pages do not send reading events', async () => {
   const sent = [];
   const tracker = new Tracker({ send: async event => sent.push(event), now: () => 1000, makeID });

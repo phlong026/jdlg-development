@@ -19,12 +19,12 @@ Page({
    const resolvedOptions=await api.resolveReaderOptions(this.options);
    if(sequence!==this.loadSequence)return;
    this.options={...resolvedOptions};
-   if(entryGeneration!==this.entryGeneration||this.entryAttributionAllowed===false||!entryValid())delete this.options.st;
+   if(entryGeneration!==this.entryGeneration||this.entryAttributionAllowed===false||!entryValid()){delete this.options.st;delete this.options.ht;}
    tracking.resolvePageOptions(this,this.options,this.boundEntryGeneration!==entryGeneration);
    this.boundEntryGeneration=entryGeneration;
    // Only a newly observed external entry may supply attribution. Ordinary
    // foreground content revalidation must not replay a revoked/consumed token.
-   this.options={...this.options};delete this.options.st;delete this.options.scene;
+   this.options={...this.options};delete this.options.st;delete this.options.ht;delete this.options.scene;
    const id=String(this.options.content_id||''),version=Number(this.options.content_version);
    if(!/^[A-Za-z0-9_-]{8,128}$/.test(id)||!Number.isInteger(version)||version<1)throw new Error('内容入口不完整');
    const configuration=await tracking.refreshConfig();

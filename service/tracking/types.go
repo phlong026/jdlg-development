@@ -196,14 +196,16 @@ type Share struct {
 	Revoked bool      `json:"revoked"`
 }
 type EntryInput struct {
-	Route      string `json:"route_key"`
-	Content    string `json:"content_id"`
-	Version    int    `json:"content_version"`
-	ShareToken string `json:"share_token"`
-	Client     string `json:"client_instance"`
-	Anonymous  string `json:"anonymous_id"`
-	Consent    string `json:"consent_version"`
-	Previous   string `json:"previous_entry_token"`
+	Route        string `json:"route_key"`
+	Content      string `json:"content_id"`
+	Version      int    `json:"content_version"`
+	ShareToken   string `json:"share_token"`
+	Client       string `json:"client_instance"`
+	Anonymous    string `json:"anonymous_id"`
+	Consent      string `json:"consent_version"`
+	Previous     string `json:"previous_entry_token"`
+	HandoffToken string `json:"handoff_token,omitempty"`
+	WebSource    bool   `json:"-"`
 }
 type Entry struct {
 	Attribution     string    `json:"attribution_status,omitempty"`
@@ -225,6 +227,9 @@ type Entry struct {
 	OriginalVisitor string    `json:"original_visitor_key,omitempty"`
 	Preview         bool      `json:"is_preview,omitempty"`
 	Self            bool      `json:"is_self_visit,omitempty"`
+	HandoffKey      string    `json:"-"`
+	WebSource       bool      `json:"-"`
+	ConsentVersion  string    `json:"-"`
 }
 type Event struct {
 	// Attribution is overwritten by the server from the signed entry context.
