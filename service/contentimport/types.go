@@ -34,6 +34,7 @@ type Source struct {
 	ID        string        `json:"source_id"`
 	SourceURL string        `json:"source_url"`
 	Title     string        `json:"title"`
+	Text      string        `json:"text,omitempty"`
 	Author    string        `json:"author,omitempty"`
 	Media     []RemoteMedia `json:"media"`
 	CoverURL  string        `json:"cover_url,omitempty"`

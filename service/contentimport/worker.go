@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"service/tracking"
@@ -213,13 +214,31 @@ func (v VideoDocumentResolver) ResolveDocument(ctx context.Context, link string)
 		return Document{}, err
 	}
 	doc := Document{Source: source, Body: tracking.ArticleDocument{Schema: 1}}
+	for _, text := range strings.Split(strings.ReplaceAll(source.Text, "\r\n", "\n"), "\n") {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		if len(text) > 10000 {
+			return Document{}, fail("article_too_large")
+		}
+		doc.Body.Blocks = append(doc.Body.Blocks, tracking.ArticleBlock{Kind: "paragraph", Text: text})
+	}
 	for i, m := range source.Media {
 		doc.Body.Blocks = append(doc.Body.Blocks, tracking.ArticleBlock{Kind: m.Kind, MediaID: fmt.Sprintf("remote-%04d", i), Caption: m.Caption})
 	}
 	if source.CoverURL != "" {
-		index := len(doc.Source.Media)
-		doc.Source.Media = append(doc.Source.Media, RemoteMedia{ID: source.ID + "-cover", Kind: "image", URL: source.CoverURL})
-		doc.CoverRef = fmt.Sprintf("remote-%04d", index)
+		for i, media := range doc.Source.Media {
+			if media.Kind == "image" && media.URL == source.CoverURL {
+				doc.CoverRef = fmt.Sprintf("remote-%04d", i)
+				break
+			}
+		}
+		if doc.CoverRef == "" {
+			index := len(doc.Source.Media)
+			doc.Source.Media = append(doc.Source.Media, RemoteMedia{ID: source.ID + "-cover", Kind: "image", URL: source.CoverURL})
+			doc.CoverRef = fmt.Sprintf("remote-%04d", index)
+		}
 	}
 	return doc, validateDocument(doc)
 }

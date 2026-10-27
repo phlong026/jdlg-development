@@ -130,3 +130,18 @@ func TestWorkerPermissionRevocationBlocksFinalDraft(t *testing.T) {
 		}
 	}
 }
+
+type sourceResolverFunc func(context.Context, string) (Source, error)
+
+func (f sourceResolverFunc) Resolve(ctx context.Context, url string) (Source, error) {
+	return f(ctx, url)
+}
+func TestGalleryDocumentKeepsFullTextAndMediaOrderWithoutDuplicatingCover(t *testing.T) {
+	r := VideoDocumentResolver{Resolver: sourceResolverFunc(func(context.Context, string) (Source, error) {
+		return Source{Platform: Xiaohongshu, ID: "0123456789abcdef01234567", Title: "图文", Text: "第一段完整正文\n第二段完整正文", Media: []RemoteMedia{{ID: "first", Kind: "image", URL: "https://a.xhscdn.com/first.jpg"}, {ID: "second", Kind: "image", URL: "https://a.xhscdn.com/second.jpg"}}, CoverURL: "https://a.xhscdn.com/first.jpg"}, nil
+	})}
+	doc, err := r.ResolveDocument(context.Background(), "https://www.xiaohongshu.com/explore/0123456789abcdef01234567")
+	if err != nil || len(doc.Body.Blocks) != 4 || len(doc.Source.Media) != 2 || doc.CoverRef != "remote-0000" || doc.Body.Blocks[0].Text != "第一段完整正文" || doc.Body.Blocks[1].Text != "第二段完整正文" || doc.Body.Blocks[3].MediaID != "remote-0001" {
+		t.Fatalf("doc=%+v err=%v", doc, err)
+	}
+}
