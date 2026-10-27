@@ -280,18 +280,30 @@ func (s *Service) ReadContent(ctx context.Context, id string, version int) (Cont
 	return out, e
 }
 func (s *Service) AddMedia(ctx context.Context, scope Scope, asset Asset, owner string) error {
+	if e := s.validateMediaWrite(scope, asset, owner); e != nil {
+		return e
+	}
+	return s.transaction(ctx, func(r Repository) error {
+		return s.addMediaIn(r, scope, asset, owner, s.Now())
+	})
+}
+
+func (s *Service) validateMediaWrite(scope Scope, asset Asset, owner string) error {
 	if e := s.authorized(scope); e != nil {
 		return e
 	}
 	if !scope.Manage || !scope.Allows(owner) || !validID(asset.ID) || asset.URL != "/api/v1/miniprogram/tracking/media/"+asset.ID {
 		return fail(403, "媒体不在授权存储范围")
 	}
-	return s.transaction(ctx, func(r Repository) error {
-		if e := r.Insert(record("media", asset.ID, owner, s.Now(), asset)); e != nil {
-			return e
-		}
-		return audit(r, owner, "upload_media", scope.Actor, asset.ID, s.Now(), map[string]string{"kind": asset.Kind})
-	})
+	return nil
+}
+
+// addMediaIn keeps the media row and its audit record in the caller's transaction.
+func (s *Service) addMediaIn(r Repository, scope Scope, asset Asset, owner string, now time.Time) error {
+	if e := r.Insert(record("media", asset.ID, owner, now, asset)); e != nil {
+		return e
+	}
+	return audit(r, owner, "upload_media", scope.Actor, asset.ID, now, map[string]string{"kind": asset.Kind})
 }
 func (s *Service) Media(ctx context.Context, scope *Scope, id string) (Asset, error) {
 	var a Asset
