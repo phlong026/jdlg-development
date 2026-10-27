@@ -25,7 +25,7 @@ type RetentionPlan struct {
 	ReviewDigest  string         `json:"review_digest"`
 }
 
-var rawRetentionKinds = []string{"notice_event", "event", "event_hash", "sequence", "view_binding", "entry", "rate"}
+var rawRetentionKinds = []string{"notice_event", "note_open", "event", "event_hash", "sequence", "view_binding", "entry", "rate"}
 var summaryRetentionKinds = []string{"session", "identity", "business", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "intent_recompute_request", "share", "share_request", "daily_summary", "summary_state"}
 
 func (s *Service) retentionAllowed(scope Scope, p RetentionPolicy, raw, summary time.Time) error {

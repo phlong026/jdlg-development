@@ -122,7 +122,7 @@ func planVisitorDeletion(r Repository, scope Scope, key string, resuming bool) (
 	p := &visitorDeletion{rows: map[string]Record{}, sessions: map[string]bool{}, events: map[string]bool{}, views: map[string]bool{}, sequences: map[string]bool{}, shares: map[string]bool{}}
 	// Deliberately do not restrict Owners: full-identity deletion must detect
 	// any inaccessible owner, including one represented only by an old entry.
-	for _, kind := range []string{"notice_event", "event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation"} {
+	for _, kind := range []string{"notice_event", "note_open", "event", "entry", "session", "identity", "business", "share", "daily_summary", "summary_state", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation"} {
 		rows, err := scopedRecords(r, kind, RecordQuery{VisitorKeys: []string{key}})
 		if err != nil {
 			return nil, err

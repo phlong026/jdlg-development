@@ -17,7 +17,7 @@ var (
 // Kinds are deleted in this order. Identity links go last: they are what ties a
 // formerly anonymous session's rows to the account, so a run interrupted before
 // the end can still find every remaining row when it is resumed.
-var deletionVisitorKinds = []string{"notice_event", "event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "entry", "session", "identity"}
+var deletionVisitorKinds = []string{"notice_event", "note_open", "event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "entry", "session", "identity"}
 var deletionSessionKinds = []string{"notice_event", "event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "view_binding", "entry", "session", "identity"}
 var deletionAnnotationKinds = []string{"crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation"}
 
