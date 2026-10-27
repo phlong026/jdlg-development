@@ -6,31 +6,47 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	defaultCaptureTimeout   = 120 * time.Second
+	defaultProbeTimeout     = 2 * time.Second
 	maxCaptureResponseBytes = 512 << 10
+	maxProbeResponseBytes   = 4 << 10
+	availableCacheTTL       = 5 * time.Second
+	unavailableCacheTTL     = time.Second
 )
 
 type CaptureWorkerConfig struct {
 	// Endpoint is deployment configuration. It must never be copied from an
 	// article, request parameter or capture response.
-	Endpoint   string
-	Secret     string
-	HTTPClient *http.Client
-	Timeout    time.Duration
+	Endpoint string
+	// HealthEndpoint must use the same HTTPS origin as Endpoint.
+	HealthEndpoint string
+	// DialAddress optionally pins both endpoints to a numeric loopback on 443
+	// while the URL hostname remains responsible for TLS SNI and validation.
+	DialAddress string
+	Secret      string
+	HTTPClient  *http.Client
+	Timeout     time.Duration
 }
 
 type CaptureWorker struct {
-	endpoint string
-	secret   string
-	client   *http.Client
-	ready    bool
+	endpoint       string
+	healthEndpoint string
+	secret         string
+	client         *http.Client
+	ready          bool
+
+	probeMu        sync.Mutex
+	probeAvailable bool
+	probeExpiresAt time.Time
 }
 
 func NewCaptureWorker(config CaptureWorkerConfig) *CaptureWorker {
@@ -38,8 +54,21 @@ func NewCaptureWorker(config CaptureWorkerConfig) *CaptureWorker {
 	if timeout <= 0 || timeout > defaultCaptureTimeout {
 		timeout = defaultCaptureTimeout
 	}
+	dialAddress := strings.TrimSpace(config.DialAddress)
+	dialAddressValid := dialAddress == "" || validCaptureDialAddress(dialAddress)
 	client := &http.Client{}
-	if config.HTTPClient != nil {
+	if dialAddress != "" && dialAddressValid {
+		dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
+		client.Transport = &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return dialer.DialContext(ctx, network, dialAddress)
+			},
+			ForceAttemptHTTP2:   true,
+			TLSHandshakeTimeout: 5 * time.Second,
+			IdleConnTimeout:     30 * time.Second,
+		}
+	} else if config.HTTPClient != nil {
 		copy := *config.HTTPClient
 		client = &copy
 	}
@@ -48,11 +77,104 @@ func NewCaptureWorker(config CaptureWorkerConfig) *CaptureWorker {
 	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 	endpoint := strings.TrimSpace(config.Endpoint)
 	parsed, err := url.Parse(endpoint)
-	ready := err == nil && parsed.Scheme == "https" && parsed.Hostname() != "" && parsed.User == nil && parsed.Fragment == "" && parsed.RawQuery == "" && len(config.Secret) >= 32 && !strings.ContainsAny(config.Secret, "\r\n") && (parsed.Port() == "" || parsed.Port() == "443")
-	return &CaptureWorker{endpoint: endpoint, secret: config.Secret, client: client, ready: ready}
+	ready := err == nil && parsed.Scheme == "https" && parsed.Hostname() != "" && parsed.User == nil && parsed.Fragment == "" && parsed.RawQuery == "" && len(config.Secret) >= 32 && !strings.ContainsAny(config.Secret, "\r\n") && (parsed.Port() == "" || parsed.Port() == "443") && dialAddressValid
+	healthEndpoint := trustedHealthEndpoint(parsed, strings.TrimSpace(config.HealthEndpoint))
+	return &CaptureWorker{endpoint: endpoint, healthEndpoint: healthEndpoint, secret: config.Secret, client: client, ready: ready}
 }
 
 func (worker *CaptureWorker) Ready() bool { return worker != nil && worker.ready }
+
+func validCaptureDialAddress(address string) bool {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || port != "443" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func trustedHealthEndpoint(capture *url.URL, raw string) string {
+	health, err := url.Parse(raw)
+	if err != nil || raw == "" || capture == nil || health.Scheme != "https" || health.Hostname() == "" || health.User != nil || health.Fragment != "" || health.RawQuery != "" || (health.Port() != "" && health.Port() != "443") {
+		return ""
+	}
+	if !strings.EqualFold(strings.TrimSuffix(capture.Hostname(), "."), strings.TrimSuffix(health.Hostname(), ".")) || effectiveHTTPSPort(capture) != effectiveHTTPSPort(health) {
+		return ""
+	}
+	return raw
+}
+
+func effectiveHTTPSPort(parsed *url.URL) string {
+	if parsed.Port() == "" {
+		return "443"
+	}
+	return parsed.Port()
+}
+
+// Probe performs an uncached readiness check. Available should be preferred by
+// request handlers so repeated capability reads do not hammer the worker.
+func (worker *CaptureWorker) Probe(ctx context.Context) error {
+	if worker == nil || !worker.ready || worker.healthEndpoint == "" {
+		return errors.New("capture worker health endpoint is unavailable")
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, defaultProbeTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, worker.healthEndpoint, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Authorization", "Bearer "+worker.secret)
+	response, err := worker.client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return errors.New("capture worker is not ready")
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxProbeResponseBytes+1))
+	if err != nil || len(body) > maxProbeResponseBytes {
+		return errors.New("invalid capture worker health response")
+	}
+	var health struct {
+		Ready bool `json:"ready"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&health) != nil || !health.Ready || decoder.Decode(&struct{}{}) != io.EOF {
+		return errors.New("invalid capture worker health response")
+	}
+	return nil
+}
+
+func (worker *CaptureWorker) Available(ctx context.Context) bool {
+	if worker == nil || !worker.ready || worker.healthEndpoint == "" {
+		return false
+	}
+	now := time.Now()
+	worker.probeMu.Lock()
+	if now.Before(worker.probeExpiresAt) {
+		available := worker.probeAvailable
+		worker.probeMu.Unlock()
+		return available
+	}
+	worker.probeMu.Unlock()
+
+	available := worker.Probe(ctx) == nil
+	if ctx.Err() != nil {
+		return false
+	}
+	ttl := unavailableCacheTTL
+	if available {
+		ttl = availableCacheTTL
+	}
+	worker.probeMu.Lock()
+	worker.probeAvailable = available
+	worker.probeExpiresAt = time.Now().Add(ttl)
+	worker.probeMu.Unlock()
+	return available
+}
 
 func (worker *CaptureWorker) Capture(ctx context.Context, articleURL string, ids []string) ([]CaptureVideo, error) {
 	if worker == nil || !worker.ready {

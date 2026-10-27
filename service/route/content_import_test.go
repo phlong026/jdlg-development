@@ -44,7 +44,7 @@ func importRoutesFixture(t *testing.T, s *importRouteStore) (*gin.Engine, *track
 	scope := &tracking.Scope{Tenant: "test", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
 	r := gin.New()
 	g := r.Group("/imports", func(c *gin.Context) { c.Set("workbench.scope", *scope); c.Next() })
-	registerContentImportHandlers(g, s, func() importCapabilities {
+	registerContentImportHandlers(g, s, func(context.Context) importCapabilities {
 		return importCapabilities{Enabled: true, Platforms: []importPlatformCapability{{Platform: contentimport.Douyin, Available: true}}}
 	})
 	return r, scope
@@ -101,7 +101,7 @@ func TestImportRoutesUnavailableAndNoSnapshotLeak(t *testing.T) {
 		t.Fatal(err)
 	}
 	r2 := gin.New()
-	registerContentImportHandlers(r2.Group("/imports"), nil, func() importCapabilities { return importCapabilities{Enabled: false} })
+	registerContentImportHandlers(r2.Group("/imports"), nil, func(context.Context) importCapabilities { return importCapabilities{Enabled: false} })
 	if w := callImport(r2, "GET", "/imports/capabilities", ""); w.Code != 200 {
 		t.Fatal(w.Code)
 	}

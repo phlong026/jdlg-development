@@ -30,14 +30,14 @@ type importCapabilities struct {
 	Platforms []importPlatformCapability `json:"platforms"`
 }
 
-func registerContentImportHandlers(g *gin.RouterGroup, store contentimport.JobStore, capabilities func() importCapabilities) {
+func registerContentImportHandlers(g *gin.RouterGroup, store contentimport.JobStore, capabilities func(context.Context) importCapabilities) {
 	g.GET("/capabilities", func(c *gin.Context) {
 		c.Header("Cache-Control", "private, no-store")
-		trackingResponse(c, capabilities(), nil)
+		trackingResponse(c, capabilities(c.Request.Context()), nil)
 	})
 	jobs := g.Group("", func(c *gin.Context) {
 		c.Header("Cache-Control", "private, no-store")
-		if store == nil || !capabilities().Enabled {
+		if store == nil || !capabilities(c.Request.Context()).Enabled {
 			importResponse(c, nil, contentimport.ErrUnavailable)
 			return
 		}
@@ -77,7 +77,7 @@ func registerContentImportHandlers(g *gin.RouterGroup, store contentimport.JobSt
 			return
 		}
 		ready := false
-		for _, p := range capabilities().Platforms {
+		for _, p := range capabilities(c.Request.Context()).Platforms {
 			if p.Platform == link.Platform && p.Available {
 				ready = true
 			}
@@ -183,7 +183,12 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 		}
 	}
 	fetcher := contentimport.NewHTTPFetcher()
-	capture := contentimport.NewCaptureWorker(contentimport.CaptureWorkerConfig{Endpoint: os.Getenv("CONTENT_IMPORT_CAPTURE_URL"), Secret: os.Getenv("CONTENT_IMPORT_CAPTURE_SECRET")})
+	capture := contentimport.NewCaptureWorker(contentimport.CaptureWorkerConfig{
+		Endpoint:       os.Getenv("CONTENT_IMPORT_CAPTURE_URL"),
+		HealthEndpoint: os.Getenv("CONTENT_IMPORT_CAPTURE_HEALTH_URL"),
+		DialAddress:    os.Getenv("CONTENT_IMPORT_CAPTURE_DIAL_ADDRESS"),
+		Secret:         os.Getenv("CONTENT_IMPORT_CAPTURE_SECRET"),
+	})
 	resolvers := map[contentimport.Platform]contentimport.DocumentResolver{contentimport.WechatArticle: &contentimport.ArticleResolver{Fetcher: fetcher, VideoCapture: capture}}
 	appID, secret := os.Getenv("CONTENT_IMPORT_DOUYIDOU_APP_ID"), os.Getenv("CONTENT_IMPORT_DOUYIDOU_APP_SECRET")
 	var video contentimport.Resolver
@@ -200,7 +205,7 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 			resolvers[contentimport.Channels] = contentimport.VideoDocumentResolver{Resolver: contentimport.NewYuanbaoResolver(contentimport.YuanbaoConfig{Enabled: true, Cookie: cookie})}
 		}
 	}
-	capabilities := func() importCapabilities {
+	capabilities := func(ctx context.Context) importCapabilities {
 		ready := store != nil && enabled && workbenchEnabled() && contentMediaConfigured(svc)
 		out := importCapabilities{Enabled: ready, Platforms: []importPlatformCapability{}}
 		for _, platform := range []contentimport.Platform{contentimport.WechatArticle, contentimport.Douyin, contentimport.Xiaohongshu, contentimport.Channels} {
@@ -209,9 +214,9 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 				p.Reason = "该平台导入服务尚未开通"
 			}
 			if platform == contentimport.WechatArticle && p.Available {
-				p.EmbeddedVideo = capture.Ready()
+				p.EmbeddedVideo = capture.Available(ctx)
 				if !p.EmbeddedVideo {
-					p.Reason = "图文可导入；文内视频待采集服务配置"
+					p.Reason = "图文可导入；文内视频采集服务未就绪"
 				}
 			}
 			if platform == contentimport.Xiaohongshu && p.Available && video == nil {
@@ -240,7 +245,7 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 	registerContentImportHandlers(g, store, capabilities)
 	current := func(ctx context.Context, job contentimport.Job) (tracking.Scope, error) {
 		scope, err := loadMiniTrackingMaterialScope(ctx, users.DB, svc.Config.Tenant, job.Actor)
-		if err == nil && (job.Tenant != scope.Tenant || !scope.Allows(job.Owner) || !capabilities().Enabled) {
+		if err == nil && (job.Tenant != scope.Tenant || !scope.Allows(job.Owner) || !capabilities(ctx).Enabled) {
 			err = contentimport.ErrUnavailable
 		}
 		return scope, err
