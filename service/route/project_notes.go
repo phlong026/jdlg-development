@@ -125,6 +125,7 @@ func projectNoteAccount(c *gin.Context, raw string) (int64, bool) {
 }
 
 func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Service, deps projectNoteHandlerDeps) {
+	registerProjectNoteExportHandlers(root, manage, svc, deps)
 	manage.GET("/projects", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("limit"))
 		out, err := svc.ProjectNoteListProjects(c.Request.Context(), projectNoteScope(c), limit, c.Query("cursor"))
