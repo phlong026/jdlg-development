@@ -49,7 +49,7 @@ func (s *Service) PrepareMediaObject(ctx context.Context, scope Scope, asset Ass
 			if mediaErr != nil {
 				return ErrUnavailable
 			}
-			if !scope.Allows(proof.Owner) || !sameMediaJournal(proof, owner, asset, sha256, origin) || stored != asset {
+			if !scope.Allows(proof.Owner) || !sameMediaJournal(proof, owner, asset, sha256, origin) || stored != proof.Asset {
 				return fail(409, "媒体对象标识冲突")
 			}
 			operation, already = proof.Operation, true
@@ -141,7 +141,9 @@ func (s *Service) FinalizeMediaObject(ctx context.Context, scope Scope, id, oper
 	if expected.Operation != operation {
 		return Asset{}, err
 	}
-	if recovered, ok := s.recoverFinalizedMediaObject(ctx, scope, expected); ok {
+	recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if recovered, ok := s.recoverFinalizedMediaObject(recoveryCtx, scope, expected); ok {
 		return recovered, nil
 	}
 	return Asset{}, err
@@ -164,7 +166,15 @@ func (s *Service) recoverFinalizedMediaObject(ctx context.Context, scope Scope, 
 }
 
 func sameMediaJournal(journal mediaObjectJournal, owner string, asset Asset, sha256, origin string) bool {
-	return journal.Owner == owner && journal.Asset == asset && journal.SHA256 == sha256 && journal.Origin == origin
+	return journal.Owner == owner && sameMediaObject(journal.Asset, asset) && journal.SHA256 == sha256 && journal.Origin == origin
+}
+
+// Title is presentation metadata. Object identity is the immutable storage and
+// validated media metadata, so a later source caption cannot create an ABA conflict.
+func sameMediaObject(left, right Asset) bool {
+	left.Title = ""
+	right.Title = ""
+	return left == right
 }
 
 func validSHA256(value string) bool {

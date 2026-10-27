@@ -13,6 +13,7 @@ type mediaJournalStore struct {
 	*memoryStore
 	failFinalize    bool
 	commitThenError bool
+	cancelOnCommit  context.CancelFunc
 }
 
 func (s *mediaJournalStore) Transaction(ctx context.Context, tenant string, fn func(Repository) error) error {
@@ -24,9 +25,19 @@ func (s *mediaJournalStore) Transaction(ctx context.Context, tenant string, fn f
 	})
 	if err == nil && s.commitThenError {
 		s.commitThenError = false
+		if s.cancelOnCommit != nil {
+			s.cancelOnCommit()
+		}
 		return errMediaFinalize
 	}
 	return err
+}
+
+func (s *mediaJournalStore) ReadTransaction(ctx context.Context, tenant string, fn func(Repository) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.memoryStore.ReadTransaction(ctx, tenant, fn)
 }
 
 type mediaJournalRepo struct {
@@ -80,18 +91,50 @@ func TestFinalizeMediaObjectFailureKeepsPendingAndMediaPrivate(t *testing.T) {
 func TestFinalizeMediaObjectRecoversCommittedTransactionError(t *testing.T) {
 	service, scope, store := journalFixture(t)
 	asset := journalAsset()
-	op, _, err := service.PrepareMediaObject(context.Background(), scope, asset, "owner-a", strings.Repeat("b", 64), "import:wechat")
+	ctx, cancel := context.WithCancel(context.Background())
+	op, _, err := service.PrepareMediaObject(ctx, scope, asset, "owner-a", strings.Repeat("b", 64), "import:wechat")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	store.commitThenError = true
-	got, err := service.FinalizeMediaObject(context.Background(), scope, asset.ID, op)
+	store.cancelOnCommit = cancel
+	got, err := service.FinalizeMediaObject(ctx, scope, asset.ID, op)
 	if err != nil || got != asset {
 		t.Fatalf("finalize = %+v %v", got, err)
 	}
 	if _, ok := store.data[scope.Tenant]["media_pending:"+asset.ID]; ok {
 		t.Fatal("committed pending journal still exists")
+	}
+}
+
+func TestPrepareMediaObjectIgnoresMutableTitleButNotDimensions(t *testing.T) {
+	service, scope, _ := journalFixture(t)
+	asset := journalAsset()
+	hash := strings.Repeat("2", 64)
+	op1, _, err := service.PrepareMediaObject(context.Background(), scope, asset, "owner-a", hash, "import:xhs")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	renamed := asset
+	renamed.Title = "new source caption.jpg"
+	op2, already, err := service.PrepareMediaObject(context.Background(), scope, renamed, "owner-a", hash, "import:xhs")
+	if err != nil || already || op2 != op1 {
+		t.Fatalf("renamed prepare = %q %v %v, want %q false nil", op2, already, err, op1)
+	}
+	got, err := service.FinalizeMediaObject(context.Background(), scope, asset.ID, op2)
+	if err != nil || got != asset {
+		t.Fatalf("finalize = %+v %v, want original metadata %+v", got, err, asset)
+	}
+	if op3, already, err := service.PrepareMediaObject(context.Background(), scope, renamed, "owner-a", hash, "import:xhs"); err != nil || !already || op3 != op1 {
+		t.Fatalf("renamed finalized prepare = %q %v %v, want %q true nil", op3, already, err, op1)
+	}
+
+	changedDimensions := asset
+	changedDimensions.Width++
+	if _, _, err := service.PrepareMediaObject(context.Background(), scope, changedDimensions, "owner-a", hash, "import:xhs"); err == nil {
+		t.Fatal("same object ID and hash accepted changed dimensions")
 	}
 }
 
