@@ -18,6 +18,11 @@ import (
 
 type HTTPFetcher struct{ client *http.Client }
 
+const (
+	maxXHSPageBytes        = 4 << 20
+	xhsPublicPageUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148"
+)
+
 func NewHTTPFetcher() *HTTPFetcher {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, Control: func(_, address string, _ syscall.RawConn) error {
 		host, _, err := net.SplitHostPort(address)
@@ -51,7 +56,11 @@ func ParseSourceLink(raw string) (ParsedLink, error) {
 		u.RawQuery = query.Encode()
 		return ParsedLink{Platform: WechatArticle, URL: u.String()}, nil
 	}
-	return ParseLink(raw)
+	link, err := ParseLink(raw)
+	if err == nil && link.Platform == Xiaohongshu {
+		return parseXHSPageLink(raw)
+	}
+	return link, err
 }
 func (f *HTTPFetcher) FetchArticle(ctx context.Context, raw string) ([]byte, error) {
 	link, err := ParseSourceLink(raw)
@@ -65,6 +74,18 @@ func (f *HTTPFetcher) FetchArticle(ctx context.Context, raw string) ([]byte, err
 	}
 	return body, err
 }
+func (f *HTTPFetcher) FetchXHSPage(ctx context.Context, raw string) ([]byte, error) {
+	link, err := parseXHSPageLink(raw)
+	if err != nil || link.Platform != Xiaohongshu || !validXHSPageURL(link.URL) {
+		return nil, fail("invalid_link")
+	}
+	body, _, err := f.fetch(ctx, Xiaohongshu, link.URL, maxXHSPageBytes, true)
+	var known *ResolveError
+	if errors.As(err, &known) && known.Code == "download_failed" {
+		err = fail("xhs_page_fetch_failed")
+	}
+	return body, err
+}
 func (f *HTTPFetcher) FetchMedia(ctx context.Context, platform Platform, raw string, max int64) ([]byte, string, error) {
 	return f.fetch(ctx, platform, raw, max, false)
 }
@@ -74,7 +95,11 @@ func allowedImportURL(platform Platform, raw string, article bool) (*url.URL, er
 		return nil, fail("media_host_not_allowed")
 	}
 	if article {
-		if u.Hostname() != "mp.weixin.qq.com" {
+		if platform == Xiaohongshu {
+			if !validXHSPageURL(u.String()) {
+				return nil, fail("media_host_not_allowed")
+			}
+		} else if platform != WechatArticle || u.Hostname() != "mp.weixin.qq.com" {
 			return nil, fail("media_host_not_allowed")
 		}
 	} else {
@@ -124,6 +149,9 @@ func (f *HTTPFetcher) fetch(ctx context.Context, platform Platform, raw string, 
 	}
 	req.Header.Set("User-Agent", "JDLG-ContentImport/1.0")
 	if article {
+		if platform == Xiaohongshu {
+			req.Header.Set("User-Agent", xhsPublicPageUserAgent)
+		}
 		req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	} else {
 		req.Header.Set("Accept", "image/png,image/jpeg,image/gif,video/mp4")
@@ -148,6 +176,9 @@ func (f *HTTPFetcher) fetch(ctx context.Context, platform Platform, raw string, 
 	if response.StatusCode != 200 && response.StatusCode != 206 {
 		return nil, "", fail("download_failed")
 	}
+	if article && platform == Xiaohongshu && !strings.HasPrefix(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
+		return nil, "", fail("download_failed")
+	}
 	if response.ContentLength > max {
 		return nil, "", fail("media_too_large")
 	}
@@ -168,4 +199,36 @@ func (f *HTTPFetcher) fetch(ctx context.Context, platform Platform, raw string, 
 		return nil, "", fail("partial_media")
 	}
 	return data, response.Header.Get("Content-Type"), nil
+}
+
+func validXHSPageURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" || u.Port() != "" && u.Port() != "443" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	path := strings.TrimSuffix(u.EscapedPath(), "/")
+	if host == "xiaohongshu.com" || host == "www.xiaohongshu.com" {
+		return validXiaohongshuID(firstMatch(xiaohongshuPathID, path)) != ""
+	}
+	if host != "xhslink.com" && host != "www.xhslink.com" {
+		return false
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 2 || parts[0] != "m" && parts[0] != "o" {
+		return false
+	}
+	if len(parts[1]) < 4 || len(parts[1]) > 256 {
+		return false
+	}
+	for _, char := range parts[1] {
+		if !validXHSShortCodeChar(char) {
+			return false
+		}
+	}
+	return true
+}
+
+func validXHSShortCodeChar(char rune) bool {
+	return char >= '0' && char <= '9' || char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || char == '-' || char == '_'
 }
