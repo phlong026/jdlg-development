@@ -3,6 +3,7 @@ package contentstorage
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -25,6 +26,9 @@ const (
 	defaultTimeout       = 30 * time.Second
 	maxErrorBody         = 1 << 20
 	sha256MetadataHeader = "x-cos-meta-sha256"
+	privateCanaryMIME    = "application/octet-stream"
+	privateCanaryData    = "content-storage-private-canary-v1"
+	cleanupTimeout       = 10 * time.Second
 )
 
 var (
@@ -144,6 +148,9 @@ func (s *COSStore) Put(ctx context.Context, tenant, assetID string, data []byte,
 	}
 	hash := sha256.Sum256(data)
 	want := Metadata{Size: int64(len(data)), MIME: contentType, SHA256: hex.EncodeToString(hash[:])}
+	if err := s.privacyPreflight(ctx); err != nil {
+		return err
+	}
 
 	existing, err := s.headKey(ctx, key)
 	switch {
@@ -156,8 +163,32 @@ func (s *COSStore) Put(ctx context.Context, tenant, assetID string, data []byte,
 		return err
 	}
 
+	status, putErr := s.putPrivate(ctx, key, data, contentType, want.SHA256)
+	if putErr != nil {
+		if status == http.StatusPreconditionFailed || status == http.StatusConflict {
+			return s.resolveWriteRace(ctx, key, want)
+		}
+		if status >= 200 && status < 300 {
+			return s.cleanupCreatedObject(ctx, key, putErr)
+		}
+		return putErr
+	}
+	actual, err := s.headKey(ctx, key)
+	if err != nil {
+		return s.cleanupCreatedObject(ctx, key, err)
+	}
+	if actual != want {
+		return s.cleanupCreatedObject(ctx, key, ErrIntegrity)
+	}
+	if err := s.provePrivate(ctx, key); err != nil {
+		return s.cleanupCreatedObject(ctx, key, err)
+	}
+	return nil
+}
+
+func (s *COSStore) putPrivate(ctx context.Context, key string, data []byte, contentType, hash string) (int, error) {
 	metadataHeaders := make(http.Header)
-	metadataHeaders.Set(sha256MetadataHeader, want.SHA256)
+	metadataHeaders.Set(sha256MetadataHeader, hash)
 	optionHeaders := make(http.Header)
 	optionHeaders.Set("If-None-Match", "*")
 	// COS documents this header as its native no-overwrite guard. If-None-Match
@@ -172,13 +203,39 @@ func (s *COSStore) Put(ctx context.Context, tenant, assetID string, data []byte,
 			XOptionHeader: &optionHeaders,
 		},
 	})
-	if putErr != nil {
-		if responseStatus(resp) == http.StatusPreconditionFailed || responseStatus(resp) == http.StatusConflict {
-			return s.resolveWriteRace(ctx, key, want)
-		}
-		return sanitizedCallError(ctx, "put object")
-	}
+	status := responseStatus(resp)
 	closeResponse(resp)
+	if putErr != nil {
+		return status, sanitizedCallError(ctx, "put object")
+	}
+	return status, nil
+}
+
+func (s *COSStore) privacyPreflight(ctx context.Context) (result error) {
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return ErrUnavailable
+	}
+	key := s.privatePrefix + "/_privacy-canary/" + hex.EncodeToString(nonce)
+	data := []byte(privateCanaryData)
+	hash := sha256.Sum256(data)
+	want := Metadata{
+		Size:   int64(len(data)),
+		MIME:   privateCanaryMIME,
+		SHA256: hex.EncodeToString(hash[:]),
+	}
+	status, err := s.putPrivate(ctx, key, data, privateCanaryMIME, want.SHA256)
+	created := status >= 200 && status < 300
+	if created {
+		defer func() {
+			if cleanupErr := s.deleteCreatedObject(ctx, key); cleanupErr != nil {
+				result = ErrUnavailable
+			}
+		}()
+	}
+	if err != nil {
+		return err
+	}
 	actual, err := s.headKey(ctx, key)
 	if err != nil {
 		return err
@@ -187,6 +244,24 @@ func (s *COSStore) Put(ctx context.Context, tenant, assetID string, data []byte,
 		return ErrIntegrity
 	}
 	return s.provePrivate(ctx, key)
+}
+
+func (s *COSStore) cleanupCreatedObject(ctx context.Context, key string, original error) error {
+	if err := s.deleteCreatedObject(ctx, key); err != nil {
+		return ErrUnavailable
+	}
+	return original
+}
+
+func (s *COSStore) deleteCreatedObject(ctx context.Context, key string) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+	defer cancel()
+	resp, deleteErr := s.client.Object.Delete(cleanupCtx, key)
+	closeResponse(resp)
+	if deleteErr != nil {
+		return sanitizedCallError(cleanupCtx, "delete object")
+	}
+	return nil
 }
 
 func (s *COSStore) Get(ctx context.Context, tenant, assetID string, max int64) ([]byte, string, error) {

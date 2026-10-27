@@ -21,6 +21,16 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
+type trackingReadCloser struct {
+	io.Reader
+	closed bool
+}
+
+func (r *trackingReadCloser) Close() error {
+	r.closed = true
+	return nil
+}
+
 func TestNewCOSStoreDefaultsToUnavailable(t *testing.T) {
 	store, err := NewCOSStore(nil)
 	if err != nil {
@@ -111,9 +121,7 @@ func TestPutSignsPrivateConditionalWriteAndProvesAnonymousDenied(t *testing.T) {
 					t.Errorf("%s = %q, want %q", name, got, want)
 				}
 			}
-			resp := response(req, http.StatusOK, nil, "")
-			resp.Header.Set("x-cos-hash-crc64ecma", strconv.FormatUint(crc64.Checksum(data, crc64.MakeTable(crc64.ECMA)), 10))
-			return resp, nil
+			return successfulPutResponse(req, data), nil
 		default:
 			t.Fatalf("unexpected method %s", req.Method)
 			return nil, nil
@@ -263,6 +271,217 @@ func TestPutFailsClosedWhenObjectIsPublicOrProbeRedirects(t *testing.T) {
 	}
 }
 
+func TestPutClosesErrorAndPreconditionResponseBodies(t *testing.T) {
+	data := []byte("sensitive")
+	hash := sha256.Sum256(data)
+	for _, tc := range []struct {
+		name   string
+		status int
+		want   error
+	}{
+		{"ordinary error", http.StatusInternalServerError, ErrUnavailable},
+		{"precondition", http.StatusPreconditionFailed, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			body := &trackingReadCloser{Reader: strings.NewReader("error")}
+			auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls++
+				switch calls {
+				case 1:
+					return response(req, http.StatusNotFound, nil, ""), nil
+				case 2:
+					resp := response(req, tc.status, nil, "")
+					resp.Body = body
+					return resp, nil
+				case 3:
+					if tc.status != http.StatusPreconditionFailed {
+						t.Fatalf("unexpected third call for %d", tc.status)
+					}
+					return metadataResponse(req, data, "video/mp4", hex.EncodeToString(hash[:])), nil
+				default:
+					t.Fatalf("unexpected call %d", calls)
+					return nil, nil
+				}
+			})
+			store := newTestStore(t, auth, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return response(req, http.StatusForbidden, nil, ""), nil
+			}))
+			err := store.Put(context.Background(), "tenant", testAssetID, data, "video/mp4")
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Put error = %v, want %v", err, tc.want)
+			}
+			if !body.closed {
+				t.Fatal("PUT error response body was not closed")
+			}
+		})
+	}
+}
+
+func TestPublicCanaryPreventsUserDataUpload(t *testing.T) {
+	userPuts := 0
+	canaryDeletes := 0
+	auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !isCanaryRequest(req) {
+			if req.Method == http.MethodPut {
+				userPuts++
+			}
+			t.Fatalf("user object request reached COS after public canary: %s %s", req.Method, req.URL.Path)
+		}
+		switch req.Method {
+		case http.MethodPut:
+			body, _ := io.ReadAll(req.Body)
+			return successfulPutResponse(req, body), nil
+		case http.MethodHead:
+			data := []byte(privateCanaryData)
+			hash := sha256.Sum256(data)
+			return metadataResponse(req, data, privateCanaryMIME, hex.EncodeToString(hash[:])), nil
+		case http.MethodDelete:
+			canaryDeletes++
+			return response(req, http.StatusNoContent, nil, ""), nil
+		default:
+			t.Fatalf("unexpected canary method %s", req.Method)
+			return nil, nil
+		}
+	})
+	store := newRawTestStore(t, auth, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !isCanaryRequest(req) {
+			t.Fatal("user object reached anonymous probe after public canary")
+		}
+		return response(req, http.StatusOK, nil, ""), nil
+	}))
+	if err := store.Put(context.Background(), "tenant", testAssetID, []byte("real-user-bytes"), "video/mp4"); !errors.Is(err, ErrPublicObject) {
+		t.Fatalf("Put error = %v, want ErrPublicObject", err)
+	}
+	if userPuts != 0 || canaryDeletes != 1 {
+		t.Fatalf("user puts/canary deletes = %d/%d", userPuts, canaryDeletes)
+	}
+}
+
+func TestPublicCanaryCleanupFailureReturnsUnavailable(t *testing.T) {
+	auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !isCanaryRequest(req) {
+			t.Fatalf("user object request reached COS: %s %s", req.Method, req.URL.Path)
+		}
+		switch req.Method {
+		case http.MethodPut:
+			body, _ := io.ReadAll(req.Body)
+			return successfulPutResponse(req, body), nil
+		case http.MethodHead:
+			data := []byte(privateCanaryData)
+			hash := sha256.Sum256(data)
+			return metadataResponse(req, data, privateCanaryMIME, hex.EncodeToString(hash[:])), nil
+		case http.MethodDelete:
+			return response(req, http.StatusInternalServerError, nil, ""), nil
+		default:
+			t.Fatalf("unexpected method %s", req.Method)
+			return nil, nil
+		}
+	})
+	store := newRawTestStore(t, auth, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return response(req, http.StatusOK, nil, ""), nil
+	}))
+	if err := store.Put(context.Background(), "tenant", testAssetID, []byte("real-user-bytes"), "video/mp4"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Put error = %v, want ErrUnavailable", err)
+	}
+}
+
+func TestPostWritePublicObjectIsDeleted(t *testing.T) {
+	data := []byte("sensitive")
+	hash := sha256.Sum256(data)
+	calls := 0
+	deletedUserObject := false
+	auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		switch req.Method {
+		case http.MethodHead:
+			if calls == 1 {
+				return response(req, http.StatusNotFound, nil, ""), nil
+			}
+			return metadataResponse(req, data, "video/mp4", hex.EncodeToString(hash[:])), nil
+		case http.MethodPut:
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return successfulPutResponse(req, body), nil
+		case http.MethodDelete:
+			deletedUserObject = true
+			return response(req, http.StatusNoContent, nil, ""), nil
+		default:
+			t.Fatalf("unexpected method %s", req.Method)
+			return nil, nil
+		}
+	})
+	store := newTestStore(t, auth, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return response(req, http.StatusOK, nil, ""), nil
+	}))
+	if err := store.Put(context.Background(), "tenant", testAssetID, data, "video/mp4"); !errors.Is(err, ErrPublicObject) {
+		t.Fatalf("Put error = %v, want ErrPublicObject", err)
+	}
+	if !deletedUserObject {
+		t.Fatal("newly created public object was not deleted")
+	}
+}
+
+func TestPostWritePublicCleanupFailureReturnsUnavailable(t *testing.T) {
+	data := []byte("sensitive")
+	hash := sha256.Sum256(data)
+	calls := 0
+	auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		switch req.Method {
+		case http.MethodHead:
+			if calls == 1 {
+				return response(req, http.StatusNotFound, nil, ""), nil
+			}
+			return metadataResponse(req, data, "video/mp4", hex.EncodeToString(hash[:])), nil
+		case http.MethodPut:
+			body, _ := io.ReadAll(req.Body)
+			return successfulPutResponse(req, body), nil
+		case http.MethodDelete:
+			return response(req, http.StatusInternalServerError, nil, ""), nil
+		default:
+			t.Fatalf("unexpected method %s", req.Method)
+			return nil, nil
+		}
+	})
+	store := newTestStore(t, auth, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return response(req, http.StatusOK, nil, ""), nil
+	}))
+	if err := store.Put(context.Background(), "tenant", testAssetID, data, "video/mp4"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Put error = %v, want ErrUnavailable", err)
+	}
+}
+
+func TestExistingPublicObjectIsNeverDeleted(t *testing.T) {
+	data := []byte("existing")
+	hash := sha256.Sum256(data)
+	deletedUserObject := false
+	auth := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.Method {
+		case http.MethodHead:
+			return metadataResponse(req, data, "video/mp4", hex.EncodeToString(hash[:])), nil
+		case http.MethodDelete:
+			deletedUserObject = true
+			t.Fatal("existing user object must never be deleted")
+			return nil, nil
+		default:
+			t.Fatalf("unexpected method %s", req.Method)
+			return nil, nil
+		}
+	})
+	store := newTestStore(t, auth, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return response(req, http.StatusOK, nil, ""), nil
+	}))
+	if err := store.Put(context.Background(), "tenant", testAssetID, data, "video/mp4"); !errors.Is(err, ErrPublicObject) {
+		t.Fatalf("Put error = %v, want ErrPublicObject", err)
+	}
+	if deletedUserObject {
+		t.Fatal("existing public object was deleted")
+	}
+}
+
 func TestGetChecksBoundsLengthHashAndMIME(t *testing.T) {
 	good := []byte("complete")
 	goodHash := sha256.Sum256(good)
@@ -365,6 +584,13 @@ func newTestStore(t *testing.T, auth, anonymous http.RoundTripper) *COSStore {
 			return response(req, http.StatusForbidden, nil, ""), nil
 		})
 	}
+	auth = withSuccessfulCanaryAuth(t, auth)
+	anonymous = withPrivateCanaryProbe(anonymous)
+	return newRawTestStore(t, auth, anonymous)
+}
+
+func newRawTestStore(t *testing.T, auth, anonymous http.RoundTripper) *COSStore {
+	t.Helper()
 	store, err := NewCOSStore(&Config{
 		Enabled: true, Bucket: "bucket-1250000000", Region: "ap-guangzhou",
 		SecretID: "test-id", SecretKey: "test-key",
@@ -376,12 +602,60 @@ func newTestStore(t *testing.T, auth, anonymous http.RoundTripper) *COSStore {
 	return store
 }
 
+func withSuccessfulCanaryAuth(t *testing.T, next http.RoundTripper) http.RoundTripper {
+	t.Helper()
+	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !isCanaryRequest(req) {
+			return next.RoundTrip(req)
+		}
+		switch req.Method {
+		case http.MethodPut:
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(body) != privateCanaryData {
+				t.Fatalf("canary body = %q", body)
+			}
+			return successfulPutResponse(req, body), nil
+		case http.MethodHead:
+			data := []byte(privateCanaryData)
+			hash := sha256.Sum256(data)
+			return metadataResponse(req, data, privateCanaryMIME, hex.EncodeToString(hash[:])), nil
+		case http.MethodDelete:
+			return response(req, http.StatusNoContent, nil, ""), nil
+		default:
+			t.Fatalf("unexpected canary method %s", req.Method)
+			return nil, nil
+		}
+	})
+}
+
+func withPrivateCanaryProbe(next http.RoundTripper) http.RoundTripper {
+	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if isCanaryRequest(req) {
+			return response(req, http.StatusForbidden, nil, ""), nil
+		}
+		return next.RoundTrip(req)
+	})
+}
+
+func isCanaryRequest(req *http.Request) bool {
+	return strings.Contains(req.URL.Path, "/_privacy-canary/")
+}
+
 func metadataResponse(req *http.Request, data []byte, contentType, hash string) *http.Response {
 	headers := make(http.Header)
 	headers.Set("Content-Length", stringInt(int64(len(data))))
 	headers.Set("Content-Type", contentType)
 	headers.Set(sha256MetadataHeader, hash)
 	return responseWithHeaders(req, http.StatusOK, nil, headers)
+}
+
+func successfulPutResponse(req *http.Request, data []byte) *http.Response {
+	resp := response(req, http.StatusOK, nil, "")
+	resp.Header.Set("x-cos-hash-crc64ecma", strconv.FormatUint(crc64.Checksum(data, crc64.MakeTable(crc64.ECMA)), 10))
+	return resp
 }
 
 func response(req *http.Request, status int, data []byte, contentType string) *http.Response {
