@@ -10,6 +10,15 @@
     return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
+  function jsonUTF8Bytes(value) {
+    let bytes = 0;
+    for (const character of JSON.stringify(value)) {
+      const code = character.codePointAt(0);
+      bytes += code <= 0x7f ? 1 : (code <= 0x7ff ? 2 : (code <= 0xffff ? 3 : 4));
+    }
+    return bytes;
+  }
+
   class Tracker {
     constructor(options) {
       this.send = options.send;
@@ -38,7 +47,13 @@
       this.setInterval = options.setInterval;
       this.clearInterval = options.clearInterval;
       this.isVisible = options.isVisible;
+      this.isOnline = options.isOnline || (() => true);
       this.send = options.send;
+      this.sendKeepalive = options.sendKeepalive || ((token, events) => Promise.all(events.map(event => this.send(token, event, true))));
+      this.schedule = options.setTimeout || globalThis.setTimeout.bind(globalThis);
+      this.cancelSchedule = options.clearTimeout || globalThis.clearTimeout.bind(globalThis);
+      this.onDiagnostic = options.onDiagnostic || (() => {});
+      this.maxOutbox = options.maxOutbox || 50;
       this.entry = null;
       this.enabling = null;
       this.interval = null;
@@ -47,6 +62,11 @@
       this.visibleSince = null;
       this.sequence = 0;
       this.viewID = null;
+      this.outbox = [];
+      this.pumping = null;
+      this.retryTimer = null;
+      this.retryDelay = 1000;
+      this.overflowNotified = false;
     }
 
     enable() {
@@ -63,7 +83,7 @@
         this.viewID = viewID;
         this.origin = this.monotonic();
         this.visibleSince = this.isVisible() ? this.origin : null;
-        if (!(await this.emit('page_view', {}, this.origin))) {
+        if (!this.emit('page_view', {}, this.origin)) {
           this.close();
           return false;
         }
@@ -74,7 +94,7 @@
       return this.enabling;
     }
 
-    async emit(type, fields, at) {
+    emit(type, fields, at) {
       if (this.closed || !this.entry) return false;
       const eventID = this.makeID();
       if (!eventID) return false;
@@ -90,16 +110,107 @@
         content_id: this.entry.content_id || '',
         content_version: this.entry.content_version || 0,
         share_id: this.entry.share_id || '',
-        client_monotonic_ms: Math.max(0, Math.round(at - this.origin)),
+        client_monotonic_ms: Math.max(0, Math.round((at === undefined ? this.monotonic() : at) - this.origin)),
         app_state: 'foreground',
         page_state: 'visible',
         quality_flags: []
       }, fields);
-      const token = this.entry.entry_token;
-      try { await this.send(token, event); } catch (error) {
-        if (this.closed) throw error;
-        await this.send(token, event);
+      if (this.outbox.length >= this.maxOutbox) {
+        if (!this.overflowNotified) {
+          this.overflowNotified = true;
+          try { this.onDiagnostic({ type: 'outbox_overflow', limit: this.maxOutbox, dropped_event_id: eventID }); } catch (_) {}
+        }
+        return false;
       }
+      this.outbox.push(event);
+      this.pump();
+      return true;
+    }
+
+    pump() {
+      if (this.closed || !this.entry || !this.outbox.length || !this.isOnline() || this.retryTimer !== null) return Promise.resolve();
+      if (this.pumping) return this.pumping;
+      const token = this.entry.entry_token;
+      this.pumping = (async () => {
+        while (!this.closed && this.outbox.length && this.isOnline()) {
+          const event = this.outbox[0];
+          try {
+            await this.send(token, event);
+          } catch (_) {
+            this.scheduleRetry();
+            return;
+          }
+          if (this.outbox[0] === event) this.outbox.shift();
+          this.retryDelay = 1000;
+          this.overflowNotified = false;
+        }
+      })().finally(() => {
+        this.pumping = null;
+        if (!this.closed && this.retryTimer === null && this.outbox.length && this.isOnline()) this.pump();
+      });
+      return this.pumping;
+    }
+
+    scheduleRetry() {
+      if (this.closed || this.retryTimer !== null || !this.outbox.length) return;
+      const delay = this.retryDelay;
+      this.retryDelay = Math.min(30000, delay * 2);
+      this.retryTimer = this.schedule(() => {
+        this.retryTimer = null;
+        this.pump();
+      }, delay);
+    }
+
+    online() {
+      if (this.closed) return;
+      if (this.retryTimer !== null) this.cancelSchedule(this.retryTimer);
+      this.retryTimer = null;
+      this.retryDelay = 1000;
+      this.pump();
+    }
+
+    drain() {
+      return this.pumping || Promise.resolve();
+    }
+
+    outboxSize() {
+      return this.outbox.length;
+    }
+
+    flushKeepalive() {
+      if (this.closed || !this.entry || !this.outbox.length) return false;
+      const token = this.entry.entry_token;
+      const byteLimit = 60 * 1024;
+      let count = 0;
+      let bytes = jsonUTF8Bytes({ entry_token: token, events: [] });
+      for (const event of this.outbox) {
+        const nextBytes = bytes + jsonUTF8Bytes(event) + (count ? 1 : 0);
+        if (nextBytes > byteLimit) break;
+        bytes = nextBytes;
+        count++;
+      }
+      if (!count) {
+        try { this.onDiagnostic({ type: 'keepalive_oversize', unsent_count: this.outbox.length, byte_limit: byteLimit }); } catch (_) {}
+        return false;
+      }
+      const events = this.outbox.slice(0, count);
+      let operation;
+      try {
+        operation = this.sendKeepalive(token, events);
+      } catch (_) {
+        try { this.onDiagnostic({ type: 'keepalive_failed', event_count: events.length }); } catch (_) {}
+        return false;
+      }
+      this.outbox.splice(0, count);
+      if (this.retryTimer !== null) this.cancelSchedule(this.retryTimer);
+      this.retryTimer = null;
+      this.overflowNotified = false;
+      if (this.outbox.length) {
+        try { this.onDiagnostic({ type: 'keepalive_truncated', sent_count: count, unsent_count: this.outbox.length, byte_limit: byteLimit }); } catch (_) {}
+      }
+      Promise.resolve(operation).catch(() => {
+        try { this.onDiagnostic({ type: 'keepalive_failed', event_count: events.length }); } catch (_) {}
+      });
       return true;
     }
 
@@ -114,7 +225,7 @@
         return;
       }
       this.sequence++;
-      if (!(await this.emit('visible_segment', { segment_id: segmentID, seq: this.sequence, visible_delta_ms: delta }, at))) this.close();
+      this.emit('visible_segment', { segment_id: segmentID, seq: this.sequence, visible_delta_ms: delta }, at);
     }
 
     async tick() {
@@ -144,10 +255,210 @@
     close() {
       this.closed = true;
       if (this.interval !== null) this.clearInterval(this.interval);
+      if (this.retryTimer !== null) this.cancelSchedule(this.retryTimer);
       this.interval = null;
+      this.retryTimer = null;
       this.entry = null;
       this.visibleSince = null;
+      this.outbox.length = 0;
     }
+  }
+
+  class VideoTracking {
+    constructor(options) {
+      this.mediaID = options.mediaID;
+      this.playerID = options.playerID;
+      this.monotonic = options.monotonic;
+      this.reportEveryMS = options.reportEveryMS || 5000;
+      this.session = null;
+      this.visible = false;
+      this.reset();
+    }
+
+    reset() {
+      this.stateValue = 'paused';
+      this.rateValue = 1;
+      this.position = 0;
+      this.duration = 0;
+      this.lastSample = null;
+      this.watch = 0;
+      this.ranges = [];
+      this.sequence = 0;
+      this.pendingSeek = false;
+      this.pendingState = false;
+    }
+
+    setSession(session) {
+      if (this.session === session) return;
+      this.session = session || null;
+      this.reset();
+    }
+
+    setVisible(visible) {
+      this.visible = !!visible;
+      this.lastSample = null;
+    }
+
+    rate(value) {
+      const next = Number(value);
+      if (Number.isFinite(next) && next >= 0 && next <= 4) this.rateValue = next;
+    }
+
+    normalize(seconds, durationSeconds) {
+      const duration = Math.max(0, Math.round(Number(durationSeconds) * 1000) || 0);
+      const rawPosition = Math.max(0, Math.round(Number(seconds) * 1000) || 0);
+      return { position: duration > 0 ? Math.min(rawPosition, duration) : rawPosition, duration };
+    }
+
+    mergeRange(start, end) {
+      if (end <= start) return;
+      const sorted = this.ranges.concat([[start, end]]).sort((a, b) => a[0] - b[0]);
+      const merged = [];
+      sorted.forEach(range => {
+        const last = merged[merged.length - 1];
+        if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+        else if (merged.length < 256) merged.push(range.slice());
+      });
+      this.ranges = merged;
+    }
+
+    uniquePlayed() {
+      return this.ranges.reduce((total, range) => total + range[1] - range[0], 0);
+    }
+
+    fields(type, flags) {
+      return {
+        media_id: this.mediaID,
+        player_instance_id: this.playerID,
+        seq: ++this.sequence,
+        current_time_ms: this.position,
+        video_duration_ms: this.duration,
+        playback_rate: this.rateValue,
+        play_state: this.stateValue,
+        video_watch_ms: type === 'video_progress' ? Math.floor(this.watch) : 0,
+        unique_played_ms: this.uniquePlayed(),
+        played_ranges: this.ranges.map(range => range.slice()),
+        quality_flags: flags || []
+      };
+    }
+
+    send(type, flags) {
+      if (!this.session || !this.visible || this.duration <= 0) return false;
+      const at = this.monotonic();
+      const accepted = this.session.emit(type, this.fields(type, flags), at) !== false;
+      if (accepted && type === 'video_progress') this.watch = 0;
+      return accepted;
+    }
+
+    sync(seconds, durationSeconds, force) {
+      const at = this.monotonic();
+      const next = this.normalize(seconds, durationSeconds);
+      if (next.duration > 0) this.duration = next.duration;
+      const delta = this.lastSample === null ? 0 : at - this.lastSample;
+      const advance = next.position - this.position;
+      const playing = !!this.session && this.visible && this.stateValue === 'playing' && delta > 0 && delta <= 2000;
+      const inferredSeek = this.pendingSeek || (playing && (advance < -100 || advance > delta * this.rateValue + 1000));
+      if (playing && !inferredSeek && advance > 0) {
+        this.watch = Math.min(15000, this.watch + delta);
+        this.mergeRange(this.position, Math.min(next.position, this.duration || next.position));
+      }
+      this.position = next.position;
+      this.lastSample = this.session && this.visible ? at : null;
+      this.pendingSeek = false;
+      if (this.pendingState && this.send('video_state')) this.pendingState = false;
+      if (inferredSeek) this.send('video_progress', ['inferred_seek']);
+      else if ((force && this.watch > 0) || this.watch >= this.reportEveryMS) this.send('video_progress');
+    }
+
+    progress(seconds, durationSeconds) {
+      this.sync(seconds, durationSeconds, false);
+    }
+
+    flush(seconds, durationSeconds) {
+      this.sync(seconds, durationSeconds, true);
+    }
+
+    seeking(seconds, durationSeconds) {
+      const next = this.normalize(seconds, durationSeconds);
+      if (next.duration > 0) this.duration = next.duration;
+      this.position = next.position;
+      this.lastSample = null;
+      this.pendingSeek = true;
+    }
+
+    state(value, seconds, durationSeconds) {
+      const nextState = value === 'playing' ? 'playing' : (value === 'ended' ? 'ended' : 'paused');
+      if (this.stateValue === nextState) {
+        if (nextState === 'playing') this.sync(seconds, durationSeconds, false);
+        else {
+          const next = this.normalize(seconds, durationSeconds);
+          if (next.duration > 0) this.duration = next.duration;
+          this.position = next.position;
+        }
+        return;
+      }
+      if (this.stateValue === 'playing' && nextState !== 'playing') {
+        this.sync(seconds, durationSeconds, true);
+        // Overflow is already diagnosed by the shared outbox. Do not carry
+        // playing time into a later paused event that the server must reject.
+        if (this.watch > 0) this.watch = 0;
+      }
+      else {
+        const next = this.normalize(seconds, durationSeconds);
+        if (next.duration > 0) this.duration = next.duration;
+        this.position = next.position;
+      }
+      this.stateValue = nextState;
+      this.lastSample = nextState === 'playing' && this.session && this.visible ? this.monotonic() : null;
+      this.pendingState = !this.send('video_state') && !!this.session && this.visible && this.duration <= 0;
+    }
+
+    drain() {
+      return this.session && this.session.drain ? this.session.drain() : Promise.resolve();
+    }
+  }
+
+  const videoBindings = new WeakMap();
+  let nextVideoPlayer = 0;
+
+  function bindVideos(elements, options) {
+    const settings = options || {};
+    const monotonic = settings.monotonic || (() => performance.now());
+    const isVisible = settings.isVisible || (() => true);
+    const bindings = [];
+    Array.from(elements || []).forEach(video => {
+      const mediaID = video.dataset && video.dataset.mediaId;
+      if (!mediaID) return;
+      let binding = videoBindings.get(video);
+      if (!binding) {
+        const tracker = new VideoTracking({ mediaID, playerID: `share-video-${++nextVideoPlayer}`, monotonic });
+        const values = () => [video.currentTime || 0, Number.isFinite(video.duration) ? video.duration : 0];
+        video.addEventListener('play', () => tracker.state('playing', ...values()));
+        video.addEventListener('pause', () => tracker.state(video.ended ? 'ended' : 'paused', ...values()));
+        video.addEventListener('ended', () => tracker.state('ended', ...values()));
+        video.addEventListener('ratechange', () => tracker.rate(video.playbackRate));
+        video.addEventListener('timeupdate', () => tracker.progress(...values()));
+        video.addEventListener('loadedmetadata', () => tracker.progress(...values()));
+        video.addEventListener('seeking', () => tracker.seeking(...values()));
+        video.addEventListener('seeked', () => tracker.progress(...values()));
+        binding = { video, tracker };
+        videoBindings.set(video, binding);
+      }
+      bindings.push(binding);
+    });
+    return {
+      setSession(session) {
+        bindings.forEach(({ video, tracker }) => {
+          tracker.setSession(session);
+          tracker.setVisible(isVisible());
+          tracker.rate(video.playbackRate);
+          tracker.progress(video.currentTime || 0, Number.isFinite(video.duration) ? video.duration : 0);
+          if (session && video.paused === false) tracker.state('playing', video.currentTime || 0, video.duration);
+        });
+      },
+      flush() { bindings.forEach(({ video, tracker }) => tracker.flush(video.currentTime || 0, Number.isFinite(video.duration) ? video.duration : 0)); },
+      setVisible(visible) { bindings.forEach(({ tracker }) => tracker.setVisible(visible)); }
+    };
   }
 
   function createPost(fetchFn, options) {
@@ -158,8 +469,9 @@
     const AbortType = Object.prototype.hasOwnProperty.call(settings, 'AbortController')
       ? settings.AbortController
       : (typeof AbortController === 'undefined' ? null : AbortController);
-    return async function post(path, payload) {
-      const controller = AbortType ? new AbortType() : null;
+    return async function post(path, payload, requestOptions) {
+      const request = requestOptions || {};
+      const controller = !request.keepalive && AbortType ? new AbortType() : null;
       let timer;
       const timeout = new Promise((_, reject) => {
         timer = schedule(() => {
@@ -174,6 +486,7 @@
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Share-Web': '1' },
             body: JSON.stringify(payload),
+            ...(request.keepalive ? { keepalive: true } : {}),
             ...(controller ? { signal: controller.signal } : {})
           });
           if (!response.ok) throw new Error('request failed');
@@ -193,16 +506,28 @@
     const consent = document.getElementById('consent'), state = document.getElementById('tracking-state');
     const post = createPost(fetch);
     let tracking = null;
+    const videos = bindVideos(document.querySelectorAll('video[data-media-id]'), {
+      monotonic: () => performance.now(),
+      isVisible: () => document.visibilityState === 'visible'
+    });
     const buildTracking = () => new ReaderTracking({
       enter: client => post('/api/v1/share-web/entry', { code, client_instance: client, consent_version: 'v1' }),
       send: (token, event) => post('/api/v1/share-web/events', { entry_token: token, events: [event] }),
+      sendKeepalive: (token, events) => post('/api/v1/share-web/events', { entry_token: token, events }, { keepalive: true }),
       monotonic: () => performance.now(),
       isVisible: () => document.visibilityState === 'visible',
+      isOnline: () => navigator.onLine !== false,
       setInterval: (fn, ms) => window.setInterval(fn, ms),
-      clearInterval: value => window.clearInterval(value)
+      clearInterval: value => window.clearInterval(value),
+      setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+      clearTimeout: value => window.clearTimeout(value),
+      onDiagnostic: diagnostic => {
+        if (diagnostic.type === 'outbox_overflow') state.textContent = ' 网络拥堵，部分记录未保存';
+      }
     });
     if (consent) consent.addEventListener('click', async () => {
       if (tracking && tracking.entry) {
+        videos.setSession(null);
         tracking.close();
         tracking = null;
         consent.textContent = '重新开启阅读记录';
@@ -220,7 +545,9 @@
         }
         consent.textContent = '关闭阅读记录';
         state.textContent = ' 已开启阅读记录';
+        videos.setSession(tracking);
       } catch (_) {
+        videos.setSession(null);
         if (tracking) tracking.close();
         tracking = null;
         state.textContent = ' 阅读记录暂不可用';
@@ -228,9 +555,27 @@
         consent.disabled = false;
       }
     });
-    const onVisibility = () => { if (tracking) tracking.visibilityChanged(document.visibilityState === 'visible').catch(() => {}); };
-    const cleanup = () => { if (tracking) tracking.close(); tracking = null; };
+    const onVisibility = () => {
+      const visible = document.visibilityState === 'visible';
+      if (!visible) videos.flush();
+      if (tracking) tracking.visibilityChanged(visible).catch(() => {});
+      videos.setVisible(visible);
+    };
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      videos.flush();
+      if (tracking) {
+        tracking.visibilityChanged(false).catch(() => {});
+        tracking.flushKeepalive();
+        tracking.close();
+      }
+      videos.setSession(null);
+      tracking = null;
+    };
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', () => { if (tracking) tracking.online(); });
     window.addEventListener('pagehide', cleanup, { once: true });
     window.addEventListener('unload', cleanup, { once: true });
     const open = document.getElementById('open-mini');
@@ -240,5 +585,5 @@
     });
   }
   if (typeof window !== 'undefined') window.addEventListener('DOMContentLoaded', boot);
-  return { Tracker, ReaderTracking, secureID, createPost, boot };
+  return { Tracker, ReaderTracking, VideoTracking, bindVideos, secureID, createPost, boot };
 });

@@ -25,11 +25,11 @@ type Page struct {
 }
 
 type viewBlock struct {
-	Kind, Text, Caption, MediaURL, Class string
-	Level                                int
-	Items                                []string
-	Ordered                              bool
-	SpacingBefore, SpacingAfter          int
+	Kind, Text, Caption, MediaID, MediaURL, Class string
+	Level                                         int
+	Items                                         []string
+	Ordered                                       bool
+	SpacingBefore, SpacingAfter                   int
 }
 
 type viewPage struct {
@@ -97,6 +97,7 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) 
 					return nil, "", "", errors.New("article media unavailable")
 				}
 				item.MediaURL = "/api/v1/share-web/media/" + page.Code + "/" + asset.ID
+				item.MediaID = asset.ID
 			}
 			out = append(out, item)
 		}
@@ -121,7 +122,7 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) 
 			if (asset.Kind != "image" && asset.Kind != "video") || !codePattern.MatchString(asset.ID) {
 				return nil, "", "", errors.New("content media unavailable")
 			}
-			out = append(out, viewBlock{Kind: asset.Kind, MediaURL: "/api/v1/share-web/media/" + page.Code + "/" + asset.ID})
+			out = append(out, viewBlock{Kind: asset.Kind, MediaID: asset.ID, MediaURL: "/api/v1/share-web/media/" + page.Code + "/" + asset.ID})
 		}
 		return out, rich, "", nil
 	default:
@@ -147,11 +148,11 @@ func renderArticleLayout(code, input string, media map[string]tracking.Asset) (s
 		if kind == "image" {
 			layout = strings.ReplaceAll(layout, `<img data-media-id="`+id+`"`, `<img src="`+url+`"`)
 		} else {
-			layout = strings.ReplaceAll(layout, `<jd-video data-media-id="`+id+`"`, `<video src="`+url+`" controls playsinline preload="metadata"`)
+			layout = strings.ReplaceAll(layout, `<jd-video data-media-id="`+id+`"`, `<video data-media-id="`+id+`" src="`+url+`" controls playsinline preload="metadata"`)
 		}
 	}
 	layout = strings.ReplaceAll(layout, "</jd-video>", "</video>")
-	if strings.Contains(layout, "data-media-id=") || strings.Contains(layout, "jd-video") {
+	if strings.Contains(layout, `<img data-media-id=`) || strings.Contains(layout, "jd-video") {
 		return "", errors.New("article media unavailable")
 	}
 	return layout, nil

@@ -1,6 +1,7 @@
 package route
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -18,7 +19,9 @@ import (
 	"service/tracking"
 )
 
-func shareWebFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceTestStore, string) {
+const shareWebVideoID = "video-share-web-0000000000000001"
+
+func shareWebFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceTestStore, string, tracking.Content) {
 	t.Helper()
 	t.Setenv("SHARE_WEB_ENABLED", "true")
 	t.Setenv("PUBLIC_SHARE_ORIGIN", "https://www.jiadilingguang.com")
@@ -30,7 +33,10 @@ func shareWebFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceT
 	now := time.Date(2026, 10, 27, 8, 0, 0, 0, time.UTC)
 	svc.Now = func() time.Time { return now }
 	scope := tracking.Scope{Tenant: "share-web", Actor: 42, Owners: []string{"owner-a"}, Manage: true}
-	content, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "安全文章", Body: "安全正文<script>alert(1)</script>", BodyFormat: "rich_text", Rights: "own", Owner: "owner-a"})
+	if err := svc.AddMedia(context.Background(), scope, tracking.Asset{ID: shareWebVideoID, Kind: "video", MIME: "video/mp4", Width: 1280, Height: 720, URL: "/api/v1/miniprogram/tracking/media/" + shareWebVideoID}, "owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	content, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "安全文章", Body: "安全正文<script>alert(1)</script>", BodyFormat: "rich_text", Rights: "own", Owner: "owner-a", MediaIDs: []string{shareWebVideoID}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +48,8 @@ func shareWebFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceT
 	if err != nil {
 		t.Fatal(err)
 	}
-	version := published["content"].(tracking.Content).Version
+	publishedContent := published["content"].(tracking.Content)
+	version := publishedContent.Version
 	entry, err := svc.Enter(context.Background(), tracking.EntryInput{Route: "pages/contentreader/contentreader", Content: content.ID, Version: version, Client: "share-web-author-client", Consent: "v1"}, 42)
 	if err != nil {
 		t.Fatal(err)
@@ -54,11 +61,11 @@ func shareWebFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceT
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	registerShareWebHandlers(router, router.Group("/api/v1"), svc, tracking.NewWechatAPI())
-	return router, svc, store, created["share_token"].(string)
+	return router, svc, store, created["share_token"].(string), publishedContent
 }
 
 func TestShareWebGETEscapesBodyAndCreatesNoTrackingRecord(t *testing.T) {
-	router, _, store, code := shareWebFixture(t)
+	router, _, store, code, _ := shareWebFixture(t)
 	before := len(store.records)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/share/s/"+code, nil))
@@ -71,7 +78,7 @@ func TestShareWebGETEscapesBodyAndCreatesNoTrackingRecord(t *testing.T) {
 }
 
 func TestShareWebEntryRequiresFixedOrigin(t *testing.T) {
-	router, _, store, code := shareWebFixture(t)
+	router, _, store, code, _ := shareWebFixture(t)
 	body, _ := json.Marshal(map[string]any{"code": code, "client_instance": "browser-client-1234", "consent_version": "v1"})
 	before := len(store.records)
 	w := httptest.NewRecorder()
@@ -81,6 +88,93 @@ func TestShareWebEntryRequiresFixedOrigin(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden || len(store.records) != before {
 		t.Fatalf("cross-origin entry %d %s records=%d/%d", w.Code, w.Body.String(), len(store.records), before)
+	}
+}
+
+func TestShareWebVideoEventsReachAggregationAndStopAfterContentRevoke(t *testing.T) {
+	router, svc, store, code, content := shareWebFixture(t)
+	post := func(path string, payload any, output any) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+		req.Header.Set("Origin", "https://www.jiadilingguang.com")
+		req.Header.Set("X-Share-Web", "1")
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+		if output != nil && w.Code == http.StatusOK {
+			var envelope struct {
+				Code int             `json:"code"`
+				Data json.RawMessage `json:"data"`
+			}
+			if err = json.Unmarshal(w.Body.Bytes(), &envelope); err != nil || envelope.Code != 0 || json.Unmarshal(envelope.Data, output) != nil {
+				t.Fatalf("decode %s: status=%d body=%s err=%v", path, w.Code, w.Body.String(), err)
+			}
+		}
+		return w
+	}
+
+	var entry tracking.Entry
+	if w := post("/api/v1/share-web/entry", map[string]string{"code": code, "client_instance": "browser-video-client-0001", "consent_version": "v1"}, &entry); w.Code != http.StatusOK {
+		t.Fatalf("entry = %d %s", w.Code, w.Body.String())
+	}
+	viewID := "share-web-video-view-0001"
+	now := svc.Now()
+	events := []tracking.Event{
+		{ID: "share-web-page-view-0001", Type: "page_view", Schema: 1, SDK: "share-web-v1", Session: entry.Session, View: viewID, Route: entry.Route, Content: entry.Content, Version: entry.Version, Share: entry.Share, Occurred: now, AppState: "foreground", PageState: "visible", Flags: []string{}},
+		{ID: "share-web-video-state-0001", Type: "video_state", Schema: 1, SDK: "share-web-v1", Session: entry.Session, View: viewID, Seq: 1, Route: entry.Route, Content: entry.Content, Version: entry.Version, Share: entry.Share, Media: shareWebVideoID, Player: "share-video-1", Duration: 10000, Rate: 1, PlayState: "playing", Occurred: now, AppState: "foreground", PageState: "visible", Flags: []string{}},
+		{ID: "share-web-video-progress-0001", Type: "video_progress", Schema: 1, SDK: "share-web-v1", Session: entry.Session, View: viewID, Seq: 2, Route: entry.Route, Content: entry.Content, Version: entry.Version, Share: entry.Share, Media: shareWebVideoID, Player: "share-video-1", Position: 2000, Duration: 10000, Watch: 2000, Rate: 1, PlayState: "playing", Ranges: [][2]int64{{0, 2000}}, Monotonic: 2000, Occurred: now, AppState: "foreground", PageState: "visible", Flags: []string{}},
+	}
+	var results []tracking.Result
+	if w := post("/api/v1/share-web/events", map[string]any{"entry_token": entry.Token, "events": events}, &results); w.Code != http.StatusOK {
+		t.Fatalf("events = %d %s", w.Code, w.Body.String())
+	}
+	if len(results) != 3 || results[0].Status != "accepted" || results[1].Status != "accepted" || results[2].Status != "accepted" {
+		t.Fatalf("video results = %+v", results)
+	}
+	eventCount := 0
+	for _, row := range store.records {
+		if row.Kind == "event" {
+			eventCount++
+		}
+	}
+	if eventCount != 3 {
+		t.Fatalf("stored events = %d, want 3", eventCount)
+	}
+	visits, err := svc.Visits(context.Background(), tracking.Scope{Tenant: "share-web", Actor: 42, Owners: []string{"owner-a"}, View: true, Manage: true}, tracking.Filter{Owner: "owner-a", Content: entry.Content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := visits.Items.([]tracking.Visit)
+	if len(items) != 1 || items[0].Progress == nil || items[0].Progress.Kind != "video" || items[0].Progress.Percent != 20 {
+		t.Fatalf("video aggregation = %+v", items)
+	}
+	if _, err = svc.Revoke(context.Background(), tracking.Scope{Tenant: "share-web", Actor: 42, Owners: []string{"owner-a"}, Manage: true}, content.ID, content.Revision, "撤回联调素材", "share-web-revoke-0001"); err != nil {
+		t.Fatal(err)
+	}
+	late := events[2]
+	late.ID = "share-web-video-progress-late"
+	late.Seq = 3
+	late.Position = 3000
+	late.Monotonic = 3000
+	var lateResults []tracking.Result
+	if w := post("/api/v1/share-web/events", map[string]any{"entry_token": entry.Token, "events": []tracking.Event{late}}, &lateResults); w.Code != http.StatusOK {
+		t.Fatalf("late events = %d %s", w.Code, w.Body.String())
+	}
+	if len(lateResults) != 1 || lateResults[0].Status != "rejected" {
+		t.Fatalf("revoked event result = %+v", lateResults)
+	}
+	after := 0
+	for _, row := range store.records {
+		if row.Kind == "event" {
+			after++
+		}
+	}
+	if after != eventCount {
+		t.Fatalf("revoked content added events: before=%d after=%d", eventCount, after)
 	}
 }
 
@@ -154,7 +248,7 @@ func TestShareWebURLLinkUsesTheSameShareAndCachesWechatResult(t *testing.T) {
 	t.Setenv("TRACKING_WECHAT_URLLINK_ENABLED", "true")
 	t.Setenv("TRACKING_WECHAT_ENV", "release")
 	withMiniprogramCredentials(t)
-	_, svc, _, code := shareWebFixture(t)
+	_, svc, _, code, _ := shareWebFixture(t)
 	linkCalls := 0
 	var generated map[string]any
 	var callsMu sync.Mutex

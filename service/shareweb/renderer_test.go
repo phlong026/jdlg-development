@@ -27,6 +27,9 @@ func TestShareWebRendererEscapesArticleTextAndBindsMediaToCode(t *testing.T) {
 	if !strings.Contains(html, "/api/v1/share-web/media/opaque-code-123456/media-image") || !strings.Contains(html, "/api/v1/share-web/media/opaque-code-123456/media-video") {
 		t.Fatalf("media was not rebound to the validated share code: %s", html)
 	}
+	if !strings.Contains(html, `data-media-id="media-video"`) {
+		t.Fatalf("video is missing its tracking identity: %s", html)
+	}
 }
 
 func TestShareWebRendererRejectsPrivateOrDraftContent(t *testing.T) {
@@ -93,7 +96,10 @@ func TestShareWebRendererUsesSanitizedLayoutAndLocalMediaURLs(t *testing.T) {
 			t.Fatalf("missing %q in %s", wanted, html)
 		}
 	}
-	for _, unsafe := range []string{"evil.test", "alert(1)", "jd-video", "data-media-id"} {
+	if !strings.Contains(html, `data-media-id="layout-video-one"`) {
+		t.Fatalf("layout video is missing its tracking identity: %s", html)
+	}
+	for _, unsafe := range []string{"evil.test", "alert(1)", "jd-video", `data-media-id="layout-image-one"`} {
 		if strings.Contains(html, unsafe) {
 			t.Fatalf("unsafe placeholder %q survived: %s", unsafe, html)
 		}

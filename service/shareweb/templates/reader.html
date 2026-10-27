@@ -19,7 +19,7 @@
         {{if eq .Kind "quote"}}<blockquote class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{.Text}}</blockquote>{{end}}
         {{if eq .Kind "list"}}{{if .Ordered}}<ol class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{range .Items}}<li>{{.}}</li>{{end}}</ol>{{else}}<ul class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px">{{range .Items}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
         {{if eq .Kind "image"}}<figure class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px"><img src="{{.MediaURL}}" alt="{{.Caption}}" loading="lazy">{{if .Caption}}<figcaption>{{.Caption}}</figcaption>{{end}}</figure>{{end}}
-        {{if eq .Kind "video"}}<figure class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px"><video src="{{.MediaURL}}" controls playsinline preload="metadata"></video>{{if .Caption}}<figcaption>{{.Caption}}</figcaption>{{end}}</figure>{{end}}
+        {{if eq .Kind "video"}}<figure class="{{.Class}}" style="margin-top:{{.SpacingBefore}}px;margin-bottom:{{.SpacingAfter}}px"><video data-media-id="{{.MediaID}}" src="{{.MediaURL}}" controls playsinline preload="metadata"></video>{{if .Caption}}<figcaption>{{.Caption}}</figcaption>{{end}}</figure>{{end}}
       {{end}}
     </article>
     {{if .Trackable}}<section class="notice"><p>同意后记录本次阅读与停留，用于让分享人及时跟进。</p><button id="consent" type="button">同意并继续阅读</button><span id="tracking-state"></span></section>{{end}}
