@@ -379,6 +379,18 @@ const ROUTES = {
     "readiness": "excluded-private-workbench",
     "collect": false,
     "exclusionReason": "private-workbench"
+  },
+  "pages/projectnotes/projectnotes": {
+    "kind": "excluded",
+    "readiness": "excluded-private-project-notes",
+    "collect": false,
+    "exclusionReason": "private-project-notes"
+  },
+  "pages/projectnoteview/projectnoteview": {
+    "kind": "excluded",
+    "readiness": "excluded-private-project-notes",
+    "collect": false,
+    "exclusionReason": "private-project-notes"
   }
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }

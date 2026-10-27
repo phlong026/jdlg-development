@@ -382,5 +382,17 @@
     "Type": "excluded",
     "Public": false,
     "Audience": "neutral"
+  },
+  "pages/projectnotes/projectnotes": {
+    "Title": "私人项目笔记管理",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/projectnoteview/projectnoteview": {
+    "Title": "受邀项目笔记固定版本",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
   }
 }

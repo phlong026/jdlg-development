@@ -20,3 +20,9 @@ test('account change discards previous account response',async()=>{
  let resolve;const {page,storage}=runtime(url=>url.endsWith('/notifications')?new Promise(r=>resolve=r):{});
  page.onShow();await tick();storage.token='';page.onShow();resolve({items:[{notification_id:'private-old'}]});await tick();assert.equal(page.data.messages.length,0);assert.equal(page.data.loginRequired,true);
 });
+test('private project notice follows only its fixed management route without exposing share token',async()=>{
+ const route='pages/projectnotes/projectnotes?project_id=project_1234&version_id=version_1234';
+ const {page,navigation}=runtime(url=>url.endsWith('/private-note')?{notification_id:'private-note',kind:'project_note_open',route_key:route,content_id:'version_1234',share_id:'internal-share'}:url.endsWith('/read')||url.includes('unread-count')?{}:{items:[]});
+ page.onShow();await tick();await page.onOpenMessage({currentTarget:{dataset:{id:'private-note'}}});
+ assert.deepEqual(navigation,['/'+route]);assert.doesNotMatch(navigation[0],/pns=|token=/);
+});

@@ -210,6 +210,14 @@
     {
       "root": "pages/visitdetail",
       "pages": ["visitdetail"]
+    },
+    {
+      "root": "pages/projectnotes",
+      "pages": ["projectnotes"]
+    },
+    {
+      "root": "pages/projectnoteview",
+      "pages": ["projectnoteview"]
     }
   ],
   "tabBar": {

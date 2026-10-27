@@ -5,6 +5,7 @@ const ORIGIN = 'https://api.jiadilingguang.com';
 const WORKBENCH = '/api/v1/miniprogram/workbench';
 const IMPORTS = WORKBENCH + '/imports';
 const MY_SHARES = '/api/v1/miniprogram/tracking/my-shares';
+const PROJECT_NOTES = '/api/v1/miniprogram/project-notes';
 let mutationSequence = 0;
 
 function authHeaders(path, body, json = true) {
@@ -59,6 +60,50 @@ function submitImport(input) { return request(IMPORTS, 'POST', input); }
 function getImport(id) { return request(IMPORTS + '/' + encodeURIComponent(id)); }
 function retryImport(id) { return request(IMPORTS + '/' + encodeURIComponent(id) + '/retry', 'POST', {}); }
 
+function projectNotePath(path) { return PROJECT_NOTES + path; }
+function listProjectNoteProjects(query) { return request(projectNotePath('/projects'), 'GET', {}, query); }
+function createProjectNoteProject(input) { return request(projectNotePath('/projects'), 'POST', input); }
+function getProjectNoteProject(id) { return request(projectNotePath('/projects/' + encodeURIComponent(id))); }
+function inviteProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'POST', {}); }
+function revokeProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'DELETE', {}); }
+function setProjectNoteConfirmer(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/confirmer'), 'PUT', { account_id: Number(accountID) }); }
+function createProjectNote(projectID, draft) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/notes'), 'POST', draft); }
+function saveProjectNote(noteID, draft) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID)), 'PATCH', draft); }
+function freezeProjectNoteVersion(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID) + '/versions'), 'POST', { expected_revision: Number(revision) }); }
+function createProjectNoteShare(versionID, expiresAt, key) { return request(projectNotePath('/versions/' + encodeURIComponent(versionID) + '/shares'), 'POST', { expires_at: expiresAt, idempotency_key: key }); }
+function revokeProjectNoteShare(shareID) { return request(projectNotePath('/shares/' + encodeURIComponent(shareID) + '/revoke'), 'POST', {}); }
+function resolveProjectNoteFeedback(feedbackID, reply, key) { return request(projectNotePath('/feedback/' + encodeURIComponent(feedbackID) + '/resolve'), 'POST', { reply, idempotency_key: key }); }
+function getSharedProjectNote(token) { return request(projectNotePath('/shared/' + encodeURIComponent(token))); }
+function openSharedProjectNote(token, eventID) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/open'), 'POST', { event_id: eventID }); }
+function addSharedProjectNoteFeedback(token, text, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/feedback'), 'POST', { text, idempotency_key: key }); }
+function confirmSharedProjectNote(token, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/confirm'), 'POST', { idempotency_key: key }); }
+
+function uploadProjectNoteMedia(projectID, filePath) {
+  const path = projectNotePath('/projects/' + encodeURIComponent(projectID) + '/media');
+  return new Promise((resolve, reject) => wx.uploadFile({
+    url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 60000,
+    success(response) {
+      let data = {};
+      try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(new Error('私有素材上传响应无法读取')); return; }
+      if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
+      else reject(Object.assign(new Error(data.msg || '私有素材上传失败'), { statusCode: response.statusCode }));
+    },
+    fail() { reject(new Error('私有素材上传失败')); },
+  }));
+}
+
+function downloadSharedProjectNoteMedia(token, id) {
+  const path = projectNotePath('/shared/' + encodeURIComponent(token) + '/media/' + encodeURIComponent(id));
+  return new Promise((resolve, reject) => wx.downloadFile({
+    url: ORIGIN + path, header: authHeaders(path, {}), timeout: 15000,
+    success(response) {
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.tempFilePath) resolve(response.tempFilePath);
+      else reject(responseError(response, '私有附件加载失败'));
+    },
+    fail() { reject(new Error('私有附件加载失败')); },
+  }));
+}
+
 function downloadWorkbenchMedia(id) {
   const path = WORKBENCH + '/media/' + encodeURIComponent(id);
   return new Promise((resolve, reject) => wx.downloadFile({
@@ -92,9 +137,14 @@ function mutationKey(prefix) {
 }
 
 module.exports = {
-  ORIGIN, WORKBENCH, MY_SHARES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
+  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
   saveContent, previewContent, publishContent, revokeContent, listMyShares, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
+  listProjectNoteProjects, createProjectNoteProject, getProjectNoteProject, inviteProjectNoteMember, revokeProjectNoteMember,
+  setProjectNoteConfirmer, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
+  revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
+  addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
+  uploadProjectNoteMedia,
 };
 export {};

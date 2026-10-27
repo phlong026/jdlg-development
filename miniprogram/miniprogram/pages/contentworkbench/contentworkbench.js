@@ -137,7 +137,7 @@ Page({
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
   openExistingAssets() { this.navigate('/pages/generatehistory/generatehistory'); },
   openShareVisits() { this.navigate('/pages/sharevisits/sharevisits'); },
-  openNotes() { wx.showToast({ title: '项目协作开通后可管理笔记', icon: 'none' }); },
+  openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
   pasteImportLink() { wx.getClipboardData({ success: result => this.setImportURL({ detail: { value: result.data } }), fail: () => wx.showToast({ title: '未能读取剪贴板，请手动粘贴', icon: 'none' }) }); },
   refreshImportList() { return this.loadImports(this._epoch); },
