@@ -642,7 +642,7 @@ Page({
                 throw new Error('生成失败');
             }
             const taskNo = encodeURIComponent(String(res.task_no));
-            const safePrompt = encodeURIComponent(promptText || tool.name);
+            const safePrompt = encodeURIComponent(promptText);
             const safeToolId = encodeURIComponent(tool.id);
             wx.navigateTo({
                 url: `/pages/generatedetails/generatedetails?task_no=${taskNo}&prompt=${safePrompt}&tool_id=${safeToolId}`,
@@ -660,8 +660,8 @@ Page({
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                         task_type: 'ai_draw',
-                        prompt: promptText || tool.name,
-                        user_prompt: promptText || tool.name,
+                        prompt: promptText,
+                        user_prompt: promptText,
                         reference_image_url: selectedStyleImageUrl || '',
                         original_image_url: originalImageUrl,
                         quality: this.data.selectedQuality,

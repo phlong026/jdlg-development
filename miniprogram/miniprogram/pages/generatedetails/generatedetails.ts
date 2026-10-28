@@ -2212,7 +2212,8 @@ Page({
       const isFree = !!publishForm.isFree;
       const price = isFree ? 0 : (publishForm.price > 0 ? publishForm.price : 1);
       const mappedCategory = publishForm.thirdTab || publishForm.subTab || publishForm.mainTab || 'scene';
-      const hiddenPrompt = String(taskData.user_prompt || taskData.prompt || '').trim();
+      // 只携带用户真实输入的提示词；工具默认词不随模板入库
+      const hiddenPrompt = String(taskData.user_prompt || '').trim();
       const body = JSON.stringify({
         name: publishForm.name,
         description: publishForm.description,
