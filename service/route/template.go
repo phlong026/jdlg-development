@@ -351,7 +351,7 @@ func isPublicSquareTemplate(template *model.Template) bool {
 }
 
 // templateToResponse 组装模板详情响应，保证返回 name、description、thumbnail、preview_url、images 等字段；
-// showPrompt 为 true 时返回 prompt 字段；paidLocked 为 true 时 description 不含提示词
+// 永不返回提示词：description 已由模型层拆分（提示词存 internal_prompt，json:"-" 不序列化）
 type originalTaskLookup interface {
 	GetByID(id int64) (*model.AITask, error)
 }
@@ -1549,11 +1549,23 @@ func RegisterTemplateRoutes(r *gin.RouterGroup, templateModel *model.TemplateMod
 				price = 0
 			}
 
+			// 模板隐藏提示词以原始任务里用户真实输入为准，不信任前端回传的 prompt
+			//（前端详情接口在用户未填描述时会回传工具默认提示词，原样入库会污染模板配方）
+			internalPrompt := ""
+			if req.OriginalTaskID != nil && *req.OriginalTaskID > 0 {
+				if originalTask, taskErr := taskModel.GetByID(*req.OriginalTaskID); taskErr == nil && originalTask != nil {
+					internalPrompt = parseUserPromptFromPayload(originalTask.RequestPayload)
+				}
+			}
+			if internalPrompt == "" && req.OriginalTaskID == nil {
+				internalPrompt = strings.TrimSpace(req.Prompt)
+			}
+
 			// 创建模板为待审核（status=pending），后台审核通过后改为 published 才会在广场展示
 			template := &model.Template{
 				Name:           req.Name,
 				Description:    strings.TrimSpace(req.Description),
-				InternalPrompt: strings.TrimSpace(req.Prompt),
+				InternalPrompt: internalPrompt,
 				Category:       req.Category,
 				MainTab:        req.MainTab,
 				SubTab:         req.SubTab,
