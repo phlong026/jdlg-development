@@ -519,6 +519,10 @@ func parseUserPromptFromPayload(requestPayload string) string {
 	if shouldHidePromptFromPayloadMap(payload) {
 		return ""
 	}
+	if _, hasToolDefault := payload["tool_default_prompt"]; hasToolDefault {
+		// 工具任务的 prompt 拼接了平台配置的默认提示词；用户没有输入时不回退展示
+		return ""
+	}
 	prompt, _ := payload["prompt"].(string)
 	return component.StripUserPromptFromAIDraw(prompt)
 }

@@ -608,6 +608,11 @@ func handleAIRequest(c *gin.Context, codeSessionModel *model.CodeSessionRedisMod
 			return
 		}
 	}
+	// 工具默认提示词属于平台配置，不给前端回显：任务详情只返回用户自己的输入。
+	// 放在模板合并之后，避免 finalizePromptPayload 对无内部提示词模板的 delete 覆盖掉标志。
+	if resolvedToolID > 0 || isNewMinnanToolScene(req.Scene) {
+		req.Payload["hide_prompt_in_response"] = true
+	}
 
 	// 3. 获取计费配置
 	pricing, err := pricingModel.GetByScene(req.Scene)
