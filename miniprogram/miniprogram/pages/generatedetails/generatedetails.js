@@ -2021,7 +2021,7 @@ Page({
             const isFree = !!publishForm.isFree;
             const price = isFree ? 0 : (publishForm.price > 0 ? publishForm.price : 1);
             const mappedCategory = publishForm.thirdTab || publishForm.subTab || publishForm.mainTab || 'scene';
-            const hiddenPrompt = String(taskData.user_prompt || taskData.prompt || '').trim();
+            const hiddenPrompt = String(taskData.user_prompt || '').trim();
             const body = JSON.stringify({
                 name: publishForm.name,
                 description: publishForm.description,

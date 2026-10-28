@@ -95,7 +95,6 @@ Page({
     template: null as any,
     contentReady: false,
     unlocked: false,
-    prompt: '',
     token: '',
     loading: false,
     // 模板名称、描述、图片（与后端 detail 返回的 name/description/thumbnail/preview_url 对应）
@@ -1065,7 +1064,6 @@ Page({
       this.setData({
         template: res,
         unlocked: !!res.unlocked,
-        prompt: res.prompt || '',
         loading: false,
         templateName: res.name || '',
         templateDesc: res.description || '',
@@ -1260,10 +1258,6 @@ Page({
       backgroundColorTop: PAGE_BACKGROUND_TOP,
       backgroundColorBottom: PAGE_BACKGROUND_BOTTOM,
     });
-  },
-
-  buildDisplayPrompt() {
-    return String(this.data.prompt || this.data.templateDesc || this.data.noteContent || '').trim();
   },
 
   buildDisplayReferenceImages() {
