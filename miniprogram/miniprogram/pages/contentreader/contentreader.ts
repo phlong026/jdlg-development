@@ -122,7 +122,11 @@ Page({
  },
  openGuide(){
   tracking.emit(this,'content_click',{target_content_id:'guide',component_key:'reader_guide',action_key:'guide_consult'});
-  wx.navigateTo({url:'/pages/customerservice/customerservice?source=content_reader'});
+  const id=String(this.options.content_id||''),version=Number(this.options.content_version);
+  const contentRef=/^[A-Za-z0-9_-]{8,128}$/.test(id)&&Number.isInteger(version)&&version>0
+   ? '&content_id='+encodeURIComponent(id)+'&content_version='+version
+   : '';
+  wx.navigateTo({url:'/pages/customerservice/customerservice?source=content_reader'+contentRef});
  },
  dismissGuide(){
   this.setData({guideVisible:false});

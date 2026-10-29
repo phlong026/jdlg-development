@@ -20,6 +20,33 @@ function pageHarness(){
  const p={...definition,data:{...definition.data,demandForm:{},consultationPlan:{}},buildCompleteDemandText:()=> 'test',setData(v){Object.assign(this.data,v);}};
  return {p,requests,toasts};
 }
+
+test('published content consultation keeps only the stable content reference',async()=>{
+ let readerDefinition,navigated='';
+ vm.runInNewContext(fs.readFileSync(path.join(root,'pages/contentreader/contentreader.js'),'utf8'),{
+  Page:d=>readerDefinition=d,
+  require:n=>n.includes('tracking/index')?{emit(){}}:{},
+  wx:{navigateTo:o=>{navigated=o.url;}},
+  encodeURIComponent,
+ });
+ readerDefinition.openGuide.call({
+  options:{content_id:'content-0001',content_version:'7',st:'share-secret',visitor_key:'visitor-secret'},
+  data:{contentReady:true,content:{title:'public title',body:'private body'}},
+ });
+ assert.equal(navigated,'/pages/customerservice/customerservice?source=content_reader&content_id=content-0001&content_version=7');
+ assert.doesNotMatch(navigated,/share|visitor|private|title|body|st=/);
+
+ const h=pageHarness();
+ h.p.recordEvent=()=>{};h.p.resetSilenceTimers=()=>{};
+ h.p.onLoad({source:'content_reader',content_id:'content-0001',content_version:'7',st:'share-secret',visitor_key:'visitor-secret'});
+ assert.equal(h.p.data.consultationPlan.contentRef.contentId,'content-0001');
+ assert.equal(h.p.data.consultationPlan.contentRef.version,7);
+ await h.p.createLead('handoff_human',{silent:true});
+ const plan=h.requests[0].data.payload.consultation_plan;
+ assert.deepEqual(JSON.parse(JSON.stringify(plan.contentRef)),{contentId:'content-0001',version:7});
+ assert.equal(JSON.stringify(h.requests[0].data).includes('share-secret'),false);
+ assert.equal(JSON.stringify(h.requests[0].data).includes('visitor-secret'),false);
+});
 test('actual page routes only explicit human request to consultation endpoint',async()=>{
  const h=pageHarness();for(const reason of ['structured_requirement','generate_click','handoff_human'])await h.p.createLead(reason,{silent:true});
  assert.equal(h.requests.length,3);

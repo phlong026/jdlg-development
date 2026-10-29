@@ -1,7 +1,9 @@
 package route
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -44,6 +46,55 @@ func parseCustomerLeadNextFollowupAt(value string) (*time.Time, error) {
 }
 
 type leadPhoneLookup func(userID int64) []string
+type publishedContentValidator func(ctx context.Context, id string, version int) error
+
+var errInvalidConsultationContent = errors.New("咨询内容已不可访问")
+
+func sanitizeContentConsultation(ctx context.Context, source string, payload map[string]interface{}, validate publishedContentValidator) error {
+	if len(payload) == 0 {
+		return nil
+	}
+	plan, ok := payload["consultation_plan"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	ref, ok := plan["contentRef"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	contentID, _ := ref["contentId"].(string)
+	versionValue, _ := ref["version"].(float64)
+	version := int(versionValue)
+	if strings.TrimSpace(source) != "content_reader" || !validConsultationContentID(contentID) || versionValue != float64(version) || version < 1 || validate == nil {
+		return errInvalidConsultationContent
+	}
+	if err := validate(ctx, contentID, version); err != nil {
+		return errInvalidConsultationContent
+	}
+	// Content consultation stores a stable public snapshot reference only. Client
+	// titles, body text, share credentials and visitor identity are not trusted.
+	payload["consultation_plan"] = map[string]interface{}{
+		"visible": true,
+		"summary": "正在咨询内容版本 v" + strconv.Itoa(version),
+		"contentRef": map[string]interface{}{
+			"contentId": contentID,
+			"version":   version,
+		},
+	}
+	return nil
+}
+
+func validConsultationContentID(value string) bool {
+	if len(value) < 8 || len(value) > 128 {
+		return false
+	}
+	for _, char := range value {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_') {
+			return false
+		}
+	}
+	return true
+}
 
 func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *model.CustomerServiceModel, trackingServices ...*tracking.Service) {
 	var store customerLeadStore
@@ -61,13 +112,22 @@ func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *mod
 		}
 	}
 	var confirmed consultationConfirmed
+	var validateContent publishedContentValidator
 	if len(trackingServices) > 0 && trackingServices[0] != nil {
 		confirmed = trackingServices[0].ConfirmConsultation
+		validateContent = func(ctx context.Context, id string, version int) error {
+			_, err := trackingServices[0].ReadContent(ctx, id, version)
+			return err
+		}
 	}
-	registerCustomerLeadRoutes(r, store, confirmed, phoneLookup)
+	registerCustomerLeadRoutes(r, store, confirmed, phoneLookup, validateContent)
 }
 
-func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel customerLeadStore, confirmed consultationConfirmed, phoneLookup leadPhoneLookup) {
+func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel customerLeadStore, confirmed consultationConfirmed, phoneLookup leadPhoneLookup, contentValidators ...publishedContentValidator) {
+	var validateContent publishedContentValidator
+	if len(contentValidators) > 0 {
+		validateContent = contentValidators[0]
+	}
 	group := r.Group("/customer-service")
 
 	group.POST("/events", func(c *gin.Context) {
@@ -155,6 +215,10 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 			source := strings.TrimSpace(req.Source)
 			if source == "" {
 				source = "customer_service"
+			}
+			if err := sanitizeContentConsultation(c.Request.Context(), source, req.Payload, validateContent); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+				return
 			}
 			// Auto-fill the phone from the account's verified identity: leads
 			// used to land with no contact channel at all although the logged-in
