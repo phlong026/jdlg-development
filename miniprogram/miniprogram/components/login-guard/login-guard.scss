@@ -1,3 +1,13 @@
+.login-guard-blocker {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10001;
+  background: #f7f2ea;
+}
+
 .login-guard-mask {
   position: fixed;
   top: 0;
@@ -106,3 +116,5 @@
   font-size: 22rpx;
   color: #a9855b;
 }
+
+.lg-error { margin-top: 18rpx; color: #9c3c2c; font-size: 24rpx; text-align: center; }

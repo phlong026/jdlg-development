@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="aitoolworkbench-page">
   <navigation-bar title="开始使用" background="#e6daca" />
 
@@ -147,3 +148,5 @@
 
   <intercept-modal />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

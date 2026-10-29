@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 ﻿<!--pages/templatesquaredetails/templatesquaredetails.wxml-->
 <view class="page">
   <view class="top-bg-fill"></view>
@@ -259,3 +260,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

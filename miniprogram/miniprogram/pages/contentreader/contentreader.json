@@ -1,1 +1,9 @@
-{"navigationBarTitleText":"内容阅读","navigationStyle":"custom","enableShareAppMessage":true,"enableShareTimeline":true}
+{
+  "navigationBarTitleText": "内容阅读",
+  "navigationStyle": "custom",
+  "enableShareAppMessage": true,
+  "enableShareTimeline": true,
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard"
+  }
+}

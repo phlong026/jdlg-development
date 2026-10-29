@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <view class="page-content">
     <!-- 统一导航栏 -->
@@ -305,3 +306,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

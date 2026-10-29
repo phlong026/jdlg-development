@@ -1,7 +1,7 @@
 <view wx:if="{{visible}}" class="nickname-guard-mask" catchtouchmove="true" catchtap="onMaskTap">
   <form class="nickname-guard" catchtap="stopPropagation" bindsubmit="onConfirm">
     <text class="ng-title">完善个人资料</text>
-    <text class="ng-desc">{{required ? '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。' : '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。可稍后完善。'}}</text>
+    <text class="ng-desc">{{required ? '请完善昵称和头像后继续查看内容。开启访问分析后，也用于已获授权的访客展示。' : '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。可稍后完善。'}}</text>
 
     <view class="ng-avatar-row">
       <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{uploading || saving}}">
@@ -13,7 +13,7 @@
       </button>
       <view class="ng-avatar-tip">
         <text class="ng-avatar-tip-main">点击设置头像</text>
-        <text class="ng-avatar-tip-sub">选填，可直接使用微信头像</text>
+        <text class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
       </view>
     </view>
 

@@ -7,7 +7,7 @@ const ts = require('./report-runtime')('typescript');
 
 const root = path.resolve(__dirname, '..');
 
-function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false, readbackFails = false } = {}) {
+function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false, readbackFails = false, required = false, avatar = '', readbackAvatar, readbackID = 101, deferAvatarSave = false } = {}) {
   let definition;
   const storage = { token: 'test-token', userInfo: { id: 101, username: 'wx_test' } };
   const requests = [], events = [], toasts = [], uploads = [];
@@ -17,7 +17,7 @@ function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpl
     : source;
   vm.runInNewContext(code, {
     exports: {},
-    require: name => name.endsWith('parameter')
+    require: name => name.endsWith('profile-validation') ? require(path.join(root, 'miniprogram/components/nickname-guard/profile-validation.js')) : name.endsWith('parameter')
       ? { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }
       : name.endsWith('deviceFingerprint')
         ? { getCachedDeviceFingerprint: () => 'test-device' }
@@ -31,10 +31,11 @@ function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpl
         requests.push(options);
         if (options.method === 'GET') {
           const nickname = requests.findLast(r => r.url.endsWith('/profile/nickname'))?.data.nickname || '';
-          options.success({ statusCode: 200, data: { code: 0, data: { id: 101, nickname: readbackFails ? '' : nickname } } });
+          options.success({ statusCode: 200, data: { code: 0, data: { id: readbackID, nickname: readbackFails ? '' : nickname, avatar: readbackAvatar === undefined ? (requests.findLast(r => r.url.endsWith('/profile/avatar'))?.data.avatar || avatar) : readbackAvatar } } });
           return;
         }
         if (deferSave && options.url.endsWith('/profile/nickname')) return;
+        if (deferAvatarSave && options.url.endsWith('/profile/avatar')) return;
         options.success({ statusCode: saveFails ? 500 : 200, data: saveFails ? { code: 500, msg: '保存失败' } : { code: 0 } });
       },
       uploadFile(options) {
@@ -49,7 +50,7 @@ function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpl
   });
   const instance = {
     ...definition.methods,
-    data: { ...definition.data, visible: true },
+    data: { ...definition.data, visible: true, required, avatarUrl: avatar, promptUserID: 101 },
     setData(value) { Object.assign(this.data, value); },
     triggerEvent(name, detail) { events.push({ name, detail }); },
   };
@@ -166,6 +167,54 @@ for (const extension of ['ts', 'js']) {
     await saving;
     assert.equal(instance.data.visible, false);
     assert.equal(events.length, 1);
+  });
+}
+
+for (const extension of ['ts', 'js']) {
+  test(`${extension}: required nickname save waits for a persisted avatar`, async () => {
+    const f = loadGuard(extension, { required: true });
+    await f.instance.onConfirm(formEvent('已填写昵称'));
+    assert.equal(f.requests.length, 0); assert.equal(f.events.length, 0); assert.equal(f.instance.data.visible, true);
+  });
+  test(`${extension}: required completion verifies both fields and the same account`, async () => {
+    const avatar = 'https://cdn.example/saved-avatar.png';
+    for (const options of [{ readbackAvatar: '' }, { readbackAvatar: 'https://cdn.example/other.png' }, { readbackID: 202 }]) {
+      const f = loadGuard(extension, { required: true, avatar, ...options });
+      await f.instance.onConfirm(formEvent('已填写昵称'));
+      assert.equal(f.events.length, 0); assert.equal(f.instance.data.visible, true); assert.equal(f.storage.userInfo.nickname, undefined);
+    }
+    const f = loadGuard(extension, { required: true, avatar });
+    await f.instance.onConfirm(formEvent('完整资料'));
+    assert.equal(f.events[0].name, 'completed'); assert.equal(f.storage.userInfo.avatar, avatar);
+  });
+  test(`${extension}: uploading for account A cannot save an avatar to account B`, async () => {
+    const f = loadGuard(extension, { required: true, deferUpload: true });
+    const uploading = f.instance.uploadAvatar('wxfile://A');
+    f.storage.token = 'B-token'; f.storage.userInfo = { id: 202 };
+    f.uploads[0].success({ statusCode: 200, data: JSON.stringify({ code: 0, data: { url: 'https://cdn.example/A.png' } }) });
+    await uploading;
+    assert.equal(f.requests.length, 0); assert.equal(f.storage.userInfo.avatar, undefined);
+  });
+  test(`${extension}: avatar PUT response after account switch cannot read back or modify the new account`, async () => {
+    const f = loadGuard(extension, { required: true, deferAvatarSave: true });
+    const pending = f.instance.uploadAvatar('wxfile://A'); await new Promise(setImmediate);
+    assert.equal(f.requests.length, 1); f.storage.token = 'B-token'; f.storage.userInfo = { id: 202 };
+    f.requests[0].success({ statusCode: 200, data: { code: 0 } }); await pending;
+    assert.equal(f.requests.length, 1); assert.equal(f.storage.userInfo.avatar, undefined); assert.equal(f.events.length, 0);
+  });
+  test(`${extension}: uploaded avatar is not confirmed until matching server readback`, async () => {
+    const f = loadGuard(extension, { required: true, readbackAvatar: '' });
+    await f.instance.uploadAvatar('wxfile://A');
+    assert.equal(f.instance.data.avatarUrl, ''); assert.equal(f.storage.userInfo.avatar, undefined);
+    await f.instance.onConfirm(formEvent('资料未全')); assert.equal(f.events.length, 0);
+  });
+  test(`${extension}: account switch after nickname PUT cannot read or complete for the new account`, async () => {
+    const f = loadGuard(extension, { required: true, avatar: 'https://cdn.example/A.png', deferSave: true });
+    const saving = f.instance.onConfirm(formEvent('A昵称'));
+    f.storage.token = 'B-token'; f.storage.userInfo = { id: 202 };
+    f.requests[0].success({ statusCode: 200, data: { code: 0 } });
+    await saving;
+    assert.equal(f.requests.length, 1); assert.equal(f.events.length, 0); assert.equal(f.storage.userInfo.nickname, undefined);
   });
 }
 

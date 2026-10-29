@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/aivideo/aivideo.wxml-->
 <view class="page">
   <image class="page-bg" src="{{pageBgImage}}" mode="widthFix" />
@@ -142,3 +143,5 @@
 
   <intercept-modal />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

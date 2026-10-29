@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="inspiration-detail-page">
   <navigation-bar title="灵感详情" background="#e6daca" />
 
@@ -43,3 +44,5 @@
 
   <view class="loading-state" wx:if="{{loading}}">加载中...</view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

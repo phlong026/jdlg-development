@@ -1,3 +1,4 @@
 {
-  "component": true
+  "component": true,
+  "usingComponents": { "nickname-guard": "/components/nickname-guard/nickname-guard" }
 }

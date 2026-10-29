@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 // Unified fail-open tracking; feature flag and independent consent default off.
+require('./utils/profile-access').install();
 require('./utils/tracking/index').install();
 // app.ts
 const promptReview_1 = require("./utils/promptReview");

@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="aitools-page">
   <navigation-bar title="AI工具选择库" background="#e6daca" />
 
@@ -84,3 +85,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

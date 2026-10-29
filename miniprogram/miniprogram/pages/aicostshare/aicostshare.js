@@ -12,24 +12,13 @@ Page({
         result: null, shareTitle: '', chatImage: '', timelineImage: '',
     },
     onLoad(options) {
+        this.pageDestroyed = false;
         const reportId = String(options.report_id || '');
         this.setData({ reportId });
         if (!REPORT_ID.test(reportId)) {
             this.setData({ loading: false, error: '分享报告链接无效，请向分享人获取新链接。' });
             return;
         }
-        // 分享报告须登录后查看：未登录时 login-guard 挡住内容，登录成功后再加载快照。
-        // 防御式调用：Node 测试环境无组件时跳过门禁，直接加载。
-        const select = this.selectComponent;
-        if (typeof select === 'function') {
-            const guard = select.call(this, '#loginGuard');
-            if (guard && typeof guard.check === 'function' && !guard.check())
-                return;
-        }
-        void this.loadPublicSnapshot();
-    },
-    onLoginSucceeded() {
-        // 登录（含一键建号）成功后加载报告内容；昵称引导由内容就绪后的 nickname-guard 接管。
         void this.loadPublicSnapshot();
     },
     onReady() { this.pageReady = true; void this.prepareCovers(); },

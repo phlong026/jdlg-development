@@ -79,19 +79,30 @@ function createTracker(io) {
     if (p.start == null) { p.segment = io.id(); p.seq = 0; p.start = io.mono(); }
     lastActivity = io.mono(); notifyObservation(p);
   }
-  function boundary(reason) {
+  function boundary(reason, pendingLoginPage = null) {
+    const pendingShare = pendingLoginPage ? pendingLoginPage.share : '';
     stop(active, true); epoch++; anonymousLink = null; context = null; previous = ''; previousSession = ''; opening = null; lastActivity = null;
-    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; discardPending(p); p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = ''; notifyObservation(p); }
+    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; discardPending(p); if (p === pendingLoginPage) p.share = pendingShare; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = ''; notifyObservation(p); }
     if (io.onBoundary) io.onBoundary(reason);
   }
-  function checkAccount() {
+  function checkAccount(showingPage = null) {
     // Check before begin/sample can refresh activity, including warm app/page
     // recovery with an already-ready entry. Zero is a valid monotonic timestamp.
     if (lastActivity !== null && io.mono() - lastActivity > SESSION_IDLE) { lastActivity = null; boundary('idle'); }
     const current = io.account();
     // Observers run synchronously during boundary(); publish the new account
     // first so a nested observation cannot repeat the same identity boundary.
-    if (current !== account) { const prior=!account && current ? context : null; account = current; boundary('identity_change'); anonymousLink=prior; }
+    if (current !== account) {
+      const loggingIn = !account && !!current;
+      const prior = loggingIn ? context : null;
+      const candidate = showingPage || (active && active.visible ? active : null);
+      // A login gate can postpone the very first entry. Keep that page's unused
+      // share, but never carry a consumed visit or another account's attribution.
+      const pendingLoginPage = loggingIn && enabled && consent && candidate && !candidate.context ? candidate : null;
+      account = current;
+      boundary('identity_change', pendingLoginPage);
+      anonymousLink = prior;
+    }
   }
   async function enter(p, share, fresh) {
     if (!enabled || !consent || suspended || !p || !p.ready || !p.visible || active !== p || !foreground) return;
@@ -184,6 +195,8 @@ function createTracker(io) {
     // Pause collection/retries, retaining the bounded, expiring offline queue.
     suspend() { if (!suspended) { stop(active, false); suspended = true; observationEpoch++; for (const p of pages.values()) notifyObservation(p); } },
     register(key, route, content, share) {
+      // Profile verification may complete before this page is registered.
+      checkAccount();
       const p = { key, route, content: content || {}, share: share || '', visible: false, ready: false, view: '', start: null, entryReady: false, shareCache: {}, shareRevision: 0, pendingEntry: null, observers: new Set() };
       pages.set(key, p); return p;
     },
@@ -204,7 +217,7 @@ function createTracker(io) {
     },
     show(key) {
       const p = pages.get(key); if (!p) return;
-      checkAccount();
+      checkAccount(p);
       if (active && active !== p) { discardPending(active); active.visible = false; stop(active, true); }
       active = p; p.visible = true;
       resume(p);
@@ -218,8 +231,20 @@ function createTracker(io) {
       const signature = external ? [options.path,options.scene,(options.query||{}).st||'',(options.query||{}).scene||''].join('|') : '';
       const changed = !!signature && signature !== lastEntrySignature;
       if (signature) lastEntrySignature = signature;
-      if (changed && active) { active.share = (options.query || {}).st || ''; enter(active, active.share, true); }
-      else resume(active);
+      if (changed) {
+        boundary('external_entry');
+        if (active && active.route === String(options.path).replace(/^\//, '')) {
+          active.share = (options.query || {}).st || '';
+          // App.onShow precedes the target page's binding/profile lifecycle.
+          // Even on the same route, this may be a different template/report.
+          active.visible = false;
+        } else if (active) {
+          // The new page owns its launch query. Do not submit its share token
+          // against the previous page while navigation/profile checks finish.
+          active.visible = false;
+          active = null;
+        }
+      } else resume(active);
       flush();
     },
     appHide() { stop(active, false); foreground = false; if (!consent && active) discardPending(active); flush(); },

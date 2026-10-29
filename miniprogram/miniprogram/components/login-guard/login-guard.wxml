@@ -1,13 +1,17 @@
-<view wx:if="{{visible}}" class="login-guard-mask" catchtouchmove="true" catchtap="stopPropagation">
+<view wx:if="{{visible}}" class="login-guard-blocker" catchtouchmove="stopPropagation" catchtap="stopPropagation"></view>
+<view wx:if="{{visible && !completingProfile}}" class="login-guard-mask" catchtouchmove="true" catchtap="stopPropagation">
   <view class="login-guard">
     <text class="lg-title">{{title}}</text>
     <text class="lg-desc">{{desc}}</text>
 
-    <button class="lg-login" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
+    <text wx:if="{{checking}}" class="lg-desc">正在确认登录与个人资料…</text>
+    <text wx:if="{{error}}" class="lg-error">{{error}}</text>
+    <button wx:if="{{!checking && !needsLogin}}" class="lg-login" bindtap="onRetry">重新检查资料</button>
+    <button wx:if="{{!checking && needsLogin}}" class="lg-login" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
       {{loggingIn ? '登录中...' : '微信一键登录'}}
     </button>
 
-    <view class="lg-agreement">
+    <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
       <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
         <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>
       </view>
@@ -16,3 +20,5 @@
     </view>
   </view>
 </view>
+
+<nickname-guard id="nicknameGuard" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />

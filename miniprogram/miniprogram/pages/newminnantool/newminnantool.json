@@ -1,7 +1,8 @@
 {
   "usingComponents": {
     "navigation-bar": "/components/navigation-bar/navigation-bar",
-    "intercept-modal": "/components/intercept-modal/intercept-modal"
+    "intercept-modal": "/components/intercept-modal/intercept-modal",
+    "login-guard": "/components/login-guard/login-guard"
   },
   "navigationStyle": "custom"
 }

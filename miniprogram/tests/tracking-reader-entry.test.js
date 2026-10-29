@@ -95,7 +95,7 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
     async switchAccount() { storage.token = 'different-account'; adapter.getSDK().tick(); await settle(); },
     background() { appDefinition.onHide(); page.onHide(); },
     async foregroundAfter(ms) { mono += ms; appDefinition.onShow({}); page.onShow(); await settle(); },
-    async external(options) { appDefinition.onShow({ path: route, scene: 1007, query: { ...options } }); await settle(); },
+    async external(options) { appDefinition.onShow({ path: route, scene: 1007, query: { ...options } }); page.onShow(); await settle(); },
     views() {
       const observed = [...events, ...adapter.getSDK().queueForTest().map(row => row.event)];
       return [...new Map(observed.map(event => [event.event_id, event])).values()].filter(event => event.event_type === 'page_view');

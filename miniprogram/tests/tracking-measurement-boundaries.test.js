@@ -229,6 +229,9 @@ for (const change of ['withdrawal', 'account', 'hide', 'unload', 'navigate', 're
   for (const pending of ['failed', 'in-flight']) {
     test('pending ' + pending + ' share cannot revive after ' + change, async () => {
       const t = coreRuntime({ failFirst: pending === 'failed', deferFirst: pending === 'in-flight' });
+      // This matrix covers account isolation, not the legitimate first login
+      // that must preserve an anonymous visitor's still-unconsumed share.
+      if (change === 'account') t.setAccount('initial-account');
       await t.mount('a', 'pages/index/index', 'old_share');
       if (change === 'withdrawal') { t.sdk.configure(true, ''); t.sdk.configure(true, 'v1'); }
       if (change === 'account') { t.setAccount('other-account'); t.sdk.tick(); }
@@ -236,7 +239,10 @@ for (const change of ['withdrawal', 'account', 'hide', 'unload', 'navigate', 're
       if (change === 'unload') { t.sdk.hide('a', true); await t.mount('a'); }
       if (change === 'navigate') { await t.mount('b', 'pages/aicost/aicost'); t.sdk.hide('b', true); t.sdk.show('a'); }
       if (change === 'content') t.sdk.ready('a', true, { id: 'replacement_content', version: 2 });
-      if (change === 'replacement') t.sdk.appShow({ path: 'pages/index/index', scene: 1007, query: { st: 'new_share' } });
+      if (change === 'replacement') {
+        t.sdk.appShow({ path: 'pages/index/index', scene: 1007, query: { st: 'new_share' } });
+        t.sdk.show('a');
+      }
       if (pending === 'in-flight') t.resolveFirst();
       await settle(); t.advance(10000); t.sdk.tick(); await settle();
       const latest = t.events().filter(event => event.event_type === 'page_view').at(-1);

@@ -6,11 +6,13 @@ import {
 } from '../../utils/deviceFingerprint';
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter';
 import { resolveAssetPath } from '../../utils/asset';
+import { hasCompleteProfile } from '../../components/nickname-guard/profile-validation';
 
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
 const LOGIN_PRIVACY_AGREEMENT_STORAGE_KEY = 'login_privacy_agreement';
 const USER_IDENTITY_OPTIONS = ['乡墅业主', '设计师', '施工队', '建材商', '机构用户'];
+type LoginContext = { token: string; userID: number; epoch: number };
 
 Page({
   /**
@@ -31,6 +33,7 @@ Page({
     smsCode: '',
     smsCountdown: 0,
     loading: false,
+    profileError: '',
     inviteCode: '', // 邀请码（从分享链接或上一页传入，注册时填写可得双方奖励）
     agreedPrivacy: false,
     identityPopupVisible: false,
@@ -43,6 +46,8 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options: any) {
+    (this as any)._authPageUnloaded = false;
+    (this as any)._authPageEpoch = ((this as any)._authPageEpoch || 0) + 1;
     this.initNavLayout();
 
     // 检查是否已登录
@@ -50,8 +55,7 @@ Page({
     const agreedPrivacy = wx.getStorageSync(LOGIN_PRIVACY_AGREEMENT_STORAGE_KEY) === true;
     const username = options.username || '';
     if (token) {
-      // A valid session does not imply that profile setup finished.
-      void this.enterAppAfterLogin();
+      // 组件在 onReady 才可用；有效登录也必须重新核验服务器资料。
       return;
     }
 
@@ -74,6 +78,10 @@ Page({
         agreedPrivacy,
       });
     }
+  },
+
+  onReady() {
+    if (wx.getStorageSync('token')) void this.enterAppAfterLogin();
   },
 
   initNavLayout() {
@@ -268,6 +276,18 @@ Page({
     }, 1000);
   },
 
+  // 同一页面生命周期和同一账号才拥有异步结果的写回权。
+  captureLoginContext(): LoginContext {
+    return { token: wx.getStorageSync('token') || '', userID: Number(wx.getStorageSync('userInfo')?.id || 0), epoch: (this as any)._authPageEpoch || 0 };
+  },
+
+  isLoginContextCurrent(context: LoginContext): boolean {
+    return !(this as any)._authPageUnloaded
+      && context.epoch === ((this as any)._authPageEpoch || 0)
+      && context.token === (wx.getStorageSync('token') || '')
+      && context.userID === Number(wx.getStorageSync('userInfo')?.id || 0);
+  },
+
   async handlePhoneLogin() {
     if (this.data.loading) return;
     const phone = (this.data.phone || '').trim();
@@ -282,14 +302,18 @@ Page({
     }
     if (!this.ensureAgreementAccepted()) return;
 
+    const context = this.captureLoginContext();
+    if (!this.isLoginContextCurrent(context)) return;
     this.setData({ loading: true });
     try {
       const deviceID = await this.ensureDeviceId();
+      if (!this.isLoginContextCurrent(context)) return;
       const inviteCode = this.data.inviteCode || '';
       const loginResult = await new Promise<any>((resolve, reject) => {
         wx.request({
           url: `${API_BASE_URL}/api/v1/miniprogram/login/phone`,
           method: 'POST',
+          timeout: 15000,
           data: {
             phone,
             code,
@@ -309,6 +333,7 @@ Page({
         });
       });
 
+      if (!this.isLoginContextCurrent(context)) return;
       const token = loginResult.token;
       if (!token) throw new Error('登录结果缺少 token');
       wx.setStorageSync('token', token);
@@ -318,6 +343,8 @@ Page({
         token: loginResult.token,
         ...loginResult,
       });
+      context.token = token;
+      context.userID = Number(loginResult.id || 0);
 
       // 新用户弹出身份选择
       if (loginResult.is_new_user) {
@@ -328,6 +355,7 @@ Page({
         await this.enterAppAfterLogin();
       }
     } catch (error: any) {
+      if (!this.isLoginContextCurrent(context)) return;
       console.error('手机登录失败:', error);
       wx.showToast({ title: error.message || '登录失败', icon: 'none', duration: 2000 });
       this.setData({ loading: false });
@@ -342,9 +370,12 @@ Page({
       return;
     }
 
+    const context = this.captureLoginContext();
+    if (!this.isLoginContextCurrent(context) || !context.token || (loginResult && (loginResult.token !== context.token || Number(loginResult.id) !== context.userID))) return;
     try {
-      const token = wx.getStorageSync('token');
+      const token = context.token;
       const deviceID = await this.ensureDeviceId();
+      if (!this.isLoginContextCurrent(context)) return;
       const apiPath = '/api/v1/miniprogram/profile/identity';
       const body = { identity_type: identity };
       const params = generateRequestParams(token, body, apiPath, deviceID);
@@ -356,12 +387,14 @@ Page({
         wx.request({
           url: `${API_BASE_URL}${apiPath}`,
           method: 'PUT',
+          timeout: 15000,
           data: body,
           header: headers,
           success: resolve,
           fail: reject,
         });
       });
+      if (!this.isLoginContextCurrent(context)) return;
       const data = res.data || {};
       if (res.statusCode !== 200 || data.code !== 0) {
         throw new Error(data.msg || '身份保存失败');
@@ -373,89 +406,104 @@ Page({
       });
       this.setData({ identityPopupVisible: false, selectedIdentity: identity, pendingLoginResult: null });
     } catch (error: any) {
+      if (!this.isLoginContextCurrent(context)) return;
       wx.showToast({ title: error.message || '身份保存失败', icon: 'none' });
       return;
     }
 
     // 选完身份紧接着检查昵称完善（新用户此时昵称必为空，会连续弹出完善弹窗）
-    await this.enterAppAfterLogin();
+    if (this.isLoginContextCurrent(context)) await this.enterAppAfterLogin();
   },
 
   skipIdentity() {
     wx.showToast({ title: '请选择身份后继续', icon: 'none' });
   },
 
-  /**
-   * 登录成功后进入小程序：先检查昵称是否完善，
-   * 未完善则弹出必须填写的昵称弹窗（登录即完善），保存确认后继续跳转；
-   * 检查请求失败时放行，不因网络问题把用户挡在门外。
-   */
+  // 资料读取失败保持当前页；只使用同一有效登录的服务器回读结果。
   async enterAppAfterLogin() {
+    const context = this.captureLoginContext();
+    if (!this.isLoginContextCurrent(context)) return false;
+    const revision = ((this as any)._profileCheckRevision || 0) + 1;
+    (this as any)._profileCheckRevision = revision;
+    const current = () => this.isLoginContextCurrent(context) && (this as any)._profileCheckRevision === revision;
+    this.setData({ loading: true, profileError: '' });
     try {
-      const nickname = await this.fetchProfileNickname();
-      if (!String(nickname || '').trim()) {
+      const { token, profile } = await this.fetchVerifiedProfile();
+      if (!current()) return false;
+      if (!hasCompleteProfile(profile)) {
         const guard = this.selectComponent('#nicknameGuard') as any;
-        if (guard && typeof guard.show === 'function') {
-          this.setData({ loading: false });
-          guard.show({ required: true });
-          return;
-        }
+        if (!guard || typeof guard.show !== 'function') throw new Error('资料填写暂不可用，请重试');
+        guard.show({ required: true, userID: Number(profile.id), nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
+        return false;
       }
-    } catch (error) {
-      console.error('昵称完善检查失败，放行进入:', error);
+      wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...profile, id: Number(profile.id), nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim(), token });
+      this.navigateToIndexAfterLogin(token);
+      return true;
+    } catch (error: any) {
+      console.error('登录资料核验失败:', error);
+      if (current()) {
+        if (error.status === 401) {
+          wx.removeStorageSync('token');
+          wx.removeStorageSync('userInfo');
+          const guard = this.selectComponent('#nicknameGuard') as any;
+          guard?.setData?.({ visible: false });
+        }
+        this.setData({ loading: false, profileError: error.message || '个人资料读取失败，请重试' });
+      }
+      return false;
+    } finally {
+      if (current()) this.setData({ loading: false });
     }
-    this.navigateToIndexAfterLogin();
   },
 
-  async fetchProfileNickname(): Promise<string> {
-    const token = wx.getStorageSync('token');
-    if (!token) {
-      return '';
-    }
+  async fetchVerifiedProfile() {
+    const context = this.captureLoginContext();
+    const token = context.token;
+    const accountID = context.userID;
+    if (!this.isLoginContextCurrent(context)) throw new Error('登录页面已关闭');
+    if (!token) throw new Error('请先登录');
     const apiPath = '/api/v1/miniprogram/profile';
     const deviceID = await this.ensureDeviceId();
-    const params = generateRequestParams(token, {}, apiPath, deviceID);
-    const headers = paramsToHeaders(params);
-    const res = await new Promise<any>((resolve, reject) => {
-      wx.request({
-        url: `${API_BASE_URL}${apiPath}`,
-        method: 'GET',
-        header: headers,
-        success: resolve,
-        fail: reject,
-      });
+    if (!this.isLoginContextCurrent(context)) throw new Error('账号或登录页面已变化，请重新检查资料');
+    const headers = paramsToHeaders(generateRequestParams(token, {}, apiPath, deviceID));
+    const res: any = await new Promise((resolve, reject) => {
+      wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
     });
-    const data = res.data || {};
-    if (res.statusCode !== 200 || data.code !== 0) {
-      throw new Error(data.msg || `请求失败: ${res.statusCode}`);
+    if (!this.isLoginContextCurrent(context)) throw new Error('账号或登录页面已变化，请重新检查资料');
+    if (res.statusCode === 401 || res.data?.code === 401) {
+      const error: any = new Error('登录已过期，请重新登录');
+      error.status = 401;
+      throw error;
     }
-    if (token !== wx.getStorageSync('token')) throw new Error('账号已变化，请重新检查资料');
-    const profile = data.data || {};
-    const cached = wx.getStorageSync('userInfo') || {};
-    if (profile.id && cached.id && Number(profile.id) !== Number(cached.id)) throw new Error('账号资料不匹配');
-    const nickname = String(profile.nickname || '').trim();
-    if (!nickname || Array.from(nickname).length > 32) return '';
-    // Reuse only the authenticated server value; an empty response never overwrites a saved name.
-    wx.setStorageSync('userInfo', { ...cached, ...(profile.id ? { id: profile.id } : {}), nickname });
-    return nickname;
+    if (res.statusCode !== 200 || res.data?.code !== 0) throw new Error(res.data?.msg || '个人资料读取失败，请重试');
+    const profile = res.data.data || {};
+    const id = Number(profile.id);
+    if (!Number.isSafeInteger(id) || id <= 0 || (accountID && id !== accountID)) throw new Error('账号资料不匹配');
+    return { token, profile };
   },
 
-  navigateToIndexAfterLogin() {
+  navigateToIndexAfterLogin(token: string) {
+    const context = this.captureLoginContext();
+    if (!token || token !== context.token || !this.isLoginContextCurrent(context)) return;
     wx.showToast({ title: '登录成功', icon: 'success', duration: 1000 });
-    this.setData({ loading: false });
-    setTimeout(() => {
-      wx.switchTab({ url: '/pages/index/index', fail: () => wx.reLaunch({ url: '/pages/index/index' }) });
-    }, 1000);
+    const goHome = () => {
+      if (!this.isLoginContextCurrent(context)) return;
+      wx.switchTab({ url: '/pages/index/index', fail: () => {
+        if (this.isLoginContextCurrent(context)) wx.reLaunch({ url: '/pages/index/index' });
+      } });
+    };
+    // 从分享内容进入完整登录页时返回原页，由原页再次核验后继续加载。
+    if (typeof getCurrentPages === 'function' && getCurrentPages().length > 1) {
+      wx.navigateBack({ delta: 1, fail: goHome });
+    } else {
+      goHome();
+    }
   },
 
-  // 昵称弹窗保存成功后的回调：延续登录流程进入首页
-  onNicknameSkipped() {
-    this.navigateToIndexAfterLogin();
-  },
-
-  onNicknameCompleted() {
-    this.navigateToIndexAfterLogin();
-  },
+  onNicknameSkipped() { return this.enterAppAfterLogin(); },
+  onNicknameCompleted() { return this.enterAppAfterLogin(); },
+  onProfileAuthRequired() { return this.enterAppAfterLogin(); },
+  onRetryProfile() { return this.enterAppAfterLogin(); },
 
   toggleAgreement() {
     const nextValue = !this.data.agreedPrivacy;
@@ -527,11 +575,14 @@ Page({
       return;
     }
 
+    const context = this.captureLoginContext();
+    if (!this.isLoginContextCurrent(context)) return;
     this.setData({ loading: true });
 
     try {
       // 1. 获取设备指纹（优先使用缓存的）
       let deviceID = await this.ensureDeviceId();
+      if (!this.isLoginContextCurrent(context)) return;
       if (!deviceID) {
         deviceID = 'temp_' + Date.now();
       }
@@ -544,6 +595,7 @@ Page({
         });
       });
 
+      if (!this.isLoginContextCurrent(context)) return;
       if (!loginRes.code) {
         wx.showToast({
           title: '获取登录code失败',
@@ -559,6 +611,7 @@ Page({
         wx.request({
           url: `${API_BASE_URL}/api/v1/miniprogram/login`,
           method: 'POST',
+          timeout: 15000,
           data: {
             code: loginRes.code,
             device_id: deviceID,
@@ -582,6 +635,7 @@ Page({
       });
 
       // 4. 保存 token 和用户信息（兼容后端只返回 id/username/token）
+      if (!this.isLoginContextCurrent(context)) return;
       const token = loginResult.token;
       if (!token) {
         throw new Error('登录结果缺少 token');
@@ -593,6 +647,8 @@ Page({
         token: loginResult.token,
         ...loginResult,
       });
+      context.token = token;
+      context.userID = Number(loginResult.id || 0);
 
       if (loginResult.is_new_user) {
         this.setData({ loading: false, identityPopupVisible: true, pendingLoginResult: loginResult });
@@ -604,6 +660,7 @@ Page({
       // 5. 检查昵称是否完善（未完善则弹强制弹窗，完成后由 completed 事件继续跳转）
       await this.enterAppAfterLogin();
     } catch (error: any) {
+      if (!this.isLoginContextCurrent(context)) return;
       console.error('登录失败:', error);
 
       wx.showToast({
@@ -613,8 +670,7 @@ Page({
       });
       this.setData({ loading: false });
     } finally {
-      // 无论成功/失败/异常，都关闭登录中模态框，避免一直旋转
-      this.setData({ loading: false });
+      if (this.isLoginContextCurrent(context)) this.setData({ loading: false });
     }
   },
 
@@ -629,10 +685,13 @@ Page({
       return;
     }
 
+    const context = this.captureLoginContext();
+    if (!this.isLoginContextCurrent(context)) return;
     this.setData({ loading: true });
 
     try {
       const deviceID = await this.ensureDeviceId();
+      if (!this.isLoginContextCurrent(context)) return;
       if (!deviceID) {
         throw new Error('获取设备信息失败，请稍后重试');
       }
@@ -642,6 +701,7 @@ Page({
         wx.request({
           url: `${API_BASE_URL}/api/v1/miniprogram/login/password`,
           method: 'POST',
+          timeout: 15000,
           data: {
             username: this.data.username,
             password: this.data.password,
@@ -669,9 +729,13 @@ Page({
       });
 
       // 保存token和用户信息
+      if (!this.isLoginContextCurrent(context)) return;
       const token = loginResult.token;
+      if (!token) throw new Error('登录结果缺少 token');
       wx.setStorageSync('token', token);
       wx.setStorageSync('userInfo', loginResult);
+      context.token = token;
+      context.userID = Number(loginResult.id || 0);
 
       // 新用户弹出身份选择
       if (loginResult.is_new_user) {
@@ -683,6 +747,7 @@ Page({
       this.closeLoginPanel();
       await this.enterAppAfterLogin();
     } catch (error: any) {
+      if (!this.isLoginContextCurrent(context)) return;
       console.error('登录失败:', error);
       wx.showToast({
         title: error.message || '登录失败',
@@ -695,6 +760,9 @@ Page({
 
 
   onUnload() {
+    (this as any)._authPageUnloaded = true;
+    (this as any)._authPageEpoch = ((this as any)._authPageEpoch || 0) + 1;
+    (this as any)._profileCheckRevision = ((this as any)._profileCheckRevision || 0) + 1;
     if ((this as any)._smsTimer) {
       clearInterval((this as any)._smsTimer);
     }

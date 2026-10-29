@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/aigenerate/aigenerate.wxml-->
 <view class="page">
   <!-- 统一导航栏 -->
@@ -277,3 +278,5 @@
 
   <intercept-modal />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

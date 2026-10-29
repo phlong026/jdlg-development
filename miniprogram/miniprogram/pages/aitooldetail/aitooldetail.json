@@ -1,7 +1,8 @@
 {
   "usingComponents": {
     "navigation-bar": "/components/navigation-bar/navigation-bar",
-    "before-after-compare": "/components/before-after-compare/before-after-compare"
+    "before-after-compare": "/components/before-after-compare/before-after-compare",
+    "login-guard": "/components/login-guard/login-guard"
   },
   "navigationStyle": "custom"
 }

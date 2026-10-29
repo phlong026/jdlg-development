@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <navigation-bar title="新闽派工具" background="#e8dece" />
 
@@ -107,3 +108,5 @@
 
   <intercept-modal />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

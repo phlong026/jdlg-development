@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/utilitytooldetail/utilitytooldetail.wxml-->
 <view class="page">
   <!-- 统一导航栏 -->
@@ -55,3 +56,5 @@
     <text>内容不存在或已删除</text>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

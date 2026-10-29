@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/aicost/aicost.wxml-->
 <view class="page">
   <navigation-bar title="造价测算" background="#e6daca" style="flex-shrink: 0;" />
@@ -156,3 +157,5 @@
     <button class="submit-btn" bindtap="onEstimateCost">生成参考造价</button>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

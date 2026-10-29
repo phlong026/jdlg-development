@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="report-page landing">
   <view wx:if="{{recent}}" class="inset"><text class="item-title">您上次的建房报告还在这里</text><button class="secondary" bindtap="resume">{{recent.paid ? '查看已购报告的交付进度' : '继续阅读我的建房方向'}}</button></view>
   <view wx:if="{{recentError}}" class="error" bindtap="loadRecent">{{recentError}}</view>
@@ -12,3 +13,5 @@
   <view class="error" wx:if="{{error}}">{{error}}</view><button wx:if="{{error}}" class="secondary" bindtap="loadConfig">重新检查服务</button>
   <view class="bottom-action"><button class="primary" disabled="{{!enabled || loading}}" loading="{{loading}}" bindtap="start">从我家的情况开始</button><text class="caption">先填写、先阅读；购买前展示完整价格与交付内容</text></view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

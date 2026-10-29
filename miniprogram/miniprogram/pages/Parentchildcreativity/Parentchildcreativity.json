@@ -2,7 +2,8 @@
   "usingComponents": {
     "custom-tabbar": "/components/tabbar/tabbar",
     "t-icon": "/components/tdesign-miniprogram/icon/icon",
-    "navigation-bar": "/components/navigation-bar/navigation-bar"
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "login-guard": "/components/login-guard/login-guard"
   },
   "navigationStyle": "custom"
 }

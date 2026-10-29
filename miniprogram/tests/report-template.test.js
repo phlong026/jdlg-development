@@ -11,7 +11,7 @@ function render(page, data) {
   const source = execFileSync(compiler, [file], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8' });
   const context = { window: {}, console: { log: error => { throw error; } } };
   vm.createContext(context); vm.runInContext(source, context);
-  return context.$gwx(file)(data);
+  return context.$gwx(file)({ __profileAccessMounted: true, ...data });
 }
 function nodes(tree) { return typeof tree === 'object' && tree ? [tree, ...(tree.children || []).flatMap(nodes)] : []; }
 function text(tree) { return typeof tree === 'string' ? tree : (tree?.children || []).map(text).join('\n'); }

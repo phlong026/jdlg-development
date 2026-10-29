@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/allrounddesign/allrounddesign.wxml-->
 <view class="page">
   <navigation-bar title="综合设计" background="#e8dece" />
@@ -270,3 +271,5 @@
 
   <intercept-modal />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -18,7 +18,7 @@ function load(extension, { token = 'tk', profile = { code: 0, data: { nickname: 
     : source;
   vm.runInNewContext(code, {
     exports: {},
-    require: name => name.endsWith('parameter') ? { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }
+    require: name => name.endsWith('profile-validation') ? require(path.join(root, 'miniprogram/components/nickname-guard/profile-validation.js')) : name.endsWith('parameter') ? { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }
       : name.endsWith('deviceFingerprint') ? { getCachedDeviceFingerprint: () => 'dev' }
       : { blockUnsafeText: () => '' },
     Component: value => { definition = value; },

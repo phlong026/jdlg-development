@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <navigation-bar title="公开造价报告" background="#e6daca" />
   <scroll-view class="public-report" scroll-y>
@@ -28,5 +29,6 @@
     <button class="start" bindtap="startOwnEstimate">我也测算自己的方案</button>
   </scroll-view>
   <nickname-guard id="nicknameGuard" />
-  <login-guard id="loginGuard" bind:loginsucceeded="onLoginSucceeded" />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

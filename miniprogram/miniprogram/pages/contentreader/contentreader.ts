@@ -6,7 +6,7 @@ const {createVideoTracker}=require('../../utils/tracking/video');
 const ROUTE='pages/contentreader/contentreader';
 Page({
  data:{loading:true,error:'',content:null,contentReady:false,media:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false},
- onLoad(options){this.entryGeneration=1;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.evaluateGuide();this.loadContent();},
+ onLoad(options){this.entryGeneration=(this.entryGeneration||0)+1;this.hasShown=false;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.evaluateGuide();this.loadContent();},
  onShow(){this.pageVisible=true;tracking.block(this,false);if(this.hasShown)this.loadContent();this.hasShown=true;this.syncPlayerVisibility();},
  onHide(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;this.pageVisible=false;this.syncPlayerVisibility();this.pausePlayers();},
  onUnload(){if(this.stopObservingTracking)this.stopObservingTracking();this.loadSequence=(this.loadSequence||0)+1;this.pageVisible=false;this.pausePlayers();this.observers.forEach(o=>o.disconnect());this.observers=[];},

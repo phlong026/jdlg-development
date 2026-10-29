@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--index.wxml-->
 <view class="pages">
   <view class="home-canvas">
@@ -308,3 +309,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

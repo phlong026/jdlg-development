@@ -245,7 +245,12 @@
   </view>
 
   <!-- 完善昵称弹窗（登录后强制） -->
-  <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" />
+  <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" bind:authrequired="onProfileAuthRequired" />
+
+  <view wx:if="{{profileError}}" class="profile-check-error">
+    <text>{{profileError}}</text>
+    <button bindtap="onRetryProfile" disabled="{{loading}}">重新检查资料</button>
+  </view>
 
   <!-- 加载遮罩 -->
   <view class="loading-mask" wx:if="{{loading}}">

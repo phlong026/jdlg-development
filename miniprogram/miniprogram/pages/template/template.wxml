@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/template/template.wxml - 模板广场，双层 Tab + 双列网格，深色主题 -->
 <view class="template-page">
   <view class="template-page-content">
@@ -141,5 +142,6 @@
       </view>
     </view>
   </view>
-  <login-guard id="loginGuard" bind:loginsucceeded="onLoginSucceeded" />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

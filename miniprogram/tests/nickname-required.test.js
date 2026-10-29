@@ -22,7 +22,7 @@ function load(extension, { token = 'tk', profile = { code: 0, data: { nickname: 
     : source;
   vm.runInNewContext(code, {
     exports: {},
-    require: name => name.endsWith('parameter') ? { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }
+    require: name => name.endsWith('profile-validation') ? require(path.join(root, 'miniprogram/components/nickname-guard/profile-validation.js')) : name.endsWith('parameter') ? { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }
       : name.endsWith('deviceFingerprint') ? { getCachedDeviceFingerprint: () => 'dev' }
       : { blockUnsafeText: () => '' },
     Component: value => { definition = value; },
@@ -78,6 +78,15 @@ for (const extension of ['ts', 'js']) {
   });
 }
 
+for (const extension of ['ts', 'js']) {
+  test(`${extension}: required also prompts when avatar is missing and preserves the nickname`, () => {
+    const { instance } = load(extension);
+    assert.equal(instance.showIfMissing({ id: 101, nickname: '已保存昵称', avatar: '' }, true), true);
+    assert.equal(instance.data.nickname, '已保存昵称');
+    assert.equal(instance.data.required, true);
+  });
+}
+
 test('wxml：跳过按钮只在软模式渲染', () => {
   const wxml = fs.readFileSync(path.join(root, 'miniprogram/components/nickname-guard/nickname-guard.wxml'), 'utf8');
   assert.match(wxml, /<button[^>]*wx:if=("|')\{\{!required\}\}\1[^>]*ng-skip/);
@@ -87,7 +96,7 @@ test('wxml：跳过按钮只在软模式渲染', () => {
 const callSites = [
   ['pages/index/index', /checkAndShow\(\{\s*required:\s*true\s*\}\)/, '首页'],
   ['pages/my/my', /showIfMissing\([^)]*,\s*true\s*\)/, '我的'],
-  ['pages/login/login', /show\(\{\s*required:\s*true\s*\}\)/, '登录'],
+  ['pages/login/login', /show\(\{\s*required:\s*true[,}]/, '登录'],
   ['pages/customerservice/customerservice', /checkAndShow\(\{\s*required:\s*true\s*\}\)/, '留资/转人工'],
   ['pages/aicostshare/aicostshare', /checkAndShow\(\{\s*required:\s*true\s*\}\)/, '公开报告'],
 ];

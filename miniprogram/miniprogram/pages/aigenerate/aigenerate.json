@@ -3,7 +3,8 @@
     "custom-tabbar": "/components/tabbar/tabbar",
     "t-icon": "/components/tdesign-miniprogram/icon/icon",
     "navigation-bar": "/components/navigation-bar/navigation-bar",
-    "intercept-modal": "/components/intercept-modal/intercept-modal"
+    "intercept-modal": "/components/intercept-modal/intercept-modal",
+    "login-guard": "/components/login-guard/login-guard"
   },
   "navigationStyle": "custom"
 }

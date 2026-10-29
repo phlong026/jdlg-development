@@ -1,11 +1,12 @@
 // components/nickname-guard/nickname-guard.ts
 // 昵称完善提示：软模式可稍后填写（每日频控）；required 模式（登录即完善）必须填写完成才关闭。
-// 保存时昵称必填，头像选填。
+// required 模式要求昵称和已保存头像，软模式保留头像选填。
 // 用法：页面 wxml 放置 <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" />，
 // 调用方通过 this.selectComponent('#nicknameGuard').show({ nickname, avatar, required }) 唤起。
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter';
 import { getCachedDeviceFingerprint } from '../../utils/deviceFingerprint';
 import { blockUnsafeText } from '../../utils/promptReview';
+import { hasCompleteProfile, hasProfileNickname, hasSavedAvatar } from './profile-validation';
 
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 // 与「我的」页共用同一个标记：同一自然日内两处合计最多提醒一次；保存成功后组件会清除它。
@@ -21,6 +22,7 @@ Component({
     uploading: false,
     saving: false,
     promptUserID: 0,
+    promptToken: '',
   },
 
   methods: {
@@ -29,6 +31,7 @@ Component({
         visible: true,
         required: !!options.required,
         promptUserID: Number(options.userID || wx.getStorageSync('userInfo')?.id || 0),
+        promptToken: wx.getStorageSync('token') || '',
         nickname: String(options.nickname || ''),
         avatarUrl: String(options.avatar || ''),
         avatarTemp: '',
@@ -52,7 +55,7 @@ Component({
       const tokenAtStart = wx.getStorageSync('token');
       try {
         const res = await new Promise<any>((resolve, reject) => {
-          wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, success: resolve, fail: reject });
+          wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
         });
         const body = res.data || {};
         if (tokenAtStart !== wx.getStorageSync('token') || res.statusCode !== 200 || body.code !== 0) {
@@ -67,12 +70,12 @@ Component({
 
     showIfMissing(profile: any, required = false) {
       const nickname = String(profile?.nickname || '').trim();
-      if (this.data.visible || (nickname && Array.from(nickname).length <= 32)) return false;
+      if (this.data.visible || (required ? hasCompleteProfile(profile) : hasProfileNickname(nickname))) return false;
       const userID = Number(profile?.id || wx.getStorageSync('userInfo')?.id || 0);
       const now = new Date();
       const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
       if (!required && userID && wx.getStorageSync(NICKNAME_PROMPT_DAY_KEY + userID) === day) return false;
-      this.show({ userID, avatar: String(profile?.avatar || ''), required });
+      this.show({ userID, nickname, avatar: String(profile?.avatar || ''), required });
       return true;
     },
 
@@ -101,17 +104,50 @@ Component({
       void this.uploadAvatar(tempFilePath);
     },
 
+    assertCurrentAccount(token: string, userID: number) {
+      const currentID = Number(wx.getStorageSync('userInfo')?.id || 0);
+      if (!token || token !== wx.getStorageSync('token') || (this.data.promptToken && this.data.promptToken !== token) || (userID && currentID && userID !== currentID)) {
+        throw new Error('账号已变化，请重新确认资料');
+      }
+    },
+
+    async readSavedProfile(token: string, userID: number) {
+      this.assertCurrentAccount(token, userID);
+      const path = '/api/v1/miniprogram/profile';
+      const headers = this.buildAuthHeaders(path);
+      if (!headers) throw new Error('请重新登录');
+      const res: any = await new Promise((resolve, reject) => {
+        wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+      });
+      this.assertCurrentAccount(token, userID);
+      if (res.statusCode === 401 || res.data?.code === 401) this.triggerEvent('authrequired');
+      if (res.statusCode !== 200 || res.data?.code !== 0) throw new Error(res.data?.msg || '资料保存结果未确认，请重试');
+      const profile = res.data.data || {};
+      const id = Number(profile.id);
+      if (!Number.isSafeInteger(id) || id <= 0 || (userID && userID !== id)) throw new Error('账号资料不匹配');
+      return profile;
+    },
+
     async uploadAvatar(tempFilePath: string) {
+      const token = wx.getStorageSync('token');
+      const userID = Number(this.data.promptUserID || wx.getStorageSync('userInfo')?.id || 0);
       this.setData({ uploading: true });
       try {
+        this.assertCurrentAccount(token, userID);
         const fileUrl = await this.uploadAvatarImage(tempFilePath);
+        this.assertCurrentAccount(token, userID);
+        if (!hasSavedAvatar(fileUrl)) throw new Error('头像上传结果无效，请重新选择');
         await this.saveAvatar(fileUrl);
+        this.assertCurrentAccount(token, userID);
+        const profile = await this.readSavedProfile(token, userID);
+        if (String(profile.avatar || '').trim() !== fileUrl) throw new Error('头像保存结果未确认，请重试');
+        wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), avatar: fileUrl });
         this.setData({ avatarUrl: fileUrl, avatarTemp: '' });
       } catch (error: any) {
         console.error('头像上传失败:', error);
-        wx.showToast({ title: error.message || '头像上传失败，可稍后在资料页重试', icon: 'none' });
+        wx.showToast({ title: error.message || '头像上传失败，请重试', icon: 'none' });
       } finally {
-        this.setData({ uploading: false, avatarTemp: '' });
+        if (token === wx.getStorageSync('token')) this.setData({ uploading: false, avatarTemp: '' });
       }
     },
 
@@ -130,8 +166,10 @@ Component({
           filePath: tempFilePath,
           name: 'file',
           header: headers,
+          timeout: 15000,
           success: (res) => {
             if (res.statusCode !== 200) {
+              if (res.statusCode === 401 && token === wx.getStorageSync('token')) this.triggerEvent('authrequired');
               reject(new Error(`上传失败: ${res.statusCode}`));
               return;
             }
@@ -152,6 +190,9 @@ Component({
     },
 
     saveAvatar(avatarUrl: string): Promise<void> {
+      const token = wx.getStorageSync('token');
+      const userID = Number(this.data.promptUserID || wx.getStorageSync('userInfo')?.id || 0);
+      this.assertCurrentAccount(token, userID);
       const apiPath = '/api/v1/miniprogram/profile/avatar';
       const body = { avatar: avatarUrl };
       const headers = this.buildAuthHeaders(apiPath, body);
@@ -164,11 +205,14 @@ Component({
           method: 'PUT',
           header: headers,
           data: body,
+          timeout: 15000,
           success: (res: any) => {
+            try { this.assertCurrentAccount(token, userID); } catch (error) { reject(error); return; }
             if (res.statusCode === 200 && res.data.code === 0) {
               resolve();
               return;
             }
+            if (res.statusCode === 401 || res.data?.code === 401) this.triggerEvent('authrequired');
             reject(new Error(res.data?.msg || '头像保存失败'));
           },
           fail: (err: any) => reject(err),
@@ -198,13 +242,20 @@ Component({
         wx.showToast({ title: '头像上传中，请稍候', icon: 'none' });
         return;
       }
+      if (this.data.required && !hasSavedAvatar(this.data.avatarUrl)) {
+        wx.showToast({ title: '请选择并保存头像后继续', icon: 'none' });
+        return;
+      }
       if (blockUnsafeText(nickname)) {
         return;
       }
 
       const tokenAtStart = wx.getStorageSync('token');
+      const userID = Number(this.data.promptUserID || wx.getStorageSync('userInfo')?.id || 0);
+      const avatarAtStart = this.data.avatarUrl;
       this.setData({ saving: true });
       try {
+        this.assertCurrentAccount(tokenAtStart, userID);
         const apiPath = '/api/v1/miniprogram/profile/nickname';
         const body = { nickname };
         const headers = this.buildAuthHeaders(apiPath, body);
@@ -217,39 +268,36 @@ Component({
             method: 'PUT',
             header: headers,
             data: body,
+            timeout: 15000,
             success: resolve,
             fail: reject,
           });
         });
-        if (res.statusCode !== 200 || res.data.code !== 0) {
+        this.assertCurrentAccount(tokenAtStart, userID);
+        if (res.statusCode !== 200 || res.data?.code !== 0) {
+          if (res.statusCode === 401 || res.data?.code === 401) this.triggerEvent('authrequired');
           throw new Error(res.data?.msg || '保存失败');
         }
-        const profilePath = '/api/v1/miniprogram/profile';
-        const readback: any = await new Promise((resolve, reject) => {
-          wx.request({ url: `${API_BASE_URL}${profilePath}`, method: 'GET',
-            header: this.buildAuthHeaders(profilePath) || {}, success: resolve, fail: reject });
-        });
-        if (tokenAtStart !== wx.getStorageSync('token')) throw new Error('账号已变化，请重新确认资料');
-        if (readback.statusCode !== 200 || readback.data?.code !== 0 || String(readback.data?.data?.nickname || '').trim() !== nickname) {
-          throw new Error('昵称保存结果未确认，请重试');
+        const profile = await this.readSavedProfile(tokenAtStart, userID);
+        if (String(profile.nickname || '').trim() !== nickname) throw new Error('昵称保存结果未确认，请重试');
+        if (this.data.required && (!hasCompleteProfile(profile) || String(profile.avatar).trim() !== avatarAtStart)) {
+          throw new Error('头像保存结果未确认，请重新选择头像');
         }
         const cachedUserInfo = wx.getStorageSync('userInfo') || {};
-        if (readback.data.data.id && cachedUserInfo.id && readback.data.data.id !== cachedUserInfo.id) throw new Error('账号资料不匹配');
-        wx.setStorageSync('userInfo', { ...cachedUserInfo, nickname });
-        if (cachedUserInfo.id) wx.removeStorageSync(NICKNAME_PROMPT_DAY_KEY + cachedUserInfo.id);
+        wx.setStorageSync('userInfo', { ...cachedUserInfo, id: Number(profile.id), nickname, avatar: String(profile.avatar || '') });
+        wx.removeStorageSync(NICKNAME_PROMPT_DAY_KEY + profile.id);
         this.setData({ visible: false, saving: false });
-        this.triggerEvent('completed', { nickname });
+        this.triggerEvent('completed', { nickname, avatar: profile.avatar, token: tokenAtStart, profile });
       } catch (error: any) {
         console.error('保存昵称失败:', error);
         wx.showToast({ title: error.message || '保存失败', icon: 'none' });
-        this.setData({ saving: false });
+        if (tokenAtStart === wx.getStorageSync('token')) this.setData({ saving: false });
       }
     },
 
-    // 资料填写可以稍后继续，不要求为浏览公开页面披露昵称；
-    // required 模式下（登录即完善）这里是唯一的提醒出口，填写完成才关闭。
+    // 软模式可稍后继续；required 模式必须完成昵称和头像后才能关闭。
     onMaskTap() {
-      wx.showToast({ title: this.data.required ? '请填写昵称后继续' : '可选择稍后完善，继续浏览', icon: 'none' });
+      wx.showToast({ title: this.data.required ? '请完善昵称和头像后继续' : '可选择稍后完善，继续浏览', icon: 'none' });
     },
 
     buildAuthHeaders(apiPath: string, body: any = {}) {

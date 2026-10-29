@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="reader">
  <view class="navigation"><button bindtap="goBack" aria-label="返回">返回</button><text>内容阅读</text></view>
  <view wx:if="{{loading}}" class="state" role="status">正在加载内容…</view>
@@ -30,3 +31,5 @@
   </view>
  </block>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

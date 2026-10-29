@@ -316,8 +316,12 @@ function wrapPage(definition) {
   result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{consentPageVisible(this,true);const s=getSDK();if(s)s.show(this);updateReady(this);warmTimeline(this);showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
   result.onHide=function() { safely(()=>{consentPageVisible(this,false);cancelTimeline(this);if(sdk)sdk.hide(this,false);}); return invoke('onHide',this,arguments); };
   result.onUnload=function() { safely(()=>{consentPageVisible(this,false);cancelTimeline(this);if(this.__trackingTimelineStop)this.__trackingTimelineStop();if(sdk)sdk.hide(this,true);}); return invoke('onUnload',this,arguments); };
-  if (hasCustomAppShare) result.onShareAppMessage=function() {
-    const original=invoke('onShareAppMessage',this,arguments);
+  result.onShareAppMessage=function() {
+    const route=String(this.route||'').replace(/^\//,'');
+    const query=publicShareQuery(this);
+    const original=hasCustomAppShare?invoke('onShareAppMessage',this,arguments):{
+      title:DEFAULT_SHARE_TITLE,path:routes.policy(route).collect?'/'+route+(query?'?'+query:''):'/pages/index/index'
+    };
     if (!original || typeof original!=='object' || !sdk || !sdk.diagnostics().enabled) return original;
     // Original callback executes once. Preserve original synchronous fallback, title/image and original promise semantics.
     return {...original,promise:Promise.resolve(original.promise || {}).then(value=>new Promise(resolve=>{
@@ -334,11 +338,6 @@ function wrapPage(definition) {
     // expirations and service failures retain the original safe share payload.
     preheatTimelineShare(this,original);
     return original;
-  };
-  if (!hasCustomAppShare) result.onShareAppMessage=function() {
-    const route=String(this.route||'').replace(/^\//,'');
-    const query=publicShareQuery(this);
-    return { title:DEFAULT_SHARE_TITLE, path:routes.policy(route).collect?'/'+route+(query?'?'+query:''):'/pages/index/index' };
   };
   // Preserve each business callback's receiver, arguments, return value and
   // exceptions. Analytics failures must never block an existing action.
@@ -366,9 +365,12 @@ function install() {
         const s=getSDK();
         if(name==='onLaunch') { refreshConfig(); if (!timer) {timer=setInterval(()=>safely(()=>sdk && sdk.tick()),HEARTBEAT);} if(wx.onNetworkStatusChange)wx.onNetworkStatusChange(status=>{if(status.isConnected&&sdk)sdk.flush();}); }
         if(name==='onShow'){
-          if(options&&options.path==='pages/contentreader/contentreader'&&options.query&&(options.query.scene||options.query.content_id)&&typeof getCurrentPages==='function'){
+          if(options&&options.path&&options.query&&typeof getCurrentPages==='function'){
             const pages=getCurrentPages(),page=pages[pages.length-1];
-            if(page&&page.route===options.path&&typeof page.acceptExternalEntry==='function')page.acceptExternalEntry(options.query);
+            if(page&&page.route===options.path){
+              if(typeof page.queueProfileEntry==='function')page.queueProfileEntry(options.query);
+              else if(typeof page.acceptExternalEntry==='function')page.acceptExternalEntry(options.query);
+            }
           }
           if(s)s.appShow(options);
         }

@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/Parentchildcreativity/Parentchildcreativity.wxml-->
 <view class="page">
   <!-- 统一导航栏 -->
@@ -178,3 +179,5 @@
   <!-- 底部导航栏 -->
   <custom-tabbar current="{{-1}}" bind:switch="onTabSwitch"></custom-tabbar>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

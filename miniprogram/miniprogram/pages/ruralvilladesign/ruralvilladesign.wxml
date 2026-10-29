@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/ruralvilladesign/ruralvilladesign.wxml-->
 <view class="page">
   <!-- 统一导航栏 -->
@@ -168,3 +169,5 @@
     <button class="generate-button" bindtap="onGenerateDesign">AI生成设计</button>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

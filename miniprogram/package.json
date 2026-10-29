@@ -11,7 +11,7 @@
     "build:tracking": "node scripts/build-tracking.js",
     "check:tracking": "node scripts/build-tracking.js --check",
     "check:tracking-routes": "node scripts/check-tracking-routes.js",
-    "test:tracking": "node --test tests/share-tracking.test.js tests/observed-content-actions.test.js tests/tracking-idle.test.js tests/tracking-consent.test.js tests/tracking-reader-entry.test.js tests/tracking-routes.test.js tests/tracking-materials.test.js tests/tracking-consultation.test.js tests/tracking-measurement-boundaries.test.js tests/tracking-timeline-preheat.test.js tests/tracking-public-cost-snapshot.test.js tests/nickname-save-flow.test.js tests/nickname-lifecycle.test.js tests/nickname-guard-home.test.js tests/settings-cache-session.test.js tests/tracking-api-diagnostics.test.js"
+    "test:tracking": "node --test tests/share-tracking.test.js tests/observed-content-actions.test.js tests/tracking-idle.test.js tests/tracking-consent.test.js tests/tracking-reader-entry.test.js tests/tracking-routes.test.js tests/tracking-materials.test.js tests/tracking-consultation.test.js tests/tracking-measurement-boundaries.test.js tests/tracking-timeline-preheat.test.js tests/tracking-public-cost-snapshot.test.js tests/nickname-save-flow.test.js tests/nickname-lifecycle.test.js tests/nickname-guard-home.test.js tests/settings-cache-session.test.js tests/tracking-api-diagnostics.test.js tests/profile-access.test.js tests/tracking-login-attribution.test.js tests/share-profile-journey.test.js tests/login-guard.test.js tests/nickname-required.test.js tests/wechat-login-flow.test.js tests/profile-validation.test.js"
   },
   "devDependencies": {
     "miniprogram-api-typings": "^2.8.3-1"
