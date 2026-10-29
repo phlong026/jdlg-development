@@ -3,6 +3,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +36,9 @@ func boundedTransaction(run func(context.Context, func(Repository) error) error,
 		bounded := boundedQueryRepository(r).(*queryRepository)
 		err := fn(bounded)
 		if bounded.budget.err != nil {
+			// 拒绝必须留下证据：不记日志的话，线上只剩一句 422 文案，
+			// 无法判断是哪个维度涨出来的（行数还是字节、最后扫到哪类记录）。
+			log.Printf("[tracking] 查询范围过大已拒绝: rows=%d bytes=%d lastKind=%s", bounded.budget.rows, bounded.budget.bytes, bounded.budget.lastKind)
 			return bounded.budget.err
 		}
 		return err

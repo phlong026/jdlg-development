@@ -10,14 +10,14 @@ import (
 )
 
 // Five-minute visits produce 32 raw events each. Raw list reduction reads the
-// window's events and then their full sessions, so 340 visits need about
-// 21,760 rows, over the 20,000-row budget. Projections need a few rows per visit.
+// window's events and then their full sessions, so 500 visits need about
+// 32,000 rows, over the 30,000-row budget. Projections need a few rows per visit.
 func TestVisitorListUsesProjectionsWithinReadBudget(t *testing.T) {
 	s, scope := fixture(t)
 	start := time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
 	clock := start
 	s.Now = func() time.Time { return clock }
-	const visits = 340
+	const visits = 500
 	for i := 0; i < visits; i++ {
 		clock = start.Add(time.Duration(i) * 20 * time.Minute)
 		en, err := s.Enter(context.Background(), EntryInput{Route: "pages/home/home", Client: fmt.Sprintf("client-%06d", i), Anonymous: fmt.Sprintf("anon-%06d", i), Consent: "v1"}, 0)

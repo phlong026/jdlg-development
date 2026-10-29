@@ -48,7 +48,9 @@ func clientShares(r Repository, scope Scope, f Filter) ([]shareFact, error) {
 		event Event
 	}{}
 	if len(sessions) > 0 {
-		events, err := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: sessions, AtFrom: f.Start, AtBefore: f.End, AtThrough: f.AsOf})
+		// 只取 share_intent 事件：整段拉会话事件会在分享覆盖面变大后打满读预算
+		// （2026-10-29 生产 422 事故）。类型过滤在 SQL 与内存两条路径都生效。
+		events, err := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: sessions, AtFrom: f.Start, AtBefore: f.End, AtThrough: f.AsOf, Types: []string{"share_intent"}})
 		if err != nil {
 			return nil, err
 		}

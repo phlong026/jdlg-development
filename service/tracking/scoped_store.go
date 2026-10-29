@@ -10,8 +10,10 @@ import (
 
 // A request must fail, rather than compute a plausible partial aggregate, when
 // its facts exceed this in-process safety envelope. These are safety limits,
-// not a claim of tested production throughput.
-const maxQueryRecords = 20000
+// not a claim of tested production throughput. 2026-10-29 生产校准：投影路径下
+// 一次列表请求的全部辅助读取约 1 万行且随会话数线性增长，30k 为当前流量的
+// ~3 倍余量；再往上应做读取去重而不是继续调大。
+const maxQueryRecords = 30000
 const maxQueryPayloadBytes = 32 << 20
 
 var ErrQueryTooLarge = fail(422, "查询范围过大，请缩小时间或归属、素材、访客范围")
@@ -23,8 +25,13 @@ var ErrQueryTooLarge = fail(422, "查询范围过大，请缩小时间或归属�
 type RecordQuery struct {
 	Owners, IDs, Sessions, VisitorKeys, Shares []string
 	Content, View                              string
-	AtFrom, AtBefore, AtThrough, IdentityAsOf  time.Time
-	CatalogAsOf                                time.Time // Immutable catalog membership; never mutable occurred_at.
+	// Types narrows kind="event" scans to payloads whose event_type is listed.
+	// It must be pushed into the SQL WHERE clause: scanning a share-covered
+	// session set without it pulls every filler segment into the read budget
+	// (the 2026-10-29 422 incident).
+	Types                                     []string
+	AtFrom, AtBefore, AtThrough, IdentityAsOf time.Time
+	CatalogAsOf                               time.Time // Immutable catalog membership; never mutable occurred_at.
 	// WithoutExactSummary keeps only rows whose session lacks a complete
 	// projection without a legacy deferred marker. Current projections include
 	// future accepted events and create all their buckets; BuiltAt gates their use.
@@ -78,6 +85,7 @@ type ScopedRecordLister interface {
 
 type readBudget struct {
 	rows, bytes int
+	lastKind    string
 	err         error
 }
 
@@ -88,6 +96,7 @@ func (b *readBudget) consume(row Record) error {
 	}
 	b.rows++
 	b.bytes += len(row.Payload)
+	b.lastKind = row.Kind
 	if b.rows > maxQueryRecords || b.bytes > maxQueryPayloadBytes {
 		return b.reject()
 	}
@@ -319,12 +328,17 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 		}
 		original, view = x.OriginalVisitor, x.View.ID
 	}
-	if row.Kind == "event" && q.View != "" {
+	if row.Kind == "event" && (q.View != "" || len(q.Types) > 0) {
 		var x Event
 		if json.Unmarshal(row.Payload, &x) != nil {
 			return false, ErrUnavailable
 		}
-		view = x.View
+		if q.View != "" {
+			view = x.View
+		}
+		if len(q.Types) > 0 && !includes(q.Types, x.Type) {
+			return false, nil
+		}
 	}
 	if q.Content != "" && content != q.Content || q.View != "" && view != q.View {
 		return false, nil

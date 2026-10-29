@@ -313,6 +313,13 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 	if q.WithoutExactSummary {
 		where = append(where, "NOT EXISTS (SELECT 1 FROM tracking_records summary_state WHERE summary_state.tenant_id=r.tenant_id AND summary_state.kind='summary_state' AND summary_state.record_id="+recordSessionColumn(kind)+" AND JSON_UNQUOTE(JSON_EXTRACT(summary_state.payload,'$.complete'))='true' AND JSON_EXTRACT(summary_state.payload,'$.deferred_from') IS NULL)")
 	}
+	if len(q.Types) > 0 && kind == "event" {
+		slots := strings.TrimSuffix(strings.Repeat("?,", len(q.Types)), ",")
+		where = append(where, "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.event_type')) IN ("+slots+")")
+		for _, eventType := range q.Types {
+			args = append(args, eventType)
+		}
+	}
 	args = append(args, limit)
 	return "SELECT " + recordColumns + " FROM tracking_records r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.occurred_at,BINARY r.record_id LIMIT ?", args
 }
