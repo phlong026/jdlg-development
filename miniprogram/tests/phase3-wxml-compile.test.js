@@ -26,7 +26,7 @@ test('native WXML compiler reproduces the escaped-operator runtime error', { ski
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
-for (const page of ['my', 'chat', 'contentworkbench', 'contentedit', 'contentreader', 'contentwriting', 'sharevisits', 'visitdetail', 'messagecenter']) {
+for (const page of ['my', 'chat', 'contentworkbench', 'contentedit', 'contentreader', 'contentwriting', 'sharevisits', 'visitdetail', 'messagecenter', 'projectnotes', 'projectnoteview']) {
   test('native WXML compiler accepts ' + page, { skip: !available }, () => {
     const result = compile(`./pages/${page}/${page}.wxml`);
     assert.equal(result.status, 0, result.stderr || result.stdout);
