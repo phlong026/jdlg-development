@@ -140,7 +140,7 @@ test('AI writing return appends once without replacing an unchanged unsaved draf
   assert.ok(toasts.some(toast => /未采用/.test(toast.title)));
 });
 
-test('AI writing return explains saved-draft and account-change rejection without overwriting', () => {
+test('AI writing return explains changed-draft and account-change rejection without overwriting', () => {
   const saved = loadEditor();
   saved.page._loaded = true;
   saved.page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a' });
@@ -148,7 +148,7 @@ test('AI writing return explains saved-draft and account-change rejection withou
   saved.page.setData({ id: 'saved-content', title: '已保存标题', blocks: [{ kind: 'paragraph', text: '已保存正文' }] });
   saved.navigationOptions[0].events.prefillContent({ title: 'AI 标题', text: '不应覆盖保存内容' });
   assert.equal(saved.page.data.blocks[0].text, '已保存正文');
-  assert.match(saved.page.data.notice, /草稿已保存|正在保存/);
+  assert.match(saved.page.data.notice, /草稿版本已变化/);
 
   const switched = loadEditor();
   switched.page._loaded = true;

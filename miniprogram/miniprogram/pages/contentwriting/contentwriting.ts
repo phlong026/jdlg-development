@@ -14,7 +14,10 @@ Page({
     this._token = String(wx.getStorageSync('token') || '');
     this._unloaded = false;
     this._source = String(options && options.source || '');
-    if (this._source === 'editor' && typeof this.getOpenerEventChannel === 'function') this._editorChannel = this.getOpenerEventChannel();
+    if (this._source === 'editor' && typeof this.getOpenerEventChannel === 'function') {
+      this._editorChannel = this.getOpenerEventChannel();
+      if (this._editorChannel && this._editorChannel.on) this._editorChannel.on('writingContext', payload => this.receiveWritingContext(payload));
+    }
   },
   onShow() {
     wx.hideShareMenu();
@@ -24,6 +27,14 @@ Page({
     this.setData({ navigating: false, loginRequired: !token });
   },
   onUnload() { this._unloaded = true; },
+  receiveWritingContext(payload) {
+    if (this._source !== 'editor' || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
+    if (!payload || payload.source !== 'editor') return;
+    this._contextLoaded = true;
+    this._contentID = String(payload.content_id || '');
+    this._revision = Number(payload.revision || 0);
+    this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: '已带入当前草稿的标题和正文，请核对后继续创作', error: '' });
+  },
   selectType(event) {
     const type = writingTypes.find(item => item.key === event.currentTarget.dataset.type);
     if (type) this.setData({ type: type.key, heading: type.heading, error: '' });
@@ -71,7 +82,7 @@ Page({
     this.setData({ navigating: true, error: '' });
     if (this._source === 'editor') {
       if (!this._editorChannel || typeof this._editorChannel.emit !== 'function') { this.setData({ navigating: false, error: '原编辑页连接已失效，请保留文案并返回重试' }); return; }
-      this._editorChannel.emit('prefillContent', { title, text });
+      this._editorChannel.emit('prefillContent', { title, text, content_id: String(this._contentID || ''), revision: Number(this._revision || 0) });
       wx.navigateBack({ delta: 1, fail: () => this.setData({ navigating: false, error: '文案已带回原编辑页，请返回继续编辑' }) });
       return;
     }

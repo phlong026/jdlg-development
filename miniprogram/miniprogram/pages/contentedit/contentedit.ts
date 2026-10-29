@@ -5,6 +5,13 @@ const { preserveLayoutBody, renderArticleDocument } = require('../../utils/artic
 
 function textBlock(text = '') { return { kind: 'paragraph', text }; }
 function mediaIDs(blocks) { return [...new Set(blocks.filter(block => block.media_id).map(block => block.media_id))]; }
+function writingFacts(blocks) {
+  return blocks.map(block => {
+    if (block.kind === 'list') return (block.items || []).filter(Boolean).join('\n');
+    if (block.kind === 'image' || block.kind === 'video') return String(block.caption || '').trim();
+    return String(block.text || '').trim();
+  }).filter(Boolean).join('\n\n').slice(0, 6000);
+}
 function articleBody(blocks) {
   return JSON.stringify({ schema: 1, blocks: blocks.map(block => {
     if (block.kind === 'image' || block.kind === 'video') return { kind: block.kind, media_id: block.media_id, caption: block.caption || '' };
@@ -103,7 +110,8 @@ Page({
     if (launch.handled) { this.setData({ notice: 'AI 文案已处理，未重复追加' }); return; }
     launch.handled = true;
     if (launch.token !== String(wx.getStorageSync('token') || '')) { this.rejectWritingReturn('账号已变化，AI 文案未采用；原内容保持不变'); return; }
-    if (this.data.id || this.data.busy) { this.rejectWritingReturn('草稿已保存或正在保存，AI 文案未采用；原内容保持不变'); return; }
+    if (this.data.busy) { this.rejectWritingReturn('草稿正在保存或处理，AI 文案未采用；原内容保持不变'); return; }
+    if (launch.contentID !== String(this.data.id || '') || launch.revision !== Number(this.data.revision || 0)) { this.rejectWritingReturn('草稿版本已变化，AI 文案未采用；请重新发起'); return; }
     if (launch.signature !== this.draftSignature()) { this.rejectWritingReturn('编辑内容已发生变化，AI 文案未采用；原内容保持不变'); return; }
     const title = String(payload && payload.title || '').trim();
     const text = String(payload && payload.text || '').trim();
@@ -132,11 +140,14 @@ Page({
     this.setData({ title: pending.title, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: 'AI 文案已带入，请核对后保存' });
   },
   openAIWriting() {
-    if (this.data.busy || this.data.id) return;
-    const launch = { token: String(wx.getStorageSync('token') || ''), signature: this.draftSignature(), handled: false };
+    if (this.data.busy || this.data.legacyReadOnly || this.data.layoutReadOnly) return;
+    const launch = { token: String(wx.getStorageSync('token') || ''), contentID: String(this.data.id || ''), revision: Number(this.data.revision || 0), signature: this.draftSignature(), handled: false };
+    const context = { source: 'editor', content_id: launch.contentID, revision: launch.revision, title: String(this.data.title || '').trim(), facts: writingFacts(this.data.blocks || []) };
     wx.navigateTo({
       url: '/pages/contentwriting/contentwriting?source=editor',
       events: { prefillContent: payload => this.receiveWritingReturn(payload, launch) },
+      success: result => result.eventChannel.emit('writingContext', context),
+      fail: () => this.setData({ notice: 'AI 文案页无法打开，草稿已保留，请重试' }),
     });
   },
   async loadPrivatePaths(items, previews) {

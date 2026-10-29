@@ -28,7 +28,7 @@
      <block wx:for="{{layoutBlocks}}" wx:key="key"><rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" /><view wx:else class="{{item.className}}" style="{{item.style}}"><video id="{{item.domId}}" src="{{item.url}}" style="width:100%;height:{{item.height}}px" controls object-fit="contain" /></view></block>
     </view>
     <block wx:if="{{!layoutReadOnly}}">
-     <view class="section-heading content-heading"><view><text class="section-title">正文内容</text><text class="section-caption">按顺序组合文字、图片和视频</text></view><view class="heading-actions"><button wx:if="{{!id}}" class="text-action ai-action" bindtap="openAIWriting">AI 文案</button><button class="text-action" bindtap="addParagraph">＋ 添加段落</button></view></view>
+     <view class="section-heading content-heading"><view><text class="section-title">正文内容</text><text class="section-caption">按顺序组合文字、图片和视频</text></view><view class="heading-actions"><button class="text-action ai-action" bindtap="openAIWriting" disabled="{{busy}}">AI 文案</button><button class="text-action" bindtap="addParagraph">＋ 添加段落</button></view></view>
      <view wx:for="{{renderedBlocks}}" wx:key="index" class="panel block">
       <textarea wx:if="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" value="{{item.text}}" data-index="{{index}}" bindinput="editBlock" auto-height maxlength="10000" placeholder="输入段落" />
       <view wx:elif="{{item.kind === 'list'}}" class="muted">已保留列表块：{{item.list_text}}</view>
