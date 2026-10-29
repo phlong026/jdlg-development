@@ -47,9 +47,11 @@
   gap: 24rpx;
 }
 
-.ng-avatar-btn {
+// 覆盖微信 v2 默认 button 宽度，避免头像保留固定高度后被拉成椭圆。
+.nickname-guard .ng-avatar-btn {
   width: 128rpx;
   height: 128rpx;
+  box-sizing: border-box;
   padding: 0;
   margin: 0;
   border-radius: 50%;
