@@ -26,3 +26,9 @@ test('private project notice follows only its fixed management route without exp
  page.onShow();await tick();await page.onOpenMessage({currentTarget:{dataset:{id:'private-note'}}});
  assert.deepEqual(navigation,['/'+route]);assert.doesNotMatch(navigation[0],/pns=|token=/);
 });
+test('project feedback notice opens the exact project version and feedback without exposing share credentials',async()=>{
+ const route='pages/projectnotes/projectnotes?project_id=project_1234';
+ const {page,navigation}=runtime(url=>url.endsWith('/feedback-note')?{notification_id:'feedback:feedback_1234',kind:'project_note_feedback',route_key:route,content_id:'version_1234'}:url.endsWith('/read')||url.includes('unread-count')?{}:{items:[]});
+ page.onShow();await tick();await page.onOpenMessage({currentTarget:{dataset:{id:'feedback-note'}}});
+ assert.deepEqual(navigation,['/'+route+'&version_id=version_1234&feedback_id=feedback_1234']);assert.doesNotMatch(navigation[0],/pns=|token=|share_id=/);
+});

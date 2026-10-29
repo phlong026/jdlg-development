@@ -80,7 +80,7 @@ func (s *fakeDurableStore) MaterializeEvent(_ context.Context, job *EventJob, ch
 		return errors.New("delivery insert failed")
 	}
 	s.notices[notice.ID] = notice
-	if eligibility.DeliveryEligible {
+	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
 		s.deliveries[delivery.ID] = delivery
 	}
 	state.status, state.leaseToken, state.leaseUntil = "processed", "", time.Time{}
@@ -317,6 +317,35 @@ func TestProjectNoteOpenNoticeUsesGenericPrivateRoute(t *testing.T) {
 	event.ContentID = strings.Repeat("v", 100)
 	if validEvent(event) {
 		t.Fatal("private project event with an oversized persisted route was accepted")
+	}
+}
+
+func TestProjectNoteFeedbackNoticeTargetsExactFeedbackWithoutExternalDelivery(t *testing.T) {
+	event := Event{ID: "feedback:" + strings.Repeat("f", 64), Kind: "project_note_feedback", Owner: "owner-a", RecipientID: 42, VisitorKey: "u:101", ShareID: strings.Repeat("s", 32), ContentID: strings.Repeat("v", 32), ProjectID: strings.Repeat("p", 32), Route: "project_note_share", OccurredAt: time.Date(2026, 10, 30, 1, 0, 0, 0, time.UTC)}
+	if !validEvent(event) {
+		t.Fatal("valid project feedback event was rejected")
+	}
+	notice := noticeFromEvent(event)
+	wantRoute := "pages/projectnotes/projectnotes?project_id=" + event.ProjectID
+	if notice.Route != wantRoute || notice.Kind != event.Kind || notice.Title != "项目收到业主反馈" {
+		t.Fatalf("notice = %#v", notice)
+	}
+	if notice.ID != event.ID || notice.ContentID != event.ContentID || len(notice.Route) > 128 {
+		t.Fatalf("feedback coordinates were not persisted safely: %#v", notice)
+	}
+	if allowsExternalDelivery(event) {
+		t.Fatal("active project feedback unexpectedly enabled external delivery")
+	}
+	if !allowsExternalDelivery(browseEvent("browse-1", 42)) {
+		t.Fatal("existing browse delivery policy changed")
+	}
+	store := newFakeDurableStore(event)
+	consumer := consumerFor(t, store, event.OccurredAt)
+	if worked, err := consumer.RunOnce(context.Background()); err != nil || !worked {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	if len(store.notices) != 1 || len(store.deliveries) != 0 {
+		t.Fatalf("notices=%d deliveries=%d", len(store.notices), len(store.deliveries))
 	}
 }
 

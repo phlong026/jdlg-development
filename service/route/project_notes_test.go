@@ -211,7 +211,7 @@ func TestProjectNoteRoutesSeparateManagerAndInvitedAccount(t *testing.T) {
 	if confirmation.Code != http.StatusOK {
 		t.Fatal(confirmation.Code, confirmation.Body.String())
 	}
-	opened := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/open", map[string]any{"event_id": "open-route-event-1"})
+	opened := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/open", map[string]any{"event_id": "open-route-event-1", "acknowledged": true})
 	openedFact := projectNoteData[tracking.ProjectNoteOpenFact](t, opened)
 	if opened.Code != http.StatusOK || !openedFact.Notify || openedFact.ActualSharerID != 7 {
 		t.Fatal(opened.Code, opened.Body.String())
@@ -411,6 +411,71 @@ func TestProjectNoteProjectInputFailsClosedForUnverifiedCRMAndUnknownFields(t *t
 	}
 }
 
+func TestProjectNoteWorkflowRoutesExposeStructuredProjectAndSatisfaction(t *testing.T) {
+	router, _, _, actor := newProjectNoteHandlerFixture(t)
+	created := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects", map[string]any{
+		"name": "张宅方案", "owner_id": "owner-a", "location": "杭州市余杭区", "building_area": 328.5, "floors": 3, "style": "现代中式",
+	})
+	if created.Code != http.StatusOK {
+		t.Fatal(created.Code, created.Body.String())
+	}
+	project := projectNoteData[tracking.ProjectNoteProject](t, created)
+	updated := projectNoteRequest(t, router, http.MethodPatch, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{
+		"expected_revision": project.Revision, "location": "杭州市临平区", "status": "revising",
+	})
+	if updated.Code != http.StatusOK {
+		t.Fatal(updated.Code, updated.Body.String())
+	}
+	project = projectNoteData[tracking.ProjectNoteProject](t, updated)
+	if project.Location != "杭州市临平区" || project.Status != tracking.ProjectNoteProjectStatusRevising {
+		t.Fatalf("updated project = %#v", project)
+	}
+	forged := projectNoteRequest(t, router, http.MethodPatch, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{
+		"expected_revision": project.Revision, "status": "confirmed",
+	})
+	if forged.Code != http.StatusBadRequest {
+		t.Fatal(forged.Code, forged.Body.String())
+	}
+
+	if rec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects/"+project.ID+"/members/101", nil); rec.Code != http.StatusOK {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	noteRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects/"+project.ID+"/notes", map[string]any{"title": "首版", "body": "固定方案", "body_format": "plain"})
+	note := projectNoteData[tracking.ProjectNote](t, noteRec)
+	versionRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/notes/"+note.ID+"/versions", map[string]any{"expected_revision": note.Revision})
+	version := projectNoteData[tracking.ProjectNoteVersion](t, versionRec)
+	shareRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/versions/"+version.ID+"/shares", map[string]any{"expires_at": "2026-10-28T08:00:00Z", "idempotency_key": "workflow-share-1"})
+	share := projectNoteData[tracking.ProjectNoteShare](t, shareRec)
+	*actor = 101
+	feedback := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/feedback", map[string]any{
+		"text": "门厅需要调整", "satisfaction": "needs_adjustment", "idempotency_key": "workflow-feedback-1",
+	})
+	if feedback.Code != http.StatusOK || projectNoteData[tracking.ProjectNoteFeedback](t, feedback).Satisfaction != tracking.ProjectNoteSatisfactionNeedsAdjustment {
+		t.Fatal(feedback.Code, feedback.Body.String())
+	}
+}
+
+func TestProjectNoteOpenRouteRequiresExplicitAcknowledgement(t *testing.T) {
+	router, _, _, actor := newProjectNoteHandlerFixture(t)
+	_, _, _, share := createProjectNoteShare(t, router)
+	*actor = 101
+	for _, body := range []map[string]any{
+		{"event_id": "open-without-ack"},
+		{"event_id": "open-false-ack", "acknowledged": false},
+	} {
+		rec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/open", body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body=%v status=%d response=%s", body, rec.Code, rec.Body.String())
+		}
+	}
+	accepted := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/open", map[string]any{
+		"event_id": "open-explicit-ack", "acknowledged": true,
+	})
+	if accepted.Code != http.StatusOK {
+		t.Fatal(accepted.Code, accepted.Body.String())
+	}
+}
+
 func TestProjectNoteRoutesDefaultOffAndRequireSignedMiniProgramAccount(t *testing.T) {
 	t.Setenv("PROJECT_NOTES_ENABLED", "")
 	if projectNotesEnabled() {
@@ -430,7 +495,7 @@ func TestProjectNoteNotificationEligibilityUsesCurrentPrivateGrant(t *testing.T)
 	svc.NoticeRules.BrowseEnabled = true
 	_, _, version, share := createProjectNoteShare(t, router)
 	*actor = 101
-	opened := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/open", map[string]any{"event_id": "open-notice-event-1"})
+	opened := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/open", map[string]any{"event_id": "open-notice-event-1", "acknowledged": true})
 	fact := projectNoteData[tracking.ProjectNoteOpenFact](t, opened)
 	if opened.Code != http.StatusOK || !fact.Notify {
 		t.Fatal(opened.Code, opened.Body.String())

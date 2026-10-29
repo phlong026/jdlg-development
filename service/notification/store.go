@@ -176,7 +176,7 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE notification_id=notificat
 	if err != nil {
 		return storeError("materialize_inbox", err)
 	}
-	if eligibility.DeliveryEligible {
+	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
 		if eligibility.BindingVersion <= 0 {
 			return ErrInvalidInput
 		}
@@ -630,7 +630,7 @@ func validEvent(event Event) bool {
 	switch event.Kind {
 	case "browse":
 		return true
-	case "project_note_open":
+	case "project_note_open", "project_note_feedback":
 		route := projectNoteNotificationRoute(event)
 		return event.ProjectID != "" && len(event.ProjectID) <= 128 && event.ContentID != "" && event.Route == "project_note_share" && strings.HasPrefix(event.VisitorKey, "u:") && len(event.VisitorKey) <= 128 && len(route) <= 128
 	default:
@@ -643,12 +643,23 @@ func noticeFromEvent(event Event) Notification {
 	if event.Kind == "project_note_open" {
 		title, body = "私人项目有新访问", "有受邀账号查看了你分享的固定版本"
 		route = projectNoteNotificationRoute(event)
+	} else if event.Kind == "project_note_feedback" {
+		title, body = "项目收到业主反馈", "业主对固定方案提交了反馈，请及时处理"
+		route = projectNoteNotificationRoute(event)
 	}
 	return Notification{ID: event.ID, EventID: event.ID, RecipientID: event.RecipientID, Kind: event.Kind, Title: title, Body: body, Route: route, ContentID: event.ContentID, ShareID: event.ShareID, CreatedAt: event.OccurredAt.UTC()}
 }
 
 func projectNoteNotificationRoute(event Event) string {
-	return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&version_id=" + url.QueryEscape(event.ContentID)
+	route := "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&version_id=" + url.QueryEscape(event.ContentID)
+	if event.Kind == "project_note_feedback" {
+		return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID)
+	}
+	return route
+}
+
+func allowsExternalDelivery(event Event) bool {
+	return event.Kind != "project_note_feedback"
 }
 
 func randomToken() (string, error) {

@@ -146,7 +146,7 @@ test('designer ignores account A project response after switching to account B',
   assert.equal(page.data.ownerID, '');
 });
 
-test('shared note opens only after protected content is rendered and retries one stable event id', async () => {
+test('shared note sends a named receipt only on an explicit action and retries one stable event id', async () => {
   const openIDs = [];
   const api = {
     getSharedProjectNote: async () => ({
@@ -161,6 +161,8 @@ test('shared note opens only after protected content is rendered and retries one
   await page.loadShared();
   assert.equal(page.data.view.version.version_id, 'version-one');
   assert.equal(page.data.canConfirm, false);
+  assert.equal(openIDs.length, 0);
+  await page.acknowledgeRead();
   await page.reportOpen();
   assert.equal(openIDs.length, 2);
   assert.equal(openIDs[0], openIDs[1]);
@@ -186,6 +188,8 @@ test('account switch rotates open event and old pending completion cannot clear 
   token = 'account-b';
   page.onShow();
   await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(calls.length, 1);
+  await page.acknowledgeRead();
   assert.equal(calls.length, 2);
   assert.notEqual(calls[0].eventID, calls[1].eventID);
   assert.equal(calls[1].token, 'account-b');
@@ -194,6 +198,199 @@ test('account switch rotates open event and old pending completion cannot clear 
   await pendingA;
   assert.equal(page._openSent, true);
   assert.equal(page._openPending, null);
+});
+
+test('project metadata update sends the selected revision and preserves confirmed as a server-owned state', async () => {
+  const calls = [];
+  const page = pageHarness('projectnotes', { updateProjectNoteProject: async (id, patch) => { calls.push({ id, patch }); return { project_id: id, ...patch, revision: 8, status: 'confirmed' }; } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'project-one', revision: 7, status: 'confirmed' }, projectEdit: { name: '张宅', location: '苏州', building_area: '168.5', floors: '2', style: '现代' } });
+  await page.saveProjectDetails();
+  assert.equal(calls[0].id, 'project-one');
+  assert.equal(calls[0].patch.expected_revision, 7);
+  assert.equal(calls[0].patch.building_area, 168.5);
+  assert.equal(calls[0].patch.floors, 2);
+  assert.equal(calls[0].patch.status, undefined);
+  assert.equal(page.data.selectedProject.revision, 8);
+  assert.equal(page.data.selectedProject.status, 'confirmed');
+});
+
+test('selecting a draft picks its own versions and returning from a fixed version restores that draft', async () => {
+  const detail = { project: { project_id: 'project-one' }, notes: [
+    { note_id: 'note-b', title: 'B草稿', body: 'B正文', body_format: 'plain', revision: 2 },
+    { note_id: 'note-a', title: 'A草稿', body: 'A正文', body_format: 'plain', revision: 3 },
+  ], versions: [{ version_id: 'version-b', note_id: 'note-b', revision: 2 }, { version_id: 'version-a', note_id: 'note-a', revision: 1 }], feedbacks: [], shares: [] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => detail,
+    getProjectNoteVersion: async (_, id) => ({ project_id: 'project-one', version_id: id, note_id: 'note-a', revision: 1, title: 'A旧版', body: 'A旧正文', body_format: 'plain', media: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail(detail);
+  await page.selectNote({ detail: { value: 1 } });
+  assert.equal(page.data.note.note_id, 'note-a');
+  assert.equal(page.data.frozenVersion.version_id, 'version-a');
+  assert.equal(page.data.versionChoices.length, 1);
+  await page.selectVersion({ currentTarget: { dataset: { id: 'version-a' } } });
+  assert.equal(page.data.versionView.body, 'A旧正文');
+  assert.equal(page.data.note, null);
+  await page.returnToDraft();
+  assert.equal(page.data.note.note_id, 'note-a');
+  assert.equal(page.data.noteBody, 'A正文');
+});
+
+test('a new note form stays separate from existing drafts after a refresh', async () => {
+  const detail = { project: { project_id: 'p' }, notes: [{ note_id: 'a', title: '已有', body: '正文', body_format: 'plain' }], versions: [], feedbacks: [] };
+  const page = pageHarness('projectnotes', { getProjectNoteProject: async () => detail });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail(detail);
+  await page.startNewNote();
+  await page.refreshProject();
+  assert.equal(page.data.note, null);
+  assert.equal(page.data.noteTitle, '');
+  assert.equal(page.data.frozenVersion, null);
+});
+
+test('feedback can be selected directly and reply retries preserve a semantic idempotency key', async () => {
+  const calls = []; let count = 0, keys = 0;
+  const page = pageHarness('projectnotes', {
+    mutationKey: () => 'key-' + ++keys,
+    resolveProjectNoteFeedback: async (...args) => { calls.push(args); if (++count === 1) throw new Error('网络中断'); return {}; },
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, feedbacks: [], notes: [], versions: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, feedbacks: [{ feedback_id: 'f', text: '调整厨房', version_id: 'v' }] });
+  page.selectFeedback({ currentTarget: { dataset: { id: 'f' } } });
+  assert.equal(page.data.selectedFeedback.text, '调整厨房');
+  page.setFeedbackReply({ detail: { value: '已调整厨房布局' } });
+  await page.resolveProjectNoteFeedback(); await page.resolveProjectNoteFeedback();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][0], 'f'); assert.equal(calls[0][2], calls[1][2]);
+});
+
+test('changing satisfaction creates a different feedback retry while preserving its exact version', async () => {
+  const calls = []; let key = 0;
+  const page = pageHarness('projectnoteview', { mutationKey: () => 'key-' + ++key, addSharedProjectNoteFeedback: async (...args) => { calls.push(args); throw new Error('网络中断'); } });
+  page.onLoad({ pns: 'opaque-private-token' }); page._accountToken = 'session-token'; page._epoch = 1;
+  page.setData({ view: { share: { share_id: 's' }, version: { version_id: 'v' } }, feedbackText: '请调整厨房' });
+  page.setSatisfaction({ detail: { value: 'needs_adjustment' } });
+  await page.submitFeedback(); await page.submitFeedback();
+  assert.equal(calls[0][3], 'needs_adjustment'); assert.equal(calls[0][2], calls[1][2]);
+  page.setSatisfaction({ detail: { value: 'unsatisfied' } });
+  await page.submitFeedback();
+  assert.equal(calls[2][3], 'unsatisfied'); assert.notEqual(calls[0][2], calls[2][2]);
+});
+
+test('project AI carries only known facts and returns to the same note across hide/show without losing media', async () => {
+  let navigation; const sent = [];
+  const page = pageHarness('projectnotes', { getProjectNoteProject: async () => ({ project: { project_id: 'p' } }) }, { navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅', location: '苏州', floors: 2, crm_id: 'private-crm', revision: 1 }, note: { note_id: 'n', revision: 3 }, noteTitle: '方案说明', noteBody: '已知事实', noteMedia: [{ media_id: 'private-media' }], feedbacks: [{ text: '私人反馈' }] });
+  page.openNoteAIWriting();
+  assert.match(navigation.url, /source=project_note/);
+  assert.equal(sent[0][0], 'writingContext');
+  assert.match(sent[0][1].facts, /苏州/);
+  assert.doesNotMatch(sent[0][1].facts, /private-|私人反馈|建筑面积/);
+  page.onHide();
+  const result = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: 'AI标题', text: '新的方案说明' };
+  navigation.events.prefillContent(result); navigation.events.prefillContent(result);
+  await page.onShow();
+  assert.equal(page.data.noteTitle, '方案说明');
+  assert.equal(page.data.noteBody, '已知事实\n\n新的方案说明');
+  assert.equal(page.data.noteMedia[0].media_id, 'private-media');
+  assert.equal(page.data.note.note_id, 'n');
+});
+
+test('project AI rejects changed drafts, revision mismatches and wrong target identities', () => {
+  for (const change of ['text', 'revision', 'identity']) {
+    let navigation;
+    const page = pageHarness('projectnotes', {}, { navigateTo: options => { navigation = options; } });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
+    page.openNoteAIWriting();
+    if (change === 'text') page.setData({ noteBody: '用户刚修改' });
+    if (change === 'revision') page.setData({ note: { note_id: 'n', revision: 4 } });
+    navigation.events.prefillContent({ source: 'project_note', project_id: change === 'identity' ? 'other' : 'p', note_id: 'n', note_revision: 3, text: '不能采用' });
+    assert.doesNotMatch(page.data.noteBody, /不能采用/);
+    assert.match(page.data.notice, /未采用/);
+  }
+});
+
+test('freezing requires the current form to be saved and never silently shares an older draft', async () => {
+  let calls = 0;
+  const page = pageHarness('projectnotes', { freezeProjectNoteVersion: async () => { calls++; return {}; } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 2, title: '原题', body: '已保存', body_format: 'plain', media_ids: [] }, noteTitle: '新标题', noteBody: '已保存' });
+  await page.freezeProjectNoteVersion();
+  assert.equal(calls, 0);
+  assert.match(page.data.error, /先保存/);
+});
+
+test('project metadata PATCH and feedback satisfaction use the signed private contract', async () => {
+  const { api, calls } = loadAPI();
+  await api.updateProjectNoteProject('p', { expected_revision: 2, location: '苏州' });
+  await api.addSharedProjectNoteFeedback('opaque-token', '调整厨房', 'stable-key', 'needs_adjustment');
+  assert.equal(calls[0].options.method, 'PATCH');
+  assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/project-notes/projects/p');
+  assert.equal(calls[0].options.data.expected_revision, 2);
+  assert.equal(calls[1].options.data.satisfaction, 'needs_adjustment');
+});
+
+test('copy selects the new draft while delete clears only the selected draft after confirmation', async () => {
+  const calls = [], project = { project_id: 'p' };
+  let notes = [{ note_id: 'n', revision: 3, title: '原方案', body: '正文', body_format: 'plain' }];
+  const page = pageHarness('projectnotes', {
+    copyProjectNote: async (id, revision) => { calls.push(['copy', id, revision]); const copy = { ...notes[0], note_id: 'copy', revision: 1 }; notes.push(copy); return copy; },
+    deleteProjectNote: async (id, revision) => { calls.push(['delete', id, revision]); notes = notes.filter(note => note.note_id !== id); return {}; },
+    getProjectNoteProject: async () => ({ project, notes, versions: [], feedbacks: [], shares: [] }),
+  }, { showModal: options => options.success({ confirm: true }) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project, notes, versions: [] });
+  await page.copyProjectNote();
+  assert.equal(page.data.note.note_id, 'copy');
+  await page.deleteProjectNote();
+  assert.deepEqual(calls, [['copy', 'n', 3], ['delete', 'copy', 1]]);
+  assert.equal(page.data.note, null);
+  assert.equal(page.data.notes.length, 1);
+});
+
+test('designer history paginates with bounded replacement and can return to the previous page', async () => {
+  const calls = [];
+  const page = pageHarness('projectnotes', { getProjectNoteHistory: async (project, type, query) => {
+    calls.push({ project, type, ...query });
+    return query.cursor ? { items: [{ version_id: 'v-old', title: '旧方案', revision: 1 }], next_cursor: '' } : { items: [{ version_id: 'v-new', title: '新方案', revision: 2 }], next_cursor: 'next' };
+  } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.setData({ selectedProject: { project_id: 'p' } });
+  await page.loadHistory();
+  await page.loadHistory({ currentTarget: { dataset: { direction: 'next' } } });
+  assert.equal(page.data.historyItems.length, 1); assert.equal(page.data.historyItems[0].version_id, 'v-old');
+  await page.loadHistory({ currentTarget: { dataset: { direction: 'previous' } } });
+  assert.equal(page.data.historyItems[0].version_id, 'v-new');
+  assert.deepEqual(calls.map(item => item.cursor), ['', 'next', '']);
+  assert.ok(calls.every(item => item.project === 'p' && item.type === 'versions' && item.limit <= 50));
+});
+
+test('old notification loads its exact feedback and old selected draft outside the initial window', async () => {
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [], versions: [], feedbacks: [] }),
+    getProjectNoteVersion: async () => ({ project_id: 'p', version_id: 'old-v', note_id: 'old-n', title: '旧版', body: '旧文', body_format: 'plain' }),
+    getProjectNoteFeedback: async () => ({ project_id: 'p', version_id: 'old-v', feedback_id: 'old-f', text: '旧意见', reply: '旧回复', resolved: true }),
+    getProjectNote: async () => ({ project_id: 'p', note_id: 'old-n', title: '当前旧笔记草稿', body: '可编辑', body_format: 'plain', revision: 3 }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._targetVersionID = 'old-v'; page._targetFeedbackID = 'old-f';
+  await page.openProject('p', 1);
+  assert.equal(page.data.selectedFeedback.text, '旧意见');
+  assert.equal(page.data.selectedFeedback.resolution_reply, '旧回复');
+  await page.returnToDraft();
+  assert.equal(page.data.note.note_id, 'old-n'); assert.equal(page.data.note.revision, 3);
+});
+
+test('shared history never appends old-account results to the current protected view', async () => {
+  let token = 'a', finish;
+  const page = pageHarness('projectnoteview', { getSharedProjectNoteHistory: () => new Promise(resolve => { finish = resolve; }) }, { getStorageSync: key => key === 'token' ? token : '' });
+  page._visible = true; page._accountToken = token; page._epoch = 1; page._shareToken = 'opaque-token'; page.setData({ view: { version: { version_id: 'v' } } });
+  const pending = page.loadActivityHistory();
+  token = 'b'; page.clearProtected(); finish({ items: [{ text: '旧账号私密意见' }] }); await pending;
+  assert.equal(page.data.activityItems.length, 0);
 });
 
 test('feedback lost-response retry reuses one semantic idempotency key and resets after success or text change', async () => {
@@ -467,4 +664,221 @@ test('designer management page exposes fixed-version workflow actions and workbe
   }
   const workbench = fs.readFileSync(path.join(root, 'pages/contentworkbench/contentworkbench.ts'), 'utf8');
   assert.match(workbench, /openNotes\(\).*\/pages\/projectnotes\/projectnotes/);
+});
+
+test('an unversioned draft has no feedback confirmation or share and ignores a deleted latest note', () => {
+  const page = pageHarness('projectnotes', {});
+  page._newNote = true;
+  page.applyProjectDetail({
+    project: { project_id: 'project-one' },
+    notes: [{ note_id: 'active-note', title: '活动草稿', body: '正文', body_format: 'plain' }],
+    latest_version: { version_id: 'deleted-version', note_id: 'deleted-note', revision: 3 },
+    versions: [{ version_id: 'deleted-version', note_id: 'deleted-note', revision: 3 }],
+    active_share: { share_id: 'old-share', version_id: 'deleted-version' },
+    shares: [{ share_id: 'old-share', version_id: 'deleted-version', revoked: false }],
+    feedbacks: [{ feedback_id: 'old-feedback', version_id: 'deleted-version', text: '旧意见' }],
+    confirmations: [{ confirmation_id: 'old-confirmation', version_id: 'deleted-version' }],
+  });
+  assert.equal(page.data.note, null);
+  assert.equal(page.data.frozenVersion, null);
+  assert.equal(page.data.activeShare, null);
+  assert.deepEqual(Array.from(page.data.feedbacks), []);
+  assert.deepEqual(Array.from(page.data.confirmations), []);
+
+  page._newNote = false;
+  page._selectedNoteID = '';
+  page.applyProjectDetail({
+    project: { project_id: 'project-one' },
+    notes: [{ note_id: 'active-note', title: '活动草稿', body: '正文', body_format: 'plain' }],
+    latest_version: { version_id: 'deleted-version', note_id: 'deleted-note', revision: 3 },
+    versions: [{ version_id: 'deleted-version', note_id: 'deleted-note', revision: 3 }],
+  });
+  assert.equal(page.data.note.note_id, 'active-note');
+  assert.equal(page.data.frozenVersion, null);
+});
+
+test('every draft-replacing action asks before discarding unsaved note input', async () => {
+  const detail = {
+    project: { project_id: 'project-one' },
+    notes: [
+      { note_id: 'note-one', revision: 2, title: '草稿一', body: '已保存', body_format: 'plain' },
+      { note_id: 'note-two', revision: 1, title: '草稿二', body: '另一篇', body_format: 'plain' },
+    ],
+    versions: [{ version_id: 'version-one', note_id: 'note-one', revision: 1 }],
+    shares: [], feedbacks: [], confirmations: [],
+  };
+  const actions = [
+    page => page.selectProject({ currentTarget: { dataset: { id: 'project-two' } } }),
+    page => page.selectNote({ detail: { value: 1 } }),
+    page => page.selectVersion({ currentTarget: { dataset: { id: 'version-one' } } }),
+    page => page.startNewNote(),
+    page => { page.setData({ historyType: 'versions', historyItems: [{ version_id: 'version-one' }] }); return page.openHistoryItem({ currentTarget: { dataset: { index: 0 } } }); },
+    page => page.returnToDraft(),
+    page => page.copyProjectNote(),
+  ];
+  for (const action of actions) {
+    let modalCount = 0, readCount = 0, copyCount = 0;
+    const page = pageHarness('projectnotes', {
+      getProjectNoteProject: async () => { readCount += 1; return detail; },
+      copyProjectNote: async () => { copyCount += 1; return detail.notes[1]; },
+    }, { showModal: options => { modalCount += 1; options.success({ confirm: false }); } });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.applyProjectDetail(detail);
+    page.setData({ noteBody: '尚未保存的新内容' });
+    await action(page);
+    assert.equal(modalCount, 1);
+    assert.equal(readCount, 0);
+    assert.equal(copyCount, 0);
+    assert.equal(page.data.note.note_id, 'note-one');
+    assert.equal(page.data.noteBody, '尚未保存的新内容');
+  }
+});
+
+test('same-account project resume revalidates access without replacing a dirty form', async () => {
+  let mode = 'ok', reads = 0;
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => {
+      reads += 1;
+      if (mode === 'denied') throw Object.assign(new Error('已撤权'), { statusCode: 403 });
+      if (mode === 'network') throw Object.assign(new Error('网络中断'), { networkError: true });
+      return { project: { project_id: 'project-one' } };
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', revision: 1, title: '标题', body: '已保存', body_format: 'plain' }], versions: [] });
+  page.setData({ noteBody: '待保存输入' });
+  await page.onShow();
+  assert.equal(reads, 1);
+  assert.equal(page.data.noteBody, '待保存输入');
+
+  mode = 'network';
+  await page.onShow();
+  assert.equal(page.data.noteBody, '待保存输入');
+  assert.equal(page.data.accessRecheckRequired, true);
+  assert.match(page.data.notice, /重试/);
+
+  mode = 'ok';
+  await page.retryProjectAccess();
+  assert.equal(page.data.accessRecheckRequired, false);
+  assert.equal(page.data.noteBody, '待保存输入');
+
+  mode = 'denied';
+  await page.onShow();
+  assert.equal(page.data.noteBody, '');
+  assert.equal(page.data.selectedProject, null);
+  assert.match(page.data.error, /权限|访问/);
+});
+
+test('same-account shared resume preserves feedback input and does not redownload media', async () => {
+  let mode = 'ok', reads = 0, downloads = 0, submissions = 0;
+  const view = { project: { project_id: 'project-one' }, share: { share_id: 'share-one' }, version: { version_id: 'version-one', title: '方案', body_format: 'plain', body: '正文', media: [{ media_id: 'image-one', kind: 'image' }] }, feedbacks: [], can_confirm: true };
+  const page = pageHarness('projectnoteview', {
+    getSharedProjectNote: async () => {
+      reads += 1;
+      if (mode === 'denied') throw Object.assign(new Error('已撤权'), { statusCode: 403 });
+      if (mode === 'network') throw Object.assign(new Error('网络中断'), { networkError: true });
+      return view;
+    },
+    downloadSharedProjectNoteMedia: async () => { downloads += 1; return '/tmp/image-one.png'; },
+    addSharedProjectNoteFeedback: async () => { submissions += 1; return {}; },
+    mutationKey: () => 'feedback-key',
+  });
+  page.onLoad({ pns: 'opaque-private-token' });
+  page._accountToken = 'session-token'; page._epoch = 1; page._accessVerified = true;
+  page.setData({ view, media: [{ media_id: 'image-one', kind: 'image', local_path: '/tmp/cached.png' }], feedbackText: '待提交意见', satisfaction: 'needs_adjustment', shareReady: true, canConfirm: true });
+  await page.onShow();
+  assert.equal(reads, 1);
+  assert.equal(downloads, 0);
+  assert.equal(page.data.feedbackText, '待提交意见');
+  assert.equal(page.data.satisfaction, 'needs_adjustment');
+  assert.equal(page.data.media[0].local_path, '/tmp/cached.png');
+
+  mode = 'network';
+  await page.onShow();
+  assert.equal(page.data.feedbackText, '待提交意见');
+  assert.equal(page.data.satisfaction, 'needs_adjustment');
+  assert.match(page.data.error, /重试/);
+  await page.submitFeedback();
+  assert.equal(submissions, 0);
+
+  mode = 'denied';
+  await page.retry();
+  assert.equal(page.data.view, null);
+  assert.equal(page.data.feedbackText, '');
+  assert.equal(page.data.satisfaction, '');
+});
+
+test('an absent form baseline is clean and never opens a discard dialog', async () => {
+  let modalCount = 0;
+  const page = pageHarness('projectnotes', {}, { showModal: () => { modalCount += 1; } });
+  page.setData({ selectedProject: { project_id: 'project-one' }, note: { note_id: 'note-one', revision: 1 }, noteTitle: '临时标题', noteBody: '临时正文' });
+  assert.equal(page.hasUnsavedChanges(), false);
+  assert.equal(await page.confirmDiscardChanges(), true);
+  assert.equal(modalCount, 0);
+});
+
+test('cancelled project creation and collaboration mutations keep unsaved draft input', async () => {
+  const detail = {
+    project: { project_id: 'project-one', revision: 2, status: 'initial' },
+    notes: [{ note_id: 'note-one', revision: 2, title: '标题', body: '已保存', body_format: 'plain', media_ids: [] }],
+    versions: [], shares: [], feedbacks: [{ feedback_id: 'feedback-one', text: '请调整' }], confirmations: [], members: [{ actor_id: 202, active: true }],
+  };
+  const actions = [
+    page => { page.setData({ projectName: '新项目', ownerID: 'owner-one' }); return page.createProjectNoteProject(); },
+    page => { page.setData({ memberAccount: '303' }); return page.inviteProjectNoteMember(); },
+    page => page.revokeProjectNoteMember({ currentTarget: { dataset: { account: 202 } } }),
+    page => { page.setData({ confirmerAccount: 202 }); return page.setProjectNoteConfirmer(); },
+    page => { page.setData({ feedbackID: 'feedback-one', feedbackReply: '已处理' }); return page.resolveProjectNoteFeedback(); },
+  ];
+  for (const action of actions) {
+    let mutationCount = 0, modalCount = 0;
+    const mutation = async () => { mutationCount += 1; return {}; };
+    const page = pageHarness('projectnotes', {
+      createProjectNoteProject: mutation, inviteProjectNoteMember: mutation, revokeProjectNoteMember: mutation,
+      setProjectNoteConfirmer: mutation, resolveProjectNoteFeedback: mutation, updateProjectNoteProject: mutation,
+      freezeProjectNoteVersion: mutation, mutationKey: () => 'stable-key',
+    }, { showModal: options => { modalCount += 1; options.success({ confirm: false }); } });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.applyProjectDetail(detail);
+    page.setData({ noteBody: '尚未保存的新内容' });
+    await action(page);
+    assert.equal(modalCount, 1);
+    assert.equal(mutationCount, 0);
+    assert.equal(page.data.noteBody, '尚未保存的新内容');
+  }
+});
+
+test('marking a project revising asks only when unsaved project fields would be replaced', async () => {
+  let modalCount = 0, mutations = 0;
+  const page = pageHarness('projectnotes', { updateProjectNoteProject: async () => { mutations += 1; return {}; } }, { showModal: options => { modalCount += 1; options.success({ confirm: false }); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'project-one', revision: 2, name: '原项目', status: 'initial' }, notes: [{ note_id: 'note-one', revision: 1, title: '标题', body: '已保存', body_format: 'plain' }], versions: [] });
+  page.setData({ noteBody: '未保存笔记' });
+  await page.markProjectRevising();
+  assert.equal(modalCount, 0);
+  assert.equal(mutations, 1);
+  page.applyProjectDetail({ project: { project_id: 'project-one', revision: 2, name: '原项目', status: 'initial' }, notes: [{ note_id: 'note-one', revision: 1, title: '标题', body: '已保存', body_format: 'plain' }], versions: [] });
+  page.setData({ projectEdit: { ...page.data.projectEdit, name: '未保存项目名' } });
+  await page.markProjectRevising();
+  assert.equal(modalCount, 1);
+  assert.equal(mutations, 1);
+  assert.equal(page.data.projectEdit.name, '未保存项目名');
+});
+
+test('AI return preserves its fill but still clears private content after permission revocation', async () => {
+  let navigation, checks = 0;
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => { checks += 1; throw Object.assign(new Error('已撤权'), { statusCode: 403 }); },
+  }, { navigateTo: options => { navigation = options; options.success({ eventChannel: { emit() {} } }); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', revision: 1, title: '标题', body: '已保存', body_format: 'plain' }], versions: [] });
+  page.openNoteAIWriting();
+  page.onHide();
+  navigation.events.prefillContent({ source: 'project_note', project_id: 'project-one', note_id: 'note-one', note_revision: 1, text: 'AI 补充' });
+  assert.match(page.data.noteBody, /AI 补充/);
+  await page.onShow();
+  assert.equal(checks, 1);
+  assert.equal(page.data.noteBody, '');
+  assert.equal(page.data.selectedProject, null);
+  assert.match(page.data.error, /权限|访问/);
 });

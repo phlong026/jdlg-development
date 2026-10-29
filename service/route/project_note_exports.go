@@ -43,6 +43,24 @@ func registerProjectNoteExportHandlers(root, manage *gin.RouterGroup, svc *track
 
 func buildProjectNoteDOCX(ctx context.Context, svc *tracking.Service, version tracking.ProjectNoteVersion, max int64) ([]byte, error) {
 	doc := notedocx.Document{Title: version.Title, Subtitle: fmt.Sprintf("固定版本 V%d · %s", version.Revision, version.FrozenAt.UTC().Format("2006-01-02 15:04 UTC")), Body: version.Body, BodyFormat: version.BodyFormat}
+	// Only frozen facts belong in an exported version; never fill legacy gaps
+	// from today's mutable project record.
+	facts := version.ProjectSnapshot
+	if facts.Name != "" {
+		doc.ProjectFacts = append(doc.ProjectFacts, "项目："+facts.Name)
+	}
+	if facts.Location != "" {
+		doc.ProjectFacts = append(doc.ProjectFacts, "地点："+facts.Location)
+	}
+	if facts.BuildingArea > 0 {
+		doc.ProjectFacts = append(doc.ProjectFacts, fmt.Sprintf("建筑面积：%g 平方米", facts.BuildingArea))
+	}
+	if facts.Floors > 0 {
+		doc.ProjectFacts = append(doc.ProjectFacts, fmt.Sprintf("层数：%d", facts.Floors))
+	}
+	if facts.Style != "" {
+		doc.ProjectFacts = append(doc.ProjectFacts, "风格："+facts.Style)
+	}
 	assets := append([]tracking.Asset(nil), version.Media...)
 	if version.Cover != nil {
 		doc.CoverID = version.Cover.ID

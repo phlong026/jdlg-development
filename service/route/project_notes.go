@@ -126,6 +126,8 @@ func projectNoteAccount(c *gin.Context, raw string) (int64, bool) {
 
 func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Service, deps projectNoteHandlerDeps) {
 	registerProjectNoteExportHandlers(root, manage, svc, deps)
+	registerProjectNoteLifecycleHandlers(manage, svc)
+	registerProjectNoteHistoryHandlers(root, manage, svc, deps)
 	manage.GET("/projects", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("limit"))
 		out, err := svc.ProjectNoteListProjects(c.Request.Context(), projectNoteScope(c), limit, c.Query("cursor"))
@@ -148,6 +150,14 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 	})
 	manage.GET("/projects/:id", func(c *gin.Context) {
 		out, err := svc.ProjectNoteGetProjectDetail(c.Request.Context(), projectNoteScope(c), c.Param("id"))
+		trackingResponse(c, out, err)
+	})
+	manage.PATCH("/projects/:id", func(c *gin.Context) {
+		var input tracking.ProjectNoteProjectUpdate
+		if !projectNoteBind(c, &input) {
+			return
+		}
+		out, err := svc.ProjectNoteUpdateProject(c.Request.Context(), projectNoteScope(c), c.Param("id"), input)
 		trackingResponse(c, out, err)
 	})
 	manage.POST("/projects/:id/members/:account", func(c *gin.Context) {
@@ -265,9 +275,14 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 	})
 	root.POST("/shared/:token/open", func(c *gin.Context) {
 		var input struct {
-			EventID string `json:"event_id"`
+			EventID      string `json:"event_id"`
+			Acknowledged bool   `json:"acknowledged"`
 		}
 		if !projectNoteBind(c, &input) {
+			return
+		}
+		if !input.Acknowledged {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "请主动确认后再告知设计师"})
 			return
 		}
 		out, err := svc.ProjectNoteOpenShare(c.Request.Context(), c.Param("token"), deps.actor(c), input.EventID)
@@ -276,12 +291,13 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 	root.POST("/shared/:token/feedback", func(c *gin.Context) {
 		var input struct {
 			Text           string `json:"text"`
+			Satisfaction   string `json:"satisfaction"`
 			IdempotencyKey string `json:"idempotency_key"`
 		}
 		if !projectNoteBind(c, &input) {
 			return
 		}
-		out, err := svc.ProjectNoteAddFeedback(c.Request.Context(), c.Param("token"), deps.actor(c), input.Text, input.IdempotencyKey)
+		out, err := svc.ProjectNoteAddFeedbackWithSatisfaction(c.Request.Context(), c.Param("token"), deps.actor(c), input.Text, input.Satisfaction, input.IdempotencyKey)
 		trackingResponse(c, out, err)
 	})
 	root.POST("/shared/:token/confirm", func(c *gin.Context) {

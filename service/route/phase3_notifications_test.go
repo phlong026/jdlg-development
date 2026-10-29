@@ -27,3 +27,13 @@ func TestDeliveryEligibilityKeepsProjectNoteKind(t *testing.T) {
 		t.Fatalf("event = %#v", event)
 	}
 }
+
+func TestDeliveryEligibilityKeepsProjectFeedbackKind(t *testing.T) {
+	event := deliveryNoticeEvent(notification.DeliveryJob{
+		Notice:   notification.Notification{EventID: "project-feedback-event-1", Kind: "project_note_feedback"},
+		Delivery: notification.Delivery{RecipientID: 42},
+	})
+	if event.ID != "project-feedback-event-1" || event.Kind != "project_note_feedback" || event.RecipientID != 42 {
+		t.Fatalf("event = %#v", event)
+	}
+}

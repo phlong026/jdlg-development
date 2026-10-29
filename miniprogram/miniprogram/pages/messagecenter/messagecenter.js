@@ -1,7 +1,7 @@
 const {request}=require('../../utils/phase3-api');
 const ROOT='/api/v1/miniprogram/notifications';
 const BINDING='/api/v1/miniprogram/official-account/binding';
-function privateProjectNoteRoute(value){const route=String(value||'');return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}&version_id=[A-Za-z0-9_-]{8,128}$/.test(route)?'/'+route:'';}
+function privateProjectNoteRoute(item){const route=String(item&&item.route_key||'');if(item&&item.kind==='project_note_feedback'){const id=/^[A-Za-z0-9_-]{8,128}$/;const version=String(item.content_id||''),notice=String(item.notification_id||''),feedback=notice.startsWith('feedback:')?notice.slice(9):'';return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}$/.test(route)&&id.test(version)&&id.test(feedback)?'/'+route+'&version_id='+encodeURIComponent(version)+'&feedback_id='+encodeURIComponent(feedback):'';}return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}&version_id=[A-Za-z0-9_-]{8,128}$/.test(route)?'/'+route:'';}
 Page({
  data:{loading:false,messages:[],cursor:'',unread:0,error:'',loginRequired:false,bindingLabel:'正在检查提醒状态',canBind:false,bindingBusy:false},
  onLoad(options){this._pendingNotice=String(options.notification_id||'');},
@@ -39,8 +39,8 @@ Page({
    await request(ROOT+'/'+encodeURIComponent(id)+'/read','PATCH');if(!this.current(epoch))return;
    this.setData({messages:this.data.messages.map(row=>row.notification_id===id?{...row,read_at:row.read_at||new Date().toISOString()}:row)});await this.loadUnread(epoch);if(!this.current(epoch))return;
    if(item.cancelled_at){wx.showToast({title:'这条提醒已失效',icon:'none'});return;}
-   const privateRoute=privateProjectNoteRoute(item.route_key);
-   if(item.kind==='project_note_open'){if(privateRoute)wx.navigateTo({url:privateRoute});else wx.showToast({title:'私人项目提醒已失效',icon:'none'});}
+   const privateRoute=privateProjectNoteRoute(item);
+   if(item.kind==='project_note_open'||item.kind==='project_note_feedback'){if(privateRoute)wx.navigateTo({url:privateRoute});else wx.showToast({title:'私人项目提醒已失效',icon:'none'});}
    else if(item.share_id)wx.navigateTo({url:'/pages/visitdetail/visitdetail?share_id='+encodeURIComponent(item.share_id)});
    else wx.showModal({title:item.title||'浏览提醒',content:item.body||'有人浏览了你分享的内容',showCancel:false});
   }catch(error){if(this.current(epoch))wx.showToast({title:'消息不可查看，请刷新后重试',icon:'none'});}

@@ -97,6 +97,31 @@ func TestProjectNoteExportPinsVersionAndHasSafeDownloadHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectNoteExportIncludesOnlyFrozenKnownProjectFacts(t *testing.T) {
+	_, svc, _, _ := newProjectNoteHandlerFixture(t)
+	version := tracking.ProjectNoteVersion{Title: "方案", Body: "正文", BodyFormat: "plain", Revision: 2,
+		ProjectSnapshot: tracking.ProjectNoteProjectSnapshot{Name: "张宅", Location: "苏州 & 湖畔", BuildingArea: 168.5, Floors: 2, Style: "现代"}}
+	data, err := buildProjectNoteDOCX(context.Background(), svc, version, projectNoteExportMaxBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xml := exportedDocumentXML(t, data)
+	for _, want := range []string{"项目：张宅", "地点：苏州 &amp; 湖畔", "建筑面积：168.5 平方米", "层数：2", "风格：现代", "正文"} {
+		if !strings.Contains(xml, want) {
+			t.Fatalf("missing frozen fact %q", want)
+		}
+	}
+	version.ProjectSnapshot = tracking.ProjectNoteProjectSnapshot{}
+	data, err = buildProjectNoteDOCX(context.Background(), svc, version, projectNoteExportMaxBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xml = exportedDocumentXML(t, data)
+	if strings.Contains(xml, "建筑面积：") || strings.Contains(xml, "项目：") {
+		t.Fatal("legacy unknown facts must remain absent")
+	}
+}
 func TestProjectNoteExportRejectsUninvitedRemovedExpiredRevokedAndForeignDesigner(t *testing.T) {
 	for _, scenario := range []string{"uninvited", "removed", "expired", "revoked", "foreign-designer", "foreign-project"} {
 		t.Run(scenario, func(t *testing.T) {

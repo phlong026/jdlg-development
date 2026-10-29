@@ -117,7 +117,7 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 			scope tracking.Scope
 			err   error
 		)
-		if event.Kind == "project_note_open" {
+		if event.Kind == "project_note_open" || event.Kind == "project_note_feedback" {
 			scope, err = loadMiniTrackingMaterialScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
 		} else {
 			scope, err = loadMiniTrackingMyScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
@@ -203,7 +203,7 @@ func phase3NoticeEligible(ctx context.Context, svc *tracking.Service, event noti
 	if event.Owner != "" && !scope.Allows(event.Owner) {
 		return false, nil
 	}
-	if event.Kind == "project_note_open" {
+	if event.Kind == "project_note_open" || event.Kind == "project_note_feedback" {
 		return svc.ProjectNoteNoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
 	}
 	return svc.NoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)

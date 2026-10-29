@@ -44,6 +44,7 @@ type Media struct {
 }
 type Document struct {
 	Title, Subtitle, Body, BodyFormat string
+	ProjectFacts                      []string
 	CoverID                           string
 	Media                             []Media
 }
@@ -73,8 +74,13 @@ func Build(ctx context.Context, doc Document, limits Limits) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(doc.Body) > maxDocumentBytes || len(doc.Title) > 1024 || len(doc.Subtitle) > 1024 || len(doc.Media) > 51 {
+	if len(doc.Body) > maxDocumentBytes || len(doc.Title) > 1024 || len(doc.Subtitle) > 1024 || len(doc.Media) > 51 || len(doc.ProjectFacts) > 5 {
 		return nil, ErrLimit
+	}
+	for _, fact := range doc.ProjectFacts {
+		if len(fact) > 1024 {
+			return nil, ErrLimit
+		}
 	}
 	max := limits.MaxOutputBytes
 	if max <= 0 || max > DefaultMaxBytes {
@@ -120,6 +126,11 @@ func Build(ctx context.Context, doc Document, limits Limits) ([]byte, error) {
 	}
 	if doc.Subtitle != "" {
 		if err = appendParagraph(&body, doc.Subtitle, "Subtitle"); err != nil {
+			return nil, err
+		}
+	}
+	for _, fact := range doc.ProjectFacts {
+		if err = appendParagraph(&body, fact, "Normal"); err != nil {
 			return nil, err
 		}
 	}
