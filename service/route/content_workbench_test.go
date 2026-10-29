@@ -25,6 +25,7 @@ func TestWorkbenchUsesSignedMiniAuthentication(t *testing.T) {
 		{"GET", "/api/v1/miniprogram/workbench/contents"},
 		{"POST", "/api/v1/miniprogram/workbench/contents"},
 		{"PATCH", "/api/v1/miniprogram/workbench/contents/other"},
+		{"DELETE", "/api/v1/miniprogram/workbench/contents/other"},
 		{"POST", "/api/v1/miniprogram/workbench/media"},
 	} {
 		w := httptest.NewRecorder()

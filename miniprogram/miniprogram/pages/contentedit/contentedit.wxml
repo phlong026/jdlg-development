@@ -6,9 +6,15 @@
   <view wx:elif="{{denied}}" class="state"><text>当前账号没有内容管理权限。</text><button class="secondary compact" bindtap="retry">重新检查</button></view>
   <view wx:elif="{{disabled}}" class="state">手机内容制作暂未开通。</view>
   <block wx:else>
-   <view class="editor-hero"><view><text class="eyebrow">内容制作</text><text class="hero-title">{{id ? '编辑内容' : '创建新内容'}}</text></view><view class="status-badge {{status}}">{{status === 'published' ? '已发布' : status === 'revoked' ? '已撤回' : '草稿'}}</view></view>
+   <view class="editor-hero"><view><text class="eyebrow">内容制作</text><text class="hero-title">{{id ? '编辑内容' : '创建新内容'}}</text></view><view class="status-badge {{status}}">{{status === 'published' ? '已发布' : status === 'revoked' ? '已撤回' : status === 'deleted' ? '已删除' : '草稿'}}</view></view>
    <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="notice">{{notice}}</view>
-   <block wx:if="{{legacyReadOnly}}">
+   <block wx:if="{{deleted}}"><view class="state"><text>这份草稿已删除，原媒体资料仍保留在授权素材库。</text><button class="secondary compact" bindtap="backToWorkbench">返回内容工作台</button></view></block>
+   <block wx:elif="{{documentReadOnly}}">
+    <view class="notice">文档资料保留 PDF/DOCX 原文件，仅授权账号可下载；小程序不在线编辑、不自动发布。</view>
+    <view class="panel document-panel"><text class="section-title">{{title}}</text><text class="muted">{{documentAsset.title || (documentAsset.mime === 'application/pdf' ? 'PDF 原文件' : 'DOCX 原文件')}}</text><button class="primary" bindtap="openDocument" loading="{{busy}}" disabled="{{busy || !documentAsset}}">鉴权打开原文件</button></view>
+    <button wx:if="{{id && status === 'draft' && version === 0 && !serverReadOnly}}" class="danger delete-draft-button" bindtap="deleteDraft" disabled="{{busy}}">删除草稿</button>
+   </block>
+   <block wx:elif="{{legacyReadOnly}}">
     <view class="notice">该内容使用旧 {{body_format}} 格式，小程序仅读展示原文，请前往后台编辑。</view>
     <view class="panel legacy-panel"><text class="section-title">{{title}}</text><rich-text wx:if="{{body_format === 'rich_text'}}" nodes="{{legacyBody}}" /><text wx:else user-select="true">{{legacyBody}}</text></view>
     <view wx:if="{{legacyMedia.length}}" class="section-heading"><text class="section-title">原内容媒体</text></view>
@@ -35,7 +41,8 @@
       <block wx:else><image wx:if="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" controls /><view wx:else class="muted media-placeholder">私有媒体预览暂不可用</view></block>
       <view class="actions"><button data-index="{{index}}" data-step="-1" bindtap="moveBlock" disabled="{{index === 0}}">上移</button><button data-index="{{index}}" data-step="1" bindtap="moveBlock" disabled="{{index === renderedBlocks.length - 1}}">下移</button><button class="remove" data-index="{{index}}" bindtap="removeBlock">删除</button></view>
      </view>
-     <view class="section-heading content-heading"><view><text class="section-title">素材库</text><text class="section-caption">上传后可加入正文或设为封面</text></view><button class="text-action" bindtap="chooseMedia" disabled="{{busy || !context.media_upload_configured}}">＋ 上传素材</button></view>
+     <view class="section-heading content-heading"><view><text class="section-title">素材库</text><text class="section-caption">图片/视频可加入正文，PDF/DOCX 将单独保存为私有文档资料</text></view><view class="heading-actions"><button class="text-action" bindtap="chooseDocument" disabled="{{busy || !context.media_upload_configured}}">＋ PDF/DOCX</button><button class="text-action" bindtap="chooseMedia" disabled="{{busy || !context.media_upload_configured}}">＋ 图片/视频</button></view></view>
+     <view wx:if="{{documentCandidates.length}}" class="panel"><text class="section-title">已上传文档</text><text class="section-caption">若上次建档中断，可直接重试，不会重复上传原文件</text><view wx:for="{{documentCandidates}}" wx:key="media_id" class="media-info"><view><text>{{item.title || '待归档文档'}}</text><text class="muted">{{item.mime === 'application/pdf' ? 'PDF' : 'DOCX'}}</text></view><button class="text-action" data-index="{{index}}" bindtap="archiveDocument" disabled="{{busy}}">保存为文档资料</button></view></view>
      <view wx:if="{{!media.length}}" class="state empty-state">暂无授权媒体，可从相册或相机上传。</view>
      <view wx:for="{{media}}" wx:key="media_id" class="panel media-row">
       <image wx:if="{{item.kind === 'image' && item.local_path}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.local_path}}" src="{{item.local_path}}" controls />
@@ -52,6 +59,7 @@
     </view>
     <view wx:if="{{status === 'published' && version > 0}}" class="published-card"><view><text class="published-title">内容已发布</text><text class="muted">公开版 V{{version}} 可阅读和分享</text></view><button class="secondary compact" bindtap="openPublished">查看并分享</button></view>
     <button wx:if="{{version > 0 && status !== 'revoked'}}" class="danger revoke-button" bindtap="revoke" disabled="{{busy}}">撤回已发布内容</button>
+    <button wx:if="{{id && status === 'draft' && version === 0 && !serverReadOnly}}" class="danger delete-draft-button" bindtap="deleteDraft" disabled="{{busy}}">删除草稿</button>
     <view class="editor-actions"><button class="secondary" bindtap="saveDraft" loading="{{busy}}" disabled="{{busy}}">保存草稿</button><button class="primary" bindtap="saveAndPreview" loading="{{busy}}" disabled="{{busy}}">保存并预览</button></view>
    </block>
   </block>

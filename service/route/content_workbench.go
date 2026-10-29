@@ -102,6 +102,16 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service)
 	}
 	writes.POST("/contents", save)
 	writes.PATCH("/contents/:id", save)
+	writes.DELETE("/contents/:id", func(c *gin.Context) {
+		var in struct {
+			Revision int `json:"expected_revision"`
+		}
+		if !trackingBind(c, &in) {
+			return
+		}
+		out, err := svc.DeleteContentDraft(c.Request.Context(), scope(c), c.Param("id"), in.Revision)
+		trackingResponse(c, out, err)
+	})
 	writes.POST("/contents/:id/preview", func(c *gin.Context) {
 		var in struct {
 			Revision int `json:"expected_revision"`

@@ -34,6 +34,7 @@ function mergeAssets(...groups) {
   groups.forEach(group => (Array.isArray(group) ? group : [group]).filter(Boolean).forEach(asset => assets.set(asset.media_id, { ...(assets.get(asset.media_id) || {}), ...asset })));
   return [...assets.values()];
 }
+function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx)$/i, '').trim().slice(0, 80) || '文档资料'; }
 
 Page({
   data: {
@@ -42,6 +43,7 @@ Page({
     blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
+    documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
@@ -53,7 +55,7 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
     }
@@ -79,7 +81,8 @@ Page({
       if (!this.current(epoch)) return;
       const mediaPage = values[0] || {}, content = values[1];
       const bodyFormat = content ? content.body_format || 'plain' : 'article_v2';
-      const legacyReadOnly = !!content && bodyFormat !== 'article_v2';
+      const documentReadOnly = !!content && bodyFormat === 'document_v1' && content.type === 'document';
+      const legacyReadOnly = !!content && bodyFormat !== 'article_v2' && !documentReadOnly;
       let layoutReadOnly = false;
       if (content && bodyFormat === 'article_v2') { try { const document = JSON.parse(content.body); layoutReadOnly = typeof document.layout_html === 'string' && !!document.layout_html; } catch (_) {} }
       const blocks = initialBlocks(content);
@@ -87,12 +90,15 @@ Page({
       const assets = mergeAssets(mediaPage.items || [], associated);
       const previews = new Set(legacyReadOnly || layoutReadOnly ? associated.map(asset => asset.media_id) : mediaIDs(blocks));
       if (content && content.cover) previews.add(content.cover.media_id);
-      const media = await this.loadPrivatePaths(assets, previews);
+      const loadedMedia = await this.loadPrivatePaths(assets, previews);
       if (!this.current(epoch)) return;
       this._loaded = true;
       const legacyIDs = new Set(associated.map(asset => asset.media_id));
+      const media = loadedMedia.filter(asset => asset.kind === 'image' || asset.kind === 'video');
+      const documentCandidates = loadedMedia.filter(asset => asset.kind === 'document');
+      const documentAsset = documentReadOnly ? loadedMedia.find(asset => associated.some(item => item.media_id === asset.media_id) && asset.kind === 'document') || null : null;
       const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, media, this.editorWidth(), 'contentedit-layout') : [];
-      this.setData({ context, media, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? media.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      this.setData({ context, media, documentCandidates, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
       this.applyPendingPrefill();
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '编辑器加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false }); }
   },
@@ -207,6 +213,57 @@ Page({
       if (file) this.uploadMedia(file.tempFilePath, file.fileType || 'image');
     } });
   },
+  chooseDocument() {
+    if (!this.data.context || !this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '文档上传尚未配置', icon: 'none' }); return; }
+    if (!this.data.owner_id || (this.data.rights !== 'own' && this.data.rights !== 'authorized')) { this.setData({ error: '请先选择内容归属并确认文档权属' }); return; }
+    const epoch = this._epoch;
+    wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx'], success: result => {
+      if (!this.current(epoch)) return;
+      const file = result.tempFiles && result.tempFiles[0];
+      if (file) this.uploadDocument(file);
+    }, fail: result => {
+      if (this.current(epoch) && !/cancel/i.test(String(result && result.errMsg || ''))) this.setData({ error: '文档选择失败，请重试' });
+    } });
+  },
+  async uploadDocument(file) {
+    const name = String(file && file.name || '');
+    if (!/\.(pdf|docx)$/i.test(name) || Number(file && file.size || 0) > 20 * 1024 * 1024) { this.setData({ error: '首批仅支持20MB以内的 PDF 和无宏 DOCX 原文件' }); return; }
+    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    try {
+      const asset = await api.uploadWorkbenchMedia(file.path, 'document', this.data.owner_id, this.data.rights, name);
+      if (!this.current(epoch)) return;
+      if (!asset || asset.kind !== 'document' || (asset.mime !== 'application/pdf' && asset.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) throw new Error('服务端未返回可用的 PDF/DOCX 文档');
+      const candidate = { ...asset, local_path: file.path };
+      this.setData({ documentCandidates: mergeAssets(this.data.documentCandidates, [candidate]), busy: false, notice: '原文件已上传，正在保存文档资料' });
+      await this.archiveDocumentAsset(candidate, epoch);
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '文档资料上传失败' }); }
+  },
+  async archiveDocument(event) {
+    const asset = this.data.documentCandidates[Number(event.currentTarget.dataset.index)];
+    if (!asset || this.data.busy) return;
+    await this.archiveDocumentAsset(asset, this._epoch);
+  },
+  async archiveDocumentAsset(asset, epoch) {
+    this.setData({ busy: true, error: '' });
+    try {
+      const title = String(this.data.title || '').trim() || documentTitle(asset.title);
+      const body = JSON.stringify({ schema: 1, media_id: asset.media_id });
+      const saved = await api.saveContent({ title, body, body_format: 'document_v1', source_url: '', source_note: '', rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: '', media_ids: [asset.media_id], expected_revision: 0 });
+      if (!this.current(epoch)) return;
+      this._loaded = true;
+      this.setData({ id: saved.content_id, title, revision: saved.revision, version: saved.version, status: saved.status, body_format: 'document_v1', documentReadOnly: true, documentAsset: asset, legacyReadOnly: false, layoutReadOnly: false, busy: false, notice: '文档资料已保存，仅授权账号可取得原文件' });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件已上传，保存资料失败，可直接重试建档' }); }
+  },
+  async openDocument() {
+    const asset = this.data.documentAsset;
+    if (!asset || !asset.media_id || this.data.busy) return;
+    const epoch = this._epoch; this.setData({ busy: true, error: '' });
+    try {
+      const filePath = await api.downloadWorkbenchMedia(asset.media_id);
+      if (!this.current(epoch)) return;
+      wx.openDocument({ filePath, showMenu: true, success: () => this.setData({ busy: false }), fail: () => this.setData({ busy: false, error: '原文件无法打开，请稍后重试' }) });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件下载失败' }); }
+  },
   async uploadMedia(filePath, kind) {
     const epoch = this._epoch; this.setData({ busy: true, error: '' });
     try {
@@ -221,6 +278,7 @@ Page({
     return this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video' || block.kind === 'list' && (block.items || []).some(Boolean) || String(block.text || '').trim());
   },
   draftInput() {
+    if (this.data.documentReadOnly) { this.setData({ error: '文档资料保留原文件，小程序不提供在线编辑或发布' }); return null; }
     if (this.data.legacyReadOnly) { this.setData({ error: '旧格式内容仅支持查看，请前往后台编辑，避免自动转换破坏原文。' }); return null; }
     const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
     if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return null; }
@@ -314,5 +372,25 @@ Page({
     const epoch = this._epoch; this.setData({ busy: true, error: '' });
     try { const content = await api.revokeContent(this.data.id, this.data.revision, reason, this.revokeKey(reason)); if (this.current(epoch)) { this._revokeSignature = ''; this._revokeKey = ''; this.setData({ revision: content.revision, status: content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已撤回' }); } }
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '撤回失败' }); }
+  },
+  deleteDraft() {
+    if (!this.data.id || this.data.status !== 'draft' || this.data.version !== 0 || this.data.busy) return;
+    const epoch = this._epoch;
+    wx.showModal({ title: '删除草稿', content: '只删除这份从未发布的草稿，不会撤回已发布内容，也不会删除原媒体文件。', confirmText: '删除草稿', confirmColor: '#a12622', success: result => {
+      if (this.current(epoch) && result.confirm) this.deleteDraftConfirmed();
+    } });
+  },
+  async deleteDraftConfirmed() {
+    const epoch = this._epoch; this.setData({ busy: true, error: '' });
+    try {
+      const deleted = await api.deleteContentDraft(this.data.id, this.data.revision);
+      if (!this.current(epoch)) return;
+      this.setData({ deleted: true, status: deleted.status, revision: deleted.revision, busy: false, notice: '草稿已删除，原媒体资料仍保留' });
+      this.backToWorkbench();
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '删除草稿失败' }); }
+  },
+  backToWorkbench() {
+    const epoch = this._epoch;
+    wx.redirectTo({ url: '/pages/contentworkbench/contentworkbench', fail: () => { if (this.current(epoch)) this.setData({ error: '草稿已删除，请手动返回内容工作台' }); } });
   },
 });

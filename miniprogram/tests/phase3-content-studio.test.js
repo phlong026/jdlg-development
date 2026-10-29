@@ -19,7 +19,7 @@ function runtime(overrides = {}) {
   const queries = [], navigations = [];
   const api = Object.assign({
     workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'] }),
-    listContents: async query => { queries.push(query); return { items: [{ content_id: 'article-a', title: '庭院图文', type: 'article', status: 'draft', media: [] }, { content_id: 'video-a', title: '庭院视频', type: 'article', status: 'published', media: [{ kind: 'video', media_id: 'video-asset' }] }], next_cursor: 'page-2', as_of: '2026-10-27T00:00:00Z', metric_version: 'v1' }; },
+    listContents: async query => { queries.push(query); return { items: [{ content_id: 'article-a', title: '庭院图文', type: 'article', status: 'draft', media: [] }, { content_id: 'video-a', title: '庭院视频', type: 'article', status: 'published', media: [{ kind: 'video', media_id: 'video-asset' }] }, { content_id: 'document-a', title: '庭院方案.pdf', type: 'document', status: 'draft', media: [{ kind: 'document', media_id: 'document-asset' }] }], next_cursor: 'page-2', as_of: '2026-10-27T00:00:00Z', metric_version: 'v1' }; },
     importCapabilities: async () => ({ enabled: true, platforms: [{ platform: 'wechat_article', available: true }] }),
     listImports: async () => ({ items: [] }),
   }, overrides);
@@ -41,7 +41,7 @@ test('content studio searches the authorized catalog and resets cursor snapshots
   assert.equal(query.content_q, '庭院');
   assert.equal(query.cursor, undefined);
   assert.equal(query.as_of, undefined);
-  assert.equal(page.data.items.length, 2);
+  assert.equal(page.data.items.length, 3);
   assert.equal(page.data.searchTerm, '庭院');
 });
 
@@ -53,6 +53,10 @@ test('content categories filter loaded records without manufacturing assets or t
   assert.equal(page.data.visibleItems[0].content_id, 'video-a');
   page.selectCategory({ currentTarget: { dataset: { key: 'note' } } });
   assert.equal(page.data.category, 'video');
+  page.selectCategory({ currentTarget: { dataset: { key: 'document' } } });
+  assert.equal(page.data.category, 'document');
+  assert.equal(page.data.visibleItems.length, 1);
+  assert.equal(page.data.visibleItems[0].content_id, 'document-a');
   assert.equal(page.data.next_cursor, 'page-2');
 });
 

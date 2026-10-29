@@ -48,6 +48,7 @@ function listContents(query) { return request(WORKBENCH + '/contents', 'GET', {}
 function getContent(id) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id)); }
 function listWorkbenchMedia() { return request(WORKBENCH + '/media'); }
 function saveContent(draft, id) { return request(WORKBENCH + '/contents' + (id ? '/' + encodeURIComponent(id) : ''), id ? 'PATCH' : 'POST', draft); }
+function deleteContentDraft(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id), 'DELETE', { expected_revision: Number(revision) }); }
 function previewContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/preview', 'POST', { expected_revision: revision }); }
 function publishContent(id, revision, previewToken, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/publish', 'POST', { expected_revision: revision, preview_token: previewToken, idempotency_key: key }); }
 function revokeContent(id, revision, reason, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/revoke', 'POST', { expected_revision: revision, reason, idempotency_key: key }); }
@@ -149,11 +150,11 @@ function downloadWorkbenchMedia(id) {
   }));
 }
 
-function uploadWorkbenchMedia(filePath, kind, owner, rights) {
+function uploadWorkbenchMedia(filePath, kind, owner, rights, originalName) {
   const path = WORKBENCH + '/media';
   return new Promise((resolve, reject) => wx.uploadFile({
     url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false),
-    formData: { owner_id: owner, rights, kind }, timeout: 60000,
+    formData: Object.assign({ owner_id: owner, rights, kind }, originalName ? { original_name: String(originalName) } : {}), timeout: 60000,
     success(response) {
       let data = {};
       try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(new Error('媒体上传响应无法读取')); return; }
@@ -171,7 +172,7 @@ function mutationKey(prefix) {
 
 module.exports = {
   ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
-  saveContent, previewContent, publishContent, revokeContent, listMyShares, listMyShareVisits,
+  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, listMyShares, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
   getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject, inviteProjectNoteMember, revokeProjectNoteMember,

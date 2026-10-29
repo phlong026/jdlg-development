@@ -21,6 +21,13 @@ func normalizeBody(body, format string) (string, string, error) {
 		}
 		return normalized, "article_v2", nil
 	}
+	if format == "document_v1" {
+		normalized, _, err := normalizeDocumentBody(body)
+		if err != nil {
+			return "", "", err
+		}
+		return normalized, "document_v1", nil
+	}
 	if format != "rich_text" {
 		return "", "", fail(400, "不支持的正文格式")
 	}

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,6 +56,9 @@ func contentMediaConfigured(svc *tracking.Service) bool {
 func contentMediaLimit(asset tracking.Asset) int64 {
 	if asset.Kind == "video" {
 		return 50 << 20
+	}
+	if asset.Kind == "document" {
+		return documentMaxBytes
 	}
 	return 10 << 20
 }
@@ -165,6 +170,13 @@ func serveContentMediaBytes(c *gin.Context, svc *tracking.Service, asset trackin
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Cache-Control", "private, no-store")
 	c.Header("Content-Security-Policy", "default-src 'none'")
+	if asset.Kind == "document" {
+		name := strings.TrimSpace(asset.Title)
+		if name == "" {
+			name = asset.ID
+		}
+		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	}
 	if os.Getenv("CONTENT_MEDIA_STORAGE") == "cos" && (svc == nil || svc.MediaObjects == nil) {
 		c.Status(http.StatusServiceUnavailable)
 		return

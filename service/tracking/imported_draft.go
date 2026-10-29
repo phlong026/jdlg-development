@@ -32,6 +32,9 @@ func (s *Service) SaveImportedDraft(ctx context.Context, scope Scope, importID s
 			if content.Owner != normalized.Owner || !scope.Allows(content.Owner) {
 				return fail(404, "素材不可访问")
 			}
+			if content.Status == "deleted" {
+				return fail(409, "导入草稿已删除，请新建导入任务")
+			}
 			out = content
 			return nil
 		}

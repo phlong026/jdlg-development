@@ -33,7 +33,7 @@ function contentRow(item) {
 Page({
   data: {
     view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [],
-    categories: [{ key: 'all', label: '全部' }, { key: 'note', label: '笔记', unavailable: true }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档', unavailable: true }],
+    categories: [{ key: 'all', label: '全部' }, { key: 'note', label: '笔记', unavailable: true }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,

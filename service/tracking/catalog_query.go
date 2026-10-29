@@ -53,6 +53,9 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 		if c.Owner != row.Owner {
 			return nil, ErrUnavailable
 		}
+		if c.Status == "deleted" {
+			continue
+		}
 		c.PageViews, c.VisibleMS, c.LastVisit, c.Identified, c.Anonymous = 0, 0, nil, 0, 0
 		out = append(out, c)
 	}

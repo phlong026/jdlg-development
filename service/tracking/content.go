@@ -3,6 +3,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,6 +16,42 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 		return out, err
 	}
 	e := s.transaction(ctx, func(r Repository) error {
+		if id == "" && in.BodyFormat == "document_v1" {
+			key, request, err := documentArchiveIdentity(in)
+			if err != nil {
+				return err
+			}
+			stored, err := decode[documentArchiveRecord](r, "document_archive", key)
+			if err == nil {
+				if stored.MediaID != request.MediaID {
+					return ErrUnavailable
+				}
+				existing, loadErr := loadCatalogContent(r, "content", stored.ContentID)
+				if loadErr != nil || existing.Owner != in.Owner || !scope.Allows(existing.Owner) || existing.Type != "document" || len(existing.Media) != 1 || existing.Media[0].ID != request.MediaID {
+					return ErrUnavailable
+				}
+				if existing.Status == "deleted" {
+					return fail(409, "原文件对应的文档资料已删除")
+				}
+				out = existing
+				return nil
+			}
+			if !errors.Is(err, ErrNotFound) {
+				return err
+			}
+			saved, err := s.saveContentIn(r, scope, id, in, s.Now())
+			if err != nil {
+				return err
+			}
+			request.ContentID = saved.ID
+			row := record("document_archive", key, saved.Owner, s.Now(), request)
+			row.Content = saved.ID
+			if err = r.Insert(row); err != nil {
+				return err
+			}
+			out = saved
+			return nil
+		}
 		saved, e := s.saveContentIn(r, scope, id, in, s.Now())
 		out = saved
 		return e
@@ -63,6 +100,11 @@ func (s *Service) validateDraft(scope Scope, in Draft) (Draft, error) {
 			}
 		}
 		in.MediaIDs = mediaIDs
+	} else if format == "document_v1" {
+		_, mediaID, e := normalizeDocumentBody(body)
+		if e != nil || in.CoverID != "" || len(in.MediaIDs) != 1 || in.MediaIDs[0] != mediaID {
+			return in, fail(400, "文档资料必须且只能引用一个原文件")
+		}
 	}
 	return in, nil
 }
@@ -79,11 +121,17 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		if e != nil || !scope.Allows(old.Owner) {
 			return out, fail(404, "素材不可访问")
 		}
+		if old.Status == "deleted" {
+			return out, fail(409, "已删除草稿不能恢复")
+		}
 		if old.Status == "revoked" {
 			return out, fail(409, "撤回素材不可重新发布，请创建新素材")
 		}
 		if old.Owner != in.Owner {
 			return out, fail(409, "素材归属变更需单独授权迁移")
+		}
+		if (old.Type == "document" && in.BodyFormat != "document_v1") || (old.Type != "document" && in.BodyFormat == "document_v1") {
+			return out, fail(409, "文档资料与图文内容不能相互转换")
 		}
 		if old.Revision != in.Revision {
 			return out, fail(409, "素材已更新，请重新读取")
@@ -97,8 +145,11 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	media := []Asset{}
 	var cover *Asset
 	articleRefs := map[string]string{}
+	documentRef := ""
 	if in.BodyFormat == "article_v2" {
 		articleRefs, _ = articleMediaReferences(in.Body)
+	} else if in.BodyFormat == "document_v1" {
+		_, documentRef, _ = normalizeDocumentBody(in.Body)
 	}
 	seen := map[string]bool{}
 	for _, mid := range append(append([]string{}, in.MediaIDs...), in.CoverID) {
@@ -124,11 +175,21 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		if expected := articleRefs[mid]; expected != "" && a.Kind != expected {
 			return out, fail(400, "原排版正文媒体类型与授权文件不符")
 		}
+		if documentRef != "" && (mid != documentRef || !supportedDocumentAsset(a)) {
+			return out, fail(400, "文档原文件类型与资料不符")
+		}
+		if documentRef == "" && a.Kind == "document" {
+			return out, fail(400, "文档原文件仅能由文档资料引用")
+		}
 		if in.BodyFormat != "article_v2" || articleRefs[mid] != "" {
 			media = append(media, a)
 		}
 	}
-	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: "article", Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+	contentType := "article"
+	if in.BodyFormat == "document_v1" {
+		contentType = "document"
+	}
+	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
 	if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
 		return out, e
 	}
@@ -149,6 +210,12 @@ func (s *Service) Preview(ctx context.Context, scope Scope, id string, revision 
 		}
 		if c.Revision != revision {
 			return fail(409, "草稿已更新")
+		}
+		if c.Status != "draft" {
+			return fail(409, "当前内容不是可预览草稿")
+		}
+		if c.Type == "document" {
+			return fail(400, "文档资料仅供私有下载，不支持发布预览")
 		}
 		token := opaque()
 		if e = r.Insert(record("preview", hash(token), c.Owner, s.Now(), map[string]any{"content": id, "revision": revision, "actor": scope.Actor, "expires": s.Now().Add(15 * time.Minute)})); e != nil {
@@ -186,6 +253,9 @@ func (s *Service) Publish(ctx context.Context, scope Scope, id string, revision 
 		}
 		if c.Revision != revision || c.Status != "draft" {
 			return fail(409, "草稿版本或状态已改变")
+		}
+		if c.Type == "document" {
+			return fail(400, "文档资料仅供私有下载，不支持发布")
 		}
 		pv, e := decode[struct {
 			Content  string    `json:"content"`
@@ -237,6 +307,9 @@ func (s *Service) Revoke(ctx context.Context, scope Scope, id string, revision i
 		}
 		if c.Revision != revision {
 			return fail(409, "素材已更新")
+		}
+		if c.Status == "deleted" {
+			return fail(409, "已删除草稿不能当作已发布内容撤回")
 		}
 		if e = r.Put(record("content_revoked", id, c.Owner, s.Now(), map[string]any{"revoked_at": s.Now()})); e != nil {
 			return e

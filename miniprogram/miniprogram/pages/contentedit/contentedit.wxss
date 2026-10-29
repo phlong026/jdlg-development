@@ -322,6 +322,11 @@ input, textarea, .picker {
   margin: 18rpx 0;
 }
 
+.delete-draft-button {
+  width: 100%;
+  margin: 22rpx 0 0;
+}
+
 .editor-actions {
   position: sticky;
   z-index: 20;

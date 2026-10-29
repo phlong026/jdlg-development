@@ -61,13 +61,23 @@ test('private draft media is downloaded or uploaded with login signatures', asyn
   const { api, calls } = loadAPI();
   const local = await api.downloadWorkbenchMedia('asset-0001');
   const uploaded = await api.uploadWorkbenchMedia('/tmp/source.jpg', 'image', 'owner-a', 'own');
+  await api.uploadWorkbenchMedia('/tmp/wxfile', 'document', 'owner-a', 'own', '方案.pdf');
   assert.equal(local, '/tmp/private-media');
   assert.equal(uploaded.media_id, 'asset-0001');
   assert.equal(calls[0].kind, 'download');
   assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/workbench/media/asset-0001');
   assert.equal(calls[1].kind, 'upload');
   assert.equal(calls[1].options.formData.owner_id, 'owner-a');
+  assert.equal(calls[2].options.formData.original_name, '方案.pdf');
   assert.ok(!calls[0].options.url.includes('tracking/media'));
+});
+
+test('draft deletion uses the signed workbench endpoint and expected revision', async () => {
+  const { api, calls } = loadAPI();
+  await api.deleteContentDraft('draft-content-001', 3);
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/workbench/contents/draft-content-001');
+  assert.equal(calls[0].options.data.expected_revision, 3);
 });
 
 test('private phase3 pages are registered, built, non-shareable, and expose real state branches', () => {
@@ -162,6 +172,125 @@ test('editor serializes paragraph-image-video order and only referenced media ID
   assert.deepEqual(document.blocks.map(block => block.kind), ['paragraph', 'image', 'video', 'image']);
   assert.deepEqual(Array.from(savedDraft.media_ids), ['asset-image', 'asset-video']);
   assert.equal(savedDraft.body_format, 'article_v2');
+});
+
+test('editor uploads a PDF or DOCX as a private document draft and reopens the original file on demand', async () => {
+  const calls = [];
+  const api = {
+    uploadWorkbenchMedia: async (path, kind, owner, rights, originalName) => {
+      calls.push({ action: 'upload', path, kind, owner, rights, originalName });
+      return { media_id: 'document-asset-0001', kind: 'document', mime: 'application/pdf', title: '庭院方案.pdf' };
+    },
+    saveContent: async draft => {
+      calls.push({ action: 'save', draft });
+      return { content_id: 'document-content-0001', revision: 1, version: 0, status: 'draft' };
+    },
+    downloadWorkbenchMedia: async id => { calls.push({ action: 'download', id }); return '/tmp/private-document.pdf'; },
+  };
+  let opened = '';
+  const page = pageHarness('contentedit', api, {
+    chooseMessageFile(options) { options.success({ tempFiles: [{ path: '/tmp/source.pdf', name: '庭院方案.pdf', size: 1024 }] }); },
+    openDocument(options) { opened = options.filePath; options.success(); },
+  });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ context: { media_upload_configured: true }, owner_id: 'owner-a', rights: 'own', title: '' });
+  page.chooseDocument();
+  await tick(); await tick();
+  assert.deepEqual(calls[0], { action: 'upload', path: '/tmp/source.pdf', kind: 'document', owner: 'owner-a', rights: 'own', originalName: '庭院方案.pdf' });
+  assert.equal(calls[1].action, 'save');
+  assert.equal(calls[1].draft.body_format, 'document_v1');
+  assert.deepEqual(Array.from(calls[1].draft.media_ids), ['document-asset-0001']);
+  assert.equal(page.data.id, 'document-content-0001');
+  assert.equal(page.data.documentReadOnly, true);
+  await page.openDocument();
+  assert.equal(calls[2].id, 'document-asset-0001');
+  assert.equal(opened, '/tmp/private-document.pdf');
+
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /bindtap="chooseDocument"/);
+  assert.match(wxml, /bindtap="openDocument"/);
+});
+
+test('document chooser reports real failures but ignores user cancellation', () => {
+  const failures = ['chooseMessageFile:fail denied', 'chooseMessageFile:fail cancel'];
+  const page = pageHarness('contentedit', {}, {
+    chooseMessageFile(options) { options.fail({ errMsg: failures.shift() }); },
+  });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ context: { media_upload_configured: true }, owner_id: 'owner-a', rights: 'own' });
+  page.chooseDocument();
+  assert.equal(page.data.error, '文档选择失败，请重试');
+  page.setData({ error: '' });
+  page.chooseDocument();
+  assert.equal(page.data.error, '');
+});
+
+test('reopened editor archives an uploaded document without uploading it again', async () => {
+  const calls = [];
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'], media_upload_configured: true }),
+    listWorkbenchMedia: async () => ({ items: [{ media_id: 'pending-document-01', kind: 'document', mime: 'application/pdf', title: '待归档方案.pdf' }] }),
+    saveContent: async draft => {
+      calls.push({ action: 'save', draft });
+      return { content_id: 'document-content-01', revision: 1, version: 0, status: 'draft' };
+    },
+    uploadWorkbenchMedia: async () => { calls.push({ action: 'upload' }); throw new Error('不应重复上传'); },
+  });
+  page._token = 'session-token'; page._epoch = 1;
+  await page.load(1);
+  assert.equal(page.data.documentCandidates.length, 1);
+  await page.archiveDocument({ currentTarget: { dataset: { index: 0 } } });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, 'save');
+  assert.deepEqual(Array.from(calls[0].draft.media_ids), ['pending-document-01']);
+  assert.equal(page.data.id, 'document-content-01');
+  assert.equal(page.data.documentReadOnly, true);
+});
+
+test('editor explicitly soft-deletes only a never-published draft without revoking content', async () => {
+  const calls = [];
+  const page = pageHarness('contentedit', {
+    deleteContentDraft: async (id, revision) => {
+      calls.push({ action: 'delete', id, revision });
+      return { content_id: id, revision: revision + 1, status: 'deleted', deleted_at: '2026-10-30T00:00:00Z' };
+    },
+    revokeContent: async () => { calls.push({ action: 'revoke' }); },
+  }, {
+    showModal(options) { options.success({ confirm: true }); },
+    redirectTo(options) { calls.push({ action: 'redirect', url: options.url }); },
+  });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ id: 'draft-content-001', revision: 3, version: 0, status: 'draft' });
+  page.deleteDraft();
+  await tick(); await tick();
+  assert.deepEqual(calls, [
+    { action: 'delete', id: 'draft-content-001', revision: 3 },
+    { action: 'redirect', url: '/pages/contentworkbench/contentworkbench' },
+  ]);
+  assert.equal(page.data.deleted, true);
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /bindtap="deleteDraft"/);
+  assert.match(wxml, /删除草稿/);
+});
+
+test('reopened document metadata stays read-only and downloads only after explicit open', async () => {
+  const downloads = [];
+  let opened = '';
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'], media_upload_configured: true }),
+    listWorkbenchMedia: async () => ({ items: [{ media_id: 'document-asset-0001', kind: 'document', mime: 'application/pdf', title: '庭院方案.pdf' }] }),
+    getContent: async () => ({ content_id: 'document-content-0001', type: 'document', title: '庭院方案', owner_id: 'owner-a', rights: 'own', revision: 1, version: 0, status: 'draft', body_format: 'document_v1', body: '{"schema":1,"media_id":"document-asset-0001"}', media: [{ media_id: 'document-asset-0001', kind: 'document', mime: 'application/pdf', title: '庭院方案.pdf' }] }),
+    downloadWorkbenchMedia: async id => { downloads.push(id); return '/tmp/reopened.pdf'; },
+  }, { openDocument(options) { opened = options.filePath; options.success(); } });
+  page._token = 'session-token'; page._epoch = 1; page.setData({ id: 'document-content-0001' });
+  await page.load(1);
+  assert.equal(page.data.documentReadOnly, true);
+  assert.equal(page.data.documentAsset.media_id, 'document-asset-0001');
+  assert.equal(page.data.media.length, 0, '文档不应混入图片/视频正文素材库');
+  assert.equal(downloads.length, 0, '重开只加载元数据，不应自动下载原文件');
+  await page.openDocument();
+  assert.deepEqual(downloads, ['document-asset-0001']);
+  assert.equal(opened, '/tmp/reopened.pdf');
 });
 
 test('editor eagerly downloads only referenced private media and leaves the library on demand', async () => {
