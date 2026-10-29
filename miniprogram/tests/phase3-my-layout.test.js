@@ -23,14 +23,15 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
   assert.doesNotMatch(wxml, /待处理反馈|今日回访/);
 });
 
-test('工作台保留八个目标入口并明确未开通能力', () => {
+test('工作台保留八个目标入口并复用已有准入边界', () => {
   for (const file of ['my.ts', 'my.js']) {
     const source = read(file);
     for (const action of ['myProjects', 'projectNotes', 'contentWorkbench', 'customerManagement', 'project', 'publish', 'shareMaterials', 'designerHome']) {
       assert.match(source, new RegExp(`action: '${action}'`));
     }
-    assert.match(source, /available: false/);
-    assert.match(source, /功能待开通/);
+    assert.match(source, /action: 'myProjects'[^\n]+available: true/);
+    assert.match(source, /action: 'contentWorkbench'[^\n]+available: hasLoginToken/);
+    assert.match(source, /action: 'customerManagement'[^\n]+available: hasLoginToken/);
   }
 });
 
@@ -82,4 +83,29 @@ test('项目笔记已有页面时我的入口可用且保留登录门禁', () =>
     assert.match(source, /action: 'projectNotes'[^\n]+available: true/);
     assert.match(source, /\/pages\/projectnotes\/projectnotes/);
   }
+});
+
+test('我的项目复用私人项目页，客户管理只打开既有后台深链', () => {
+  const vm = require('node:vm');
+  let page;
+  const navigations = [];
+  vm.runInNewContext(read('my.js'), {
+    exports: {},
+    require: () => ({ resolveAssetPath: value => value }),
+    Page: definition => { page = definition; },
+    wx: { getStorageSync: () => 'mini-session', navigateTo: options => navigations.push(options.url), showToast() {} },
+    setTimeout,
+  });
+  page.data = { ...page.data, token: 'mini-session', hasLoginToken: true };
+  page.setData = patch => Object.assign(page.data, patch);
+  page.refreshWorkbenchMenuItems({ hasLoginToken: true });
+  for (const action of ['myProjects', 'customerManagement', 'contentWorkbench']) {
+    page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
+  }
+  assert.deepEqual(navigations, [
+    '/pages/projectnotes/projectnotes',
+    '/pages/adminhome/adminhome?target=customer-management',
+    '/pages/contentworkbench/contentworkbench',
+  ]);
+  assert.equal(navigations.some(url => /token|session|user_id/i.test(url)), false);
 });

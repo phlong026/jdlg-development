@@ -128,10 +128,10 @@ function buildWorkbenchMenuItems(options: {
   });
 
   return [
-    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '方案与效果图', available: false, meta: '功能待开通' },
+    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '方案与效果图', available: true },
     { action: 'projectNotes', label: '项目笔记', icon: 'file-edit', description: '记录与灵感', available: true },
     { action: 'contentWorkbench', label: '内容制作', icon: 'video', description: '文案与素材', available: hasLoginToken },
-    { action: 'customerManagement', label: '客户管理', icon: 'usergroup', description: '跟进与回访', available: false, meta: '功能待开通' },
+    { action: 'customerManagement', label: '客户管理', icon: 'usergroup', description: '使用客户管理账号登录', available: hasLoginToken },
     { action: 'project', label: '生成记录', icon: 'file', description: '各类AI成果', available: hasLoginToken },
     { action: 'publish', label: '我的发布', icon: 'send', description: '作品与发布管理', available: hasDesignerAccess },
     { action: 'shareMaterials', label: '可分享素材', icon: 'share', description: '已授权作品', available: hasLoginToken },
@@ -1029,8 +1029,18 @@ Page({
       return;
     }
 
+    if (action === 'myProjects') {
+      wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
     if (action === 'projectNotes') {
       wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'customerManagement') {
+      wx.navigateTo({ url: '/pages/adminhome/adminhome?target=customer-management', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
       return;
     }
 

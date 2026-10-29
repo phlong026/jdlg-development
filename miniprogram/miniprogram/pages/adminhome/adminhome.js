@@ -1,12 +1,18 @@
 "use strict";
 const ADMIN_HOME_WEBVIEW_URL = 'https://api.jiadilingguang.com/admin/';
+const CUSTOMER_MANAGEMENT_WEBVIEW_URL = `${ADMIN_HOME_WEBVIEW_URL}customer-management`;
+function resolveAdminWebviewURL(target = '') {
+    return target === 'customer-management'
+        ? CUSTOMER_MANAGEMENT_WEBVIEW_URL
+        : ADMIN_HOME_WEBVIEW_URL;
+}
 Page({
     data: {
         webUrl: ADMIN_HOME_WEBVIEW_URL,
     },
-    onLoad() {
+    onLoad(options = {}) {
         this.setData({
-            webUrl: ADMIN_HOME_WEBVIEW_URL,
+            webUrl: resolveAdminWebviewURL(String(options.target || '')),
         });
     },
     onShareAppMessage() {
