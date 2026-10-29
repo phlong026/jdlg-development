@@ -130,6 +130,35 @@ test('writing page receives editor context through EventChannel and returns to t
   assert.equal(returned.revision, 7);
 });
 
+test('writing page returns explicit project-note identity through the same EventChannel', () => {
+  const h = loadPage('contentwriting');
+  h.page.onLoad({ source: 'project_note' });
+  assert.equal(typeof h.listeners.writingContext, 'function');
+  h.listeners.writingContext({
+    source: 'project_note',
+    project_id: 'project-8',
+    note_id: 'note-12',
+    note_revision: 4,
+    title: '业主沟通纪要',
+    facts: '业主明确要求保留东侧窗洞。',
+  });
+  assert.equal(h.page.data.title, '业主沟通纪要');
+  assert.equal(h.page.data.facts, '业主明确要求保留东侧窗洞。');
+  assert.match(h.page.data.returnLabel, /项目笔记/);
+
+  h.page.editResult({ detail: { value: '经人工核对的沟通文案' } });
+  assert.match(h.page.data.notice, /项目笔记/);
+  h.page.saveToDraft();
+  assert.equal(h.navigations.length, 0, '采纳项目笔记文案不应打开第二个内容编辑器');
+  const returned = h.emitted.find(item => item.event === 'prefillContent').value;
+  assert.equal(returned.source, 'project_note');
+  assert.equal(returned.project_id, 'project-8');
+  assert.equal(returned.note_id, 'note-12');
+  assert.equal(returned.note_revision, 4);
+  assert.equal(returned.title, '业主沟通纪要');
+  assert.equal(returned.text, '经人工核对的沟通文案');
+});
+
 test('saved editable drafts expose AI writing while original-layout content stays read-only', () => {
   const wxml = fs.readFileSync(path.join(pagesRoot, 'contentedit/contentedit.wxml'), 'utf8');
   assert.match(wxml, /class="text-action ai-action" bindtap="openAIWriting"/);

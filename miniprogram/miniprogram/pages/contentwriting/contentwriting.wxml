@@ -26,5 +26,5 @@
       <text class="generation-hint">将在AI对话中预填任务；点击发送后，按对话页显示的灵石价格生成。</text>
     </block>
   </view>
-  <view wx:if="{{!loginRequired}}" class="writing-footer"><button class="primary" bindtap="saveToDraft" disabled="{{!result || navigating}}">保存到内容草稿</button><button class="secondary" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button></view>
+  <view wx:if="{{!loginRequired}}" class="writing-footer"><button class="primary" bindtap="saveToDraft" disabled="{{!result || navigating}}">{{returnLabel}}</button><button class="secondary" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button></view>
 </view>

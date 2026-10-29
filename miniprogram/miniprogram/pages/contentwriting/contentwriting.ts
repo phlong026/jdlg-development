@@ -8,15 +8,16 @@ const writingTypes = [
 ];
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存到内容草稿' },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
     this._unloaded = false;
     this._source = String(options && options.source || '');
-    if (this._source === 'editor' && typeof this.getOpenerEventChannel === 'function') {
-      this._editorChannel = this.getOpenerEventChannel();
-      if (this._editorChannel && this._editorChannel.on) this._editorChannel.on('writingContext', payload => this.receiveWritingContext(payload));
+    if (this._source === 'project_note') this.setData({ returnLabel: '采纳到项目笔记' });
+    if ((this._source === 'editor' || this._source === 'project_note') && typeof this.getOpenerEventChannel === 'function') {
+      this._returnChannel = this.getOpenerEventChannel();
+      if (this._returnChannel && this._returnChannel.on) this._returnChannel.on('writingContext', payload => this.receiveWritingContext(payload));
     }
   },
   onShow() {
@@ -28,12 +29,18 @@ Page({
   },
   onUnload() { this._unloaded = true; },
   receiveWritingContext(payload) {
-    if (this._source !== 'editor' || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
-    if (!payload || payload.source !== 'editor') return;
+    if ((this._source !== 'editor' && this._source !== 'project_note') || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
+    if (!payload || payload.source !== this._source) return;
     this._contextLoaded = true;
-    this._contentID = String(payload.content_id || '');
-    this._revision = Number(payload.revision || 0);
-    this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: '已带入当前草稿的标题和正文，请核对后继续创作', error: '' });
+    if (this._source === 'project_note') {
+      this._projectID = String(payload.project_id || '');
+      this._noteID = String(payload.note_id || '');
+      this._noteRevision = Number(payload.note_revision || 0);
+    } else {
+      this._contentID = String(payload.content_id || '');
+      this._revision = Number(payload.revision || 0);
+    }
+    this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: this._source === 'project_note' ? '已带入项目笔记的明确事实，请核对后继续创作' : '已带入当前草稿的标题和正文，请核对后继续创作', error: '' });
   },
   selectType(event) {
     const type = writingTypes.find(item => item.key === event.currentTarget.dataset.type);
@@ -41,7 +48,7 @@ Page({
   },
   editTitle(event) { this.setData({ title: String(event.detail.value || ''), error: '' }); },
   editFacts(event) { this.setData({ facts: String(event.detail.value || ''), error: '' }); },
-  editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: '文案已修改，保存后可在内容编辑页继续排版' }); },
+  editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: this._source === 'project_note' ? '文案已修改，采纳后将带回项目笔记' : '文案已修改，保存后可在内容编辑页继续排版' }); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login', fail: () => this.setData({ error: '登录页面暂时无法打开，请稍后重试' }) }); },
   generateWriting(event) {
     if (this.data.navigating) return;
@@ -65,7 +72,7 @@ Page({
           if (this._unloaded) return;
           if (token !== String(wx.getStorageSync('token') || '') || token !== this._token) { this.setData({ result: '', error: '账号已变化，本次文案未带入' }); return; }
           const value = String(result && result.text || '').trim();
-          if (value) this.setData({ result: value, navigating: false, error: '', notice: '已带入生成文案，可修改后保存到内容草稿' });
+          if (value) this.setData({ result: value, navigating: false, error: '', notice: this._source === 'project_note' ? '已带入生成文案，可修改后采纳到项目笔记' : '已带入生成文案，可修改后保存到内容草稿' });
         },
       },
       success: result => result.eventChannel.emit('contentWritingTask', { text }),
@@ -75,15 +82,18 @@ Page({
   saveToDraft() {
     if (this.data.navigating) return;
     const text = String(this.data.result || '').trim();
-    if (!text) { this.setData({ error: '请先生成或填写文案，再保存到内容草稿' }); return; }
+    if (!text) { this.setData({ error: this._source === 'project_note' ? '请先生成或填写文案，再采纳到项目笔记' : '请先生成或填写文案，再保存到内容草稿' }); return; }
     const token = String(wx.getStorageSync('token') || '');
     if (!token || token !== this._token) { this.setData({ error: '账号已变化，请重新登录后创作' }); return; }
     const title = String(this.data.title || '').trim() || this.data.heading;
     this.setData({ navigating: true, error: '' });
-    if (this._source === 'editor') {
-      if (!this._editorChannel || typeof this._editorChannel.emit !== 'function') { this.setData({ navigating: false, error: '原编辑页连接已失效，请保留文案并返回重试' }); return; }
-      this._editorChannel.emit('prefillContent', { title, text, content_id: String(this._contentID || ''), revision: Number(this._revision || 0) });
-      wx.navigateBack({ delta: 1, fail: () => this.setData({ navigating: false, error: '文案已带回原编辑页，请返回继续编辑' }) });
+    if (this._source === 'editor' || this._source === 'project_note') {
+      if (!this._returnChannel || typeof this._returnChannel.emit !== 'function') { this.setData({ navigating: false, error: '原页面连接已失效，请保留文案并返回重试' }); return; }
+      const identity = this._source === 'project_note'
+        ? { project_id: String(this._projectID || ''), note_id: String(this._noteID || ''), note_revision: Number(this._noteRevision || 0) }
+        : { content_id: String(this._contentID || ''), revision: Number(this._revision || 0) };
+      this._returnChannel.emit('prefillContent', { source: this._source, title, text, ...identity });
+      wx.navigateBack({ delta: 1, fail: () => this.setData({ navigating: false, error: '文案已带回原页面，请返回继续编辑' }) });
       return;
     }
     wx.navigateTo({
