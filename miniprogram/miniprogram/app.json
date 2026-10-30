@@ -32,7 +32,12 @@
   "subPackages": [
     {
       "root": "pages/report",
-      "pages": ["landing", "questionnaire", "preview", "delivery"]
+      "pages": [
+        "landing",
+        "questionnaire",
+        "preview",
+        "delivery"
+      ]
     },
     {
       "root": "pages/generatedetails",
@@ -192,36 +197,16 @@
       ]
     },
     {
-      "root": "pages/contentworkbench",
-      "pages": ["contentworkbench"]
-    },
-    {
-      "root": "pages/contentedit",
-      "pages": ["contentedit"]
-    },
-    {
-      "root": "pages/contentwriting",
-      "pages": ["contentwriting"]
-    },
-    {
       "root": "pages/sharevisits",
-      "pages": ["sharevisits"]
+      "pages": [
+        "sharevisits"
+      ]
     },
     {
       "root": "pages/visitdetail",
-      "pages": ["visitdetail"]
-    },
-    {
-      "root": "pages/projectnotes",
-      "pages": ["projectnotes"]
-    },
-    {
-      "root": "pages/projectnoteview",
-      "pages": ["projectnoteview"]
-    },
-    {
-      "root": "pages/nativereferences",
-      "pages": ["nativereferences"]
+      "pages": [
+        "visitdetail"
+      ]
     }
   ],
   "tabBar": {

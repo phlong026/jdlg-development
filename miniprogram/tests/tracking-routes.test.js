@@ -15,7 +15,7 @@ function fixture() {
 }
 
 test('actual app, runtime policies and Go inventory agree for every reviewed route', () => {
-  assert.deepEqual(checkRepository(), { total: 67, public: 22, excluded: 45 });
+  assert.deepEqual(checkRepository(), { total: 61, public: 22, excluded: 39 });
 });
 
 const mutations = [

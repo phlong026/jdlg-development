@@ -26,11 +26,9 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
 test('工作台保留八个目标入口并复用已有准入边界', () => {
   for (const file of ['my.ts', 'my.js']) {
     const source = read(file);
-    for (const action of ['myProjects', 'projectNotes', 'contentWorkbench', 'customerManagement', 'project', 'publish', 'shareMaterials', 'designerHome']) {
+    for (const action of ['customerManagement', 'project', 'publish', 'shareMaterials', 'designerHome']) {
       assert.match(source, new RegExp(`action: '${action}'`));
     }
-    assert.match(source, /action: 'myProjects'[^\n]+available: true/);
-    assert.match(source, /action: 'contentWorkbench'[^\n]+available: hasLoginToken/);
     assert.match(source, /action: 'customerManagement'[^\n]+available: hasLoginToken/);
   }
 });
@@ -51,7 +49,7 @@ test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
   const source = read('my.ts');
   const iconStyles = fs.readFileSync(path.join(root, '../../components/tdesign-miniprogram/icon/icon.wxss'), 'utf8');
   assert.equal(config.usingComponents['t-icon'], '/components/tdesign-miniprogram/icon/icon');
-  for (const icon of ['folder', 'file-edit', 'video', 'usergroup', 'file', 'send', 'share', 'user-business', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
+  for (const icon of ['usergroup', 'file', 'send', 'share', 'user-business', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
     assert.ok(source.includes(`icon: '${icon}'`) || wxml.includes(`name="${icon}"`), `应使用已校验图标 ${icon}`);
     assert.ok(iconStyles.includes(`.t-icon-${icon}:before`), `TDesign 本地字体应包含 ${icon}`);
   }
@@ -60,52 +58,4 @@ test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
   assert.match(scss, /background:\s*#fbfaf7/);
 });
 
-test('项目笔记已有页面时我的入口可用且保留登录门禁', () => {
-  const vm = require('node:vm');
-  let page;
-  const navigations = [], toasts = [];
-  vm.runInNewContext(read('my.js'), {
-    exports: {},
-    require: () => ({ resolveAssetPath: value => value }),
-    Page: definition => { page = definition; },
-    wx: { getStorageSync: () => '', navigateTo: options => navigations.push(options.url), showToast: options => toasts.push(options.title) },
-  });
-  const event = { currentTarget: { dataset: { action: 'projectNotes' } } };
-  page.data = { ...page.data, token: '', hasLoginToken: false };
-  page.onWorkbenchMenuTap(event);
-  assert.equal(navigations.length, 0);
-  assert.equal(toasts[0], '请先登录');
-  page.data.token = 'fixture-session';
-  page.onWorkbenchMenuTap(event);
-  assert.deepEqual(navigations, ['/pages/projectnotes/projectnotes']);
-  for (const file of ['my.ts', 'my.js']) {
-    const source = read(file);
-    assert.match(source, /action: 'projectNotes'[^\n]+available: true/);
-    assert.match(source, /\/pages\/projectnotes\/projectnotes/);
-  }
-});
 
-test('我的项目复用私人项目页，客户管理只打开既有后台深链', () => {
-  const vm = require('node:vm');
-  let page;
-  const navigations = [];
-  vm.runInNewContext(read('my.js'), {
-    exports: {},
-    require: () => ({ resolveAssetPath: value => value }),
-    Page: definition => { page = definition; },
-    wx: { getStorageSync: () => 'mini-session', navigateTo: options => navigations.push(options.url), showToast() {} },
-    setTimeout,
-  });
-  page.data = { ...page.data, token: 'mini-session', hasLoginToken: true };
-  page.setData = patch => Object.assign(page.data, patch);
-  page.refreshWorkbenchMenuItems({ hasLoginToken: true });
-  for (const action of ['myProjects', 'customerManagement', 'contentWorkbench']) {
-    page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
-  }
-  assert.deepEqual(navigations, [
-    '/pages/projectnotes/projectnotes',
-    '/pages/adminhome/adminhome?target=customer-management',
-    '/pages/contentworkbench/contentworkbench',
-  ]);
-  assert.equal(navigations.some(url => /token|session|user_id/i.test(url)), false);
-});

@@ -353,18 +353,6 @@
     "Public": true,
     "Audience": "customer"
   },
-  "pages/contentworkbench/contentworkbench": {
-    "Title": "pages/contentworkbench/contentworkbench",
-    "Type": "excluded",
-    "Public": false,
-    "Audience": "neutral"
-  },
-  "pages/contentedit/contentedit": {
-    "Title": "pages/contentedit/contentedit",
-    "Type": "excluded",
-    "Public": false,
-    "Audience": "neutral"
-  },
   "pages/sharevisits/sharevisits": {
     "Title": "pages/sharevisits/sharevisits",
     "Type": "excluded",
@@ -373,30 +361,6 @@
   },
   "pages/visitdetail/visitdetail": {
     "Title": "pages/visitdetail/visitdetail",
-    "Type": "excluded",
-    "Public": false,
-    "Audience": "neutral"
-  },
-  "pages/contentwriting/contentwriting": {
-    "Title": "AI内容策划",
-    "Type": "excluded",
-    "Public": false,
-    "Audience": "neutral"
-  },
-  "pages/projectnotes/projectnotes": {
-    "Title": "私人项目笔记管理",
-    "Type": "excluded",
-    "Public": false,
-    "Audience": "neutral"
-  },
-  "pages/projectnoteview/projectnoteview": {
-    "Title": "受邀项目笔记固定版本",
-    "Type": "excluded",
-    "Public": false,
-    "Audience": "neutral"
-  },
-  "pages/nativereferences/nativereferences": {
-    "Title": "原生内容引用库",
     "Type": "excluded",
     "Public": false,
     "Audience": "neutral"

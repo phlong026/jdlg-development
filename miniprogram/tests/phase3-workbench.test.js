@@ -82,7 +82,7 @@ test('draft deletion uses the signed workbench endpoint and expected revision', 
 
 test('private phase3 pages are registered, built, non-shareable, and expose real state branches', () => {
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
-  for (const page of ['contentworkbench', 'contentedit', 'sharevisits', 'visitdetail']) {
+  for (const page of ['sharevisits', 'visitdetail']) {
     assert.ok(app.subPackages.some(pack => pack.root === `pages/${page}` && pack.pages.includes(page)));
     const config = JSON.parse(fs.readFileSync(path.join(root, `pages/${page}/${page}.json`), 'utf8'));
     assert.notEqual(config.enableShareAppMessage, true);
@@ -95,7 +95,7 @@ test('private phase3 pages are registered, built, non-shareable, and expose real
     assert.match(source, /loading|error/);
   }
   const build = fs.readFileSync(path.join(__dirname, '../scripts/build-tracking.js'), 'utf8');
-  for (const page of ['contentworkbench', 'contentedit', 'sharevisits', 'visitdetail']) assert.match(build, new RegExp(`pages/${page}/${page}\\.ts`));
+  for (const page of ['sharevisits', 'visitdetail']) assert.match(build, new RegExp(`pages/${page}/${page}\\.ts`));
   const trackingRoutes = require(path.join(root, 'utils/tracking/routes.js'));
   for (const page of ['contentworkbench', 'contentedit', 'sharevisits', 'visitdetail']) assert.equal(trackingRoutes.policy(`pages/${page}/${page}`).collect, false);
 });
