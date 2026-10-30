@@ -12,17 +12,24 @@ import (
 )
 
 type Service struct {
-	VerifyBusiness func(context.Context, BusinessProof) (bool, error)
+	MediaObjects MediaObjectStore
+	// Projection participants run inside the tracking write transaction.
+	OnNoticeEvent        func(context.Context, NoticeEvent) error
+	OnRemoveNoticeEvents func(context.Context, []string) error
+	OnContentRevoke      func(context.Context, string) error
+	VerifyBusiness       func(context.Context, BusinessProof) (bool, error)
 	// Server-side, current account grant lookup. Never derived from client fields.
-	IsContentOperator      func(context.Context, int64, string) (bool, error)
-	ResolveLegacy          func(string, int64) (LegacyMetadata, error)
-	ResolveLegacyContext   func(context.Context, string, int64) (LegacyMetadata, error)
-	ResolvePublicSnapshot  func(context.Context, string) (LegacyMetadata, error)
-	VerifyCRM              func(context.Context, Scope, string, string, string) error
-	ResolveVisitorProfiles VisitorProfileResolver
-	Store                  Store
-	Config                 Config
-	Now                    func() time.Time
+	IsContentOperator         func(context.Context, int64, string) (bool, error)
+	ResolveLegacy             func(string, int64) (LegacyMetadata, error)
+	ResolveLegacyContext      func(context.Context, string, int64) (LegacyMetadata, error)
+	ResolveLegacyBatchContext func(context.Context, string, []string) (map[string]LegacyMetadata, error)
+	ResolvePublicSnapshot     func(context.Context, string) (LegacyMetadata, error)
+	VerifyCRM                 func(context.Context, Scope, string, string, string) error
+	ResolveVisitorProfiles    VisitorProfileResolver
+	Store                     Store
+	Config                    Config
+	NoticeRules               NoticeRules
+	Now                       func() time.Time
 	// Tests only: take the staged deletion path even when the atomic plan fits.
 	forceStagedDeletion bool
 }
@@ -184,6 +191,7 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 			return fail(410, "访问记录已删除")
 		}
 		out = Entry{Attribution: attribution, Route: in.Route, Content: in.Content, Version: in.Version, Session: opaque(), Visitor: visitor, Anonymous: anon, Account: account, Client: in.Client, Owner: owner, Share: share, Started: now, LastActive: now, Expires: now.Add(72 * time.Hour), Accessible: true, Self: self}
+		out.WebSource, out.ConsentVersion = in.WebSource, in.Consent
 		if in.Previous != "" && in.ShareToken == "" {
 			old, err := s.entry(r, in.Previous)
 			linked := false
@@ -227,11 +235,14 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 				return err
 			}
 		}
+		if err := s.redeemShareHandoff(r, &out, in.HandoffToken); err != nil {
+			return err
+		}
 		token := opaque()
-		if e := r.Insert(record("entry", hash(token), out.Owner, now, out)); e != nil {
+		if e := r.Insert(record("entry", hash(token), out.Owner, now, persistedEntry(out))); e != nil {
 			return e
 		}
-		session := record("session", out.Session, out.Owner, out.Started, out)
+		session := record("session", out.Session, out.Owner, out.Started, persistedEntry(out))
 		session.Visitor = out.Visitor
 		session.Session = out.Session
 		if e := r.Put(session); e != nil {
@@ -610,6 +621,28 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			if err = r.Insert(record("event_hash", e.ID, en.Owner, e.Occurred, map[string]string{"fingerprint": fingerprint})); err != nil {
 				return err
 			}
+			notice, createNotice, err := browseNotice(r, en, e, s.NoticeRules)
+			if err != nil {
+				return err
+			}
+			if e.Type == "page_view" {
+				createNotice, err = s.claimHandoffNotice(r, en, e, createNotice)
+				if err != nil {
+					return err
+				}
+			}
+			if createNotice {
+				nr := record("notice_event", notice.ID, en.Owner, notice.OccurredAt, notice)
+				nr.Visitor, nr.Content, nr.Share, nr.Session = notice.VisitorKey, notice.ContentID, notice.ShareID, en.Session
+				if err = r.Insert(nr); err != nil {
+					return err
+				}
+				if s.OnNoticeEvent != nil {
+					if err = s.OnNoticeEvent(sourceReadContext(ctx, r), notice); err != nil {
+						return err
+					}
+				}
+			}
 			res.Status = "accepted"
 			out = append(out, res)
 		}
@@ -620,7 +653,7 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 			return err
 		}
 		en.LastActive = now
-		if err = r.Put(record("entry", hash(token), en.Owner, now, en)); err != nil {
+		if err = r.Put(record("entry", hash(token), en.Owner, now, persistedEntry(en))); err != nil {
 			return err
 		}
 		return nil

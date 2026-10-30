@@ -103,6 +103,38 @@ test('rich text renders only the explicit persisted format; legacy body remains 
  assert.ok(!editor.includes('<ContentBody content={form}'));
 });
 
+test('article_v2 preview keeps interleaved blocks and never interprets document text as HTML', () => {
+ const { ContentBody }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
+ const content={body_format:'article_v2',body:JSON.stringify({schema:1,blocks:[{kind:'heading',level:2,text:'标题'},{kind:'paragraph',text:'<script>literal</script>'},{kind:'image',media_id:'asset-1'},{kind:'quote',text:'引用'}]}),media:[{media_id:'asset-1',kind:'image',url:'/authorized/media/1',width:1200,height:800}]};
+ const html=renderToStaticMarkup(React.createElement(ContentBody,{content}));
+ assert.ok(html.indexOf('&lt;script&gt;literal&lt;/script&gt;')<html.indexOf('<img'));
+ assert.ok(html.indexOf('<img')<html.indexOf('引用'));
+ assert.doesNotMatch(html,/<script>/);
+ assert.match(html,/class="st-article-block st-article-heading st-article-heading-2"/);
+ const editor=fs.readFileSync(new URL('src/pages/shareTracking/editor.tsx',root),'utf8');
+ assert.match(editor,/value="article_v2"/);
+});
+
+test('article_v2 original layout preview binds only authorized media and rejects active markup', () => {
+ const { ContentBody }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
+ const body=JSON.stringify({schema:1,layout_html:'<section style="padding:12px"><p>前文</p><img data-media-id="asset-image"><jd-video data-media-id="asset-video"></jd-video></section>',blocks:[{kind:'paragraph',text:'兼容正文'}]});
+ const content={body_format:'article_v2',body,media:[{media_id:'asset-image',kind:'image',url:'/authorized/media/image'},{media_id:'asset-video',kind:'video',url:'/authorized/media/video'}]};
+ const html=renderToStaticMarkup(React.createElement(ContentBody,{content}));
+ assert.match(html,/class="st-body st-original-layout"/);assert.match(html,/<img src="https:\/\/example\.test\/authorized\/media\/image"/);assert.match(html,/<video src="https:\/\/example\.test\/authorized\/media\/video" controls playsinline/);assert.doesNotMatch(html,/data-media-id|jd-video/);
+ const unsafe={...content,body:JSON.stringify({schema:1,layout_html:'<script>alert(1)</script>',blocks:[{kind:'paragraph',text:'兼容正文'}]})};
+ const rejected=renderToStaticMarkup(React.createElement(ContentBody,{content:unsafe}));assert.match(rejected,/无法安全预览/);assert.doesNotMatch(rejected,/<script>|alert\(1\)/);
+});
+
+test('editor keeps imported layout body read-only and saves it without flattening', async () => {
+ const original=JSON.stringify({schema:1,layout_html:'<p>原排版</p>',blocks:[{kind:'paragraph',text:'兼容正文'}]});
+ const h=editorHarness({}, {body_format:'article_v2',body:original,media:[]});
+ const label=h.find('label','已有正文');const textarea=label.props.children.find(node=>node?.type==='textarea');assert.equal(textarea.props.readOnly,true);assert.match(h.text(),/正文与媒体授权为只读/);
+ h.checkbox()[0].props.onChange({target:{checked:true}});h.render();h.find('button','保存草稿并预览').props.onClick();await flush();
+ const save=h.calls.find(call=>call[0]==='save');assert.equal(save[1].body,original);
+});
+
 test('published draft keeps current public version and revokes without publishing unfinished edits',async()=>{
  const h=editorHarness({}, {status:'draft',version:4,revision:9});
  assert.match(h.text(),/当前公开版本：v4/);assert.match(h.text(),/无需发布草稿即可撤回/);

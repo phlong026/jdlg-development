@@ -42,3 +42,5 @@
   line-height: 1.8;
   color: #9a8264;
 }
+.binding-card,.message-card,.status-card {background:#fff;border-radius:24rpx;padding:28rpx;margin-bottom:20rpx;display:flex;flex-direction:column;gap:16rpx;}
+.binding-name{font-size:30rpx;font-weight:600;}.toolbar,.message-heading{display:flex;align-items:center;justify-content:space-between;margin:24rpx 0;}.toolbar button{margin:0;}.message-heading{margin:0;}.message-body{font-size:28rpx;line-height:1.6;}.message-time{font-size:22rpx;color:#9a8264;}.message-action{font-size:25rpx;color:#85643d;}.unread-dot{width:14rpx;height:14rpx;background:#bf6945;border-radius:50%;}.read{background:#ffffffb8;}.content{padding-bottom:60rpx;}

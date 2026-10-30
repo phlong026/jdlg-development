@@ -17,8 +17,10 @@ const CERTIFICATION_REFRESH_INTERVAL = 10000;
 type MyMenuItem = {
   action: string;
   label: string;
-  shortLabel: string;
+  icon: string;
   meta?: string;
+  description?: string;
+  available?: boolean;
 };
 
 function hasDesignerWorkbenchAccess(options: {
@@ -91,20 +93,22 @@ function resolveVipDisplays(hasLoginToken: boolean, ...sources: any[]) {
 
 function buildCommonMenuItems(): MyMenuItem[] {
   return [
-    { action: 'project', label: '生成记录', shortLabel: '记' },
-    { action: 'wallet', label: '充值中心', shortLabel: '充' },
-    { action: 'orders', label: '我的订单', shortLabel: '单' },
-    { action: 'favorite', label: '我的收藏', shortLabel: '藏' },
-    { action: 'buildingCodeDocs', label: '规范资料', shortLabel: '规', meta: '全站问答' },
+    { action: 'favorite', label: '我的收藏', icon: 'star', meta: '已保存的内容' },
+    { action: 'buildingCodeDocs', label: '规范资料', icon: 'file', meta: '全站问答' },
   ];
 }
 
-function buildServiceMenuItems(): MyMenuItem[] {
+function certificationMeta(hasLoginToken: boolean, certStatus = '') {
+  if (!hasLoginToken) return '登录后查看';
+  return ({ approved: '已通过', pending_review: '审核中', pending_payment: '待支付', rejected: '未通过' } as Record<string, string>)[certStatus] || '可选认证';
+}
+
+function buildServiceMenuItems(options: { hasLoginToken?: boolean; certStatus?: string } = {}): MyMenuItem[] {
   return [
-    { action: 'bindPhone', label: '绑定手机', shortLabel: '机', meta: '' },
-    { action: 'settings', label: '设置', shortLabel: '设', meta: '账号与隐私' },
-    { action: 'message', label: '消息中心', shortLabel: '信' },
-    { action: 'adminLogin', label: '管理员登录', shortLabel: '管' },
+    { action: 'identity', label: '认证资料', icon: 'verified', meta: certificationMeta(!!options.hasLoginToken, String(options.certStatus || '')) },
+    { action: 'bindPhone', label: '绑定手机', icon: 'mobile', meta: options.hasLoginToken ? '查看绑定状态' : '登录后查看' },
+    { action: 'message', label: '消息中心', icon: 'notification', meta: '系统通知' },
+    { action: 'settings', label: '设置', icon: 'setting', meta: '账号与隐私' },
   ];
 }
 
@@ -123,25 +127,15 @@ function buildWorkbenchMenuItems(options: {
     certIdentityType,
   });
 
-  let identityMeta = '登录后查看';
-  if (hasLoginToken) {
-    if (certStatus === 'approved') {
-      identityMeta = '已通过';
-    } else if (certStatus === 'pending_review') {
-      identityMeta = '审核中';
-    } else if (certStatus === 'pending_payment') {
-      identityMeta = '待支付';
-    } else if (certStatus === 'rejected') {
-      identityMeta = '未通过';
-    } else {
-      identityMeta = '可选认证';
-    }
-  }
-
   return [
-    { action: 'identity', label: '认证资料', shortLabel: '认', meta: identityMeta },
-    { action: 'designerHome', label: '设计师主页', shortLabel: '页', meta: hasDesignerAccess ? '进入主页' : '登录后可用' },
-    { action: 'publish', label: '我的发布', shortLabel: '发', meta: hasDesignerAccess ? '上传作品' : '登录后可用' },
+    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '方案与效果图', available: true },
+    { action: 'projectNotes', label: '项目笔记', icon: 'file-edit', description: '记录与灵感', available: true },
+    { action: 'contentWorkbench', label: '内容制作', icon: 'video', description: '文案与素材', available: hasLoginToken },
+    { action: 'customerManagement', label: '客户管理', icon: 'usergroup', description: '使用客户管理账号登录', available: hasLoginToken },
+    { action: 'project', label: '生成记录', icon: 'file', description: '各类AI成果', available: hasLoginToken },
+    { action: 'publish', label: '我的发布', icon: 'send', description: '作品与发布管理', available: hasDesignerAccess },
+    { action: 'shareMaterials', label: '可分享素材', icon: 'share', description: '已授权作品', available: hasLoginToken },
+    { action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示主页', available: hasDesignerAccess },
   ];
 }
 
@@ -166,6 +160,8 @@ Page({
     commonMenuItems: buildCommonMenuItems(),
     workbenchMenuItems: buildWorkbenchMenuItems({}),
     serviceMenuItems: buildServiceMenuItems(),
+    showShareMaterialsPanel: false,
+    brandOrganization: '华匠邦',
     stones: 0,
     stonesDisplay: '0',
     taskCount: 0,
@@ -279,6 +275,7 @@ Page({
     };
     this.setData({
       workbenchMenuItems: buildWorkbenchMenuItems(nextState),
+      serviceMenuItems: buildServiceMenuItems(nextState),
     });
   },
 
@@ -299,7 +296,7 @@ Page({
         userInfo: displayUserInfo,
         hasLoginToken: true,
         commonMenuItems: buildCommonMenuItems(),
-        serviceMenuItems: buildServiceMenuItems(),
+        serviceMenuItems: buildServiceMenuItems({ hasLoginToken: true, certStatus: this.data.certStatus }),
         workbenchMenuItems: buildWorkbenchMenuItems({
           hasLoginToken: true,
           certStatus: this.data.certStatus,
@@ -343,7 +340,7 @@ Page({
         certRealNameMasked: '',
         commonMenuItems: buildCommonMenuItems(),
         workbenchMenuItems: buildWorkbenchMenuItems({ hasLoginToken: false }),
-        serviceMenuItems: buildServiceMenuItems(),
+        serviceMenuItems: buildServiceMenuItems({ hasLoginToken: false }),
         vipLevelShortDisplay: '--',
         vipLevelText: '非会员',
         vipLevelIsFallback: true,
@@ -974,6 +971,7 @@ Page({
 
   onWorkbenchMenuTap(e: any) {
     const action = e.currentTarget.dataset.action;
+    const selected = this.data.workbenchMenuItems.find((item: MyMenuItem) => item.action === action);
 
     if (!this.isLoggedIn()) {
       wx.showToast({
@@ -983,8 +981,8 @@ Page({
       return;
     }
 
-    if (action === 'identity') {
-      this.onSettingTap({ currentTarget: { dataset: { type: 'tools' } } });
+    if (selected && selected.available === false) {
+      wx.showToast({ title: selected.meta || '功能待开通', icon: 'none' });
       return;
     }
 
@@ -1026,6 +1024,42 @@ Page({
       return;
     }
 
+    if (action === 'project') {
+      this.goToGenerateHistory();
+      return;
+    }
+
+    if (action === 'myProjects') {
+      wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'projectNotes') {
+      wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'customerManagement') {
+      wx.navigateTo({ url: '/pages/adminhome/adminhome?target=customer-management', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'contentWorkbench') {
+      wx.navigateTo({ url: '/pages/contentworkbench/contentworkbench', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'shareVisits') {
+      wx.navigateTo({ url: '/pages/sharevisits/sharevisits', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'shareMaterials') {
+      this.setData({ showShareMaterialsPanel: true });
+      setTimeout(() => wx.pageScrollTo({ selector: '#shareMaterialsPanel', duration: 240 }), 0);
+      return;
+    }
+
     if (action === 'settings') {
       this.goToSettings();
       return;
@@ -1039,6 +1073,18 @@ Page({
 
   onAccountMenuTap(e: any) {
     const action = e.currentTarget.dataset.action;
+
+    if (action === 'identity') {
+      if (!this.isLoggedIn()) {
+        wx.showToast({ title: '请先登录', icon: 'none' });
+        return;
+      }
+      wx.navigateTo({
+        url: '/pages/Identityauthen/Identityauthen',
+        fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }),
+      });
+      return;
+    }
 
     if (action === 'bindPhone') {
       if (!this.isLoggedIn()) {
@@ -1086,6 +1132,10 @@ Page({
       this.onSettingTap({ currentTarget: { dataset: { type: 'tools2' } } });
       return;
     }
+  },
+
+  hideShareMaterialsPanel() {
+    this.setData({ showShareMaterialsPanel: false });
   },
 
   goToSettings() {

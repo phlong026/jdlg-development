@@ -1,0 +1,19 @@
+[Unit]
+Description=JDLG isolated content capture network
+Wants=network-online.target
+After=network-online.target
+Before=jdlg-content-capture-browser.service jdlg-content-capture-worker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /opt/jdlg-content-capture/ops/network.py up
+ExecReload=/usr/bin/python3 /opt/jdlg-content-capture/ops/network.py refresh
+ExecStop=/usr/bin/python3 /opt/jdlg-content-capture/ops/network.py down
+TimeoutStartSec=45s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN
+
+[Install]
+WantedBy=multi-user.target

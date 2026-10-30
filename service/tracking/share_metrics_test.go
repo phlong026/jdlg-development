@@ -2,6 +2,7 @@ package tracking
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -254,4 +255,40 @@ func bytesContains(haystack, needle string) bool {
 		}
 		return false
 	})()
+}
+
+func TestCopiedPreparedShareCountsOnceAfterConfirmedIntent(t *testing.T) {
+	s, m, scope, now := reviewFixture()
+	catalogSeed(m, "content1", "复制分享内容", "one", 1, now.Add(-2*time.Hour))
+	seedShareMetric(m, "copied", "one", "u:1", "copy-session", "content1", 1, now.Add(-time.Hour))
+	rec := m["share/tokhash-copied"]
+	var sh Share
+	if err := json.Unmarshal(rec.Payload, &sh); err != nil {
+		t.Fatal(err)
+	}
+	sh.Prepared = true
+	sh.Channel = "app_message"
+	rec.Payload = marshal(sh)
+	m["share/tokhash-copied"] = rec
+	count := func() int {
+		t.Helper()
+		list, err := s.Contents(context.Background(), scope, Filter{}, "content1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return list.Items.([]Content)[0].Shares
+	}
+	if got := count(); got != 0 {
+		t.Fatal("preparation counted", got)
+	}
+	seedShareIntent(m, "one", "u:1", "copy-session", sh.ID, "app_message", now.Add(-30*time.Minute))
+	if got := count(); got != 1 {
+		t.Fatal("copy intent missing", got)
+	}
+	row := m["event/intent-"+sh.ID]
+	row.ID = "copy-duplicate-intent"
+	m["event/"+row.ID] = row
+	if got := count(); got != 1 {
+		t.Fatal("duplicate intent created another share", got)
+	}
 }

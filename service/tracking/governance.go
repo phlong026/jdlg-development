@@ -25,7 +25,7 @@ type RetentionPlan struct {
 	ReviewDigest  string         `json:"review_digest"`
 }
 
-var rawRetentionKinds = []string{"event", "event_hash", "sequence", "view_binding", "entry", "rate"}
+var rawRetentionKinds = []string{"notice_event", "note_open", "share_handoff", "handoff_redeem", "handoff_notice", "event", "event_hash", "sequence", "view_binding", "entry", "rate"}
 var summaryRetentionKinds = []string{"session", "identity", "business", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "intent_recompute_request", "share", "share_request", "daily_summary", "summary_state"}
 
 func (s *Service) retentionAllowed(scope Scope, p RetentionPolicy, raw, summary time.Time) error {
@@ -120,10 +120,12 @@ func (s *Service) PurgeExpired(ctx context.Context, scope Scope, p RetentionPoli
 		if e = s.PrepareSummaryRetention(r, rows, s.Now(), reviewed.SummaryBefore); e != nil {
 			return e
 		}
+		removals := map[string]Record{}
 		for _, row := range rows {
-			if e = r.Remove(row.Kind, row.ID); e != nil {
-				return e
-			}
+			removals[row.Kind+":"+row.ID] = row
+		}
+		if e = s.removePrivacyRecords(ctx, r, removals); e != nil {
+			return e
 		}
 		if e = prepareIntentOverrideRetention(r, rows, reviewed.SummaryBefore, s.Now()); e != nil {
 			return e

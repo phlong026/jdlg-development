@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-27",
+  "purpose": "固定版本 Word 导出的合成资料渲染检查",
+  "synthetic": true,
+  "production": false,
+  "real_customer_data": false,
+  "real_cos": false,
+  "builder": "service/notedocx.Build",
+  "renderer": "bundled LibreOffice headless via documents/render_docx.py",
+  "font_environment": "仅该次命令 FONTCONFIG_FILE 指向临时配置，使用已有系统中文字体；无全局修改",
+  "pages": 1,
+  "files": {
+    "sample.docx": {
+      "bytes": 3174,
+      "sha256": "fcebed4a1a48f4a6dafaecbdd4a863df9487c517b89cadc6f1348576addcb962"
+    },
+    "sample.pdf": {
+      "bytes": 76013,
+      "sha256": "055d1122c5576250d36b752d47278b72cc249cc045a2f9f4d95f765ff418b6c0"
+    },
+    "page-1.png": {
+      "bytes": 100657,
+      "sha256": "e6238fd3b65095841c4b22d97b9b863eb00919ea0405fd69c505a5ab59a78df1"
+    }
+  },
+  "zip_test": true,
+  "embedded_images": 1,
+  "external_relationships": false
+}

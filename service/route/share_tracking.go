@@ -251,7 +251,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	svc.VerifyCRM = makeTrackingCRMVerifier(users.DB)
 	svc.VerifyBusiness = makeTrackingBusinessVerifier(users.DB)
 	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
+	svc.ResolveLegacyBatchContext = makeTrackingLegacyBatchResolver(users.DB)
 	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
+	registerContentWorkbenchRoutes(v1, svc, users, codes)
+	registerProjectNoteRoutes(v1, svc, users, codes)
 	// This is a separate capability group, not an implicit platform-admin data grant.
 	mpSettings := loadMPSyncSettings(os.Getenv)
 	for _, problem := range mpSettings.Problems {
@@ -639,6 +642,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	})
 	pub := v1.Group("/miniprogram/tracking")
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
+	registerTrackingMyRoutes(pub, svc, users, codes)
 	pub.POST("/share-entry", func(c *gin.Context) {
 		var in struct {
 			Scene string `json:"scene"`
@@ -658,7 +662,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
 		trackingResponse(c, v, e)
 	})
-	pub.GET("/media/:id", func(c *gin.Context) {
+	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
 		var selected *tracking.Scope
 		if e == nil {

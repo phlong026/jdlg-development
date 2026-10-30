@@ -26,6 +26,11 @@ interface Message {
 }
 
 Page({
+  writingToken: '',
+  writingChannel: null as any,
+  writingRequest: null as any,
+  writingClosed: false,
+  writingSequence: 0,
   /**
    * 页面的初始数据
    */
@@ -48,6 +53,8 @@ Page({
     waitingFirstChunk: false,
     streamingMessageId: '' as string,
     chatCost: DEFAULT_CHAT_COST,
+    writingResultID: '',
+    writingBusy: false,
   },
 
   /**
@@ -65,6 +72,15 @@ Page({
       conversationTitle: title || this.data.conversationTitle,
     });
 
+    if (source === 'content-writing' && mode === 'chat') {
+      this.writingToken = String(wx.getStorageSync('token') || '');
+      this.writingChannel = this.getOpenerEventChannel();
+      this.writingChannel.on('contentWritingTask', (task: { text?: string }) => {
+        if (this.writingToken !== String(wx.getStorageSync('token') || '')) return;
+        this.setData({ inputText: String(task && task.text || '').slice(0, 20000) });
+      });
+    }
+
     if (mode === 'chat') {
       this.setData({
         mode: 'chat',
@@ -74,7 +90,7 @@ Page({
       if (!this.data.messages.length) {
         this.addMessage(
           'ai',
-          preset || '你好！我是AI设计客服，可以先帮你判断这个设计师适不适合你的需求，再帮你整理更容易沟通的咨询内容。'
+          preset || (source === 'content-writing' ? '创作要求已填入输入框。请核对后点击发送，生成完成后可采用文案并返回编辑。' : '你好！我是AI设计客服，可以先帮你判断这个设计师适不适合你的需求，再帮你整理更容易沟通的咨询内容。')
         );
       }
       return;
@@ -91,12 +107,29 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow() {
+    if (this.data.source === 'content-writing' && this.writingToken !== String(wx.getStorageSync('token') || '')) {
+      this.setData({ inputText: '', messages: [], writingResultID: '', writingBusy: false });
+    }
     // 如果还没有选择模式且有来源，显示弹窗
     if (!this.data.mode && this.data.source) {
       this.setData({
         showModeModal: true,
       });
     }
+  },
+
+  onUnload() {
+    this.writingClosed = true;
+    if (this.writingChannel) this.writingChannel.off('contentWritingTask');
+    if (this.writingRequest && this.data.writingBusy) this.writingRequest.abort();
+  },
+
+  adoptWriting() {
+    if (this.data.source !== 'content-writing' || !this.writingChannel || this.data.writingBusy || this.writingClosed || this.writingToken !== String(wx.getStorageSync('token') || '')) return;
+    const message = this.data.messages.find((item: Message) => item.id === this.data.writingResultID && item.role === 'ai');
+    if (!message || !message.content.trim()) return;
+    this.writingChannel.emit('contentWritingResult', { text: message.content.trim() });
+    wx.navigateBack({ delta: 1, fail: () => wx.showToast({ title: '文案已带回，请返回上一页', icon: 'none' }) });
   },
 
   async loadChatPricing() {
@@ -297,6 +330,7 @@ Page({
    * 发送消息
    */
   onSendMessage() {
+    if (this.data.source === 'content-writing' && this.data.writingBusy) return;
     const text = this.data.inputText.trim();
     if (!text) {
       return;
@@ -324,7 +358,7 @@ Page({
     this.addMessage('user', text);
 
     if (this.data.mode === 'chat') {
-      void this.sendChatMessage(text);
+      void this.sendChatMessage(text, true);
     } else {
       void this.generateDirectly(text);
     }
@@ -337,7 +371,7 @@ Page({
   /**
    * 发送聊天消息（流式）
    */
-  async sendChatMessage(text: string) {
+  async sendChatMessage(text: string, currentMessageAdded = false) {
     if (blockUnsafeText(text, { scene: 'chat' })) {
       return;
     }
@@ -351,6 +385,9 @@ Page({
         });
         return;
       }
+      const writing = this.data.source === 'content-writing';
+      if (writing && (this.data.writingBusy || this.writingToken !== String(token))) return;
+      if (writing) this.setData({ writingBusy: true, writingResultID: '' });
 
       // 构建聊天历史
       const history = this.data.messages
@@ -360,8 +397,8 @@ Page({
           content: msg.content,
         }));
 
-      // 添加当前消息
-      const messages = [...history.slice(-10), { role: 'user', content: text }];
+      // 发送按钮已把当前消息放入列表；按调用路径保留一次，不按文字删掉真实的历史重复提问。
+      const messages = currentMessageAdded ? history.slice(-11) : [...history.slice(-10), { role: 'user', content: text }];
 
       // 构建请求体
       const requestBody = {
@@ -378,7 +415,7 @@ Page({
       const headers = paramsToHeaders(params);
 
       // 先添加一个空的AI消息，用于流式更新
-      const aiMessageId = Date.now().toString();
+      const aiMessageId = writing ? `writing-${Date.now()}-${++this.writingSequence}` : Date.now().toString();
       const aiMessage: Message = {
         id: aiMessageId,
         role: 'ai',
@@ -393,6 +430,13 @@ Page({
 
       // 使用requestTask进行流式请求
       let fullContent = '';
+      let streamDone = false;
+      let streamFailed = false;
+      let pendingBytes = new Uint8Array(0);
+      const finishWriting = (successful: boolean) => {
+        if (!writing || this.writingClosed || this.writingToken !== String(wx.getStorageSync('token') || '')) return;
+        this.setData({ writingBusy: false, writingResultID: successful && streamDone && !streamFailed && fullContent.trim() ? aiMessageId : '' });
+      };
       const requestTask = wx.request({
         url: `${API_BASE_URL}${apiPath}`,
         method: 'POST',
@@ -404,8 +448,10 @@ Page({
         data: requestBody,
         enableChunked: true, // 启用分块传输
         success: (res: any) => {
+          if (writing && (this.writingClosed || this.writingToken !== String(wx.getStorageSync('token') || ''))) return;
           this.setData({ waitingFirstChunk: false, streamingMessageId: '' });
           if (res.statusCode === 402 && res.data) {
+            finishWriting(false);
             const data = res.data as any;
             const required = Number(data?.data?.required || this.data.chatCost || 0);
             const current = Number(data?.data?.current || 0);
@@ -417,29 +463,45 @@ Page({
             if (typeof res.data === 'object' && res.data.code !== undefined) {
               // JSON响应，可能是错误
               if (res.data.code !== 0) {
+                streamFailed = true;
                 this.updateAIMessage(aiMessageId, `抱歉，${res.data.msg || '请求失败'}`);
               }
             }
           } else if (res.statusCode !== 200) {
+            streamFailed = true;
             const data = res.data as any;
             this.updateAIMessage(aiMessageId, `抱歉，${(data && data.msg) || `请求失败：${res.statusCode}`}`);
           }
+          finishWriting(res.statusCode === 200);
         },
         fail: (err: any) => {
+          if (writing && (this.writingClosed || this.writingToken !== String(wx.getStorageSync('token') || ''))) return;
+          streamFailed = true;
+          finishWriting(false);
           this.setData({ waitingFirstChunk: false, streamingMessageId: '' });
           console.error('流式请求失败:', err);
           this.updateAIMessage(aiMessageId, `抱歉，网络错误：${err.errMsg || '请稍后重试'}`);
         },
       } as any) as any;
+      if (writing) this.writingRequest = requestTask;
 
       // 监听分块数据
       requestTask.onChunkReceived((res: any) => {
+        if (writing && (this.writingClosed || this.writingToken !== String(wx.getStorageSync('token') || ''))) return;
         try {
-          // 将ArrayBuffer转换为字符串
-          const text = this.arrayBufferToString(res.data);
-          
-          // 解析SSE数据
-          const lines = text.split('\n');
+          // SSE行和UTF-8字符均可能跨网络块，先按换行字节组成完整行再解码。
+          const bytes = new Uint8Array(res.data);
+          const combined = new Uint8Array(pendingBytes.length + bytes.length);
+          combined.set(pendingBytes); combined.set(bytes, pendingBytes.length);
+          const lines: string[] = [];
+          let start = 0;
+          for (let index = 0; index < combined.length; index++) {
+            if (combined[index] === 10) {
+              lines.push(this.arrayBufferToString(combined.slice(start, index).buffer));
+              start = index + 1;
+            }
+          }
+          pendingBytes = combined.slice(start);
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const jsonStr = line.substring(6).trim();
@@ -453,24 +515,28 @@ Page({
                     fullContent += data.content;
                     this.updateAIMessage(aiMessageId, fullContent);
                   } else if (data.type === 'done') {
+                    streamDone = true;
                     this.setData({ waitingFirstChunk: false, streamingMessageId: '' });
-                    console.log('流式聊天完成');
                   } else if (data.type === 'error') {
+                    streamFailed = true;
                     this.setData({ waitingFirstChunk: false, streamingMessageId: '' });
                     this.updateAIMessage(aiMessageId, `抱歉，${data.error || '发生错误'}`);
                   }
                 } catch (e) {
-                  // 忽略解析错误
+                  streamFailed = true;
+                  console.warn('AI流式响应格式无法解析');
                 }
               }
             }
           }
         } catch (e) {
+          streamFailed = true;
           console.error('解析分块数据失败:', e);
         }
       });
 
     } catch (error: any) {
+      if (this.data.source === 'content-writing') this.setData({ writingBusy: false, writingResultID: '' });
       console.error('发送消息失败:', error);
       this.addMessage('ai', `抱歉，发送失败：${error.message || '网络错误'}`);
     }

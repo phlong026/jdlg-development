@@ -53,6 +53,9 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 		if c.Owner != row.Owner {
 			return nil, ErrUnavailable
 		}
+		if c.Status == "deleted" {
+			continue
+		}
 		c.PageViews, c.VisibleMS, c.LastVisit, c.Identified, c.Anonymous = 0, 0, nil, 0, 0
 		out = append(out, c)
 	}
@@ -221,13 +224,15 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 		visitors := map[string]map[string]bool{}
 		totalVisitors := map[string]bool{}
 		shareTotals := map[string]int{}
-		shares, e := clientShares(r, scope, f)
-		if e != nil {
-			return e
-		}
-		for _, sh := range shares {
-			if sh.content != "" {
-				shareTotals[sh.content]++
+		if scope.View {
+			shares, e := clientShares(r, scope, f)
+			if e != nil {
+				return e
+			}
+			for _, sh := range shares {
+				if sh.content != "" {
+					shareTotals[sh.content]++
+				}
 			}
 		}
 		for _, fact := range facts {

@@ -1,0 +1,72 @@
+{
+  "method": "direct native wcc; official compile_wxml metadata is not a syntax gate",
+  "results": [
+    {
+      "file": "pages/my/my.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/chat/chat.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentworkbench/contentworkbench.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentedit/contentedit.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentreader/contentreader.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/contentwriting/contentwriting.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/sharevisits/sharevisits.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/visitdetail/visitdetail.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    },
+    {
+      "file": "pages/messagecenter/messagecenter.wxml",
+      "success": true,
+      "compiler": "native wcc"
+    }
+  ],
+  "styles": [
+    {
+      "file": "pages/contentworkbench/contentworkbench.wxss",
+      "success": true,
+      "parser": "installed sass"
+    },
+    {
+      "file": "pages/contentedit/contentedit.wxss",
+      "success": true,
+      "parser": "installed sass"
+    },
+    {
+      "file": "pages/contentreader/contentreader.wxss",
+      "success": true,
+      "parser": "installed sass"
+    },
+    {
+      "file": "pages/contentwriting/contentwriting.wxss",
+      "success": true,
+      "parser": "installed sass"
+    }
+  ]
+}

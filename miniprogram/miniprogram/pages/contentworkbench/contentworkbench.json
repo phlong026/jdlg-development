@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "内容制作",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "t-icon": "/components/tdesign-miniprogram/icon/icon",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

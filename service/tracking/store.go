@@ -280,32 +280,50 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 			original := recordVisitorColumn(kind)
 			slots := strings.TrimSuffix(strings.Repeat("?,", len(q.VisitorKeys)), ",")
 			direct := original + " IN (" + slots + ")"
-			copies := 2
+			copies := 1
+			if kind == "share" && q.ExactVisitors {
+				// Current shares use the indexed scalar. The JSON fallback is only
+				// for older blank-scalar rows and remains bounded by the other fixed
+				// predicates plus LIMIT while the additive backfill is rolling out.
+				direct = "(r.visitor_key IN (" + slots + ") OR (r.visitor_key='' AND JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.sharer_id')) IN (" + slots + ")))"
+				copies = 2
+			}
 			if kind == "daily_summary" {
 				// Persisted projected identity is an additional candidate for
 				// deletion; snapshot reads still resolve OriginalVisitor.
 				direct += " OR r.visitor_key IN (" + slots + ")"
 				copies++
 			}
-			clause := "(" + direct + " OR EXISTS (SELECT 1 FROM tracking_records identity_link WHERE identity_link.tenant_id=r.tenant_id AND identity_link.kind='identity' AND identity_link.record_id=" + recordSessionColumn(kind) + " AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.original_visitor_key'))=" + original + " AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.visitor_key')) LIKE 'u:%' AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.visitor_key')) IN (" + slots + ")"
+			clause := "(" + direct
 			for i := 0; i < copies; i++ {
 				for _, key := range q.VisitorKeys {
 					args = append(args, key)
 				}
 			}
-			if !q.IdentityAsOf.IsZero() {
-				clause += " AND identity_link.occurred_at<=?"
-				args = append(args, stamp(q.IdentityAsOf))
+			if !q.ExactVisitors {
+				clause += " OR EXISTS (SELECT 1 FROM tracking_records identity_link WHERE identity_link.tenant_id=r.tenant_id AND identity_link.kind='identity' AND identity_link.record_id=" + recordSessionColumn(kind) + " AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.original_visitor_key'))=" + original + " AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.visitor_key')) LIKE 'u:%' AND JSON_UNQUOTE(JSON_EXTRACT(identity_link.payload,'$.visitor_key')) IN (" + slots + ")"
+				for _, key := range q.VisitorKeys {
+					args = append(args, key)
+				}
+				if !q.IdentityAsOf.IsZero() {
+					clause += " AND identity_link.occurred_at<=?"
+					args = append(args, stamp(q.IdentityAsOf))
+				}
+				clause += ")"
 			}
-			where = append(where, clause+"))")
+			where = append(where, clause+")")
 		}
 	}
-	if q.hasCursor() {
+	if q.hasAfterCursor() {
 		// MySQL's default utf8mb4 collation is case-insensitive, while Go compares
 		// record IDs bytewise. Keep SQL cursor comparison and ordering bytewise too,
 		// otherwise pageRecords can move the boundary past mixed-case IDs.
 		where = append(where, "(r.occurred_at>? OR (r.occurred_at=? AND BINARY r.record_id>BINARY ?))")
 		args = append(args, stamp(q.AfterAt), stamp(q.AfterAt), q.AfterID)
+	}
+	if q.hasBeforeCursor() {
+		where = append(where, "(r.occurred_at<? OR (r.occurred_at=? AND BINARY r.record_id<BINARY ?))")
+		args = append(args, stamp(q.BeforeAt), stamp(q.BeforeAt), q.BeforeID)
 	}
 	if q.Limit > 0 && q.Limit < limit {
 		limit = q.Limit
@@ -321,7 +339,11 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 		}
 	}
 	args = append(args, limit)
-	return "SELECT " + recordColumns + " FROM tracking_records r WHERE " + strings.Join(where, " AND ") + " ORDER BY r.occurred_at,BINARY r.record_id LIMIT ?", args
+	order := " ORDER BY r.occurred_at,BINARY r.record_id LIMIT ?"
+	if q.Descending {
+		order = " ORDER BY r.occurred_at DESC,BINARY r.record_id DESC LIMIT ?"
+	}
+	return "SELECT " + recordColumns + " FROM tracking_records r WHERE " + strings.Join(where, " AND ") + order, args
 }
 func (r *sqlRepo) ListScoped(kind string, q RecordQuery) ([]Record, error) {
 	if queryHasNoRows(q) {

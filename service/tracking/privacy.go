@@ -211,10 +211,8 @@ func (s *Service) deleteVisitorAtomic(ctx context.Context, scope Scope, key, rea
 				return e
 			}
 		}
-		for _, row := range plan.rows {
-			if e := r.Remove(row.Kind, row.ID); e != nil {
-				return e
-			}
+		if e := s.removePrivacyRecords(ctx, r, plan.rows); e != nil {
+			return e
 		}
 		// Do not copy the free-text request or deleted identity into the audit log.
 		return audit(r, "", "delete_visitor", scope.Actor, hash(key), s.Now(), map[string]string{"reason_hash": hash(reason), "backup_policy": "restore_must_reapply_tombstones"})

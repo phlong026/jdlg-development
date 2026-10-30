@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "我的分享访问",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

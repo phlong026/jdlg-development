@@ -4,6 +4,7 @@
   "enableShareAppMessage": true,
   "enableShareTimeline": true,
   "usingComponents": {
-    "login-guard": "/components/login-guard/login-guard"
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
   }
 }

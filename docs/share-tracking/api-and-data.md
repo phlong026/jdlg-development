@@ -13,7 +13,7 @@
 ## 公开和采集接口
 
 - `GET /config`：安全开关、告知文字/版本、采样和队列限制。不含客户数据。
-- `GET /contents/:id/versions/:version`：公开已发布自有正文；不要求同意分析。版本固定，撤回拒读。正文按已持久化的body_format渲染：plain保持转义文本，rich_text仅渲染服务器允许列表清洗结果；媒体单独授权。此接口不承诺原业务页面的历史正文回放。
+- `GET /contents/:id/versions/:version`：公开已发布自有正文；不要求同意分析。版本固定，撤回拒读。正文按已持久化的body_format渲染：plain保持转义文本，rich_text仅渲染服务器允许列表清洗结果，article_v2按有序内容块渲染图文；媒体仍单独授权。此接口不承诺原业务页面的历史正文回放。
 - `POST /share-entry`（JSON scene，不把令牌置于请求URL日志）：校验不透明分享后返回公开目标route/content/version/token，不创建PV、不暴露收件人。
 - `GET /media/:id`：管理session按素材范围，或媒体确实属于仍可访问的已发布版本。无缓存并每次复核撤回，不接受任意外部URL代理。
 - `POST /entry`：`route_key,content_id?,content_version?,client_instance,anonymous_id?,share_token?,previous_entry_token?,consent_version`。返回受限entry_token、session_id、visitor_key、share_id、服务器确认的content_version及可访问状态。原业务公开详情的版本以服务端resolver为准，客户端后续事件及分享必须使用返回版本。非法/过期/不匹配分享回退直接访问，内容不可访问则404。新的真实分享入口、换账号和超时产生新会话；同客户端当前匿名会话登录可审计关联。
@@ -33,8 +33,10 @@
 - `GET /visits`：后台「客户查看」时间线，一次访问一条，按开始时间倒序，权限、快照、游标和意向与 `/visitors` 同源（同一访客的计数与意向两处一致）。“一次访问”= 同一会话内对同一素材版本的已计数浏览合并；普通页面和窗口开始前已打开的浏览不列出。参数同 `/visitors`，另有 `channel`=app_message/timeline/code_link/direct（非法值 400），不接受排序；`limit` 默认 20、最大 50（每页要读原始事件算进度）。每项含 `visit_id,started_at,visible_ms,visitor`（完整访客投影），`content`（标题、类型、状态、封面，不含正文），`source{kind,channel?,forwarder?}`：kind=share（小程序内分享）、code_link（后台生成的码/URL Link）、direct；分享记录由服务端写入 `origin`：后台生成为 console（`CreateConsoleShare`），小程序内为 miniprogram（含已登录但无采集会话的分享），客户端不能指定；无 origin 的旧记录以“无小程序会话”判为 code_link。只有按私发/朋友圈/扫码筛选时才对整个窗口解析入口分享，否则只解析当前页；channel 取自分享人当时会话中的 share_intent，未回传则省略；forwarder 为直接上一级分享人（按同会话登录关联解析为登录身份），只对当前页解析；分享人是该素材归属的运营账号（`IsContentOperator`）、已删除或其会话处于分阶段删除中时省略。`progress{kind,percent,plays?}` 只对当前页读取原始事件：视频为各媒体去重播放峰值÷时长（封顶100%），plays 为本次播放增量累计÷时长（≥2才返回）；文章为最深 scroll_depth；无数据或原始事件已过期时省略。`content_page_views` 为该访客在筛选范围内看这个素材版本的次数；`engaged` 为本次可见≥60秒、或该素材累计≥3次、或视频≥80%，只表示浏览行为，不是意向等级。
 - `GET /visitors/:id/sessions`：可加content_id；`include_related=true`只展开访问过此素材的那些会话中的其他页面。
 - `GET /page-views/:id/events`：脱敏事件分页，含补报/不完整标记。原始事件已按批准策略过期则HTTP 410，并在保留访问记录上标raw_events_expired；不以空列表伪装从未发生。每层独立做范围检查。
-- `POST /contents`、`PATCH /contents/:id`：人工plain或rich_text草稿；expected_revision乐观锁；不能借编辑变更历史归属。富文本为受控HTML源码输入，支持p/br/strong/em/h2/h3/ul/ol/li/blockquote，移除所有属性、脚本、外部嵌入和危险命名空间；清洗后无正文则拒绝。图片/视频只走授权媒体。未指定格式保持纯文本兼容，保存后的清洗内容用于预览、发布及读取。
+- `POST /contents`、`PATCH /contents/:id`：人工plain、rich_text或article_v2草稿；expected_revision乐观锁；不能借编辑变更历史归属。富文本为受控HTML源码输入，支持p/br/strong/em/h2/h3/ul/ol/li/blockquote，移除所有属性、脚本、外部嵌入和危险命名空间；清洗后无正文则拒绝。article_v2为`{"schema":1,"blocks":[...]}`，按顺序支持paragraph/heading/image/video/list/quote；image/video只能用media_id引用同请求media_ids中的授权媒体。style仅支持align(left/center/right)、font_size(small/normal/large)、spacing_before/spacing_after(0–48)及border(none/left/box)；不支持HTML、事件属性或外部嵌入。旧格式行为不变，保存后的归一化内容用于预览、发布及读取。
 - `POST /contents/:id/preview`：当前版本预览令牌，15分钟，绑定操作者。
+
+`article_v2` 对顶层、内容块和 `style` 使用严格字段集：出现未定义字段时整个文档拒绝，不会静默丢弃后保存。文章公开版本的 `media` 只保留正文实际引用的唯一媒体；额外勾选项不公开，封面单独保存。
 - `POST /contents/:id/publish`：预览令牌、expected_revision和idempotency_key；创建不可变版本。
 - `POST /contents/:id/revoke`：原因、版本、幂等键；永久撤回墓碑，旧入口和媒体不继续公开。
 - `GET /media`、`POST /media` multipart：受控私有盘上传，真实PNG/JPEG/GIF≤10MiB、MP4≤50MiB，权属声明；MP4必须可读取合法尺寸；无任意URL导入或远程抓取。
@@ -115,3 +117,7 @@ WHERE user_id=:verified_miniprogram_user_id AND tenant_id=:verified_tenant_id AN
 ```
 
 自动覆盖：`service/tracking/published_materials_test.go`、`service/route/share_tracking_materials_test.go`、`miniprogram/tests/tracking-materials.test.js`。数据库驱动和Node VM只验证代码合同；真实签名登录/Redis、授权配置、微信开发者工具/真机样式、真实A分享给B的全链路仍是上线验收项。
+
+## 三期工作台、分享网页与通知增量
+
+新签名接口、收件人范围、服务号配置和投递状态见[三期接入说明](../phase3/README.md)；验证和未完成项见[首批验证记录](../phase3/verification-20261027.md)。共享网页不替代私人项目邀请授权，默认关闭的服务号不表示真实可发送。

@@ -1,34 +1,32 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="reader">
- <view class="navigation"><button bindtap="goBack" aria-label="返回">返回</button><text>内容阅读</text></view>
+ <navigation-bar class="reader-navigation" title="内容阅读" back="{{true}}" background="#f7f5f1" />
  <view wx:if="{{loading}}" class="state" role="status">正在加载内容…</view>
- <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="loadContent">重试</button></view>
+ <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="loadContent">重试</button></view>
  <block wx:else>
-  <view class="title">{{content.title}}</view>
-  <view class="meta">版本 {{content.version}} · {{content.published_at || ''}}</view>
-  <view wx:if="{{consentAvailable}}" class="notice">
-   <text>{{consentNotice}}</text>
-   <text class="notice-caption">是否同意访问分析不影响阅读。可随时关闭；可见时长不代表已读或理解。</text>
-   <button wx:if="{{!consented}}" bindtap="acceptTracking">同意访问分析</button>
-   <button bindtap="declineTracking">{{consented ? '关闭访问分析' : '暂不同意，继续阅读'}}</button>
+  <view class="reader-brand"><view class="brand-mark">甲</view><view><text class="brand-name">甲第灵光</text><text class="brand-subtitle">传承东方居住美学</text></view><text class="brand-share">甲第内容</text></view>
+  <view class="article-header"><view class="title">{{content.title}}</view><view class="meta"><text>{{content.source_note || (content.source_url ? '外部素材' : '创作者资料')}}</text><text>公开版 V{{content.version}}</text><text>{{content.published_at || ''}}</text></view></view>
+  <view wx:if="{{consentAvailable}}" class="notice"><text class="notice-title">访问分析设置</text><text>{{consentNotice}}</text><text class="notice-caption">是否同意不影响阅读；可见时长不代表已读或理解。</text><view class="notice-actions"><button wx:if="{{!consented}}" class="primary" bindtap="acceptTracking">同意</button><button class="secondary" bindtap="declineTracking">{{consented ? '关闭访问分析' : '暂不同意'}}</button></view></view>
+  <view class="article-paper">
+   <!-- rich_text is persisted server-allowlisted HTML; legacy content remains escaped text. -->
+   <block wx:if="{{content.body_format === 'rich_text'}}"><rich-text class="body" nodes="{{content.body}}" selectable="{{true}}" /></block>
+   <block wx:elif="{{content.body_format === 'article_v2'}}"><block wx:for="{{articleBlocks}}" wx:key="key">
+     <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
+     <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+     <view wx:elif="{{item.kind === 'list'}}" class="{{item.className}}" style="{{item.style}}"><view wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex" class="article-list-item"><text class="article-list-marker">{{item.ordered ? (listIndex + 1) + '.' : '•'}}</text><text selectable="{{true}}">{{listItem}}</text></view></view>
+     <view wx:else class="{{item.className}}" style="{{item.style}}">
+      <image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.caption || item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" bindtap="openImage" binderror="mediaError" />
+      <video wx:else id="{{item.domId}}" class="media-video" style="height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" data-player-key="{{item.playerKey}}" data-error-key="{{item.errorKey}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+      <text wx:if="{{item.caption}}" class="article-caption" selectable="{{true}}">{{item.caption}}</text><view wx:if="{{mediaErrors[item.errorKey]}}" class="error"><text>{{mediaErrors[item.errorKey]}}</text><button bindtap="retryMedia">重新加载媒体</button></view>
+     </view>
+   </block></block>
+   <block wx:else><text class="body" selectable="{{true}}">{{content.body}}</text></block>
+   <view wx:if="{{content.body_format !== 'article_v2'}}" wx:for="{{media}}" wx:key="media_id" class="media-frame"><image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" bindtap="openImage" binderror="mediaError" /><video wx:else id="{{item.domId}}" class="media-video" style="height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" data-player-key="{{item.playerKey}}" data-error-key="{{item.errorKey}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" /><view wx:if="{{mediaErrors[item.errorKey]}}" class="error"><text>{{mediaErrors[item.errorKey]}}</text><button bindtap="retryMedia">重新加载媒体</button></view></view>
   </view>
-  <!-- rich_text is persisted server-allowlisted HTML; legacy content remains escaped text. -->
-  <rich-text wx:if="{{content.body_format === 'rich_text'}}" class="body" nodes="{{content.body}}" selectable="{{true}}" />
-  <text wx:else class="body" selectable="{{true}}">{{content.body}}</text>
-  <view wx:for="{{media}}" wx:key="media_id" class="media-frame">
-   <image wx:if="{{item.kind === 'image'}}" class="media-image" aria-label="{{item.title || content.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" data-media-id="{{item.media_id}}" bindtap="openImage" binderror="mediaError" />
-   <video wx:else id="{{item.domId}}" style="width:100%;height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
-   <view wx:if="{{mediaErrors[item.media_id]}}" class="error"><text>{{mediaErrors[item.media_id]}}</text><button bindtap="retryMedia">重新加载媒体</button></view>
-  </view>
-  <view wx:if="{{content.source_note}}" class="source">来源说明：{{content.source_note}}</view>
-  <button wx:if="{{content.source_url}}" bindtap="copySource">复制原文链接</button>
-  <button open-type="share">分享此内容</button>
+  <view class="source-card"><view><text class="source-label">内容来源</text><text class="source-value">{{content.source_note || (content.source_url ? '外部素材' : '创作者资料')}}</text></view><button wx:if="{{content.source_url}}" class="source-action" bindtap="copySource">复制原文</button></view>
   <text class="limits">分享操作仅表示发起分享，不代表已送达。视频播放位置、有效观看时间与覆盖片段分别记录。</text>
-  <view wx:if="{{guideVisible}}" class="reader-guide">
-   <view class="reader-guide-text"><text class="reader-guide-title">想为这套方案估算建房造价？</text><text class="reader-guide-sub">AI 建房顾问可按您的宅基地情况给出参考报价</text></view>
-   <button class="reader-guide-cta" bindtap="openGuide">去咨询</button>
-   <button class="reader-guide-close" bindtap="dismissGuide" aria-label="暂不需要">✕</button>
-  </view>
+  <view wx:if="{{guideVisible}}" class="reader-guide"><view class="reader-guide-text"><text class="reader-guide-title">想为这套方案估算建房造价？</text><text class="reader-guide-sub">AI 建房顾问可按您的宅基地情况给出参考报价</text></view><button class="reader-guide-cta" bindtap="openGuide">去咨询</button><button class="reader-guide-close" bindtap="dismissGuide" aria-label="暂不需要">✕</button></view>
+  <view class="reader-actions"><button class="copy-action" bindtap="copyWebLink" loading="{{webLinkBusy}}" disabled="{{webLinkBusy}}"><text class="action-icon">⌁</text><text>复制分享链接</text></button><button class="share-action" open-type="share"><text class="action-icon">↗</text><text>分享给微信好友</text></button></view>
  </block>
 </view>
 </block>

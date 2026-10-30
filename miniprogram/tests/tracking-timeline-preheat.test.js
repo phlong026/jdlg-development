@@ -191,3 +191,16 @@ test('production 30-day token expiry uses bounded checks without minting on each
   t.advanceWall(29*day-1000);await t.runTimers();await t.ready(page);assert.equal(t.shares.length,2,'renew once at expiry margin');
   assert.match(page.onShareTimeline().query,/st=token_2/);t.close(page);
 });
+
+test('copied prepared link confirms one intent without creating another Share',async()=>{
+ const t=runtime({account:'account-b'}),page=t.custom();await t.mount(page);await t.ready(page);
+ const before=t.shares.length,key='web-copy';
+ const prepared=await t.adapter.prepareShare(page,{path:'/pages/index/index'},'app_message',key,false);
+ assert.match(prepared.path,/st=token_/);assert.equal(t.shares.length,before+1);
+ assert.equal(t.adapter.confirmPreparedShare(page,key,'app_message'),true);
+ assert.equal(t.adapter.confirmPreparedShare(page,key,'app_message'),true);
+ await t.flush();const id=t.adapter.getSDK().get(page).shareIds[key].id;
+ assert.equal(t.events.filter(e=>e.event_type==='share_intent'&&e.share_id===id).length,1);
+ assert.equal(t.shares.length,before+1);
+ t.close(page);
+});

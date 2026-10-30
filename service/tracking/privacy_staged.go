@@ -17,8 +17,8 @@ var (
 // Kinds are deleted in this order. Identity links go last: they are what ties a
 // formerly anonymous session's rows to the account, so a run interrupted before
 // the end can still find every remaining row when it is resumed.
-var deletionVisitorKinds = []string{"event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "entry", "session", "identity"}
-var deletionSessionKinds = []string{"event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "view_binding", "entry", "session", "identity"}
+var deletionVisitorKinds = []string{"notice_event", "note_open", "share_handoff", "handoff_redeem", "handoff_notice", "event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "entry", "session", "identity"}
+var deletionSessionKinds = []string{"notice_event", "share_handoff", "handoff_redeem", "handoff_notice", "event", "daily_summary", "business", "share", "crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation", "summary_state", "view_binding", "entry", "session", "identity"}
 var deletionAnnotationKinds = []string{"crm", "intent_override", "intent_override_history", "intent_override_boundary", "intent_evaluation"}
 
 // sessionTombstone records that the session was deleted on behalf of key. The
@@ -182,7 +182,7 @@ func (s *Service) verifyDeletionScope(ctx context.Context, scope Scope, key stri
 
 // removeDeletionPage deletes one page of rows and everything that depends on
 // them. Dependencies of this page are found by ID, never by scanning a kind.
-func (s *Service) removeDeletionPage(r Repository, scope Scope, key string, rows []Record, visitorOnly bool, allSessions map[string]bool) error {
+func (s *Service) removeDeletionPage(ctx context.Context, r Repository, scope Scope, key string, rows []Record, visitorOnly bool, allSessions map[string]bool) error {
 	p := &visitorDeletion{rows: map[string]Record{}, sessions: map[string]bool{}, events: map[string]bool{}, views: map[string]bool{}, sequences: map[string]bool{}, shares: map[string]bool{}}
 	for _, row := range rows {
 		if visitorOnly {
@@ -242,12 +242,7 @@ func (s *Service) removeDeletionPage(r Repository, scope Scope, key string, rows
 			}
 		}
 	}
-	for _, row := range p.rows {
-		if err := r.Remove(row.Kind, row.ID); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.removePrivacyRecords(ctx, r, p.rows)
 }
 
 // deleteVisitorStaged is used when the atomic plan exceeds the read budget.
@@ -311,7 +306,7 @@ func (s *Service) deleteVisitorStaged(ctx context.Context, scope Scope, key, rea
 				return false, nil
 			}
 			pages++
-			return true, s.removeDeletionPage(r, scope, key, rows, visitorOnly, sessions)
+			return true, s.removeDeletionPage(ctx, r, scope, key, rows, visitorOnly, sessions)
 		}
 	}
 	finished := true

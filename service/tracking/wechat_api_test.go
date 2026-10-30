@@ -74,6 +74,27 @@ func TestURLLinkRequestAndResult(t *testing.T) {
 	}
 }
 
+func TestURLLinkUntilNeverOutlivesShare(t *testing.T) {
+	f, api := newFakeWechat(t)
+	now := time.Date(2026, 10, 27, 8, 0, 0, 500_000_000, time.UTC)
+	shareExpires := now.Add(10*time.Minute + 750*time.Millisecond)
+	got, err := WechatURLLinkUntil(context.Background(), api, "app-id", "app-secret", "pages/contentreader/contentreader", "content_id=c&st=t", "release", now, shareExpires)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantExpires := time.Unix(shareExpires.Unix(), 0).UTC()
+	if !got.Expires.Equal(wantExpires) || got.Expires.After(shareExpires) {
+		t.Fatalf("result expiry=%s share expiry=%s", got.Expires, shareExpires)
+	}
+	body := f.bodies[0]
+	if body["is_expire"] != true || body["expire_type"].(float64) != 0 || int64(body["expire_time"].(float64)) != wantExpires.Unix() {
+		t.Fatalf("request body: %v", body)
+	}
+	if _, ok := body["expire_interval"]; ok {
+		t.Fatalf("absolute-expiry request also sent an interval: %v", body)
+	}
+}
+
 func TestURLLinkRefusesInvalidInputBeforeAnyRequest(t *testing.T) {
 	f, api := newFakeWechat(t)
 	now := time.Now()

@@ -1,5 +1,5 @@
 <!--pages/chat/chat.wxml-->
-<view class="page">
+<view class="page {{source === 'content-writing' ? 'writing-chat' : ''}}">
   <!-- 统一导航栏 -->
   <navigation-bar background="#e6daca">
     <view slot="center" class="title-section" bindtap="onTitleTap">
@@ -100,7 +100,11 @@
     </view>
 
     <!-- 生成提示词按钮（聊天模式下显示） -->
-    <view class="generate-prompt-section" wx:if="{{mode === 'chat' && messages.length > 0}}">
+    <view class="writing-adopt-section" wx:if="{{source === 'content-writing'}}">
+      <button class="writing-adopt" bindtap="adoptWriting" disabled="{{!writingResultID || writingBusy}}">{{writingBusy ? '正在生成文案…' : '采用此文案'}}</button>
+      <text>采用后返回内容策划页，可继续编辑并保存草稿。</text>
+    </view>
+    <view class="generate-prompt-section" wx:if="{{source !== 'content-writing' && mode === 'chat' && messages.length > 0}}">
       <button class="generate-btn" bindtap="generatePromptFromChat">
         根据对话生成提示词
       </button>
@@ -129,6 +133,7 @@
         placeholder="{{mode === 'chat' ? '输入消息...' : '输入需求...'}}"
         placeholder-style="{{mode === 'chat' ? 'color: rgba(255, 255, 255, 0.5);' : 'color: rgba(111, 89, 69, 0.5);'}}"
         value="{{inputText}}"
+        maxlength="{{source === 'content-writing' ? 20000 : 140}}"
         bindinput="onInputChange"
         bindconfirm="onSendMessage"
         confirm-type="send"

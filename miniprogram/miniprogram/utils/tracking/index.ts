@@ -111,7 +111,13 @@ function splitPath(path, fallback) {
 }
 function appendToken(value, token) {
   // Preserve business query byte-for-byte. Only replace this SDK's own tracking parameter.
-  const cleaned=String(value||'').replace(/([?&])st=[^&]*(&?)/g,(_,lead,tail)=>tail?lead:'').replace(/[?&]$/,'');
+  const original=String(value||''),question=original.indexOf('?');
+  const path=question<0?original:original.slice(0,question);
+  const query=question<0?'':original.slice(question+1).split('&').filter(part=>{
+    if(!part)return false;
+    try {const key=decodeURIComponent(part.split('=')[0]);return key!=='st'&&key!=='ht';}catch(_){return true;}
+  }).join('&');
+  const cleaned=path+(query?'?'+query:'');
   return cleaned+(cleaned.includes('?')?'&':'?')+'st='+encodeURIComponent(token);
 }
 async function prepareShare(page, original, channel, cacheKey, emitIntent = true, isCurrent = () => true) {
@@ -142,6 +148,23 @@ async function prepareShare(page, original, channel, cacheKey, emitIntent = true
     if(state)state.shareFailure={stage:'share_prepare',statusCode:Number(error&&error.statusCode)||0,code:error&&error.code||'unavailable',networkError:!!(error&&error.networkError)};
     return original;
   }
+}
+// Confirm an actual copy gesture using its prepared Share; never mint a second
+// Share merely to record the action. Account/context changes invalidate it.
+function confirmPreparedShare(page, key, channel) {
+  return safely(() => {
+    const s = getSDK();
+    if (!s || !s.diagnostics().enabled) return false;
+    s.observation(page);
+    const state = s.get(page), meta = state && state.shareIds && state.shareIds[key];
+    if (!meta || meta.context !== state.context || meta.view !== state.view || meta.expires <= Date.now() ||
+        meta.account !== String(wx.getStorageSync('token') || '') || meta.validity !== entryInvalidation) return false;
+    if (!meta.intentConfirmed) {
+      s.shareIntent(meta.context, meta.route, meta.content, meta.id, channel);
+      meta.intentConfirmed = true;
+    }
+    return true;
+  }, false);
 }
 // A timeline callback must return synchronously. Prepare at page readiness,
 // never by pretending its return value can await a network request.
@@ -296,7 +319,7 @@ function wrapPage(definition) {
       const route=String(this.route||'').replace(/^\//,'');
       if (routes.policy(route).collect) {
         const s=getSDK(); if (s) {
-          s.register(this,route,routes.binding(route,options||{}),(options||{}).st);
+          s.register(this,route,routes.binding(route,options||{}),(options||{}).st,(options||{}).ht);
           this.__trackingTimelineStop=s.observe(this,()=>{if(this.__trackingConsentVisible===true){safely(()=>warmTimeline(this));showTimelineShareMenu(this,hasCustomTimelineShare);}});
         }
       } else if (!hasCustomTimelineShare) return;
@@ -383,7 +406,7 @@ function install() {
 }
 function resolvePageOptions(page, options, applyAttribution = true) {
  page.__trackingOptions=options;
- const s=getSDK(),p=s&&s.get(page);if(p&&applyAttribution){p.share=options.st||'';p.shareRevision=(p.shareRevision||0)+1;}
+ const s=getSDK(),p=s&&s.get(page);if(p&&applyAttribution){p.share=options.st||'';p.handoff=p.share?options.ht||'':'';p.shareRevision=(p.shareRevision||0)+1;}
  updateReady(page);
 }
 function shareDiagnostics(page){
@@ -393,5 +416,5 @@ function shareDiagnostics(page){
     ? {...(state.shareFailure||{}),attribution_status:status} : state.shareFailure||null;
 }
 function captureEntryValidity(){const revision=entryInvalidation,account=safely(()=>String(wx.getStorageSync('token')||''),'');return()=>revision===entryInvalidation&&account===safely(()=>String(wx.getStorageSync('token')||''),'');}
-module.exports={observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+module.exports={observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,confirmPreparedShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
 export {};

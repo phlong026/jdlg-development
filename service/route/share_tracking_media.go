@@ -1,9 +1,14 @@
 package route
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"github.com/gin-gonic/gin"
+	_ "golang.org/x/image/webp"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -11,10 +16,75 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"service/tracking"
 	"strings"
 )
+
+func addDocumentExpanded(total, size uint64) (uint64, bool) {
+	if total > documentExpandedMax || size > documentExpandedMax-total {
+		return total, false
+	}
+	return total + size, true
+}
+
+func validatePDF(data []byte) bool {
+	if len(data) < 16 || !bytes.HasPrefix(data, []byte("%PDF-")) || (data[5] != '1' && data[5] != '2') || data[6] != '.' || data[7] < '0' || data[7] > '9' {
+		return false
+	}
+	trimmed := bytes.TrimSpace(data)
+	return bytes.HasSuffix(trimmed, []byte("%%EOF")) && bytes.Contains(data, []byte(" obj")) && bytes.Contains(data, []byte("endobj"))
+}
+
+const (
+	documentMaxBytes       = int64(20 << 20)
+	documentExpandedMax    = uint64(100 << 20)
+	documentContentTypeMax = int64(1 << 20)
+)
+
+func validateDOCX(data []byte) bool {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil || len(reader.File) == 0 || len(reader.File) > 5000 {
+		return false
+	}
+	foundTypes, foundDocument := false, false
+	var expanded uint64
+	for _, file := range reader.File {
+		name := strings.ReplaceAll(file.Name, "\\", "/")
+		if strings.HasPrefix(name, "/") || strings.Contains(name, "../") {
+			return false
+		}
+		var ok bool
+		expanded, ok = addDocumentExpanded(expanded, file.UncompressedSize64)
+		if !ok {
+			return false
+		}
+		if strings.EqualFold(path.Base(name), "vbaProject.bin") {
+			return false
+		}
+		switch name {
+		case "word/document.xml":
+			foundDocument = true
+		case "[Content_Types].xml":
+			if file.UncompressedSize64 > uint64(documentContentTypeMax) {
+				return false
+			}
+			input, err := file.Open()
+			if err != nil {
+				return false
+			}
+			content, err := io.ReadAll(io.LimitReader(input, documentContentTypeMax+1))
+			closeErr := input.Close()
+			lower := bytes.ToLower(content)
+			if err != nil || closeErr != nil || int64(len(content)) > documentContentTypeMax || bytes.Contains(lower, []byte("macroenabled")) || bytes.Contains(lower, []byte("application/vnd.ms-office.vbaproject")) {
+				return false
+			}
+			foundTypes = bytes.Contains(content, []byte("application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"))
+		}
+	}
+	return foundTypes && foundDocument
+}
 
 func trackingMediaRoot() (string, error) {
 	root := os.Getenv("TRACKING_MEDIA_DIR")
@@ -31,7 +101,15 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "无媒体上传权限"})
 		return
 	}
-	root, e := trackingMediaRoot()
+	if os.Getenv("CONTENT_MEDIA_STORAGE") == "cos" && (s == nil || s.MediaObjects == nil) {
+		trackingResponse(c, nil, tracking.ErrUnavailable)
+		return
+	}
+	root := ""
+	var e error
+	if s == nil || s.MediaObjects == nil {
+		root, e = trackingMediaRoot()
+	}
 	if e != nil {
 		trackingResponse(c, nil, e)
 		return
@@ -64,13 +142,59 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 	mime := http.DetectContentType(sniff)
 	kind := "image"
 	max := int64(10 << 20)
-	switch mime {
-	case "image/png", "image/jpeg", "image/gif":
-	case "video/mp4":
+	filename := filepath.Base(header.Filename)
+	if original := strings.TrimSpace(c.PostForm("original_name")); original != "" {
+		normalized := strings.ReplaceAll(original, "\\", "/")
+		declared := path.Base(normalized)
+		if len(original) > 200 || declared == "." || declared == "/" || declared != normalized {
+			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "原文件名声明无效"})
+			return
+		}
+		filename = declared
+	}
+	extension := strings.ToLower(filepath.Ext(filename))
+	switch {
+	case extension == ".pdf" && mime == "application/pdf":
+		if _, err := source.Seek(0, io.SeekStart); err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		data, err := io.ReadAll(io.LimitReader(source, documentMaxBytes+1))
+		if err != nil || int64(len(data)) > documentMaxBytes {
+			trackingResponse(c, nil, &tracking.Error{Status: 413, Message: "PDF文档体积超过限制"})
+			return
+		}
+		if !validatePDF(data) {
+			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "PDF基本结构或尾标无效"})
+			return
+		}
+		kind = "document"
+		max = documentMaxBytes
+		_, _ = source.Seek(0, io.SeekStart)
+	case extension == ".docx" && (mime == "application/zip" || mime == "application/octet-stream"):
+		if _, err := source.Seek(0, io.SeekStart); err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		data, err := io.ReadAll(io.LimitReader(source, documentMaxBytes+1))
+		if err != nil || int64(len(data)) > documentMaxBytes {
+			trackingResponse(c, nil, &tracking.Error{Status: 413, Message: "DOCX文档体积超过限制"})
+			return
+		}
+		if !validateDOCX(data) {
+			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "DOCX结构无效或包含宏"})
+			return
+		}
+		kind = "document"
+		mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+		max = documentMaxBytes
+		_, _ = source.Seek(0, io.SeekStart)
+	case mime == "image/png" || mime == "image/jpeg" || mime == "image/gif" || mime == "image/webp":
+	case mime == "video/mp4":
 		kind = "video"
 		max = 50 << 20
 	default:
-		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "仅支持经过类型校验的PNG/JPEG/GIF和MP4文件"})
+		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "仅支持经过类型校验的PNG/JPEG/GIF/WebP、MP4、PDF和无宏DOCX文件"})
 		return
 	}
 	if header.Size > max {
@@ -110,6 +234,30 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		return
 	}
 	id := base64.RawURLEncoding.EncodeToString(bytes)
+	if s.MediaObjects != nil {
+		data, err := io.ReadAll(io.LimitReader(source, max+1))
+		if err != nil || int64(len(data)) > max {
+			trackingResponse(c, nil, &tracking.Error{Status: 413, Message: "上传失败或超出限制"})
+			return
+		}
+		asset := tracking.Asset{ID: id, Kind: kind, URL: "/api/v1/miniprogram/tracking/media/" + id, Width: width, Height: height, MIME: mime, Title: filename}
+		if len(asset.Title) > 200 {
+			asset.Title = "已上传媒体"
+		}
+		digest := sha256.Sum256(data)
+		operation, _, err := s.PrepareMediaObject(c.Request.Context(), scope, asset, owner, fmt.Sprintf("%x", digest), "upload")
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		if err = storeContentMedia(c.Request.Context(), s, id, data, mime); err != nil {
+			importResponse(c, nil, err)
+			return
+		}
+		saved, err := s.FinalizeMediaObject(c.Request.Context(), scope, id, operation)
+		trackingResponse(c, saved, err)
+		return
+	}
 	file, e := os.OpenFile(filepath.Join(root, id), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if e != nil {
 		trackingResponse(c, nil, e)
@@ -122,7 +270,7 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		trackingResponse(c, nil, &tracking.Error{Status: 413, Message: "上传失败或超出限制"})
 		return
 	}
-	asset := tracking.Asset{ID: id, Kind: kind, URL: "/api/v1/miniprogram/tracking/media/" + id, Width: width, Height: height, MIME: mime, Title: filepath.Base(header.Filename)}
+	asset := tracking.Asset{ID: id, Kind: kind, URL: "/api/v1/miniprogram/tracking/media/" + id, Width: width, Height: height, MIME: mime, Title: filename}
 	if len(asset.Title) > 200 {
 		asset.Title = "已上传媒体"
 	}
@@ -143,25 +291,5 @@ func serveTrackingMedia(c *gin.Context, s *tracking.Service, scope *tracking.Sco
 		trackingResponse(c, nil, e)
 		return
 	}
-	root, e := trackingMediaRoot()
-	if e != nil {
-		trackingResponse(c, nil, e)
-		return
-	}
-	f, e := os.Open(filepath.Join(root, id))
-	if e != nil {
-		trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "媒体不可访问"})
-		return
-	}
-	defer f.Close()
-	info, e := f.Stat()
-	if e != nil || !info.Mode().IsRegular() {
-		trackingResponse(c, nil, tracking.ErrUnavailable)
-		return
-	}
-	c.Header("Content-Type", asset.MIME)
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("Cache-Control", "private, no-store")
-	c.Header("Content-Security-Policy", "default-src 'none'")
-	http.ServeContent(c.Writer, c.Request, asset.ID, info.ModTime(), f)
+	serveContentMediaBytes(c, s, asset)
 }

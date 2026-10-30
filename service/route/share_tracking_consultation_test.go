@@ -139,6 +139,60 @@ func TestConsultationAnalyticsNeverBlocksBusinessResponse(t *testing.T) {
 	}
 }
 
+func TestContentConsultationRequiresPublishedVersionAndStoresOnlySafeReference(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name, body string
+		valid      bool
+		status     int
+	}{
+		{
+			name:   "published reference",
+			body:   `{"source":"content_reader","demand_summary":"test","payload":{"reason":"handoff_human","consultation_plan":{"visible":true,"contentRef":{"contentId":"content-0001","version":7},"body":"private body","share_token":"secret","visitor_key":"visitor"}}}`,
+			valid:  true,
+			status: http.StatusOK,
+		},
+		{
+			name:   "unpublished reference",
+			body:   `{"source":"content_reader","demand_summary":"test","payload":{"consultation_plan":{"contentRef":{"contentId":"content-0001","version":8}}}}`,
+			status: http.StatusBadRequest,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &consultationStoreFixture{}
+			router := gin.New()
+			router.Use(func(c *gin.Context) { c.Set("code_session", &model.CodeSession{UserID: 41}); c.Next() })
+			registerCustomerLeadRoutes(router.Group("/api"), store, nil, nil, func(_ context.Context, id string, version int) error {
+				if tc.valid && id == "content-0001" && version == 7 {
+					return nil
+				}
+				return errors.New("not published")
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/customer-service/consultation-requests", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != tc.status {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if !tc.valid {
+				if store.leadCalls != 0 {
+					t.Fatal("invalid reference created a lead")
+				}
+				return
+			}
+			plan := store.submitAttempts[0].Payload["consultation_plan"].(map[string]interface{})
+			if plan["body"] != nil || plan["share_token"] != nil || plan["visitor_key"] != nil {
+				t.Fatalf("unsafe consultation fields persisted: %#v", plan)
+			}
+			ref := plan["contentRef"].(map[string]interface{})
+			if ref["contentId"] != "content-0001" || ref["version"] != 7 {
+				t.Fatalf("wrong safe reference: %#v", ref)
+			}
+		})
+	}
+}
+
 // lead_submit / consultation_request_submitted 只由服务端在真实留资后写入；
 // 通用事件接口若放行，任何登录用户都能把任意线索顶到列表最前、虚增"提交线索"。
 func TestGenericEventsRejectServerOnlyTypes(t *testing.T) {

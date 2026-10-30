@@ -448,8 +448,10 @@ func main() {
 			"/api/v1/miniprogram/ai/task/status",
 		},
 		Output: gin.DefaultWriter,
+		Skip:   route.SkipPhase3RawAccessLog,
 	}))
 	r.Use(gin.Recovery())
+	r.Use(route.Phase3AccessLog())
 
 	// 添加CORS中间件
 	r.Use(route.CORSMiddleware())

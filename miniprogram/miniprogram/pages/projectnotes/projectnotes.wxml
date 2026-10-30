@@ -1,0 +1,86 @@
+<view class="page">
+  <view class="hero"><text class="eyebrow">项目协作</text><text class="title">私人项目笔记</text><text class="subtitle">邀请指定账号查看固定版本，转发不会增加权限</text></view>
+  <view wx:if="{{loading}}" class="state">正在加载私人项目…</view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>登录后才能管理私人项目。</text><button class="primary" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{accessRecheckRequired}}" class="state"><text>{{notice}}</text><button class="secondary" bindtap="retryProjectAccess">重试权限核验</button></view>
+  <block wx:else>
+    <view wx:if="{{error}}" class="alert error">{{error}}</view><view wx:if="{{notice}}" class="alert success">{{notice}}</view><view wx:if="{{truncationNotice}}" class="alert warning">{{truncationNotice}}</view><view wx:if="{{historyNotice}}" class="alert warning">{{historyNotice}}</view>
+    <view class="card">
+      <text class="section-title">新建项目</text>
+      <input value="{{projectName}}" bindinput="setProjectName" maxlength="100" placeholder="项目名称（必填）" />
+      <picker range="{{owners}}" value="{{ownerIndex}}" bindchange="setOwnerID"><view class="picker">{{ownerID || '暂无可用项目归属'}}</view></picker>
+      <text class="muted">CRM 项目关联接入中，可先建立私人项目。</text>
+      <button class="primary" loading="{{busy}}" disabled="{{busy || !projectName || !ownerID}}" bindtap="createProjectNoteProject">创建项目</button>
+    </view>
+    <view class="card">
+      <text class="section-title">我的私人项目</text>
+      <view wx:if="{{!projects.length}}" class="empty">暂无项目，从上方创建。</view>
+      <button wx:for="{{projects}}" wx:key="project_id" class="project-row {{selectedProject.project_id === item.project_id ? 'selected' : ''}}" data-id="{{item.project_id}}" bindtap="selectProject"><view><text class="project-name">{{item.name}}</text><text class="muted">{{item.owner_id}}</text></view><text>›</text></button>
+    </view>
+    <block wx:if="{{selectedProject}}">
+      <view class="card">
+        <text class="section-title">项目资料 · {{projectStatusLabel}}</text>
+        <text class="muted">以下资料用于后续方案版本，已分享的历史版本保持不变。</text>
+        <input value="{{projectEdit.name}}" data-field="name" bindinput="setProjectField" maxlength="100" placeholder="项目名称" />
+        <input value="{{projectEdit.location}}" data-field="location" bindinput="setProjectField" maxlength="200" placeholder="项目地点（选填）" />
+        <input value="{{projectEdit.building_area}}" data-field="building_area" bindinput="setProjectField" type="digit" placeholder="建筑面积，平方米（选填）" />
+        <input value="{{projectEdit.floors}}" data-field="floors" bindinput="setProjectField" type="number" placeholder="层数（选填）" />
+        <input value="{{projectEdit.style}}" data-field="style" bindinput="setProjectField" maxlength="100" placeholder="建筑风格（选填）" />
+        <button class="secondary" bindtap="saveProjectDetails" disabled="{{busy || !projectEdit.name}}">保存项目资料</button>
+        <button wx:if="{{selectedProject.status !== 'revising'}}" class="secondary" bindtap="markProjectRevising" disabled="{{busy}}">开始修改方案</button>
+        <text class="muted">“已确认”由指定业主确认方案后产生，原版本确认记录会保留。</text>
+      </view>
+      <view class="card">
+        <text class="section-title">笔记与方案版本</text>
+        <picker wx:if="{{notes.length}}" range="{{notes}}" range-key="title" value="{{noteIndex}}" bindchange="selectNote" disabled="{{busy}}"><view class="picker">{{note ? note.title : historyMode ? '正在查看固定版本' : '选择已有笔记'}}</view></picker>
+        <button class="secondary" bindtap="startNewNote" disabled="{{busy}}">新建另一条笔记</button>
+        <text wx:if="{{!versionChoices.length}}" class="muted">此笔记还没有冻结的方案版本。</text>
+        <button wx:for="{{versionChoices}}" wx:key="version_id" class="version-row {{frozenVersion.version_id === item.version_id ? 'selected' : ''}}" data-id="{{item.version_id}}" bindtap="selectVersion" disabled="{{busy}}">{{item.label}} · 查看固定版</button>
+      </view>
+      <view class="card"><text class="section-title">受邀账号</text><text class="muted">仅显示仍有访问权的账号。移除当前确认人时，后端会同时清空确认人。</text><view wx:if="{{!activeMembers.length}}" class="empty compact">暂无受邀账号</view><view wx:for="{{activeMembers}}" wx:key="member_id" class="member-row"><text>账号 {{item.actor_id}}{{selectedProject.confirmer_id === item.actor_id ? ' · 当前确认人' : ''}}</text><button class="danger small" data-account="{{item.actor_id}}" bindtap="revokeProjectNoteMember" disabled="{{busy}}">移除</button></view><input type="number" value="{{memberAccount}}" bindinput="setMemberAccount" placeholder="现有甲第业主账号 ID" /><button class="secondary" bindtap="inviteProjectNoteMember" disabled="{{busy || !memberAccount}}">邀请账号</button></view>
+      <view class="card"><text class="section-title">指定方案确认人</text><picker range="{{confirmerChoices}}" range-key="label" value="{{confirmerIndex}}" bindchange="setConfirmerChoice"><view class="picker">{{confirmerAccount ? '账号 ' + confirmerAccount : '请选择受邀业主账号'}}</view></picker><button class="secondary" bindtap="setProjectNoteConfirmer" disabled="{{busy || !confirmerAccount}}">指定确认人</button><text class="muted">确认只针对精确版本，不会自动处理反馈。</text></view>
+      <view wx:if="{{!historyMode}}" class="card"><text class="section-title">笔记草稿</text><view wx:if="{{note}}" class="actions"><button class="secondary small" bindtap="copyProjectNote" disabled="{{busy}}">复制已保存草稿</button><button class="danger small" bindtap="deleteProjectNote" disabled="{{busy}}">删除草稿</button></view><input value="{{noteTitle}}" bindinput="setNoteTitle" maxlength="80" placeholder="笔记标题" /><text wx:if="{{bodyReadOnly}}" class="readonly-note">此笔记包含结构化排版，正文和素材暂为只读；修改标题会原样保留完整正文、封面和素材。</text><textarea wx:else value="{{noteBody}}" bindinput="setNoteBody" maxlength="8000" auto-height placeholder="方案正文" /><view class="media-row" wx:for="{{noteMedia}}" wx:key="media_id"><text>{{item.title || item.media_id}}</text><button wx:if="{{!bodyReadOnly}}" class="danger small" data-id="{{item.media_id}}" bindtap="removeNoteMedia">移除</button></view><button wx:if="{{!bodyReadOnly}}" class="secondary" bindtap="chooseNoteMedia" disabled="{{busy}}">上传项目私有图片/视频</button><button wx:if="{{!bodyReadOnly}}" class="secondary" bindtap="openNoteAIWriting" disabled="{{busy}}">根据项目资料继续 AI 创作</button><view class="actions"><button wx:if="{{!note}}" class="primary" bindtap="createProjectNote" disabled="{{busy || !noteTitle || !noteBody}}">创建草稿</button><button wx:else class="secondary" bindtap="saveProjectNote" disabled="{{busy || !noteTitle || (!bodyReadOnly && !noteBody)}}">保存新修订</button><button wx:if="{{note}}" class="primary" bindtap="freezeProjectNoteVersion" disabled="{{busy}}">冻结当前版本</button></view></view>
+      <view wx:if="{{historyMode && versionView}}" class="card fixed-preview">
+        <text class="section-title">{{versionView.title}} · 固定版本 V{{versionView.revision}}</text>
+        <block wx:if="{{versionView.body_format === 'article_v2'}}"><block wx:for="{{versionBlocks}}" wx:key="key">
+          <rich-text wx:if="{{item.kind === 'layout'}}" nodes="{{item.html}}" selectable="{{true}}" />
+          <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+          <view wx:elif="{{item.kind === 'list'}}"><view wx:for="{{item.items}}" wx:for-item="listItem" wx:key="*this">{{item.ordered ? index + 1 + '.' : '•'}} {{listItem}}</view></view>
+          <image wx:elif="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" style="height:{{item.height}}px" />
+          <video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" style="height:{{item.height}}px" />
+        </block></block>
+        <rich-text wx:elif="{{versionView.body_format === 'rich_text'}}" nodes="{{versionView.body}}" selectable="{{true}}" />
+        <text wx:else class="fixed-plain" selectable="{{true}}">{{versionView.body}}</text>
+        <block wx:if="{{versionView.body_format !== 'article_v2'}}"><view wx:for="{{versionMedia}}" wx:key="media_id"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" /></view></block>
+        <button class="secondary" bindtap="returnToDraft" disabled="{{busy}}">返回当前草稿管理</button>
+      </view>
+      <view wx:if="{{frozenVersion}}" class="card accent"><text class="section-title">固定版本 V{{frozenVersion.revision}}</text><text class="muted">分享后，业主看到的始终是这一版。</text><text class="muted">Word 保留文字、图片的内容顺序；视频请在甲第方案中查看。</text><button class="secondary" bindtap="exportProjectNoteWord" disabled="{{busy}}" loading="{{busy}}">导出这个版本的 Word</button><button wx:if="{{!activeShare}}" class="primary" bindtap="createProjectNoteShare" disabled="{{busy}}">生成私密分享</button><block wx:else><button wx:if="{{activeShare.share_token}}" class="primary" bindtap="openSharePreview">打开分享页</button><button wx:if="{{activeShare.share_token}}" class="secondary" bindtap="copySharePath">复制小程序路径</button><button class="danger" bindtap="revokeProjectNoteShare" disabled="{{busy}}">撤回分享</button></block></view>
+      <view class="card">
+        <text class="section-title">完整项目记录</text>
+        <picker range="{{historyTypes}}" range-key="label" value="{{historyIndex}}" bindchange="setHistoryType" disabled="{{busy}}"><view class="picker">{{historyTypes[historyIndex].label}}</view></picker>
+        <button wx:if="{{!historyLoaded}}" class="secondary" bindtap="loadHistory" loading="{{historyLoading}}" disabled="{{busy || historyLoading}}">查看记录</button>
+        <text wx:if="{{historyLoaded && !historyItems.length}}" class="muted">暂无此类记录。</text>
+        <view wx:for="{{historyItems}}" wx:key="key" class="feedback">
+          <text>{{item.displayTitle}}</text><text class="muted">{{item.displayText}}</text><text class="muted">{{item.displayTime}}</text>
+          <button wx:if="{{historyType === 'notes' || historyType === 'versions' || historyType === 'feedbacks'}}" class="secondary small" data-index="{{index}}" bindtap="openHistoryItem" disabled="{{busy}}">{{historyType === 'notes' ? '编辑此笔记' : '打开对应方案'}}</button>
+        </view>
+        <view wx:if="{{historyLoaded}}" class="actions"><button class="secondary small" data-direction="previous" bindtap="loadHistory" disabled="{{historyPage === 0 || historyLoading}}">上一页</button><text class="muted">第 {{historyPage + 1}} 页</text><button class="secondary small" data-direction="next" bindtap="loadHistory" disabled="{{!historyNextCursor || historyLoading}}" loading="{{historyLoading}}">下一页</button></view>
+      </view>
+      <view class="card">
+        <text class="section-title">处理业主反馈</text>
+        <text wx:if="{{!feedbacks.length}}" class="muted">所选版本暂无反馈。</text>
+        <view wx:for="{{feedbacks}}" wx:key="feedback_id" class="feedback {{feedbackID === item.feedback_id ? 'selected' : ''}}">
+          <text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text>
+          <text>{{item.text}}</text><text class="muted">{{item.created_at}} · {{item.resolved ? '已处理' : '待处理'}}</text>
+          <text wx:if="{{item.resolution_reply}}" class="muted">处理说明：{{item.resolution_reply}}</text>
+          <button wx:if="{{!item.resolved}}" class="secondary small" data-id="{{item.feedback_id}}" bindtap="selectFeedback" disabled="{{busy}}">回复这条意见</button>
+        </view>
+        <view wx:if="{{selectedFeedback && !selectedFeedback.resolved}}" class="reply-form">
+          <text class="muted">正在回复：{{selectedFeedback.text}}</text>
+          <textarea value="{{feedbackReply}}" bindinput="setFeedbackReply" maxlength="500" placeholder="说明已做的调整或处理方式" />
+          <button class="secondary" bindtap="resolveProjectNoteFeedback" disabled="{{busy || !feedbackID || !feedbackReply}}">保存回复并标记已处理</button>
+        </view>
+      </view>
+    </block>
+  </block>
+</view>

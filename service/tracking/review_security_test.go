@@ -66,6 +66,10 @@ func TestReviewViewIsSeparateFromManage(t *testing.T) {
 	s, m, scope, now := reviewFixture()
 	reviewPV(m, "view0001", "one", "u:1", "session1", "content1", now.Add(-time.Hour))
 	_ = m.Put(record("content", "content1", "one", now, Content{ID: "content1", Owner: "one", PageViews: 99, VisibleMS: 99}))
+	shareRow := record("share", "share-hash", "one", now.Add(-time.Minute), Share{ID: "share-one", Owner: "one", Content: "content1", Version: 1, Route: "pages/contentreader/contentreader", Sharer: "u:2", Session: "sender-session", Origin: "miniprogram", Expires: now.Add(time.Hour)})
+	shareRow.Visitor, shareRow.Session = "u:2", "sender-session"
+	_ = m.Put(shareRow)
+
 	scope.View = false
 	if _, e := s.Visitors(context.Background(), scope, Filter{}); e == nil {
 		t.Fatal("manager read visitors")
@@ -81,7 +85,7 @@ func TestReviewViewIsSeparateFromManage(t *testing.T) {
 		t.Fatal(e)
 	}
 	c := got.Items.([]Content)[0]
-	if c.PageViews != 0 || c.VisibleMS != 0 || c.LastVisit != nil {
+	if c.PageViews != 0 || c.VisibleMS != 0 || c.LastVisit != nil || c.Shares != 0 {
 		t.Fatal("manager received metrics")
 	}
 }

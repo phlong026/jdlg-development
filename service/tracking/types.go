@@ -115,6 +115,28 @@ type Asset struct {
 	MIME   string `json:"mime"`
 	Title  string `json:"title,omitempty"`
 }
+type ArticleStyle struct {
+	Align         string `json:"align,omitempty"`
+	FontSize      string `json:"font_size,omitempty"`
+	SpacingBefore int    `json:"spacing_before,omitempty"`
+	SpacingAfter  int    `json:"spacing_after,omitempty"`
+	Border        string `json:"border,omitempty"`
+}
+type ArticleBlock struct {
+	Kind    string       `json:"kind"`
+	Text    string       `json:"text,omitempty"`
+	Level   int          `json:"level,omitempty"`
+	Items   []string     `json:"items,omitempty"`
+	Ordered bool         `json:"ordered,omitempty"`
+	MediaID string       `json:"media_id,omitempty"`
+	Caption string       `json:"caption,omitempty"`
+	Style   ArticleStyle `json:"style,omitempty"`
+}
+type ArticleDocument struct {
+	Schema     int            `json:"schema"`
+	LayoutHTML string         `json:"layout_html,omitempty"`
+	Blocks     []ArticleBlock `json:"blocks"`
+}
 type Content struct {
 	ReadOnly    bool       `json:"read_only,omitempty"`
 	Route       string     `json:"route_key,omitempty"`
@@ -174,14 +196,16 @@ type Share struct {
 	Revoked bool      `json:"revoked"`
 }
 type EntryInput struct {
-	Route      string `json:"route_key"`
-	Content    string `json:"content_id"`
-	Version    int    `json:"content_version"`
-	ShareToken string `json:"share_token"`
-	Client     string `json:"client_instance"`
-	Anonymous  string `json:"anonymous_id"`
-	Consent    string `json:"consent_version"`
-	Previous   string `json:"previous_entry_token"`
+	Route        string `json:"route_key"`
+	Content      string `json:"content_id"`
+	Version      int    `json:"content_version"`
+	ShareToken   string `json:"share_token"`
+	Client       string `json:"client_instance"`
+	Anonymous    string `json:"anonymous_id"`
+	Consent      string `json:"consent_version"`
+	Previous     string `json:"previous_entry_token"`
+	HandoffToken string `json:"handoff_token,omitempty"`
+	WebSource    bool   `json:"-"`
 }
 type Entry struct {
 	Attribution     string    `json:"attribution_status,omitempty"`
@@ -203,6 +227,9 @@ type Entry struct {
 	OriginalVisitor string    `json:"original_visitor_key,omitempty"`
 	Preview         bool      `json:"is_preview,omitempty"`
 	Self            bool      `json:"is_self_visit,omitempty"`
+	HandoffKey      string    `json:"-"`
+	WebSource       bool      `json:"-"`
+	ConsentVersion  string    `json:"-"`
 }
 type Event struct {
 	// Attribution is overwritten by the server from the signed entry context.

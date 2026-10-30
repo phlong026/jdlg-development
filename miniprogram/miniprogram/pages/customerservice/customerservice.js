@@ -109,9 +109,10 @@ function buildPromptFromText(text) {
         ? cleanText
         : `${cleanText}，自建房方案，布局实用，外观适合乡村居住。`;
 }
-function buildLeadRemark(reason, form, actionText = '') {
+function buildLeadRemark(reason, form, actionText = '', contentRef) {
     const summary = buildDemandFormSummary(form);
-    return [reason, actionText ? `结果页诉求：${actionText}` : '', summary].filter(Boolean).join('；');
+    const content = contentRef ? `咨询内容：${contentRef.contentId} v${contentRef.version}` : '';
+    return [reason, actionText ? `结果页诉求：${actionText}` : '', content, summary].filter(Boolean).join('；');
 }
 function normalizeTemplateImageUrl(url) {
     const cleanUrl = String(url || '').trim();
@@ -180,14 +181,20 @@ function buildConsultationPlan(options) {
     const imageUrl = decodeOption(options?.image_url);
     const action = decodeOption(options?.action) || '';
     const actionText = decodeOption(options?.action_text) || '';
+    const contentId = String(options?.content_id || '');
+    const contentVersion = Number(options?.content_version);
+    const contentRef = /^[A-Za-z0-9_-]{8,128}$/.test(contentId) && Number.isInteger(contentVersion) && contentVersion > 0
+        ? { contentId, version: contentVersion }
+        : undefined;
     return {
-        visible: !!(taskNo || prompt || imageUrl),
+        visible: !!(taskNo || prompt || imageUrl || contentRef),
         taskNo,
         prompt,
         imageUrl,
         action,
         actionText,
-        summary: buildPlanSummary(prompt, taskNo),
+        summary: contentRef && !prompt && !taskNo ? `正在咨询内容版本 v${contentRef.version}` : buildPlanSummary(prompt, taskNo),
+        contentRef,
     };
 }
 function openTemplateSquare() {
@@ -736,7 +743,7 @@ Page({
             room_requirement: demandForm.rooms,
             intent_level: this.data.intentLevel || (hasDemandFormValue(demandForm) ? 'medium' : 'low'),
             status: 'new',
-            remark: buildLeadRemark(reason, demandForm, String(consultationPlan.actionText || '')),
+            remark: buildLeadRemark(reason, demandForm, String(consultationPlan.actionText || ''), consultationPlan.contentRef),
             payload: {
                 reason,
                 demand_form: demandForm,

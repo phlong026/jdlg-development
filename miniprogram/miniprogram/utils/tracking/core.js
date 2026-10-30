@@ -59,7 +59,7 @@ function createTracker(io) {
     }
   }
   function discardPending(p) {
-    p.share = ''; p.pendingEntry = null;
+    p.share = ''; p.handoff = ''; p.pendingEntry = null;
     // Leaving a page invalidates an unresolved request as well as future retries.
     if (p.entering) { p.request = (p.request || 0) + 1; p.entering = false; }
   }
@@ -107,18 +107,21 @@ function createTracker(io) {
     if (!enabled || !consent || suspended || !p || !p.ready || !p.visible || active !== p || !foreground) return;
     checkAccount();
     if (fresh) {
+      const handoff = p.handoff;
       boundary('external_entry');
       // The launch input is consumed only on success, not by the boundary that
       // starts its first request. Retries belong to this exact entry generation.
       p.share = share || '';
+      p.handoff = p.share ? handoff || '' : '';
     }
     const version = epoch;
-    if (!p.pendingEntry || p.pendingEntry.epoch !== epoch) p.pendingEntry = { epoch, share: p.share || '', shareRevision: p.shareRevision, previous: context || anonymousLink };
+    if (!p.pendingEntry || p.pendingEntry.epoch !== epoch) p.pendingEntry = { epoch, share: p.share || '', handoff: p.handoff || '', shareRevision: p.shareRevision, previous: context || anonymousLink };
     const pending = p.pendingEntry, old = pending.previous;
     const request = (p.request || 0) + 1; p.request = request; p.entering = true;
     try {
       const response = await io.entry({ route_key: p.route, content_id: p.content.id || undefined,
         content_version: p.content.version || undefined, share_token: pending.share || undefined,
+        handoff_token: pending.share && pending.handoff || undefined,
         previous_entry_token: old ? old.entry_token : undefined, consent_version: consent });
       if (request !== p.request || version !== epoch || account !== io.account() || !enabled || !consent || suspended) return;
       if (!response || !response.entry_token || !response.session_id || response.content_accessible === false) { p.entryReady = false; return; }
@@ -126,7 +129,7 @@ function createTracker(io) {
       // even with recent local activity. Invalidate retained contexts and never
       // attach another session's predecessor to this new observation.
       if (old && old.session_id !== response.session_id) boundary('server_session');
-      anonymousLink = null; if (active === p) context = response; p.context = response; p.share = ''; p.pendingEntry = null; p.entryReady = true; begin(p); flush();
+      anonymousLink = null; if (active === p) context = response; p.context = response; p.share = ''; p.handoff = ''; p.pendingEntry = null; p.entryReady = true; begin(p); flush();
       return response;
     } catch (_) {
       if (request === p.request && version === epoch) p.entryReady = false;
@@ -184,8 +187,9 @@ function createTracker(io) {
         // account changes, and leaving this page must discard it permanently.
         const pendingShare = options.awaitConsent === true && flag === true && !consent &&
           active && foreground && active.visible && !active.context && !active.entering ? active.share : '';
+        const pendingHandoff = pendingShare && active.handoff;
         stop(active, false); boundary('disabled'); queue = []; persist();
-        if (pendingShare) active.share = pendingShare;
+        if (pendingShare) { active.share = pendingShare; active.handoff = pendingHandoff || ''; }
       }
       enabled = flag === true; consent = version || ''; suspended = false; account = io.account();
       if (next && active && foreground && active.visible) enter(active, active.share, true);
@@ -193,10 +197,10 @@ function createTracker(io) {
     // A failed config fetch is not a server kill switch or withdrawn consent.
     // Pause collection/retries, retaining the bounded, expiring offline queue.
     suspend() { if (!suspended) { stop(active, false); suspended = true; observationEpoch++; for (const p of pages.values()) notifyObservation(p); } },
-    register(key, route, content, share) {
+    register(key, route, content, share, handoff) {
       // Profile verification may complete before this page is registered.
       checkAccount();
-      const p = { key, route, content: content || {}, share: share || '', visible: false, ready: false, view: '', start: null, entryReady: false, shareCache: {}, shareRevision: 0, pendingEntry: null, observers: new Set() };
+      const p = { key, route, content: content || {}, share: share || '', handoff: share ? handoff || '' : '', visible: false, ready: false, view: '', start: null, entryReady: false, shareCache: {}, shareRevision: 0, pendingEntry: null, observers: new Set() };
       pages.set(key, p); return p;
     },
     ready(key, available, content) {
@@ -206,7 +210,7 @@ function createTracker(io) {
         // Resolved reader options may carry a newly observed external share.
         // Preserve that newer input, but never rebind an old pending share to
         // a replacement content/version merely because its request failed.
-        if (p.pendingEntry && p.shareRevision === p.pendingEntry.shareRevision) p.share = '';
+        if (p.pendingEntry && p.shareRevision === p.pendingEntry.shareRevision) { p.share = ''; p.handoff = ''; }
         p.pendingEntry = null; p.content = content; p.entryReady = false; p.context = null; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = '';
         p.request = (p.request || 0) + 1; p.entering = false;
       }
@@ -227,13 +231,15 @@ function createTracker(io) {
       // WeChat may repeat the same launch query on ordinary foreground recovery.
       // Changed externally supplied entry context is observable; identical repeated context alone is not proof of a new visit.
       const external = options && options.path && ((options.query || {}).st || (options.query || {}).scene || [1001, 1011, 1012, 1013, 1038, 1047, 1048, 1049, 1089].includes(options.scene));
-      const signature = external ? [options.path,options.scene,(options.query||{}).st||'',(options.query||{}).scene||''].join('|') : '';
+      const signature = external ? [options.path,options.scene,(options.query||{}).st||'',(options.query||{}).ht||'',(options.query||{}).scene||''].join('|') : '';
       const changed = !!signature && signature !== lastEntrySignature;
       if (signature) lastEntrySignature = signature;
       if (changed) {
         boundary('external_entry');
+        const handoff = (options.query || {}).ht || '';
         if (active && active.route === String(options.path).replace(/^\//, '')) {
           active.share = (options.query || {}).st || '';
+          active.handoff = active.share ? handoff : '';
           // App.onShow precedes the target page's binding/profile lifecycle.
           // Even on the same route, this may be a different template/report.
           active.visible = false;

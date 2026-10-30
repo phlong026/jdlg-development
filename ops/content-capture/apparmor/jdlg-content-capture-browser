@@ -1,0 +1,6 @@
+abi <abi/4.0>,
+include <tunables/global>
+
+profile jdlg-content-capture-browser /opt/jdlg-content-capture/browser/chrome-headless-shell-linux64/chrome-headless-shell flags=(unconfined) {
+  userns,
+}

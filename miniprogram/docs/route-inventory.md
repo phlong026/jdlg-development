@@ -123,3 +123,9 @@
 列表曝光只产生源列表 PV，不批量生成素材读取；content_click 只代表点击意图，即使导航失败也不声称目标阅读成功。目标页必须独立成功加载、渲染且可见，才有目标 PV。image_open 代表请求打开大图，不推断平台预览成功或图片观看时长。首页仅有精选案例卡片点击，不采集客服二维码、联系按钮或上传输入。
 
 新增 `tests/observed-content-actions.test.js` 运行实际页面 JS 回调及适配器，覆盖上述所有分支、非法/缺失 ID、私有/本人页面、仅主页图片、开关关闭/采集抛错 fail-open、回调契约、无列表曝光伪 PV；真实 SDK 验证源 PV 绑定、同意/就绪门槛和不生成目标 PV。自动测试不替代微信真机点击与跳转验收。
+
+三期新增 contentworkbench、contentedit、sharevisits、visitdetail 共4个私有子页面，均 excluded-private-workbench，不采集、不开放分享。当前63路由中22个公开、41个排除。
+
+本次四条新增路由分别为`pages/contentworkbench/contentworkbench`、`pages/contentedit/contentedit`、`pages/sharevisits/sharevisits`、`pages/visitdetail/visitdetail`，均显式使用private-workbench排除策略。上文历史59条基线保留日期，不作为当前总数。
+
+2026-10-27 内容制作前端：新增 `pages/contentwriting/contentwriting` AI文案私有工作页，明确 excluded-private-workbench，不采集输入和生成正文。当前共64条路由：22条公开、42条排除；已同步前后端清单及路由门禁。

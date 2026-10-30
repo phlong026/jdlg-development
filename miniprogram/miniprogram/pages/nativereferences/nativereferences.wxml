@@ -1,0 +1,20 @@
+<view class="page">
+  <text class="eyebrow">内容资料库</text><text class="title">选用原生内容</text>
+  <text class="description">保存已发布的固定版本，打开内容后使用微信原生卡片分享。</text>
+  <view wx:if="{{loginRequired}}" class="card"><text>登录并获得内容权限后可选用。</text><button bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{loading}}" class="card">正在加载可选内容…</view>
+  <block wx:else>
+    <view wx:if="{{error}}" class="notice error">{{error}}<button bindtap="retry" disabled="{{busy}}">重新加载</button></view>
+    <text wx:if="{{notice}}" class="notice">{{notice}}</text>
+    <view class="card"><text class="section-title">已选用</text><text wx:if="{{!references.length}}" class="muted">尚未选用内容，可从下方选择。</text>
+      <view wx:for="{{references}}" wx:key="reference_id" class="row"><text class="name">{{item.target.title}}</text><text class="muted">固定版本 V{{item.target.content_version}}{{item.available ? '' : ' · 来源已失效'}}</text><view class="actions"><button class="primary" data-id="{{item.reference_id}}" bindtap="openReference" disabled="{{busy || !item.available}}">打开并分享</button><button data-id="{{item.reference_id}}" bindtap="removeReference" disabled="{{busy}}">移除引用</button></view></view>
+      <button wx:if="{{referenceCursor}}" data-kind="references" bindtap="loadMore" disabled="{{busy}}">加载更多引用</button>
+    </view>
+    <view class="card"><text class="section-title">可选的已发布版本</text><text wx:if="{{!candidates.length}}" class="muted">当前页暂无已发布内容。{{candidateCursor ? '可继续加载。' : ''}}</text>
+      <view wx:for="{{candidates}}" wx:key="content_id" class="row"><text class="name">{{item.title}}</text><text class="muted">已发布 · V{{item.content_version}}</text><button class="primary" data-id="{{item.content_id}}" data-version="{{item.content_version}}" bindtap="saveReference" disabled="{{busy}}">选用这个版本</button></view>
+      <button wx:if="{{candidateCursor}}" data-kind="candidates" bindtap="loadMore" disabled="{{busy}}">加载更多来源</button>
+    </view>
+    <button bindtap="openHistory">查看已有生成记录</button>
+    <text class="description">仅展示当前授权范围的已发布内容。模板、旧作品和造价快照的资料库适配接入中。</text>
+  </block>
+</view>

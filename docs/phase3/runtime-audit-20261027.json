@@ -1,0 +1,61 @@
+{
+  "source": "用户已登录目标宝塔的终端，只读 /proc、ss 和目录元数据；敏感值未输出",
+  "process": {
+    "pid": 3763918,
+    "ppid": 1,
+    "count": 1,
+    "exe": "/www/wwwroot/jiadilingguang/service/bin/applinux",
+    "cwd": "/www/wwwroot/jiadilingguang/service/bin",
+    "uid": 0,
+    "listen": "*:8080",
+    "cgroup": "0::/system.slice/bt.service",
+    "manager": "未确定独立应用管理者；cgroup 与父进程不能单独证明重启方式"
+  },
+  "startup_environment": {
+    "HTTP_ADDR": ":8080",
+    "ENV": "production",
+    "TRACKING_ENABLED": "true",
+    "TRACKING_CONTENT_ENABLED": "true",
+    "TRACKING_VIDEO_ENABLED": "true",
+    "TRACKING_INTENT_ENABLED": "true",
+    "TRACKING_TENANT": "jdlg",
+    "TRACKING_DEFAULT_OWNER": "admin"
+  },
+  "unset_keys": [
+    "TRACKING_WECHAT_CODE_ENABLED",
+    "TRACKING_WECHAT_URLLINK_ENABLED",
+    "TRACKING_WECHAT_ENV",
+    "TRACKING_MEDIA_DIR",
+    "TRACKING_TRUSTED_PROXY_CIDRS",
+    "TRACKING_MP_SYNC_ENABLED",
+    "PUBLIC_SHARE_ORIGIN",
+    "SHARE_WEB_ENABLED",
+    "JDLG_LOCAL_ENV_FILE"
+  ],
+  "credentials_present": {
+    "WECHAT_APPID": true,
+    "WECHAT_APPSECRET": true,
+    "TRACKING_MP_APPID": false,
+    "TRACKING_MP_SECRET": false,
+    "OFFICIAL_ACCOUNT_APP_ID": false,
+    "OFFICIAL_ACCOUNT_APP_SECRET": false
+  },
+  "directories": {
+    "/www/wwwroot/jiadilingguang/service/bin/assets": {
+      "exists": true,
+      "mode": "0755",
+      "uid": 0,
+      "free_gib": 57.47
+    },
+    "/www/server/jdlg-private": {
+      "exists": false
+    },
+    "/www/server/jdlg-private/tracking-media": {
+      "exists": false
+    }
+  },
+  "limits": "/proc/environ 为启动环境，不读取 Go 运行中内存；已结合环境文件与公开 config 核对。没有修改配置、目录、程序或发送通知。",
+  "official_account_name": "华匠邦建科",
+  "official_account_app_id_verified": false,
+  "official_template_verified": false
+}
