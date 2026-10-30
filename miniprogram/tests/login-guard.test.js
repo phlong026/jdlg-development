@@ -6,9 +6,9 @@ const { test } = require('node:test');
 const ts = require('./report-runtime')('typescript');
 const root = path.resolve(__dirname, '..');
 const complete = { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/portrait.jpg' };
-function load(extension, { token = '', loginOk = true, profile = complete, status = 200, defer = false, deferLogin = false, offline = false } = {}) {
+function load(extension, { token = '', loginOk = true, profile = complete, status = 200, defer = false, deferLogin = false, offline = false, cachedProfile = null } = {}) {
   let definition;
-  const storage = { token, userInfo: { id: 9 } }, toasts = [], events = [], requests = [], shows = [];
+  const storage = { token, userInfo: cachedProfile ? { id: 9, ...cachedProfile } : { id: 9 } }, toasts = [], events = [], requests = [], shows = [];
   const nicknameGuard = { data: { visible: false }, setData(v) { Object.assign(this.data, v); }, show(v) { shows.push(v); this.data.visible = true; } };
   const wx = {
     getStorageSync: key => storage[key], setStorageSync: (key, value) => { storage[key] = value; }, removeStorageSync: key => { delete storage[key]; },
@@ -35,12 +35,36 @@ for (const ext of ['ts', 'js']) {
   test(`${ext}: missing token remains blocked`, async () => {
     const f = load(ext); assert.equal(await f.instance.check(), false); assert.equal(f.instance.data.visible, true); assert.ok(f.events.some(e => e.name === 'gated')); assert.equal(f.requests.length, 0);
   });
-  test(`${ext}: token alone does not grant access before authoritative profile read`, async () => {
+  test(`${ext}: token without cached profile verifies silently before granting access`, async () => {
     const f = load(ext, { token: 'tk', defer: true }); const pending = f.instance.check();
-    assert.equal(f.instance.data.visible, true); assert.equal(f.events.filter(e => e.name === 'authenticated').length, 0); assert.equal(f.requests.length, 1);
+    assert.equal(f.instance.data.visible, false); assert.equal(f.events.filter(e => e.name === 'authenticated').length, 0); assert.equal(f.requests.length, 1);
     f.requests[0].success({ statusCode: 200, data: { code: 0, data: complete } });
     assert.equal(await pending, true); assert.equal(f.instance.data.visible, false);
     assert.equal(f.events.find(e => e.name === 'authenticated').detail.token, 'tk');
+  });
+  test(`${ext}: complete cached profile grants optimistic access and confirmation keeps it`, async () => {
+    const f = load(ext, { token: 'tk', cachedProfile: complete, defer: true }); const pending = f.instance.check();
+    assert.equal(f.instance.data.visible, false);
+    const granted = f.events.filter(e => e.name === 'authenticated');
+    assert.equal(granted.length, 1); assert.equal(granted[0].detail.profile.id, 9); assert.equal(f.requests.length, 1);
+    f.requests[0].success({ statusCode: 200, data: { code: 0, data: complete } });
+    assert.equal(await pending, true);
+    assert.equal(f.instance.data.visible, false); assert.equal(f.storage.userInfo.nickname, complete.nickname);
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
+  });
+  test(`${ext}: optimistic access degrades to required editor when authoritative read finds gaps`, async () => {
+    const f = load(ext, { token: 'tk', cachedProfile: complete, profile: { ...complete, avatar: '' } });
+    assert.equal(await f.instance.check(), false);
+    assert.ok(f.events.some(e => e.name === 'gated'));
+    assert.equal(f.shows.length, 1); assert.equal(f.shows[0].required, true); assert.equal(f.shows[0].userID, 9);
+    assert.equal(f.instance.data.visible, false);
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
+  });
+  test(`${ext}: optimistic access degrades to bottom gate on network failure`, async () => {
+    const f = load(ext, { token: 'tk', cachedProfile: complete, offline: true });
+    assert.equal(await f.instance.check(), false);
+    assert.ok(f.events.some(e => e.name === 'gated'));
+    assert.equal(f.instance.data.visible, true); assert.ok(f.instance.data.error);
   });
   test(`${ext}: incomplete or placeholder avatar profile opens required editor with saved values`, async () => {
     for (const profile of [{ ...complete, nickname: '' }, { ...complete, avatar: '' }, { ...complete, avatar: '/assets/images/home.jpg' }, { ...complete, avatar: 'wxfile://temp' }]) {

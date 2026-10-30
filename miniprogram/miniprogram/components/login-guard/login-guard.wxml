@@ -1,16 +1,18 @@
-<view wx:if="{{visible}}" class="login-guard-blocker" catchtouchmove="stopPropagation" catchtap="stopPropagation"></view>
-<view wx:if="{{visible && !completingProfile}}" class="login-guard-mask" catchtouchmove="true" catchtap="stopPropagation">
-  <view class="login-guard">
-    <text class="lg-title">{{title}}</text>
-    <text class="lg-desc">{{desc}}</text>
-
-    <text wx:if="{{checking}}" class="lg-desc">正在确认登录与个人资料…</text>
+<view wx:if="{{visible && !completingProfile}}" class="login-guard-panel" catchtouchmove="stopPropagation">
+  <view class="lg-fade"></view>
+  <view class="login-guard" catchtap="stopPropagation">
+    <view class="lg-grip"></view>
+    <view class="lg-brand"><text class="lg-brand-name">甲第灵光</text><text class="lg-brand-badge">乡建智能体</text></view>
+    <text class="lg-title">登录后查看完整内容</text>
+    <text class="lg-sub">已登录用户可查看户型、案例、报价、设计方案等全部内容</text>
     <text wx:if="{{error}}" class="lg-error">{{error}}</text>
-    <button wx:if="{{!checking && !needsLogin}}" class="lg-login" bindtap="onRetry">重新检查资料</button>
     <button wx:if="{{!checking && needsLogin}}" class="lg-login" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
-      {{loggingIn ? '登录中...' : '微信一键登录'}}
+      <view class="lg-login-inner">
+        <image class="lg-wx-icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTI0LjQgMTMuMmMwLS40IDAtLjguMS0xLjJDMjMuMyA5LjggMjEuMyA5IDIwLjggOS4yYy4zLS4zLjYtLjYgMS0uOS0uMSAwLS4xIDAtLjIgMGwxLjEtLjFjLjEuMS4xLjEuMi4yek0xMi41IDEwYy41IDAgMS4xLjEgMS42LjEuMS0uNC4zLS44LjUtMS4yLTEuMSAwLS4yIDAtLjMgMC0uMnoiLz48L3N2Zz4=" mode="aspectFit" />
+        <text>{{loggingIn ? '登录中...' : '微信一键登录'}}</text>
+      </view>
     </button>
-
+    <button wx:if="{{!checking && !needsLogin}}" class="lg-login lg-login-plain" bindtap="onRetry">重新检查资料</button>
     <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
       <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
         <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>

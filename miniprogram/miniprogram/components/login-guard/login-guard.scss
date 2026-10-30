@@ -1,120 +1,160 @@
-.login-guard-blocker {
+// 底部引导卡（甲第灵光品牌风）：内容预览可见，卡片浮在底部，向上渐变过渡。
+.login-guard-panel {
   position: fixed;
-  top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
-  left: 0;
-  z-index: 10001;
-  background: #f7f2ea;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;
 }
 
-.login-guard-mask {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 10003;
-  background: rgba(46, 31, 20, 0.62);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48rpx;
-  box-sizing: border-box;
+.lg-fade {
+  height: 180rpx;
+  background: linear-gradient(to bottom, rgba(251, 250, 247, 0), rgba(251, 250, 247, 0.9) 60%, #fbfaf7);
+  pointer-events: none;
 }
 
 .login-guard {
-  width: 100%;
-  max-width: 600rpx;
-  background: linear-gradient(180deg, #fffaf2 0%, #f7f2ea 100%);
-  border-radius: 28rpx;
-  padding: 44rpx 36rpx 36rpx;
+  pointer-events: auto;
+  background: #fbfaf7;
+  padding: 16rpx 48rpx calc(28rpx + constant(safe-area-inset-bottom)) 48rpx;
+  padding-bottom: calc(28rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
-  box-shadow: 0 20rpx 44rpx rgba(71, 53, 40, 0.2);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
+.lg-grip {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: #e8e2d5;
+  margin-bottom: 24rpx;
+}
+
+.lg-brand {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 10rpx;
+}
+
+.lg-brand-name {
+  font-family: "Songti SC", "STSongti-SC", "SimSun", serif;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #4a3419;
+  letter-spacing: 4rpx;
+}
+
+.lg-brand-badge {
+  margin-left: 14rpx;
+  font-size: 22rpx;
+  color: #a8825c;
+  border: 2rpx solid #d9c29a;
+  border-radius: 999rpx;
+  padding: 2rpx 16rpx;
+}
+
 .lg-title {
+  font-family: "Songti SC", "STSongti-SC", "SimSun", serif;
   font-size: 36rpx;
   font-weight: 700;
-  color: #4a3524;
+  color: #2b2115;
+  margin-bottom: 12rpx;
+  text-align: center;
+  letter-spacing: 2rpx;
+}
+
+.lg-sub {
+  font-size: 24rpx;
+  color: #97897a;
+  margin-bottom: 24rpx;
   text-align: center;
 }
 
-.lg-desc {
-  margin-top: 14rpx;
-  font-size: 24rpx;
-  color: #a08a72;
+.lg-error {
+  font-size: 26rpx;
+  color: #d54941;
+  margin-bottom: 16rpx;
   text-align: center;
-  line-height: 1.5;
 }
 
 .lg-login {
-  margin-top: 40rpx;
   width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: 46rpx;
-  background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
+  height: 96rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #c2a06b, #a8825c);
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 600;
-  padding: 0;
-}
-
-.lg-login::after {
   border: none;
+  box-shadow: 0 10rpx 28rpx rgba(168, 130, 92, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+
+  &::after { border: none; }
+  &[disabled] { opacity: 0.6; color: #ffffff; background: #b3925f; }
 }
 
-.lg-login[disabled] {
-  opacity: 0.7;
-  color: #ffffff;
-  background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
+.lg-login-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lg-wx-icon {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 14rpx;
+}
+
+.lg-login-plain {
+  background: #fbfaf7;
+  color: #a8825c;
+  border: 2rpx solid #c2a06b;
+  box-sizing: border-box;
 }
 
 .lg-agreement {
-  margin-top: 24rpx;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: center;
-  row-gap: 6rpx;
+  margin-top: 20rpx;
 }
 
 .lg-check {
-  width: 32rpx;
-  height: 32rpx;
+  width: 30rpx;
+  height: 30rpx;
   border-radius: 50%;
-  border: 2rpx solid #c9ab84;
-  background: #ffffff;
+  border: 2rpx solid #c9bda6;
+  margin-right: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 8rpx;
   box-sizing: border-box;
 }
 
 .lg-check-on {
-  background: #a9855b;
-  border-color: #a9855b;
+  background: #a8825c;
+  border-color: #a8825c;
 }
 
 .lg-check-mark {
   font-size: 20rpx;
   color: #ffffff;
-  line-height: 1;
 }
 
 .lg-agreement-text {
-  font-size: 22rpx;
-  color: #a08a72;
+  font-size: 24rpx;
+  color: #97897a;
 }
 
 .lg-link {
-  font-size: 22rpx;
-  color: #a9855b;
+  font-size: 24rpx;
+  color: #a8825c;
 }
-
-.lg-error { margin-top: 18rpx; color: #9c3c2c; font-size: 24rpx; text-align: center; }

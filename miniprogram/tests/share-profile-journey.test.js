@@ -271,11 +271,13 @@ for (const extension of ['ts', 'js']) {
     await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.holdProfile = true;
     await h.resume();
-    assert.equal(h.page.data.__profileAccessReady, false);
-    assert.equal(h.reports().length, 1); assert.equal(h.entries().length, 1);
+    // Оптимистичный тёплый возврат: полный кэш перепускает контент мгновенно,
+    // авторитетная сверка профиля при этом всё равно отправляется.
+    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.ok(h.requests.some(request => String(request.url || request.path || '').endsWith('/profile')), 'warm return must still re-verify the profile');
+    assert.equal(h.reports().length, 2, 'report availability should be revalidated'); assert.equal(h.entries().length, 1);
     h.releaseProfile(); await settle();
     assert.equal(h.page.data.__profileAccessReady, true);
-    assert.equal(h.reports().length, 2, 'report availability should be revalidated');
     assert.equal(h.entries().length, 1, 'unchanged warm query is not another external share');
     assert.equal(h.events.filter(event => event.event_type === 'page_view').length, 1);
   });
@@ -285,12 +287,13 @@ for (const extension of ['ts', 'js']) {
     await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.holdProfile = true;
     await h.resume({ report_id: nextReportID, st: 'next-share' });
-    assert.equal(h.page.data.__profileAccessReady, false);
-    assert.equal(h.reports().length, 1); assert.equal(h.entries().length, 1);
-    h.releaseProfile(); await settle();
-    assert.equal(h.page.data.__profileAccessReady, true); assert.equal(h.page.data.contentReady, true);
+    // Тёплый re-entry с другим query мгновенно пересобирает страницу на новый
+    // отчёт; held профиль-ответ не блокирует переключение, только пере-подтверждает аккаунт.
+    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.page.data.contentReady, true);
     assert.equal(h.page.data.reportId, nextReportID);
     assert.equal(h.entries().length, 2);
+    h.releaseProfile(); await settle();
     assert.equal(h.entries()[1].body.content_id, `costsnapshot:${nextReportID}`);
     assert.equal(h.entries()[1].body.share_token, 'next-share');
     assert.equal(h.entries()[1].body.previous_entry_token, undefined);
@@ -304,10 +307,14 @@ for (const extension of ['ts', 'js']) {
     await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.profileMode = 'offline';
     await h.resume();
+    // Оптимистичный перепуск доказывается перезагрузкой отчёта: страница
+    // пересобралась по кэшу до авторитетного ответа.
+    assert.equal(h.reports().length, 2);
     const eventCount = h.events.length;
     h.tracking.getSDK().tick(); await settle();
+    // Авторитетный offline-ответ останавливает трекинг и возвращает нижнюю карточку-гейт.
     assert.equal(h.page.data.__profileAccessReady, false);
-    assert.equal(h.reports().length, 1); assert.equal(h.entries().length, 1);
+    assert.equal(h.entries().length, 1);
     assert.equal(h.events.length, eventCount);
     assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
   });
@@ -322,9 +329,9 @@ for (const extension of ['ts', 'js']) {
     const firstGeneration = h.page.boundEntryGeneration;
     h.background(); h.server.holdProfile = true;
     await h.resume({ scene: nextScene });
-    assert.equal(h.page.data.__profileAccessReady, false);
-    assert.equal(h.entries().length, 1);
-    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 1);
+    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.entries().length, 2);
+    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 2);
     h.releaseProfile(); await settle();
     assert.equal(h.page.data.contentReady, true);
     assert.equal(h.entries().length, 2);
@@ -346,10 +353,11 @@ for (const extension of ['ts', 'js']) {
     assert.equal(h.entries().length, 0);
     h.background(); h.server.holdProfile = true;
     await h.resume({ report_id: nextReportID });
-    assert.equal(h.page.data.__profileAccessReady, false);
-    assert.equal(h.reports().length, 1, 'new report must still wait for profile verification');
+    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.page.data.contentReady, true);
+    assert.equal(h.reports().length, 2, 'new report loads without waiting for the held profile read');
     h.releaseProfile(); await settle();
-    assert.equal(h.page.data.__profileAccessReady, true); assert.equal(h.page.data.contentReady, true);
+    assert.equal(h.page.data.__profileAccessReady, true);
     assert.equal(h.page.data.reportId, nextReportID);
     assert.equal(h.reports().length, 2);
     assert.equal(h.reports()[1].path, `/api/v1/miniprogram/ai/cost/shares/${nextReportID}`);

@@ -16,6 +16,7 @@ Component({
     error: '',
     agreedPrivacy: false,
     loggingIn: false,
+    optimistic: false,
     title: '登录后查看完整内容',
     desc: '登录并完善昵称、头像后即可查看，无需填写手机号',
   },
@@ -32,13 +33,21 @@ Component({
       const revision = ((this as any)._checkRevision || 0) + 1;
       (this as any)._checkRevision = revision;
       const token = wx.getStorageSync('token');
-      const accountID = Number(wx.getStorageSync('userInfo')?.id || 0);
-      this.setData({ visible: true, checking: !!token, needsLogin: !token, completingProfile: false, error: '' });
+      const cached = (wx.getStorageSync('userInfo') || {}) as any;
+      const accountID = Number(cached?.id || 0);
+      // 核验全程静默：有 token 就乐观放行内容（资料齐全的缓存），失败再降级为底部卡片。
+      this.setData({ visible: false, checking: !!token, needsLogin: !token, completingProfile: false, error: '', optimistic: false });
       this.triggerEvent('gated');
       const editor = this.selectComponent('#nicknameGuard') as any;
       if (!token) {
         editor?.setData({ visible: false });
+        this.setData({ visible: true, checking: false });
         return false;
+      }
+      if (hasCompleteProfile({ nickname: cached?.nickname, avatar: cached?.avatar })) {
+        const optimistic = { id: accountID, nickname: String(cached?.nickname || '').trim(), avatar: String(cached?.avatar || '').trim() };
+        this.setData({ optimistic: true });
+        this.triggerEvent('authenticated', { token, profile: optimistic });
       }
       const current = () => (this as any)._checkRevision === revision && wx.getStorageSync('token') === token;
       try {
@@ -52,7 +61,8 @@ Component({
           wx.removeStorageSync('token');
           wx.removeStorageSync('userInfo');
           editor?.setData({ visible: false });
-          this.setData({ checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
+          this.triggerEvent('gated');
+          this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
           return false;
         }
         if (res.statusCode !== 200 || res.data?.code !== 0) throw new Error(res.data?.msg || '资料读取失败，请重试');
@@ -61,7 +71,8 @@ Component({
         if (!Number.isSafeInteger(id) || id <= 0 || (accountID && accountID !== id)) throw new Error('账号资料不匹配，请重新登录');
         if (!hasCompleteProfile(profile)) {
           if (!editor || typeof editor.show !== 'function') throw new Error('资料填写暂不可用，请重试');
-          this.setData({ checking: false, completingProfile: true });
+          this.setData({ visible: false, checking: false, completingProfile: true });
+          this.triggerEvent('gated');
           // 同一账号正在填写时保留尚未提交的输入和上传状态。
           if (!editor.data?.visible || editor.data.promptToken !== token) {
             editor.show({ required: true, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
@@ -71,13 +82,18 @@ Component({
         const verified = { ...profile, id, nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim() };
         wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...verified, token });
         editor?.setData({ visible: false });
-        this.setData({ visible: false, checking: false, completingProfile: false });
-        this.triggerEvent('authenticated', { token, profile: verified });
+        if (!(this.data as any).optimistic) {
+          this.setData({ visible: false, checking: false, completingProfile: false });
+          this.triggerEvent('authenticated', { token, profile: verified });
+        } else {
+          this.setData({ visible: false, checking: false, completingProfile: false, optimistic: false });
+        }
         return true;
       } catch (error: any) {
         if (current()) {
           console.error('分享资料核验失败:', error);
-          this.setData({ checking: false, error: error.message || '资料读取失败，请重试' });
+          this.triggerEvent('gated');
+          this.setData({ visible: true, checking: false, error: error.message || '资料读取失败，请重试' });
         }
         return false;
       }
