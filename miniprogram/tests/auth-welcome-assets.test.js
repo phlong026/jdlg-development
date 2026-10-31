@@ -36,3 +36,20 @@ test('资料填写继续使用原生头像选择、昵称输入和表单提交',
   assert.match(template, /bindsubmit="onConfirm"/);
   assert.match(template, /scroll-y/);
 });
+
+test('登录与资料确认使用同一场景，编辑器持续挂载以保留选择结果', () => {
+  const login = fs.readFileSync(path.join(sourceRoot, 'components/login-guard/login-guard.wxml'), 'utf8');
+  const rootTag = login.match(/<scroll-view[^>]+>/)[0];
+  assert.doesNotMatch(rootTag, /wx:if=/, '检查期间不能销毁正在上传或编辑资料的组件');
+  const hidden = rootTag.match(/hidden="{{([^}]+)}}"/)[1];
+  const hiddenFor = data => Function(...Object.keys(data), `return (${hidden});`)(...Object.values(data));
+  const initial = { visible: true, checking: true, loggingIn: false, completingProfile: false };
+  assert.equal(hiddenFor(initial), true, '初次静默核验不闪登录场景');
+  assert.equal(hiddenFor({ ...initial, checking: false }), false);
+  assert.equal(hiddenFor({ ...initial, visible: false, loggingIn: true }), false, '登录后核验继续使用同一背景');
+  assert.equal(hiddenFor({ ...initial, visible: false, checking: false, completingProfile: true }), false);
+  assert.equal(hiddenFor({ ...initial, visible: false, checking: false }), true, '资料完整后关闭场景');
+  assert.match(login, /<nickname-guard[^>]+embedded="{{true}}"/);
+  const page = fs.readFileSync(path.join(sourceRoot, 'pages/login/login.wxml'), 'utf8');
+  assert.match(page, /<nickname-guard[^>]+embedded="{{true}}"/);
+});

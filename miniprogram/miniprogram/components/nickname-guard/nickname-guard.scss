@@ -178,3 +178,32 @@
   color: #6b5846;
   font-size: 26rpx;
 }
+
+.nickname-guard-embedded {
+  position: static;
+  height: auto;
+  z-index: auto;
+  background: transparent;
+
+  .nickname-guard {
+    margin: 0;
+  }
+
+  .ng-title {
+    line-height: 1.4;
+  }
+
+  .ng-welcome {
+    font-size: 26rpx;
+    line-height: 1.6;
+    color: #665443;
+  }
+
+  .ng-avatar-tip-sub, .ng-desc {
+    color: #6b5a49;
+  }
+
+  .ng-confirm {
+    background: linear-gradient(135deg, #a67d48, #90653b);
+  }
+}

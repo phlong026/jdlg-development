@@ -1,9 +1,9 @@
 <import src="/templates/auth-welcome.wxml" />
-<scroll-view wx:if="{{visible && !checking && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
+<scroll-view hidden="{{!loggingIn && !completingProfile && (!visible || checking)}}" class="login-guard-panel" scroll-y="{{true}}">
   <template is="auth-backdrop" />
   <view class="aw-content">
     <template is="auth-intro" />
-    <view class="login-guard aw-card" catchtap="stopPropagation">
+    <view wx:if="{{!completingProfile}}" class="login-guard aw-card" catchtap="stopPropagation">
       <text class="lg-title">{{needsLogin ? '登录后查看完整内容' : '重新连接，继续发现好设计'}}</text>
       <text class="lg-sub">发现户型、案例、报价与设计灵感</text>
       <template is="auth-avatars" />
@@ -23,7 +23,8 @@
         <text class="lg-link" catchtap="onOpenPrivacy">《用户协议与隐私政策》</text>
       </view>
     </view>
+    <view class="lg-profile-card" hidden="{{!completingProfile}}">
+      <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />
+    </view>
   </view>
 </scroll-view>
-
-<nickname-guard id="nicknameGuard" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />

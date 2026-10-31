@@ -13,6 +13,10 @@ const API_BASE_URL = 'https://api.jiadilingguang.com';
 // 与「我的」页共用同一个标记：同一自然日内两处合计最多提醒一次；保存成功后组件会清除它。
 const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day:';
 Component({
+    properties: {
+        // 登录入口复用当前场景，仅将资料表单放入原来的底部卡片。
+        embedded: { type: Boolean, value: false },
+    },
     data: {
         visible: false,
         required: false,

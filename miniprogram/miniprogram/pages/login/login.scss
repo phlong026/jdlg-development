@@ -66,6 +66,11 @@
   width: 100%;
   margin: 0;
 }
+.login-profile-card {
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
+}
 .login-welcome-title {
   display: block;
   font-size: 36rpx;

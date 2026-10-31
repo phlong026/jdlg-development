@@ -18,7 +18,7 @@
 
     <template is="auth-intro" />
 
-    <view class="main-action aw-card">
+    <view wx:if="{{!completingProfile}}" class="main-action aw-card">
       <text class="login-welcome-title">登录，开启你的理想家</text>
       <text class="login-welcome-sub">收藏建房灵感，找到适合自己的方案</text>
       <template is="auth-avatars" />
@@ -43,7 +43,11 @@
       </view>
     </view>
 
-    <view class="other-login-section">
+    <view class="login-profile-card" hidden="{{!completingProfile}}">
+      <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" bind:authrequired="onProfileAuthRequired" />
+    </view>
+
+    <view wx:if="{{!completingProfile}}" class="other-login-section">
       <view class="other-login-divider">
         <view class="divider-line"></view>
         <text class="divider-text">其他登录方式</text>
@@ -245,9 +249,6 @@
       </view>
     </view>
   </view>
-
-  <!-- 完善昵称弹窗（登录后强制） -->
-  <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" bind:authrequired="onProfileAuthRequired" />
 
   <view wx:if="{{profileError}}" class="profile-check-error">
     <text>{{profileError}}</text>

@@ -17,6 +17,11 @@
   align-items: center;
 }
 
+.lg-profile-card {
+  flex-shrink: 0;
+  margin: 0 26rpx;
+}
+
 .lg-title {
   font-size: 36rpx;
   font-weight: 700;
