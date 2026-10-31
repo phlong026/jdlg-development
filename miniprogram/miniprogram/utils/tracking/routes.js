@@ -391,6 +391,11 @@ const ROUTES = {
     "collect": false,
     "exclusionReason": "private-project-notes"
   },
+  "pages/projectcollections/projectcollections": {"kind": "excluded", "readiness": "excluded-private-workbench", "collect": false, "exclusionReason": "private-workbench"},
+  "pages/projectpackage/projectpackage": {"kind": "excluded", "readiness": "excluded-private-project-notes", "collect": false, "exclusionReason": "private-project-notes"},
+  "pages/projectpackageview/projectpackageview": {"kind": "excluded", "readiness": "excluded-private-project-notes", "collect": false, "exclusionReason": "private-project-notes"},
+  "pages/projectinvite/projectinvite": {"kind": "excluded", "readiness": "excluded-private-project-notes", "collect": false, "exclusionReason": "private-project-notes"},
+  "pages/collectionreader/collectionreader": {"kind":"collection","readiness":"explicit","collect":true,"idKey":"collection_id"},
   "pages/nativereferences/nativereferences": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }
@@ -405,7 +410,14 @@ function binding(route, options) {
  const p=policy(route); options=options||{}; const value=options[p.idKey] || (p.idAlias && options[p.idAlias]);
  if (!p.idKey || !value) return {};
  const raw=String(value).slice(0,80);
- if (p.kind==='owned-content') return {id:raw,version:Number(options.content_version)||undefined};
+ if (p.kind==='collection') return {id:raw,version:Number(options.collection_version)||undefined};
+ if (p.kind==='owned-content') {
+  const content={id:raw,version:Number(options.content_version)||undefined};
+  if (options.collection_id && /^[A-Za-z0-9_-]{8,128}$/.test(String(options.collection_id)) && Number.isInteger(Number(options.collection_version)) && Number(options.collection_version)>0) {
+   content.collection_id=String(options.collection_id); content.collection_version=Number(options.collection_version);
+  }
+  return content;
+ }
  if (route==='pages/aicostshare/aicostshare') return /^[A-Za-z0-9_-]{32}$/.test(raw) ? {id:'costsnapshot:'+raw} : {};
  let hash=2166136261; for(let i=0;i<route.length;i++) hash=Math.imul(hash ^ route.charCodeAt(i),16777619);
  return {id:'legacy:'+(hash>>>0).toString(16)+':'+raw.replace(/[^A-Za-z0-9_-]/g,'')};

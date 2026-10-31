@@ -48,7 +48,7 @@ function request(path, method = 'GET', body = {}, query = {}) {
 function workbenchContext() { return request(WORKBENCH + '/context'); }
 function listContents(query) { return request(WORKBENCH + '/contents', 'GET', {}, query); }
 function getContent(id) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id)); }
-function listWorkbenchMedia() { return request(WORKBENCH + '/media'); }
+function listWorkbenchMedia(query) { return request(WORKBENCH + '/media', 'GET', {}, query); }
 function saveContent(draft, id) { return request(WORKBENCH + '/contents' + (id ? '/' + encodeURIComponent(id) : ''), id ? 'PATCH' : 'POST', draft); }
 function deleteContentDraft(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id), 'DELETE', { expected_revision: Number(revision) }); }
 function previewContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/preview', 'POST', { expected_revision: revision }); }
@@ -79,7 +79,13 @@ function getProjectNoteFeedback(id, feedbackID) { return request(projectNotePath
 function getProjectNote(id, noteID) { return request(projectNotePath('/projects/' + encodeURIComponent(id) + '/notes/' + encodeURIComponent(noteID))); }
 function getProjectNoteProject(id) { return request(projectNotePath('/projects/' + encodeURIComponent(id))); }
 function getProjectNoteVersion(projectID, versionID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/versions/' + encodeURIComponent(versionID))); }
-function inviteProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'POST', {}); }
+function createProjectInvitation(projectID, expiresAt, key) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-invitations'), 'POST', { expires_at: expiresAt, idempotency_key: key }); }
+function listProjectInvitations(projectID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-invitations')); }
+function revokeProjectInvitation(projectID, invitationID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-invitations/' + encodeURIComponent(invitationID)), 'DELETE'); }
+function getProjectInvitation(token) { return request(projectNotePath('/member-invitations/' + encodeURIComponent(token))); }
+function applyProjectInvitation(token, key) { return request(projectNotePath('/member-invitations/' + encodeURIComponent(token) + '/apply'), 'POST', { idempotency_key: key }); }
+function listProjectJoinRequests(projectID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-requests')); }
+function approveProjectJoinRequest(projectID, requestID, key) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-requests/' + encodeURIComponent(requestID) + '/approve'), 'POST', { idempotency_key: key }); }
 function revokeProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'DELETE', {}); }
 function setProjectNoteConfirmer(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/confirmer'), 'PUT', { account_id: Number(accountID) }); }
 function createProjectNote(projectID, draft) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/notes'), 'POST', draft); }
@@ -178,7 +184,9 @@ module.exports = {
   saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
-  getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject, inviteProjectNoteMember, revokeProjectNoteMember,
+  getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject,
+  createProjectInvitation, listProjectInvitations, revokeProjectInvitation, getProjectInvitation, applyProjectInvitation, listProjectJoinRequests, approveProjectJoinRequest,
+  revokeProjectNoteMember,
   setProjectNoteConfirmer, copyProjectNote, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
   addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,

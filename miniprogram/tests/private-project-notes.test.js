@@ -117,7 +117,7 @@ test('shared note clears protected content when account changes before response 
 
 test('designer account guard clears every protected form and ownership field', () => {
   const page = pageHarness('projectnotes', {});
-  Object.assign(page.data, { projects: [{ project_id: 'private-project' }], owners: ['owner-a'], ownerID: 'owner-a', projectName: '张宅', crmID: 'crm-secret', noteTitle: '私密标题', noteBody: '私密草稿', memberAccount: '101', confirmerAccount: '101', feedbackID: 'feedback-secret', feedbackReply: '已处理', noteMedia: [{ media_id: 'private-media' }] });
+  Object.assign(page.data, { projects: [{ project_id: 'private-project' }], owners: ['owner-a'], ownerID: 'owner-a', projectName: '张宅', crmID: 'crm-secret', noteTitle: '私密标题', noteBody: '私密草稿', joinRequests: [{ request_id: 'request-one' }], memberInvitations: [{ invitation_id: 'invitation-one' }], memberInvitation: { invitation_id: 'invitation-one' }, memberInvitationPath: '/private', confirmerAccount: '101', feedbackID: 'feedback-secret', feedbackReply: '已处理', noteMedia: [{ media_id: 'private-media' }] });
   page.clearProtected();
   assert.equal(page.data.projects.length, 0);
   assert.equal(page.data.owners.length, 0);
@@ -126,11 +126,32 @@ test('designer account guard clears every protected form and ownership field', (
   assert.equal(page.data.crmID, '');
   assert.equal(page.data.noteTitle, '');
   assert.equal(page.data.noteBody, '');
-  assert.equal(page.data.memberAccount, '');
+  assert.equal(page.data.joinRequests.length, 0);
+  assert.equal(page.data.memberInvitations.length, 0);
+  assert.equal(page.data.memberInvitation, null);
+  assert.equal(page.data.memberInvitationPath, '');
   assert.equal(page.data.confirmerAccount, '');
   assert.equal(page.data.feedbackReply, '');
   assert.equal(page.data.feedbackID, '');
   assert.equal(page.data.noteMedia.length, 0);
+});
+
+test('member view reloads active invitations and can revoke one after page refresh', async () => {
+  const revoked = [];
+  const page = pageHarness('projectnotes', {
+    listProjectJoinRequests: async () => ({ items: [] }),
+    listProjectInvitations: async () => ({ items: [{ invitation_id: 'invitation-one', status: 'active', expires_at: '2026-11-01T08:00:00Z' }] }),
+    revokeProjectInvitation: async (_project, invitation) => { revoked.push(invitation); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'project-one' }, pageView: 'members' });
+  await page.loadJoinRequests();
+  assert.equal(page.data.memberInvitations.length, 1);
+  assert.match(page.data.memberInvitations[0].expiryLabel, /^\u6709\u6548\u81f3 /);
+  assert.equal(page.data.memberInvitation, null);
+  await page.revokeProjectInvitation({ currentTarget: { dataset: { id: 'invitation-one' } } });
+  assert.deepEqual(revoked, ['invitation-one']);
+  assert.equal(page.data.memberInvitations.length, 0);
 });
 
 test('project workspace uses in-page navigation and keeps native back for the project list', async () => {
@@ -202,6 +223,30 @@ test('fixed proposal shows only confirmations belonging to its exact version', (
   assert.equal(page.data.confirmations[0].confirmation_id, 'confirm-one');
   const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
   assert.match(template, /wx:for="\{\{confirmations\}\}"/);
+});
+
+test('project detail opens share materials and keeps profile labels bound to real actor ids', () => {
+  let navigated = '';
+  const page = pageHarness('projectnotes', {}, { navigateTo: options => { navigated = options.url; } });
+  page.applyProjectDetail({
+    project: { project_id: 'project-one', name: '张宅', confirmer_id: 101 },
+    notes: [], versions: [], feedbacks: [],
+    members: [{ member_id: 'member-one', actor_id: 101, active: true, display_name: '张女士', avatar: 'https://public.example/avatar.png' }],
+  }, '', null, null, 'detail');
+  assert.equal(page.data.activeMembers[0].actor_id, 101);
+  assert.equal(page.data.confirmerChoices[1].actor_id, 101);
+  assert.equal(page.data.confirmerChoices[1].label, '张女士');
+  page.openProjectPackage();
+  assert.equal(navigated, '/pages/projectpackage/projectpackage?project_id=project-one');
+});
+
+test('project member view renders presentation profile while retaining actor id only as behavior data', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /bindtap="openProjectPackage"/);
+  assert.match(template, /item\.display_name/);
+  assert.match(template, /item\.avatar/);
+  assert.match(template, /data-account="\{\{item\.actor_id\}\}"/);
+  assert.doesNotMatch(template, /账号 #/);
 });
 
 test('project template separates core views and delegates custom navigation back to the page', () => {
@@ -686,14 +731,14 @@ test('an in-flight Word download cannot open after switching the selected projec
   assert.equal(opened.length, 0);
 });
 
-test('member mutations refresh active members and confirmer is selected from them', async () => {
+test('approved join request refreshes active members and confirmer is selected from them', async () => {
   let reads = 0;
   const detail = () => ({ project: { project_id: 'project-one', name: '张宅', confirmer_id: reads > 1 ? 202 : 0 }, notes: [], versions: [], shares: [], feedbacks: [], confirmations: [], truncated: {}, members: [{ actor_id: 202, active: true }] });
   const page = pageHarness('projectnotes', {
-    getProjectNoteProject: async () => { reads += 1; return detail(); }, inviteProjectNoteMember: async () => ({}), setProjectNoteConfirmer: async () => ({}),
+    getProjectNoteProject: async () => { reads += 1; return detail(); }, approveProjectJoinRequest: async () => ({}), listProjectJoinRequests: async () => ({ items: [] }), setProjectNoteConfirmer: async () => ({}), mutationKey: () => 'approval-key',
   });
-  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.setData({ selectedProject: { project_id: 'project-one' }, memberAccount: '202' });
-  await page.inviteProjectNoteMember();
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.setData({ selectedProject: { project_id: 'project-one' } });
+  await page.approveProjectJoinRequest({ currentTarget: { dataset: { id: 'request-one' } } });
   assert.equal(page.data.activeMembers[0].actor_id, 202);
   page.setData({ confirmerIndex: 1, confirmerAccount: 202 });
   await page.setProjectNoteConfirmer();
@@ -740,7 +785,7 @@ test('private reader joins designer resolution replies onto feedback without ren
 
 test('designer management page exposes fixed-version workflow actions and workbench navigates to it', () => {
   const source = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes-core.js'), 'utf8');
-  for (const action of ['createProjectNoteProject', 'inviteProjectNoteMember', 'setProjectNoteConfirmer', 'createProjectNote', 'saveProjectNote', 'freezeProjectNoteVersion', 'createProjectNoteShare', 'revokeProjectNoteShare', 'resolveProjectNoteFeedback']) {
+  for (const action of ['createProjectNoteProject', 'createProjectInvitation', 'approveProjectJoinRequest', 'setProjectNoteConfirmer', 'createProjectNote', 'saveProjectNote', 'freezeProjectNoteVersion', 'createProjectNoteShare', 'revokeProjectNoteShare', 'resolveProjectNoteFeedback']) {
     assert.match(source, new RegExp(action));
   }
   const workbench = fs.readFileSync(path.join(root, 'pages/contentworkbench/contentworkbench.ts'), 'utf8');
@@ -906,7 +951,6 @@ test('cancelled project creation and collaboration mutations keep unsaved draft 
   };
   const actions = [
     page => { page.setData({ projectName: '新项目', ownerID: 'owner-one' }); return page.createProjectNoteProject(); },
-    page => { page.setData({ memberAccount: '303' }); return page.inviteProjectNoteMember(); },
     page => page.revokeProjectNoteMember({ currentTarget: { dataset: { account: 202 } } }),
     page => { page.setData({ confirmerAccount: 202 }); return page.setProjectNoteConfirmer(); },
     page => { page.setData({ feedbackID: 'feedback-one', feedbackReply: '已处理' }); return page.resolveProjectNoteFeedback(); },
@@ -915,7 +959,7 @@ test('cancelled project creation and collaboration mutations keep unsaved draft 
     let mutationCount = 0, modalCount = 0;
     const mutation = async () => { mutationCount += 1; return {}; };
     const page = pageHarness('projectnotes', {
-      createProjectNoteProject: mutation, inviteProjectNoteMember: mutation, revokeProjectNoteMember: mutation,
+      createProjectNoteProject: mutation, revokeProjectNoteMember: mutation,
       setProjectNoteConfirmer: mutation, resolveProjectNoteFeedback: mutation, updateProjectNoteProject: mutation,
       freezeProjectNoteVersion: mutation, mutationKey: () => 'stable-key',
     }, { showModal: options => { modalCount += 1; options.success({ confirm: false }); } });

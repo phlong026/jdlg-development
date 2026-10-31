@@ -8,7 +8,8 @@ const blankProtected = () => ({
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
   projects: [], owners: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
-  members: [], activeMembers: [], confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '', memberAccount: '',
+  members: [], activeMembers: [], joinRequests: [], memberInvitations: [], requestsLoading: false, confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '',
+  memberInvitation: null, memberInvitationPath: '',
   note: null, noteTitle: '', noteBody: '', bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
@@ -17,6 +18,13 @@ const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
 const assetOf = item => item && item.asset ? item.asset : item;
 const activeMembers = members => (members || []).filter(item => item && item.active !== false);
+const memberLabel = member => String(member && member.display_name || '').trim() || '项目成员';
+const invitationLabel = item => {
+  const date = new Date(item && item.expires_at || '');
+  if (Number.isNaN(date.getTime())) return '有效中';
+  const pad = value => String(value).padStart(2, '0');
+  return `有效至 ${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 const statusLabels = { initial: '初步方案', revising: '修改中', confirmed: '已确认' };
 const satisfactionLabels = { very_satisfied: '非常满意', needs_adjustment: '基本满意，需要调整', unsatisfied: '不太满意' };
 const projectForm = project => ({ name: project.name || '', location: project.location || '', building_area: project.building_area || '', floors: project.floors || '', style: project.style || '' });
@@ -29,13 +37,14 @@ Page({
     this._targetProjectID = String(options && options.project_id || '');
     this._targetVersionID = String(options && options.version_id || '');
     this._targetFeedbackID = String(options && options.feedback_id || '');
+    this._targetView = String(options && options.view || '') === 'members' ? 'members' : '';
   },
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this._token = token; this._epoch = (this._epoch || 0) + 1;
-      this._loaded = false; this._writingLaunch = null; this._selectedNoteID = ''; this._newNote = false; this._resolutionAttempt = null; this._issuedShare = null; this._shareAttempt = null; this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
+      this._loaded = false; this._writingLaunch = null; this._selectedNoteID = ''; this._newNote = false; this._resolutionAttempt = null; this._issuedShare = null; this._shareAttempt = null; this._invitationAttempt = null; this._approvalAttempts = new Map(); this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
     }
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
@@ -102,8 +111,13 @@ Page({
     if (!await this.confirmDiscardChanges(changed) || !this.current(epoch) || this.data.selectedProject !== project || this.data.pageView !== view || this.data.busy) return;
     this.restoreLoadedForms(); this.setData({ projectSettingsOpen: false });
   },
-  openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false }); },
+  openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false }); return this.loadJoinRequests(); },
   openHistory() { this.setData({ pageView: 'history', navigationTitle: '项目记录', projectSettingsOpen: false }); if (!this.data.historyLoaded) return this.loadHistory(); },
+  openProjectPackage() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.busy) return;
+    wx.navigateTo({ url: '/pages/projectpackage/projectpackage?project_id=' + encodeURIComponent(project.project_id) });
+  },
   openNote(event) {
     const id = String(event.currentTarget.dataset.id || ''), index = this.data.notes.findIndex(item => item.note_id === id);
     if (index >= 0) return this.selectNote({ detail: { value: index } });
@@ -151,7 +165,7 @@ Page({
       this._loaded = true;
       this.setData({ projects, owners, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
       const selectedID = this._targetProjectID || this._selectedProjectID;
-      if (selectedID) { this._targetProjectID = ''; await this.openProject(selectedID, epoch); }
+      if (selectedID) { this._targetProjectID = ''; if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
     } catch (error) {
       if (!this.current(epoch)) return;
       this.clearProtected();
@@ -161,7 +175,6 @@ Page({
 
   setProjectName(event) { this.setData({ projectName: value(event) }); },
   setOwnerID(event) { const index = Number(event.detail.value) || 0; this.setData({ ownerIndex: index, ownerID: this.data.owners[index] || '' }); },
-  setMemberAccount(event) { this.setData({ memberAccount: value(event) }); },
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
   setNoteTitle(event) { this.setData({ noteTitle: value(event) }); },
   setNoteBody(event) { if (!this.data.bodyReadOnly) this.setData({ noteBody: String(event.detail && event.detail.value || '') }); },
@@ -234,7 +247,10 @@ Page({
         result.feedbacks = [...(result.feedbacks || []), feedback];
       }
       const presentation = fixed ? await this.fixedVersionPresentation(projectID, fixed, epoch, request) : null;
-      if (this.current(epoch) && request === this._projectRequest) this.applyProjectDetail(result, notice, fixed, presentation, requestedView);
+      if (this.current(epoch) && request === this._projectRequest) {
+        this.applyProjectDetail(result, notice, fixed, presentation, requestedView);
+        if (requestedView === 'members') await this.loadJoinRequests();
+      }
     } catch (_) {
       if (!this.current(epoch) || request !== this._projectRequest) return;
       this.clearProtected(); this.setData(Object.assign({}, kept, { error: requested ? '目标固定版本暂不可访问，未切换到其他版本。' : '私人项目暂不可访问。', busy: false }));
@@ -279,7 +295,7 @@ Page({
     let share = targetID && result.active_share && result.active_share.version_id === targetID ? result.active_share : targetID ? shares.find(item => !item.revoked && item.version_id === targetID) || null : null;
     if (share && this._issuedShare && this._issuedShare.share_token && share.share_id === this._issuedShare.share_id) share = Object.assign({}, share, { share_token: this._issuedShare.share_token });
     const members = result.members || [], available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
-    const confirmerChoices = [{ actor_id: '', label: '请选择受邀账号' }, ...available.map(item => Object.assign({}, item, { label: '账号 ' + item.actor_id }))];
+    const confirmerChoices = [{ actor_id: '', label: '选择确认人' }, ...available.map(item => Object.assign({}, item, { label: memberLabel(item) }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
     const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
     const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
@@ -380,17 +396,86 @@ Page({
     } catch (error) { if (selected()) this.setData({ busy: false, error: error.message || 'Word 导出失败' }); }
   },
 
-  async inviteProjectNoteMember() { return this.memberMutation(false); },
-  async revokeProjectNoteMember(event) { return this.memberMutation(true, event && event.currentTarget.dataset.account); },
-  async memberMutation(revoke, supplied) {
-    const project = this.data.selectedProject, account = Number(supplied || this.data.memberAccount);
+  async loadJoinRequests() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.requestsLoading) return;
+    const epoch = this._epoch, projectID = project.project_id;
+    this.setData({ requestsLoading: true });
+    try {
+      const [result, invitations] = await Promise.all([api.listProjectJoinRequests(projectID), api.listProjectInvitations(projectID)]);
+      if (!this.current(epoch) || !this.data.selectedProject || this.data.selectedProject.project_id !== projectID) return;
+      this.setData({
+        joinRequests: (result.items || []).filter(item => item.status === 'pending'),
+        memberInvitations: (invitations.items || []).map(item => Object.assign({}, item, { expiryLabel: invitationLabel(item) })),
+        requestsLoading: false,
+      });
+    } catch (error) {
+      if (this.current(epoch) && this.data.selectedProject && this.data.selectedProject.project_id === projectID) this.setData({ requestsLoading: false, error: error.message || '加入申请加载失败' });
+    }
+  },
+  async createProjectInvitation() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.busy) return;
+    if (!this._invitationAttempt || this._invitationAttempt.projectID !== project.project_id) {
+      this._invitationAttempt = { projectID: project.project_id, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), key: api.mutationKey('project-member-invitation') };
+    }
+    const attempt = this._invitationAttempt, epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      const invitation = await api.createProjectInvitation(project.project_id, attempt.expiresAt, attempt.key);
+      if (!this.current(epoch) || !this.data.selectedProject || this.data.selectedProject.project_id !== project.project_id) return;
+      if (!invitation.invitation_token) { this.setData({ busy: false, error: '邀请链接未生成，请重试。' }); return; }
+      this._invitationAttempt = null;
+      const summary = { invitation_id: invitation.invitation_id, status: 'active', expires_at: invitation.expires_at, expiryLabel: invitationLabel(invitation) };
+      const memberInvitations = [summary, ...this.data.memberInvitations.filter(item => item.invitation_id !== summary.invitation_id)];
+      this.setData({ busy: false, memberInvitation: invitation, memberInvitationPath: '/pages/projectinvite/projectinvite?pni=' + encodeURIComponent(invitation.invitation_token), memberInvitations, notice: '邀请已生成。' });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '邀请生成失败' }); }
+  },
+  async revokeProjectInvitation(event) {
+    const project = this.data.selectedProject;
+    const invitationID = String(event && event.currentTarget && event.currentTarget.dataset.id || this.data.memberInvitation && this.data.memberInvitation.invitation_id || '');
+    if (!project || !invitationID || this.data.busy) return;
+    const epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      await api.revokeProjectInvitation(project.project_id, invitationID);
+      if (!this.current(epoch)) return;
+      const clearsShare = this.data.memberInvitation && this.data.memberInvitation.invitation_id === invitationID;
+      this.setData({
+        busy: false,
+        memberInvitation: clearsShare ? null : this.data.memberInvitation,
+        memberInvitationPath: clearsShare ? '' : this.data.memberInvitationPath,
+        memberInvitations: this.data.memberInvitations.filter(item => item.invitation_id !== invitationID),
+        notice: '邀请已撤销。',
+      });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '邀请撤销失败' }); }
+  },
+  async approveProjectJoinRequest(event) {
+    const project = this.data.selectedProject, requestID = String(event && event.currentTarget.dataset.id || '');
+    if (!project || !requestID || this.data.busy) return;
+    if (!this._approvalAttempts) this._approvalAttempts = new Map();
+    if (!this._approvalAttempts.has(requestID)) this._approvalAttempts.set(requestID, api.mutationKey('project-member-approval'));
+    const key = this._approvalAttempts.get(requestID), epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      await api.approveProjectJoinRequest(project.project_id, requestID, key);
+      if (!this.current(epoch)) return;
+      this._approvalAttempts.delete(requestID);
+      this.setData({ busy: false });
+      await this.refreshProject('已批准加入项目。');
+      if (this.current(epoch)) await this.openMembers();
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '批准失败' }); }
+  },
+  async revokeProjectNoteMember(event) { return this.memberMutation(event && event.currentTarget.dataset.account); },
+  async memberMutation(supplied) {
+    const project = this.data.selectedProject, account = Number(supplied);
     if (!project || !Number.isInteger(account) || account <= 0 || this.data.busy) return;
     if (!await this.confirmDiscardChanges()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
-      if (revoke) await api.revokeProjectNoteMember(project.project_id, account); else await api.inviteProjectNoteMember(project.project_id, account);
+      await api.revokeProjectNoteMember(project.project_id, account);
       if (!this.current(epoch)) return;
-      this.setData({ busy: false, memberAccount: '' }); await this.refreshProject(revoke ? '访问权限已移除。' : '业主账号已邀请。');
+      this.setData({ busy: false }); await this.refreshProject('访问权限已移除。');
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '成员设置失败' }); }
   },
   async setProjectNoteConfirmer() {
@@ -527,4 +612,10 @@ Page({
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '反馈处理失败' }); }
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
+  onShareAppMessage(event) {
+    if (event && event.target && event.target.dataset.kind === 'project-invitation' && this.data.memberInvitationPath) {
+      return { title: (this.data.selectedProject && this.data.selectedProject.name || '项目') + ' 邀请你加入', path: this.data.memberInvitationPath };
+    }
+    return {};
+  },
 });

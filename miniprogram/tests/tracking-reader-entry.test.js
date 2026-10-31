@@ -18,6 +18,7 @@ const direct = { content_id: 'content_one', content_version: '1', st: 'original_
 function runtime({ accepted = false, deferScene = false, deferConfig = false } = {}) {
   let pageDefinition, appDefinition, currentPage, mono = 1000;
   const storage = accepted ? { share_tracking_consent_v1: { version: 'v1' } } : {};
+  const reads = [];
   const entries = [], events = [], pendingScenes = [], pendingConfigs = [], modals = [];
   const configuration = { enabled: true, consent_version: 'v1', privacy_notice: notice };
   if(accepted) storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:'v1',notice};
@@ -55,6 +56,7 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
         events.push(...request.data.events);
         return ok(request, { results: request.data.events.map(event => ({ event_id: event.event_id, status: 'accepted' })) });
       }
+      if (suffix.startsWith('/project-collections/')) { reads.push(suffix); return ok(request, { content_id: 'content_one', version: 1, title: '合集作品', media: [] }); }
       if (suffix.startsWith('/contents/')) return ok(request, { title: request.data.title || '可读内容', media: [] });
       throw new Error('Unexpected request ' + suffix);
     }
@@ -83,7 +85,7 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
   };
   currentPage = page;
   return {
-    adapter, page, entries, events, storage, modals, pendingScenes, pendingConfigs,
+    adapter, page, entries, events, reads, storage, modals, pendingScenes, pendingConfigs,
     // 阅读器就绪流程会重发 /config，解析全部待定请求
     resolveConfig() { while (pendingConfigs.length) ok(pendingConfigs.shift(), configuration); },
     async mount(options = direct) { page.onLoad({ ...options }); page.onShow(); page.onReady(); await settle(); },
@@ -203,4 +205,15 @@ test('obsolete scene completion cannot replace newer reader options or its share
   t.grant(); await settle();
   assert.equal(t.entries.at(-1).content_id, 'content_two');
   assert.equal(t.entries.at(-1).share_token, 'new_share');
+});
+
+test('collection child reads only through revocation-aware collection endpoint',async()=>{
+ const t=runtime({accepted:true});await t.mount({...direct,collection_id:'collection-a',collection_version:'2',item_position:'0'});await untilReady(t.page);
+ assert.equal(t.reads[0],'/project-collections/collection-a/versions/2/items/0/content');
+ assert.equal(t.entries.at(-1).collection_id,'collection-a');
+ assert.equal(t.entries.at(-1).share_token,'original_share');
+});
+test('malformed collection context never falls back to ordinary public content',async()=>{
+ const t=runtime({accepted:true});await t.mount({...direct,collection_id:'collection-a',collection_version:'2'});await settle();
+ assert.equal(t.page.data.contentReady,false);assert.ok(t.page.data.error);assert.equal(t.entries.length,0);
 });

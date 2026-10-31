@@ -36,15 +36,21 @@ test('native-reference helpers use signed source-version endpoints without accep
   assert.equal(calls[4].method, 'DELETE');
 });
 
+test('workbench media helper signs paginated server-side filters', async () => {
+  const { api, calls } = loadAPI();
+  await api.listWorkbenchMedia({ cursor: 'next page', limit: 20, q: '庭院', kind: 'image,video' });
+  assert.equal(calls[0].header.route, '/api/v1/miniprogram/workbench/media?cursor=next%20page&limit=20&q=%E5%BA%AD%E9%99%A2&kind=image%2Cvideo');
+});
+
 function pageHarness(api, storage = { token: 'account-a' }) {
-  let definition; const navigation = [];
+  let definition; const navigation = [], emitted = [];
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/nativereferences/nativereferences.js'), 'utf8'), {
     Page: value => { definition = value; }, require: () => api,
-    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url) },
+    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {}, getOpenerEventChannel: () => ({ emit: (name, value) => emitted.push({ name, value }) }) },
     Promise, Object, String, Number, Array, Set, Error, encodeURIComponent,
   });
   const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(value) { Object.assign(this.data, value); } }, definition);
-  return { page, navigation, storage };
+  return { page, navigation, emitted, storage };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 test('reference page preserves an idempotency attempt after a lost save response', async () => {
@@ -96,4 +102,30 @@ test('bounded reference window can still reach sources after the first two hundr
   page.data.candidateCursor = 'next-page';
   await page.loadMore({ currentTarget: { dataset: { kind: 'candidates' } } });
   assert.equal(page.data.candidates.length, 1); assert.equal(page.data.candidates[0].content_id, 'source-0201'); assert.equal(page.data.candidateCursor, 'later-page');
+});
+
+test('media picker uses server paging and returns the selected asset without creating a favorite', async () => {
+  const calls = [];
+  const asset = { media_id: 'media-0001', kind: 'image', title: '庭院图' };
+  const { page, emitted } = pageHarness({
+    listWorkbenchMedia: async query => { calls.push(query); return { items: [asset], next_cursor: 'media-next' }; },
+  });
+  page.onLoad({ picker: 'media', kind: 'image,video' });
+  page.onShow(); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), { limit: 20, kind: 'image,video' });
+  page.selectMedia({ currentTarget: { dataset: { id: 'media-0001' } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(emitted)), [{ name: 'selectMaterial', value: { kind: 'media', asset } }]);
+});
+
+test('content picker searches on the server and returns a fixed version without saving a reference', async () => {
+  const calls = [], candidate = { content_id: 'content-0001', content_version: 3, title: '庭院内容' };
+  const { page, emitted } = pageHarness({
+    listNativeReferenceCandidates: async query => { calls.push(query); return { items: [candidate] }; },
+    listNativeReferences: async () => ({ items: [] }),
+  });
+  page.onLoad({ picker: 'content' }); page.onShow(); await tick();
+  page.onSearchInput({ detail: { value: '庭院' } }); await page.submitSearch();
+  assert.equal(calls.at(-1).q, '庭院');
+  page.selectContent({ currentTarget: { dataset: { id: 'content-0001', version: 3 } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(emitted)), [{ name: 'selectMaterial', value: { kind: 'content', target: candidate } }]);
 });

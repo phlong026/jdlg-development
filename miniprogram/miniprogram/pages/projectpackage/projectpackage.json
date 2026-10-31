@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "分享资料",
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
+  "enableShareAppMessage": true,
+  "enableShareTimeline": false
+}

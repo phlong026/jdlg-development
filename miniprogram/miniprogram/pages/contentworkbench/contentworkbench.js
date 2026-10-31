@@ -136,6 +136,7 @@ Page({
   },
   navigate(url) { wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }); },
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
+  openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },
   openShareVisits() { this.navigate('/pages/sharevisits/sharevisits'); },
   openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },

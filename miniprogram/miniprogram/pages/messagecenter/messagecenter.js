@@ -1,9 +1,13 @@
 const {request}=require('../../utils/phase3-api');
 const ROOT='/api/v1/miniprogram/notifications';
 const BINDING='/api/v1/miniprogram/official-account/binding';
-function privateProjectNoteRoute(item){const route=String(item&&item.route_key||'');if(item&&item.kind==='project_note_feedback'){const id=/^[A-Za-z0-9_-]{8,128}$/;const version=String(item.content_id||''),notice=String(item.notification_id||''),feedback=notice.startsWith('feedback:')?notice.slice(9):'';return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}$/.test(route)&&id.test(version)&&id.test(feedback)?'/'+route+'&version_id='+encodeURIComponent(version)+'&feedback_id='+encodeURIComponent(feedback):'';}return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}&version_id=[A-Za-z0-9_-]{8,128}$/.test(route)?'/'+route:'';}
+function privateProjectNoteRoute(item){const route=String(item&&item.route_key||'');if(item&&item.kind==='project_note_join_request')return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}&view=members$/.test(route)?'/'+route:'';if(item&&item.kind==='project_note_feedback'){const id=/^[A-Za-z0-9_-]{8,128}$/;const version=String(item.content_id||''),notice=String(item.notification_id||''),feedback=notice.startsWith('feedback:')?notice.slice(9):'';return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}$/.test(route)&&id.test(version)&&id.test(feedback)?'/'+route+'&version_id='+encodeURIComponent(version)+'&feedback_id='+encodeURIComponent(feedback):'';}return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}&version_id=[A-Za-z0-9_-]{8,128}$/.test(route)?'/'+route:'';}
 function messagePresentation(kind){
+ if(kind==='project_note_join_request')return {categoryLabel:'项目申请',actionLabel:'处理申请'};
+ if(kind==='collection_directory_browse')return {categoryLabel:'合集访问',actionLabel:'查看访问'};
+ if(kind==='collection_content_browse')return {categoryLabel:'作品阅读',actionLabel:'查看访问'};
  if(kind==='project_note_feedback')return {categoryLabel:'项目反馈',actionLabel:'查看反馈'};
+ if(kind==='project_package_receipt')return {categoryLabel:'阅读回执',actionLabel:'查看方案'};
  if(kind==='project_note_open')return {categoryLabel:'项目动态',actionLabel:'查看方案'};
  if(kind==='browse')return {categoryLabel:'访问提醒',actionLabel:'查看访问'};
  return {categoryLabel:'消息',actionLabel:'查看详情'};
@@ -46,7 +50,7 @@ Page({
    this.setData({messages:this.data.messages.map(row=>row.notification_id===id?{...row,read_at:row.read_at||new Date().toISOString()}:row)});await this.loadUnread(epoch);if(!this.current(epoch))return;
    if(item.cancelled_at){wx.showToast({title:'这条提醒已失效',icon:'none'});return;}
    const privateRoute=privateProjectNoteRoute(item);
-   if(item.kind==='project_note_open'||item.kind==='project_note_feedback'){if(privateRoute)wx.navigateTo({url:privateRoute});else wx.showToast({title:'私人项目提醒已失效',icon:'none'});}
+   if(item.kind==='project_note_open'||item.kind==='project_note_feedback'||item.kind==='project_package_receipt'||item.kind==='project_note_join_request'){if(privateRoute)wx.navigateTo({url:privateRoute});else wx.showToast({title:'私人项目提醒已失效',icon:'none'});}
    else if(item.share_id)wx.navigateTo({url:'/pages/visitdetail/visitdetail?share_id='+encodeURIComponent(item.share_id)});
    else wx.showModal({title:item.title||'浏览提醒',content:item.body||'有人浏览了你分享的内容',showCancel:false});
   }catch(error){if(this.current(epoch))wx.showToast({title:'消息不可查看，请刷新后重试',icon:'none'});}

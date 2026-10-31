@@ -31,7 +31,15 @@ Page({
    if(sequence!==this.loadSequence)return;
    this.setData({consentNotice:configuration.privacy_notice||'',consentAvailable:configuration.enabled===true&&!!configuration.consent_version&&!!configuration.privacy_notice,consented:tracking.consented()});
    // Public published content is independently readable, even when analytics is disabled or declined.
-   const content=await api.request('/contents/'+encodeURIComponent(id)+'/versions/'+version,'GET',{},undefined,false);
+   let readPath='/contents/'+encodeURIComponent(id)+'/versions/'+version;
+   const collectionID=this.options.collection_id, collectionVersion=Number(this.options.collection_version), position=Number(this.options.item_position);
+   const inCollection=collectionID!==undefined||this.options.collection_version!==undefined||this.options.item_position!==undefined;
+   if(inCollection){
+    if(!/^[A-Za-z0-9_-]{8,128}$/.test(String(collectionID||''))||!Number.isInteger(collectionVersion)||collectionVersion<1||this.options.item_position===undefined||!Number.isInteger(position)||position<0)throw new Error('合集入口不完整');
+    readPath='/project-collections/'+encodeURIComponent(collectionID)+'/versions/'+collectionVersion+'/items/'+position+'/content';
+   }
+   const content=await api.request(readPath,'GET',{},undefined,false);
+   if(inCollection&&(content.content_id!==id||Number(content.version)!==version))throw new Error('合集作品已改变');
    if(sequence!==this.loadSequence)return;
    const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync(),width=Math.max(240,window.windowWidth-40);
    const media=(content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map((asset,index)=>({...asset,domId:'media-'+index,playerKey:asset.media_id,errorKey:'legacyMedia'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))}));

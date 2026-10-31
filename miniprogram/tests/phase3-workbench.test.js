@@ -60,6 +60,21 @@ test('phase3 API signs authenticated workbench and paginated self-visit requests
   assert.equal(calls[2].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares?cursor=cursor%20one&as_of=2026-10-27T00%3A00%3A00Z&metric_version=visible-v1');
 });
 
+test('content editor receives existing media from the picker without uploading or replacing current text', async () => {
+  let picker;
+  const page = pageHarness('contentedit', { downloadWorkbenchMedia: async () => '/tmp/existing-image' }, {
+    navigateTo(options) { picker = options; },
+  });
+  page._token = 'session-token'; page._epoch = 2;
+  page.data.blocks = [{ kind: 'paragraph', text: '保留正文' }]; page.data.media = [];
+  page.openMediaPicker();
+  assert.match(picker.url, /picker=media/);
+  await picker.events.selectMaterial({ kind: 'media', asset: { media_id: 'existing-image', kind: 'image', title: '已有图' } });
+  assert.equal(page.data.blocks[0].text, '保留正文');
+  assert.equal(page.data.blocks.at(-1).media_id, 'existing-image');
+  assert.equal(page.data.media[0].local_path, '/tmp/existing-image');
+});
+
 test('phase3 API production cryptography signs the exact encoded URL path and preserves session inputs', async () => {
   const calls = [];
   const source = fs.readFileSync(path.join(root, 'utils/phase3-api.js'), 'utf8');

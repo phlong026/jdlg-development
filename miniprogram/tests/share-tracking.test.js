@@ -32,7 +32,7 @@ test('revoking consent clears persisted pending analytics',async()=>{const t=set
 test('server rejected records do not retry indefinitely',async()=>{const t=setup({send:async body=>({results:body.events.map(e=>({event_id:e.event_id,status:'rejected',reason:'deleted'}))})});await mount(t);await t.sdk.flush();assert.equal(t.events().length,0);assert.ok(t.sdk.diagnostics().dropped.rejected>0);});
 test('segment sequence is ordered and idempotency identifiers unique',async()=>{const t=setup();await mount(t);for(let i=0;i<3;i++){t.advance(10000);t.sdk.tick();}const e=types(t,'visible_segment');assert.deepEqual(e.map(x=>x.seq),[1,2,3]);assert.equal(new Set(e.map(x=>x.segment_id)).size,1);assert.equal(new Set(t.events().map(x=>x.event_id)).size,t.events().length);});
 test('public readiness rejects error/default/loading-only states',()=>{assert.equal(routes.ready('pages/inspirationdetail/inspirationdetail',{loading:false,detail:null},true),false);assert.equal(routes.ready('pages/utilitytools/utilitytools',{loading:false,tools:[]},true),false);assert.equal(routes.ready('pages/inspirationdetail/inspirationdetail',{loading:false,detail:{id:1}},true),true);assert.equal(routes.ready('pages/login/login',{},true),false);assert.equal(routes.ready('pages/contentreader/contentreader',{contentReady:true,error:'revoked'},true),false);});
-test('all reviewed routes including public snapshots have explicit route policy',()=>{const app=require('../miniprogram/app.json');const all=app.pages.concat(...app.subPackages.map(p=>p.pages.map(x=>p.root+'/'+x)));assert.equal(all.length,67);all.forEach(route=>assert.ok(routes.ROUTES[route],route));});
+test('all reviewed routes including public snapshots have explicit route policy',()=>{const app=require('../miniprogram/app.json');const all=app.pages.concat(...app.subPackages.map(p=>p.pages.map(x=>p.root+'/'+x)));assert.equal(all.length,72);all.forEach(route=>assert.ok(routes.ROUTES[route],route));});
 test('original share query and image/title remain untouched by token utility',()=>{assert.equal(appendToken('/pages/x?prompt=a%26b&x=1','opaque'),'/pages/x?prompt=a%26b&x=1&st=opaque');assert.equal(appendToken('/pages/x?st=old&x=1','new'),'/pages/x?x=1&st=new');assert.deepEqual(splitPath('/pages/x?id=12&prompt=secret',''),{route:'pages/x',query:{id:'12',prompt:'secret'}});assert.equal(routes.binding('pages/aitooldetail/aitooldetail',{id:'12',prompt:'secret'}).id.startsWith('legacy:'),true);});
 test('share callback is invoked once and unchanged when SDK disabled',()=>{let called=0;const value={title:'original',path:'/pages/index/index?business=1',imageUrl:'cover'};const page=wrapPage({onShareAppMessage(){called++;return value;}});assert.equal(page.onShareAppMessage(),value);assert.equal(called,1);});
 function video(){let time=0,events=[];const v=createVideoTracker({mono:()=>time,emit:(type,event)=>events.push({type,...event})},'media','player');return{v,events,advance:n=>time+=n};}
@@ -165,4 +165,52 @@ test('recreated reader video players use distinct observation instances',()=>{
  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../miniprogram/pages/contentreader/contentreader.js'),'utf8'),sandbox);
  const state={observers:[],data:{media:[{kind:'video',media_id:'asset_video',domId:'media-0'}]}};
  page.observePlayers.call(state);page.observePlayers.call(state);assert.notEqual(instances[0],instances[1]);
+});
+
+test('collection child entry preserves the actual share and immutable collection context',async()=>{
+ const t=setup();
+ const content={id:'content_one',version:2,collection_id:'collection_one',collection_version:3};
+ t.sdk.register('child','pages/contentreader/contentreader',content,'collection_share');
+ t.sdk.appShow();t.sdk.configure(true,'v1');t.sdk.show('child');t.sdk.ready('child',true);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(t.requests[0].share_token,'collection_share');
+ assert.equal(t.requests[0].content_id,'content_one');
+ assert.equal(t.requests[0].collection_id,'collection_one');
+ assert.equal(t.requests[0].collection_version,3);
+ assert.equal(types(t,'page_view').length,1);
+ assert.equal(types(t,'share').length,0);
+});
+
+test('changing collection context for the same child starts a new verified entry',async()=>{
+ const t=setup();
+ t.sdk.register('child','pages/contentreader/contentreader',{id:'content_one',version:2,collection_id:'collection_one',collection_version:1});
+ t.sdk.appShow();t.sdk.configure(true,'v1');t.sdk.show('child');t.sdk.ready('child',true);
+ await new Promise(resolve=>setImmediate(resolve));
+ t.sdk.ready('child',true,{id:'content_one',version:2,collection_id:'collection_two',collection_version:1});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(t.requests.length,2);
+ assert.equal(t.requests[1].collection_id,'collection_two');
+});
+
+for (const boundary of ['withdrawal', 'account', 'idle']) {
+ test('collection navigation retains only verified current attribution before '+boundary, async()=>{
+  const t=setup({entry:async body=>({entry_token:'entry-valid',session_id:'session-valid',share_id:body.share_token||body.previous_entry_token?'share-b':undefined,content_accessible:true})});
+  const key='directory';t.sdk.register(key,'pages/collectionreader/collectionreader',{id:'collection-a',version:1},'token-b');
+  t.sdk.appShow();t.sdk.configure(true,'v1');t.sdk.show(key);t.sdk.ready(key,true);await new Promise(r=>setImmediate(r));
+  assert.equal(t.sdk.collectionToken(key),'token-b');
+  t.sdk.hide(key,false);t.sdk.register('child','pages/contentreader/contentreader',{id:'content-a',version:1,collection_id:'collection-a',collection_version:1});t.sdk.show('child');t.sdk.ready('child',true);await new Promise(r=>setImmediate(r));
+  t.sdk.hide('child',true);t.sdk.show(key);await new Promise(r=>setImmediate(r));
+  assert.equal(t.sdk.collectionToken(key),'token-b');
+  if(boundary==='withdrawal')t.sdk.configure(true,'');
+  if(boundary==='account')t.account('another');
+  if(boundary==='idle')t.advance(31*60*1000);
+  assert.equal(t.sdk.collectionToken(key),'');
+ });
+}
+
+test('terminal entry rejection is not retried on every timer tick; content reload can retry',async()=>{
+ let calls=0;const t=setup({entry:async()=>{calls++;throw Object.assign(new Error('revoked'),{statusCode:404});}});
+ await mount(t);for(let i=0;i<3;i++){t.advance(1000);t.sdk.tick();await new Promise(r=>setImmediate(r));}
+ assert.equal(calls,1);
+ t.sdk.ready('a',false);t.sdk.ready('a',true);await new Promise(r=>setImmediate(r));assert.equal(calls,2);
 });

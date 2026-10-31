@@ -32,17 +32,24 @@ test('project feedback notice opens the exact project version and feedback witho
  page.onShow();await tick();await page.onOpenMessage({currentTarget:{dataset:{id:'feedback-note'}}});
  assert.deepEqual(navigation,['/'+route+'&version_id=version_1234&feedback_id=feedback_1234']);assert.doesNotMatch(navigation[0],/pns=|token=|share_id=/);
 });
+test('project package receipt opens the exact confirmed version instead of public share visits',async()=>{
+ const route='pages/projectnotes/projectnotes?project_id=project_1234&version_id=version_1234';
+ const {page,navigation}=runtime(url=>url.endsWith('/receipt-note')?{notification_id:'package-receipt:receipt_1234',kind:'project_package_receipt',route_key:route,content_id:'version_1234',share_id:'delivery_1234'}:url.endsWith('/read')||url.includes('unread-count')?{}:{items:[]});
+ page.onShow();await tick();await page.onOpenMessage({currentTarget:{dataset:{id:'receipt-note'}}});
+ assert.deepEqual(navigation,['/'+route]);assert.doesNotMatch(navigation[0],/visitdetail|share_id=|token=/);
+});
 test('message rows use the action and category of their real business kind',async()=>{
  const {page}=runtime(url=>url.includes('unread-count')?{unread_count:3}:url.includes('official-account')?{capability:{binding_available:false}}:{
   items:[
    {notification_id:'browse-one',kind:'browse',title:'分享内容有新访问',created_at:'2026-10-27T01:00:00Z'},
    {notification_id:'open-one',kind:'project_note_open',title:'私人项目有新访问',created_at:'2026-10-27T02:00:00Z'},
    {notification_id:'feedback-one',kind:'project_note_feedback',title:'项目收到业主反馈',created_at:'2026-10-27T03:00:00Z'},
+   {notification_id:'receipt-one',kind:'project_package_receipt',title:'收到阅读回执',created_at:'2026-10-27T04:00:00Z'},
   ],
  });
  page.onShow();await tick();
  assert.deepEqual(page.data.messages.map(item=>[item.categoryLabel,item.actionLabel]),[
-  ['访问提醒','查看访问'],['项目动态','查看方案'],['项目反馈','查看反馈'],
+  ['访问提醒','查看访问'],['项目动态','查看方案'],['项目反馈','查看反馈'],['阅读回执','查看方案'],
  ]);
 });
 test('service account status distinguishes binding from real delivery availability',async()=>{
@@ -60,4 +67,12 @@ test('message template keeps service status compact and uses a neutral empty sta
  assert.match(wxml,/item\.actionLabel/);
  assert.match(wxml,/暂时没有消息/);
  assert.doesNotMatch(wxml,/class="binding-card"|暂时没有浏览提醒|查看访问记录/);
+});
+
+test('join request opens member approval and never treats invitation id as public share',async()=>{
+ for(const route of ['pages/projectnotes/projectnotes?project_id=project_1234&view=members','pages/index/index']){
+  const {page,navigation}=runtime(url=>url.endsWith('/join-request')?{notification_id:'join:request_1234',kind:'project_note_join_request',route_key:route,share_id:'invitation_1234'}:url.endsWith('/read')||url.includes('unread-count')?{}:{items:[]});
+  page.onShow();await tick();await page.onOpenMessage({currentTarget:{dataset:{id:'join-request'}}});
+  assert.deepEqual(navigation,route.includes('project_id=')?['/'+route]:[]);
+ }
 });

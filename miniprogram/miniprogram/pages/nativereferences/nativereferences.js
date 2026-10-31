@@ -1,42 +1,79 @@
 'use strict';
 const api = require('../../utils/phase3-api');
-const empty = () => ({ references: [], candidates: [], referenceCursor: '', candidateCursor: '', loading: false, busy: false, error: '', notice: '', loginRequired: false });
+const empty = (pickerMode = '', mediaKinds = '') => ({ pickerMode, mediaKinds, search: '', references: [], candidates: [], media: [], referenceCursor: '', candidateCursor: '', mediaCursor: '', loading: false, busy: false, error: '', notice: '', loginRequired: false });
 const candidateKey = item => String(item.content_id) + ':' + String(item.content_version);
+const searchQuery = (search, extra = {}) => ({ limit: 20, ...extra, ...(search ? { q: search } : {}) });
 Page({
   data: empty(),
+  onLoad(options) {
+    const pickerMode = options && (options.picker === 'media' || options.picker === 'content') ? options.picker : '';
+    const mediaKinds = pickerMode === 'media' ? String(options.kind || '') : '';
+    this._pickerMode = pickerMode; this._mediaKinds = mediaKinds;
+    this._pickerChannel = wx.getOpenerEventChannel ? wx.getOpenerEventChannel() : null;
+    this.setData(empty(pickerMode, mediaKinds));
+  },
   onShow() {
     wx.hideShareMenu(); this._visible = true; this._epoch = (this._epoch || 0) + 1;
     const token = String(wx.getStorageSync('token') || '');
-    if (this._token !== token) { this._attempts = new Map(); this.setData(empty()); }
+    if (this._token !== token) { this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); }
     this._token = token;
     if (!token) { this.setData({ loginRequired: true }); return; }
     this.load();
   },
   onHide() { this._visible = false; this._epoch += 1; },
-  onUnload() { this._visible = false; this._epoch += 1; this._attempts = new Map(); this.setData(empty()); },
+  onUnload() { this._visible = false; this._epoch += 1; this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); },
   current(epoch) { return this._visible && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   async load() {
     const epoch = this._epoch = (this._epoch || 0) + 1; this.setData({ loading: true, busy: false, error: '', notice: '' });
     try {
-      const [refs, candidates] = await Promise.all([api.listNativeReferences({ limit: 20 }), api.listNativeReferenceCandidates({ limit: 20 })]);
+      if (this.data.pickerMode === 'media') {
+        const media = await api.listWorkbenchMedia(searchQuery(this.data.search, this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}));
+        if (this.current(epoch)) this.setData({ media: media.items || [], mediaCursor: media.next_cursor || '', loading: false });
+        return;
+      }
+      const query = searchQuery(this.data.search);
+      const [refs, candidates] = await Promise.all([this.data.pickerMode ? Promise.resolve({ items: [] }) : api.listNativeReferences({ limit: 20 }), api.listNativeReferenceCandidates(query)]);
       if (this.current(epoch)) this.setData({ references: refs.items || [], candidates: candidates.items || [], referenceCursor: refs.next_cursor || '', candidateCursor: candidates.next_cursor || '', loading: false });
     } catch (error) { if (this.current(epoch)) this.setData({ loading: false, error: error.message || '原生内容暂不可用' }); }
   },
   async loadMore(event) {
     if (this.data.busy) return;
+    if (event.currentTarget.dataset.kind === 'media') {
+      const cursor = this.data.mediaCursor; if (!cursor) return;
+      const epoch = this._epoch; this.setData({ busy: true, error: '' });
+      try {
+        const page = await api.listWorkbenchMedia(searchQuery(this.data.search, { cursor, ...(this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}) }));
+        if (!this.current(epoch)) return;
+        const seen = new Set(this.data.media.map(item => item.media_id));
+        this.setData({ media: [...this.data.media, ...(page.items || []).filter(item => !seen.has(item.media_id))], mediaCursor: page.next_cursor || '', busy: false });
+      } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '加载失败，可重试' }); }
+      return;
+    }
     const candidates = event.currentTarget.dataset.kind === 'candidates';
     const listKey = candidates ? 'candidates' : 'references', cursorKey = candidates ? 'candidateCursor' : 'referenceCursor';
     const cursor = this.data[cursorKey]; if (!cursor) return;
     const replaceWindow = this.data[listKey].length >= 200;
     const epoch = this._epoch; this.setData({ busy: true, error: '' });
     try {
-      const page = await (candidates ? api.listNativeReferenceCandidates : api.listNativeReferences)({ cursor, limit: 20 });
+      const page = await (candidates ? api.listNativeReferenceCandidates : api.listNativeReferences)({ cursor, limit: 20, q: candidates ? this.data.search : '' });
       if (!this.current(epoch)) return;
       const key = candidates ? candidateKey : item => item.reference_id;
       const existing = replaceWindow ? [] : this.data[listKey];
       const seen = new Set(existing.map(key));
       this.setData({ [listKey]: [...existing, ...(page.items || []).filter(item => !seen.has(key(item)))], [cursorKey]: page.next_cursor || '', busy: false, notice: replaceWindow ? '已切换到后续内容。重新加载可回到第一页。' : '' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '加载失败，可重试' }); }
+  },
+  onSearchInput(event) { this.setData({ search: String(event.detail.value || '').slice(0, 100) }); },
+  submitSearch() { return this.load(); },
+  selectMedia(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    const asset = this.data.media.find(item => item.media_id === id); if (!asset || !this._pickerChannel) return;
+    this._pickerChannel.emit('selectMaterial', { kind: 'media', asset }); wx.navigateBack();
+  },
+  selectContent(event) {
+    const id = String(event.currentTarget.dataset.id || ''), version = Number(event.currentTarget.dataset.version);
+    const target = this.data.candidates.find(item => item.content_id === id && item.content_version === version); if (!target || !this._pickerChannel) return;
+    this._pickerChannel.emit('selectMaterial', { kind: 'content', target }); wx.navigateBack();
   },
   async saveReference(event) {
     if (this.data.busy) return;

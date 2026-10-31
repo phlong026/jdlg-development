@@ -6,6 +6,13 @@ const root=path.join(__dirname,'../miniprogram');
 const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsWith('.ts')).map(x=>'utils/tracking/'+x).concat([
  'utils/profile-access.ts',
  'utils/phase3-api.ts',
+ 'utils/project-collections-api.ts',
+ 'utils/project-packages-api.ts',
+ 'pages/projectcollections/projectcollections.ts',
+ 'pages/collectionreader/collectionreader.ts',
+ 'pages/projectpackage/projectpackage.ts',
+ 'pages/projectpackageview/projectpackageview.ts',
+ 'pages/projectinvite/projectinvite.ts',
  'pages/contentreader/contentreader.ts',
  'pages/messagecenter/messagecenter.ts',
  'pages/contentworkbench/contentworkbench.ts',

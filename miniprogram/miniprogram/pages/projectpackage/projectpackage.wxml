@@ -1,0 +1,60 @@
+<navigation-bar title="分享资料" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" />
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载…</view>
+  <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="loadProject">重试</button></view>
+  <block wx:else>
+    <view class="header">
+      <text class="eyebrow">{{projectName}}</text>
+      <text class="title">{{step === 'select' ? '选择分享内容' : step === 'preview' ? '预览分享' : '分享已生成'}}</text>
+    </view>
+
+    <block wx:if="{{step === 'select'}}">
+      <view class="card">
+        <text class="section-title">选择方案</text>
+        <text wx:if="{{notes.length}}" class="group-title">已保存方案</text>
+        <button wx:for="{{notes}}" wx:key="note_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.note_id}}" bindtap="toggleNote">
+          <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">当前第 {{item.revision}} 版 · 分享时固定</text></view><text class="check">{{item.selected ? '✓' : ''}}</text>
+        </button>
+        <text wx:if="{{versions.length}}" class="group-title">固定版本</text>
+        <view wx:if="{{!notes.length && !versions.length}}" class="empty">当前项目还没有可分享方案</view>
+        <button wx:for="{{versions}}" wx:key="version_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.version_id}}" bindtap="toggleVersion">
+          <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">第 {{item.revision}} 版 · {{item.media_count || 0}} 个素材</text></view><text class="check">{{item.selected ? '✓' : ''}}</text>
+        </button>
+      </view>
+      <view class="card">
+        <text class="section-title">接收人</text>
+        <button wx:for="{{members}}" wx:key="actor_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.actor_id}}" bindtap="toggleRecipient">
+          <view class="member-profile"><image wx:if="{{item.avatar}}" class="member-avatar" src="{{item.avatar}}" mode="aspectFill" /><view wx:else class="member-avatar avatar-placeholder">员</view><view><text class="row-title">{{item.display_name || '项目成员'}}</text><text wx:if="{{project.confirmer_id == item.actor_id}}" class="meta">指定确认人</text></view></view><text class="check">{{item.selected ? '✓' : ''}}</text>
+        </button>
+      </view>
+      <button class="primary" disabled="{{busy || (!notes.length && !versions.length)}}" bindtap="previewPackage">预览分享</button>
+    </block>
+
+    <block wx:elif="{{step === 'preview'}}">
+      <view class="card summary">
+        <text class="section-title">{{preview.project.name}}</text>
+        <text class="summary-label">方案</text>
+        <text wx:for="{{preview.items}}" wx:key="key" class="summary-row">{{item.title}} · 第 {{item.revision}} 版{{item.pending_freeze ? ' · 发布时固定' : ''}}</text>
+        <text class="summary-label">接收人</text>
+        <view wx:for="{{preview.recipients}}" wx:key="actor_id" class="summary-member"><image wx:if="{{item.avatar}}" class="member-avatar small" src="{{item.avatar}}" mode="aspectFill" /><view wx:else class="member-avatar small avatar-placeholder">员</view><text class="summary-row">{{item.display_name || '项目成员'}}</text></view>
+      </view>
+      <button class="primary" loading="{{busy}}" bindtap="publishPackage">生成分享</button>
+      <button class="text-button" bindtap="editSelection">返回修改</button>
+    </block>
+
+    <block wx:else>
+      <view class="card done"><text class="done-mark">✓</text><text class="section-title">资料已准备好</text><text class="meta">仅所选项目成员可查看</text></view>
+      <button class="primary" open-type="share">发送给接收人</button>
+    </block>
+    <view wx:if="{{historyDeliveries.length}}" class="card history">
+      <text class="section-title">分享记录</text>
+      <view wx:for="{{historyDeliveries}}" wx:key="delivery_id" class="history-row">
+        <view><text class="row-title">{{item.itemCount}} 个方案 · {{item.recipientCount}} 位接收人</text><text class="meta">{{item.historyMeta}}</text></view>
+        <text wx:if="{{item.revoked}}" class="status">已撤回</text>
+        <button wx:else class="danger-link" data-id="{{item.delivery_id}}" bindtap="revokeDelivery" disabled="{{busy}}">撤回</button>
+      </view>
+      <text wx:if="{{historyTruncated}}" class="meta">仅展示最近 50 条记录</text>
+    </view>
+    <view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  </block>
+</view>

@@ -220,6 +220,26 @@
       "pages": ["projectnoteview"]
     },
     {
+      "root": "pages/projectcollections",
+      "pages": ["projectcollections"]
+    },
+    {
+      "root": "pages/collectionreader",
+      "pages": ["collectionreader"]
+    },
+    {
+      "root": "pages/projectpackage",
+      "pages": ["projectpackage"]
+    },
+    {
+      "root": "pages/projectpackageview",
+      "pages": ["projectpackageview"]
+    },
+    {
+      "root": "pages/projectinvite",
+      "pages": ["projectinvite"]
+    },
+    {
       "root": "pages/nativereferences",
       "pages": ["nativereferences"]
     }

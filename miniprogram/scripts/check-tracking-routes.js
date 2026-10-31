@@ -6,7 +6,7 @@ const path = require('node:path');
 
 // An intentional app-route addition must update this reviewed baseline as well
 // as both policy inventories. Never silently classify an unreviewed page.
-const EXPECTED_ROUTE_COUNT = 67;
+const EXPECTED_ROUTE_COUNT = 72;
 
 function validateTrackingRoutes({ app, policies, backendRoutes }) {
   assert.ok(Array.isArray(app.pages), 'app.pages must be an array');
@@ -35,7 +35,7 @@ function validateTrackingRoutes({ app, policies, backendRoutes }) {
   assert.deepEqual(Object.keys(backendRoutes).sort(), expected, 'backend route keys must exactly match app routes');
 
   let publicCount = 0;
-  const publicKinds = new Set(['home', 'list', 'catalog', 'detail', 'form', 'landing', 'owned-content']);
+  const publicKinds = new Set(['home', 'list', 'catalog', 'detail', 'form', 'landing', 'owned-content', 'collection']);
   for (const route of expected) {
     const policy = policies[route];
     const backend = backendRoutes[route];

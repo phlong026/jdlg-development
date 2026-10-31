@@ -121,6 +121,26 @@ Page({
   },
   toggleSettings() { this.setData({ settingsExpanded: !this.data.settingsExpanded }); },
   toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
+  openMediaPicker() {
+    if (this.data.busy) return;
+    const token = this._token, epoch = this._epoch;
+    wx.navigateTo({
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=image%2Cvideo',
+      events: { selectMaterial: payload => this.receivePickedMedia(payload, token, epoch) },
+    });
+  },
+  async receivePickedMedia(payload, token, epoch) {
+    const asset = payload && payload.kind === 'media' ? payload.asset : null;
+    if (!asset || !asset.media_id || (asset.kind !== 'image' && asset.kind !== 'video')) return;
+    if (token !== this._token || !this.current(epoch) || this.data.busy || this.data.layoutReadOnly) return;
+    let selected = { ...asset };
+    try { selected.local_path = await api.downloadWorkbenchMedia(asset.media_id); }
+    catch (_) { selected.preview_error = '私有媒体预览加载失败'; }
+    if (token !== this._token || !this.current(epoch) || this.data.busy || this.data.layoutReadOnly) return;
+    const media = mergeAssets(this.data.media, [selected]);
+    const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
+    this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), preview: null, notice: '已加入正文' });
+  },
   toggleMore() { this.setData({ moreExpanded: !this.data.moreExpanded }); },
   returnToEdit() {
     if (this.data.busy) return;

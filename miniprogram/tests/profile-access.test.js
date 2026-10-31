@@ -10,7 +10,7 @@ const publicRoutes = Object.entries(require('../miniprogram/utils/tracking/route
   .filter(([, policy]) => policy.collect).map(([route]) => route);
 
 test('every public route mounts the profile guard outside its protected content', () => {
-  assert.equal(publicRoutes.length, 22);
+  assert.equal(publicRoutes.length, 23);
   for (const route of publicRoutes) {
     const template = fs.readFileSync(path.join(root, route + '.wxml'), 'utf8');
     const config = JSON.parse(fs.readFileSync(path.join(root, route + '.json'), 'utf8'));

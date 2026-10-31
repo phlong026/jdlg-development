@@ -32,7 +32,7 @@ function request(suffix, method = 'GET', body = {}, credential, authenticated = 
     }))
   }));
 }
-function mediaURL(value) { const url=String(value||''); return url.startsWith(ROOT+'/media/') ? ORIGIN+url : /^https:\/\//.test(url) ? url : ''; }
+function mediaURL(value) { const url=String(value||''); return url.startsWith(ROOT+'/media/') || /^\/api\/v1\/miniprogram\/tracking\/project-collections\/[A-Za-z0-9_-]{8,128}\/versions\/[1-9]\d*\/items\/\d+\/media\/[A-Za-z0-9_-]+$/.test(url) ? ORIGIN+url : /^https:\/\//.test(url) ? url : ''; }
 async function resolveReaderOptions(options) {
   if (options.content_id || !options.scene) return options;
   let scene; try { scene=decodeURIComponent(String(options.scene)); } catch (_) { throw new Error('扫码入口无效'); }
