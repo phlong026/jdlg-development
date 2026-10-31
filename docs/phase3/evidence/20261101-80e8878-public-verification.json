@@ -1,0 +1,171 @@
+{
+  "checked_at": "2026-10-31T23:12:41.072864+00:00",
+  "source_commit": "80e88786953afa68a3b74b5bd3106433c1ac5837",
+  "phase": "final",
+  "results": [
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/miniprogram/tracking/config",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true
+    },
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/miniprogram/workbench/context",
+      "status": 401,
+      "expected": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true,
+      "business_code": 401
+    },
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/miniprogram/workbench/project-collections",
+      "status": 401,
+      "expected": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true,
+      "business_code": 401
+    },
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/miniprogram/project-packages/shared/deployment-check-80e8878",
+      "status": 401,
+      "expected": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true,
+      "business_code": 401
+    },
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/miniprogram/project-notes/member-invitations/deployment-check-80e8878",
+      "status": 401,
+      "expected": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true,
+      "business_code": 401
+    },
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/miniprogram/tracking/project-collections/deployment-check-80e8878/versions/1",
+      "status": 404,
+      "expected": 404,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true,
+      "business_code": 404
+    },
+    {
+      "url": "https://api.jiadilingguang.com/api/v1/management/me",
+      "status": 401,
+      "expected": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "valid_json": true,
+      "business_code": 401
+    },
+    {
+      "url": "https://api.jiadilingguang.com/admin/",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "text/html",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "744832a619a1158e7165d58db5a7dc92a4038f98d8a1c8c4fed01b755d61c5af",
+      "matches_package": true
+    },
+    {
+      "url": "https://api.jiadilingguang.com/admin/assets/index-CJk3fwvU.css",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "text/css",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "2844fee8c4155b2f1d3d489535432a56d70fb017869ff32e06f116ec88f91994",
+      "matches_package": true
+    },
+    {
+      "url": "https://api.jiadilingguang.com/admin/assets/index-ZAeCa5aV.js",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/javascript",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "edb765ebdca07d12d373e0bf32dea558a2dc9412d2c6383e9adcc2680e8e0caf",
+      "matches_package": true
+    },
+    {
+      "url": "https://api.jiadilingguang.com/admin/assets/react-vendor-5my-l6c8.js",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/javascript",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "dbf3636f9cdf279bdd3420d0d706263f96ed243fb08213751fa7c7d0cecaae45",
+      "matches_package": true
+    },
+    {
+      "url": "https://api.jiadilingguang.com/admin/assets/router-vendor-BmyojryK.js",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/javascript",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "8f8bacc3ca101eba87045b57eb277074ed7a1380cfc53b38e1ce20bfde26d129",
+      "matches_package": true
+    },
+    {
+      "url": "https://api.jiadilingguang.com/admin/assets/vendor-CWG1rEj-.js",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/javascript",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "890630c5f314d053518a6726ce6bba86c206dcbf64ce446f3a6cb5fb87587625",
+      "matches_package": true
+    },
+    {
+      "url": "https://www.jiadilingguang.com/share/assets/reader.js",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/javascript; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "d44093922c43a5e80bb8bc19f167e2b8d9b749abe570ccaba153c408ac28daa1",
+      "matches_package": true
+    },
+    {
+      "url": "https://www.jiadilingguang.com/share/assets/reader.css",
+      "status": 200,
+      "expected": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "text/css; charset=utf-8",
+      "tls_verified": true,
+      "passed": true,
+      "sha256": "01b87e8c3fee776fb16a9d3037e4a659300b6efe3cfea083bb21ad5baf5643db",
+      "matches_package": true
+    }
+  ]
+}
