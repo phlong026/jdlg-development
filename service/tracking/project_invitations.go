@@ -237,6 +237,11 @@ func (s *Service) ProjectNoteReadInvitation(ctx context.Context, token string, a
 		out = ProjectNoteInvitationPreview{ProjectName: project.Name, ExpiresAt: invitation.ExpiresAt}
 		request, readErr := decode[ProjectNoteJoinRequest](r, projectNoteJoinRequestKind, projectNoteJoinRequestID(invitation.ID, actor))
 		if readErr == nil {
+			if request.Status == ProjectNoteJoinApproved {
+				if _, memberErr := projectNoteLoadMember(r, project.ID, actor); memberErr != nil {
+					return memberErr
+				}
+			}
 			out.Status = request.Status
 		} else if !errors.Is(readErr, ErrNotFound) {
 			return readErr

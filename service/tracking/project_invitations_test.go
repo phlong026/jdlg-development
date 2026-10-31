@@ -52,6 +52,48 @@ func TestProjectInvitationRequiresDesignerApprovalBeforeMembership(t *testing.T)
 	}
 }
 
+func TestProjectInvitationApprovedPreviewRequiresCurrentMembership(t *testing.T) {
+	ctx := context.Background()
+	s, designer, _ := projectNoteFixture(t)
+	project, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "张宅方案", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := s.ProjectNoteCreateInvitation(ctx, designer, project.ID, s.Now().Add(time.Hour), "invite-membership-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview, readErr := s.ProjectNoteReadInvitation(ctx, issued.Token, 102); readErr != nil || preview.Status != "" {
+		t.Fatalf("valid invitation without request = %#v err=%v", preview, readErr)
+	}
+	request, err := s.ProjectNoteApplyInvitation(ctx, issued.Token, 101, "invite-membership-apply")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview, readErr := s.ProjectNoteReadInvitation(ctx, issued.Token, 101); readErr != nil || preview.Status != ProjectNoteJoinPending {
+		t.Fatalf("pending invitation preview = %#v err=%v", preview, readErr)
+	}
+	if _, err = s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, request.ID, "invite-membership-approve"); err != nil {
+		t.Fatal(err)
+	}
+	if preview, readErr := s.ProjectNoteReadInvitation(ctx, issued.Token, 101); readErr != nil || preview.Status != ProjectNoteJoinApproved {
+		t.Fatalf("approved invitation preview = %#v err=%v", preview, readErr)
+	}
+	if err = s.ProjectNoteRevokeMember(ctx, designer, project.ID, 101); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.ProjectNoteReadInvitation(ctx, issued.Token, 101)
+	projectInvitationStatus(t, err, 403)
+
+	reissued, err := s.ProjectNoteCreateInvitation(ctx, designer, project.ID, s.Now().Add(time.Hour), "invite-membership-reissue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ProjectNoteApplyInvitation(ctx, reissued.Token, 101, "invite-membership-reapply"); err != nil {
+		t.Fatal("a new invitation must allow a removed member to apply again:", err)
+	}
+}
+
 func TestProjectInvitationExpiryRevocationAndDesignerScopeFailClosed(t *testing.T) {
 	ctx := context.Background()
 	s, designer, other := projectNoteFixture(t)
