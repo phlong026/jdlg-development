@@ -150,6 +150,8 @@ function buildWorkbenchMenuItems(options: {
     { action: 'myProjects', label: '我的项目', icon: 'folder', description: '方案与效果图', available: true },
     { action: 'projectNotes', label: '项目笔记', icon: 'file-edit', description: '记录与灵感', available: true },
     { action: 'contentWorkbench', label: '内容制作', icon: 'video', description: '文案与素材', available: true },
+    { action: 'aiWriting', label: 'AI文案', icon: 'edit-1', description: '起草与润色', available: true },
+    { action: 'assetLibrary', label: '资料库', icon: 'file-copy', description: '已发布内容引用', available: true },
     { action: 'shareMaterials', label: '可分享素材', icon: 'share', description: '已授权作品', available: true },
   ];
   if (hasDesignerAccess) {
@@ -1151,7 +1153,7 @@ Page({
       return;
     }
 
-    const contentActions = ['myProjects', 'projectNotes', 'contentWorkbench', 'shareMaterials', 'publish', 'designerHome'];
+    const contentActions = ['myProjects', 'projectNotes', 'contentWorkbench', 'aiWriting', 'assetLibrary', 'shareMaterials', 'publish', 'designerHome'];
     if (
       contentActions.includes(action)
       && (!this.data.hasContentWorkbenchAccess || !storedToken || storedToken !== String(this.data.token || ''))
@@ -1220,6 +1222,12 @@ Page({
 
     if (action === 'projectNotes') {
       wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'aiWriting' || action === 'assetLibrary') {
+      const url = action === 'aiWriting' ? '/pages/contentwriting/contentwriting' : '/pages/nativereferences/nativereferences';
+      wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
       return;
     }
 

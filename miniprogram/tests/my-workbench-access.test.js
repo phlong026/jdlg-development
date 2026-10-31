@@ -176,3 +176,25 @@ test('工作台区块按权限隐藏，普通生成记录与独立客户管理�
   assert.match(source, /buildServiceMenuItems[\s\S]+action: 'customerManagement'/);
   assert.doesNotMatch(source, /action: 'contentWorkbench'[^\n]+available: hasLoginToken/);
 });
+
+
+test('认证设计师工作台完整展示八项已有能力，资料引用和AI文案直接复用当前登录', async () => {
+  const designer = loadPage();
+  designer.page.setData({ certStatus: 'approved', certType: 'designer', certIdentityType: '设计师' });
+  await designer.page.loadWorkbenchAccess();
+  assert.deepEqual(Array.from(designer.page.data.workbenchMenuItems, item => item.action), [
+    'myProjects', 'projectNotes', 'contentWorkbench', 'aiWriting',
+    'assetLibrary', 'shareMaterials', 'publish', 'designerHome',
+  ]);
+  for (const action of ['assetLibrary', 'aiWriting']) {
+    designer.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
+  }
+  assert.deepEqual(designer.navigations, ['/pages/nativereferences/nativereferences', '/pages/contentwriting/contentwriting']);
+  const owner = loadPage({ context: async () => ({ can_manage: false, owners: [] }) });
+  await owner.page.loadWorkbenchAccess();
+  for (const action of ['assetLibrary', 'aiWriting']) {
+    owner.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
+  }
+  assert.deepEqual(owner.navigations, []);
+  assert.equal(owner.toasts.length, 2);
+});
