@@ -247,10 +247,15 @@ Page({
   async archiveDocumentAsset(asset, epoch) {
     this.setData({ busy: true, error: '' });
     try {
-      const title = String(this.data.title || '').trim() || documentTitle(asset.title);
+      const title = documentTitle(asset.title);
       const body = JSON.stringify({ schema: 1, media_id: asset.media_id });
       const saved = await api.saveContent({ title, body, body_format: 'document_v1', source_url: '', source_note: '', rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: '', media_ids: [asset.media_id], expected_revision: 0 });
       if (!this.current(epoch)) return;
+      // 文档单独建档，不能替换正在编辑的图文；同时保留请求期间新输入的内容。
+      if (this.data.id || String(this.data.title || '').trim() || this.validBlocks().length || this.data.cover_media_id || String(this.data.source_note || '').trim() || String(this.data.source_url || '').trim()) {
+        this.setData({ busy: false, notice: '文档资料已单独保存，可在内容工作台查看；请继续编辑并保存当前图文' });
+        return;
+      }
       this._loaded = true;
       this.setData({ id: saved.content_id, title, revision: saved.revision, version: saved.version, status: saved.status, body_format: 'document_v1', documentReadOnly: true, documentAsset: asset, legacyReadOnly: false, layoutReadOnly: false, busy: false, notice: '文档资料已保存，仅授权账号可取得原文件' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件已上传，保存资料失败，可直接重试建档' }); }
@@ -287,10 +292,13 @@ Page({
     return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), expected_revision: this.data.revision } };
   },
   async persistDraft(input, epoch) {
+    const signature = this.draftSignature();
     const saved = await api.saveContent(input.draft, this.data.id);
     if (!this.current(epoch)) return null;
-    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks: input.blocks, renderedBlocks: decorateBlocks(input.blocks, this.data.media) });
-    return saved;
+    const draftChanged = signature !== this.draftSignature();
+    const blocks = draftChanged ? this.data.blocks : input.blocks;
+    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media) });
+    return { ...saved, draftChanged };
   },
   async saveDraft() {
     if (this.data.busy) return;
@@ -300,7 +308,7 @@ Page({
     try {
       const saved = await this.persistDraft(input, epoch);
       if (!saved || !this.current(epoch)) return;
-      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '草稿已保存，可继续编辑或生成发布预览' });
+      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: saved.draftChanged ? '已保存提交时的内容，当前仍有未保存修改，请再次保存' : '草稿已保存，可继续编辑或生成发布预览' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
   },
   publishKey() {
@@ -339,14 +347,17 @@ Page({
     if (this.data.busy) return;
     const input = this.draftInput();
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false });
     try {
       const saved = await this.persistDraft(input, epoch);
       if (!saved || !this.current(epoch)) return;
+      if (saved.draftChanged) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
+      const signature = this.draftSignature();
       const preview = await api.previewContent(saved.content_id, saved.revision);
       if (!this.current(epoch)) return;
       const view = await this.previewView(preview);
       if (!this.current(epoch)) return;
+      if (signature !== this.draftSignature()) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
       this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '预览已生成，请核对后发布' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },

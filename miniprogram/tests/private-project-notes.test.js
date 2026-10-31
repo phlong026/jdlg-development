@@ -91,12 +91,13 @@ test('fixed-version and Word downloads sign their exact private routes without q
   assert.equal(calls[3].options.timeout, 30000);
 });
 
-test('private note pages stay unregistered in this release and never collect public tracking', () => {
+test('private pages are registered and explicitly excluded from public tracking', () => {
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
   const routes = require(path.join(root, 'utils/tracking/routes.js'));
   for (const name of ['projectnotes', 'projectnoteview']) {
-    assert.ok(!app.subPackages.some(pack => pack.root === `pages/${name}` && pack.pages.includes(name)));
+    assert.ok(app.subPackages.some(pack => pack.root === `pages/${name}` && pack.pages.includes(name)));
     assert.equal(routes.policy(`pages/${name}/${name}`).collect, false);
+    assert.equal(routes.policy(`pages/${name}/${name}`).exclusionReason, 'private-project-notes');
   }
 });
 

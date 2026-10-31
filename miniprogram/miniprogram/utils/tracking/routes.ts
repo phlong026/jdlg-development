@@ -350,6 +350,24 @@ const ROUTES = {
     "readiness": "explicit",
     "idKey": "content_id"
   },
+  "pages/contentworkbench/contentworkbench": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
+  "pages/contentedit/contentedit": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
+  "pages/contentwriting/contentwriting": {
+    "kind": "excluded",
+    "readiness": "excluded-private-workbench",
+    "collect": false,
+    "exclusionReason": "private-workbench"
+  },
   "pages/sharevisits/sharevisits": {
     "kind": "excluded",
     "readiness": "excluded-private-workbench",
@@ -362,6 +380,19 @@ const ROUTES = {
     "collect": false,
     "exclusionReason": "private-workbench"
   },
+  "pages/projectnotes/projectnotes": {
+    "kind": "excluded",
+    "readiness": "excluded-private-project-notes",
+    "collect": false,
+    "exclusionReason": "private-project-notes"
+  },
+  "pages/projectnoteview/projectnoteview": {
+    "kind": "excluded",
+    "readiness": "excluded-private-project-notes",
+    "collect": false,
+    "exclusionReason": "private-project-notes"
+  },
+  "pages/nativereferences/nativereferences": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }
 function ready(route, data, rendered) {
