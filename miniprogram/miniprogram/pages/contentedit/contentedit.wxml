@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="private-page">
  <navigation-bar title="{{preview ? '发布预览' : id ? '编辑内容' : '新建内容'}}" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" background="#fbfaf7" />
  <view class="page-body">
@@ -70,3 +71,5 @@
   </block>
  </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

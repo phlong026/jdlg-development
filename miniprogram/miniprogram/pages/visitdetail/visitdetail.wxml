@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="private-page">
  <navigation-bar title="访问详情" back="{{true}}" background="#f7f3ee" />
  <view class="page-body">
@@ -16,3 +17,5 @@
   </block>
  </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

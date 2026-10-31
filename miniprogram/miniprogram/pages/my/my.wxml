@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/my/my.wxml-->
 <view class="page">
   <!-- 统一导航栏（Tab页不显示返回按钮） -->
@@ -115,3 +116,5 @@
   <!-- 存量用户昵称补检弹窗 -->
   <nickname-guard id="nicknameGuard" bind:completed="onNicknameGuardCompleted" />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="studio-page">
   <navigation-bar title="{{view === 'import' ? '导入分享链接' : '内容创作'}}" back="{{true}}" background="#fbfaf7" />
   <view class="studio-body">
@@ -49,3 +50,5 @@
   </view>
   <view wx:if="{{view === 'studio' && !loading && !loginRequired && !denied && !disabled}}" class="studio-footer"><button class="gold-button" bindtap="openCreateMenu">＋ 新建</button></view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

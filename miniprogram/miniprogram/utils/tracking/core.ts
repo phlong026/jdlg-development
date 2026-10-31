@@ -27,7 +27,7 @@ function createTracker(io) {
   }
   function enqueue(event, ctx) {
     if (!enabled || !consent || suspended || !ctx || !ctx.entry_token) return;
-    queue.push({ event, credential: ctx.entry_token, queued_at: io.wall() }); prune(); persist();
+    queue.push({ account: io.queueAccount ? io.queueAccount() : io.account(), event, credential: ctx.entry_token, queued_at: io.wall() }); prune(); persist();
   }
   function event(p, type, extra = {}) {
     if (!p || !p.context) return;
@@ -156,7 +156,14 @@ function createTracker(io) {
   }
   async function flush() {
     if (!enabled || !consent || suspended || busy || io.wall() < retryAt) return;
-    prune(); persist(); if (!queue.length) return;
+    prune();
+    const currentAccount = io.queueAccount ? io.queueAccount() : io.account();
+    if (currentAccount) {
+      const before = queue.length;
+      queue = queue.filter(row => row.account === currentAccount);
+      dropped.rejected += before - queue.length;
+    }
+    persist(); if (!queue.length) return;
     const credential = queue[0].credential;
     const batch = [];
     for (const row of queue) {

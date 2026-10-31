@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <navigation-bar title="AI建房顾问" background="#dcc7ad" />
 
@@ -216,3 +217,5 @@
   <intercept-modal />
   <nickname-guard id="nicknameGuard" />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

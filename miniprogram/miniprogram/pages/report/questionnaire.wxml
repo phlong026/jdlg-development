@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="report-page">
   <text class="eyebrow">为您家的报告 · 第 {{step + 1}} / 5 步</text>
   <view class="step-track"><view wx:for="{{titles}}" wx:key="index" class="step-dot {{index <= step ? 'active' : ''}}" /></view>
@@ -64,3 +65,5 @@
   </block>
   <text class="error" wx:if="{{error}}">{{error}}</text><button wx:if="{{!configReady && !configLoading}}" class="secondary" bindtap="loadConfig">重新检查报告服务</button>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

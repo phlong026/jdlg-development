@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <navigation-bar title="分享资料" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在加载…</view>
@@ -64,3 +65,5 @@
     <view wx:if="{{notice}}" class="notice">{{notice}}</view>
   </block>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

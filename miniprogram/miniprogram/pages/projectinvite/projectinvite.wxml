@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <navigation-bar title="加入项目" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" background="#f8f5ef" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在加载…</view>
@@ -13,3 +14,5 @@
     <text wx:if="{{error}}" class="error">{{error}}</text>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -44,7 +44,7 @@ test('登录与资料确认使用同一场景，编辑器持续挂载以保留�
   const hidden = rootTag.match(/hidden="{{([^}]+)}}"/)[1];
   const hiddenFor = data => Function(...Object.keys(data), `return (${hidden});`)(...Object.values(data));
   const initial = { visible: true, checking: true, loggingIn: false, completingProfile: false };
-  assert.equal(hiddenFor(initial), true, '初次静默核验不闪登录场景');
+  assert.equal(hiddenFor(initial), false, '核验期间保留同一品牌场景和加载态');
   assert.equal(hiddenFor({ ...initial, checking: false }), false);
   assert.equal(hiddenFor({ ...initial, visible: false, loggingIn: true }), false, '登录后核验继续使用同一背景');
   assert.equal(hiddenFor({ ...initial, visible: false, checking: false, completingProfile: true }), false);

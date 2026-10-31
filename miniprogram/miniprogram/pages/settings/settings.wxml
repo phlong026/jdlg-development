@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/settings/settings.wxml-->
 <view class="page {{darkMode ? 'dark-mode' : 'light-mode'}}">
   <view class="page-glow page-glow-left"></view>
@@ -463,3 +464,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

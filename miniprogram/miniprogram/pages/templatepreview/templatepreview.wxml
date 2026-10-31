@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <!-- 统一导航栏 -->
   <navigation-bar background="#e6daca" />
@@ -45,4 +46,5 @@
     </view>
   </view>
 </view>
-
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

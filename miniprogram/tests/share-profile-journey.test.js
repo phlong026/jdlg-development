@@ -26,8 +26,8 @@ const settle = async () => { for (let i = 0; i < 16; i++) await new Promise(reso
 // Real installers, page, components, profile validation, cost API and tracking
 // modules run together. Only native WeChat I/O, signature generation and images
 // are replaced; no request can reach a network transport from this harness.
-function journey({ extension = 'js', token = '', profile = completeProfile, profileMode = 'ok', enabled = true, declined = false, defaultShare = false, reader = false } = {}) {
-  const storage = { token, userInfo: token ? { id: profile.id } : {}, device_fingerprint: 'test-device', share_tracking_instance_v1: 'test-installation' };
+function journey({ extension = 'js', token = '', profile = completeProfile, cachedID = profile.id, profileMode = 'ok', enabled = true, declined = false, defaultShare = false, reader = false } = {}) {
+  const storage = { token, userInfo: token ? { id: cachedID, staleBusinessField: 'must-not-cross-account' } : {}, device_fingerprint: 'test-device', share_tracking_instance_v1: 'test-installation' };
   if (declined) storage.share_tracking_consent_choice_v1 = { accepted: false, explicit: true, version: 'v1' };
   const server = { profile: { ...profile }, profileMode, holdProfile: false, persistNickname: true };
   const requests = [], events = [], errors = [], pendingProfile = [], modules = new Map();
@@ -204,6 +204,17 @@ for (const extension of ['ts', 'js']) {
     await assertAccessibleAndAttributed(h);
   });
 
+  test(`${extension}: stale cached id is replaced before the authoritative account completes a missing avatar`, async t => {
+    const h = journey({ extension, token: 'session-A', cachedID: 99, profile: { ...completeProfile, avatar: '' } }); t.after(() => h.close());
+    await h.mount(); assertBlocked(h);
+    assert.equal(h.storage.userInfo.id, 41);
+    assert.equal(h.storage.userInfo.staleBusinessField, undefined, 'cross-account cache fields must be discarded');
+    assert.equal(h.editor.data.promptUserID, 41);
+    await h.chooseAvatar(); await h.saveNickname();
+    await assertAccessibleAndAttributed(h);
+    assert.equal(h.storage.userInfo.avatar, avatar);
+  });
+
   test(`${extension}: complete returning account still waits for authoritative profile read`, async t => {
     const h = journey({ extension, token: 'session-A' }); t.after(() => h.close());
     h.server.holdProfile = true;
@@ -271,13 +282,12 @@ for (const extension of ['ts', 'js']) {
     await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.holdProfile = true;
     await h.resume();
-    // Оптимистичный тёплый возврат: полный кэш перепускает контент мгновенно,
-    // авторитетная сверка профиля при этом всё равно отправляется.
-    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.page.data.__profileAccessReady, false, '热返回必须等待服务端再次确认');
     assert.ok(h.requests.some(request => String(request.url || request.path || '').endsWith('/profile')), 'warm return must still re-verify the profile');
-    assert.equal(h.reports().length, 2, 'report availability should be revalidated'); assert.equal(h.entries().length, 1);
+    assert.equal(h.reports().length, 1); assert.equal(h.entries().length, 1);
     h.releaseProfile(); await settle();
     assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.reports().length, 2, '核验通过后才重新确认报告可用性');
     assert.equal(h.entries().length, 1, 'unchanged warm query is not another external share');
     assert.equal(h.events.filter(event => event.event_type === 'page_view').length, 1);
   });
@@ -287,13 +297,13 @@ for (const extension of ['ts', 'js']) {
     await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.holdProfile = true;
     await h.resume({ report_id: nextReportID, st: 'next-share' });
-    // Тёплый re-entry с другим query мгновенно пересобирает страницу на новый
-    // отчёт; held профиль-ответ не блокирует переключение, только пере-подтверждает аккаунт.
-    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.page.data.__profileAccessReady, false);
+    assert.equal(h.reports().length, 1);
+    assert.equal(h.entries().length, 1);
+    h.releaseProfile(); await settle();
     assert.equal(h.page.data.contentReady, true);
     assert.equal(h.page.data.reportId, nextReportID);
     assert.equal(h.entries().length, 2);
-    h.releaseProfile(); await settle();
     assert.equal(h.entries()[1].body.content_id, `costsnapshot:${nextReportID}`);
     assert.equal(h.entries()[1].body.share_token, 'next-share');
     assert.equal(h.entries()[1].body.previous_entry_token, undefined);
@@ -307,12 +317,9 @@ for (const extension of ['ts', 'js']) {
     await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.profileMode = 'offline';
     await h.resume();
-    // Оптимистичный перепуск доказывается перезагрузкой отчёта: страница
-    // пересобралась по кэшу до авторитетного ответа.
-    assert.equal(h.reports().length, 2);
+    assert.equal(h.reports().length, 1, '权威资料查询失败时不重新读取内容');
     const eventCount = h.events.length;
     h.tracking.getSDK().tick(); await settle();
-    // Авторитетный offline-ответ останавливает трекинг и возвращает нижнюю карточку-гейт.
     assert.equal(h.page.data.__profileAccessReady, false);
     assert.equal(h.entries().length, 1);
     assert.equal(h.events.length, eventCount);
@@ -329,9 +336,9 @@ for (const extension of ['ts', 'js']) {
     const firstGeneration = h.page.boundEntryGeneration;
     h.background(); h.server.holdProfile = true;
     await h.resume({ scene: nextScene });
-    assert.equal(h.page.data.__profileAccessReady, true);
-    assert.equal(h.entries().length, 2);
-    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 2);
+    assert.equal(h.page.data.__profileAccessReady, false);
+    assert.equal(h.entries().length, 1);
+    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 1);
     h.releaseProfile(); await settle();
     assert.equal(h.page.data.contentReady, true);
     assert.equal(h.entries().length, 2);
@@ -353,11 +360,11 @@ for (const extension of ['ts', 'js']) {
     assert.equal(h.entries().length, 0);
     h.background(); h.server.holdProfile = true;
     await h.resume({ report_id: nextReportID });
-    assert.equal(h.page.data.__profileAccessReady, true);
-    assert.equal(h.page.data.contentReady, true);
-    assert.equal(h.reports().length, 2, 'new report loads without waiting for the held profile read');
+    assert.equal(h.page.data.__profileAccessReady, false);
+    assert.equal(h.reports().length, 1, '新报告在资料核验前不可读取');
     h.releaseProfile(); await settle();
     assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.page.data.contentReady, true);
     assert.equal(h.page.data.reportId, nextReportID);
     assert.equal(h.reports().length, 2);
     assert.equal(h.reports()[1].path, `/api/v1/miniprogram/ai/cost/shares/${nextReportID}`);

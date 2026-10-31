@@ -5,13 +5,14 @@ const route='pages/contentreader/contentreader';
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const material={content_id:'material_one',content_version:2,title:'已发布文章',status:'published',route_key:route,cover:{url:'/api/v1/miniprogram/tracking/media/image_one'}};
 function runtime(token='account-a',contentAccess=true){
- const storage={token,device_fingerprint:'cached-login-device'},requests=[],navigations=[],toasts=[],signatures=[],capabilityCalls=[];let definition;
+ const storage={token,device_fingerprint:'cached-login-device',userInfo:{id:7,nickname:'设计师',avatar:'https://cdn.example/avatar.png',token}},requests=[],navigations=[],toasts=[],signatures=[],capabilityCalls=[];let definition;
  const wx={getStorageSync:key=>storage[key],setStorageSync:(key,value)=>storage[key]=value,removeStorageSync:key=>delete storage[key],
  request:r=>requests.push(r),navigateTo:r=>navigations.push(r),showToast:r=>toasts.push(r),setBackgroundColor(){},stopPullDownRefresh(){}};
  const signer={generateRequestParams:(token,body,p,device)=>{signatures.push({token,body,path:p,device});return{token};},paramsToHeaders:x=>({...x,pass:'signed'})};
  const sandbox={wx,module:{exports:{}},require:()=>signer,Promise};
  vm.runInNewContext(fs.readFileSync(path.join(root,'utils/tracking/api.js'),'utf8'),sandbox);const api=sandbox.module.exports;
- const mixin={wx,module:{exports:{}},require:()=>api,Promise};vm.runInNewContext(fs.readFileSync(path.join(root,'utils/tracking/materials.js'),'utf8'),mixin);
+ const protectedMedia={resolveProtectedMediaURL:async url=>'wxfile://tmp/'+url.split('/').at(-1)};
+ const mixin={wx,module:{exports:{}},require:name=>name.endsWith('/protected-media')?protectedMedia:api,Promise};vm.runInNewContext(fs.readFileSync(path.join(root,'utils/tracking/materials.js'),'utf8'),mixin);
  const tracking={consented:()=>false,refreshConfig:()=>Promise.resolve({enabled:false})};
  const phase3={workbenchContext:async()=>{capabilityCalls.push(storage.token);if(!contentAccess)throw Object.assign(new Error('forbidden'),{statusCode:403});return{enabled:true,can_manage:true,owners:['designer-7']};},mySharesContext:async()=>{throw Object.assign(new Error('forbidden'),{statusCode:403});}};
  vm.runInNewContext(fs.readFileSync(path.join(root,'pages/my/my.js'),'utf8'),{wx,exports:{},Page:value=>definition=value,Promise,Date,console:{log(){},warn(){},error(){}},
@@ -24,7 +25,7 @@ test('existing My page loads signed published cards and opens the server-verifie
  const t=runtime();await t.show();assert.equal(t.page.data.shareMaterialsState,'loading');assert.equal(t.matching().length,1);
  const r=t.matching()[0];assert.equal(r.header.token,'account-a');assert.equal(r.header.pass,'signed');
  assert.ok(t.signatures.some(s=>s.path==='/api/v1/miniprogram/tracking/materials?limit=20'&&s.device==='cached-login-device'));
- t.ok(0,{items:[material]});await settle();assert.equal(t.page.data.shareMaterialsState,'ready');assert.equal(t.page.data.shareMaterials[0].title,material.title);assert.match(t.page.data.shareMaterials[0].coverURL,/^https:\/\/api\.jiadilingguang.com/);
+ t.ok(0,{items:[material]});await settle();assert.equal(t.page.data.shareMaterialsState,'ready');assert.equal(t.page.data.shareMaterials[0].title,material.title);assert.equal(t.page.data.shareMaterials[0].coverURL,'wxfile://tmp/image_one');
  const click={currentTarget:{dataset:{id:material.content_id}}};t.page.openShareMaterial(click);t.page.openShareMaterial(click);assert.equal(t.matching().length,2);assert.equal(t.navigations.length,0);
  t.ok(1,material);await settle();assert.equal(t.navigations.length,1);assert.equal(t.navigations[0].url,'/'+route+'?content_id=material_one&content_version=2');
 });
@@ -44,12 +45,14 @@ test('reader native share uses the published target, title and cover, with menus
  let definition,resolveRead,rejectRead;const hidden=[],shown=[];
  const wx={hideShareMenu:()=>hidden.push(true),showShareMenu:x=>shown.push(x),getWindowInfo:()=>({windowWidth:375})};
  const api={resolveReaderOptions:async x=>x,mediaURL:x=>'https://api.jiadilingguang.com'+x,request:()=>new Promise((resolve,reject)=>{resolveRead=resolve;rejectRead=reject;})};
+ const protectedMedia={resolveProtectedMediaURL:async url=>'wxfile://tmp/'+url.split('/').at(-1)};
+ const articleDocument=require('../miniprogram/utils/article-document');
  const preheats=[];const tracking={captureEntryValidity:()=>()=>true,resolvePageOptions(){},refreshConfig:async()=>({enabled:false}),consented:()=>false,block(){},preheatTimelineShare(page,value){preheats.push(value);}};
- vm.runInNewContext(fs.readFileSync(path.join(root,route+'.js'),'utf8'),{Page:x=>definition=x,wx,exports:{},require:name=>name.endsWith('/tracking/index')?tracking:name.endsWith('/tracking/api')?api:{},Promise,Date});
+ vm.runInNewContext(fs.readFileSync(path.join(root,route+'.js'),'utf8'),{Page:x=>definition=x,wx,exports:{},require:name=>name.endsWith('/tracking/index')?tracking:name.endsWith('/tracking/api')?api:name.endsWith('/protected-media')?protectedMedia:name.endsWith('/article-document')?articleDocument:{},Promise,Date});
  const page={...definition,data:JSON.parse(JSON.stringify(definition.data)),setData(v,callback){Object.assign(this.data,v);if(callback)callback();}};
  page.onLoad({content_id:material.content_id,content_version:2});page.onShow();await settle();assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(hidden.length,1);
- resolveRead({content_id:material.content_id,version:2,title:material.title,cover:material.cover,media:[]});await settle();
- const share=page.onShareAppMessage();assert.equal(share.title,material.title);assert.equal(share.path,'/'+route+'?content_id=material_one&content_version=2');assert.equal(share.imageUrl,'https://api.jiadilingguang.com'+material.cover.url);assert.equal(shown.length,1);
+ resolveRead({content_id:material.content_id,version:2,title:material.title,body_format:'article_v2',body:JSON.stringify({schema:1,blocks:[{kind:'image',media_id:'image_one'}]}),cover:material.cover,media:[{media_id:'image_one',kind:'image',url:material.cover.url}]});await settle();
+ const share=page.onShareAppMessage();assert.equal(share.title,material.title);assert.equal(share.path,'/'+route+'?content_id=material_one&content_version=2');assert.equal(share.imageUrl,'wxfile://tmp/image_one');assert.equal(page.data.media[0].url,'wxfile://tmp/image_one');assert.equal(page.data.articleBlocks[0].url,'wxfile://tmp/image_one');assert.equal(shown.length,1);
  assert.equal(page.onShareTimeline().query,'content_id=material_one&content_version=2');
  assert.equal(preheats.length,1);const successShare=page.onShareTimeline();assert.deepEqual(preheats[0],successShare);
  page.loadContent();await settle();rejectRead(new Error('revoked'));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');

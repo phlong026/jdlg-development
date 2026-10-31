@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page {{isEditMode ? 'page-edit-mode' : ''}}">
   <navigation-bar wx:if="{{!isEditMode}}" title="我的收藏" background="#f6efe7" />
 
@@ -125,3 +126,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

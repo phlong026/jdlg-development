@@ -1,5 +1,6 @@
 'use strict';
 const api = require('../../utils/project-collections-api');
+const { resolveProtectedMediaURL } = require('../../utils/protected-media');
 
 const initial = () => ({
   loading: false, loadingMore: false, busy: false, loginRequired: false, denied: false,
@@ -28,6 +29,9 @@ Page({
     const cover = item && item.cover ? api.mediaURL(item.cover.url) : '';
     return Object.assign({}, item, { cover_url: cover, status_text: item.status === 'revoked' ? '已撤回' : item.version > 0 ? '已发布 V' + item.version : '草稿' });
   },
+  async resolveCovers(items) {
+    return Promise.all((items || []).map(async item => { const decorated = this.decorate(item); return decorated.cover_url ? Object.assign({}, decorated, { cover_url: await resolveProtectedMediaURL(decorated.cover_url) }) : decorated; }));
+  },
   async loadHome(epoch) {
     this.setData({ loading: true, loginRequired: false, denied: false, error: '', notice: '' });
     try {
@@ -37,7 +41,9 @@ Page({
       const ownerChoices = Array.isArray(context.owner_choices) ? context.owner_choices : [];
       const selectedChoice = this.data.ownerChoices[this.data.ownerIndex];
       const selectedOwner = this.data.current ? this.data.current.owner_id : selectedChoice && selectedChoice.owner_id;
-      this.setData({ owners, ownerChoices, ownerIndex: Math.max(0, ownerChoices.findIndex(item => item.owner_id === selectedOwner)), busy: false, collections: (page.items || []).map(item => this.decorate(item)), nextCursor: page.next_cursor || '', loading: false });
+      const collections = await this.resolveCovers(page.items);
+      if (!this.currentRequest(epoch)) return;
+      this.setData({ owners, ownerChoices, ownerIndex: Math.max(0, ownerChoices.findIndex(item => item.owner_id === selectedOwner)), busy: false, collections, nextCursor: page.next_cursor || '', loading: false });
       if (this.requestedID) { const id = this.requestedID; this.requestedID = ''; await this.openEditorByID(id, epoch); }
     } catch (error) {
       if (!this.currentRequest(epoch)) return;
@@ -52,7 +58,9 @@ Page({
       const page = await api.listCollections({ cursor: this.data.nextCursor, limit: 20 });
       if (!this.currentRequest(epoch)) return;
       const seen = new Set(this.data.collections.map(item => item.collection_id));
-      this.setData({ collections: this.data.collections.concat((page.items || []).filter(item => !seen.has(item.collection_id)).map(item => this.decorate(item))), nextCursor: page.next_cursor || '', loadingMore: false });
+      const incoming = await this.resolveCovers((page.items || []).filter(item => !seen.has(item.collection_id)));
+      if (!this.currentRequest(epoch)) return;
+      this.setData({ collections: this.data.collections.concat(incoming), nextCursor: page.next_cursor || '', loadingMore: false });
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ loadingMore: false, error: error.message || '加载失败' }); }
   },
   async startCreate() {
@@ -71,7 +79,9 @@ Page({
       const ownerIndex = Math.max(0, this.data.ownerChoices.findIndex(item => item.owner_id === collection.owner_id));
       this.createKey = '';
       this.publishKey = '';
-      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems: (collection.items || []).map(item => this.decorate(item)), ownerIndex, busy: false, dirty: false });
+      const selectedItems = await this.resolveCovers(collection.items);
+      if (!this.currentRequest(epoch)) return;
+      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, ownerIndex, busy: false, dirty: false });
       await this.loadCandidates(false);
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '合集不可访问' }); }
   },
@@ -95,7 +105,9 @@ Page({
     try {
       const page = await api.listCandidates({ cursor, limit: 20 });
       if (!this.currentRequest(epoch)) return;
-      const incoming = (page.items || []).map(item => ({...this.decorate(item), selected: this.data.selectedItems.some(ref => sourceKey(ref) === sourceKey(item))}));
+      const decorated = await this.resolveCovers(page.items);
+      if (!this.currentRequest(epoch)) return;
+      const incoming = decorated.map(item => ({...item, selected: this.data.selectedItems.some(ref => sourceKey(ref) === sourceKey(item))}));
       const base = more ? this.data.candidates : [];
       const seen = new Set(base.map(sourceKey));
       this.setData({ candidates: base.concat(incoming.filter(item => !seen.has(sourceKey(item)))), candidateCursor: page.next_cursor || '', busy: false });
@@ -150,9 +162,12 @@ Page({
     try {
       const saved = await api.saveCollection(input, id || '');
       if (!this.currentRequest(epoch)) return null;
-      const changedDuringSave = JSON.stringify(this.draftInput()) !== JSON.stringify(input);
+      let changedDuringSave = JSON.stringify(this.draftInput()) !== JSON.stringify(input);
+      const selectedItems = changedDuringSave ? [] : await this.resolveCovers(saved.items);
+      if (!this.currentRequest(epoch)) return null;
+      changedDuringSave = changedDuringSave || JSON.stringify(this.draftInput()) !== JSON.stringify(input);
       this.createKey = '';
-      this.setData(Object.assign({ current: saved, busy: false, preview: null, notice: '已保存', dirty: changedDuringSave }, changedDuringSave ? {} : { title: saved.title, description: saved.description || '', selectedItems: (saved.items || []).map(item => this.decorate(item)) }));
+      this.setData(Object.assign({ current: saved, busy: false, preview: null, notice: '已保存', dirty: changedDuringSave }, changedDuringSave ? {} : { title: saved.title, description: saved.description || '', selectedItems }));
       return saved;
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '保存失败' }); return null; }
   },
@@ -185,7 +200,9 @@ Page({
   },
   async refreshList(epoch) {
     const page = await api.listCollections({ limit: 20 });
-    if (this.currentRequest(epoch)) this.setData({ collections: (page.items || []).map(item => this.decorate(item)), nextCursor: page.next_cursor || '' });
+    if (!this.currentRequest(epoch)) return;
+    const collections = await this.resolveCovers(page.items);
+    if (this.currentRequest(epoch)) this.setData({ collections, nextCursor: page.next_cursor || '' });
   },
   deleteDraft(event) {
     const collection = this.data.collections.find(item => item.collection_id === String(event.currentTarget.dataset.id || ''));

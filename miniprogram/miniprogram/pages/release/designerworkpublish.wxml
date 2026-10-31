@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <!-- 统一导航栏 -->
   <navigation-bar title="{{editMode ? '编辑发布作品' : '上传设计作品'}}" subtitle="{{editMode ? '调整作品信息后重新提交审核' : '先上传到主页，可选同步到模板广场'}}" background="#e6daca" />
@@ -90,3 +91,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

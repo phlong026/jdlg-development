@@ -25,10 +25,11 @@ function getSDK() {
   if (mono() == null) return null; // Never substitute user-adjustable wall time for duration.
   sdk = createTracker({ wall: Date.now, mono, id, random: Math.random,
     account: () => safely(() => String(wx.getStorageSync('token') || ''), ''),
+    queueAccount: () => safely(() => String((wx.getStorageSync('userInfo') || {}).id || ''), ''),
     loadDiagnostics:()=>wx.getStorageSync(STORAGE+'_diagnostics'),saveDiagnostics:value=>wx.setStorageSync(STORAGE+'_diagnostics',value),
     load: () => wx.getStorageSync(STORAGE), save: queue => wx.setStorageSync(STORAGE, queue),
     async entry(body) { if (!instance) instance = await anonymousInstance(); return api.request('/entry','POST', { ...body, client_instance: instance, anonymous_id: instance }, undefined, true); },
-    send: (body, credential) => api.request('/events/batch','POST',body,credential,false)
+    send: (body, credential) => api.request('/events/batch','POST',body,credential,true)
   });
   return sdk;
 }

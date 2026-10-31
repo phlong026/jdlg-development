@@ -1,7 +1,12 @@
 // @ts-nocheck
 'use strict';
-const routes = require('./tracking/routes');
+const { hasCompleteProfile } = require('../components/nickname-guard/profile-validation');
 let installed = false;
+const ACCESS_FREE_ROUTES = new Set([
+  'pages/login/login',
+  'pages/privacy/privacy',
+  'pages/passwordrecovery/passwordrecovery',
+]);
 
 // Run outside the analytics wrapper: content access must not depend on analytics
 // availability or consent, and an unverified page must not create a visit.
@@ -9,20 +14,66 @@ function wrapProfileAccess(definition) {
   const signature = options => JSON.stringify(Object.keys(options || {}).sort().map(key => [key, options[key]]));
   const invoke = (name, page, args = []) => typeof definition[name] === 'function'
     ? definition[name].apply(page, args) : undefined;
-  const protectedPage = page => routes.policy(page.route).collect === true;
+  const protectedPage = page => !ACCESS_FREE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const lock = page => {
     page.__accessRevision = (page.__accessRevision || 0) + 1;
     if (page.__accessActive) invoke('onHide', page);
     page.__accessActive = false;
-    page.setData({ __profileAccessReady: false });
+    page.setData({ __profileAccessReady: false, __profileAccessMounted: false });
     if (typeof wx.hideShareMenu === 'function') wx.hideShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] });
+  };
+  const redirectToLogin = page => {
+    if (page.__accessRedirecting || page.__accessDestroyed || !page.__accessVisible) return;
+    page.__accessRedirecting = true;
+    wx.navigateTo({
+      url: '/pages/login/login?from=profile-gate',
+      fail() {
+        page.__accessRedirecting = false;
+        wx.showToast({ title: '请先登录并补充头像、昵称', icon: 'none' });
+      },
+    });
+  };
+  const verifyWithoutComponent = page => {
+    const token = String(wx.getStorageSync('token') || '');
+    if (!token) { redirectToLogin(page); return; }
+    const revision = page.__accessRevision;
+    const path = '/api/v1/miniprogram/profile';
+    const auth = require('./parameter');
+    const device = String(wx.getStorageSync('device_fingerprint') || '');
+    const header = auth.paramsToHeaders(auth.generateRequestParams(token, {}, path, device));
+    wx.request({ url: 'https://api.jiadilingguang.com' + path, method: 'GET', header, timeout: 15000,
+      success(response) {
+        if (revision !== page.__accessRevision || token !== wx.getStorageSync('token') || !page.__accessVisible || page.__accessDestroyed) return;
+        const data = response.data || {};
+        if (response.statusCode === 401 || data.code === 401) {
+          wx.removeStorageSync('token'); wx.removeStorageSync('userInfo'); redirectToLogin(page); return;
+        }
+        const profile = data.data || {};
+        const id = Number(profile.id || 0);
+        if (response.statusCode !== 200 || data.code !== 0) {
+          wx.showToast({ title: data.msg || '资料读取失败，请重试', icon: 'none' }); return;
+        }
+        if (!Number.isSafeInteger(id) || id <= 0) {
+          wx.removeStorageSync('token'); wx.removeStorageSync('userInfo'); redirectToLogin(page); return;
+        }
+        const cachedProfile = wx.getStorageSync('userInfo') || {};
+        const sameAccount = Number(cachedProfile.id || 0) === id;
+        wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
+        if (!hasCompleteProfile(profile)) { redirectToLogin(page); return; }
+        page.onProfileAccessGranted({ detail: { token, profile } });
+      },
+      fail() {
+        if (revision === page.__accessRevision && page.__accessVisible && !page.__accessDestroyed) {
+          wx.showToast({ title: '资料读取失败，请重试', icon: 'none' });
+        }
+      },
+    });
   };
   const verify = page => {
     if (!page.__accessMounted || !page.__accessVisible || page.__accessDestroyed) return;
     const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
     if (!guard || typeof guard.check !== 'function') {
-      console.error('个人资料门禁组件未就绪', page.route);
-      return;
+      verifyWithoutComponent(page); return;
     }
     Promise.resolve(guard.check()).catch(error => console.error('个人资料核验失败', page.route, error));
   };
@@ -40,6 +91,7 @@ function wrapProfileAccess(definition) {
     if (!protectedPage(this)) return invoke('onShow', this, arguments);
     if (this.__accessDestroyed) return;
     this.__accessVisible = true;
+    this.__accessRedirecting = false;
     lock(this);
     verify(this);
   };

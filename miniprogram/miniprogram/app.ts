@@ -1,4 +1,5 @@
 // Unified fail-open tracking; feature flag and independent consent default off.
+require('./utils/profile-request-guard').install();
 require('./utils/profile-access').install();
 require('./utils/tracking/index').install();
 // app.ts

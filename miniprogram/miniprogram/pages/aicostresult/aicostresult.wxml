@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/aicostresult/aicostresult.wxml-->
 <view class="page">
   <navigation-bar title="造价测算报告" background="#e6daca" />
@@ -72,3 +73,5 @@
     </block>
   </scroll-view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

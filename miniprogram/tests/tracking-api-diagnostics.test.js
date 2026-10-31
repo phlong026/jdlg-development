@@ -11,6 +11,11 @@ function api(request) {
   return sandbox.module.exports;
 }
 
+test('tracking event batches require the signed login session', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../miniprogram/utils/tracking/index.js'), 'utf8');
+  assert.match(source, /request\('\/events\/batch','POST',body,credential,true\)/);
+});
+
 test('tracking failures expose safe status and operation without a token or request body', async () => {
   for (const [statusCode, code] of [[401, 401], [409, 409], [503, 503], [200, 503]]) {
     const tracking = api(options => options.success({ statusCode, data: { code, message: 'unsafe upstream detail token=secret' } }));

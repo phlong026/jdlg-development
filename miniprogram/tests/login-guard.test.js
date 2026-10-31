@@ -6,6 +6,13 @@ const { test } = require('node:test');
 const ts = require('./report-runtime')('typescript');
 const root = path.resolve(__dirname, '..');
 const complete = { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/portrait.jpg' };
+
+test('权威资料核验期间显示品牌加载态，不露出内容或登录按钮', () => {
+  const wxml = fs.readFileSync(path.join(root, 'miniprogram/components/login-guard/login-guard.wxml'), 'utf8');
+  assert.match(wxml, /wx:if="\{\{checking\}\}"[^>]*class="login-guard aw-card lg-checking"/);
+  assert.match(wxml, /正在核验登录资料/);
+  assert.match(wxml, /hidden="\{\{!visible && !checking && !loggingIn && !completingProfile\}\}" class="login-guard-panel"/);
+});
 function load(extension, { token = '', loginOk = true, profile = complete, status = 200, defer = false, deferLogin = false, offline = false, cachedProfile = null } = {}) {
   let definition;
   const storage = { token, userInfo: cachedProfile ? { id: 9, ...cachedProfile } : { id: 9 } }, toasts = [], events = [], requests = [], shows = [];
@@ -42,25 +49,25 @@ for (const ext of ['ts', 'js']) {
     assert.equal(await pending, true); assert.equal(f.instance.data.visible, false);
     assert.equal(f.events.find(e => e.name === 'authenticated').detail.token, 'tk');
   });
-  test(`${ext}: complete cached profile grants optimistic access and confirmation keeps it`, async () => {
+  test(`${ext}: complete cached profile still waits for authoritative confirmation`, async () => {
     const f = load(ext, { token: 'tk', cachedProfile: complete, defer: true }); const pending = f.instance.check();
     assert.equal(f.instance.data.visible, false);
     const granted = f.events.filter(e => e.name === 'authenticated');
-    assert.equal(granted.length, 1); assert.equal(granted[0].detail.profile.id, 9); assert.equal(f.requests.length, 1);
+    assert.equal(granted.length, 0); assert.equal(f.requests.length, 1);
     f.requests[0].success({ statusCode: 200, data: { code: 0, data: complete } });
     assert.equal(await pending, true);
     assert.equal(f.instance.data.visible, false); assert.equal(f.storage.userInfo.nickname, complete.nickname);
     assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
   });
-  test(`${ext}: optimistic access degrades to required editor when authoritative read finds gaps`, async () => {
+  test(`${ext}: cached profile stays blocked when authoritative read finds gaps`, async () => {
     const f = load(ext, { token: 'tk', cachedProfile: complete, profile: { ...complete, avatar: '' } });
     assert.equal(await f.instance.check(), false);
     assert.ok(f.events.some(e => e.name === 'gated'));
     assert.equal(f.shows.length, 1); assert.equal(f.shows[0].required, true); assert.equal(f.shows[0].userID, 9);
     assert.equal(f.instance.data.visible, false);
-    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 0);
   });
-  test(`${ext}: optimistic access degrades to bottom gate on network failure`, async () => {
+  test(`${ext}: cached profile stays blocked on network failure`, async () => {
     const f = load(ext, { token: 'tk', cachedProfile: complete, offline: true });
     assert.equal(await f.instance.check(), false);
     assert.ok(f.events.some(e => e.name === 'gated'));
@@ -100,8 +107,14 @@ for (const ext of ['ts', 'js']) {
       assert.equal(await pending, false); assert.equal(f.storage.token, 'new'); assert.equal(f.events.filter(e => e.name === 'authenticated').length, 0);
     }
   });
-  test(`${ext}: mismatched server account stays blocked`, async () => {
-    const f = load(ext, { token: 'tk', profile: { ...complete, id: 10 } }); assert.equal(await f.instance.check(), false); assert.equal(f.storage.userInfo.id, 9);
+  test(`${ext}: authoritative profile replaces a stale cached account id for the same token`, async () => {
+    const f = load(ext, { token: 'tk', profile: { ...complete, id: 10 } }); assert.equal(await f.instance.check(), true);
+    assert.equal(f.storage.userInfo.id, 10); assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
+  });
+  test(`${ext}: profile without an authoritative account id clears only the current session`, async () => {
+    const f = load(ext, { token: 'tk', profile: { ...complete, id: 0 } }); assert.equal(await f.instance.check(), false);
+    assert.equal(f.storage.token, undefined); assert.equal(f.storage.userInfo, undefined);
+    assert.equal(f.instance.data.needsLogin, true); assert.equal(f.events.filter(e => e.name === 'authenticated').length, 0);
   });
   test(`${ext}: wx login waits for complete server profile`, async () => {
     const f = load(ext, { profile: { ...complete, avatar: '' } }); await f.instance.check(); f.instance.onTogglePrivacy(); await f.instance.onWxLogin();

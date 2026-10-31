@@ -33,21 +33,14 @@ Component({
       const revision = ((this as any)._checkRevision || 0) + 1;
       (this as any)._checkRevision = revision;
       const token = wx.getStorageSync('token');
-      const cached = (wx.getStorageSync('userInfo') || {}) as any;
-      const accountID = Number(cached?.id || 0);
-      // 核验全程静默：有 token 就乐观放行内容（资料齐全的缓存），失败再降级为底部卡片。
-      this.setData({ visible: false, checking: !!token, needsLogin: !token, completingProfile: false, error: '', optimistic: false });
+      // 缓存只用于预填资料，不能替代服务器确认；否则旧包或换号缓存会先加载内容并写入访问记录。
+      this.setData({ visible: false, checking: !!token, needsLogin: !token, completingProfile: false, error: '' });
       this.triggerEvent('gated');
       const editor = this.selectComponent('#nicknameGuard') as any;
       if (!token) {
         editor?.setData({ visible: false });
         this.setData({ visible: true, checking: false });
         return false;
-      }
-      if (hasCompleteProfile({ nickname: cached?.nickname, avatar: cached?.avatar })) {
-        const optimistic = { id: accountID, nickname: String(cached?.nickname || '').trim(), avatar: String(cached?.avatar || '').trim() };
-        this.setData({ optimistic: true });
-        this.triggerEvent('authenticated', { token, profile: optimistic });
       }
       const current = () => (this as any)._checkRevision === revision && wx.getStorageSync('token') === token;
       try {
@@ -68,7 +61,17 @@ Component({
         if (res.statusCode !== 200 || res.data?.code !== 0) throw new Error(res.data?.msg || '资料读取失败，请重试');
         const profile = res.data.data || {};
         const id = Number(profile.id);
-        if (!Number.isSafeInteger(id) || id <= 0 || (accountID && accountID !== id)) throw new Error('账号资料不匹配，请重新登录');
+        if (!Number.isSafeInteger(id) || id <= 0) {
+          wx.removeStorageSync('token');
+          wx.removeStorageSync('userInfo');
+          editor?.setData({ visible: false });
+          this.triggerEvent('gated');
+          this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
+          return false;
+        }
+        const cachedProfile = wx.getStorageSync('userInfo') || {};
+        const sameAccount = Number(cachedProfile.id || 0) === id;
+        wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
         if (!hasCompleteProfile(profile)) {
           if (!editor || typeof editor.show !== 'function') throw new Error('资料填写暂不可用，请重试');
           this.setData({ visible: false, checking: false, completingProfile: true });
@@ -82,12 +85,8 @@ Component({
         const verified = { ...profile, id, nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim() };
         wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...verified, token });
         editor?.setData({ visible: false });
-        if (!(this.data as any).optimistic) {
-          this.setData({ visible: false, checking: false, completingProfile: false });
-          this.triggerEvent('authenticated', { token, profile: verified });
-        } else {
-          this.setData({ visible: false, checking: false, completingProfile: false, optimistic: false });
-        }
+        this.setData({ visible: false, checking: false, completingProfile: false });
+        this.triggerEvent('authenticated', { token, profile: verified });
         return true;
       } catch (error: any) {
         if (current()) {

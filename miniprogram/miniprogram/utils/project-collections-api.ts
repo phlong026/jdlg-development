@@ -56,8 +56,8 @@ function publishCollection(id, revision, previewToken, key) {
 function revokeCollection(id, revision, reason, key) {
   return request(collectionPath(id) + '/revoke', 'POST', { expected_revision: Number(revision), reason, idempotency_key: key });
 }
-function readPublishedCollection(id, version) { return request(publicCollectionPath(id, version), 'GET', {}, false); }
-function openPublishedItem(id, version, position) { return request(publicCollectionPath(id, version) + '/items/' + Number(position), 'GET', {}, false); }
+function readPublishedCollection(id, version) { return request(publicCollectionPath(id, version)); }
+function openPublishedItem(id, version, position) { return request(publicCollectionPath(id, version) + '/items/' + Number(position)); }
 function mutationKey(prefix) { return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10); }
 function mediaURL(value) {
   const url = String(value || '');

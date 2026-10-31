@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 ﻿<!--pages/generatedetails/generatedetails.wxml-->
 <view class="page">
   <view class="page-shell">
@@ -586,3 +587,5 @@
 </view>
 </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

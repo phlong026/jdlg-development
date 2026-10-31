@@ -212,11 +212,11 @@ Component({
           timeout: 15000,
           success: (res: any) => {
             try { this.assertCurrentAccount(token, userID); } catch (error) { reject(error); return; }
-            if (res.statusCode === 200 && res.data.code === 0) {
+            if (res?.statusCode === 200 && res.data?.code === 0) {
               resolve();
               return;
             }
-            if (res.statusCode === 401 || res.data?.code === 401) this.triggerEvent('authrequired');
+            if (res?.statusCode === 401 || res?.data?.code === 401) this.triggerEvent('authrequired');
             reject(new Error(res.data?.msg || '头像保存失败'));
           },
           fail: (err: any) => reject(err),

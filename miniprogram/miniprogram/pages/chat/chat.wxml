@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/chat/chat.wxml-->
 <view class="page {{source === 'content-writing' ? 'writing-chat' : ''}}">
   <!-- 统一导航栏 -->
@@ -151,3 +152,5 @@
 
   <intercept-modal />
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

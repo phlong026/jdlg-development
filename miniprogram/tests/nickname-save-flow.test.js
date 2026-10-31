@@ -7,7 +7,7 @@ const ts = require('./report-runtime')('typescript');
 
 const root = path.resolve(__dirname, '..');
 
-function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false, readbackFails = false, required = false, avatar = '', readbackAvatar, readbackID = 101, deferAvatarSave = false } = {}) {
+function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpload = false, deferSave = false, readbackFails = false, required = false, avatar = '', readbackAvatar, readbackID = 101, deferAvatarSave = false, malformedAvatarSave = false } = {}) {
   let definition;
   const storage = { token: 'test-token', userInfo: { id: 101, username: 'wx_test' } };
   const requests = [], events = [], toasts = [], uploads = [];
@@ -36,6 +36,7 @@ function loadGuard(extension, { saveFails = false, uploadFails = false, deferUpl
         }
         if (deferSave && options.url.endsWith('/profile/nickname')) return;
         if (deferAvatarSave && options.url.endsWith('/profile/avatar')) return;
+        if (malformedAvatarSave && options.url.endsWith('/profile/avatar')) return options.success({ statusCode: 200 });
         options.success({ statusCode: saveFails ? 500 : 200, data: saveFails ? { code: 500, msg: '保存失败' } : { code: 0 } });
       },
       uploadFile(options) {
@@ -117,6 +118,16 @@ for (const extension of ['ts', 'js']) {
     await instance.onConfirm(formEvent('只保存昵称'));
     assert.equal(storage.userInfo.nickname, '只保存昵称');
     assert.equal(instance.data.visible, false);
+  });
+
+  test(`${extension}: malformed avatar save response rejects and always releases uploading`, async () => {
+    const { instance, storage, requests, toasts } = loadGuard(extension, { malformedAvatarSave: true });
+    await instance.uploadAvatar('wxfile://avatar');
+    assert.equal(instance.data.uploading, false);
+    assert.equal(instance.data.avatarUrl, '');
+    assert.equal(storage.userInfo.avatar, undefined);
+    assert.equal(requests.filter(request => request.method === 'GET').length, 0);
+    assert.ok(toasts.some(title => /头像保存失败/.test(title)));
   });
 
   test(`${extension}: 上传尚未完成时，不提前提交昵称`, async () => {

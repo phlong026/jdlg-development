@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="report-page">
   <text class="eyebrow">甲第灵光 · 您家的建房方向</text>
   <view class="card" wx:if="{{!sections.length}}"><text class="page-title">{{statusLabel || '正在读取您的报告'}}</text><text class="body">先把一家人的需要理清楚。生成完成后，内容会自动出现在这里。</text></view>
@@ -38,3 +39,5 @@
   <report-document wx:if="{{showDocument}}" title="您的建房方向 · 前四部分" mode="preview" status="{{documentStatus}}" document-url="{{documentURL}}" bind:refresh="document" />
   <text class="caption">报告用于前期沟通。审批、结构安全、地勘及最终造价须由当地具备资质的专业人员核实。</text>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

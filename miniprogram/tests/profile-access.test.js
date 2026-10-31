@@ -8,6 +8,23 @@ const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../miniprogram');
 const publicRoutes = Object.entries(require('../miniprogram/utils/tracking/routes').ROUTES)
   .filter(([, policy]) => policy.collect).map(([route]) => route);
+const app = require('../miniprogram/app.json');
+const openRoutes = new Set(['pages/login/login', 'pages/privacy/privacy', 'pages/passwordrecovery/passwordrecovery']);
+const businessRoutes = [
+  ...(app.pages || []),
+  ...(app.subPackages || []).flatMap(group => group.pages.map(page => `${group.root}/${page}`)),
+].filter(route => !openRoutes.has(route));
+
+test('every business route hides its content behind the shared profile guard', () => {
+  assert.equal(businessRoutes.length, 69);
+  for (const route of businessRoutes) {
+    const template = fs.readFileSync(path.join(root, route + '.wxml'), 'utf8');
+    const config = JSON.parse(fs.readFileSync(path.join(root, route + '.json'), 'utf8'));
+    assert.equal(config.usingComponents && config.usingComponents['login-guard'], '/components/login-guard/login-guard', route);
+    assert.match(template, /^<block wx:if="\{\{__profileAccessMounted\}\}">/, route);
+    assert.match(template, /<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked"\s*\/>\s*$/, route);
+  }
+});
 
 test('every public route mounts the profile guard outside its protected content', () => {
   assert.equal(publicRoutes.length, 23);
@@ -36,13 +53,23 @@ test('native WXML compiler renders only the login gate before profile approval o
 });
 
 function harness(route = 'pages/index/index') {
-  const calls = [], storage = { token: '' };
+  const calls = [], storage = { token: '' }, navigations = [], requests = [], toasts = [];
   let checks = 0;
   const module = { exports: {} };
-  const wx = { getStorageSync: key => storage[key], hideShareMenu() {} };
+  const wx = {
+    getStorageSync: key => storage[key],
+    setStorageSync: (key, value) => { storage[key] = value; },
+    removeStorageSync: key => { delete storage[key]; },
+    hideShareMenu() {},
+    navigateTo: options => navigations.push(options),
+    showToast: options => toasts.push(options.title),
+    request: options => requests.push(options),
+  };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/profile-access.js'), 'utf8'), {
     module, exports: module.exports, wx, console, Promise,
-    require: name => require(path.join(root, 'utils', name)),
+    require: name => name === './parameter'
+      ? { generateRequestParams: token => ({ token }), paramsToHeaders: value => value }
+      : require(path.join(root, 'utils', name)),
   });
   const definition = module.exports.wrapProfileAccess({
     data: { value: 'initial' },
@@ -59,7 +86,7 @@ function harness(route = 'pages/index/index') {
     setData(value, done) { Object.assign(this.data, value); if (done) done.call(this); },
     selectComponent: () => guard,
   };
-  return { page, calls, storage, checks: () => checks,
+  return { page, calls, storage, navigations, requests, toasts, checks: () => checks,
     mount(options = { st: 'original-share' }) { page.onLoad(options); page.onShow(); page.onReady(); },
     grant(token = 'verified-account') {
       storage.token = token;
@@ -83,6 +110,13 @@ for (const route of ['pages/index/index', 'pages/templatesquaredetails/templates
     assert.equal(h.page.onShareAppMessage().path, '/original');
   });
 }
+test('ordinary business pages are protected even when analytics collection is disabled', () => {
+  const h = harness('pages/my/my'); h.mount({ from: 'tab' });
+  assert.equal(h.checks(), 1);
+  assert.deepEqual(h.calls, []);
+  h.grant();
+  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
+});
 test('cached token is not profile approval; stale approval cannot unlock another account', () => {
   const h = harness(); h.storage.token = 'cached'; h.mount();
   assert.deepEqual(h.calls, []);
@@ -94,7 +128,7 @@ test('every return verifies again, preserves business state and resumes once', (
   const h = harness(); h.mount(); h.grant(); h.page.data.value = 'retained';
   h.page.onHide(); h.page.onShow();
   assert.equal(h.page.data.__profileAccessReady, false);
-  assert.equal(h.page.data.__profileAccessMounted, true, 'revalidation keeps mounted content and its observers');
+  assert.equal(h.page.data.__profileAccessMounted, false, 'revalidation immediately hides previously approved content');
   assert.equal(h.checks(), 2);
   h.grant(); h.grant();
   assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready', 'hide', 'show']);
@@ -106,9 +140,36 @@ test('hidden/unloaded pages ignore late verification and never fetch content', (
   h.page.onUnload(); h.page.onShow(); h.grant();
   assert.deepEqual(h.calls, []);
 });
-test('missing component fails closed instead of test-only bypass', () => {
+test('missing component without a login redirects to the reusable login flow', () => {
   const h = harness(); h.page.selectComponent = () => null; h.mount();
   assert.deepEqual(h.calls, []); assert.equal(h.page.data.__profileAccessReady, false);
+  assert.equal(h.navigations.length, 1);
+  assert.equal(h.navigations[0].url, '/pages/login/login?from=profile-gate');
+});
+test('missing component verifies a complete profile before running ordinary page code', () => {
+  const h = harness('pages/my/my'); h.page.selectComponent = () => null;
+  h.storage.token = 'verified'; h.storage.userInfo = { id: 99 };
+  h.mount({ from: 'tab' });
+  assert.deepEqual(h.calls, []); assert.equal(h.requests.length, 1);
+  h.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '客户', avatar: 'https://cdn.example/avatar.png' } } });
+  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
+  assert.equal(h.page.data.__profileAccessReady, true);
+  assert.equal(h.storage.userInfo.id, 9, 'authority replaces a stale cache id for the current token');
+});
+test('missing component clears an unverifiable current account and returns to login', () => {
+  const h = harness('pages/my/my'); h.page.selectComponent = () => null;
+  h.storage.token = 'unverifiable'; h.storage.userInfo = { id: 99 }; h.mount();
+  h.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 0, nickname: '客户', avatar: 'https://cdn.example/avatar.png' } } });
+  assert.equal(h.storage.token, undefined); assert.equal(h.storage.userInfo, undefined);
+  assert.equal(h.navigations.length, 1); assert.deepEqual(h.calls, []);
+});
+test('missing component stores an authoritative incomplete profile before opening completion', () => {
+  const h = harness('pages/my/my'); h.page.selectComponent = () => null;
+  h.storage.token = 'verified'; h.storage.userInfo = { id: 99, staleBusinessField: 'old-account' }; h.mount();
+  h.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '客户', avatar: '' } } });
+  assert.equal(h.storage.userInfo.id, 9); assert.equal(h.storage.userInfo.nickname, '客户');
+  assert.equal(h.storage.userInfo.staleBusinessField, undefined);
+  assert.equal(h.navigations.length, 1); assert.deepEqual(h.calls, []);
 });
 test('warm entry waits for profile and uses latest original options', () => {
   const h = harness('pages/templatesquaredetails/templatesquaredetails'); h.mount({ id: 'old', st: 'old-share' }); h.grant();
@@ -150,7 +211,9 @@ test('token change during rendering relocks content and starts server revalidati
   assert.equal(h.calls.filter(x => x[0] === 'show').length, 0);
 });
 test('privacy/login pages remain accessible without recursively requiring login', () => {
-  const h = harness('pages/privacy/privacy'); h.mount();
-  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
-  assert.equal(h.checks(), 0);
+  for (const route of ['pages/privacy/privacy', 'pages/login/login', 'pages/passwordrecovery/passwordrecovery']) {
+    const h = harness(route); h.mount();
+    assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
+    assert.equal(h.checks(), 0);
+  }
 });

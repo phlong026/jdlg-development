@@ -1,1 +1,10 @@
-{"navigationStyle":"default","navigationBarTitleText":"您家的建房方向","navigationBarBackgroundColor":"#f2ece1","navigationBarTextStyle":"black","usingComponents":{"report-document":"/components/report-document/report-document"}}
+{
+  "navigationStyle": "default",
+  "navigationBarTitleText": "您家的建房方向",
+  "navigationBarBackgroundColor": "#f2ece1",
+  "navigationBarTextStyle": "black",
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
+    "report-document": "/components/report-document/report-document"
+  }
+}

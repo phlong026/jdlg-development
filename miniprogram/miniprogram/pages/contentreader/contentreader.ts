@@ -4,6 +4,7 @@ const tracking=require('../../utils/tracking/index');
 const api=require('../../utils/tracking/api');
 const {createVideoTracker}=require('../../utils/tracking/video');
 const {renderArticleDocument}=require('../../utils/article-document');
+const {resolveProtectedMediaURL}=require('../../utils/protected-media');
 const ROUTE='pages/contentreader/contentreader';
 Page({
  data:{loading:true,error:'',content:null,contentReady:false,media:[],articleBlocks:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false,webLinkBusy:false},
@@ -39,15 +40,17 @@ Page({
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(String(collectionID||''))||!Number.isInteger(collectionVersion)||collectionVersion<1||this.options.item_position===undefined||!Number.isInteger(position)||position<0)throw new Error('合集入口不完整');
     readPath='/project-collections/'+encodeURIComponent(collectionID)+'/versions/'+collectionVersion+'/items/'+position+'/content';
    }
-   const content=await api.request(readPath,'GET',{},undefined,false);
+   const content=await api.request(readPath,'GET',{},undefined,true);
    if(inCollection&&(content.content_id!==id||Number(content.version)!==version))throw new Error('合集作品已改变');
    if(sequence!==this.loadSequence)return;
    const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync(),width=Math.max(240,window.windowWidth-40);
-   const media=(content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map((asset,index)=>({...asset,domId:'media-'+index,playerKey:asset.media_id,errorKey:'legacyMedia'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))}));
+   const media=await Promise.all((content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map(async(asset,index)=>({...asset,url:await resolveProtectedMediaURL(asset.url),domId:'media-'+index,playerKey:asset.media_id,errorKey:'legacyMedia'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))})));
+   if(sequence!==this.loadSequence)return;
    const articleBlocks=content.body_format==='article_v2'?renderArticleDocument(content.body,media,width):[];
-   if(content.cover)content.cover={...content.cover,url:api.mediaURL(content.cover.url)};
+   if(content.cover){const coverURL=api.mediaURL(content.cover.url);content.cover={...content.cover,url:coverURL?await resolveProtectedMediaURL(coverURL):''};}
+   if(sequence!==this.loadSequence)return;
    this.setData({content,media,articleBlocks,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
-  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
+  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:error&&error.code==='MEDIA_DOWNLOAD_FAILED'?'素材加载失败，请检查网络后重试。':'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
  },
  renderedMedia(){return this.data.content&&this.data.content.body_format==='article_v2'?this.data.articleBlocks.filter(block=>block.kind==='image'||block.kind==='video'):this.data.media;},
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},

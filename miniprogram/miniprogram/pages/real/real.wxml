@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/real/real.wxml 资质认证：个人认证 / 企业认证 与身份认证一致深色风格 -->
 <view class="page">
   <!-- 统一导航栏 -->
@@ -109,3 +110,5 @@
     </button>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

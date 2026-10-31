@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <navigation-bar title="{{editing ? (current ? '编辑合集' : '新建合集') : '项目合集'}}" back="{{true}}" custom-back="{{true}}" bind:back="goBack" background="#fbfaf7" />
   <view class="body">
@@ -44,3 +45,5 @@
 
   <view wx:if="{{preview}}" class="mask"><view class="preview-card"><text class="preview-title">{{preview.collection.title}}</text><text class="meta">{{preview.collection.items.length}}个作品</text><view wx:for="{{preview.collection.items}}" wx:key="content_id" class="preview-row"><text>{{index + 1}}</text><text>{{item.title}}</text></view><view class="preview-actions"><button bindtap="closePreview" disabled="{{busy}}">继续编辑</button><button class="primary" bindtap="publishCurrent" loading="{{busy}}">确认发布</button></view></view></view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

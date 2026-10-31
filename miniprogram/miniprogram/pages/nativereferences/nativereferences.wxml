@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <navigation-bar title="{{navigationTitle}}" back="{{true}}" background="#f6f3ed" />
 <view class="page">
   <view wx:if="{{loginRequired}}" class="state"><text>登录后可使用资料库</text><button class="primary" bindtap="goLogin">去登录</button></view>
@@ -34,3 +35,5 @@
     </block>
   </block>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
   <view wx:elif="{{loginRequired}}" class="state"><text>请使用受邀的甲第账号登录后查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
@@ -43,3 +44,5 @@
     <text class="footer">卡片只是入口；收件人仍需用受邀账号登录。</text>
   </block>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -31,21 +31,14 @@ Component({
             const revision = (this._checkRevision || 0) + 1;
             this._checkRevision = revision;
             const token = wx.getStorageSync('token');
-            const cached = (wx.getStorageSync('userInfo') || {});
-            const accountID = Number((cached === null || cached === void 0 ? void 0 : cached.id) || 0);
-            // 核验全程静默：有 token 就乐观放行内容（资料齐全的缓存），失败再降级为底部卡片。
-            this.setData({ visible: false, checking: !!token, needsLogin: !token, completingProfile: false, error: '', optimistic: false });
+            // 缓存只用于预填资料，不能替代服务器确认；否则旧包或换号缓存会先加载内容并写入访问记录。
+            this.setData({ visible: false, checking: !!token, needsLogin: !token, completingProfile: false, error: '' });
             this.triggerEvent('gated');
             const editor = this.selectComponent('#nicknameGuard');
             if (!token) {
                 editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
                 this.setData({ visible: true, checking: false });
                 return false;
-            }
-            if ((0, profile_validation_1.hasCompleteProfile)({ nickname: cached === null || cached === void 0 ? void 0 : cached.nickname, avatar: cached === null || cached === void 0 ? void 0 : cached.avatar })) {
-                const optimistic = { id: accountID, nickname: String((cached === null || cached === void 0 ? void 0 : cached.nickname) || '').trim(), avatar: String((cached === null || cached === void 0 ? void 0 : cached.avatar) || '').trim() };
-                this.setData({ optimistic: true });
-                this.triggerEvent('authenticated', { token, profile: optimistic });
             }
             const current = () => this._checkRevision === revision && wx.getStorageSync('token') === token;
             try {
@@ -68,8 +61,17 @@ Component({
                     throw new Error(((_c = res.data) === null || _c === void 0 ? void 0 : _c.msg) || '资料读取失败，请重试');
                 const profile = res.data.data || {};
                 const id = Number(profile.id);
-                if (!Number.isSafeInteger(id) || id <= 0 || (accountID && accountID !== id))
-                    throw new Error('账号资料不匹配，请重新登录');
+                if (!Number.isSafeInteger(id) || id <= 0) {
+                    wx.removeStorageSync('token');
+                    wx.removeStorageSync('userInfo');
+                    editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
+                    this.triggerEvent('gated');
+                    this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
+                    return false;
+                }
+                const cachedProfile = wx.getStorageSync('userInfo') || {};
+                const sameAccount = Number(cachedProfile.id || 0) === id;
+                wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
                 if (!(0, profile_validation_1.hasCompleteProfile)(profile)) {
                     if (!editor || typeof editor.show !== 'function')
                         throw new Error('资料填写暂不可用，请重试');
@@ -84,13 +86,8 @@ Component({
                 const verified = { ...profile, id, nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim() };
                 wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...verified, token });
                 editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
-                if (!this.data.optimistic) {
-                    this.setData({ visible: false, checking: false, completingProfile: false });
-                    this.triggerEvent('authenticated', { token, profile: verified });
-                }
-                else {
-                    this.setData({ visible: false, checking: false, completingProfile: false, optimistic: false });
-                }
+                this.setData({ visible: false, checking: false, completingProfile: false });
+                this.triggerEvent('authenticated', { token, profile: verified });
                 return true;
             }
             catch (error) {

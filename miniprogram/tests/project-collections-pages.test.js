@@ -8,9 +8,9 @@ const vm = require('node:vm');
 const root = path.join(__dirname, '../miniprogram');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-function pageRuntime(api, token = 'designer-session') {
+function pageRuntime(api, token = 'designer-session', resolveProtectedMediaURL = async url => 'wxfile://tmp/' + url.split('/').at(-1)) {
   let definition;
-  const storage = { token };
+  const storage = { token, userInfo: { id: 9, nickname: '设计师', avatar: 'https://cdn.example/avatar.png', token } };
   const navigations = [];
   const modals = [];
   const wx = {
@@ -23,7 +23,7 @@ function pageRuntime(api, token = 'designer-session') {
     showModal(options) { modals.push(options); options.success && options.success({ confirm: true }); },
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.js'), 'utf8'), {
-    Page: value => { definition = value; }, require: () => api, wx,
+    Page: value => { definition = value; }, require: name => name.includes('protected-media') ? { resolveProtectedMediaURL } : api, wx,
     Promise, Date, Math, Object, Array, Set, String, Number, Error, encodeURIComponent,
   });
   const page = Object.assign({}, definition, {
@@ -94,6 +94,18 @@ test('collection page discards late data after account switch', async () => {
   assert.equal(runtime.page.data.collections.length, 0);
 });
 
+test('collection workbench renders protected covers from authenticated temporary files', async () => {
+  const api = {
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [] }),
+    listCollections: async () => ({ items: [{ collection_id: 'collection-0001', version: 1, cover: { url: '/cover-workbench' } }] }),
+    mediaURL: value => 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/media' + value,
+  };
+  const { page } = pageRuntime(api);
+  page.onShow();
+  await tick(); await tick();
+  assert.equal(page.data.collections[0].cover_url, 'wxfile://tmp/cover-workbench');
+});
+
 test('collection owner picker shows labels but saves the authorized owner ID', async () => {
   const saved = [];
   const api = {
@@ -124,12 +136,13 @@ function readerRuntime(api, token = '') {
   let definition;
   const navigations = [];
   const wx = {
+    getStorageSync: key => key === 'token' ? token : key === 'userInfo' ? { id: 9, nickname: '设计师', avatar: 'https://cdn.example/avatar.png', token } : '',
     hideShareMenu() {}, showShareMenu() {},
     navigateTo: options => { navigations.push(options.url); if(options.success) options.success(); },
     navigateBack() {}, switchTab() {},
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/collectionreader/collectionreader.js'), 'utf8'), {
-    Page: value => { definition = value; }, require: name => name.includes('tracking/index') ? tracking : api, wx,
+    Page: value => { definition = value; }, require: name => name.includes('tracking/index') ? tracking : name.includes('protected-media') ? { resolveProtectedMediaURL: async url => 'wxfile://tmp/' + url.split('/').at(-1) } : api, wx,
     Promise, Object, Array, String, Number, Error, encodeURIComponent,
   });
   const page = Object.assign({}, definition, { data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { Object.assign(this.data, values); if (callback) callback(); } });
@@ -139,9 +152,9 @@ function readerRuntime(api, token = '') {
 test('collection reader opens only the server-validated fixed child target and creates no child share', async () => {
   const calls = [];
   const api = {
-    readPublishedCollection: async () => ({ collection_id: 'collection-0001', version: 3, title: '对外案例', items: [{ title: '案例甲', available: true }] }),
+    readPublishedCollection: async () => ({ collection_id: 'collection-0001', version: 3, title: '对外案例', cover: { url: '/cover-main' }, items: [{ title: '案例甲', available: true, cover: { url: '/cover-item' } }] }),
     openPublishedItem: async (...args) => { calls.push(args); return { route_key: 'pages/contentreader/contentreader', path: '/pages/contentreader/contentreader?collection_id=collection-0001&collection_version=3&content_id=content-0001&content_version=2&item_position=0' }; },
-    mediaURL: () => '',
+    mediaURL: value => 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/media' + value,
   };
   const { page, navigations, events } = readerRuntime(api, 'verified-token-b');
   page.onLoad({ collection_id: 'collection-0001', collection_version: '3' });
@@ -150,6 +163,8 @@ test('collection reader opens only the server-validated fixed child target and c
   assert.deepEqual(calls[0], ['collection-0001', 3, 0]);
   assert.equal(navigations[0], '/pages/contentreader/contentreader?collection_id=collection-0001&collection_version=3&content_id=content-0001&content_version=2&item_position=0&st=verified-token-b');
   assert.equal(page.data.contentReady,true);
+  assert.equal(page.data.collection.cover.url,'wxfile://tmp/cover-main');
+  assert.equal(page.data.items[0].cover_url,'wxfile://tmp/cover-item');
   assert.equal(events[0][1],'content_click');
   assert.equal(page.onShareAppMessage().path, '/pages/collectionreader/collectionreader?collection_id=collection-0001&collection_version=3');
 });
@@ -186,6 +201,15 @@ test('collection save cannot overwrite edits made while its request is in flight
  const saving=page.saveDraft();page.setTitle({detail:{value:'继续编辑'}});
  finish({collection_id:'collection-0001',revision:1,title:'原稿',items:[{content_id:'content-0001',content_version:1}]});await saving;
  assert.equal(page.data.title,'继续编辑');assert.equal(page.data.dirty,true);assert.equal(page.data.current.revision,1);
+});
+
+test('collection cover download cannot overwrite edits made after save returns',async()=>{
+ let finishMedia;
+ const api={mutationKey:()=> 'key',workbenchContext:async()=>({owners:['owner-a'],owner_choices:[{owner_id:'owner-a',display_name:'设计师昵称'}]}),listCollections:async()=>({items:[]}),listCandidates:async()=>({items:[]}),saveCollection:async input=>({collection_id:'collection-0001',revision:1,title:input.title,owner_id:'owner-a',items:[{content_id:'content-0001',content_version:1,cover:{url:'/cover'}}]}),mediaURL:value=>'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/media'+value};
+ const {page}=pageRuntime(api,'designer-session',()=>new Promise(resolve=>{finishMedia=resolve;}));page.onShow();await tick();
+ page.setData({editing:true,title:'原稿',owners:['owner-a'],ownerChoices:[{owner_id:'owner-a',display_name:'设计师昵称'}],selectedItems:[{content_id:'content-0001',content_version:1}]});
+ const saving=page.saveDraft();await tick();page.setTitle({detail:{value:'继续编辑'}});finishMedia('wxfile://tmp/cover');await saving;
+ assert.equal(page.data.title,'继续编辑');assert.equal(page.data.dirty,true);
 });
 
 test('collection editor asks before dropping changes and modal callbacks cannot clear another account',async()=>{

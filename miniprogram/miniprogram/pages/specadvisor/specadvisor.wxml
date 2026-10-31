@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="spec-page">
   <wxs src="./specadvisor.wxs" module="util" />
   <navigation-bar background="transparent">
@@ -119,3 +120,5 @@
     </scroll-view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

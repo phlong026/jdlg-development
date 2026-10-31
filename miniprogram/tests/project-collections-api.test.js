@@ -33,7 +33,7 @@ function loadAPI(autoRespond = true) {
   return { api: module.exports, requests, signatures };
 }
 
-test('collection API signs management calls and keeps public reader calls unsigned', async () => {
+test('collection API signs management and published-reader calls', async () => {
   const { api, requests, signatures } = loadAPI();
   await api.listCandidates({ cursor: 'next page', limit: 20 });
   await api.saveCollection({ title: '案例合集', owner_id: 'owner-a', items: [] });
@@ -42,11 +42,11 @@ test('collection API signs management calls and keeps public reader calls unsign
   await api.readPublishedCollection('collection-1', 2);
   await api.openPublishedItem('collection-1', 2, 0);
 
-  assert.equal(signatures.length, 4);
+  assert.equal(signatures.length, 6);
   assert.equal(signatures[0].route, '/api/v1/miniprogram/workbench/project-collections/candidates?cursor=next%20page&limit=20');
   assert.equal(signatures[0].device, 'known-device');
-  assert.equal(requests[4].header.token, undefined);
-  assert.equal(requests[5].header.token, undefined);
+  assert.equal(requests[4].header.token, 'designer-session');
+  assert.equal(requests[5].header.token, 'designer-session');
   assert.match(requests[4].url, /\/tracking\/project-collections\/collection-1\/versions\/2$/);
   assert.match(requests[5].url, /\/items\/0$/);
   assert.deepEqual(JSON.parse(JSON.stringify(requests[3].data)), {
