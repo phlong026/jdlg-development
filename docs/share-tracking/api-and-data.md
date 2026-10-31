@@ -87,18 +87,28 @@ as_of固定收件快照用于分页；原始记录过期后，早于已冻结投
 
 已有“我的”页增加“可分享素材”，复用已注册的 `pages/contentreader/contentreader`，不新增页面。
 
-- `GET /api/v1/miniprogram/tracking/materials?limit=20&cursor=...`：必须通过现有完整签名 token 验证。服务端按当前账号、配置 tenant、`tracking_access.enabled=true AND can_manage=true`、`users.user_type=miniprogram`、账号 active 取 owner 范围。没有授权为 403，前端隐藏入口；权限/数据服务故障为错误和重试态，不能假装空数据。仅返回该范围的不可变已发布快照标题、封面、固定版本、发布状态及 reader route，不返回草稿正文/标题、owner、访问统计。默认20、最高50，受同一后端查询预算限制。
+- `GET /api/v1/miniprogram/tracking/materials?limit=20&cursor=...`：必须通过现有完整签名 token 验证。服务端只接受 active 的 `users.user_type=miniprogram` 账号，将其 `tracking_access.enabled=true AND can_manage=true` 显式范围与下述已认证设计师个人范围合并去重。没有授权为 403，前端隐藏入口；权限/数据服务故障为错误和重试态，不能假装空数据。仅返回该范围的不可变已发布快照标题、封面、固定版本、发布状态及 reader route，不返回草稿正文/标题、owner、访问统计。默认20、最高50，受同一后端查询预算限制。
 - `GET /api/v1/miniprogram/tracking/materials/:id/versions/:version`：每次点击重新验证当前权限、owner、固定发布版本和撤回墓碑，返回同一安全元数据。前端仅能导航到固定 reader；无权限、草稿、其他owner和撤回统一不可访问。此操作不生成PV或分享成功记录。
 - 发布后继续编辑草稿时，入口保持该素材最近已发布的固定快照，绝不混入正在编辑的标题/封面。撤回后不再列出，旧reader也不能读取。内容开关独立于分析开关，关闭分析或拒绝告知仍可打开和原生分享。
 - reader 成功加载前以及读取失败/撤回时隐藏原生分享菜单并清空旧内容；成功后分享目标仍是实际 content_id/content_version，标题/封面来自该发布版本。
 - `POST /entry` 对 reader 使用真实发布素材 owner，不使用默认owner。已认证且当前具有该owner素材能力的mini账号由服务端判定 self；客户端不可提供self/preview标记。其准备分享的阅读事件不进入客户PV/UV/可见时长统计；读取权限故障时采集失败关闭，不影响公开阅读。普通接收者仍按合法告知同意后记录。
 - 私有列表不落本地缓存，返回 `Cache-Control: private, no-store`。换号/登出/离开页立即清空列表，并丢弃旧请求；重复点击、旧打开请求不能把新账号导航到旧上下文。
 
-### 授权配置前提（不自动执行）
+### 设计师个人创作与其他角色授权
 
-现有小程序登录只接受 `users.user_type='miniprogram'`，管理后台账号只接受management身份。这两个账号不会根据名称、手机号或 management_access 自动映射。当前没有专门的mini素材授权UI；上线前须由有权限的数据库管理员确认实际mini用户ID、已存在的tenant和素材owner，经业务批准后显式配置 `tracking_access`。不能把管理端已授权当成小程序已授权。
+已认证设计师沿用现有小程序登录，不需要再次登录或新增授权记录。服务端要求存在 `certification_applications.status='approved' AND type='designer' AND TRIM(identity_type)='设计师'`，从服务端账号 ID 派生个人 owner `designer-<userID>`，仅赋予 `can_manage`。自填身份、`can_withdraw`、企业认证、施工队认证、待审核认证及空身份历史认证均不自动取得此能力；不使用默认组织 owner 兜底。
 
-下面仅是最小权限配置模板，不随迁移执行，也未在本轮对任何数据库执行。全部占位值必须由授权管理员核实，owner必须与要分享的素材一致；同一mini账号需要多个owner时逐项审批。mini能力仅供公开素材列表和打开，不允许访问管理端草稿或客户数据。
+个人范围同时用于内容工作台、私有媒体、原生资料引用、项目笔记管理、导入请求与异步任务，以及项目笔记成员访问/通知对原设计师资格的实时复核。认证失效或账号被封禁后，下次校验立即失效；独立的有效显式授权仍按自身规则生效。项目笔记仍校验项目设计师本人，引用仍校验创建者与 owner，不能因个人认证读取他人的私有内容。
+
+此资格不授予 `can_view`、CRM、删除访客或规则管理权限。“我的分享访问”仍单独要求显式 `can_view`；公开阅读和原生分享不因此扩大到客户数据。
+
+`GET /api/v1/miniprogram/tracking/my-shares/context` 沿用小程序完整签名登录及独立的 `can_view` 范围校验。授权成功仅返回 `data: {"can_view": true, "owners": [...]}`，不读取或返回分享记录、访客记录或统计；前端据此显示分享访问入口。未登录/签名无效返回 401，没有有效查看授权返回 403，`can_manage` 或设计师认证不隐含查看能力。owner 始终来自服务端当前授权，响应继续使用 `Cache-Control: private, no-store`。
+
+### 其他角色的显式授权配置（不自动执行）
+
+现有小程序登录只接受 `users.user_type='miniprogram'`，管理后台账号只接受management身份。这两个账号不会根据名称、手机号或 management_access 自动映射。其他角色及设计师的额外组织范围仍须经业务批准后显式配置 `tracking_access`。当前没有专门的mini素材授权UI，须由有权限的数据库管理员确认实际mini用户ID、tenant和素材owner。不能把管理端已授权当成小程序已授权。
+
+下面仅是最小权限配置模板，不随迁移执行，也未在本轮对任何数据库执行。全部占位值必须由授权管理员核实，owner必须与要操作的素材一致；同一mini账号需要多个owner时逐项审批。`can_manage` 允许该 owner 范围的内容创作和素材管理，不授予管理端登录或客户数据访问。
 
 ```sql
 -- 先在受控环境核验账号类型和状态，以及目标素材owner；不得按昵称猜测账号。
@@ -111,12 +121,12 @@ SELECT id, :verified_tenant_id, :verified_content_owner,
 FROM users
 WHERE id = :verified_miniprogram_user_id
  AND user_type = 'miniprogram' AND COALESCE(status, 'active') = 'active';
--- 撤销此mini素材能力（仍需真实管理员授权）：
+-- 撤销此显式授权（仍需真实管理员授权；不会撤销有效设计师认证派生的个人范围）：
 UPDATE tracking_access SET enabled=FALSE, updated_by=:authorized_operator_id, updated_at=UTC_TIMESTAMP(6)
 WHERE user_id=:verified_miniprogram_user_id AND tenant_id=:verified_tenant_id AND owner_id=:verified_content_owner;
 ```
 
-自动覆盖：`service/tracking/published_materials_test.go`、`service/route/share_tracking_materials_test.go`、`miniprogram/tests/tracking-materials.test.js`。数据库驱动和Node VM只验证代码合同；真实签名登录/Redis、授权配置、微信开发者工具/真机样式、真实A分享给B的全链路仍是上线验收项。
+自动覆盖：`service/tracking/published_materials_test.go`、`service/route/share_tracking_materials_test.go`、`service/route/share_tracking_designer_scope_test.go`、`miniprogram/tests/tracking-materials.test.js`。数据库驱动和Node VM只验证代码合同；真实签名登录/Redis、授权配置、微信开发者工具/真机样式、真实A分享给B的全链路仍是上线验收项。
 
 ## 三期工作台、分享网页与通知增量
 

@@ -65,6 +65,9 @@ func registerTrackingMyHandlers(my *gin.RouterGroup, svc *tracking.Service) {
 	scope := func(c *gin.Context) tracking.Scope {
 		return c.MustGet("tracking.my.scope").(tracking.Scope)
 	}
+	my.GET("/context", func(c *gin.Context) {
+		trackingResponse(c, gin.H{"can_view": true, "owners": scope(c).Owners}, nil)
+	})
 	my.GET("", func(c *gin.Context) {
 		filter, err := trackingFilter(c)
 		if err != nil {
