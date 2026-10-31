@@ -37,7 +37,7 @@ Page({
     categories: [{ key: 'all', label: '全部' }, { key: 'note', label: '笔记', unavailable: true }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false,
     context: null, items: [], next_cursor: '', snapshot: null,
-    importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
+    importServiceEnabled: false, importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
     importRights: '', importBusy: false, importError: '', imports: [], importPolling: false,
   },
   onLoad(options) { this.setData({ view: options && options.view === 'import' ? 'import' : 'studio' }); },
@@ -48,7 +48,7 @@ Page({
     this._visible = true; this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
     this.setData({
       context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false,
-      loginRequired: !token, loading: !!token, loadingMore: false, importEnabled: false, importCapabilityReason: '',
+      loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
       importError: '', imports: [], importPolling: false,
     });
@@ -147,16 +147,26 @@ Page({
       const capability = await api.importCapabilities();
       if (!this.current(epoch)) return;
       const platforms = (capability.platforms || []).map(item => Object.assign({}, item, { label: platformText(item.platform) }));
-      const available = capability.enabled === true && platforms.some(item => item.available);
+      const serviceEnabled = capability.enabled === true;
+      const available = serviceEnabled && platforms.some(item => item.available);
       const reason = capability.reason || (!available ? platforms.map(item => item.reason).filter(Boolean).join('；') : '');
-      this.setData({ importEnabled: available, importCapabilityReason: reason, importPlatforms: platforms, importError: '' });
+      this.setData({
+        importServiceEnabled: serviceEnabled, importEnabled: available,
+        importCapabilityReason: reason || (!serviceEnabled ? '链接导入功能当前未开启' : ''),
+        importPlatforms: platforms, importError: '', importPolling: false,
+        ...(!serviceEnabled ? { imports: [] } : {}),
+      });
+      if (!serviceEnabled) { this.stopImportPoll(); return; }
       await this.refreshImports(epoch);
     } catch (error) {
-      if (this.current(epoch)) this.setData({ importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: error.message || '导入能力加载失败' });
+      if (this.current(epoch)) {
+        this.stopImportPoll();
+        this.setData({ importServiceEnabled: false, importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: error.message || '导入能力加载失败', importPolling: false });
+      }
     }
   },
   async refreshImports(epoch) {
-    if (!this.current(epoch) || this._importPollEpoch === epoch) return;
+    if (!this.current(epoch) || !this.data.importServiceEnabled || this._importPollEpoch === epoch) return;
     this._importPollEpoch = epoch;
     this.setData({ importPolling: true });
     try {
@@ -175,7 +185,7 @@ Page({
   },
   scheduleImportPoll(epoch) {
     this.stopImportPoll();
-    if (!this.current(epoch)) return;
+    if (!this.current(epoch) || !this.data.importServiceEnabled) return;
     this._importTimer = setTimeout(() => { this._importTimer = null; this.refreshImports(epoch); }, 3000);
   },
   stopImportPoll() { if (this._importTimer) clearTimeout(this._importTimer); this._importTimer = null; },

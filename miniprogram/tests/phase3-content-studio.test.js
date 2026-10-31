@@ -60,11 +60,17 @@ test('content categories filter loaded records without manufacturing assets or t
   assert.equal(page.data.next_cursor, 'page-2');
 });
 
-test('temporarily disabling import creation does not hide existing tasks', async () => {
-  const { page } = runtime({ importCapabilities: async () => ({ enabled: false, platforms: [] }), listImports: async () => ({ items: [{ import_id: 'saved-task', status: 'ready', content_id: 'article-a' }] }) });
+test('disabling the import service keeps content usable without requesting import tasks', async () => {
+  let importListCalls = 0;
+  const { page } = runtime({
+    importCapabilities: async () => ({ enabled: false, reason: '链接导入暂未开通', platforms: [] }),
+    listImports: async () => { importListCalls += 1; throw Object.assign(new Error('内容导入服务暂不可用'), { statusCode: 503 }); },
+  });
   page.onShow(); await tick(); await tick();
   assert.equal(page.data.importEnabled, false);
-  assert.equal(page.data.imports[0].import_id, 'saved-task');
+  assert.equal(page.data.items[0].content_id, 'article-a');
+  assert.equal(page.data.imports.length, 0);
+  assert.equal(importListCalls, 0);
 });
 
 test('pagination reuses a pending cover download and late covers cannot cross accounts', async () => {
