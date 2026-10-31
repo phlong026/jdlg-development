@@ -15,31 +15,35 @@ import (
 // Traffic is restricted to this exact share; owner membership alone is never
 // enough to expose a colleague's distribution results.
 type MyShare struct {
-	ID        string     `json:"share_id"`
-	At        time.Time  `json:"created_at"`
-	Route     string     `json:"route_key,omitempty"`
-	Content   string     `json:"content_id,omitempty"`
-	Version   int        `json:"content_version,omitempty"`
-	Title     string     `json:"title"`
-	Type      string     `json:"type,omitempty"`
-	Status    string     `json:"status,omitempty"`
-	Channel   string     `json:"channel,omitempty"`
-	Expires   time.Time  `json:"expires_at"`
-	Revoked   bool       `json:"revoked"`
-	Visitors  int        `json:"visitor_count"`
-	Views     int        `json:"page_views"`
-	LastVisit *time.Time `json:"last_visit,omitempty"`
+	ID             string     `json:"share_id"`
+	At             time.Time  `json:"created_at"`
+	Route          string     `json:"route_key,omitempty"`
+	Content        string     `json:"content_id,omitempty"`
+	Version        int        `json:"content_version,omitempty"`
+	Title          string     `json:"title"`
+	Type           string     `json:"type,omitempty"`
+	Status         string     `json:"status,omitempty"`
+	Channel        string     `json:"channel,omitempty"`
+	Expires        time.Time  `json:"expires_at"`
+	Revoked        bool       `json:"revoked"`
+	Visitors       int        `json:"visitor_count"`
+	Views          int        `json:"page_views"`
+	DirectoryViews int        `json:"directory_views,omitempty"`
+	ContentViews   int        `json:"content_views,omitempty"`
+	LastVisit      *time.Time `json:"last_visit,omitempty"`
 }
 
 // MyShareVisit is the cumulative, snapshot-pinned traffic from one visitor to
 // one authorized share. It deliberately carries no company-wide history.
 type MyShareVisit struct {
-	Visitor  Visitor   `json:"visitor"`
-	First    time.Time `json:"first_visit"`
-	Last     time.Time `json:"last_visit"`
-	Views    int       `json:"page_views"`
-	Visible  int64     `json:"visible_ms"`
-	Sessions int       `json:"session_count"`
+	Visitor        Visitor   `json:"visitor"`
+	First          time.Time `json:"first_visit"`
+	Last           time.Time `json:"last_visit"`
+	Views          int       `json:"page_views"`
+	DirectoryViews int       `json:"directory_views,omitempty"`
+	ContentViews   int       `json:"content_views,omitempty"`
+	Visible        int64     `json:"visible_ms"`
+	Sessions       int       `json:"session_count"`
 }
 
 func actorVisitorKey(actor int64) string {
@@ -184,7 +188,7 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 			share := row.share
 			item := MyShare{ID: share.ID, At: row.at, Route: share.Route, Content: share.Content, Version: share.Version, Channel: share.Channel, Expires: share.Expires, Revoked: share.Revoked}
 			stats := traffic[share.ID]
-			item.Visitors, item.Views, item.LastVisit = len(stats.visitors), stats.views, stats.last
+			item.Visitors, item.Views, item.DirectoryViews, item.ContentViews, item.LastVisit = len(stats.visitors), stats.views, stats.directoryViews, stats.contentViews, stats.last
 			if share.Content != "" && share.Version > 0 {
 				key := share.Route + "\x00" + contentKey(share.Content, share.Version)
 				material := materials[key]
@@ -213,6 +217,14 @@ func (s *Service) myShareMaterials(ctx context.Context, r Repository, scope Scop
 			continue
 		}
 		key := share.Route + "\x00" + contentKey(share.Content, share.Version)
+		if share.Route == projectCollectionReaderRoute {
+			material, err := s.projectCollectionShareMaterial(r, share)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = material
+			continue
+		}
 		out[key] = VisitorContent{ID: share.Content, Version: share.Version, Route: share.Route, Title: "素材暂不可访问", Status: "unavailable"}
 		if LegacyRoute(share.Route) {
 			legacyByRoute[share.Route] = appendUnique(legacyByRoute[share.Route], share.Content)
@@ -312,6 +324,9 @@ func (s *Service) myShareMaterials(ctx context.Context, r Repository, scope Scop
 			continue
 		}
 		key := share.Route + "\x00" + contentKey(share.Content, share.Version)
+		if share.Route == projectCollectionReaderRoute {
+			continue
+		}
 		version, versionOK := versionByID[contentKey(share.Content, share.Version)]
 		if LegacyRoute(share.Route) {
 			if !legacyAvailable[share.Route+"\x00"+share.Content] {
@@ -373,9 +388,11 @@ func (s *Service) myShareMaterials(ctx context.Context, r Repository, scope Scop
 }
 
 type myShareTrafficStats struct {
-	visitors map[string]bool
-	views    int
-	last     *time.Time
+	visitors       map[string]bool
+	views          int
+	directoryViews int
+	contentViews   int
+	last           *time.Time
 }
 
 func myShareTraffic(r Repository, owners, shares []string, f Filter, actor string) (map[string]myShareTrafficStats, error) {
@@ -421,6 +438,11 @@ func myShareTraffic(r Repository, owners, shares []string, f Filter, actor strin
 		}
 		stats.visitors[visitor] = true
 		stats.views++
+		if event.Route == projectCollectionReaderRoute {
+			stats.directoryViews++
+		} else if event.Route == publishedReaderRoute && event.Content != "" {
+			stats.contentViews++
+		}
 		at := event.Occurred
 		if stats.last == nil || at.After(*stats.last) {
 			stats.last = &at
@@ -473,10 +495,12 @@ func (s *Service) MyShareVisits(ctx context.Context, scope Scope, actor int64, s
 }
 
 type myVisitAccumulator struct {
-	first, last time.Time
-	views       int
-	sessions    map[string]bool
-	visible     int64
+	first, last    time.Time
+	views          int
+	directoryViews int
+	contentViews   int
+	sessions       map[string]bool
+	visible        int64
 }
 
 type myShareAcceptedEvent struct {
@@ -554,6 +578,11 @@ func (s *Service) myShareVisitItems(ctx context.Context, r Repository, scope Sco
 				acc.last = event.Occurred
 			}
 			acc.views++
+			if event.Route == projectCollectionReaderRoute {
+				acc.directoryViews++
+			} else if event.Route == publishedReaderRoute && event.Content != "" {
+				acc.contentViews++
+			}
 			acc.sessions[item.row.Session] = true
 			viewVisitor[event.View] = visitor
 			continue
@@ -595,7 +624,7 @@ func (s *Service) myShareVisitItems(ctx context.Context, r Repository, scope Sco
 		} else {
 			anonymous++
 		}
-		items = append(items, MyShareVisit{Visitor: visitor, First: acc.first, Last: acc.last, Views: acc.views, Visible: acc.visible, Sessions: len(acc.sessions)})
+		items = append(items, MyShareVisit{Visitor: visitor, First: acc.first, Last: acc.last, Views: acc.views, DirectoryViews: acc.directoryViews, ContentViews: acc.contentViews, Visible: acc.visible, Sessions: len(acc.sessions)})
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Last.Equal(items[j].Last) {

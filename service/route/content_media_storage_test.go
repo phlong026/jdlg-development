@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"image"
 	"image/png"
@@ -11,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -143,6 +145,34 @@ func TestPublicCOSCannotBecomeReadyMedia(t *testing.T) {
 	}
 	if items, ok := media.Items.([]tracking.Asset); !ok || len(items) != 0 {
 		t.Fatal("public storage became an authorized asset", media)
+	}
+}
+
+func TestWorkbenchMediaRoutePagesAndFiltersBeforeReturning(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	router, svc := newWorkbenchHandlerFixture(t, &scope)
+	for _, asset := range []tracking.Asset{
+		{ID: strings.Repeat("m", 32), Kind: "image", MIME: "image/png", Width: 2, Height: 2, Title: "庭院图", URL: "/api/v1/miniprogram/tracking/media/" + strings.Repeat("m", 32)},
+		{ID: strings.Repeat("n", 32), Kind: "video", MIME: "video/mp4", Width: 2, Height: 2, Title: "庭院视频", URL: "/api/v1/miniprogram/tracking/media/" + strings.Repeat("n", 32)},
+	} {
+		if err := svc.AddMedia(context.Background(), scope, asset, "owner-a"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first := workbenchRequest(t, router, http.MethodGet, "/workbench/media?limit=1&q=%E5%BA%AD%E9%99%A2&kind=image,video", nil)
+	if first.Code != http.StatusOK || !strings.Contains(first.Body.String(), "next_cursor") {
+		t.Fatalf("first=%d %s", first.Code, first.Body.String())
+	}
+	var envelope struct {
+		Data tracking.MediaPage `json:"data"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &envelope); err != nil || len(envelope.Data.Items) != 1 || envelope.Data.NextCursor == "" {
+		t.Fatalf("decode first=%+v err=%v", envelope, err)
+	}
+	second := workbenchRequest(t, router, http.MethodGet, "/workbench/media?limit=1&q=%E5%BA%AD%E9%99%A2&kind=image,video&cursor="+url.QueryEscape(envelope.Data.NextCursor), nil)
+	if second.Code != http.StatusOK || strings.Contains(second.Body.String(), envelope.Data.Items[0].ID) {
+		t.Fatalf("second=%d %s", second.Code, second.Body.String())
 	}
 }
 func TestCOSProxyNeverUsesSameIDLocalFileAndStreamsRanges(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"service/shareweb"
 	"service/tracking"
 )
+
+const shareWebCollectionRoute = "pages/collectionreader/collectionreader"
 
 type shareURLLinkCache struct {
 	mu       sync.Mutex
@@ -27,6 +30,43 @@ type shareURLLinkCall struct {
 	done  chan struct{}
 	value tracking.URLLinkResult
 	err   error
+}
+
+func shareWebHandoffTarget(path, rawQuery string) (tracking.EntryInput, error) {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil || values.Get("st") == "" {
+		return tracking.EntryInput{}, tracking.ErrUnavailable
+	}
+	target := tracking.EntryInput{Route: path, ShareToken: values.Get("st")}
+	positive := func(key string) (int, error) {
+		value, parseErr := strconv.Atoi(values.Get(key))
+		if parseErr != nil || value < 1 {
+			return 0, tracking.ErrUnavailable
+		}
+		return value, nil
+	}
+	switch path {
+	case trackingReaderRoute:
+		target.Content = values.Get("content_id")
+		target.Version, err = positive("content_version")
+		if err != nil || target.Content == "" {
+			return tracking.EntryInput{}, tracking.ErrUnavailable
+		}
+		if values.Get("collection_id") != "" || values.Get("collection_version") != "" {
+			target.CollectionID = values.Get("collection_id")
+			target.CollectionVersion, err = positive("collection_version")
+			if err != nil || target.CollectionID == "" {
+				return tracking.EntryInput{}, tracking.ErrUnavailable
+			}
+		}
+	case shareWebCollectionRoute:
+		target.Content = values.Get("collection_id")
+		target.Version, err = positive("collection_version")
+		if err != nil || target.Content == "" {
+			return tracking.EntryInput{}, tracking.ErrUnavailable
+		}
+	}
+	return target, nil
 }
 
 func newShareURLLinkCache(capacity int) *shareURLLinkCache {
@@ -102,7 +142,7 @@ func shareEntryDestination(ctx context.Context, svc *tracking.Service, scope tra
 		return nil, &tracking.Error{Status: http.StatusServiceUnavailable, Message: "分享网页尚未配置"}
 	}
 	credentials := miniprogramCredentials()
-	trackingReady := svc.Config.Enabled && (share.Route != trackingReaderRoute || svc.Config.ContentEnabled)
+	trackingReady := svc.Config.Enabled && ((share.Route != trackingReaderRoute && share.Route != shareWebCollectionRoute) || svc.Config.ContentEnabled)
 	return gin.H{
 		"share_id": share.ID, "native_path": path, "native_query": query,
 		"web_url": origin + "/share/s/" + url.PathEscape(token), "expires_at": share.Expires,
@@ -169,6 +209,13 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		// Inline spacing values are server-generated bounded integers. Stored rich
 		// text is re-sanitized and cannot carry style attributes.
 		c.Header("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+		if share.Route == shareWebCollectionRoute {
+			collection, readErr := svc.ReadPublishedProjectCollection(c.Request.Context(), share.Content, share.Version)
+			if readErr != nil || shareweb.RenderCollection(c.Writer, shareweb.CollectionPage{Code: code, Collection: collection, Trackable: svc.Config.Enabled}) != nil {
+				c.Status(http.StatusNotFound)
+			}
+			return
+		}
 		if share.Route != trackingReaderRoute {
 			if !tracking.LegacyRoute(share.Route) {
 				c.Status(http.StatusNotFound)
@@ -189,6 +236,36 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			c.Status(http.StatusNotFound)
 		}
 	})
+	root.GET("/share/s/:code/items/:position", func(c *gin.Context) {
+		if _, ok := shareWebOrigin(); !ok {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		position, err := strconv.Atoi(c.Param("position"))
+		if err != nil || position < 0 {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		code := c.Param("code")
+		share, err := svc.ResolveShareRecord(c.Request.Context(), code)
+		if err != nil || share.Route != shareWebCollectionRoute {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		content, err := svc.ReadPublishedProjectCollectionItemContent(c.Request.Context(), share.Content, share.Version, position)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+		base := "/api/v1/share-web/collection-media/" + url.PathEscape(code) + "/" + strconv.Itoa(position)
+		if err = shareweb.Render(c.Writer, shareweb.Page{Code: code, Content: content, Trackable: svc.Config.Enabled, MediaBase: base, ItemPosition: &position}); err != nil {
+			c.Status(http.StatusNotFound)
+		}
+	})
 
 	web := v1.Group("/share-web")
 	mutationRateLimit := trackingEntryRateLimit()
@@ -203,19 +280,36 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 	}
 	web.POST("/entry", mutation, mutationRateLimit, func(c *gin.Context) {
 		var input struct {
-			Code    string `json:"code"`
-			Client  string `json:"client_instance"`
-			Consent string `json:"consent_version"`
+			Code         string `json:"code"`
+			ItemPosition *int   `json:"item_position"`
+			Client       string `json:"client_instance"`
+			Consent      string `json:"consent_version"`
 		}
 		if !trackingBind(c, &input) {
 			return
 		}
 		share, err := svc.ResolveShareRecord(c.Request.Context(), input.Code)
-		if err != nil || share.Route != trackingReaderRoute {
+		if err != nil || (share.Route != trackingReaderRoute && share.Route != shareWebCollectionRoute) {
 			trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "分享入口无效"})
 			return
 		}
-		entry, err := svc.Enter(c.Request.Context(), tracking.EntryInput{Route: share.Route, Content: share.Content, Version: share.Version, ShareToken: input.Code, Client: input.Client, Consent: input.Consent, WebSource: true}, 0)
+		entryInput := tracking.EntryInput{Route: share.Route, Content: share.Content, Version: share.Version, ShareToken: input.Code, Client: input.Client, Consent: input.Consent, WebSource: true}
+		if share.Route == shareWebCollectionRoute && input.ItemPosition != nil {
+			collection, readErr := svc.ReadPublishedProjectCollection(c.Request.Context(), share.Content, share.Version)
+			if readErr != nil || *input.ItemPosition < 0 || *input.ItemPosition >= len(collection.Items) || !collection.Items[*input.ItemPosition].Available {
+				trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "合集作品不可访问"})
+				return
+			}
+			item := collection.Items[*input.ItemPosition]
+			entryInput.Route, entryInput.Content, entryInput.Version = item.RouteKey, item.ContentID, item.ContentVersion
+			entryInput.CollectionID, entryInput.CollectionVersion = share.Content, share.Version
+		} else if share.Route == shareWebCollectionRoute && input.ItemPosition == nil {
+			// Directory browsing is tracked against the collection itself.
+		} else if input.ItemPosition != nil {
+			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "分享入口参数无效"})
+			return
+		}
+		entry, err := svc.Enter(c.Request.Context(), entryInput, 0)
 		trackingResponse(c, entry, err)
 	})
 	web.POST("/events", mutation, mutationRateLimit, func(c *gin.Context) {
@@ -262,9 +356,32 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		}
 		serveContentMediaBytes(c, svc, asset)
 	})
+	web.Match([]string{http.MethodGet, http.MethodHead}, "/collection-media/:code/:position/:id", func(c *gin.Context) {
+		if _, ok := shareWebOrigin(); !ok {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		position, err := strconv.Atoi(c.Param("position"))
+		if err != nil || position < 0 {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		share, err := svc.ResolveShareRecord(c.Request.Context(), c.Param("code"))
+		if err != nil || share.Route != shareWebCollectionRoute {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		asset, err := svc.ReadPublishedProjectCollectionItemMedia(c.Request.Context(), share.Content, share.Version, position, c.Param("id"))
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		serveContentMediaBytes(c, svc, asset)
+	})
 	web.POST("/open-miniprogram", mutation, mutationRateLimit, func(c *gin.Context) {
 		var input struct {
 			Code             string `json:"code"`
+			ItemPosition     *int   `json:"item_position"`
 			SourceEntryToken string `json:"source_entry_token"`
 			SourceEventID    string `json:"source_page_view_event_id"`
 			HandoffToken     string `json:"handoff_token"`
@@ -277,11 +394,6 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			trackingResponse(c, nil, &tracking.Error{Status: 503, Message: "URL Link尚未配置"})
 			return
 		}
-		handoff, err := svc.CreateShareHandoff(c.Request.Context(), input.Code, input.SourceEntryToken, input.SourceEventID, input.HandoffToken)
-		if err != nil {
-			trackingResponse(c, nil, err)
-			return
-		}
 		share, err := svc.ResolveShareRecord(c.Request.Context(), input.Code)
 		if err != nil {
 			trackingResponse(c, nil, err)
@@ -292,7 +404,37 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			trackingResponse(c, nil, err)
 			return
 		}
+		if input.ItemPosition != nil {
+			if share.Route != shareWebCollectionRoute || *input.ItemPosition < 0 {
+				trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "分享入口参数无效"})
+				return
+			}
+			collection, readErr := svc.ReadPublishedProjectCollection(c.Request.Context(), share.Content, share.Version)
+			if readErr != nil || *input.ItemPosition >= len(collection.Items) || !collection.Items[*input.ItemPosition].Available {
+				trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "合集作品不可访问"})
+				return
+			}
+			item := collection.Items[*input.ItemPosition]
+			values := url.Values{
+				"st": {input.Code}, "content_id": {item.ContentID}, "content_version": {strconv.Itoa(item.ContentVersion)},
+				"collection_id": {share.Content}, "collection_version": {strconv.Itoa(share.Version)}, "item_position": {strconv.Itoa(*input.ItemPosition)},
+			}
+			path, query = item.RouteKey, values.Encode()
+		}
+		target, err := shareWebHandoffTarget(path, query)
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		handoff, err := svc.CreateShareHandoffForTarget(c.Request.Context(), input.Code, input.SourceEntryToken, input.SourceEventID, input.HandoffToken, target)
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
 		cacheKey := share.ID
+		if input.ItemPosition != nil {
+			cacheKey += ":item:" + strconv.Itoa(*input.ItemPosition)
+		}
 		if handoff.Ready {
 			values, parseErr := url.ParseQuery(query)
 			if parseErr != nil {

@@ -72,6 +72,12 @@ func ShareNativeDestination(share Share, token string) (string, string, error) {
 		}
 		values.Set("content_id", share.Content)
 		values.Set("content_version", strconv.Itoa(share.Version))
+	case share.Route == projectCollectionReaderRoute:
+		if !validID(share.Content) || share.Version <= 0 {
+			return "", "", fail(404, "分享入口无效")
+		}
+		values.Set("collection_id", share.Content)
+		values.Set("collection_version", strconv.Itoa(share.Version))
 	case share.Route == CostSnapshotRoute:
 		reportID, ok := validCostSnapshotID(share.Content)
 		if !ok {

@@ -406,30 +406,69 @@ func (s *Service) Media(ctx context.Context, scope *Scope, id string) (Asset, er
 	return a, e
 }
 func (s *Service) ListMedia(ctx context.Context, scope Scope) (List, error) {
-	out := List{Items: []Asset{}, Snapshot: Snapshot{s.Now(), MetricVersion}}
+	page, err := s.ListMediaPage(ctx, scope, "", 50, "", nil)
+	return List{Items: page.Items, Cursor: page.NextCursor, Snapshot: Snapshot{s.Now(), MetricVersion}}, err
+}
+
+type MediaPage struct {
+	Items      []Asset `json:"items"`
+	NextCursor string  `json:"next_cursor,omitempty"`
+}
+
+func (s *Service) ListMediaPage(ctx context.Context, scope Scope, cursor string, limit int, search string, kinds []string) (MediaPage, error) {
+	out := MediaPage{Items: []Asset{}}
 	if e := s.authorized(scope); e != nil {
 		return out, e
 	}
 	if !scope.Manage {
 		return out, fail(403, "无素材管理权限")
 	}
-	e := s.readTransaction(ctx, func(r Repository) error {
-		rows, e := r.List("media")
+	search = strings.TrimSpace(search)
+	if len(search) > 100 {
+		return out, fail(400, "素材搜索内容过长")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	normalizedKinds := []string(nil)
+	if kinds != nil {
+		normalizedKinds = make([]string, 0, len(kinds))
+		seen := map[string]bool{}
+		for _, kind := range kinds {
+			kind = strings.TrimSpace(kind)
+			if kind != "image" && kind != "video" && kind != "document" {
+				return out, fail(400, "素材类型无效")
+			}
+			if !seen[kind] {
+				seen[kind] = true
+				normalizedKinds = append(normalizedKinds, kind)
+			}
+		}
+	}
+	query, err := nativeReferenceQuery(scope, cursor, limit)
+	if err != nil {
+		return out, err
+	}
+	query.TitleSearch, query.AssetKinds = search, normalizedKinds
+	e := s.readQueryTransaction(ctx, func(r Repository) error {
+		rows, e := pageRecords(r, "media", query)
 		if e != nil {
 			return e
 		}
-		items := []Asset{}
+		if len(rows) == query.Limit {
+			out.NextCursor = nativeReferenceCursor(rows[len(rows)-2])
+			rows = rows[:len(rows)-1]
+		}
 		for _, row := range rows {
-			if !scope.Allows(row.Owner) {
-				continue
-			}
 			var a Asset
-			if json.Unmarshal(row.Payload, &a) != nil {
+			if !scope.Allows(row.Owner) || json.Unmarshal(row.Payload, &a) != nil || a.ID != row.ID {
 				return ErrUnavailable
 			}
-			items = append(items, a)
+			out.Items = append(out.Items, a)
 		}
-		out.Items = items
 		return nil
 	})
 	return out, e

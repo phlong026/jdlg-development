@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -74,6 +75,237 @@ func TestShareWebGETEscapesBodyAndCreatesNoTrackingRecord(t *testing.T) {
 	}
 	if len(store.records) != before {
 		t.Fatalf("GET created records: before=%d after=%d", before, len(store.records))
+	}
+}
+
+func shareWebCollectionFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceTestStore, string, tracking.PublishedProjectCollection, tracking.Content) {
+	t.Helper()
+	t.Setenv("SHARE_WEB_ENABLED", "true")
+	t.Setenv("PUBLIC_SHARE_ORIGIN", "https://www.jiadilingguang.com")
+	store := &governanceTestStore{records: map[string]tracking.Record{}}
+	svc := tracking.New(store, tracking.Config{
+		Enabled: true, ContentEnabled: true, Tenant: "share-web-collection", DefaultOwner: "owner-a", ConsentVersion: "v1",
+		Routes: map[string]tracking.Route{
+			"pages/contentreader/contentreader":       {Public: true},
+			"pages/collectionreader/collectionreader": {Public: true},
+		},
+	})
+	now := time.Date(2026, 10, 31, 8, 0, 0, 0, time.UTC)
+	svc.Now = func() time.Time { return now }
+	scope := tracking.Scope{Tenant: "share-web-collection", Actor: 42, Owners: []string{"owner-a"}, Manage: true}
+	content, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "庭院案例", Body: "合集作品正文", BodyFormat: "plain", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := svc.Preview(context.Background(), scope, content.ID, content.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := svc.Publish(context.Background(), scope, content.ID, content.Revision, preview["preview_token"].(string), "share-web-collection-content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishedContent := published["content"].(tracking.Content)
+	collection, err := svc.SaveProjectCollection(context.Background(), scope, "", tracking.ProjectCollectionDraft{
+		Title: "新中式项目合集", Description: "三个项目的代表方案", Owner: "owner-a",
+		Items:          []tracking.ProjectCollectionItemInput{{ContentID: publishedContent.ID, ContentVersion: publishedContent.Version}},
+		IdempotencyKey: "share-web-collection-create",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collectionPreview, err := svc.PreviewProjectCollection(context.Background(), scope, collection.ID, collection.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishedCollection, err := svc.PublishProjectCollection(context.Background(), scope, collection.ID, collection.Revision, collectionPreview.PreviewToken, "share-web-collection-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := svc.Enter(context.Background(), tracking.EntryInput{Route: "pages/collectionreader/collectionreader", Content: publishedCollection.ID, Version: publishedCollection.Version, Client: "share-web-collection-author", Consent: "v1"}, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.CreateShare(context.Background(), tracking.ShareInput{Route: entry.Route, Content: entry.Content, Version: entry.Version, Channel: "app_message", Key: "share-web-collection-share"}, entry.Token, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	registerShareWebHandlers(router, router.Group("/api/v1"), svc, tracking.NewWechatAPI())
+	return router, svc, store, created["share_token"].(string), publishedCollection, publishedContent
+}
+
+func TestShareWebCollectionDirectoryAndItemGETCreateNoTrackingRecords(t *testing.T) {
+	router, _, store, code, collection, content := shareWebCollectionFixture(t)
+	before := len(store.records)
+	directory := httptest.NewRecorder()
+	router.ServeHTTP(directory, httptest.NewRequest(http.MethodGet, "/share/s/"+code, nil))
+	if directory.Code != http.StatusOK || !strings.Contains(directory.Body.String(), collection.Title) || !strings.Contains(directory.Body.String(), "/share/s/"+code+"/items/0") {
+		t.Fatalf("directory = %d %s", directory.Code, directory.Body.String())
+	}
+	item := httptest.NewRecorder()
+	router.ServeHTTP(item, httptest.NewRequest(http.MethodGet, "/share/s/"+code+"/items/0", nil))
+	if item.Code != http.StatusOK || !strings.Contains(item.Body.String(), content.Title) || !strings.Contains(item.Body.String(), "合集作品正文") {
+		t.Fatalf("item = %d %s", item.Code, item.Body.String())
+	}
+	if len(store.records) != before {
+		t.Fatalf("collection GET created records: before=%d after=%d", before, len(store.records))
+	}
+}
+
+func TestShareWebCollectionItemEntryKeepsOriginalShareAttribution(t *testing.T) {
+	router, _, store, code, collection, content := shareWebCollectionFixture(t)
+	shareCount := 0
+	for _, row := range store.records {
+		if row.Kind == "share" {
+			shareCount++
+		}
+	}
+	body, _ := json.Marshal(map[string]any{"code": code, "item_position": 0, "client_instance": "browser-collection-reader", "consent_version": "v1"})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/share-web/entry", bytes.NewReader(body))
+	req.Header.Set("Origin", "https://www.jiadilingguang.com")
+	req.Header.Set("X-Share-Web", "1")
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("entry = %d %s", w.Code, w.Body.String())
+	}
+	var envelope struct {
+		Data tracking.Entry `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	entry := envelope.Data
+	if entry.Route != "pages/contentreader/contentreader" || entry.Content != content.ID || entry.Version != content.Version || entry.CollectionID != collection.ID || entry.CollectionVersion != collection.Version || entry.Share == "" || entry.Attribution != "share" {
+		t.Fatalf("collection child entry = %+v", entry)
+	}
+	afterShares := 0
+	for _, row := range store.records {
+		if row.Kind == "share" {
+			afterShares++
+		}
+	}
+	if afterShares != shareCount {
+		t.Fatalf("collection navigation created a fake child share: before=%d after=%d", shareCount, afterShares)
+	}
+}
+
+func TestShareWebCollectionPagesStopAfterCollectionRevoke(t *testing.T) {
+	router, svc, _, code, collection, _ := shareWebCollectionFixture(t)
+	scope := tracking.Scope{Tenant: "share-web-collection", Actor: 42, Owners: []string{"owner-a"}, Manage: true}
+	if _, err := svc.RevokeProjectCollection(context.Background(), scope, collection.ID, collection.Revision, "停止公开", "share-web-collection-revoke"); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/share/s/" + code, "/share/s/" + code + "/items/0"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("revoked %s = %d %s", path, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestShareWebCollectionItemOpensExactNativeChildWithOriginalShare(t *testing.T) {
+	t.Setenv("TRACKING_WECHAT_URLLINK_ENABLED", "true")
+	t.Setenv("TRACKING_WECHAT_ENV", "release")
+	withMiniprogramCredentials(t)
+	_, svc, _, code, collection, content := shareWebCollectionFixture(t)
+	var generated map[string]any
+	wechat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/cgi-bin/token":
+			_, _ = io.WriteString(w, `{"access_token":"collection-share-web-token"}`)
+		case "/wxa/generate_urllink":
+			if err := json.NewDecoder(r.Body).Decode(&generated); err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.WriteString(w, `{"errcode":0,"url_link":"https://wxaurl.cn/collection-child"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer wechat.Close()
+	api := tracking.NewWechatAPI()
+	api.Base = wechat.URL
+	router := gin.New()
+	registerShareWebHandlers(router, router.Group("/api/v1"), svc, api)
+	body, _ := json.Marshal(map[string]any{"code": code, "item_position": 0})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/share-web/open-miniprogram", bytes.NewReader(body))
+	req.Header.Set("Origin", "https://www.jiadilingguang.com")
+	req.Header.Set("X-Share-Web", "1")
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("open child = %d %s", w.Code, w.Body.String())
+	}
+	query, _ := generated["query"].(string)
+	values, err := url.ParseQuery(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if generated["path"] != "pages/contentreader/contentreader" || values.Get("st") != code || values.Get("content_id") != content.ID || values.Get("content_version") != strconv.Itoa(content.Version) || values.Get("collection_id") != collection.ID || values.Get("collection_version") != strconv.Itoa(collection.Version) || values.Get("item_position") != "0" {
+		t.Fatalf("native child target = %#v query=%s", generated, query)
+	}
+}
+
+func TestShareWebCollectionDirectorySourceCannotClaimChildHandoffReady(t *testing.T) {
+	t.Setenv("TRACKING_WECHAT_URLLINK_ENABLED", "true")
+	withMiniprogramCredentials(t)
+	_, svc, _, code, collection, _ := shareWebCollectionFixture(t)
+	source, err := svc.Enter(context.Background(), tracking.EntryInput{Route: "pages/collectionreader/collectionreader", Content: collection.ID, Version: collection.Version, Client: "collection-directory-handoff", Consent: "v1", ShareToken: code, WebSource: true}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := tracking.Event{Schema: 1, ID: "collection-directory-handoff-view", Type: "page_view", Session: source.Session, View: "collection-directory-handoff-page", Route: source.Route, Content: source.Content, Version: source.Version, Share: source.Share, Occurred: svc.Now(), AppState: "foreground", PageState: "visible"}
+	if results, acceptErr := svc.Accept(context.Background(), source.Token, []tracking.Event{event}); acceptErr != nil || len(results) != 1 || results[0].Status != "accepted" {
+		t.Fatal(results, acceptErr)
+	}
+	var generated map[string]any
+	wechat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/cgi-bin/token":
+			_, _ = io.WriteString(w, `{"access_token":"directory-target-test"}`)
+		case "/wxa/generate_urllink":
+			if decodeErr := json.NewDecoder(r.Body).Decode(&generated); decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
+			_, _ = io.WriteString(w, `{"errcode":0,"url_link":"https://wxaurl.cn/directory-target-test"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer wechat.Close()
+	api := tracking.NewWechatAPI()
+	api.Base = wechat.URL
+	router := gin.New()
+	registerShareWebHandlers(router, router.Group("/api/v1"), svc, api)
+	token := strings.Repeat("z", 43)
+	body, _ := json.Marshal(map[string]any{"code": code, "item_position": 0, "source_entry_token": source.Token, "source_page_view_event_id": event.ID, "handoff_token": token})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/share-web/open-miniprogram", bytes.NewReader(body))
+	req.Header.Set("Origin", "https://www.jiadilingguang.com")
+	req.Header.Set("X-Share-Web", "1")
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Data struct {
+			Ready bool `json:"handoff_ready"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(w.Body.Bytes(), &response) != nil || response.Data.Ready {
+		t.Fatalf("directory source claimed child handoff: %s", w.Body.String())
+	}
+	query, _ := generated["query"].(string)
+	values, parseErr := url.ParseQuery(query)
+	if parseErr != nil || values.Get("ht") != "" {
+		t.Fatalf("mismatched handoff leaked into child URL: %q %v", query, parseErr)
 	}
 }
 

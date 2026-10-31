@@ -25,16 +25,18 @@ const (
 )
 
 type Event struct {
-	ID          string    `json:"event_id"`
-	Kind        string    `json:"kind"`
-	Owner       string    `json:"owner_id"`
-	RecipientID int64     `json:"recipient_id"`
-	VisitorKey  string    `json:"visitor_key"`
-	ShareID     string    `json:"share_id"`
-	ContentID   string    `json:"content_id,omitempty"`
-	ProjectID   string    `json:"project_id,omitempty"`
-	Route       string    `json:"route_key"`
-	OccurredAt  time.Time `json:"occurred_at"`
+	ID                string    `json:"event_id"`
+	Kind              string    `json:"kind"`
+	Owner             string    `json:"owner_id"`
+	RecipientID       int64     `json:"recipient_id"`
+	VisitorKey        string    `json:"visitor_key"`
+	ShareID           string    `json:"share_id"`
+	ContentID         string    `json:"content_id,omitempty"`
+	CollectionID      string    `json:"collection_id,omitempty"`
+	CollectionVersion int       `json:"collection_version,omitempty"`
+	ProjectID         string    `json:"project_id,omitempty"`
+	Route             string    `json:"route_key"`
+	OccurredAt        time.Time `json:"occurred_at"`
 }
 
 type EventJob struct {

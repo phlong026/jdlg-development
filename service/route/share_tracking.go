@@ -641,6 +641,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, gin.H{"status": status}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
+	registerPublicProjectCollectionHandlers(pub, svc)
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	registerTrackingMyRoutes(pub, svc, users, codes)
 	pub.POST("/share-entry", func(c *gin.Context) {

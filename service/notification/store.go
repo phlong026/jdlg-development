@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -630,7 +631,11 @@ func validEvent(event Event) bool {
 	switch event.Kind {
 	case "browse":
 		return true
-	case "project_note_open", "project_note_feedback":
+	case "collection_directory_browse":
+		return event.CollectionID != "" && len(event.CollectionID) <= 128 && event.CollectionVersion > 0 && event.ContentID == event.CollectionID && event.Route == "pages/collectionreader/collectionreader"
+	case "collection_content_browse":
+		return event.CollectionID != "" && len(event.CollectionID) <= 128 && event.CollectionVersion > 0 && event.ContentID != "" && event.Route == "pages/contentreader/contentreader"
+	case "project_note_open", "project_note_feedback", "project_note_join_request", "project_package_receipt":
 		route := projectNoteNotificationRoute(event)
 		return event.ProjectID != "" && len(event.ProjectID) <= 128 && event.ContentID != "" && event.Route == "project_note_share" && strings.HasPrefix(event.VisitorKey, "u:") && len(event.VisitorKey) <= 128 && len(route) <= 128
 	default:
@@ -640,17 +645,37 @@ func validEvent(event Event) bool {
 
 func noticeFromEvent(event Event) Notification {
 	title, body, route := "分享内容有新访问", "有人浏览了你分享的内容", event.Route
-	if event.Kind == "project_note_open" {
+	if event.Kind == "collection_directory_browse" {
+		title, body, route = "项目合集有新访问", "有人打开了你分享的项目合集", collectionNotificationRoute(event)
+	} else if event.Kind == "collection_content_browse" {
+		title, body, route = "项目作品有新访问", "有人查看了合集中的作品", collectionNotificationRoute(event)
+	} else if event.Kind == "project_note_open" {
 		title, body = "私人项目有新访问", "有受邀账号查看了你分享的固定版本"
 		route = projectNoteNotificationRoute(event)
 	} else if event.Kind == "project_note_feedback" {
 		title, body = "项目收到业主反馈", "业主对固定方案提交了反馈，请及时处理"
 		route = projectNoteNotificationRoute(event)
+	} else if event.Kind == "project_package_receipt" {
+		title, body = "收到阅读回执", "接收人已主动确认阅读该固定方案"
+		route = projectNoteNotificationRoute(event)
+	} else if event.Kind == "project_note_join_request" {
+		title, body = "项目有新的加入申请", "有用户申请加入项目，请审核后授权"
+		route = projectNoteNotificationRoute(event)
 	}
 	return Notification{ID: event.ID, EventID: event.ID, RecipientID: event.RecipientID, Kind: event.Kind, Title: title, Body: body, Route: route, ContentID: event.ContentID, ShareID: event.ShareID, CreatedAt: event.OccurredAt.UTC()}
 }
 
+func collectionNotificationRoute(event Event) string {
+	return "pages/collectionreader/collectionreader?" + url.Values{
+		"collection_id":      {event.CollectionID},
+		"collection_version": {strconv.Itoa(event.CollectionVersion)},
+	}.Encode()
+}
+
 func projectNoteNotificationRoute(event Event) string {
+	if event.Kind == "project_note_join_request" {
+		return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&view=members"
+	}
 	route := "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&version_id=" + url.QueryEscape(event.ContentID)
 	if event.Kind == "project_note_feedback" {
 		return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID)
@@ -659,7 +684,7 @@ func projectNoteNotificationRoute(event Event) string {
 }
 
 func allowsExternalDelivery(event Event) bool {
-	return event.Kind != "project_note_feedback"
+	return event.Kind != "project_note_feedback" && event.Kind != "project_note_join_request" && event.Kind != "project_package_receipt"
 }
 
 func randomToken() (string, error) {

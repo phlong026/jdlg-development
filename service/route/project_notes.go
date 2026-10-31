@@ -34,27 +34,13 @@ const projectNoteScopeKey = "project-notes.scope"
 type projectNoteHandlerDeps struct {
 	actor        func(*gin.Context) int64
 	verifyMember func(context.Context, int64) error
+	profiles     projectNoteProfileResolver
 }
 
 func projectNotesEnabled() bool { return os.Getenv("PROJECT_NOTES_ENABLED") == "true" }
 
-func verifyActiveMiniProgramAccount(ctx context.Context, db *sql.DB, account int64) error {
-	if db == nil || account <= 0 {
-		return &tracking.Error{Status: http.StatusBadRequest, Message: "受邀账号不存在或已停用"}
-	}
-	var found int
-	err := tracking.SourceReadDB(ctx, db).QueryRowContext(ctx, `SELECT 1 FROM users WHERE id=? AND user_type='miniprogram' AND COALESCE(status,'active')='active'`, account).Scan(&found)
-	if errors.Is(err, sql.ErrNoRows) {
-		return &tracking.Error{Status: http.StatusBadRequest, Message: "受邀账号不存在或已停用"}
-	}
-	if err != nil {
-		return tracking.ErrUnavailable
-	}
-	return nil
-}
-
-func registerProjectNoteRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
-	root := v1.Group("/miniprogram/project-notes",
+func projectNotePrivateMiddlewares(users *model.UserModel, codes *model.CodeSessionRedisModel) []gin.HandlerFunc {
+	return []gin.HandlerFunc{
 		trackingEntryRateLimit(),
 		func(c *gin.Context) {
 			// Authentication verifies multipart requests before the handler. Bound
@@ -72,7 +58,27 @@ func registerProjectNoteRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users
 			}
 			c.Next()
 		},
-	)
+	}
+}
+
+func verifyActiveMiniProgramAccount(ctx context.Context, db *sql.DB, account int64) error {
+	if db == nil || account <= 0 {
+		return &tracking.Error{Status: http.StatusBadRequest, Message: "受邀账号不存在或已停用"}
+	}
+	var found int
+	err := tracking.SourceReadDB(ctx, db).QueryRowContext(ctx, `SELECT 1 FROM users WHERE id=? AND user_type='miniprogram' AND COALESCE(status,'active')='active'`, account).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &tracking.Error{Status: http.StatusBadRequest, Message: "受邀账号不存在或已停用"}
+	}
+	if err != nil {
+		return tracking.ErrUnavailable
+	}
+	return nil
+}
+
+func registerProjectNoteRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
+	root := v1.Group("/miniprogram/project-notes", projectNotePrivateMiddlewares(users, codes)...)
+	packageRoot := v1.Group("/miniprogram/project-packages", projectNotePrivateMiddlewares(users, codes)...)
 	manage := root.Group("", func(c *gin.Context) {
 		scope, err := loadMiniTrackingMaterialScope(c.Request.Context(), users.DB, svc.Config.Tenant, GetTokenUserID(c))
 		if err != nil {
@@ -82,12 +88,15 @@ func registerProjectNoteRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users
 		c.Set(projectNoteScopeKey, scope)
 		c.Next()
 	})
+	actor := func(c *gin.Context) int64 { return GetTokenUserID(c) }
 	registerProjectNoteHandlers(root, manage, svc, projectNoteHandlerDeps{
-		actor: func(c *gin.Context) int64 { return GetTokenUserID(c) },
+		actor:    actor,
+		profiles: makeProjectNoteProfileResolver(users.DB),
 		verifyMember: func(ctx context.Context, account int64) error {
 			return verifyActiveMiniProgramAccount(ctx, users.DB, account)
 		},
 	})
+	registerProjectPackageHandlers(manage, packageRoot, svc, actor)
 }
 
 func projectNoteBind(c *gin.Context, value any) bool {
@@ -128,6 +137,7 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 	registerProjectNoteExportHandlers(root, manage, svc, deps)
 	registerProjectNoteLifecycleHandlers(manage, svc)
 	registerProjectNoteHistoryHandlers(root, manage, svc, deps)
+	registerProjectInvitationHandlers(root, manage, svc, deps)
 	manage.GET("/projects", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("limit"))
 		out, err := svc.ProjectNoteListProjects(c.Request.Context(), projectNoteScope(c), limit, c.Query("cursor"))
@@ -149,7 +159,12 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 		trackingResponse(c, out, err)
 	})
 	manage.GET("/projects/:id", func(c *gin.Context) {
-		out, err := svc.ProjectNoteGetProjectDetail(c.Request.Context(), projectNoteScope(c), c.Param("id"))
+		detail, err := svc.ProjectNoteGetProjectDetail(c.Request.Context(), projectNoteScope(c), c.Param("id"))
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		out, err := presentProjectNoteProjectDetail(c.Request.Context(), detail, deps.profiles)
 		trackingResponse(c, out, err)
 	})
 	manage.PATCH("/projects/:id", func(c *gin.Context) {
@@ -163,6 +178,10 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 	manage.POST("/projects/:id/members/:account", func(c *gin.Context) {
 		account, ok := projectNoteAccount(c, c.Param("account"))
 		if !ok {
+			return
+		}
+		if deps.verifyMember == nil {
+			trackingResponse(c, nil, tracking.ErrUnavailable)
 			return
 		}
 		if err := deps.verifyMember(c.Request.Context(), account); err != nil {

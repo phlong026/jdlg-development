@@ -349,6 +349,29 @@ func TestProjectNoteFeedbackNoticeTargetsExactFeedbackWithoutExternalDelivery(t 
 	}
 }
 
+func TestProjectPackageReceiptNoticeTargetsExactVersionWithoutExternalDelivery(t *testing.T) {
+	event := Event{ID: "package-receipt:" + strings.Repeat("r", 64), Kind: "project_package_receipt", Owner: "owner-a", RecipientID: 42, VisitorKey: "u:101", ShareID: strings.Repeat("d", 32), ContentID: strings.Repeat("v", 32), ProjectID: strings.Repeat("p", 32), Route: "project_note_share", OccurredAt: time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)}
+	if !validEvent(event) {
+		t.Fatal("valid project package receipt event was rejected")
+	}
+	notice := noticeFromEvent(event)
+	wantRoute := "pages/projectnotes/projectnotes?project_id=" + event.ProjectID + "&version_id=" + event.ContentID
+	if notice.Route != wantRoute || notice.Kind != event.Kind || notice.Title != "收到阅读回执" || notice.Body != "接收人已主动确认阅读该固定方案" {
+		t.Fatalf("notice = %#v", notice)
+	}
+	if allowsExternalDelivery(event) {
+		t.Fatal("private package receipt unexpectedly enabled external delivery")
+	}
+	store := newFakeDurableStore(event)
+	consumer := consumerFor(t, store, event.OccurredAt)
+	if worked, err := consumer.RunOnce(context.Background()); err != nil || !worked {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	if len(store.notices) != 1 || len(store.deliveries) != 0 {
+		t.Fatalf("notices=%d deliveries=%d", len(store.notices), len(store.deliveries))
+	}
+}
+
 func consumerFor(t *testing.T, store ConsumerStore, now time.Time) *Consumer {
 	t.Helper()
 	consumer, err := NewConsumer(store, ConsumerConfig{PollInterval: time.Millisecond, LeaseDuration: time.Minute, MaxAttempts: 3, Channel: "service_account", Eligibility: func(context.Context, Event) (bool, error) { return true, nil }, Binding: func(context.Context, int64) (int64, bool, error) { return 1, true, nil }})

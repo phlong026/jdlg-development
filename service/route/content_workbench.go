@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"service/model"
@@ -43,6 +45,7 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 
 func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service) {
 	registerNativeReferenceHandlers(g, svc)
+	registerProjectCollectionHandlers(g, svc)
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
 	g.GET("/context", func(c *gin.Context) {
 		media := contentMediaConfigured(svc)
@@ -157,7 +160,12 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service)
 		trackingResponse(c, out, err)
 	})
 	g.GET("/media", func(c *gin.Context) {
-		out, err := svc.ListMedia(c.Request.Context(), scope(c))
+		limit, _ := strconv.Atoi(c.Query("limit"))
+		var kinds []string
+		if raw := strings.TrimSpace(c.Query("kind")); raw != "" {
+			kinds = strings.Split(raw, ",")
+		}
+		out, err := svc.ListMediaPage(c.Request.Context(), scope(c), c.Query("cursor"), limit, c.Query("q"), kinds)
 		trackingResponse(c, out, err)
 	})
 	g.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {

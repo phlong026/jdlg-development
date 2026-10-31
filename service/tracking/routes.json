@@ -347,6 +347,12 @@
     "Public": true,
     "Audience": "customer"
   },
+  "pages/collectionreader/collectionreader": {
+    "Title": "项目合集",
+    "Type": "collection",
+    "Public": true,
+    "Audience": "customer"
+  },
   "pages/aicostshare/aicostshare": {
     "Title": "公开造价测算报告",
     "Type": "detail",
@@ -397,6 +403,30 @@
   },
   "pages/nativereferences/nativereferences": {
     "Title": "原生内容引用库",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/projectcollections/projectcollections": {
+    "Title": "项目合集管理",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/projectpackage/projectpackage": {
+    "Title": "私密资料包管理",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/projectpackageview/projectpackageview": {
+    "Title": "私密资料包阅读",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "neutral"
+  },
+  "pages/projectinvite/projectinvite": {
+    "Title": "项目邀请",
     "Type": "excluded",
     "Public": false,
     "Audience": "neutral"

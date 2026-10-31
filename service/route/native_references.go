@@ -17,7 +17,7 @@ func registerNativeReferenceHandlers(g *gin.RouterGroup, svc *tracking.Service) 
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
 	group.GET("/native-reference-candidates", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("limit"))
-		out, err := svc.NativeReferenceCandidates(c.Request.Context(), scope(c), c.Query("cursor"), limit)
+		out, err := svc.SearchNativeReferenceCandidates(c.Request.Context(), scope(c), c.Query("cursor"), limit, c.Query("q"))
 		trackingResponse(c, out, err)
 	})
 	group.GET("/native-references", func(c *gin.Context) {

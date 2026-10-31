@@ -25,6 +25,10 @@ var ErrQueryTooLarge = fail(422, "查询范围过大，请缩小时间或归属�
 type RecordQuery struct {
 	Owners, IDs, Sessions, VisitorKeys, Shares []string
 	Content, View                              string
+	// TitleSearch and AssetKinds are catalog predicates. SQL repositories push
+	// them into the query so media/content pagination never scans a whole tenant.
+	TitleSearch string
+	AssetKinds  []string
 	// Types narrows kind="event" scans to payloads whose event_type is listed.
 	// It must be pushed into the SQL WHERE clause: scanning a share-covered
 	// session set without it pulls every filler segment into the read budget
@@ -279,6 +283,28 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 	}
 	if len(row.Payload) > maxQueryPayloadBytes {
 		return false, ErrQueryTooLarge
+	}
+	if q.TitleSearch != "" || q.AssetKinds != nil {
+		switch row.Kind {
+		case "media":
+			var asset Asset
+			if json.Unmarshal(row.Payload, &asset) != nil {
+				return false, ErrUnavailable
+			}
+			if (q.TitleSearch != "" && !strings.Contains(strings.ToLower(asset.Title), strings.ToLower(q.TitleSearch))) || !includes(q.AssetKinds, asset.Kind) {
+				return false, nil
+			}
+		case "content":
+			var content Content
+			if json.Unmarshal(row.Payload, &content) != nil {
+				return false, ErrUnavailable
+			}
+			if (q.TitleSearch != "" && !strings.Contains(strings.ToLower(content.Title), strings.ToLower(q.TitleSearch))) || q.AssetKinds != nil {
+				return false, nil
+			}
+		default:
+			return false, nil
+		}
 	}
 	if !q.CatalogAsOf.IsZero() && (row.Kind == "content" || row.Kind == "legacy_catalog") {
 		var c Content

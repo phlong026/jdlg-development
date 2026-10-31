@@ -7,7 +7,7 @@
   <title>{{.Title}}</title>
   <link rel="stylesheet" href="/share/assets/reader.css">
 </head>
-<body data-code="{{.Code}}" data-trackable="{{.Trackable}}">
+<body data-code="{{.Code}}" data-trackable="{{.Trackable}}"{{if .CollectionItem}} data-item-position="{{.ItemPosition}}"{{end}}>
   <main class="reader">
     <header><span>甲第灵光</span><h1>{{.Title}}</h1></header>
     <article>

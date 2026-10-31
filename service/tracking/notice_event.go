@@ -18,16 +18,18 @@ type NoticeRules struct {
 // NoticeEvent is the small immutable handoff from tracking to notification.
 // It contains only the fields needed to build an inbox item and delivery row.
 type NoticeEvent struct {
-	ID          string    `json:"event_id"`
-	Kind        string    `json:"kind"`
-	Owner       string    `json:"owner_id"`
-	RecipientID int64     `json:"recipient_id"`
-	VisitorKey  string    `json:"visitor_key"`
-	ShareID     string    `json:"share_id"`
-	ContentID   string    `json:"content_id,omitempty"`
-	ProjectID   string    `json:"project_id,omitempty"`
-	Route       string    `json:"route_key"`
-	OccurredAt  time.Time `json:"occurred_at"`
+	ID                string    `json:"event_id"`
+	Kind              string    `json:"kind"`
+	Owner             string    `json:"owner_id"`
+	RecipientID       int64     `json:"recipient_id"`
+	VisitorKey        string    `json:"visitor_key"`
+	ShareID           string    `json:"share_id"`
+	ContentID         string    `json:"content_id,omitempty"`
+	CollectionID      string    `json:"collection_id,omitempty"`
+	CollectionVersion int       `json:"collection_version,omitempty"`
+	ProjectID         string    `json:"project_id,omitempty"`
+	Route             string    `json:"route_key"`
+	OccurredAt        time.Time `json:"occurred_at"`
 }
 
 // NoticeRecipient deliberately has no fallback to Owner or any display name.
@@ -62,16 +64,26 @@ func BuildBrowseNotice(entry Entry, event Event, share Share, rules NoticeRules)
 	if entry.Visitor == share.Sharer {
 		return NoticeEvent{}, false, nil
 	}
+	kind := "browse"
+	collectionID, collectionVersion := entry.CollectionID, entry.CollectionVersion
+	if entry.Route == projectCollectionReaderRoute {
+		kind = "collection_directory_browse"
+		collectionID, collectionVersion = entry.Content, entry.Version
+	} else if entry.Route == publishedReaderRoute && entry.CollectionID != "" {
+		kind = "collection_content_browse"
+	}
 	return NoticeEvent{
-		ID:          event.ID,
-		Kind:        "browse",
-		Owner:       entry.Owner,
-		RecipientID: recipient,
-		VisitorKey:  entry.Visitor,
-		ShareID:     share.ID,
-		ContentID:   event.Content,
-		Route:       event.Route,
-		OccurredAt:  event.Occurred.UTC(),
+		ID:                event.ID,
+		Kind:              kind,
+		Owner:             entry.Owner,
+		RecipientID:       recipient,
+		VisitorKey:        entry.Visitor,
+		ShareID:           share.ID,
+		ContentID:         event.Content,
+		CollectionID:      collectionID,
+		CollectionVersion: collectionVersion,
+		Route:             event.Route,
+		OccurredAt:        event.Occurred.UTC(),
 	}, true, nil
 }
 

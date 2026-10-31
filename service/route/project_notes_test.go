@@ -88,6 +88,15 @@ func newProjectNoteHandlerFixture(t *testing.T) (*gin.Engine, *tracking.Service,
 	manage := root.Group("", func(c *gin.Context) { c.Set(projectNoteScopeKey, *scope); c.Next() })
 	registerProjectNoteHandlers(root, manage, svc, projectNoteHandlerDeps{
 		actor: func(*gin.Context) int64 { return actor },
+		profiles: func(_ context.Context, ids []int64) (map[int64]model.UserProfilePresentation, error) {
+			out := map[int64]model.UserProfilePresentation{}
+			for _, id := range ids {
+				if id == 101 {
+					out[id] = model.UserProfilePresentation{UserID: id, Nickname: "张女士", Avatar: "https://public.example/member.png"}
+				}
+			}
+			return out, nil
+		},
 		verifyMember: func(_ context.Context, account int64) error {
 			if account == 101 || account == 102 {
 				return nil
@@ -252,6 +261,44 @@ func TestProjectNoteRoutesSeparateManagerAndInvitedAccount(t *testing.T) {
 	revoked := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token, nil)
 	if revoked.Code != http.StatusNotFound {
 		t.Fatal(revoked.Code, revoked.Body.String())
+	}
+}
+
+func TestProjectNoteDetailAddsPresentationOnlyForAuthorizedProjectRecords(t *testing.T) {
+	router, svc, scope, _ := newProjectNoteHandlerFixture(t)
+	project, _, version, share := createProjectNoteShare(t, router)
+	if err := svc.ProjectNoteSetConfirmer(context.Background(), *scope, project.ID, 101); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProjectNoteConfirmShare(context.Background(), share.Token, 101, "presentation-confirm"); err != nil {
+		t.Fatal(err)
+	}
+	rec := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects/"+project.ID, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatal(rec.Code, rec.Body.String())
+	}
+	var envelope struct {
+		Data struct {
+			Members []struct {
+				ActorID     int64  `json:"actor_id"`
+				DisplayName string `json:"display_name"`
+				Avatar      string `json:"avatar"`
+			} `json:"members"`
+			Confirmations []struct {
+				VersionID   string `json:"version_id"`
+				ConfirmerID int64  `json:"confirmer_id"`
+				DisplayName string `json:"display_name"`
+			} `json:"confirmations"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.Members) != 1 || envelope.Data.Members[0].ActorID != 101 || envelope.Data.Members[0].DisplayName != "张女士" || envelope.Data.Members[0].Avatar != "https://public.example/member.png" {
+		t.Fatalf("members = %s", rec.Body.String())
+	}
+	if len(envelope.Data.Confirmations) != 1 || envelope.Data.Confirmations[0].VersionID != version.ID || envelope.Data.Confirmations[0].ConfirmerID != 101 || envelope.Data.Confirmations[0].DisplayName != "张女士" {
+		t.Fatalf("confirmations = %s", rec.Body.String())
 	}
 }
 

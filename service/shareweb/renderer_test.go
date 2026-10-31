@@ -43,6 +43,31 @@ func TestShareWebRendererRejectsPrivateOrDraftContent(t *testing.T) {
 	}
 }
 
+func TestShareWebCollectionRendererEscapesMetadataAndHidesUnavailableItems(t *testing.T) {
+	collection := tracking.PublishedProjectCollection{
+		ID: "collection-one", Version: 2, Status: "published", Title: `<script>合集</script>`, Description: `<img src=x onerror=alert(1)>`,
+		Items: []tracking.ProjectCollectionItem{
+			{Title: "可查看作品", Available: true, Cover: &tracking.Asset{ID: "collection-cover-0001", Kind: "image"}},
+			{Title: "不应泄露的旧标题", ContentID: "private-content", Available: false},
+		},
+	}
+	var output bytes.Buffer
+	if err := RenderCollection(&output, CollectionPage{Code: "opaque-code-123456", Collection: collection, Trackable: true}); err != nil {
+		t.Fatal(err)
+	}
+	html := output.String()
+	for _, unsafe := range []string{"<script>合集</script>", "<img src=x onerror=alert(1)>", "不应泄露的旧标题", "private-content"} {
+		if strings.Contains(html, unsafe) {
+			t.Fatalf("collection leaked %q in %s", unsafe, html)
+		}
+	}
+	for _, wanted := range []string{"可查看作品", "内容暂不可用", "/share/s/opaque-code-123456/items/0", "/api/v1/share-web/collection-media/opaque-code-123456/0/collection-cover-0001"} {
+		if !strings.Contains(html, wanted) {
+			t.Fatalf("missing %q in %s", wanted, html)
+		}
+	}
+}
+
 func TestShareWebRendererKeepsSanitizedRichTextAndAppendsLegacyMedia(t *testing.T) {
 	content := tracking.Content{
 		ID: "legacy-rich-article", Version: 2, Title: "旧格式文章", Status: "published", BodyFormat: "rich_text",
