@@ -55,21 +55,22 @@ type ProjectNoteProjectUpdate struct {
 }
 
 type ProjectNoteProject struct {
-	ID               string    `json:"project_id"`
-	Name             string    `json:"name"`
-	Owner            string    `json:"owner_id"`
-	CRMID            string    `json:"crm_id,omitempty"`
-	Location         string    `json:"location,omitempty"`
-	BuildingArea     float64   `json:"building_area,omitempty"`
-	Floors           int       `json:"floors,omitempty"`
-	Style            string    `json:"style,omitempty"`
-	Status           string    `json:"status"`
-	CurrentVersionID string    `json:"current_version_id,omitempty"`
-	DesignerID       int64     `json:"designer_id"`
-	ConfirmerID      int64     `json:"confirmer_id,omitempty"`
-	Revision         int       `json:"revision"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                 string    `json:"project_id"`
+	Name               string    `json:"name"`
+	Owner              string    `json:"owner_id"`
+	CRMID              string    `json:"crm_id,omitempty"`
+	Location           string    `json:"location,omitempty"`
+	BuildingArea       float64   `json:"building_area,omitempty"`
+	Floors             int       `json:"floors,omitempty"`
+	Style              string    `json:"style,omitempty"`
+	Status             string    `json:"status"`
+	CurrentVersionID   string    `json:"current_version_id,omitempty"`
+	DesignerID         int64     `json:"designer_id"`
+	CreatorDisplayName string    `json:"creator_display_name,omitempty"`
+	ConfirmerID        int64     `json:"confirmer_id,omitempty"`
+	Revision           int       `json:"revision"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type ProjectNoteProjectPage struct {

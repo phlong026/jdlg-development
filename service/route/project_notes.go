@@ -15,6 +15,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -141,6 +142,15 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 	manage.GET("/projects", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("limit"))
 		out, err := svc.ProjectNoteListProjects(c.Request.Context(), projectNoteScope(c), limit, c.Query("cursor"))
+		if err == nil {
+			presented, presentationErr := presentProjectNoteProjects(c.Request.Context(), out.Items, deps.profiles)
+			if presentationErr != nil {
+				log.Printf("[project-notes] error operation=list_creator_profiles error_type=%T", presentationErr)
+				out.Items, _ = presentProjectNoteProjects(c.Request.Context(), out.Items, nil)
+			} else {
+				out.Items = presented
+			}
+		}
 		trackingResponse(c, out, err)
 	})
 	manage.POST("/projects", func(c *gin.Context) {
@@ -156,6 +166,15 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 			return
 		}
 		out, err := svc.ProjectNoteCreateProject(c.Request.Context(), projectNoteScope(c), input)
+		if err == nil {
+			presented, presentationErr := presentProjectNoteProjects(c.Request.Context(), []tracking.ProjectNoteProject{out}, deps.profiles)
+			if presentationErr != nil {
+				log.Printf("[project-notes] error operation=create_creator_profile project_id=%s error_type=%T", out.ID, presentationErr)
+				out.CreatorDisplayName = "项目创建人"
+			} else {
+				out = presented[0]
+			}
+		}
 		trackingResponse(c, out, err)
 	})
 	manage.GET("/projects/:id", func(c *gin.Context) {
@@ -165,6 +184,10 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 			return
 		}
 		out, err := presentProjectNoteProjectDetail(c.Request.Context(), detail, deps.profiles)
+		if err != nil {
+			log.Printf("[project-notes] error operation=detail_profiles project_id=%s error_type=%T", detail.Project.ID, err)
+			err = tracking.ErrUnavailable
+		}
 		trackingResponse(c, out, err)
 	})
 	manage.PATCH("/projects/:id", func(c *gin.Context) {
@@ -173,6 +196,15 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 			return
 		}
 		out, err := svc.ProjectNoteUpdateProject(c.Request.Context(), projectNoteScope(c), c.Param("id"), input)
+		if err == nil {
+			presented, presentationErr := presentProjectNoteProjects(c.Request.Context(), []tracking.ProjectNoteProject{out}, deps.profiles)
+			if presentationErr != nil {
+				log.Printf("[project-notes] error operation=update_creator_profile project_id=%s error_type=%T", out.ID, presentationErr)
+				out.CreatorDisplayName = "项目创建人"
+			} else {
+				out = presented[0]
+			}
+		}
 		trackingResponse(c, out, err)
 	})
 	manage.POST("/projects/:id/members/:account", func(c *gin.Context) {

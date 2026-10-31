@@ -1,6 +1,8 @@
 package route
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,17 +42,65 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 		c.Set("workbench.scope", scope)
 		c.Next()
 	})
-	registerContentWorkbenchHandlers(g, svc)
+	registerContentWorkbenchHandlers(g, svc, makeProjectNoteProfileResolver(users.DB))
 }
 
-func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service) {
+type workbenchOwnerChoice struct {
+	OwnerID     string `json:"owner_id"`
+	DisplayName string `json:"display_name"`
+}
+
+func workbenchOwnerChoices(ctx context.Context, scope tracking.Scope, resolve projectNoteProfileResolver) ([]workbenchOwnerChoice, error) {
+	personalOwner := "designer-" + strconv.FormatInt(scope.Actor, 10)
+	profile := model.UserProfilePresentation{}
+	hasPersonalOwner := false
+	for _, owner := range scope.Owners {
+		if owner == personalOwner {
+			hasPersonalOwner = true
+			break
+		}
+	}
+	if resolve != nil && scope.Actor > 0 && hasPersonalOwner {
+		profiles, err := resolve(ctx, []int64{scope.Actor})
+		if err != nil {
+			return nil, err
+		}
+		profile = profiles[scope.Actor]
+	}
+	choices := make([]workbenchOwnerChoice, 0, len(scope.Owners))
+	teamIndex := 0
+	for _, owner := range scope.Owners {
+		label := "个人创作空间"
+		if owner == personalOwner {
+			if nickname := strings.TrimSpace(profile.Nickname); nickname != "" {
+				label = nickname
+			}
+		} else {
+			teamIndex++
+			label = "团队内容空间"
+			if teamIndex > 1 {
+				label += " " + strconv.Itoa(teamIndex)
+			}
+		}
+		choices = append(choices, workbenchOwnerChoice{OwnerID: owner, DisplayName: label})
+	}
+	return choices, nil
+}
+
+func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service, profiles projectNoteProfileResolver) {
 	registerNativeReferenceHandlers(g, svc)
 	registerProjectCollectionHandlers(g, svc)
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
 	g.GET("/context", func(c *gin.Context) {
 		media := contentMediaConfigured(svc)
+		currentScope := scope(c)
+		ownerChoices, err := workbenchOwnerChoices(c.Request.Context(), currentScope, profiles)
+		if err != nil {
+			log.Printf("[content-workbench] error operation=owner_profiles actor=%d error_type=%T", currentScope.Actor, err)
+			ownerChoices, _ = workbenchOwnerChoices(c.Request.Context(), currentScope, nil)
+		}
 		trackingResponse(c, gin.H{
-			"enabled": workbenchEnabled(), "can_manage": true, "owners": scope(c).Owners,
+			"enabled": workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
 			"publish_enabled":             svc.Config.ContentEnabled,
 			"native_tracking_enabled":     svc.Config.Enabled,
 			"media_upload_configured":     media,
