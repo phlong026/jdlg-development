@@ -45,11 +45,14 @@ Page({
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
+    settingsExpanded: false, mediaExpanded: false, moreExpanded: false,
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
     const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
     const sourceToken = String(wx.getStorageSync('token') || '');
+    this._createToken = sourceToken;
+    this._pendingCreateAction = !options.id && ['media', 'document'].includes(options.action) ? options.action : '';
     if (channel && channel.on) channel.on('prefillContent', payload => this.receivePrefill(payload, sourceToken));
   },
   onShow() {
@@ -59,6 +62,8 @@ Page({
       this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
+      this._savedSignature = '';
+      this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
     this._token = token; this._epoch = (this._epoch || 0) + 1;
     this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: false });
@@ -101,9 +106,36 @@ Page({
       const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, media, this.editorWidth(), 'contentedit-layout') : [];
       this.setData({ context, media, documentCandidates, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
       this.applyPendingPrefill();
+      this._savedSignature = content ? this.draftSignature() : '';
+      this.performCreateAction();
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '编辑器加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false }); }
   },
   editorWidth() { const window = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync ? wx.getSystemInfoSync() : { windowWidth: 375 }; return Math.max(240, Number(window.windowWidth || 375) - 64); },
+  performCreateAction() {
+    if (!this._loaded || !this.data.context || !this.data.context.enabled || this.data.context.can_manage === false) return;
+    const action = this._pendingCreateAction;
+    this._pendingCreateAction = '';
+    if (!action || this.data.id || this._createToken !== String(wx.getStorageSync('token') || '')) return;
+    if (action === 'media') this.chooseMedia();
+    if (action === 'document') this.chooseDocument();
+  },
+  toggleSettings() { this.setData({ settingsExpanded: !this.data.settingsExpanded }); },
+  toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
+  toggleMore() { this.setData({ moreExpanded: !this.data.moreExpanded }); },
+  returnToEdit() {
+    if (this.data.busy) return;
+    this.pauseLayoutVideos();
+    this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, notice: '' });
+  },
+  handleBack() {
+    if (this.data.busy) { wx.showToast({ title: '正在处理，请稍候', icon: 'none' }); return; }
+    if (this.data.preview) { this.returnToEdit(); return; }
+    const leave = () => wx.navigateBack({ fail: () => this.backToWorkbench() });
+    const edited = this._savedSignature ? this._savedSignature !== this.draftSignature() : !this.data.id && (String(this.data.title || '').trim() || this.validBlocks().length);
+    if (!edited || this.data.deleted || this.data.documentReadOnly || this.data.legacyReadOnly) { leave(); return; }
+    const epoch = this._epoch;
+    wx.showModal({ title: '离开编辑？', content: '还有未保存的修改', confirmText: '离开', cancelText: '继续编辑', success: result => { if (result.confirm && this.current(epoch)) leave(); } });
+  },
   pauseLayoutVideos() { [...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || [])].filter(block => block.kind === 'video').forEach(block => wx.createVideoContext(block.domId, this).pause()); },
   draftSignature() {
     return JSON.stringify({ id: this.data.id, title: this.data.title, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks });
@@ -298,6 +330,8 @@ Page({
     const draftChanged = signature !== this.draftSignature();
     const blocks = draftChanged ? this.data.blocks : input.blocks;
     this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media) });
+    // 保存的是提交时的内容，不能把请求期间的新输入误当成已保存。
+    this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
     return { ...saved, draftChanged };
   },
   async saveDraft() {
@@ -308,7 +342,7 @@ Page({
     try {
       const saved = await this.persistDraft(input, epoch);
       if (!saved || !this.current(epoch)) return;
-      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: saved.draftChanged ? '已保存提交时的内容，当前仍有未保存修改，请再次保存' : '草稿已保存，可继续编辑或生成发布预览' });
+      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: saved.draftChanged ? '当前仍有未保存修改，请再次保存' : '草稿已保存' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
   },
   publishKey() {
@@ -358,7 +392,7 @@ Page({
       const view = await this.previewView(preview);
       if (!this.current(epoch)) return;
       if (signature !== this.draftSignature()) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
-      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '预览已生成，请核对后发布' });
+      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
@@ -368,7 +402,8 @@ Page({
       const result = await api.publishContent(this.data.id, this.data.revision, this.data.preview.preview_token, this.publishKey());
       if (!this.current(epoch)) return;
       this._publishSignature = ''; this._publishKey = '';
-      this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布。分享请从已发布阅读页使用小程序原生入口。' });
+      this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布' });
+      this._savedSignature = this.draftSignature();
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '发布失败' }); }
   },
   openPublished() {

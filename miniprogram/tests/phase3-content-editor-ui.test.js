@@ -13,6 +13,7 @@ function loadEditor(apiOverrides = {}) {
   const navigations = [];
   const navigationOptions = [];
   const toasts = [];
+  const modals = [], backs = [];
   let sessionToken = 'session-token';
   const api = {
     mutationKey: prefix => `${prefix}-key`,
@@ -25,6 +26,8 @@ function loadEditor(apiOverrides = {}) {
     getStorageSync: key => key === 'token' ? sessionToken : '',
     navigateTo: options => { navigations.push(options.url); navigationOptions.push(options); },
     showToast: options => toasts.push(options),
+    showModal: options => modals.push(options),
+    navigateBack: options => backs.push(options),
     getWindowInfo: () => ({ windowWidth: 375 }),
     createVideoContext: () => ({ pause() {} }),
   };
@@ -46,7 +49,7 @@ function loadEditor(apiOverrides = {}) {
     _visible: true,
     setData(values) { Object.assign(this.data, values); },
   };
-  return { page, navigations, navigationOptions, toasts, token(value) { sessionToken = value; } };
+  return { page, navigations, navigationOptions, toasts, modals, backs, token(value) { sessionToken = value; } };
 }
 
 test('editor exposes separate draft, preview, publish and published-reader actions', async () => {
@@ -65,6 +68,70 @@ test('editor exposes separate draft, preview, publish and published-reader actio
   page.setData({ status: 'published', version: 3, id: 'content-one' });
   page.openPublished();
   assert.equal(navigations[0], '/pages/contentreader/contentreader?content_id=content-one&content_version=3');
+});
+
+test('returning from preview keeps edits and invalidates the old publish token', async () => {
+  let publications = 0;
+  const { page } = loadEditor({ publishContent: async () => { publications += 1; } });
+  page.setData({ title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '保留正文' }], preview: { preview_token: 'old-preview' }, previewBlocks: [{ text: '旧预览' }] });
+  page.returnToEdit();
+  assert.equal(page.data.title, '庭院方案');
+  assert.equal(page.data.blocks[0].text, '保留正文');
+  assert.equal(page.data.preview, null);
+  assert.equal(page.data.previewBlocks.length, 0);
+  await page.publish();
+  assert.equal(publications, 0);
+});
+
+test('new content type opens its chooser once after authorization without triggering for saved content', () => {
+  const { page } = loadEditor();
+  let selections = 0;
+  page.chooseMedia = () => { selections += 1; };
+  page.onLoad({ action: 'media' });
+  page.performCreateAction();
+  assert.equal(selections, 0);
+  page._loaded = true;
+  page.setData({ context: { enabled: true, can_manage: true, media_upload_configured: true } });
+  page.performCreateAction();
+  page.performCreateAction();
+  assert.equal(selections, 1);
+  page.onLoad({ id: 'saved-content', action: 'media' });
+  page.performCreateAction();
+  assert.equal(selections, 1);
+});
+
+test('editor back preserves a preview before considering page exit', () => {
+  const { page } = loadEditor();
+  page.setData({ preview: { preview_token: 'preview' }, title: '未退出' });
+  page.handleBack();
+  assert.equal(page.data.preview, null);
+  assert.equal(page.data.title, '未退出');
+});
+
+test('back warns about edits made while a new draft was being saved', async () => {
+  let finish;
+  const saved = new Promise(resolve => { finish = resolve; });
+  const { page, modals, backs } = loadEditor({ saveContent: () => saved });
+  page.setData({ title: '提交时标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '提交正文' }] });
+  const saving = page.saveDraft();
+  page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '保存期间继续输入' } });
+  finish({ content_id: 'new-content', revision: 1, version: 0, status: 'draft' });
+  await saving;
+  page.handleBack();
+  assert.equal(backs.length, 0);
+  assert.equal(modals.length, 1);
+  modals[0].success({ confirm: false });
+  assert.equal(backs.length, 0);
+  assert.equal(page.data.title, '保存期间继续输入');
+});
+
+test('back exits a saved draft without a redundant confirmation', async () => {
+  const { page, modals, backs } = loadEditor();
+  page.setData({ title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+  await page.saveDraft();
+  page.handleBack();
+  assert.equal(modals.length, 0);
+  assert.equal(backs.length, 1);
 });
 
 test('AI writing prefill stays account-scoped and never overwrites a saved draft', () => {

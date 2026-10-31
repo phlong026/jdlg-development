@@ -25,6 +25,7 @@ function loadPage({
   let storedUserInfo = { username: '测试用户' };
   const navigations = [];
   const toasts = [];
+  let actionSheet;
   const source = fs.readFileSync(path.join(pageRoot, 'my.js'), 'utf8');
   vm.runInNewContext(source, {
     exports: {},
@@ -41,6 +42,7 @@ function loadPage({
       getStorageSync(key) { return key === 'token' ? storedToken : key === 'userInfo' ? storedUserInfo : ''; },
       navigateTo(options) { navigations.push(options.url); },
       showToast(options) { toasts.push(options.title); },
+      showActionSheet(options) { actionSheet = options; },
     },
     console, Promise, Date, Object, String, Number, Boolean, Array, setTimeout,
   });
@@ -51,7 +53,7 @@ function loadPage({
   page.data.token = token;
   page.data.hasLoginToken = !!token;
   return {
-    page, navigations, toasts,
+    page, navigations, toasts, actionSheet: () => actionSheet,
     setToken(value) { storedToken = value; page.data.token = value; },
     switchStoredAccount(value, userInfo = { username: '新账号' }) { storedToken = value; storedUserInfo = userInfo; },
   };
@@ -75,6 +77,19 @@ test('只有后端工作台能力允许时才显示并打开内容创作入口',
   const disabled = loadPage({ context: async () => ({ enabled: false, can_manage: true, owners: ['designer-7'] }) });
   await disabled.page.loadWorkbenchAccess();
   assert.equal(disabled.page.data.showWorkbenchSection, false);
+});
+
+test('收起的旧作品发布入口仍可从更多打开并复核权限', async () => {
+  const harness = loadPage();
+  harness.page.setData({ certStatus: 'approved', certType: 'designer', certIdentityType: '设计师' });
+  await harness.page.loadWorkbenchAccess();
+  harness.page.onWorkbenchMore();
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['作品发布', '可分享素材']);
+  harness.actionSheet().success({ tapIndex: 0 });
+  assert.deepEqual(harness.navigations, ['/pages/release/release']);
+  harness.switchStoredAccount('account-b');
+  harness.actionSheet().success({ tapIndex: 0 });
+  assert.equal(harness.navigations.length, 1);
 });
 
 test('认证资料只决定设计师标题和主页，不替代后端创作授权', async () => {
@@ -178,23 +193,18 @@ test('工作台区块按权限隐藏，普通生成记录与独立客户管理�
 });
 
 
-test('认证设计师工作台完整展示八项已有能力，资料引用和AI文案直接复用当前登录', async () => {
+test('认证设计师工作台只保留任务入口，收起能力仍从内容页继续可达', async () => {
   const designer = loadPage();
   designer.page.setData({ certStatus: 'approved', certType: 'designer', certIdentityType: '设计师' });
   await designer.page.loadWorkbenchAccess();
   assert.deepEqual(Array.from(designer.page.data.workbenchMenuItems, item => item.action), [
-    'myProjects', 'projectNotes', 'contentWorkbench', 'aiWriting',
-    'assetLibrary', 'shareMaterials', 'publish', 'designerHome',
+    'myProjects', 'contentWorkbench', 'designerHome',
   ]);
-  for (const action of ['assetLibrary', 'aiWriting']) {
-    designer.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
-  }
-  assert.deepEqual(designer.navigations, ['/pages/nativereferences/nativereferences', '/pages/contentwriting/contentwriting']);
+  designer.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action: 'contentWorkbench' } } });
+  assert.deepEqual(designer.navigations, ['/pages/contentworkbench/contentworkbench']);
   const owner = loadPage({ context: async () => ({ can_manage: false, owners: [] }) });
   await owner.page.loadWorkbenchAccess();
-  for (const action of ['assetLibrary', 'aiWriting']) {
-    owner.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
-  }
+  owner.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action: 'contentWorkbench' } } });
   assert.deepEqual(owner.navigations, []);
-  assert.equal(owner.toasts.length, 2);
+  assert.equal(owner.toasts.length, 1);
 });

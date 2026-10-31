@@ -180,6 +180,28 @@ test('disabled import capability leaves normal content workbench usable and expl
   assert.equal(listCalls, 0);
   const template = fs.readFileSync(path.join(root, 'pages/contentworkbench/contentworkbench.wxml'), 'utf8');
   assert.match(template, /wx:if="\{\{importServiceEnabled\}\}"[^>]*class="recent-imports"/);
+  assert.match(template, /wx:if="\{\{!importEnabled\}\}"[^>]*class="import-gate"/);
+  assert.match(template, /wx:else[^>]*class="import-editor"/);
+});
+
+test('repeated platform reasons collapse into one short import gate', async () => {
+  const runtime = harness(baseAPI({
+    importCapabilities: async () => ({
+      enabled: true,
+      platforms: ['wechat_article', 'xiaohongshu', 'channels', 'douyin'].map(platform => ({ platform, available: false, reason: '该平台导入服务尚未开通' })),
+    }),
+  }));
+  runtime.page.onShow(); await tick(); await tick();
+  assert.equal(runtime.page.data.importCapabilityReason, '该平台导入服务尚未开通');
+});
+
+test('capability failure uses one short gate instead of a second inline error', async () => {
+  const runtime = harness(baseAPI({
+    importCapabilities: async () => { throw new Error('导入能力加载失败'); },
+  }));
+  runtime.page.onShow(); await tick(); await tick();
+  assert.equal(runtime.page.data.importCapabilityReason, '链接导入能力暂不可用');
+  assert.equal(runtime.page.data.importError, '');
 });
 
 test('temporary import list failure keeps the existing retry polling behavior', async () => {

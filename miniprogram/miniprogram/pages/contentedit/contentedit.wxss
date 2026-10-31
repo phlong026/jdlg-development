@@ -1,5 +1,5 @@
 page {
-  background: #f7f5f1;
+  background: #fbfaf7;
   color: #2b211b;
 }
 
@@ -19,21 +19,7 @@ page {
 }
 
 .editor-hero {
-  padding: 24rpx 4rpx 8rpx;
-}
-
-.eyebrow {
-  display: block;
-  color: #a87943;
-  font-size: 22rpx;
-  letter-spacing: 2rpx;
-}
-
-.hero-title {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 40rpx;
-  font-weight: 650;
+  padding: 0 4rpx;
 }
 
 .status-badge {
@@ -58,9 +44,8 @@ page {
   margin: 18rpx 0;
   padding: 26rpx;
   border: 1rpx solid #eee8e1;
-  border-radius: 22rpx;
+  border-radius: 16rpx;
   background: #fff;
-  box-shadow: 0 8rpx 24rpx rgba(74, 52, 35, 0.04);
 }
 
 .state {
@@ -87,7 +72,48 @@ page {
 .form-panel {
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 18rpx;
+}
+
+.form-panel .title-input {
+  border: 0;
+  padding: 8rpx 0;
+  background: transparent;
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.settings-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 76rpx;
+  margin: 0;
+  padding: 12rpx 0 0;
+  border-top: 1rpx solid #eee8e1;
+  border-radius: 0;
+  background: transparent;
+  font-size: 26rpx;
+  color: #66584a;
+}
+
+.plain-action {
+  width: auto;
+  min-height: 72rpx;
+  margin: 0;
+  padding: 12rpx 8rpx;
+  background: transparent;
+  font-size: 26rpx;
+  color: #806345;
+}
+
+.insert-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 12rpx 0;
 }
 
 .section-heading {
@@ -101,14 +127,14 @@ page {
 .section-title {
   display: block;
   font-size: 31rpx;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .section-caption {
   display: block;
   margin-top: 5rpx;
-  color: #978b80;
-  font-size: 23rpx;
+  color: #817568;
+  font-size: 24rpx;
 }
 
 .content-heading > view {
@@ -130,11 +156,6 @@ page {
   flex: 1;
   flex-direction: column;
   gap: 10rpx;
-}
-
-.field-row {
-  display: flex;
-  gap: 18rpx;
 }
 
 .field-label {
@@ -172,7 +193,11 @@ input, textarea, .picker {
 }
 
 .block textarea {
-  min-height: 130rpx;
+  min-height: 220rpx;
+  border: 0;
+  background: transparent;
+  padding: 8rpx 0;
+  line-height: 1.7;
 }
 
 .block image, .block video, .media-row image, .media-row video, .preview image, .preview video {
@@ -203,7 +228,7 @@ input, textarea, .picker {
   padding: 0 16rpx;
   background: #f5f1ec;
   color: #65584e;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .actions .selected {
@@ -240,7 +265,7 @@ input, textarea, .picker {
 }
 
 .muted {
-  color: #8b8178;
+  color: #817568;
   font-size: 24rpx;
 }
 
@@ -257,14 +282,6 @@ input, textarea, .picker {
   margin-top: 8rpx;
   font-size: 36rpx;
   font-weight: 650;
-}
-
-.preview-tag {
-  padding: 8rpx 14rpx;
-  border-radius: 999rpx;
-  background: #f2e6d6;
-  color: #8c6034;
-  font-size: 22rpx;
 }
 
 .preview-cover {
@@ -284,10 +301,6 @@ input, textarea, .picker {
 .caption {
   display: block;
   text-align: center;
-}
-
-.publish-button {
-  margin-top: 28rpx;
 }
 
 .published-card {
@@ -337,7 +350,6 @@ input, textarea, .picker {
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
   border-top: 1rpx solid #e8e0d8;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -10rpx 30rpx rgba(72, 48, 30, 0.08);
 }
 
 button {
@@ -385,8 +397,4 @@ button::after {
 
 .article-layout-preview {
   overflow: hidden;
-}
-
-.preview-tag {
-  flex-shrink: 0;
 }

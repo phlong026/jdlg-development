@@ -17,23 +17,27 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
     assert.ok(position > previous, `${label} 应按目标顺序出现`);
     previous = position;
   }
-  assert.match(wxml, /class="workbench-grid"/);
+  assert.match(wxml, /class="workbench-grid workbench-grid-/);
   assert.match(wxml, /class="account-card"/);
   assert.match(wxml, /class="section-grid section-grid-two"/);
   assert.doesNotMatch(wxml, /待处理反馈|今日回访/);
 });
 
 test('工作台入口由后端创作能力控制，普通功能移出设计师分区', () => {
+  const source = read('my.ts');
+  for (const action of ['myProjects', 'contentWorkbench', 'designerHome']) {
+    assert.match(source, new RegExp(`action: '${action}'`));
+  }
+  for (const action of ['projectNotes', 'aiWriting', 'assetLibrary', 'shareMaterials', 'publish']) {
+    assert.doesNotMatch(source.match(/function buildWorkbenchMenuItems[\s\S]+?return items;/)[0], new RegExp(`action: '${action}'`));
+  }
   for (const file of ['my.ts', 'my.js']) {
-    const source = read(file);
-    for (const action of ['myProjects', 'projectNotes', 'contentWorkbench', 'publish', 'shareMaterials', 'designerHome']) {
-      assert.match(source, new RegExp(`action: '${action}'`));
-    }
-    assert.match(source, /action: 'myProjects'[^\n]+available: true/);
-    assert.match(source, /hasContentWorkbenchAccess/);
-    assert.match(source, /can_manage === true/);
-    assert.match(source, /buildCommonMenuItems[\s\S]+action: 'project'/);
-    assert.match(source, /buildServiceMenuItems[\s\S]+action: 'customerManagement'/);
+    const built = read(file);
+    assert.match(built, /action: 'myProjects'[^\n]+available: true/);
+    assert.match(built, /hasContentWorkbenchAccess/);
+    assert.match(built, /can_manage === true/);
+    assert.match(built, /buildCommonMenuItems[\s\S]+action: 'project'/);
+    assert.match(built, /buildServiceMenuItems[\s\S]+action: 'customerManagement'/);
   }
 });
 
@@ -53,7 +57,7 @@ test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
   const source = read('my.ts');
   const iconStyles = fs.readFileSync(path.join(root, '../../components/tdesign-miniprogram/icon/icon.wxss'), 'utf8');
   assert.equal(config.usingComponents['t-icon'], '/components/tdesign-miniprogram/icon/icon');
-  for (const icon of ['folder', 'file-edit', 'video', 'usergroup', 'file', 'send', 'share', 'user-business', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
+  for (const icon of ['folder', 'video', 'usergroup', 'file', 'share', 'user-business', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
     assert.ok(source.includes(`icon: '${icon}'`) || wxml.includes(`name="${icon}"`), `应使用已校验图标 ${icon}`);
     assert.ok(iconStyles.includes(`.t-icon-${icon}:before`), `TDesign 本地字体应包含 ${icon}`);
   }
@@ -62,7 +66,7 @@ test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
   assert.match(scss, /background:\s*#fbfaf7/);
 });
 
-test('项目笔记已有页面时我的入口可用且保留登录门禁', () => {
+test('项目笔记并入我的项目且保留登录门禁', () => {
   const vm = require('node:vm');
   let page;
   let storedToken = '';
@@ -73,7 +77,7 @@ test('项目笔记已有页面时我的入口可用且保留登录门禁', () =>
     Page: definition => { page = definition; },
     wx: { getStorageSync: () => storedToken, navigateTo: options => navigations.push(options.url), showToast: options => toasts.push(options.title) },
   });
-  const event = { currentTarget: { dataset: { action: 'projectNotes' } } };
+  const event = { currentTarget: { dataset: { action: 'myProjects' } } };
   page.data = { ...page.data, token: '', hasLoginToken: false };
   page.onWorkbenchMenuTap(event);
   assert.equal(navigations.length, 0);
@@ -83,11 +87,10 @@ test('项目笔记已有页面时我的入口可用且保留登录门禁', () =>
   page.data.hasContentWorkbenchAccess = true;
   page.onWorkbenchMenuTap(event);
   assert.deepEqual(navigations, ['/pages/projectnotes/projectnotes']);
-  for (const file of ['my.ts', 'my.js']) {
-    const source = read(file);
-    assert.match(source, /action: 'projectNotes'[^\n]+available: true/);
-    assert.match(source, /\/pages\/projectnotes\/projectnotes/);
-  }
+  const source = read('my.ts');
+  assert.match(source, /action: 'myProjects'[^\n]+available: true/);
+  assert.match(source, /\/pages\/projectnotes\/projectnotes/);
+  assert.doesNotMatch(source.match(/function buildWorkbenchMenuItems[\s\S]+?return items;/)[0], /action: 'projectNotes'/);
 });
 
 test('我的项目复用私人项目页，客户管理只打开既有后台深链', () => {

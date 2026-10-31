@@ -147,18 +147,11 @@ function buildWorkbenchMenuItems(options: {
   if (!hasContentAccess) return [];
 
   const items: MyMenuItem[] = [
-    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '方案与效果图', available: true },
-    { action: 'projectNotes', label: '项目笔记', icon: 'file-edit', description: '记录与灵感', available: true },
-    { action: 'contentWorkbench', label: '内容制作', icon: 'video', description: '文案与素材', available: true },
-    { action: 'aiWriting', label: 'AI文案', icon: 'edit-1', description: '起草与润色', available: true },
-    { action: 'assetLibrary', label: '资料库', icon: 'file-copy', description: '已发布内容引用', available: true },
-    { action: 'shareMaterials', label: '可分享素材', icon: 'share', description: '已授权作品', available: true },
+    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '项目与方案', available: true },
+    { action: 'contentWorkbench', label: '内容创作', icon: 'video', description: '作品与资料', available: true },
   ];
   if (hasDesignerAccess) {
-    items.push(
-      { action: 'publish', label: '我的发布', icon: 'send', description: '作品与发布管理', available: true },
-      { action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示主页', available: true },
-    );
+    items.push({ action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示', available: true });
   }
   return items;
 }
@@ -1130,6 +1123,20 @@ Page({
       return;
     }
 
+  },
+
+  onWorkbenchMore() {
+    if (!this.data.hasContentWorkbenchAccess) return;
+    const choices = this.data.isApprovedDesigner
+      ? [{ label: '作品发布', action: 'publish' }, { label: '可分享素材', action: 'shareMaterials' }]
+      : [{ label: '可分享素材', action: 'shareMaterials' }];
+    wx.showActionSheet({
+      itemList: choices.map(item => item.label),
+      success: result => {
+        const choice = choices[result.tapIndex];
+        if (choice) this.onWorkbenchMenuTap({ currentTarget: { dataset: { action: choice.action } } });
+      },
+    });
   },
 
   onWorkbenchMenuTap(e: any) {

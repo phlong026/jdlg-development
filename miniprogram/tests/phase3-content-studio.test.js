@@ -17,6 +17,7 @@ test('content pages explicitly register their custom navigation component', () =
 function runtime(overrides = {}) {
   let definition;
   const queries = [], navigations = [];
+  let actionSheet;
   const api = Object.assign({
     workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'] }),
     listContents: async query => { queries.push(query); return { items: [{ content_id: 'article-a', title: '庭院图文', type: 'article', status: 'draft', media: [] }, { content_id: 'video-a', title: '庭院视频', type: 'article', status: 'published', media: [{ kind: 'video', media_id: 'video-asset' }] }, { content_id: 'document-a', title: '庭院方案.pdf', type: 'document', status: 'draft', media: [{ kind: 'document', media_id: 'document-asset' }] }], next_cursor: 'page-2', as_of: '2026-10-27T00:00:00Z', metric_version: 'v1' }; },
@@ -25,11 +26,11 @@ function runtime(overrides = {}) {
   }, overrides);
   vm.runInNewContext(fs.readFileSync(source, 'utf8'), {
     Page: value => { definition = value; }, require: () => api,
-    wx: { getStorageSync: () => 'account-a', hideShareMenu() {}, stopPullDownRefresh() {}, navigateTo: value => navigations.push(value.url), showToast() {}, getClipboardData: options => options.success({ data: 'https://mp.weixin.qq.com/s/original' }) },
+    wx: { getStorageSync: () => 'account-a', hideShareMenu() {}, stopPullDownRefresh() {}, navigateTo: value => navigations.push(value.url), showToast() {}, showActionSheet(options) { actionSheet = options; }, getClipboardData: options => options.success({ data: 'https://mp.weixin.qq.com/s/original' }) },
     setTimeout, clearTimeout, console,
   });
   const page = Object.assign({}, definition, { data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { for (const [key, value] of Object.entries(values)) { const parts = key.split('.'); let object = this.data; for (const part of parts.slice(0, -1)) object = object[part]; object[parts.at(-1)] = value; } if (callback) callback(); } });
-  return { page, queries, navigations };
+  return { page, queries, navigations, actionSheet: () => actionSheet };
 }
 
 test('content studio searches the authorized catalog and resets cursor snapshots', async () => {
@@ -51,8 +52,6 @@ test('content categories filter loaded records without manufacturing assets or t
   page.selectCategory({ currentTarget: { dataset: { key: 'video' } } });
   assert.equal(page.data.visibleItems.length, 1);
   assert.equal(page.data.visibleItems[0].content_id, 'video-a');
-  page.selectCategory({ currentTarget: { dataset: { key: 'note' } } });
-  assert.equal(page.data.category, 'video');
   page.selectCategory({ currentTarget: { dataset: { key: 'document' } } });
   assert.equal(page.data.category, 'document');
   assert.equal(page.data.visibleItems.length, 1);
@@ -102,4 +101,50 @@ test('studio offers real destinations for existing assets and visits', () => {
   const { page, navigations } = runtime();
   page.openExistingAssets(); page.openShareVisits();
   assert.deepEqual(navigations, ['/pages/nativereferences/nativereferences', '/pages/sharevisits/sharevisits']);
+});
+
+test('studio has one create action and routes each supported type into the existing editor', () => {
+  const harness = runtime();
+  harness.page.openCreateMenu();
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['图文内容', '图片或视频', 'PDF / Word']);
+  harness.actionSheet().success({ tapIndex: 0 });
+  harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex: 1 });
+  harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex: 2 });
+  assert.deepEqual(harness.navigations, [
+    '/pages/contentedit/contentedit',
+    '/pages/contentedit/contentedit?action=media',
+    '/pages/contentedit/contentedit?action=document',
+  ]);
+});
+
+test('published rows open their immutable reader while drafts continue in the editor', () => {
+  const harness = runtime();
+  harness.page.openContent({ currentTarget: { dataset: { id: 'video-a', status: 'published', version: 3 } } });
+  harness.page.openContent({ currentTarget: { dataset: { id: 'article-a', status: 'draft', version: 0 } } });
+  assert.deepEqual(harness.navigations, [
+    '/pages/contentreader/contentreader?content_id=video-a&content_version=3',
+    '/pages/contentedit/contentedit?id=article-a',
+  ]);
+});
+
+test('published content keeps an explicit path back to editing', () => {
+  const harness = runtime();
+  harness.page.editContent({ currentTarget: { dataset: { id: 'published-a', status: 'published', version: 3 } } });
+  assert.deepEqual(harness.navigations, ['/pages/contentedit/contentedit?id=published-a']);
+  const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  assert.match(template, /catchtap="editContent"/);
+});
+
+test('legacy snapshots keep their existing read-only editor instead of calling native published-content APIs', () => {
+  const harness = runtime();
+  harness.page.openContent({ currentTarget: { dataset: { id: 'legacy-a', status: 'published', version: 3, readOnly: true, route: 'pages/work/work' } } });
+  assert.deepEqual(harness.navigations, ['/pages/contentedit/contentedit?id=legacy-a']);
+});
+
+test('studio template removes duplicate create and unavailable note controls', () => {
+  const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  assert.equal((template.match(/bindtap="openCreateMenu"/g) || []).length, 1);
+  assert.doesNotMatch(template, /上传资料|项目笔记协作尚未开通|已有生成记录、模板与作品可直接选用/);
+  assert.match(template, /bindtap="openExistingAssets"/);
+  assert.match(template, /bindtap="openAIWriting"/);
 });

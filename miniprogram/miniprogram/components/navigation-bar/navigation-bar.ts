@@ -20,6 +20,8 @@ Component({
     subtitle: { type: String, value: '' },
     /** 返回页面深度 */
     delta: { type: Number, value: 1 },
+    /** 多层视图由页面决定返回层级，其他页面维持原导航行为 */
+    customBack: { type: Boolean, value: false },
   },
 
   data: {
@@ -79,6 +81,7 @@ Component({
     onBack() {
       const delta = this.data.delta;
       this.triggerEvent('back', { delta });
+      if (this.data.customBack) return;
       wx.navigateBack({
         delta,
         fail: () => {

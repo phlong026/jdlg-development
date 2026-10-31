@@ -25,6 +25,7 @@ function contentRow(item) {
   return Object.assign({}, item, {
     kind, kind_label: { note: '项目笔记', document: '文档资料', video: '视频', article: '图文' }[kind],
     status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
+    action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
     cover_path: '', cover_error: false,
   });
@@ -33,7 +34,7 @@ function contentRow(item) {
 Page({
   data: {
     view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [],
-    categories: [{ key: 'all', label: '全部' }, { key: 'note', label: '笔记', unavailable: true }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
+    categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importServiceEnabled: false, importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
@@ -139,6 +140,15 @@ Page({
   openShareVisits() { this.navigate('/pages/sharevisits/sharevisits'); },
   openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
+  openCreateMenu() {
+    wx.showActionSheet({
+      itemList: ['图文内容', '图片或视频', 'PDF / Word'],
+      success: result => {
+        const url = ['/pages/contentedit/contentedit', '/pages/contentedit/contentedit?action=media', '/pages/contentedit/contentedit?action=document'][Number(result.tapIndex)];
+        if (url) this.navigate(url);
+      },
+    });
+  },
   pasteImportLink() { wx.getClipboardData({ success: result => this.setImportURL({ detail: { value: result.data } }), fail: () => wx.showToast({ title: '未能读取剪贴板，请手动粘贴', icon: 'none' }) }); },
   refreshImportList() { return this.loadImports(this._epoch); },
   async loadImports(epoch) {
@@ -148,7 +158,8 @@ Page({
       const platforms = (capability.platforms || []).map(item => Object.assign({}, item, { label: platformText(item.platform) }));
       const serviceEnabled = capability.enabled === true;
       const available = serviceEnabled && platforms.some(item => item.available);
-      const reason = capability.reason || (!available ? platforms.map(item => item.reason).filter(Boolean).join('；') : '');
+      const platformReasons = [...new Set(platforms.map(item => String(item.reason || '').trim()).filter(Boolean))];
+      const reason = capability.reason || (!available ? platformReasons.join('；') : '');
       this.setData({
         importServiceEnabled: serviceEnabled, importEnabled: available,
         importCapabilityReason: reason || (!serviceEnabled ? '链接导入功能当前未开启' : ''),
@@ -160,7 +171,7 @@ Page({
     } catch (error) {
       if (this.current(epoch)) {
         this.stopImportPoll();
-        this.setData({ importServiceEnabled: false, importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: error.message || '导入能力加载失败', importPolling: false });
+        this.setData({ importServiceEnabled: false, importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: '', importPolling: false });
       }
     }
   },
@@ -256,6 +267,20 @@ Page({
   retry() { this.load(true); },
   loadMore() { this.load(false, this._epoch); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
-  createContent() { wx.navigateTo({ url: '/pages/contentedit/contentedit' }); },
-  editContent(event) { wx.navigateTo({ url: '/pages/contentedit/contentedit?id=' + encodeURIComponent(event.currentTarget.dataset.id) }); },
+  createContent() { this.navigate('/pages/contentedit/contentedit'); },
+  openContent(event) {
+    const data = event.currentTarget.dataset || {};
+    const id = String(data.id || '');
+    const version = Number(data.version || 0);
+    if (!id) return;
+    if (data.status === 'published' && version > 0 && !data.readOnly && (!data.route || data.route === 'pages/contentreader/contentreader')) {
+      this.navigate('/pages/contentreader/contentreader?content_id=' + encodeURIComponent(id) + '&content_version=' + encodeURIComponent(String(version)));
+      return;
+    }
+    this.navigate('/pages/contentedit/contentedit?id=' + encodeURIComponent(id));
+  },
+  editContent(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    if (id) this.navigate('/pages/contentedit/contentedit?id=' + encodeURIComponent(id));
+  },
 });
