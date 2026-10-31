@@ -3,6 +3,12 @@ const {request}=require('../../utils/phase3-api');
 const ROOT='/api/v1/miniprogram/notifications';
 const BINDING='/api/v1/miniprogram/official-account/binding';
 function privateProjectNoteRoute(item){const route=String(item&&item.route_key||'');if(item&&item.kind==='project_note_feedback'){const id=/^[A-Za-z0-9_-]{8,128}$/;const version=String(item.content_id||''),notice=String(item.notification_id||''),feedback=notice.startsWith('feedback:')?notice.slice(9):'';return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}$/.test(route)&&id.test(version)&&id.test(feedback)?'/'+route+'&version_id='+encodeURIComponent(version)+'&feedback_id='+encodeURIComponent(feedback):'';}return /^pages\/projectnotes\/projectnotes\?project_id=[A-Za-z0-9_-]{8,128}&version_id=[A-Za-z0-9_-]{8,128}$/.test(route)?'/'+route:'';}
+function messagePresentation(kind){
+ if(kind==='project_note_feedback')return {categoryLabel:'项目反馈',actionLabel:'查看反馈'};
+ if(kind==='project_note_open')return {categoryLabel:'项目动态',actionLabel:'查看方案'};
+ if(kind==='browse')return {categoryLabel:'访问提醒',actionLabel:'查看访问'};
+ return {categoryLabel:'消息',actionLabel:'查看详情'};
+}
 Page({
  data:{loading:false,messages:[],cursor:'',unread:0,error:'',loginRequired:false,bindingLabel:'正在检查提醒状态',canBind:false,bindingBusy:false},
  onLoad(options){this._pendingNotice=String(options.notification_id||'');},
@@ -20,7 +26,7 @@ Page({
    const page=await request(ROOT,'GET',{}, {limit:20,cursor:more?this.data.cursor:''});
    if(!this.current(epoch))return;
    const rows=Array.isArray(page.items)?page.items:[];
-   const items=rows.map(row=>({...row,timeLabel:String(row.created_at||'').replace('T',' ').slice(0,16)}));
+   const items=rows.map(row=>({...row,...messagePresentation(row.kind),timeLabel:String(row.created_at||'').replace('T',' ').slice(0,16)}));
    const seen=new Set();const messages=(more?this.data.messages.concat(items):items).filter(row=>!seen.has(row.notification_id)&&seen.add(row.notification_id));
    this.setData({messages,cursor:page.next_cursor||''});
    await this.loadUnread(epoch);
@@ -30,9 +36,9 @@ Page({
  },
  async loadUnread(epoch){try{const result=await request(ROOT+'/unread-count');if(this.current(epoch))this.setData({unread:Number(result.unread_count)||0});}catch(error){if(this.current(epoch))this.setData({error:'未读状态暂时无法更新，请刷新'});}},
  async loadBinding(){const epoch=this._epoch;try{const status=await request(BINDING);if(!this.current(epoch))return;
-  const available=!!(status.capability&&status.capability.binding_available);
-  this.setData({canBind:available&&!(status.bound&&status.subscribed),bindingLabel:status.bound&&status.subscribed?'已连接华匠邦建科浏览提醒':available?'连接华匠邦建科，离开小程序也能接收提醒':'华匠邦建科浏览提醒暂未开通'});
- }catch(error){if(this.current(epoch))this.setData({bindingLabel:'服务号提醒状态暂时无法读取',canBind:false});}},
+  const capability=status.capability||{};const available=!!capability.binding_available;const connected=!!(status.bound&&status.subscribed);const deliverable=!!capability.delivery_available;
+  this.setData({canBind:available&&!connected,bindingLabel:connected?(deliverable?'已连接，可接收提醒':'已连接，提醒暂不可用'):available?'离开小程序也能收到提醒':'暂不可用'});
+ }catch(error){if(this.current(epoch))this.setData({bindingLabel:'状态读取失败',canBind:false});}},
  onRetry(){this.loadMessages(false);},onLoadMore(){if(this.data.cursor)this.loadMessages(true);},
  onLogin(){wx.navigateTo({url:'/pages/login/login'});},
  async onOpenMessage(event){const id=String(event.currentTarget.dataset.id||'');if(!id||!this._token)return;const epoch=this._epoch;

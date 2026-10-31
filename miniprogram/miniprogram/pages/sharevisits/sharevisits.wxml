@@ -1,18 +1,19 @@
 <view class="private-page">
- <navigation-bar title="我的分享访问" back="{{true}}" background="#f7f3ee" />
+ <navigation-bar title="分享记录" back="{{true}}" background="#f7f3ee" />
  <view class="page-body">
-  <view wx:if="{{loading}}" class="state" role="status">正在加载本人分享记录…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>请先登录后查看本人分享记录。</text><button bindtap="goLogin">去登录</button></view>
-  <view wx:elif="{{denied}}" class="state"><text>当前账号没有本人访问记录查看权限。</text><button bindtap="retry">重新检查</button></view>
+  <view wx:if="{{loading}}" class="state" role="status">正在加载分享记录…</view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>登录后查看分享记录</text><button class="primary" bindtap="goLogin">登录</button></view>
+  <view wx:elif="{{denied}}" class="state"><text>当前账号无法查看分享记录</text><button bindtap="retry">重新检查</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="retry">重试</button></view>
   <block wx:else>
-   <view class="intro">仅显示由当前登录账号实际发起的分享及其授权访问统计。</view>
-   <view wx:if="{{!items.length}}" class="state">暂无本人分享记录。</view>
+   <view wx:if="{{!items.length}}" class="state">暂时没有分享记录</view>
    <button wx:for="{{items}}" wx:key="share_id" class="card" data-index="{{index}}" bindtap="openVisits">
-    <text class="title">{{item.title || '分享内容'}}</text><text class="meta">{{item.revoked ? '已撤回' : item.status === 'published' ? '已发布' : item.status || '分享记录'}} · {{item.channel || '未回传渠道'}}</text>
-    <view class="metrics"><text>{{item.visitor_count}} 位访客</text><text>{{item.page_views}} 次浏览</text></view><text class="meta">最近访问：{{item.last_visit_text}}</text>
+    <view class="card-heading"><text class="title">{{item.title || '分享内容'}}</text><text class="status">{{item.status_text}}</text></view>
+    <text class="meta">{{item.channel_text}} · 分享于 {{item.created_at_text}}</text>
+    <view class="metrics"><text>{{item.visitor_count}} 位访客</text><text>{{item.page_views}} 次浏览</text></view>
+    <text class="visit-time">{{item.has_visits ? '最近访问 ' + item.last_visit_text : '暂时没有访问'}}</text>
    </button>
-   <button wx:if="{{next_cursor}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
+   <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
   </block>
  </view>
 </view>
