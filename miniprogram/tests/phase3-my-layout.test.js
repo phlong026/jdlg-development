@@ -10,7 +10,7 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 
 test('我的页按目标图组织账户、工作台、资料和服务', () => {
   const wxml = read('my.wxml');
-  const orderedSections = ['我的账户', '设计师工作台', '我的资料', '账号与服务'];
+  const orderedSections = ['我的账户', '{{workbenchSectionTitle}}', '我的资料', '账号与服务'];
   let previous = -1;
   for (const label of orderedSections) {
     const position = wxml.indexOf(label);
@@ -23,15 +23,17 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
   assert.doesNotMatch(wxml, /待处理反馈|今日回访/);
 });
 
-test('工作台保留八个目标入口并复用已有准入边界', () => {
+test('工作台入口由后端创作能力控制，普通功能移出设计师分区', () => {
   for (const file of ['my.ts', 'my.js']) {
     const source = read(file);
-    for (const action of ['myProjects', 'projectNotes', 'contentWorkbench', 'customerManagement', 'project', 'publish', 'shareMaterials', 'designerHome']) {
+    for (const action of ['myProjects', 'projectNotes', 'contentWorkbench', 'publish', 'shareMaterials', 'designerHome']) {
       assert.match(source, new RegExp(`action: '${action}'`));
     }
     assert.match(source, /action: 'myProjects'[^\n]+available: true/);
-    assert.match(source, /action: 'contentWorkbench'[^\n]+available: hasLoginToken/);
-    assert.match(source, /action: 'customerManagement'[^\n]+available: hasLoginToken/);
+    assert.match(source, /hasContentWorkbenchAccess/);
+    assert.match(source, /can_manage === true/);
+    assert.match(source, /buildCommonMenuItems[\s\S]+action: 'project'/);
+    assert.match(source, /buildServiceMenuItems[\s\S]+action: 'customerManagement'/);
   }
 });
 
@@ -63,19 +65,22 @@ test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
 test('项目笔记已有页面时我的入口可用且保留登录门禁', () => {
   const vm = require('node:vm');
   let page;
+  let storedToken = '';
   const navigations = [], toasts = [];
   vm.runInNewContext(read('my.js'), {
     exports: {},
     require: () => ({ resolveAssetPath: value => value }),
     Page: definition => { page = definition; },
-    wx: { getStorageSync: () => '', navigateTo: options => navigations.push(options.url), showToast: options => toasts.push(options.title) },
+    wx: { getStorageSync: () => storedToken, navigateTo: options => navigations.push(options.url), showToast: options => toasts.push(options.title) },
   });
   const event = { currentTarget: { dataset: { action: 'projectNotes' } } };
   page.data = { ...page.data, token: '', hasLoginToken: false };
   page.onWorkbenchMenuTap(event);
   assert.equal(navigations.length, 0);
   assert.equal(toasts[0], '请先登录');
+  storedToken = 'fixture-session';
   page.data.token = 'fixture-session';
+  page.data.hasContentWorkbenchAccess = true;
   page.onWorkbenchMenuTap(event);
   assert.deepEqual(navigations, ['/pages/projectnotes/projectnotes']);
   for (const file of ['my.ts', 'my.js']) {
@@ -98,14 +103,15 @@ test('我的项目复用私人项目页，客户管理只打开既有后台深�
   });
   page.data = { ...page.data, token: 'mini-session', hasLoginToken: true };
   page.setData = patch => Object.assign(page.data, patch);
-  page.refreshWorkbenchMenuItems({ hasLoginToken: true });
-  for (const action of ['myProjects', 'customerManagement', 'contentWorkbench']) {
+  page.refreshWorkbenchMenuItems({ hasLoginToken: true, hasContentWorkbenchAccess: true });
+  for (const action of ['myProjects', 'contentWorkbench']) {
     page.onWorkbenchMenuTap({ currentTarget: { dataset: { action } } });
   }
+  page.onAccountMenuTap({ currentTarget: { dataset: { action: 'customerManagement' } } });
   assert.deepEqual(navigations, [
     '/pages/projectnotes/projectnotes',
-    '/pages/adminhome/adminhome?target=customer-management',
     '/pages/contentworkbench/contentworkbench',
+    '/pages/adminhome/adminhome?target=customer-management',
   ]);
   assert.equal(navigations.some(url => /token|session|user_id/i.test(url)), false);
 });

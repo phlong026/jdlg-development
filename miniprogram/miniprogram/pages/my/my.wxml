@@ -50,7 +50,8 @@
         <text class="prompt-text">请先登录后查看会员与账户信息</text>
       </view>
 
-      <view class="menu-section-title">设计师工作台</view>
+      <block wx:if="{{showWorkbenchSection}}">
+      <view class="menu-section-title">{{workbenchSectionTitle}}</view>
       <view class="workbench-card">
         <view class="workbench-grid">
           <view wx:for="{{workbenchMenuItems}}" wx:key="action" class="workbench-item {{item.available === false ? 'workbench-item-disabled' : ''}}" bindtap="onWorkbenchMenuTap" data-action="{{item.action}}">
@@ -59,13 +60,14 @@
             <text class="workbench-description">{{item.available === false ? item.meta : item.description}}</text>
           </view>
         </view>
-        <view class="share-visits-entry" bindtap="onWorkbenchMenuTap" data-action="shareVisits">
+        <view wx:if="{{hasShareVisitAccess}}" class="share-visits-entry" bindtap="onWorkbenchMenuTap" data-action="shareVisits">
           <view><t-icon class="share-visits-icon" name="share" size="20px" /><text class="share-visits-title">我的分享访问</text><text class="share-visits-meta">仅查看本人分享</text></view>
           <text class="menu-list-arrow">›</text>
         </view>
       </view>
+      </block>
 
-      <view id="shareMaterialsPanel" wx:if="{{showShareMaterialsPanel && hasLoginToken && shareMaterialsState !== 'hidden'}}" class="share-materials-section">
+      <view id="shareMaterialsPanel" wx:if="{{showShareMaterialsPanel && hasContentWorkbenchAccess && shareMaterialsState !== 'hidden'}}" class="share-materials-section">
         <view class="menu-section-title">可分享素材</view>
         <view class="menu-card share-materials-card">
           <view class="share-materials-head"><text class="share-materials-caption">仅展示已授权的已发布版本，打开后可原生分享。</text><text class="share-materials-close" bindtap="hideShareMaterialsPanel">收起</text></view>

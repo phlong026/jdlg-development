@@ -49,12 +49,15 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 test('phase3 API signs authenticated workbench and paginated self-visit requests', async () => {
   const { api, calls } = loadAPI();
   await api.workbenchContext();
+  await api.mySharesContext();
   await api.listMyShares({ cursor: 'cursor one', as_of: '2026-10-27T00:00:00Z', metric_version: 'visible-v1' });
   assert.equal(calls[0].options.url, 'https://api.jiadilingguang.com/api/v1/miniprogram/workbench/context');
   assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/workbench/context');
-  assert.match(calls[1].options.url, /cursor=cursor%20one/);
-  assert.match(calls[1].options.url, /as_of=2026-10-27T00%3A00%3A00Z/);
-  assert.equal(calls[1].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares');
+  assert.equal(calls[1].options.url, 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/my-shares/context');
+  assert.equal(calls[1].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares/context');
+  assert.match(calls[2].options.url, /cursor=cursor%20one/);
+  assert.match(calls[2].options.url, /as_of=2026-10-27T00%3A00%3A00Z/);
+  assert.equal(calls[2].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares');
 });
 
 test('private draft media is downloaded or uploaded with login signatures', async () => {

@@ -53,6 +53,7 @@ function deleteContentDraft(id, revision) { return request(WORKBENCH + '/content
 function previewContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/preview', 'POST', { expected_revision: revision }); }
 function publishContent(id, revision, previewToken, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/publish', 'POST', { expected_revision: revision, preview_token: previewToken, idempotency_key: key }); }
 function revokeContent(id, revision, reason, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/revoke', 'POST', { expected_revision: revision, reason, idempotency_key: key }); }
+function mySharesContext() { return request(MY_SHARES + '/context'); }
 function listMyShares(query) { return request(MY_SHARES, 'GET', {}, query); }
 function listMyShareVisits(id, query) { return request(MY_SHARES + '/' + encodeURIComponent(id) + '/visits', 'GET', {}, query); }
 function importCapabilities() { return request(IMPORTS + '/capabilities'); }
@@ -173,7 +174,7 @@ function mutationKey(prefix) {
 
 module.exports = {
   ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
-  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, listMyShares, listMyShareVisits,
+  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
   getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject, inviteProjectNoteMember, revokeProjectNoteMember,
