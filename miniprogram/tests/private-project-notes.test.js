@@ -133,6 +133,87 @@ test('designer account guard clears every protected form and ownership field', (
   assert.equal(page.data.noteMedia.length, 0);
 });
 
+test('project workspace uses in-page navigation and keeps native back for the project list', async () => {
+  let nativeBacks = 0;
+  const page = pageHarness('projectnotes', {}, { navigateBack: () => { nativeBacks++; } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'project-one', name: '张宅' }, notes: [], versions: [], feedbacks: [] });
+  assert.equal(page.data.pageView, 'detail');
+
+  await page.startNewNote();
+  assert.equal(page.data.pageView, 'editor');
+  await page.handleBack();
+  assert.equal(page.data.pageView, 'detail');
+  await page.handleBack();
+  assert.equal(page.data.pageView, 'list');
+  assert.equal(page.data.selectedProject, null);
+  await page.handleBack();
+  assert.equal(nativeBacks, 1);
+});
+
+test('project deep link opens the exact version view and returns to project detail first', async () => {
+  const detail = { project: { project_id: 'project-one', name: '张宅' }, notes: [], versions: [], feedbacks: [], shares: [] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => detail,
+    getProjectNoteVersion: async () => ({ project_id: 'project-one', version_id: 'version-one', note_id: 'note-one', revision: 2, title: '确认版', body: '固定正文', body_format: 'plain', media: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page._targetVersionID = 'version-one';
+  await page.openProject('project-one', 1);
+  assert.equal(page.data.pageView, 'version');
+  assert.equal(page.data.versionView.version_id, 'version-one');
+  await page.handleBack();
+  assert.equal(page.data.pageView, 'detail');
+  assert.equal(page.data.selectedProject.project_id, 'project-one');
+});
+
+test('project back cannot reopen protected detail after an account change during the discard prompt', async () => {
+  let token = 'session-token', modal;
+  const page = pageHarness('projectnotes', {}, { getStorageSync: () => token, showModal: options => { modal = options; } });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'project-one', name: '张宅' }, notes: [], versions: [] });
+  await page.startNewNote();
+  page.setNoteBody({ detail: { value: '修改中的内容' } });
+  const pending = page.handleBack();
+  token = 'different-account'; page.clearProtected();
+  modal.success({ confirm: true });
+  await pending;
+  assert.equal(page.data.pageView, 'list');
+  assert.equal(page.data.selectedProject, null);
+});
+
+test('project back waits for a pending save instead of leaving an active editor', async () => {
+  const page = pageHarness('projectnotes', {});
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'project-one', name: '张宅' }, notes: [], versions: [] });
+  await page.startNewNote(); page.data.busy = true;
+  await page.handleBack();
+  assert.equal(page.data.pageView, 'editor');
+});
+
+test('fixed proposal shows only confirmations belonging to its exact version', () => {
+  const page = pageHarness('projectnotes', {});
+  page._selectedVersionID = 'version-one';
+  page.applyProjectDetail({ project: { project_id: 'project-one', name: '张宅' }, confirmations: [
+    { confirmation_id: 'confirm-one', version_id: 'version-one', confirmed_at: '2026-10-31T08:00:00Z' },
+    { confirmation_id: 'confirm-two', version_id: 'version-two', confirmed_at: '2026-10-31T09:00:00Z' },
+  ] }, '', { version_id: 'version-one', revision: 1 }, null, 'version');
+  assert.equal(page.data.confirmations.length, 1);
+  assert.equal(page.data.confirmations[0].confirmation_id, 'confirm-one');
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /wx:for="\{\{confirmations\}\}"/);
+});
+
+test('project template separates core views and delegates custom navigation back to the page', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /custom-back="\{\{true\}\}"/);
+  assert.match(template, /bind:back="handleBack"/);
+  for (const view of ['list', 'detail', 'editor', 'version', 'members', 'history']) {
+    assert.match(template, new RegExp(`pageView === '${view}'`));
+  }
+  assert.doesNotMatch(template, /CRM 项目关联接入中|转发不会增加权限|完整项目记录/);
+});
+
 test('designer ignores account A project response after switching to account B', async () => {
   let token = 'account-a', resolveProjects;
   const projects = new Promise(resolve => { resolveProjects = resolve; });

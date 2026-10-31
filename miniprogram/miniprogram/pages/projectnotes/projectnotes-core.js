@@ -4,6 +4,7 @@ const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
 
 const blankProtected = () => ({
+  pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false,
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
   projects: [], owners: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
@@ -48,7 +49,7 @@ Page({
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   clearProtected() {
-    this._noteFormBaseline = null; this._projectFormBaseline = null;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -56,7 +57,10 @@ Page({
     return JSON.stringify({ project_id: this.data.selectedProject && this.data.selectedProject.project_id || '', note_id: this.data.note && this.data.note.note_id || '', new_note: !!this._newNote, draft: this.noteDraft() });
   },
   projectFormSignature() { return JSON.stringify(this.data.projectEdit || {}); },
-  rememberLoadedForms() { this._noteFormBaseline = this.noteFormSignature(); this._projectFormBaseline = this.projectFormSignature(); },
+  rememberLoadedForms() {
+    this._noteFormBaseline = this.noteFormSignature(); this._projectFormBaseline = this.projectFormSignature();
+    this._loadedFormState = { projectEdit: Object.assign({}, this.data.projectEdit), noteTitle: this.data.noteTitle, noteBody: this.data.noteBody, noteMedia: (this.data.noteMedia || []).map(item => Object.assign({}, item)) };
+  },
   hasUnsavedChanges() {
     return this._noteFormBaseline != null && this._noteFormBaseline !== this.noteFormSignature()
       || this._projectFormBaseline != null && this._projectFormBaseline !== this.projectFormSignature();
@@ -65,6 +69,44 @@ Page({
     if (typeof hasChanges !== 'boolean') hasChanges = this.hasUnsavedChanges();
     if (!hasChanges) return Promise.resolve(true);
     return new Promise(resolve => wx.showModal({ title: '放弃未保存的修改？', content: '切换后，当前尚未保存的项目或笔记内容将丢失。', confirmText: '放弃修改', confirmColor: '#a33b31', success: result => resolve(result.confirm === true), fail: () => resolve(false) }));
+  },
+
+  restoreLoadedForms() {
+    const state = this._loadedFormState;
+    if (state) this.setData({ projectEdit: Object.assign({}, state.projectEdit), noteTitle: state.noteTitle, noteBody: state.noteBody, noteMedia: state.noteMedia.map(item => Object.assign({}, item)) });
+  },
+
+  async handleBack() {
+    if (this.data.busy) return;
+    if (this.data.pageView === 'list') { wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/my/my' }) }); return; }
+    const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
+    const unchanged = () => this.current(epoch) && this.data.selectedProject === project && this.data.pageView === view && !this.data.busy;
+    if (this.data.pageView !== 'detail') {
+      if (!await this.confirmDiscardChanges() || !unchanged()) return;
+      this.restoreLoadedForms();
+      this.setData({ pageView: 'detail', navigationTitle: this.data.selectedProject && this.data.selectedProject.name || '项目详情', projectSettingsOpen: false, error: '', notice: '' });
+      return;
+    }
+    if (!await this.confirmDiscardChanges() || !unchanged()) return;
+    const kept = { projects: this.data.projects, owners: this.data.owners, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    this._selectedProjectID = ''; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
+    this.setData(Object.assign(blankProtected(), kept));
+  },
+
+  openProjectSettings() { this.setData({ projectSettingsOpen: true }); },
+  async closeProjectSettings() {
+    if (this.data.busy) return;
+    const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
+    const changed = this._projectFormBaseline != null && this._projectFormBaseline !== this.projectFormSignature();
+    if (!await this.confirmDiscardChanges(changed) || !this.current(epoch) || this.data.selectedProject !== project || this.data.pageView !== view || this.data.busy) return;
+    this.restoreLoadedForms(); this.setData({ projectSettingsOpen: false });
+  },
+  openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false }); },
+  openHistory() { this.setData({ pageView: 'history', navigationTitle: '项目记录', projectSettingsOpen: false }); if (!this.data.historyLoaded) return this.loadHistory(); },
+  openNote(event) {
+    const id = String(event.currentTarget.dataset.id || ''), index = this.data.notes.findIndex(item => item.note_id === id);
+    if (index >= 0) return this.selectNote({ detail: { value: index } });
   },
 
   async revalidateProjectAccess() {
@@ -157,7 +199,7 @@ Page({
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const project = await api.createProjectNoteProject({ name: this.data.projectName, owner_id: this.data.ownerID });
-      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建，可邀请业主并建立笔记。'); }
+      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },
   async selectProject(event) { if (this.data.busy || !await this.confirmDiscardChanges()) return; this._selectedNoteID = ''; this._newNote = false; this._targetVersionID = ''; this._selectedVersionID = ''; return this.openProject(String(event.currentTarget.dataset.id || ''), this._epoch); },
@@ -165,6 +207,8 @@ Page({
     if (!projectID) return;
     const request = this._projectRequest = (this._projectRequest || 0) + 1;
     const requested = this._targetVersionID || this._selectedVersionID || '';
+    const requestedView = this._nextPageView || (requested ? 'version' : ['editor', 'members', 'history'].includes(this.data.pageView) ? this.data.pageView : 'detail');
+    this._nextPageView = '';
     this._selectedProjectID = projectID; this._selectedVersionID = requested; this._targetVersionID = '';
     const kept = { projects: this.data.projects, owners: this.data.owners, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this.setData(Object.assign(blankProtected(), kept, { busy: true, error: '', notice: notice || '' }));
@@ -190,7 +234,7 @@ Page({
         result.feedbacks = [...(result.feedbacks || []), feedback];
       }
       const presentation = fixed ? await this.fixedVersionPresentation(projectID, fixed, epoch, request) : null;
-      if (this.current(epoch) && request === this._projectRequest) this.applyProjectDetail(result, notice, fixed, presentation);
+      if (this.current(epoch) && request === this._projectRequest) this.applyProjectDetail(result, notice, fixed, presentation, requestedView);
     } catch (_) {
       if (!this.current(epoch) || request !== this._projectRequest) return;
       this.clearProtected(); this.setData(Object.assign({}, kept, { error: requested ? '目标固定版本暂不可访问，未切换到其他版本。' : '私人项目暂不可访问。', busy: false }));
@@ -216,7 +260,7 @@ Page({
     const blocks = fixed.body_format === 'article_v2' ? renderArticleDocument(fixed.body, media, Math.max(240, windowInfo.windowWidth - 40), 'fixed-note') : [];
     return { media, blocks };
   },
-  applyProjectDetail(result, notice, fixed, presentation) {
+  applyProjectDetail(result, notice, fixed, presentation, requestedView) {
     const project = result.project || result, notes = result.notes || [], versions = result.versions || [], shares = result.shares || [];
     const requested = this._selectedVersionID || this._targetVersionID;
     if (fixed) { this._selectedNoteID = fixed.note_id; this._newNote = false; }
@@ -238,9 +282,12 @@ Page({
     const confirmerChoices = [{ actor_id: '', label: '请选择受邀账号' }, ...available.map(item => Object.assign({}, item, { label: '账号 ' + item.actor_id }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
     const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
+    const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
+    const navigationTitles = { detail: project.name || '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this._loaded = true;
     this.setData({
+      pageView, navigationTitle: navigationTitles[pageView] || project.name || '项目详情', projectSettingsOpen: false,
       selectedProject: project, projectEdit: projectForm(project), projectStatusLabel: statusLabels[project.status] || '初步方案', notes, noteIndex: Math.max(0, notes.findIndex(item => item.note_id === noteID)), versionChoices, members, activeMembers: available, confirmerChoices,
       confirmerIndex: foundIndex < 0 ? 0 : foundIndex + 1, confirmerAccount: foundIndex < 0 ? '' : available[foundIndex].actor_id,
       note, noteTitle: note && note.title || '', noteBody: note && note.body || '', bodyReadOnly,
@@ -286,8 +333,8 @@ Page({
     const item = this.data.historyItems[Number(event.currentTarget.dataset.index)];
     if (!item || this.data.busy || !await this.confirmDiscardChanges()) return;
     this._targetFeedbackID = this.data.historyType === 'feedbacks' ? item.feedback_id : '';
-    if (this.data.historyType === 'notes') { this._selectedNoteID = item.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = ''; }
-    else if (item.version_id) this._selectedVersionID = item.version_id;
+    if (this.data.historyType === 'notes') { this._selectedNoteID = item.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = ''; this._nextPageView = 'editor'; }
+    else if (item.version_id) { this._selectedVersionID = item.version_id; this._nextPageView = 'version'; }
     else return;
     await this.refreshProject();
   },
@@ -296,19 +343,20 @@ Page({
     const note = this.data.notes[Number(event.detail.value)]; if (!note) return;
     if (!await this.confirmDiscardChanges()) return;
     this._targetFeedbackID = ''; this._selectedNoteID = note.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = '';
+    this._nextPageView = 'editor';
     return this.refreshProject();
   },
   async selectVersion(event) {
     const id = String(event.currentTarget.dataset.id || '');
     if (this.data.busy || !this.data.versionChoices.some(item => item.version_id === id)) return;
     if (!await this.confirmDiscardChanges()) return;
-    this._targetFeedbackID = ''; this._selectedVersionID = id;
+    this._targetFeedbackID = ''; this._selectedVersionID = id; this._nextPageView = 'version';
     return this.refreshProject();
   },
   async startNewNote() {
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
     this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null;
-    this.setData({ note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, frozenVersion: null, versionChoices: [], activeShare: null, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this._noteFormBaseline = this.noteFormSignature(); });
+    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, frozenVersion: null, versionChoices: [], activeShare: null, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this._noteFormBaseline = this.noteFormSignature(); });
   },
   selectFeedback(event) {
     const feedback = this.data.feedbacks.find(item => item.feedback_id === String(event.currentTarget.dataset.id || ''));
@@ -317,7 +365,7 @@ Page({
     this.setData({ selectedFeedback: feedback, feedbackID: feedback.feedback_id, feedbackReply: feedback.resolution_reply || '' });
   },
   async refreshProject(notice) { const project = this.data.selectedProject; if (project) await this.openProject(project.project_id, this._epoch, notice); },
-  async returnToDraft() { const project = this.data.selectedProject; if (!project || this.data.busy || !await this.confirmDiscardChanges()) return; this._targetVersionID = ''; this._selectedVersionID = ''; await this.openProject(project.project_id, this._epoch); },
+  async returnToDraft() { const project = this.data.selectedProject; if (!project || this.data.busy || !await this.confirmDiscardChanges()) return; this._targetVersionID = ''; this._selectedVersionID = ''; this._nextPageView = 'editor'; await this.openProject(project.project_id, this._epoch); },
   async exportProjectNoteWord() {
     const project = this.data.selectedProject, version = this.data.frozenVersion;
     if (!project || !version || this.data.busy) return;
