@@ -13,6 +13,7 @@
 | `c267592` | 分享业务状态和消息动作 |
 | `814077f` | 合集、私密资料包、邀请、媒体分页、网页与归因服务端集成 |
 | `dd7ed9c` | 原生合集、资料包、邀请、选择器和分享消息链路 |
+| `c36e9bb` | 移除成员后旧邀请不能继续显示已经加入 |
 
 主要文件组为 `service/tracking/project_collections.go`、`project_packages.go`、`project_invitations.go` 及对应处理器/测试；小程序新增 `projectcollections`、`collectionreader`、`projectpackage`、`projectpackageview`、`projectinvite` 页面，接入创作、项目、资料库和消息页。
 
@@ -36,12 +37,16 @@
 
 开发者工具曾加载真实登录设计师的创作首页，无二次管理登录、调试错误0；随后修正栏目宽度。最终宽度、新增页面视觉、小屏、键盘与系统返回手势尚未复验。
 
+## 远端检查
+
+代码已推送的 `1c05119` 触发了 [GitHub Actions](https://github.com/phlong026/jdlg-development/actions/runs/41206960488)，两个任务均未启动，失败注释明确为账户付款失败或消费额度不足。没有代码测试日志，不将其称为CI通过。账户账单/额度恢复后仍需对最终提交重新取得检查证据；不修改付款设置或自动增加额度。
+
 ## 部署包与上线状态
 
-- 程序源码提交：`dd7ed9c`（含服务端 `814077f`）。
-- 归档：`jdlg-content-rectification-dd7ed9c.tar.gz`，27,424,630字节；发布器校验全部清单文件通过。
-- 归档SHA-256：`5745c81bd4b768ab2adc814ed8612a008ad1da473034119c9b433313ced2715c`。
-- 本地交付目录：`/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/交付/内容创作整改-20261031-dd7ed9c/`。
+- 最终程序源码提交：`c36e9bb`（含服务端 `814077f`、小程序 `dd7ed9c`）。
+- 最终归档：`jdlg-content-rectification-c36e9bb.tar.gz`；发布器校验全部清单文件通过。
+- 归档SHA-256见交付目录中的 `SHA256SUMS.txt`，内部文件哈希见 `manifest.json`。
+- 本地交付目录：`/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/交付/内容创作整改-20261031-c36e9bb/`。
 - 正确服务器：`162.14.210.252`，主后端目录 `/www/wwwroot/jiadilingguang/service/bin`，端口8080。CRM18087不属于本次切换范围。
 - 包含Linux程序、SHA-256清单、发布器、四个既有已审计增量迁移和操作说明；不含 `.env`、账号凭据或生产备份。
 - 发布器保留现有凭据和环境文件，按其明确的功能开关启动；先备份，再增量迁移、切换及探活；失败按已有机制回退。二进制回退保留新增业务记录，不执行删表迁移。
