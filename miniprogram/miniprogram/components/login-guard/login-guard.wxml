@@ -1,26 +1,29 @@
-<view wx:if="{{visible && !completingProfile}}" class="login-guard-panel" catchtouchmove="stopPropagation">
-  <view class="lg-fade"></view>
-  <view class="login-guard" catchtap="stopPropagation">
-    <view class="lg-grip"></view>
-    <view class="lg-brand"><text class="lg-brand-name">甲第灵光</text><text class="lg-brand-badge">乡建智能体</text></view>
-    <text class="lg-title">登录后查看完整内容</text>
-    <text class="lg-sub">已登录用户可查看户型、案例、报价、设计方案等全部内容</text>
-    <text wx:if="{{error}}" class="lg-error">{{error}}</text>
-    <button wx:if="{{!checking && needsLogin}}" class="lg-login" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
-      <view class="lg-login-inner">
-        <image class="lg-wx-icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTI0LjQgMTMuMmMwLS40IDAtLjguMS0xLjJDMjMuMyA5LjggMjEuMyA5IDIwLjggOS4yYy4zLS4zLjYtLjYgMS0uOS0uMSAwLS4xIDAtLjIgMGwxLjEtLjFjLjEuMS4xLjEuMi4yek0xMi41IDEwYy41IDAgMS4xLjEgMS42LjEuMS0uNC4zLS44LjUtMS4yLTEuMSAwLS4yIDAtLjMgMC0uMnoiLz48L3N2Zz4=" mode="aspectFit" />
-        <text>{{loggingIn ? '登录中...' : '微信一键登录'}}</text>
+<import src="/templates/auth-welcome.wxml" />
+<scroll-view wx:if="{{visible && !checking && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
+  <template is="auth-backdrop" />
+  <view class="aw-content">
+    <template is="auth-intro" />
+    <view class="login-guard aw-card" catchtap="stopPropagation">
+      <text class="lg-title">{{needsLogin ? '登录后查看完整内容' : '重新连接，继续发现好设计'}}</text>
+      <text class="lg-sub">发现户型、案例、报价与设计灵感</text>
+      <template is="auth-avatars" />
+      <text wx:if="{{error}}" class="lg-error">{{error}}</text>
+      <button wx:if="{{!checking && needsLogin}}" class="lg-login {{loggingIn ? 'lg-login-disabled' : ''}}" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
+        <view class="lg-login-inner">
+          <image class="lg-wx-icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCAzNiI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xNiAzQzguMyAzIDIgOCAyIDE0LjJjMCAzLjYgMi4yIDYuOCA1LjcgOC45bC0xLjQgNC4zIDUtMi41YzEuNS40IDMuMS42IDQuNy42aDEuMWExMC42IDEwLjYgMCAwIDEtMS42LTUuNWMwLTYgNS42LTEwLjggMTIuNS0xMC44aC41QzI2LjIgNS41IDIxLjUgMyAxNiAzWiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNMzggMjBjMC01LTQuNi05LTEwLjMtOXMtMTAuMyA0LTEwLjMgOSA0LjYgOSAxMC4zIDljMS4yIDAgMi40LS4yIDMuNS0uNWw0IDItMS0zLjRDMzYuNSAyNS41IDM4IDIyLjkgMzggMjBaIi8+PGcgZmlsbD0iI2FkODY0ZiI+PGNpcmNsZSBjeD0iMTEiIGN5PSIxMiIgcj0iMS41Ii8+PGNpcmNsZSBjeD0iMjAiIGN5PSIxMiIgcj0iMS41Ii8+PGNpcmNsZSBjeD0iMjQiIGN5PSIxOCIgcj0iMS4zIi8+PGNpcmNsZSBjeD0iMzIiIGN5PSIxOCIgcj0iMS4zIi8+PC9nPjwvc3ZnPg==" mode="aspectFit" />
+          <text>{{loggingIn ? '登录中...' : '微信一键登录'}}</text>
+        </view>
+      </button>
+      <button wx:if="{{!checking && !needsLogin}}" class="lg-login lg-login-plain" bindtap="onRetry">重新检查资料</button>
+      <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
+        <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
+          <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>
+        </view>
+        <text class="lg-agreement-text">我已阅读并同意</text>
+        <text class="lg-link" catchtap="onOpenPrivacy">《用户协议与隐私政策》</text>
       </view>
-    </button>
-    <button wx:if="{{!checking && !needsLogin}}" class="lg-login lg-login-plain" bindtap="onRetry">重新检查资料</button>
-    <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
-      <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
-        <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>
-      </view>
-      <text class="lg-agreement-text">我已阅读并同意</text>
-      <text class="lg-link" catchtap="onOpenPrivacy">《用户协议与隐私政策》</text>
     </view>
   </view>
-</view>
+</scroll-view>
 
 <nickname-guard id="nicknameGuard" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />

@@ -1,9 +1,11 @@
+@import "../../styles/auth-welcome";
+
 /* pages/login/login.scss */
 
 .page {
   width: 100vw;
   min-height: 100vh;
-  background: linear-gradient(180deg, #f0ebe3 0%, #f7f4ef 55%, #ffffff 100%);
+  background: #f5eddf;
   color: #1f1f1f;
   padding-bottom: env(safe-area-inset-bottom);
   box-sizing: border-box;
@@ -11,15 +13,18 @@
 
 /* 主登录页 */
 .login-landing {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 56rpx 64rpx;
+  padding: 0 26rpx 32rpx;
   box-sizing: border-box;
 }
 
 .page-nav {
+  position: absolute;
+  z-index: 2;
   width: 100%;
   align-self: flex-start;
   box-sizing: border-box;
@@ -52,31 +57,36 @@
   background: rgba(94, 65, 47, 0.08);
 }
 
-.brand-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-top: 6vh;
-  min-height: 360rpx;
-}
-
-.brand-logo {
-  width: 280rpx;
-  height: 340rpx;
+.login-landing > .aw-intro {
+  position: relative;
+  width: calc(100% + 52rpx);
 }
 
 .main-action {
+  position: relative;
   width: 100%;
-  margin-bottom: 48rpx;
+  margin: 0;
+}
+.login-welcome-title {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #362719;
+  text-align: center;
+}
+.login-welcome-sub {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #8b765e;
+  text-align: center;
 }
 
 .primary-login-btn {
-  width: 50vw;
+  width: 100%;
   height: 96rpx;
   line-height: 96rpx;
-  border-radius: 999rpx;
+  border-radius: 20rpx;
   border: none;
   background: #1f1f1f;
   color: #ffffff;
@@ -86,8 +96,8 @@
   margin: 0;
 
   &.wechat-primary {
-    background: linear-gradient(135deg, #07c160 0%, #06ad56 100%);
-    box-shadow: 0 8rpx 20rpx rgba(6, 173, 86, 0.25);
+    background: linear-gradient(135deg, #c2a06b, #a8825c);
+    box-shadow: 0 8rpx 20rpx rgba(168, 130, 92, 0.25);
   }
 
   &::after {
@@ -145,8 +155,9 @@
 
 /* 其他登录方式 */
 .other-login-section {
+  position: relative;
   width: 100%;
-  margin-top: auto;
+  margin-top: 30rpx;
   padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
 }
 
@@ -154,7 +165,7 @@
   display: flex;
   align-items: center;
   gap: 20rpx;
-  margin-bottom: 48rpx;
+  margin-bottom: 24rpx;
 }
 
 .divider-line {
@@ -472,5 +483,12 @@
   }
 }
 
-.profile-check-error { padding: 24rpx; color: #9c3c2c; text-align: center; font-size: 26rpx; }
-.profile-check-error button { margin-top: 16rpx; }
+.profile-check-error {
+  padding: 24rpx;
+  color: #9c3c2c;
+  text-align: center;
+  font-size: 26rpx;
+}
+.profile-check-error button {
+  margin-top: 16rpx;
+}

@@ -1,47 +1,59 @@
+@import "../../styles/auth-welcome";
+
 .nickname-guard-mask {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
+  height: 100%;
   z-index: 10002;
-  background: rgba(46, 31, 20, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48rpx;
-  box-sizing: border-box;
+  background: #f5eddf;
 }
 
+.ng-content .aw-intro {
+  min-height: 740rpx;
+}
+.ng-content .aw-headline {
+  font-size: 54rpx;
+}
+.ng-content .aw-community {
+  margin: 10rpx 0 0;
+}
+.ng-content .aw-community-copy {
+  display: none;
+}
 .nickname-guard {
-  width: 100%;
-  max-width: 620rpx;
-  background: linear-gradient(180deg, #fffaf2 0%, #f7f2ea 100%);
-  border-radius: 28rpx;
-  padding: 40rpx 36rpx 32rpx;
-  box-sizing: border-box;
-  box-shadow: 0 20rpx 44rpx rgba(71, 53, 40, 0.2);
   display: flex;
   flex-direction: column;
 }
+.ng-welcome {
+  display: block;
+  margin-top: 12rpx;
+  text-align: center;
+  color: #8b765e;
+  font-size: 24rpx;
+}
 
 .ng-title {
-  font-size: 36rpx;
+  display: block;
+  font-size: 34rpx;
   font-weight: 700;
   color: #4a3524;
   text-align: center;
 }
 
 .ng-desc {
-  margin-top: 12rpx;
-  font-size: 24rpx;
+  display: block;
+  margin-top: 24rpx;
+  font-size: 22rpx;
   color: #a08a72;
   text-align: center;
   line-height: 1.5;
 }
 
 .ng-avatar-row {
-  margin-top: 32rpx;
+  margin-top: 24rpx;
   display: flex;
   align-items: center;
   gap: 24rpx;
@@ -111,7 +123,7 @@
 }
 
 .ng-field {
-  margin-top: 32rpx;
+  margin-top: 24rpx;
 }
 
 .ng-label {
@@ -137,12 +149,12 @@
   color: #c2ad92;
 }
 
-.ng-confirm {
-  margin-top: 40rpx;
+.nickname-guard .ng-confirm {
+  margin-top: 24rpx;
   width: 100%;
   height: 92rpx;
   line-height: 92rpx;
-  border-radius: 46rpx;
+  border-radius: 20rpx;
   background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
   color: #ffffff;
   font-size: 32rpx;
@@ -154,10 +166,15 @@
   border: none;
 }
 
-.ng-confirm[disabled] {
+.ng-confirm-disabled {
   opacity: 0.7;
   color: #ffffff;
   background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
 }
 
-.ng-skip { margin-top: 20rpx; background: transparent; color: #6b5846; font-size: 26rpx; }
+.ng-skip {
+  margin-top: 20rpx;
+  background: transparent;
+  color: #6b5846;
+  font-size: 26rpx;
+}
