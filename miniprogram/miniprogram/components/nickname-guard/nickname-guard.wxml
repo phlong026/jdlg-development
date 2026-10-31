@@ -5,7 +5,7 @@
     <template wx:if="{{!embedded}}" is="auth-intro" />
     <form class="nickname-guard aw-card" catchtap="stopPropagation" bindsubmit="onConfirm">
       <text class="ng-title">{{embedded ? '确认头像和昵称' : '完善资料，开启建房之旅'}}</text>
-      <text class="ng-welcome">{{embedded ? '可使用微信头像与昵称快捷填写' : '完善昵称与头像，继续探索理想的家'}}</text>
+      <text wx:if="{{!embedded}}" class="ng-welcome">完善昵称与头像，继续探索理想的家</text>
       <template wx:if="{{!embedded}}" is="auth-avatars" />
 
       <view class="ng-avatar-row">
@@ -17,8 +17,8 @@
           </view>
         </button>
         <view class="ng-avatar-tip">
-          <text class="ng-avatar-tip-main">点击设置头像</text>
-          <text class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
+          <text class="ng-avatar-tip-main">{{embedded ? '点击选择微信头像' : '点击设置头像'}}</text>
+          <text wx:if="{{!embedded}}" class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
         </view>
       </view>
 
@@ -37,8 +37,6 @@
           bindinput="onNicknameInput"
         />
       </view>
-
-      <text class="ng-desc">{{required ? '请完善昵称和头像后继续查看内容。开启访问分析后，也用于已获授权的访客展示。' : '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。可稍后完善。'}}</text>
 
       <button class="ng-confirm {{saving ? 'ng-confirm-disabled' : ''}}" loading="{{saving}}" disabled="{{saving}}" form-type="submit">
         {{saving ? '保存中...' : (embedded ? '确认并继续' : '保存并继续浏览')}}

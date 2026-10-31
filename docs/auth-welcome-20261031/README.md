@@ -1,6 +1,6 @@
 # 登录与资料补全欢迎场景 · 2026-10-31
 
-最新流程见 [同页确认头像与昵称](inline-profile.md)，布局调整见 [第二轮底部布局与文字清晰度优化](refinement.md)。以下为首轮记录。
+最新效果见 [确认资料卡精简](inline-profile-simple.md)，流程见 [同页确认头像与昵称](inline-profile.md)，布局调整见 [第二轮底部布局与文字清晰度优化](refinement.md)。以下为首轮记录。
 
 ## 延续的修改
 

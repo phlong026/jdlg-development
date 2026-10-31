@@ -43,15 +43,6 @@
   text-align: center;
 }
 
-.ng-desc {
-  display: block;
-  margin-top: 24rpx;
-  font-size: 22rpx;
-  color: #a08a72;
-  text-align: center;
-  line-height: 1.5;
-}
-
 .ng-avatar-row {
   margin-top: 24rpx;
   display: flex;
@@ -191,16 +182,6 @@
 
   .ng-title {
     line-height: 1.4;
-  }
-
-  .ng-welcome {
-    font-size: 26rpx;
-    line-height: 1.6;
-    color: #665443;
-  }
-
-  .ng-avatar-tip-sub, .ng-desc {
-    color: #6b5a49;
   }
 
   .ng-confirm {
