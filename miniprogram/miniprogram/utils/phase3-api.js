@@ -32,8 +32,9 @@ function responseError(response, fallback) {
 }
 
 function request(path, method = 'GET', body = {}, query = {}) {
+  const fullPath = path + queryString(query);
   return new Promise((resolve, reject) => wx.request({
-    url: ORIGIN + path + queryString(query), method, data: body, header: authHeaders(path, body), timeout: 10000,
+    url: ORIGIN + fullPath, method, data: body, header: authHeaders(fullPath, body), timeout: 10000,
     success(response) {
       const data = response.data || {};
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});

@@ -2,7 +2,8 @@
 const ROOT = '/api/v1/miniprogram/tracking';
 const ORIGIN = 'https://api.jiadilingguang.com';
 function request(suffix, method = 'GET', body = {}, credential, authenticated = false) {
-  const path = ROOT + suffix.split('?')[0];
+  const operation = suffix.split('?')[0];
+  const path = ROOT + suffix;
   let header = { 'Content-Type': 'application/json' };
   if (credential) header['X-Tracking-Token'] = credential;
   if (authenticated) {
@@ -23,10 +24,10 @@ function request(suffix, method = 'GET', body = {}, credential, authenticated = 
       else reject(Object.assign(new Error('访问记录服务暂不可用'), {
         statusCode: response.statusCode,
         code: Number.isInteger(result.code) ? result.code : undefined,
-        operation: suffix.split('?')[0]
+        operation
       }));
     }, fail: () => reject(Object.assign(new Error('访问记录网络不可用'), {
-      networkError: true, operation: suffix.split('?')[0]
+      networkError: true, operation
     }))
   }));
 }

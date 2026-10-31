@@ -57,7 +57,51 @@ test('phase3 API signs authenticated workbench and paginated self-visit requests
   assert.equal(calls[1].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares/context');
   assert.match(calls[2].options.url, /cursor=cursor%20one/);
   assert.match(calls[2].options.url, /as_of=2026-10-27T00%3A00%3A00Z/);
-  assert.equal(calls[2].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares');
+  assert.equal(calls[2].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares?cursor=cursor%20one&as_of=2026-10-27T00%3A00%3A00Z&metric_version=visible-v1');
+});
+
+test('phase3 API production cryptography signs the exact encoded URL path and preserves session inputs', async () => {
+  const calls = [];
+  const source = fs.readFileSync(path.join(root, 'utils/phase3-api.js'), 'utf8');
+  const module = { exports: {} };
+  const ts = require('./report-runtime')('typescript');
+  const parameter = {};
+  const parameterSource = fs.readFileSync(path.join(root, 'utils/parameter.ts'), 'utf8');
+  const parameterJS = ts.transpileModule(parameterSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  vm.runInNewContext(parameterJS, {
+    exports: parameter,
+    require(id) { return require(path.join(root, 'utils', id)); },
+    Date, JSON, Error, Object, String, Number,
+  });
+  const token = 'session-token';
+  const device = 'cached-device';
+  const query = { content_q: '中 文&方案', limit: 20, cursor: '页 一&二', as_of: '2026-10-31T00:00:00Z' };
+  const encoded = Object.entries(query).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join('&');
+  const fullPath = `/api/v1/miniprogram/workbench/contents?${encoded}`;
+  const originalNow = Date.now;
+  Date.now = () => 1793376000000;
+  try {
+    const wx = {
+      getStorageSync: key => key === 'token' ? token : key === 'device_fingerprint' ? device : '',
+      request(options) { calls.push(options); options.success({ statusCode: 200, data: { code: 0, data: {} } }); },
+    };
+    vm.runInNewContext(source, {
+      module, exports: module.exports, wx,
+      require(id) { assert.equal(id, './parameter'); return parameter; },
+      Promise, JSON, Error, Object, String, Number, encodeURIComponent,
+    });
+    await module.exports.listContents(query);
+    const expected = parameter.paramsToHeaders(parameter.generateRequestParams(token, {}, fullPath, device));
+    assert.equal(calls[0].url, `https://api.jiadilingguang.com${fullPath}`);
+    assert.equal(calls[0].header.token, token);
+    assert.equal(calls[0].header['md5-signature'], expected['md5-signature']);
+    assert.equal(calls[0].header.pass, expected.pass);
+    assert.equal(calls[0].header.tm, expected.tm);
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test('private draft media is downloaded or uploaded with login signatures', async () => {
@@ -69,7 +113,9 @@ test('private draft media is downloaded or uploaded with login signatures', asyn
   assert.equal(uploaded.media_id, 'asset-0001');
   assert.equal(calls[0].kind, 'download');
   assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/workbench/media/asset-0001');
+  assert.equal(calls[0].options.url, `https://api.jiadilingguang.com${calls[0].options.header.signedPath}`);
   assert.equal(calls[1].kind, 'upload');
+  assert.equal(calls[1].options.url, `https://api.jiadilingguang.com${calls[1].options.header.signedPath}`);
   assert.equal(calls[1].options.formData.owner_id, 'owner-a');
   assert.equal(calls[2].options.formData.original_name, '方案.pdf');
   assert.ok(!calls[0].options.url.includes('tracking/media'));

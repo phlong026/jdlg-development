@@ -26,7 +26,7 @@ test('native-reference helpers use signed source-version endpoints without accep
   await api.getNativeReferenceTarget('reference-0001');
   await api.deleteNativeReference('reference-0001');
   assert.deepEqual(calls.map(item => item.header.route), [
-    '/api/v1/miniprogram/workbench/native-reference-candidates',
+    '/api/v1/miniprogram/workbench/native-reference-candidates?limit=20',
     '/api/v1/miniprogram/workbench/native-references',
     '/api/v1/miniprogram/workbench/native-references',
     '/api/v1/miniprogram/workbench/native-references/reference-0001/target',

@@ -23,7 +23,7 @@ function runtime(token='account-a',contentAccess=true){
 test('existing My page loads signed published cards and opens the server-verified fixed reader version',async()=>{
  const t=runtime();await t.show();assert.equal(t.page.data.shareMaterialsState,'loading');assert.equal(t.matching().length,1);
  const r=t.matching()[0];assert.equal(r.header.token,'account-a');assert.equal(r.header.pass,'signed');
- assert.ok(t.signatures.some(s=>s.path==='/api/v1/miniprogram/tracking/materials'&&s.device==='cached-login-device'));
+ assert.ok(t.signatures.some(s=>s.path==='/api/v1/miniprogram/tracking/materials?limit=20'&&s.device==='cached-login-device'));
  t.ok(0,{items:[material]});await settle();assert.equal(t.page.data.shareMaterialsState,'ready');assert.equal(t.page.data.shareMaterials[0].title,material.title);assert.match(t.page.data.shareMaterials[0].coverURL,/^https:\/\/api\.jiadilingguang.com/);
  const click={currentTarget:{dataset:{id:material.content_id}}};t.page.openShareMaterial(click);t.page.openShareMaterial(click);assert.equal(t.matching().length,2);assert.equal(t.navigations.length,0);
  t.ok(1,material);await settle();assert.equal(t.navigations.length,1);assert.equal(t.navigations[0].url,'/'+route+'?content_id=material_one&content_version=2');
