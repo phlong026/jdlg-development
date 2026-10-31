@@ -23,12 +23,14 @@
   color: #2b2115;
   margin-bottom: 12rpx;
   text-align: center;
-  letter-spacing: 2rpx;
+  line-height: 1.4;
+  letter-spacing: 0;
 }
 
 .lg-sub {
-  font-size: 24rpx;
-  color: #97897a;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: #665443;
   margin-bottom: 0;
   text-align: center;
 }
@@ -44,12 +46,12 @@
   width: 100%;
   height: 96rpx;
   border-radius: 20rpx;
-  background: linear-gradient(135deg, #c2a06b, #a8825c);
+  background: linear-gradient(135deg, #a67d48, #90653b);
   color: #ffffff;
   font-size: 34rpx;
   font-weight: 600;
   border: none;
-  box-shadow: 0 10rpx 28rpx rgba(168, 130, 92, 0.35);
+  box-shadow: 0 8rpx 20rpx rgba(144, 101, 59, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -58,7 +60,6 @@
   &::after {
     border: none;
   }
-
 }
 
 .lg-login-inner {
@@ -73,9 +74,9 @@
   margin-right: 14rpx;
 }
 
-.lg-login-plain {
+.login-guard .lg-login-plain {
   background: #fbfaf7;
-  color: #a8825c;
+  color: #805b32;
   border: 2rpx solid #c2a06b;
   box-sizing: border-box;
 }
@@ -114,12 +115,12 @@
 
 .lg-agreement-text {
   font-size: 24rpx;
-  color: #97897a;
+  color: #6b5a49;
 }
 
 .lg-link {
   font-size: 24rpx;
-  color: #a8825c;
+  color: #805b32;
 }
 
 .login-guard .lg-login-disabled {
