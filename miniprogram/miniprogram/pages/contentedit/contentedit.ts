@@ -40,7 +40,7 @@ function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx)$/
 Page({
   data: {
     id: '', loading: true, busy: false, error: '', denied: false, disabled: false, loginRequired: false, context: null,
-    title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
+    title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
     blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
@@ -59,7 +59,7 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
       this._savedSignature = '';
@@ -104,7 +104,10 @@ Page({
       const documentCandidates = loadedMedia.filter(asset => asset.kind === 'document');
       const documentAsset = documentReadOnly ? loadedMedia.find(asset => associated.some(item => item.media_id === asset.media_id) && asset.kind === 'document') || null : null;
       const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, media, this.editorWidth(), 'contentedit-layout') : [];
-      this.setData({ context, media, documentCandidates, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      const ownerID = content ? content.owner_id : (context.owners || [])[0] || '';
+      const ownerChoices = context.owner_choices || [];
+      const ownerIndex = Math.max(0, ownerChoices.findIndex(item => item.owner_id === ownerID));
+      this.setData({ context, media, documentCandidates, title: content ? content.title : '', owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
       this.applyPendingPrefill();
       this._savedSignature = content ? this.draftSignature() : '';
       this.performCreateAction();
@@ -228,7 +231,7 @@ Page({
   },
   setField(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value, preview: null, notice: '有未保存修改' }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
-  setOwner(event) { const owner = (this.data.context.owners || [])[Number(event.detail.value)] || ''; this.setData({ owner_id: owner, preview: null }); },
+  setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, preview: null }); },
   editBlock(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);

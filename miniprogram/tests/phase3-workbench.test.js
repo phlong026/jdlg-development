@@ -7,13 +7,13 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '../miniprogram');
 
-function loadAPI() {
+function loadAPI(responseData = { items: [], next_cursor: 'next-one' }) {
   const calls = [];
   const source = fs.readFileSync(path.join(root, 'utils/phase3-api.js'), 'utf8');
   const module = { exports: {} };
   const wx = {
     getStorageSync: key => key === 'token' ? 'session-token' : key === 'device_fingerprint' ? 'device-one' : '',
-    request(options) { calls.push({ kind: 'request', options }); options.success({ statusCode: 200, data: { code: 0, data: { items: [], next_cursor: 'next-one' } } }); },
+    request(options) { calls.push({ kind: 'request', options }); options.success({ statusCode: 200, data: { code: 0, data: responseData } }); },
     downloadFile(options) { calls.push({ kind: 'download', options }); options.success({ statusCode: 200, tempFilePath: '/tmp/private-media' }); },
     uploadFile(options) { calls.push({ kind: 'upload', options }); options.success({ statusCode: 200, data: JSON.stringify({ code: 0, data: { media_id: 'asset-0001' } }) }); },
   };
@@ -45,6 +45,25 @@ function pageHarness(name, api, wxOverrides = {}) {
   return page;
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('workbench ownership labels follow authorized ID order without exposing internal identifiers', async () => {
+  const original = { owners: ['designer-40', 'team-a'], owner_choices: [
+    { owner_id: 'team-a', display_name: '设计团队' },
+    { owner_id: 'outside', display_name: '无权限组织' },
+    { owner_id: 'designer-40', display_name: '设计师昵称' },
+  ] };
+  const context = await loadAPI(original).api.workbenchContext();
+  assert.deepEqual(JSON.parse(JSON.stringify(context.owner_choices)), [
+    { owner_id: 'designer-40', display_name: '设计师昵称' },
+    { owner_id: 'team-a', display_name: '设计团队' },
+  ]);
+  assert.deepEqual(context.owners, original.owners);
+  const legacy = await loadAPI({ owners: ['designer-40'] }).api.workbenchContext();
+  assert.equal(legacy.owner_choices[0].display_name, '我的内容');
+  assert.equal(legacy.owner_choices[0].owner_id, 'designer-40');
+  const missing = await loadAPI({ owners: ['owner-a', 'owner-b'], owner_choices: [{ owner_id: 'owner-a', display_name: '  ' }] }).api.workbenchContext();
+  assert.deepEqual(Array.from(missing.owner_choices, item => item.display_name), ['内容归属 1', '内容归属 2']);
+});
 
 test('phase3 API signs authenticated workbench and paginated self-visit requests', async () => {
   const { api, calls } = loadAPI();

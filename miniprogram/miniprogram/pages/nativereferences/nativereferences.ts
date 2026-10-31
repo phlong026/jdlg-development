@@ -1,7 +1,8 @@
 // @ts-nocheck
 'use strict';
 const api = require('../../utils/phase3-api');
-const empty = (pickerMode = '', mediaKinds = '') => ({ pickerMode, mediaKinds, search: '', references: [], candidates: [], media: [], referenceCursor: '', candidateCursor: '', mediaCursor: '', loading: false, busy: false, error: '', notice: '', loginRequired: false });
+const pageTitle = pickerMode => pickerMode === 'media' ? '选择素材' : pickerMode === 'content' ? '选择内容' : '资料库';
+const empty = (pickerMode = '', mediaKinds = '') => ({ pickerMode, mediaKinds, navigationTitle: pageTitle(pickerMode), libraryTab: 'selected', search: '', references: [], candidates: [], media: [], referenceCursor: '', candidateCursor: '', mediaCursor: '', loading: false, busy: false, error: '', notice: '', loginRequired: false });
 const candidateKey = item => String(item.content_id) + ':' + String(item.content_version);
 const searchQuery = (search, extra = {}) => ({ limit: 20, ...extra, ...(search ? { q: search } : {}) });
 Page({
@@ -66,6 +67,10 @@ Page({
   },
   onSearchInput(event) { this.setData({ search: String(event.detail.value || '').slice(0, 100) }); },
   submitSearch() { return this.load(); },
+  selectLibraryTab(event) {
+    const tab = String(event.currentTarget.dataset.tab || '');
+    if (tab === 'selected' || tab === 'available') this.setData({ libraryTab: tab });
+  },
   selectMedia(event) {
     const id = String(event.currentTarget.dataset.id || '');
     const asset = this.data.media.find(item => item.media_id === id); if (!asset || !this._pickerChannel) return;

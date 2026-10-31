@@ -1,7 +1,6 @@
 <view class="writing-page">
-  <navigation-bar title="甲第灵光" back="{{true}}" background="#faf8f4" />
+  <navigation-bar title="AI文案" back="{{true}}" background="#faf8f4" />
   <view class="writing-body">
-    <text class="page-title">AI内容策划</text>
     <view class="writing-tabs" role="tablist">
       <button wx:for="{{writingTypes}}" wx:key="key" class="writing-tab {{type === item.key ? 'active' : ''}}" data-type="{{item.key}}" bindtap="selectType" aria-role="tab" aria-selected="{{type === item.key}}">{{item.label}}</button>
     </view>
@@ -10,21 +9,20 @@
       <view class="writing-panel facts-panel">
         <text class="section-title">创作资料</text>
         <label class="field"><text class="field-title">内容标题 <text class="optional">选填</text></text><input value="{{title}}" maxlength="80" bindinput="editTitle" placeholder="为这次创作取一个标题" placeholder-class="placeholder" /></label>
-        <label class="field"><text class="field-title">已知资料与要求</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写实际项目资料、设计重点和表达要求；没有提供的信息将不写入文案" placeholder-class="placeholder" auto-height /></label>
-        <text class="panel-caption">仅根据你提供的事实创作，不自动添加项目数据。</text>
+        <label class="field"><text class="field-title">已知资料与要求</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写项目资料、设计重点和表达要求" placeholder-class="placeholder" auto-height /></label>
       </view>
       <view class="writing-panel result-panel">
         <view class="section-heading"><text class="section-title">{{heading}}</text><text class="edit-hint">可编辑</text></view>
-        <textarea class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="生成后，文案将在这里展示。也可以直接填写并修改正文。" placeholder-class="placeholder" />
+        <textarea class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="生成的文案将显示在这里，也可直接填写" placeholder-class="placeholder" />
         <text class="panel-caption">内容由AI辅助生成，请核对事实后再使用。</text>
       </view>
-      <view class="writing-panel refine-panel">
+      <view wx:if="{{result}}" class="writing-panel refine-panel">
         <text class="section-title">编辑优化</text>
         <view class="refine-actions"><button data-action="concise" bindtap="generateWriting" disabled="{{!result || navigating}}">精简</button><button data-action="expand" bindtap="generateWriting" disabled="{{!result || navigating}}">扩写</button><button data-action="tone" bindtap="generateWriting" disabled="{{!result || navigating}}">调整语气</button></view>
       </view>
       <text wx:if="{{error}}" class="feedback error" role="alert">{{error}}</text><text wx:if="{{notice}}" class="feedback notice" role="status">{{notice}}</text>
-      <text class="generation-hint">将在AI对话中预填任务；点击发送后，按对话页显示的灵石价格生成。</text>
+      <text class="generation-hint">生成将进入 AI 对话，费用以发送前显示为准。</text>
     </block>
   </view>
-  <view wx:if="{{!loginRequired}}" class="writing-footer"><button class="primary" bindtap="saveToDraft" disabled="{{!result || navigating}}">{{returnLabel}}</button><button class="secondary" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button></view>
+  <view wx:if="{{!loginRequired}}" class="writing-footer"><button wx:if="{{result}}" class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button><button class="{{result ? 'secondary' : 'primary'}}" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button></view>
 </view>

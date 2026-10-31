@@ -24,6 +24,18 @@ function pageHarness(name, api = {}, wxOverrides = {}) {
   return Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values, done) { Object.assign(this.data, values); if (done) done(); }, setToken(value) { token = value; } }, definition);
 }
 
+test('package composer opens members for the current project without changing selections', () => {
+  let target;
+  const page = pageHarness('projectpackage', {}, { navigateTo(options) { target = options; } });
+  page._projectID = 'project one';
+  page.data.selectedNoteIDs = ['note-one'];
+  page.openProjectMembers();
+  assert.equal(target.url, '/pages/projectnotes/projectnotes?project_id=project%20one&view=members&return_to=package');
+  assert.deepEqual(page.data.selectedNoteIDs, ['note-one']);
+  target.fail();
+  assert.equal(page.data.notice, '暂时无法打开项目成员，请重试。');
+});
+
 test('package composer preselects only the designated confirmer and never every member', () => {
   const page = pageHarness('projectpackage');
   page.applyProject({
@@ -133,7 +145,7 @@ test('invited package opens exact version and returns to directory in-page', asy
 test('new package templates keep the workflow compact and avoid fake file-package claims', () => {
   const composer = fs.readFileSync(path.join(root, 'pages/projectpackage/projectpackage.wxml'), 'utf8');
   const invited = fs.readFileSync(path.join(root, 'pages/projectpackageview/projectpackageview.wxml'), 'utf8');
-  assert.match(composer, /选择方案/);
+  assert.match(composer, /分享内容/);
   assert.match(composer, /预览分享/);
   assert.match(invited, /pageView === 'directory'/);
   assert.match(invited, /pageView === 'version'/);

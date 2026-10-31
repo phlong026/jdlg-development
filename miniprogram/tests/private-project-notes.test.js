@@ -117,10 +117,11 @@ test('shared note clears protected content when account changes before response 
 
 test('designer account guard clears every protected form and ownership field', () => {
   const page = pageHarness('projectnotes', {});
-  Object.assign(page.data, { projects: [{ project_id: 'private-project' }], owners: ['owner-a'], ownerID: 'owner-a', projectName: '张宅', crmID: 'crm-secret', noteTitle: '私密标题', noteBody: '私密草稿', joinRequests: [{ request_id: 'request-one' }], memberInvitations: [{ invitation_id: 'invitation-one' }], memberInvitation: { invitation_id: 'invitation-one' }, memberInvitationPath: '/private', confirmerAccount: '101', feedbackID: 'feedback-secret', feedbackReply: '已处理', noteMedia: [{ media_id: 'private-media' }] });
+  Object.assign(page.data, { projects: [{ project_id: 'private-project' }], owners: ['owner-a'], ownerChoices: [{ owner_id: 'owner-a', display_name: '设计师' }], ownerID: 'owner-a', projectName: '张宅', crmID: 'crm-secret', noteTitle: '私密标题', noteBody: '私密草稿', joinRequests: [{ request_id: 'request-one' }], memberInvitations: [{ invitation_id: 'invitation-one' }], memberInvitation: { invitation_id: 'invitation-one' }, memberInvitationPath: '/private', confirmerAccount: '101', feedbackID: 'feedback-secret', feedbackReply: '已处理', noteMedia: [{ media_id: 'private-media' }] });
   page.clearProtected();
   assert.equal(page.data.projects.length, 0);
   assert.equal(page.data.owners.length, 0);
+  assert.equal(page.data.ownerChoices.length, 0);
   assert.equal(page.data.ownerID, '');
   assert.equal(page.data.projectName, '');
   assert.equal(page.data.crmID, '');
@@ -170,6 +171,68 @@ test('project workspace uses in-page navigation and keeps native back for the pr
   assert.equal(page.data.selectedProject, null);
   await page.handleBack();
   assert.equal(nativeBacks, 1);
+});
+
+test('member view opened from a project package returns directly to that package', async () => {
+  let nativeBacks = 0;
+  const page = pageHarness('projectnotes', {}, { navigateBack: () => { nativeBacks += 1; } });
+  page.onLoad({ project_id: 'project-one', view: 'members', return_to: 'package' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'members', selectedProject: { project_id: 'project-one' } });
+  await page.handleBack();
+  assert.equal(nativeBacks, 1);
+  assert.equal(page.data.pageView, 'members');
+});
+
+test('project creation is a separate step and keeps readable owner labels separate from owner ids', async () => {
+  let modal;
+  const page = pageHarness('projectnotes', {}, { showModal: options => { modal = options; } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({
+    owners: ['designer-40', 'company-2'],
+    ownerChoices: [
+      { owner_id: 'designer-40', display_name: '裴设计师' },
+      { owner_id: 'company-2', display_name: '华匠邦' },
+    ],
+    ownerID: 'designer-40',
+  });
+
+  page.openProjectCreation();
+  assert.equal(page.data.pageView, 'create');
+  assert.equal(page.data.navigationTitle, '新建项目');
+  page.setOwnerID({ detail: { value: 1 } });
+  assert.equal(page.data.ownerID, 'company-2');
+  assert.equal(page.data.ownerIndex, 1);
+
+  page.setProjectName({ detail: { value: '未保存项目' } });
+  const pending = page.handleBack();
+  assert.equal(page.data.pageView, 'create');
+  modal.success({ confirm: true });
+  await pending;
+  assert.equal(page.data.pageView, 'list');
+  assert.equal(page.data.projectName, '');
+  assert.equal(page.data.ownerID, 'designer-40');
+});
+
+test('project list and detail keep one title and one empty-note action', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /pageView === 'create'/);
+  assert.match(template, /range="\{\{ownerChoices\}\}" range-key="display_name"/);
+  assert.match(template, /selectedProject\.creator_display_name/);
+  assert.doesNotMatch(template, /class="page-title">我的项目/);
+  assert.doesNotMatch(template, />开始记录</);
+  assert.doesNotMatch(template, /\{\{ownerID \|\| '选择项目归属'\}\}/);
+  assert.doesNotMatch(template, /组合方案并指定接收人|版本、意见与确认/);
+  assert.match(template, /class="menu-meta">\{\{activeMembers\.length\}\} 人/);
+  assert.match(template, /\{\{activeMembers\.length\}\} 位成员/);
+  assert.match(template, /wx:if="\{\{activeMembers\.length\}\}" class="card"><text class="section-title">方案确认人/);
+  assert.match(template, /wx:if="\{\{projects\.length\}\}" class="primary list-create"/);
+  const styles = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxss'), 'utf8');
+  assert.match(styles, /\.page \.project-row[^}]*width:100%!important/);
+  assert.match(styles, /\.page \.project-list\{overflow:hidden\}/);
+  assert.match(styles, /\.page \.menu-card\{overflow:hidden\}/);
+  assert.match(styles, /\.page \.menu-row\{min-height:96rpx/);
+  assert.match(styles, /\.page \.empty-action\{width:240rpx!important\}/);
 });
 
 test('project deep link opens the exact version view and returns to project detail first', async () => {
@@ -253,7 +316,7 @@ test('project template separates core views and delegates custom navigation back
   const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
   assert.match(template, /custom-back="\{\{true\}\}"/);
   assert.match(template, /bind:back="handleBack"/);
-  for (const view of ['list', 'detail', 'editor', 'version', 'members', 'history']) {
+  for (const view of ['list', 'create', 'detail', 'editor', 'version', 'members', 'history']) {
     assert.match(template, new RegExp(`pageView === '${view}'`));
   }
   assert.doesNotMatch(template, /CRM 项目关联接入中|转发不会增加权限|完整项目记录/);

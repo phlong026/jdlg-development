@@ -44,7 +44,18 @@ function request(path, method = 'GET', body = {}, query = {}) {
   }));
 }
 
-function workbenchContext() { return request(WORKBENCH + '/context'); }
+async function workbenchContext() {
+  const context = await request(WORKBENCH + '/context');
+  const owners = context.owners || [];
+  const labels = new Map((context.owner_choices || []).map(item => [item.owner_id, String(item.display_name || '').trim()]));
+  // Keep presentation aligned with authorized IDs, including during a staged server rollout.
+  return Object.assign({}, context, {
+    owner_choices: owners.map((owner_id, index) => ({
+      owner_id,
+      display_name: labels.get(owner_id) || (owners.length === 1 ? '我的内容' : '内容归属 ' + (index + 1)),
+    })),
+  });
+}
 function listContents(query) { return request(WORKBENCH + '/contents', 'GET', {}, query); }
 function getContent(id) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id)); }
 function listWorkbenchMedia(query) { return request(WORKBENCH + '/media', 'GET', {}, query); }

@@ -4,30 +4,36 @@
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="loadProject">重试</button></view>
   <block wx:else>
     <view class="header">
-      <text class="eyebrow">{{projectName}}</text>
-      <text class="title">{{step === 'select' ? '选择分享内容' : step === 'preview' ? '预览分享' : '分享已生成'}}</text>
+      <text class="title">{{projectName}}</text>
+      <text class="step-label">{{step === 'select' ? '选择内容与接收人' : step === 'preview' ? '确认分享' : '分享已生成'}}</text>
     </view>
 
     <block wx:if="{{step === 'select'}}">
+      <view wx:if="{{!notes.length && !versions.length}}" class="empty-state">
+        <text>暂无可分享的方案</text>
+        <button class="secondary" bindtap="handleBack">返回项目</button>
+      </view>
+      <block wx:else>
       <view class="card">
-        <text class="section-title">选择方案</text>
-        <text wx:if="{{notes.length}}" class="group-title">已保存方案</text>
+        <text class="section-title">分享内容</text>
+        <text wx:if="{{notes.length}}" class="group-title">项目笔记</text>
         <button wx:for="{{notes}}" wx:key="note_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.note_id}}" bindtap="toggleNote">
           <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">当前第 {{item.revision}} 版 · 分享时固定</text></view><text class="check">{{item.selected ? '✓' : ''}}</text>
         </button>
-        <text wx:if="{{versions.length}}" class="group-title">固定版本</text>
-        <view wx:if="{{!notes.length && !versions.length}}" class="empty">当前项目还没有可分享方案</view>
+        <text wx:if="{{versions.length}}" class="group-title">方案版本</text>
         <button wx:for="{{versions}}" wx:key="version_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.version_id}}" bindtap="toggleVersion">
           <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">第 {{item.revision}} 版 · {{item.media_count || 0}} 个素材</text></view><text class="check">{{item.selected ? '✓' : ''}}</text>
         </button>
       </view>
       <view class="card">
         <text class="section-title">接收人</text>
+        <view wx:if="{{!members.length}}" class="empty-members"><text class="meta">暂无项目成员</text><button class="text-button" bindtap="openProjectMembers">添加接收人</button></view>
         <button wx:for="{{members}}" wx:key="actor_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.actor_id}}" bindtap="toggleRecipient">
           <view class="member-profile"><image wx:if="{{item.avatar}}" class="member-avatar" src="{{item.avatar}}" mode="aspectFill" /><view wx:else class="member-avatar avatar-placeholder">员</view><view><text class="row-title">{{item.display_name || '项目成员'}}</text><text wx:if="{{project.confirmer_id == item.actor_id}}" class="meta">指定确认人</text></view></view><text class="check">{{item.selected ? '✓' : ''}}</text>
         </button>
       </view>
-      <button class="primary" disabled="{{busy || (!notes.length && !versions.length)}}" bindtap="previewPackage">预览分享</button>
+      <button wx:if="{{members.length}}" class="primary" disabled="{{busy || (!selectedNoteIDs.length && !selectedVersionIDs.length) || !selectedRecipientIDs.length}}" bindtap="previewPackage">预览分享</button>
+      </block>
     </block>
 
     <block wx:elif="{{step === 'preview'}}">

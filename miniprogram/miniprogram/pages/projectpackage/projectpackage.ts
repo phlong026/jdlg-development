@@ -82,6 +82,13 @@ Page({
       historyMeta: [String(item.created_at || '').replace('T', ' ').slice(0, 16), receiptCount ? receiptCount + ' 条回执' : ''].filter(Boolean).join(' · '),
     });
   },
+  openProjectMembers() {
+    if (!this._projectID || this.data.busy) return;
+    wx.navigateTo({
+      url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(this._projectID) + '&view=members&return_to=package',
+      fail: () => this.setData({ notice: '暂时无法打开项目成员，请重试。' }),
+    });
+  },
   toggleNote(event) {
     const id = String(event.currentTarget.dataset.id || '');
     const ids = this.data.selectedNoteIDs.includes(id) ? this.data.selectedNoteIDs.filter(value => value !== id) : [...this.data.selectedNoteIDs, id];

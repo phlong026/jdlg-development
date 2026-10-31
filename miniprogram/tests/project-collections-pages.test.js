@@ -49,7 +49,7 @@ test('collection editor multi-selects, reorders, saves, previews and publishes f
   ];
   const api = {
     mutationKey: prefix => prefix + '-key',
-    workbenchContext: async () => ({ owners: ['owner-a'], enabled: true }),
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '设计师昵称' }], enabled: true }),
     listCollections: async () => ({ items: [] }),
     listCandidates: async () => ({ items: candidates }),
     saveCollection: async (input, id) => {
@@ -92,6 +92,30 @@ test('collection page discards late data after account switch', async () => {
   finishes[0]({ items: [{ collection_id: 'old-account-collection' }] });
   await tick();
   assert.equal(runtime.page.data.collections.length, 0);
+});
+
+test('collection owner picker shows labels but saves the authorized owner ID', async () => {
+  const saved = [];
+  const api = {
+    mutationKey: () => 'collection-key',
+    workbenchContext: async () => ({ owners: ['designer-40', 'team-a'], owner_choices: [{ owner_id: 'team-a', display_name: '设计团队' }, { owner_id: 'designer-40', display_name: '设计师昵称' }] }),
+    listCollections: async () => ({ items: [] }),
+    listCandidates: async () => ({ items: [{ content_id: 'content-0001', content_version: 1, title: '作品' }] }),
+    saveCollection: async input => { saved.push(input); return { collection_id: 'collection-1', revision: 1, title: input.title, owner_id: input.owner_id, items: input.items }; },
+    mediaURL: () => '',
+  };
+  const { page } = pageRuntime(api);
+  page.onShow(); await tick(); await tick();
+  await page.startCreate();
+  page.setOwner({ detail: { value: 0 } });
+  page.setTitle({ detail: { value: '精选' } });
+  page.toggleCandidate({ currentTarget: { dataset: { id: 'content-0001', version: 1 } } });
+  await page.saveDraft();
+  assert.equal(page.data.ownerChoices[0].display_name, '设计团队');
+  assert.equal(saved[0].owner_id, 'team-a');
+  const template = fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.wxml'), 'utf8');
+  assert.match(template, /range-key="display_name"/);
+  assert.doesNotMatch(template, /{{owners\[ownerIndex\]}}/);
 });
 
 function readerRuntime(api, token = '') {
@@ -142,11 +166,23 @@ test('collection pages stay clean and use the existing navigation and brand pale
   }
 });
 
+test('collection editor keeps a single hierarchy and disables preview without works', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.wxss'), 'utf8');
+  assert.doesNotMatch(template, /page-title\">我的合集/);
+  assert.match(template, /{{collections\.length}}个合集/);
+  assert.match(template, /wx:if="{{selectedItems\.length}}" class="section selected-section"/);
+  assert.match(template, /暂无可添加的已发布作品/);
+  assert.doesNotMatch(template, /class="secondary" bindtap="closeEditor"/);
+  assert.match(template, /bindtap="previewCurrent" disabled="{{busy \|\| !selectedItems\.length}}"/);
+  assert.match(style, /\.form-card input\{[^}]*height:88rpx;[^}]*line-height:88rpx;[^}]*padding:0 24rpx/);
+});
+
 test('collection save cannot overwrite edits made while its request is in flight',async()=>{
  let finish;
- const api={mutationKey:()=> 'key',workbenchContext:async()=>({owners:['owner-a']}),listCollections:async()=>({items:[]}),listCandidates:async()=>({items:[]}),saveCollection:()=>new Promise(r=>finish=r),mediaURL:()=>''};
+ const api={mutationKey:()=> 'key',workbenchContext:async()=>({owners:['owner-a'],owner_choices:[{owner_id:'owner-a',display_name:'设计师昵称'}]}),listCollections:async()=>({items:[]}),listCandidates:async()=>({items:[]}),saveCollection:()=>new Promise(r=>finish=r),mediaURL:()=>''};
  const {page}=pageRuntime(api);page.onShow();await tick();
- page.setData({editing:true,title:'原稿',owners:['owner-a'],selectedItems:[{content_id:'content-0001',content_version:1}]});
+ page.setData({editing:true,title:'原稿',owners:['owner-a'],ownerChoices:[{owner_id:'owner-a',display_name:'设计师昵称'}],selectedItems:[{content_id:'content-0001',content_version:1}]});
  const saving=page.saveDraft();page.setTitle({detail:{value:'继续编辑'}});
  finish({collection_id:'collection-0001',revision:1,title:'原稿',items:[{content_id:'content-0001',content_version:1}]});await saving;
  assert.equal(page.data.title,'继续编辑');assert.equal(page.data.dirty,true);assert.equal(page.data.current.revision,1);

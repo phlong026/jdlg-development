@@ -8,7 +8,7 @@ const source = path.join(__dirname, '../miniprogram/pages/contentworkbench/conte
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 test('content pages explicitly register their custom navigation component', () => {
-  for (const name of ['contentworkbench', 'contentedit', 'contentwriting', 'contentreader', 'sharevisits', 'visitdetail']) {
+  for (const name of ['contentworkbench', 'contentedit', 'contentwriting', 'contentreader', 'nativereferences', 'sharevisits', 'visitdetail']) {
     const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../miniprogram/pages', name, name + '.json'), 'utf8'));
     assert.equal(config.usingComponents && config.usingComponents['navigation-bar'], '/components/navigation-bar/navigation-bar');
   }
@@ -147,4 +147,26 @@ test('studio template removes duplicate create and unavailable note controls', (
   assert.doesNotMatch(template, /上传资料|项目笔记协作尚未开通|已有生成记录、模板与作品可直接选用/);
   assert.match(template, /bindtap="openExistingAssets"/);
   assert.match(template, /bindtap="openAIWriting"/);
+});
+
+test('content pages use one clear title and hide unavailable writing actions', () => {
+  const writing = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentwriting/contentwriting.wxml'), 'utf8');
+  const references = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/nativereferences/nativereferences.wxml'), 'utf8');
+  const workbench = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  const editor = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentedit/contentedit.wxml'), 'utf8');
+  const workbenchConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.json'), 'utf8'));
+  assert.match(writing, /<navigation-bar title="AI文案"/);
+  assert.doesNotMatch(writing, /AI内容策划|title="甲第灵光"/);
+  assert.match(writing, /wx:if="{{result}}" class="writing-panel refine-panel"/);
+  assert.match(writing, /wx:if="{{result}}" class="primary"/);
+  assert.match(writing, /class="{{result \? 'secondary' : 'primary'}}" bindtap="generateWriting"/);
+  assert.match(references, /<navigation-bar title="{{navigationTitle}}"/);
+  assert.match(references, /bindtap="selectLibraryTab"/);
+  assert.doesNotMatch(references, /保存已发布的固定版本|仅展示当前授权范围/);
+  assert.match(workbench, /wx:if="{{context\.owner_choices\.length > 1}}"/);
+  assert.match(workbench, /range-key="display_name"/);
+  assert.doesNotMatch(workbench, />{{importOwner \|\| '请选择'}}/);
+  assert.match(editor, /range="{{context\.owner_choices}}" range-key="display_name"/);
+  assert.doesNotMatch(editor, /{{owner_id \|\| '请选择'}}/);
+  assert.equal(workbenchConfig.navigationBarTitleText, '内容创作');
 });

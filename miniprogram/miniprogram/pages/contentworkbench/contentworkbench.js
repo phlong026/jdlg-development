@@ -203,8 +203,8 @@ Page({
   resetImportKey() { this._importSignature = ''; this._importKey = ''; },
   setImportURL(event) { const value = String(event.detail.value || ''); if (value !== this.data.importURL) this.resetImportKey(); this.setData({ importURL: value, importError: '' }); },
   setImportOwner(event) {
-    const index = Number(event.detail.value || 0); const owners = this.data.context && this.data.context.owners || [];
-    const owner = owners[index] || ''; if (owner !== this.data.importOwner) this.resetImportKey();
+    const index = Number(event.detail.value || 0); const choices = this.data.context && this.data.context.owner_choices || [];
+    const owner = choices[index] && choices[index].owner_id || ''; if (owner !== this.data.importOwner) this.resetImportKey();
     this.setData({ importOwnerIndex: index, importOwner: owner, importError: '' });
   },
   setImportRights(event) { const value = event.detail.value; if (value !== this.data.importRights) this.resetImportKey(); this.setData({ importRights: value, importError: '' }); },

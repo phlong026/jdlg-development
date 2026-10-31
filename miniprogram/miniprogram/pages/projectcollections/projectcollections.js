@@ -4,7 +4,7 @@ const api = require('../../utils/project-collections-api');
 const initial = () => ({
   loading: false, loadingMore: false, busy: false, loginRequired: false, denied: false,
   error: '', notice: '', collections: [], nextCursor: '', editing: false,
-  current: null, title: '', description: '', owners: [], ownerIndex: 0,
+  current: null, title: '', description: '', owners: [], ownerChoices: [], ownerIndex: 0,
   candidates: [], candidateCursor: '', selectedItems: [], preview: null, dirty: false,
 });
 const sourceKey = item => String(item.content_id) + ':' + String(item.content_version);
@@ -34,8 +34,10 @@ Page({
       const [context, page] = await Promise.all([api.workbenchContext(), api.listCollections({ limit: 20 })]);
       if (!this.currentRequest(epoch)) return;
       const owners = Array.isArray(context.owners) ? context.owners : [];
-      const selectedOwner = this.data.current ? this.data.current.owner_id : this.data.owners[this.data.ownerIndex];
-      this.setData({ owners, ownerIndex: Math.max(0, owners.indexOf(selectedOwner)), busy: false, collections: (page.items || []).map(item => this.decorate(item)), nextCursor: page.next_cursor || '', loading: false });
+      const ownerChoices = Array.isArray(context.owner_choices) ? context.owner_choices : [];
+      const selectedChoice = this.data.ownerChoices[this.data.ownerIndex];
+      const selectedOwner = this.data.current ? this.data.current.owner_id : selectedChoice && selectedChoice.owner_id;
+      this.setData({ owners, ownerChoices, ownerIndex: Math.max(0, ownerChoices.findIndex(item => item.owner_id === selectedOwner)), busy: false, collections: (page.items || []).map(item => this.decorate(item)), nextCursor: page.next_cursor || '', loading: false });
       if (this.requestedID) { const id = this.requestedID; this.requestedID = ''; await this.openEditorByID(id, epoch); }
     } catch (error) {
       if (!this.currentRequest(epoch)) return;
@@ -66,7 +68,7 @@ Page({
     try {
       const collection = await api.getCollection(id);
       if (!this.currentRequest(epoch)) return;
-      const ownerIndex = Math.max(0, this.data.owners.indexOf(collection.owner_id));
+      const ownerIndex = Math.max(0, this.data.ownerChoices.findIndex(item => item.owner_id === collection.owner_id));
       this.createKey = '';
       this.publishKey = '';
       this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems: (collection.items || []).map(item => this.decorate(item)), ownerIndex, busy: false, dirty: false });
@@ -128,7 +130,8 @@ Page({
     this.setData({ selectedItems: items, preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   draftInput() {
-    const owner = this.data.current ? this.data.current.owner_id : this.data.owners[this.data.ownerIndex];
+    const choice = this.data.ownerChoices[this.data.ownerIndex];
+    const owner = this.data.current ? this.data.current.owner_id : choice && choice.owner_id;
     return {
       title: String(this.data.title || '').trim(), description: String(this.data.description || '').trim(), owner_id: owner || '',
       expected_revision: this.data.current ? Number(this.data.current.revision) : 0,

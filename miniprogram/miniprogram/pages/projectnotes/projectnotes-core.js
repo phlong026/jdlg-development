@@ -7,7 +7,7 @@ const blankProtected = () => ({
   pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false,
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
-  projects: [], owners: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
+  projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
   members: [], activeMembers: [], joinRequests: [], memberInvitations: [], requestsLoading: false, confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '',
   memberInvitation: null, memberInvitationPath: '',
   note: null, noteTitle: '', noteBody: '', bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
@@ -38,6 +38,7 @@ Page({
     this._targetVersionID = String(options && options.version_id || '');
     this._targetFeedbackID = String(options && options.feedback_id || '');
     this._targetView = String(options && options.view || '') === 'members' ? 'members' : '';
+    this._returnToPackage = this._targetView === 'members' && String(options && options.return_to || '') === 'package';
   },
   onShow() {
     wx.hideShareMenu();
@@ -88,22 +89,37 @@ Page({
   async handleBack() {
     if (this.data.busy) return;
     if (this.data.pageView === 'list') { wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/my/my' }) }); return; }
+    if (this.data.pageView === 'create') {
+      const epoch = this._epoch, view = this.data.pageView;
+      if (!await this.confirmDiscardChanges(!!this.data.projectName)
+        || !this.current(epoch) || this.data.pageView !== view || this.data.busy) return;
+      this.setData({ pageView: 'list', navigationTitle: '我的项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' });
+      return;
+    }
+    if (this.data.pageView === 'members' && this._returnToPackage) {
+      wx.navigateBack({ fail: () => this.setData({ pageView: 'detail', navigationTitle: '项目详情', error: '', notice: '' }) });
+      return;
+    }
     const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
     const unchanged = () => this.current(epoch) && this.data.selectedProject === project && this.data.pageView === view && !this.data.busy;
     if (this.data.pageView !== 'detail') {
       if (!await this.confirmDiscardChanges() || !unchanged()) return;
       this.restoreLoadedForms();
-      this.setData({ pageView: 'detail', navigationTitle: this.data.selectedProject && this.data.selectedProject.name || '项目详情', projectSettingsOpen: false, error: '', notice: '' });
+      this.setData({ pageView: 'detail', navigationTitle: '项目详情', projectSettingsOpen: false, error: '', notice: '' });
       return;
     }
     if (!await this.confirmDiscardChanges() || !unchanged()) return;
-    const kept = { projects: this.data.projects, owners: this.data.owners, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    const kept = { projects: this.data.projects, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this._selectedProjectID = ''; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false;
     this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
     this.setData(Object.assign(blankProtected(), kept));
   },
 
   openProjectSettings() { this.setData({ projectSettingsOpen: true }); },
+  openProjectCreation() {
+    if (this.data.busy) return;
+    this.setData({ pageView: 'create', navigationTitle: '新建项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' });
+  },
   async closeProjectSettings() {
     if (this.data.busy) return;
     const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
@@ -162,8 +178,13 @@ Page({
       const [projects, context] = await Promise.all([this.fetchAllProjects(), api.workbenchContext()]);
       if (!this.current(epoch)) return;
       const owners = context.owners || [];
+      const choices = Array.isArray(context.owner_choices) ? context.owner_choices : [];
+      const ownerChoices = owners.map((ownerID, index) => {
+        const choice = choices.find(item => item && item.owner_id === ownerID);
+        return { owner_id: ownerID, display_name: choice && choice.display_name || (owners.length === 1 ? '当前账号' : `项目归属 ${index + 1}`) };
+      });
       this._loaded = true;
-      this.setData({ projects, owners, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
+      this.setData({ projects, owners, ownerChoices, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
       const selectedID = this._targetProjectID || this._selectedProjectID;
       if (selectedID) { this._targetProjectID = ''; if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
     } catch (error) {
@@ -174,7 +195,7 @@ Page({
   },
 
   setProjectName(event) { this.setData({ projectName: value(event) }); },
-  setOwnerID(event) { const index = Number(event.detail.value) || 0; this.setData({ ownerIndex: index, ownerID: this.data.owners[index] || '' }); },
+  setOwnerID(event) { const index = Number(event.detail.value) || 0, choice = this.data.ownerChoices[index]; this.setData({ ownerIndex: index, ownerID: choice && choice.owner_id || this.data.owners[index] || '' }); },
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
   setNoteTitle(event) { this.setData({ noteTitle: value(event) }); },
   setNoteBody(event) { if (!this.data.bodyReadOnly) this.setData({ noteBody: String(event.detail && event.detail.value || '') }); },
@@ -223,7 +244,7 @@ Page({
     const requestedView = this._nextPageView || (requested ? 'version' : ['editor', 'members', 'history'].includes(this.data.pageView) ? this.data.pageView : 'detail');
     this._nextPageView = '';
     this._selectedProjectID = projectID; this._selectedVersionID = requested; this._targetVersionID = '';
-    const kept = { projects: this.data.projects, owners: this.data.owners, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    const kept = { projects: this.data.projects, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this.setData(Object.assign(blankProtected(), kept, { busy: true, error: '', notice: notice || '' }));
     try {
       const result = await api.getProjectNoteProject(projectID);
@@ -299,7 +320,7 @@ Page({
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
     const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
     const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
-    const navigationTitles = { detail: project.name || '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
+    const navigationTitles = { detail: '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this._loaded = true;
     this.setData({
