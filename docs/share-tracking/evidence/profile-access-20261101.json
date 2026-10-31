@@ -1,0 +1,213 @@
+{
+  "verified_at": "2026-11-01T07:55:49+08:00",
+  "backend_admin_commit": "0fd72b4ddcd9ff5d7c7bdd8834174efadaa15a66",
+  "miniprogram_commit": "9e9da57e8ccdcff8903ff75a5515ba80ae462a18",
+  "checks": {
+    "backend_tests": "pass",
+    "backend_vet": "pass",
+    "mini_tests": {
+      "pass": 898,
+      "fail": 0,
+      "skip": 0
+    },
+    "mini_types": "pass",
+    "mini_routes": 72,
+    "admin_tests": {
+      "pass": 757,
+      "fail": 0
+    },
+    "release_tests": 27,
+    "mini_npm_vulnerabilities": 0,
+    "admin_npm_vulnerabilities": 0,
+    "package_files_verified": 100,
+    "admin_files": 92
+  },
+  "upload": {
+    "version": "7.2.18",
+    "appid": "wx94fdc48861913ede",
+    "cli_success": true,
+    "size": {
+      "total": 2954551,
+      "packages": [
+        {
+          "name": "TOTAL",
+          "size": 2954551
+        },
+        {
+          "name": "main",
+          "size": 1673822
+        },
+        {
+          "name": "/pages/adminhome/",
+          "size": 890
+        },
+        {
+          "name": "/pages/adminlogin/",
+          "size": 677
+        },
+        {
+          "name": "/pages/allrounddesign/",
+          "size": 42204
+        },
+        {
+          "name": "/pages/buildingreplacement/",
+          "size": 18886
+        },
+        {
+          "name": "/pages/chat/",
+          "size": 40185
+        },
+        {
+          "name": "/pages/checkin/",
+          "size": 24215
+        },
+        {
+          "name": "/pages/collectionreader/",
+          "size": 11818
+        },
+        {
+          "name": "/pages/contentedit/",
+          "size": 49972
+        },
+        {
+          "name": "/pages/contentreader/",
+          "size": 26045
+        },
+        {
+          "name": "/pages/contentworkbench/",
+          "size": 34335
+        },
+        {
+          "name": "/pages/contentwriting/",
+          "size": 12391
+        },
+        {
+          "name": "/pages/designerhome/",
+          "size": 83084
+        },
+        {
+          "name": "/pages/generatedetails/",
+          "size": 107452
+        },
+        {
+          "name": "/pages/generatehistory/",
+          "size": 38030
+        },
+        {
+          "name": "/pages/Identityauthen/",
+          "size": 21264
+        },
+        {
+          "name": "/pages/Invitefriends/",
+          "size": 37490
+        },
+        {
+          "name": "/pages/lingshidetails/",
+          "size": 16792
+        },
+        {
+          "name": "/pages/messagecenter/",
+          "size": 13139
+        },
+        {
+          "name": "/pages/myfavorites/",
+          "size": 25963
+        },
+        {
+          "name": "/pages/myInformationmodification/",
+          "size": 36935
+        },
+        {
+          "name": "/pages/myplan/",
+          "size": 30675
+        },
+        {
+          "name": "/pages/nativereferences/",
+          "size": 15312
+        },
+        {
+          "name": "/pages/orderdetail/",
+          "size": 16435
+        },
+        {
+          "name": "/pages/ordermanagement/",
+          "size": 41036
+        },
+        {
+          "name": "/pages/Parentchildcreativity/",
+          "size": 24478
+        },
+        {
+          "name": "/pages/projectcollections/",
+          "size": 25766
+        },
+        {
+          "name": "/pages/projectinvite/",
+          "size": 5707
+        },
+        {
+          "name": "/pages/projectnotes/",
+          "size": 79055
+        },
+        {
+          "name": "/pages/projectnoteview/",
+          "size": 27482
+        },
+        {
+          "name": "/pages/projectpackage/",
+          "size": 20118
+        },
+        {
+          "name": "/pages/projectpackageview/",
+          "size": 16513
+        },
+        {
+          "name": "/pages/release/",
+          "size": 58781
+        },
+        {
+          "name": "/pages/report/",
+          "size": 76167
+        },
+        {
+          "name": "/pages/ruralvilladesign/",
+          "size": 28242
+        },
+        {
+          "name": "/pages/sharevisits/",
+          "size": 7484
+        },
+        {
+          "name": "/pages/templatesquaredetails/",
+          "size": 70507
+        },
+        {
+          "name": "/pages/topupcenter/",
+          "size": 51962
+        },
+        {
+          "name": "/pages/visitdetail/",
+          "size": 6525
+        },
+        {
+          "name": "/pages/wallet/",
+          "size": 22643
+        },
+        {
+          "name": "/pages/withdrawcenter/",
+          "size": 14074
+        }
+      ]
+    }
+  },
+  "deployment": {
+    "server": "162.14.210.252",
+    "package_uploaded": false,
+    "backend_activated": false,
+    "admin_installed": false,
+    "experience_selected": "unverified",
+    "formal_release": "unverified",
+    "device_uat": "not_run"
+  },
+  "archive_sha256": "9c948a82b9d75cf47bcff0c6072792abf4883a8ebc27d8f0629eb75961c686f2"
+}
