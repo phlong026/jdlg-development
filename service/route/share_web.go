@@ -206,33 +206,26 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.Header("Cache-Control", "private, no-store")
 		c.Header("Referrer-Policy", "no-referrer")
-		// Inline spacing values are server-generated bounded integers. Stored rich
-		// text is re-sanitized and cannot carry style attributes.
+		// 引导页沿用既有样式，不把分享正文或媒体写入 HTML。
 		c.Header("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
-		if share.Route == shareWebCollectionRoute {
-			collection, readErr := svc.ReadPublishedProjectCollection(c.Request.Context(), share.Content, share.Version)
-			if readErr != nil || shareweb.RenderCollection(c.Writer, shareweb.CollectionPage{Code: code, Collection: collection, Trackable: svc.Config.Enabled}) != nil {
+		switch share.Route {
+		case shareWebCollectionRoute:
+			if _, err = svc.ReadPublishedProjectCollection(c.Request.Context(), share.Content, share.Version); err != nil {
 				c.Status(http.StatusNotFound)
+				return
 			}
-			return
-		}
-		if share.Route != trackingReaderRoute {
+		case trackingReaderRoute:
+			if _, err = svc.ReadContent(c.Request.Context(), share.Content, share.Version); err != nil {
+				c.Status(http.StatusNotFound)
+				return
+			}
+		default:
 			if !tracking.LegacyRoute(share.Route) {
 				c.Status(http.StatusNotFound)
 				return
 			}
-			title := svc.Config.Routes[share.Route].Title
-			if err = shareweb.RenderLanding(c.Writer, code, title); err != nil {
-				c.Status(http.StatusNotFound)
-			}
-			return
 		}
-		content, err := svc.ReadContent(c.Request.Context(), share.Content, share.Version)
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		if err = shareweb.Render(c.Writer, shareweb.Page{Code: code, Content: content, Trackable: svc.Config.Enabled}); err != nil {
+		if err = shareweb.RenderLoginLanding(c.Writer, code, nil); err != nil {
 			c.Status(http.StatusNotFound)
 		}
 	})
@@ -252,7 +245,7 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 			c.Status(http.StatusNotFound)
 			return
 		}
-		content, err := svc.ReadPublishedProjectCollectionItemContent(c.Request.Context(), share.Content, share.Version, position)
+		_, err = svc.ReadPublishedProjectCollectionItemContent(c.Request.Context(), share.Content, share.Version, position)
 		if err != nil {
 			c.Status(http.StatusNotFound)
 			return
@@ -261,8 +254,7 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		c.Header("Cache-Control", "private, no-store")
 		c.Header("Referrer-Policy", "no-referrer")
 		c.Header("Content-Security-Policy", "default-src 'self'; img-src 'self'; media-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
-		base := "/api/v1/share-web/collection-media/" + url.PathEscape(code) + "/" + strconv.Itoa(position)
-		if err = shareweb.Render(c.Writer, shareweb.Page{Code: code, Content: content, Trackable: svc.Config.Enabled, MediaBase: base, ItemPosition: &position}); err != nil {
+		if err = shareweb.RenderLoginLanding(c.Writer, code, &position); err != nil {
 			c.Status(http.StatusNotFound)
 		}
 	})
@@ -278,106 +270,15 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		}
 		c.Next()
 	}
-	web.POST("/entry", mutation, mutationRateLimit, func(c *gin.Context) {
-		var input struct {
-			Code         string `json:"code"`
-			ItemPosition *int   `json:"item_position"`
-			Client       string `json:"client_instance"`
-			Consent      string `json:"consent_version"`
-		}
-		if !trackingBind(c, &input) {
-			return
-		}
-		share, err := svc.ResolveShareRecord(c.Request.Context(), input.Code)
-		if err != nil || (share.Route != trackingReaderRoute && share.Route != shareWebCollectionRoute) {
-			trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "分享入口无效"})
-			return
-		}
-		entryInput := tracking.EntryInput{Route: share.Route, Content: share.Content, Version: share.Version, ShareToken: input.Code, Client: input.Client, Consent: input.Consent, WebSource: true}
-		if share.Route == shareWebCollectionRoute && input.ItemPosition != nil {
-			collection, readErr := svc.ReadPublishedProjectCollection(c.Request.Context(), share.Content, share.Version)
-			if readErr != nil || *input.ItemPosition < 0 || *input.ItemPosition >= len(collection.Items) || !collection.Items[*input.ItemPosition].Available {
-				trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "合集作品不可访问"})
-				return
-			}
-			item := collection.Items[*input.ItemPosition]
-			entryInput.Route, entryInput.Content, entryInput.Version = item.RouteKey, item.ContentID, item.ContentVersion
-			entryInput.CollectionID, entryInput.CollectionVersion = share.Content, share.Version
-		} else if share.Route == shareWebCollectionRoute && input.ItemPosition == nil {
-			// Directory browsing is tracked against the collection itself.
-		} else if input.ItemPosition != nil {
-			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "分享入口参数无效"})
-			return
-		}
-		entry, err := svc.Enter(c.Request.Context(), entryInput, 0)
-		trackingResponse(c, entry, err)
-	})
-	web.POST("/events", mutation, mutationRateLimit, func(c *gin.Context) {
-		var input struct {
-			Token  string           `json:"entry_token"`
-			Events []tracking.Event `json:"events"`
-		}
-		if !trackingBind(c, &input) {
-			return
-		}
-		out, err := svc.Accept(c.Request.Context(), input.Token, input.Events)
-		trackingResponse(c, out, err)
-	})
-	web.Match([]string{http.MethodGet, http.MethodHead}, "/media/:code/:id", func(c *gin.Context) {
-		if _, ok := shareWebOrigin(); !ok {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		share, err := svc.ResolveShareRecord(c.Request.Context(), c.Param("code"))
-		if err != nil || share.Route != trackingReaderRoute {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		content, err := svc.ReadContent(c.Request.Context(), share.Content, share.Version)
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		found := false
-		for _, media := range content.Media {
-			if media.ID == c.Param("id") {
-				found = true
-				break
-			}
-		}
-		if !found {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		asset, err := svc.Media(c.Request.Context(), nil, c.Param("id"))
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		serveContentMediaBytes(c, svc, asset)
-	})
-	web.Match([]string{http.MethodGet, http.MethodHead}, "/collection-media/:code/:position/:id", func(c *gin.Context) {
-		if _, ok := shareWebOrigin(); !ok {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		position, err := strconv.Atoi(c.Param("position"))
-		if err != nil || position < 0 {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		share, err := svc.ResolveShareRecord(c.Request.Context(), c.Param("code"))
-		if err != nil || share.Route != shareWebCollectionRoute {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		asset, err := svc.ReadPublishedProjectCollectionItemMedia(c.Request.Context(), share.Content, share.Version, position, c.Param("id"))
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		serveContentMediaBytes(c, svc, asset)
-	})
+	// 网页没有经过小程序登录核验，只提供原分享目标的跳转，不再暴露正文、媒体或记录匿名浏览。
+	requireNativeLogin := func(c *gin.Context) {
+		c.Header("Cache-Control", "private, no-store")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "请在小程序中登录并补齐头像、昵称后查看"})
+	}
+	web.POST("/entry", requireNativeLogin)
+	web.POST("/events", requireNativeLogin)
+	web.Match([]string{http.MethodGet, http.MethodHead}, "/media/:code/:id", requireNativeLogin)
+	web.Match([]string{http.MethodGet, http.MethodHead}, "/collection-media/:code/:position/:id", requireNativeLogin)
 	web.POST("/open-miniprogram", mutation, mutationRateLimit, func(c *gin.Context) {
 		var input struct {
 			Code             string `json:"code"`

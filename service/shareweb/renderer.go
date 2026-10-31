@@ -117,16 +117,14 @@ func RenderCollection(w io.Writer, page CollectionPage) error {
 	})
 }
 
-// RenderLanding exposes no source body. It is the safe browser handoff for
-// legacy public routes whose content model cannot be rendered by this service.
-func RenderLanding(w io.Writer, code, title string) error {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		title = "甲第灵光内容"
+// RenderLoginLanding keeps the original share destination without rendering its content.
+func RenderLoginLanding(w io.Writer, code string, itemPosition *int) error {
+	if itemPosition != nil && *itemPosition < 0 {
+		return errors.New("content unavailable")
 	}
-	return Render(w, Page{Code: code, Content: tracking.Content{
-		ID: "legacy-landing", Version: 1, Title: title, Status: "published",
-		BodyFormat: "plain", Body: "请在甲第灵光小程序中查看完整内容。",
+	return Render(w, Page{Code: code, ItemPosition: itemPosition, Content: tracking.Content{
+		ID: "login-landing", Version: 1, Title: "登录后查看完整内容", Status: "published",
+		BodyFormat: "plain", Body: "请在小程序中登录并补齐头像、昵称。",
 	}})
 }
 

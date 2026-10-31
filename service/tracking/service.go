@@ -567,6 +567,19 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 	return nil
 }
 func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]Result, error) {
+	return s.accept(ctx, token, events, 0, false)
+}
+
+// AcceptForAccount is the Mini Program boundary: an authenticated account may
+// only append events to the entry token that the same account created.
+func (s *Service) AcceptForAccount(ctx context.Context, token string, events []Event, account int64) ([]Result, error) {
+	if account <= 0 {
+		return nil, fail(401, "未登录")
+	}
+	return s.accept(ctx, token, events, account, true)
+}
+
+func (s *Service) accept(ctx context.Context, token string, events []Event, account int64, requireAccount bool) ([]Result, error) {
 	out := []Result{}
 	if !s.Config.Enabled {
 		return nil, fail(503, "采集关闭")
@@ -578,6 +591,9 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 		en, err := s.entry(r, token)
 		if err != nil {
 			return err
+		}
+		if requireAccount && (en.Account != account || en.Visitor != actorVisitorKey(account)) {
+			return fail(403, "采集凭据不属于当前账号")
 		}
 		now := s.Now()
 		// Transactional per-credential minute budget survives process restarts; duplicates still consume budget.

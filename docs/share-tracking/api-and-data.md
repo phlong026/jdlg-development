@@ -8,17 +8,25 @@
 
 管理接口前缀 `/api/v1/management/tracking`。沿用管理session并重新检查 `management_access` 启用、用户类型及企微会话；再从 `tracking_access` 读取服务器配置的tenant/owner能力。`can_view`、`can_manage`、`can_crm`、`can_delete`、`can_rules`独立。多归属能力暂采用交集，宁可拒绝不明的跨归属操作；不把某归属管理权限提升为全部范围权限。写操作要求Origin同源/既有白名单及 `X-Tracking-Request: 1`。
 
-小程序前缀 `/api/v1/miniprogram/tracking`。登录请求沿用既有签名认证，服务器注入账号，客户端字段不能指定账号/租户/销售。匿名只使用随机客户端/匿名标识。采集凭据以 `X-Tracking-Token` 携带，服务器仅保存其SHA256；它不能访问后台查询。既有登录签名可能读取已登录时产生的认证设备值；追踪模块不新建指纹，也不把该值写入事件。
+小程序前缀 `/api/v1/miniprogram/tracking`。业务请求沿用既有完整签名认证，并由服务端确认昵称、持久化头像均完整；服务器注入账号，客户端字段不能指定账号/租户/销售。采集凭据以 `X-Tracking-Token` 携带，服务器仅保存其SHA256；它不能代替登录签名或访问后台查询。既有登录签名可能读取已登录时产生的认证设备值；追踪模块不新建指纹，也不把该值写入事件。历史匿名标识、同会话身份关联仍保留原事实，不按客户端标识追溯合并成某个账号。
 
-## 公开和采集接口
+### 登录与资料完整门禁（2026-11-01）
+
+服务端在注册业务路由前默认保护整个 `/api/v1/miniprogram` 前缀。无有效登录返回 HTTP 401；有效登录但资料不全返回 HTTP 428：`{code:428,msg:"请先补充头像和昵称",data:{profile_required:true,missing_fields:["nickname","avatar"]}}`，数组仅包含实际缺项。资料核验失败返回 HTTP 503，不能当作资料完整放行。受保护响应使用 `Cache-Control: private,no-store`。428 保留当前登录，只引导补齐缺项；401 才清理对应已失效的会话。
+
+仅精确方法和路径允许在补全前调用：GET `/profile`、`/tracking/config`；POST `/login`、`/login/password`、`/login/phone`、`/sms/send`、`/profile/password/recover`、`/ai/upload-reference-image`、`/tracking/share-entry`、`/wecom/enterprise-wechat/callback`；PUT `/profile/nickname`、`/profile/avatar`、`/profile/identity`。这些路径相对上述前缀；资料读写与头像上传仍保留原登录认证，回调仍保留自身校验。OPTIONS 仅用于预检。其余业务路径默认需要完整资料，新增路由不能自动成为公开旁路。
+
+小程序所有业务页面先核验服务器资料；本地缓存只预填资料。未登录、缺资料、核验失败、换号或退后台时隐藏业务内容。媒体 API 通过带签名下载转换为本地临时路径，不在媒体 URL 放登录凭证。外部已公开 CDN 链接和用户已保存文件不在本次 API 门禁的可撤销范围。
+
+## 内容和采集接口
 
 - `GET /config`：安全开关、告知文字/版本、采样和队列限制。不含客户数据。
-- `GET /contents/:id/versions/:version`：公开已发布自有正文；不要求同意分析。版本固定，撤回拒读。正文按已持久化的body_format渲染：plain保持转义文本，rich_text仅渲染服务器允许列表清洗结果，article_v2按有序内容块渲染图文；媒体仍单独授权。此接口不承诺原业务页面的历史正文回放。
+- `GET /contents/:id/versions/:version`：登录且资料完整后读取已发布自有正文；不要求同意分析。版本固定，撤回拒读。正文按已持久化的body_format渲染：plain保持转义文本，rich_text仅渲染服务器允许列表清洗结果，article_v2按有序内容块渲染图文；媒体仍单独授权。此接口不承诺原业务页面的历史正文回放。
 - `POST /share-entry`（JSON scene，不把令牌置于请求URL日志）：校验不透明分享后返回公开目标route/content/version/token，不创建PV、不暴露收件人。
-- `GET /media/:id`：管理session按素材范围，或媒体确实属于仍可访问的已发布版本。无缓存并每次复核撤回，不接受任意外部URL代理。
+- `GET /media/:id`：小程序须登录且资料完整，媒体还须属于仍可访问的已发布版本。管理端仍使用独立管理媒体接口和素材范围校验。无缓存并每次复核撤回，不接受任意外部URL代理。
 - `POST /entry`：`route_key,content_id?,content_version?,client_instance,anonymous_id?,share_token?,previous_entry_token?,consent_version`。返回受限entry_token、session_id、visitor_key、share_id、服务器确认的content_version及可访问状态。原业务公开详情的版本以服务端resolver为准，客户端后续事件及分享必须使用返回版本。非法/过期/不匹配分享回退直接访问，内容不可访问则404。新的真实分享入口、换账号和超时产生新会话；同客户端当前匿名会话登录可审计关联。
 - `POST /shares`：`route_key,content_id?,content_version?,parent_share_id?,channel,idempotency_key`。服务端确认实际分享目标，返回share_id/share_token/expiry。不推断是否发送成功。
-- `POST /events/batch`：`batch_id,events`，最多50条和64KiB，逐条accepted/duplicate/rejected。未知字段/事件/版本拒绝，永久错误不会无限重试。服务端校验绑定、发生时间、分段、视频媒体归属，客户端不能发送业务成功事实。
+- `POST /events/batch`：`batch_id,events`，最多50条和64KiB，逐条accepted/duplicate/rejected。必须同时携带完整账号签名和该账号创建的 `X-Tracking-Token`；旧匿名凭据或其他账号凭据返回403，不追加事件、不改写归属。未知字段/事件/版本拒绝，永久错误不会无限重试。服务端校验绑定、发生时间、分段、视频媒体归属，客户端不能发送业务成功事实。
 
 事件类型：share_intent、page_view、page_end、visible_segment、content_click、image_open、outbound_click、scroll_depth、video_state、video_progress。scroll_depth为0至100百分数。`business_action_confirmed`仅允许可信服务端业务适配，不开放客户端入口。真实收藏成功通过独立服务端ConfirmFavorite写入business事实，不接受客户端“成功”事件。
 
@@ -40,6 +48,7 @@
 - `POST /contents/:id/publish`：预览令牌、expected_revision和idempotency_key；创建不可变版本。
 - `POST /contents/:id/revoke`：原因、版本、幂等键；永久撤回墓碑，旧入口和媒体不继续公开。
 - `GET /media`、`POST /media` multipart：受控私有盘上传，真实PNG/JPEG/GIF≤10MiB、MP4≤50MiB，权属声明；MP4必须可读取合法尺寸；无任意URL导入或远程抓取。
+- `GET/HEAD /media/:id`：管理会话及当前素材归属范围验证后读取媒体，支持原媒体响应行为。管理台显示已持久化的小程序媒体路径时，在同源范围内转为这个管理路径，不改变原存储记录，不开放匿名媒体读取。
 - `GET /contents/:id/code?version=N`：仅真实微信码开关及配置齐备时调用官方接口，超时/权限失败明确报错；不是伪造二维码。URL Link见下一条。
 - `POST /contents/:id/url-link?version=N`：会创建分享并占用微信生成额度，所以是写操作，而不是 GET：与管理端其他写接口一样要求 `X-Tracking-Request: 1` 头和同源 `Origin`（预取、图片标签、链接扫描器无法触发），且每个账号每分钟最多 20 次，超出返回 429。需TRACKING_WECHAT_URLLINK_ENABLED=true、对该素材归属有管理权限且该版本已发布；调用官方 generate_urllink 返回 `{url_link, expires_at}`，链接带该账号当日新建的分享令牌，有效期29天（早于令牌到期）。发布接口在开启后也会在 `share_methods.url_link` 返回。生成失败只返回说明，不影响发布。
 - `GET /mp-sync`、`POST /mp-sync`：需TRACKING_MP_SYNC_ENABLED=true及对配置归属的管理权限。GET返回配置摘要与最近一次同步结果（含 `publishes:false`）；POST立即同步一次（同一进程内同时只运行一次，手动触发间隔不少于1分钟，运行期间返回409，过于频繁返回429），返回各项计数与最多20条未同步原因。同步只生成或更新草稿，不发布、不撤回、不覆盖人工修改。
@@ -131,3 +140,5 @@ WHERE user_id=:verified_miniprogram_user_id AND tenant_id=:verified_tenant_id AN
 ## 三期工作台、分享网页与通知增量
 
 新签名接口、收件人范围、服务号配置和投递状态见[三期接入说明](../phase3/README.md)；验证和未完成项见[首批验证记录](../phase3/verification-20261027.md)。共享网页不替代私人项目邀请授权，默认关闭的服务号不表示真实可发送。
+
+自 2026-11-01 整改版起，网页 `/share/s/:code` 及合集单项只显示“登录后查看完整内容”和打开小程序按钮，保留原分享目标及单项位置，不输出正文、合集目录或受保护媒体地址。`/api/v1/share-web/entry`、`/events`、`/media/*`、`/collection-media/*` 返回 HTTP 401，不再创建匿名阅读记录；合法 `/open-miniprogram` 沿用原来源校验、限流和微信跳转。历史网页访问事实继续按原规则查询。此变更的验证和上线状态见[强制门禁整改记录](profile-access-enforcement-20261101.md)。

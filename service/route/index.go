@@ -73,6 +73,11 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	{
 		// 用户DB模型（共用）
 		userDBModel := model.NewUserModel(component.GetDB())
+		// 旧小程序仍可请求公开业务路由，因此服务端在所有小程序路由注册前统一守门。
+		v1.Use(
+			miniprogramProfileAuthentication(TokenAuthRequired(codeSessionModel)),
+			miniprogramProfileCompleteness(miniprogramProfileLoaderFromModel(userProfileModel)),
+		)
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
 		stopImports = registerContentImports(reportContext, v1, trackingService, userDBModel, codeSessionModel, cfg)
 		costShareStore := model.NewCostEstimateShareRedisModel(component.GetRedis())

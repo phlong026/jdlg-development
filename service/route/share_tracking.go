@@ -577,6 +577,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	})
 	mg.GET("/media", func(c *gin.Context) { v, e := svc.ListMedia(c.Request.Context(), sc(c)); trackingResponse(c, v, e) })
 	mg.POST("/media", func(c *gin.Context) { uploadTrackingMedia(c, svc, sc(c)) })
+	mg.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
+		scope := sc(c)
+		serveTrackingMedia(c, svc, &scope)
+	})
 	mg.POST("/identity-links", func(c *gin.Context) {
 		var in struct {
 			Visitor  string `json:"visitor_key"`
@@ -682,7 +686,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		results, e := svc.Accept(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events)
+		results, e := svc.AcceptForAccount(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events, GetTokenUserID(c))
 		trackingResponse(c, gin.H{"results": results, "metric_version": tracking.MetricVersion}, e)
 	})
 	optionalAuth := func(c *gin.Context) {

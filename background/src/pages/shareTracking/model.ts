@@ -24,7 +24,19 @@ export function queryFor(filters: Filters, now = new Date(), view: 'visitors' | 
 }
 export function time(value?: string): string { if (!value) return '未记录'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '时间不可用' : new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date); }
 export function duration(ms = 0): string { const seconds = Math.floor(Math.max(0, ms) / 1000); return seconds < 60 ? `${seconds}秒` : seconds < 3600 ? `${Math.floor(seconds / 60)}分${seconds % 60}秒` : `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分`; }
-export function safeMediaURL(value?: string): string | undefined { if (!value) return; try { const url = new URL(value, window.location.origin); return (url.protocol === 'https:' || (url.origin === window.location.origin && url.protocol === window.location.protocol)) && !url.username && !url.password ? url.href : undefined; } catch { return; } }
+export function safeMediaURL(value?: string): string | undefined {
+    if (!value) return;
+    try {
+        const url = new URL(value, window.location.origin);
+        if ((url.protocol !== 'https:' && !(url.origin === window.location.origin && url.protocol === window.location.protocol)) || url.username || url.password) return;
+        // 已存媒体地址由多端共用；管理台用自身会话和归属权限读取，不能借小程序公开入口。
+        const miniMedia = '/api/v1/miniprogram/tracking/media/';
+        if (url.origin === window.location.origin && url.pathname.startsWith(miniMedia)) {
+            url.pathname = '/api/v1/management/tracking/media/' + url.pathname.slice(miniMedia.length);
+        }
+        return url.href;
+    } catch { return; }
+}
 export const intentLabels = { high: '高意向参考', medium: '中意向参考', low: '低关注待观察', unknown: '待判断' };
 // 卡片角标放不下“参考”二字；“仅供跟进参考”写在页面口径说明里。
 export const intentShortLabels = { high: '高意向', medium: '中意向', low: '低关注', unknown: '待判断' };
