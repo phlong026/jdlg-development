@@ -119,7 +119,7 @@ Component({
             if (!headers)
                 throw new Error('请重新登录');
             const res = await new Promise((resolve, reject) => {
-                wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+                wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true });
             });
             this.assertCurrentAccount(token, userID);
             if (res.statusCode === 401 || res.data?.code === 401)

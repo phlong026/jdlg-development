@@ -40,7 +40,7 @@ function wrapProfileAccess(definition) {
     const auth = require('./parameter');
     const device = String(wx.getStorageSync('device_fingerprint') || '');
     const header = auth.paramsToHeaders(auth.generateRequestParams(token, {}, path, device));
-    wx.request({ url: 'https://api.jiadilingguang.com' + path, method: 'GET', header, timeout: 15000,
+    wx.request({ url: 'https://api.jiadilingguang.com' + path, method: 'GET', header, timeout: 15000, __profileAccessResponseHandled: true,
       success(response) {
         if (revision !== page.__accessRevision || token !== wx.getStorageSync('token') || !page.__accessVisible || page.__accessDestroyed) return;
         const data = response.data || {};

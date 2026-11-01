@@ -7,11 +7,11 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../miniprogram/utils/profile-request-guard.js'), 'utf8');
 
-function harness({ token = 'account-token', route = 'pages/index/index' } = {}) {
+function harness({ token = 'account-token', route = 'pages/index/index', inlineGate = true } = {}) {
   const calls = [], navigations = [], removed = [], blocked = [], toasts = [], guardChecks = [];
   const storage = { token, device_fingerprint: 'login-device', userInfo: { id: 9 } };
   const gate = { check() { guardChecks.push(route); return Promise.resolve(false); } };
-  const page = { route, onProfileAccessBlocked() { blocked.push(route); }, selectComponent: () => gate };
+  const page = { route, onProfileAccessBlocked() { blocked.push(route); }, selectComponent: () => inlineGate ? gate : null };
   const wx = {
     request(options) { calls.push(options); return { abort() {} }; },
     getStorageSync: key => storage[key],
@@ -125,22 +125,74 @@ test('428 keeps the valid token, locks content and opens profile completion only
   assert.equal(h.storage.token, 'account-token');
   assert.deepEqual(h.removed, []);
   assert.deepEqual(h.blocked, ['pages/index/index', 'pages/index/index']);
-  assert.equal(h.navigations.length, 1);
-  assert.equal(h.navigations[0].url, '/pages/login/login?from=profile-gate');
-  assert.deepEqual(delivered, [response]);
-  h.navigations[0].fail();
+  assert.equal(h.navigations.length, 0);
   assert.deepEqual(h.guardChecks, ['pages/index/index']);
-  assert.ok(h.toasts.some(title => /登录/.test(title)));
+  assert.deepEqual(delivered, [response]);
 });
 
-test('401 clears the expired session before opening login', () => {
+test('401 clears the expired session and reopens the inline login card', () => {
   const h = harness(); h.guard.install();
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
   h.calls[0].success({ statusCode: 401, data: { code: 401 } });
   assert.equal(h.storage.token, undefined);
   assert.deepEqual(h.removed, ['token', 'userInfo']);
   assert.deepEqual(h.blocked, ['pages/index/index']);
+  assert.equal(h.navigations.length, 0);
+  assert.deepEqual(h.guardChecks, ['pages/index/index']);
+});
+
+test('a page without an inline gate still opens the standalone login page', () => {
+  const h = harness({ inlineGate: false }); h.guard.install();
+  wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
+  h.calls[0].success({ statusCode: 428, data: { code: 428 } });
   assert.equal(h.navigations.length, 1);
+  assert.equal(h.navigations[0].url, '/pages/login/login?from=profile-gate');
+});
+
+test('ordinary profile readers still receive global session recovery', () => {
+  const h = harness(); h.guard.install();
+  wxCall(h, {
+    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/profile',
+    method: 'GET',
+  });
+  h.calls[0].success({ statusCode: 401, data: { code: 401 } });
+  assert.equal(h.storage.token, undefined);
+  assert.deepEqual(h.removed, ['token', 'userInfo']);
+  assert.deepEqual(h.blocked, ['pages/index/index']);
+  assert.deepEqual(h.guardChecks, ['pages/index/index']);
+});
+
+test('an explicitly owned GET profile response belongs to the calling login card', () => {
+  const delivered = [];
+  const h = harness(); h.guard.install();
+  wxCall(h, {
+    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/profile',
+    method: 'GET',
+    __profileAccessResponseHandled: true,
+    success: response => delivered.push(response),
+  });
+  const response = { statusCode: 401, data: { code: 401 } };
+  h.calls[0].success(response);
+  assert.equal(h.storage.token, 'account-token');
+  assert.deepEqual(h.removed, []);
+  assert.deepEqual(h.blocked, []);
+  assert.deepEqual(h.guardChecks, []);
+  assert.deepEqual(delivered, [response]);
+  assert.equal(h.calls[0].__profileAccessResponseHandled, undefined, 'local ownership marker must not leave the client');
+});
+
+test('ownership marker cannot bypass the global gate outside an exact GET profile request', () => {
+  for (const request of [
+    { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects', method: 'GET' },
+    { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/profile', method: 'POST' },
+  ]) {
+    const h = harness(); h.guard.install();
+    wxCall(h, { ...request, __profileAccessResponseHandled: true });
+    h.calls[0].success({ statusCode: 401, data: { code: 401 } });
+    assert.equal(h.storage.token, undefined);
+    assert.deepEqual(h.guardChecks, ['pages/index/index']);
+    assert.equal(h.calls[0].__profileAccessResponseHandled, undefined);
+  }
 });
 
 test('late 401, 428 and 200 responses from an old account cannot affect the new session', () => {

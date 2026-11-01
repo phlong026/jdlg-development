@@ -47,7 +47,7 @@ Component({
         const path = '/api/v1/miniprogram/profile';
         const headers = paramsToHeaders(generateRequestParams(token, {}, path, getCachedDeviceFingerprint() || ''));
         const res: any = await new Promise((resolve, reject) => {
-          wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+          wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true } as any);
         });
         if (!current()) return false;
         if (res.statusCode === 401 || res.data?.code === 401) {

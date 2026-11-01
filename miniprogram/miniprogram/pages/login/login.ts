@@ -471,7 +471,7 @@ Page({
     if (!this.isLoginContextCurrent(context)) throw new Error('账号或登录页面已变化，请重新检查资料');
     const headers = paramsToHeaders(generateRequestParams(token, {}, apiPath, deviceID));
     const res: any = await new Promise((resolve, reject) => {
-      wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+      wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true } as any);
     });
     if (!this.isLoginContextCurrent(context)) throw new Error('账号或登录页面已变化，请重新检查资料');
     if (res.statusCode === 401 || res.data?.code === 401) {

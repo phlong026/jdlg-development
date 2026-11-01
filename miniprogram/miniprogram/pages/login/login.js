@@ -465,7 +465,7 @@ Page({
             throw new Error('账号或登录页面已变化，请重新检查资料');
         const headers = (0, parameter_1.paramsToHeaders)((0, parameter_1.generateRequestParams)(token, {}, apiPath, deviceID));
         const res = await new Promise((resolve, reject) => {
-            wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+            wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true });
         });
         if (!this.isLoginContextCurrent(context))
             throw new Error('账号或登录页面已变化，请重新检查资料');

@@ -75,6 +75,21 @@ function activePage() {
   return pages[pages.length - 1];
 }
 
+function checkInlineProfileGate(page) {
+  const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
+  if (!guard || typeof guard.check !== 'function') return false;
+  if (page.__profileGateChecking) return true;
+  page.__profileGateChecking = true;
+  const done = () => { page.__profileGateChecking = false; };
+  try {
+    Promise.resolve(guard.check()).then(done, done);
+  } catch (_) {
+    done();
+    return false;
+  }
+  return true;
+}
+
 function openProfileGate(clearSession) {
   if (clearSession) {
     wx.removeStorageSync('token');
@@ -83,6 +98,8 @@ function openProfileGate(clearSession) {
   const page = activePage();
   if (!page || GATE_ROUTES.has(page.route)) return;
   if (typeof page.onProfileAccessBlocked === 'function') page.onProfileAccessBlocked();
+  // 分享页已经挂载同一套登录与资料补全卡片，优先原地恢复，避免再叠加独立登录页。
+  if (checkInlineProfileGate(page)) return;
   if (page.__accessRedirecting) return;
   page.__accessRedirecting = true;
   wx.navigateTo({
@@ -123,6 +140,10 @@ function install() {
     const alreadySigned = hasCompleteSignature(originalHeader);
     requestOptions = alreadySigned ? { ...(options || {}) } : normalizeProtectedRequest(options || {});
     const signedPath = requestPath(requestOptions.url);
+    const callerHandlesProfile = requestOptions.__profileAccessResponseHandled === true
+      && String(requestOptions.method || 'GET').toUpperCase() === 'GET'
+      && signedPath.split('?')[0] === '/api/v1/miniprogram/profile';
+    delete requestOptions.__profileAccessResponseHandled;
     const header = alreadySigned ? { ...(requestOptions.header || {}) } : withoutAuthHeaders(requestOptions.header || {});
     const token = String(wx.getStorageSync('token') || '');
     if (token && !alreadySigned) {
@@ -147,7 +168,7 @@ function install() {
           if (typeof fail === 'function') fail(staleFailure());
           return;
         }
-        handleProfileAccessResponse(response && response.statusCode, response && response.data, dispatchToken);
+        if (!callerHandlesProfile) handleProfileAccessResponse(response && response.statusCode, response && response.data, dispatchToken);
         if (typeof success === 'function') success(response);
       },
       fail(error) {
