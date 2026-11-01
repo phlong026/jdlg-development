@@ -37,3 +37,7 @@ assert.match(customerModel, /findExistingLeadID/, 'customer leads should dedupe 
 assert.match(customerModel, /updateExistingLead/, 'customer leads should update an existing lead instead of duplicating it');
 
 console.log('generatedetails customer service conversion checks passed');
+// B1 直连管线布线断言：结果页提供"存为内容"动作且走服务端转存接口
+assert.match(read('miniprogram/pages/generatedetails/generatedetails.wxml'), /bindtap="saveAsContent"/, 'saveAsContent 应有按钮');
+assert.match(read('miniprogram/pages/generatedetails/generatedetails.wxml'), /存为内容发客户/);
+assert.match(read('miniprogram/pages/generatedetails/generatedetails.js'), /workbench\/contents\/from-generation/, '必须走服务端转存而不是前端拼URL');

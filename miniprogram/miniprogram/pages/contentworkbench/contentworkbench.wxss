@@ -550,3 +550,16 @@ button::after {
   font-size: 23rpx;
   color: #817568;
 }
+
+.quota-strip {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 0 4rpx 12rpx;
+  color: #817568;
+  font-size: 23rpx;
+}
+
+.quota-divider {
+  color: #c9b597;
+}

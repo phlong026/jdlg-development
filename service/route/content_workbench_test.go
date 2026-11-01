@@ -52,7 +52,7 @@ func newWorkbenchHandlerFixtureWithProfiles(t *testing.T, scope *tracking.Scope,
 	})
 	r := gin.New()
 	g := r.Group("/workbench", func(c *gin.Context) { c.Set("workbench.scope", *scope); c.Next() })
-	registerContentWorkbenchHandlers(g, svc, profiles)
+	registerContentWorkbenchHandlers(g, svc, profiles, nil)
 	return r, svc
 }
 

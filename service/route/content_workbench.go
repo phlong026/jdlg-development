@@ -42,8 +42,11 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 		c.Set("workbench.scope", scope)
 		c.Next()
 	})
-	registerContentWorkbenchHandlers(g, svc, makeProjectNoteProfileResolver(users.DB))
+	registerContentWorkbenchHandlers(g, svc, makeProjectNoteProfileResolver(users.DB), func(userID int64) (int64, int64) {
+		return generationQuotaSnapshot(context.Background(), users, userID)
+	})
 	registerWritingPromptsRoute(g, users.DB)
+	registerGenerationImportRoute(g, svc, users)
 }
 
 type workbenchOwnerChoice struct {
@@ -88,7 +91,7 @@ func workbenchOwnerChoices(ctx context.Context, scope tracking.Scope, resolve pr
 	return choices, nil
 }
 
-func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service, profiles projectNoteProfileResolver) {
+func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service, profiles projectNoteProfileResolver, quota func(userID int64) (stones, monthGenerations int64)) {
 	registerNativeReferenceHandlers(g, svc)
 	registerProjectCollectionHandlers(g, svc)
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
@@ -100,6 +103,11 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			log.Printf("[content-workbench] error operation=owner_profiles actor=%d error_type=%T", currentScope.Actor, err)
 			ownerChoices, _ = workbenchOwnerChoices(c.Request.Context(), currentScope, nil)
 		}
+		// B1 配额条：失败返回 -1，前端隐藏而不是显示误导值。
+		var stones, monthGenerations int64 = -1, -1
+		if quota != nil {
+			stones, monthGenerations = quota(GetTokenUserID(c))
+		}
 		trackingResponse(c, gin.H{
 			"enabled": workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
 			"publish_enabled":             svc.Config.ContentEnabled,
@@ -108,6 +116,8 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			"url_link_configured":         media && trackingURLLinkEnabled() && miniprogramCredentials().AppID != "" && miniprogramCredentials().Secret != "",
 			"official_account_configured": os.Getenv("OFFICIAL_ACCOUNT_APP_ID") != "" && os.Getenv("OFFICIAL_ACCOUNT_APP_SECRET") != "",
 			"import_capabilities_path":    "/api/v1/miniprogram/workbench/imports/capabilities",
+			"stones_balance":              stones,
+			"month_generations":           monthGenerations,
 		}, nil)
 	})
 	// Keep draft listing separate from visit analytics: a content-management grant
