@@ -563,3 +563,28 @@ button::after {
 .quota-divider {
   color: #c9b597;
 }
+
+.owner-tabs {
+  display: flex;
+  gap: 12rpx;
+  margin: 0 4rpx 14rpx;
+  overflow-x: auto;
+}
+
+.owner-tab {
+  flex: 0 0 auto;
+  min-height: 60rpx;
+  margin: 0;
+  padding: 0 24rpx;
+  border: 1rpx solid #eee8e1;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #65584e;
+  font-size: 24rpx;
+}
+
+.owner-tab.active {
+  border-color: #a87943;
+  background: #f1e4d2;
+  color: #8b5c2d;
+}

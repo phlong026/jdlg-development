@@ -33,7 +33,7 @@ function contentRow(item) {
 
 Page({
   data: {
-    view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [],
+    view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [], ownerFilter: '',
     categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
@@ -112,6 +112,7 @@ Page({
       }
       const query = { limit: 20 };
       if (this.data.searchTerm) query.content_q = this.data.searchTerm;
+      if (this.data.ownerFilter) query.owner = this.data.ownerFilter;
       if (!reset && this.data.next_cursor) query.cursor = this.data.next_cursor;
       if (!reset && this.data.snapshot) { query.as_of = this.data.snapshot.as_of; query.metric_version = this.data.snapshot.metric_version; }
       const page = await api.listContents(query);
@@ -140,6 +141,15 @@ Page({
     if (!category) return;
     if (category.unavailable) { wx.showToast({ title: category.label + '资料尚未开通', icon: 'none' }); return; }
     this.setData({ category: category.key }); this.filterItems();
+  },
+  // B13 公司/个人空间 Tab：复用服务端 ?owner= 过滤（带权限交集校验），切换即整表重载。
+  selectOwnerTab(event) {
+    const ownerID = String(event.currentTarget.dataset.owner || '');
+    if (ownerID === this.data.ownerFilter) return;
+    const choices = (this.data.context && this.data.context.owner_choices) || [];
+    if (ownerID && !choices.some(item => item.owner_id === ownerID)) return;
+    this.setData({ ownerFilter: ownerID, items: [], visibleItems: [], next_cursor: '', snapshot: null });
+    this.loadContents(true);
   },
   async loadCovers(epoch, rows) {
     if (!api.downloadWorkbenchMedia) return;
