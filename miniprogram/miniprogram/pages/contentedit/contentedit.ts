@@ -347,11 +347,10 @@ Page({
     if (!this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
     // epoch 必须在选图回调内取：相册/相机全屏页会触发页面 onHide/onShow，
     // 提前捕获的代次会被返回时的 onShow 作废，导致选中的文件被静默丢弃。
-    wx.chooseMedia({ count: 1, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => {
+    wx.chooseMedia({ count: 9, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => {
       const epoch = this._epoch;
       if (!this.current(epoch)) return;
-      const file = result.tempFiles && result.tempFiles[0];
-      if (file) this.uploadMedia(file.tempFilePath, file.fileType || 'image');
+      this.uploadMediaBatch(result.tempFiles || []);
     } });
   },
   chooseDocument() {
@@ -411,18 +410,30 @@ Page({
       wx.openDocument({ filePath, showMenu: true, success: () => this.setData({ busy: false }), fail: () => this.setData({ busy: false, error: '原文件无法打开，请稍后重试' }) });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件下载失败' }); }
   },
-  async uploadMedia(filePath, kind) {
-    const epoch = this._epoch; this.setData({ busy: true, error: '' });
-    try {
-      const asset = await api.uploadWorkbenchMedia(filePath, kind, this.data.owner_id, this.data.rights);
-      if (!this.current(epoch)) return;
-      const media = this.data.media.concat({ ...asset, local_path: filePath });
-      const blocks = this.data.blocks.concat({ kind: asset.kind || kind, media_id: asset.media_id, caption: '' });
-      this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), busy: false, preview: null, notice: '已上传并加入正文，请保存预览' });
-    } catch (error) {
-      // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
-      if (this.current(epoch)) { this.setData({ busy: false, error: error.message || '媒体上传失败' }); wx.showToast({ title: error.message || '媒体上传失败', icon: 'none' }); }
+  async uploadMediaBatch(files) {
+    if (!files || !files.length || this.data.busy) return;
+    const epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    const media = this.data.media.slice();
+    const blocks = this.data.blocks.slice();
+    let failures = 0;
+    // 串行上传：并发会互相争抢 busy 状态且服务端按 owner 串行建档；中途会话失效立即停止，
+    // 已成功的不回滚，失败的计数提示可重试。
+    for (let position = 0; position < files.length; position += 1) {
+      const file = files[position];
+      try {
+        const asset = await api.uploadWorkbenchMedia(file.tempFilePath, file.fileType || 'image', this.data.owner_id, this.data.rights);
+        if (!this.current(epoch)) { this.setData({ busy: false }); return; }
+        media.push({ ...asset, local_path: file.tempFilePath });
+        blocks.push({ kind: asset.kind || file.fileType || 'image', media_id: asset.media_id, caption: '' });
+      } catch (error) {
+        if (!this.current(epoch)) { this.setData({ busy: false }); return; }
+        failures += 1;
+      }
     }
+    this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), busy: false, preview: null, notice: failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入正文，请保存预览' });
+    // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
+    if (failures) wx.showToast({ title: `${failures} 个媒体上传失败`, icon: 'none' });
   },
   validBlocks() {
     return this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video' || block.kind === 'list' && (block.items || []).some(Boolean) || String(block.text || '').trim());

@@ -15,6 +15,7 @@ function loadEditor(apiOverrides = {}) {
   const toasts = [];
   const modals = [], backs = [];
   const actionSheets = [];
+  const mediaChoosers = [];
   let sessionToken = 'session-token';
   const api = {
     mutationKey: prefix => `${prefix}-key`,
@@ -30,6 +31,7 @@ function loadEditor(apiOverrides = {}) {
     showModal: options => modals.push(options),
     navigateBack: options => backs.push(options),
     showActionSheet: options => actionSheets.push(options),
+    chooseMedia: options => mediaChoosers.push(options),
     getWindowInfo: () => ({ windowWidth: 375 }),
     createVideoContext: () => ({ pause() {} }),
   };
@@ -51,7 +53,7 @@ function loadEditor(apiOverrides = {}) {
     _visible: true,
     setData(values) { Object.assign(this.data, values); },
   };
-  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, token(value) { sessionToken = value; } };
+  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, mediaChoosers, token(value) { sessionToken = value; } };
 }
 
 test('editor exposes separate draft, preview, publish and published-reader actions', async () => {
@@ -315,6 +317,53 @@ test('image and video blocks expose caption editing that survives serialization'
   const doc = JSON.parse(input.draft.body);
   assert.equal(doc.blocks[0].caption, '南立面效果图');
   assert.equal(doc.blocks[0].media_id, 'media-1');
+});
+
+test('multi-select media uploads serially and batches state updates with failure tally', async () => {
+  const uploaded = [];
+  let calls = 0;
+  const { page, mediaChoosers } = loadEditor({
+    uploadWorkbenchMedia: async (filePath, kind) => {
+      calls += 1;
+      if (calls === 2) throw new Error('第二个文件上传失败');
+      uploaded.push({ filePath, kind });
+      return { media_id: `media-${calls}`, kind };
+    },
+  });
+  page.setData({ context: { enabled: true, can_manage: true, media_upload_configured: true }, owner_id: 'owner-a', rights: 'own', blocks: [] });
+
+  page.chooseMedia();
+  assert.equal(mediaChoosers.length, 1, 'chooseMedia 应仍由按钮触发');
+  assert.equal(mediaChoosers[0].count, 9, '相册应放开多选（对齐黑谷 9 张）');
+  mediaChoosers[0].success({ tempFiles: [
+    { tempFilePath: 'tmp://one.jpg', fileType: 'image' },
+    { tempFilePath: 'tmp://two.mp4', fileType: 'video' },
+    { tempFilePath: 'tmp://three.jpg', fileType: 'image' },
+  ] });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(calls, 3, '三个文件都应逐个尝试上传');
+  assert.equal(uploaded.length, 2);
+  assert.equal(page.data.media.length, 2, '失败的文件不进入素材列表');
+  assert.deepEqual(page.data.blocks.map(block => block.kind), ['image', 'image']);
+  assert.equal(page.data.busy, false, '批量结束后释放 busy');
+  assert.match(page.data.notice, /2.*1/);
+  assert.ok(page.data.notice.indexOf('失败') >= 0);
+});
+
+test('batch upload aborts without state changes when the page token changes mid-flight', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const { page, token } = loadEditor({
+    uploadWorkbenchMedia: async () => { await gate; return { media_id: 'media-x', kind: 'image' }; },
+  });
+  page.setData({ context: { enabled: true, can_manage: true, media_upload_configured: true }, owner_id: 'owner-a', rights: 'own', blocks: [] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg', fileType: 'image' }]);
+  token('another-session');
+  release();
+  await pending;
+  assert.equal(page.data.media.length, 0, '账号切换后不得再写入旧会话的上传结果');
+  assert.equal(page.data.busy, false);
 });
 
 test('editor wxml wires the new block editing affordances', () => {
