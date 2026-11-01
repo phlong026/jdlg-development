@@ -22,6 +22,11 @@
     </view>
     <image class="service-card all-card" src="{{allRoundDesignImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/allrounddesign/allrounddesign" role="button" aria-label="综合设计" />
   </view>
+  <view class="workbench-entry" bindtap="onOpenPage" data-url="/pages/contentworkbench/contentworkbench?source=index_entry" role="button" aria-label="内容创作工作台">
+    <view class="workbench-entry-icon"><text>✎</text></view>
+    <view class="workbench-entry-texts"><text class="workbench-entry-title">内容创作</text><text class="workbench-entry-desc">图文、AI文案与项目分享，一键发给客户</text></view>
+    <text class="workbench-entry-arrow">›</text>
+  </view>
   <view class="cost-estimator" role="region" aria-label="10秒估算建房报价">
     <view class="cost-panel"></view>
     <view class="cost-stat-icon"><image class="cost-stat-bars" src="{{homeAssets.costStats}}" mode="aspectFit" aria-hidden="true" /></view>

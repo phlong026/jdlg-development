@@ -290,7 +290,8 @@
         "pages/chat",
         "pages/topupcenter",
         "pages/Invitefriends",
-        "pages/checkin"
+        "pages/checkin",
+        "pages/contentworkbench"
       ]
     },
     "pages/template/template": {
