@@ -243,6 +243,23 @@ func TestWorkbenchContextSeparatesOwnerIDsFromDisplayNames(t *testing.T) {
 	if len(result.Data.OwnerChoices) != 2 || result.Data.OwnerChoices[0].OwnerID != "designer-11" || result.Data.OwnerChoices[0].DisplayName != "陈设计师" || result.Data.OwnerChoices[1].OwnerID != "company" || result.Data.OwnerChoices[1].DisplayName != "团队内容空间" {
 		t.Fatalf("owner choices = %#v", result.Data.OwnerChoices)
 	}
+
+	// B19 角色位：自选身份作为展示前缀（设计师·昵称），无身份保持纯昵称
+	roleR, _ := newWorkbenchHandlerFixtureWithProfiles(t, &tracking.Scope{Actor: 11, Manage: true, Owners: []string{"designer-11", "company"}}, func(ctx context.Context, ids []int64) (map[int64]model.UserProfilePresentation, error) {
+		return map[int64]model.UserProfilePresentation{11: {UserID: 11, Nickname: "李销售", IdentityType: "建材商"}}, nil
+	})
+	roleW := workbenchRequest(t, roleR, "GET", "/workbench/context", nil)
+	var roleResult struct {
+		Data struct {
+			OwnerChoices []workbenchOwnerChoice `json:"owner_choices"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(roleW.Body.Bytes(), &roleResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(roleResult.Data.OwnerChoices) == 0 || roleResult.Data.OwnerChoices[0].DisplayName != "建材商·李销售" {
+		t.Fatalf("identity prefix missing: %#v", roleResult.Data.OwnerChoices)
+	}
 }
 
 func TestWorkbenchContextKeepsAuthorizedOwnersWhenProfilesFail(t *testing.T) {

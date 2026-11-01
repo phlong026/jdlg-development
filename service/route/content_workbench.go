@@ -77,7 +77,13 @@ func workbenchOwnerChoices(ctx context.Context, scope tracking.Scope, resolve pr
 		label := "个人创作空间"
 		if owner == personalOwner {
 			if nickname := strings.TrimSpace(profile.Nickname); nickname != "" {
-				label = nickname
+				// B19 角色位（展示层）：自选身份做前缀，销售/设计师的产出可区分；
+				// identity_type 是展示标签，绝不能当授权事实使用。
+				if identity := strings.TrimSpace(profile.IdentityType); identity != "" && len([]rune(identity)) <= 12 {
+					label = identity + "·" + nickname
+				} else {
+					label = nickname
+				}
 			}
 		} else {
 			teamIndex++
