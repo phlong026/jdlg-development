@@ -4,6 +4,9 @@ const api = require('../../utils/phase3-api');
 const { preserveLayoutBody, renderArticleDocument } = require('../../utils/article-document');
 
 function textBlock(text = '') { return { kind: 'paragraph', text }; }
+function headingBlock(level = 2) { return { kind: 'heading', level: level === 3 ? 3 : 2, text: '' }; }
+function quoteBlock() { return { kind: 'quote', text: '' }; }
+function listBlock(ordered = false) { return { kind: 'list', ordered: !!ordered, items: [''] }; }
 function mediaIDs(blocks) { return [...new Set(blocks.filter(block => block.media_id).map(block => block.media_id))]; }
 function writingFacts(blocks) {
   return blocks.map(block => {
@@ -28,7 +31,7 @@ function initialBlocks(content) {
 }
 function decorateBlocks(blocks, media) {
   const byID = new Map((media || []).map(asset => [asset.media_id, asset]));
-  return blocks.map((block, index) => ({ ...block, index, list_text: (block.items || []).join('、'), asset: block.media_id ? byID.get(block.media_id) || null : null }));
+  return blocks.map((block, index) => ({ ...block, index, asset: block.media_id ? byID.get(block.media_id) || null : null }));
 }
 function mergeAssets(...groups) {
   const assets = new Map();
@@ -238,7 +241,87 @@ Page({
     blocks[index] = { ...blocks[index], text: event.detail.value };
     this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
-  addParagraph() { if (this.data.layoutReadOnly) return; const blocks = this.data.blocks.concat(textBlock('')); this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null }); },
+  addParagraph() { if (this.data.layoutReadOnly) return; this.insertBlock('paragraph'); },
+  showInsertMenu() {
+    if (this.data.layoutReadOnly || this.data.busy) return;
+    const specs = ['paragraph', 'heading', 'quote', 'list-unordered', 'list-ordered'];
+    wx.showActionSheet({
+      itemList: ['段落', '标题', '引用', '无序列表', '有序列表'],
+      success: result => {
+        if (!this.current(this._epoch)) return;
+        this.insertBlock(specs[result.tapIndex] || 'paragraph');
+      },
+      fail: () => {},
+    });
+  },
+  insertBlock(spec) {
+    if (this.data.layoutReadOnly) return;
+    let block;
+    if (spec === 'heading') block = headingBlock(2);
+    else if (spec === 'quote') block = quoteBlock();
+    else if (spec === 'list-unordered') block = listBlock(false);
+    else if (spec === 'list-ordered') block = listBlock(true);
+    else block = textBlock('');
+    const blocks = this.data.blocks.concat(block);
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  setHeadingLevel(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || blocks[index].kind !== 'heading') return;
+    blocks[index] = { ...blocks[index], level: Number(event.currentTarget.dataset.level) === 3 ? 3 : 2 };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  convertBlock(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    const target = String(event.currentTarget.dataset.to || ''), current = blocks[index];
+    if (!current || ['paragraph', 'heading', 'quote'].indexOf(target) < 0 || target === current.kind) return;
+    const converted = { kind: target, text: String(current.text || '') };
+    if (target === 'heading') converted.level = current.kind === 'heading' ? current.level : 2;
+    blocks[index] = converted;
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  editCaption(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || (blocks[index].kind !== 'image' && blocks[index].kind !== 'video')) return;
+    blocks[index] = { ...blocks[index], caption: event.detail.value };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+  },
+  editListItem(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index), itemIndex = Number(event.currentTarget.dataset.itemIndex);
+    if (!blocks[index] || blocks[index].kind !== 'list' || !Array.isArray(blocks[index].items)) return;
+    const items = blocks[index].items.slice();
+    items[itemIndex] = event.detail.value;
+    blocks[index] = { ...blocks[index], items };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+  },
+  addListItem(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || blocks[index].kind !== 'list') return;
+    const items = blocks[index].items || [];
+    if (items.length >= 100) { wx.showToast({ title: '列表最多 100 项', icon: 'none' }); return; }
+    blocks[index] = { ...blocks[index], items: items.concat('') };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  removeListItem(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index), itemIndex = Number(event.currentTarget.dataset.itemIndex);
+    if (!blocks[index] || blocks[index].kind !== 'list') return;
+    const items = blocks[index].items || [];
+    blocks[index] = { ...blocks[index], items: items.length > 1 ? items.filter((_, position) => position !== itemIndex) : [''] };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  toggleListOrdered(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || blocks[index].kind !== 'list') return;
+    blocks[index] = { ...blocks[index], ordered: !blocks[index].ordered };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
   addMediaBlock(event) {
     if (this.data.layoutReadOnly) return;
     const asset = this.data.media[Number(event.currentTarget.dataset.index)];

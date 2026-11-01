@@ -14,6 +14,7 @@ function loadEditor(apiOverrides = {}) {
   const navigationOptions = [];
   const toasts = [];
   const modals = [], backs = [];
+  const actionSheets = [];
   let sessionToken = 'session-token';
   const api = {
     mutationKey: prefix => `${prefix}-key`,
@@ -28,6 +29,7 @@ function loadEditor(apiOverrides = {}) {
     showToast: options => toasts.push(options),
     showModal: options => modals.push(options),
     navigateBack: options => backs.push(options),
+    showActionSheet: options => actionSheets.push(options),
     getWindowInfo: () => ({ windowWidth: 375 }),
     createVideoContext: () => ({ pause() {} }),
   };
@@ -49,7 +51,7 @@ function loadEditor(apiOverrides = {}) {
     _visible: true,
     setData(values) { Object.assign(this.data, values); },
   };
-  return { page, navigations, navigationOptions, toasts, modals, backs, token(value) { sessionToken = value; } };
+  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, token(value) { sessionToken = value; } };
 }
 
 test('editor exposes separate draft, preview, publish and published-reader actions', async () => {
@@ -226,6 +228,107 @@ test('AI writing return explains changed-draft and account-change rejection with
   assert.equal(switched.page.data.blocks.length, 1);
   assert.equal(switched.page.data.blocks[0].text, '当前正文');
   assert.match(switched.page.data.notice, /账号已变化/);
+});
+
+test('block insert menu offers heading, quote and list blocks that serialize correctly', () => {
+  const { page, actionSheets } = loadEditor();
+  page.showInsertMenu();
+  assert.equal(actionSheets.length, 1, '插入块应通过动作面板提供全部文本块类型');
+  actionSheets[0].success({ tapIndex: 1 });
+  assert.equal(page.data.blocks[page.data.blocks.length - 1].kind, 'heading');
+
+  page.insertBlock('quote');
+  page.insertBlock('list-ordered');
+  const blocks = page.data.blocks;
+  assert.equal(blocks[blocks.length - 2].kind, 'quote');
+  assert.equal(blocks[blocks.length - 1].kind, 'list');
+  assert.equal(blocks[blocks.length - 1].ordered, true);
+
+  page.setData({ title: '块类型方案', owner_id: 'owner-a', blocks: [
+    { kind: 'heading', level: 2, text: '户型布局' },
+    { kind: 'quote', text: '业主希望保留老宅门头' },
+    { kind: 'list', ordered: true, items: ['一层客厅', '二层主卧'] },
+    { kind: 'paragraph', text: '正文' },
+  ] });
+  const input = page.draftInput();
+  assert.ok(input, '六种块的草稿应可提交');
+  const doc = JSON.parse(input.draft.body);
+  assert.equal(doc.blocks[0].kind, 'heading');
+  assert.equal(doc.blocks[0].level, 2);
+  assert.equal(doc.blocks[1].kind, 'quote');
+  assert.equal(doc.blocks[2].kind, 'list');
+  assert.equal(doc.blocks[2].ordered, true);
+  assert.deepEqual(doc.blocks[2].items, ['一层客厅', '二层主卧']);
+});
+
+test('heading blocks switch between H2 and H3 and text blocks convert without losing text', () => {
+  const { page } = loadEditor();
+  page.setData({ blocks: [{ kind: 'paragraph', text: '南立面设计说明' }] });
+  page.convertBlock({ currentTarget: { dataset: { index: 0, to: 'heading' } } });
+  assert.equal(page.data.blocks[0].kind, 'heading');
+  assert.equal(page.data.blocks[0].level, 2);
+  assert.equal(page.data.blocks[0].text, '南立面设计说明');
+
+  page.setHeadingLevel({ currentTarget: { dataset: { index: 0, level: '3' } } });
+  assert.equal(page.data.blocks[0].level, 3);
+
+  page.convertBlock({ currentTarget: { dataset: { index: 0, to: 'quote' } } });
+  assert.equal(page.data.blocks[0].kind, 'quote');
+  assert.equal(page.data.blocks[0].text, '南立面设计说明');
+
+  page.convertBlock({ currentTarget: { dataset: { index: 0, to: 'paragraph' } } });
+  assert.equal(page.data.blocks[0].kind, 'paragraph');
+  assert.equal(page.data.blocks[0].text, '南立面设计说明');
+});
+
+test('list blocks support item editing, add, remove and ordered toggle', () => {
+  const { page, toasts } = loadEditor();
+  page.setData({ blocks: [{ kind: 'list', ordered: false, items: [''] }] });
+
+  page.editListItem({ currentTarget: { dataset: { index: 0, itemIndex: 0 } }, detail: { value: '一层客厅' } });
+  page.addListItem({ currentTarget: { dataset: { index: 0 } } });
+  page.editListItem({ currentTarget: { dataset: { index: 0, itemIndex: 1 } }, detail: { value: '二层主卧' } });
+  assert.deepEqual([...page.data.blocks[0].items], ['一层客厅', '二层主卧']);
+
+  page.removeListItem({ currentTarget: { dataset: { index: 0, itemIndex: 0 } } });
+  assert.deepEqual([...page.data.blocks[0].items], ['二层主卧']);
+
+  page.removeListItem({ currentTarget: { dataset: { index: 0, itemIndex: 0 } } });
+  assert.deepEqual([...page.data.blocks[0].items], [''], '最后一项删除后保留空位而不是空列表');
+
+  page.toggleListOrdered({ currentTarget: { dataset: { index: 0 } } });
+  assert.equal(page.data.blocks[0].ordered, true);
+
+  page.setData({ blocks: [{ kind: 'list', ordered: false, items: Array.from({ length: 100 }, () => '项') }] });
+  page.addListItem({ currentTarget: { dataset: { index: 0 } } });
+  assert.equal(page.data.blocks[0].items.length, 100, '列表项不得超过服务端上限 100');
+  assert.ok(toasts.some(toast => /100/.test(toast.title)));
+});
+
+test('image and video blocks expose caption editing that survives serialization', () => {
+  const { page } = loadEditor();
+  page.setData({ title: '图注方案', owner_id: 'owner-a', blocks: [{ kind: 'image', media_id: 'media-1', caption: '' }] });
+  page.editCaption({ currentTarget: { dataset: { index: 0 } }, detail: { value: '南立面效果图' } });
+  assert.equal(page.data.blocks[0].caption, '南立面效果图');
+
+  const input = page.draftInput();
+  const doc = JSON.parse(input.draft.body);
+  assert.equal(doc.blocks[0].caption, '南立面效果图');
+  assert.equal(doc.blocks[0].media_id, 'media-1');
+});
+
+test('editor wxml wires the new block editing affordances', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(editorWxml, /bindtap="showInsertMenu"/);
+  assert.match(editorWxml, /bindinput="editListItem"/);
+  assert.match(editorWxml, /bindinput="editCaption"/);
+  assert.match(editorWxml, /bindtap="toggleListOrdered"/);
+  assert.match(editorWxml, /bindtap="setHeadingLevel"/);
+  assert.match(editorWxml, /bindtap="convertBlock"/);
+  assert.match(editorWxml, /bindtap="addListItem"/);
+  const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  assert.match(editorStyle, /\.list-editor|\.list-item-row/);
+  assert.match(editorStyle, /\.caption-input/);
 });
 
 test('editor and reader implement the selected warm-gold content studio hierarchy', () => {
