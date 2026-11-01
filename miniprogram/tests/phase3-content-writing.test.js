@@ -42,6 +42,46 @@ function harness(name) {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('voice input degrades gracefully without the plugin and appends speech into facts', () => {
+  const h = harness('contentwriting'); h.page.onLoad({}); h.page.onShow();
+  // VM 环境无 requirePlugin：必须降级提示而不是抛错阻塞创作
+  h.page.startVoiceInput();
+  assert.match(h.page.data.error, /不可用/);
+  // 注入伪识别器并绑定回调，走完整识别链路
+  const fake = { start(options) { this.started = options; }, stop() {} };
+  h.page.attachVoiceHandlers(fake);
+  h.page._voiceManager = fake;
+  h.page.setData({ error: '', facts: '占地120平' });
+  h.page.startVoiceInput();
+  assert.equal(fake.started.duration, 60000);
+  assert.equal(fake.started.lang, 'zh_CN');
+  fake.onStart();
+  assert.equal(h.page.data.voiceActive, true);
+  fake.onRecognize({ result: '三层框架' });
+  assert.equal(h.page.data.voicePartial, '三层框架');
+  fake.onStop({ result: '三层框架结构，带阁楼层。' });
+  assert.equal(h.page.data.voiceActive, false);
+  assert.equal(h.page.data.facts, '占地120平\n三层框架结构，带阁楼层。');
+  // 追加超出输入框上限时截断到 6000
+  h.page.setData({ facts: 'a'.repeat(5995) });
+  fake.onStop({ result: 'bcd'.repeat(10) });
+  assert.equal(h.page.data.facts.length, 6000);
+  // 麦克风未授权与普通失败给出可行动文案
+  fake.onError({ msg: 'operateWXData:fail permission denied' });
+  assert.match(h.page.data.error, /麦克风/);
+  fake.onError({ msg: 'network error' });
+  assert.match(h.page.data.error, /语音识别失败/);
+});
+
+test('app.json declares the WechatSI speech plugin and wxml wires the voice button', () => {
+  const appJson = fs.readFileSync(path.join(root, 'app.json'), 'utf8');
+  assert.match(appJson, /"WechatSI"/);
+  assert.match(appJson, /wx069ba97219f66d99/);
+  const writingWxml = fs.readFileSync(path.join(root, 'pages/contentwriting/contentwriting.wxml'), 'utf8');
+  assert.match(writingWxml, /bindtouchstart="startVoiceInput"/);
+  assert.match(writingWxml, /bindtouchend="stopVoiceInput"/);
+});
+
 test('writing page requires known facts and never triggers model requests or stores private content', () => {
   const h = harness('contentwriting'); h.page.onLoad({}); h.page.onShow();
   h.page.generateWriting();

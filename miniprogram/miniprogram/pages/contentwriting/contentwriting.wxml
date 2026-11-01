@@ -12,6 +12,7 @@
         <text class="section-title">创作资料</text>
         <label class="field"><text class="field-title">内容标题 <text class="optional">选填</text></text><input value="{{title}}" maxlength="80" bindinput="editTitle" placeholder="为这次创作取一个标题" placeholder-class="placeholder" /></label>
         <label class="field"><text class="field-title">已知资料与要求</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写项目资料、设计重点和表达要求" placeholder-class="placeholder" auto-height /></label>
+        <view class="voice-row"><button class="voice-button {{voiceActive ? 'active' : ''}}" bindtouchstart="startVoiceInput" bindtouchend="stopVoiceInput" bindtouchcancel="stopVoiceInput" disabled="{{loginRequired}}" aria-label="按住说话进行语音输入">{{voiceActive ? '松开结束 · ' + (voicePartial || '正在识别…') : '按住说话，说完自动转为文字'}}</button></view>
       </view>
       <view class="writing-panel result-panel">
         <view class="section-heading"><text class="section-title">{{heading}}</text><text class="edit-hint">可编辑</text></view>

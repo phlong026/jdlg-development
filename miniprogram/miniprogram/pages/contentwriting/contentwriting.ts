@@ -8,7 +8,7 @@ const writingTypes = [
 ];
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿' },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '' },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
@@ -49,6 +49,47 @@ Page({
   },
   editTitle(event) { this.setData({ title: String(event.detail.value || ''), error: '' }); },
   editFacts(event) { this.setData({ facts: String(event.detail.value || ''), error: '' }); },
+  // 语音输入：微信同声传译插件（WechatSI）。插件在小程序后台未添加或低版本基础库不可用时
+  // 必须优雅降级为键盘输入，不能阻塞创作流程；识别结果按行追加进已知资料。
+  voiceManager() {
+    if (this._voiceManager !== undefined) return this._voiceManager;
+    this._voiceManager = null;
+    try {
+      const plugin = requirePlugin('WechatSI');
+      const manager = plugin && plugin.getRecordRecognitionManager && plugin.getRecordRecognitionManager();
+      if (manager) this._voiceManager = this.attachVoiceHandlers(manager);
+    } catch (_) { this._voiceManager = null; }
+    return this._voiceManager;
+  },
+  attachVoiceHandlers(manager) {
+    manager.onStart = () => { if (!this._unloaded) this.setData({ voiceActive: true, voicePartial: '', error: '' }); };
+    manager.onRecognize = res => { if (!this._unloaded && res && res.result) this.setData({ voicePartial: String(res.result) }); };
+    manager.onStop = res => {
+      if (this._unloaded) return;
+      const text = String(res && res.result || '').trim();
+      this.setData({ voiceActive: false, voicePartial: '' });
+      if (text) this.appendFacts(text);
+    };
+    manager.onError = res => {
+      if (this._unloaded) return;
+      const message = String(res && res.msg || '');
+      this.setData({ voiceActive: false, voicePartial: '', error: /permission|auth|denied/i.test(message) ? '未授权麦克风，无法语音输入，可直接打字填写' : '语音识别失败，请重试或改用键盘输入' });
+    };
+    return manager;
+  },
+  startVoiceInput() {
+    if (this.data.loginRequired) return;
+    const manager = this.voiceManager();
+    if (!manager) { this.setData({ error: '语音输入组件不可用，可直接打字填写' }); return; }
+    manager.start({ duration: 60000, lang: 'zh_CN' });
+  },
+  stopVoiceInput() {
+    if (this._voiceManager && this.data.voiceActive) this._voiceManager.stop();
+  },
+  appendFacts(text) {
+    const current = String(this.data.facts || '').replace(/\s+$/, '');
+    this.setData({ facts: ((current ? current + '\n' : '') + String(text)).slice(0, 6000), error: '' });
+  },
   editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: this._source === 'project_note' ? '文案已修改，采纳后将带回项目笔记' : '文案已修改，保存后可在内容编辑页继续排版' }); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login', fail: () => this.setData({ error: '登录页面暂时无法打开，请稍后重试' }) }); },
   generateWriting(event) {

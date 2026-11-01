@@ -259,3 +259,25 @@ page {
 .login-state .secondary {
   margin-top: 24rpx;
 }
+
+.voice-row {
+  margin-top: 14rpx;
+}
+
+.voice-button {
+  width: 100%;
+  min-height: 76rpx;
+  border: 1rpx dashed #c9a06a;
+  border-radius: 14rpx;
+  background: #fff8ef;
+  color: #8c5e32;
+  font-size: 25rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-button.active {
+  border-style: solid;
+  background: #f1e4d2;
+}
