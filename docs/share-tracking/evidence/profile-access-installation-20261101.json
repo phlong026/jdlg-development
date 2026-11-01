@@ -1,0 +1,44 @@
+{
+  "observed_at": "2026-11-01T09:24:52+08:00",
+  "evidence_type": "transcribed from BaoTa terminal screenshots and native Chrome UI; not a raw server export",
+  "server": "162.14.210.252",
+  "hostname": "VM-0-5-ubuntu",
+  "archive_sha256": "9c948a82b9d75cf47bcff0c6072792abf4883a8ebc27d8f0629eb75961c686f2",
+  "package": "/root/jdlg-profile-0fd72b4",
+  "backend": {
+    "source_commit": "0fd72b4ddcd9ff5d7c7bdd8834174efadaa15a66",
+    "prepare": "completed; private backups verified",
+    "migrate": "completed; existing additive migrations",
+    "activate": "completed; direct main-process health checks passed",
+    "prepared": true,
+    "migrated": true,
+    "activated": true,
+    "pid": 3109308,
+    "previous_pid": 2960979,
+    "process_start_time": "1131239781",
+    "binary": "/www/wwwroot/jiadilingguang/service/bin/applinux",
+    "binary_sha256": "b8ed19308440a9a253c208960a8e0ec74c22b49da2ea0279e6e22ef909975ea0",
+    "backup": "/root/jdlg-profile-backup-20261101-0fd72b4",
+    "current_pointer": "/root/jdlg-release-current.json",
+    "pointer_matches_backup": true
+  },
+  "admin": {
+    "status": "installed",
+    "files": 92,
+    "target": "/www/wwwroot/jiadilingguang/admin",
+    "backup": "/root/jdlg-profile-web-backup-20261101-0fd72b4/admin",
+    "ui_url": "https://api.jiadilingguang.com/admin/share-tracking",
+    "ui_observations": [
+      "Reloaded authenticated admin session; customer visit cards and thumbnails loaded.",
+      "Material view loaded cards, counts and cover images.",
+      "Historical anonymous visit card remains visible, as expected."
+    ],
+    "ui_observed_data_timestamp": "2026-11-01T09:24:10+08:00",
+    "authenticated_media_endpoint_network_trace": "not_captured"
+  },
+  "scope": [
+    "No production credentials or environment values copied into this record.",
+    "No Nginx or CRM 18087 changes made.",
+    "Mini Program experience selection, formal release and phone UAT not verified."
+  ]
+}

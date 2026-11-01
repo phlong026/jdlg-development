@@ -202,12 +202,15 @@
   },
   "deployment": {
     "server": "162.14.210.252",
-    "package_uploaded": false,
-    "backend_activated": false,
-    "admin_installed": false,
+    "package_uploaded": true,
+    "backend_activated": true,
+    "admin_installed": true,
     "experience_selected": "unverified",
     "formal_release": "unverified",
-    "device_uat": "not_run"
+    "device_uat": "not_run",
+    "verified_at": "2026-11-01T09:24:52+08:00",
+    "installation_evidence": "profile-access-installation-20261101.json",
+    "public_verification_evidence": "profile-access-production-20261101.json"
   },
   "archive_sha256": "9c948a82b9d75cf47bcff0c6072792abf4883a8ebc27d8f0629eb75961c686f2"
 }
