@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const completeProfile = { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/avatar.jpg' };
 
-function loadCombined({ profileResponses = [completeProfile] } = {}) {
+function loadCombined({ profileResponses = [completeProfile], deferProfiles = false } = {}) {
   let componentDefinition;
   const storage = {};
   const requests = [];
@@ -16,6 +16,7 @@ function loadCombined({ profileResponses = [completeProfile] } = {}) {
   const events = [];
   const editorShows = [];
   const pendingBusiness = [];
+  const pendingProfiles = [];
   const editor = {
     data: { visible: false, promptToken: '' },
     setData(value) { Object.assign(this.data, value); },
@@ -32,6 +33,10 @@ function loadCombined({ profileResponses = [completeProfile] } = {}) {
       return { abort() {} };
     }
     if (options.url.endsWith('/profile')) {
+      if (deferProfiles) {
+        pendingProfiles.push(options);
+        return { abort() {} };
+      }
       const profile = profileResponses[Math.min(profileIndex++, profileResponses.length - 1)];
       if (profile && profile.statusCode) options.success(profile);
       else options.success({ statusCode: 200, data: { code: 0, data: profile } });
@@ -96,7 +101,7 @@ function loadCombined({ profileResponses = [completeProfile] } = {}) {
     selectComponent() { return editor; },
     triggerEvent(name, detail) { events.push({ name, detail }); },
   };
-  return { component, editor, editorShows, events, navigations, pendingBusiness, requests, storage, wx };
+  return { component, editor, editorShows, events, navigations, pendingBusiness, pendingProfiles, requests, storage, wx };
 }
 
 async function login(fixture) {
@@ -147,4 +152,28 @@ test('a late rejection from an old account cannot clear or gate the new account'
   assert.equal(fixture.storage.token, 'new-session');
   assert.deepEqual(fixture.navigations, []);
   assert.equal(fixture.events.filter(event => event.name === 'blocked').length, 0);
+});
+
+test('a same-session 401 takes over an in-flight 428 profile check and restores the login card', async () => {
+  const fixture = loadCombined({ deferProfiles: true });
+  fixture.storage.token = 'session-A';
+  fixture.storage.userInfo = { id: 9 };
+  fixture.wx.request({ url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
+  fixture.wx.request({ url: 'https://api.jiadilingguang.com/api/v1/miniprogram/workbench/context' });
+
+  fixture.pendingBusiness[0].success({ statusCode: 428, data: { code: 428 } });
+  assert.equal(fixture.component.data.checking, true);
+  assert.equal(fixture.pendingProfiles.length, 1);
+
+  fixture.pendingBusiness[1].success({ statusCode: 401, data: { code: 401 } });
+  assert.equal(fixture.storage.token, undefined);
+  assert.equal(fixture.pendingProfiles.length, 1, '401 must not start a profile request without a token');
+  fixture.pendingProfiles[0].success({ statusCode: 200, data: { code: 0, data: completeProfile } });
+  await new Promise(setImmediate);
+
+  assert.equal(fixture.component.data.checking, false);
+  assert.equal(fixture.component.data.visible, true);
+  assert.equal(fixture.component.data.needsLogin, true);
+  assert.equal(fixture.events.filter(event => event.name === 'authenticated').length, 0);
+  assert.deepEqual(fixture.navigations, []);
 });

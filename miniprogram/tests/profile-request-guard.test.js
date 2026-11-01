@@ -7,10 +7,10 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../miniprogram/utils/profile-request-guard.js'), 'utf8');
 
-function harness({ token = 'account-token', route = 'pages/index/index', inlineGate = true } = {}) {
+function harness({ token = 'account-token', route = 'pages/index/index', inlineGate = true, gateCheck } = {}) {
   const calls = [], navigations = [], removed = [], blocked = [], toasts = [], guardChecks = [];
   const storage = { token, device_fingerprint: 'login-device', userInfo: { id: 9 } };
-  const gate = { check() { guardChecks.push(route); return Promise.resolve(false); } };
+  const gate = { check() { guardChecks.push(route); return gateCheck ? gateCheck() : Promise.resolve(false); } };
   const page = { route, onProfileAccessBlocked() { blocked.push(route); }, selectComponent: () => inlineGate ? gate : null };
   const wx = {
     request(options) { calls.push(options); return { abort() {} }; },
@@ -139,6 +139,27 @@ test('401 clears the expired session and reopens the inline login card', () => {
   assert.deepEqual(h.blocked, ['pages/index/index']);
   assert.equal(h.navigations.length, 0);
   assert.deepEqual(h.guardChecks, ['pages/index/index']);
+});
+
+test('a cleared session starts a new inline check and owns the busy marker', async () => {
+  const pending = [];
+  const h = harness({ gateCheck: () => new Promise(resolve => pending.push(resolve)) });
+  h.guard.install();
+  wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
+  wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/workbench/context' });
+
+  h.calls[0].success({ statusCode: 428, data: { code: 428 } });
+  h.calls[1].success({ statusCode: 401, data: { code: 401 } });
+  assert.equal(pending.length, 2);
+  assert.equal(h.page.__profileGateChecking, true);
+
+  pending[0](false);
+  await new Promise(setImmediate);
+  assert.equal(h.page.__profileGateChecking, true, 'the stale profile check must not release the current check');
+
+  pending[1](false);
+  await new Promise(setImmediate);
+  assert.equal(h.page.__profileGateChecking, false);
 });
 
 test('a page without an inline gate still opens the standalone login page', () => {

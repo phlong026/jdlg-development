@@ -78,9 +78,17 @@ function activePage() {
 function checkInlineProfileGate(page) {
   const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
   if (!guard || typeof guard.check !== 'function') return false;
-  if (page.__profileGateChecking) return true;
+  const token = String(wx.getStorageSync('token') || '');
+  if (page.__profileGateChecking && page.__profileGateCheckToken === token) return true;
+  const revision = Number(page.__profileGateCheckRevision || 0) + 1;
   page.__profileGateChecking = true;
-  const done = () => { page.__profileGateChecking = false; };
+  page.__profileGateCheckToken = token;
+  page.__profileGateCheckRevision = revision;
+  const done = () => {
+    if (page.__profileGateCheckRevision !== revision) return;
+    page.__profileGateChecking = false;
+    page.__profileGateCheckToken = undefined;
+  };
   try {
     Promise.resolve(guard.check()).then(done, done);
   } catch (_) {
