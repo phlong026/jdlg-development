@@ -362,3 +362,68 @@ func TestProjectCollectionDirectoryCoverUsesScopedMediaAndDisappearsWithSource(t
 		t.Fatal("withdrawn source leaked directory cover")
 	}
 }
+
+func TestProjectCollectionCoverItemIndexOverridesFirstCover(t *testing.T) {
+	s, scope := fixture(t)
+	ctx := context.Background()
+	publishWithCover := func(key string) Content {
+		t.Helper()
+		mediaID := "cover-media-" + key
+		if err := s.AddMedia(ctx, scope, Asset{ID: mediaID, Kind: "image", URL: "/api/v1/miniprogram/tracking/media/" + mediaID, Width: 800, Height: 600, MIME: "image/png"}, scope.Owners[0]); err != nil {
+			t.Fatal(err)
+		}
+		draft, err := s.SaveContent(ctx, scope, "", Draft{Title: "带封面" + key, Body: "正文", BodyFormat: "plain", Owner: scope.Owners[0], Rights: "own", CoverID: mediaID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		preview, err := s.Preview(ctx, scope, draft.ID, draft.Revision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		published, err := s.Publish(ctx, scope, draft.ID, draft.Revision, preview["preview_token"].(string), "cover-publish-"+key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return published["content"].(Content)
+	}
+	first := publishWithCover("a")
+	second := publishWithCover("b")
+	in := collectionInput(scope.Owners[0], "collection-cover-index", second, first)
+	secondIndex := 0 // second 排在首位
+	in.CoverItemIndex = &secondIndex
+	created, err := s.SaveProjectCollection(context.Background(), scope, "", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Cover == nil || created.Cover.ID != second.Cover.ID {
+		t.Fatalf("指定封面索引应生效 created.Cover=%v", created.Cover)
+	}
+
+	// 无效索引回退第一个有封面条目（历史行为）
+	bad := 99
+	in.CoverItemIndex = &bad
+	in.IdempotencyKey = "collection-cover-bad"
+	fallback, err := s.SaveProjectCollection(context.Background(), scope, "", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fallback.Cover == nil || fallback.Cover.ID != second.Cover.ID {
+		t.Fatalf("越界索引应回退首图 fallback.Cover=%v", fallback.Cover)
+	}
+
+	// 不指定保持历史行为
+	plain := collectionInput(scope.Owners[0], "collection-cover-plain", second, first)
+	legacy, err := s.SaveProjectCollection(context.Background(), scope, "", plain)
+	if err != nil || legacy.Cover == nil || legacy.Cover.ID != second.Cover.ID {
+		t.Fatalf("不指定封面索引保持首图 legacy=%v err=%v", legacy.Cover, err)
+	}
+
+	// 指定第二个条目（first）为封面
+	tail := 1
+	tailInput := collectionInput(scope.Owners[0], "collection-cover-tail", second, first)
+	tailInput.CoverItemIndex = &tail
+	tailCollection, err := s.SaveProjectCollection(context.Background(), scope, "", tailInput)
+	if err != nil || tailCollection.Cover == nil || tailCollection.Cover.ID != first.Cover.ID {
+		t.Fatalf("索引 1 应取第二个条目封面 got=%v err=%v", tailCollection.Cover, err)
+	}
+}

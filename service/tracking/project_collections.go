@@ -26,6 +26,9 @@ type ProjectCollectionDraft struct {
 	Description      string                       `json:"description,omitempty"`
 	Owner            string                       `json:"owner_id"`
 	Items            []ProjectCollectionItemInput `json:"items"`
+	// CoverItemIndex 指定用第几个条目的封面作为合集封面；nil/越界/该条无封面
+	// 一律回退"第一个有封面的条目"（历史行为）。(B12 合集封面自选)
+	CoverItemIndex   *int                         `json:"cover_item_index,omitempty"`
 	ExpectedRevision int                          `json:"expected_revision,omitempty"`
 	IdempotencyKey   string                       `json:"idempotency_key,omitempty"`
 }
@@ -176,7 +179,13 @@ func (s *Service) projectCollectionItems(r Repository, scope Scope, owner string
 	return items, nil
 }
 
-func projectCollectionCover(items []ProjectCollectionItem) *Asset {
+func projectCollectionCover(items []ProjectCollectionItem, preferred *int) *Asset {
+	if preferred != nil {
+		if index := *preferred; index >= 0 && index < len(items) && items[index].Cover != nil {
+			cover := *items[index].Cover
+			return &cover
+		}
+	}
 	for _, item := range items {
 		if item.Cover != nil {
 			cover := *item.Cover
@@ -248,7 +257,7 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 			if err != nil {
 				return err
 			}
-			out = ProjectCollection{ID: opaque(), Title: in.Title, Description: in.Description, Owner: in.Owner, Cover: projectCollectionCover(items), Items: items, Status: "draft", Revision: 1, CreatorActor: scope.Actor, CreatedAt: now, UpdatedAt: now}
+			out = ProjectCollection{ID: opaque(), Title: in.Title, Description: in.Description, Owner: in.Owner, Cover: projectCollectionCover(items, in.CoverItemIndex), Items: items, Status: "draft", Revision: 1, CreatorActor: scope.Actor, CreatedAt: now, UpdatedAt: now}
 			if err = r.Insert(projectCollectionRecord(projectCollectionKind, out, now)); err != nil {
 				return err
 			}
@@ -278,7 +287,7 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 			return err
 		}
 		existing.Title, existing.Description = in.Title, in.Description
-		existing.Items, existing.Cover = items, projectCollectionCover(items)
+		existing.Items, existing.Cover = items, projectCollectionCover(items, in.CoverItemIndex)
 		existing.Revision++
 		existing.UpdatedAt = now
 		out = existing
@@ -364,7 +373,7 @@ func (s *Service) PreviewProjectCollection(ctx context.Context, scope Scope, id 
 		if err != nil {
 			return err
 		}
-		collection.Items, collection.Cover = items, projectCollectionCover(items)
+		collection.Items, collection.Cover = items, projectCollectionCover(items, nil)
 		now := s.Now().UTC()
 		expires := now.Add(15 * time.Minute)
 		token := opaque()
@@ -445,7 +454,7 @@ func (s *Service) PublishProjectCollection(ctx context.Context, scope Scope, id 
 			return err
 		}
 		now := s.Now().UTC()
-		collection.Items, collection.Cover = items, projectCollectionCover(items)
+		collection.Items, collection.Cover = items, projectCollectionCover(items, nil)
 		collection.Status = "published"
 		collection.Version++
 		collection.Revision++
@@ -509,7 +518,7 @@ func (s *Service) ReadPublishedProjectCollection(ctx context.Context, id string,
 			items = append(items, ProjectCollectionItem{RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion, Title: item.Title, Cover: cover, PublishedAt: item.PublishedAt, Available: true})
 		}
 		out.Items = items
-		out.Cover = projectCollectionCover(items)
+		out.Cover = projectCollectionCover(items, nil)
 		return nil
 	})
 	return out, err

@@ -29,7 +29,7 @@
       </view>
 
       <view wx:if="{{selectedItems.length}}" class="section selected-section"><view class="section-head"><text>已选作品</text><text class="count">{{selectedItems.length}}</text></view>
-        <view wx:for="{{selectedItems}}" wx:key="content_id" class="selected-row"><text class="order">{{index + 1}}</text><view class="selected-main"><text>{{item.title}}</text><text class="meta">V{{item.content_version}}</text></view><view class="sort-actions"><button data-index="{{index}}" data-direction="-1" bindtap="moveItem" disabled="{{index === 0}}">↑</button><button data-index="{{index}}" data-direction="1" bindtap="moveItem" disabled="{{index === selectedItems.length - 1}}">↓</button><button class="danger" data-index="{{index}}" bindtap="removeItem">移除</button></view></view>
+        <view wx:for="{{selectedItems}}" wx:key="content_id" class="selected-row"><text class="order">{{index + 1}}</text><view class="selected-main"><text>{{item.title}}</text><text class="meta">V{{item.content_version}}</text></view><view class="sort-actions"><button wx:if="{{index > 0}}" data-index="{{index}}" bindtap="topItem">置顶</button><button data-index="{{index}}" data-direction="-1" bindtap="moveItem" disabled="{{index === 0}}">↑</button><button data-index="{{index}}" data-direction="1" bindtap="moveItem" disabled="{{index === selectedItems.length - 1}}">↓</button><button class="{{coverItemIndex === index ? 'cover-on' : ''}}" data-index="{{index}}" bindtap="setCoverItem">{{coverItemIndex === index ? '封面' : '设封面'}}</button><button class="danger" data-index="{{index}}" bindtap="removeItem">移除</button></view></view>
       </view>
 
       <view class="section"><view class="section-head"><text>添加作品</text></view>

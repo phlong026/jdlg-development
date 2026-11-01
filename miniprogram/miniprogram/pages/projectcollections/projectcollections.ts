@@ -7,7 +7,7 @@ const initial = () => ({
   loading: false, loadingMore: false, busy: false, loginRequired: false, denied: false,
   error: '', notice: '', collections: [], nextCursor: '', editing: false,
   current: null, title: '', description: '', owners: [], ownerChoices: [], ownerIndex: 0,
-  candidates: [], candidateCursor: '', selectedItems: [], preview: null, dirty: false,
+  candidates: [], candidateCursor: '', selectedItems: [], preview: null, dirty: false, coverItemIndex: null,
 });
 const sourceKey = item => String(item.content_id) + ':' + String(item.content_version);
 
@@ -67,7 +67,7 @@ Page({
   async startCreate() {
     this.createKey = this.createKey || api.mutationKey('collection-create');
     this.publishKey = '';
-    this.setData({ editing: true, current: null, title: '', description: '', selectedItems: [], preview: null, error: '', notice: '', ownerIndex: 0, dirty: true });
+    this.setData({ editing: true, current: null, title: '', description: '', selectedItems: [], preview: null, error: '', notice: '', ownerIndex: 0, coverItemIndex: null, dirty: true });
     await this.loadCandidates(false);
   },
   openEditor(event) { return this.openEditorByID(String(event.currentTarget.dataset.id || ''), this.epoch); },
@@ -82,7 +82,7 @@ Page({
       this.publishKey = '';
       const selectedItems = await this.resolveCovers(collection.items);
       if (!this.currentRequest(epoch)) return;
-      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, ownerIndex, busy: false, dirty: false });
+      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, coverItemIndex: null, ownerIndex, busy: false, dirty: false });
       await this.loadCandidates(false);
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '合集不可访问' }); }
   },
@@ -140,17 +140,43 @@ Page({
     if (!Number.isInteger(index) || ![-1, 1].includes(direction) || target < 0 || target >= this.data.selectedItems.length) return;
     const items = this.data.selectedItems.slice();
     [items[index], items[target]] = [items[target], items[index]];
-    this.setData({ selectedItems: items, preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+  },
+  // B12 置顶：长列表省去逐级上移。条目重排后封面索引跟随条目走。
+  topItem(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    if (!Number.isInteger(index) || index <= 0 || index >= this.data.selectedItems.length) return;
+    const items = this.data.selectedItems.slice();
+    const [moved] = items.splice(index, 1);
+    items.unshift(moved);
+    this.setData({ selectedItems: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+  },
+  // B12 封面自选：记录所选条目当前序号；重排时同步平移，移除时清空回退首图。
+  setCoverItem(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    if (!Number.isInteger(index) || index < 0 || index >= this.data.selectedItems.length) return;
+    this.setData({ coverItemIndex: this.data.coverItemIndex === index ? null : index, preview: null, dirty: true });
+  },
+  reindexCover(items) {
+    if (this.data.coverItemIndex === null || this.data.coverItemIndex === undefined) return items;
+    const current = this.data.selectedItems[this.data.coverItemIndex];
+    if (!current) return items;
+    const next = items.findIndex(item => sourceKey(item) === sourceKey(current));
+    this.data.coverItemIndex = next >= 0 ? next : null;
+    return items;
   },
   draftInput() {
     const choice = this.data.ownerChoices[this.data.ownerIndex];
     const owner = this.data.current ? this.data.current.owner_id : choice && choice.owner_id;
-    return {
+    const input = {
       title: String(this.data.title || '').trim(), description: String(this.data.description || '').trim(), owner_id: owner || '',
       expected_revision: this.data.current ? Number(this.data.current.revision) : 0,
       idempotency_key: this.data.current ? '' : this.createKey,
       items: this.data.selectedItems.map(item => ({ content_id: item.content_id, content_version: Number(item.content_version) })),
     };
+    // B12 封面自选：显式指定时才提交索引，未指定保持服务端"第一个有封面条目"的历史行为。
+    if (this.data.coverItemIndex !== null && this.data.coverItemIndex !== undefined) input.cover_item_index = Number(this.data.coverItemIndex);
+    return input;
   },
   async saveDraft() {
     if (this.data.busy) return null;
