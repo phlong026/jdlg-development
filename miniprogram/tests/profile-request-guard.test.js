@@ -141,6 +141,25 @@ test('401 clears the expired session and reopens the inline login card', () => {
   assert.deepEqual(h.guardChecks, ['pages/index/index']);
 });
 
+test('an expired tracking credential 401 never tears down the account session', () => {
+  const h = harness(); h.guard.install();
+  const delivered = [];
+  wxCall(h, {
+    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/events/batch',
+    method: 'POST',
+    header: { 'X-Tracking-Token': 'expired-entry', 'Content-Type': 'application/json' },
+    success: value => delivered.push(value),
+  });
+  h.calls[0].success({ statusCode: 401, data: { code: 401, msg: '采集凭据已失效' } });
+  h.calls[0].success({ statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } });
+  assert.equal(h.storage.token, 'account-token');
+  assert.deepEqual(h.removed, []);
+  assert.deepEqual(h.blocked, []);
+  assert.deepEqual(h.navigations, []);
+  assert.deepEqual(h.guardChecks, []);
+  assert.equal(delivered.length, 2, 'the tracking SDK still observes its own responses for re-entry');
+});
+
 test('a cleared session starts a new inline check and owns the busy marker', async () => {
   const pending = [];
   const h = harness({ gateCheck: () => new Promise(resolve => pending.push(resolve)) });

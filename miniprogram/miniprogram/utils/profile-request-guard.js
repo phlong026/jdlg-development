@@ -161,6 +161,9 @@ function install() {
       Object.assign(header, auth.paramsToHeaders(auth.generateRequestParams(token, body, signedPath, device)));
     }
     const dispatchToken = headerValue(header, 'token');
+    // 采集/心跳类请求自带临时的 X-Tracking-Token 凭据，其过期 401 是常规业务
+    // 状态（SDK 会自行重新建立 entry），绝不能清掉主账号会话或弹登录门禁。
+    const backgroundTracking = hasHeader(header, 'x-tracking-token');
     const success = requestOptions.success;
     const fail = requestOptions.fail;
     const complete = requestOptions.complete;
@@ -175,7 +178,7 @@ function install() {
           if (typeof fail === 'function') fail(staleFailure());
           return;
         }
-        if (!callerHandlesProfile) handleProfileAccessResponse(response && response.statusCode, response && response.data, dispatchToken);
+        if (!callerHandlesProfile && !backgroundTracking) handleProfileAccessResponse(response && response.statusCode, response && response.data, dispatchToken);
         if (typeof success === 'function') success(response);
       },
       fail(error) {
