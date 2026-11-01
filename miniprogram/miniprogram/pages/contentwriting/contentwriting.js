@@ -1,13 +1,13 @@
 'use strict';
 
 const writingTypes = [
-  { key: 'design', label: '设计说明', heading: '方案设计说明' },
-  { key: 'project', label: '项目介绍', heading: '项目内容介绍' },
-  { key: 'promotion', label: '推广文案', heading: '作品推广文案' },
+  { key: 'design', label: '设计说明', heading: '方案设计说明', example: '本方案为三层框架结构自建房，占地约120平方米。一层布置客厅、餐厨与老人房，二层为主卧套房与书房。立面采用新闽派风格，坡屋顶配合浅色真石漆，整体与村落肌理协调。' },
+  { key: 'project', label: '项目介绍', heading: '项目内容介绍', example: '这是位于镇郊的一栋自建房项目，前后院采光充足。设计保留了场地原有大树，入户朝南，室内动线围绕家庭聚餐与老人起居展开，屋顶露台可远眺后山。' },
+  { key: 'promotion', label: '推广文案', heading: '作品推广文案', example: '老宅翻新，不拆承重、不动感情。这次改造保留了三十年前的门头石雕，把新生活装进旧骨架。回乡建房的朋友，欢迎来聊聊你家的老宅故事。' },
 ];
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '' },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '' },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
@@ -45,7 +45,7 @@ Page({
   },
   selectType(event) {
     const type = writingTypes.find(item => item.key === event.currentTarget.dataset.type);
-    if (type) this.setData({ type: type.key, heading: type.heading, error: '' });
+    if (type) this.setData({ type: type.key, heading: type.heading, example: type.example, exampleLabel: type.label, error: '' });
   },
   editTitle(event) { this.setData({ title: String(event.detail.value || ''), error: '' }); },
   editFacts(event) { this.setData({ facts: String(event.detail.value || ''), error: '' }); },

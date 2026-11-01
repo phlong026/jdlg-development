@@ -304,3 +304,25 @@ button::after {
   font-size: 23rpx;
   text-align: center;
 }
+
+.example-card {
+  margin: 14rpx 0 4rpx;
+  padding: 20rpx 24rpx;
+  border: 1rpx dashed #dfcbb3;
+  border-radius: 14rpx;
+  background: #fffdf9;
+}
+
+.example-title {
+  display: block;
+  color: #98683a;
+  font-size: 23rpx;
+}
+
+.example-body {
+  display: block;
+  margin-top: 10rpx;
+  color: #6d6258;
+  font-size: 25rpx;
+  line-height: 1.7;
+}

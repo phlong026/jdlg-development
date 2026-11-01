@@ -6,6 +6,7 @@
       <button wx:for="{{writingTypes}}" wx:key="key" class="writing-tab {{type === item.key ? 'active' : ''}}" data-type="{{item.key}}" bindtap="selectType" aria-role="tab" aria-selected="{{type === item.key}}">{{item.label}}</button>
     </view>
     <text class="tab-hint">三种文案类型共用下方标题与已知资料；切换类型只改变 AI 的写作目标，不会分别保存三份文案。</text>
+    <view class="example-card"><text class="example-title">{{exampleLabel}}示例 · 仅示意表达风格，事实请以你的资料为准</text><text class="example-body" user-select="{{true}}">{{example}}</text></view>
     <view wx:if="{{loginRequired}}" class="login-state"><text>登录后可使用AI文案并保存草稿</text><button class="secondary" bindtap="goLogin">去登录</button></view>
     <block wx:else>
       <view class="writing-panel facts-panel">

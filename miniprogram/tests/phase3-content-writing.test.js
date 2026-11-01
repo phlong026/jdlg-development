@@ -82,6 +82,22 @@ test('app.json declares the WechatSI speech plugin and wxml wires the voice butt
   assert.match(writingWxml, /bindtouchend="stopVoiceInput"/);
 });
 
+test('tab examples show style only and never feed fabricated facts into inputs', () => {
+  const h = harness('contentwriting'); h.page.onLoad({}); h.page.onShow();
+  assert.ok(h.page.data.example.length > 20, '默认展示设计说明示例');
+  assert.equal(h.page.data.exampleLabel, '设计说明');
+  h.page.selectType({ currentTarget: { dataset: { type: 'promotion' } } });
+  assert.equal(h.page.data.exampleLabel, '推广文案');
+  assert.ok(h.page.data.example !== h.page.data.facts, '示例是虚构事实，绝不能自动进入已知资料');
+  assert.equal(h.page.data.facts, '');
+
+  const writingWxml = fs.readFileSync(path.join(root, 'pages/contentwriting/contentwriting.wxml'), 'utf8');
+  assert.match(writingWxml, /example-card/);
+  assert.match(writingWxml, /仅示意表达风格，事实请以你的资料为准/);
+  const exampleBlock = writingWxml.slice(writingWxml.indexOf('example-card'), writingWxml.indexOf('login-state'));
+  assert.ok(exampleBlock.indexOf('bindtap') < 0, '示例卡必须只读，不得有点填动作');
+});
+
 test('writing page requires known facts and never triggers model requests or stores private content', () => {
   const h = harness('contentwriting'); h.page.onLoad({}); h.page.onShow();
   h.page.generateWriting();
