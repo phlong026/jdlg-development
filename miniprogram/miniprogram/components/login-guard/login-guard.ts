@@ -29,16 +29,18 @@ Component({
   },
 
   methods: {
-    async check(): Promise<boolean> {
+    async check(options?: { silent?: boolean }): Promise<boolean> {
+      const silent = !!(options && options.silent);
       const revision = ((this as any)._checkRevision || 0) + 1;
       (this as any)._checkRevision = revision;
       const token = wx.getStorageSync('token');
       // 缓存只用于预填资料，不能替代服务器确认；否则旧包或换号缓存会先加载内容并写入访问记录。
-      this.setData({ visible: false, checking: !!token, needsLogin: !token, completingProfile: false, error: '' });
-      this.triggerEvent('gated');
+      // silent 供已放行页面的后台重验使用：不弹核验面板、不提前上锁，仅在真正失败时 gated。
+      this.setData({ visible: false, checking: !silent && !!token, needsLogin: !token, completingProfile: false, error: '' });
       const editor = this.selectComponent('#nicknameGuard') as any;
       if (!token) {
         editor?.setData({ visible: false });
+        this.triggerEvent('gated');
         this.setData({ visible: true, checking: false });
         return false;
       }

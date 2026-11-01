@@ -142,7 +142,10 @@ Page({
   async revalidateProjectAccess() {
     const epoch = this._epoch = (this._epoch || 0) + 1;
     const project = this.data.selectedProject;
-    this.setData({ loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
+    // 已加载过的页面静默重验：返回本页时不再整页切到"正在加载…"造成闪屏。
+    this.setData(this._loaded
+      ? { loginRequired: false, accessRecheckRequired: false, error: '', notice: '' }
+      : { loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
     try {
       if (project) await api.getProjectNoteProject(project.project_id); else await api.workbenchContext();
       if (!this.current(epoch)) return;

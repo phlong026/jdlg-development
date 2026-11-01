@@ -44,7 +44,7 @@ Page({
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
-    settingsExpanded: false, mediaExpanded: false, moreExpanded: false,
+    settingsExpanded: false, mediaExpanded: true, moreExpanded: false,
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
@@ -261,8 +261,10 @@ Page({
   },
   chooseMedia() {
     if (!this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
-    const epoch = this._epoch;
+    // epoch 必须在选图回调内取：相册/相机全屏页会触发页面 onHide/onShow，
+    // 提前捕获的代次会被返回时的 onShow 作废，导致选中的文件被静默丢弃。
     wx.chooseMedia({ count: 1, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => {
+      const epoch = this._epoch;
       if (!this.current(epoch)) return;
       const file = result.tempFiles && result.tempFiles[0];
       if (file) this.uploadMedia(file.tempFilePath, file.fileType || 'image');
@@ -271,12 +273,13 @@ Page({
   chooseDocument() {
     if (!this.data.context || !this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '文档上传尚未配置', icon: 'none' }); return; }
     if (!this.data.owner_id || (this.data.rights !== 'own' && this.data.rights !== 'authorized')) { this.setData({ error: '请先选择内容归属并确认文档权属' }); return; }
-    const epoch = this._epoch;
     wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx'], success: result => {
+      const epoch = this._epoch;
       if (!this.current(epoch)) return;
       const file = result.tempFiles && result.tempFiles[0];
       if (file) this.uploadDocument(file);
     }, fail: result => {
+      const epoch = this._epoch;
       if (this.current(epoch) && !/cancel/i.test(String(result && result.errMsg || ''))) this.setData({ error: '文档选择失败，请重试' });
     } });
   },
@@ -291,7 +294,7 @@ Page({
       const candidate = { ...asset, local_path: file.path };
       this.setData({ documentCandidates: mergeAssets(this.data.documentCandidates, [candidate]), busy: false, notice: '原文件已上传，正在保存文档资料' });
       await this.archiveDocumentAsset(candidate, epoch);
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '文档资料上传失败' }); }
+    } catch (error) { if (this.current(epoch)) { this.setData({ busy: false, error: error.message || '文档资料上传失败' }); wx.showToast({ title: error.message || '文档资料上传失败', icon: 'none' }); } }
   },
   async archiveDocument(event) {
     const asset = this.data.documentCandidates[Number(event.currentTarget.dataset.index)];
@@ -332,7 +335,10 @@ Page({
       const media = this.data.media.concat({ ...asset, local_path: filePath });
       const blocks = this.data.blocks.concat({ kind: asset.kind || kind, media_id: asset.media_id, caption: '' });
       this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), busy: false, preview: null, notice: '已上传并加入正文，请保存预览' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '媒体上传失败' }); }
+    } catch (error) {
+      // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
+      if (this.current(epoch)) { this.setData({ busy: false, error: error.message || '媒体上传失败' }); wx.showToast({ title: error.message || '媒体上传失败', icon: 'none' }); }
+    }
   },
   validBlocks() {
     return this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video' || block.kind === 'list' && (block.items || []).some(Boolean) || String(block.text || '').trim());

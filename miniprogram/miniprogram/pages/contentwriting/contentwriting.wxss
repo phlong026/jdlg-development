@@ -180,6 +180,14 @@ page {
   line-height: 1.7;
 }
 
+.tab-hint {
+  display: block;
+  margin: -6rpx 0 18rpx;
+  font-size: 23rpx;
+  color: #8f867b;
+  line-height: 1.7;
+}
+
 .writing-footer {
   position: fixed;
   bottom: 0;

@@ -45,7 +45,17 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
     this.stopImportPoll();
-    this._visible = true; this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
+    this._visible = true;
+    // 同一账号已成功加载过：保留已渲染列表就地静默刷新，返回本页不再整页重载闪屏。
+    const quiet = !!token && token === this._token && this._loaded === true;
+    this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
+    if (quiet) {
+      this.setData({ loginRequired: false, loading: false, error: '' });
+      void this.loadShareVisitAccess(token);
+      this.load(true, this._epoch, true);
+      return;
+    }
+    this._loaded = false;
     this.setData({
       context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false, hasShareVisitAccess: false,
       loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityReason: '',
@@ -83,12 +93,14 @@ Page({
       this.setData({ hasShareVisitAccess: false });
     }
   },
-  async load(reset, suppliedEpoch) {
+  async load(reset, suppliedEpoch, quiet) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token || !reset && (this._morePending || !this.data.next_cursor)) return;
     const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
     if (!reset) this._morePending = true;
-    if (reset) this.setData({ loading: true, error: '', denied: false, disabled: false, items: [], visibleItems: [], next_cursor: '', snapshot: null });
+    if (reset) this.setData(quiet
+      ? { error: '', denied: false, disabled: false }
+      : { loading: true, error: '', denied: false, disabled: false, items: [], visibleItems: [], next_cursor: '', snapshot: null });
     else this.setData({ loadingMore: true, error: '' });
     try {
       let context = this.data.context;
@@ -111,6 +123,7 @@ Page({
         context, items: reset ? (page.items || []).map(contentRow) : this.data.items.concat((page.items || []).map(contentRow)), next_cursor: page.next_cursor || '', snapshot,
         importOwner: selectedOwner, importOwnerIndex: Math.max(0, owners.indexOf(selectedOwner)), loading: false, loadingMore: false,
       });
+      this._loaded = true;
       this.filterItems();
       this.loadCovers(epoch, page.items || []);
       if (reset) await this.loadImports(epoch);

@@ -42,6 +42,23 @@ for (const ext of ['ts', 'js']) {
   test(`${ext}: missing token remains blocked`, async () => {
     const f = load(ext); assert.equal(await f.instance.check(), false); assert.equal(f.instance.data.visible, true); assert.ok(f.events.some(e => e.name === 'gated')); assert.equal(f.requests.length, 0);
   });
+  test(`${ext}: silent background verify keeps the panel hidden, never gates early and still grants`, async () => {
+    const f = load(ext, { token: 'tk', cachedProfile: complete, defer: true });
+    const pending = f.instance.check({ silent: true });
+    assert.equal(f.instance.data.visible, false);
+    assert.equal(f.instance.data.checking, false, '后台重验不得闪现核验面板');
+    assert.equal(f.events.filter(e => e.name === 'gated').length, 0, '后台重验开始时不得提前上锁');
+    assert.equal(f.requests.length, 1);
+    f.requests[0].success({ statusCode: 200, data: { code: 0, data: complete } });
+    assert.equal(await pending, true);
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
+  });
+  test(`${ext}: silent verify still gates on real failures`, async () => {
+    const f = load(ext, { token: 'tk', cachedProfile: complete, offline: true });
+    assert.equal(await f.instance.check({ silent: true }), false);
+    assert.ok(f.events.some(e => e.name === 'gated'), '核验失败仍必须上锁');
+    assert.equal(f.instance.data.visible, true);
+  });
   test(`${ext}: token without cached profile verifies silently before granting access`, async () => {
     const f = load(ext, { token: 'tk', defer: true }); const pending = f.instance.check();
     assert.equal(f.instance.data.visible, false); assert.equal(f.events.filter(e => e.name === 'authenticated').length, 0); assert.equal(f.requests.length, 1);

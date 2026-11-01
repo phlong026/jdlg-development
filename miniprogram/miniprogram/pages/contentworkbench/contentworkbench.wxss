@@ -3,6 +3,15 @@ page {
   color: #302316;
 }
 
+/* 统一按钮垂直居中基线：部分按钮类只设了 min-height/padding，
+   依赖原生默认 line-height 会造成文字不居中。 */
+button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
 .studio-page {
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;

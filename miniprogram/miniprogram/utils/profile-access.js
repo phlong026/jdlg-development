@@ -68,13 +68,13 @@ function wrapProfileAccess(definition) {
       },
     });
   };
-  const verify = page => {
+  const verify = (page, silent) => {
     if (!page.__accessMounted || !page.__accessVisible || page.__accessDestroyed) return;
     const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
     if (!guard || typeof guard.check !== 'function') {
       verifyWithoutComponent(page); return;
     }
-    Promise.resolve(guard.check()).catch(error => console.error('个人资料核验失败', page.route, error));
+    Promise.resolve(guard.check(silent ? { silent: true } : undefined)).catch(error => console.error('个人资料核验失败', page.route, error));
   };
   const result = { ...definition, data: { ...definition.data, __profileAccessReady: false, __profileAccessMounted: false } };
   result.onLoad = function(options) {
@@ -91,6 +91,14 @@ function wrapProfileAccess(definition) {
     if (this.__accessDestroyed) return;
     this.__accessVisible = true;
     this.__accessRedirecting = false;
+    const token = String(wx.getStorageSync('token') || '');
+    // 同一账号被覆盖后返回：内容保持挂载、后台静默核验，核验通过后由放行回调
+    // 恢复页面生命周期。整页上锁只保留给首次进入、换号和外部入口变化。
+    if (this.__accessSuspended && this.__accessActiveToken === token) {
+      this.__accessSuspended = false;
+      verify(this, true);
+      return;
+    }
     lock(this);
     verify(this);
   };
@@ -121,6 +129,7 @@ function wrapProfileAccess(definition) {
     }
     this.__accessUserID = userID;
     this.__accessActive = true;
+    this.__accessActiveToken = token;
     if (this.__accessReload && this.__accessLoaded) {
       invoke('onUnload', this);
       // Keep request generations monotonic so a late response for the previous
@@ -157,7 +166,13 @@ function wrapProfileAccess(definition) {
   result.onHide = function() {
     if (!protectedPage(this)) return invoke('onHide', this, arguments);
     this.__accessVisible = false;
-    lock(this);
+    // 被其他页面覆盖时不再整页卸载：已放行内容留在层栈里，返回时走静默核验，
+    // 避免每次子页面往返都出现白屏闪烁。安全上锁仍由门禁失败与 App 隐藏负责。
+    if (this.__accessActive) {
+      this.__accessActive = false;
+      this.__accessSuspended = true;
+      invoke('onHide', this, arguments);
+    }
   };
   result.onUnload = function() {
     if (!protectedPage(this)) return invoke('onUnload', this, arguments);

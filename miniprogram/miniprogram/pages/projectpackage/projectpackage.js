@@ -19,12 +19,21 @@ Page({
     if (!token) { this.clearProtected(); this.setData({ loading: false, error: '请先登录后制作分享资料。' }); return; }
     const accountChanged = token !== this._accountToken;
     const selections = accountChanged ? null : this.selectionSnapshot();
-    if (accountChanged) { this._accountToken = token; this._epoch = (this._epoch || 0) + 1; }
+    if (accountChanged) { this._accountToken = token; this._epoch = (this._epoch || 0) + 1; this._loadedOnce = false; }
     this._visible = true;
-    this.clearProtected(!accountChanged);
-    return this.loadProject(selections);
+    // 同一账号且已成功渲染过：就地静默刷新，不清空已展示的资料，返回时不再闪屏。
+    const quiet = !accountChanged && this._loadedOnce === true && !!this.data.project;
+    if (!quiet) this.clearProtected(!accountChanged);
+    else { wx.hideShareMenu(); this.setData({ busy: false, error: '', notice: '' }); }
+    return this.loadProject(selections, quiet);
   },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(true); },
+  onHide() {
+    this._visible = false; this._epoch = (this._epoch || 0) + 1;
+    // 离开即作废未收口的分享入口与预览态；列表与选择状态保留，返回时静默重验不闪屏。
+    this._draftAttempt = null; this._publishAttempt = null;
+    wx.hideShareMenu();
+    this.setData({ step: 'select', preview: null, delivery: null, sharePath: '', busy: false });
+  },
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   selectionSnapshot() {
     return { noteIDs: [...this.data.selectedNoteIDs], versionIDs: [...this.data.selectedVersionIDs], recipientIDs: [...this.data.selectedRecipientIDs] };
@@ -36,10 +45,12 @@ Page({
     this.setData({ projectName: '', project: null, notes: [], versions: [], members: [], selectedNoteIDs: selections.noteIDs, selectedVersionIDs: selections.versionIDs, selectedRecipientIDs: selections.recipientIDs, draft: null, preview: null, delivery: null, sharePath: '', historyDeliveries: [], historyReceipts: [], historyTruncated: false, step: 'select', notice: '', error: '', loading: true, busy: false });
   },
   current(epoch) { return this._visible && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
-  async loadProject(selections) {
+  async loadProject(selections, quiet) {
     if (!this._projectID) { this.setData({ loading: false, error: '项目不存在。' }); return; }
     const epoch = this._epoch = (this._epoch || 0) + 1;
-    this._visible = true; this.setData({ loading: true, error: '' });
+    this._visible = true;
+    // 静默刷新保留已渲染内容；首次进入仍显示加载态。
+    this.setData(quiet ? { error: '' } : { loading: true, error: '' });
     try {
       const [detail, historyResult] = await Promise.all([
         api.getProjectPackageProject(this._projectID),
@@ -48,6 +59,7 @@ Page({
       if (!this.current(epoch)) return;
       this.applyProject(detail, selections);
       if (historyResult.history) this.applyHistory(historyResult.history);
+      this._loadedOnce = true;
       this.setData({ loading: false, notice: historyResult.error ? '分享记录暂时无法加载，请稍后刷新。' : '' });
     } catch (error) {
       if (this.current(epoch)) { this.clearProtected(); this.setData({ loading: false, error: error.message || '项目加载失败' }); }

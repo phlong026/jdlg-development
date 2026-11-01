@@ -29,6 +29,10 @@
       </view>
     </view>
     <view class="lg-profile-card" hidden="{{!completingProfile}}">
+      <view class="lg-profile-head">
+        <text class="lg-title">补充头像和昵称后继续</text>
+        <text class="lg-sub">账号仍在登录状态，完善资料即可返回当前页面继续使用</text>
+      </view>
       <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />
     </view>
   </view>

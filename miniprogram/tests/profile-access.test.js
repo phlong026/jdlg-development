@@ -124,15 +124,25 @@ test('cached token is not profile approval; stale approval cannot unlock another
   h.page.onProfileAccessGranted({ detail: { token: 'cached' } });
   assert.deepEqual(h.calls, []);
 });
-test('every return verifies again, preserves business state and resumes once', () => {
+test('returning to an approved page keeps content mounted and verifies silently in the background', () => {
   const h = harness(); h.mount(); h.grant(); h.page.data.value = 'retained';
   h.page.onHide(); h.page.onShow();
-  assert.equal(h.page.data.__profileAccessReady, false);
-  assert.equal(h.page.data.__profileAccessMounted, false, 'revalidation immediately hides previously approved content');
-  assert.equal(h.checks(), 2);
-  h.grant(); h.grant();
+  assert.equal(h.page.data.__profileAccessMounted, true, 'same-account return keeps previously approved content mounted');
+  assert.equal(h.checks(), 2, 'a silent background verification still runs');
+  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready', 'hide'], 'lifecycle stays suspended until the background verify resolves');
+  h.grant();
   assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready', 'hide', 'show']);
   assert.equal(h.page.data.value, 'retained');
+});
+test('a different account on return goes through the full gate again', () => {
+  const h = harness(); h.mount(); h.grant('account-a');
+  h.page.onHide();
+  h.storage.token = 'account-b';
+  h.page.onShow();
+  assert.equal(h.page.data.__profileAccessMounted, false, 'account change relocks immediately');
+  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready', 'hide']);
+  h.grant('account-b');
+  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready', 'hide', 'show']);
 });
 test('hidden/unloaded pages ignore late verification and never fetch content', () => {
   const h = harness(); h.mount(); h.page.onHide(); h.grant();
