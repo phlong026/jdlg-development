@@ -1,13 +1,17 @@
 'use strict';
+const api = require('../../utils/phase3-api');
 
+// 本地兜底仅保留中性短指令：完整业务提示词（含示例与措辞）由服务端注册表下发，
+// 可运营调整而无需发版；防臆造条款刻意留在本地常量，任何服务端配置都无法移除它。
 const writingTypes = [
-  { key: 'design', label: '设计说明', heading: '方案设计说明', example: '本方案为三层框架结构自建房，占地约120平方米。一层布置客厅、餐厨与老人房，二层为主卧套房与书房。立面采用新闽派风格，坡屋顶配合浅色真石漆，整体与村落肌理协调。' },
-  { key: 'project', label: '项目介绍', heading: '项目内容介绍', example: '这是位于镇郊的一栋自建房项目，前后院采光充足。设计保留了场地原有大树，入户朝南，室内动线围绕家庭聚餐与老人起居展开，屋顶露台可远眺后山。' },
-  { key: 'promotion', label: '推广文案', heading: '作品推广文案', example: '老宅翻新，不拆承重、不动感情。这次改造保留了三十年前的门头石雕，把新生活装进旧骨架。回乡建房的朋友，欢迎来聊聊你家的老宅故事。' },
+  { key: 'design', label: '设计说明', heading: '方案设计说明', example: '', instruction: '请撰写方案设计说明。' },
+  { key: 'project', label: '项目介绍', heading: '项目内容介绍', example: '', instruction: '请撰写项目内容介绍。' },
+  { key: 'promotion', label: '推广文案', heading: '作品推广文案', example: '', instruction: '请撰写作品推广文案。' },
 ];
+const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '' },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '' },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
@@ -20,6 +24,7 @@ Page({
       this._returnChannel = this.getOpenerEventChannel();
       if (this._returnChannel && this._returnChannel.on) this._returnChannel.on('writingContext', payload => this.receiveWritingContext(payload));
     }
+    if (this._token) this.loadWritingTypes();
   },
   onShow() {
     wx.hideShareMenu();
@@ -27,6 +32,7 @@ Page({
     if (token !== this._token) this.setData({ title: '', facts: '', result: '', notice: '', error: '账号已变化，请重新填写创作内容' });
     this._token = token;
     this.setData({ navigating: false, loginRequired: !token });
+    if (token && !this._typesLoadedOnce) { this._typesLoadedOnce = true; this.loadWritingTypes(); }
   },
   onUnload() { this._unloaded = true; },
   receiveWritingContext(payload) {
@@ -44,8 +50,19 @@ Page({
     this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: this._source === 'project_note' ? '已带入项目笔记的明确事实，请核对后继续创作' : '已带入当前草稿的标题和正文，请核对后继续创作', error: '' });
   },
   selectType(event) {
-    const type = writingTypes.find(item => item.key === event.currentTarget.dataset.type);
-    if (type) this.setData({ type: type.key, heading: type.heading, example: type.example, exampleLabel: type.label, error: '' });
+    const type = this.data.writingTypes.find(item => item.key === event.currentTarget.dataset.type);
+    if (type) this.setData({ type: type.key, heading: type.heading, example: type.example || '', exampleLabel: type.label, instruction: type.instruction, error: '' });
+  },
+  // 拉取服务端 Prompt 注册表；失败静默保持本地兜底，不打扰创作流程。
+  loadWritingTypes() {
+    api.writingPrompts().then(result => {
+      const prompts = ((result && result.prompts) || []).filter(item => item && item.key && item.heading && item.instruction).map(item => ({
+        key: String(item.key), label: String(item.label || item.heading), heading: String(item.heading), example: String(item.example || ''), instruction: String(item.instruction),
+      }));
+      if (!prompts.length || this._unloaded) return;
+      const current = prompts.find(item => item.key === this.data.type) || prompts[0];
+      this.setData({ writingTypes: prompts, type: current.key, heading: current.heading, example: current.example, exampleLabel: current.label, instruction: current.instruction, error: '' });
+    }).catch(() => {});
   },
   editTitle(event) { this.setData({ title: String(event.detail.value || ''), error: '' }); },
   editFacts(event) { this.setData({ facts: String(event.detail.value || ''), error: '' }); },
@@ -101,8 +118,8 @@ Page({
     const action = event && event.currentTarget && event.currentTarget.dataset.action || '';
     const instruction = { concise: '精简下面的文案，保留已知事实和重点。', expand: '适当扩写下面的文案，只补充表达，不增添未经提供的事实。', tone: '将下面的文案改为自然、专业、适合与业主沟通的语气。' }[action];
     const text = [
-      `请撰写${this.data.heading}。${this.data.title ? '主题：' + this.data.title.trim() + '。' : ''}`,
-      '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。',
+      `${this.data.instruction || '请撰写' + this.data.heading + '。'}${this.data.title ? '主题：' + this.data.title.trim() + '。' : ''}`,
+      ANTI_FABRICATION_CLAUSE,
       '已知资料与要求：\n' + facts,
       instruction && this.data.result ? instruction + '\n待优化文案：\n' + this.data.result : '请直接输出可编辑的正文，不添加虚构项目或版本。',
     ].join('\n\n');

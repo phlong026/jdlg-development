@@ -43,6 +43,7 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 		c.Next()
 	})
 	registerContentWorkbenchHandlers(g, svc, makeProjectNoteProfileResolver(users.DB))
+	registerWritingPromptsRoute(g, users.DB)
 }
 
 type workbenchOwnerChoice struct {

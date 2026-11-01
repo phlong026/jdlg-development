@@ -10,6 +10,7 @@ function harness(name) {
   let definition;
   const calls = [], listeners = {}, channel = { on(name, fn) { listeners[name] = fn; }, off() {}, emit(name, value) { calls.push({ event: name, value }); } };
   let token = 'session-one', stream, chunk;
+  const apiStub = { writingPrompts: async () => { throw new Error('offline'); } };
   const wx = {
     hideShareMenu() {}, getStorageSync: () => token, pageScrollTo() {}, showToast(value) { calls.push({ toast: value }); },
     navigateTo(value) { calls.push({ navigate: value }); }, navigateBack(value) { calls.push({ back: value }); },
@@ -22,6 +23,7 @@ function harness(name) {
   vm.runInNewContext(fs.readFileSync(path.join(root, `pages/${name}/${name}.js`), 'utf8'), {
     Page(value) { definition = value; }, wx, exports: {}, module: { exports: {} }, console,
     require(id) {
+      if (id.endsWith('/phase3-api')) return apiStub;
       if (id.endsWith('/parameter')) return { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) };
       if (id.endsWith('/deviceFingerprint')) return { getCachedDeviceFingerprint: () => '' };
       if (id.endsWith('/aiError')) return { sanitizeAIGenerationErrorMessage: value => value };
@@ -33,7 +35,7 @@ function harness(name) {
   });
   const page = Object.assign({}, definition, { data: JSON.parse(JSON.stringify(definition.data)), setData(values) { Object.assign(this.data, values); }, getOpenerEventChannel: () => channel });
   return {
-    page, calls, listeners, channel, token(value) { token = value; },
+    page, calls, listeners, channel, apiStub, token(value) { token = value; },
     chunk(text) { const bytes = Uint8Array.from(Buffer.from(text)); chunk({ data: bytes.buffer }); },
     bytes(value) { const bytes = Uint8Array.from(value); chunk({ data: bytes.buffer }); },
     success(statusCode = 200, data = '') { stream.success({ statusCode, data }); },
@@ -82,20 +84,59 @@ test('app.json declares the WechatSI speech plugin and wxml wires the voice butt
   assert.match(writingWxml, /bindtouchend="stopVoiceInput"/);
 });
 
-test('tab examples show style only and never feed fabricated facts into inputs', () => {
-  const h = harness('contentwriting'); h.page.onLoad({}); h.page.onShow();
-  assert.ok(h.page.data.example.length > 20, '默认展示设计说明示例');
-  assert.equal(h.page.data.exampleLabel, '设计说明');
+test('tab examples arrive from the server registry and never feed fabricated facts into inputs', async () => {
+  // 兜底不携带业务示例：默认示例卡隐藏
+  const offline = harness('contentwriting'); offline.page.onLoad({}); offline.page.onShow();
+  assert.equal(offline.page.data.example, '', '本地兜底不得内置业务示例文案');
+  assert.ok(offline.page.data.instruction.indexOf('方案设计说明') >= 0, '兜底仍带中性指令保证可用');
+
+  // 服务端注册表下发示例与指令，随 Tab 联动
+  const h = harness('contentwriting');
+  h.apiStub.writingPrompts = async () => ({ prompts: [
+    { key: 'design', label: '设计说明', heading: '方案设计说明', example: '服务端示例：三层框架结构与闽派立面。', instruction: '请撰写方案设计说明。面向专业读者。' },
+    { key: 'promotion', label: '推广文案', heading: '作品推广文案', example: '服务端示例：老宅翻新故事。', instruction: '请撰写推广文案。短句为主。' },
+  ] });
+  h.page.onLoad({}); h.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(h.page.data.example.indexOf('服务端示例') === 0, '示例来自服务端注册表');
   h.page.selectType({ currentTarget: { dataset: { type: 'promotion' } } });
   assert.equal(h.page.data.exampleLabel, '推广文案');
-  assert.ok(h.page.data.example !== h.page.data.facts, '示例是虚构事实，绝不能自动进入已知资料');
-  assert.equal(h.page.data.facts, '');
+  assert.ok(h.page.data.instruction.indexOf('短句为主') >= 0);
+  assert.equal(h.page.data.facts, '', '示例是虚构事实，绝不能自动进入已知资料');
 
   const writingWxml = fs.readFileSync(path.join(root, 'pages/contentwriting/contentwriting.wxml'), 'utf8');
-  assert.match(writingWxml, /example-card/);
-  assert.match(writingWxml, /仅示意表达风格，事实请以你的资料为准/);
+  assert.match(writingWxml, /wx:if="\{\{example\}\}" class="example-card"/);
   const exampleBlock = writingWxml.slice(writingWxml.indexOf('example-card'), writingWxml.indexOf('login-state'));
   assert.ok(exampleBlock.indexOf('bindtap') < 0, '示例卡必须只读，不得有点填动作');
+});
+
+test('prompt registry drives generation while the anti-fabrication clause stays client-side', async () => {
+  const h = harness('contentwriting');
+  h.apiStub.writingPrompts = async () => ({ prompts: [
+    { key: 'design', label: '设计说明', heading: '服务端设计标题', example: '示例', instruction: '服务端定制指令。' },
+  ] });
+  h.page.onLoad({}); h.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.page.data.heading, '服务端设计标题');
+  h.page.setData({ title: '庭院方案', facts: '保留现有大树，入口朝南。' });
+  h.page.generateWriting();
+  const navigation = h.calls.find(call => call.navigate).navigate;
+  navigation.success({ eventChannel: h.channel });
+  const task = h.calls.find(call => call.event === 'contentWritingTask');
+  assert.match(task.value.text, /服务端定制指令/, '生成提示词首句来自服务端注册表');
+  assert.match(task.value.text, /不得编造面积/, '防臆造条款必须由客户端常量注入且不可被配置移除');
+
+  // 注册表不可用时静默回退本地中性指令，不报错不打扰
+  const offline = harness('contentwriting'); offline.page.onLoad({}); offline.page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(offline.page.data.error, '');
+  assert.match(offline.page.data.instruction, /请撰写/);
+
+  // 包内不得残留可运营的完整业务提示词（seed 措辞只存在于服务端默认值与迁移里）
+  const pageSource = fs.readFileSync(path.join(root, 'pages/contentwriting/contentwriting.js'), 'utf8');
+  for (const seed of ['面向专业读者', '面向业主', '适合朋友圈与社群转发', '新闽派风格，坡屋顶配合浅色真石漆']) {
+    assert.ok(pageSource.indexOf(seed) < 0, `业务提示词措辞不得硬编码在小程序包内：${seed}`);
+  }
 });
 
 test('writing page requires known facts and never triggers model requests or stores private content', () => {
