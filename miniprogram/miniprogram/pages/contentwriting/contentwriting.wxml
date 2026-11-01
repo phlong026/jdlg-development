@@ -27,7 +27,7 @@
       <text class="generation-hint">生成将进入 AI 对话，费用以发送前显示为准。</text>
     </block>
   </view>
-  <view wx:if="{{!loginRequired}}" class="writing-footer"><button wx:if="{{result}}" class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button><button class="{{result ? 'secondary' : 'primary'}}" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button></view>
+  <view wx:if="{{!loginRequired}}" class="writing-footer"><button wx:if="{{result}}" class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button><button class="{{result ? 'secondary' : 'primary'}}" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button><text wx:if="{{!source}}" class="save-hint">保存会新建一条图文草稿，稍后可在内容工作台继续编辑。</text></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

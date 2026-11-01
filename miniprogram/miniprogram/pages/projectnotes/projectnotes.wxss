@@ -3,3 +3,18 @@ page{background:#f8f5ef;color:#2f241a}.page{min-height:100vh;padding:28rpx 28rpx
 .invite-actions{display:flex;align-items:center;gap:24rpx;margin-top:20rpx}.invite-actions .primary{flex:1;margin-top:0}
 .page .project-list{overflow:hidden}.page .project-row,.page .content-row,.page .menu-row{display:flex!important;width:100%!important;max-width:none;margin:0!important}.page .text-button,.page .danger-link,.page .list-create{width:auto!important;flex:none}.page .list-create{margin-top:0!important}
 .page .menu-card{overflow:hidden}.page .menu-row{min-height:96rpx;padding:0 28rpx}.menu-row>.menu-trailing{flex:none;margin-left:auto;display:flex;align-items:center;gap:12rpx}.menu-meta{color:#897b6e;font-size:23rpx}.page .empty-action{width:240rpx!important}.create-card input,.card input{padding:0 24rpx;line-height:88rpx}
+
+button {
+  min-height: 82rpx;
+  border-radius: 16rpx;
+  font-size: 27rpx;
+  /* 统一垂直居中基线：原生 button 的默认 line-height 配合 min-height 会让文字偏移。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+button::after {
+  border: 0;
+}

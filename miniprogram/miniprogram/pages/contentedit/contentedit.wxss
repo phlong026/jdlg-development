@@ -459,3 +459,10 @@ button::after {
 .article-layout-preview {
   overflow: hidden;
 }
+
+/* 操作按钮在页面底部，顶部错误/提示横幅滚动出视口后用户看不到反馈；吸顶常驻。 */
+.error, .notice {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}

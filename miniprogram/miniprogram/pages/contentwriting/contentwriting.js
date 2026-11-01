@@ -7,12 +7,13 @@ const writingTypes = [
 ];
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '' },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '' },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
     this._unloaded = false;
     this._source = String(options && options.source || '');
+    this.setData({ source: this._source });
     if (this._source === 'project_note') this.setData({ returnLabel: '采纳到项目笔记' });
     else if (this._source === 'editor') this.setData({ returnLabel: '采纳到当前草稿' });
     if ((this._source === 'editor' || this._source === 'project_note') && typeof this.getOpenerEventChannel === 'function') {

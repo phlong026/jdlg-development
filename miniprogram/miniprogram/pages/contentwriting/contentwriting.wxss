@@ -281,3 +281,26 @@ page {
   border-style: solid;
   background: #f1e4d2;
 }
+
+button {
+  min-height: 82rpx;
+  border-radius: 16rpx;
+  font-size: 27rpx;
+  /* 统一垂直居中基线：原生 button 的默认 line-height 配合 min-height 会让文字偏移。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+button::after {
+  border: 0;
+}
+
+.save-hint {
+  display: block;
+  margin-top: 10rpx;
+  color: #817568;
+  font-size: 23rpx;
+  text-align: center;
+}

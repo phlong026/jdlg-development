@@ -380,6 +380,34 @@ test('editor wxml wires the new block editing affordances', () => {
   assert.match(editorStyle, /\.caption-input/);
 });
 
+test('U6 form polish: sticky error banner, rights wording and rejection toast carry the reason', () => {
+  const { page, navigationOptions, toasts } = loadEditor();
+  page._loaded = true;
+  page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', title: '标题', blocks: [{ kind: 'paragraph', text: '正文' }] });
+  page.openAIWriting();
+  page.setData({ title: '期间已修改' });
+  navigationOptions[0].events.prefillContent({ title: 'AI', text: '不应采用' });
+  // 拒收 toast 必须带原因，只写"未采用"用户不知道下一步
+  assert.ok(toasts.some(toast => /已发生变化/.test(toast.title)));
+
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(editorWxml, /素材版权来源/);
+  assert.ok(editorWxml.indexOf('素材权属') < 0, '旧措辞不得残留');
+  const workbenchWxml = fs.readFileSync(path.join(root, 'contentworkbench/contentworkbench.wxml'), 'utf8');
+  assert.match(workbenchWxml, /素材版权来源/);
+  const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  assert.match(editorStyle, /\.error,\s*\.notice\s*\{[^}]*position:\s*sticky/);
+});
+
+test('U6 button baseline lands on content pages that lacked it', () => {
+  for (const pageName of ['contentwriting', 'nativereferences', 'projectnotes']) {
+    const style = fs.readFileSync(path.join(root, `${pageName}/${pageName}.wxss`), 'utf8');
+    assert.match(style, /button\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/, `${pageName} 应有按钮垂直居中基线`);
+  }
+  const writingWxml = fs.readFileSync(path.join(root, 'contentwriting/contentwriting.wxml'), 'utf8');
+  assert.match(writingWxml, /保存会新建一条图文草稿/);
+});
+
 test('editor and reader implement the selected warm-gold content studio hierarchy', () => {
   const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
   const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');

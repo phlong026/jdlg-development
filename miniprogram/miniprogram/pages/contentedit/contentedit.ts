@@ -168,7 +168,8 @@ Page({
   },
   rejectWritingReturn(message) {
     this.setData({ notice: message });
-    wx.showToast({ title: '文案未采用', icon: 'none' });
+    // toast 带原因：只写"未采用"用户不知道下一步该做什么。
+    wx.showToast({ title: message, icon: 'none' });
   },
   receiveWritingReturn(payload, launch) {
     if (launch.handled) { this.setData({ notice: 'AI 文案已处理，未重复追加' }); return; }
