@@ -38,3 +38,13 @@
 - 后续使用独立备份目录 `/root/jdlg-combined-backup-20261101-b28e6a1`，先确认现有进程和运行配置，再依次执行 `prepare`、`migrate`、`activate` 与 `web_release.py admin`；不覆盖环境配置，不修改 nginx，不清空 Redis。
 - 切换后须核对实际进程、二进制摘要、健康接口与公网后台资源，并验证管理员全部跟踪权限、认证设计师本人记录、后台勾选后重开免登录和主动退出失效。
 - 发布材料位于仓库同级 `交付/分享权限与后台登录合并发布-20261101/`。其中 `verification.json` 区分测试、推送、上传和线上切换状态；发布包包含受保护参数，不进入公共代码仓库。
+
+## 生产切换记录（2026-11-01 21:46）
+
+- 重新核验服务器 `/root/jdlg-combined-b28e6a1.tar.gz` SHA256 一致（`7c31fc4e…`）并解压，包内 `applinux` SHA256 与发布记录一致（`5959933e…`）。
+- 依次执行 `runner.py prepare`、`migrate`、`activate` 与 `web_release.py admin`，全部成功（EXIT=0）；备份目录：后端 `/root/jdlg-combined-backup-20261101-b28e6a1`，管理台 `/root/jdlg-combined-web-backup-20261101-b28e6a1/admin`。
+- activate 后新进程 PID 3922584，线上二进制 SHA256 实测等于 `5959933e…`；主进程健康检查通过。
+- 管理台安装 277 个文件至 `/www/wwwroot/jiadilingguang/admin`。
+- 公网复验：admin 新资源 `index-B4KxcjgO.js` 由切换前 404 变为 200；`tracking/config` 200；未登录 `workbench/context` 401；admin 页 200。
+- 回滚方式：后端 `runner.py rollback --backup /root/jdlg-combined-backup-20261101-b28e6a1`；管理台还原备份目录。
+- 待人工验收：管理员全量跟踪、认证设计师本人记录视图、记住密码 28 天免登与主动退出失效、小程序 7.2.21 真机分享卡片与头像昵称补全。
