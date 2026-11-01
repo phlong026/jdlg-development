@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -110,6 +111,14 @@ func maskPhoneNumber(raw string) string {
 	return s[:keep] + "****" + s[len(s)-keep:]
 }
 
+// 管理端按本次登录选择有效期，不修改共享 store，避免影响其他用户或小程序。
+func managementSessionOptions(c *gin.Context, maxAge int) sessions.Options {
+	return sessions.Options{
+		Path: "/", MaxAge: maxAge, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Secure: crmEnabled() || c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https",
+	}
+}
+
 // RegisterManagementRoutes 注册管理后台路由
 func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthProcessor, userDBModel *model.UserModel, userRedisModel *model.UserRedisModel, userProfileModel *model.UserProfileModel, stoneRecordModel *model.StoneRecordModel) {
 	registerWecomLogin(r, userDBModel)
@@ -118,7 +127,10 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 	r.POST("/login", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-		var req processor.PasswordLoginRequest
+		var req struct {
+			processor.PasswordLoginRequest
+			RememberMe bool `json:"remember_me"`
+		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code": 400,
@@ -141,7 +153,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			return
 		}
 
-		result, err := strategy.Login(context.Background(), &req)
+		result, err := strategy.Login(c.Request.Context(), &req.PasswordLoginRequest)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code": 400,
@@ -150,8 +162,14 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			return
 		}
 
-		// 设置session
+		// Redis SETEX 与浏览器 Cookie 使用同一固定期限；读取会话不会续期。
+		maxAge := 8 * 60 * 60
+		if req.RememberMe {
+			maxAge = 28 * 24 * 60 * 60
+		}
+		sessions.Default(c).Options(managementSessionOptions(c, maxAge))
 		if err := SetUserSession(c, result.User.ID, result.User.Username, result.User.UserType); err != nil {
+			log.Printf("[management-login] ERROR 保存会话失败 user_id=%d: %v", result.User.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code": 500,
 				"msg":  "保存会话失败",
@@ -185,6 +203,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 
 	// 获取当前用户信息
 	auth.GET("/me", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		userID := GetUserID(c)
 		username := GetUsername(c)
 		accessScope := "platform_admin"
@@ -205,7 +224,10 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 
 	// 登出
 	auth.POST("/logout", func(c *gin.Context) {
+		// 清空字段不足以删除持久会话，负 MaxAge 同时撤销 Redis 记录和 Cookie。
+		sessions.Default(c).Options(managementSessionOptions(c, -1))
 		if err := ClearUserSession(c); err != nil {
+			log.Printf("[management-logout] ERROR 撤销会话失败: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code": 500,
 				"msg":  "登出失败",
