@@ -86,6 +86,51 @@ func validateDOCX(data []byte) bool {
 	return foundTypes && foundDocument
 }
 
+// validatePPTX 与 DOCX 同源的 OOXML 结构校验：zip 局部路径、解压总量、宏载体、
+// Content_Types 声明与幻灯片主部件一一确认（B4：方案汇报/招商宣讲的高频形态）。
+func validatePPTX(data []byte) bool {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil || len(reader.File) == 0 || len(reader.File) > 5000 {
+		return false
+	}
+	foundTypes, foundSlide := false, false
+	var expanded uint64
+	for _, file := range reader.File {
+		name := strings.ReplaceAll(file.Name, "\\", "/")
+		if strings.HasPrefix(name, "/") || strings.Contains(name, "../") {
+			return false
+		}
+		var ok bool
+		expanded, ok = addDocumentExpanded(expanded, file.UncompressedSize64)
+		if !ok {
+			return false
+		}
+		if strings.EqualFold(path.Base(name), "vbaProject.bin") {
+			return false
+		}
+		switch {
+		case name == "ppt/presentation.xml":
+			foundSlide = true
+		case name == "[Content_Types].xml":
+			if file.UncompressedSize64 > uint64(documentContentTypeMax) {
+				return false
+			}
+			input, err := file.Open()
+			if err != nil {
+				return false
+			}
+			content, err := io.ReadAll(io.LimitReader(input, documentContentTypeMax+1))
+			closeErr := input.Close()
+			lower := bytes.ToLower(content)
+			if err != nil || closeErr != nil || int64(len(content)) > documentContentTypeMax || bytes.Contains(lower, []byte("macroenabled")) || bytes.Contains(lower, []byte("application/vnd.ms-office.vbaproject")) {
+				return false
+			}
+			foundTypes = bytes.Contains(content, []byte("application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"))
+		}
+	}
+	return foundTypes && foundSlide
+}
+
 func trackingMediaRoot() (string, error) {
 	root := os.Getenv("TRACKING_MEDIA_DIR")
 	if root == "" || !filepath.IsAbs(root) {
@@ -189,12 +234,30 @@ func uploadTrackingMedia(c *gin.Context, s *tracking.Service, scope tracking.Sco
 		mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 		max = documentMaxBytes
 		_, _ = source.Seek(0, io.SeekStart)
+	case extension == ".pptx" && (mime == "application/zip" || mime == "application/octet-stream" || mime == "application/vnd.openxmlformats-officedocument.presentationml.presentation"):
+		if _, err := source.Seek(0, io.SeekStart); err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		data, err := io.ReadAll(io.LimitReader(source, documentMaxBytes+1))
+		if err != nil || int64(len(data)) > documentMaxBytes {
+			trackingResponse(c, nil, &tracking.Error{Status: 413, Message: "PPT文档体积超过限制"})
+			return
+		}
+		if !validatePPTX(data) {
+			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "PPT结构无效或包含宏"})
+			return
+		}
+		kind = "document"
+		mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+		max = documentMaxBytes
+		_, _ = source.Seek(0, io.SeekStart)
 	case mime == "image/png" || mime == "image/jpeg" || mime == "image/gif" || mime == "image/webp":
 	case mime == "video/mp4":
 		kind = "video"
 		max = 50 << 20
 	default:
-		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "仅支持经过类型校验的PNG/JPEG/GIF/WebP、MP4、PDF和无宏DOCX文件"})
+		trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "仅支持经过类型校验的PNG/JPEG/GIF/WebP、MP4、PDF、无宏DOCX和无宏PPTX文件"})
 		return
 	}
 	if header.Size > max {

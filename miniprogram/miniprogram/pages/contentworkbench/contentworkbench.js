@@ -192,7 +192,7 @@ Page({
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
   openCreateMenu() {
     wx.showActionSheet({
-      itemList: ['图文内容', '图片或视频', 'PDF / Word'],
+      itemList: ['图文内容', '图片或视频', 'PDF / Word / PPT'],
       success: result => {
         const url = ['/pages/contentedit/contentedit', '/pages/contentedit/contentedit?action=media', '/pages/contentedit/contentedit?action=document'][Number(result.tapIndex)];
         if (url) this.navigate(url);

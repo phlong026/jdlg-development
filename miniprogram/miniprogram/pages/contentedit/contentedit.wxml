@@ -11,7 +11,7 @@
    <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="notice">{{notice}}</view>
    <block wx:if="{{deleted}}"><view class="state"><text>这份草稿已删除，原媒体资料仍保留在授权素材库。</text><button class="secondary compact" bindtap="backToWorkbench">返回内容工作台</button></view></block>
    <block wx:elif="{{documentReadOnly}}">
-    <view class="panel document-panel"><text class="section-title">{{title}}</text><text class="muted">{{documentAsset.title || (documentAsset.mime === 'application/pdf' ? 'PDF' : 'Word')}} · 仅授权可见</text><button class="primary" bindtap="openDocument" loading="{{busy}}" disabled="{{busy || !documentAsset}}">打开文档</button></view>
+    <view class="panel document-panel"><text class="section-title">{{title}}</text><text class="muted">{{documentAsset.title || (documentAsset.mime === 'application/pdf' ? 'PDF' : documentAsset.mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ? 'PPT' : 'Word')}} · 仅授权可见</text><button class="primary" bindtap="openDocument" loading="{{busy}}" disabled="{{busy || !documentAsset}}">打开文档</button></view>
     <button wx:if="{{moreExpanded && id && status === 'draft' && version === 0 && !serverReadOnly}}" class="danger delete-draft-button" bindtap="deleteDraft" disabled="{{busy}}">删除资料</button>
    </block>
    <block wx:elif="{{legacyReadOnly}}">
@@ -55,8 +55,8 @@
      </view>
      <view class="insert-actions"><button class="text-action" bindtap="chooseMedia" disabled="{{busy || !context.media_upload_configured}}">添加图片／视频</button><button class="plain-action" bindtap="openMediaPicker" disabled="{{busy}}">选择已有素材</button><button class="plain-action" bindtap="toggleMedia" aria-expanded="{{mediaExpanded}}">素材管理 {{mediaExpanded ? '⌃' : '›'}}</button></view>
      <block wx:if="{{mediaExpanded}}">
-     <view class="section-heading"><text class="section-title">已上传素材</text><button class="plain-action" bindtap="chooseDocument" disabled="{{busy || !context.media_upload_configured}}">上传文档</button></view>
-     <view wx:if="{{documentCandidates.length}}" class="panel"><text class="section-title">文档</text><view wx:for="{{documentCandidates}}" wx:key="media_id" class="media-info"><view><text>{{item.title || '待归档文档'}}</text><text class="muted">{{item.mime === 'application/pdf' ? 'PDF' : 'Word'}}</text></view><button class="text-action" data-index="{{index}}" bindtap="archiveDocument" disabled="{{busy}}">保存文档</button></view></view>
+     <view class="section-heading"><text class="section-title">已上传素材</text><button class="plain-action" bindtap="chooseDocument" disabled="{{busy || !context.media_upload_configured}}">上传文档（PDF/Word/PPT）</button></view>
+     <view wx:if="{{documentCandidates.length}}" class="panel"><text class="section-title">文档</text><view wx:for="{{documentCandidates}}" wx:key="media_id" class="media-info"><view><text>{{item.title || '待归档文档'}}</text><text class="muted">{{item.mime === 'application/pdf' ? 'PDF' : item.mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ? 'PPT' : 'Word'}}</text></view><button class="text-action" data-index="{{index}}" bindtap="archiveDocument" disabled="{{busy}}">保存文档</button></view></view>
      <view wx:if="{{!media.length && !documentCandidates.length}}" class="state empty-state">暂无已上传素材</view>
      <view wx:for="{{media}}" wx:key="media_id" class="panel media-row">
       <image wx:if="{{item.kind === 'image' && item.local_path}}" src="{{item.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.local_path}}" src="{{item.local_path}}" controls />

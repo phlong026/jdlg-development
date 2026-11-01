@@ -37,7 +37,7 @@ function mergeAssets(...groups) {
   groups.forEach(group => (Array.isArray(group) ? group : [group]).filter(Boolean).forEach(asset => assets.set(asset.media_id, { ...(assets.get(asset.media_id) || {}), ...asset })));
   return [...assets.values()];
 }
-function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx)$/i, '').trim().slice(0, 80) || '文档资料'; }
+function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx|pptx)$/i, '').trim().slice(0, 80) || '文档资料'; }
 
 Page({
   data: {
@@ -356,7 +356,7 @@ Page({
   chooseDocument() {
     if (!this.data.context || !this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '文档上传尚未配置', icon: 'none' }); return; }
     if (!this.data.owner_id || (this.data.rights !== 'own' && this.data.rights !== 'authorized')) { this.setData({ error: '请先选择内容归属并确认文档权属' }); return; }
-    wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx'], success: result => {
+    wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx', 'pptx'], success: result => {
       const epoch = this._epoch;
       if (!this.current(epoch)) return;
       const file = result.tempFiles && result.tempFiles[0];
@@ -368,12 +368,12 @@ Page({
   },
   async uploadDocument(file) {
     const name = String(file && file.name || '');
-    if (!/\.(pdf|docx)$/i.test(name) || Number(file && file.size || 0) > 20 * 1024 * 1024) { this.setData({ error: '首批仅支持20MB以内的 PDF 和无宏 DOCX 原文件' }); return; }
+    if (!/\.(pdf|docx|pptx)$/i.test(name) || Number(file && file.size || 0) > 20 * 1024 * 1024) { this.setData({ error: '首批仅支持20MB以内的 PDF、无宏 DOCX 和无宏 PPTX 原文件' }); return; }
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const asset = await api.uploadWorkbenchMedia(file.path, 'document', this.data.owner_id, this.data.rights, name);
       if (!this.current(epoch)) return;
-      if (!asset || asset.kind !== 'document' || (asset.mime !== 'application/pdf' && asset.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) throw new Error('服务端未返回可用的 PDF/DOCX 文档');
+      if (!asset || asset.kind !== 'document' || (asset.mime !== 'application/pdf' && asset.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && asset.mime !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation')) throw new Error('服务端未返回可用的 PDF/DOCX/PPTX 文档');
       const candidate = { ...asset, local_path: file.path };
       this.setData({ documentCandidates: mergeAssets(this.data.documentCandidates, [candidate]), busy: false, notice: '原文件已上传，正在保存文档资料' });
       await this.archiveDocumentAsset(candidate, epoch);

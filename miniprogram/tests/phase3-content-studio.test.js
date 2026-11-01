@@ -108,7 +108,7 @@ test('studio offers real destinations for existing assets and visits', async () 
 test('studio has one create action and routes each supported type into the existing editor', () => {
   const harness = runtime();
   harness.page.openCreateMenu();
-  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['图文内容', '图片或视频', 'PDF / Word']);
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['图文内容', '图片或视频', 'PDF / Word / PPT']);
   harness.actionSheet().success({ tapIndex: 0 });
   harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex: 1 });
   harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex: 2 });

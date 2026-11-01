@@ -43,5 +43,8 @@ func normalizeDocumentBody(body string) (string, string, error) {
 }
 
 func supportedDocumentAsset(asset Asset) bool {
-	return asset.Kind == "document" && (asset.MIME == "application/pdf" || asset.MIME == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	// B4：PPTX 纳入文档资料；上传层已完成同源 OOXML 结构与宏校验。
+	return asset.Kind == "document" && (asset.MIME == "application/pdf" ||
+		asset.MIME == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+		asset.MIME == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
 }
