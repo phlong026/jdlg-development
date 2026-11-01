@@ -18,6 +18,21 @@
 
 这些占位值不能用于生产。克隆后需在受保护的本地配置中提供项目所需凭据；代码快照上传不表示系统已部署或完成业务验收。
 
+### 后端受保护发布构建
+
+仓库中的 `service/function/crypto.go` 保留占位值，不能直接用普通 `go build` 作为发布包。本地受保护版本应保持仅当前用户可读，并在发布时显式传入：
+
+```sh
+chmod 600 /absolute/protected/crypto.go
+service/scripts/build-protected-release.sh \
+  --crypto-file /absolute/protected/crypto.go \
+  --output-dir /absolute/output/jdlg-service-release
+```
+
+构建脚本只从 `git archive HEAD` 创建临时源码树，仅在临时目录注入受保护的 `crypto.go`，然后强制执行小程序 JavaScript 签名器到 Go 鉴权中间件的契约测试再构建。最终 ELF 保留 Go 符号，脚本会从加载段中读取实际 HMAC/SM4 slice 并与本次注入源文件比较，两项不一致均禁止输出。默认拒绝其他工作副本变更、未跟踪文件和其他 `skip-worktree` / `assume-unchanged` 文件。
+
+输出目录权限为 `0700`，仅包含权限 `0700` 的后端可执行文件和权限 `0600` 的独立 `auth-build.json`；清单记录 Git commit、tree、Go 版本、受保护源文件摘要、二进制摘要和两项 ELF 匹配布尔值，不包含密钥源码，也不覆盖现有迁移发布器使用的 `manifest.json` / `files[]`。
+
 ## 代码验证
 
 先安装后台锁定依赖，再运行包含开发依赖的安全审计、后台回归与生产构建：

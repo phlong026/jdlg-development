@@ -45,6 +45,9 @@ jobs:
           node-version: '24.19.0'
           package-manager-cache: false
 
+      - name: Verify the protected release builder policy
+        run: node --test scripts/build-protected-release.test.js
+
       # Fake SQL, in-memory repositories and miniredis: no business credentials,
       # external database, production configuration or deployment is needed.
       - name: Run tracking, source model and HTTP route regressions

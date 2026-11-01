@@ -3,8 +3,10 @@ package route
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -66,8 +68,20 @@ func TestMiniprogramClientSignerExplicitDefaultsPassTokenAuthRequired(t *testing
 
 func testMiniprogramClientSignerAgainstTokenAuth(t *testing.T, explicitDefaults bool) {
 	t.Helper()
-	if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("1234567890123456"))); err != nil {
-		t.Fatal(err)
+	strict := os.Getenv("JDLG_REQUIRE_CLIENT_AUTH_CONTRACT") == "1"
+	if !strict {
+		if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("1234567890123456"))); err != nil {
+			t.Fatal(err)
+		}
+	} else if expected := os.Getenv("JDLG_AUTH_CRYPTO_SHA256"); expected != "" {
+		source, err := os.ReadFile(filepath.Join("..", "function", "crypto.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(source)
+		if hex.EncodeToString(digest[:]) != expected {
+			t.Fatal("strict auth contract is not using the explicitly injected crypto source")
+		}
 	}
 
 	db := sql.OpenDB(profileGateAuthConnector{})
@@ -91,6 +105,16 @@ func testMiniprogramClientSignerAgainstTokenAuth(t *testing.T, explicitDefaults 
 	token, err := function.GenerateToken(session.SessionID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	probe, err := signWithMiniprogramClient(t, token, "{}", "/api/v1/miniprogram/profile", session.DeviceID, explicitDefaults)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !function.VerifyTokenSignature(token, probe["token-signature"]) {
+		if os.Getenv("JDLG_REQUIRE_CLIENT_AUTH_CONTRACT") == "1" || !backendSourceUsesReleasePlaceholders(t) {
+			t.Fatal("protected backend HMAC does not match the checked-in mini-program signer")
+		}
+		t.Skip("committed backend source contains release placeholders; protected release build must inject crypto.go and require this contract")
 	}
 
 	router := gin.New()
@@ -125,6 +149,58 @@ func testMiniprogramClientSignerAgainstTokenAuth(t *testing.T, explicitDefaults 
 			}
 		})
 	}
+}
+
+func TestMiniprogramClientSignerStrictSM4Contract(t *testing.T) {
+	if backendSourceUsesReleasePlaceholders(t) {
+		t.Skip("committed backend source contains release placeholders")
+	}
+	for _, test := range []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{name: "matching default", mode: "matching"},
+		{name: "wrong SM4", mode: "wrong", wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			command := exec.Command(os.Args[0], "-test.run=^TestMiniprogramClientSignerStrictSM4Probe$", "-test.count=1")
+			command.Env = append(os.Environ(), "JDLG_REQUIRE_CLIENT_AUTH_CONTRACT=1", "JDLG_AUTH_SM4_PROBE="+test.mode)
+			output, err := command.CombinedOutput()
+			if test.wantErr && err == nil {
+				t.Fatal("strict auth contract accepted a mismatched SM4 key")
+			}
+			if !test.wantErr && err != nil {
+				t.Fatalf("strict auth contract rejected matching defaults: %v: %s", err, bytes.TrimSpace(output))
+			}
+			if test.wantErr && !bytes.Contains(output, []byte("sin验证失败")) {
+				t.Fatalf("wrong SM4 failed for an unexpected reason: %s", bytes.TrimSpace(output))
+			}
+		})
+	}
+}
+
+func TestMiniprogramClientSignerStrictSM4Probe(t *testing.T) {
+	mode := os.Getenv("JDLG_AUTH_SM4_PROBE")
+	if mode == "" {
+		t.Skip("subprocess probe only")
+	}
+	if mode == "wrong" {
+		if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("6543210987654321"))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testMiniprogramClientSignerAgainstTokenAuth(t, false)
+}
+
+func backendSourceUsesReleasePlaceholders(t *testing.T) bool {
+	t.Helper()
+	source, err := os.ReadFile(filepath.Join("..", "function", "crypto.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bytes.Contains(source, []byte(`sm4Key = []byte("REPLACE_SM4_KEY!")`)) &&
+		bytes.Contains(source, []byte(`hmacKey = []byte("REPLACE_WITH_LOCAL_HMAC_KEY")`))
 }
 
 func clientSignatureOK(c *gin.Context) {
