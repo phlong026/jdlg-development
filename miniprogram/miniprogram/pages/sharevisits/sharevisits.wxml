@@ -11,7 +11,7 @@
    <button wx:for="{{items}}" wx:key="share_id" class="card" data-index="{{index}}" bindtap="openVisits">
     <view class="card-heading"><text class="title">{{item.title || '分享内容'}}</text><text class="status">{{item.status_text}}</text></view>
     <text class="meta">{{item.channel_text}} · 分享于 {{item.created_at_text}}</text>
-    <view class="metrics"><text>{{item.visitor_count}} 位访客</text><block wx:if="{{item.is_collection}}"><text>目录 {{item.directory_views}} 次</text><text>作品 {{item.content_views}} 次</text></block><text wx:else>{{item.page_views}} 次浏览</text></view>
+    <view class="metrics"><text>{{item.visitor_count}} 位访客</text><block wx:if="{{item.is_collection}}"><text>目录 {{item.directory_views}} 次</text><text>作品 {{item.content_views}} 次</text></block><text wx:else>{{item.page_views}} 次浏览</text><text wx:if="{{item.avg_views_per_visitor}}">人均 {{item.avg_views_per_visitor}}</text></view>
     <text class="visit-time">{{item.has_visits ? '最近访问 ' + item.last_visit_text : '暂时没有访问'}}</text>
    </button>
    <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>

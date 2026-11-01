@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,6 +32,9 @@ type MyShare struct {
 	DirectoryViews int        `json:"directory_views,omitempty"`
 	ContentViews   int        `json:"content_views,omitempty"`
 	LastVisit      *time.Time `json:"last_visit,omitempty"`
+	// AvgViewsPerVisitor 是"人均浏览"口径的参与度参考（B17）：总浏览/访客数，
+	// 保留一位小数。它是比值不是事实声明——访客数受匿名与登录流失影响。
+	AvgViewsPerVisitor float64 `json:"avg_views_per_visitor,omitempty"`
 }
 
 // MyShareVisit is the cumulative, snapshot-pinned traffic from one visitor to
@@ -189,6 +193,9 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 			item := MyShare{ID: share.ID, At: row.at, Route: share.Route, Content: share.Content, Version: share.Version, Channel: share.Channel, Expires: share.Expires, Revoked: share.Revoked}
 			stats := traffic[share.ID]
 			item.Visitors, item.Views, item.DirectoryViews, item.ContentViews, item.LastVisit = len(stats.visitors), stats.views, stats.directoryViews, stats.contentViews, stats.last
+			if item.Visitors > 0 && item.Views > 0 {
+				item.AvgViewsPerVisitor = math.Round(float64(item.Views)/float64(item.Visitors)*10) / 10
+			}
 			if share.Content != "" && share.Version > 0 {
 				key := share.Route + "\x00" + contentKey(share.Content, share.Version)
 				material := materials[key]
