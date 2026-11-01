@@ -501,3 +501,52 @@ button::after {
 .workspace-tabs { display: flex; align-items: center; gap: 32rpx; margin-bottom: 24rpx; }
 .workspace-tab { flex: 1; width: 0; min-width: 0; text-align: center; white-space: nowrap; padding: 14rpx 0; font-size: 30rpx; color: #73604e; border-radius: 0; }
 .workspace-tab.selected { color: #302316; font-weight: 600; border-bottom: 4rpx solid #a87943; }
+
+.onboarding-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 26rpx;
+  text-align: left;
+}
+
+.onboarding-card {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 22rpx 24rpx;
+  border: 1rpx solid #eee8e1;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 999rpx;
+  background: #f1e4d2;
+  color: #8b5c2d;
+  font-size: 26rpx;
+}
+
+.onboarding-texts {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.onboarding-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2b211b;
+}
+
+.onboarding-desc {
+  font-size: 23rpx;
+  color: #817568;
+}

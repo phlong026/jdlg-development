@@ -25,7 +25,17 @@
               <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{item.status === 'published' && !item.read_only}}" class="edit-link" catchtap="editContent" data-id="{{item.content_id}}">编辑</button></view></view><text class="row-chevron">›</text>
             </view>
           </block>
-          <view wx:else class="empty-state"><t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : category === 'all' ? '还没有内容' : '暂无这类内容'}}</text><text wx:if="{{!searchTerm && !next_cursor}}" class="muted">点击下方新建</text></view>
+          <view wx:else class="empty-state">
+            <block wx:if="{{category === 'all' && !searchTerm && !next_cursor}}">
+              <t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">还没有内容</text><text class="muted">从下面三步开始，做出第一条可分享的内容</text>
+              <view class="onboarding-cards">
+                <view class="onboarding-card" bindtap="openImportView" role="button" aria-label="试试链接导入"><text class="onboarding-step">①</text><view class="onboarding-texts"><text class="onboarding-title">导入一篇文章试试</text><text class="onboarding-desc">粘贴公众号或小红书链接，自动保存为可分享内容</text></view><text class="row-chevron">›</text></view>
+                <view class="onboarding-card" bindtap="startFirstContent" role="button" aria-label="新建第一条图文"><text class="onboarding-step">②</text><view class="onboarding-texts"><text class="onboarding-title">拍一张现场照开始</text><text class="onboarding-desc">新建图文内容，拍照上传即成正文，可加图注</text></view><text class="row-chevron">›</text></view>
+                <view class="onboarding-card" bindtap="openAIWriting" role="button" aria-label="让AI帮你写文案"><text class="onboarding-step">③</text><view class="onboarding-texts"><text class="onboarding-title">让 AI 帮你写</text><text class="onboarding-desc">按住说一段设计说明，AI 整理成设计文案</text></view><text class="row-chevron">›</text></view>
+              </view>
+            </block>
+            <block wx:else><t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : '暂无这类内容'}}</text></block>
+          </view>
         </view>
         <text wx:if="{{category !== 'all' && next_cursor}}" class="pagination-note">分类显示已加载内容，可继续加载更多资料</text>
         <view wx:if="{{error}}" class="inline-error">{{error}}</view>

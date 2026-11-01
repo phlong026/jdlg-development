@@ -166,6 +166,11 @@ test('content pages use one clear title and hide unavailable writing actions', (
   assert.match(references, /bindtap="selectLibraryTab"/);
   assert.doesNotMatch(references, /保存已发布的固定版本|仅展示当前授权范围/);
   assert.match(workbench, /wx:if="{{context\.owner_choices\.length > 1}}"/);
+  // U2：全空工作台的首次引导三卡（导入/新建/AI文案），搜索或分类筛选时不出现
+  assert.match(workbench, /wx:if="\{\{category === 'all' && !searchTerm && !next_cursor\}\}"/);
+  assert.match(workbench, /bindtap="openImportView"[^>]*aria-label="试试链接导入"/);
+  assert.match(workbench, /bindtap="startFirstContent"[^>]*aria-label="新建第一条图文"/);
+  assert.match(workbench, /bindtap="openAIWriting"[^>]*aria-label="让AI帮你写文案"/);
   assert.match(workbench, /range-key="display_name"/);
   assert.doesNotMatch(workbench, />{{importOwner \|\| '请选择'}}/);
   assert.match(editor, /range="{{context\.owner_choices}}" range-key="display_name"/);

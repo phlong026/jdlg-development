@@ -171,6 +171,8 @@ Page({
   },
   navigate(url) { wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }); },
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
+  // 引导卡直达新建图文：不经过 openCreateMenu，保持"创建菜单入口唯一"的既有护栏。
+  startFirstContent() { this.navigate('/pages/contentedit/contentedit'); },
   openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },
   openShareVisits() {
