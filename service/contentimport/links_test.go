@@ -76,3 +76,23 @@ func errorCode(err error) string {
 	}
 	return ""
 }
+
+// B18-B：快手链接识别（官方支持域名清单）。
+func TestParseLinkKuaishou(t *testing.T) {
+	for _, raw := range []string{
+		"https://www.kuaishou.com/short-video/3xbdf9q9",
+		"https://v.kuaishou.com/AbCdEf",
+		"https://m.chenzhongtech.com/fw/short-video/3xbdf9q9",
+	} {
+		link, err := ParseLink(raw)
+		if err != nil || link.Platform != Kuaishou {
+			t.Fatalf("%s => %#v err=%v", raw, link, err)
+		}
+	}
+	if link, err := ParseLink("https://v.kuaishou.com/AbCdEf"); err != nil || link.URL != "https://v.kuaishou.com/AbCdEf" {
+		t.Fatalf("短链必须原样交给解析方 got=%#v err=%v", link, err)
+	}
+	if _, err := ParseLink("https://example.com/x"); err == nil {
+		t.Fatal("未知平台必须拒绝")
+	}
+}

@@ -208,7 +208,7 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 	capabilities := func(ctx context.Context) importCapabilities {
 		ready := store != nil && enabled && workbenchEnabled() && contentMediaConfigured(svc)
 		out := importCapabilities{Enabled: ready, Platforms: []importPlatformCapability{}}
-		for _, platform := range []contentimport.Platform{contentimport.WechatArticle, contentimport.Douyin, contentimport.Xiaohongshu, contentimport.Channels} {
+		for _, platform := range []contentimport.Platform{contentimport.WechatArticle, contentimport.Douyin, contentimport.Xiaohongshu, contentimport.Kuaishou, contentimport.Channels} {
 			p := importPlatformCapability{Platform: platform, Available: ready && resolvers[platform] != nil}
 			if !p.Available {
 				p.Reason = "该平台导入服务尚未开通"

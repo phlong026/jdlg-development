@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -50,7 +51,7 @@ func (resolver *DouyidouResolver) Resolve(ctx context.Context, raw string) (Sour
 	if err != nil {
 		return Source{}, err
 	}
-	if link.Platform != Douyin && link.Platform != Xiaohongshu {
+	if link.Platform != Douyin && link.Platform != Xiaohongshu && link.Platform != Kuaishou {
 		return Source{}, fail("unsupported_platform")
 	}
 
@@ -112,14 +113,19 @@ func douyidouSignature(appID, appSecret, sourceURL string) (string, string) {
 type douyidouPayload struct {
 	AwemeID json.RawMessage `json:"aweme_id"`
 	NoteID  json.RawMessage `json:"note_id"`
+	PhotoID json.RawMessage `json:"photo_id"`
 	ItemID  json.RawMessage `json:"item_id"`
 	ID      json.RawMessage `json:"id"`
 	Title   string          `json:"title"`
 	Text    string          `json:"text"`
+	Type    string          `json:"type"`
 	Author  json.RawMessage `json:"author"`
 	Cover   string          `json:"cover"`
 	Video   json.RawMessage `json:"video"`
-	Other   struct {
+	// Images 为网关图集字段（B18-B：抖音/快手图文笔记）。官方契约文档明确该数组
+	// 与 video 同级；历史上本服务只消费 video，图集链接被整体丢弃。
+	Images json.RawMessage `json:"images"`
+	Other  struct {
 		Duration json.RawMessage `json:"duration"`
 	} `json:"other"`
 	Duration      json.RawMessage `json:"duration"`
@@ -158,17 +164,21 @@ func decodeDouyidou(body []byte) (douyidouPayload, error) {
 
 func douyidouSource(link ParsedLink, payload douyidouPayload) (Source, error) {
 	videoURL := firstRemoteURL(payload.Video)
-	if videoURL == "" {
+	imageURLs := douyidouImageURLs(payload.Images)
+	if videoURL == "" && len(imageURLs) == 0 {
 		return Source{}, fail("no_video")
 	}
 
 	var sourceID string
-	if link.Platform == Xiaohongshu {
-		sourceID = firstRawString(payload.NoteID, payload.ItemID, payload.ID)
-		sourceID = validXiaohongshuID(sourceID)
-	} else {
-		sourceID = firstRawString(payload.AwemeID, payload.ItemID, payload.ID)
-		sourceID = validDouyinID(sourceID)
+	switch link.Platform {
+	case Xiaohongshu:
+		sourceID = validXiaohongshuID(firstRawString(payload.NoteID, payload.ItemID, payload.ID))
+	case Kuaishou:
+		// 官方契约仅保证 platform=1（抖音）的 id 字段语义；快手 ID 放宽为
+		// 非空短标识，避免把合法链接误判为无效。
+		sourceID = validKuaishouID(firstRawString(payload.PhotoID, payload.ItemID, payload.AwemeID, payload.ID))
+	default:
+		sourceID = validDouyinID(firstRawString(payload.AwemeID, payload.ItemID, payload.ID))
 	}
 	if sourceID == "" {
 		return Source{}, fail("invalid_native_id")
@@ -181,12 +191,24 @@ func douyidouSource(link ParsedLink, payload douyidouPayload) (Source, error) {
 	if title == "" {
 		title = "链接视频"
 	}
-	media := RemoteMedia{
-		ID:         sourceID,
-		Kind:       "video",
-		URL:        videoURL,
-		Caption:    truncateRunes(strings.TrimSpace(payload.Text), 2000),
-		DurationMS: douyidouDuration(payload),
+	caption := truncateRunes(strings.TrimSpace(payload.Text), 2000)
+	media := make([]RemoteMedia, 0, len(imageURLs)+1)
+	if videoURL != "" {
+		media = append(media, RemoteMedia{
+			ID:         sourceID,
+			Kind:       "video",
+			URL:        videoURL,
+			Caption:    caption,
+			DurationMS: douyidouDuration(payload),
+		})
+	}
+	for index, image := range imageURLs {
+		media = append(media, RemoteMedia{
+			ID:      fmt.Sprintf("%s:image:%d", sourceID, index),
+			Kind:    "image",
+			URL:     image,
+			Caption: caption,
+		})
 	}
 	return Source{
 		Platform:            link.Platform,
@@ -194,10 +216,58 @@ func douyidouSource(link ParsedLink, payload douyidouPayload) (Source, error) {
 		SourceURL:           link.URL,
 		Title:               truncateRunes(title, 200),
 		Author:              truncateRunes(douyidouAuthor(payload.Author), 120),
-		Media:               []RemoteMedia{media},
+		Media:               media,
 		CoverURL:            validRemoteURL(payload.Cover),
 		WatermarkExtraction: true,
 	}, nil
+}
+
+// douyidouImageURLs 提取网关图集数组中的合法图片直链（去重保序）。
+func douyidouImageURLs(raw json.RawMessage) []string {
+	var entries []json.RawMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &entries) != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var urls []string
+	for _, entry := range entries {
+		var candidates []string
+		if value := rawString(entry); value != "" {
+			candidates = []string{value}
+		} else if err := json.Unmarshal(entry, &candidates); err == nil {
+			// 兼容 [{url:...}] 对象数组形态。
+			var objects []struct {
+				URL string `json:"url"`
+			}
+			if json.Unmarshal(entry, &objects) == nil {
+				candidates = nil
+				for _, object := range objects {
+					candidates = append(candidates, object.URL)
+				}
+			}
+		}
+		for _, candidate := range candidates {
+			if valid := validRemoteURL(candidate); valid != "" && !seen[valid] {
+				seen[valid] = true
+				urls = append(urls, valid)
+			}
+		}
+	}
+	return urls
+}
+
+// validKuaishouID：快手内容 ID 宽松校验（官方契约未保证其格式）。
+func validKuaishouID(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) < 4 || len(value) > 64 {
+		return ""
+	}
+	for _, r := range value {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '_' || r == '-') {
+			return ""
+		}
+	}
+	return value
 }
 
 func firstRemoteURL(raw json.RawMessage) string {

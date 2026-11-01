@@ -16,6 +16,7 @@ const (
 	WechatArticle Platform = "wechat_article"
 	Douyin        Platform = "douyin"
 	Xiaohongshu   Platform = "xiaohongshu"
+	Kuaishou      Platform = "kuaishou"
 	Channels      Platform = "channels"
 )
 

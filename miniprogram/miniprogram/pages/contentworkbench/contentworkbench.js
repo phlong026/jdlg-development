@@ -3,7 +3,7 @@ const api = require('../../utils/phase3-api');
 
 const pendingImport = status => status === 'queued' || status === 'resolving' || status === 'downloading';
 const statusText = status => ({ queued: '等待处理', resolving: '正在解析', downloading: '正在保存素材', ready: '草稿已生成', failed: '导入失败', uncertain: '结果待人工核对', blocked: '需要处理后重试' }[status] || '状态未知');
-const platformText = platform => ({ wechat_article: '微信公众号', douyin: '抖音', xiaohongshu: '小红书', channels: '视频号' }[platform] || platform || '待识别');
+const platformText = platform => ({ wechat_article: '微信公众号', douyin: '抖音', xiaohongshu: '小红书', kuaishou: '快手', channels: '视频号' }[platform] || platform || '待识别');
 const errorText = code => ({
   browser_required: '公众号文内视频采集服务尚未配置', requires_login: '视频号登录状态已失效', verification_required: '来源平台要求人工验证',
   rate_limited: '来源平台请求频繁，请稍后重试', unsupported_encryption: '该视频暂不支持安全导入', unsupported_embed: '正文含暂不支持的嵌入内容',
