@@ -151,7 +151,7 @@ const Login: React.FC = () => {
                                     disabled={loading}
                                 />
                                 <span className="remember-box" aria-hidden="true"></span>
-                                <span className="remember-text">28 天内保持登录</span>
+                                <span className="remember-text">记住密码</span>
                             </label>
 
                             {/* 登录按钮 */}

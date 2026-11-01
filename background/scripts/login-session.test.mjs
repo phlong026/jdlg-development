@@ -136,7 +136,7 @@ async function loginPage(overrides = {}) {
 
 test('remember option asks the server for a persistent session without storing credentials', async () => {
   const page = await loginPage();
-  assert.match(page.text(), /28 天内保持登录/);
+  assert.match(page.text(), /记住密码/);
   page.input('login-account').props.onChange({ target: { value: ' admin ' } });
   page.input('login-password').props.onChange({ target: { value: 'secret' } });
   page.checkbox().props.onChange({ target: { checked: true } });
