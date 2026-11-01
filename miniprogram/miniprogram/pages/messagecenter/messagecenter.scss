@@ -177,3 +177,40 @@ button::after {
   color: #76593a;
   font-size: 25rpx;
 }
+
+.pref-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  margin: 16rpx 0;
+  padding: 24rpx;
+  border: 1rpx solid #eee8e1;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.pref-texts {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.pref-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2b211b;
+}
+
+.pref-desc {
+  font-size: 23rpx;
+  color: #817568;
+  line-height: 1.5;
+}

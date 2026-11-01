@@ -7,6 +7,16 @@
       <button wx:if="{{canBind}}" class="strip-action" bindtap="onBind" loading="{{bindingBusy}}">连接</button>
       <button wx:else class="strip-action quiet" bindtap="loadBinding">刷新</button>
     </view>
+    <view wx:if="{{!loginRequired && prefsVisible}}" class="pref-card">
+      <view class="pref-row">
+        <view class="pref-texts"><text class="pref-title">浏览类提醒</text><text class="pref-desc">内容或合集被访问时推送；关闭后仅在消息中心保留</text></view>
+        <switch checked="{{browseDelivery}}" disabled="{{prefsBusy}}" color="#a87943" bindchange="onToggleBrowse" aria-label="浏览类提醒推送开关" />
+      </view>
+      <view class="pref-row">
+        <view class="pref-texts"><text class="pref-title">项目动态提醒</text><text class="pref-desc">业主反馈、阅读回执与加入申请；关闭后仅在消息中心保留</text></view>
+        <switch checked="{{projectDelivery}}" disabled="{{prefsBusy}}" color="#a87943" bindchange="onToggleProject" aria-label="项目动态提醒推送开关" />
+      </view>
+    </view>
     <view wx:if="{{loginRequired}}" class="empty-card"><text class="empty-title">登录后查看消息</text><text class="empty-desc">访问提醒和项目反馈会保留在这里</text><button class="primary-action" bindtap="onLogin">登录</button></view>
     <block wx:else>
       <view class="toolbar"><text>未读 {{unread}}</text><button bindtap="onReadAll" size="mini" disabled="{{!unread}}">全部已读</button></view>

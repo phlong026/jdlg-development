@@ -132,3 +132,64 @@ func TestNotificationNilStoreReturnsUnavailable(t *testing.T) {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
 }
+
+type fakePreferenceStore struct {
+	fakeInboxStore
+	prefs     notification.Preferences
+	saved     []notification.Preferences
+	loadFail  error
+	saveFail  error
+}
+
+func (s *fakePreferenceStore) LoadPreferences(_ context.Context, recipient int64) (notification.Preferences, error) {
+	s.recipient = recipient
+	return s.prefs, s.loadFail
+}
+
+func (s *fakePreferenceStore) SavePreferences(_ context.Context, recipient int64, prefs notification.Preferences) error {
+	s.recipient = recipient
+	if s.saveFail != nil {
+		return s.saveFail
+	}
+	s.saved = append(s.saved, prefs)
+	s.prefs = prefs
+	return nil
+}
+
+func TestNotificationPreferencesRoundTripAndValidation(t *testing.T) {
+	store := &fakePreferenceStore{prefs: notification.Preferences{BrowseDelivery: true, ProjectDelivery: true}}
+	router := notificationRouter(store)
+
+	// GET 默认值（全开）
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/notifications/preferences?user_id=99", nil))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"browse_delivery":true`) || store.recipient != 42 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+
+	// PUT 持久化关闭浏览类外发
+	w = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/notifications/preferences?user_id=99", strings.NewReader(`{"browse_delivery":false,"project_delivery":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != 200 || len(store.saved) != 1 || store.saved[0].BrowseDelivery {
+		t.Fatal(w.Code, w.Body.String(), store.saved)
+	}
+
+	// 缺字段拒绝：不能让半份配置静默生效
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, "/notifications/preferences", strings.NewReader(`{"browse_delivery":false}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != 400 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+
+	// 未实现 PreferenceStore 的旧存储：明确 503 而不是假装成功
+	legacy := notificationRouter(&fakeInboxStore{})
+	w = httptest.NewRecorder()
+	legacy.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/notifications/preferences", nil))
+	if w.Code != 503 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}

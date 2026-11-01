@@ -14,13 +14,13 @@ function messagePresentation(kind){
  return {categoryLabel:'消息',actionLabel:'查看详情'};
 }
 Page({
- data:{loading:false,messages:[],cursor:'',unread:0,error:'',loginRequired:false,bindingLabel:'正在检查提醒状态',canBind:false,bindingBusy:false},
+ data:{loading:false,messages:[],cursor:'',unread:0,error:'',loginRequired:false,bindingLabel:'正在检查提醒状态',canBind:false,bindingBusy:false,prefsVisible:false,prefsBusy:false,browseDelivery:true,projectDelivery:true},
  onLoad(options){this._pendingNotice=String(options.notification_id||'');},
  onShow(){
   wx.hideShareMenu();this._epoch=(this._epoch||0)+1;this._token=String(wx.getStorageSync('token')||'');
   this.setData({messages:[],cursor:'',unread:0,error:'',loading:false,loginRequired:!this._token,canBind:false});
   if(!this._token){this.setData({bindingLabel:'登录后查看浏览提醒'});return;}
-  this.loadMessages(false);this.loadBinding();
+  this.loadMessages(false);this.loadBinding();this.loadPrefs();
  },
  onUnload(){this._epoch=(this._epoch||0)+1;},
  current(epoch){return epoch===this._epoch&&this._token===String(wx.getStorageSync('token')||'');},
@@ -66,6 +66,20 @@ Page({
    wx.setClipboardData({data:url,success:()=>{if(this.current(epoch))wx.showModal({title:'连接浏览提醒',content:'授权链接已复制，请在微信中打开并完成连接，然后返回这里刷新状态。',showCancel:false});}});
   }catch(error){if(this.current(epoch))wx.showToast({title:'暂时无法连接提醒，请稍后重试',icon:'none'});}
   finally{if(this.current(epoch))this.setData({bindingBusy:false});}
- }
+ },
+ // 分类外发开关（B16b）：只控制服务号推送，消息中心始终保留全部提醒。
+ async loadPrefs(){const epoch=this._epoch;
+  try{const prefs=await request(ROOT+'/preferences');if(!this.current(epoch))return;
+   if(typeof prefs.browse_delivery!=='boolean'||typeof prefs.project_delivery!=='boolean')return;
+   this.setData({prefsVisible:true,browseDelivery:prefs.browse_delivery,projectDelivery:prefs.project_delivery});
+  }catch(error){/* 服务端未迁移该能力时静默隐藏设置卡 */}
+ },
+ async savePrefs(browse,project){const epoch=this._epoch;this.setData({prefsBusy:true});
+  try{await request(ROOT+'/preferences','PUT',{browse_delivery:browse,project_delivery:project});if(!this.current(epoch))return;
+   this.setData({browseDelivery:browse,projectDelivery:project,prefsBusy:false});
+  }catch(error){if(this.current(epoch)){this.setData({prefsBusy:false,browseDelivery:this.data.browseDelivery,projectDelivery:this.data.projectDelivery});wx.showToast({title:'设置未保存，请重试',icon:'none'});}}
+ },
+ onToggleBrowse(event){if(this.data.prefsBusy)return;this.savePrefs(!!event.detail.value,this.data.projectDelivery);},
+ onToggleProject(event){if(this.data.prefsBusy)return;this.savePrefs(this.data.browseDelivery,!!event.detail.value);}
 });
 export {};

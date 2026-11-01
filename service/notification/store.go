@@ -206,7 +206,7 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE notification_id=notificat
 		if err != nil {
 			return storeError("materialize_inbox", err)
 		}
-		if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
+		if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) && !s.categoryOptedOut(ctx, tx, notice.RecipientID, job.Event.Kind) {
 			if eligibility.BindingVersion <= 0 {
 				return ErrInvalidInput
 			}

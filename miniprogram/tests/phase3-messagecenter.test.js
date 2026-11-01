@@ -76,3 +76,34 @@ test('join request opens member approval and never treats invitation id as publi
   assert.deepEqual(navigation,route.includes('project_id=')?['/'+route]:[]);
  }
 });
+test('delivery preference toggles PUT both fields and stay hidden when unavailable',async()=>{
+ const {page,calls}=runtime(url=>url.includes('preferences')?{browse_delivery:true,project_delivery:true}:url.includes('unread-count')?{unread_count:0}:url.includes('official-account')?{capability:{binding_available:false}}:{items:[]});
+ page.onShow();await tick();
+ assert.equal(page.data.prefsVisible,true,'服务端支持偏好接口时展示设置卡');
+ await page.onToggleBrowse({detail:{value:false}});await tick();
+ const put=calls.find(c=>c[0].endsWith('/preferences')&&c[1]==='PUT');
+ assert.equal(put[2].browse_delivery,false,'保存必须整份提交两个字段');
+ assert.equal(put[2].project_delivery,true);
+ assert.equal(page.data.browseDelivery,false);
+
+ // 服务端未迁移偏好能力（响应无布尔字段）：设置卡隐藏，不影响消息列表
+ const legacy=runtime(url=>url.includes('preferences')?{items:[]}:url.includes('unread-count')?{unread_count:0}:url.includes('official-account')?{capability:{binding_available:false}}:{items:[]});
+ legacy.page.onShow();await tick();
+ assert.equal(legacy.page.data.prefsVisible,false);
+
+ // 保存失败回滚到原值
+ let saveOK=false;
+ const flaky=runtime(url=>{
+  if(!url.includes('preferences'))return url.includes('unread-count')?{unread_count:0}:url.includes('official-account')?{capability:{binding_available:false}}:{items:[]};
+  if(!saveOK)return {browse_delivery:true,project_delivery:true};
+  throw Error('save failed');
+ });
+ flaky.page.onShow();await tick();
+ flaky.page._epoch=1;saveOK=true;
+ await flaky.page.savePrefs(false,true);await tick();
+ assert.equal(flaky.page.data.browseDelivery,true,'保存失败必须回滚开关状态');
+ const wxml=fs.readFileSync(path.join(__dirname,'../miniprogram/pages/messagecenter/messagecenter.wxml'),'utf8');
+ assert.match(wxml,/bindchange="onToggleBrowse"/);
+ assert.match(wxml,/bindchange="onToggleProject"/);
+ assert.match(wxml,/wx:if="\{\{!loginRequired && prefsVisible\}\}"/);
+});

@@ -26,16 +26,33 @@ type fakeDurableStore struct {
 	receipts          map[string]string
 	failDelivery      bool
 	browseMergeWindow time.Duration
+	prefs             map[int64]Preferences
 	inTx              bool
 	seq               int
 }
 
 func newFakeDurableStore(events ...Event) *fakeDurableStore {
-	store := &fakeDurableStore{events: map[string]Event{}, eventJobs: map[string]fakeEventState{}, notices: map[string]Notification{}, deliveries: map[string]Delivery{}, receipts: map[string]string{}}
+	store := &fakeDurableStore{events: map[string]Event{}, eventJobs: map[string]fakeEventState{}, notices: map[string]Notification{}, deliveries: map[string]Delivery{}, receipts: map[string]string{}, prefs: map[int64]Preferences{}}
 	for _, event := range events {
 		store.events[event.ID] = event
 	}
 	return store
+}
+
+// categoryOptedOut 与 SQLStore 的外发类别检查保持同一语义（B16b）。
+func (s *fakeDurableStore) categoryOptedOut(recipientID int64, kind string) bool {
+	category := deliveryCategory(kind)
+	if category == "" || recipientID <= 0 {
+		return false
+	}
+	prefs, ok := s.prefs[recipientID]
+	if !ok {
+		return false
+	}
+	if category == "browse" {
+		return !prefs.BrowseDelivery
+	}
+	return !prefs.ProjectDelivery
 }
 
 func (s *fakeDurableStore) token() string {
@@ -97,7 +114,7 @@ func (s *fakeDurableStore) MaterializeEvent(_ context.Context, job *EventJob, ch
 		return errors.New("delivery insert failed")
 	}
 	s.notices[notice.ID] = notice
-	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
+	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) && !s.categoryOptedOut(notice.RecipientID, job.Event.Kind) {
 		s.deliveries[delivery.ID] = delivery
 	}
 	state.status, state.leaseToken, state.leaseUntil = "processed", "", time.Time{}

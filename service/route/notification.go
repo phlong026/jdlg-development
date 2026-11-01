@@ -99,6 +99,36 @@ func registerNotificationHandlers(group *gin.RouterGroup, store notification.Inb
 		err := store.MarkRead(c.Request.Context(), GetTokenUserID(c), c.Param("id"), time.Now().UTC())
 		notificationResponse(c, gin.H{"notification_id": c.Param("id"), "read": err == nil}, err)
 	})
+	// 分类外发开关（B16b）：能力由 store 类型断言探测，未迁移的部署保持 503 提示。
+	prefStore, prefOK := store.(notification.PreferenceStore)
+	group.GET("/preferences", func(c *gin.Context) {
+		if !prefOK {
+			notificationResponse(c, nil, notification.ErrUnavailable)
+			return
+		}
+		prefs, err := prefStore.LoadPreferences(c.Request.Context(), GetTokenUserID(c))
+		notificationResponse(c, prefs, err)
+	})
+	group.PUT("/preferences", func(c *gin.Context) {
+		if !prefOK {
+			notificationResponse(c, nil, notification.ErrUnavailable)
+			return
+		}
+		var body struct {
+			BrowseDelivery  *bool `json:"browse_delivery"`
+			ProjectDelivery *bool `json:"project_delivery"`
+		}
+		if c.ShouldBindJSON(&body) != nil || body.BrowseDelivery == nil || body.ProjectDelivery == nil {
+			notificationResponse(c, nil, notification.ErrInvalidInput)
+			return
+		}
+		prefs := notification.Preferences{BrowseDelivery: *body.BrowseDelivery, ProjectDelivery: *body.ProjectDelivery}
+		if err := prefStore.SavePreferences(c.Request.Context(), GetTokenUserID(c), prefs); err != nil {
+			notificationResponse(c, nil, err)
+			return
+		}
+		notificationResponse(c, prefs, nil)
+	})
 }
 
 func notificationResponse(c *gin.Context, value any, err error) {
