@@ -189,8 +189,13 @@ function mutationKey(prefix) {
   return prefix + '-' + Date.now() + '-' + mutationSequence;
 }
 
+// 服务端 Prompt 注册表（B5）：业务措辞可运营调整而无需发版。
+async function writingPrompts() {
+  return request(WORKBENCH + '/writing-prompts');
+}
+
 module.exports = {
-  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
+  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
   saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,

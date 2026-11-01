@@ -195,6 +195,8 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 	if strings.TrimSpace(appID) != "" && strings.TrimSpace(secret) != "" {
 		video = contentimport.NewDouyidouResolver(contentimport.DouyidouConfig{AppID: appID, AppSecret: secret})
 		resolvers[contentimport.Douyin] = contentimport.VideoDocumentResolver{Resolver: video}
+		// B18-B：快手与抖音同一网关凭据，一并注册。
+		resolvers[contentimport.Kuaishou] = contentimport.VideoDocumentResolver{Resolver: video}
 	}
 	resolvers[contentimport.Xiaohongshu] = contentimport.VideoDocumentResolver{Resolver: contentimport.XHSResolver{Fetcher: fetcher, Video: video}}
 	if enabled && os.Getenv("CONTENT_IMPORT_YUANBAO_ENABLED") == "true" {
