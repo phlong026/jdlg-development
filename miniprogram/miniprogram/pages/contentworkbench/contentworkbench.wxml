@@ -14,7 +14,7 @@
         <view class="workspace-links">
           <button class="workspace-link" bindtap="openImportView"><t-icon name="link" size="20px" /><text>链接导入</text></button>
           <button class="workspace-link" bindtap="openAIWriting"><t-icon name="edit-1" size="20px" /><text>AI文案</text></button>
-          <button class="workspace-link" bindtap="openShareVisits"><t-icon name="share" size="20px" /><text>分享记录</text></button>
+          <button wx:if="{{hasShareVisitAccess}}" class="workspace-link" bindtap="openShareVisits"><t-icon name="share" size="20px" /><text>分享记录</text></button>
         </view>
         <view class="category-tabs" role="tablist"><button wx:for="{{categories}}" wx:key="key" class="category-tab {{category === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="selectCategory" role="tab" aria-selected="{{category === item.key}}">{{item.label}}</button></view>
         <view wx:if="{{searchTerm}}" class="filter-note">“{{searchTerm}}”的搜索结果<button class="text-button" bindtap="clearSearch">清空</button></view>

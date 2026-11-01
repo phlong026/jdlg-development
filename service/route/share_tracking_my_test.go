@@ -161,6 +161,63 @@ func TestMySharesScopeRequiresExplicitViewGrant(t *testing.T) {
 	}
 }
 
+func TestMySharesCapabilityDenialDoesNotBecomeDataAccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := sql.Open("tracking-my-scope", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, test := range []struct {
+		actor  int64
+		path   string
+		status int
+	}{
+		{22, "/context", 200},
+		{22, "", 403},
+		{22, "/someone-elses-share/visits", 403},
+		{0, "/context", 401},
+		{11, "/context", 200},
+	} {
+		router := gin.New()
+		g := router.Group("/api/v1/miniprogram/tracking/my-shares", func(c *gin.Context) {
+			c.Set("user_id", test.actor)
+			c.Next()
+		}, miniTrackingMyScopeMiddleware(db, "tenant"))
+		registerTrackingMyHandlers(g, nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/tracking/my-shares"+test.path+"?can_view=true&owner=company&user_id=11", nil))
+		if response.Code != test.status {
+			t.Fatalf("actor=%d path=%s got=%d body=%s", test.actor, test.path, response.Code, response.Body.String())
+		}
+		if test.actor == 22 && test.path == "/context" {
+			var result struct {
+				Data struct {
+					CanView bool     `json:"can_view"`
+					Owners  []string `json:"owners"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Data.CanView || result.Data.Owners == nil || len(result.Data.Owners) != 0 {
+				t.Fatalf("denied capability disclosed a scope: %s", response.Body.String())
+			}
+		}
+		if response.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatal("capability response must not be cached")
+		}
+	}
+	router := gin.New()
+	g := router.Group("/api/v1/miniprogram/tracking/my-shares", func(c *gin.Context) { c.Set("user_id", int64(11)); c.Next() }, miniTrackingMyScopeMiddleware(nil, "tenant"))
+	registerTrackingMyHandlers(g, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/tracking/my-shares/context", nil))
+	if response.Code != 503 {
+		t.Fatalf("backend failure became no permission: %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestMySharesContextRequiresRealSignedMiniSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

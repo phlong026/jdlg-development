@@ -36,7 +36,7 @@ Page({
   data: {
     view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [],
     categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
-    loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false,
+    loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importServiceEnabled: false, importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
     importRights: '', importBusy: false, importError: '', imports: [], importPolling: false,
@@ -48,20 +48,41 @@ Page({
     this.stopImportPoll();
     this._visible = true; this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
     this.setData({
-      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false,
+      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false, hasShareVisitAccess: false,
       loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
       importError: '', imports: [], importPolling: false,
     });
-    if (token) this.load(true, this._epoch);
+    if (token) {
+      void this.loadShareVisitAccess(token);
+      this.load(true, this._epoch);
+    }
   },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
-  onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
+  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
+  onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() {
     this.stopImportPoll();
     const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false;
+    this.setData({ hasShareVisitAccess: false });
+    void this.loadShareVisitAccess(this._token);
     this.load(true, epoch).finally(() => wx.stopPullDownRefresh());
+  },
+  async loadShareVisitAccess(token) {
+    const requestId = (this._shareAccessRequestId || 0) + 1;
+    this._shareAccessRequestId = requestId;
+    const current = () => this._visible && requestId === this._shareAccessRequestId && token === this._token && token === String(wx.getStorageSync('token') || '');
+    if (!token || token !== String(wx.getStorageSync('token') || '')) return;
+    try {
+      const context = await api.mySharesContext();
+      if (!current()) return;
+      const hasShareVisitAccess = context?.can_view === true && Array.isArray(context?.owners) && context.owners.length > 0;
+      this.setData({ hasShareVisitAccess });
+    } catch (error) {
+      if (!current()) return;
+      console.warn('获取分享访问权限失败:', error);
+      this.setData({ hasShareVisitAccess: false });
+    }
   },
   async load(reset, suppliedEpoch) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
@@ -139,7 +160,10 @@ Page({
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
   openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },
-  openShareVisits() { this.navigate('/pages/sharevisits/sharevisits'); },
+  openShareVisits() {
+    if (!this.data.hasShareVisitAccess || !this.current(this._epoch)) return;
+    this.navigate('/pages/sharevisits/sharevisits');
+  },
   openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
   openCreateMenu() {

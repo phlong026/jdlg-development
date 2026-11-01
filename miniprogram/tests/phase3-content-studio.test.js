@@ -19,6 +19,7 @@ function runtime(overrides = {}) {
   const queries = [], navigations = [];
   let actionSheet;
   const api = Object.assign({
+    mySharesContext: async () => ({ can_view: true, owners: ['owner-a'] }),
     workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'] }),
     listContents: async query => { queries.push(query); return { items: [{ content_id: 'article-a', title: '庭院图文', type: 'article', status: 'draft', media: [] }, { content_id: 'video-a', title: '庭院视频', type: 'article', status: 'published', media: [{ kind: 'video', media_id: 'video-asset' }] }, { content_id: 'document-a', title: '庭院方案.pdf', type: 'document', status: 'draft', media: [{ kind: 'document', media_id: 'document-asset' }] }], next_cursor: 'page-2', as_of: '2026-10-27T00:00:00Z', metric_version: 'v1' }; },
     importCapabilities: async () => ({ enabled: true, platforms: [{ platform: 'wechat_article', available: true }] }),
@@ -97,8 +98,9 @@ test('link import is an explicit view and paste reuses the existing submission f
   assert.equal(navigations[0], '/pages/contentworkbench/contentworkbench?view=import');
 });
 
-test('studio offers real destinations for existing assets and visits', () => {
+test('studio offers real destinations for existing assets and visits', async () => {
   const { page, navigations } = runtime();
+  page.onShow(); await tick();
   page.openExistingAssets(); page.openShareVisits();
   assert.deepEqual(navigations, ['/pages/nativereferences/nativereferences', '/pages/sharevisits/sharevisits']);
 });

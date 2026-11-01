@@ -30,6 +30,7 @@ type designerScopeAccount struct {
 type designerScopeConnector struct {
 	accounts map[int64]designerScopeAccount
 	queries  int
+	shares   map[int64][]string
 }
 type designerScopeConn struct{ state *designerScopeConnector }
 
@@ -49,14 +50,24 @@ func (c designerScopeConn) QueryContext(_ context.Context, query string, args []
 			return nil, fmt.Errorf("missing account predicate: %s", predicate)
 		}
 	}
-	if !viewOnly {
-		for _, predicate := range []string{"t.can_manage=TRUE", "UNION", "CONCAT('designer-', u.id)", "u.id=?", "EXISTS", "certification_applications ca", "ca.user_id=u.id", "ca.type='designer'", "ca.status='approved'", "TRIM(ca.identity_type)='设计师'"} {
+	if !viewOnly || strings.Contains(query, "certification_applications ca") {
+		for _, predicate := range []string{"UNION", "u.id=?", "EXISTS", "certification_applications ca", "ca.user_id=u.id", "ca.type='designer'", "ca.status='approved'", "TRIM(ca.identity_type)='设计师'"} {
 			if !strings.Contains(query, predicate) {
 				return nil, fmt.Errorf("missing certification predicate: %s", predicate)
 			}
 		}
-		if strings.Count(query, "u.user_type='miniprogram'") != 2 || strings.Count(query, "COALESCE(u.status,'active')='active'") != 2 || len(args) != 3 || args[2].Value != args[0].Value {
+		if strings.Count(query, "u.user_type='miniprogram'") != 2 || strings.Count(query, "COALESCE(u.status,'active')='active'") != 2 || !viewOnly && (len(args) != 3 || args[2].Value != args[0].Value) {
 			return nil, errors.New("personal scope must use the same active mini-account")
+		}
+	}
+	if viewOnly {
+		for _, predicate := range []string{"r.tenant_id=?", "r.kind='share'", "r.visitor_key=?", "r.visitor_key=''", "'$.sharer_id'", "NOT EXISTS", "denied.user_id=u.id", "denied.tenant_id=?", "denied.owner_id=candidate.owner_id", "denied.enabled=FALSE OR denied.can_view=FALSE"} {
+			if !strings.Contains(query, predicate) {
+				return nil, fmt.Errorf("missing self-share boundary: %s", predicate)
+			}
+		}
+		if len(args) != 8 || args[2].Value != args[0].Value || args[6].Value != args[0].Value || args[3].Value != args[1].Value || args[7].Value != args[1].Value || args[4].Value != fmt.Sprintf("u:%d", args[0].Value) || args[5].Value != args[4].Value {
+			return nil, errors.New("self-share scope must bind the current actor and tenant")
 		}
 	}
 	if strings.Contains(query, "can_withdraw") || strings.Contains(query, "user_profiles") {
@@ -73,10 +84,26 @@ func (c designerScopeConn) QueryContext(_ context.Context, query string, args []
 			rows.values = append(rows.values, grant.owner)
 		}
 	}
-	if !viewOnly {
+	if !viewOnly || strings.Contains(query, "certification_applications ca") {
 		for _, certification := range account.certifications {
 			if certification.kind == "designer" && certification.status == "approved" && strings.TrimSpace(certification.identity) == "设计师" {
-				rows.values = append(rows.values, fmt.Sprintf("designer-%d", actor))
+				owners := []string{fmt.Sprintf("designer-%d", actor)}
+				if viewOnly {
+					owners = append(owners, c.state.shares[actor]...)
+				}
+				for _, owner := range owners {
+					denied := false
+					if viewOnly {
+						for _, grant := range account.grants {
+							if grant.owner == owner && (!grant.enabled || !grant.view) {
+								denied = true
+							}
+						}
+					}
+					if !denied {
+						rows.values = append(rows.values, owner)
+					}
+				}
 				break
 			}
 		}
@@ -141,13 +168,40 @@ func TestCertifiedDesignerMaterialScopeAuthorityMatrix(t *testing.T) {
 	}
 }
 
-func TestCertifiedDesignerDoesNotReceiveVisitorAnalytics(t *testing.T) {
-	db, _ := designerScopeDB(t, map[int64]designerScopeAccount{41: {"miniprogram", "active", []designerScopeCertification{{"designer", "approved", "设计师"}}, nil}})
-	if _, err := loadMiniTrackingMaterialScope(context.Background(), db, "tenant-a", 41); err != nil {
-		t.Fatal(err)
+func TestCertifiedDesignerOwnSharesAuthority(t *testing.T) {
+	approved := designerScopeCertification{"designer", "approved", "设计师"}
+	cases := []struct {
+		name    string
+		account designerScopeAccount
+		owners  []string
+	}{
+		{"approved designer", designerScopeAccount{"miniprogram", "active", []designerScopeCertification{approved}, nil}, []string{"company", "designer-41"}},
+		{"self declared", designerScopeAccount{"miniprogram", "active", nil, nil}, nil},
+		{"pending", designerScopeAccount{"miniprogram", "active", []designerScopeCertification{{"designer", "pending_review", "设计师"}}, nil}, nil},
+		{"revoked certification", designerScopeAccount{"miniprogram", "active", []designerScopeCertification{{"designer", "rejected", "设计师"}}, nil}, nil},
+		{"other identity", designerScopeAccount{"miniprogram", "active", []designerScopeCertification{{"designer", "approved", "施工队"}}, nil}, nil},
+		{"banned", designerScopeAccount{"miniprogram", "banned", []designerScopeCertification{approved}, nil}, nil},
+		{"management", designerScopeAccount{"management", "active", []designerScopeCertification{approved}, nil}, nil},
+		{"explicit owner denial", designerScopeAccount{"miniprogram", "active", []designerScopeCertification{approved}, []designerScopeGrant{{"company", true, true, false}}}, []string{"designer-41"}},
+		{"explicit owner disabled", designerScopeAccount{"miniprogram", "active", []designerScopeCertification{approved}, []designerScopeGrant{{"company", false, true, true}}}, []string{"designer-41"}},
+		{"independent explicit view", designerScopeAccount{"miniprogram", "active", nil, []designerScopeGrant{{"organization", true, false, true}}}, []string{"organization"}},
 	}
-	if _, err := loadMiniTrackingMyScope(context.Background(), db, "tenant-a", 41); err == nil {
-		t.Fatal("certification must not grant visitor analytics")
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			db, state := designerScopeDB(t, map[int64]designerScopeAccount{41: test.account})
+			state.shares = map[int64][]string{41: {"company"}}
+			scope, err := loadMiniTrackingMyScope(context.Background(), db, "tenant-a", 41)
+			if len(test.owners) == 0 {
+				if !errors.Is(err, errMySharesViewDenied) {
+					t.Fatalf("expected denial: %+v %v", scope, err)
+				}
+				return
+			}
+			sort.Strings(scope.Owners)
+			if err != nil || !reflect.DeepEqual(scope.Owners, test.owners) || !scope.View || scope.Manage || scope.CRM || scope.Delete || scope.Rules || scope.Actor != 41 {
+				t.Fatalf("wrong self-only scope: %+v %v", scope, err)
+			}
+		})
 	}
 }
 
