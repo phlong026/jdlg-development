@@ -47,7 +47,8 @@
       <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" bind:authrequired="onProfileAuthRequired" />
     </view>
 
-    <view wx:if="{{!completingProfile}}" class="other-login-section">
+    <!-- 暂时只展示微信登录入口，保留其他登录方式以便后续恢复。 -->
+    <view wx:if="{{false}}" class="other-login-section">
       <view class="other-login-divider">
         <view class="divider-line"></view>
         <text class="divider-text">其他登录方式</text>
