@@ -53,3 +53,20 @@ test('登录与资料确认使用同一场景，编辑器持续挂载以保留�
   const page = fs.readFileSync(path.join(sourceRoot, 'pages/login/login.wxml'), 'utf8');
   assert.match(page, /<nickname-guard[^>]+embedded="{{true}}"/);
 });
+
+test('分享欢迎文案可单独调整，独立登录页仍使用原默认文案', () => {
+  const template = fs.readFileSync(path.join(sourceRoot, 'templates/auth-welcome.wxml'), 'utf8');
+  const share = fs.readFileSync(path.join(sourceRoot, 'components/login-guard/login-guard.wxml'), 'utf8');
+  const login = fs.readFileSync(path.join(sourceRoot, 'pages/login/login.wxml'), 'utf8');
+  assert.match(template, /motto \|\| '让乡墅业主都会用，让设计师喜欢用'/);
+  assert.match(template, /headline \|\| '建房别墅'/);
+  assert.match(template, /communityCopy \|\| '一起发现理想的家'/);
+  for (const copy of ['乡村住宅AI设计与协作平台', '建别墅', '免费开启您的理想家', '海量乡墅案例 · AI设计体验 · 建房造价测算', '一起开启理想家的设计之旅']) {
+    assert.ok(share.includes(copy), `分享欢迎页应显示：${copy}`);
+    assert.ok(!login.includes(copy), `独立登录页不跟随修改：${copy}`);
+  }
+  assert.ok(share.indexOf('bindtap="onWxLogin"') < share.indexOf('is="auth-avatars"'), '登录按钮位于头像组上方');
+  assert.match(login, /<template is="auth-intro" \/>/);
+  assert.match(login, /登录，开启你的理想家/);
+  assert.match(login, /wx:if="\{\{false\}\}" class="other-login-section"/);
+});

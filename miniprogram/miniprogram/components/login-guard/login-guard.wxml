@@ -2,16 +2,15 @@
 <scroll-view hidden="{{!visible && !checking && !loggingIn && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
   <template is="auth-backdrop" />
   <view class="aw-content">
-    <template is="auth-intro" />
+    <template is="auth-intro" data="{{motto: '乡村住宅AI设计与协作平台', headline: '建别墅'}}" />
     <view wx:if="{{checking}}" class="login-guard aw-card lg-checking" catchtap="stopPropagation">
       <view class="lg-spinner"></view>
       <text class="lg-title">正在核验登录资料</text>
       <text class="lg-sub">请稍候</text>
     </view>
     <view wx:elif="{{!completingProfile}}" class="login-guard aw-card" catchtap="stopPropagation">
-      <text class="lg-title">{{needsLogin ? '登录后查看完整内容' : '重新连接，继续发现好设计'}}</text>
-      <text class="lg-sub">发现户型、案例、报价与设计灵感</text>
-      <template is="auth-avatars" />
+      <text class="lg-title">{{needsLogin ? '免费开启您的理想家' : '重新连接，继续发现好设计'}}</text>
+      <text class="lg-sub">海量乡墅案例 · AI设计体验 · 建房造价测算</text>
       <text wx:if="{{error}}" class="lg-error">{{error}}</text>
       <button wx:if="{{!checking && needsLogin}}" class="lg-login {{loggingIn ? 'lg-login-disabled' : ''}}" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
         <view class="lg-login-inner">
@@ -20,6 +19,7 @@
         </view>
       </button>
       <button wx:if="{{!checking && !needsLogin}}" class="lg-login lg-login-plain" bindtap="onRetry">重新检查资料</button>
+      <template is="auth-avatars" data="{{communityCopy: '一起开启理想家的设计之旅'}}" />
       <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
         <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
           <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>

@@ -68,6 +68,7 @@
 
 .login-guard .lg-login {
   width: 100%;
+  margin-top: 24rpx;
   height: 96rpx;
   border-radius: 20rpx;
   background: linear-gradient(135deg, #a67d48, #90653b);
@@ -90,6 +91,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.login-guard .aw-community {
+  margin: 22rpx 0 0;
 }
 
 .lg-wx-icon {
