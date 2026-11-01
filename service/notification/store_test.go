@@ -18,15 +18,16 @@ type fakeEventState struct {
 }
 
 type fakeDurableStore struct {
-	mu           sync.Mutex
-	events       map[string]Event
-	eventJobs    map[string]fakeEventState
-	notices      map[string]Notification
-	deliveries   map[string]Delivery
-	receipts     map[string]string
-	failDelivery bool
-	inTx         bool
-	seq          int
+	mu                sync.Mutex
+	events            map[string]Event
+	eventJobs         map[string]fakeEventState
+	notices           map[string]Notification
+	deliveries        map[string]Delivery
+	receipts          map[string]string
+	failDelivery      bool
+	browseMergeWindow time.Duration
+	inTx              bool
+	seq               int
 }
 
 func newFakeDurableStore(events ...Event) *fakeDurableStore {
@@ -75,6 +76,22 @@ func (s *fakeDurableStore) MaterializeEvent(_ context.Context, job *EventJob, ch
 		return nil
 	}
 	notice := noticeFromEvent(job.Event)
+	// 与 SQLStore.MaterializeEvent 保持同一合并维度：窗口内未读浏览提醒只刷新
+	// 时间与事件指向，不新建收件箱条目也不新建外发投递。
+	if recipientID, kind, shareID, at, mergeable := browseMergeTarget(job.Event, s.browseMergeWindow); mergeable {
+		existing := make([]Notification, 0, len(s.notices))
+		for _, item := range s.notices {
+			existing = append(existing, item)
+		}
+		if existingID, found := findMergeableBrowseNotice(existing, recipientID, kind, shareID, at, s.browseMergeWindow); found {
+			merged := s.notices[existingID]
+			merged.CreatedAt, merged.EventID = notice.CreatedAt, notice.EventID
+			s.notices[existingID] = merged
+			state.status, state.leaseToken, state.leaseUntil = "processed", "", time.Time{}
+			s.eventJobs[job.Event.ID] = state
+			return nil
+		}
+	}
 	delivery := Delivery{ID: notice.ID + ":" + channel, NotificationID: notice.ID, RecipientID: notice.RecipientID, Channel: channel, Status: DeliveryPending, BindingVersion: eligibility.BindingVersion, CreatedAt: notice.CreatedAt, UpdatedAt: notice.CreatedAt}
 	if s.failDelivery {
 		return errors.New("delivery insert failed")

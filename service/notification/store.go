@@ -19,11 +19,21 @@ import (
 type SQLStore struct {
 	db     *sql.DB
 	tenant string
+	// browseMergeWindow 为浏览提醒合并窗口；0 表示禁用（保持一事件一条通知）。
+	browseMergeWindow time.Duration
 }
 
 var _ ConsumerStore = (*SQLStore)(nil)
 var _ DeliveryStore = (*SQLStore)(nil)
 var _ InboxStore = (*SQLStore)(nil)
+
+// SetBrowseMergeWindow 配置浏览提醒合并窗口（<=0 禁用）。必须在消费 worker 启动前设置。
+func (s *SQLStore) SetBrowseMergeWindow(window time.Duration) {
+	if window < 0 {
+		window = 0
+	}
+	s.browseMergeWindow = window
+}
 
 func NewSQLStore(db *sql.DB, tenant string) (*SQLStore, error) {
 	if db == nil || tenant == "" {
@@ -170,24 +180,44 @@ func (s *SQLStore) MaterializeEvent(ctx context.Context, job *EventJob, channel 
 		return tx.Commit()
 	}
 	notice := noticeFromEvent(job.Event)
-	_, err = tx.ExecContext(ctx, `INSERT INTO mini_notifications
+	// 浏览提醒合并：窗口内同收件人+同分享+同类型已有未读提醒时，只刷新其时间与
+	// 最新事件指向，不再新建收件箱条目，也不再创建外发投递（窗口内只提醒一次）。
+	merged := false
+	if recipientID, kind, shareID, at, mergeable := browseMergeTarget(job.Event, s.browseMergeWindow); mergeable {
+		var existingID string
+		lookupErr := tx.QueryRowContext(ctx, `SELECT notification_id FROM mini_notifications
+WHERE tenant_id=? AND recipient_id=? AND kind=? AND share_id=? AND read_at IS NULL AND cancelled_at IS NULL AND created_at>=?
+ORDER BY created_at DESC LIMIT 1`, s.tenant, recipientID, kind, shareID, at.Add(-s.browseMergeWindow)).Scan(&existingID)
+		if lookupErr == nil {
+			if _, updateErr := tx.ExecContext(ctx, `UPDATE mini_notifications SET created_at=?, event_id=? WHERE tenant_id=? AND notification_id=? AND read_at IS NULL AND cancelled_at IS NULL`,
+				notice.CreatedAt, notice.EventID, s.tenant, existingID); updateErr != nil {
+				return storeError("materialize_merge", updateErr)
+			}
+			merged = true
+		} else if !errors.Is(lookupErr, sql.ErrNoRows) {
+			return storeError("materialize_merge_lookup", lookupErr)
+		}
+	}
+	if !merged {
+		_, err = tx.ExecContext(ctx, `INSERT INTO mini_notifications
 (tenant_id,notification_id,event_id,recipient_id,kind,title,body,route_key,content_id,share_id,created_at)
 VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE notification_id=notification_id`,
-		s.tenant, notice.ID, notice.EventID, notice.RecipientID, notice.Kind, notice.Title, notice.Body, notice.Route, notice.ContentID, notice.ShareID, notice.CreatedAt)
-	if err != nil {
-		return storeError("materialize_inbox", err)
-	}
-	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
-		if eligibility.BindingVersion <= 0 {
-			return ErrInvalidInput
+			s.tenant, notice.ID, notice.EventID, notice.RecipientID, notice.Kind, notice.Title, notice.Body, notice.Route, notice.ContentID, notice.ShareID, notice.CreatedAt)
+		if err != nil {
+			return storeError("materialize_inbox", err)
 		}
-		deliveryID := notice.ID + ":" + channel
-		_, err = tx.ExecContext(ctx, `INSERT INTO mini_notification_deliveries
+		if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
+			if eligibility.BindingVersion <= 0 {
+				return ErrInvalidInput
+			}
+			deliveryID := notice.ID + ":" + channel
+			_, err = tx.ExecContext(ctx, `INSERT INTO mini_notification_deliveries
 (tenant_id,delivery_id,notification_id,recipient_id,channel,status,attempt_count,binding_version,next_attempt_at,created_at,updated_at)
 VALUES (?,?,?,?,?,'pending',0,?,?,?,?) ON DUPLICATE KEY UPDATE delivery_id=delivery_id`,
-			s.tenant, deliveryID, notice.ID, notice.RecipientID, channel, eligibility.BindingVersion, notice.CreatedAt, notice.CreatedAt, notice.CreatedAt)
-		if err != nil {
-			return storeError("materialize_delivery", err)
+				s.tenant, deliveryID, notice.ID, notice.RecipientID, channel, eligibility.BindingVersion, notice.CreatedAt, notice.CreatedAt, notice.CreatedAt)
+			if err != nil {
+				return storeError("materialize_delivery", err)
+			}
 		}
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE mini_notification_event_jobs SET status='processed',lease_token=NULL,lease_until=NULL,updated_at=? WHERE tenant_id=? AND event_id=? AND status='processing' AND lease_token=?`, time.Now().UTC(), s.tenant, job.Event.ID, job.LeaseToken)

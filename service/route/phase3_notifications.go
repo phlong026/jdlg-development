@@ -91,6 +91,12 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 		if err != nil {
 			inbox = nil
 			log.Printf("[notification] error inbox_disabled reason=schema_unavailable error_type=%T", err)
+		} else {
+			// 浏览提醒合并窗口（B16）：BROWSE_NOTICE_MERGE_WINDOW=30m 这类时长串开启；
+			// 不配置或非法值保持默认 0（一事件一条通知），不在代码里替生产做决定。
+			if window, windowErr := time.ParseDuration(os.Getenv("BROWSE_NOTICE_MERGE_WINDOW")); windowErr == nil && window > 0 {
+				inbox.SetBrowseMergeWindow(window)
+			}
 		}
 	}
 	var inboxAPI notification.InboxStore
