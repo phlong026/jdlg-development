@@ -146,6 +146,53 @@ Page({
  onShareAppMessage(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',path:'/'+ROUTE+'?content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};},
  onShareTimeline(){return this.timelineShareValue();},
  // 与 onShareTimeline 同源取值：预热（preheatTimelineShare）以此对象为缓存键，首次分享即带 st 归因令牌
- timelineShareValue(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};}
+ timelineShareValue(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};},
+ // B14: 生成分享海报——封面+标题+小程序码 canvas 合成保存相册
+ async generatePoster(){
+  if(this.data.posterBusy)return;
+  const content=this.data.content;if(!this.data.contentReady||!content)return;
+  this.setData({posterBusy:true});
+  try{
+   const api=require('../../utils/phase3-api');
+   const result=await api.request('/api/v1/miniprogram/workbench/content-poster','GET',{},{content_id:this.options.content_id});
+   const posterURL=String(result&&result.poster_url||'');
+   if(!posterURL)throw new Error('海报码生成失败');
+   const [coverPath,qrPath]=await Promise.all([
+    new Promise(resolve=>{const url=content&&content.cover?content.cover.url:'';if(!url)return resolve('');wx.downloadFile({url,success:res=>resolve(res.statusCode===200?res.tempFilePath:''),fail:()=>resolve('')});}),
+    new Promise(resolve=>{wx.downloadFile({url:posterURL,success:res=>resolve(res.statusCode===200?res.tempFilePath:''),fail:()=>resolve('')});}),
+   ]);
+   const canvas=await new Promise(resolve=>{wx.createSelectorQuery().in(this).select('#posterCanvas').fields({node:true,size:true},res=>resolve(res&&res.node)).exec();});
+   if(!canvas)throw new Error('画布不可用');
+   const ctx=canvas.getContext('2d');
+   const W=750,H=1000;canvas.width=W;canvas.height=H;
+   // 背景
+   ctx.fillStyle='#fbfaf7';ctx.fillRect(0,0,W,H);
+   // 封面（上半区，保持比例）
+   if(coverPath){
+    const img=canvas.createImage();
+    await new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;img.src=coverPath;});
+    const ratio=Math.min(W/img.width,(H*0.5)/img.height);
+    const dw=img.width*ratio,dh=img.height*ratio;
+    ctx.drawImage(img,(W-dw)/2,40,dw,dh);
+   }else{ctx.fillStyle='#eee9e2';ctx.fillRect(40,40,W-80,H*0.5);}
+   // 标题（中部）
+   ctx.fillStyle='#2b211b';ctx.font='bold 36px sans-serif';ctx.textAlign='center';
+   const title=String(content.title||'分享内容').slice(0,24);
+   ctx.fillText(title,W/2,H*0.58,W-80);
+   // 品牌行
+   ctx.fillStyle='#a87943';ctx.font='28px sans-serif';
+   ctx.fillText('甲第灵光 · 扫码查看完整内容',W/2,H*0.64);
+   // 小程序码（底部居中）
+   if(qrPath){
+    const qr=canvas.createImage();
+    await new Promise(resolve=>{qr.onload=resolve;qr.onerror=resolve;qr.src=qrPath;});
+    const qrSize=280;
+    ctx.drawImage(qr,(W-qrSize)/2,H-qrSize-80,qrSize,qrSize);
+   }
+   // 导出保存
+   const tempPath=await new Promise((resolve,reject)=>{wx.canvasToTempFilePath({canvas,success:res=>resolve(res.tempFilePath),fail:reject});});
+   wx.saveImageToPhotosAlbum({filePath:tempPath,success:()=>{this.setData({posterBusy:false});wx.showToast({title:'海报已保存到相册',icon:'success'});},fail:()=>{this.setData({posterBusy:false});wx.showToast({title:'保存失败，请授权相册',icon:'none'});}});
+  }catch(error){this.setData({posterBusy:false});wx.showToast({title:error.message||'海报生成失败',icon:'none'});}
+ }
 });
 export {};

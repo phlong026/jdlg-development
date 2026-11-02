@@ -20,6 +20,7 @@ const PAIRS = [
   'pages/sharevisits/sharevisits',
   'pages/projectcollections/projectcollections',
   'pages/messagecenter/messagecenter',
+  'pages/contentreader/contentreader',
 ];
 
 test('strip-normalized ts sources stay in lockstep with committed js artifacts', () => {

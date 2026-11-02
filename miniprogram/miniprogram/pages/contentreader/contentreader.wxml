@@ -26,7 +26,8 @@
   <view class="source-card"><view><text class="source-label">内容来源</text><text class="source-value">{{content.source_note || (content.source_url ? '外部素材' : '创作者资料')}}</text></view><button wx:if="{{content.source_url}}" class="source-action" bindtap="copySource">复制原文</button></view>
   <text class="limits">分享操作仅表示发起分享，不代表已送达。视频播放位置、有效观看时间与覆盖片段分别记录。</text>
   <view wx:if="{{guideVisible}}" class="reader-guide"><view class="reader-guide-text"><text class="reader-guide-title">想为这套方案估算建房造价？</text><text class="reader-guide-sub">AI 建房顾问可按您的宅基地情况给出参考报价</text></view><button class="reader-guide-cta" bindtap="openGuide">去咨询</button><button class="reader-guide-close" bindtap="dismissGuide" aria-label="暂不需要">✕</button></view>
-  <view class="reader-actions"><button class="copy-action" bindtap="copyWebLink" loading="{{webLinkBusy}}" disabled="{{webLinkBusy}}"><text class="action-icon">⌁</text><text>复制分享链接</text></button><button class="share-action" open-type="share"><text class="action-icon">↗</text><text>分享给微信好友</text></button></view>
+  <view class="reader-actions"><button class="copy-action" bindtap="copyWebLink" loading="{{webLinkBusy}}" disabled="{{webLinkBusy}}"><text class="action-icon">⌁</text><text>复制分享链接</text></button><button class="share-action" open-type="share"><text class="action-icon">↗</text><text>分享给微信好友</text></button><button class="poster-action" bindtap="generatePoster" loading="{{posterBusy}}" disabled="{{posterBusy}}"><text class="action-icon">▦</text><text>生成海报</text></button></view>
+  <canvas type="2d" id="posterCanvas" class="poster-canvas" style="position:fixed;left:-9999px;top:-9999px;width:750px;height:1000px;"></canvas>
  </block>
 </view>
 </block>
