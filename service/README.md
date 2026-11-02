@@ -174,6 +174,8 @@ AI_VIDEO_MODEL=veo-3.1-landscape-fast-fl
 
 生图兼容 provider code 继续使用 `gpt-image-2-vip`，实际请求网关和模型由 `LAOZHANG_IMAGE_BASE_URL` 与 `LAOZHANG_IMAGE_MODEL` 决定；未配置或仅包含空白时使用上述默认值。数据库中的历史 Gemini 生图模板仍会经过兼容转换，后台修改普通生图地址不会覆盖这两项环境变量。修改后需重启 Go 服务生效。
 
+流式聊天的老张默认接口为 `https://api2.laozhang.ai/v1/chat/completions`（[官方备用域名公告](https://www.laozhang.ai/zh-cn)），模型仍为 `gpt-5.5`。`ai_api_config` 中启用的 `ai_chat` 配置可覆盖接口和密钥；修改数据库后需失效 Redis 的 `ai_api_config:task_type:ai_chat` 缓存。供应商决定模型及环境密钥，接口路径决定 Completions 或 Responses 协议；二者独立，不能根据 Completions 路径推断为老张。显式供应商与已知接口主机冲突时会拒绝请求。未配置老张密钥时继续沿用方舟默认；后台明确配置的原域名不会被强制替换。
+
 ## 数据库表结构
 
 ### users 表

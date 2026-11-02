@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	// 主模型：老张 API（OpenAI 兼容）
-	laozhangChatBaseURL = "https://api.laozhang.ai/v1"
+	// 主模型：老张 API（OpenAI 兼容）。原域连接失败时使用官方备域，Key 与协议不变。
+	// https://www.laozhang.ai/zh-cn （备用 API 域名公告）
+	laozhangChatBaseURL = "https://api2.laozhang.ai/v1"
 	laozhangChatModel   = "gpt-5.5"
 
 	// 备用模型：火山引擎方舟（豆包）
@@ -96,22 +97,17 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 		}
 	}
 
-	// 优先使用老张 API，若未配置则回退到方舟（豆包）
-	useLaozhang := true
-	apiKey := cfg.AI.LaoZhangAPIKey
-	if apiKey == "" {
-		apiKey = os.Getenv("LAOZHANG_API_KEY")
+	laozhangKey := cfg.AI.LaoZhangAPIKey
+	if laozhangKey == "" {
+		laozhangKey = os.Getenv("LAOZHANG_API_KEY")
 	}
-	if apiKey == "" {
-		useLaozhang = false
-		apiKey = cfg.AI.ArkAPIKey
-		if apiKey == "" {
-			apiKey = os.Getenv("ARK_API_KEY")
-		}
+	arkKey := cfg.AI.ArkAPIKey
+	if arkKey == "" {
+		arkKey = os.Getenv("ARK_API_KEY")
 	}
 
 	// 支持数据库动态配置覆盖
-	endpoint := ""
+	var providerConfig *model.AIAPIConfig
 	method := http.MethodPost
 	headers := map[string]string{
 		"Content-Type": "application/json",
@@ -120,14 +116,9 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 	apiKeyName := "Authorization"
 	if apiConfigModel != nil {
 		if cfgData, err := apiConfigModel.GetByTaskType("ai_chat"); err == nil && cfgData != nil {
-			if strings.TrimSpace(cfgData.APIEndpoint) != "" {
-				endpoint = strings.TrimSpace(cfgData.APIEndpoint)
-			}
+			providerConfig = cfgData
 			if strings.TrimSpace(cfgData.Method) != "" {
 				method = strings.ToUpper(strings.TrimSpace(cfgData.Method))
-			}
-			if strings.TrimSpace(cfgData.APIKey) != "" {
-				apiKey = strings.TrimSpace(cfgData.APIKey)
 			}
 			if strings.TrimSpace(cfgData.APIKeyLocation) != "" {
 				apiKeyLocation = strings.TrimSpace(cfgData.APIKeyLocation)
@@ -147,14 +138,16 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 			}
 		}
 	}
-	// 若数据库未覆盖 endpoint，按供应商设置默认值
-	if endpoint == "" {
-		if useLaozhang {
-			endpoint = laozhangChatBaseURL + "/chat/completions"
-		} else {
-			endpoint = arkBaseURL + "/responses"
+	provider, configErr := resolveChatStreamProvider(providerConfig, laozhangKey, arkKey)
+	if configErr != nil {
+		log.Printf("[ChatStream] 配置失败: %v", configErr)
+		if pricing.Stones > 0 {
+			userModel.AddStones(codeSession.UserID, pricing.Stones)
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "AI接口配置失败，请联系管理员"})
+		return
 	}
+	endpoint, apiKey := provider.endpoint, provider.apiKey
 
 	if apiKey == "" {
 		if pricing.Stones > 0 {
@@ -189,9 +182,9 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 - 回答实用、落地，多从居住体验、采光、收纳、预算出发`
 	}
 
-	// 构建请求体：老张 API 使用 OpenAI Chat Completions 格式，方舟使用 Responses 格式
+	// 请求体与流解析使用接口协议，模型与密钥独立跟随供应商。
 	var requestJSON []byte
-	if useLaozhang {
+	if provider.completions {
 		// OpenAI 兼容格式：messages 数组，content 为字符串
 		messages := make([]map[string]string, 0, len(req.Messages)+1)
 		messages = append(messages, map[string]string{
@@ -209,7 +202,7 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 			})
 		}
 		body := map[string]interface{}{
-			"model":    laozhangChatModel,
+			"model":    provider.model,
 			"stream":   true,
 			"messages": messages,
 		}
@@ -218,7 +211,7 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 		}
 		requestJSON, err = json.Marshal(body)
 	} else {
-		// 方舟 Responses 格式（备用）
+		// Responses 格式
 		ensureText := func(s string) string {
 			if s == "" {
 				return " "
@@ -245,7 +238,7 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 			})
 		}
 		body := map[string]interface{}{
-			"model":  arkModel,
+			"model":  provider.model,
 			"stream": true,
 			"tools": []map[string]interface{}{
 				{"type": "web_search", "max_keyword": 2},
@@ -265,11 +258,7 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 		return
 	}
 
-	providerName := "老张API/gpt-5.5"
-	if !useLaozhang {
-		providerName = "豆包/方舟(备用)"
-	}
-	log.Printf("[ChatStream] 用户 %d 发起流式聊天（%s），消息数: %d", codeSession.UserID, providerName, len(req.Messages))
+	log.Printf("[ChatStream] 用户 %d 发起流式聊天（%s/%s），消息数: %d", codeSession.UserID, provider.provider, provider.model, len(req.Messages))
 
 	if apiKey != "" && apiKeyLocation == "query" {
 		separator := "?"
@@ -371,7 +360,7 @@ func handleChatStream(c *gin.Context, codeSessionModel *model.CodeSessionRedisMo
 
 		// 解析内容：兼容 OpenAI 格式和方舟格式
 		var delta string
-		if useLaozhang {
+		if provider.completions {
 			// OpenAI Chat Completions 流式格式: choices[0].delta.content
 			if choices, ok := evt["choices"].([]interface{}); ok && len(choices) > 0 {
 				if choice, ok := choices[0].(map[string]interface{}); ok {
