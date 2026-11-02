@@ -82,7 +82,8 @@ Page({
       this.publishKey = '';
       const selectedItems = await this.resolveCovers(collection.items);
       if (!this.currentRequest(epoch)) return;
-      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, coverItemIndex: null, ownerIndex, busy: false, dirty: false });
+      const coverIndex = selectedItems.findIndex(item => collection.cover && collection.cover.media_id && item.cover && item.cover.media_id === collection.cover.media_id);
+      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, coverItemIndex: coverIndex >= 0 ? coverIndex : null, ownerIndex, busy: false, dirty: false });
       await this.loadCandidates(false);
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '合集不可访问' }); }
   },
@@ -126,13 +127,13 @@ Page({
       const source = this.data.candidates.find(item => sourceKey(item) === key);
       if (source) selected.push(source);
     }
-    this.setData({ selectedItems: selected, preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: selected.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: selected, coverItemIndex: this.reindexCover(selected), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: selected.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   removeItem(event) {
     const index = Number(event.currentTarget.dataset.index);
     if (!Number.isInteger(index) || index < 0 || index >= this.data.selectedItems.length) return;
     const items = this.data.selectedItems.slice(); items.splice(index, 1);
-    this.setData({ selectedItems: items, preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: items, coverItemIndex: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   moveItem(event) {
     const index = Number(event.currentTarget.dataset.index), direction = Number(event.currentTarget.dataset.direction);
@@ -140,7 +141,7 @@ Page({
     if (!Number.isInteger(index) || ![-1, 1].includes(direction) || target < 0 || target >= this.data.selectedItems.length) return;
     const items = this.data.selectedItems.slice();
     [items[index], items[target]] = [items[target], items[index]];
-    this.setData({ selectedItems: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: items, coverItemIndex: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   // B12 置顶：长列表省去逐级上移。条目重排后封面索引跟随条目走。
   topItem(event) {
@@ -149,7 +150,7 @@ Page({
     const items = this.data.selectedItems.slice();
     const [moved] = items.splice(index, 1);
     items.unshift(moved);
-    this.setData({ selectedItems: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: items, coverItemIndex: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   // B12 封面自选：记录所选条目当前序号；重排时同步平移，移除时清空回退首图。
   setCoverItem(event) {
@@ -158,12 +159,11 @@ Page({
     this.setData({ coverItemIndex: this.data.coverItemIndex === index ? null : index, preview: null, dirty: true });
   },
   reindexCover(items) {
-    if (this.data.coverItemIndex === null || this.data.coverItemIndex === undefined) return items;
+    if (this.data.coverItemIndex === null || this.data.coverItemIndex === undefined) return null;
     const current = this.data.selectedItems[this.data.coverItemIndex];
-    if (!current) return items;
+    if (!current) return null;
     const next = items.findIndex(item => sourceKey(item) === sourceKey(current));
-    this.data.coverItemIndex = next >= 0 ? next : null;
-    return items;
+    return next >= 0 ? next : null;
   },
   draftInput() {
     const choice = this.data.ownerChoices[this.data.ownerIndex];

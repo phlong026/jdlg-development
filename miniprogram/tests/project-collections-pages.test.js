@@ -228,3 +228,54 @@ test('late collection responses cannot replace a newly opened collection',async(
  pending[0]({collection_id:'collection-old',version:1,items:[]});await tick();
  assert.equal(page.data.collection.collection_id,'collection-new');
 });
+
+for (const method of ['removeItem', 'toggleCandidate']) {
+  test(`collection ${method} keeps the selected cover attached to its source`, () => {
+    const { page } = pageRuntime({});
+    const items = ['a', 'b', 'c'].map(content_id => ({ content_id, content_version: 1 }));
+    page.setData({ selectedItems: items, candidates: items, coverItemIndex: 1 });
+    const remove = index => page[method]({ currentTarget: { dataset: { index, id: page.data.selectedItems[index].content_id, version: 1 } } });
+    remove(0);
+    assert.equal(page.data.coverItemIndex, 0);
+    assert.equal(page.data.selectedItems[page.data.coverItemIndex].content_id, 'b');
+    assert.equal(page.draftInput().cover_item_index, 0);
+    remove(0);
+    assert.equal(page.data.coverItemIndex, null);
+    assert.equal(page.draftInput().cover_item_index, undefined);
+  });
+}
+
+for (const method of ['moveItem', 'topItem']) {
+  test(`collection ${method} sends the updated cover index to the rendered view`, () => {
+    const { page } = pageRuntime({});
+    const items = ['a', 'b', 'c'].map(content_id => ({ content_id, content_version: 1 }));
+    page.setData({ selectedItems: items, candidates: items, coverItemIndex: 1 });
+    const updates = [];
+    const setData = page.setData.bind(page);
+    page.setData = values => { updates.push(values); setData(values); };
+    page[method]({ currentTarget: { dataset: { index: 1, direction: -1 } } });
+    assert.equal(page.data.selectedItems[0].content_id, 'b');
+    assert.equal(page.data.coverItemIndex, 0);
+    assert.equal(updates.at(-1).coverItemIndex, 0);
+  });
+}
+
+test('reopening a collection preserves its saved cover when editing its title', async () => {
+  const items = ['a', 'b'].map(content_id => ({ content_id, content_version: 1, cover: { media_id: 'cover-' + content_id, url: '/cover-' + content_id } }));
+  const savedInputs = [];
+  const collection = { collection_id: 'collection-0001', owner_id: 'owner-a', title: '原名称', revision: 1, items, cover: items[1].cover };
+  const { page } = pageRuntime({
+    getCollection: async () => collection,
+    listCandidates: async () => ({ items }),
+    mediaURL: value => value,
+    saveCollection: async input => { savedInputs.push(input); return { ...collection, title: input.title, revision: 2 }; },
+  });
+  page.visible = true;
+  page.account = 'designer-session';
+  page.epoch = 1;
+  await page.openEditorByID(collection.collection_id, 1);
+  assert.equal(page.data.coverItemIndex, 1);
+  page.setTitle({ detail: { value: '新名称' } });
+  await page.saveDraft();
+  assert.equal(savedInputs[0].cover_item_index, 1);
+});
