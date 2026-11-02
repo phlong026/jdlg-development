@@ -8,17 +8,25 @@
 
 管理接口前缀 `/api/v1/management/tracking`。沿用管理session并重新检查 `management_access` 启用、用户类型及企微会话；再从 `tracking_access` 读取服务器配置的tenant/owner能力。`can_view`、`can_manage`、`can_crm`、`can_delete`、`can_rules`独立。多归属能力暂采用交集，宁可拒绝不明的跨归属操作；不把某归属管理权限提升为全部范围权限。写操作要求Origin同源/既有白名单及 `X-Tracking-Request: 1`。
 
-小程序前缀 `/api/v1/miniprogram/tracking`。登录请求沿用既有签名认证，服务器注入账号，客户端字段不能指定账号/租户/销售。匿名只使用随机客户端/匿名标识。采集凭据以 `X-Tracking-Token` 携带，服务器仅保存其SHA256；它不能访问后台查询。既有登录签名可能读取已登录时产生的认证设备值；追踪模块不新建指纹，也不把该值写入事件。
+小程序前缀 `/api/v1/miniprogram/tracking`。业务请求沿用既有完整签名认证，并由服务端确认昵称、持久化头像均完整；服务器注入账号，客户端字段不能指定账号/租户/销售。采集凭据以 `X-Tracking-Token` 携带，服务器仅保存其SHA256；它不能代替登录签名或访问后台查询。既有登录签名可能读取已登录时产生的认证设备值；追踪模块不新建指纹，也不把该值写入事件。历史匿名标识、同会话身份关联仍保留原事实，不按客户端标识追溯合并成某个账号。
 
-## 公开和采集接口
+### 登录与资料完整门禁（2026-11-01）
+
+服务端在注册业务路由前默认保护整个 `/api/v1/miniprogram` 前缀。无有效登录返回 HTTP 401；有效登录但资料不全返回 HTTP 428：`{code:428,msg:"请先补充头像和昵称",data:{profile_required:true,missing_fields:["nickname","avatar"]}}`，数组仅包含实际缺项。资料核验失败返回 HTTP 503，不能当作资料完整放行。受保护响应使用 `Cache-Control: private,no-store`。428 保留当前登录，只引导补齐缺项；401 才清理对应已失效的会话。
+
+仅精确方法和路径允许在补全前调用：GET `/profile`、`/tracking/config`；POST `/login`、`/login/password`、`/login/phone`、`/sms/send`、`/profile/password/recover`、`/ai/upload-reference-image`、`/tracking/share-entry`、`/wecom/enterprise-wechat/callback`；PUT `/profile/nickname`、`/profile/avatar`、`/profile/identity`。这些路径相对上述前缀；资料读写与头像上传仍保留原登录认证，回调仍保留自身校验。OPTIONS 仅用于预检。其余业务路径默认需要完整资料，新增路由不能自动成为公开旁路。
+
+小程序所有业务页面先核验服务器资料；本地缓存只预填资料。未登录、缺资料、核验失败、换号或退后台时隐藏业务内容。媒体 API 通过带签名下载转换为本地临时路径，不在媒体 URL 放登录凭证。外部已公开 CDN 链接和用户已保存文件不在本次 API 门禁的可撤销范围。
+
+## 内容和采集接口
 
 - `GET /config`：安全开关、告知文字/版本、采样和队列限制。不含客户数据。
-- `GET /contents/:id/versions/:version`：公开已发布自有正文；不要求同意分析。版本固定，撤回拒读。正文按已持久化的body_format渲染：plain保持转义文本，rich_text仅渲染服务器允许列表清洗结果，article_v2按有序内容块渲染图文；媒体仍单独授权。此接口不承诺原业务页面的历史正文回放。
+- `GET /contents/:id/versions/:version`：登录且资料完整后读取已发布自有正文；不要求同意分析。版本固定，撤回拒读。正文按已持久化的body_format渲染：plain保持转义文本，rich_text仅渲染服务器允许列表清洗结果，article_v2按有序内容块渲染图文；媒体仍单独授权。此接口不承诺原业务页面的历史正文回放。
 - `POST /share-entry`（JSON scene，不把令牌置于请求URL日志）：校验不透明分享后返回公开目标route/content/version/token，不创建PV、不暴露收件人。
-- `GET /media/:id`：管理session按素材范围，或媒体确实属于仍可访问的已发布版本。无缓存并每次复核撤回，不接受任意外部URL代理。
+- `GET /media/:id`：小程序须登录且资料完整，媒体还须属于仍可访问的已发布版本。管理端仍使用独立管理媒体接口和素材范围校验。无缓存并每次复核撤回，不接受任意外部URL代理。
 - `POST /entry`：`route_key,content_id?,content_version?,client_instance,anonymous_id?,share_token?,previous_entry_token?,consent_version`。返回受限entry_token、session_id、visitor_key、share_id、服务器确认的content_version及可访问状态。原业务公开详情的版本以服务端resolver为准，客户端后续事件及分享必须使用返回版本。非法/过期/不匹配分享回退直接访问，内容不可访问则404。新的真实分享入口、换账号和超时产生新会话；同客户端当前匿名会话登录可审计关联。
 - `POST /shares`：`route_key,content_id?,content_version?,parent_share_id?,channel,idempotency_key`。服务端确认实际分享目标，返回share_id/share_token/expiry。不推断是否发送成功。
-- `POST /events/batch`：`batch_id,events`，最多50条和64KiB，逐条accepted/duplicate/rejected。未知字段/事件/版本拒绝，永久错误不会无限重试。服务端校验绑定、发生时间、分段、视频媒体归属，客户端不能发送业务成功事实。
+- `POST /events/batch`：`batch_id,events`，最多50条和64KiB，逐条accepted/duplicate/rejected。必须同时携带完整账号签名和该账号创建的 `X-Tracking-Token`；旧匿名凭据或其他账号凭据返回403，不追加事件、不改写归属。未知字段/事件/版本拒绝，永久错误不会无限重试。服务端校验绑定、发生时间、分段、视频媒体归属，客户端不能发送业务成功事实。
 
 事件类型：share_intent、page_view、page_end、visible_segment、content_click、image_open、outbound_click、scroll_depth、video_state、video_progress。scroll_depth为0至100百分数。`business_action_confirmed`仅允许可信服务端业务适配，不开放客户端入口。真实收藏成功通过独立服务端ConfirmFavorite写入business事实，不接受客户端“成功”事件。
 
@@ -40,6 +48,7 @@
 - `POST /contents/:id/publish`：预览令牌、expected_revision和idempotency_key；创建不可变版本。
 - `POST /contents/:id/revoke`：原因、版本、幂等键；永久撤回墓碑，旧入口和媒体不继续公开。
 - `GET /media`、`POST /media` multipart：受控私有盘上传，真实PNG/JPEG/GIF≤10MiB、MP4≤50MiB，权属声明；MP4必须可读取合法尺寸；无任意URL导入或远程抓取。
+- `GET/HEAD /media/:id`：管理会话及当前素材归属范围验证后读取媒体，支持原媒体响应行为。管理台显示已持久化的小程序媒体路径时，在同源范围内转为这个管理路径，不改变原存储记录，不开放匿名媒体读取。
 - `GET /contents/:id/code?version=N`：仅真实微信码开关及配置齐备时调用官方接口，超时/权限失败明确报错；不是伪造二维码。URL Link见下一条。
 - `POST /contents/:id/url-link?version=N`：会创建分享并占用微信生成额度，所以是写操作，而不是 GET：与管理端其他写接口一样要求 `X-Tracking-Request: 1` 头和同源 `Origin`（预取、图片标签、链接扫描器无法触发），且每个账号每分钟最多 20 次，超出返回 429。需TRACKING_WECHAT_URLLINK_ENABLED=true、对该素材归属有管理权限且该版本已发布；调用官方 generate_urllink 返回 `{url_link, expires_at}`，链接带该账号当日新建的分享令牌，有效期29天（早于令牌到期）。发布接口在开启后也会在 `share_methods.url_link` 返回。生成失败只返回说明，不影响发布。
 - `GET /mp-sync`、`POST /mp-sync`：需TRACKING_MP_SYNC_ENABLED=true及对配置归属的管理权限。GET返回配置摘要与最近一次同步结果（含 `publishes:false`）；POST立即同步一次（同一进程内同时只运行一次，手动触发间隔不少于1分钟，运行期间返回409，过于频繁返回429），返回各项计数与最多20条未同步原因。同步只生成或更新草稿，不发布、不撤回、不覆盖人工修改。
@@ -87,18 +96,32 @@ as_of固定收件快照用于分页；原始记录过期后，早于已冻结投
 
 已有“我的”页增加“可分享素材”，复用已注册的 `pages/contentreader/contentreader`，不新增页面。
 
-- `GET /api/v1/miniprogram/tracking/materials?limit=20&cursor=...`：必须通过现有完整签名 token 验证。服务端按当前账号、配置 tenant、`tracking_access.enabled=true AND can_manage=true`、`users.user_type=miniprogram`、账号 active 取 owner 范围。没有授权为 403，前端隐藏入口；权限/数据服务故障为错误和重试态，不能假装空数据。仅返回该范围的不可变已发布快照标题、封面、固定版本、发布状态及 reader route，不返回草稿正文/标题、owner、访问统计。默认20、最高50，受同一后端查询预算限制。
+- `GET /api/v1/miniprogram/tracking/materials?limit=20&cursor=...`：必须通过现有完整签名 token 验证。服务端只接受 active 的 `users.user_type=miniprogram` 账号，将其 `tracking_access.enabled=true AND can_manage=true` 显式范围与下述已认证设计师个人范围合并去重。没有授权为 403，前端隐藏入口；权限/数据服务故障为错误和重试态，不能假装空数据。仅返回该范围的不可变已发布快照标题、封面、固定版本、发布状态及 reader route，不返回草稿正文/标题、owner、访问统计。默认20、最高50，受同一后端查询预算限制。
 - `GET /api/v1/miniprogram/tracking/materials/:id/versions/:version`：每次点击重新验证当前权限、owner、固定发布版本和撤回墓碑，返回同一安全元数据。前端仅能导航到固定 reader；无权限、草稿、其他owner和撤回统一不可访问。此操作不生成PV或分享成功记录。
 - 发布后继续编辑草稿时，入口保持该素材最近已发布的固定快照，绝不混入正在编辑的标题/封面。撤回后不再列出，旧reader也不能读取。内容开关独立于分析开关，关闭分析或拒绝告知仍可打开和原生分享。
 - reader 成功加载前以及读取失败/撤回时隐藏原生分享菜单并清空旧内容；成功后分享目标仍是实际 content_id/content_version，标题/封面来自该发布版本。
 - `POST /entry` 对 reader 使用真实发布素材 owner，不使用默认owner。已认证且当前具有该owner素材能力的mini账号由服务端判定 self；客户端不可提供self/preview标记。其准备分享的阅读事件不进入客户PV/UV/可见时长统计；读取权限故障时采集失败关闭，不影响公开阅读。普通接收者仍按合法告知同意后记录。
 - 私有列表不落本地缓存，返回 `Cache-Control: private, no-store`。换号/登出/离开页立即清空列表，并丢弃旧请求；重复点击、旧打开请求不能把新账号导航到旧上下文。
 
-### 授权配置前提（不自动执行）
+### 设计师个人创作与其他角色授权
 
-现有小程序登录只接受 `users.user_type='miniprogram'`，管理后台账号只接受management身份。这两个账号不会根据名称、手机号或 management_access 自动映射。当前没有专门的mini素材授权UI；上线前须由有权限的数据库管理员确认实际mini用户ID、已存在的tenant和素材owner，经业务批准后显式配置 `tracking_access`。不能把管理端已授权当成小程序已授权。
+已认证设计师沿用现有小程序登录，不需要再次登录或新增授权记录。服务端要求存在 `certification_applications.status='approved' AND type='designer' AND TRIM(identity_type)='设计师'`，从服务端账号 ID 派生个人 owner `designer-<userID>`，仅赋予 `can_manage`。自填身份、`can_withdraw`、企业认证、施工队认证、待审核认证及空身份历史认证均不自动取得此能力；不使用默认组织 owner 兜底。
 
-下面仅是最小权限配置模板，不随迁移执行，也未在本轮对任何数据库执行。全部占位值必须由授权管理员核实，owner必须与要分享的素材一致；同一mini账号需要多个owner时逐项审批。mini能力仅供公开素材列表和打开，不允许访问管理端草稿或客户数据。
+个人范围同时用于内容工作台、私有媒体、原生资料引用、项目笔记管理、导入请求与异步任务，以及项目笔记成员访问/通知对原设计师资格的实时复核。认证失效或账号被封禁后，下次校验立即失效；独立的有效显式授权仍按自身规则生效。项目笔记仍校验项目设计师本人，引用仍校验创建者与 owner，不能因个人认证读取他人的私有内容。
+
+此资格同时允许查看本人创建的分享链接及该链接的访问记录，包括本人转发的公开素材。服务端合并个人 owner、当前租户中本人实际创建分享的 owner 和有效显式查看授权；分享查询始终要求 `Sharer=u:<当前账号ID>`，同 owner 其他人的分享不会开放。匹配 owner 的显式停用或 `can_view=false` 优先于认证派生。未认证的其他小程序身份仍需显式查看授权。设计师认证不授予管理端、CRM、删除访客或规则管理权限。
+
+`GET /api/v1/miniprogram/tracking/my-shares/context` 沿用小程序完整签名登录，按当前认证资格和显式授权确定本人分享范围。授权成功仅返回 `data: {"can_view": true, "owners": [...]}`，仅为认证设计师读取本人分享的去重 owner，不返回分享详情、访客记录或统计；前端据此显示分享访问入口。已登录但没有有效查看授权时，能力查询正常返回 HTTP 200 和 `data: {"can_view": false, "owners": []}`；“我的”和内容工作台隐藏分享记录入口。直接请求分享列表或访客明细仍返回 403。未登录/签名无效仍返回 401，权限存储故障仍返回 503，不能伪装成无权限。仅 `can_manage` 不隐含查看能力，设计师的认证派生权限仅供本人分享接口使用。owner 始终来自服务端当前授权，响应继续使用 `Cache-Control: private, no-store`。
+
+### 管理员与其他角色的授权
+
+管理后台的真实、启用的 `platform_admin` 账号可使用当前租户全部分享跟踪功能；必须由服务端账户及管理授权记录确认身份。`crm_only` 仍按显式 owner 和五项能力授权，不继承平台管理员权限。小程序账号与管理账号按 `user_type` 隔离，不按昵称、手机号或设计师认证推断管理员身份。CRM 关联仍须通过真实 CRM 账号绑定和目标客户验证。
+
+### 其他角色的显式授权配置（不自动执行）
+
+现有小程序登录只接受 `users.user_type='miniprogram'`，管理后台账号只接受management身份。这两个账号不会根据名称、手机号或 management_access 自动映射。其他角色及设计师的额外组织范围仍须经业务批准后显式配置 `tracking_access`。当前没有专门的mini素材授权UI，须由有权限的数据库管理员确认实际mini用户ID、tenant和素材owner。不能把管理端已授权当成小程序已授权。
+
+下面仅是最小权限配置模板，不随迁移执行，也未在本轮对任何数据库执行。全部占位值必须由授权管理员核实，owner必须与要操作的素材一致；同一mini账号需要多个owner时逐项审批。`can_manage` 允许该 owner 范围的内容创作和素材管理，不授予管理端登录或客户数据访问。
 
 ```sql
 -- 先在受控环境核验账号类型和状态，以及目标素材owner；不得按昵称猜测账号。
@@ -111,13 +134,15 @@ SELECT id, :verified_tenant_id, :verified_content_owner,
 FROM users
 WHERE id = :verified_miniprogram_user_id
  AND user_type = 'miniprogram' AND COALESCE(status, 'active') = 'active';
--- 撤销此mini素材能力（仍需真实管理员授权）：
+-- 撤销此显式授权（仍需真实管理员授权；不会撤销有效设计师认证派生的个人范围）：
 UPDATE tracking_access SET enabled=FALSE, updated_by=:authorized_operator_id, updated_at=UTC_TIMESTAMP(6)
 WHERE user_id=:verified_miniprogram_user_id AND tenant_id=:verified_tenant_id AND owner_id=:verified_content_owner;
 ```
 
-自动覆盖：`service/tracking/published_materials_test.go`、`service/route/share_tracking_materials_test.go`、`miniprogram/tests/tracking-materials.test.js`。数据库驱动和Node VM只验证代码合同；真实签名登录/Redis、授权配置、微信开发者工具/真机样式、真实A分享给B的全链路仍是上线验收项。
+自动覆盖：`service/tracking/published_materials_test.go`、`service/route/share_tracking_materials_test.go`、`service/route/share_tracking_designer_scope_test.go`、`miniprogram/tests/tracking-materials.test.js`。数据库驱动和Node VM只验证代码合同；真实签名登录/Redis、授权配置、微信开发者工具/真机样式、真实A分享给B的全链路仍是上线验收项。
 
 ## 三期工作台、分享网页与通知增量
 
 新签名接口、收件人范围、服务号配置和投递状态见[三期接入说明](../phase3/README.md)；验证和未完成项见[首批验证记录](../phase3/verification-20261027.md)。共享网页不替代私人项目邀请授权，默认关闭的服务号不表示真实可发送。
+
+自 2026-11-01 整改版起，网页 `/share/s/:code` 及合集单项只显示“登录后查看完整内容”和打开小程序按钮，保留原分享目标及单项位置，不输出正文、合集目录或受保护媒体地址。`/api/v1/share-web/entry`、`/events`、`/media/*`、`/collection-media/*` 返回 HTTP 401，不再创建匿名阅读记录；合法 `/open-miniprogram` 沿用原来源校验、限流和微信跳转。历史网页访问事实继续按原规则查询。此变更的验证和上线状态见[强制门禁整改记录](profile-access-enforcement-20261101.md)。

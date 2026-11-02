@@ -7,21 +7,30 @@ import (
 	"html/template"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"service/tracking"
 )
 
-//go:embed templates/reader.html assets/reader.css assets/reader.js
+//go:embed templates/reader.html templates/collection.html assets/reader.css assets/reader.js
 var files embed.FS
 
 var codePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,256}$`)
 var classPattern = regexp.MustCompile(`^[a-z]+$`)
 
 type Page struct {
-	Code      string
-	Content   tracking.Content
-	Trackable bool
+	Code         string
+	Content      tracking.Content
+	Trackable    bool
+	MediaBase    string
+	ItemPosition *int
+}
+
+type CollectionPage struct {
+	Code       string
+	Collection tracking.PublishedProjectCollection
+	Trackable  bool
 }
 
 type viewBlock struct {
@@ -39,9 +48,27 @@ type viewPage struct {
 	Trackable              bool
 	RichHTML               template.HTML
 	LayoutHTML             template.HTML
+	CollectionItem         bool
+	ItemPosition           int
+}
+
+type collectionItemView struct {
+	Position  int
+	Title     string
+	URL       string
+	CoverURL  string
+	Available bool
+}
+
+type collectionViewPage struct {
+	Code, Title, Description string
+	Version                  int
+	Items                    []collectionItemView
+	Trackable                bool
 }
 
 var readerTemplate = template.Must(template.ParseFS(files, "templates/reader.html"))
+var collectionTemplate = template.Must(template.ParseFS(files, "templates/collection.html"))
 
 func Render(w io.Writer, page Page) error {
 	if !codePattern.MatchString(page.Code) || page.Content.Status != "published" || page.Content.ID == "" || page.Content.Version <= 0 {
@@ -54,23 +81,60 @@ func Render(w io.Writer, page Page) error {
 	return readerTemplate.ExecuteTemplate(w, "reader.html", viewPage{
 		Code: page.Code, Title: page.Content.Title, ContentID: page.Content.ID,
 		Version: page.Content.Version, Blocks: blocks, Trackable: page.Trackable, RichHTML: richHTML, LayoutHTML: layoutHTML,
+		CollectionItem: page.ItemPosition != nil, ItemPosition: intValue(page.ItemPosition),
 	})
 }
 
-// RenderLanding exposes no source body. It is the safe browser handoff for
-// legacy public routes whose content model cannot be rendered by this service.
-func RenderLanding(w io.Writer, code, title string) error {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		title = "甲第灵光内容"
+func intValue(value *int) int {
+	if value == nil {
+		return 0
 	}
-	return Render(w, Page{Code: code, Content: tracking.Content{
-		ID: "legacy-landing", Version: 1, Title: title, Status: "published",
-		BodyFormat: "plain", Body: "请在甲第灵光小程序中查看完整内容。",
+	return *value
+}
+
+func RenderCollection(w io.Writer, page CollectionPage) error {
+	collection := page.Collection
+	if !codePattern.MatchString(page.Code) || collection.Status != "published" || collection.ID == "" || collection.Version <= 0 {
+		return errors.New("collection unavailable")
+	}
+	items := make([]collectionItemView, 0, len(collection.Items))
+	for position, item := range collection.Items {
+		view := collectionItemView{Position: position, Available: item.Available}
+		if item.Available {
+			view.Title = item.Title
+			view.URL = "/share/s/" + page.Code + "/items/" + strconv.Itoa(position)
+			if item.Cover != nil && item.Cover.Kind == "image" && codePattern.MatchString(item.Cover.ID) {
+				view.CoverURL = "/api/v1/share-web/collection-media/" + page.Code + "/" + strconv.Itoa(position) + "/" + item.Cover.ID
+			}
+		} else {
+			view.Title = "内容暂不可用"
+		}
+		items = append(items, view)
+	}
+	return collectionTemplate.ExecuteTemplate(w, "collection.html", collectionViewPage{
+		Code: page.Code, Title: collection.Title, Description: collection.Description,
+		Version: collection.Version, Items: items, Trackable: page.Trackable,
+	})
+}
+
+// RenderLoginLanding keeps the original share destination without rendering its content.
+func RenderLoginLanding(w io.Writer, code string, itemPosition *int) error {
+	if itemPosition != nil && *itemPosition < 0 {
+		return errors.New("content unavailable")
+	}
+	return Render(w, Page{Code: code, ItemPosition: itemPosition, Content: tracking.Content{
+		ID: "login-landing", Version: 1, Title: "登录后查看完整内容", Status: "published",
+		BodyFormat: "plain", Body: "请在小程序中登录并补齐头像、昵称。",
 	}})
 }
 
 func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) {
+	mediaURL := func(id string) string {
+		if page.MediaBase != "" {
+			return strings.TrimRight(page.MediaBase, "/") + "/" + id
+		}
+		return "/api/v1/share-web/media/" + page.Code + "/" + id
+	}
 	switch page.Content.BodyFormat {
 	case "article_v2":
 		var document tracking.ArticleDocument
@@ -82,7 +146,7 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) 
 			media[asset.ID] = asset
 		}
 		if document.LayoutHTML != "" {
-			layout, err := renderArticleLayout(page.Code, document.LayoutHTML, media)
+			layout, err := renderArticleLayout(document.LayoutHTML, media, mediaURL)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -96,7 +160,7 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) 
 				if !ok || asset.Kind != block.Kind {
 					return nil, "", "", errors.New("article media unavailable")
 				}
-				item.MediaURL = "/api/v1/share-web/media/" + page.Code + "/" + asset.ID
+				item.MediaURL = mediaURL(asset.ID)
 				item.MediaID = asset.ID
 			}
 			out = append(out, item)
@@ -122,7 +186,7 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) 
 			if (asset.Kind != "image" && asset.Kind != "video") || !codePattern.MatchString(asset.ID) {
 				return nil, "", "", errors.New("content media unavailable")
 			}
-			out = append(out, viewBlock{Kind: asset.Kind, MediaID: asset.ID, MediaURL: "/api/v1/share-web/media/" + page.Code + "/" + asset.ID})
+			out = append(out, viewBlock{Kind: asset.Kind, MediaID: asset.ID, MediaURL: mediaURL(asset.ID)})
 		}
 		return out, rich, "", nil
 	default:
@@ -130,7 +194,7 @@ func renderBlocks(page Page) ([]viewBlock, template.HTML, template.HTML, error) 
 	}
 }
 
-func renderArticleLayout(code, input string, media map[string]tracking.Asset) (string, error) {
+func renderArticleLayout(input string, media map[string]tracking.Asset, mediaURL func(string) string) (string, error) {
 	layout, err := tracking.NormalizeArticleLayoutHTML(input)
 	if err != nil {
 		return "", errors.New("article unavailable")
@@ -144,7 +208,7 @@ func renderArticleLayout(code, input string, media map[string]tracking.Asset) (s
 		if !ok || asset.Kind != kind || !codePattern.MatchString(asset.ID) {
 			return "", errors.New("article media unavailable")
 		}
-		url := "/api/v1/share-web/media/" + code + "/" + asset.ID
+		url := mediaURL(asset.ID)
 		if kind == "image" {
 			layout = strings.ReplaceAll(layout, `<img data-media-id="`+id+`"`, `<img src="`+url+`"`)
 		} else {

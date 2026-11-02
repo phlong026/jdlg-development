@@ -4,6 +4,7 @@ const tracking=require('../../utils/tracking/index');
 const api=require('../../utils/tracking/api');
 const {createVideoTracker}=require('../../utils/tracking/video');
 const {renderArticleDocument}=require('../../utils/article-document');
+const {resolveProtectedMediaURL}=require('../../utils/protected-media');
 const ROUTE='pages/contentreader/contentreader';
 Page({
  data:{loading:true,error:'',content:null,contentReady:false,media:[],articleBlocks:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false,webLinkBusy:false},
@@ -32,14 +33,24 @@ Page({
    if(sequence!==this.loadSequence)return;
    this.setData({consentNotice:configuration.privacy_notice||'',consentAvailable:configuration.enabled===true&&!!configuration.consent_version&&!!configuration.privacy_notice,consented:tracking.consented()});
    // Public published content is independently readable, even when analytics is disabled or declined.
-   const content=await api.request('/contents/'+encodeURIComponent(id)+'/versions/'+version,'GET',{},undefined,false);
+   let readPath='/contents/'+encodeURIComponent(id)+'/versions/'+version;
+   const collectionID=this.options.collection_id, collectionVersion=Number(this.options.collection_version), position=Number(this.options.item_position);
+   const inCollection=collectionID!==undefined||this.options.collection_version!==undefined||this.options.item_position!==undefined;
+   if(inCollection){
+    if(!/^[A-Za-z0-9_-]{8,128}$/.test(String(collectionID||''))||!Number.isInteger(collectionVersion)||collectionVersion<1||this.options.item_position===undefined||!Number.isInteger(position)||position<0)throw new Error('合集入口不完整');
+    readPath='/project-collections/'+encodeURIComponent(collectionID)+'/versions/'+collectionVersion+'/items/'+position+'/content';
+   }
+   const content=await api.request(readPath,'GET',{},undefined,true);
+   if(inCollection&&(content.content_id!==id||Number(content.version)!==version))throw new Error('合集作品已改变');
    if(sequence!==this.loadSequence)return;
    const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync(),width=Math.max(240,window.windowWidth-40);
-   const media=(content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map((asset,index)=>({...asset,domId:'media-'+index,playerKey:asset.media_id,errorKey:'legacyMedia'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))}));
+   const media=await Promise.all((content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map(async(asset,index)=>({...asset,url:await resolveProtectedMediaURL(asset.url),domId:'media-'+index,playerKey:asset.media_id,errorKey:'legacyMedia'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))})));
+   if(sequence!==this.loadSequence)return;
    const articleBlocks=content.body_format==='article_v2'?renderArticleDocument(content.body,media,width):[];
-   if(content.cover)content.cover={...content.cover,url:api.mediaURL(content.cover.url)};
+   if(content.cover){const coverURL=api.mediaURL(content.cover.url);content.cover={...content.cover,url:coverURL?await resolveProtectedMediaURL(coverURL):''};}
+   if(sequence!==this.loadSequence)return;
    this.setData({content,media,articleBlocks,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
-  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
+  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:error&&error.code==='MEDIA_DOWNLOAD_FAILED'?'素材加载失败，请检查网络后重试。':'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
  },
  renderedMedia(){return this.data.content&&this.data.content.body_format==='article_v2'?this.data.articleBlocks.filter(block=>block.kind==='image'||block.kind==='video'):this.data.media;},
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},
@@ -135,6 +146,53 @@ Page({
  onShareAppMessage(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',path:'/'+ROUTE+'?content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};},
  onShareTimeline(){return this.timelineShareValue();},
  // 与 onShareTimeline 同源取值：预热（preheatTimelineShare）以此对象为缓存键，首次分享即带 st 归因令牌
- timelineShareValue(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};}
+ timelineShareValue(){const content=this.data.content;if(!this.data.contentReady||!content)return {};return {title:content?content.title:'自有内容',query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content&&content.cover?content.cover.url:undefined};},
+ // B14: 生成分享海报——封面+标题+小程序码 canvas 合成保存相册
+ async generatePoster(){
+  if(this.data.posterBusy)return;
+  const content=this.data.content;if(!this.data.contentReady||!content)return;
+  this.setData({posterBusy:true});
+  try{
+   const api=require('../../utils/phase3-api');
+   const result=await api.request('/api/v1/miniprogram/workbench/content-poster','GET',{},{content_id:this.options.content_id});
+   const posterURL=String(result&&result.poster_url||'');
+   if(!posterURL)throw new Error('海报码生成失败');
+   const [coverPath,qrPath]=await Promise.all([
+    new Promise(resolve=>{const url=content&&content.cover?content.cover.url:'';if(!url)return resolve('');wx.downloadFile({url,success:res=>resolve(res.statusCode===200?res.tempFilePath:''),fail:()=>resolve('')});}),
+    new Promise(resolve=>{wx.downloadFile({url:posterURL,success:res=>resolve(res.statusCode===200?res.tempFilePath:''),fail:()=>resolve('')});}),
+   ]);
+   const canvas=await new Promise(resolve=>{wx.createSelectorQuery().in(this).select('#posterCanvas').fields({node:true,size:true},res=>resolve(res&&res.node)).exec();});
+   if(!canvas)throw new Error('画布不可用');
+   const ctx=canvas.getContext('2d');
+   const W=750,H=1000;canvas.width=W;canvas.height=H;
+   // 背景
+   ctx.fillStyle='#fbfaf7';ctx.fillRect(0,0,W,H);
+   // 封面（上半区，保持比例）
+   if(coverPath){
+    const img=canvas.createImage();
+    await new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;img.src=coverPath;});
+    const ratio=Math.min(W/img.width,(H*0.5)/img.height);
+    const dw=img.width*ratio,dh=img.height*ratio;
+    ctx.drawImage(img,(W-dw)/2,40,dw,dh);
+   }else{ctx.fillStyle='#eee9e2';ctx.fillRect(40,40,W-80,H*0.5);}
+   // 标题（中部）
+   ctx.fillStyle='#2b211b';ctx.font='bold 36px sans-serif';ctx.textAlign='center';
+   const title=String(content.title||'分享内容').slice(0,24);
+   ctx.fillText(title,W/2,H*0.58,W-80);
+   // 品牌行
+   ctx.fillStyle='#a87943';ctx.font='28px sans-serif';
+   ctx.fillText('甲第灵光 · 扫码查看完整内容',W/2,H*0.64);
+   // 小程序码（底部居中）
+   if(qrPath){
+    const qr=canvas.createImage();
+    await new Promise(resolve=>{qr.onload=resolve;qr.onerror=resolve;qr.src=qrPath;});
+    const qrSize=280;
+    ctx.drawImage(qr,(W-qrSize)/2,H-qrSize-80,qrSize,qrSize);
+   }
+   // 导出保存
+   const tempPath=await new Promise((resolve,reject)=>{wx.canvasToTempFilePath({canvas,success:res=>resolve(res.tempFilePath),fail:reject});});
+   wx.saveImageToPhotosAlbum({filePath:tempPath,success:()=>{this.setData({posterBusy:false});wx.showToast({title:'海报已保存到相册',icon:'success'});},fail:()=>{this.setData({posterBusy:false});wx.showToast({title:'保存失败，请授权相册',icon:'none'});}});
+  }catch(error){this.setData({posterBusy:false});wx.showToast({title:error.message||'海报生成失败',icon:'none'});}
+ }
 });
 export {};

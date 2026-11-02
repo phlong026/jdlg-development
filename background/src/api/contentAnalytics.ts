@@ -106,3 +106,16 @@ export const getContentAnalyticsLowConversion = (params?: ContentAnalyticsListPa
 
 export const getContentAnalyticsFeaturedCases = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
     getAnalyticsList<ContentAnalyticsFeaturedCaseItem>(API_ENDPOINTS.CONTENT_ANALYTICS.FEATURED_CASES, '精选案例观察', params, signal);
+
+// B9: 素材传播排行——基于 native_ref 引用记录聚合
+export interface ContentPropagationItem {
+    content_id: string;
+    title: string;
+    reference_count: number;
+    active_referencers: number;
+    first_referenced_at: string;
+    last_referenced_at: string;
+}
+
+export const getContentPropagation = (params?: ContentAnalyticsListParams, signal?: AbortSignal) =>
+    getAnalyticsList<ContentPropagationItem>(API_ENDPOINTS.CONTENT_ANALYTICS.PROPAGATION, '素材传播排行', params, signal);

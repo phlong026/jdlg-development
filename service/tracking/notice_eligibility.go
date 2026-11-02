@@ -91,6 +91,15 @@ func (s *Service) NoticeEligible(ctx context.Context, eventID string, recipient 
 			}
 			return err
 		}
+		if entry.CollectionID != "" {
+			if _, err = s.projectCollectionChild(ctx, r, entry.CollectionID, entry.CollectionVersion, entry.Route, entry.Content, entry.Version); err != nil {
+				var known *Error
+				if errors.As(err, &known) && (known.Status == 404 || known.Status == 410) {
+					return nil
+				}
+				return err
+			}
+		}
 		eligible = true
 		return nil
 	})

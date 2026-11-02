@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/release/release.wxml-->
 <view class="page {{isManageMode ? 'page-manage-mode' : ''}}">
   <!-- 统一导航栏 -->
@@ -254,3 +255,5 @@
     <text class="floating-upload-text">上传</text>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

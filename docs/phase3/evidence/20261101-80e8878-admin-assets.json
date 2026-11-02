@@ -1,0 +1,1302 @@
+{
+  "checked_at": "2026-10-31T23:05:18.649340+00:00",
+  "source_commit": "80e88786953afa68a3b74b5bd3106433c1ac5837",
+  "origin": "https://api.jiadilingguang.com",
+  "files": [
+    {
+      "path": "admin/assets/MobileFold-D2EsfnC9.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "63979dcf8d607732a9f2797e126920c63c9f2608e8885a3d85e44406fe728488",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-BAAGIT8P.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2d84c332f0d7acc103b87cd1e2985bf4483654b3d5bc5fb07d2a5f600219f387",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-BLzIqXsC.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a46edda5a72f4dba78969703b97b70c86814a8abefd39231139bb55244a36de3",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-ZRky4nx7.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2d97b8d3989bfac30b58e687533c70cda8a1401070c6721b28070eff0ce1ee51",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-config-CpFbmijY.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "929d3f312ac87f3fec37dffd15c724f5358a95503c23f77e572dbac69d79f2ff",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-config-DES8gZJn.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "53d76eefbad7b88e82577d8ae8eab538587c0420af7c1e8b0bf39d3bc0436ed8",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-config-DSvuWeW0.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "7ecc4f839fb92aa493fbd76b9ff071eff64575913b880c2d353f2389f23f41aa",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/ai-config-Dp6ou1pE.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "b1a1ca41fa51e85d70723a7b3baa1725f6383c25c85c447809c7c5cdc2cfc69d",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiContentAudits-C7I67x1S.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8c13358ab0f3fe87eec2abab000d328226fd7f3948c9e1aceb387de40bc9c078",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiContentAudits-CXXT0okp.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c44ecc9b0b9be87810706be3c6e4c74a773eddd154daaf1cc970a54c6a9e16d7",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiContentAudits-D1Meje3h.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "470291032471603df10dbb5cf17408b1acc692ead97b78887dec99f35186d86a",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiContentAudits-D1ojzXCz.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "9c8e2ac01766014cb9cba79dd92c19abc1afb2e53d05884e49888febacc0a818",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-BkeIYJd8.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d1b8a1052be5f21401b3e902258752c81b0bc64d725417cf8cce7fcecd78ef98",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-Bq9chXWA.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4b3d46830dfa3b1fc969a6a24cff543c1ed1d064ab37d03165c8fb621cfd0f75",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-Ce2kdTn0.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "30bd92ca5fbfb343f04bbb88c518500a8a4c31f10d7b39853a02f3dab837bf30",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-CjI8i3uT.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "f2a169d45daeaefe77f230c4fc3215c8795c37321f7de2f94050216a72a01ac8",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-DLiYL47e.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ef5f923d1707aba844d0a6d60c13352163d33c7ce6b8ac835bd3c104b7cb831f",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-DO6CSYjT.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a032751373d8a7d4436d22dfb6aea17c1b61b40f6adca6964a3e64e8921b2e84",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiOverview-DUgq8Ab4.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "437dc79280a4ddb24b2e43d4498cfb4e432bb31d267716efed87450619c637cb",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiPricing-BUxVqYD4.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "e3b043a633b5175df09c900dc4317c719daa86bb7e058e4719b19c5e4b82c3ea",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiPricing-BaJwkaTf.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "04b68c1c9e3c01ddb0861561a346f9bc46e3061baf03a77b09f141e53ca0df33",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiPricing-CPc21zff.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ab815beb23443ac73a175640fde0266abaf779fb241f5209ed81d4ad32ae7bf4",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiPricing-CdYTl7yi.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "223be8f0980fc28ba029236d75fd524599fc2191cc07f2cf3dbba6aae0e4c1d7",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTaskCenter-CMf_KF-m.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4dcdcc01fbe34d94461c92e69fdc6c7ba924e56513dc3985e6349095f20ae43c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTaskCenter-CUB7L4Fw.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "086b05ec16855c7fb98b107c55f641a618d4d6831bfb9019583647fdddd24aad",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTaskCenter-CiqCzSec.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "31429bd14123ccda1376a4575b88fd50d7c423884b825195c882e99f72729b25",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTaskCenter-NwZukjfs.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8754d2a1b2807776d859c1ef19ae419a4aeab6ea58675873c63ffae2b79c5e52",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTools-Bgf1kRjR.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "17a2db45514c898c1ff012a1a42ba4e89fffc4e2780f4226731121619995d941",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTools-CQiF8w_w.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ebca0e864059fdebdb1522790eb022695ba09c71a0054734469906a04ea416c9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTools-Cm01_ACp.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "bc699397f9401b7b807f13e62b69536dfe8be0c09fe33462bacf66c1d1b5970b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/aiTools-Kdy-Uw1I.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "da126ca16de4bbffc7071b1b95a47f94f03a83ce60b5690388d9051f87a4ba59",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-54vbgVvF.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "0e56880ac61d9efd1e75ac394c9bef6035d9ecb800323d050384a0b895209568",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-B11_iYSR.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "fe9e7cb06e8def117203e2ffad731ec8ba641c3cf922b2c7ad69767a7114f94b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-B8AQ-3U1.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "f914019f1948b83d5deeb47bf84feb9b8c43d028e33299fb5a30116f5c3df6fb",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-Bnl2dzo8.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d563ad05b48f123787942dfc64eef88d689b6fc3b70132ecddce4d456701e8d2",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-CAkizNiy.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d0b2517707b3201375a7ca707dffd7305528d732607a9197e3f3633e4c9ad3f9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-CMX5FRah.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "fed0b2835071f2a6ffa35000bba0a731178dfa1ee448c56a7642c96211446e17",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/certification-D1mGDaK9.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c54e52651b484b5d9dc5596b1d6bcfecc0beaac02bedfa40eee55812ae14b7b9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/contentAnalytics-CC2lVDEI.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "1ad91bc0022eac6d5bb040f37964ebe4ea564e28d39d5d2ba06dc18dd0761c23",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/contentAnalytics-D4T_Klow.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4e4803baccf86af75c3f2c968c1858b0029c511b9a7c74e923fb98801b07d144",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/contentAnalytics-D4lbLGNO.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a9305cdb05f61b0b5f7bd427abee59185cfdaa3fee31f523f950f9cc9e9a9170",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/contentAnalytics-PcTiXFNn.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "aacd15e26747c71b18be951c5b2cfd9e7fad424f43a95de1595e9b7118c7e1a8",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeads-B9Pqtfym.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "93b589e5a4dfe05e97af494b3efa42fab3a342339ec1e80dd50b5642365c6e72",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeads-CqTJy3sO.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "0661b360995cdb9649e3aede5f582ade527a5a6c8df6751f2801ccefb91c250c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeads-c2ECJpuu.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3f1fbb9565e84b2d2efa33d6b486f9dcfd8f71a9790551d1dcf1f8e41c51be98",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeadsPage-BlebH--4.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8a2125b1a54e85ecaaab01c20cf8b093b8a3d3fab1dc92fe2378bb22049511f9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeadsPage-CM---RXf.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2457e6abbc70df768b59db46e0e1b0035ba069e67cab11a1d5cd269da6a19600",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeadsPage-DqpTW8uB.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c1ab88e4042956f1be29e947e8a0803f28ccb0256a6ff31a8f2ce73b875045b8",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerLeadsPage-ZcX4-sX-.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "21c269390ea54469c4bf829d572d56cdfdfb6eab1ea8fafbbad39610c9b20638",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerManagement-19qhx8wJ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ee07ad5c165ff3e514ba86e83c9254d5d976b1d5372cd36806dba11bc3cff1d9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerManagement-CwzamnoR.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "074ada7d3ab2d477f8253000a7865cc50cf0d0442b69a4090e1e86c5e1c22631",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerManagement-d_MvZWgo.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "020c60b284c6eae93235d44c697bff2ff1d425c58821e66a5b3d86404d0714f6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerReportForm-BZGSs9WJ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3acb675c7c0afd68e00868add3c55dbeb838fe74683a752982d477a7476327ba",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerReportForm-DN1hULep.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "86d4f8b3abd4a1f180985d68fb0d2d104cb4833c86574255e3df279997869aeb",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerReportForm-akoc7l62.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8095ac79dd1e437b1e98eeb3f354aec4ac9d3ab3999a00a78af6822d2b2d480c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerResponsive--xkyi3zY.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4f4a95134a9b4e9239983a8a6f5a5aa64efea2fcb9c85745ef1f261ccc6d3408",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerSettings-C2Cr23Tb.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ab00c0fcf8cde0db1473172ecc8818a931ff48fe9fbaa7a93acc7a9e5b80c9fe",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerSettings-CPvDu3dk.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "069cf65288e14f39068c0d89adf38f40b2c792655d6ff90cdc005ce8ab2898b9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerSettings-CdowEJJk.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3722232d08fc2a0a6fbc55ad4a82b96d412264f58125ef8feb447e35f7d66fa3",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerSettings-Ctf3fWGd.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "f8a1444a0e7408a0a1bed67f24ea6a05ab82f987fdf5ced84352e70f9051f766",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerWorkflow-B6poZxWE.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a7f3922cd39e027e7ca19b92803b2c70362866c0cb2d7a2d5fcdc0e631a0d672",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerWorkflow-BKeJYX6S.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "aa3b70a044eba80ca42aa048c71dd4a7dc083e4ef7fef5cd2095f1e6eaf066bf",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/customerWorkflow-CiPlUmU7.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "beef0950689a0fb45bcd083345bc6270e07fd296ab7d9c1313442e90d4c2d125",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/dashboard-6Z2q_Fo-.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "fcf6fdf634eba792255050db0a35cfef6604a8782ee41235f3f5a807c3584110",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/dashboard-C5R60Rfv.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "0cdb0d0486140624fdb9fa9363eab4e600f63ba6bdecc54e64229b6fd76d69c1",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/dashboard-C_M9SN4Z.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "5e300060f8583363dc2f0f3f9b47b064b4b40c53cfc33b42bf37a11b553cef0e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/dashboard-CjUb8TR0.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "6b4acc822937dd90cdbf87d842968b13c03ebd6cc5130924733069eb1e196220",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/designerCenter-BsrqKkAg.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "5a85c82af34675baa6770239ca04cc908ffa57f8ce991c8b5d47aa843f603e8e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/designerCenter-CQuVcfQG.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "abbd91969c2f2d8f34b08179618afb2e9ddb3a6d4ed131dcc1fbb987e48ab49e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/designerCenter-CdK-MHgr.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "cef672a3837222df239a98497517b336baba76e36f1f2b74c96ebdc22676f236",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/designerCenter-CxFCgMIK.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c07ceb1b71b6fabf8e25fb92241a99a76c3ec80b2fc18203d4ee201096e7ef6b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/displayLabels-D0s7a41N.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "bb91f119f75aced2f240691325d06778323a19ff093d992a49dce4f209c652cf",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/displayName-B6jSaeIB.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "053355fcad1f7ca15168a9d7cb7dc7752e36dcf9abea6dc2e115fc80f2522eca",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/distribution--zLXx7Ym.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "1a4f61f54dc23e58f26939465f93b83a8fc34bae5308ee0b081b0515d6277884",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/distribution-Bvf2Nc8P.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "263c526ffb257cc03a776adc6c114c5f6e0565dfbcdfcabcd2a73b64736d5653",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/distribution-CRgsU0EI.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2e137ad43369c2e718a9709ea0b17839f2e1ff56f97b4063016e204394abb448",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/distribution-Czkzwj8L.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "947973ee042f35d163c26727ac6ec0ac80b791ae944a19ae44e80cb8b66b12d4",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/index-CJk3fwvU.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2844fee8c4155b2f1d3d489535432a56d70fb017869ff32e06f116ec88f91994",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/index-DWRUEBQT.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c6e8411af8a2e21cf1ba0f9b12e2c95ba9ba0ef0ca4bbc9e367b09feca2f49da",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/index-DrPrVwWg.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "53da8663f49e10d7fea9df39a096cfbeb2d0caf83e93721c93e44bc3b0c711b0",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/index-ZAeCa5aV.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "edb765ebdca07d12d373e0bf32dea558a2dc9412d2c6383e9adcc2680e8e0caf",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/inspirations-BnBlwcbv.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a4437834a8d8518702d2dea3b21466947014bea453a9f3ce7c17ddfad98baea8",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/inspirations-CIwrvipl.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "67742959a7c02cc94e38dfcf380770cc75ac4dbd149d7eb7994a9bd2fdfa9a0c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/inspirations-COfgrz5e.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "b9bafe6ae1c5d77fbc6ebd23ca2d6544700beec71bf4bea891ce49d85698ca02",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/inspirations-Q5CaoeH3.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "9c3f1d0959aa193add783c78f88917b629bbca7bea3068def90e1235110960e6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/login-C-1f8Kni.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "62dbf5d6071f09e9e7f6174620f027d93def209a8c21d26f2f7ec19a3c4504c9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/login-CRCCAEuK.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "057c4ccd55b0697f0fcb28c9d0b925ae6cf02e0aa2cb4ebfe6126cbd5f293b14",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/login-DpWQD1jl.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "94c74da01c86d02a458999761e35003c425d430574e03efd414750c2349ac174",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/login-OfNpjGeD.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "57d739a8273cd5b233f4fd61a55d2984e9d5d904e8437475edf097550b3faa34",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/logs-B10ABXpW.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "bc749cf54dabcba25178868815e823ea4bf6ee5976d2a77c155e28511837d636",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/logs-B4GZVQR6.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8f8e70fd8f0cde7da1892a922d7dffaa4f1f3fdcc29c4eb2e84e477ef7c9052a",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/logs-Bg_6syKZ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "5a605bfed4ba63efb879d71704ab6ffea3c30eaf737421132472d22a584d340a",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/logs-E_YZeIxd.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "dd5f308c8b5d0921536b75afbd8548dda6832f7054d02cfeaca23f043973b43e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/managementSearchPanel-CNDN4Uhg.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4779312682c787fac611fb9a9d4f8fe0210dbd6b0a47167bf4f3ef405a26a7a1",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/managementSearchPanel-DsgmWUcX.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "e54fec2aa02fdcfd7db955b5e73aafa15f3bb18cc7567507a53b229b22468d4b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipOperations-B95-bYE7.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "43ff13f467747f66a3115d48cdaa2135502a53cb5bd0acae4ce7a74015a0af83",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipOperations-Cmn-3nzM.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a6143ff57e0c6a506200fe5e14143a01217c0b43d119f9ffb055cb0a4ec2fd28",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipOperations-D2b9oCYT.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "969e2a4a7ef40b9740e5615fd492fd2988253627eb76b763decc6c5713fa69f6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipOperations-DWpt9pMF.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "dfb7a76c5a10ca48277c7f9d41baae97eece9b80d63f2fb16382bd6d5801f959",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipPlans-CNWfTFZa.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "1fea8e3eb374efd3460b14d7c9c1bef9c5dbd082543c030bb4d2eda10153fc47",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipPlans-CUsiwSry.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3c29a7a45690d030dc4c31120d3826dde037848d547d84e7cc0dd992348595d7",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipPlans-DloVwtzO.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "e0319f31382bbc2e6d0a39b80291211dc7b5bc8189db52b9b09bdfcb409c2e81",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/membershipPlans-oB6OtCmQ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a4b83e6ab316d5c9e293bbec72d26985221378f736e6f0357edb79cef4c94742",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/orderCenter-2YZqyXCB.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c2533fb80e4d9b0c83aa338be50785b7b6989e897a8ac1381cf9e77ee1865f9a",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/orderCenter-B3MpP2AP.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c06bacea45de3a2a564fba2346bf5a2fcce80d7975f0a27f167d290f434e8ff6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/orderCenter-Ou13Zu5n.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "bf8430b746fd96d8ec1e5b10a8ab6668ef54d9a40070bc1021994cf637931b9f",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/orderCenter-gqhPkEuE.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "50808c71f3c7ccdcd79a891b254b5fa41b4d594f9d36eaf7e4813533ad34e2d3",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/oss-8uX-BNai.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ea160456a434d9e606e80ed7c3d089b5f87c91abc1d2e8263220fb3f61b537b1",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/oss-DAbsUK-d.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3617e91386b8b173e677a4bde06859c8fca06f8a4eab08896b4528171ed2ec22",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/oss-aO7gQQ79.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3aec79dc455cb1b0050de0eb680716df154f3b4d6c3d3690b5b8834465fa14b7",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/oss-hSkg_K2h.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d5d2f298bc7a48d692cf10351a3ed465e899a4afb2ede0ab64b76aff3354782b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/pricingConfig-B0idmOrl.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2936eb8ca807797e08c5a7957113c797a43ecf643cbeaf45350dfab2c65b1518",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/pricingConfig-B20X_eri.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "eae6d4c1d227343f4fc9e7361c3fb01727324fa76bd22846a3c659aef5747c8a",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/pricingConfig-C7WcjUdg.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "fa3f62a109527a3e4654d2cd58c606407d063c28f3df7f6557586376e711e4e1",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/pricingConfig-adifuKw1.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "faa589042ce95699df79eefff0ad01b778e972925dbde209733bf4e54e02da1e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/react-vendor-5my-l6c8.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "dbf3636f9cdf279bdd3420d0d706263f96ed243fb08213751fa7c7d0cecaae45",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/rechargeConfig-C4EZTGJF.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "6ec62a8bcf7068bfdd9a6690f78dc5834d96882cfbd1bc52badf5ff0056dd486",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/rechargeConfig-CzKab9ZB.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3033aefa7c1c45519f219011ba2873f16e8e489d6fc05571088b0bca40003dca",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/rechargeConfig-DqxK55Xu.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "af282d2ca1add70bbad339a5b1d1b0adb43c771703e7ed92c44a59164bc040c2",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/rechargeConfig-v6GN8TzT.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3716288afb1beedbc8c84c2d8beb97f28129c34916fce8fca34084955a3bc720",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/reportCenter-B3iuMtgv.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4def67bba421f5d3d3573f3dd74b628ce1b89cdd3725d7ad9e7ab5085873943c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/reportCenter-B6nA56BI.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "90c3cddb0a2a328b7ad82580c85321c238871b527a8b1755c7e97c1d5c21445e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/reportCenter-BtmzjIqq.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d03778c670d145c66b66303497ac052a0c3cede7f7669309b3aab953dd38b196",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/reportCenter-DES1NEAz.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "bae43c1e7bdc580433fc25348bb7f61fddf6e24f578ad915ca3c890eb2a3068a",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-BDmKo3Z-.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "42db2398fbee4fe1e5c9c25ad7d384443fe7471ece6e14d3c04d34515449e3e2",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-BUvbqg4O.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "29a3d5418073fdc292595291a2b570359693635652fcbc58b42a46363946055c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-BmfJK-QM.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "26a66f477bcf7349eaab5295a9a9ad1e002101abec5e566112b01fa8f8753306",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-CjjTIo_c.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "67bd63f8514dcfc893f2f9a34b8b943701a71a2a6b4185fe125ce0f1a3ac5ee9",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-CwVMl998.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "5021e493b6b27dc5d1b28d4e0fdba56f91c0b2aa5b46d44d95a5ae8a8e75b232",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-DJL_U4bj.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3439bf35b9d13e67de0c2c4908178ebad9ba8f7e7197fbe9ea5898ab87890db0",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/riskControl-DPwvLV7I.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d547f97c16f3b2783008710bdf5e96619daf43f9d2aee8d66313149b74f07816",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/router-vendor-BmyojryK.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8f8bacc3ca101eba87045b57eb277074ed7a1380cfc53b38e1ce20bfde26d129",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/salesFormat-BauLqa4E.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a80b1550db79566d62e22ce1946d6b642d8e04151fd04ad1b9fab4eca3bb61f1",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/salesModule-BGwl9xYh.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "198a1d6bd513e56a74b5e5d126f88fac22bf918e3f208d96e8bf336c905f68aa",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/salesOverview-AK1fw0TV.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "8fe219761c91bbc24af9b1bd7ffe553a8c5c54ce90ada1effe5467a81301ee6f",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/salesOverview-BDnfjZYx.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "731ddb7139c0547b2b6b5f29f65f40b051884a63a88164d6aeb55e3deba031ee",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/salesOverview-CjmHWD2Q.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a4f4c6e1e9181ca7efecfdcab5f0cea2c51cd126bb744b00a588c8d347fcbe47",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/salesOverview-D0A6cwV2.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "7d15c23c8e5dfc82880da536d39cb8fb0a097a877b80bcd6d981778c27b2d144",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-96ic_2PA.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "882abbf3e8ba689d6823ceaea8b7cbc83fd0a834d98aa3f6fe9783c5a419aae6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-Aaq5ouoW.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "896aba3c78a82e50d65d89d83e27e32521c70428c641cd6226da1f239924742c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-BTQ8CB7z.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "5334005a36ebc6f980d70020cd43d359f256bf11452f146281cd9cf5fd6778db",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-BxDddOff.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "21aaa25deb0296694eab6dcdfec7cf6c53b02b592dd542c562cca810210601d5",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-D3gE390R.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "a58b978ee14a19b2c5ff4d85d396c188b40fcbfb076b5c3fcb9c2714eb805a3e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-DK9iFOWm.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "e19fba288b74031d8fb2139b2d9d4914858ea225a36ecdfcace2f7ee4d54cb02",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-DS2dj6T9.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3e0efbdf3ed3ce7cf4cdc69db7278ce07cc9b91a2266194fb99c962c926b2071",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/shareTracking-EGj2nmYh.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3ad1554c795168c247918b6fad2bde501ff33b6bac9a81f136f862eb14d2e197",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-0M7VC93o.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4c54b1bbf0aef3814ae782de145acefd0735e60b82ad1a4e9dc0ca33059c9cf5",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-BDFRJ9xv.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "1e2b8852c41a7ffcc9fdf6a9f637a9b280164ecaea2e595114e61a1361a47640",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-BlTUT9x8.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "28fae9053dd3f896be4f8df72e379d25cfa7d03f548ed590802081ae967f12dd",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-CpX0PNAy.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "b9787485062278e9993ffca6c0e86dc9986a43cc8da1c06cc59887937c0fe6b0",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-CrP5IMX6.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "4c2eba4d6c4982b46f8db8706d849c27eec1723b25b620e76289ae355fb12912",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-DOTEakPF.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "17e26838b528bb8805f701750844249621781cea4508baa85ee7e9629183785d",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/supportTickets-Z_bW5XQ7.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d55da2242aaabffc1dc925b3a57df414e4a1686ee1c4d8632be2658b526d9a3c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-0F2SJDn_.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "98f774f4ffc9fc78ad908a90a475c484fbfe24b0b4fc1af9938955498a453e1d",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-B5_LdaTe.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "26c338daa38a1024f13a65e780e454d06db10d1ddd2db305410d892b23a6a30d",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-B_rSSKaA.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "fcfc7ddfe16103abc63c66fe0765394444633af70b8a01341f5cc29a7c684cc7",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-BtojXk7X.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2494bbde180aabffdd440ade2c350e68a3c710fbeed087f99452e3840a845130",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-CCfseDDL.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "70a919eab6749714de38342f88c0a352ae0198f1cef35196db24bac7ac78d677",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-D3koZAEo.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "0335d532fee3ad0cd0e29e2dbdad6e57d9c569a4558b80c02feeb64ea9498853",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/templates-DCEx631z.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "f65e22c311529157e7bbc78d891d3133029587afc6763c5a6cd1b36a73b81f35",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/useIsMobile-D7b4X1fx.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "2fcde9b12aa89092f50bc4dfcc3ed31a30ec45025537eda5d622ca2c9d6f1277",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/userWorkbench-5jtj2jzU.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "e23f019b39551962ae6006aab0aaf98b9b97d388c98a2a84f52f045d74933a06",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/userWorkbench-B9TeCGzZ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "79fb2cdbafc0795f0b6ce86f4525ade5ffcefbd187770b7d7d68eaf0462cc8c1",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/userWorkbench-BRuuxQ3w.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "ad70aae741cc9f6c7e60744d8a212e64da8dc47f5220e0b5eb859b4ea3984ff3",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/userWorkbench-BmqhvJAC.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "23ab0c487054ce2b3c1793dca84ef29587e3a80b2892bce5a8a1b040df23b48c",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-C3giULBJ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "952c30d515926a2cc77b232203ffc09dd312faa2533d9fef03bd44e84be5f1b3",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-CEr3lB13.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "20bad2b2cf4b6d3a1b083983374d60af670886b4fb384aac63e8f78464c157a8",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-CzQu71gR.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d5c1f8712f70459e8c402c648ad40cdd9b624375241d337d15d80da5ffadf454",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-D2o8B1-G.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "371a6009d7b73ac3ce4c747efc44e77d57bb88aec89a78763c8986dc8959339d",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-YUBPCI66.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "72cfaa0605e2cf8ade8656a73525e6acafd7118f7f555b6821944032a7b11612",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-iph9bB1S.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "3a523e97e9ef786b4b2ded2d8ace506106a23af749e37f5816e58c3addc99e93",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/users-raWloRlg.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "6872a6fda52f0fb29db726a330f5c7884cb5875aaf326a9fedcd1f29967b3a23",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/utilityTools-BS11UX_7.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "0b955dc060b63f1bf06b746e31df7fcb05e9db9d8ac9805da68a73cd520968ca",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/utilityTools-COwmquoi.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "fcd2f95c59c599c105fb31134be1fab6844e7781912cb5ec26888979c3da2b6b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/utilityTools-CvbIP4AA.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "f0db29711d923488d7dbb49d8510e6454a6a318005455990f3336b90934826b6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/utilityTools-_UZYGHPV.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d401628bcccb5cbccd60c877977bb46a79bb88f76a92f5632a28d6583d245ef0",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/vendor-CWG1rEj-.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "890630c5f314d053518a6726ce6bba86c206dcbf64ce446f3a6cb5fb87587625",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-BQJRkVHF.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "e1360242e06833edac591b4852671d71c09a1b6e3fc3dd866fe9043a981fd72e",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-BpIBk10E.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d91402e36045ca67757c04db7ae480334729a43f88c184d61c6aaf1b22b667bc",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-CYXbkbFw.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "d2db90fec18d56ee6f54983f3492bc996b14486924116da91e2a67f48c9b8e6b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-DizatXH5.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "800c84f53513147ce29a3c0c7b461b4623d68528a76afaab32982256545b403b",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-_5k5rgTZ.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "f3ddd85df5d64e241f40f6fe0e24783b334b70ed2ed32022563467bacb51baa6",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-jA3jwuLV.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "41bc78e7154fc57c7792f87210f1b4295fd736a63d471833cf0471bb67e0033d",
+      "passed": true
+    },
+    {
+      "path": "admin/assets/virtualPay-lnqUjuL0.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "c9508b2f4caa1964c7c381cd1dae150b45efab58599853f3908e29c00d9725e6",
+      "passed": true
+    },
+    {
+      "path": "admin/index.html",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "sha256": "744832a619a1158e7165d58db5a7dc92a4038f98d8a1c8c4fed01b755d61c5af",
+      "passed": true
+    }
+  ]
+}

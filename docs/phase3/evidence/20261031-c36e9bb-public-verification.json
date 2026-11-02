@@ -1,0 +1,69 @@
+{
+  "checked_at": "2026-10-31T14:26:28.666404+00:00",
+  "origin": "https://api.jiadilingguang.com",
+  "results": [
+    {
+      "path": "/api/v1/miniprogram/tracking/config",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "expected": 200,
+      "valid_json": true
+    },
+    {
+      "path": "/api/v1/miniprogram/workbench/context",
+      "status": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "expected": 401,
+      "body": {
+        "code": 401,
+        "msg": "参数不合法"
+      }
+    },
+    {
+      "path": "/api/v1/miniprogram/workbench/project-collections",
+      "status": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "expected": 401,
+      "body": {
+        "code": 401,
+        "msg": "参数不合法"
+      }
+    },
+    {
+      "path": "/api/v1/miniprogram/project-packages/shared/deployment-check-c36e9bb",
+      "status": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "expected": 401,
+      "body": {
+        "code": 401,
+        "msg": "参数不合法"
+      }
+    },
+    {
+      "path": "/api/v1/miniprogram/project-notes/member-invitations/deployment-check-c36e9bb",
+      "status": 401,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "expected": 401,
+      "body": {
+        "code": 401,
+        "msg": "参数不合法"
+      }
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/project-collections/deployment-check-c36e9bb/versions/1",
+      "status": 404,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/json; charset=utf-8",
+      "expected": 404,
+      "body": {
+        "code": 404,
+        "msg": "合集不可访问"
+      }
+    }
+  ]
+}

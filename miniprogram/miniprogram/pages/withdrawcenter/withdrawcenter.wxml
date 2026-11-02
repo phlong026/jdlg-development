@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <!-- 统一导航栏 -->
   <navigation-bar title="提现中心" subtitle="{{canWithdraw ? '认证设计师 / 机构可申请微信提现' : '完成认证后即可开通提现能力'}}" background="#e6daca" />
@@ -93,3 +94,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -138,7 +138,7 @@ for (const extension of ['ts', 'js']) {
     assert.deepEqual(fixture.navigation, [{ method: 'switchTab', url: '/pages/index/index' }]);
   });
 
-  test(`${extension}: 老用户缺昵称时显示昵称弹窗并停止跳转`, async () => {
+  test(`${extension}: 老用户缺昵称时在原登录卡内确认资料并停止跳转`, async () => {
     const fixture = loadLoginPage(extension, { profileNickname: '   ' });
     await fixture.page.handleWechatLogin();
 
@@ -146,6 +146,7 @@ for (const extension of ['ts', 'js']) {
     assert.equal(fixture.guardShows(), 1);
     assert.equal(fixture.navigation.length, 0);
     assert.equal(fixture.page.data.identityPopupVisible, false);
+    assert.equal(fixture.page.data.completingProfile, true);
     assert.equal(fixture.page.data.loading, false);
   });
 
@@ -176,6 +177,7 @@ for (const extension of ['ts', 'js']) {
     assert.deepEqual(fixture.navigation, [{ method: 'navigateBack', delta: 1 }]);
     assert.equal(fixture.storage.userInfo.nickname, '山居用户');
     assert.equal(fixture.storage.userInfo.avatar, 'https://cdn.example/confirmed-avatar.png');
+    assert.equal(fixture.page.data.completingProfile, false);
     assert.equal(fixture.requests.filter(r => r.method === 'GET').length, 2);
   });
 

@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use strict';
 const api=require('./api');
+const {resolveProtectedMediaURL}=require('../protected-media');
 const READER='pages/contentreader/contentreader';
 const data={shareMaterials:[],shareMaterialsState:'hidden',shareMaterialsCursor:'',shareMaterialsLoading:false,shareMaterialOpening:''};
 function account(){return String(wx.getStorageSync('token')||'');}
@@ -26,7 +27,8 @@ const methods={
   try{
    const result=await api.request('/materials?limit=20'+(cursor?'&cursor='+encodeURIComponent(cursor):''),'GET',{},undefined,true);
    if(!current(this,sequence,token))return;
-   const items=(result.items||[]).filter(item=>item.status==='published'&&item.route_key===READER&&/^[A-Za-z0-9_-]{8,128}$/.test(item.content_id)&&Number.isInteger(item.content_version)&&item.content_version>0).map(item=>({...item,coverURL:item.cover?api.mediaURL(item.cover.url):''}));
+   const items=await Promise.all((result.items||[]).filter(item=>item.status==='published'&&item.route_key===READER&&/^[A-Za-z0-9_-]{8,128}$/.test(item.content_id)&&Number.isInteger(item.content_version)&&item.content_version>0).map(async item=>{const url=item.cover?api.mediaURL(item.cover.url):'';return {...item,coverURL:url?await resolveProtectedMediaURL(url):''};}));
+   if(!current(this,sequence,token))return;
    const all=more?this.data.shareMaterials.concat(items):items;
    this.setData({shareMaterials:all,shareMaterialsCursor:result.next_cursor||'',shareMaterialsLoading:false,shareMaterialsState:all.length?'ready':'empty'});
   }catch(error){

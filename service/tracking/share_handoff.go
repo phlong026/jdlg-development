@@ -15,15 +15,17 @@ type ShareHandoffResult struct {
 	Expires time.Time `json:"handoff_expires_at,omitempty"`
 }
 type shareHandoff struct {
-	ShareID       string    `json:"share_id"`
-	Route         string    `json:"route_key"`
-	Content       string    `json:"content_id"`
-	Version       int       `json:"content_version"`
-	SourceEvent   string    `json:"source_event_id"`
-	SourceVisitor string    `json:"source_visitor"`
-	SourceSession string    `json:"source_session"`
-	Expires       time.Time `json:"expires_at"`
-	Redeemed      bool      `json:"redeemed"`
+	ShareID           string    `json:"share_id"`
+	Route             string    `json:"route_key"`
+	Content           string    `json:"content_id"`
+	Version           int       `json:"content_version"`
+	CollectionID      string    `json:"collection_id,omitempty"`
+	CollectionVersion int       `json:"collection_version,omitempty"`
+	SourceEvent       string    `json:"source_event_id"`
+	SourceVisitor     string    `json:"source_visitor"`
+	SourceSession     string    `json:"source_session"`
+	Expires           time.Time `json:"expires_at"`
+	Redeemed          bool      `json:"redeemed"`
 }
 type handoffRedeem struct {
 	Key             string `json:"handoff_key"`
@@ -97,9 +99,66 @@ func (s *Service) handoffContentAvailable(r Repository, share Share) (bool, erro
 	return master.Status != "revoked" && version.Status == "published" && version.Owner == share.Owner && master.Owner == share.Owner && version.ID == share.Content && version.Version == share.Version, nil
 }
 
+func (s *Service) handoffSourceAvailable(ctx context.Context, r Repository, share Share, source Entry) (bool, error) {
+	switch share.Route {
+	case publishedReaderRoute:
+		if source.Route != share.Route || source.Content != share.Content || source.Version != share.Version || source.CollectionID != "" || source.CollectionVersion != 0 {
+			return false, nil
+		}
+		return s.handoffContentAvailable(r, share)
+	case projectCollectionReaderRoute:
+		if source.Route == projectCollectionReaderRoute {
+			if source.Content != share.Content || source.Version != share.Version || source.CollectionID != "" || source.CollectionVersion != 0 {
+				return false, nil
+			}
+			_, err := s.projectCollectionVersion(r, share.Content, share.Version)
+			if err == nil {
+				return true, nil
+			}
+			if handoffEvidenceAbsent(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if source.Route != publishedReaderRoute || source.CollectionID != share.Content || source.CollectionVersion != share.Version {
+			return false, nil
+		}
+		_, err := s.projectCollectionChild(ctx, r, source.CollectionID, source.CollectionVersion, source.Route, source.Content, source.Version)
+		if err == nil {
+			return true, nil
+		}
+		if handoffEvidenceAbsent(err) {
+			return false, nil
+		}
+		return false, err
+	default:
+		return false, nil
+	}
+}
+
+func handoffMatchesEntry(proof shareHandoff, entry Entry) bool {
+	return proof.ShareID == entry.Share && proof.Route == entry.Route && proof.Content == entry.Content && proof.Version == entry.Version &&
+		proof.CollectionID == entry.CollectionID && proof.CollectionVersion == entry.CollectionVersion
+}
+
+func handoffTargetMatchesSource(target EntryInput, source Entry, code string) bool {
+	return target.ShareToken == code && target.Route == source.Route && target.Content == source.Content && target.Version == source.Version &&
+		target.CollectionID == source.CollectionID && target.CollectionVersion == source.CollectionVersion
+}
+
 // CreateShareHandoff proves one explicit browser-to-mini-program transition.
 // It never links identities, creates a Share, or counts a URL Link as a read.
 func (s *Service) CreateShareHandoff(ctx context.Context, code, sourceToken, eventID, token string) (ShareHandoffResult, error) {
+	return s.createShareHandoff(ctx, code, sourceToken, eventID, token, nil)
+}
+
+// CreateShareHandoffForTarget only marks a generated destination ready when it
+// is the exact page that produced the verified browser view.
+func (s *Service) CreateShareHandoffForTarget(ctx context.Context, code, sourceToken, eventID, token string, target EntryInput) (ShareHandoffResult, error) {
+	return s.createShareHandoff(ctx, code, sourceToken, eventID, token, &target)
+}
+
+func (s *Service) createShareHandoff(ctx context.Context, code, sourceToken, eventID, token string, target *EntryInput) (ShareHandoffResult, error) {
 	var out ShareHandoffResult
 	if !s.Config.Enabled || !validID(code) || !validID(sourceToken) || !validID(eventID) || !validHandoffToken(token) {
 		return out, nil
@@ -113,14 +172,7 @@ func (s *Service) CreateShareHandoff(ctx context.Context, code, sourceToken, eve
 			return err
 		}
 		now := s.Now().UTC()
-		if share.Revoked || !now.Before(share.Expires) || share.Route != publishedReaderRoute {
-			return nil
-		}
-		available, err := s.handoffContentAvailable(r, share)
-		if err != nil {
-			return err
-		}
-		if !available {
+		if share.Revoked || !now.Before(share.Expires) || (share.Route != publishedReaderRoute && share.Route != projectCollectionReaderRoute) {
 			return nil
 		}
 		source, err := s.entry(r, sourceToken)
@@ -130,7 +182,17 @@ func (s *Service) CreateShareHandoff(ctx context.Context, code, sourceToken, eve
 		if err != nil {
 			return err
 		}
-		if !source.WebSource || source.ConsentVersion != s.Config.ConsentVersion || source.ConsentVersion == "" || source.Account != 0 || !strings.HasPrefix(source.Visitor, "a:") || source.Attribution != "share" || source.Share != share.ID || source.Owner != share.Owner || source.Route != share.Route || source.Content != share.Content || source.Version != share.Version {
+		if !source.WebSource || source.ConsentVersion != s.Config.ConsentVersion || source.ConsentVersion == "" || source.Account != 0 || !strings.HasPrefix(source.Visitor, "a:") || source.Attribution != "share" || source.Share != share.ID || source.Owner != share.Owner {
+			return nil
+		}
+		if target != nil && !handoffTargetMatchesSource(*target, source, code) {
+			return nil
+		}
+		available, err := s.handoffSourceAvailable(ctx, r, share, source)
+		if err != nil {
+			return err
+		}
+		if !available {
 			return nil
 		}
 		row, err := r.Get("event", eventID)
@@ -149,7 +211,7 @@ func (s *Service) CreateShareHandoff(ctx context.Context, code, sourceToken, eve
 		}
 		key := hash(token)
 		if old, err := decode[shareHandoff](r, "share_handoff", key); err == nil {
-			if old.ShareID != share.ID || old.SourceEvent != eventID || old.SourceVisitor != source.Visitor || old.SourceSession != source.Session {
+			if old.ShareID != share.ID || old.Route != source.Route || old.Content != source.Content || old.Version != source.Version || old.CollectionID != source.CollectionID || old.CollectionVersion != source.CollectionVersion || old.SourceEvent != eventID || old.SourceVisitor != source.Visitor || old.SourceSession != source.Session {
 				return fail(409, "交接标识已用于其他来源")
 			}
 			if now.Before(old.Expires) {
@@ -163,9 +225,9 @@ func (s *Service) CreateShareHandoff(ctx context.Context, code, sourceToken, eve
 		if share.Expires.Before(expires) {
 			expires = share.Expires
 		}
-		proof := shareHandoff{ShareID: share.ID, Route: share.Route, Content: share.Content, Version: share.Version, SourceEvent: eventID, SourceVisitor: source.Visitor, SourceSession: source.Session, Expires: expires}
+		proof := shareHandoff{ShareID: share.ID, Route: source.Route, Content: source.Content, Version: source.Version, CollectionID: source.CollectionID, CollectionVersion: source.CollectionVersion, SourceEvent: eventID, SourceVisitor: source.Visitor, SourceSession: source.Session, Expires: expires}
 		rec := record("share_handoff", key, source.Owner, now, proof)
-		rec.Visitor, rec.Session, rec.Share, rec.Content = source.Visitor, source.Session, share.ID, share.Content
+		rec.Visitor, rec.Session, rec.Share, rec.Content = source.Visitor, source.Session, share.ID, source.Content
 		if err = r.Insert(rec); err != nil {
 			return err
 		}
@@ -191,7 +253,7 @@ func (s *Service) redeemShareHandoff(r Repository, entry *Entry, token string) e
 	if json.Unmarshal(row.Payload, &proof) != nil {
 		return ErrUnavailable
 	}
-	if row.Owner != entry.Owner || proof.ShareID != entry.Share || proof.Route != entry.Route || proof.Content != entry.Content || proof.Version != entry.Version || !s.Now().Before(proof.Expires) {
+	if row.Owner != entry.Owner || !handoffMatchesEntry(proof, *entry) || !s.Now().Before(proof.Expires) {
 		return nil
 	}
 	if _, err = r.Get("deletion", proof.SourceVisitor); err == nil {
@@ -244,7 +306,7 @@ func (s *Service) claimHandoffNotice(r Repository, entry Entry, event Event, wou
 	if err != nil {
 		return false, err
 	}
-	if !proof.Redeemed || proof.ShareID != entry.Share || proof.Route != entry.Route || proof.Content != entry.Content || proof.Version != entry.Version {
+	if !proof.Redeemed || !handoffMatchesEntry(proof, entry) {
 		return false, ErrUnavailable
 	}
 	if !s.Now().Before(proof.Expires) {

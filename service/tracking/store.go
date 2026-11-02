@@ -256,6 +256,21 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 		where = append(where, "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'"+path+"'))=?")
 		args = append(args, q.View)
 	}
+	if q.TitleSearch != "" {
+		if kind != "media" && kind != "content" {
+			where = append(where, "1=0")
+		} else {
+			where = append(where, "LOCATE(LOWER(?),LOWER(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.title')),'')))>0")
+			args = append(args, q.TitleSearch)
+		}
+	}
+	if q.AssetKinds != nil {
+		if kind != "media" {
+			where = append(where, "1=0")
+		} else {
+			addIn("JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.kind'))", q.AssetKinds)
+		}
+	}
 	stamp := func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05.999999") }
 	if !q.AtFrom.IsZero() {
 		where = append(where, "r.occurred_at>=?")

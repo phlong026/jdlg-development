@@ -7,6 +7,7 @@ import {
 } from '../../utils/deviceFingerprint';
 import { resolveAssetPath } from '../../utils/asset';
 const shareMaterials = require('../../utils/tracking/materials');
+const phase3API = require('../../utils/phase3-api');
 
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
@@ -26,9 +27,13 @@ type MyMenuItem = {
 function hasDesignerWorkbenchAccess(options: {
   hasLoginToken?: boolean;
   certStatus?: string;
+  certType?: string;
   certIdentityType?: string;
 }) {
-  return !!options.hasLoginToken;
+  return !!options.hasLoginToken
+    && options.certStatus === 'approved'
+    && options.certType === 'designer'
+    && options.certIdentityType === '设计师';
 }
 
 // 格式化灵石显示：只保留前 6 位，后面加 ...
@@ -91,11 +96,20 @@ function resolveVipDisplays(hasLoginToken: boolean, ...sources: any[]) {
   };
 }
 
-function buildCommonMenuItems(): MyMenuItem[] {
-  return [
+function buildCommonMenuItems(options: {
+  hasShareVisitAccess?: boolean;
+  hasContentWorkbenchAccess?: boolean;
+  workbenchAccessLoading?: boolean;
+} = {}): MyMenuItem[] {
+  const items: MyMenuItem[] = [
     { action: 'favorite', label: '我的收藏', icon: 'star', meta: '已保存的内容' },
     { action: 'buildingCodeDocs', label: '规范资料', icon: 'file', meta: '全站问答' },
+    { action: 'project', label: '生成记录', icon: 'file', meta: '各类AI成果' },
   ];
+  if (options.hasShareVisitAccess && !options.hasContentWorkbenchAccess && !options.workbenchAccessLoading) {
+    items.push({ action: 'shareVisits', label: '我的分享访问', icon: 'share', meta: '仅查看本人分享' });
+  }
+  return items;
 }
 
 function certificationMeta(hasLoginToken: boolean, certStatus = '') {
@@ -108,6 +122,7 @@ function buildServiceMenuItems(options: { hasLoginToken?: boolean; certStatus?: 
     { action: 'identity', label: '认证资料', icon: 'verified', meta: certificationMeta(!!options.hasLoginToken, String(options.certStatus || '')) },
     { action: 'bindPhone', label: '绑定手机', icon: 'mobile', meta: options.hasLoginToken ? '查看绑定状态' : '登录后查看' },
     { action: 'message', label: '消息中心', icon: 'notification', meta: '系统通知' },
+    { action: 'customerManagement', label: '客户管理', icon: 'usergroup', meta: '独立管理账号' },
     { action: 'settings', label: '设置', icon: 'setting', meta: '账号与隐私' },
   ];
 }
@@ -117,6 +132,7 @@ function buildWorkbenchMenuItems(options: {
   certStatus?: string;
   certType?: string;
   certIdentityType?: string;
+  hasContentWorkbenchAccess?: boolean;
 }): MyMenuItem[] {
   const hasLoginToken = !!options.hasLoginToken;
   const certStatus = String(options.certStatus || '');
@@ -124,19 +140,20 @@ function buildWorkbenchMenuItems(options: {
   const hasDesignerAccess = hasDesignerWorkbenchAccess({
     hasLoginToken,
     certStatus,
+    certType: String(options.certType || ''),
     certIdentityType,
   });
+  const hasContentAccess = !!options.hasContentWorkbenchAccess;
+  if (!hasContentAccess) return [];
 
-  return [
-    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '方案与效果图', available: true },
-    { action: 'projectNotes', label: '项目笔记', icon: 'file-edit', description: '记录与灵感', available: true },
-    { action: 'contentWorkbench', label: '内容制作', icon: 'video', description: '文案与素材', available: hasLoginToken },
-    { action: 'customerManagement', label: '客户管理', icon: 'usergroup', description: '使用客户管理账号登录', available: hasLoginToken },
-    { action: 'project', label: '生成记录', icon: 'file', description: '各类AI成果', available: hasLoginToken },
-    { action: 'publish', label: '我的发布', icon: 'send', description: '作品与发布管理', available: hasDesignerAccess },
-    { action: 'shareMaterials', label: '可分享素材', icon: 'share', description: '已授权作品', available: hasLoginToken },
-    { action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示主页', available: hasDesignerAccess },
+  const items: MyMenuItem[] = [
+    { action: 'myProjects', label: '我的项目', icon: 'folder', description: '项目与方案', available: true },
+    { action: 'contentWorkbench', label: '内容创作', icon: 'video', description: '作品与资料', available: true },
   ];
+  if (hasDesignerAccess) {
+    items.push({ action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示', available: true });
+  }
+  return items;
 }
 
 Page({
@@ -160,6 +177,13 @@ Page({
     commonMenuItems: buildCommonMenuItems(),
     workbenchMenuItems: buildWorkbenchMenuItems({}),
     serviceMenuItems: buildServiceMenuItems(),
+    hasContentWorkbenchAccess: false,
+    showWorkbenchSection: false,
+    workbenchAccessLoading: false,
+    hasShareVisitAccess: false,
+    shareVisitAccessLoading: false,
+    workbenchSectionTitle: '内容创作工作台',
+    isApprovedDesigner: false,
     showShareMaterialsPanel: false,
     brandOrganization: '华匠邦',
     stones: 0,
@@ -219,7 +243,6 @@ Page({
   onHide() { this.hideShareMaterials(); },
   onUnload() { this.hideShareMaterials(); },
   onShow() {
-    this.refreshShareMaterials();
     this.syncWindowBackground();
     this.syncTabBar();
     this.loadUserData();
@@ -271,12 +294,94 @@ Page({
       certStatus: this.data.certStatus,
       certType: this.data.certType,
       certIdentityType: this.data.certIdentityType,
+      hasContentWorkbenchAccess: this.data.hasContentWorkbenchAccess,
+      hasShareVisitAccess: this.data.hasShareVisitAccess,
+      workbenchAccessLoading: this.data.workbenchAccessLoading,
       ...overrides,
     };
+    const isApprovedDesigner = hasDesignerWorkbenchAccess(nextState);
+    const hasContentWorkbenchAccess = !!nextState.hasContentWorkbenchAccess;
     this.setData({
       workbenchMenuItems: buildWorkbenchMenuItems(nextState),
+      commonMenuItems: buildCommonMenuItems(nextState),
       serviceMenuItems: buildServiceMenuItems(nextState),
+      hasContentWorkbenchAccess,
+      isApprovedDesigner,
+      showWorkbenchSection: hasContentWorkbenchAccess,
+      workbenchSectionTitle: isApprovedDesigner ? '设计师工作台' : '内容创作工作台',
     });
+  },
+
+  async loadWorkbenchAccess() {
+    const token = String(this.data.token || wx.getStorageSync('token') || '');
+    const requestId = Number(this.__workbenchAccessRequestId || 0) + 1;
+    this.__workbenchAccessRequestId = requestId;
+
+    this.setData({
+      hasContentWorkbenchAccess: false,
+      showWorkbenchSection: false,
+      showShareMaterialsPanel: false,
+      workbenchAccessLoading: !!token,
+    });
+    this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
+    if (!token || token !== String(wx.getStorageSync('token') || '')) return;
+
+    try {
+      const context = await phase3API.workbenchContext();
+      if (
+        requestId !== this.__workbenchAccessRequestId
+        || token !== String(this.data.token || '')
+        || token !== String(wx.getStorageSync('token') || '')
+      ) return;
+      const hasContentWorkbenchAccess = context?.enabled !== false
+        && context?.can_manage === true
+        && Array.isArray(context?.owners)
+        && context.owners.length > 0;
+      this.setData({ hasContentWorkbenchAccess, workbenchAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess });
+      if (hasContentWorkbenchAccess) this.refreshShareMaterials();
+    } catch (error) {
+      if (
+        requestId !== this.__workbenchAccessRequestId
+        || token !== String(this.data.token || '')
+        || token !== String(wx.getStorageSync('token') || '')
+      ) return;
+      console.warn('获取内容创作权限失败:', error);
+      this.setData({ hasContentWorkbenchAccess: false, workbenchAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
+    }
+  },
+
+  async loadShareVisitAccess() {
+    const token = String(this.data.token || wx.getStorageSync('token') || '');
+    const requestId = Number(this.__shareVisitAccessRequestId || 0) + 1;
+    this.__shareVisitAccessRequestId = requestId;
+    this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: !!token });
+    this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
+    if (!token || token !== String(wx.getStorageSync('token') || '')) return;
+
+    try {
+      const context = await phase3API.mySharesContext();
+      if (
+        requestId !== this.__shareVisitAccessRequestId
+        || token !== String(this.data.token || '')
+        || token !== String(wx.getStorageSync('token') || '')
+      ) return;
+      const hasShareVisitAccess = context?.can_view === true
+        && Array.isArray(context?.owners)
+        && context.owners.length > 0;
+      this.setData({ hasShareVisitAccess, shareVisitAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasShareVisitAccess });
+    } catch (error) {
+      if (
+        requestId !== this.__shareVisitAccessRequestId
+        || token !== String(this.data.token || '')
+        || token !== String(wx.getStorageSync('token') || '')
+      ) return;
+      console.warn('获取分享访问权限失败:', error);
+      this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
+    }
   },
 
   /**
@@ -291,23 +396,47 @@ Page({
     const vipDisplays = resolveVipDisplays(!!token, displayUserInfo);
 
     if (token) {
+      const accountChanged = String(this.data.token || '') !== String(token);
+      const certStatus = accountChanged ? '' : this.data.certStatus;
+      const certType = accountChanged ? '' : this.data.certType;
+      const certIdentityType = accountChanged ? '' : this.data.certIdentityType;
       this.setData({
         token: token,
         userInfo: displayUserInfo,
+        userProfile: accountChanged ? {
+          nickname: getFirstDisplayValue(displayUserInfo, ['nickname', 'username', 'name']),
+          avatar: getFirstDisplayValue(displayUserInfo, ['avatar', 'avatarUrl']),
+          identityType: '',
+        } : this.data.userProfile,
         hasLoginToken: true,
-        commonMenuItems: buildCommonMenuItems(),
-        serviceMenuItems: buildServiceMenuItems({ hasLoginToken: true, certStatus: this.data.certStatus }),
+        certStatus,
+        certStage: accountChanged ? '' : this.data.certStage,
+        certType,
+        certIdentityType,
+        certRealName: accountChanged ? '' : this.data.certRealName,
+        certRealNameMasked: accountChanged ? '' : this.data.certRealNameMasked,
+        isApprovedDesigner: accountChanged ? false : this.data.isApprovedDesigner,
+        hasShareVisitAccess: accountChanged ? false : this.data.hasShareVisitAccess,
+        commonMenuItems: buildCommonMenuItems({
+          hasShareVisitAccess: accountChanged ? false : this.data.hasShareVisitAccess,
+          hasContentWorkbenchAccess: accountChanged ? false : this.data.hasContentWorkbenchAccess,
+          workbenchAccessLoading: true,
+        }),
+        serviceMenuItems: buildServiceMenuItems({ hasLoginToken: true, certStatus }),
         workbenchMenuItems: buildWorkbenchMenuItems({
           hasLoginToken: true,
-          certStatus: this.data.certStatus,
-          certType: this.data.certType,
-          certIdentityType: this.data.certIdentityType,
+          certStatus,
+          certType,
+          certIdentityType,
+          hasContentWorkbenchAccess: accountChanged ? false : this.data.hasContentWorkbenchAccess,
         }),
         stonesDisplay: formatStonesDisplay(this.data.stones || 0),
         vipLevelShortDisplay: vipDisplays.vipLevelShortDisplay,
         vipLevelText: vipDisplays.vipLevelText,
         vipLevelIsFallback: vipDisplays.vipLevelIsFallback,
       });
+      void this.loadWorkbenchAccess();
+      void this.loadShareVisitAccess();
 
       const lastProfileRefreshTime = Number(this.data.lastProfileRefreshTime || 0);
       const refreshInterval = Number(this.data.lastProfileRefreshInterval || 60000);
@@ -348,7 +477,16 @@ Page({
         lastProfileRefreshToken: '',
         lastCertificationRefreshTime: 0,
         lastCertificationRefreshToken: '',
+        hasContentWorkbenchAccess: false,
+        showWorkbenchSection: false,
+        workbenchAccessLoading: false,
+        hasShareVisitAccess: false,
+        shareVisitAccessLoading: false,
+        isApprovedDesigner: false,
       });
+      this.__workbenchAccessRequestId = Number(this.__workbenchAccessRequestId || 0) + 1;
+      this.__shareVisitAccessRequestId = Number(this.__shareVisitAccessRequestId || 0) + 1;
+      this.__certificationRequestId = Number(this.__certificationRequestId || 0) + 1;
     }
   },
 
@@ -373,6 +511,8 @@ Page({
       lastCertificationRefreshTime: Date.now(),
       lastCertificationRefreshToken: token,
     });
+    const requestId = Number(this.__certificationRequestId || 0) + 1;
+    this.__certificationRequestId = requestId;
 
     try {
       const apiPath = '/api/v1/miniprogram/certification/status';
@@ -401,6 +541,12 @@ Page({
         });
       });
 
+      if (
+        requestId !== this.__certificationRequestId
+        || token !== String(this.data.token || '')
+        || token !== String(wx.getStorageSync('token') || '')
+      ) return;
+
       this.setData({
         certStatus: res.status || '',
         certStage: res.stage || '',
@@ -416,6 +562,11 @@ Page({
         certIdentityType: res.identity_type || '',
       });
     } catch (e) {
+      if (
+        requestId !== this.__certificationRequestId
+        || token !== String(this.data.token || '')
+        || token !== String(wx.getStorageSync('token') || '')
+      ) return;
       console.warn('获取认证状态失败:', e);
       this.setData({
         certStatus: '',
@@ -710,7 +861,7 @@ Page({
    * 页面相关事件处理函数--监听用户下拉动作
    */
   onPullDownRefresh() {
-    this.refreshShareMaterials();
+    if (this.data.hasContentWorkbenchAccess) this.refreshShareMaterials();
     this.loadUserData();
     wx.stopPullDownRefresh();
   },
@@ -935,6 +1086,11 @@ Page({
   onProjectMenuTap(e: any) {
     const action = e.currentTarget.dataset.action;
 
+    if (action === 'shareVisits') {
+      this.onWorkbenchMenuTap(e);
+      return;
+    }
+
     if (action === 'project') {
       this.goToGenerateHistory();
       return;
@@ -969,6 +1125,20 @@ Page({
 
   },
 
+  onWorkbenchMore() {
+    if (!this.data.hasContentWorkbenchAccess) return;
+    const choices = this.data.isApprovedDesigner
+      ? [{ label: '作品发布', action: 'publish' }, { label: '可分享素材', action: 'shareMaterials' }]
+      : [{ label: '可分享素材', action: 'shareMaterials' }];
+    wx.showActionSheet({
+      itemList: choices.map(item => item.label),
+      success: result => {
+        const choice = choices[result.tapIndex];
+        if (choice) this.onWorkbenchMenuTap({ currentTarget: { dataset: { action: choice.action } } });
+      },
+    });
+  },
+
   onWorkbenchMenuTap(e: any) {
     const action = e.currentTarget.dataset.action;
     const selected = this.data.workbenchMenuItems.find((item: MyMenuItem) => item.action === action);
@@ -981,6 +1151,24 @@ Page({
       return;
     }
 
+    const storedToken = String(wx.getStorageSync('token') || '');
+    if (
+      action === 'shareVisits'
+      && (!this.data.hasShareVisitAccess || !storedToken || storedToken !== String(this.data.token || ''))
+    ) {
+      wx.showToast({ title: '当前账号无分享访问权限', icon: 'none' });
+      return;
+    }
+
+    const contentActions = ['myProjects', 'projectNotes', 'contentWorkbench', 'aiWriting', 'assetLibrary', 'shareMaterials', 'publish', 'designerHome'];
+    if (
+      contentActions.includes(action)
+      && (!this.data.hasContentWorkbenchAccess || !storedToken || storedToken !== String(this.data.token || ''))
+    ) {
+      wx.showToast({ title: '当前账号无内容创作权限', icon: 'none' });
+      return;
+    }
+
     if (selected && selected.available === false) {
       wx.showToast({ title: selected.meta || '功能待开通', icon: 'none' });
       return;
@@ -990,11 +1178,12 @@ Page({
       const hasDesignerAccess = hasDesignerWorkbenchAccess({
         hasLoginToken: this.data.hasLoginToken,
         certStatus: this.data.certStatus,
+        certType: this.data.certType,
         certIdentityType: this.data.certIdentityType,
       });
       if (!hasDesignerAccess) {
         wx.showToast({
-          title: '请先登录',
+          title: '仅已认证设计师可用',
           icon: 'none',
         });
         return;
@@ -1020,6 +1209,10 @@ Page({
     }
 
     if (action === 'publish') {
+      if (!this.data.isApprovedDesigner) {
+        wx.showToast({ title: '仅已认证设计师可用', icon: 'none' });
+        return;
+      }
       this.onPostTap({ currentTarget: { dataset: { type: 'publish' } } });
       return;
     }
@@ -1039,8 +1232,9 @@ Page({
       return;
     }
 
-    if (action === 'customerManagement') {
-      wx.navigateTo({ url: '/pages/adminhome/adminhome?target=customer-management', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+    if (action === 'aiWriting' || action === 'assetLibrary') {
+      const url = action === 'aiWriting' ? '/pages/contentwriting/contentwriting' : '/pages/nativereferences/nativereferences';
+      wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
       return;
     }
 
@@ -1073,6 +1267,18 @@ Page({
 
   onAccountMenuTap(e: any) {
     const action = e.currentTarget.dataset.action;
+
+    if (action === 'customerManagement') {
+      if (!this.isLoggedIn()) {
+        wx.showToast({ title: '请先登录', icon: 'none' });
+        return;
+      }
+      wx.navigateTo({
+        url: '/pages/adminhome/adminhome?target=customer-management',
+        fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }),
+      });
+      return;
+    }
 
     if (action === 'identity') {
       if (!this.isLoggedIn()) {

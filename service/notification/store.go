@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,11 +19,21 @@ import (
 type SQLStore struct {
 	db     *sql.DB
 	tenant string
+	// browseMergeWindow 为浏览提醒合并窗口；0 表示禁用（保持一事件一条通知）。
+	browseMergeWindow time.Duration
 }
 
 var _ ConsumerStore = (*SQLStore)(nil)
 var _ DeliveryStore = (*SQLStore)(nil)
 var _ InboxStore = (*SQLStore)(nil)
+
+// SetBrowseMergeWindow 配置浏览提醒合并窗口（<=0 禁用）。必须在消费 worker 启动前设置。
+func (s *SQLStore) SetBrowseMergeWindow(window time.Duration) {
+	if window < 0 {
+		window = 0
+	}
+	s.browseMergeWindow = window
+}
 
 func NewSQLStore(db *sql.DB, tenant string) (*SQLStore, error) {
 	if db == nil || tenant == "" {
@@ -169,24 +180,44 @@ func (s *SQLStore) MaterializeEvent(ctx context.Context, job *EventJob, channel 
 		return tx.Commit()
 	}
 	notice := noticeFromEvent(job.Event)
-	_, err = tx.ExecContext(ctx, `INSERT INTO mini_notifications
+	// 浏览提醒合并：窗口内同收件人+同分享+同类型已有未读提醒时，只刷新其时间与
+	// 最新事件指向，不再新建收件箱条目，也不再创建外发投递（窗口内只提醒一次）。
+	merged := false
+	if recipientID, kind, shareID, at, mergeable := browseMergeTarget(job.Event, s.browseMergeWindow); mergeable {
+		var existingID string
+		lookupErr := tx.QueryRowContext(ctx, `SELECT notification_id FROM mini_notifications
+WHERE tenant_id=? AND recipient_id=? AND kind=? AND share_id=? AND read_at IS NULL AND cancelled_at IS NULL AND created_at>=?
+ORDER BY created_at DESC LIMIT 1`, s.tenant, recipientID, kind, shareID, at.Add(-s.browseMergeWindow)).Scan(&existingID)
+		if lookupErr == nil {
+			if _, updateErr := tx.ExecContext(ctx, `UPDATE mini_notifications SET created_at=?, event_id=? WHERE tenant_id=? AND notification_id=? AND read_at IS NULL AND cancelled_at IS NULL`,
+				notice.CreatedAt, notice.EventID, s.tenant, existingID); updateErr != nil {
+				return storeError("materialize_merge", updateErr)
+			}
+			merged = true
+		} else if !errors.Is(lookupErr, sql.ErrNoRows) {
+			return storeError("materialize_merge_lookup", lookupErr)
+		}
+	}
+	if !merged {
+		_, err = tx.ExecContext(ctx, `INSERT INTO mini_notifications
 (tenant_id,notification_id,event_id,recipient_id,kind,title,body,route_key,content_id,share_id,created_at)
 VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE notification_id=notification_id`,
-		s.tenant, notice.ID, notice.EventID, notice.RecipientID, notice.Kind, notice.Title, notice.Body, notice.Route, notice.ContentID, notice.ShareID, notice.CreatedAt)
-	if err != nil {
-		return storeError("materialize_inbox", err)
-	}
-	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
-		if eligibility.BindingVersion <= 0 {
-			return ErrInvalidInput
+			s.tenant, notice.ID, notice.EventID, notice.RecipientID, notice.Kind, notice.Title, notice.Body, notice.Route, notice.ContentID, notice.ShareID, notice.CreatedAt)
+		if err != nil {
+			return storeError("materialize_inbox", err)
 		}
-		deliveryID := notice.ID + ":" + channel
-		_, err = tx.ExecContext(ctx, `INSERT INTO mini_notification_deliveries
+		if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) && !s.categoryOptedOut(ctx, tx, notice.RecipientID, job.Event.Kind) {
+			if eligibility.BindingVersion <= 0 {
+				return ErrInvalidInput
+			}
+			deliveryID := notice.ID + ":" + channel
+			_, err = tx.ExecContext(ctx, `INSERT INTO mini_notification_deliveries
 (tenant_id,delivery_id,notification_id,recipient_id,channel,status,attempt_count,binding_version,next_attempt_at,created_at,updated_at)
 VALUES (?,?,?,?,?,'pending',0,?,?,?,?) ON DUPLICATE KEY UPDATE delivery_id=delivery_id`,
-			s.tenant, deliveryID, notice.ID, notice.RecipientID, channel, eligibility.BindingVersion, notice.CreatedAt, notice.CreatedAt, notice.CreatedAt)
-		if err != nil {
-			return storeError("materialize_delivery", err)
+				s.tenant, deliveryID, notice.ID, notice.RecipientID, channel, eligibility.BindingVersion, notice.CreatedAt, notice.CreatedAt, notice.CreatedAt)
+			if err != nil {
+				return storeError("materialize_delivery", err)
+			}
 		}
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE mini_notification_event_jobs SET status='processed',lease_token=NULL,lease_until=NULL,updated_at=? WHERE tenant_id=? AND event_id=? AND status='processing' AND lease_token=?`, time.Now().UTC(), s.tenant, job.Event.ID, job.LeaseToken)
@@ -630,7 +661,11 @@ func validEvent(event Event) bool {
 	switch event.Kind {
 	case "browse":
 		return true
-	case "project_note_open", "project_note_feedback":
+	case "collection_directory_browse":
+		return event.CollectionID != "" && len(event.CollectionID) <= 128 && event.CollectionVersion > 0 && event.ContentID == event.CollectionID && event.Route == "pages/collectionreader/collectionreader"
+	case "collection_content_browse":
+		return event.CollectionID != "" && len(event.CollectionID) <= 128 && event.CollectionVersion > 0 && event.ContentID != "" && event.Route == "pages/contentreader/contentreader"
+	case "project_note_open", "project_note_feedback", "project_note_join_request", "project_package_receipt":
 		route := projectNoteNotificationRoute(event)
 		return event.ProjectID != "" && len(event.ProjectID) <= 128 && event.ContentID != "" && event.Route == "project_note_share" && strings.HasPrefix(event.VisitorKey, "u:") && len(event.VisitorKey) <= 128 && len(route) <= 128
 	default:
@@ -640,17 +675,37 @@ func validEvent(event Event) bool {
 
 func noticeFromEvent(event Event) Notification {
 	title, body, route := "分享内容有新访问", "有人浏览了你分享的内容", event.Route
-	if event.Kind == "project_note_open" {
+	if event.Kind == "collection_directory_browse" {
+		title, body, route = "项目合集有新访问", "有人打开了你分享的项目合集", collectionNotificationRoute(event)
+	} else if event.Kind == "collection_content_browse" {
+		title, body, route = "项目作品有新访问", "有人查看了合集中的作品", collectionNotificationRoute(event)
+	} else if event.Kind == "project_note_open" {
 		title, body = "私人项目有新访问", "有受邀账号查看了你分享的固定版本"
 		route = projectNoteNotificationRoute(event)
 	} else if event.Kind == "project_note_feedback" {
 		title, body = "项目收到业主反馈", "业主对固定方案提交了反馈，请及时处理"
 		route = projectNoteNotificationRoute(event)
+	} else if event.Kind == "project_package_receipt" {
+		title, body = "收到阅读回执", "接收人已主动确认阅读该固定方案"
+		route = projectNoteNotificationRoute(event)
+	} else if event.Kind == "project_note_join_request" {
+		title, body = "项目有新的加入申请", "有用户申请加入项目，请审核后授权"
+		route = projectNoteNotificationRoute(event)
 	}
 	return Notification{ID: event.ID, EventID: event.ID, RecipientID: event.RecipientID, Kind: event.Kind, Title: title, Body: body, Route: route, ContentID: event.ContentID, ShareID: event.ShareID, CreatedAt: event.OccurredAt.UTC()}
 }
 
+func collectionNotificationRoute(event Event) string {
+	return "pages/collectionreader/collectionreader?" + url.Values{
+		"collection_id":      {event.CollectionID},
+		"collection_version": {strconv.Itoa(event.CollectionVersion)},
+	}.Encode()
+}
+
 func projectNoteNotificationRoute(event Event) string {
+	if event.Kind == "project_note_join_request" {
+		return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&view=members"
+	}
 	route := "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID) + "&version_id=" + url.QueryEscape(event.ContentID)
 	if event.Kind == "project_note_feedback" {
 		return "pages/projectnotes/projectnotes?project_id=" + url.QueryEscape(event.ProjectID)
@@ -659,7 +714,7 @@ func projectNoteNotificationRoute(event Event) string {
 }
 
 func allowsExternalDelivery(event Event) bool {
-	return event.Kind != "project_note_feedback"
+	return event.Kind != "project_note_feedback" && event.Kind != "project_note_join_request" && event.Kind != "project_package_receipt"
 }
 
 func randomToken() (string, error) {

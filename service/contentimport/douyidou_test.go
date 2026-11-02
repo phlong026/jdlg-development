@@ -245,3 +245,47 @@ func TestDouyidouCapsResponseAndDoesNotFollowRedirects(t *testing.T) {
 		t.Fatalf("body cap error code = %q", errorCode(err))
 	}
 }
+
+// B18-B：快手白名单与图集 images 消费（官方契约字段）。
+func TestDouyidouKuaishouVideoAndGallery(t *testing.T) {
+	videoClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return response(http.StatusOK, `{"code":0,"data":{"photo_id":"3xbdf9q9","title":"快手现场记录","text":"三层封顶","cover":"https://cover.example.com/c.jpg","video":["https://v.example.com/k.mp4"],"other":{"duration":12}}}`), nil
+	})}
+	resolver := NewDouyidouResolver(DouyidouConfig{AppID: "app", AppSecret: "secret", HTTPClient: videoClient})
+	source, err := resolver.Resolve(context.Background(), "https://www.kuaishou.com/short-video/3xbdf9q9")
+	if err != nil {
+		t.Fatalf("快手视频应可解析 err=%v", err)
+	}
+	if source.Platform != Kuaishou || source.ID != "3xbdf9q9" || len(source.Media) != 1 || source.Media[0].Kind != "video" {
+		t.Fatalf("source=%#v", source)
+	}
+
+	galleryClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return response(http.StatusOK, `{"code":0,"data":{"photo_id":"gal0001","type":"note","title":"快手图集","text":"外观记录","images":["https://img.example.com/1.jpg","https://img.example.com/1.jpg","https://img.example.com/2.jpg"]}}`), nil
+	})}
+	galleryResolver := NewDouyidouResolver(DouyidouConfig{AppID: "app", AppSecret: "secret", HTTPClient: galleryClient})
+	source, err = galleryResolver.Resolve(context.Background(), "https://www.kuaishou.com/short-video/gal0001")
+	if err != nil {
+		t.Fatalf("快手图集应可解析 err=%v", err)
+	}
+	if len(source.Media) != 2 || source.Media[0].Kind != "image" || source.Media[1].Kind != "image" {
+		t.Fatalf("图集应产出两个图片媒体并去重 got=%#v", source.Media)
+	}
+	if source.Media[0].ID != "gal0001:image:0" {
+		t.Fatalf("图集媒体 ID 应带序号 got=%s", source.Media[0].ID)
+	}
+}
+
+func TestDouyidouDouyinGalleryConsumesImages(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return response(http.StatusOK, `{"code":0,"data":{"aweme_id":"7419320667310492928","title":"抖音图文","text":"改造前后","images":["https://img.example.com/a.jpg","https://img.example.com/b.jpg"]}}`), nil
+	})}
+	resolver := NewDouyidouResolver(DouyidouConfig{AppID: "app", AppSecret: "secret", HTTPClient: client})
+	source, err := resolver.Resolve(context.Background(), "https://www.douyin.com/note/7419320667310492928")
+	if err != nil {
+		t.Fatalf("抖音图集应可解析 err=%v", err)
+	}
+	if len(source.Media) != 2 || source.Media[0].Kind != "image" {
+		t.Fatalf("got=%#v", source.Media)
+	}
+}

@@ -26,7 +26,7 @@ function createTracker(io) {
   }
   function enqueue(event, ctx) {
     if (!enabled || !consent || suspended || !ctx || !ctx.entry_token) return;
-    queue.push({ event, credential: ctx.entry_token, queued_at: io.wall() }); prune(); persist();
+    queue.push({ account: io.queueAccount ? io.queueAccount() : io.account(), event, credential: ctx.entry_token, queued_at: io.wall() }); prune(); persist();
   }
   function event(p, type, extra = {}) {
     if (!p || !p.context) return;
@@ -81,7 +81,7 @@ function createTracker(io) {
   function boundary(reason, pendingLoginPage = null) {
     const pendingShare = pendingLoginPage ? pendingLoginPage.share : '';
     stop(active, true); epoch++; anonymousLink = null; context = null; previous = ''; previousSession = ''; opening = null; lastActivity = null;
-    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.context = null; discardPending(p); if (p === pendingLoginPage) p.share = pendingShare; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = ''; notifyObservation(p); }
+    for (const p of pages.values()) { p.view = ''; p.start = null; p.entryReady = false; p.entryRejected = false; p.context = null; discardPending(p); if (p === pendingLoginPage) p.share = pendingShare; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = ''; notifyObservation(p); }
     if (io.onBoundary) io.onBoundary(reason);
   }
   function checkAccount(showingPage = null) {
@@ -121,6 +121,7 @@ function createTracker(io) {
     try {
       const response = await io.entry({ route_key: p.route, content_id: p.content.id || undefined,
         content_version: p.content.version || undefined, share_token: pending.share || undefined,
+        collection_id: p.content.collection_id || undefined, collection_version: p.content.collection_version || undefined,
         handoff_token: pending.share && pending.handoff || undefined,
         previous_entry_token: old ? old.entry_token : undefined, consent_version: consent });
       if (request !== p.request || version !== epoch || account !== io.account() || !enabled || !consent || suspended) return;
@@ -129,10 +130,18 @@ function createTracker(io) {
       // even with recent local activity. Invalidate retained contexts and never
       // attach another session's predecessor to this new observation.
       if (old && old.session_id !== response.session_id) boundary('server_session');
+      // Keep the original token only inside a verified collection visit. All
+      // identity, consent and idle boundaries already clear these contexts.
+      if (response.share_id && (p.route === 'pages/collectionreader/collectionreader' || p.content.collection_id)) {
+        response.collectionShareToken = pending.share || (old && old.session_id === response.session_id && old.share_id === response.share_id ? old.collectionShareToken : '') || '';
+      }
       anonymousLink = null; if (active === p) context = response; p.context = response; p.share = ''; p.handoff = ''; p.pendingEntry = null; p.entryReady = true; begin(p); flush();
       return response;
-    } catch (_) {
-      if (request === p.request && version === epoch) p.entryReady = false;
+    } catch (error) {
+      if (request === p.request && version === epoch) {
+        p.entryReady = false;
+        p.entryRejected = [400,401,403,404,410,422].includes(error && error.statusCode);
+      }
     } finally {
       // A late completion must not release or invalidate a newer content entry.
       if (request === p.request) p.entering = false;
@@ -141,12 +150,19 @@ function createTracker(io) {
   function resume(p) {
     if (!p || active !== p || !foreground || !p.visible || !enabled || !consent || suspended) return;
     checkAccount();
-    if (!p.entryReady && p.ready && !p.entering) enter(p, p.share, !p.pendingEntry && !!p.share);
+    if (!p.entryReady && !p.entryRejected && p.ready && !p.entering) enter(p, p.share, !p.pendingEntry && !!p.share);
     else begin(p);
   }
   async function flush() {
     if (!enabled || !consent || suspended || busy || io.wall() < retryAt) return;
-    prune(); persist(); if (!queue.length) return;
+    prune();
+    const currentAccount = io.queueAccount ? io.queueAccount() : io.account();
+    if (currentAccount) {
+      const before = queue.length;
+      queue = queue.filter(row => row.account === currentAccount);
+      dropped.rejected += before - queue.length;
+    }
+    persist(); if (!queue.length) return;
     const credential = queue[0].credential;
     const batch = [];
     for (const row of queue) {
@@ -205,15 +221,16 @@ function createTracker(io) {
     },
     ready(key, available, content) {
       const p = pages.get(key); if (!p) return;
-      if (content && (p.content.id !== content.id || p.content.version !== content.version)) {
+      if (content && (p.content.id !== content.id || p.content.version !== content.version || p.content.collection_id !== content.collection_id || p.content.collection_version !== content.collection_version)) {
         stop(p, true);
         // Resolved reader options may carry a newly observed external share.
         // Preserve that newer input, but never rebind an old pending share to
         // a replacement content/version merely because its request failed.
         if (p.pendingEntry && p.shareRevision === p.pendingEntry.shareRevision) { p.share = ''; p.handoff = ''; }
-        p.pendingEntry = null; p.content = content; p.entryReady = false; p.context = null; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = '';
+        p.pendingEntry = null; p.content = content; p.entryReady = false; p.entryRejected = false; p.context = null; p.shareCache = {}; p.shareIds = {}; p.sharePending = {}; p.timelineStatus = '';
         p.request = (p.request || 0) + 1; p.entering = false;
       }
+      if (available !== true) p.entryRejected = false;
       p.ready = available === true;
       if (!p.ready) stop(p, false);
       else resume(p);
@@ -264,6 +281,10 @@ function createTracker(io) {
       }
     },
     shareIntent(ctx, route, content, shareId, channel) { event({context:ctx,route,content:content||{},visible:false}, 'share_intent', {share_id:shareId,source_channel:channel}); },
+    collectionToken(key) {
+      checkAccount(); const p = pages.get(key);
+      return enabled && consent && !suspended && foreground && p && p.visible && p.ready && p.entryReady && p.context ? p.context.collectionShareToken || '' : '';
+    },
     observation(key) { checkAccount(); return observation(pages.get(key)); },
     observe(key, listener) {
       const p = pages.get(key); if (!p) return () => {};

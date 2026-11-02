@@ -1,0 +1,34 @@
+{
+  "source_commit": "80e88786953afa68a3b74b5bd3106433c1ac5837",
+  "server": "162.14.210.252",
+  "observation_method": "通过 Chrome 宝塔终端截图及 release-state.json 编辑器只读查看；以下为人工转录的非敏感字段，不是原始日志导出",
+  "backend": {
+    "prepared": true,
+    "migrated": true,
+    "activated": true,
+    "old_pid": 2397036,
+    "new_pid": 2960979,
+    "sha256": "7eb49b57a2e6d00766a895f6870fd128d75501fc47b851b21245e4875d15af11",
+    "backup": "/root/jdlg-main-backup-20261101-80e8878",
+    "current_pointer_backup": "/root/jdlg-main-backup-20261101-80e8878"
+  },
+  "admin": {
+    "phase": "admin",
+    "status": "installed",
+    "target": "/www/wwwroot/jiadilingguang/admin",
+    "backup": "/root/jdlg-web-backup-20261101-80e8878/admin",
+    "files": 185
+  },
+  "browser": {
+    "url": "https://api.jiadilingguang.com/admin/login",
+    "rendered": true,
+    "observed": [
+      "客户管理",
+      "欢迎登录",
+      "账号",
+      "密码",
+      "登录"
+    ],
+    "authenticated_business_checks": false
+  }
+}

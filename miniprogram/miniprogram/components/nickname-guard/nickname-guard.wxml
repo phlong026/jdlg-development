@@ -1,39 +1,47 @@
-<view wx:if="{{visible}}" class="nickname-guard-mask" catchtouchmove="true" catchtap="onMaskTap">
-  <form class="nickname-guard" catchtap="stopPropagation" bindsubmit="onConfirm">
-    <text class="ng-title">完善个人资料</text>
-    <text class="ng-desc">{{required ? '请完善昵称和头像后继续查看内容。开启访问分析后，也用于已获授权的访客展示。' : '昵称用于公开互动；开启访问分析后，也用于已获授权的访客展示。可稍后完善。'}}</text>
+<import src="/templates/auth-welcome.wxml" />
+<scroll-view wx:if="{{visible}}" class="nickname-guard-mask {{embedded ? 'nickname-guard-embedded' : ''}}" catchtap="onMaskTap" scroll-y="{{!embedded}}">
+  <template wx:if="{{!embedded}}" is="auth-backdrop" />
+  <view class="{{embedded ? 'ng-embedded-content' : 'aw-content ng-content'}}">
+    <template wx:if="{{!embedded}}" is="auth-intro" />
+    <form class="nickname-guard aw-card" catchtap="stopPropagation" bindsubmit="onConfirm">
+      <text class="ng-title">{{embedded ? '确认头像和昵称' : '完善资料，开启建房之旅'}}</text>
+      <text wx:if="{{!embedded}}" class="ng-welcome">完善昵称与头像，继续探索理想的家</text>
+      <template wx:if="{{!embedded}}" is="auth-avatars" />
 
-    <view class="ng-avatar-row">
-      <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{uploading || saving}}">
-        <image wx:if="{{avatarTemp || avatarUrl}}" class="ng-avatar-img" src="{{avatarTemp || avatarUrl}}" mode="aspectFill" />
-        <view wx:else class="ng-avatar-placeholder">
-          <text class="ng-avatar-placeholder-icon">＋</text>
-          <text class="ng-avatar-placeholder-text">头像</text>
+      <view class="ng-avatar-row">
+        <button class="ng-avatar-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" disabled="{{uploading || saving}}">
+          <image wx:if="{{avatarTemp || avatarUrl}}" class="ng-avatar-img" src="{{avatarTemp || avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="ng-avatar-placeholder">
+            <text class="ng-avatar-placeholder-icon">＋</text>
+            <text class="ng-avatar-placeholder-text">头像</text>
+          </view>
+        </button>
+        <view class="ng-avatar-tip">
+          <text class="ng-avatar-tip-main">{{embedded ? '点击选择微信头像' : '点击设置头像'}}</text>
+          <text wx:if="{{!embedded}}" class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
         </view>
-      </button>
-      <view class="ng-avatar-tip">
-        <text class="ng-avatar-tip-main">点击设置头像</text>
-        <text class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
       </view>
-    </view>
 
-    <view class="ng-field">
-      <text class="ng-label">昵称</text>
-      <input
-        class="ng-input"
-        name="nickname"
-        type="nickname"
-        value="{{nickname}}"
-        maxlength="32"
-        placeholder="请输入昵称"
-        placeholder-class="ng-input-placeholder"
-        bindinput="onNicknameInput"
-      />
-    </view>
+      <view class="ng-field">
+        <text class="ng-label">昵称</text>
+        <input
+          class="ng-input"
+          name="nickname"
+          type="nickname"
+          value="{{nickname}}"
+          maxlength="32"
+          cursor-spacing="120"
+          adjust-position="{{true}}"
+          placeholder="请输入昵称"
+          placeholder-class="ng-input-placeholder"
+          bindinput="onNicknameInput"
+        />
+      </view>
 
-    <button class="ng-confirm" loading="{{saving}}" disabled="{{saving}}" form-type="submit">
-      {{saving ? '保存中...' : '完 成'}}
-    </button>
-    <button wx:if="{{!required}}" class="ng-skip" bindtap="onSkip" disabled="{{saving}}">稍后完善，继续浏览</button>
-  </form>
-</view>
+      <button class="ng-confirm {{saving ? 'ng-confirm-disabled' : ''}}" loading="{{saving}}" disabled="{{saving}}" form-type="submit">
+        {{saving ? '保存中...' : (embedded ? '确认并继续' : '保存并继续浏览')}}
+      </button>
+      <button wx:if="{{!required}}" class="ng-skip" bindtap="onSkip" disabled="{{saving}}">稍后完善，继续浏览</button>
+    </form>
+  </view>
+</scroll-view>

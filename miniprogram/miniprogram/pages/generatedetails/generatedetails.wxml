@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 ﻿<!--pages/generatedetails/generatedetails.wxml-->
 <view class="page">
   <view class="page-shell">
@@ -329,6 +330,9 @@
       <view class="action-btn primary" bindtap="regenerate">
         <text>再次生成</text>
       </view>
+      <view class="action-btn primary" bindtap="saveAsContent" aria-label="把生成结果保存为内容草稿">
+        <text>{{contentSaving ? '正在保存…' : '存为内容发客户'}}</text>
+      </view>
       <view class="action-btn primary" bindtap="publishToSquare">
         <text>发布到模板广场</text>
       </view>
@@ -586,3 +590,5 @@
 </view>
 </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

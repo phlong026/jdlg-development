@@ -1,1 +1,9 @@
-{"navigationStyle":"default","navigationBarTitleText":"描绘您家的生活","navigationBarBackgroundColor":"#f2ece1","navigationBarTextStyle":"black","usingComponents":{}}
+{
+  "navigationStyle": "default",
+  "navigationBarTitleText": "描绘您家的生活",
+  "navigationBarBackgroundColor": "#f2ece1",
+  "navigationBarTextStyle": "black",
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard"
+  }
+}

@@ -7,7 +7,7 @@ exports.paramsToHeaders = paramsToHeaders;
 const smCrypto = require('./miniprogram-sm-crypto/index.js');
 // @ts-ignore
 const CryptoJS = require('./crypto-js/index.js');
-function generateRequestParams(token, requestBody, apiPath, deviceID, hmacKey = "REPLACE_WITH_LOCAL_HMACKEY", sm4Key = "REPLACE_WITH_LOCAL_SM4KEY" // 16字节密钥（会自动转换为32字符十六进制）
+function generateRequestParams(token, requestBody, apiPath, deviceID, hmacKey = 'jiadilinguang-hmac-secret-key-2024', sm4Key = '1234567890123456' // 16字节密钥（会自动转换为32字符十六进制）
 ) {
     // 1. 生成token的HMAC签名（SHA256）
     const tokenSignature = generateTokenSignature(token, hmacKey);

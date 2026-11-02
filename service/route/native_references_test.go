@@ -43,7 +43,7 @@ func TestNativeReferenceWorkbenchRoutesKeepShareCredentialsServerOwned(t *testin
 		t.Fatal(err, created.Body.String())
 	}
 
-	candidates := workbenchRequest(t, r, http.MethodGet, "/workbench/native-reference-candidates?limit=10", nil)
+	candidates := workbenchRequest(t, r, http.MethodGet, "/workbench/native-reference-candidates?limit=10&q=%E5%8E%9F%E7%94%9F", nil)
 	listed := workbenchRequest(t, r, http.MethodGet, "/workbench/native-references?limit=10", nil)
 	target := workbenchRequest(t, r, http.MethodGet, "/workbench/native-references/"+response.Data.ReferenceID+"/target", nil)
 	if candidates.Code != http.StatusOK || listed.Code != http.StatusOK || target.Code != http.StatusOK {

@@ -91,6 +91,12 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 		if err != nil {
 			inbox = nil
 			log.Printf("[notification] error inbox_disabled reason=schema_unavailable error_type=%T", err)
+		} else {
+			// 浏览提醒合并窗口（B16）：BROWSE_NOTICE_MERGE_WINDOW=30m 这类时长串开启；
+			// 不配置或非法值保持默认 0（一事件一条通知），不在代码里替生产做决定。
+			if window, windowErr := time.ParseDuration(os.Getenv("BROWSE_NOTICE_MERGE_WINDOW")); windowErr == nil && window > 0 {
+				inbox.SetBrowseMergeWindow(window)
+			}
 		}
 	}
 	var inboxAPI notification.InboxStore
@@ -117,7 +123,7 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 			scope tracking.Scope
 			err   error
 		)
-		if event.Kind == "project_note_open" || event.Kind == "project_note_feedback" {
+		if event.Kind == "project_note_open" || event.Kind == "project_note_feedback" || event.Kind == "project_package_receipt" || event.Kind == "project_note_join_request" {
 			scope, err = loadMiniTrackingMaterialScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
 		} else {
 			scope, err = loadMiniTrackingMyScope(ctx, users.DB, svc.Config.Tenant, event.RecipientID)
@@ -203,7 +209,7 @@ func phase3NoticeEligible(ctx context.Context, svc *tracking.Service, event noti
 	if event.Owner != "" && !scope.Allows(event.Owner) {
 		return false, nil
 	}
-	if event.Kind == "project_note_open" || event.Kind == "project_note_feedback" {
+	if event.Kind == "project_note_open" || event.Kind == "project_note_feedback" || event.Kind == "project_package_receipt" || event.Kind == "project_note_join_request" {
 		return svc.ProjectNoteNoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)
 	}
 	return svc.NoticeEligible(ctx, event.ID, event.RecipientID, scope.Owners...)

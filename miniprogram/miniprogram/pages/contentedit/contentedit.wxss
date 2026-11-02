@@ -1,5 +1,5 @@
 page {
-  background: #f7f5f1;
+  background: #fbfaf7;
   color: #2b211b;
 }
 
@@ -19,21 +19,7 @@ page {
 }
 
 .editor-hero {
-  padding: 24rpx 4rpx 8rpx;
-}
-
-.eyebrow {
-  display: block;
-  color: #a87943;
-  font-size: 22rpx;
-  letter-spacing: 2rpx;
-}
-
-.hero-title {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 40rpx;
-  font-weight: 650;
+  padding: 0 4rpx;
 }
 
 .status-badge {
@@ -58,9 +44,8 @@ page {
   margin: 18rpx 0;
   padding: 26rpx;
   border: 1rpx solid #eee8e1;
-  border-radius: 22rpx;
+  border-radius: 16rpx;
   background: #fff;
-  box-shadow: 0 8rpx 24rpx rgba(74, 52, 35, 0.04);
 }
 
 .state {
@@ -87,7 +72,48 @@ page {
 .form-panel {
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 18rpx;
+}
+
+.form-panel .title-input {
+  border: 0;
+  padding: 8rpx 0;
+  background: transparent;
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.settings-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 76rpx;
+  margin: 0;
+  padding: 12rpx 0 0;
+  border-top: 1rpx solid #eee8e1;
+  border-radius: 0;
+  background: transparent;
+  font-size: 26rpx;
+  color: #66584a;
+}
+
+.plain-action {
+  width: auto;
+  min-height: 72rpx;
+  margin: 0;
+  padding: 12rpx 8rpx;
+  background: transparent;
+  font-size: 26rpx;
+  color: #806345;
+}
+
+.insert-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 12rpx 0;
 }
 
 .section-heading {
@@ -101,14 +127,14 @@ page {
 .section-title {
   display: block;
   font-size: 31rpx;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .section-caption {
   display: block;
   margin-top: 5rpx;
-  color: #978b80;
-  font-size: 23rpx;
+  color: #817568;
+  font-size: 24rpx;
 }
 
 .content-heading > view {
@@ -130,11 +156,6 @@ page {
   flex: 1;
   flex-direction: column;
   gap: 10rpx;
-}
-
-.field-row {
-  display: flex;
-  gap: 18rpx;
 }
 
 .field-label {
@@ -172,7 +193,67 @@ input, textarea, .picker {
 }
 
 .block textarea {
-  min-height: 130rpx;
+  min-height: 220rpx;
+  border: 0;
+  background: transparent;
+  padding: 8rpx 0;
+  line-height: 1.7;
+}
+
+.block textarea.heading {
+  min-height: 96rpx;
+  font-size: 33rpx;
+  font-weight: 650;
+}
+
+.block textarea.quote {
+  padding-left: 22rpx;
+  border-left: 6rpx solid #dfcbb3;
+  color: #6d6258;
+}
+
+.list-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.list-toolbar {
+  display: flex;
+}
+
+.list-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.list-marker {
+  min-width: 44rpx;
+  text-align: right;
+  color: #98683a;
+  font-size: 26rpx;
+}
+
+.list-item-row input {
+  flex: 1;
+  min-height: 72rpx;
+}
+
+.list-item-remove {
+  flex: 0 0 auto;
+  min-height: 64rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  background: #f5f1ec;
+  color: #a24a43;
+  font-size: 24rpx;
+}
+
+.caption-input {
+  min-height: 72rpx;
+  font-size: 25rpx;
+  color: #6d6258;
 }
 
 .block image, .block video, .media-row image, .media-row video, .preview image, .preview video {
@@ -203,7 +284,7 @@ input, textarea, .picker {
   padding: 0 16rpx;
   background: #f5f1ec;
   color: #65584e;
-  font-size: 23rpx;
+  font-size: 24rpx;
 }
 
 .actions .selected {
@@ -240,7 +321,7 @@ input, textarea, .picker {
 }
 
 .muted {
-  color: #8b8178;
+  color: #817568;
   font-size: 24rpx;
 }
 
@@ -257,14 +338,6 @@ input, textarea, .picker {
   margin-top: 8rpx;
   font-size: 36rpx;
   font-weight: 650;
-}
-
-.preview-tag {
-  padding: 8rpx 14rpx;
-  border-radius: 999rpx;
-  background: #f2e6d6;
-  color: #8c6034;
-  font-size: 22rpx;
 }
 
 .preview-cover {
@@ -284,10 +357,6 @@ input, textarea, .picker {
 .caption {
   display: block;
   text-align: center;
-}
-
-.publish-button {
-  margin-top: 28rpx;
 }
 
 .published-card {
@@ -337,13 +406,17 @@ input, textarea, .picker {
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
   border-top: 1rpx solid #e8e0d8;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -10rpx 30rpx rgba(72, 48, 30, 0.08);
 }
 
 button {
   min-height: 82rpx;
   border-radius: 16rpx;
   font-size: 27rpx;
+  /* 统一垂直居中基线：原生 button 的默认 line-height 配合 min-height 会让文字偏移。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
 }
 
 button::after {
@@ -387,6 +460,9 @@ button::after {
   overflow: hidden;
 }
 
-.preview-tag {
-  flex-shrink: 0;
+/* 操作按钮在页面底部，顶部错误/提示横幅滚动出视口后用户看不到反馈；吸顶常驻。 */
+.error, .notice {
+  position: sticky;
+  top: 0;
+  z-index: 15;
 }

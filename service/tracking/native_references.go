@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -140,14 +141,23 @@ func (s *Service) nativeReferenceSource(r Repository, scope Scope, id string, ve
 // The cursor follows scanned catalog rows, including drafts. A page can be
 // empty and still have a cursor; skipping those rows must not skip later sources.
 func (s *Service) NativeReferenceCandidates(ctx context.Context, scope Scope, cursor string, limit int) (NativeReferenceCandidatePage, error) {
+	return s.SearchNativeReferenceCandidates(ctx, scope, cursor, limit, "")
+}
+
+func (s *Service) SearchNativeReferenceCandidates(ctx context.Context, scope Scope, cursor string, limit int, search string) (NativeReferenceCandidatePage, error) {
 	out := NativeReferenceCandidatePage{Items: []NativeReferenceTarget{}}
 	if err := s.publishedMaterialAccess(scope); err != nil {
 		return out, err
+	}
+	search = strings.TrimSpace(search)
+	if len(search) > 100 {
+		return out, fail(400, "内容搜索条件过长")
 	}
 	q, err := nativeReferenceQuery(scope, cursor, limit)
 	if err != nil {
 		return out, err
 	}
+	q.TitleSearch = search
 	err = s.readQueryTransaction(ctx, func(r Repository) error {
 		rows, err := pageRecords(r, "content", q)
 		if err != nil {

@@ -57,7 +57,7 @@ function readerRuntime({ accepted = false, deferConfig = false } = {}) {
   adapter.install(); sandbox.App({}); appDefinition.onShow({});
   vm.runInNewContext(fs.readFileSync(path.join(root, readerRoute + '.js'), 'utf8'), {
     Page: sandbox.Page, wx, Date, Math, Promise,
-    require: name => name.endsWith('/index') ? adapter : name.endsWith('/api') ? api : require(path.join(root, 'utils/tracking/video'))
+    require: name => name.endsWith('/index') ? adapter : name.endsWith('/api') ? api : name.endsWith('/protected-media') ? { resolveProtectedMediaURL: async value => value } : require(path.join(root, 'utils/tracking/video'))
   });
   const page = { ...pageDefinition, route: readerRoute, data: JSON.parse(JSON.stringify(pageDefinition.data)),
     setData(value, callback) { Object.assign(this.data, value); if (callback) callback.call(this); },

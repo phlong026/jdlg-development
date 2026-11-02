@@ -162,6 +162,7 @@ const GENERATED_TASK_PROGRESS_STORAGE_PREFIX = 'generated_task_progress_';
 Page({
     data: {
         taskData: {},
+        contentSaving: false,
         loading: true,
         statusText: '',
         durationText: '',
@@ -1860,6 +1861,31 @@ Page({
             });
         }
     },
+    // B1 直连管线：把本次生成结果一键转存为内容工作台的图文草稿，随后进入编辑器排版发布。
+    async saveAsContent() {
+        if (this.data.contentSaving)
+            return;
+        const taskNo = String(this.data.taskData?.task_no || '');
+        if (!taskNo || this.data.taskData?.status !== 'success') {
+            wx.showToast({ title: '生成成功后才能保存为内容', icon: 'none' });
+            return;
+        }
+        this.setData({ contentSaving: true });
+        try {
+            const { request } = require('../../utils/phase3-api');
+            const title = String(this.data.taskData.user_prompt || this.data.taskData.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+            const result = await request('/api/v1/miniprogram/workbench/contents/from-generation', 'POST', { task_no: taskNo, title });
+            const contentId = String(result && result.content_id || '');
+            if (!contentId)
+                throw new Error('保存失败');
+            this.setData({ contentSaving: false });
+            wx.navigateTo({ url: `/pages/contentedit/contentedit?id=${encodeURIComponent(contentId)}` });
+        }
+        catch (error) {
+            this.setData({ contentSaving: false });
+            wx.showToast({ title: (error && error.message) || '保存失败，请重试', icon: 'none' });
+        }
+    },
     publishToSquare() {
         const mainTabs = this.data.mainTabs || [];
         const allSubTabs = this.data.allSubTabs || [];
@@ -2021,6 +2047,7 @@ Page({
             const isFree = !!publishForm.isFree;
             const price = isFree ? 0 : (publishForm.price > 0 ? publishForm.price : 1);
             const mappedCategory = publishForm.thirdTab || publishForm.subTab || publishForm.mainTab || 'scene';
+            // 只携带用户真实输入的提示词；工具默认词不随模板入库
             const hiddenPrompt = String(taskData.user_prompt || '').trim();
             const body = JSON.stringify({
                 name: publishForm.name,

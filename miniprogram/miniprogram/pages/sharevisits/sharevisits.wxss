@@ -1,1 +1,117 @@
-.private-page{min-height:100vh;background:#f7f3ee;color:#29221d}.page-body{padding:96rpx 28rpx 52rpx}.intro,.state,.card{margin:18rpx 0;padding:26rpx;border-radius:22rpx;background:#fff}.intro,.meta{font-size:25rpx;color:#776d64;line-height:1.6}.state{text-align:center;display:grid;gap:18rpx}.card{width:100%;display:grid;gap:12rpx;text-align:left;border:1rpx solid #eadfd4}.title{font-size:32rpx;font-weight:650}.metrics{display:flex;gap:28rpx;color:#8b5e3c;font-size:28rpx}button{min-height:82rpx;border-radius:16rpx;font-size:27rpx}button::after{border:0}
+.private-page {
+  min-height: 100vh;
+  background: #f7f3ee;
+  color: #30271f;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+}
+
+.page-body {
+  padding: 96rpx 28rpx calc(52rpx + env(safe-area-inset-bottom));
+}
+
+button {
+  margin: 0;
+  color: inherit;
+}
+
+button::after {
+  border: 0;
+}
+
+.state {
+  min-height: 280rpx;
+  padding: 36rpx;
+  border: 1rpx solid #e8dfd3;
+  border-radius: 16rpx;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18rpx;
+  color: #6f6255;
+  font-size: 27rpx;
+  text-align: center;
+}
+
+.state button,
+.primary {
+  min-width: 200rpx;
+  min-height: 72rpx;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+}
+
+.primary {
+  background: #a87943;
+  color: #fff;
+}
+
+.card {
+  width: 100%;
+  margin-bottom: 16rpx;
+  padding: 26rpx 28rpx;
+  border: 1rpx solid #e8dfd3;
+  border-radius: 16rpx;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  text-align: left;
+}
+
+.card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 18rpx;
+}
+
+.title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: #34291f;
+  font-size: 30rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.status {
+  flex-shrink: 0;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: #f3ece3;
+  color: #84613e;
+  font-size: 21rpx;
+}
+
+.meta,
+.visit-time {
+  color: #8b7d6f;
+  font-size: 23rpx;
+  line-height: 1.5;
+}
+
+.metrics {
+  display: flex;
+  gap: 30rpx;
+  color: #76512f;
+  font-size: 27rpx;
+}
+
+.visit-time {
+  padding-top: 2rpx;
+}
+
+.load-more {
+  width: 100%;
+  min-height: 78rpx;
+  border: 1rpx solid #dfd3c6;
+  border-radius: 12rpx;
+  background: #fff;
+  color: #76593a;
+  font-size: 25rpx;
+}

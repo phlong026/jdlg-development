@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/share/assets/reader.css">
+</head>
+<body data-code="{{.Code}}" data-trackable="{{.Trackable}}">
+  <main class="reader collection-reader">
+    <header><span>甲第灵光</span><h1>{{.Title}}</h1>{{if .Description}}<p class="collection-description">{{.Description}}</p>{{end}}</header>
+    <section class="collection-list" aria-label="合集内容">
+      {{range .Items}}
+        {{if .Available}}
+          <a class="collection-item" href="{{.URL}}">
+            {{if .CoverURL}}<img src="{{.CoverURL}}" alt="" loading="lazy">{{else}}<span class="collection-placeholder" aria-hidden="true"></span>{{end}}
+            <strong>{{.Title}}</strong><span class="collection-arrow" aria-hidden="true">›</span>
+          </a>
+        {{else}}
+          <div class="collection-item unavailable"><span class="collection-placeholder" aria-hidden="true"></span><strong>{{.Title}}</strong></div>
+        {{end}}
+      {{end}}
+    </section>
+    {{if .Trackable}}<section class="notice"><p>同意后记录本次浏览，用于让分享人及时跟进。</p><button id="consent" type="button">同意并继续浏览</button><span id="tracking-state"></span></section>{{end}}
+    <button id="open-mini" type="button">在甲第灵光中打开</button>
+  </main>
+  <script src="/share/assets/reader.js" defer></script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/generatehistory/generatehistory.wxml-->
 <view class="page {{isEditMode ? 'page-edit-mode' : ''}}">
   <navigation-bar wx:if="{{!isEditMode}}" title="生成历史" background="#e6daca"></navigation-bar>
@@ -242,3 +243,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

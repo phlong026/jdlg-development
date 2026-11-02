@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -71,14 +72,21 @@ func trackingMutationAllowed(r *http.Request) bool {
 	u, e := url.Parse(origin)
 	return e == nil && u.Host == r.Host && (u.Scheme == "https" || u.Scheme == "http" && r.TLS == nil)
 }
-func loadTrackingScope(c *gin.Context, db *sql.DB, tenant string) (tracking.Scope, error) {
-	return loadTrackingScopeFor(c.Request.Context(), db, tenant, GetUserID(c))
+func loadTrackingScope(c *gin.Context, db *sql.DB, tenant, defaultOwner string) (tracking.Scope, error) {
+	return loadManagementTrackingScopeFor(c.Request.Context(), db, tenant, GetUserID(c), defaultOwner)
 }
 
-// loadTrackingScopeFor reads one management account's current tracking grants.
-// A background job acts through the same lookup a login session does, so it can
-// never hold more than an explicit, enabled grant.
+// Background tasks retain explicit grants even when their actor is a platform
+// admin; only an authenticated management request receives the full catalog.
 func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor int64) (tracking.Scope, error) {
+	return loadTrackingScopeForRole(ctx, db, tenant, actor, false, "")
+}
+
+func loadManagementTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor int64, defaultOwner string) (tracking.Scope, error) {
+	return loadTrackingScopeForRole(ctx, db, tenant, actor, true, defaultOwner)
+}
+
+func loadTrackingScopeForRole(ctx context.Context, db *sql.DB, tenant string, actor int64, expandPlatformAdmin bool, defaultOwner string) (tracking.Scope, error) {
 	scope := tracking.Scope{Tenant: tenant, Actor: actor, Owners: []string{}}
 	if scope.Actor <= 0 {
 		return scope, &tracking.Error{Status: 401, Message: "未登录"}
@@ -86,8 +94,47 @@ func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor 
 	if db == nil || tenant == "" {
 		return scope, tracking.ErrUnavailable
 	}
-	access, e := readManagementAccess(ctx, db, scope.Actor)
-	if e != nil || !access.Enabled {
+	access, e := readActiveTrackingManagementAccess(ctx, db, scope.Actor)
+	if e != nil {
+		if errors.Is(e, sql.ErrNoRows) {
+			return scope, &tracking.Error{Status: 403, Message: "管理账号未授权"}
+		}
+		return scope, tracking.ErrUnavailable
+	}
+	if !access.Enabled {
+		return scope, &tracking.Error{Status: 403, Message: "管理账号未授权"}
+	}
+	if expandPlatformAdmin && access.Scope == "platform_admin" {
+		owners := map[string]bool{}
+		if defaultOwner != "" {
+			owners[defaultOwner] = true
+		}
+		rows, err := db.QueryContext(ctx, `SELECT DISTINCT owner_id FROM tracking_records WHERE tenant_id=? AND owner_id<>''
+			UNION SELECT owner_id FROM tracking_access WHERE tenant_id=? AND owner_id<>''`, tenant, tenant)
+		if err != nil {
+			return scope, tracking.ErrUnavailable
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var owner string
+			if rows.Scan(&owner) != nil {
+				return scope, tracking.ErrUnavailable
+			}
+			if owner != "" {
+				owners[owner] = true
+			}
+		}
+		if rows.Err() != nil {
+			return scope, tracking.ErrUnavailable
+		}
+		for owner := range owners {
+			scope.Owners = append(scope.Owners, owner)
+		}
+		sort.Strings(scope.Owners)
+		scope.View, scope.Manage, scope.CRM, scope.Delete, scope.Rules = true, true, true, true, true
+		return scope, nil
+	}
+	if access.Scope != "platform_admin" && access.Scope != "crm_only" {
 		return scope, &tracking.Error{Status: 403, Message: "管理账号未授权"}
 	}
 	rows, e := db.QueryContext(ctx, `SELECT t.owner_id,t.can_view,t.can_manage,t.can_crm,t.can_delete,t.can_rules FROM tracking_access t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND u.user_type='management'`, scope.Actor, tenant)
@@ -125,6 +172,12 @@ func loadTrackingScopeFor(ctx context.Context, db *sql.DB, tenant string, actor 
 		return scope, tracking.ErrUnavailable
 	}
 	return scope, nil
+}
+
+func readActiveTrackingManagementAccess(ctx context.Context, db *sql.DB, actor int64) (managementAccess, error) {
+	var access managementAccess
+	err := tracking.SourceReadDB(ctx, db).QueryRowContext(ctx, `SELECT a.scope,a.enabled,a.version FROM management_access a JOIN users u ON u.id=a.user_id WHERE a.user_id=? AND u.user_type='management' AND COALESCE(u.status,'active')='active'`, actor).Scan(&access.Scope, &access.Enabled, &access.Version)
+	return access, err
 }
 func trackingFilter(c *gin.Context) (tracking.Filter, error) {
 	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor"), Channel: c.Query("channel"), Group: c.Query("group")}
@@ -282,7 +335,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		c.Header("Cache-Control", "private, no-store")
 		c.Next()
 	}, AuthRequired, func(c *gin.Context) {
-		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
+		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant, cfg.DefaultOwner)
 		if e != nil {
 			trackingResponse(c, nil, e)
 			return
@@ -577,6 +630,10 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	})
 	mg.GET("/media", func(c *gin.Context) { v, e := svc.ListMedia(c.Request.Context(), sc(c)); trackingResponse(c, v, e) })
 	mg.POST("/media", func(c *gin.Context) { uploadTrackingMedia(c, svc, sc(c)) })
+	mg.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
+		scope := sc(c)
+		serveTrackingMedia(c, svc, &scope)
+	})
 	mg.POST("/identity-links", func(c *gin.Context) {
 		var in struct {
 			Visitor  string `json:"visitor_key"`
@@ -641,6 +698,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, gin.H{"status": status}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
+	registerPublicProjectCollectionHandlers(pub, svc)
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	registerTrackingMyRoutes(pub, svc, users, codes)
 	pub.POST("/share-entry", func(c *gin.Context) {
@@ -663,7 +721,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, v, e)
 	})
 	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
-		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant)
+		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant, cfg.DefaultOwner)
 		var selected *tracking.Scope
 		if e == nil {
 			if !checkWecomSession(c, users.DB) {
@@ -681,7 +739,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		results, e := svc.Accept(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events)
+		results, e := svc.AcceptForAccount(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events, GetTokenUserID(c))
 		trackingResponse(c, gin.H{"results": results, "metric_version": tracking.MetricVersion}, e)
 	})
 	optionalAuth := func(c *gin.Context) {

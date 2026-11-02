@@ -108,6 +108,12 @@ func allowedImportURL(platform Platform, raw string, article bool) (*url.URL, er
 			Channels:      {"qpic.cn", "qlogo.cn", "finder.video.qq.com", "findermp.video.qq.com", "wxapp.tc.qq.com"},
 			Douyin:        {"douyinvod.com", "douyinvodcdn.com", "douyinvodds.com", "douyinpic.com", "byteimg.com", "ibytedtos.com", "bytecdn.cn"},
 			Xiaohongshu:   {"xhscdn.com", "rednotevideo.com", "xiaohongshu.com"},
+			// B18-B：快手系 CDN（真实样例验收时按网关实际返回域补全）。
+			Kuaishou: {"kuaishou.com", "yximgs.com", "gifshow.com", "ksapisrc.com", "kwimgs.com"},
+			// B1：AI 生成结果图转存。URL 来自我们自己的任务结果表（服务端供应商
+			// 写入），威胁等级低于用户粘贴链接；域名覆盖在用的生成 CDN，
+			// 拨号层公网实 IP 校验仍然全程生效。真实供应商域随任务样例补全。
+			"ai_generation": {"byteimg.com", "ibytedtos.com", "douyinpic.com", "bytecdn.cn", "myqcloud.com", "volces.com", "volcengine.com", "aigccloud.com"},
 		}
 		host := strings.ToLower(u.Hostname())
 		allowed := false

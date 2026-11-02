@@ -7,13 +7,13 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '../miniprogram');
 
-function loadAPI() {
+function loadAPI(responseData = { items: [], next_cursor: 'next-one' }) {
   const calls = [];
   const source = fs.readFileSync(path.join(root, 'utils/phase3-api.js'), 'utf8');
   const module = { exports: {} };
   const wx = {
     getStorageSync: key => key === 'token' ? 'session-token' : key === 'device_fingerprint' ? 'device-one' : '',
-    request(options) { calls.push({ kind: 'request', options }); options.success({ statusCode: 200, data: { code: 0, data: { items: [], next_cursor: 'next-one' } } }); },
+    request(options) { calls.push({ kind: 'request', options }); options.success({ statusCode: 200, data: { code: 0, data: responseData } }); },
     downloadFile(options) { calls.push({ kind: 'download', options }); options.success({ statusCode: 200, tempFilePath: '/tmp/private-media' }); },
     uploadFile(options) { calls.push({ kind: 'upload', options }); options.success({ statusCode: 200, data: JSON.stringify({ code: 0, data: { media_id: 'asset-0001' } }) }); },
   };
@@ -46,15 +46,96 @@ function pageHarness(name, api, wxOverrides = {}) {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('workbench ownership labels follow authorized ID order without exposing internal identifiers', async () => {
+  const original = { owners: ['designer-40', 'team-a'], owner_choices: [
+    { owner_id: 'team-a', display_name: '设计团队' },
+    { owner_id: 'outside', display_name: '无权限组织' },
+    { owner_id: 'designer-40', display_name: '设计师昵称' },
+  ] };
+  const context = await loadAPI(original).api.workbenchContext();
+  assert.deepEqual(JSON.parse(JSON.stringify(context.owner_choices)), [
+    { owner_id: 'designer-40', display_name: '设计师昵称' },
+    { owner_id: 'team-a', display_name: '设计团队' },
+  ]);
+  assert.deepEqual(context.owners, original.owners);
+  const legacy = await loadAPI({ owners: ['designer-40'] }).api.workbenchContext();
+  assert.equal(legacy.owner_choices[0].display_name, '我的内容');
+  assert.equal(legacy.owner_choices[0].owner_id, 'designer-40');
+  const missing = await loadAPI({ owners: ['owner-a', 'owner-b'], owner_choices: [{ owner_id: 'owner-a', display_name: '  ' }] }).api.workbenchContext();
+  assert.deepEqual(Array.from(missing.owner_choices, item => item.display_name), ['内容归属 1', '内容归属 2']);
+});
+
 test('phase3 API signs authenticated workbench and paginated self-visit requests', async () => {
   const { api, calls } = loadAPI();
   await api.workbenchContext();
+  await api.mySharesContext();
   await api.listMyShares({ cursor: 'cursor one', as_of: '2026-10-27T00:00:00Z', metric_version: 'visible-v1' });
   assert.equal(calls[0].options.url, 'https://api.jiadilingguang.com/api/v1/miniprogram/workbench/context');
   assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/workbench/context');
-  assert.match(calls[1].options.url, /cursor=cursor%20one/);
-  assert.match(calls[1].options.url, /as_of=2026-10-27T00%3A00%3A00Z/);
-  assert.equal(calls[1].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares');
+  assert.equal(calls[1].options.url, 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/my-shares/context');
+  assert.equal(calls[1].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares/context');
+  assert.match(calls[2].options.url, /cursor=cursor%20one/);
+  assert.match(calls[2].options.url, /as_of=2026-10-27T00%3A00%3A00Z/);
+  assert.equal(calls[2].options.header.signedPath, '/api/v1/miniprogram/tracking/my-shares?cursor=cursor%20one&as_of=2026-10-27T00%3A00%3A00Z&metric_version=visible-v1');
+});
+
+test('content editor receives existing media from the picker without uploading or replacing current text', async () => {
+  let picker;
+  const page = pageHarness('contentedit', { downloadWorkbenchMedia: async () => '/tmp/existing-image' }, {
+    navigateTo(options) { picker = options; },
+  });
+  page._token = 'session-token'; page._epoch = 2;
+  page.data.blocks = [{ kind: 'paragraph', text: '保留正文' }]; page.data.media = [];
+  page.openMediaPicker();
+  assert.match(picker.url, /picker=media/);
+  await picker.events.selectMaterial({ kind: 'media', asset: { media_id: 'existing-image', kind: 'image', title: '已有图' } });
+  assert.equal(page.data.blocks[0].text, '保留正文');
+  assert.equal(page.data.blocks.at(-1).media_id, 'existing-image');
+  assert.equal(page.data.media[0].local_path, '/tmp/existing-image');
+});
+
+test('phase3 API production cryptography signs the exact encoded URL path and preserves session inputs', async () => {
+  const calls = [];
+  const source = fs.readFileSync(path.join(root, 'utils/phase3-api.js'), 'utf8');
+  const module = { exports: {} };
+  const ts = require('./report-runtime')('typescript');
+  const parameter = {};
+  const parameterSource = fs.readFileSync(path.join(root, 'utils/parameter.ts'), 'utf8');
+  const parameterJS = ts.transpileModule(parameterSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  vm.runInNewContext(parameterJS, {
+    exports: parameter,
+    require(id) { return require(path.join(root, 'utils', id)); },
+    Date, JSON, Error, Object, String, Number,
+  });
+  const token = 'session-token';
+  const device = 'cached-device';
+  const query = { content_q: '中 文&方案', limit: 20, cursor: '页 一&二', as_of: '2026-10-31T00:00:00Z' };
+  const encoded = Object.entries(query).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join('&');
+  const fullPath = `/api/v1/miniprogram/workbench/contents?${encoded}`;
+  const originalNow = Date.now;
+  Date.now = () => 1793376000000;
+  try {
+    const wx = {
+      getStorageSync: key => key === 'token' ? token : key === 'device_fingerprint' ? device : '',
+      request(options) { calls.push(options); options.success({ statusCode: 200, data: { code: 0, data: {} } }); },
+    };
+    vm.runInNewContext(source, {
+      module, exports: module.exports, wx,
+      require(id) { assert.equal(id, './parameter'); return parameter; },
+      Promise, JSON, Error, Object, String, Number, encodeURIComponent,
+    });
+    await module.exports.listContents(query);
+    const expected = parameter.paramsToHeaders(parameter.generateRequestParams(token, {}, fullPath, device));
+    assert.equal(calls[0].url, `https://api.jiadilingguang.com${fullPath}`);
+    assert.equal(calls[0].header.token, token);
+    assert.equal(calls[0].header['md5-signature'], expected['md5-signature']);
+    assert.equal(calls[0].header.pass, expected.pass);
+    assert.equal(calls[0].header.tm, expected.tm);
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test('private draft media is downloaded or uploaded with login signatures', async () => {
@@ -66,7 +147,9 @@ test('private draft media is downloaded or uploaded with login signatures', asyn
   assert.equal(uploaded.media_id, 'asset-0001');
   assert.equal(calls[0].kind, 'download');
   assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/workbench/media/asset-0001');
+  assert.equal(calls[0].options.url, `https://api.jiadilingguang.com${calls[0].options.header.signedPath}`);
   assert.equal(calls[1].kind, 'upload');
+  assert.equal(calls[1].options.url, `https://api.jiadilingguang.com${calls[1].options.header.signedPath}`);
   assert.equal(calls[1].options.formData.owner_id, 'owner-a');
   assert.equal(calls[2].options.formData.original_name, '方案.pdf');
   assert.ok(!calls[0].options.url.includes('tracking/media'));
@@ -211,6 +294,49 @@ test('editor uploads a PDF or DOCX as a private document draft and reopens the o
   assert.match(wxml, /bindtap="openDocument"/);
 });
 
+test('archiving a document preserves the existing or unsaved article and its next save target', async () => {
+  for (const id of ['existing-article', '']) {
+    const calls = [];
+    const page = pageHarness('contentedit', {
+      saveContent: async (draft, contentID) => {
+        calls.push({ draft, contentID });
+        return { content_id: contentID || (draft.body_format === 'document_v1' ? 'new-document' : 'new-article'), revision: 1, version: 0, status: 'draft' };
+      },
+    });
+    page._token = 'session-token'; page._epoch = 1;
+    page.setData({ id, title: '尚未保存的图文', revision: id ? 4 : 0, owner_id: 'owner-a', blocks: [
+      { kind: 'paragraph', text: '尚未保存的正文' }, { kind: 'image', media_id: 'article-image' },
+    ], cover_media_id: 'article-image' });
+    const original = page.draftSignature();
+    await page.archiveDocumentAsset({ media_id: 'document-asset', kind: 'document', title: '建筑图纸.pdf', mime: 'application/pdf' }, 1);
+    assert.equal(page.draftSignature(), original);
+    assert.equal(page.data.body_format, 'article_v2');
+    assert.equal(page.data.documentReadOnly, false);
+    assert.equal(page.data.busy, false);
+    assert.equal(calls[0].draft.title, '建筑图纸');
+    assert.equal(calls[0].contentID, undefined);
+    assert.match(page.data.notice, /文档资料已单独保存/);
+    await page.saveDraft();
+    assert.equal(calls[1].contentID, id);
+    assert.equal(calls[1].draft.body_format, 'article_v2');
+    assert.equal(JSON.parse(calls[1].draft.body).blocks[0].text, '尚未保存的正文');
+  }
+});
+
+test('typing while a document is being archived keeps the new article editable', async () => {
+  let finishArchive;
+  const page = pageHarness('contentedit', { saveContent: () => new Promise(resolve => { finishArchive = resolve; }) });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ owner_id: 'owner-a' });
+  const pending = page.archiveDocumentAsset({ media_id: 'document-asset', title: '方案.pdf' }, 1);
+  page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '上传时继续输入的正文' } });
+  finishArchive({ content_id: 'new-document', revision: 1, version: 0, status: 'draft' });
+  await pending;
+  assert.equal(page.data.id, '');
+  assert.equal(page.data.documentReadOnly, false);
+  assert.equal(page.data.blocks[0].text, '上传时继续输入的正文');
+});
+
 test('document chooser reports real failures but ignores user cancellation', () => {
   const failures = ['chooseMessageFile:fail denied', 'chooseMessageFile:fail cancel'];
   const page = pageHarness('contentedit', {}, {
@@ -334,6 +460,91 @@ test('legacy plain and rich text content stays read-only without implicit articl
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
   assert.match(wxml, /legacyReadOnly/);
   assert.match(wxml, /rich-text/);
+});
+
+test('saving keeps edits made during the request and the next save uses the returned revision', async () => {
+  for (const action of ['saveDraft', 'saveAndPreview']) {
+    const calls = [], responses = [];
+    let previewCalls = 0;
+    const page = pageHarness('contentedit', {
+      saveContent: (draft, id) => { calls.push({ draft, id }); return new Promise(resolve => responses.push(resolve)); },
+      previewContent: async () => { previewCalls++; return { preview_token: 'outdated-preview', content: {} }; },
+    });
+    page._token = 'session-token'; page._epoch = 1;
+    page.setData({ id: 'content-one', revision: 4, title: '提交时的标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '提交时的正文' }] });
+    const pending = page[action]();
+    page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '保存期间继续输入的正文' } });
+    page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '保存期间的新标题' } });
+    await page[action]();
+    assert.equal(calls.length, 1, '重复点击不能创建并发保存');
+    responses[0]({ content_id: 'content-one', revision: 5, version: 0, status: 'draft' });
+    await pending;
+    assert.equal(page.data.title, '保存期间的新标题');
+    assert.equal(page.data.blocks[0].text, '保存期间继续输入的正文');
+    assert.equal(page.data.revision, 5);
+    assert.equal(page.data.busy, false);
+    assert.equal(page.data.preview, null);
+    assert.match(page.data.notice, /未保存/);
+    assert.equal(previewCalls, 0, '有新修改时不能继续生成旧内容的发布预览');
+    const nextSave = page.saveDraft();
+    assert.equal(calls[1].draft.expected_revision, 5);
+    assert.equal(JSON.parse(calls[1].draft.body).blocks[0].text, '保存期间继续输入的正文');
+    responses[1]({ content_id: 'content-one', revision: 6, version: 0, status: 'draft' });
+    await nextSave;
+    assert.match(page.data.notice, /草稿已保存/);
+  }
+});
+
+test('edits during preview or preview-media requests prevent an outdated publish preview', async () => {
+  for (const stage of ['preview', 'media']) {
+    let finish;
+    const preview = { preview_token: 'outdated-preview', content: { title: '旧预览', body_format: 'article_v2', body: JSON.stringify({ schema: 1, blocks: [{ kind: 'image', media_id: 'preview-image' }] }), media: [{ media_id: 'preview-image', kind: 'image' }] } };
+    const page = pageHarness('contentedit', {
+      saveContent: async () => ({ content_id: 'content-one', revision: 2, version: 0, status: 'draft' }),
+      previewContent: () => stage === 'preview' ? new Promise(resolve => { finish = () => resolve(preview); }) : Promise.resolve(preview),
+      downloadWorkbenchMedia: () => stage === 'media' ? new Promise(resolve => { finish = () => resolve('/tmp/preview-image'); }) : Promise.resolve('/tmp/preview-image'),
+    });
+    page._token = 'session-token'; page._epoch = 1;
+    page.setData({ id: 'content-one', revision: 1, title: '图文', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '预览请求前的正文' }] });
+    const pending = page.saveAndPreview();
+    await tick();
+    assert.equal(typeof finish, 'function');
+    page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '等待预览期间继续编辑的正文' } });
+    finish();
+    await pending;
+    assert.equal(page.data.blocks[0].text, '等待预览期间继续编辑的正文');
+    assert.equal(page.data.preview, null);
+    assert.equal(page.data.busy, false);
+    assert.match(page.data.notice, /未保存/);
+  }
+});
+
+test('a stale save response cannot overwrite or unlock a newer editor request', async () => {
+  for (const action of ['saveDraft', 'saveAndPreview']) {
+    const responses = [];
+    const page = pageHarness('contentedit', {
+      saveContent: () => new Promise(resolve => responses.push(resolve)),
+      previewContent: async () => ({ preview_token: 'current-preview', content: {} }),
+    });
+    page._token = 'session-token'; page._epoch = 1;
+    page.setData({ title: '旧页面标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '旧页面正文' }] });
+    const oldRequest = page[action]();
+    page.onUnload();
+    page.setData({ id: 'current-content', revision: 7, busy: false, title: '新页面标题', blocks: [{ kind: 'paragraph', text: '新页面正文' }] });
+    const currentRequest = page[action]();
+    responses[0]({ content_id: 'stale-content', revision: 1, version: 0, status: 'draft' });
+    await oldRequest;
+    assert.equal(page.data.id, 'current-content');
+    assert.equal(page.data.revision, 7);
+    assert.equal(page.data.busy, true);
+    assert.equal(page.data.blocks[0].text, '新页面正文');
+    responses[1]({ content_id: 'current-content', revision: 8, version: 0, status: 'draft' });
+    await currentRequest;
+    assert.equal(page.data.id, 'current-content');
+    assert.equal(page.data.revision, 8);
+    assert.equal(page.data.busy, false);
+    assert.equal(page.data.preview && page.data.preview.preview_token, action === 'saveAndPreview' ? 'current-preview' : null);
+  }
 });
 
 test('publish preview renders normalized server content and only its signed private media', async () => {

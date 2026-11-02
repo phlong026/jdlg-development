@@ -1,9 +1,13 @@
 package route
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"service/model"
@@ -38,22 +42,90 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 		c.Set("workbench.scope", scope)
 		c.Next()
 	})
-	registerContentWorkbenchHandlers(g, svc)
+	registerContentWorkbenchHandlers(g, svc, makeProjectNoteProfileResolver(users.DB), func(userID int64) (int64, int64) {
+		return generationQuotaSnapshot(context.Background(), users, userID)
+	})
+	registerWritingPromptsRoute(g, users.DB)
+	registerGenerationImportRoute(g, svc, users)
+	registerSharePosterRoute(g, svc)
+	registerPublishReminderRoutes(g, users.DB)
 }
 
-func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service) {
+type workbenchOwnerChoice struct {
+	OwnerID     string `json:"owner_id"`
+	DisplayName string `json:"display_name"`
+}
+
+func workbenchOwnerChoices(ctx context.Context, scope tracking.Scope, resolve projectNoteProfileResolver) ([]workbenchOwnerChoice, error) {
+	personalOwner := "designer-" + strconv.FormatInt(scope.Actor, 10)
+	profile := model.UserProfilePresentation{}
+	hasPersonalOwner := false
+	for _, owner := range scope.Owners {
+		if owner == personalOwner {
+			hasPersonalOwner = true
+			break
+		}
+	}
+	if resolve != nil && scope.Actor > 0 && hasPersonalOwner {
+		profiles, err := resolve(ctx, []int64{scope.Actor})
+		if err != nil {
+			return nil, err
+		}
+		profile = profiles[scope.Actor]
+	}
+	choices := make([]workbenchOwnerChoice, 0, len(scope.Owners))
+	teamIndex := 0
+	for _, owner := range scope.Owners {
+		label := "个人创作空间"
+		if owner == personalOwner {
+			if nickname := strings.TrimSpace(profile.Nickname); nickname != "" {
+				// B19 角色位（展示层）：自选身份做前缀，销售/设计师的产出可区分；
+				// identity_type 是展示标签，绝不能当授权事实使用。
+				if identity := strings.TrimSpace(profile.IdentityType); identity != "" && len([]rune(identity)) <= 12 {
+					label = identity + "·" + nickname
+				} else {
+					label = nickname
+				}
+			}
+		} else {
+			teamIndex++
+			label = "团队内容空间"
+			if teamIndex > 1 {
+				label += " " + strconv.Itoa(teamIndex)
+			}
+		}
+		choices = append(choices, workbenchOwnerChoice{OwnerID: owner, DisplayName: label})
+	}
+	return choices, nil
+}
+
+func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service, profiles projectNoteProfileResolver, quota func(userID int64) (stones, monthGenerations int64)) {
 	registerNativeReferenceHandlers(g, svc)
+	registerProjectCollectionHandlers(g, svc)
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
 	g.GET("/context", func(c *gin.Context) {
 		media := contentMediaConfigured(svc)
+		currentScope := scope(c)
+		ownerChoices, err := workbenchOwnerChoices(c.Request.Context(), currentScope, profiles)
+		if err != nil {
+			log.Printf("[content-workbench] error operation=owner_profiles actor=%d error_type=%T", currentScope.Actor, err)
+			ownerChoices, _ = workbenchOwnerChoices(c.Request.Context(), currentScope, nil)
+		}
+		// B1 配额条：失败返回 -1，前端隐藏而不是显示误导值。
+		var stones, monthGenerations int64 = -1, -1
+		if quota != nil {
+			stones, monthGenerations = quota(GetTokenUserID(c))
+		}
 		trackingResponse(c, gin.H{
-			"enabled": workbenchEnabled(), "can_manage": true, "owners": scope(c).Owners,
+			"enabled": workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
 			"publish_enabled":             svc.Config.ContentEnabled,
 			"native_tracking_enabled":     svc.Config.Enabled,
 			"media_upload_configured":     media,
 			"url_link_configured":         media && trackingURLLinkEnabled() && miniprogramCredentials().AppID != "" && miniprogramCredentials().Secret != "",
 			"official_account_configured": os.Getenv("OFFICIAL_ACCOUNT_APP_ID") != "" && os.Getenv("OFFICIAL_ACCOUNT_APP_SECRET") != "",
 			"import_capabilities_path":    "/api/v1/miniprogram/workbench/imports/capabilities",
+			"stones_balance":              stones,
+			"month_generations":           monthGenerations,
 		}, nil)
 	})
 	// Keep draft listing separate from visit analytics: a content-management grant
@@ -157,7 +229,12 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service)
 		trackingResponse(c, out, err)
 	})
 	g.GET("/media", func(c *gin.Context) {
-		out, err := svc.ListMedia(c.Request.Context(), scope(c))
+		limit, _ := strconv.Atoi(c.Query("limit"))
+		var kinds []string
+		if raw := strings.TrimSpace(c.Query("kind")); raw != "" {
+			kinds = strings.Split(raw, ",")
+		}
+		out, err := svc.ListMediaPage(c.Request.Context(), scope(c), c.Query("cursor"), limit, c.Query("q"), kinds)
 		trackingResponse(c, out, err)
 	})
 	g.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {

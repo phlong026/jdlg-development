@@ -10,9 +10,11 @@ import {
     getContentAnalyticsLowConversion,
     getContentAnalyticsNewTemplates,
     getContentAnalyticsOverview,
+    getContentPropagation,
     type ContentAnalyticsFeaturedCaseItem,
     type ContentAnalyticsOverview,
     type ContentAnalyticsTemplateItem,
+    type ContentPropagationItem,
 } from '../api/contentAnalytics';
 import { getTemplateCategories, getTemplateTabConfig } from '../api/templates';
 import './contentAnalytics.scss';
@@ -41,6 +43,7 @@ type AnalyticsReport = {
     newTemplates: ContentAnalyticsTemplateItem[];
     lowConversionTemplates: ContentAnalyticsTemplateItem[];
     featuredCases: ContentAnalyticsFeaturedCaseItem[];
+    propagation: ContentPropagationItem[];
 };
 
 const conversionTypeLabelMap: Record<string, string> = {
@@ -97,6 +100,7 @@ const ContentAnalytics: React.FC = () => {
                 newTemplatesData,
                 lowConversionData,
                 featuredCasesData,
+                propagationData,
             ] = await Promise.all([
                 getContentAnalyticsOverview(controller.signal),
                 getContentAnalyticsDownloadRanking(params, controller.signal),
@@ -104,6 +108,7 @@ const ContentAnalytics: React.FC = () => {
                 getContentAnalyticsNewTemplates(params, controller.signal),
                 getContentAnalyticsLowConversion(params, controller.signal),
                 getContentAnalyticsFeaturedCases(params, controller.signal),
+                getContentPropagation(params, controller.signal).catch(() => ({ list: [], total: 0 })),
             ]);
             if (!isCurrent()) return;
             setReport({
@@ -113,6 +118,7 @@ const ContentAnalytics: React.FC = () => {
                 newTemplates: newTemplatesData.list,
                 lowConversionTemplates: lowConversionData.list,
                 featuredCases: featuredCasesData.list,
+                propagation: propagationData.list,
             });
             reportPageLoadRecovered(loadFailureSource);
         } catch (error) {
@@ -433,6 +439,46 @@ const ContentAnalytics: React.FC = () => {
                             </table>
                         </div>
                     </div>
+
+                    {report.propagation && report.propagation.length > 0 ? (
+                        <div className="analytics-section">
+                            <div className="section-header">
+                                <div>
+                                    <h3>素材传播排行</h3>
+                                    <p className="stat-desc">已发布内容被他人引用进资料库的次数排行。引用次数代表素材的分发价值。</p>
+                                </div>
+                            </div>
+                            <div className="analytics-table-container">
+                                <table className="analytics-table">
+                                    <thead>
+                                        <tr>
+                                            <th>内容</th>
+                                            <th>被引用次数</th>
+                                            <th>活跃引用方</th>
+                                            <th>首次被引用</th>
+                                            <th>最近被引用</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {report.propagation.map((item) => (
+                                            <tr key={item.content_id}>
+                                                <td>
+                                                    <div className="identity-cell">
+                                                        <strong>{item.title || '未命名内容'}</strong>
+                                                        <span>{item.content_id}</span>
+                                                    </div>
+                                                </td>
+                                                <td>{item.reference_count}</td>
+                                                <td>{item.active_referencers}</td>
+                                                <td>{item.first_referenced_at ? new Date(item.first_referenced_at).toLocaleDateString('zh-CN') : '—'}</td>
+                                                <td>{item.last_referenced_at ? new Date(item.last_referenced_at).toLocaleDateString('zh-CN') : '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
                 </> : null}
             </div>

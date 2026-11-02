@@ -55,21 +55,22 @@ type ProjectNoteProjectUpdate struct {
 }
 
 type ProjectNoteProject struct {
-	ID               string    `json:"project_id"`
-	Name             string    `json:"name"`
-	Owner            string    `json:"owner_id"`
-	CRMID            string    `json:"crm_id,omitempty"`
-	Location         string    `json:"location,omitempty"`
-	BuildingArea     float64   `json:"building_area,omitempty"`
-	Floors           int       `json:"floors,omitempty"`
-	Style            string    `json:"style,omitempty"`
-	Status           string    `json:"status"`
-	CurrentVersionID string    `json:"current_version_id,omitempty"`
-	DesignerID       int64     `json:"designer_id"`
-	ConfirmerID      int64     `json:"confirmer_id,omitempty"`
-	Revision         int       `json:"revision"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                 string    `json:"project_id"`
+	Name               string    `json:"name"`
+	Owner              string    `json:"owner_id"`
+	CRMID              string    `json:"crm_id,omitempty"`
+	Location           string    `json:"location,omitempty"`
+	BuildingArea       float64   `json:"building_area,omitempty"`
+	Floors             int       `json:"floors,omitempty"`
+	Style              string    `json:"style,omitempty"`
+	Status             string    `json:"status"`
+	CurrentVersionID   string    `json:"current_version_id,omitempty"`
+	DesignerID         int64     `json:"designer_id"`
+	CreatorDisplayName string    `json:"creator_display_name,omitempty"`
+	ConfirmerID        int64     `json:"confirmer_id,omitempty"`
+	Revision           int       `json:"revision"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type ProjectNoteProjectPage struct {
@@ -674,19 +675,23 @@ func (s *Service) ProjectNoteInviteMember(ctx context.Context, scope Scope, proj
 		if err != nil {
 			return err
 		}
-		now := s.Now().UTC()
-		id := projectNoteMemberID(projectID, actor)
-		if old, readErr := decode[ProjectNoteMember](r, projectNoteMemberKind, id); readErr == nil {
-			old.Active, old.RevokedAt = true, time.Time{}
-			out = old
-			return r.Put(projectNoteRecord(projectNoteMemberKind, id, project.Owner, now, old, projectNoteActorKey(actor), projectID, projectID, ""))
-		} else if !errors.Is(readErr, ErrNotFound) {
-			return readErr
-		}
-		out = ProjectNoteMember{ID: id, ProjectID: projectID, ActorID: actor, Active: true, InvitedAt: now}
-		return r.Insert(projectNoteRecord(projectNoteMemberKind, id, project.Owner, now, out, projectNoteActorKey(actor), projectID, projectID, ""))
+		out, err = s.projectNoteInviteMemberIn(r, project, actor)
+		return err
 	})
 	return out, err
+}
+
+func (s *Service) projectNoteInviteMemberIn(r Repository, project ProjectNoteProject, actor int64) (ProjectNoteMember, error) {
+	now := s.Now().UTC()
+	id := projectNoteMemberID(project.ID, actor)
+	if old, err := decode[ProjectNoteMember](r, projectNoteMemberKind, id); err == nil {
+		old.Active, old.RevokedAt = true, time.Time{}
+		return old, r.Put(projectNoteRecord(projectNoteMemberKind, id, project.Owner, now, old, projectNoteActorKey(actor), project.ID, project.ID, ""))
+	} else if !errors.Is(err, ErrNotFound) {
+		return ProjectNoteMember{}, err
+	}
+	member := ProjectNoteMember{ID: id, ProjectID: project.ID, ActorID: actor, Active: true, InvitedAt: now}
+	return member, r.Insert(projectNoteRecord(projectNoteMemberKind, id, project.Owner, now, member, projectNoteActorKey(actor), project.ID, project.ID, ""))
 }
 
 func (s *Service) ProjectNoteRevokeMember(ctx context.Context, scope Scope, projectID string, actor int64) error {
@@ -860,45 +865,54 @@ func projectNoteSnapshotAssets(r Repository, projectID, owner string, draft Proj
 	return cover, media, nil
 }
 
+func (s *Service) projectNoteFreezeVersionIn(r Repository, scope Scope, noteID string, expectedRevision int) (ProjectNoteVersion, error) {
+	note, err := projectNoteRequired[ProjectNote](r, projectNoteKind, noteID, "项目笔记不存在")
+	if err != nil {
+		return ProjectNoteVersion{}, err
+	}
+	project, err := s.projectNoteManaged(r, scope, note.ProjectID)
+	if err != nil {
+		return ProjectNoteVersion{}, err
+	}
+	if err = projectNoteRequireActive(r, note.ID); err != nil {
+		return ProjectNoteVersion{}, err
+	}
+	if note.Revision != expectedRevision {
+		return ProjectNoteVersion{}, fail(409, "项目笔记已更新，请重新读取")
+	}
+	cover, media, err := projectNoteSnapshotAssets(r, project.ID, project.Owner, ProjectNoteDraft{Body: note.Body, BodyFormat: note.BodyFormat, CoverID: note.CoverID, MediaIDs: note.MediaIDs})
+	if err != nil {
+		return ProjectNoteVersion{}, err
+	}
+	now := s.Now().UTC()
+	out := ProjectNoteVersion{
+		ID: opaque(), ProjectID: project.ID, NoteID: note.ID, Revision: note.Revision,
+		Title: note.Title, Body: note.Body, BodyFormat: note.BodyFormat,
+		ProjectSnapshot: ProjectNoteProjectSnapshot{
+			Name: project.Name, Location: project.Location, BuildingArea: project.BuildingArea,
+			Floors: project.Floors, Style: project.Style, Revision: project.Revision,
+		},
+		Cover: cover, Media: media, FrozenAt: now,
+	}
+	if err = r.Insert(projectNoteRecord(projectNoteVersionKind, out.ID, project.Owner, now, out, projectNoteActorKey(project.DesignerID), project.ID, note.ID, "")); err != nil {
+		return out, err
+	}
+	project.CurrentVersionID = out.ID
+	project.Status = ProjectNoteProjectStatusRevising
+	project.Revision++
+	project.UpdatedAt = now
+	if err = r.Put(projectNoteRecord(projectNoteProjectKind, project.ID, project.Owner, now, project, projectNoteActorKey(project.DesignerID), "", project.ID, "")); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
 func (s *Service) ProjectNoteFreezeVersion(ctx context.Context, scope Scope, noteID string, expectedRevision int) (ProjectNoteVersion, error) {
 	var out ProjectNoteVersion
 	err := s.transaction(ctx, func(r Repository) error {
-		note, err := projectNoteRequired[ProjectNote](r, projectNoteKind, noteID, "项目笔记不存在")
-		if err != nil {
-			return err
-		}
-		project, err := s.projectNoteManaged(r, scope, note.ProjectID)
-		if err != nil {
-			return err
-		}
-		if err = projectNoteRequireActive(r, note.ID); err != nil {
-			return err
-		}
-		if note.Revision != expectedRevision {
-			return fail(409, "项目笔记已更新，请重新读取")
-		}
-		cover, media, err := projectNoteSnapshotAssets(r, project.ID, project.Owner, ProjectNoteDraft{Body: note.Body, BodyFormat: note.BodyFormat, CoverID: note.CoverID, MediaIDs: note.MediaIDs})
-		if err != nil {
-			return err
-		}
-		now := s.Now().UTC()
-		out = ProjectNoteVersion{
-			ID: opaque(), ProjectID: project.ID, NoteID: note.ID, Revision: note.Revision,
-			Title: note.Title, Body: note.Body, BodyFormat: note.BodyFormat,
-			ProjectSnapshot: ProjectNoteProjectSnapshot{
-				Name: project.Name, Location: project.Location, BuildingArea: project.BuildingArea,
-				Floors: project.Floors, Style: project.Style, Revision: project.Revision,
-			},
-			Cover: cover, Media: media, FrozenAt: now,
-		}
-		if err = r.Insert(projectNoteRecord(projectNoteVersionKind, out.ID, project.Owner, now, out, projectNoteActorKey(project.DesignerID), project.ID, note.ID, "")); err != nil {
-			return err
-		}
-		project.CurrentVersionID = out.ID
-		project.Status = ProjectNoteProjectStatusRevising
-		project.Revision++
-		project.UpdatedAt = now
-		return r.Put(projectNoteRecord(projectNoteProjectKind, project.ID, project.Owner, now, project, projectNoteActorKey(project.DesignerID), "", project.ID, ""))
+		var err error
+		out, err = s.projectNoteFreezeVersionIn(r, scope, noteID, expectedRevision)
+		return err
 	})
 	return out, err
 }
@@ -1156,6 +1170,54 @@ func (s *Service) ProjectNoteNoticeEligible(ctx context.Context, eventID string,
 			}
 		}
 		if !allowedOwner || notice.RecipientID != recipient {
+			return nil
+		}
+		if notice.Kind == ProjectNoteJoinRequestNoticeKind {
+			eligible, err = s.projectNoteJoinNoticeEligible(ctx, r, notice, recipient)
+			return err
+		}
+		if notice.Kind == ProjectPackageReceiptNoticeKind {
+			receiptRows, receiptErr := pageRecords(r, projectPackageReceiptKind, RecordQuery{Owners: []string{notice.Owner}, Sessions: []string{notice.ProjectID}, VisitorKeys: []string{notice.VisitorKey}, Shares: []string{notice.ShareID}, Content: notice.ContentID, ExactVisitors: true, Limit: 2})
+			if receiptErr != nil {
+				return receiptErr
+			}
+			if len(receiptRows) == 0 {
+				return nil
+			}
+			var receipt ProjectPackageReceipt
+			if json.Unmarshal(receiptRows[0].Payload, &receipt) != nil || projectPackageReceiptNoticeID(receipt) != notice.ID || receipt.DeliveryID != notice.ShareID || receipt.ProjectID != notice.ProjectID || receipt.VersionID != notice.ContentID || projectNoteActorKey(receipt.ActorID) != notice.VisitorKey {
+				return nil
+			}
+			_, delivery, deliveryErr := projectPackageDeliveryByID(r, notice.Owner, receipt.DeliveryID)
+			if deliveryErr != nil {
+				var missing *Error
+				if errors.As(deliveryErr, &missing) && missing.Status == 404 {
+					return nil
+				}
+				return deliveryErr
+			}
+			if delivery.ProjectID != receipt.ProjectID || !projectPackageHasVersion(delivery.Items, receipt.VersionID) {
+				return nil
+			}
+			project, projectErr := projectNoteLoadProject(r, receipt.ProjectID)
+			if projectErr != nil {
+				var missing *Error
+				if errors.As(projectErr, &missing) && missing.Status == 404 {
+					return nil
+				}
+				return projectErr
+			}
+			if project.Owner != notice.Owner || project.DesignerID != recipient {
+				return nil
+			}
+			if grantErr := s.projectNoteGrant(ctx, r, project); grantErr != nil {
+				var denied *Error
+				if errors.As(grantErr, &denied) && (denied.Status == 401 || denied.Status == 403 || denied.Status == 404) {
+					return nil
+				}
+				return grantErr
+			}
+			eligible = true
 			return nil
 		}
 		if notice.Kind == ProjectNoteFeedbackNoticeKind {

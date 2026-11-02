@@ -33,6 +33,13 @@ test('media URL rendering rejects executable protocols, cleartext external and e
  for (const url of ['javascript:alert(1)','data:image/svg+xml,x','http://remote.test/a','https://user:secret@example.test/x']) assert.equal(model.safeMediaURL(url), undefined);
  assert.equal(model.safeMediaURL('/authorized/media/1'),'https://example.test/authorized/media/1');
 });
+test('admin media previews use the scoped management route without rewriting external URLs', () => {
+ assert.equal(model.safeMediaURL('/api/v1/miniprogram/tracking/media/asset-1?version=2'), 'https://example.test/api/v1/management/tracking/media/asset-1?version=2');
+ assert.equal(model.safeMediaURL('https://example.test/api/v1/miniprogram/tracking/media/asset-2'), 'https://example.test/api/v1/management/tracking/media/asset-2');
+ const external = 'https://external.test/api/v1/miniprogram/tracking/media/asset-3';
+ assert.equal(model.safeMediaURL(external), external);
+ assert.equal(model.safeMediaURL('/api/v1/miniprogram/tracking/materials'), 'https://example.test/api/v1/miniprogram/tracking/materials');
+});
 test('API uses real requests, scoped prefix, CSRF marker and abort signal', async () => {
  const calls=[]; const api=load('src/api/shareTracking.ts',{'../utils/request':{request:async(...args)=>{calls.push(args);return {data:{items:[]}}}}});
  const controller=new AbortController();await api.tracking.visitors({identity:'anonymous'},controller.signal);

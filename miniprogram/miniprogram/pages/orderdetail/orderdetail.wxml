@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <!-- 统一导航栏 -->
   <navigation-bar title="订单详情" subtitle="查看本次订单的完整信息" background="#e6daca" />
@@ -86,3 +87,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

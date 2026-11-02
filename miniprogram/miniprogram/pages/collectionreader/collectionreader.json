@@ -1,0 +1,10 @@
+{
+  "navigationBarTitleText": "项目合集",
+  "navigationStyle": "custom",
+  "enableShareAppMessage": true,
+  "enableShareTimeline": true,
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

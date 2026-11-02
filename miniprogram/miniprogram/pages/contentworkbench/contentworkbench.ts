@@ -4,7 +4,7 @@ const api = require('../../utils/phase3-api');
 
 const pendingImport = status => status === 'queued' || status === 'resolving' || status === 'downloading';
 const statusText = status => ({ queued: '等待处理', resolving: '正在解析', downloading: '正在保存素材', ready: '草稿已生成', failed: '导入失败', uncertain: '结果待人工核对', blocked: '需要处理后重试' }[status] || '状态未知');
-const platformText = platform => ({ wechat_article: '微信公众号', douyin: '抖音', xiaohongshu: '小红书', channels: '视频号' }[platform] || platform || '待识别');
+const platformText = platform => ({ wechat_article: '微信公众号', douyin: '抖音', xiaohongshu: '小红书', kuaishou: '快手', channels: '视频号' }[platform] || platform || '待识别');
 const errorText = code => ({
   browser_required: '公众号文内视频采集服务尚未配置', requires_login: '视频号登录状态已失效', verification_required: '来源平台要求人工验证',
   rate_limited: '来源平台请求频繁，请稍后重试', unsupported_encryption: '该视频暂不支持安全导入', unsupported_embed: '正文含暂不支持的嵌入内容',
@@ -26,6 +26,7 @@ function contentRow(item) {
   return Object.assign({}, item, {
     kind, kind_label: { note: '项目笔记', document: '文档资料', video: '视频', article: '图文' }[kind],
     status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
+    action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
     cover_path: '', cover_error: false,
   });
@@ -33,11 +34,11 @@ function contentRow(item) {
 
 Page({
   data: {
-    view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [],
-    categories: [{ key: 'all', label: '全部' }, { key: 'note', label: '笔记', unavailable: true }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
-    loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false,
+    view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [], ownerFilter: '',
+    categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
+    loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
-    importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
+    importServiceEnabled: false, importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
     importRights: '', importBusy: false, importError: '', imports: [], importPolling: false,
   },
   onLoad(options) { this.setData({ view: options && options.view === 'import' ? 'import' : 'studio' }); },
@@ -45,29 +46,62 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
     this.stopImportPoll();
-    this._visible = true; this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
+    this._visible = true;
+    // 同一账号已成功加载过：保留已渲染列表就地静默刷新，返回本页不再整页重载闪屏。
+    const quiet = !!token && token === this._token && this._loaded === true;
+    this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
+    if (quiet) {
+      this.setData({ loginRequired: false, loading: false, error: '' });
+      void this.loadShareVisitAccess(token);
+      this.load(true, this._epoch, true);
+      return;
+    }
+    this._loaded = false;
     this.setData({
-      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false,
-      loginRequired: !token, loading: !!token, loadingMore: false, importEnabled: false, importCapabilityReason: '',
+      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false, hasShareVisitAccess: false,
+      loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
       importError: '', imports: [], importPolling: false,
     });
-    if (token) this.load(true, this._epoch);
+    if (token) {
+      void this.loadShareVisitAccess(token);
+      this.load(true, this._epoch);
+    }
   },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
-  onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
+  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
+  onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() {
     this.stopImportPoll();
     const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false;
+    this.setData({ hasShareVisitAccess: false });
+    void this.loadShareVisitAccess(this._token);
     this.load(true, epoch).finally(() => wx.stopPullDownRefresh());
   },
-  async load(reset, suppliedEpoch) {
+  async loadShareVisitAccess(token) {
+    const requestId = (this._shareAccessRequestId || 0) + 1;
+    this._shareAccessRequestId = requestId;
+    const current = () => this._visible && requestId === this._shareAccessRequestId && token === this._token && token === String(wx.getStorageSync('token') || '');
+    if (!token || token !== String(wx.getStorageSync('token') || '')) return;
+    try {
+      const context = await api.mySharesContext();
+      if (!current()) return;
+      const hasShareVisitAccess = context?.can_view === true && Array.isArray(context?.owners) && context.owners.length > 0;
+      this.setData({ hasShareVisitAccess });
+    } catch (error) {
+      if (!current()) return;
+      console.warn('获取分享访问权限失败:', error);
+      this.setData({ hasShareVisitAccess: false });
+    }
+  },
+  async load(reset, suppliedEpoch, quiet) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token || !reset && (this._morePending || !this.data.next_cursor)) return;
     const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
     if (!reset) this._morePending = true;
-    if (reset) this.setData({ loading: true, error: '', denied: false, disabled: false, items: [], visibleItems: [], next_cursor: '', snapshot: null });
+    if (reset) this.setData(quiet
+      ? { error: '', denied: false, disabled: false }
+      : { loading: true, error: '', denied: false, disabled: false, items: [], visibleItems: [], next_cursor: '', snapshot: null });
     else this.setData({ loadingMore: true, error: '' });
     try {
       let context = this.data.context;
@@ -79,6 +113,7 @@ Page({
       }
       const query = { limit: 20 };
       if (this.data.searchTerm) query.content_q = this.data.searchTerm;
+      if (this.data.ownerFilter) query.owner = this.data.ownerFilter;
       if (!reset && this.data.next_cursor) query.cursor = this.data.next_cursor;
       if (!reset && this.data.snapshot) { query.as_of = this.data.snapshot.as_of; query.metric_version = this.data.snapshot.metric_version; }
       const page = await api.listContents(query);
@@ -90,6 +125,7 @@ Page({
         context, items: reset ? (page.items || []).map(contentRow) : this.data.items.concat((page.items || []).map(contentRow)), next_cursor: page.next_cursor || '', snapshot,
         importOwner: selectedOwner, importOwnerIndex: Math.max(0, owners.indexOf(selectedOwner)), loading: false, loadingMore: false,
       });
+      this._loaded = true;
       this.filterItems();
       this.loadCovers(epoch, page.items || []);
       if (reset) await this.loadImports(epoch);
@@ -106,6 +142,15 @@ Page({
     if (!category) return;
     if (category.unavailable) { wx.showToast({ title: category.label + '资料尚未开通', icon: 'none' }); return; }
     this.setData({ category: category.key }); this.filterItems();
+  },
+  // B13 公司/个人空间 Tab：复用服务端 ?owner= 过滤（带权限交集校验），切换即整表重载。
+  selectOwnerTab(event) {
+    const ownerID = String(event.currentTarget.dataset.owner || '');
+    if (ownerID === this.data.ownerFilter) return;
+    const choices = (this.data.context && this.data.context.owner_choices) || [];
+    if (ownerID && !choices.some(item => item.owner_id === ownerID)) return;
+    this.setData({ ownerFilter: ownerID, items: [], visibleItems: [], next_cursor: '', snapshot: null });
+    this.loadContents(true);
   },
   async loadCovers(epoch, rows) {
     if (!api.downloadWorkbenchMedia) return;
@@ -136,10 +181,25 @@ Page({
   },
   navigate(url) { wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }); },
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
+  // 引导卡直达新建图文：不经过 openCreateMenu，保持"创建菜单入口唯一"的既有护栏。
+  startFirstContent() { this.navigate('/pages/contentedit/contentedit'); },
+  openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },
-  openShareVisits() { this.navigate('/pages/sharevisits/sharevisits'); },
+  openShareVisits() {
+    if (!this.data.hasShareVisitAccess || !this.current(this._epoch)) return;
+    this.navigate('/pages/sharevisits/sharevisits');
+  },
   openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
+  openCreateMenu() {
+    wx.showActionSheet({
+      itemList: ['图文内容', '图片或视频', 'PDF / Word / PPT'],
+      success: result => {
+        const url = ['/pages/contentedit/contentedit', '/pages/contentedit/contentedit?action=media', '/pages/contentedit/contentedit?action=document'][Number(result.tapIndex)];
+        if (url) this.navigate(url);
+      },
+    });
+  },
   pasteImportLink() { wx.getClipboardData({ success: result => this.setImportURL({ detail: { value: result.data } }), fail: () => wx.showToast({ title: '未能读取剪贴板，请手动粘贴', icon: 'none' }) }); },
   refreshImportList() { return this.loadImports(this._epoch); },
   async loadImports(epoch) {
@@ -147,16 +207,27 @@ Page({
       const capability = await api.importCapabilities();
       if (!this.current(epoch)) return;
       const platforms = (capability.platforms || []).map(item => Object.assign({}, item, { label: platformText(item.platform) }));
-      const available = capability.enabled === true && platforms.some(item => item.available);
-      const reason = capability.reason || (!available ? platforms.map(item => item.reason).filter(Boolean).join('；') : '');
-      this.setData({ importEnabled: available, importCapabilityReason: reason, importPlatforms: platforms, importError: '' });
+      const serviceEnabled = capability.enabled === true;
+      const available = serviceEnabled && platforms.some(item => item.available);
+      const platformReasons = [...new Set(platforms.map(item => String(item.reason || '').trim()).filter(Boolean))];
+      const reason = capability.reason || (!available ? platformReasons.join('；') : '');
+      this.setData({
+        importServiceEnabled: serviceEnabled, importEnabled: available,
+        importCapabilityReason: reason || (!serviceEnabled ? '链接导入功能当前未开启' : ''),
+        importPlatforms: platforms, importError: '', importPolling: false,
+        ...(!serviceEnabled ? { imports: [] } : {}),
+      });
+      if (!serviceEnabled) { this.stopImportPoll(); return; }
       await this.refreshImports(epoch);
     } catch (error) {
-      if (this.current(epoch)) this.setData({ importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: error.message || '导入能力加载失败' });
+      if (this.current(epoch)) {
+        this.stopImportPoll();
+        this.setData({ importServiceEnabled: false, importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: '', importPolling: false });
+      }
     }
   },
   async refreshImports(epoch) {
-    if (!this.current(epoch) || this._importPollEpoch === epoch) return;
+    if (!this.current(epoch) || !this.data.importServiceEnabled || this._importPollEpoch === epoch) return;
     this._importPollEpoch = epoch;
     this.setData({ importPolling: true });
     try {
@@ -175,15 +246,15 @@ Page({
   },
   scheduleImportPoll(epoch) {
     this.stopImportPoll();
-    if (!this.current(epoch)) return;
+    if (!this.current(epoch) || !this.data.importServiceEnabled) return;
     this._importTimer = setTimeout(() => { this._importTimer = null; this.refreshImports(epoch); }, 3000);
   },
   stopImportPoll() { if (this._importTimer) clearTimeout(this._importTimer); this._importTimer = null; },
   resetImportKey() { this._importSignature = ''; this._importKey = ''; },
   setImportURL(event) { const value = String(event.detail.value || ''); if (value !== this.data.importURL) this.resetImportKey(); this.setData({ importURL: value, importError: '' }); },
   setImportOwner(event) {
-    const index = Number(event.detail.value || 0); const owners = this.data.context && this.data.context.owners || [];
-    const owner = owners[index] || ''; if (owner !== this.data.importOwner) this.resetImportKey();
+    const index = Number(event.detail.value || 0); const choices = this.data.context && this.data.context.owner_choices || [];
+    const owner = choices[index] && choices[index].owner_id || ''; if (owner !== this.data.importOwner) this.resetImportKey();
     this.setData({ importOwnerIndex: index, importOwner: owner, importError: '' });
   },
   setImportRights(event) { const value = event.detail.value; if (value !== this.data.importRights) this.resetImportKey(); this.setData({ importRights: value, importError: '' }); },
@@ -247,6 +318,20 @@ Page({
   retry() { this.load(true); },
   loadMore() { this.load(false, this._epoch); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
-  createContent() { wx.navigateTo({ url: '/pages/contentedit/contentedit' }); },
-  editContent(event) { wx.navigateTo({ url: '/pages/contentedit/contentedit?id=' + encodeURIComponent(event.currentTarget.dataset.id) }); },
+  createContent() { this.navigate('/pages/contentedit/contentedit'); },
+  openContent(event) {
+    const data = event.currentTarget.dataset || {};
+    const id = String(data.id || '');
+    const version = Number(data.version || 0);
+    if (!id) return;
+    if (data.status === 'published' && version > 0 && !data.readOnly && (!data.route || data.route === 'pages/contentreader/contentreader')) {
+      this.navigate('/pages/contentreader/contentreader?content_id=' + encodeURIComponent(id) + '&content_version=' + encodeURIComponent(String(version)));
+      return;
+    }
+    this.navigate('/pages/contentedit/contentedit?id=' + encodeURIComponent(id));
+  },
+  editContent(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    if (id) this.navigate('/pages/contentedit/contentedit?id=' + encodeURIComponent(id));
+  },
 });

@@ -80,6 +80,10 @@ func (s *Service) available(ctx context.Context, r Repository, route, content st
 	if e := s.Config.validateRoute(route); e != nil {
 		return e
 	}
+	if route == projectCollectionReaderRoute {
+		_, err := s.projectCollectionVersion(r, content, version)
+		return err
+	}
 	if route != "pages/contentreader/contentreader" {
 		if LegacyRoute(route) {
 			_, err := s.resolveLegacy(sourceReadContext(ctx, r), route, content)
@@ -139,6 +143,10 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		if e := s.available(ctx, r, in.Route, in.Content, in.Version); e != nil {
 			return e
 		}
+		collectionOwner, err := s.validateProjectCollectionEntryContext(ctx, r, in)
+		if err != nil {
+			return err
+		}
 		now := s.Now()
 		owner := s.Config.DefaultOwner
 		share := ""
@@ -156,6 +164,21 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 					return err
 				}
 			}
+		} else if in.Route == projectCollectionReaderRoute {
+			collection, err := s.projectCollectionVersion(r, in.Content, in.Version)
+			if err != nil {
+				return err
+			}
+			owner = collection.Owner
+			if account > 0 && s.IsContentOperator != nil {
+				self, err = s.IsContentOperator(sourceReadContext(ctx, r), account, owner)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if collectionOwner != "" && collectionOwner != owner {
+			return fail(404, "合集作品不可访问")
 		}
 		if in.ShareToken != "" {
 			sh, err := decode[Share](r, "share", hash(in.ShareToken))
@@ -168,7 +191,9 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 				attribution = "revoked_share"
 			case !now.Before(sh.Expires):
 				attribution = "expired_share"
-			case sh.Route != in.Route || sh.Content != in.Content || sh.Version != in.Version:
+			case sh.Owner != owner:
+				attribution = "mismatched_share"
+			case !collectionShareMatchesEntry(sh, in):
 				attribution = "mismatched_share"
 			default:
 				attribution = "share"
@@ -190,12 +215,17 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 		if _, e := r.Get("deletion", visitor); e == nil {
 			return fail(410, "访问记录已删除")
 		}
-		out = Entry{Attribution: attribution, Route: in.Route, Content: in.Content, Version: in.Version, Session: opaque(), Visitor: visitor, Anonymous: anon, Account: account, Client: in.Client, Owner: owner, Share: share, Started: now, LastActive: now, Expires: now.Add(72 * time.Hour), Accessible: true, Self: self}
+		out = Entry{Attribution: attribution, Route: in.Route, Content: in.Content, Version: in.Version, CollectionID: in.CollectionID, CollectionVersion: in.CollectionVersion, Session: opaque(), Visitor: visitor, Anonymous: anon, Account: account, Client: in.Client, Owner: owner, Share: share, Started: now, LastActive: now, Expires: now.Add(72 * time.Hour), Accessible: true, Self: self}
 		out.WebSource, out.ConsentVersion = in.WebSource, in.Consent
 		if in.Previous != "" && in.ShareToken == "" {
 			old, err := s.entry(r, in.Previous)
 			linked := false
+			canContinue := true
 			if err == nil {
+				canContinue, err = canContinueProjectCollectionShare(r, old, in, now)
+				if err != nil {
+					return err
+				}
 				existing, lookup := decode[map[string]string](r, "identity", old.Session)
 				if lookup == nil {
 					linked = true
@@ -206,14 +236,15 @@ func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entr
 					return lookup
 				}
 			}
-			if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == account && (in.Route != publishedReaderRoute || old.Owner == owner) {
+			ownerBound := in.Route == publishedReaderRoute || in.Route == projectCollectionReaderRoute
+			if err == nil && canContinue && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == account && (!ownerBound || old.Owner == owner) {
 				out.Session = old.Session
 				out.Started = old.Started
 				out.Share = old.Share
 				out.Attribution = old.Attribution
 				out.Owner = old.Owner
 				out.Self = out.Self || old.Self
-			} else if err == nil && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == 0 && account > 0 && (in.Route != publishedReaderRoute || old.Owner == owner) {
+			} else if err == nil && canContinue && old.Client == in.Client && now.Sub(old.LastActive) < 30*time.Minute && old.Account == 0 && account > 0 && (!ownerBound || old.Owner == owner) {
 				out.Session = old.Session
 				out.Started = old.Started
 				out.Share = old.Share
@@ -335,6 +366,12 @@ func (s *Service) createShare(ctx context.Context, in ShareInput, token string, 
 		if in.Route == "pages/contentreader/contentreader" {
 			c, _ := decode[Content](r, "content", in.Content)
 			owner = c.Owner
+		} else if in.Route == projectCollectionReaderRoute {
+			collection, err := s.projectCollectionVersion(r, in.Content, in.Version)
+			if err != nil {
+				return err
+			}
+			owner = collection.Owner
 		}
 		if legacy.ID != "" {
 			if err := saveLegacy(r, legacy, owner, now); err != nil {
@@ -399,6 +436,11 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 	}
 	if e.Route != en.Route || e.Content != en.Content || e.Version != en.Version {
 		return fail(400, "页面内容绑定不一致")
+	}
+	if en.CollectionID != "" {
+		if _, err := s.projectCollectionChild(ctx, r, en.CollectionID, en.CollectionVersion, en.Route, en.Content, en.Version); err != nil {
+			return err
+		}
 	}
 	if err := available(e.Route, e.Content, e.Version); err != nil {
 		return err
@@ -525,6 +567,19 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 	return nil
 }
 func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]Result, error) {
+	return s.accept(ctx, token, events, 0, false)
+}
+
+// AcceptForAccount is the Mini Program boundary: an authenticated account may
+// only append events to the entry token that the same account created.
+func (s *Service) AcceptForAccount(ctx context.Context, token string, events []Event, account int64) ([]Result, error) {
+	if account <= 0 {
+		return nil, fail(401, "未登录")
+	}
+	return s.accept(ctx, token, events, account, true)
+}
+
+func (s *Service) accept(ctx context.Context, token string, events []Event, account int64, requireAccount bool) ([]Result, error) {
 	out := []Result{}
 	if !s.Config.Enabled {
 		return nil, fail(503, "采集关闭")
@@ -536,6 +591,9 @@ func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]R
 		en, err := s.entry(r, token)
 		if err != nil {
 			return err
+		}
+		if requireAccount && (en.Account != account || en.Visitor != actorVisitorKey(account)) {
+			return fail(403, "采集凭据不属于当前账号")
 		}
 		now := s.Now()
 		// Transactional per-credential minute budget survives process restarts; duplicates still consume budget.

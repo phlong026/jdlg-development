@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="private-page">
  <navigation-bar title="访问详情" back="{{true}}" background="#f7f3ee" />
  <view class="page-body">
@@ -9,10 +10,21 @@
    <view class="summary"><text class="title">{{title}}</text><text>已识别 {{identified_count}} 人 · 匿名 {{anonymous_count}} 人</text><text class="muted">可见时长只表示页面在前台，不代表已读或认可。</text></view>
    <view wx:if="{{!items.length}}" class="state">当前统计窗口暂无访问。</view>
    <view wx:for="{{items}}" wx:key="visitor_key" class="card">
-    <view class="visitor"><image wx:if="{{item.visitor.avatar_url}}" src="{{item.visitor.avatar_url}}" mode="aspectFill" /><view><text class="title">{{item.visitor_name}}</text><text class="muted">{{item.visitor.identity_state === 'identified' ? '已识别' : '匿名访客'}}{{item.visitor.identity_type ? ' · ' + item.visitor.identity_type : ''}}</text></view></view>
-    <view class="metrics"><text>{{item.page_views}} 次浏览</text><text>{{item.session_count}} 次会话</text><text>可见 {{item.visible_text}}</text></view><text class="muted">首次 {{item.first_visit_text}} · 最近 {{item.last_visit_text}}</text>
+    <view class="visitor" data-key="{{item.visitor_key}}" bindtap="toggleTimeline"><image wx:if="{{item.visitor.avatar_url}}" src="{{item.visitor.avatar_url}}" mode="aspectFill" /><view><text class="title">{{item.visitor_name}}</text><text class="muted">{{item.visitor.identity_state === 'identified' ? '已识别' : '匿名访客'}}{{item.visitor.identity_type ? ' · ' + item.visitor.identity_type : ''}}</text></view><text class="chevron">{{item.expanded ? '⌃' : '⌄'}}</text></view>
+    <view class="metrics"><text>{{item.page_views}} 次浏览</text><text>{{item.session_count}} 次会话</text><text>可见 {{item.visible_text}}</text></view>
+    <block wx:if="{{item.expanded && item.timeline.length}}">
+     <view class="timeline">
+      <view wx:for="{{item.timeline}}" wx:for-item="node" wx:key="label" class="timeline-node">
+       <view class="timeline-dot"></view>
+       <view class="timeline-body"><text class="timeline-label">{{node.label}}</text><text class="timeline-time">{{node.time}}</text><text class="timeline-detail">{{node.detail}}</text></view>
+      </view>
+     </view>
+    </block>
+    <text wx:else class="muted">首次 {{item.first_visit_text}} · 最近 {{item.last_visit_text}}</text>
    </view>
    <button wx:if="{{next_cursor}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
   </block>
  </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

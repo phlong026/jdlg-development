@@ -1,120 +1,159 @@
-.login-guard-blocker {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 10001;
-  background: #f7f2ea;
-}
+@import "../../styles/auth-welcome";
 
-.login-guard-mask {
+.login-guard-panel {
   position: fixed;
   top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
-  left: 0;
-  z-index: 10003;
-  background: rgba(46, 31, 20, 0.62);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48rpx;
-  box-sizing: border-box;
+  height: 100%;
+  z-index: 10001;
+  background: #f5eddf;
 }
 
 .login-guard {
-  width: 100%;
-  max-width: 600rpx;
-  background: linear-gradient(180deg, #fffaf2 0%, #f7f2ea 100%);
-  border-radius: 28rpx;
-  padding: 44rpx 36rpx 36rpx;
-  box-sizing: border-box;
-  box-shadow: 0 20rpx 44rpx rgba(71, 53, 40, 0.2);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
+.lg-checking {
+  min-height: 260rpx;
+  justify-content: center;
+}
+
+.lg-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  margin-bottom: 28rpx;
+  border: 4rpx solid rgba(166, 125, 72, 0.22);
+  border-top-color: #a67d48;
+  border-radius: 50%;
+  animation: lg-spin 0.8s linear infinite;
+}
+
+@keyframes lg-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lg-profile-card {
+  flex-shrink: 0;
+  margin: 0 26rpx;
+}
+
 .lg-title {
   font-size: 36rpx;
   font-weight: 700;
-  color: #4a3524;
+  color: #2b2115;
+  margin-bottom: 12rpx;
+  text-align: center;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.lg-sub {
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: #665443;
+  margin-bottom: 0;
   text-align: center;
 }
 
-.lg-desc {
-  margin-top: 14rpx;
-  font-size: 24rpx;
-  color: #a08a72;
+.lg-error {
+  font-size: 26rpx;
+  color: #d54941;
+  margin-bottom: 16rpx;
   text-align: center;
-  line-height: 1.5;
 }
 
-.lg-login {
-  margin-top: 40rpx;
+.login-guard .lg-login {
   width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: 46rpx;
-  background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
+  margin-top: 24rpx;
+  height: 96rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #a67d48, #90653b);
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 600;
-  padding: 0;
-}
-
-.lg-login::after {
   border: none;
+  box-shadow: 0 8rpx 20rpx rgba(144, 101, 59, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+
+  &::after {
+    border: none;
+  }
 }
 
-.lg-login[disabled] {
-  opacity: 0.7;
-  color: #ffffff;
-  background: linear-gradient(135deg, #b98a52 0%, #a9855b 100%);
+.lg-login-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-guard .aw-community {
+  margin: 22rpx 0 0;
+}
+
+.lg-wx-icon {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 14rpx;
+}
+
+.login-guard .lg-login-plain {
+  background: #fbfaf7;
+  color: #805b32;
+  border: 2rpx solid #c2a06b;
+  box-sizing: border-box;
 }
 
 .lg-agreement {
-  margin-top: 24rpx;
   display: flex;
   align-items: center;
+  margin-top: 24rpx;
   flex-wrap: wrap;
   justify-content: center;
-  row-gap: 6rpx;
+  line-height: 1.8;
 }
 
 .lg-check {
-  width: 32rpx;
-  height: 32rpx;
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
   border-radius: 50%;
-  border: 2rpx solid #c9ab84;
-  background: #ffffff;
+  border: 2rpx solid #c9bda6;
+  margin-right: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 8rpx;
   box-sizing: border-box;
 }
 
 .lg-check-on {
-  background: #a9855b;
-  border-color: #a9855b;
+  background: #a8825c;
+  border-color: #a8825c;
 }
 
 .lg-check-mark {
   font-size: 20rpx;
   color: #ffffff;
-  line-height: 1;
 }
 
 .lg-agreement-text {
-  font-size: 22rpx;
-  color: #a08a72;
+  font-size: 24rpx;
+  color: #6b5a49;
 }
 
 .lg-link {
-  font-size: 22rpx;
-  color: #a9855b;
+  font-size: 24rpx;
+  color: #805b32;
 }
 
-.lg-error { margin-top: 18rpx; color: #9c3c2c; font-size: 24rpx; text-align: center; }
+.login-guard .lg-login-disabled {
+  opacity: 0.6;
+  color: #fff;
+  background: #b3925f;
+}

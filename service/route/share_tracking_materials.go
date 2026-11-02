@@ -11,8 +11,8 @@ import (
 	"service/tracking"
 )
 
-// Mini-program users cannot log in as management users. Explicit mini-account
-// grants are deliberately separate; management_access never implies this grant.
+// 已认证设计师自动获得个人创作范围；其他范围仍须显式授权。
+// 这里只授予素材管理能力，不把认证身份扩大为访客分析或管理端权限。
 func loadMiniTrackingMaterialScope(ctx context.Context, db *sql.DB, tenant string, actor int64) (tracking.Scope, error) {
 	scope := tracking.Scope{Tenant: tenant, Actor: actor, Owners: []string{}}
 	if actor <= 0 {
@@ -21,17 +21,26 @@ func loadMiniTrackingMaterialScope(ctx context.Context, db *sql.DB, tenant strin
 	if db == nil || tenant == "" {
 		return scope, tracking.ErrUnavailable
 	}
-	rows, err := tracking.SourceReadDB(ctx, db).QueryContext(ctx, `SELECT t.owner_id FROM tracking_access t JOIN users u ON u.id=t.user_id WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND t.can_manage=TRUE AND u.user_type='miniprogram' AND COALESCE(u.status,'active')='active'`, actor, tenant)
+	// 单次来源查询复用调用方事务；审核身份不能由自填资料或提现标记替代。
+	rows, err := tracking.SourceReadDB(ctx, db).QueryContext(ctx, `SELECT t.owner_id FROM tracking_access t JOIN users u ON u.id=t.user_id
+		WHERE t.user_id=? AND t.tenant_id=? AND t.enabled=TRUE AND t.can_manage=TRUE AND u.user_type='miniprogram' AND COALESCE(u.status,'active')='active'
+		UNION
+		SELECT CONCAT('designer-', u.id) AS owner_id FROM users u
+		WHERE u.id=? AND u.user_type='miniprogram' AND COALESCE(u.status,'active')='active'
+		AND EXISTS (SELECT 1 FROM certification_applications ca WHERE ca.user_id=u.id
+			AND ca.type='designer' AND ca.status='approved' AND TRIM(ca.identity_type)='设计师')`, actor, tenant, actor)
 	if err != nil {
 		return scope, tracking.ErrUnavailable
 	}
 	defer rows.Close()
+	seen := make(map[string]bool)
 	for rows.Next() {
 		var owner string
 		if rows.Scan(&owner) != nil {
 			return scope, tracking.ErrUnavailable
 		}
-		if owner != "" {
+		if owner != "" && !seen[owner] {
+			seen[owner] = true
 			scope.Owners = append(scope.Owners, owner)
 		}
 	}

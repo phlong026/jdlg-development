@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,6 +40,10 @@ func TestWorkbenchUsesSignedMiniAuthentication(t *testing.T) {
 }
 
 func newWorkbenchHandlerFixture(t *testing.T, scope *tracking.Scope) (*gin.Engine, *tracking.Service) {
+	return newWorkbenchHandlerFixtureWithProfiles(t, scope, nil)
+}
+
+func newWorkbenchHandlerFixtureWithProfiles(t *testing.T, scope *tracking.Scope, profiles projectNoteProfileResolver) (*gin.Engine, *tracking.Service) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	svc := tracking.New(&governanceTestStore{records: map[string]tracking.Record{}}, tracking.Config{
@@ -47,7 +52,7 @@ func newWorkbenchHandlerFixture(t *testing.T, scope *tracking.Scope) (*gin.Engin
 	})
 	r := gin.New()
 	g := r.Group("/workbench", func(c *gin.Context) { c.Set("workbench.scope", *scope); c.Next() })
-	registerContentWorkbenchHandlers(g, svc)
+	registerContentWorkbenchHandlers(g, svc, profiles, nil)
 	return r, svc
 }
 
@@ -208,6 +213,75 @@ func TestWorkbenchReadinessDoesNotPretendMediaAndURLLinkAreEnabled(t *testing.T)
 	}
 	if strings.Contains(w.Body.String(), privateDir) {
 		t.Fatal("readiness must not expose server storage paths")
+	}
+}
+
+func TestWorkbenchContextSeparatesOwnerIDsFromDisplayNames(t *testing.T) {
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"designer-11", "company"}, Manage: true}
+	r, _ := newWorkbenchHandlerFixtureWithProfiles(t, &scope, func(_ context.Context, ids []int64) (map[int64]model.UserProfilePresentation, error) {
+		if len(ids) != 1 || ids[0] != 11 {
+			t.Fatalf("profile batch = %#v", ids)
+		}
+		return map[int64]model.UserProfilePresentation{11: {UserID: 11, Nickname: " 陈设计师 "}}, nil
+	})
+	w := workbenchRequest(t, r, "GET", "/workbench/context", nil)
+	if w.Code != http.StatusOK {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var result struct {
+		Data struct {
+			Owners       []string               `json:"owners"`
+			OwnerChoices []workbenchOwnerChoice `json:"owner_choices"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(result.Data.Owners, ",") != "designer-11,company" {
+		t.Fatalf("owners = %#v", result.Data.Owners)
+	}
+	if len(result.Data.OwnerChoices) != 2 || result.Data.OwnerChoices[0].OwnerID != "designer-11" || result.Data.OwnerChoices[0].DisplayName != "陈设计师" || result.Data.OwnerChoices[1].OwnerID != "company" || result.Data.OwnerChoices[1].DisplayName != "团队内容空间" {
+		t.Fatalf("owner choices = %#v", result.Data.OwnerChoices)
+	}
+
+	// B19 角色位：自选身份作为展示前缀（设计师·昵称），无身份保持纯昵称
+	roleR, _ := newWorkbenchHandlerFixtureWithProfiles(t, &tracking.Scope{Actor: 11, Manage: true, Owners: []string{"designer-11", "company"}}, func(ctx context.Context, ids []int64) (map[int64]model.UserProfilePresentation, error) {
+		return map[int64]model.UserProfilePresentation{11: {UserID: 11, Nickname: "李销售", IdentityType: "建材商"}}, nil
+	})
+	roleW := workbenchRequest(t, roleR, "GET", "/workbench/context", nil)
+	var roleResult struct {
+		Data struct {
+			OwnerChoices []workbenchOwnerChoice `json:"owner_choices"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(roleW.Body.Bytes(), &roleResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(roleResult.Data.OwnerChoices) == 0 || roleResult.Data.OwnerChoices[0].DisplayName != "建材商·李销售" {
+		t.Fatalf("identity prefix missing: %#v", roleResult.Data.OwnerChoices)
+	}
+}
+
+func TestWorkbenchContextKeepsAuthorizedOwnersWhenProfilesFail(t *testing.T) {
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"designer-11", "company"}, Manage: true}
+	r, _ := newWorkbenchHandlerFixtureWithProfiles(t, &scope, func(context.Context, []int64) (map[int64]model.UserProfilePresentation, error) {
+		return nil, errors.New("profile store unavailable")
+	})
+	w := workbenchRequest(t, r, "GET", "/workbench/context", nil)
+	if w.Code != http.StatusOK {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var result struct {
+		Data struct {
+			Owners       []string               `json:"owners"`
+			OwnerChoices []workbenchOwnerChoice `json:"owner_choices"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(result.Data.Owners, ",") != "designer-11,company" || len(result.Data.OwnerChoices) != 2 || result.Data.OwnerChoices[0].DisplayName != "个人创作空间" || result.Data.OwnerChoices[1].DisplayName != "团队内容空间" {
+		t.Fatalf("degraded context = %s", w.Body.String())
 	}
 }
 

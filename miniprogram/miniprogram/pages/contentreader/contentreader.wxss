@@ -426,3 +426,14 @@ button::after {
   border: 1px solid #d8cbb9;
   border-radius: 8px;
 }
+
+.poster-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.poster-canvas {
+  pointer-events: none;
+}

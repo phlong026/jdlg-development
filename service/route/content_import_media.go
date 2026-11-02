@@ -48,22 +48,47 @@ func saveImportedMedia(ctx context.Context, svc *tracking.Service, scope trackin
 	} else if source.Kind != "image" {
 		return out, &contentimport.ResolveError{Code: "invalid_media"}
 	}
-	data, found, err := readContentMedia(ctx, svc, id, max)
+	return persistImportedMedia(ctx, svc, scope, persistImportedMediaInput{
+		ID: id, Kind: source.Kind, URL: source.URL, Caption: source.Caption,
+		DefaultTitle: "链接导入素材", Max: max, Fetch: fetch,
+		PlatformForFetch: job.Platform, Origin: "import:" + string(job.Platform), Owner: job.Owner,
+	})
+}
+
+type persistImportedMediaInput struct {
+	ID               string
+	Kind             string // image | video
+	URL              string
+	Caption          string
+	DefaultTitle     string
+	Max              int64
+	Fetch            importMediaFetch
+	PlatformForFetch contentimport.Platform
+	Origin           string // media_objects.origin 审计标记
+	Owner            string
+}
+
+// persistImportedMedia 完成"远端 URL → workbench 私有媒体"的通用转存：优先命中已存
+// ID 避免重复下载，类型/尺寸校验后按两阶段（优先）或本地目录落库。链接导入与
+// AI 生成结果转存（B1 直连管线）共用此实现，任何一处校验规则变更两边同时生效。
+func persistImportedMedia(ctx context.Context, svc *tracking.Service, scope tracking.Scope, in persistImportedMediaInput) (tracking.Asset, error) {
+	var out tracking.Asset
+	data, found, err := readContentMedia(ctx, svc, in.ID, in.Max)
 	if err != nil {
 		return out, err
 	}
 	if !found {
-		data, _, err = fetch(ctx, job.Platform, source.URL, max)
+		data, _, err = in.Fetch(ctx, in.PlatformForFetch, in.URL, in.Max)
 		if err != nil {
 			return out, err
 		}
 	}
-	if int64(len(data)) > max || len(data) == 0 {
+	if int64(len(data)) > in.Max || len(data) == 0 {
 		return out, &contentimport.ResolveError{Code: "media_too_large"}
 	}
 	mime := http.DetectContentType(data)
 	width, height := 0, 0
-	if source.Kind == "image" {
+	if in.Kind == "image" {
 		if mime != "image/png" && mime != "image/jpeg" && mime != "image/gif" && mime != "image/webp" {
 			return out, &contentimport.ResolveError{Code: "invalid_media"}
 		}
@@ -81,34 +106,34 @@ func saveImportedMedia(ctx context.Context, svc *tracking.Service, scope trackin
 			return out, &contentimport.ResolveError{Code: "invalid_media"}
 		}
 	}
-	out = tracking.Asset{ID: id, Kind: source.Kind, URL: "/api/v1/miniprogram/tracking/media/" + id, Width: width, Height: height, MIME: mime, Title: clipImportText(source.Caption, 200)}
+	out = tracking.Asset{ID: in.ID, Kind: in.Kind, URL: "/api/v1/miniprogram/tracking/media/" + in.ID, Width: width, Height: height, MIME: mime, Title: clipImportText(in.Caption, 200)}
 	if out.Title == "" {
-		out.Title = "链接导入素材"
+		out.Title = in.DefaultTitle
 	}
 	if svc.MediaObjects != nil {
 		digest := sha256.Sum256(data)
-		operation, _, err := svc.PrepareMediaObject(ctx, scope, out, job.Owner, fmt.Sprintf("%x", digest), "import:"+string(job.Platform))
+		operation, _, err := svc.PrepareMediaObject(ctx, scope, out, in.Owner, fmt.Sprintf("%x", digest), in.Origin)
 		if err != nil {
 			return tracking.Asset{}, err
 		}
-		if err = storeContentMedia(ctx, svc, id, data, mime); err != nil {
+		if err = storeContentMedia(ctx, svc, in.ID, data, mime); err != nil {
 			return tracking.Asset{}, err
 		}
-		return svc.FinalizeMediaObject(ctx, scope, id, operation)
+		return svc.FinalizeMediaObject(ctx, scope, in.ID, operation)
 	}
 	if !found {
-		if err = storeContentMedia(ctx, svc, id, data, mime); err != nil {
+		if err = storeContentMedia(ctx, svc, in.ID, data, mime); err != nil {
 			return tracking.Asset{}, err
 		}
 	}
-	if old, e := svc.Media(ctx, &scope, id); e == nil {
+	if old, e := svc.Media(ctx, &scope, in.ID); e == nil {
 		if old.Kind != out.Kind || old.MIME != out.MIME || old.Width != out.Width || old.Height != out.Height {
 			return tracking.Asset{}, &contentimport.ResolveError{Code: "invalid_stored_media"}
 		}
 		return old, nil
 	}
-	if e := svc.AddMedia(ctx, scope, out, job.Owner); e != nil {
-		old, readErr := svc.Media(ctx, &scope, id)
+	if e := svc.AddMedia(ctx, scope, out, in.Owner); e != nil {
+		old, readErr := svc.Media(ctx, &scope, in.ID)
 		if readErr == nil && old.Kind == out.Kind && old.Width == out.Width && old.Height == out.Height && old.MIME == out.MIME {
 			return old, nil
 		}

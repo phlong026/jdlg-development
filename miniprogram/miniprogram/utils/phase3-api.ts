@@ -33,8 +33,9 @@ function responseError(response, fallback) {
 }
 
 function request(path, method = 'GET', body = {}, query = {}) {
+  const fullPath = path + queryString(query);
   return new Promise((resolve, reject) => wx.request({
-    url: ORIGIN + path + queryString(query), method, data: body, header: authHeaders(path, body), timeout: 10000,
+    url: ORIGIN + fullPath, method, data: body, header: authHeaders(fullPath, body), timeout: 10000,
     success(response) {
       const data = response.data || {};
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
@@ -44,15 +45,27 @@ function request(path, method = 'GET', body = {}, query = {}) {
   }));
 }
 
-function workbenchContext() { return request(WORKBENCH + '/context'); }
+async function workbenchContext() {
+  const context = await request(WORKBENCH + '/context');
+  const owners = context.owners || [];
+  const labels = new Map((context.owner_choices || []).map(item => [item.owner_id, String(item.display_name || '').trim()]));
+  // Keep presentation aligned with authorized IDs, including during a staged server rollout.
+  return Object.assign({}, context, {
+    owner_choices: owners.map((owner_id, index) => ({
+      owner_id,
+      display_name: labels.get(owner_id) || (owners.length === 1 ? '我的内容' : '内容归属 ' + (index + 1)),
+    })),
+  });
+}
 function listContents(query) { return request(WORKBENCH + '/contents', 'GET', {}, query); }
 function getContent(id) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id)); }
-function listWorkbenchMedia() { return request(WORKBENCH + '/media'); }
+function listWorkbenchMedia(query) { return request(WORKBENCH + '/media', 'GET', {}, query); }
 function saveContent(draft, id) { return request(WORKBENCH + '/contents' + (id ? '/' + encodeURIComponent(id) : ''), id ? 'PATCH' : 'POST', draft); }
 function deleteContentDraft(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id), 'DELETE', { expected_revision: Number(revision) }); }
 function previewContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/preview', 'POST', { expected_revision: revision }); }
 function publishContent(id, revision, previewToken, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/publish', 'POST', { expected_revision: revision, preview_token: previewToken, idempotency_key: key }); }
 function revokeContent(id, revision, reason, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/revoke', 'POST', { expected_revision: revision, reason, idempotency_key: key }); }
+function mySharesContext() { return request(MY_SHARES + '/context'); }
 function listMyShares(query) { return request(MY_SHARES, 'GET', {}, query); }
 function listMyShareVisits(id, query) { return request(MY_SHARES + '/' + encodeURIComponent(id) + '/visits', 'GET', {}, query); }
 function importCapabilities() { return request(IMPORTS + '/capabilities'); }
@@ -77,7 +90,13 @@ function getProjectNoteFeedback(id, feedbackID) { return request(projectNotePath
 function getProjectNote(id, noteID) { return request(projectNotePath('/projects/' + encodeURIComponent(id) + '/notes/' + encodeURIComponent(noteID))); }
 function getProjectNoteProject(id) { return request(projectNotePath('/projects/' + encodeURIComponent(id))); }
 function getProjectNoteVersion(projectID, versionID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/versions/' + encodeURIComponent(versionID))); }
-function inviteProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'POST', {}); }
+function createProjectInvitation(projectID, expiresAt, key) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-invitations'), 'POST', { expires_at: expiresAt, idempotency_key: key }); }
+function listProjectInvitations(projectID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-invitations')); }
+function revokeProjectInvitation(projectID, invitationID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-invitations/' + encodeURIComponent(invitationID)), 'DELETE'); }
+function getProjectInvitation(token) { return request(projectNotePath('/member-invitations/' + encodeURIComponent(token))); }
+function applyProjectInvitation(token, key) { return request(projectNotePath('/member-invitations/' + encodeURIComponent(token) + '/apply'), 'POST', { idempotency_key: key }); }
+function listProjectJoinRequests(projectID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-requests')); }
+function approveProjectJoinRequest(projectID, requestID, key) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/member-requests/' + encodeURIComponent(requestID) + '/approve'), 'POST', { idempotency_key: key }); }
 function revokeProjectNoteMember(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/members/' + encodeURIComponent(accountID)), 'DELETE', {}); }
 function setProjectNoteConfirmer(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/confirmer'), 'PUT', { account_id: Number(accountID) }); }
 function createProjectNote(projectID, draft) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/notes'), 'POST', draft); }
@@ -171,12 +190,19 @@ function mutationKey(prefix) {
   return prefix + '-' + Date.now() + '-' + mutationSequence;
 }
 
+// 服务端 Prompt 注册表（B5）：业务措辞可运营调整而无需发版。
+async function writingPrompts() {
+  return request(WORKBENCH + '/writing-prompts');
+}
+
 module.exports = {
-  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, listContents, getContent, listWorkbenchMedia,
-  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, listMyShares, listMyShareVisits,
+  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
+  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
-  getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject, inviteProjectNoteMember, revokeProjectNoteMember,
+  getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject,
+  createProjectInvitation, listProjectInvitations, revokeProjectInvitation, getProjectInvitation, applyProjectInvitation, listProjectJoinRequests, approveProjectJoinRequest,
+  revokeProjectNoteMember,
   setProjectNoteConfirmer, copyProjectNote, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
   addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,

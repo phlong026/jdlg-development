@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <!--pages/phonebind/phonebind.wxml-->
 <view class="page">
   <navigation-bar title="绑定手机号" background="#e6daca" />
@@ -56,3 +57,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -3,6 +3,15 @@ page {
   color: #302316;
 }
 
+/* 统一按钮垂直居中基线：部分按钮类只设了 min-height/padding，
+   依赖原生默认 line-height 会造成文字不居中。 */
+button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
 .studio-page {
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
@@ -31,7 +40,7 @@ button::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(110deg, #ba945e, #a1733d);
+  background: #a87943;
   color: #fff;
   font-size: 30rpx;
   border: 1rpx solid #a87943;
@@ -87,33 +96,33 @@ button::after {
   font-size: 32rpx;
 }
 
-.search-row .new-small {
-  width: 152rpx;
-  flex-shrink: 0;
-  min-height: 82rpx;
-  padding: 0 22rpx;
-  font-size: 26rpx;
-}
-
-.creation-tools {
+.workspace-links {
   display: flex;
-  gap: 14rpx;
-  margin: 30rpx 0 32rpx;
+  margin: 18rpx 0 26rpx;
+  border: 1rpx solid #ebe5dc;
+  border-radius: 12rpx;
+  background: #fff;
+  overflow: hidden;
 }
 
-.creation-tool {
+.workspace-link {
   flex: 1;
-  min-width: 0;
-  min-height: 150rpx;
-  display: flex;
   flex-direction: column;
+  padding: 18rpx 0;
+  min-width: 0;
+  min-height: 82rpx;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16rpx;
-  border: 1rpx solid #e9e5de;
-  border-radius: 14rpx;
-  background: #fff;
-  font-size: 24rpx;
+  gap: 8rpx;
+  border-right: 1rpx solid #ebe5dc;
+  border-radius: 0;
+  color: #6f5135;
+  font-size: 23rpx;
+}
+
+.workspace-link:last-child {
+  border-right: 0;
 }
 
 .category-tabs {
@@ -135,7 +144,7 @@ button::after {
 
 .category-tab.active {
   color: #432b18;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .category-tab.active::after {
@@ -211,18 +220,18 @@ button::after {
   -webkit-box-orient: vertical;
   overflow: hidden;
   font-size: 29rpx;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.5;
 }
 
-.content-meta, .content-date {
+.content-meta, .content-action {
   display: block;
   color: #968d83;
   font-size: 24rpx;
 }
 
-.content-date {
-  color: #aaa198;
+.content-action {
+  color: #91622f;
   font-size: 23rpx;
 }
 
@@ -249,7 +258,7 @@ button::after {
   display: block;
   color: #51402e;
   font-size: 30rpx;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .muted {
@@ -298,35 +307,6 @@ button::after {
   line-height: 1.6;
 }
 
-.existing-assets {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin: 44rpx 0 24rpx;
-}
-
-.existing-assets .text-button {
-  width: auto;
-  max-width: 580rpx;
-  flex: 0 1 auto;
-}
-
-.divider-line {
-  flex: 1;
-  height: 1rpx;
-  background: #e7e0d5;
-}
-
-.studio-body .visits-entry {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  padding: 26rpx 0;
-  border-top: 1rpx solid #ebe5dc;
-  font-size: 26rpx;
-}
-
 .studio-footer .gold-button {
   width: 100%;
 }
@@ -345,7 +325,7 @@ button::after {
 .import-heading {
   display: block;
   font-size: 28rpx;
-  font-weight: 600;
+  font-weight: 400;
   margin: 12rpx 0 26rpx;
 }
 
@@ -378,69 +358,19 @@ button::after {
   padding: 8rpx;
 }
 
-.platforms {
+.available-platforms {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
-  margin: 28rpx 0;
+  margin: 18rpx 0 8rpx;
 }
 
-.platform {
-  flex: 1;
-  min-width: 120rpx;
+.available-platforms text {
   border: 1rpx solid #e4ddd3;
-  background: #fff;
-  border-radius: 12rpx;
-  padding: 16rpx 10rpx;
-}
-
-.platform.available {
-  border-color: #c6aa83;
-}
-
-.platform-heading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-  font-size: 23rpx;
-  white-space: nowrap;
-}
-
-.platform-symbol {
-  width: 38rpx;
-  height: 38rpx;
-  background: #38332d;
-  border-radius: 10rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
+  border-radius: 8rpx;
+  padding: 8rpx 14rpx;
+  color: #837361;
   font-size: 21rpx;
-}
-
-.wechat_article {
-  background: #1fb765;
-}
-
-.xiaohongshu {
-  background: #fa3653;
-}
-
-.channels {
-  background: #ce984f;
-}
-
-.platform-state {
-  display: block;
-  text-align: center;
-  font-size: 20rpx;
-  color: #988977;
-  margin-top: 10rpx;
-}
-
-.unavailable {
-  opacity: 0.65;
 }
 
 .import-options {
@@ -489,15 +419,6 @@ button::after {
   width: 100%;
 }
 
-.import-caption {
-  display: block;
-  font-size: 23rpx;
-  color: #a0968a;
-  text-align: center;
-  line-height: 1.7;
-  margin: 20rpx 12rpx 42rpx;
-}
-
 .import-gate, .inline-error {
   border-radius: 10rpx;
   background: #fbf0e5;
@@ -515,7 +436,7 @@ button::after {
   border-top: 1rpx solid #e9e1d6;
   padding-top: 28rpx;
   font-size: 29rpx;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .import-row {
@@ -572,4 +493,98 @@ button::after {
 
 .compact {
   padding: 40rpx 20rpx;
+}
+
+.content-row-actions { display: flex; align-items: center; justify-content: space-between; }
+.edit-link { padding: 12rpx 16rpx; color: #8d6238; font-size: 24rpx; }
+
+.workspace-tabs { display: flex; align-items: center; gap: 32rpx; margin-bottom: 24rpx; }
+.workspace-tab { flex: 1; width: 0; min-width: 0; text-align: center; white-space: nowrap; padding: 14rpx 0; font-size: 30rpx; color: #73604e; border-radius: 0; }
+.workspace-tab.selected { color: #302316; font-weight: 600; border-bottom: 4rpx solid #a87943; }
+
+.onboarding-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 26rpx;
+  text-align: left;
+}
+
+.onboarding-card {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 22rpx 24rpx;
+  border: 1rpx solid #eee8e1;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 999rpx;
+  background: #f1e4d2;
+  color: #8b5c2d;
+  font-size: 26rpx;
+}
+
+.onboarding-texts {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.onboarding-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2b211b;
+}
+
+.onboarding-desc {
+  font-size: 23rpx;
+  color: #817568;
+}
+
+.quota-strip {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 0 4rpx 12rpx;
+  color: #817568;
+  font-size: 23rpx;
+}
+
+.quota-divider {
+  color: #c9b597;
+}
+
+.owner-tabs {
+  display: flex;
+  gap: 12rpx;
+  margin: 0 4rpx 14rpx;
+  overflow-x: auto;
+}
+
+.owner-tab {
+  flex: 0 0 auto;
+  min-height: 60rpx;
+  margin: 0;
+  padding: 0 24rpx;
+  border: 1rpx solid #eee8e1;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #65584e;
+  font-size: 24rpx;
+}
+
+.owner-tab.active {
+  border-color: #a87943;
+  background: #f1e4d2;
+  color: #8b5c2d;
 }

@@ -13,6 +13,10 @@ const API_BASE_URL = 'https://api.jiadilingguang.com';
 const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day:';
 
 Component({
+  properties: {
+    // 登录入口复用当前场景，仅将资料表单放入原来的底部卡片。
+    embedded: { type: Boolean, value: false },
+  },
   data: {
     visible: false,
     required: false,
@@ -117,7 +121,7 @@ Component({
       const headers = this.buildAuthHeaders(path);
       if (!headers) throw new Error('请重新登录');
       const res: any = await new Promise((resolve, reject) => {
-        wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+        wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true } as any);
       });
       this.assertCurrentAccount(token, userID);
       if (res.statusCode === 401 || res.data?.code === 401) this.triggerEvent('authrequired');
@@ -208,11 +212,11 @@ Component({
           timeout: 15000,
           success: (res: any) => {
             try { this.assertCurrentAccount(token, userID); } catch (error) { reject(error); return; }
-            if (res.statusCode === 200 && res.data.code === 0) {
+            if (res?.statusCode === 200 && res.data?.code === 0) {
               resolve();
               return;
             }
-            if (res.statusCode === 401 || res.data?.code === 401) this.triggerEvent('authrequired');
+            if (res?.statusCode === 401 || res?.data?.code === 401) this.triggerEvent('authrequired');
             reject(new Error(res.data?.msg || '头像保存失败'));
           },
           fail: (err: any) => reject(err),

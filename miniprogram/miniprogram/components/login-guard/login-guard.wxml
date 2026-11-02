@@ -1,24 +1,39 @@
-<view wx:if="{{visible}}" class="login-guard-blocker" catchtouchmove="stopPropagation" catchtap="stopPropagation"></view>
-<view wx:if="{{visible && !completingProfile}}" class="login-guard-mask" catchtouchmove="true" catchtap="stopPropagation">
-  <view class="login-guard">
-    <text class="lg-title">{{title}}</text>
-    <text class="lg-desc">{{desc}}</text>
-
-    <text wx:if="{{checking}}" class="lg-desc">正在确认登录与个人资料…</text>
-    <text wx:if="{{error}}" class="lg-error">{{error}}</text>
-    <button wx:if="{{!checking && !needsLogin}}" class="lg-login" bindtap="onRetry">重新检查资料</button>
-    <button wx:if="{{!checking && needsLogin}}" class="lg-login" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
-      {{loggingIn ? '登录中...' : '微信一键登录'}}
-    </button>
-
-    <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
-      <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
-        <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>
+<import src="/templates/auth-welcome.wxml" />
+<scroll-view hidden="{{!visible && !checking && !loggingIn && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
+  <template is="auth-backdrop" />
+  <view class="aw-content">
+    <template is="auth-intro" data="{{motto: '乡村住宅AI设计与协作平台', headline: '建别墅'}}" />
+    <view wx:if="{{checking}}" class="login-guard aw-card lg-checking" catchtap="stopPropagation">
+      <view class="lg-spinner"></view>
+      <text class="lg-title">正在核验登录资料</text>
+      <text class="lg-sub">请稍候</text>
+    </view>
+    <view wx:elif="{{!completingProfile}}" class="login-guard aw-card" catchtap="stopPropagation">
+      <text class="lg-title">{{needsLogin ? '免费开启您的理想家' : '重新连接，继续发现好设计'}}</text>
+      <text class="lg-sub">海量乡墅案例 · AI设计体验 · 建房造价测算</text>
+      <text wx:if="{{error}}" class="lg-error">{{error}}</text>
+      <button wx:if="{{!checking && needsLogin}}" class="lg-login {{loggingIn ? 'lg-login-disabled' : ''}}" loading="{{loggingIn}}" disabled="{{loggingIn}}" bindtap="onWxLogin">
+        <view class="lg-login-inner">
+          <image class="lg-wx-icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCAzNiI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xNiAzQzguMyAzIDIgOCAyIDE0LjJjMCAzLjYgMi4yIDYuOCA1LjcgOC45bC0xLjQgNC4zIDUtMi41YzEuNS40IDMuMS42IDQuNy42aDEuMWExMC42IDEwLjYgMCAwIDEtMS42LTUuNWMwLTYgNS42LTEwLjggMTIuNS0xMC44aC41QzI2LjIgNS41IDIxLjUgMyAxNiAzWiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNMzggMjBjMC01LTQuNi05LTEwLjMtOXMtMTAuMyA0LTEwLjMgOSA0LjYgOSAxMC4zIDljMS4yIDAgMi40LS4yIDMuNS0uNWw0IDItMS0zLjRDMzYuNSAyNS41IDM4IDIyLjkgMzggMjBaIi8+PGcgZmlsbD0iI2FkODY0ZiI+PGNpcmNsZSBjeD0iMTEiIGN5PSIxMiIgcj0iMS41Ii8+PGNpcmNsZSBjeD0iMjAiIGN5PSIxMiIgcj0iMS41Ii8+PGNpcmNsZSBjeD0iMjQiIGN5PSIxOCIgcj0iMS4zIi8+PGNpcmNsZSBjeD0iMzIiIGN5PSIxOCIgcj0iMS4zIi8+PC9nPjwvc3ZnPg==" mode="aspectFit" />
+          <text>{{loggingIn ? '登录中...' : '微信一键登录'}}</text>
+        </view>
+      </button>
+      <button wx:if="{{!checking && !needsLogin}}" class="lg-login lg-login-plain" bindtap="onRetry">重新检查资料</button>
+      <template is="auth-avatars" data="{{communityCopy: '一起开启理想家的设计之旅'}}" />
+      <view wx:if="{{needsLogin && !checking}}" class="lg-agreement">
+        <view class="lg-check {{agreedPrivacy ? 'lg-check-on' : ''}}" catchtap="onTogglePrivacy" catchtouchmove="true">
+          <text wx:if="{{agreedPrivacy}}" class="lg-check-mark">✓</text>
+        </view>
+        <text class="lg-agreement-text">我已阅读并同意</text>
+        <text class="lg-link" catchtap="onOpenPrivacy">《用户协议与隐私政策》</text>
       </view>
-      <text class="lg-agreement-text">我已阅读并同意</text>
-      <text class="lg-link" catchtap="onOpenPrivacy">《用户协议与隐私政策》</text>
+    </view>
+    <view class="lg-profile-card" hidden="{{!completingProfile}}">
+      <view class="lg-profile-head">
+        <text class="lg-title">补充头像和昵称后继续</text>
+        <text class="lg-sub">账号仍在登录状态，完善资料即可返回当前页面继续使用</text>
+      </view>
+      <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />
     </view>
   </view>
-</view>
-
-<nickname-guard id="nicknameGuard" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />
+</scroll-view>

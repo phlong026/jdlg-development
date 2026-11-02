@@ -1,0 +1,24 @@
+<!-- 装饰素材仅用于欢迎场景，不代表真实用户数据。 -->
+<template name="auth-backdrop">
+  <view class="aw-backdrop" aria-hidden="true">
+    <image class="aw-courtyard" src="/assets/welcome/courtyard.jpg" mode="aspectFill" />
+    <view class="aw-wash"></view>
+  </view>
+</template>
+
+<template name="auth-intro">
+  <view class="aw-intro">
+    <image class="aw-brand-logo" src="/assets/welcome/brand-logo.png" mode="aspectFit" aria-label="甲第灵光 ArchLight" />
+    <text class="aw-motto">{{motto || '让乡墅业主都会用，让设计师喜欢用'}}</text>
+    <view class="aw-rule"></view>
+    <text class="aw-headline">{{headline || '建房别墅'}}{{'\n'}}从这里开始</text>
+    <text class="aw-services">测造价 · 选户型 · 看效果 · 找设计师</text>
+  </view>
+</template>
+
+<template name="auth-avatars">
+  <view class="aw-community">
+    <image class="aw-avatars" src="/assets/welcome/avatar-examples.png" mode="aspectFit" aria-hidden="true" />
+    <text class="aw-community-copy">{{communityCopy || '一起发现理想的家'}}</text>
+  </view>
+</template>

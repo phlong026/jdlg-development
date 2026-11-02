@@ -1,0 +1,43 @@
+<block wx:if="{{__profileAccessMounted}}">
+<navigation-bar title="项目资料" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" />
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载…</view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>请登录受邀账号后查看</text><button class="primary" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button></view>
+
+  <block wx:elif="{{pageView === 'directory' && directory}}">
+    <view class="header"><text class="eyebrow">受邀可见</text><text class="title">{{directory.project.name}}</text><text class="meta">{{directory.items.length}} 个方案</text></view>
+    <view class="card directory">
+      <button wx:for="{{directory.items}}" wx:key="version_id" class="version-row" data-id="{{item.version_id}}" bindtap="openVersion">
+        <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">第 {{item.revision}} 版</text></view><text class="arrow">›</text>
+      </button>
+    </view>
+  </block>
+
+  <block wx:elif="{{pageView === 'version' && versionView}}">
+    <view class="header"><text class="eyebrow">{{directory.project.name}}</text><text class="title">{{versionView.version.title}}</text><text class="meta">固定版本 V{{versionView.version.revision}}</text></view>
+    <view class="paper">
+      <block wx:if="{{versionView.version.body_format === 'article_v2'}}"><block wx:for="{{articleBlocks}}" wx:key="key">
+        <rich-text wx:if="{{item.kind === 'layout'}}" nodes="{{item.html}}" selectable="{{true}}" />
+        <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+        <view wx:elif="{{item.kind === 'list'}}"><view wx:for="{{item.items}}" wx:for-item="line" wx:key="*this">{{item.ordered ? index + 1 + '.' : '•'}} {{line}}</view></view>
+        <view wx:else class="media"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" /></view>
+      </block></block>
+      <rich-text wx:elif="{{versionView.version.body_format === 'rich_text'}}" nodes="{{versionView.version.body}}" selectable="{{true}}" />
+      <text wx:else class="plain" selectable="{{true}}">{{versionView.version.body}}</text>
+      <view wx:if="{{versionView.version.body_format !== 'article_v2'}}" wx:for="{{media}}" wx:key="media_id" class="media"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" /></view>
+    </view>
+    <view class="card action-row"><button class="secondary" bindtap="acknowledgeRead" disabled="{{busy || readAcknowledged}}">{{readAcknowledged ? '已发送回执' : '发送阅读回执'}}</button><button wx:for="{{media}}" wx:key="media_id" wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveImage">保存原图</button></view>
+    <view class="card">
+      <text class="section-title">反馈</text>
+      <view wx:for="{{versionView.feedbacks}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction}}" class="rating">{{item.satisfaction === 'very_satisfied' ? '非常满意' : item.satisfaction === 'needs_adjustment' ? '需要调整' : '不太满意'}}</text><text>{{item.text}}</text></view>
+      <radio-group class="ratings" bindchange="setSatisfaction"><label><radio value="very_satisfied" color="#9f7140" />满意</label><label><radio value="needs_adjustment" color="#9f7140" />需要调整</label><label><radio value="unsatisfied" color="#9f7140" />不满意</label></radio-group>
+      <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" placeholder="写下修改意见" />
+      <button class="secondary" bindtap="submitFeedback" disabled="{{busy || !feedbackText}}">提交反馈</button>
+    </view>
+    <view wx:if="{{versionView.can_confirm || confirmed}}" class="card"><text class="section-title">版本确认</text><button class="primary" bindtap="confirmVersion" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
+  </block>
+  <view wx:if="{{notice}}" class="notice">{{notice}}</view>
+</view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

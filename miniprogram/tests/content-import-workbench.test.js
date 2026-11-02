@@ -163,11 +163,57 @@ test('uncertain tasks never retry while safe retry and ready draft actions remai
 });
 
 test('disabled import capability leaves normal content workbench usable and explains the gate', async () => {
-  const { page } = harness(baseAPI({ importCapabilities: async () => ({ enabled: false, reason: '链接导入暂未开通', platforms: [] }) }));
+  let listCalls = 0;
+  const runtime = harness(baseAPI({
+    importCapabilities: async () => ({ enabled: false, reason: '链接导入暂未开通', platforms: [] }),
+    listImports: async () => { listCalls += 1; throw Object.assign(new Error('内容导入服务暂不可用'), { statusCode: 503 }); },
+  }));
+  const { page } = runtime;
   page.onShow(); await tick(); await tick();
   assert.equal(page.data.disabled, false);
   assert.equal(page.data.importEnabled, false);
+  assert.equal(page.data.importServiceEnabled, false);
   assert.equal(page.data.importCapabilityReason, '链接导入暂未开通');
+  assert.equal(listCalls, 0);
+  assert.equal(runtime.timers.some(timer => !timer.cleared), false);
+  await page.refreshImportList();
+  assert.equal(listCalls, 0);
+  const template = fs.readFileSync(path.join(root, 'pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  assert.match(template, /wx:if="\{\{importServiceEnabled\}\}"[^>]*class="recent-imports"/);
+  assert.match(template, /wx:if="\{\{!importEnabled\}\}"[^>]*class="import-gate"/);
+  assert.match(template, /wx:else[^>]*class="import-editor"/);
+});
+
+test('repeated platform reasons collapse into one short import gate', async () => {
+  const runtime = harness(baseAPI({
+    importCapabilities: async () => ({
+      enabled: true,
+      platforms: ['wechat_article', 'xiaohongshu', 'channels', 'douyin'].map(platform => ({ platform, available: false, reason: '该平台导入服务尚未开通' })),
+    }),
+  }));
+  runtime.page.onShow(); await tick(); await tick();
+  assert.equal(runtime.page.data.importCapabilityReason, '该平台导入服务尚未开通');
+});
+
+test('capability failure uses one short gate instead of a second inline error', async () => {
+  const runtime = harness(baseAPI({
+    importCapabilities: async () => { throw new Error('导入能力加载失败'); },
+  }));
+  runtime.page.onShow(); await tick(); await tick();
+  assert.equal(runtime.page.data.importCapabilityReason, '链接导入能力暂不可用');
+  assert.equal(runtime.page.data.importError, '');
+});
+
+test('temporary import list failure keeps the existing retry polling behavior', async () => {
+  let listCalls = 0;
+  const runtime = harness(baseAPI({
+    listImports: async () => { listCalls += 1; throw Object.assign(new Error('导入服务暂时繁忙'), { statusCode: 503 }); },
+  }));
+  runtime.page.onShow(); await tick(); await tick();
+  assert.equal(runtime.page.data.importServiceEnabled, true);
+  assert.equal(listCalls, 1);
+  assert.equal(runtime.page.data.importError, '导入服务暂时繁忙');
+  assert.equal(runtime.timers.some(timer => !timer.cleared), true);
 });
 
 test('import form names the tracking owner as content ownership rather than a business project', () => {
@@ -220,7 +266,7 @@ test('retry patches returned queued task and keeps polling during an older list 
  let finishList;
  const runtime=harness(baseAPI({listImports:()=>new Promise(resolve=>{finishList=resolve;}),retryImport:async()=>({import_id:'job-retry',owner_id:'owner-a',status:'queued',can_retry:false})}));
  const page=runtime.page;page._visible=true;page._token='account-a';page._epoch=1;
- page.setData({imports:[{import_id:'job-retry',status:'failed',can_retry:true}]});
+ page.setData({importServiceEnabled:true,imports:[{import_id:'job-retry',status:'failed',can_retry:true}]});
  const inflight=page.refreshImports(1);await tick();
  await page.retryImport({currentTarget:{dataset:{id:'job-retry'}}});
  assert.equal(page.data.imports[0].status,'queued');

@@ -4,10 +4,12 @@ const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
 
 const blankProtected = () => ({
+  pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false,
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
-  projects: [], owners: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
-  members: [], activeMembers: [], confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '', memberAccount: '',
+  projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
+  members: [], activeMembers: [], joinRequests: [], memberInvitations: [], requestsLoading: false, confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '',
+  memberInvitation: null, memberInvitationPath: '',
   note: null, noteTitle: '', noteBody: '', bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
@@ -16,6 +18,13 @@ const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
 const assetOf = item => item && item.asset ? item.asset : item;
 const activeMembers = members => (members || []).filter(item => item && item.active !== false);
+const memberLabel = member => String(member && member.display_name || '').trim() || '项目成员';
+const invitationLabel = item => {
+  const date = new Date(item && item.expires_at || '');
+  if (Number.isNaN(date.getTime())) return '有效中';
+  const pad = value => String(value).padStart(2, '0');
+  return `有效至 ${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 const statusLabels = { initial: '初步方案', revising: '修改中', confirmed: '已确认' };
 const satisfactionLabels = { very_satisfied: '非常满意', needs_adjustment: '基本满意，需要调整', unsatisfied: '不太满意' };
 const projectForm = project => ({ name: project.name || '', location: project.location || '', building_area: project.building_area || '', floors: project.floors || '', style: project.style || '' });
@@ -28,13 +37,15 @@ Page({
     this._targetProjectID = String(options && options.project_id || '');
     this._targetVersionID = String(options && options.version_id || '');
     this._targetFeedbackID = String(options && options.feedback_id || '');
+    this._targetView = String(options && options.view || '') === 'members' ? 'members' : '';
+    this._returnToPackage = this._targetView === 'members' && String(options && options.return_to || '') === 'package';
   },
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this._token = token; this._epoch = (this._epoch || 0) + 1;
-      this._loaded = false; this._writingLaunch = null; this._selectedNoteID = ''; this._newNote = false; this._resolutionAttempt = null; this._issuedShare = null; this._shareAttempt = null; this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
+      this._loaded = false; this._writingLaunch = null; this._selectedNoteID = ''; this._newNote = false; this._resolutionAttempt = null; this._issuedShare = null; this._shareAttempt = null; this._invitationAttempt = null; this._approvalAttempts = new Map(); this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
     }
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
@@ -48,7 +59,7 @@ Page({
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   clearProtected() {
-    this._noteFormBaseline = null; this._projectFormBaseline = null;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -56,7 +67,10 @@ Page({
     return JSON.stringify({ project_id: this.data.selectedProject && this.data.selectedProject.project_id || '', note_id: this.data.note && this.data.note.note_id || '', new_note: !!this._newNote, draft: this.noteDraft() });
   },
   projectFormSignature() { return JSON.stringify(this.data.projectEdit || {}); },
-  rememberLoadedForms() { this._noteFormBaseline = this.noteFormSignature(); this._projectFormBaseline = this.projectFormSignature(); },
+  rememberLoadedForms() {
+    this._noteFormBaseline = this.noteFormSignature(); this._projectFormBaseline = this.projectFormSignature();
+    this._loadedFormState = { projectEdit: Object.assign({}, this.data.projectEdit), noteTitle: this.data.noteTitle, noteBody: this.data.noteBody, noteMedia: (this.data.noteMedia || []).map(item => Object.assign({}, item)) };
+  },
   hasUnsavedChanges() {
     return this._noteFormBaseline != null && this._noteFormBaseline !== this.noteFormSignature()
       || this._projectFormBaseline != null && this._projectFormBaseline !== this.projectFormSignature();
@@ -67,10 +81,71 @@ Page({
     return new Promise(resolve => wx.showModal({ title: '放弃未保存的修改？', content: '切换后，当前尚未保存的项目或笔记内容将丢失。', confirmText: '放弃修改', confirmColor: '#a33b31', success: result => resolve(result.confirm === true), fail: () => resolve(false) }));
   },
 
+  restoreLoadedForms() {
+    const state = this._loadedFormState;
+    if (state) this.setData({ projectEdit: Object.assign({}, state.projectEdit), noteTitle: state.noteTitle, noteBody: state.noteBody, noteMedia: state.noteMedia.map(item => Object.assign({}, item)) });
+  },
+
+  async handleBack() {
+    if (this.data.busy) return;
+    if (this.data.pageView === 'list') { wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/my/my' }) }); return; }
+    if (this.data.pageView === 'create') {
+      const epoch = this._epoch, view = this.data.pageView;
+      if (!await this.confirmDiscardChanges(!!this.data.projectName)
+        || !this.current(epoch) || this.data.pageView !== view || this.data.busy) return;
+      this.setData({ pageView: 'list', navigationTitle: '我的项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' });
+      return;
+    }
+    if (this.data.pageView === 'members' && this._returnToPackage) {
+      wx.navigateBack({ fail: () => this.setData({ pageView: 'detail', navigationTitle: '项目详情', error: '', notice: '' }) });
+      return;
+    }
+    const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
+    const unchanged = () => this.current(epoch) && this.data.selectedProject === project && this.data.pageView === view && !this.data.busy;
+    if (this.data.pageView !== 'detail') {
+      if (!await this.confirmDiscardChanges() || !unchanged()) return;
+      this.restoreLoadedForms();
+      this.setData({ pageView: 'detail', navigationTitle: '项目详情', projectSettingsOpen: false, error: '', notice: '' });
+      return;
+    }
+    if (!await this.confirmDiscardChanges() || !unchanged()) return;
+    const kept = { projects: this.data.projects, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    this._selectedProjectID = ''; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
+    this.setData(Object.assign(blankProtected(), kept));
+  },
+
+  openProjectSettings() { this.setData({ projectSettingsOpen: true }); },
+  openProjectCreation() {
+    if (this.data.busy) return;
+    this.setData({ pageView: 'create', navigationTitle: '新建项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' });
+  },
+  async closeProjectSettings() {
+    if (this.data.busy) return;
+    const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
+    const changed = this._projectFormBaseline != null && this._projectFormBaseline !== this.projectFormSignature();
+    if (!await this.confirmDiscardChanges(changed) || !this.current(epoch) || this.data.selectedProject !== project || this.data.pageView !== view || this.data.busy) return;
+    this.restoreLoadedForms(); this.setData({ projectSettingsOpen: false });
+  },
+  openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false }); return this.loadJoinRequests(); },
+  openHistory() { this.setData({ pageView: 'history', navigationTitle: '项目记录', projectSettingsOpen: false }); if (!this.data.historyLoaded) return this.loadHistory(); },
+  openProjectPackage() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.busy) return;
+    wx.navigateTo({ url: '/pages/projectpackage/projectpackage?project_id=' + encodeURIComponent(project.project_id) });
+  },
+  openNote(event) {
+    const id = String(event.currentTarget.dataset.id || ''), index = this.data.notes.findIndex(item => item.note_id === id);
+    if (index >= 0) return this.selectNote({ detail: { value: index } });
+  },
+
   async revalidateProjectAccess() {
     const epoch = this._epoch = (this._epoch || 0) + 1;
     const project = this.data.selectedProject;
-    this.setData({ loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
+    // 已加载过的页面静默重验：返回本页时不再整页切到"正在加载…"造成闪屏。
+    this.setData(this._loaded
+      ? { loginRequired: false, accessRecheckRequired: false, error: '', notice: '' }
+      : { loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
     try {
       if (project) await api.getProjectNoteProject(project.project_id); else await api.workbenchContext();
       if (!this.current(epoch)) return;
@@ -106,10 +181,15 @@ Page({
       const [projects, context] = await Promise.all([this.fetchAllProjects(), api.workbenchContext()]);
       if (!this.current(epoch)) return;
       const owners = context.owners || [];
+      const choices = Array.isArray(context.owner_choices) ? context.owner_choices : [];
+      const ownerChoices = owners.map((ownerID, index) => {
+        const choice = choices.find(item => item && item.owner_id === ownerID);
+        return { owner_id: ownerID, display_name: choice && choice.display_name || (owners.length === 1 ? '当前账号' : `项目归属 ${index + 1}`) };
+      });
       this._loaded = true;
-      this.setData({ projects, owners, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
+      this.setData({ projects, owners, ownerChoices, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
       const selectedID = this._targetProjectID || this._selectedProjectID;
-      if (selectedID) { this._targetProjectID = ''; await this.openProject(selectedID, epoch); }
+      if (selectedID) { this._targetProjectID = ''; if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
     } catch (error) {
       if (!this.current(epoch)) return;
       this.clearProtected();
@@ -118,8 +198,7 @@ Page({
   },
 
   setProjectName(event) { this.setData({ projectName: value(event) }); },
-  setOwnerID(event) { const index = Number(event.detail.value) || 0; this.setData({ ownerIndex: index, ownerID: this.data.owners[index] || '' }); },
-  setMemberAccount(event) { this.setData({ memberAccount: value(event) }); },
+  setOwnerID(event) { const index = Number(event.detail.value) || 0, choice = this.data.ownerChoices[index]; this.setData({ ownerIndex: index, ownerID: choice && choice.owner_id || this.data.owners[index] || '' }); },
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
   setNoteTitle(event) { this.setData({ noteTitle: value(event) }); },
   setNoteBody(event) { if (!this.data.bodyReadOnly) this.setData({ noteBody: String(event.detail && event.detail.value || '') }); },
@@ -157,7 +236,7 @@ Page({
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const project = await api.createProjectNoteProject({ name: this.data.projectName, owner_id: this.data.ownerID });
-      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建，可邀请业主并建立笔记。'); }
+      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },
   async selectProject(event) { if (this.data.busy || !await this.confirmDiscardChanges()) return; this._selectedNoteID = ''; this._newNote = false; this._targetVersionID = ''; this._selectedVersionID = ''; return this.openProject(String(event.currentTarget.dataset.id || ''), this._epoch); },
@@ -165,8 +244,10 @@ Page({
     if (!projectID) return;
     const request = this._projectRequest = (this._projectRequest || 0) + 1;
     const requested = this._targetVersionID || this._selectedVersionID || '';
+    const requestedView = this._nextPageView || (requested ? 'version' : ['editor', 'members', 'history'].includes(this.data.pageView) ? this.data.pageView : 'detail');
+    this._nextPageView = '';
     this._selectedProjectID = projectID; this._selectedVersionID = requested; this._targetVersionID = '';
-    const kept = { projects: this.data.projects, owners: this.data.owners, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    const kept = { projects: this.data.projects, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this.setData(Object.assign(blankProtected(), kept, { busy: true, error: '', notice: notice || '' }));
     try {
       const result = await api.getProjectNoteProject(projectID);
@@ -190,7 +271,10 @@ Page({
         result.feedbacks = [...(result.feedbacks || []), feedback];
       }
       const presentation = fixed ? await this.fixedVersionPresentation(projectID, fixed, epoch, request) : null;
-      if (this.current(epoch) && request === this._projectRequest) this.applyProjectDetail(result, notice, fixed, presentation);
+      if (this.current(epoch) && request === this._projectRequest) {
+        this.applyProjectDetail(result, notice, fixed, presentation, requestedView);
+        if (requestedView === 'members') await this.loadJoinRequests();
+      }
     } catch (_) {
       if (!this.current(epoch) || request !== this._projectRequest) return;
       this.clearProtected(); this.setData(Object.assign({}, kept, { error: requested ? '目标固定版本暂不可访问，未切换到其他版本。' : '私人项目暂不可访问。', busy: false }));
@@ -216,7 +300,7 @@ Page({
     const blocks = fixed.body_format === 'article_v2' ? renderArticleDocument(fixed.body, media, Math.max(240, windowInfo.windowWidth - 40), 'fixed-note') : [];
     return { media, blocks };
   },
-  applyProjectDetail(result, notice, fixed, presentation) {
+  applyProjectDetail(result, notice, fixed, presentation, requestedView) {
     const project = result.project || result, notes = result.notes || [], versions = result.versions || [], shares = result.shares || [];
     const requested = this._selectedVersionID || this._targetVersionID;
     if (fixed) { this._selectedNoteID = fixed.note_id; this._newNote = false; }
@@ -235,12 +319,15 @@ Page({
     let share = targetID && result.active_share && result.active_share.version_id === targetID ? result.active_share : targetID ? shares.find(item => !item.revoked && item.version_id === targetID) || null : null;
     if (share && this._issuedShare && this._issuedShare.share_token && share.share_id === this._issuedShare.share_id) share = Object.assign({}, share, { share_token: this._issuedShare.share_token });
     const members = result.members || [], available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
-    const confirmerChoices = [{ actor_id: '', label: '请选择受邀账号' }, ...available.map(item => Object.assign({}, item, { label: '账号 ' + item.actor_id }))];
+    const confirmerChoices = [{ actor_id: '', label: '选择确认人' }, ...available.map(item => Object.assign({}, item, { label: memberLabel(item) }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
     const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
+    const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
+    const navigationTitles = { detail: '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this._loaded = true;
     this.setData({
+      pageView, navigationTitle: navigationTitles[pageView] || project.name || '项目详情', projectSettingsOpen: false,
       selectedProject: project, projectEdit: projectForm(project), projectStatusLabel: statusLabels[project.status] || '初步方案', notes, noteIndex: Math.max(0, notes.findIndex(item => item.note_id === noteID)), versionChoices, members, activeMembers: available, confirmerChoices,
       confirmerIndex: foundIndex < 0 ? 0 : foundIndex + 1, confirmerAccount: foundIndex < 0 ? '' : available[foundIndex].actor_id,
       note, noteTitle: note && note.title || '', noteBody: note && note.body || '', bodyReadOnly,
@@ -286,8 +373,8 @@ Page({
     const item = this.data.historyItems[Number(event.currentTarget.dataset.index)];
     if (!item || this.data.busy || !await this.confirmDiscardChanges()) return;
     this._targetFeedbackID = this.data.historyType === 'feedbacks' ? item.feedback_id : '';
-    if (this.data.historyType === 'notes') { this._selectedNoteID = item.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = ''; }
-    else if (item.version_id) this._selectedVersionID = item.version_id;
+    if (this.data.historyType === 'notes') { this._selectedNoteID = item.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = ''; this._nextPageView = 'editor'; }
+    else if (item.version_id) { this._selectedVersionID = item.version_id; this._nextPageView = 'version'; }
     else return;
     await this.refreshProject();
   },
@@ -296,19 +383,20 @@ Page({
     const note = this.data.notes[Number(event.detail.value)]; if (!note) return;
     if (!await this.confirmDiscardChanges()) return;
     this._targetFeedbackID = ''; this._selectedNoteID = note.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = '';
+    this._nextPageView = 'editor';
     return this.refreshProject();
   },
   async selectVersion(event) {
     const id = String(event.currentTarget.dataset.id || '');
     if (this.data.busy || !this.data.versionChoices.some(item => item.version_id === id)) return;
     if (!await this.confirmDiscardChanges()) return;
-    this._targetFeedbackID = ''; this._selectedVersionID = id;
+    this._targetFeedbackID = ''; this._selectedVersionID = id; this._nextPageView = 'version';
     return this.refreshProject();
   },
   async startNewNote() {
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
     this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null;
-    this.setData({ note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, frozenVersion: null, versionChoices: [], activeShare: null, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this._noteFormBaseline = this.noteFormSignature(); });
+    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, frozenVersion: null, versionChoices: [], activeShare: null, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this._noteFormBaseline = this.noteFormSignature(); });
   },
   selectFeedback(event) {
     const feedback = this.data.feedbacks.find(item => item.feedback_id === String(event.currentTarget.dataset.id || ''));
@@ -317,7 +405,7 @@ Page({
     this.setData({ selectedFeedback: feedback, feedbackID: feedback.feedback_id, feedbackReply: feedback.resolution_reply || '' });
   },
   async refreshProject(notice) { const project = this.data.selectedProject; if (project) await this.openProject(project.project_id, this._epoch, notice); },
-  async returnToDraft() { const project = this.data.selectedProject; if (!project || this.data.busy || !await this.confirmDiscardChanges()) return; this._targetVersionID = ''; this._selectedVersionID = ''; await this.openProject(project.project_id, this._epoch); },
+  async returnToDraft() { const project = this.data.selectedProject; if (!project || this.data.busy || !await this.confirmDiscardChanges()) return; this._targetVersionID = ''; this._selectedVersionID = ''; this._nextPageView = 'editor'; await this.openProject(project.project_id, this._epoch); },
   async exportProjectNoteWord() {
     const project = this.data.selectedProject, version = this.data.frozenVersion;
     if (!project || !version || this.data.busy) return;
@@ -332,17 +420,86 @@ Page({
     } catch (error) { if (selected()) this.setData({ busy: false, error: error.message || 'Word 导出失败' }); }
   },
 
-  async inviteProjectNoteMember() { return this.memberMutation(false); },
-  async revokeProjectNoteMember(event) { return this.memberMutation(true, event && event.currentTarget.dataset.account); },
-  async memberMutation(revoke, supplied) {
-    const project = this.data.selectedProject, account = Number(supplied || this.data.memberAccount);
+  async loadJoinRequests() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.requestsLoading) return;
+    const epoch = this._epoch, projectID = project.project_id;
+    this.setData({ requestsLoading: true });
+    try {
+      const [result, invitations] = await Promise.all([api.listProjectJoinRequests(projectID), api.listProjectInvitations(projectID)]);
+      if (!this.current(epoch) || !this.data.selectedProject || this.data.selectedProject.project_id !== projectID) return;
+      this.setData({
+        joinRequests: (result.items || []).filter(item => item.status === 'pending'),
+        memberInvitations: (invitations.items || []).map(item => Object.assign({}, item, { expiryLabel: invitationLabel(item) })),
+        requestsLoading: false,
+      });
+    } catch (error) {
+      if (this.current(epoch) && this.data.selectedProject && this.data.selectedProject.project_id === projectID) this.setData({ requestsLoading: false, error: error.message || '加入申请加载失败' });
+    }
+  },
+  async createProjectInvitation() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.busy) return;
+    if (!this._invitationAttempt || this._invitationAttempt.projectID !== project.project_id) {
+      this._invitationAttempt = { projectID: project.project_id, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), key: api.mutationKey('project-member-invitation') };
+    }
+    const attempt = this._invitationAttempt, epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      const invitation = await api.createProjectInvitation(project.project_id, attempt.expiresAt, attempt.key);
+      if (!this.current(epoch) || !this.data.selectedProject || this.data.selectedProject.project_id !== project.project_id) return;
+      if (!invitation.invitation_token) { this.setData({ busy: false, error: '邀请链接未生成，请重试。' }); return; }
+      this._invitationAttempt = null;
+      const summary = { invitation_id: invitation.invitation_id, status: 'active', expires_at: invitation.expires_at, expiryLabel: invitationLabel(invitation) };
+      const memberInvitations = [summary, ...this.data.memberInvitations.filter(item => item.invitation_id !== summary.invitation_id)];
+      this.setData({ busy: false, memberInvitation: invitation, memberInvitationPath: '/pages/projectinvite/projectinvite?pni=' + encodeURIComponent(invitation.invitation_token), memberInvitations, notice: '邀请已生成。' });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '邀请生成失败' }); }
+  },
+  async revokeProjectInvitation(event) {
+    const project = this.data.selectedProject;
+    const invitationID = String(event && event.currentTarget && event.currentTarget.dataset.id || this.data.memberInvitation && this.data.memberInvitation.invitation_id || '');
+    if (!project || !invitationID || this.data.busy) return;
+    const epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      await api.revokeProjectInvitation(project.project_id, invitationID);
+      if (!this.current(epoch)) return;
+      const clearsShare = this.data.memberInvitation && this.data.memberInvitation.invitation_id === invitationID;
+      this.setData({
+        busy: false,
+        memberInvitation: clearsShare ? null : this.data.memberInvitation,
+        memberInvitationPath: clearsShare ? '' : this.data.memberInvitationPath,
+        memberInvitations: this.data.memberInvitations.filter(item => item.invitation_id !== invitationID),
+        notice: '邀请已撤销。',
+      });
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '邀请撤销失败' }); }
+  },
+  async approveProjectJoinRequest(event) {
+    const project = this.data.selectedProject, requestID = String(event && event.currentTarget.dataset.id || '');
+    if (!project || !requestID || this.data.busy) return;
+    if (!this._approvalAttempts) this._approvalAttempts = new Map();
+    if (!this._approvalAttempts.has(requestID)) this._approvalAttempts.set(requestID, api.mutationKey('project-member-approval'));
+    const key = this._approvalAttempts.get(requestID), epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      await api.approveProjectJoinRequest(project.project_id, requestID, key);
+      if (!this.current(epoch)) return;
+      this._approvalAttempts.delete(requestID);
+      this.setData({ busy: false });
+      await this.refreshProject('已批准加入项目。');
+      if (this.current(epoch)) await this.openMembers();
+    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '批准失败' }); }
+  },
+  async revokeProjectNoteMember(event) { return this.memberMutation(event && event.currentTarget.dataset.account); },
+  async memberMutation(supplied) {
+    const project = this.data.selectedProject, account = Number(supplied);
     if (!project || !Number.isInteger(account) || account <= 0 || this.data.busy) return;
     if (!await this.confirmDiscardChanges()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
-      if (revoke) await api.revokeProjectNoteMember(project.project_id, account); else await api.inviteProjectNoteMember(project.project_id, account);
+      await api.revokeProjectNoteMember(project.project_id, account);
       if (!this.current(epoch)) return;
-      this.setData({ busy: false, memberAccount: '' }); await this.refreshProject(revoke ? '访问权限已移除。' : '业主账号已邀请。');
+      this.setData({ busy: false }); await this.refreshProject('访问权限已移除。');
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '成员设置失败' }); }
   },
   async setProjectNoteConfirmer() {
@@ -479,4 +636,10 @@ Page({
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '反馈处理失败' }); }
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
+  onShareAppMessage(event) {
+    if (event && event.target && event.target.dataset.kind === 'project-invitation' && this.data.memberInvitationPath) {
+      return { title: (this.data.selectedProject && this.data.selectedProject.name || '项目') + ' 邀请你加入', path: this.data.memberInvitationPath };
+    }
+    return {};
+  },
 });

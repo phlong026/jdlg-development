@@ -71,6 +71,21 @@ func (s *Service) validateDraft(scope Scope, in Draft) (Draft, error) {
 	if !trim(in.Title, 80) || !trim(in.Body, 100000) || len(in.SourceNote) > 2000 || (in.SourceURL != "" && !safeURL(in.SourceURL)) || (in.Rights != "own" && in.Rights != "authorized") || !scope.Allows(in.Owner) || len(in.MediaIDs) > 50 {
 		return in, fail(400, "标题正文权属或归属无效")
 	}
+	// B11: 标签最多 10 个，每个 ≤ 32 字符，去重去空白。
+	if len(in.Tags) > 10 {
+		return in, fail(400, "标签最多 10 个")
+	}
+	seenTags := map[string]bool{}
+	tags := make([]string, 0, len(in.Tags))
+	for _, tag := range in.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" || len([]rune(tag)) > 32 || seenTags[tag] {
+			continue
+		}
+		seenTags[tag] = true
+		tags = append(tags, tag)
+	}
+	in.Tags = tags
 	body, format, err := normalizeBody(in.Body, in.BodyFormat)
 	if err != nil {
 		return in, err
@@ -116,6 +131,8 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	created := now.UTC()
 	revision := 1
 	version := 0
+	var oldPinned bool
+	var oldTags []string
 	if id != "" {
 		old, e := loadCatalogContent(r, "content", id)
 		if e != nil || !scope.Allows(old.Owner) {
@@ -139,6 +156,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		revision = old.Revision + 1
 		version = old.Version
 		created = *old.CreatedAt
+		oldPinned, oldTags = old.Pinned, old.Tags
 	} else {
 		id = opaque()
 	}
@@ -189,7 +207,18 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	if in.BodyFormat == "document_v1" {
 		contentType = "document"
 	}
-	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Tags: in.Tags, Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+	// B11 置顶：新内容默认 false；更新时显式传入则覆盖，否则保留原值。
+	if id != "" {
+		if in.Pinned != nil {
+			out.Pinned = *in.Pinned
+		} else {
+			out.Pinned = oldPinned
+		}
+		if out.Tags == nil && oldTags != nil {
+			out.Tags = oldTags // 未传标签时保留原标签
+		}
+	}
 	if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
 		return out, e
 	}
@@ -406,30 +435,69 @@ func (s *Service) Media(ctx context.Context, scope *Scope, id string) (Asset, er
 	return a, e
 }
 func (s *Service) ListMedia(ctx context.Context, scope Scope) (List, error) {
-	out := List{Items: []Asset{}, Snapshot: Snapshot{s.Now(), MetricVersion}}
+	page, err := s.ListMediaPage(ctx, scope, "", 50, "", nil)
+	return List{Items: page.Items, Cursor: page.NextCursor, Snapshot: Snapshot{s.Now(), MetricVersion}}, err
+}
+
+type MediaPage struct {
+	Items      []Asset `json:"items"`
+	NextCursor string  `json:"next_cursor,omitempty"`
+}
+
+func (s *Service) ListMediaPage(ctx context.Context, scope Scope, cursor string, limit int, search string, kinds []string) (MediaPage, error) {
+	out := MediaPage{Items: []Asset{}}
 	if e := s.authorized(scope); e != nil {
 		return out, e
 	}
 	if !scope.Manage {
 		return out, fail(403, "无素材管理权限")
 	}
-	e := s.readTransaction(ctx, func(r Repository) error {
-		rows, e := r.List("media")
+	search = strings.TrimSpace(search)
+	if len(search) > 100 {
+		return out, fail(400, "素材搜索内容过长")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	normalizedKinds := []string(nil)
+	if kinds != nil {
+		normalizedKinds = make([]string, 0, len(kinds))
+		seen := map[string]bool{}
+		for _, kind := range kinds {
+			kind = strings.TrimSpace(kind)
+			if kind != "image" && kind != "video" && kind != "document" {
+				return out, fail(400, "素材类型无效")
+			}
+			if !seen[kind] {
+				seen[kind] = true
+				normalizedKinds = append(normalizedKinds, kind)
+			}
+		}
+	}
+	query, err := nativeReferenceQuery(scope, cursor, limit)
+	if err != nil {
+		return out, err
+	}
+	query.TitleSearch, query.AssetKinds = search, normalizedKinds
+	e := s.readQueryTransaction(ctx, func(r Repository) error {
+		rows, e := pageRecords(r, "media", query)
 		if e != nil {
 			return e
 		}
-		items := []Asset{}
+		if len(rows) == query.Limit {
+			out.NextCursor = nativeReferenceCursor(rows[len(rows)-2])
+			rows = rows[:len(rows)-1]
+		}
 		for _, row := range rows {
-			if !scope.Allows(row.Owner) {
-				continue
-			}
 			var a Asset
-			if json.Unmarshal(row.Payload, &a) != nil {
+			if !scope.Allows(row.Owner) || json.Unmarshal(row.Payload, &a) != nil || a.ID != row.ID {
 				return ErrUnavailable
 			}
-			items = append(items, a)
+			out.Items = append(out.Items, a)
 		}
-		out.Items = items
 		return nil
 	})
 	return out, e

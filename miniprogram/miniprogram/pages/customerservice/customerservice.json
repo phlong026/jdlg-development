@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "AI建房顾问",
   "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
     "navigation-bar": "/components/navigation-bar/navigation-bar",
     "intercept-modal": "/components/intercept-modal/intercept-modal",
     "nickname-guard": "/components/nickname-guard/nickname-guard"

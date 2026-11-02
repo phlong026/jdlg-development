@@ -33,6 +33,7 @@ Page({
     smsCode: '',
     smsCountdown: 0,
     loading: false,
+    completingProfile: false,
     profileError: '',
     inviteCode: '', // 邀请码（从分享链接或上一页传入，注册时填写可得双方奖励）
     agreedPrivacy: false,
@@ -411,7 +412,7 @@ Page({
       return;
     }
 
-    // 选完身份紧接着检查昵称完善（新用户此时昵称必为空，会连续弹出完善弹窗）
+    // 身份确认后继续核验资料，缺失项在当前登录卡内补充。
     if (this.isLoginContextCurrent(context)) await this.enterAppAfterLogin();
   },
 
@@ -434,9 +435,11 @@ Page({
         const guard = this.selectComponent('#nicknameGuard') as any;
         if (!guard || typeof guard.show !== 'function') throw new Error('资料填写暂不可用，请重试');
         guard.show({ required: true, userID: Number(profile.id), nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
+        this.setData({ completingProfile: true });
         return false;
       }
       wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...profile, id: Number(profile.id), nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim(), token });
+      this.setData({ completingProfile: false });
       this.navigateToIndexAfterLogin(token);
       return true;
     } catch (error: any) {
@@ -447,6 +450,7 @@ Page({
           wx.removeStorageSync('userInfo');
           const guard = this.selectComponent('#nicknameGuard') as any;
           guard?.setData?.({ visible: false });
+          this.setData({ completingProfile: false });
         }
         this.setData({ loading: false, profileError: error.message || '个人资料读取失败，请重试' });
       }
@@ -467,7 +471,7 @@ Page({
     if (!this.isLoginContextCurrent(context)) throw new Error('账号或登录页面已变化，请重新检查资料');
     const headers = paramsToHeaders(generateRequestParams(token, {}, apiPath, deviceID));
     const res: any = await new Promise((resolve, reject) => {
-      wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+      wx.request({ url: `${API_BASE_URL}${apiPath}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true } as any);
     });
     if (!this.isLoginContextCurrent(context)) throw new Error('账号或登录页面已变化，请重新检查资料');
     if (res.statusCode === 401 || res.data?.code === 401) {

@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { FiUser, FiLock, FiEye, FiEyeOff } from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { login } from '../api/auth';
+import { useManagementSession } from '../component/ManagementSession';
 import { API_BASE_URL } from '../config/api';
 import './login.scss';
 
 const REMEMBERED_LOGIN_KEY = 'background_remembered_login';
 
-// 记住密码：按用户明确要求保留原有的读取、回填、保存与取消逻辑
-// （2026-09-16 上线评审中再次确认接受明文缓存的本机暴露风险）。
 const Login: React.FC = () => {
     const navigate = useNavigate();
+    const session = useManagementSession();
     const [account, setAccount] = useState('');
     const [password, setPassword] = useState('');
-    const [rememberPassword, setRememberPassword] = useState(false);
+    const [keepLoggedIn, setKeepLoggedIn] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -29,15 +29,9 @@ const Login: React.FC = () => {
 
     useEffect(() => {
         try {
-            const saved = window.localStorage.getItem(REMEMBERED_LOGIN_KEY);
-            if (!saved) return;
-
-            const parsed = JSON.parse(saved) as { account?: string; password?: string };
-            setAccount(parsed.account || '');
-            setPassword(parsed.password || '');
-            setRememberPassword(!!parsed.account && !!parsed.password);
-        } catch {
             window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+        } catch (err) {
+            console.warn('旧版登录缓存清理失败', err);
         }
     }, []);
 
@@ -52,11 +46,7 @@ const Login: React.FC = () => {
     };
 
     const handleRememberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const checked = e.target.checked;
-        setRememberPassword(checked);
-        if (!checked) {
-            window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
-        }
+        setKeepLoggedIn(e.target.checked);
     };
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -75,26 +65,23 @@ const Login: React.FC = () => {
             const result = await login({
                 username: normalizedAccount,
                 password: password,
+                remember_me: keepLoggedIn,
             });
-            if (rememberPassword) {
-                window.localStorage.setItem(
-                    REMEMBERED_LOGIN_KEY,
-                    JSON.stringify({
-                        account: normalizedAccount,
-                        password: password,
-                    })
-                );
-            } else {
-                window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
-            }
             // crm_only 账号直接落到客户管理，避免经 dashboard 二次重定向
-            navigate(result.scope === 'crm_only' ? '/customer-management' : '/dashboard');
+            navigate(result.scope === 'crm_only' ? '/customer-management' : '/dashboard', { replace: true });
         } catch (err: any) {
             setError(err.message || '登录失败，请检查账号和密码');
         } finally {
             setLoading(false);
         }
     };
+
+    if (session.loading) {
+        return <div className="route-loading">正在核对登录状态…</div>;
+    }
+    if (session.user) {
+        return <Navigate to={session.user.scope === 'crm_only' ? '/customer-management' : '/dashboard'} replace />;
+    }
 
     return (
         <div className="login-page">
@@ -103,6 +90,8 @@ const Login: React.FC = () => {
                 <div className="form-section">
                     <div className="form-content">
                         <div className="login-brand">客户管理</div><h1 className="welcome-title">欢迎登录</h1><p className="login-subtitle">记录客户需求，跟进每一次机会</p>
+
+                        {session.error && <div role="status" className="error-message">{session.error} <button type="button" onClick={session.refresh}>重新检查</button></div>}
 
                         <form onSubmit={handleLogin} className="login-form">
                             {/* 错误提示 */}
@@ -157,7 +146,7 @@ const Login: React.FC = () => {
                             <label className="remember-row">
                                 <input
                                     type="checkbox"
-                                    checked={rememberPassword}
+                                    checked={keepLoggedIn}
                                     onChange={handleRememberChange}
                                     disabled={loading}
                                 />

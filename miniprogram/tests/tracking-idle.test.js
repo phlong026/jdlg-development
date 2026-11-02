@@ -6,8 +6,8 @@ const { createTracker, SESSION_IDLE, TTL } = require('../miniprogram/utils/track
 // Exercise the production state machine and its retained page objects. The fake
 // entry service deliberately reuses sessions and shares when passed an old token,
 // so clearing only the local PV cannot conceal a stale-attribution regression.
-function runtime({ start = 1000, initialQueue = [], validatePrevious = false } = {}) {
-  let mono = start, wall = 1700000000000, sequence = 0, account = '', online = false;
+function runtime({ start = 1000, initialQueue = [], initialAccount = '', validatePrevious = false } = {}) {
+  let mono = start, wall = 1700000000000, sequence = 0, account = initialAccount, online = false;
   const requests = [], credentials = new Map(), boundaries = [], batches = [], knownViews = new Set();
   const sdk = createTracker({
     mono: () => mono, wall: () => wall, id: () => `event_${++sequence}`,
@@ -163,8 +163,8 @@ test('short-idle login linkage remains allowed, but an expired anonymous session
     t.advance(expired ? SESSION_IDLE + 1 : 60000); t.setAccount('logged-in-account');
     resume(t); await settle();
     assert.equal(t.requests.at(-1).previous_entry_token, expired ? undefined : 'credential_1');
-    assert.equal(t.events('page_view').length, 2);
-    assert.equal(t.events('page_view')[1].share_id, undefined);
+    assert.equal(t.events('page_view').length, 1, 'the new account never uploads the anonymous account queue');
+    assert.equal(t.events('page_view')[0].share_id, undefined);
     t.setAccount(''); t.sdk.tick(); await settle();
     assert.equal(t.requests.at(-1).previous_entry_token, undefined, 'logout never carries the previous account entry');
   }
@@ -210,10 +210,18 @@ test('long config suspension resumes with a clean session and attribution', asyn
   assertFresh(t, first);
 });
 
-function restoredQueue() {
-  return [{ credential: 'restored_credential', queued_at: 1700000000000,
+function restoredQueue(account = '') {
+  return [{ account, credential: 'restored_credential', queued_at: 1700000000000,
     event: { event_id: 'restored_event', event_type: 'page_view', page_view_id: 'restored_view', session_id: 'restored_session' } }];
 }
+
+test('a restored queue from another account is discarded before authenticated upload', async () => {
+  const t = runtime({ initialQueue: restoredQueue('account-a'), initialAccount: 'account-b' });
+  t.sdk.configure(true, 'notice-v1'); t.setOnline(); await t.sdk.flush();
+  assert.equal(t.batches.length, 0);
+  assert.equal(t.sdk.diagnostics().queued, 0);
+  assert.equal(t.sdk.diagnostics().dropped.rejected, 1);
+});
 
 test('cold-start suspension retains restored queue until a confirmed enabled config returns', async () => {
   const saved = restoredQueue(), t = runtime({ initialQueue: saved });

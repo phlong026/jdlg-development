@@ -8,6 +8,20 @@ function displayTime(value) {
   const two = number => String(number).padStart(2, '0');
   return date.getFullYear() + '-' + two(date.getMonth() + 1) + '-' + two(date.getDate()) + ' ' + two(date.getHours()) + ':' + two(date.getMinutes());
 }
+function displayChannel(value) {
+  if (value === 'app_message') return '微信好友';
+  if (value === 'timeline') return '朋友圈';
+  return '分享方式未记录';
+}
+function displayStatus(item) {
+  if (item.revoked) return '已撤回';
+  const expires = new Date(item.expires_at || '');
+  if (!Number.isNaN(expires.getTime()) && expires.getTime() <= Date.now()) return '分享已过期';
+  if (item.status === 'expired') return '内容版本已失效';
+  if (item.status === 'published') return '分享中';
+  if (item.status === 'unavailable' || item.status === 'revoked') return '内容不可用';
+  return '分享记录';
+}
 
 Page({
   data: { loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], next_cursor: '', as_of: '', metric_version: '' },
@@ -34,7 +48,10 @@ Page({
       if (!reset) Object.assign(query, { cursor: this.data.next_cursor, as_of: this.data.as_of, metric_version: this.data.metric_version });
       const page = await api.listMyShares(query);
       if (!this.current(epoch)) return;
-      const rows = (page.items || []).map(item => ({ ...item, visitor_count: Number(item.visitor_count || 0), page_views: Number(item.page_views || 0), last_visit_text: displayTime(item.last_visit), created_at_text: displayTime(item.created_at) }));
+      const rows = (page.items || []).map(item => {
+        const visitorCount = Number(item.visitor_count || 0), pageViews = Number(item.page_views || 0);
+        return { ...item, is_collection: item.route_key === 'pages/collectionreader/collectionreader', directory_views: Number(item.directory_views || 0), content_views: Number(item.content_views || 0), visitor_count: visitorCount, page_views: pageViews, avg_views_per_visitor: Number(item.avg_views_per_visitor || 0) || '', status_text: displayStatus(item), channel_text: displayChannel(item.channel), has_visits: visitorCount > 0 || pageViews > 0 || !!item.last_visit, last_visit_text: displayTime(item.last_visit), created_at_text: displayTime(item.created_at) };
+      });
       this.setData({ items: reset ? rows : this.data.items.concat(rows), next_cursor: page.next_cursor || '', as_of: page.as_of || this.data.as_of, metric_version: page.metric_version || this.data.metric_version, loading: false, loadingMore: false });
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '本人分享记录加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false }); }
     finally { if (this.current(epoch)) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }

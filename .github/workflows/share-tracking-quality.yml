@@ -39,6 +39,15 @@ jobs:
           go-version: '1.27.2'
           cache: false
 
+      - name: Set up Node.js for the client-to-server signature contract
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+
+      - name: Verify the protected release builder policy
+        run: node --test scripts/build-protected-release.test.js
+
       # Fake SQL, in-memory repositories and miniredis: no business credentials,
       # external database, production configuration or deployment is needed.
       - name: Run tracking, source model and HTTP route regressions
@@ -76,6 +85,9 @@ jobs:
 
       - name: Run focused tracking regression tests
         run: npm run test:tracking
+
+      - name: Check the authentication signer runtime
+        run: npm run check:auth-signer
 
       - name: Check deterministic TypeScript and JavaScript outputs
         run: npm run check:tracking

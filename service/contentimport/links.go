@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	linkPattern         = regexp.MustCompile(`(?i)(?:https?://|(?:www\.)?(?:v\.douyin\.com|douyin\.com|xiaohongshu\.com|xhslink\.com|channels\.weixin\.qq\.com|weixin\.qq\.com)/)[^\s<>\"']*`)
+	linkPattern         = regexp.MustCompile(`(?i)(?:https?://|(?:www\.)?(?:v\.douyin\.com|douyin\.com|xiaohongshu\.com|xhslink\.com|v\.kuaishou\.com|kuaishou\.com|m\.chenzhongtech\.com|chenzhongtech\.com|m\.kuai-fei\.com|channels\.weixin\.qq\.com|weixin\.qq\.com)/)[^\s<>\"']*`)
 	douyinPathID        = regexp.MustCompile(`/(?:video|note|slides)/(\d{15,22})(?:/|$)`)
 	xiaohongshuPathID   = regexp.MustCompile(`/(?:explore|discovery/item)/(?:[^/]+/)?([0-9a-fA-F]{24})(?:/|$)`)
 	douyinNativeID      = regexp.MustCompile(`^\d{15,22}$`)
@@ -73,6 +73,8 @@ func sourcePlatform(parsed *url.URL) (Platform, bool) {
 		return Douyin, true
 	case "xiaohongshu.com", "www.xiaohongshu.com", "xhslink.com", "www.xhslink.com":
 		return Xiaohongshu, true
+	case "kuaishou.com", "www.kuaishou.com", "v.kuaishou.com", "chenzhongtech.com", "m.chenzhongtech.com", "kuai-fei.com", "m.kuai-fei.com":
+		return Kuaishou, true
 	case "channels.weixin.qq.com":
 		if strings.HasPrefix(parsed.Path, "/s/") {
 			return Channels, true
@@ -117,7 +119,7 @@ func canonicalProviderURL(platform Platform, parsed *url.URL) string {
 
 func isShortLinkHost(host string) bool {
 	switch strings.ToLower(host) {
-	case "v.douyin.com", "xhslink.com", "www.xhslink.com":
+	case "v.douyin.com", "xhslink.com", "www.xhslink.com", "v.kuaishou.com":
 		return true
 	default:
 		return false

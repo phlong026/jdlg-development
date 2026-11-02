@@ -522,6 +522,8 @@
   async function boot() {
     if (typeof document === 'undefined') return;
     const body = document.body, code = body.dataset.code;
+    const itemPosition = body.dataset.itemPosition === undefined ? null : Number(body.dataset.itemPosition);
+    const pageContext = Number.isInteger(itemPosition) && itemPosition >= 0 ? { item_position: itemPosition } : {};
     const consent = document.getElementById('consent'), state = document.getElementById('tracking-state');
     const post = createPost(fetch);
     let tracking = null;
@@ -530,7 +532,7 @@
       isVisible: () => document.visibilityState === 'visible'
     });
     const buildTracking = () => new ReaderTracking({
-      enter: client => post('/api/v1/share-web/entry', { code, client_instance: client, consent_version: 'v1' }),
+      enter: client => post('/api/v1/share-web/entry', { code, ...pageContext, client_instance: client, consent_version: 'v1' }),
       send: (token, event) => post('/api/v1/share-web/events', { entry_token: token, events: [event] }),
       sendKeepalive: (token, events) => post('/api/v1/share-web/events', { entry_token: token, events }, { keepalive: true }),
       monotonic: () => performance.now(),
@@ -604,7 +606,7 @@
       const source = tracking;
       try {
         const proof = source ? await source.handoffProof() : {};
-        const out = await post('/api/v1/share-web/open-miniprogram', { code, ...(source === tracking && source && !source.closed ? proof : {}) });
+        const out = await post('/api/v1/share-web/open-miniprogram', { code, ...pageContext, ...(source === tracking && source && !source.closed ? proof : {}) });
         location.href = out.url_link;
       }
       catch (_) { open.textContent = '暂时无法打开小程序'; }

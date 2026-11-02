@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"service/model"
 	"service/tracking"
 )
 
@@ -157,6 +158,122 @@ func TestMySharesScopeRequiresExplicitViewGrant(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/my-shares", nil))
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("manage-only route status = %d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestMySharesCapabilityDenialDoesNotBecomeDataAccess(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := sql.Open("tracking-my-scope", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, test := range []struct {
+		actor  int64
+		path   string
+		status int
+	}{
+		{22, "/context", 200},
+		{22, "", 403},
+		{22, "/someone-elses-share/visits", 403},
+		{0, "/context", 401},
+		{11, "/context", 200},
+	} {
+		router := gin.New()
+		g := router.Group("/api/v1/miniprogram/tracking/my-shares", func(c *gin.Context) {
+			c.Set("user_id", test.actor)
+			c.Next()
+		}, miniTrackingMyScopeMiddleware(db, "tenant"))
+		registerTrackingMyHandlers(g, nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/tracking/my-shares"+test.path+"?can_view=true&owner=company&user_id=11", nil))
+		if response.Code != test.status {
+			t.Fatalf("actor=%d path=%s got=%d body=%s", test.actor, test.path, response.Code, response.Body.String())
+		}
+		if test.actor == 22 && test.path == "/context" {
+			var result struct {
+				Data struct {
+					CanView bool     `json:"can_view"`
+					Owners  []string `json:"owners"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Data.CanView || result.Data.Owners == nil || len(result.Data.Owners) != 0 {
+				t.Fatalf("denied capability disclosed a scope: %s", response.Body.String())
+			}
+		}
+		if response.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatal("capability response must not be cached")
+		}
+	}
+	router := gin.New()
+	g := router.Group("/api/v1/miniprogram/tracking/my-shares", func(c *gin.Context) { c.Set("user_id", int64(11)); c.Next() }, miniTrackingMyScopeMiddleware(nil, "tenant"))
+	registerTrackingMyHandlers(g, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/tracking/my-shares/context", nil))
+	if response.Code != 503 {
+		t.Fatalf("backend failure became no permission: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestMySharesContextRequiresRealSignedMiniSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	svc := tracking.New(nil, tracking.Config{Tenant: "tenant"})
+	registerTrackingMyRoutes(router.Group("/api/v1/miniprogram/tracking"), svc, &model.UserModel{}, nil)
+	for _, token := range []string{"", "client-asserted-token"} {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/tracking/my-shares/context?user_id=11&can_view=true", nil)
+		request.Header.Set("token", token)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("unsigned context status=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestMySharesContextReportsOnlyExplicitViewScopeWithoutReadingRecords(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := sql.Open("tracking-my-scope", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, test := range []struct {
+		actor  int64
+		status int
+	}{{0, http.StatusUnauthorized}, {22, http.StatusForbidden}, {11, http.StatusOK}} {
+		router := gin.New()
+		group := router.Group("/api/v1/miniprogram/tracking/my-shares", func(c *gin.Context) {
+			scope, err := loadMiniTrackingMyScope(c.Request.Context(), db, "tenant", test.actor)
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			c.Set("tracking.my.scope", scope)
+			c.Next()
+		})
+		// 权限探测不应调用记录服务；nil 可防止它悄悄变成分享列表读取。
+		registerTrackingMyHandlers(group, nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/tracking/my-shares/context?owner=other&user_id=11&can_manage=true", nil))
+		if response.Code != test.status {
+			t.Fatalf("actor=%d status=%d body=%s", test.actor, response.Code, response.Body.String())
+		}
+		if test.status != http.StatusOK {
+			continue
+		}
+		var result struct {
+			Data map[string]json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Data) != 2 || string(result.Data["can_view"]) != "true" || string(result.Data["owners"]) != `["company"]` {
+			t.Fatalf("context must contain only server-owned view capability: %s", response.Body.String())
+		}
 	}
 }
 

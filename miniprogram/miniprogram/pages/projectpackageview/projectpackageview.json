@@ -1,0 +1,10 @@
+{
+  "navigationBarTitleText": "项目资料",
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  },
+  "enableShareAppMessage": false,
+  "enableShareTimeline": false
+}

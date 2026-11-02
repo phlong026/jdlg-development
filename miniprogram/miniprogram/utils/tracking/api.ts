@@ -3,7 +3,8 @@
 const ROOT = '/api/v1/miniprogram/tracking';
 const ORIGIN = 'https://api.jiadilingguang.com';
 function request(suffix, method = 'GET', body = {}, credential, authenticated = false) {
-  const path = ROOT + suffix.split('?')[0];
+  const operation = suffix.split('?')[0];
+  const path = ROOT + suffix;
   let header = { 'Content-Type': 'application/json' };
   if (credential) header['X-Tracking-Token'] = credential;
   if (authenticated) {
@@ -24,14 +25,14 @@ function request(suffix, method = 'GET', body = {}, credential, authenticated = 
       else reject(Object.assign(new Error('访问记录服务暂不可用'), {
         statusCode: response.statusCode,
         code: Number.isInteger(result.code) ? result.code : undefined,
-        operation: suffix.split('?')[0]
+        operation
       }));
     }, fail: () => reject(Object.assign(new Error('访问记录网络不可用'), {
-      networkError: true, operation: suffix.split('?')[0]
+      networkError: true, operation
     }))
   }));
 }
-function mediaURL(value) { const url=String(value||''); return url.startsWith(ROOT+'/media/') ? ORIGIN+url : /^https:\/\//.test(url) ? url : ''; }
+function mediaURL(value) { const url=String(value||''); return url.startsWith(ROOT+'/media/') || /^\/api\/v1\/miniprogram\/tracking\/project-collections\/[A-Za-z0-9_-]{8,128}\/versions\/[1-9]\d*\/items\/\d+\/media\/[A-Za-z0-9_-]+$/.test(url) ? ORIGIN+url : /^https:\/\//.test(url) ? url : ''; }
 async function resolveReaderOptions(options) {
   if (options.content_id || !options.scene) return options;
   let scene; try { scene=decodeURIComponent(String(options.scene)); } catch (_) { throw new Error('扫码入口无效'); }

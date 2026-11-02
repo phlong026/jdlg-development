@@ -94,6 +94,21 @@ func TestNativeReferenceCandidatesUseBoundedCursorWithoutLosingPublishedRows(t *
 	}
 }
 
+func TestNativeReferenceCandidateSearchRunsBeforePagination(t *testing.T) {
+	s, scope := fixture(t)
+	wanted := publishNativeReferenceContent(t, s, scope, "唯一庭院方案", "native-search-wanted")
+	for index := 0; index < 5; index++ {
+		publishNativeReferenceContent(t, s, scope, "无关内容", "native-search-noise-"+string(rune('a'+index)))
+	}
+	page, err := s.SearchNativeReferenceCandidates(context.Background(), scope, "", 1, "庭院")
+	if err != nil || len(page.Items) != 1 || page.Items[0].ContentID != wanted.ID || page.NextCursor != "" {
+		t.Fatalf("searched=%+v err=%v", page, err)
+	}
+	if _, err = s.SearchNativeReferenceCandidates(context.Background(), scope, "", 20, strings.Repeat("x", 101)); err == nil {
+		t.Fatal("accepted oversized candidate search")
+	}
+}
+
 func TestNativeReferenceRevokedSourceStaysVisibleButCannotOpen(t *testing.T) {
 	s, scope := fixture(t)
 	published := publishNativeReferenceContent(t, s, scope, "会撤回的来源", "native-publish-revoke")

@@ -96,5 +96,5 @@ test('reader has an article branch and does not append article media as legacy a
 	const editorView = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
 	assert.match(editor, /preserveLayoutBody\(this\.data\.layoutBody/);
 	assert.match(editor, /layoutMediaIDs/);
-	assert.match(editorView, /公众号原排版正文为只读结构/);
+	assert.match(editorView, /正文保留原排版，暂不支持编辑/);
 });

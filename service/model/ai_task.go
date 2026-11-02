@@ -784,3 +784,10 @@ func (m *AITaskModel) BackfillResolvedExecutionMetaForSuccessTasks(limit int) (i
 	}
 	return updatedCount, inspectedCount, nil
 }
+
+// CountByUserSince 统计用户自某时刻以来的生成任务数（B1 配额条展示用）。
+func (m *AITaskModel) CountByUserSince(userID int64, since time.Time) (int64, error) {
+	var count int64
+	err := m.DB.QueryRow(`SELECT COUNT(*) FROM ai_tasks WHERE user_id = ? AND created_at >= ?`, userID, since).Scan(&count)
+	return count, err
+}

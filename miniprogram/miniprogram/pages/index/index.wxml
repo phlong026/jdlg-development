@@ -1,6 +1,16 @@
 <block wx:if="{{__profileAccessMounted}}">
 <!--index.wxml-->
 <view class="pages">
+  <!-- APP 式未读消息横幅：打开小程序时显示，点击进入消息中心 -->
+  <view wx:if="{{unreadBannerVisible && unreadCount > 0}}" class="unread-banner" bindtap="goToMessageCenter">
+    <view class="unread-banner-icon">🔔</view>
+    <view class="unread-banner-body">
+      <text class="unread-banner-title">你有 {{unreadCount}} 条新消息</text>
+      <text class="unread-banner-desc">有人看了你分享的内容</text>
+    </view>
+    <text class="unread-banner-arrow">›</text>
+    <view class="unread-banner-close" catchtap="dismissUnreadBanner">✕</view>
+  </view>
   <view class="home-canvas">
     <image class="bg-image" src="{{heroBgImage}}" mode="scaleToFill" />
     <view class="hotspot smart-service-float {{mascotBouncing ? 'smart-service-float--bounce' : ''}}" bindtap="onMascotTap" role="button" aria-label="在线客服">
@@ -21,6 +31,11 @@
       <text class="cost-card-label">造价测算</text>
     </view>
     <image class="service-card all-card" src="{{allRoundDesignImage}}" mode="scaleToFill" bindtap="onOpenPage" data-url="/pages/allrounddesign/allrounddesign" role="button" aria-label="综合设计" />
+  </view>
+  <view class="workbench-entry" bindtap="onOpenPage" data-url="/pages/contentworkbench/contentworkbench?source=index_entry" role="button" aria-label="内容创作工作台">
+    <view class="workbench-entry-icon"><text>✎</text></view>
+    <view class="workbench-entry-texts"><text class="workbench-entry-title">内容创作</text><text class="workbench-entry-desc">图文、AI文案与项目分享，一键发给客户</text></view>
+    <text class="workbench-entry-arrow">›</text>
   </view>
   <view class="cost-estimator" role="region" aria-label="10秒估算建房报价">
     <view class="cost-panel"></view>

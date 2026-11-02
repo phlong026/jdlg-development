@@ -7,6 +7,7 @@ import { expireSession } from '../utils/session';
 export interface LoginRequest {
     username: string;
     password: string;
+    remember_me: boolean;
 }
 
 // 登录响应

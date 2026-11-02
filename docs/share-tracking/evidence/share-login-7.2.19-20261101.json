@@ -1,0 +1,229 @@
+{
+  "checked_at": "2026-11-01T10:17:38.962216+08:00",
+  "source_commit": "8fbb7359454198009e71513b0d621204b14e7e45",
+  "version": "7.2.19",
+  "tests": {
+    "passed": 907,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typescript": "passed",
+  "generated_js_consistency": "passed",
+  "route_inventory": {
+    "total": 72,
+    "public": 23,
+    "excluded": 49
+  },
+  "native_wxml": "4 authentication templates passed",
+  "sass": "passed; existing import deprecation warning",
+  "dependency_audit_vulnerabilities": 0,
+  "changed_file_credential_scan": "no candidates",
+  "independent_code_review": "approved; no issues",
+  "native_devtools": {
+    "runtime_errors": 0,
+    "warnings": 3,
+    "warnings_description": "existing invalid page.json share options and developer local domain/TLS-check configuration",
+    "share_card_order": [
+      "title",
+      "subtitle",
+      "login_button",
+      "avatar_group",
+      "agreement"
+    ],
+    "standalone_login": "main appearance unchanged; other login methods hidden"
+  },
+  "real_phone_login": "pending",
+  "server_restart_required": false,
+  "backend_code_changed": false,
+  "production_switch": "pending WeChat platform experience-version selection and review/release",
+  "uploaded_at": "2026-11-01T10:19:01.396809+08:00",
+  "upload": {
+    "exit_code": 0,
+    "log_contains_success": true,
+    "appid": "wx94fdc48861913ede",
+    "version_argument": "7.2.19",
+    "tool": "official WeChat DevTools CLI",
+    "receipt": {
+      "size": {
+        "total": 2955449,
+        "packages": [
+          {
+            "name": "TOTAL",
+            "size": 2955449
+          },
+          {
+            "name": "main",
+            "size": 1674720
+          },
+          {
+            "name": "/pages/adminhome/",
+            "size": 890
+          },
+          {
+            "name": "/pages/adminlogin/",
+            "size": 677
+          },
+          {
+            "name": "/pages/allrounddesign/",
+            "size": 42204
+          },
+          {
+            "name": "/pages/buildingreplacement/",
+            "size": 18886
+          },
+          {
+            "name": "/pages/chat/",
+            "size": 40185
+          },
+          {
+            "name": "/pages/checkin/",
+            "size": 24215
+          },
+          {
+            "name": "/pages/collectionreader/",
+            "size": 11818
+          },
+          {
+            "name": "/pages/contentedit/",
+            "size": 49972
+          },
+          {
+            "name": "/pages/contentreader/",
+            "size": 26045
+          },
+          {
+            "name": "/pages/contentworkbench/",
+            "size": 34335
+          },
+          {
+            "name": "/pages/contentwriting/",
+            "size": 12391
+          },
+          {
+            "name": "/pages/designerhome/",
+            "size": 83084
+          },
+          {
+            "name": "/pages/generatedetails/",
+            "size": 107452
+          },
+          {
+            "name": "/pages/generatehistory/",
+            "size": 38030
+          },
+          {
+            "name": "/pages/Identityauthen/",
+            "size": 21264
+          },
+          {
+            "name": "/pages/Invitefriends/",
+            "size": 37490
+          },
+          {
+            "name": "/pages/lingshidetails/",
+            "size": 16792
+          },
+          {
+            "name": "/pages/messagecenter/",
+            "size": 13139
+          },
+          {
+            "name": "/pages/myfavorites/",
+            "size": 25963
+          },
+          {
+            "name": "/pages/myInformationmodification/",
+            "size": 36935
+          },
+          {
+            "name": "/pages/myplan/",
+            "size": 30675
+          },
+          {
+            "name": "/pages/nativereferences/",
+            "size": 15312
+          },
+          {
+            "name": "/pages/orderdetail/",
+            "size": 16435
+          },
+          {
+            "name": "/pages/ordermanagement/",
+            "size": 41036
+          },
+          {
+            "name": "/pages/Parentchildcreativity/",
+            "size": 24478
+          },
+          {
+            "name": "/pages/projectcollections/",
+            "size": 25766
+          },
+          {
+            "name": "/pages/projectinvite/",
+            "size": 5707
+          },
+          {
+            "name": "/pages/projectnotes/",
+            "size": 79055
+          },
+          {
+            "name": "/pages/projectnoteview/",
+            "size": 27482
+          },
+          {
+            "name": "/pages/projectpackage/",
+            "size": 20118
+          },
+          {
+            "name": "/pages/projectpackageview/",
+            "size": 16513
+          },
+          {
+            "name": "/pages/release/",
+            "size": 58781
+          },
+          {
+            "name": "/pages/report/",
+            "size": 76167
+          },
+          {
+            "name": "/pages/ruralvilladesign/",
+            "size": 28242
+          },
+          {
+            "name": "/pages/sharevisits/",
+            "size": 7484
+          },
+          {
+            "name": "/pages/templatesquaredetails/",
+            "size": 70507
+          },
+          {
+            "name": "/pages/topupcenter/",
+            "size": 51962
+          },
+          {
+            "name": "/pages/visitdetail/",
+            "size": 6525
+          },
+          {
+            "name": "/pages/wallet/",
+            "size": 22643
+          },
+          {
+            "name": "/pages/withdrawcenter/",
+            "size": 14074
+          }
+        ]
+      }
+    },
+    "log_sha256": "8ecb39e5360e1b297ba967ad97f86b76fdfc9cb787a6f091e265bb99cb195b3d",
+    "receipt_sha256": "07e14dac98cd7660642c62a7ca7041261f360226557f6463e110068cd9ab4a70"
+  },
+  "preview": {
+    "exit_code": 0,
+    "qr_generated": true
+  },
+  "remote_source_commit_verified": "8fbb7359454198009e71513b0d621204b14e7e45"
+}

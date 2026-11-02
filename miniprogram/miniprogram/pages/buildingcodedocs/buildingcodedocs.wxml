@@ -1,3 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <view class="docs-page">
   <navigation-bar background="#f6efe6">
     <view slot="center" class="nav-title">规范资料</view>
@@ -42,3 +43,5 @@
     </view>
   </view>
 </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -1,0 +1,21 @@
+{
+  "checked_at": "2026-10-31T14:33:11.042918+00:00",
+  "results": [
+    {
+      "url": "https://www.jiadilingguang.com/share/assets/reader.js",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "application/javascript; charset=utf-8",
+      "sha256": "d44093922c43a5e80bb8bc19f167e2b8d9b749abe570ccaba153c408ac28daa1",
+      "matches_source": true
+    },
+    {
+      "url": "https://www.jiadilingguang.com/share/assets/reader.css",
+      "status": 200,
+      "remote_ip": "162.14.210.252",
+      "content_type": "text/css; charset=utf-8",
+      "sha256": "01b87e8c3fee776fb16a9d3037e4a659300b6efe3cfea083bb21ad5baf5643db",
+      "matches_source": true
+    }
+  ]
+}

@@ -1,4 +1,10 @@
 {
+  "plugins": {
+    "WechatSI": {
+      "version": "0.3.5",
+      "provider": "wx069ba97219f66d99"
+    }
+  },
   "pages": [
     "pages/index/index",
     "pages/customerservice/customerservice",
@@ -220,6 +226,26 @@
       "pages": ["projectnoteview"]
     },
     {
+      "root": "pages/projectcollections",
+      "pages": ["projectcollections"]
+    },
+    {
+      "root": "pages/collectionreader",
+      "pages": ["collectionreader"]
+    },
+    {
+      "root": "pages/projectpackage",
+      "pages": ["projectpackage"]
+    },
+    {
+      "root": "pages/projectpackageview",
+      "pages": ["projectpackageview"]
+    },
+    {
+      "root": "pages/projectinvite",
+      "pages": ["projectinvite"]
+    },
+    {
       "root": "pages/nativereferences",
       "pages": ["nativereferences"]
     }
@@ -264,7 +290,8 @@
         "pages/chat",
         "pages/topupcenter",
         "pages/Invitefriends",
-        "pages/checkin"
+        "pages/checkin",
+        "pages/contentworkbench"
       ]
     },
     "pages/template/template": {

@@ -1,7 +1,8 @@
-<!--pages/login/login.wxml-->
+<import src="/templates/auth-welcome.wxml" />
 <view class="page">
   <!-- 主登录页 -->
   <view class="login-landing">
+    <template is="auth-backdrop" />
     <view
       class="page-nav"
       style="padding-top: {{navSafeTop}}px; height: {{navBarHeight}}px;"
@@ -15,11 +16,12 @@
       </view>
     </view>
 
-    <view class="brand-section">
-      <image class="brand-logo" src="{{logoImage}}" mode="aspectFit" />
-    </view>
+    <template is="auth-intro" />
 
-    <view class="main-action">
+    <view wx:if="{{!completingProfile}}" class="main-action aw-card">
+      <text class="login-welcome-title">登录，开启你的理想家</text>
+      <text class="login-welcome-sub">收藏建房灵感，找到适合自己的方案</text>
+      <template is="auth-avatars" />
       <button
         class="primary-login-btn wechat-primary"
         bindtap="handleWechatLogin"
@@ -41,7 +43,12 @@
       </view>
     </view>
 
-    <view class="other-login-section">
+    <view class="login-profile-card" hidden="{{!completingProfile}}">
+      <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" bind:authrequired="onProfileAuthRequired" />
+    </view>
+
+    <!-- 暂时只展示微信登录入口，保留其他登录方式以便后续恢复。 -->
+    <view wx:if="{{false}}" class="other-login-section">
       <view class="other-login-divider">
         <view class="divider-line"></view>
         <text class="divider-text">其他登录方式</text>
@@ -243,9 +250,6 @@
       </view>
     </view>
   </view>
-
-  <!-- 完善昵称弹窗（登录后强制） -->
-  <nickname-guard id="nicknameGuard" bind:completed="onNicknameCompleted" bind:skipped="onNicknameSkipped" bind:authrequired="onProfileAuthRequired" />
 
   <view wx:if="{{profileError}}" class="profile-check-error">
     <text>{{profileError}}</text>

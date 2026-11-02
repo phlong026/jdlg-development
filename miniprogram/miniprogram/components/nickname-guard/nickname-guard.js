@@ -13,6 +13,10 @@ const API_BASE_URL = 'https://api.jiadilingguang.com';
 // 与「我的」页共用同一个标记：同一自然日内两处合计最多提醒一次；保存成功后组件会清除它。
 const NICKNAME_PROMPT_DAY_KEY = 'nickname_prompt_day:';
 Component({
+    properties: {
+        // 登录入口复用当前场景，仅将资料表单放入原来的底部卡片。
+        embedded: { type: Boolean, value: false },
+    },
     data: {
         visible: false,
         required: false,
@@ -115,7 +119,7 @@ Component({
             if (!headers)
                 throw new Error('请重新登录');
             const res = await new Promise((resolve, reject) => {
-                wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject });
+                wx.request({ url: `${API_BASE_URL}${path}`, method: 'GET', header: headers, timeout: 15000, success: resolve, fail: reject, __profileAccessResponseHandled: true });
             });
             this.assertCurrentAccount(token, userID);
             if (res.statusCode === 401 || res.data?.code === 401)
@@ -219,11 +223,11 @@ Component({
                             reject(error);
                             return;
                         }
-                        if (res.statusCode === 200 && res.data.code === 0) {
+                        if (res?.statusCode === 200 && res.data?.code === 0) {
                             resolve();
                             return;
                         }
-                        if (res.statusCode === 401 || res.data?.code === 401)
+                        if (res?.statusCode === 401 || res?.data?.code === 401)
                             this.triggerEvent('authrequired');
                         reject(new Error(res.data?.msg || '头像保存失败'));
                     },

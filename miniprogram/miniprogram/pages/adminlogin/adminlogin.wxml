@@ -1,1 +1,4 @@
+<block wx:if="{{__profileAccessMounted}}">
 <web-view src="{{webUrl}}"></web-view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

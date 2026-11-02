@@ -18,23 +18,41 @@ type fakeEventState struct {
 }
 
 type fakeDurableStore struct {
-	mu           sync.Mutex
-	events       map[string]Event
-	eventJobs    map[string]fakeEventState
-	notices      map[string]Notification
-	deliveries   map[string]Delivery
-	receipts     map[string]string
-	failDelivery bool
-	inTx         bool
-	seq          int
+	mu                sync.Mutex
+	events            map[string]Event
+	eventJobs         map[string]fakeEventState
+	notices           map[string]Notification
+	deliveries        map[string]Delivery
+	receipts          map[string]string
+	failDelivery      bool
+	browseMergeWindow time.Duration
+	prefs             map[int64]Preferences
+	inTx              bool
+	seq               int
 }
 
 func newFakeDurableStore(events ...Event) *fakeDurableStore {
-	store := &fakeDurableStore{events: map[string]Event{}, eventJobs: map[string]fakeEventState{}, notices: map[string]Notification{}, deliveries: map[string]Delivery{}, receipts: map[string]string{}}
+	store := &fakeDurableStore{events: map[string]Event{}, eventJobs: map[string]fakeEventState{}, notices: map[string]Notification{}, deliveries: map[string]Delivery{}, receipts: map[string]string{}, prefs: map[int64]Preferences{}}
 	for _, event := range events {
 		store.events[event.ID] = event
 	}
 	return store
+}
+
+// categoryOptedOut 与 SQLStore 的外发类别检查保持同一语义（B16b）。
+func (s *fakeDurableStore) categoryOptedOut(recipientID int64, kind string) bool {
+	category := deliveryCategory(kind)
+	if category == "" || recipientID <= 0 {
+		return false
+	}
+	prefs, ok := s.prefs[recipientID]
+	if !ok {
+		return false
+	}
+	if category == "browse" {
+		return !prefs.BrowseDelivery
+	}
+	return !prefs.ProjectDelivery
 }
 
 func (s *fakeDurableStore) token() string {
@@ -75,12 +93,28 @@ func (s *fakeDurableStore) MaterializeEvent(_ context.Context, job *EventJob, ch
 		return nil
 	}
 	notice := noticeFromEvent(job.Event)
+	// 与 SQLStore.MaterializeEvent 保持同一合并维度：窗口内未读浏览提醒只刷新
+	// 时间与事件指向，不新建收件箱条目也不新建外发投递。
+	if recipientID, kind, shareID, at, mergeable := browseMergeTarget(job.Event, s.browseMergeWindow); mergeable {
+		existing := make([]Notification, 0, len(s.notices))
+		for _, item := range s.notices {
+			existing = append(existing, item)
+		}
+		if existingID, found := findMergeableBrowseNotice(existing, recipientID, kind, shareID, at, s.browseMergeWindow); found {
+			merged := s.notices[existingID]
+			merged.CreatedAt, merged.EventID = notice.CreatedAt, notice.EventID
+			s.notices[existingID] = merged
+			state.status, state.leaseToken, state.leaseUntil = "processed", "", time.Time{}
+			s.eventJobs[job.Event.ID] = state
+			return nil
+		}
+	}
 	delivery := Delivery{ID: notice.ID + ":" + channel, NotificationID: notice.ID, RecipientID: notice.RecipientID, Channel: channel, Status: DeliveryPending, BindingVersion: eligibility.BindingVersion, CreatedAt: notice.CreatedAt, UpdatedAt: notice.CreatedAt}
 	if s.failDelivery {
 		return errors.New("delivery insert failed")
 	}
 	s.notices[notice.ID] = notice
-	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) {
+	if eligibility.DeliveryEligible && allowsExternalDelivery(job.Event) && !s.categoryOptedOut(notice.RecipientID, job.Event.Kind) {
 		s.deliveries[delivery.ID] = delivery
 	}
 	state.status, state.leaseToken, state.leaseUntil = "processed", "", time.Time{}
@@ -338,6 +372,29 @@ func TestProjectNoteFeedbackNoticeTargetsExactFeedbackWithoutExternalDelivery(t 
 	}
 	if !allowsExternalDelivery(browseEvent("browse-1", 42)) {
 		t.Fatal("existing browse delivery policy changed")
+	}
+	store := newFakeDurableStore(event)
+	consumer := consumerFor(t, store, event.OccurredAt)
+	if worked, err := consumer.RunOnce(context.Background()); err != nil || !worked {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	if len(store.notices) != 1 || len(store.deliveries) != 0 {
+		t.Fatalf("notices=%d deliveries=%d", len(store.notices), len(store.deliveries))
+	}
+}
+
+func TestProjectPackageReceiptNoticeTargetsExactVersionWithoutExternalDelivery(t *testing.T) {
+	event := Event{ID: "package-receipt:" + strings.Repeat("r", 64), Kind: "project_package_receipt", Owner: "owner-a", RecipientID: 42, VisitorKey: "u:101", ShareID: strings.Repeat("d", 32), ContentID: strings.Repeat("v", 32), ProjectID: strings.Repeat("p", 32), Route: "project_note_share", OccurredAt: time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)}
+	if !validEvent(event) {
+		t.Fatal("valid project package receipt event was rejected")
+	}
+	notice := noticeFromEvent(event)
+	wantRoute := "pages/projectnotes/projectnotes?project_id=" + event.ProjectID + "&version_id=" + event.ContentID
+	if notice.Route != wantRoute || notice.Kind != event.Kind || notice.Title != "收到阅读回执" || notice.Body != "接收人已主动确认阅读该固定方案" {
+		t.Fatalf("notice = %#v", notice)
+	}
+	if allowsExternalDelivery(event) {
+		t.Fatal("private package receipt unexpectedly enabled external delivery")
 	}
 	store := newFakeDurableStore(event)
 	consumer := consumerFor(t, store, event.OccurredAt)

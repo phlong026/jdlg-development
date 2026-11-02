@@ -2,7 +2,18 @@
 
 ## 工程入口与云端图片
 
-在微信开发者工具导入 `JDLG-home-restore/miniprogram`（本 README 所在目录），AppID 为 `wx94fdc48861913ede`，项目显示名为“甲第灵光-新版首页-云端图片”。同级旧工程 `JDLG/miniprogram` 仍是旧首页，不作为本次上传来源。
+在微信开发者工具导入当前 `JDLG/miniprogram`（本 README 所在目录），AppID 为 `wx94fdc48861913ede`，项目显示名为“甲第灵光-新版首页-云端图片”。不要再使用过时的 `JDLG-home-restore/miniprogram` 路径作为上传来源。
+
+上传前必须从 `miniprogram/utils/parameter.ts` 重新生成仓库内的签名 JavaScript 产物，并校验它与 TypeScript 源码一致：
+
+```sh
+cd miniprogram
+npm run build:auth-signer
+npm run check:auth-signer
+npm run test:tracking
+```
+
+`miniprogram/utils/parameter.js` 是确定性生成物，不应手工修改。CI 质量门禁会同时验证 TypeScript 源码、JavaScript 运行文件和 Go 鉴权中间件的跨语言契约；不需要微信或生产服务器凭据。
 
 图片发布清单为 `assets-cloud-manifest.json`，记录 45 张原图的字节数、SHA-256 和不可变 CDN 地址。当前发布前缀：
 

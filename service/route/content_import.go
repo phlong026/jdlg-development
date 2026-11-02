@@ -195,6 +195,8 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 	if strings.TrimSpace(appID) != "" && strings.TrimSpace(secret) != "" {
 		video = contentimport.NewDouyidouResolver(contentimport.DouyidouConfig{AppID: appID, AppSecret: secret})
 		resolvers[contentimport.Douyin] = contentimport.VideoDocumentResolver{Resolver: video}
+		// B18-B：快手与抖音同一网关凭据，一并注册。
+		resolvers[contentimport.Kuaishou] = contentimport.VideoDocumentResolver{Resolver: video}
 	}
 	resolvers[contentimport.Xiaohongshu] = contentimport.VideoDocumentResolver{Resolver: contentimport.XHSResolver{Fetcher: fetcher, Video: video}}
 	if enabled && os.Getenv("CONTENT_IMPORT_YUANBAO_ENABLED") == "true" {
@@ -208,7 +210,7 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 	capabilities := func(ctx context.Context) importCapabilities {
 		ready := store != nil && enabled && workbenchEnabled() && contentMediaConfigured(svc)
 		out := importCapabilities{Enabled: ready, Platforms: []importPlatformCapability{}}
-		for _, platform := range []contentimport.Platform{contentimport.WechatArticle, contentimport.Douyin, contentimport.Xiaohongshu, contentimport.Channels} {
+		for _, platform := range []contentimport.Platform{contentimport.WechatArticle, contentimport.Douyin, contentimport.Xiaohongshu, contentimport.Kuaishou, contentimport.Channels} {
 			p := importPlatformCapability{Platform: platform, Available: ready && resolvers[platform] != nil}
 			if !p.Available {
 				p.Reason = "该平台导入服务尚未开通"

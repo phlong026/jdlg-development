@@ -4,6 +4,9 @@ const api = require('../../utils/phase3-api');
 const { preserveLayoutBody, renderArticleDocument } = require('../../utils/article-document');
 
 function textBlock(text = '') { return { kind: 'paragraph', text }; }
+function headingBlock(level = 2) { return { kind: 'heading', level: level === 3 ? 3 : 2, text: '' }; }
+function quoteBlock() { return { kind: 'quote', text: '' }; }
+function listBlock(ordered = false) { return { kind: 'list', ordered: !!ordered, items: [''] }; }
 function mediaIDs(blocks) { return [...new Set(blocks.filter(block => block.media_id).map(block => block.media_id))]; }
 function writingFacts(blocks) {
   return blocks.map(block => {
@@ -28,37 +31,42 @@ function initialBlocks(content) {
 }
 function decorateBlocks(blocks, media) {
   const byID = new Map((media || []).map(asset => [asset.media_id, asset]));
-  return blocks.map((block, index) => ({ ...block, index, list_text: (block.items || []).join('、'), asset: block.media_id ? byID.get(block.media_id) || null : null }));
+  return blocks.map((block, index) => ({ ...block, index, asset: block.media_id ? byID.get(block.media_id) || null : null }));
 }
 function mergeAssets(...groups) {
   const assets = new Map();
   groups.forEach(group => (Array.isArray(group) ? group : [group]).filter(Boolean).forEach(asset => assets.set(asset.media_id, { ...(assets.get(asset.media_id) || {}), ...asset })));
   return [...assets.values()];
 }
-function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx)$/i, '').trim().slice(0, 80) || '文档资料'; }
+function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx|pptx)$/i, '').trim().slice(0, 80) || '文档资料'; }
 
 Page({
   data: {
     id: '', loading: true, busy: false, error: '', denied: false, disabled: false, loginRequired: false, context: null,
-    title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
+    title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
     blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
+    settingsExpanded: false, mediaExpanded: true, moreExpanded: false, tagsText: '', pinned: false,
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
     const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
     const sourceToken = String(wx.getStorageSync('token') || '');
+    this._createToken = sourceToken;
+    this._pendingCreateAction = !options.id && ['media', 'document'].includes(options.action) ? options.action : '';
     if (channel && channel.on) channel.on('prefillContent', payload => this.receivePrefill(payload, sourceToken));
   },
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
+      this._savedSignature = '';
+      this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
     this._token = token; this._epoch = (this._epoch || 0) + 1;
     this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: false });
@@ -99,18 +107,69 @@ Page({
       const documentCandidates = loadedMedia.filter(asset => asset.kind === 'document');
       const documentAsset = documentReadOnly ? loadedMedia.find(asset => associated.some(item => item.media_id === asset.media_id) && asset.kind === 'document') || null : null;
       const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, media, this.editorWidth(), 'contentedit-layout') : [];
-      this.setData({ context, media, documentCandidates, title: content ? content.title : '', owner_id: content ? content.owner_id : (context.owners || [])[0] || '', rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      const ownerID = content ? content.owner_id : (context.owners || [])[0] || '';
+      const ownerChoices = context.owner_choices || [];
+      const ownerIndex = Math.max(0, ownerChoices.findIndex(item => item.owner_id === ownerID));
+      this.setData({ context, media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
       this.applyPendingPrefill();
+      this._savedSignature = content ? this.draftSignature() : '';
+      this.performCreateAction();
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '编辑器加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false }); }
   },
   editorWidth() { const window = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync ? wx.getSystemInfoSync() : { windowWidth: 375 }; return Math.max(240, Number(window.windowWidth || 375) - 64); },
+  performCreateAction() {
+    if (!this._loaded || !this.data.context || !this.data.context.enabled || this.data.context.can_manage === false) return;
+    const action = this._pendingCreateAction;
+    this._pendingCreateAction = '';
+    if (!action || this.data.id || this._createToken !== String(wx.getStorageSync('token') || '')) return;
+    if (action === 'media') this.chooseMedia();
+    if (action === 'document') this.chooseDocument();
+  },
+  toggleSettings() { this.setData({ settingsExpanded: !this.data.settingsExpanded }); },
+  toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
+  openMediaPicker() {
+    if (this.data.busy) return;
+    const token = this._token, epoch = this._epoch;
+    wx.navigateTo({
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=image%2Cvideo',
+      events: { selectMaterial: payload => this.receivePickedMedia(payload, token, epoch) },
+    });
+  },
+  async receivePickedMedia(payload, token, epoch) {
+    const asset = payload && payload.kind === 'media' ? payload.asset : null;
+    if (!asset || !asset.media_id || (asset.kind !== 'image' && asset.kind !== 'video')) return;
+    if (token !== this._token || !this.current(epoch) || this.data.busy || this.data.layoutReadOnly) return;
+    let selected = { ...asset };
+    try { selected.local_path = await api.downloadWorkbenchMedia(asset.media_id); }
+    catch (_) { selected.preview_error = '私有媒体预览加载失败'; }
+    if (token !== this._token || !this.current(epoch) || this.data.busy || this.data.layoutReadOnly) return;
+    const media = mergeAssets(this.data.media, [selected]);
+    const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
+    this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), preview: null, notice: '已加入正文' });
+  },
+  toggleMore() { this.setData({ moreExpanded: !this.data.moreExpanded }); },
+  returnToEdit() {
+    if (this.data.busy) return;
+    this.pauseLayoutVideos();
+    this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, notice: '' });
+  },
+  handleBack() {
+    if (this.data.busy) { wx.showToast({ title: '正在处理，请稍候', icon: 'none' }); return; }
+    if (this.data.preview) { this.returnToEdit(); return; }
+    const leave = () => wx.navigateBack({ fail: () => this.backToWorkbench() });
+    const edited = this._savedSignature ? this._savedSignature !== this.draftSignature() : !this.data.id && (String(this.data.title || '').trim() || this.validBlocks().length);
+    if (!edited || this.data.deleted || this.data.documentReadOnly || this.data.legacyReadOnly) { leave(); return; }
+    const epoch = this._epoch;
+    wx.showModal({ title: '离开编辑？', content: '还有未保存的修改', confirmText: '离开', cancelText: '继续编辑', success: result => { if (result.confirm && this.current(epoch)) leave(); } });
+  },
   pauseLayoutVideos() { [...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || [])].filter(block => block.kind === 'video').forEach(block => wx.createVideoContext(block.domId, this).pause()); },
   draftSignature() {
     return JSON.stringify({ id: this.data.id, title: this.data.title, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks });
   },
   rejectWritingReturn(message) {
     this.setData({ notice: message });
-    wx.showToast({ title: '文案未采用', icon: 'none' });
+    // toast 带原因：只写"未采用"用户不知道下一步该做什么。
+    wx.showToast({ title: message, icon: 'none' });
   },
   receiveWritingReturn(payload, launch) {
     if (launch.handled) { this.setData({ notice: 'AI 文案已处理，未重复追加' }); return; }
@@ -175,15 +234,97 @@ Page({
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有媒体预览加载失败' }); }
   },
   setField(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value, preview: null, notice: '有未保存修改' }); },
+  setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
+  togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
-  setOwner(event) { const owner = (this.data.context.owners || [])[Number(event.detail.value)] || ''; this.setData({ owner_id: owner, preview: null }); },
+  setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, preview: null }); },
   editBlock(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     blocks[index] = { ...blocks[index], text: event.detail.value };
     this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
-  addParagraph() { if (this.data.layoutReadOnly) return; const blocks = this.data.blocks.concat(textBlock('')); this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null }); },
+  addParagraph() { if (this.data.layoutReadOnly) return; this.insertBlock('paragraph'); },
+  showInsertMenu() {
+    if (this.data.layoutReadOnly || this.data.busy) return;
+    const specs = ['paragraph', 'heading', 'quote', 'list-unordered', 'list-ordered'];
+    wx.showActionSheet({
+      itemList: ['段落', '标题', '引用', '无序列表', '有序列表'],
+      success: result => {
+        if (!this.current(this._epoch)) return;
+        this.insertBlock(specs[result.tapIndex] || 'paragraph');
+      },
+      fail: () => {},
+    });
+  },
+  insertBlock(spec) {
+    if (this.data.layoutReadOnly) return;
+    let block;
+    if (spec === 'heading') block = headingBlock(2);
+    else if (spec === 'quote') block = quoteBlock();
+    else if (spec === 'list-unordered') block = listBlock(false);
+    else if (spec === 'list-ordered') block = listBlock(true);
+    else block = textBlock('');
+    const blocks = this.data.blocks.concat(block);
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  setHeadingLevel(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || blocks[index].kind !== 'heading') return;
+    blocks[index] = { ...blocks[index], level: Number(event.currentTarget.dataset.level) === 3 ? 3 : 2 };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  convertBlock(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    const target = String(event.currentTarget.dataset.to || ''), current = blocks[index];
+    if (!current || ['paragraph', 'heading', 'quote'].indexOf(target) < 0 || target === current.kind) return;
+    const converted = { kind: target, text: String(current.text || '') };
+    if (target === 'heading') converted.level = current.kind === 'heading' ? current.level : 2;
+    blocks[index] = converted;
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  editCaption(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || (blocks[index].kind !== 'image' && blocks[index].kind !== 'video')) return;
+    blocks[index] = { ...blocks[index], caption: event.detail.value };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+  },
+  editListItem(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index), itemIndex = Number(event.currentTarget.dataset.itemIndex);
+    if (!blocks[index] || blocks[index].kind !== 'list' || !Array.isArray(blocks[index].items)) return;
+    const items = blocks[index].items.slice();
+    items[itemIndex] = event.detail.value;
+    blocks[index] = { ...blocks[index], items };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+  },
+  addListItem(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || blocks[index].kind !== 'list') return;
+    const items = blocks[index].items || [];
+    if (items.length >= 100) { wx.showToast({ title: '列表最多 100 项', icon: 'none' }); return; }
+    blocks[index] = { ...blocks[index], items: items.concat('') };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  removeListItem(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index), itemIndex = Number(event.currentTarget.dataset.itemIndex);
+    if (!blocks[index] || blocks[index].kind !== 'list') return;
+    const items = blocks[index].items || [];
+    blocks[index] = { ...blocks[index], items: items.length > 1 ? items.filter((_, position) => position !== itemIndex) : [''] };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
+  toggleListOrdered(event) {
+    if (this.data.layoutReadOnly) return;
+    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    if (!blocks[index] || blocks[index].kind !== 'list') return;
+    blocks[index] = { ...blocks[index], ordered: !blocks[index].ordered };
+    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+  },
   addMediaBlock(event) {
     if (this.data.layoutReadOnly) return;
     const asset = this.data.media[Number(event.currentTarget.dataset.index)];
@@ -207,37 +348,39 @@ Page({
   },
   chooseMedia() {
     if (!this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
-    const epoch = this._epoch;
-    wx.chooseMedia({ count: 1, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => {
+    // epoch 必须在选图回调内取：相册/相机全屏页会触发页面 onHide/onShow，
+    // 提前捕获的代次会被返回时的 onShow 作废，导致选中的文件被静默丢弃。
+    wx.chooseMedia({ count: 9, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => {
+      const epoch = this._epoch;
       if (!this.current(epoch)) return;
-      const file = result.tempFiles && result.tempFiles[0];
-      if (file) this.uploadMedia(file.tempFilePath, file.fileType || 'image');
+      this.uploadMediaBatch(result.tempFiles || []);
     } });
   },
   chooseDocument() {
     if (!this.data.context || !this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '文档上传尚未配置', icon: 'none' }); return; }
     if (!this.data.owner_id || (this.data.rights !== 'own' && this.data.rights !== 'authorized')) { this.setData({ error: '请先选择内容归属并确认文档权属' }); return; }
-    const epoch = this._epoch;
-    wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx'], success: result => {
+    wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx', 'pptx'], success: result => {
+      const epoch = this._epoch;
       if (!this.current(epoch)) return;
       const file = result.tempFiles && result.tempFiles[0];
       if (file) this.uploadDocument(file);
     }, fail: result => {
+      const epoch = this._epoch;
       if (this.current(epoch) && !/cancel/i.test(String(result && result.errMsg || ''))) this.setData({ error: '文档选择失败，请重试' });
     } });
   },
   async uploadDocument(file) {
     const name = String(file && file.name || '');
-    if (!/\.(pdf|docx)$/i.test(name) || Number(file && file.size || 0) > 20 * 1024 * 1024) { this.setData({ error: '首批仅支持20MB以内的 PDF 和无宏 DOCX 原文件' }); return; }
+    if (!/\.(pdf|docx|pptx)$/i.test(name) || Number(file && file.size || 0) > 20 * 1024 * 1024) { this.setData({ error: '首批仅支持20MB以内的 PDF、无宏 DOCX 和无宏 PPTX 原文件' }); return; }
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const asset = await api.uploadWorkbenchMedia(file.path, 'document', this.data.owner_id, this.data.rights, name);
       if (!this.current(epoch)) return;
-      if (!asset || asset.kind !== 'document' || (asset.mime !== 'application/pdf' && asset.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) throw new Error('服务端未返回可用的 PDF/DOCX 文档');
+      if (!asset || asset.kind !== 'document' || (asset.mime !== 'application/pdf' && asset.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && asset.mime !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation')) throw new Error('服务端未返回可用的 PDF/DOCX/PPTX 文档');
       const candidate = { ...asset, local_path: file.path };
       this.setData({ documentCandidates: mergeAssets(this.data.documentCandidates, [candidate]), busy: false, notice: '原文件已上传，正在保存文档资料' });
       await this.archiveDocumentAsset(candidate, epoch);
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '文档资料上传失败' }); }
+    } catch (error) { if (this.current(epoch)) { this.setData({ busy: false, error: error.message || '文档资料上传失败' }); wx.showToast({ title: error.message || '文档资料上传失败', icon: 'none' }); } }
   },
   async archiveDocument(event) {
     const asset = this.data.documentCandidates[Number(event.currentTarget.dataset.index)];
@@ -247,10 +390,15 @@ Page({
   async archiveDocumentAsset(asset, epoch) {
     this.setData({ busy: true, error: '' });
     try {
-      const title = String(this.data.title || '').trim() || documentTitle(asset.title);
+      const title = documentTitle(asset.title);
       const body = JSON.stringify({ schema: 1, media_id: asset.media_id });
       const saved = await api.saveContent({ title, body, body_format: 'document_v1', source_url: '', source_note: '', rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: '', media_ids: [asset.media_id], expected_revision: 0 });
       if (!this.current(epoch)) return;
+      // 文档单独建档，不能替换正在编辑的图文；同时保留请求期间新输入的内容。
+      if (this.data.id || String(this.data.title || '').trim() || this.validBlocks().length || this.data.cover_media_id || String(this.data.source_note || '').trim() || String(this.data.source_url || '').trim()) {
+        this.setData({ busy: false, notice: '文档资料已单独保存，可在内容工作台查看；请继续编辑并保存当前图文' });
+        return;
+      }
       this._loaded = true;
       this.setData({ id: saved.content_id, title, revision: saved.revision, version: saved.version, status: saved.status, body_format: 'document_v1', documentReadOnly: true, documentAsset: asset, legacyReadOnly: false, layoutReadOnly: false, busy: false, notice: '文档资料已保存，仅授权账号可取得原文件' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件已上传，保存资料失败，可直接重试建档' }); }
@@ -265,15 +413,30 @@ Page({
       wx.openDocument({ filePath, showMenu: true, success: () => this.setData({ busy: false }), fail: () => this.setData({ busy: false, error: '原文件无法打开，请稍后重试' }) });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件下载失败' }); }
   },
-  async uploadMedia(filePath, kind) {
-    const epoch = this._epoch; this.setData({ busy: true, error: '' });
-    try {
-      const asset = await api.uploadWorkbenchMedia(filePath, kind, this.data.owner_id, this.data.rights);
-      if (!this.current(epoch)) return;
-      const media = this.data.media.concat({ ...asset, local_path: filePath });
-      const blocks = this.data.blocks.concat({ kind: asset.kind || kind, media_id: asset.media_id, caption: '' });
-      this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), busy: false, preview: null, notice: '已上传并加入正文，请保存预览' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '媒体上传失败' }); }
+  async uploadMediaBatch(files) {
+    if (!files || !files.length || this.data.busy) return;
+    const epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    const media = this.data.media.slice();
+    const blocks = this.data.blocks.slice();
+    let failures = 0;
+    // 串行上传：并发会互相争抢 busy 状态且服务端按 owner 串行建档；中途会话失效立即停止，
+    // 已成功的不回滚，失败的计数提示可重试。
+    for (let position = 0; position < files.length; position += 1) {
+      const file = files[position];
+      try {
+        const asset = await api.uploadWorkbenchMedia(file.tempFilePath, file.fileType || 'image', this.data.owner_id, this.data.rights);
+        if (!this.current(epoch)) { this.setData({ busy: false }); return; }
+        media.push({ ...asset, local_path: file.tempFilePath });
+        blocks.push({ kind: asset.kind || file.fileType || 'image', media_id: asset.media_id, caption: '' });
+      } catch (error) {
+        if (!this.current(epoch)) { this.setData({ busy: false }); return; }
+        failures += 1;
+      }
+    }
+    this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), busy: false, preview: null, notice: failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入正文，请保存预览' });
+    // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
+    if (failures) wx.showToast({ title: `${failures} 个媒体上传失败`, icon: 'none' });
   },
   validBlocks() {
     return this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video' || block.kind === 'list' && (block.items || []).some(Boolean) || String(block.text || '').trim());
@@ -284,13 +447,19 @@ Page({
     const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
     if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return null; }
     const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks));
-    return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), expected_revision: this.data.revision } };
+    const tags = String(this.data.tagsText || '').split(/[\s,，]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
+    return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), tags, pinned: this.data.pinned, expected_revision: this.data.revision } };
   },
   async persistDraft(input, epoch) {
+    const signature = this.draftSignature();
     const saved = await api.saveContent(input.draft, this.data.id);
     if (!this.current(epoch)) return null;
-    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks: input.blocks, renderedBlocks: decorateBlocks(input.blocks, this.data.media) });
-    return saved;
+    const draftChanged = signature !== this.draftSignature();
+    const blocks = draftChanged ? this.data.blocks : input.blocks;
+    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media) });
+    // 保存的是提交时的内容，不能把请求期间的新输入误当成已保存。
+    this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
+    return { ...saved, draftChanged };
   },
   async saveDraft() {
     if (this.data.busy) return;
@@ -300,7 +469,7 @@ Page({
     try {
       const saved = await this.persistDraft(input, epoch);
       if (!saved || !this.current(epoch)) return;
-      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '草稿已保存，可继续编辑或生成发布预览' });
+      this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: saved.draftChanged ? '当前仍有未保存修改，请再次保存' : '草稿已保存' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
   },
   publishKey() {
@@ -339,15 +508,18 @@ Page({
     if (this.data.busy) return;
     const input = this.draftInput();
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false });
     try {
       const saved = await this.persistDraft(input, epoch);
       if (!saved || !this.current(epoch)) return;
+      if (saved.draftChanged) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
+      const signature = this.draftSignature();
       const preview = await api.previewContent(saved.content_id, saved.revision);
       if (!this.current(epoch)) return;
       const view = await this.previewView(preview);
       if (!this.current(epoch)) return;
-      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '预览已生成，请核对后发布' });
+      if (signature !== this.draftSignature()) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
+      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
@@ -357,7 +529,8 @@ Page({
       const result = await api.publishContent(this.data.id, this.data.revision, this.data.preview.preview_token, this.publishKey());
       if (!this.current(epoch)) return;
       this._publishSignature = ''; this._publishKey = '';
-      this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布。分享请从已发布阅读页使用小程序原生入口。' });
+      this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布' });
+      this._savedSignature = this.draftSignature();
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '发布失败' }); }
   },
   openPublished() {

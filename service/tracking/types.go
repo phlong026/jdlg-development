@@ -147,6 +147,8 @@ type Content struct {
 	Title       string     `json:"title"`
 	Type        string     `json:"type"`
 	Status      string     `json:"status"`
+	Tags        []string   `json:"tags,omitempty"`
+	Pinned      bool       `json:"pinned,omitempty"`
 	Cover       *Asset     `json:"cover,omitempty"`
 	Media       []Asset    `json:"media"`
 	Body        string     `json:"body"`
@@ -174,6 +176,8 @@ type Draft struct {
 	Owner      string   `json:"owner_id"`
 	CoverID    string   `json:"cover_media_id"`
 	MediaIDs   []string `json:"media_ids"`
+	Tags       []string `json:"tags,omitempty"`
+	Pinned     *bool    `json:"pinned,omitempty"` // nil=不变，显式 true/false 覆盖
 	Revision   int      `json:"expected_revision"`
 }
 type Share struct {
@@ -196,40 +200,44 @@ type Share struct {
 	Revoked bool      `json:"revoked"`
 }
 type EntryInput struct {
-	Route        string `json:"route_key"`
-	Content      string `json:"content_id"`
-	Version      int    `json:"content_version"`
-	ShareToken   string `json:"share_token"`
-	Client       string `json:"client_instance"`
-	Anonymous    string `json:"anonymous_id"`
-	Consent      string `json:"consent_version"`
-	Previous     string `json:"previous_entry_token"`
-	HandoffToken string `json:"handoff_token,omitempty"`
-	WebSource    bool   `json:"-"`
+	Route             string `json:"route_key"`
+	Content           string `json:"content_id"`
+	Version           int    `json:"content_version"`
+	CollectionID      string `json:"collection_id,omitempty"`
+	CollectionVersion int    `json:"collection_version,omitempty"`
+	ShareToken        string `json:"share_token"`
+	Client            string `json:"client_instance"`
+	Anonymous         string `json:"anonymous_id"`
+	Consent           string `json:"consent_version"`
+	Previous          string `json:"previous_entry_token"`
+	HandoffToken      string `json:"handoff_token,omitempty"`
+	WebSource         bool   `json:"-"`
 }
 type Entry struct {
-	Attribution     string    `json:"attribution_status,omitempty"`
-	Route           string    `json:"route_key"`
-	Content         string    `json:"content_id,omitempty"`
-	Version         int       `json:"content_version,omitempty"`
-	Session         string    `json:"session_id"`
-	Token           string    `json:"entry_token,omitempty"`
-	Visitor         string    `json:"visitor_key"`
-	Anonymous       string    `json:"anonymous_id,omitempty"`
-	Account         int64     `json:"account"`
-	Client          string    `json:"client_instance"`
-	Owner           string    `json:"owner_id"`
-	Share           string    `json:"share_id,omitempty"`
-	Started         time.Time `json:"started_at"`
-	LastActive      time.Time `json:"last_active_at"`
-	Expires         time.Time `json:"expires_at"`
-	Accessible      bool      `json:"content_accessible"`
-	OriginalVisitor string    `json:"original_visitor_key,omitempty"`
-	Preview         bool      `json:"is_preview,omitempty"`
-	Self            bool      `json:"is_self_visit,omitempty"`
-	HandoffKey      string    `json:"-"`
-	WebSource       bool      `json:"-"`
-	ConsentVersion  string    `json:"-"`
+	Attribution       string    `json:"attribution_status,omitempty"`
+	Route             string    `json:"route_key"`
+	Content           string    `json:"content_id,omitempty"`
+	Version           int       `json:"content_version,omitempty"`
+	CollectionID      string    `json:"collection_id,omitempty"`
+	CollectionVersion int       `json:"collection_version,omitempty"`
+	Session           string    `json:"session_id"`
+	Token             string    `json:"entry_token,omitempty"`
+	Visitor           string    `json:"visitor_key"`
+	Anonymous         string    `json:"anonymous_id,omitempty"`
+	Account           int64     `json:"account"`
+	Client            string    `json:"client_instance"`
+	Owner             string    `json:"owner_id"`
+	Share             string    `json:"share_id,omitempty"`
+	Started           time.Time `json:"started_at"`
+	LastActive        time.Time `json:"last_active_at"`
+	Expires           time.Time `json:"expires_at"`
+	Accessible        bool      `json:"content_accessible"`
+	OriginalVisitor   string    `json:"original_visitor_key,omitempty"`
+	Preview           bool      `json:"is_preview,omitempty"`
+	Self              bool      `json:"is_self_visit,omitempty"`
+	HandoffKey        string    `json:"-"`
+	WebSource         bool      `json:"-"`
+	ConsentVersion    string    `json:"-"`
 }
 type Event struct {
 	// Attribution is overwritten by the server from the signed entry context.
