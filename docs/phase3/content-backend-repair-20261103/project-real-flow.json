@@ -1,0 +1,136 @@
+[
+  {
+    "label": "修复后项目列表正常",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "list",
+    "error": "",
+    "notice": "",
+    "invitationCount": 0
+  },
+  {
+    "label": "重进已创建测试项目",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "detail",
+    "error": "",
+    "notice": "",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "invitationCount": 0
+  },
+  {
+    "label": "保存项目资料",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "detail",
+    "error": "",
+    "notice": "项目资料已保存，已冻结版本仍保留原有资料。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "invitationCount": 0
+  },
+  {
+    "label": "真实保存笔记",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "editor",
+    "error": "",
+    "notice": "笔记草稿已创建。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "noteId": "h4zOmDpMKCz8zh-XE4JvUzEqXHUdMOP3",
+    "noteRevision": 1,
+    "invitationCount": 0
+  },
+  {
+    "label": "真实修改笔记",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "editor",
+    "error": "",
+    "notice": "草稿已更新，需重新冻结并分享新版本。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "noteId": "h4zOmDpMKCz8zh-XE4JvUzEqXHUdMOP3",
+    "noteRevision": 2,
+    "invitationCount": 0
+  },
+  {
+    "label": "真实生成方案版本",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "editor",
+    "error": "",
+    "notice": "版本已冻结，后续修改不会改变本次分享。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "noteId": "h4zOmDpMKCz8zh-XE4JvUzEqXHUdMOP3",
+    "noteRevision": 2,
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  },
+  {
+    "label": "真实生成方案版本",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "editor",
+    "error": "",
+    "notice": "版本已冻结，后续修改不会改变本次分享。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "noteId": "h4zOmDpMKCz8zh-XE4JvUzEqXHUdMOP3",
+    "noteRevision": 2,
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  },
+  {
+    "label": "查看冻结版本",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "version",
+    "error": "",
+    "notice": "",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  },
+  {
+    "label": "查看冻结版本",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "version",
+    "error": "",
+    "notice": "",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  },
+  {
+    "label": "生成邀请未发送",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "members",
+    "error": "",
+    "notice": "邀请已生成。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 1
+  },
+  {
+    "label": "撤销测试邀请",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "members",
+    "error": "",
+    "notice": "邀请已撤销。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  },
+  {
+    "label": "项目记录",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "history",
+    "error": "",
+    "notice": "",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  },
+  {
+    "label": "重进项目持久化验证",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "detail",
+    "error": "",
+    "notice": "",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "noteId": "h4zOmDpMKCz8zh-XE4JvUzEqXHUdMOP3",
+    "noteRevision": 2,
+    "versionId": "ukrT0v1QdAyCTSKP51tZCaSkGiW0go16",
+    "invitationCount": 0
+  }
+]
