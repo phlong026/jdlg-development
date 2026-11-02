@@ -150,7 +150,7 @@ Page({
     const choices = (this.data.context && this.data.context.owner_choices) || [];
     if (ownerID && !choices.some(item => item.owner_id === ownerID)) return;
     this.setData({ ownerFilter: ownerID, items: [], visibleItems: [], next_cursor: '', snapshot: null });
-    this.loadContents(true);
+    return this.load(true);
   },
   async loadCovers(epoch, rows) {
     if (!api.downloadWorkbenchMedia) return;

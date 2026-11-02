@@ -178,3 +178,13 @@ test('content pages use one clear title and hide unavailable writing actions', (
   assert.doesNotMatch(editor, /{{owner_id \|\| '请选择'}}/);
   assert.equal(workbenchConfig.navigationBarTitleText, '内容创作');
 });
+
+test('switching owner reloads the selected catalog from its first page', async () => {
+  const { page, queries } = runtime({ workbenchContext: async () => ({ enabled: true, can_manage: true, owner_choices: [{ owner_id: 'owner-a' }, { owner_id: 'owner-b' }] }) });
+  page.onShow(); await tick(); await tick();
+  await page.selectOwnerTab({ currentTarget: { dataset: { owner: 'owner-b' } } });
+  await tick();
+  assert.equal(queries.at(-1).owner, 'owner-b');
+  assert.equal(queries.at(-1).cursor, undefined);
+  assert.equal(page.data.items.length, 3);
+});
