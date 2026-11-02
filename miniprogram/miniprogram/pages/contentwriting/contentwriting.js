@@ -30,12 +30,15 @@ Page({
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
-    if (token !== this._token) this.setData({ title: '', facts: '', result: '', notice: '', error: '账号已变化，请重新填写创作内容' });
+    if (token !== this._token) {
+      this.cancelStream();
+      this.setData({ title: '', facts: '', result: '', notice: '', streaming: false, streamPartial: '', error: '账号已变化，请重新填写创作内容' });
+    }
     this._token = token;
     this.setData({ navigating: false, loginRequired: !token });
     if (token && !this._typesLoadedOnce) { this._typesLoadedOnce = true; this.loadWritingTypes(); }
   },
-  onUnload() { this._unloaded = true; if (this._streamTask) this._streamTask.abort(); },
+  onUnload() { this._unloaded = true; this.cancelStream(); },
   receiveWritingContext(payload) {
     if ((this._source !== 'editor' && this._source !== 'project_note') || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
     if (!payload || payload.source !== this._source) return;
@@ -148,27 +151,45 @@ Page({
     const prompt = this.buildPrompt(action);
     if (!prompt) { this.setData({ error: '请先填写已知资料和要求，AI 将以这些事实为依据' }); return; }
     this.setData({ streaming: true, streamPartial: '', error: '', notice: '正在生成…' });
-    this._streamTask = startAIStream({
-      messages: [{ role: 'user', content: prompt }],
-      onChunk: partial => {
-        if (!this._unloaded) this.setData({ streamPartial: partial, notice: '' });
-      },
-      onDone: full => {
-        if (this._unloaded) return;
-        const value = String(full || '').trim();
-        this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '生成完成，请核对事实后使用' : '生成为空，请调整资料后重试' });
-      },
-      onError: message => {
-        if (this._unloaded) return;
-        this.setData({ streaming: false, streamPartial: '', error: message });
-      },
-    });
+    const request = this._streamRequest = (this._streamRequest || 0) + 1;
+    let settled = false;
+    const current = () => !settled && !this._unloaded && request === this._streamRequest && token === this._token && token === String(wx.getStorageSync('token') || '');
+    const onError = message => {
+      if (!current()) return;
+      settled = true; this._streamTask = null;
+      this.setData({ streaming: false, streamPartial: '', notice: '', error: message });
+    };
+    try {
+      const task = startAIStream({
+        messages: [{ role: 'user', content: prompt }],
+        onChunk: partial => {
+          if (current()) this.setData({ streamPartial: partial, notice: '' });
+        },
+        onDone: full => {
+          if (!current()) return;
+          settled = true; this._streamTask = null;
+          const value = String(full || '').trim();
+          this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '生成完成，请核对事实后使用' : '生成为空，请调整资料后重试' });
+        },
+        onError,
+      });
+      if (current()) this._streamTask = task;
+    } catch (error) {
+      console.warn('启动文案生成失败:', error);
+      onError('生成暂时无法开始，请稍后重试');
+    }
+  },
+  cancelStream() {
+    // 先使回调失效，再中止请求；abort 可能同步触发网络失败回调。
+    this._streamRequest = (this._streamRequest || 0) + 1;
+    const task = this._streamTask;
+    this._streamTask = null;
+    if (task) task.abort();
   },
   stopStream() {
-    if (this._streamTask && this.data.streaming) {
-      this._streamTask.abort();
-      this.setData({ streaming: false, streamPartial: '', notice: '已停止生成' });
-    }
+    if (!this.data.streaming) return;
+    this.cancelStream();
+    this.setData({ streaming: false, streamPartial: '', notice: '已停止生成' });
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login', fail: () => this.setData({ error: '登录页面暂时无法打开，请稍后重试' }) }); },
   generateWriting(event) {

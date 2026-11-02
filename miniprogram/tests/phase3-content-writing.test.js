@@ -24,7 +24,7 @@ function harness(name) {
   vm.runInNewContext(fs.readFileSync(path.join(root, `pages/${name}/${name}.js`), 'utf8'), {
     Page(value) { definition = value; }, wx, exports: {}, module: { exports: {} }, console,
     require(id) {
-      if (id.endsWith('/ai-stream')) return aiStreamStub;
+      if (id.endsWith('/ai-stream')) return { startAIStream: options => aiStreamStub.startAIStream(options) };
       if (id.endsWith('/phase3-api')) return apiStub;
       if (id.endsWith('/parameter')) return { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) };
       if (id.endsWith('/deviceFingerprint')) return { getCachedDeviceFingerprint: () => '' };
@@ -277,4 +277,40 @@ test('the actual send button includes the current user message once and preserve
   assert.equal(messages.filter(item => item.role === 'user' && item.content === '请写庭院说明').length, 2);
   assert.equal(messages[1].content, '上一轮说明');
   assert.equal(messages[2].content, '请写庭院说明');
+});
+
+for (const boundary of ['stop', 'unload', 'account-change', 'storage-change']) {
+  test(`quick generation ignores late callbacks after ${boundary}`, () => {
+    const h = harness('contentwriting'); let callbacks, aborted = 0;
+    h.aiStreamStub.startAIStream = options => { callbacks = options; return { abort() { aborted++; options.onError('abort callback'); } }; };
+    h.page.onLoad({}); h.page.onShow(); h.page.setData({ facts: '真实资料' }); h.page.quickGenerate();
+    if (boundary === 'stop') h.page.stopStream();
+    if (boundary === 'unload') h.page.onUnload();
+    if (boundary === 'account-change' || boundary === 'storage-change') h.token('session-two');
+    if (boundary === 'account-change') h.page.onShow();
+    const before = JSON.stringify(h.page.data);
+    callbacks.onChunk('旧片段'); callbacks.onDone('旧账号文案'); callbacks.onError('旧错误');
+    assert.equal(JSON.stringify(h.page.data), before);
+    if (boundary !== 'storage-change') assert.equal(aborted, 1);
+    if (boundary === 'account-change') assert.equal(h.page.data.streaming, false);
+  });
+}
+
+test('stopped stream cannot overwrite or stop its replacement', () => {
+  const h = harness('contentwriting'); const requests = [];
+  h.aiStreamStub.startAIStream = options => { requests.push(options); return { abort() { options.onError('aborted'); } }; };
+  h.page.onLoad({}); h.page.onShow(); h.page.setData({ facts: '资料' }); h.page.quickGenerate(); h.page.stopStream(); h.page.quickGenerate();
+  requests[1].onChunk('新片段'); requests[0].onDone('旧结果'); requests[0].onError('旧错误');
+  assert.equal(h.page.data.streaming, true); assert.equal(h.page.data.streamPartial, '新片段'); assert.equal(h.page.data.error, '');
+  requests[1].onDone('新结果'); requests[1].onChunk('完成后的片段'); requests[1].onError('完成后的错误');
+  assert.equal(h.page.data.result, '新结果'); assert.equal(h.page.data.streaming, false); assert.equal(h.page.data.streamPartial, ''); assert.equal(h.page.data.error, '');
+});
+
+test('synchronously completed stream leaves no active task and startup errors recover', () => {
+  const h = harness('contentwriting'); let aborted = 0;
+  h.aiStreamStub.startAIStream = options => { options.onDone('同步结果'); return { abort() { aborted++; } }; };
+  h.page.onLoad({}); h.page.onShow(); h.page.setData({ facts: '资料' }); h.page.quickGenerate();
+  assert.equal(h.page.data.result, '同步结果'); assert.equal(h.page.data.streaming, false); assert.ok(!h.page._streamTask);
+  h.aiStreamStub.startAIStream = () => { throw new Error('request unavailable'); };
+  h.page.quickGenerate(); assert.equal(h.page.data.streaming, false); assert.ok(h.page.data.error); assert.equal(aborted, 0);
 });
