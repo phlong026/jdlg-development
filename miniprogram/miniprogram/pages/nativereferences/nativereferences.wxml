@@ -1,12 +1,12 @@
 <block wx:if="{{__profileAccessMounted}}">
-<navigation-bar title="{{navigationTitle}}" back="{{true}}" background="#f6f3ed" />
+<navigation-bar title="{{navigationTitle}}" back="{{true}}" background="#fbfaf7" />
 <view class="page">
   <view wx:if="{{loginRequired}}" class="state"><text>登录后使用资料库</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{loading}}" class="state">正在加载…</view>
   <block wx:else>
     <view wx:if="{{error}}" class="notice error"><text>{{error}}</text><button bindtap="retry" disabled="{{busy}}">重试</button></view>
     <text wx:if="{{notice}}" class="notice">{{notice}}</text>
-    <view wx:if="{{pickerMode}}" class="search"><input value="{{search}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="submitSearch" placeholder="搜索标题" /><button bindtap="submitSearch" disabled="{{busy}}">搜索</button></view>
+    <view wx:if="{{pickerMode || libraryTab === 'available'}}" class="search"><input value="{{search}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="submitSearch" placeholder="搜索标题" /><button bindtap="submitSearch" disabled="{{busy}}">搜索</button></view>
     <view wx:if="{{pickerMode === 'media'}}" class="content-section">
       <text wx:if="{{!media.length}}" class="empty">未找到素材</text>
       <view wx:for="{{media}}" wx:key="media_id" class="row"><text class="name">{{item.title || (item.kind === 'image' ? '图片' : item.kind === 'video' ? '视频' : '文档')}}</text><button class="primary compact" data-id="{{item.media_id}}" bindtap="selectMedia">选择</button></view>
@@ -22,16 +22,16 @@
     <block wx:else>
       <view class="library-tabs" role="tablist"><button class="library-tab {{libraryTab === 'selected' ? 'active' : ''}}" data-tab="selected" bindtap="selectLibraryTab">已选用</button><button class="library-tab {{libraryTab === 'available' ? 'active' : ''}}" data-tab="available" bindtap="selectLibraryTab">可用内容</button></view>
       <view wx:if="{{libraryTab === 'selected'}}" class="content-section">
-        <text wx:if="{{!references.length}}" class="empty">暂无已选内容</text>
+        <view wx:if="{{!references.length}}" class="library-empty"><text>暂无已选内容</text><button class="primary empty-action" data-tab="available" bindtap="selectLibraryTab">浏览可用内容</button></view>
         <view wx:for="{{references}}" wx:key="reference_id" class="row"><view class="row-main"><text class="name">{{item.target.title}}</text><text class="meta">V{{item.target.content_version}}{{item.available ? '' : ' · 已失效'}}</text></view><view class="actions"><button class="primary compact" data-id="{{item.reference_id}}" bindtap="openReference" disabled="{{busy || !item.available}}">打开</button><button class="text-button" data-id="{{item.reference_id}}" bindtap="removeReference" disabled="{{busy}}">移除</button></view></view>
         <button wx:if="{{referenceCursor}}" class="load-more" data-kind="references" bindtap="loadMore" disabled="{{busy}}">加载更多</button>
-        <button class="history-link" bindtap="openHistory">生成记录</button>
       </view>
       <view wx:else class="content-section">
         <text wx:if="{{!candidates.length}}" class="empty">暂无可用内容</text>
         <view wx:for="{{candidates}}" wx:key="content_id" class="row"><view class="row-main"><text class="name">{{item.title}}</text><text class="meta">已发布 · V{{item.content_version}}</text></view><button class="primary compact" data-id="{{item.content_id}}" data-version="{{item.content_version}}" bindtap="saveReference" disabled="{{busy}}">选用</button></view>
         <button wx:if="{{candidateCursor}}" class="load-more" data-kind="candidates" bindtap="loadMore" disabled="{{busy}}">加载更多</button>
       </view>
+      <button class="history-link" bindtap="openHistory">生成记录 <text>›</text></button>
     </block>
   </block>
 </view>

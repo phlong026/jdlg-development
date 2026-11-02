@@ -1,0 +1,20 @@
+[
+  {
+    "state": "空输入校验",
+    "error": "请先填写已知资料和要求，AI 将以这些事实为依据",
+    "footerError": "请先填写已知资料和要求，AI 将以这些事实为依据"
+  },
+  {
+    "state": "手工长文",
+    "resultLength": 540,
+    "footerButtons": [
+      "重新生成",
+      "带入编辑器"
+    ]
+  },
+  {
+    "state": "资料库空态到搜索",
+    "libraryTab": "available",
+    "error": ""
+  }
+]

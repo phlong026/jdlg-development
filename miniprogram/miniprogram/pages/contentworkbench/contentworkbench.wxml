@@ -9,18 +9,17 @@
     <view wx:elif="{{error && !items.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
     <block wx:else>
       <block wx:if="{{view === 'studio'}}">
-        <view class="workspace-tabs"><text class="workspace-tab selected">我的内容</text><button class="workspace-tab" bindtap="openCollections">项目合集</button><button class="workspace-tab" bindtap="openExistingAssets">资料库</button></view>
-        <view class="search-row"><view class="search-box"><text class="search-symbol">⌕</text><input value="{{keyword}}" bindinput="setKeyword" bindconfirm="searchContents" confirm-type="search" maxlength="30" placeholder="搜索内容" aria-label="搜索内容标题" /><button wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清空搜索">×</button></view></view>
-        <view wx:if="{{context.stones_balance >= 0}}" class="quota-strip"><text>灵石 {{context.stones_balance}}</text><text wx:if="{{context.month_generations >= 0}}" class="quota-divider">·</text><text wx:if="{{context.month_generations >= 0}}">本月生成 {{context.month_generations}}</text></view>
+        <view class="workspace-heading"><text class="workspace-title">我的内容</text><view class="workspace-destinations"><button class="workspace-destination" bindtap="openCollections">项目合集<text class="destination-arrow">›</text></button><button class="workspace-destination" bindtap="openExistingAssets">资料库<text class="destination-arrow">›</text></button></view></view>
+        <view class="workspace-links">
+          <button class="workspace-link" bindtap="openImportView"><t-icon name="link" size="17px" /><text>链接导入</text></button>
+          <button class="workspace-link" bindtap="openAIWriting"><t-icon name="edit-1" size="17px" /><text>AI文案</text></button>
+          <button wx:if="{{hasShareVisitAccess}}" class="workspace-link" bindtap="openShareVisits"><t-icon name="share" size="17px" /><text>分享记录</text></button>
+        </view>
         <view wx:if="{{context.owner_choices.length > 1}}" class="owner-tabs" role="tablist">
           <button class="owner-tab {{ownerFilter === '' ? 'active' : ''}}" data-owner="" bindtap="selectOwnerTab" role="tab" aria-selected="{{ownerFilter === ''}}">全部</button>
           <button wx:for="{{context.owner_choices}}" wx:key="owner_id" class="owner-tab {{ownerFilter === item.owner_id ? 'active' : ''}}" data-owner="{{item.owner_id}}" bindtap="selectOwnerTab" role="tab" aria-selected="{{ownerFilter === item.owner_id}}">{{item.display_name}}</button>
         </view>
-        <view class="workspace-links">
-          <button class="workspace-link" bindtap="openImportView"><t-icon name="link" size="20px" /><text>链接导入</text></button>
-          <button class="workspace-link" bindtap="openAIWriting"><t-icon name="edit-1" size="20px" /><text>AI文案</text></button>
-          <button wx:if="{{hasShareVisitAccess}}" class="workspace-link" bindtap="openShareVisits"><t-icon name="share" size="20px" /><text>分享记录</text></button>
-        </view>
+        <view class="search-row"><view class="search-box"><text class="search-symbol">⌕</text><input value="{{keyword}}" bindinput="setKeyword" bindconfirm="searchContents" confirm-type="search" maxlength="30" placeholder="搜索内容" aria-label="搜索内容标题" /><button wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清空搜索">×</button></view></view>
         <view class="category-tabs" role="tablist"><button wx:for="{{categories}}" wx:key="key" class="category-tab {{category === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="selectCategory" role="tab" aria-selected="{{category === item.key}}">{{item.label}}</button></view>
         <view wx:if="{{searchTerm}}" class="filter-note">“{{searchTerm}}”<button class="text-button" bindtap="clearSearch">清空</button></view>
         <view class="content-list">
@@ -43,6 +42,7 @@
           </view>
         </view>
         <text wx:if="{{category !== 'all' && next_cursor}}" class="pagination-note">仅筛选已加载内容</text>
+        <view wx:if="{{context.stones_balance >= 0}}" class="quota-strip"><text>灵石 {{context.stones_balance}}</text><text wx:if="{{context.month_generations >= 0}}" class="quota-divider">·</text><text wx:if="{{context.month_generations >= 0}}">本月生成 {{context.month_generations}}</text></view>
         <view wx:if="{{error}}" class="inline-error">{{error}}</view>
         <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
       </block>
