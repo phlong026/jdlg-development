@@ -2055,7 +2055,7 @@ Page({
       wx.navigateTo({ url: `/pages/contentedit/contentedit?id=${encodeURIComponent(contentId)}` });
     } catch (error) {
       this.setData({ contentSaving: false });
-      wx.showToast({ title: (error && error.message) || '保存失败，请重试', icon: 'none' });
+      wx.showToast({ title: (error instanceof Error && error.message) || '保存失败，请重试', icon: 'none' });
     }
   },
 
