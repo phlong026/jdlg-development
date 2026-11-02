@@ -1,6 +1,6 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="writing-page">
-  <navigation-bar title="AI文案" back="{{true}}" background="#faf8f4" />
+  <view class="writing-navigation"><navigation-bar title="AI文案" back="{{true}}" background="#fbfaf7" /></view>
   <view class="writing-body">
     <view class="writing-tabs" role="tablist">
       <button wx:for="{{writingTypes}}" wx:key="key" class="writing-tab {{type === item.key ? 'active' : ''}}" data-type="{{item.key}}" bindtap="selectType" aria-role="tab" aria-selected="{{type === item.key}}">{{item.label}}</button>
@@ -17,23 +17,35 @@
             <view class="picker-value">{{introPresetIndex >= 0 ? introPresets[introPresetIndex].name : '选择名片或品牌介绍（选填）'}}</view>
           </picker>
         </view>
-        <view class="voice-row"><button class="voice-button {{voiceActive ? 'active' : ''}}" bindtouchstart="startVoiceInput" bindtouchend="stopVoiceInput" bindtouchcancel="stopVoiceInput" disabled="{{loginRequired}}" aria-label="按住说话进行语音输入">{{voiceActive ? '松开结束 · ' + (voicePartial || '正在识别…') : '按住说话'}}</button></view>
+        <view class="voice-row"><button class="voice-button {{voiceActive ? 'active' : ''}}" bindtouchstart="startVoiceInput" bindtouchend="stopVoiceInput" bindtouchcancel="stopVoiceInput" disabled="{{loginRequired}}" aria-label="按住说话进行语音输入"><t-icon name="microphone" size="20px" /><text>{{voiceActive ? '松开结束' : '按住说话'}}</text></button></view>
       </view>
       <view class="writing-panel result-panel">
-        <view class="section-heading"><text class="section-title">{{heading}}</text></view>
+        <view class="section-heading"><text class="section-title">文案</text></view>
         <view wx:if="{{streaming && streamPartial}}" class="stream-preview"><text class="stream-text">{{streamPartial}}▌</text></view>
         <textarea wx:else class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="{{streaming ? '正在生成…' : '输入或生成文案'}}" placeholder-class="placeholder" disabled="{{streaming}}" />
         <text class="panel-caption">AI生成内容，请核对后使用。</text>
       </view>
       <view wx:if="{{result}}" class="writing-panel refine-panel">
         <text class="section-title">编辑优化</text>
-        <view class="refine-actions"><button data-action="concise" bindtap="generateWriting" disabled="{{!result || navigating}}">精简</button><button data-action="expand" bindtap="generateWriting" disabled="{{!result || navigating}}">扩写</button><button data-action="tone" bindtap="generateWriting" disabled="{{!result || navigating}}">调整语气</button></view>
+        <view class="refine-actions"><button data-action="concise" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">精简</button><button data-action="expand" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">扩写</button><button data-action="tone" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">调整语气</button></view>
       </view>
-      <text wx:if="{{error}}" class="feedback error" role="alert">{{error}}</text><text wx:if="{{notice}}" class="feedback notice" role="status">{{notice}}</text>
+      <text wx:if="{{notice}}" class="feedback notice" role="status">{{notice}}</text>
+      <button class="text-action deep-chat" bindtap="generateWriting" disabled="{{streaming || navigating}}">打开对话</button>
       <text class="generation-hint">对话费用以发送前提示为准。</text>
+      <text wx:if="{{error}}" class="writing-error writing-error-reserve" aria-hidden="{{true}}">{{error}}</text>
     </block>
   </view>
-  <view wx:if="{{!loginRequired}}" class="writing-footer"><button wx:if="{{result}}" class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button><button wx:if="{{streaming}}" class="secondary" bindtap="stopStream">停止</button><button class="{{result || streaming ? 'secondary' : 'primary'}}" bindtap="quickGenerate" disabled="{{streaming || navigating}}">{{streaming ? '生成中…' : result ? '重新生成' : '快速生成'}}</button><button class="text-action deep-chat" bindtap="generateWriting" disabled="{{streaming || navigating}}">打开对话</button></view>
+  <view wx:if="{{!loginRequired}}" class="writing-footer">
+    <text wx:if="{{error}}" class="writing-error" role="alert">{{error}}</text>
+    <view class="writing-footer-actions">
+    <button wx:if="{{streaming}}" class="secondary" bindtap="stopStream">停止生成</button>
+    <block wx:elif="{{result}}">
+      <button class="secondary" bindtap="quickGenerate" disabled="{{navigating}}">重新生成</button>
+      <button class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button>
+    </block>
+    <button wx:else class="primary" bindtap="quickGenerate" disabled="{{navigating}}">生成文案</button>
+    </view>
+  </view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

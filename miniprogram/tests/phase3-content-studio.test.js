@@ -160,7 +160,7 @@ test('content pages use one clear title and hide unavailable writing actions', (
   assert.match(writing, /<navigation-bar title="AI文案"/);
   assert.doesNotMatch(writing, /AI内容策划|title="甲第灵光"/);
   assert.match(writing, /wx:if="{{result}}" class="writing-panel refine-panel"/);
-  assert.match(writing, /wx:if="{{result}}" class="primary"/);
+  assert.match(writing, /<block wx:elif="{{result}}">[\s\S]*?<button class="primary" bindtap="saveToDraft"/);
   assert.match(writing, /bindtap="quickGenerate"/);
   assert.match(writing, /bindtap="generateWriting"[^>]*/); // 深聊入口保留
   assert.match(references, /<navigation-bar title="{{navigationTitle}}"/);

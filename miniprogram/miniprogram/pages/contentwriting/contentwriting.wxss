@@ -1,16 +1,16 @@
 page {
-  background: #faf8f4;
+  background: #fbfaf7;
   color: #30251c;
 }
 
 .writing-page {
   min-height: 100vh;
-  background: #faf8f4;
+  background: #fbfaf7;
   font-size: 28rpx;
 }
 
 .writing-body {
-  padding: 24rpx 32rpx calc(250rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx calc(156rpx + env(safe-area-inset-bottom));
 }
 
 .writing-tabs {
@@ -185,7 +185,7 @@ page {
   z-index: 10;
   box-sizing: border-box;
   padding: 18rpx 32rpx calc(22rpx + env(safe-area-inset-bottom));
-  background: #faf8f4;
+  background: #fbfaf7;
   border-top: 1rpx solid #eee6dc;
 }
 
@@ -215,17 +215,13 @@ page {
 }
 
 .writing-footer .primary, .writing-footer .secondary {
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
-}
-
-.writing-footer .secondary {
-  margin-top: 0;
-}
-
-.writing-footer .primary + .secondary {
-  margin-top: 16rpx;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 12rpx;
+  white-space: nowrap;
+  font-size: 26rpx;
 }
 
 .primary[disabled] {
@@ -249,25 +245,29 @@ page {
   margin-top: 24rpx;
 }
 
+/* 语音是输入辅助，保持次级视觉权重与可长按的触控面积。 */
 .voice-row {
-  margin-top: 14rpx;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8rpx;
 }
 
-.voice-button {
-  width: 100%;
-  min-height: 76rpx;
-  border: 1rpx dashed #c9a06a;
-  border-radius: 14rpx;
-  background: #fff8ef;
-  color: #8c5e32;
+button.voice-button {
+  width: auto;
+  min-height: 88rpx;
+  margin: 0;
+  padding: 0 16rpx;
+  gap: 10rpx;
+  border: 0;
+  border-radius: 12rpx;
+  background: transparent;
+  color: #806345;
   font-size: 25rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.voice-button.active {
-  border-style: solid;
+button.voice-button.active {
+  color: #8c5e32;
   background: #f1e4d2;
 }
 
@@ -302,14 +302,15 @@ button::after {
 }
 
 .deep-chat {
-  flex: 0 0 auto;
-  min-height: 82rpx;
-  margin: 0;
-  padding: 0 22rpx;
-  border: 1rpx solid #dfcbb3;
-  background: #fff;
+  width: auto;
+  min-height: 72rpx;
+  margin: 0 0 12rpx;
+  padding: 0;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
   color: #98683a;
-  font-size: 24rpx;
+  font-size: 26rpx;
 }
 
 .picker-value {
@@ -323,3 +324,32 @@ button::after {
   display: flex;
   align-items: center;
 }
+
+.writing-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.writing-error {
+  display: block;
+  box-sizing: border-box;
+  margin: 0 0 16rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 10rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: #a54435;
+  background: #fcf0ec;
+}
+
+/* 与固定栏错误同宽同排版，按实际换行高度给正文留位。 */
+.writing-error-reserve {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.writing-navigation { position: sticky; top: 0; z-index: 30; background: #fbfaf7; }

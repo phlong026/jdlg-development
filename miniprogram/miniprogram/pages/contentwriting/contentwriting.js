@@ -60,9 +60,15 @@ Page({
   // 拉取服务端 Prompt 注册表；失败静默保持本地兜底，不打扰创作流程。
   loadWritingTypes() {
     api.writingPrompts().then(result => {
-      const prompts = ((result && result.prompts) || []).filter(item => item && item.key && item.heading && item.instruction).map(item => ({
-        key: String(item.key), label: String(item.label || item.heading), heading: String(item.heading), example: String(item.example || ''), instruction: String(item.instruction),
-      }));
+      const prompts = ((result && result.prompts) || []).filter(item => item && item.key && item.heading && item.instruction).map(item => {
+        // 已有类型的名称属于产品导航；运营仍可调整指令，扩展类型保留服务端命名。
+        const productType = writingTypes.find(type => type.key === item.key);
+        return {
+          key: String(item.key), label: productType ? productType.label : String(item.label || item.heading),
+          heading: productType ? productType.heading : String(item.heading),
+          example: String(item.example || ''), instruction: String(item.instruction),
+        };
+      });
       if (this._unloaded) return;
       const update = {};
       if (prompts.length) {
@@ -124,7 +130,7 @@ Page({
     const current = String(this.data.facts || '').replace(/\s+$/, '');
     this.setData({ facts: ((current ? current + '\n' : '') + String(text)).slice(0, 6000), error: '' });
   },
-  editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: this._source === 'project_note' ? '文案已修改，采纳后将带回项目笔记' : '文案已修改，保存后可在内容编辑页继续排版' }); },
+  editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: '', error: '' }); },
   // B6 就地流式生成：不跳 chat 页，复用 SSE 通道直接在结果区流式回显。
   buildPrompt(action) {
     const facts = String(this.data.facts || '').trim();

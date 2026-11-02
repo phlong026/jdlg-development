@@ -115,7 +115,7 @@ test('prompt registry drives generation while the anti-fabrication clause stays 
   ] });
   h.page.onLoad({}); h.page.onShow();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.page.data.heading, '服务端设计标题');
+  assert.equal(h.page.data.heading, '方案设计说明');
   h.page.setData({ title: '庭院方案', facts: '保留现有大树，入口朝南。' });
   h.page.generateWriting();
   const navigation = h.calls.find(call => call.navigate).navigate;
@@ -309,4 +309,49 @@ test('synchronously completed stream leaves no active task and startup errors re
   assert.equal(h.page.data.result, '同步结果'); assert.equal(h.page.data.streaming, false); assert.ok(!h.page._streamTask);
   h.aiStreamStub.startAIStream = () => { throw new Error('request unavailable'); };
   h.page.quickGenerate(); assert.equal(h.page.data.streaming, false); assert.ok(h.page.data.error); assert.equal(aborted, 0);
+});
+
+test('known writing types keep product names while retaining server instructions and custom types', async () => {
+  const h = harness('contentwriting');
+  h.apiStub.writingPrompts = async () => ({ prompts: [
+    ...['design', 'project', 'promotion'].map(key => ({ key, label: 'è®¾', heading: '服务端标题', instruction: key + ' 服务端专用指令' })),
+    { key: 'custom', label: '招募文案', heading: '自定义标题', instruction: '自定义指令' },
+  ] });
+  h.page.onLoad({}); h.page.onShow(); await tick();
+  assert.deepEqual(Array.from(h.page.data.writingTypes, item => item.label), ['设计说明', '项目介绍', '推广文案', '招募文案']);
+  h.page.setData({ facts: '真实资料' });
+  for (const key of ['design', 'project', 'promotion', 'custom']) {
+    h.page.selectType({ currentTarget: { dataset: { type: key } } });
+    assert.match(h.page.buildPrompt(), new RegExp(key === 'custom' ? '自定义指令' : key + ' 服务端专用指令'));
+  }
+  assert.equal(h.page.data.heading, '自定义标题');
+});
+
+test('native error rendering places complete feedback above footer actions and reserves its height', () => {
+  const compiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
+  const file = './pages/contentwriting/contentwriting.wxml';
+  const source = require('node:child_process').execFileSync(compiler, [file], { cwd: root, encoding: 'utf8' });
+  const context = { window: {}, console: { log: error => { throw error; } } };
+  vm.createContext(context); vm.runInContext(source, context);
+  const error = '请先填写已知资料和要求，AI 将以这些事实为依据。\n补充项目地点与设计重点后重试。';
+  const nodes = tree => typeof tree === 'object' && tree ? [tree, ...(tree.children || []).flatMap(nodes)] : [];
+  const text = tree => typeof tree === 'string' ? tree : (tree?.children || []).map(text).join('');
+  const tree = context.$gwx(file)({ __profileAccessMounted: true, loginRequired: false, error, result: '', writingTypes: [], introPresets: [] });
+  const all = nodes(tree);
+  const footer = all.find(node => node.attr?.class === 'writing-footer');
+  const alert = nodes(footer).find(node => node.attr?.role === 'alert');
+  assert.ok(alert, 'error must be visible in the fixed footer');
+  assert.equal(text(alert), error);
+  const row = nodes(footer).find(node => node.attr?.class === 'writing-footer-actions');
+  assert.ok(nodes(row).some(node => node.attr?.bindtap === 'quickGenerate'));
+  const reserve = all.find(node => String(node.attr?.class || '').includes('writing-error-reserve'));
+  assert.equal(text(reserve), error, 'reserve the actual wrapped message height without truncating');
+});
+
+test('manual writing clears stale generation errors without changing the entered result', () => {
+  const h = harness('contentwriting');
+  h.page.setData({ error: '请先填写创作要求' });
+  h.page.editResult({ detail: { value: '手动填写的文案' } });
+  assert.equal(h.page.data.result, '手动填写的文案');
+  assert.equal(h.page.data.error, '');
 });

@@ -148,7 +148,6 @@ test('writing page returns explicit project-note identity through the same Event
   assert.match(h.page.data.returnLabel, /项目笔记/);
 
   h.page.editResult({ detail: { value: '经人工核对的沟通文案' } });
-  assert.match(h.page.data.notice, /项目笔记/);
   h.page.saveToDraft();
   assert.equal(h.navigations.length, 0, '采纳项目笔记文案不应打开第二个内容编辑器');
   const returned = h.emitted.find(item => item.event === 'prefillContent').value;
