@@ -6,6 +6,26 @@ const ACCESS_FREE_ROUTES = new Set([
   'pages/privacy/privacy',
   'pages/passwordrecovery/passwordrecovery',
 ]);
+// 公开浏览页：匿名可先浏览（微信审核要求用户体验服务后再自行选择登录）。
+// 这些页面仍被包装（wxml 的 guard 结构不变），但 onShow 走乐观放行——
+// 不锁内容、不隐藏分享菜单、不因未登录跳登录页；登录与资料补全只在
+// 用户进入身份功能页（工作台/内容创作/订单/钱包等）时才要求。
+const PUBLIC_BROWSE_ROUTES = new Set([
+  'pages/index/index',
+  'pages/template/template',
+  'pages/templatesquaredetails/templatesquaredetails',
+  'pages/templatepreview/templatepreview',
+  'pages/designerhome/designerhome',
+  'pages/inspirationdetail/inspirationdetail',
+  'pages/contentreader/contentreader',
+  'pages/aicostshare/aicostshare',
+  'pages/customerservice/customerservice',
+  'pages/my/my',
+  'pages/report/landing',
+  'pages/report/questionnaire',
+  'pages/report/preview',
+  'pages/report/delivery',
+]);
 
 // Run outside the analytics wrapper: content access must not depend on analytics
 // availability or consent, and an unverified page must not create a visit.
@@ -14,6 +34,7 @@ function wrapProfileAccess(definition) {
   const invoke = (name, page, args = []) => typeof definition[name] === 'function'
     ? definition[name].apply(page, args) : undefined;
   const protectedPage = page => !ACCESS_FREE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
+  const publicBrowse = page => PUBLIC_BROWSE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const lock = page => {
     page.__accessRevision = (page.__accessRevision || 0) + 1;
     if (page.__accessActive) invoke('onHide', page);
@@ -76,6 +97,18 @@ function wrapProfileAccess(definition) {
     }
     Promise.resolve(guard.check(silent ? { silent: true } : undefined)).catch(error => console.error('个人资料核验失败', page.route, error));
   };
+  // 公开浏览页乐观放行：复用 granted 解锁路径但不做服务端资料核验，页面
+  // 内容与分享能力对未登录用户直接开放（微信审核：先体验，登录由用户
+  // 自行触发；匿名浏览经 tracking 匿名池记录，登录后归并到账号）。
+  const optimisticGrant = page => {
+    if (page.__accessActive || page.__accessDestroyed || !page.__accessVisible) return;
+    const token = String(wx.getStorageSync('token') || '');
+    // 匿名浏览用哨兵 id=-1：非 falsy 且不等于任何真实账号，后续登录核验
+    // （id>=1）到达时触发 reload 分支，把页面数据与 tracking 观察切到登录
+    // 账号（转发归因、实名 entry 都依赖这次重载）。已登录用户保持 id=0
+    // （falsy）：同账号后台核验通过时不 reload，内容保持挂载不重复采集。
+    page.onProfileAccessGranted({ detail: { token, profile: { id: token ? 0 : -1 }, optimistic: true } });
+  };
   const result = { ...definition, data: { ...definition.data, __profileAccessReady: false, __profileAccessMounted: false } };
   result.onLoad = function(options) {
     if (!protectedPage(this)) return invoke('onLoad', this, arguments);
@@ -94,9 +127,17 @@ function wrapProfileAccess(definition) {
     const token = String(wx.getStorageSync('token') || '');
     // 同一账号被覆盖后返回：内容保持挂载、后台静默核验，核验通过后由放行回调
     // 恢复页面生命周期。整页上锁只保留给首次进入、换号和外部入口变化。
-    if (this.__accessSuspended && this.__accessActiveToken === token) {
+    // 公开浏览页恢复时不重核验（乐观放行），直接走下方公开页分支。
+    if (this.__accessSuspended && this.__accessActiveToken === token && !publicBrowse(this)) {
       this.__accessSuspended = false;
       verify(this, true);
+      return;
+    }
+    // 公开浏览页乐观放行：无论登录与否先解锁内容，不锁页、不跳登录、
+    // 不在此触发资料核验弹窗（补全引导由身份功能页和首页软引导承担）。
+    if (publicBrowse(this)) {
+      this.__accessSuspended = false;
+      if (!this.__accessActive) optimisticGrant(this);
       return;
     }
     lock(this);
@@ -105,20 +146,32 @@ function wrapProfileAccess(definition) {
   result.onReady = function() {
     if (!protectedPage(this)) return invoke('onReady', this, arguments);
     this.__accessMounted = true;
-    verify(this);
+    // 公开浏览页不核验：核验会对未登录用户弹登录面板/对资料不全用户弹
+    // 强制补全，把"先浏览"又变成"先授权"。身份页行为不变。
+    if (!publicBrowse(this)) verify(this);
   };
   result.onProfileAccessBlocked = function() {
-    if (protectedPage(this)) lock(this);
+    // 公开浏览页即使收到 gated 也不锁内容（乐观放行语义）。
+    if (protectedPage(this) && !publicBrowse(this)) lock(this);
   };
   result.onProfileAccessAppHide = function() {
     if (!protectedPage(this)) return;
     this.__accessVisible = false;
-    lock(this);
+    if (!publicBrowse(this)) lock(this);
   };
   result.onProfileAccessGranted = function(event) {
     const token = wx.getStorageSync('token');
-    if (!protectedPage(this) || this.__accessDestroyed || !this.__accessVisible || this.__accessActive
-      || !token || event?.detail?.token !== token) return;
+    // optimistic=公开浏览页乐观放行：detail.token 即构造时的当前 token
+    // （含未登录的空串），不要求服务端核验结果，其余守卫不变。
+    const optimistic = event?.detail?.optimistic === true && publicBrowse(this) && event?.detail?.token === String(token || '');
+    // upgrade=真实核验升级乐观放行：页面已被乐观放行（__accessOptimistic）
+    // 时，服务端 authenticated 事件仍需进入以触发换号 reload（-1→真实id），
+    // 让数据与 tracking 观察切到登录账号，否则登录后的转发丢失归因。
+    const upgrade = !optimistic && this.__accessOptimistic === true;
+    if (!protectedPage(this) || this.__accessDestroyed || !this.__accessVisible
+      || (!optimistic && !upgrade && this.__accessActive)
+      || (!optimistic && (!token || event?.detail?.token !== token))) return;
+    this.__accessOptimistic = optimistic;
     const revision = this.__accessRevision = (this.__accessRevision || 0) + 1;
     const userID = Number(event?.detail?.profile?.id || 0);
     if (this.__accessUserID && userID && this.__accessUserID !== userID && !this.__accessReload) {
@@ -145,7 +198,12 @@ function wrapProfileAccess(definition) {
     }
     this.setData({ __profileAccessReady: true, __profileAccessMounted: true }, () => {
       if (revision !== this.__accessRevision || !this.__accessActive || !this.__accessVisible || this.__accessDestroyed) return;
-      if (token !== wx.getStorageSync('token')) { lock(this); verify(this); return; }
+      if (token !== wx.getStorageSync('token')) {
+        // 公开浏览页 token 变化（如前台登录）不锁内容：下次 onShow 会以
+        // 新 token 乐观恢复；身份页维持原安全行为（上锁并重新核验）。
+        if (!publicBrowse(this)) { lock(this); verify(this); }
+        return;
+      }
       invoke('onShow', this);
       if (!this.__accessRendered) { this.__accessRendered = true; invoke('onReady', this); }
     });
@@ -157,6 +215,13 @@ function wrapProfileAccess(definition) {
     this.__accessEntrySignature = nextSignature;
     this.__accessOptions = { ...(options || {}) };
     this.__accessReload = this.__accessLoaded === true;
+    if (publicBrowse(this)) {
+      // 公开浏览页收到新分享入口：乐观重载生命周期（granted 的 reload
+      // 分支会重跑 onLoad），不锁页、不触发核验弹窗。
+      this.__accessActive = false;
+      optimisticGrant(this);
+      return;
+    }
     lock(this);
     verify(this);
   };
