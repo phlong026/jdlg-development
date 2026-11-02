@@ -206,7 +206,9 @@ Page({
     this.setData({ busy: true, error: '' });
     try {
       const preview = await api.previewCollection(collection.collection_id, collection.revision);
-      if (this.currentRequest(epoch)) this.setData({ preview, busy: false, notice: '' });
+      if (!this.currentRequest(epoch)) return;
+      const [collections, items] = await Promise.all([this.resolveCovers([preview.collection]), this.resolveCovers(preview.collection.items)]);
+      if (this.currentRequest(epoch)) this.setData({ preview: { ...preview, collection: { ...collections[0], items } }, busy: false, notice: '' });
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '预览失败' }); }
   },
   closePreview() { if (!this.data.busy) this.setData({ preview: null }); },

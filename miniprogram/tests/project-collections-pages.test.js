@@ -279,3 +279,44 @@ test('reopening a collection preserves its saved cover when editing its title', 
   await page.saveDraft();
   assert.equal(savedInputs[0].cover_item_index, 1);
 });
+
+test('collection preview resolves its hero and item covers while preserving the publish token', async () => {
+  const downloads = [], published = [];
+  const { page } = pageRuntime({
+    previewCollection: async () => ({ preview_token: 'verified-token', collection: { title: '庭院合集', description: '设计案例', cover: { url: '/hero' }, items: [{ content_id: 'work-a', content_version: 2, title: '庭院', cover: { url: '/work' } }, { content_id: 'work-b', content_version: 1, title: '无图案例' }] } }),
+    mediaURL: value => 'https://api.example' + value,
+    mutationKey: () => 'publish-key',
+    publishCollection: async (...args) => { published.push(args); return { version: 1 }; },
+    listCollections: async () => ({ items: [] }),
+  }, 'designer-session', async url => { downloads.push(url); return 'wxfile://' + url.split('/').at(-1); });
+  page.visible = true; page.account = 'designer-session'; page.epoch = 1;
+  page.setData({ current: { collection_id: 'collection-a', revision: 3 }, dirty: false });
+  await page.previewCurrent();
+  assert.equal(page.data.preview.preview_token, 'verified-token');
+  assert.equal(page.data.preview.collection.cover_url, 'wxfile://hero');
+  assert.equal(page.data.preview.collection.items[0].cover_url, 'wxfile://work');
+  assert.equal(page.data.preview.collection.items[1].cover_url, '');
+  assert.deepEqual(downloads.sort(), ['https://api.example/hero', 'https://api.example/work']);
+  await page.publishCurrent();
+  assert.equal(published[0][2], 'verified-token');
+});
+
+test('collection preview cover completion cannot restore a previous account preview', async () => {
+  let finish;
+  const { page, storage } = pageRuntime({
+    previewCollection: async () => ({ preview_token: 'old-token', collection: { cover: { url: '/hero' }, items: [] } }),
+    mediaURL: value => 'https://api.example' + value,
+    workbenchContext: async () => ({ owners: [], owner_choices: [] }),
+    listCollections: async () => ({ items: [] }),
+  }, 'designer-session', () => new Promise(resolve => { finish = resolve; }));
+  page.visible = true; page.account = 'designer-session'; page.epoch = 1;
+  page.setData({ current: { collection_id: 'collection-a', revision: 3 }, dirty: false });
+  const pending = page.previewCurrent();
+  await tick();
+  storage.token = 'other-account';
+  page.onShow();
+  if (finish) finish('wxfile://old-cover');
+  await pending;
+  await tick();
+  assert.equal(page.data.preview, null);
+});
