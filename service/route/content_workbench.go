@@ -47,6 +47,7 @@ func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, 
 	})
 	registerWritingPromptsRoute(g, users.DB)
 	registerGenerationImportRoute(g, svc, users)
+	registerSharePosterRoute(g, svc)
 }
 
 type workbenchOwnerChoice struct {
