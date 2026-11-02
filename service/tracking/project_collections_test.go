@@ -427,3 +427,29 @@ func TestProjectCollectionCoverItemIndexOverridesFirstCover(t *testing.T) {
 		t.Fatalf("索引 1 应取第二个条目封面 got=%v err=%v", tailCollection.Cover, err)
 	}
 }
+
+// B10 方案A：协作者字段持久化与上限校验。
+func TestProjectCollectionCollaboratorsPersistAndValidate(t *testing.T) {
+	s, scope := fixture(t)
+	content := publishNativeReferenceContent(t, s, scope, "协作案例", "collab-source")
+
+	in := collectionInput(scope.Owners[0], "collection-collab", content)
+	in.Collaborators = []int64{42, 42, 0, 99} // 去重+过滤零值
+	created, err := s.SaveProjectCollection(context.Background(), scope, "", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Collaborators) != 2 || created.Collaborators[0] != 42 || created.Collaborators[1] != 99 {
+		t.Fatalf("协作者应去重并过滤零值 got=%v", created.Collaborators)
+	}
+
+	// 超限拒绝
+	over := collectionInput(scope.Owners[0], "collection-collab-over", content)
+	over.Collaborators = make([]int64, 21)
+	for i := range over.Collaborators {
+		over.Collaborators[i] = int64(i + 1)
+	}
+	if _, err = s.SaveProjectCollection(context.Background(), scope, "", over); err == nil {
+		t.Fatal("协作者超过 20 人应被拒绝")
+	}
+}

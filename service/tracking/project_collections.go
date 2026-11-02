@@ -22,15 +22,17 @@ type ProjectCollectionItemInput struct {
 }
 
 type ProjectCollectionDraft struct {
-	Title            string                       `json:"title"`
-	Description      string                       `json:"description,omitempty"`
-	Owner            string                       `json:"owner_id"`
-	Items            []ProjectCollectionItemInput `json:"items"`
+	Title       string                       `json:"title"`
+	Description string                       `json:"description,omitempty"`
+	Owner       string                       `json:"owner_id"`
+	Items       []ProjectCollectionItemInput `json:"items"`
 	// CoverItemIndex 指定用第几个条目的封面作为合集封面；nil/越界/该条无封面
 	// 一律回退"第一个有封面的条目"（历史行为）。(B12 合集封面自选)
-	CoverItemIndex   *int                         `json:"cover_item_index,omitempty"`
-	ExpectedRevision int                          `json:"expected_revision,omitempty"`
-	IdempotencyKey   string                       `json:"idempotency_key,omitempty"`
+	CoverItemIndex *int `json:"cover_item_index,omitempty"`
+	// Collaborators 为只读共享的协作者 actor ID 列表（B10 方案A，特性开关控制）。
+	Collaborators    []int64 `json:"collaborators,omitempty"`
+	ExpectedRevision int     `json:"expected_revision,omitempty"`
+	IdempotencyKey   string  `json:"idempotency_key,omitempty"`
 }
 
 type ProjectCollectionItem struct {
@@ -54,9 +56,11 @@ type ProjectCollection struct {
 	Revision     int                     `json:"revision"`
 	Version      int                     `json:"version"`
 	CreatorActor int64                   `json:"-"`
-	CreatedAt    time.Time               `json:"created_at"`
-	UpdatedAt    time.Time               `json:"updated_at"`
-	PublishedAt  *time.Time              `json:"published_at,omitempty"`
+	// Collaborators 只读共享的协作者列表（B10 方案A）。
+	Collaborators []int64    `json:"collaborators,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	PublishedAt   *time.Time `json:"published_at,omitempty"`
 }
 
 type ProjectCollectionPage struct {
@@ -226,6 +230,19 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 	if !trim(in.Title, 80) || len(in.Description) > 500 || !scope.Allows(in.Owner) {
 		return out, fail(400, "合集名称、简介或归属无效")
 	}
+	// B10: 协作者上限 20，去重。
+	if len(in.Collaborators) > 20 {
+		return out, fail(400, "合集协作者最多 20 人")
+	}
+	seenCollab := map[int64]bool{}
+	collabs := make([]int64, 0, len(in.Collaborators))
+	for _, id := range in.Collaborators {
+		if id > 0 && !seenCollab[id] {
+			seenCollab[id] = true
+			collabs = append(collabs, id)
+		}
+	}
+	in.Collaborators = collabs
 	if id == "" && !validID(in.IdempotencyKey) {
 		return out, fail(400, "缺少幂等标识")
 	}
@@ -257,7 +274,7 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 			if err != nil {
 				return err
 			}
-			out = ProjectCollection{ID: opaque(), Title: in.Title, Description: in.Description, Owner: in.Owner, Cover: projectCollectionCover(items, in.CoverItemIndex), Items: items, Status: "draft", Revision: 1, CreatorActor: scope.Actor, CreatedAt: now, UpdatedAt: now}
+			out = ProjectCollection{ID: opaque(), Title: in.Title, Description: in.Description, Owner: in.Owner, Cover: projectCollectionCover(items, in.CoverItemIndex), Items: items, Status: "draft", Revision: 1, CreatorActor: scope.Actor, Collaborators: in.Collaborators, CreatedAt: now, UpdatedAt: now}
 			if err = r.Insert(projectCollectionRecord(projectCollectionKind, out, now)); err != nil {
 				return err
 			}
