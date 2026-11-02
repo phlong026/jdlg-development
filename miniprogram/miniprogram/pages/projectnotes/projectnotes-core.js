@@ -4,7 +4,7 @@ const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
 
 const blankProtected = () => ({
-  pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false,
+  pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectLoadFailed: false,
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
   projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
@@ -117,7 +117,8 @@ Page({
 
   openProjectSettings() { this.setData({ projectSettingsOpen: true }); },
   openProjectCreation() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.loading || this.data.projectLoadFailed) return;
+    if (!this.data.owners.length) { this.setData({ projectLoadFailed: true, error: '暂无可用的项目归属，请重新加载或联系管理员。' }); return; }
     this.setData({ pageView: 'create', navigationTitle: '新建项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' });
   },
   async closeProjectSettings() {
@@ -155,13 +156,13 @@ Page({
       const status = Number(error.statusCode);
       if ([401, 403, 404].includes(status)) {
         this._loaded = false; this.clearProtected();
-        this.setData({ loginRequired: status === 401, error: status === 401 ? '' : '项目访问权限已变更，请重新进入。' });
+        this.setData({ loginRequired: status === 401, projectLoadFailed: status !== 401, error: status === 401 ? '' : '项目访问权限已变更，请重新加载或联系管理员。' });
         return;
       }
       this.setData({ loading: false, accessRecheckRequired: true, notice: '权限重验失败，未保存内容已保留，请重试。' });
     }
   },
-  retryProjectAccess() { return this.revalidateProjectAccess(); },
+  retryProjectAccess() { return this._loaded ? this.revalidateProjectAccess() : this.loadProjects(); },
 
   async fetchAllProjects() {
     const items = [], seen = new Set(); let cursor = '';
@@ -192,8 +193,9 @@ Page({
       if (selectedID) { this._targetProjectID = ''; if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
     } catch (error) {
       if (!this.current(epoch)) return;
+      this._loaded = false;
       this.clearProtected();
-      this.setData({ loading: false, loginRequired: error.statusCode === 401, error: error.statusCode === 403 ? '暂无私人项目管理权限。' : '私人项目暂不可用，请稍后重试。' });
+      this.setData({ loading: false, projectLoadFailed: true, loginRequired: error.statusCode === 401, error: error.statusCode === 403 ? (error.message || '暂无私人项目管理权限，请联系管理员。') : '私人项目暂不可用，请稍后重试。' });
     }
   },
 
@@ -231,7 +233,9 @@ Page({
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目资料保存失败，请重新载入后重试' }); }
   },
   async createProjectNoteProject() {
-    if (!this.data.projectName || !this.data.ownerID || this.data.busy) return;
+    if (this.data.busy || this.data.loading || this.data.projectLoadFailed) return;
+    if (!this.data.ownerID) { this.setData({ error: '暂无可用的项目归属，请返回重新加载。' }); return; }
+    if (!this.data.projectName) { this.setData({ error: '请填写项目名称。' }); return; }
     if (!await this.confirmDiscardChanges()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {

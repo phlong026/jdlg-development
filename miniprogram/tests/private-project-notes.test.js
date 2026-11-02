@@ -189,7 +189,7 @@ test('project creation is a separate step and keeps readable owner labels separa
   const page = pageHarness('projectnotes', {}, { showModal: options => { modal = options; } });
   page._visible = true; page._token = 'session-token'; page._epoch = 1;
   page.setData({
-    owners: ['designer-40', 'company-2'],
+    loading: false, owners: ['designer-40', 'company-2'],
     ownerChoices: [
       { owner_id: 'designer-40', display_name: '裴设计师' },
       { owner_id: 'company-2', display_name: '华匠邦' },
@@ -1013,7 +1013,7 @@ test('cancelled project creation and collaboration mutations keep unsaved draft 
     versions: [], shares: [], feedbacks: [{ feedback_id: 'feedback-one', text: '请调整' }], confirmations: [], members: [{ actor_id: 202, active: true }],
   };
   const actions = [
-    page => { page.setData({ projectName: '新项目', ownerID: 'owner-one' }); return page.createProjectNoteProject(); },
+    page => { page.setData({ loading: false, projectName: '新项目', ownerID: 'owner-one' }); return page.createProjectNoteProject(); },
     page => page.revokeProjectNoteMember({ currentTarget: { dataset: { account: 202 } } }),
     page => { page.setData({ confirmerAccount: 202 }); return page.setProjectNoteConfirmer(); },
     page => { page.setData({ feedbackID: 'feedback-one', feedbackReply: '已处理' }); return page.resolveProjectNoteFeedback(); },
@@ -1069,4 +1069,35 @@ test('AI return preserves its fill but still clears private content after permis
   assert.equal(page.data.noteBody, '');
   assert.equal(page.data.selectedProject, null);
   assert.match(page.data.error, /权限|访问/);
+});
+
+for (const statusCode of [403, 500]) {
+  test(`failed project load (${statusCode}) keeps creation closed and retries the projects API`, async () => {
+    let failing = true, calls = 0, creates = 0;
+    const page = pageHarness('projectnotes', {
+      listProjectNoteProjects: async () => { calls++; if (failing) throw Object.assign(new Error('私人项目笔记暂未开通'), { statusCode }); return { items: [] }; },
+      workbenchContext: async () => ({ owners: ['designer-40'] }),
+      createProjectNoteProject: async () => { creates++; },
+    });
+    await page.onShow();
+    assert.equal(page.data.projectLoadFailed, true);
+    const error = page.data.error;
+    page.openProjectCreation();
+    assert.equal(page.data.pageView, 'list');
+    assert.equal(page.data.error, error);
+    await page.createProjectNoteProject();
+    assert.equal(creates, 0);
+    failing = false;
+    await page.retryProjectAccess();
+    assert.equal(calls, 2);
+    assert.equal(page.data.projectLoadFailed, false);
+    page.openProjectCreation();
+    assert.equal(page.data.pageView, 'create');
+    assert.equal(page.data.ownerID, 'designer-40');
+  });
+}
+
+test('project load failure renders a retry state before project creation controls', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /wx:elif="{{projectLoadFailed}}"[\s\S]*?bindtap="retryProjectAccess"/);
 });

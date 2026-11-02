@@ -3,6 +3,7 @@
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在加载…</view>
   <view wx:elif="{{loginRequired}}" class="state"><text>登录后管理项目</text><button class="primary state-action" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{projectLoadFailed}}" class="state"><text>{{error}}</text><button class="secondary state-action" bindtap="retryProjectAccess">重新加载</button></view>
   <view wx:elif="{{accessRecheckRequired}}" class="state"><text>{{notice}}</text><button class="secondary state-action" bindtap="retryProjectAccess">重新加载</button></view>
   <block wx:else>
     <view wx:if="{{error}}" class="alert error">{{error}}</view><view wx:if="{{notice}}" class="alert success">{{notice}}</view><view wx:if="{{truncationNotice}}" class="alert warning">{{truncationNotice}}</view><view wx:if="{{historyNotice}}" class="alert warning">{{historyNotice}}</view>
