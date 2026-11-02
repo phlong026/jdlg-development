@@ -214,6 +214,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterBuildingCodeManagementRoutes(managementAuth, buildingCodeDocumentModel, cfg)
 		RegisterDistributionManagementRoutes(managementAuth, userDBModel, inviteRelationModel, userInviteCodeModel, stoneRecordModel, userOrderModel)
 		RegisterContentAnalyticsManagementRoutes(managementAuth, templateModel)
+		registerContentPropagationManagement(managementAuth.Group("/content-analytics"), userDBModel.DB)
 		RegisterRiskControlManagementRoutes(managementAuth, userDBModel)
 		RegisterReportCenterManagementRoutes(managementAuth, userDBModel)
 		RegisterTemplateManagementRoutes(managementAuth, templateModel, templateCategoryModel, templateSquareConfigModel, featuredCaseGroupModel)

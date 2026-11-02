@@ -40,6 +40,7 @@ export const API_ENDPOINTS = {
         NEW_TEMPLATES: '/api/v1/management/content-analytics/new-templates',
         LOW_CONVERSION: '/api/v1/management/content-analytics/low-conversion',
         FEATURED_CASES: '/api/v1/management/content-analytics/featured-cases',
+        PROPAGATION: '/api/v1/management/content-analytics/propagation',
     },
     RISK_CONTROL: {
         OVERVIEW: '/api/v1/management/risk-control/overview',
