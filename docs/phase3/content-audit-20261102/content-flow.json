@@ -1,0 +1,132 @@
+[
+  {
+    "label": "新建图文入口",
+    "path": "pages/contentedit/contentedit",
+    "id": "",
+    "error": "",
+    "notice": "",
+    "status": "draft",
+    "revision": 0,
+    "preview": false,
+    "buttons": [
+      "内容设置自有素材 ›",
+      "AI文案",
+      "插入块",
+      "添加图片／视频",
+      "选择已有素材",
+      "素材管理 ›",
+      "保存",
+      "预览"
+    ]
+  },
+  {
+    "label": "真实保存草稿",
+    "path": "pages/contentedit/contentedit",
+    "id": "Z1SyR4YDZz55V2x1sGzuFlIhWE7-G8fm",
+    "error": "",
+    "notice": "草稿已保存",
+    "status": "draft",
+    "revision": 1,
+    "preview": false,
+    "buttons": [
+      "更多",
+      "内容设置自有素材 ⌃",
+      "AI文案",
+      "插入块",
+      "转标题",
+      "转引用",
+      "移除",
+      "添加图片／视频",
+      "选择已有素材",
+      "素材管理 ›",
+      "保存",
+      "预览"
+    ]
+  },
+  {
+    "label": "重新打开持久化草稿",
+    "path": "pages/contentedit/contentedit",
+    "id": "Z1SyR4YDZz55V2x1sGzuFlIhWE7-G8fm",
+    "error": "",
+    "notice": "",
+    "status": "draft",
+    "revision": 1,
+    "preview": false,
+    "buttons": [
+      "更多",
+      "内容设置自有素材 ›",
+      "AI文案",
+      "插入块",
+      "转标题",
+      "转引用",
+      "移除",
+      "添加图片／视频",
+      "选择已有素材",
+      "素材管理 ›",
+      "保存",
+      "预览"
+    ]
+  },
+  {
+    "label": "真实保存并预览",
+    "path": "pages/contentedit/contentedit",
+    "id": "Z1SyR4YDZz55V2x1sGzuFlIhWE7-G8fm",
+    "error": "",
+    "notice": "",
+    "status": "draft",
+    "revision": 2,
+    "preview": true,
+    "buttons": [
+      "返回编辑",
+      "发布"
+    ]
+  },
+  {
+    "label": "真实素材选择器",
+    "path": "pages/contentedit/contentedit",
+    "id": "Z1SyR4YDZz55V2x1sGzuFlIhWE7-G8fm",
+    "error": "",
+    "notice": "",
+    "status": "draft",
+    "revision": 2,
+    "preview": false,
+    "buttons": [
+      "更多",
+      "内容设置自有素材 ›",
+      "AI文案",
+      "插入块",
+      "转标题",
+      "转引用",
+      "移除",
+      "添加图片／视频",
+      "选择已有素材",
+      "素材管理 ›",
+      "保存",
+      "预览"
+    ]
+  },
+  {
+    "label": "带入AI文案",
+    "path": "pages/contentedit/contentedit",
+    "id": "Z1SyR4YDZz55V2x1sGzuFlIhWE7-G8fm",
+    "error": "",
+    "notice": "",
+    "status": "draft",
+    "revision": 2,
+    "preview": false,
+    "buttons": [
+      "更多",
+      "内容设置自有素材 ›",
+      "AI文案",
+      "插入块",
+      "转标题",
+      "转引用",
+      "移除",
+      "添加图片／视频",
+      "选择已有素材",
+      "素材管理 ›",
+      "保存",
+      "预览"
+    ]
+  }
+]

@@ -1,0 +1,49 @@
+[
+  {
+    "page": "contentworkbench",
+    "mounted": false,
+    "ready": false,
+    "loading": true,
+    "error": "",
+    "loginRequired": false
+  },
+  {
+    "page": "contentedit",
+    "mounted": false,
+    "ready": false,
+    "loading": true,
+    "error": "",
+    "loginRequired": false
+  },
+  {
+    "page": "contentwriting",
+    "mounted": false,
+    "ready": false,
+    "error": "",
+    "loginRequired": false
+  },
+  {
+    "page": "nativereferences",
+    "mounted": false,
+    "ready": false,
+    "loading": false,
+    "error": "",
+    "loginRequired": false
+  },
+  {
+    "page": "projectcollections",
+    "mounted": false,
+    "ready": false,
+    "loading": false,
+    "error": "",
+    "loginRequired": false
+  },
+  {
+    "page": "sharevisits",
+    "mounted": false,
+    "ready": false,
+    "loading": true,
+    "error": "",
+    "loginRequired": false
+  }
+]
