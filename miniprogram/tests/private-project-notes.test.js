@@ -1101,3 +1101,64 @@ test('project load failure renders a retry state before project creation control
   const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
   assert.match(template, /wx:elif="{{projectLoadFailed}}"[\s\S]*?bindtap="retryProjectAccess"/);
 });
+
+for (const unsavedNote of [false, true]) {
+  test(`saved project settings keep their restored values and preserve unsaved note protection (${unsavedNote})`, async () => {
+    let modalCount = 0;
+    const original = { project_id: 'project-one', name: '原项目名称', revision: 1, status: 'initial' };
+    const page = pageHarness('projectnotes', {
+      updateProjectNoteProject: async (id, patch) => ({ ...original, ...patch, project_id: id, revision: 2 }),
+    }, { showModal: options => { modalCount++; options.success({ confirm: false }); } });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.applyProjectDetail({ project: original, notes: [{ note_id: 'note-one', title: '已存笔记', body: '已存正文', body_format: 'plain', revision: 1 }], versions: [] });
+    const noteBaseline = page._noteFormBaseline;
+    const savedNoteSnapshot = page._loadedFormState.noteBody;
+    if (unsavedNote) page.setNoteBody({ detail: { value: '尚未保存的正文' } });
+    page.openProjectSettings();
+    page.setProjectField({ currentTarget: { dataset: { field: 'name' } }, detail: { value: '新项目名称' } });
+    await page.saveProjectDetails();
+    assert.equal(page.data.selectedProject.name, '新项目名称');
+    assert.equal(page._noteFormBaseline, noteBaseline);
+    assert.equal(page._loadedFormState.noteBody, savedNoteSnapshot);
+    await page.closeProjectSettings();
+    assert.equal(page.data.projectSettingsOpen, false);
+    assert.equal(page.data.projectEdit.name, '新项目名称');
+    assert.equal(modalCount, 0);
+    if (unsavedNote) assert.equal(page.data.noteBody, '尚未保存的正文');
+    await page.startNewNote();
+    assert.equal(modalCount, unsavedNote ? 1 : 0);
+    if (unsavedNote) {
+      assert.equal(page.data.note.note_id, 'note-one');
+      assert.equal(page.data.noteBody, '尚未保存的正文');
+    } else {
+      assert.equal(page.data.pageView, 'editor');
+      assert.equal(page.data.note, null);
+    }
+  });
+}
+
+for (const update of [false, true]) {
+  test(`project note ${update ? 'update retains revision' : 'creation omits update-only revision'} for the strict request schema`, async () => {
+    const allowed = ['title', 'body', 'body_format', 'cover_media_id', 'media_ids'];
+    if (update) allowed.push('expected_revision');
+    let accepted = null;
+    const strictSave = async (id, input) => {
+      if (Object.keys(input).some(key => !allowed.includes(key))) throw Object.assign(new Error('请求字段或体积无效'), { statusCode: 400 });
+      accepted = { id, input };
+      return { note_id: 'note-one', revision: update ? 8 : 1, ...input };
+    };
+    const page = pageHarness('projectnotes', { createProjectNote: strictSave, saveProjectNote: strictSave });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.refreshProject = async () => {};
+    page.setData({ selectedProject: { project_id: 'project-one' }, note: update ? { note_id: 'note-one', revision: 7 } : null, noteTitle: '方案说明', noteBody: '保留庭院入口', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
+    await (update ? page.saveProjectNote() : page.createProjectNote());
+    assert.equal(page.data.error, '');
+    assert.ok(accepted);
+    assert.deepEqual(Object.keys(accepted.input).sort(), allowed.sort());
+    assert.equal(accepted.id, update ? 'note-one' : 'project-one');
+    assert.equal(accepted.input.expected_revision, update ? 7 : undefined);
+    assert.equal(accepted.input.cover_media_id, 'image-one');
+    assert.deepEqual(Array.from(accepted.input.media_ids), ['image-one']);
+    assert.equal(page.data.note.note_id, 'note-one');
+  });
+}

@@ -126,7 +126,9 @@ Page({
     const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
     const changed = this._projectFormBaseline != null && this._projectFormBaseline !== this.projectFormSignature();
     if (!await this.confirmDiscardChanges(changed) || !this.current(epoch) || this.data.selectedProject !== project || this.data.pageView !== view || this.data.busy) return;
-    this.restoreLoadedForms(); this.setData({ projectSettingsOpen: false });
+    // 收起项目资料仅恢复项目字段，不能丢弃仍在编辑的笔记。
+    if (this._loadedFormState) this.setData({ projectEdit: Object.assign({}, this._loadedFormState.projectEdit) });
+    this.setData({ projectSettingsOpen: false });
   },
   openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false }); return this.loadJoinRequests(); },
   openHistory() { this.setData({ pageView: 'history', navigationTitle: '项目记录', projectSettingsOpen: false }); if (!this.data.historyLoaded) return this.loadHistory(); },
@@ -229,7 +231,10 @@ Page({
     try {
       const saved = await api.updateProjectNoteProject(project.project_id, Object.assign({}, patch, { expected_revision: project.revision }));
       if (!this.current(epoch) || this._selectedProjectID && this._selectedProjectID !== project.project_id) return;
-      this.setData({ selectedProject: saved, projectEdit: projectForm(saved), projectStatusLabel: statusLabels[saved.status] || '初步方案', projects: this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), busy: false, notice: '项目资料已保存，已冻结版本仍保留原有资料。' }, () => { this._projectFormBaseline = this.projectFormSignature(); });
+      this.setData({ selectedProject: saved, projectEdit: projectForm(saved), projectStatusLabel: statusLabels[saved.status] || '初步方案', projects: this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), busy: false, notice: '项目资料已保存，已冻结版本仍保留原有资料。' }, () => {
+        this._projectFormBaseline = this.projectFormSignature();
+        if (this._loadedFormState) this._loadedFormState.projectEdit = Object.assign({}, this.data.projectEdit);
+      });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目资料保存失败，请重新载入后重试' }); }
   },
   async createProjectNoteProject() {
@@ -581,6 +586,8 @@ Page({
   async persistNote(update) {
     const project = this.data.selectedProject, note = this.data.note, draft = this.noteDraft();
     if (!project || !draft.title || (!this.data.bodyReadOnly && !draft.body.trim()) || update && !note || this.data.busy) return;
+    // 创建接口采用严格字段校验，修订号仅用于编辑已有笔记的并发校验。
+    if (!update) delete draft.expected_revision;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const saved = update ? await api.saveProjectNote(note.note_id, draft) : await api.createProjectNote(project.project_id, draft);
