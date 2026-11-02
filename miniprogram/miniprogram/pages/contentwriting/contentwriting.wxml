@@ -13,6 +13,12 @@
         <text class="section-title">创作资料</text>
         <label class="field"><text class="field-title">内容标题 <text class="optional">选填</text></text><input value="{{title}}" maxlength="80" bindinput="editTitle" placeholder="为这次创作取一个标题" placeholder-class="placeholder" /></label>
         <label class="field"><text class="field-title">已知资料与要求</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写项目资料、设计重点和表达要求" placeholder-class="placeholder" auto-height /></label>
+        <view wx:if="{{introPresets.length && type === 'promotion'}}" class="field">
+          <text class="field-title">介绍预设</text>
+          <picker range="{{introPresets}}" range-key="name" value="{{introPresetIndex}}" bindchange="selectIntroPreset">
+            <view class="picker-value">{{introPresetIndex >= 0 ? introPresets[introPresetIndex].name : '选择名片或品牌介绍（选填）'}}</view>
+          </picker>
+        </view>
         <view class="voice-row"><button class="voice-button {{voiceActive ? 'active' : ''}}" bindtouchstart="startVoiceInput" bindtouchend="stopVoiceInput" bindtouchcancel="stopVoiceInput" disabled="{{loginRequired}}" aria-label="按住说话进行语音输入">{{voiceActive ? '松开结束 · ' + (voicePartial || '正在识别…') : '按住说话，说完自动转为文字'}}</button></view>
       </view>
       <view class="writing-panel result-panel">

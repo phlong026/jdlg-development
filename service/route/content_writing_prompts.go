@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"sync"
 	"time"
 
@@ -90,6 +91,47 @@ func resetWritingPromptCache() {
 func registerWritingPromptsRoute(g *gin.RouterGroup, db *sql.DB) {
 	g.GET("/writing-prompts", func(c *gin.Context) {
 		prompts := loadWritingPrompts(c.Request.Context(), db)
-		trackingResponse(c, gin.H{"prompts": prompts}, nil)
+		response := gin.H{"prompts": prompts}
+		// B8: intro presets for the current user (personal) and tenant.
+		if db != nil {
+			if actor := GetTokenUserID(c); actor > 0 {
+				if presets := loadIntroPresets(c.Request.Context(), db, actor); len(presets) > 0 {
+					response["intro_presets"] = presets
+				}
+			}
+		}
+		trackingResponse(c, response, nil)
 	})
+}
+
+// introPreset is a named business-card or brand intro injected into prompts.
+type introPreset struct {
+	ID      int64  `json:"id"`
+	Kind    string `json:"kind"` // personal | tenant
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+// loadIntroPresets reads enabled presets for the user (personal) and tenant.
+// Missing table returns empty; presets never block the main prompt flow.
+func loadIntroPresets(ctx context.Context, db *sql.DB, actor int64) []introPreset {
+	if db == nil || actor <= 0 {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id,owner_kind,name,content FROM content_intro_presets WHERE enabled=1 AND (owner_kind='personal' AND owner_id=?) OR (owner_kind='tenant' AND owner_id='default') ORDER BY sort_order,id`, strconv.FormatInt(actor, 10))
+	if err != nil {
+		return nil // table missing or transient: presets are additive, never blocking
+	}
+	defer rows.Close()
+	presets := make([]introPreset, 0, 4)
+	for rows.Next() {
+		var item introPreset
+		if scanErr := rows.Scan(&item.ID, &item.Kind, &item.Name, &item.Content); scanErr != nil {
+			continue
+		}
+		if item.Name != "" && item.Content != "" {
+			presets = append(presets, item)
+		}
+	}
+	return presets
 }

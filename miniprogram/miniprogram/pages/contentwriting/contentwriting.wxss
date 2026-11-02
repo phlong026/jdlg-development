@@ -352,3 +352,15 @@ button::after {
   color: #98683a;
   font-size: 24rpx;
 }
+
+.picker-value {
+  min-height: 82rpx;
+  padding: 18rpx 20rpx;
+  border: 1rpx solid #ded5cc;
+  border-radius: 14rpx;
+  background: #fdfcfb;
+  font-size: 28rpx;
+  color: #6d6258;
+  display: flex;
+  align-items: center;
+}

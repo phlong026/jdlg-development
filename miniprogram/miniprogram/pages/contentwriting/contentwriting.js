@@ -12,7 +12,7 @@ const writingTypes = [
 const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '' },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
@@ -60,10 +60,23 @@ Page({
       const prompts = ((result && result.prompts) || []).filter(item => item && item.key && item.heading && item.instruction).map(item => ({
         key: String(item.key), label: String(item.label || item.heading), heading: String(item.heading), example: String(item.example || ''), instruction: String(item.instruction),
       }));
-      if (!prompts.length || this._unloaded) return;
-      const current = prompts.find(item => item.key === this.data.type) || prompts[0];
-      this.setData({ writingTypes: prompts, type: current.key, heading: current.heading, example: current.example, exampleLabel: current.label, instruction: current.instruction, error: '' });
+      if (this._unloaded) return;
+      const update = {};
+      if (prompts.length) {
+        const current = prompts.find(item => item.key === this.data.type) || prompts[0];
+        Object.assign(update, { writingTypes: prompts, type: current.key, heading: current.heading, example: current.example, exampleLabel: current.label, instruction: current.instruction, error: '' });
+      }
+      // B8: intro presets（名片/品牌介绍），追加到已知资料末尾而非自由 prompt。
+      const presets = ((result && result.intro_presets) || []).filter(item => item && item.name && item.content).map(item => ({ id: item.id, name: item.name, content: item.content }));
+      if (presets.length) update.introPresets = presets;
+      if (Object.keys(update).length) this.setData(update);
     }).catch(() => {});
+  },
+  selectIntroPreset(event) {
+    const index = Number(event.detail.value) || 0;
+    const preset = this.data.introPresets[index];
+    if (!preset) return;
+    this.setData({ introPresetIndex: index, error: '' });
   },
   editTitle(event) { this.setData({ title: String(event.detail.value || ''), error: '' }); },
   editFacts(event) { this.setData({ facts: String(event.detail.value || ''), error: '' }); },
@@ -114,10 +127,16 @@ Page({
     const facts = String(this.data.facts || '').trim();
     if (!facts) return '';
     const instruction = { concise: '精简下面的文案，保留已知事实和重点。', expand: '适当扩写下面的文案，只补充表达，不增添未经提供的事实。', tone: '将下面的文案改为自然、专业、适合与业主沟通的语气。' }[action || ''];
+    // B8: 名片/品牌预设作为额外已知资料注入，不进自由 prompt——维持防臆造边界。
+    let extendedFacts = facts;
+    const preset = this.data.introPresets[this.data.introPresetIndex];
+    if (preset && preset.content) {
+      extendedFacts = facts + '\n\n介绍信息（可作为署名或结尾参考）：\n' + String(preset.content).slice(0, 500);
+    }
     return [
       `${this.data.instruction || '请撰写' + this.data.heading + '。'}${this.data.title ? '主题：' + this.data.title.trim() + '。' : ''}`,
       ANTI_FABRICATION_CLAUSE,
-      '已知资料与要求：\n' + facts,
+      '已知资料与要求：\n' + extendedFacts,
       instruction && this.data.result ? instruction + '\n待优化文案：\n' + this.data.result : '请直接输出可编辑的正文，不添加虚构项目或版本。',
     ].join('\n\n');
   },
