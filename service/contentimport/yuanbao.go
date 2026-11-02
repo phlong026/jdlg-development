@@ -67,8 +67,18 @@ func (resolver *YuanbaoResolver) Resolve(ctx context.Context, raw string) (Sourc
 		return Source{}, err
 	}
 	firstExportID := strings.TrimSpace(parsed.ExportID)
-	if firstExportID != "" && firstExportID != preview.ExportID {
-		return Source{}, fail("provider_identity_mismatch")
+	// B18-A 实测发现元宝 API 的 wx_export_id 与 playable_url 的 eid 共享前缀
+	// 但后缀不同（同一视频的两个不同导出会话标识）。长 ID 用前缀匹配
+	// （export/ 后至少 20 字符），短 ID 回退精确匹配——防串视频不误拒。
+	if firstExportID != "" && preview.ExportID != "" {
+		const prefixLen = len("export/") + 20
+		if len(firstExportID) >= prefixLen && len(preview.ExportID) >= prefixLen {
+			if firstExportID[:prefixLen] != preview.ExportID[:prefixLen] {
+				return Source{}, fail("provider_identity_mismatch")
+			}
+		} else if firstExportID != preview.ExportID {
+			return Source{}, fail("provider_identity_mismatch")
+		}
 	}
 	feed, err := resolver.fetchFeed(ctx, preview)
 	if err != nil {
@@ -338,7 +348,8 @@ func (resolver *YuanbaoResolver) doJSON(request *http.Request) ([]byte, error) {
 	if response.StatusCode == http.StatusTooManyRequests {
 		return nil, fail("risk_control")
 	}
-	if response.StatusCode != http.StatusOK {
+	// B18-A 实测：finder-preview API 有时返回 201（Created）携带正常 JSON 体。
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
 		return nil, fail("provider_failed")
 	}
 	return readLimitedBody(response.Body)
