@@ -37,6 +37,7 @@ function loadPage(name) {
     Map,
     require(id) {
       if (id.includes('phase3-api')) return { writingPrompts: async () => { throw new Error('offline'); } };
+      if (id.includes('ai-stream')) return { startAIStream: () => ({ abort() {} }) };
       if (id.includes('article-document')) return { preserveLayoutBody: (_layout, fallback) => fallback, renderArticleDocument: () => [] };
       throw new Error(`unexpected require ${id}`);
     },

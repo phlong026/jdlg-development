@@ -161,7 +161,8 @@ test('content pages use one clear title and hide unavailable writing actions', (
   assert.doesNotMatch(writing, /AI内容策划|title="甲第灵光"/);
   assert.match(writing, /wx:if="{{result}}" class="writing-panel refine-panel"/);
   assert.match(writing, /wx:if="{{result}}" class="primary"/);
-  assert.match(writing, /class="{{result \? 'secondary' : 'primary'}}" bindtap="generateWriting"/);
+  assert.match(writing, /bindtap="quickGenerate"/);
+  assert.match(writing, /bindtap="generateWriting"[^>]*/); // 深聊入口保留
   assert.match(references, /<navigation-bar title="{{navigationTitle}}"/);
   assert.match(references, /bindtap="selectLibraryTab"/);
   assert.doesNotMatch(references, /保存已发布的固定版本|仅展示当前授权范围/);

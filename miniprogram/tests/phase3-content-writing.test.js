@@ -11,6 +11,7 @@ function harness(name) {
   const calls = [], listeners = {}, channel = { on(name, fn) { listeners[name] = fn; }, off() {}, emit(name, value) { calls.push({ event: name, value }); } };
   let token = 'session-one', stream, chunk;
   const apiStub = { writingPrompts: async () => { throw new Error('offline'); } };
+  const aiStreamStub = { startAIStream: () => ({ abort() {} }) };
   const wx = {
     hideShareMenu() {}, getStorageSync: () => token, pageScrollTo() {}, showToast(value) { calls.push({ toast: value }); },
     navigateTo(value) { calls.push({ navigate: value }); }, navigateBack(value) { calls.push({ back: value }); },
@@ -23,6 +24,7 @@ function harness(name) {
   vm.runInNewContext(fs.readFileSync(path.join(root, `pages/${name}/${name}.js`), 'utf8'), {
     Page(value) { definition = value; }, wx, exports: {}, module: { exports: {} }, console,
     require(id) {
+      if (id.endsWith('/ai-stream')) return aiStreamStub;
       if (id.endsWith('/phase3-api')) return apiStub;
       if (id.endsWith('/parameter')) return { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) };
       if (id.endsWith('/deviceFingerprint')) return { getCachedDeviceFingerprint: () => '' };
@@ -35,7 +37,7 @@ function harness(name) {
   });
   const page = Object.assign({}, definition, { data: JSON.parse(JSON.stringify(definition.data)), setData(values) { Object.assign(this.data, values); }, getOpenerEventChannel: () => channel });
   return {
-    page, calls, listeners, channel, apiStub, token(value) { token = value; },
+    page, calls, listeners, channel, apiStub, aiStreamStub, token(value) { token = value; },
     chunk(text) { const bytes = Uint8Array.from(Buffer.from(text)); chunk({ data: bytes.buffer }); },
     bytes(value) { const bytes = Uint8Array.from(value); chunk({ data: bytes.buffer }); },
     success(statusCode = 200, data = '') { stream.success({ statusCode, data }); },

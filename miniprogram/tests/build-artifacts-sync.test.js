@@ -13,6 +13,7 @@ const stripTS = source => source.replace('// @ts-nocheck\n', '').replace(/\nexpo
 
 const PAIRS = [
   'utils/phase3-api',
+  'utils/ai-stream',
   'pages/contentedit/contentedit',
   'pages/contentwriting/contentwriting',
   'pages/contentworkbench/contentworkbench',

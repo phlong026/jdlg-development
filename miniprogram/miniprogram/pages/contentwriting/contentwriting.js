@@ -1,5 +1,6 @@
 'use strict';
 const api = require('../../utils/phase3-api');
+const { startAIStream } = require('../../utils/ai-stream');
 
 // 本地兜底仅保留中性短指令：完整业务提示词（含示例与措辞）由服务端注册表下发，
 // 可运营调整而无需发版；防臆造条款刻意留在本地常量，任何服务端配置都无法移除它。
@@ -11,7 +12,7 @@ const writingTypes = [
 const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '' },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '' },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
@@ -34,7 +35,7 @@ Page({
     this.setData({ navigating: false, loginRequired: !token });
     if (token && !this._typesLoadedOnce) { this._typesLoadedOnce = true; this.loadWritingTypes(); }
   },
-  onUnload() { this._unloaded = true; },
+  onUnload() { this._unloaded = true; if (this._streamTask) this._streamTask.abort(); },
   receiveWritingContext(payload) {
     if ((this._source !== 'editor' && this._source !== 'project_note') || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
     if (!payload || payload.source !== this._source) return;
@@ -108,6 +109,48 @@ Page({
     this.setData({ facts: ((current ? current + '\n' : '') + String(text)).slice(0, 6000), error: '' });
   },
   editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: this._source === 'project_note' ? '文案已修改，采纳后将带回项目笔记' : '文案已修改，保存后可在内容编辑页继续排版' }); },
+  // B6 就地流式生成：不跳 chat 页，复用 SSE 通道直接在结果区流式回显。
+  buildPrompt(action) {
+    const facts = String(this.data.facts || '').trim();
+    if (!facts) return '';
+    const instruction = { concise: '精简下面的文案，保留已知事实和重点。', expand: '适当扩写下面的文案，只补充表达，不增添未经提供的事实。', tone: '将下面的文案改为自然、专业、适合与业主沟通的语气。' }[action || ''];
+    return [
+      `${this.data.instruction || '请撰写' + this.data.heading + '。'}${this.data.title ? '主题：' + this.data.title.trim() + '。' : ''}`,
+      ANTI_FABRICATION_CLAUSE,
+      '已知资料与要求：\n' + facts,
+      instruction && this.data.result ? instruction + '\n待优化文案：\n' + this.data.result : '请直接输出可编辑的正文，不添加虚构项目或版本。',
+    ].join('\n\n');
+  },
+  quickGenerate(event) {
+    if (this.data.streaming || this.data.navigating) return;
+    const token = String(wx.getStorageSync('token') || '');
+    if (!token || token !== this._token) { this.setData({ loginRequired: !token, error: '请使用当前账号登录后生成文案' }); return; }
+    const action = event && event.currentTarget && event.currentTarget.dataset.action || '';
+    const prompt = this.buildPrompt(action);
+    if (!prompt) { this.setData({ error: '请先填写已知资料和要求，AI 将以这些事实为依据' }); return; }
+    this.setData({ streaming: true, streamPartial: '', error: '', notice: '正在生成…' });
+    this._streamTask = startAIStream({
+      messages: [{ role: 'user', content: prompt }],
+      onChunk: partial => {
+        if (!this._unloaded) this.setData({ streamPartial: partial, notice: '' });
+      },
+      onDone: full => {
+        if (this._unloaded) return;
+        const value = String(full || '').trim();
+        this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '生成完成，请核对事实后使用' : '生成为空，请调整资料后重试' });
+      },
+      onError: message => {
+        if (this._unloaded) return;
+        this.setData({ streaming: false, streamPartial: '', error: message });
+      },
+    });
+  },
+  stopStream() {
+    if (this._streamTask && this.data.streaming) {
+      this._streamTask.abort();
+      this.setData({ streaming: false, streamPartial: '', notice: '已停止生成' });
+    }
+  },
   goLogin() { wx.navigateTo({ url: '/pages/login/login', fail: () => this.setData({ error: '登录页面暂时无法打开，请稍后重试' }) }); },
   generateWriting(event) {
     if (this.data.navigating) return;

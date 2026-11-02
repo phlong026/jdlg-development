@@ -17,7 +17,8 @@
       </view>
       <view class="writing-panel result-panel">
         <view class="section-heading"><text class="section-title">{{heading}}</text><text class="edit-hint">可编辑</text></view>
-        <textarea class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="生成的文案将显示在这里，也可直接填写" placeholder-class="placeholder" />
+        <view wx:if="{{streaming && streamPartial}}" class="stream-preview"><text class="stream-text">{{streamPartial}}▌</text></view>
+        <textarea wx:else class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="{{streaming ? '正在生成…' : '生成的文案将显示在这里，也可直接填写'}}" placeholder-class="placeholder" disabled="{{streaming}}" />
         <text class="panel-caption">内容由AI辅助生成，请核对事实后再使用。</text>
       </view>
       <view wx:if="{{result}}" class="writing-panel refine-panel">
@@ -28,7 +29,7 @@
       <text class="generation-hint">生成将进入 AI 对话，费用以发送前显示为准。</text>
     </block>
   </view>
-  <view wx:if="{{!loginRequired}}" class="writing-footer"><button wx:if="{{result}}" class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button><button class="{{result ? 'secondary' : 'primary'}}" bindtap="generateWriting" disabled="{{navigating}}">{{result ? '重新生成' : '生成文案'}}</button><text wx:if="{{!source}}" class="save-hint">保存会新建一条图文草稿，稍后可在内容工作台继续编辑。</text></view>
+  <view wx:if="{{!loginRequired}}" class="writing-footer"><button wx:if="{{result}}" class="primary" bindtap="saveToDraft" disabled="{{navigating}}">{{returnLabel}}</button><button wx:if="{{streaming}}" class="secondary" bindtap="stopStream">停止</button><button class="{{result || streaming ? 'secondary' : 'primary'}}" bindtap="quickGenerate" disabled="{{streaming || navigating}}">{{streaming ? '生成中…' : result ? '快速重新生成' : '快速生成'}}</button><button class="text-action deep-chat" bindtap="generateWriting" disabled="{{streaming || navigating}}">去对话深聊</button><text wx:if="{{!source}}" class="save-hint">保存会新建一条图文草稿，稍后可在内容工作台继续编辑。</text></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

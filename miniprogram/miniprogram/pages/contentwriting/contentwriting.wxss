@@ -326,3 +326,29 @@ button::after {
   font-size: 25rpx;
   line-height: 1.7;
 }
+
+.stream-preview {
+  min-height: 200rpx;
+  padding: 18rpx 20rpx;
+  border: 1rpx solid #ded5cc;
+  border-radius: 14rpx;
+  background: #fdfcfb;
+  font-size: 28rpx;
+  line-height: 1.7;
+}
+
+.stream-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.deep-chat {
+  flex: 0 0 auto;
+  min-height: 82rpx;
+  margin: 0;
+  padding: 0 22rpx;
+  border: 1rpx solid #dfcbb3;
+  background: #fff;
+  color: #98683a;
+  font-size: 24rpx;
+}
