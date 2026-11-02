@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -52,6 +53,30 @@ var miniprogramProfileBootstrap = map[string]map[string]bool{
 
 func isMiniprogramAPIPath(path string) bool {
 	return path == miniprogramAPIPrefix || strings.HasPrefix(path, miniprogramAPIPrefix+"/")
+}
+
+// miniprogramProfileGateEnabled 控制“登录+完整资料”门禁是否生效。
+// 配套小程序（7.2.18+）正式发版前，旧版客户端无法通过门禁，可临时设
+// MINIPROGRAM_PROFILE_GATE=off 放开止血；未设置或任何其他值均视为开启。
+func miniprogramProfileGateEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MINIPROGRAM_PROFILE_GATE"))) {
+	case "off", "0", "false":
+		return false
+	default:
+		return true
+	}
+}
+
+// miniprogramProfileGateMiddlewares 返回需要挂载的门禁中间件；开关关闭时为空，
+// 使小程序业务路由回到门禁启用前的既有行为。
+func miniprogramProfileGateMiddlewares(auth gin.HandlerFunc, load miniprogramProfileLoader) []gin.HandlerFunc {
+	if !miniprogramProfileGateEnabled() {
+		return nil
+	}
+	return []gin.HandlerFunc{
+		miniprogramProfileAuthentication(auth),
+		miniprogramProfileCompleteness(load),
+	}
 }
 
 func isMiniprogramProfileBootstrap(method, path string) bool {
