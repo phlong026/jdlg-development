@@ -8,8 +8,11 @@ const profile_validation_1 = require("../nickname-guard/profile-validation");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 Component({
     data: {
-        visible: true,
-        checking: true,
+        // 初始隐藏：公开浏览页乐观放行后不会调用 check()，组件必须默认不盖
+        // 浮层（否则"正在核验登录资料"常驻首页，公开页等于没放开）。check()
+        // 的每个需要展示的分支（未登录/过期/资料不全/失败）都显式设置 visible。
+        visible: false,
+        checking: false,
         needsLogin: false,
         completingProfile: false,
         error: '',
