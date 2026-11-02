@@ -30,6 +30,7 @@
       <view class="field"><text class="field-label">素材版权来源</text><radio-group class="rights" bindchange="setRights"><label><radio value="own" checked="{{rights === 'own'}}" color="#a87943" />自有素材</label><label><radio value="authorized" checked="{{rights === 'authorized'}}" color="#a87943" />已获授权</label></radio-group></view>
       <label class="field"><text class="field-label">来源说明</text><input value="{{source_note}}" maxlength="2000" data-field="source_note" bindinput="setField" placeholder="选填" /></label>
       <label class="field"><text class="field-label">原文链接</text><input value="{{source_url}}" data-field="source_url" bindinput="setField" placeholder="选填" /></label>
+      <label class="field"><text class="field-label">标签 <text class="optional">最多10个，空格分隔</text></text><input value="{{tagsText}}" bindinput="setTags" maxlength="200" placeholder="如：现代简约 三层 120平" /></label>
      </block>
     </view>
     <view wx:if="{{layoutReadOnly}}" class="notice">正文保留原排版，暂不支持编辑。</view>
@@ -73,7 +74,8 @@
      <block wx:else><view wx:for="{{previewBlocks}}" wx:key="index" class="preview-block"><view wx:if="{{item.kind === 'list'}}"><text wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex">{{item.ordered ? (listIndex + 1) + '. ' : '• '}}{{listItem}}\n</text></view><text wx:elif="{{item.text}}">{{item.text}}</text><image wx:elif="{{item.kind === 'image' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" mode="aspectFit" /><video wx:elif="{{item.kind === 'video' && item.asset && item.asset.local_path}}" src="{{item.asset.local_path}}" controls /><view wx:else class="muted media-placeholder">媒体预览加载失败<button data-media-id="{{item.media_id}}" bindtap="retryPreviewMedia" disabled="{{busy}}">重试媒体</button></view><text wx:if="{{item.caption}}" class="muted caption">{{item.caption}}</text></view></block>
     </view>
     <view wx:if="{{!preview && status === 'published' && version > 0}}" class="published-card"><view><text class="published-title">已发布 · V{{version}}</text></view><button class="secondary compact" bindtap="openPublished">查看并分享</button></view>
-    <block wx:if="{{moreExpanded && !preview}}"><button wx:if="{{version > 0 && status !== 'revoked'}}" class="danger revoke-button" bindtap="revoke" disabled="{{busy}}">撤回发布</button><button wx:if="{{id && status === 'draft' && version === 0 && !serverReadOnly}}" class="danger delete-draft-button" bindtap="deleteDraft" disabled="{{busy}}">删除草稿</button></block>
+    <block wx:if="{{moreExpanded && !preview}}"><button wx:if="{{version > 0 && status !== 'revoked'}}" class="danger revoke-button" bindtap="revoke" disabled="{{busy}}">撤回发布</button><button class="text-action {{pinned ? 'selected' : ''}}" bindtap="togglePinned" disabled="{{busy}}">{{pinned ? '已置顶' : '置顶'}}</button>
+<button wx:if="{{id && status === 'draft' && version === 0 && !serverReadOnly}}" class="danger delete-draft-button" bindtap="deleteDraft" disabled="{{busy}}">删除草稿</button></block>
     <view class="editor-actions"><block wx:if="{{preview}}"><button class="secondary" bindtap="returnToEdit" disabled="{{busy}}">返回编辑</button><button class="primary publish-button" bindtap="publish" loading="{{busy}}" disabled="{{busy}}">发布</button></block><block wx:else><button class="secondary" bindtap="saveDraft" loading="{{busy}}" disabled="{{busy}}">保存</button><button class="primary" bindtap="saveAndPreview" loading="{{busy}}" disabled="{{busy}}">预览</button></block></view>
    </block>
   </block>

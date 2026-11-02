@@ -47,7 +47,7 @@ Page({
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
-    settingsExpanded: false, mediaExpanded: true, moreExpanded: false,
+    settingsExpanded: false, mediaExpanded: true, moreExpanded: false, tagsText: '', pinned: false,
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
@@ -109,7 +109,7 @@ Page({
       const ownerID = content ? content.owner_id : (context.owners || [])[0] || '';
       const ownerChoices = context.owner_choices || [];
       const ownerIndex = Math.max(0, ownerChoices.findIndex(item => item.owner_id === ownerID));
-      this.setData({ context, media, documentCandidates, title: content ? content.title : '', owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      this.setData({ context, media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
       this.applyPendingPrefill();
       this._savedSignature = content ? this.draftSignature() : '';
       this.performCreateAction();
@@ -233,6 +233,8 @@ Page({
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有媒体预览加载失败' }); }
   },
   setField(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value, preview: null, notice: '有未保存修改' }); },
+  setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
+  togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
   setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, preview: null }); },
   editBlock(event) {
@@ -444,7 +446,8 @@ Page({
     const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
     if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return null; }
     const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks));
-    return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), expected_revision: this.data.revision } };
+    const tags = String(this.data.tagsText || '').split(/[\s,，]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
+    return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), tags, pinned: this.data.pinned, expected_revision: this.data.revision } };
   },
   async persistDraft(input, epoch) {
     const signature = this.draftSignature();

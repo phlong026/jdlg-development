@@ -147,6 +147,8 @@ type Content struct {
 	Title       string     `json:"title"`
 	Type        string     `json:"type"`
 	Status      string     `json:"status"`
+	Tags        []string   `json:"tags,omitempty"`
+	Pinned      bool       `json:"pinned,omitempty"`
 	Cover       *Asset     `json:"cover,omitempty"`
 	Media       []Asset    `json:"media"`
 	Body        string     `json:"body"`
@@ -174,6 +176,8 @@ type Draft struct {
 	Owner      string   `json:"owner_id"`
 	CoverID    string   `json:"cover_media_id"`
 	MediaIDs   []string `json:"media_ids"`
+	Tags       []string `json:"tags,omitempty"`
+	Pinned     *bool    `json:"pinned,omitempty"` // nil=不变，显式 true/false 覆盖
 	Revision   int      `json:"expected_revision"`
 }
 type Share struct {
