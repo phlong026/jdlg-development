@@ -34,6 +34,8 @@ Page({
         featuredGroups: [],
         homeChatCover: '',
         homeTimelineCover: '',
+        unreadCount: 0,
+        unreadBannerVisible: false,
         contentReady: false,
         featuredGroupsLoading: false,
         lastFeaturedGroupsFetchTime: 0,
@@ -87,7 +89,50 @@ Page({
             return;
         this.syncTabBar();
         this.loadFeaturedGroups();
+        if (typeof this.checkUnreadNotifications === 'function')
+            this.checkUnreadNotifications();
         void this.promptNicknameIfMissing();
+    },
+    // APP 式消息弹窗：打开小程序时检查未读通知，有则显示顶部横幅
+    async checkUnreadNotifications() {
+        const token = wx.getStorageSync('token');
+        if (!token)
+            return;
+        try {
+            const result = await new Promise((resolve, reject) => {
+                wx.request({
+                    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/notifications/unread-count',
+                    method: 'GET',
+                    header: { token },
+                    success: (res) => {
+                        if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.code === 0) {
+                            resolve(res.data.data);
+                        }
+                        else {
+                            reject(new Error('failed'));
+                        }
+                    },
+                    fail: reject,
+                });
+            });
+            const count = Number(result.unread_count || 0);
+            if (count > 0) {
+                this.setData({ unreadCount: count, unreadBannerVisible: true });
+            }
+            else {
+                this.setData({ unreadCount: 0, unreadBannerVisible: false });
+            }
+        }
+        catch (_) {
+            // 消息服务不可用不阻塞首页
+        }
+    },
+    dismissUnreadBanner() {
+        this.setData({ unreadBannerVisible: false });
+    },
+    goToMessageCenter() {
+        this.setData({ unreadBannerVisible: false });
+        wx.navigateTo({ url: '/pages/messagecenter/messagecenter' });
     },
     // 已登录但昵称为空时强制完善资料（登录即完善，新老用户一致）；首页引导弹窗显示期间不叠加，等下次进入首页再检查。
     async promptNicknameIfMissing() {
@@ -107,7 +152,13 @@ Page({
     },
     onShareAppMessage() {
         const share = { title: HOME_SHARE_TITLE, path: '/pages/index/index?from=share' };
-        return Object.assign(Object.assign({}, share), { imageUrl: this.data.homeChatCover || undefined, promise: Promise.resolve(this.shareCoversPromise).then(() => (Object.assign(Object.assign({}, share), { imageUrl: this.data.homeChatCover || undefined }))) });
+        return {
+            ...share,
+            imageUrl: this.data.homeChatCover || undefined,
+            promise: Promise.resolve(this.shareCoversPromise).then(() => ({
+                ...share, imageUrl: this.data.homeChatCover || undefined,
+            })),
+        };
     },
     getTimelineSharePayload,
     onShareTimeline() { return getTimelineSharePayload.call(this); },
@@ -132,7 +183,7 @@ Page({
             },
         };
         if (tabPaths.includes(url.split('?')[0])) {
-            wx.switchTab(Object.assign(Object.assign({}, options), { url: url.split('?')[0] }));
+            wx.switchTab({ ...options, url: url.split('?')[0] });
         }
         else {
             wx.navigateTo(options);
@@ -163,10 +214,9 @@ Page({
         }
     },
     onQuickRegionChange(e) {
-        var _a;
         const indices = e.detail.value;
         const province = Object.keys(costRegions_1.cityOptionsMap)[indices[0]];
-        const city = (_a = costRegions_1.cityOptionsMap[province]) === null || _a === void 0 ? void 0 : _a[indices[1]];
+        const city = costRegions_1.cityOptionsMap[province]?.[indices[1]];
         if (!province || !city)
             return;
         this.setData({
@@ -306,20 +356,20 @@ Page({
     prefetchFeaturedGroups(groups) {
         const cases = [];
         (Array.isArray(groups) ? groups : []).forEach((group) => {
-            if (group === null || group === void 0 ? void 0 : group.case1) {
+            if (group?.case1) {
                 cases.push(group.case1);
             }
-            if (group === null || group === void 0 ? void 0 : group.case2) {
+            if (group?.case2) {
                 cases.push(group.case2);
             }
         });
         const uniqueCases = cases.filter((item, index, list) => {
-            const id = Number((item === null || item === void 0 ? void 0 : item.id) || 0);
-            return id > 0 && list.findIndex((candidate) => Number((candidate === null || candidate === void 0 ? void 0 : candidate.id) || 0) === id) === index;
+            const id = Number(item?.id || 0);
+            return id > 0 && list.findIndex((candidate) => Number(candidate?.id || 0) === id) === index;
         });
         void (0, perf_1.prefetchImages)(uniqueCases.map((item) => (0, asset_1.normalizeCosUrl)(item.thumbnail || item.preview_url || '')), 2);
         uniqueCases.slice(0, 2).forEach((item) => {
-            const templateId = Number((item === null || item === void 0 ? void 0 : item.id) || 0);
+            const templateId = Number(item?.id || 0);
             const cacheKey = buildPublicTemplateDetailCacheKey(templateId);
             if (!templateId || (0, perf_1.getPageCache)(cacheKey) || featuredDetailPrefetching.has(templateId)) {
                 return;
@@ -329,8 +379,8 @@ Page({
                 url: `${API_BASE_URL}/api/v1/miniprogram/templates/${templateId}`,
                 method: 'GET',
                 success: (response) => {
-                    const body = (response === null || response === void 0 ? void 0 : response.data) || {};
-                    if ((response === null || response === void 0 ? void 0 : response.statusCode) === 200 && body.code === 0 && body.data) {
+                    const body = response?.data || {};
+                    if (response?.statusCode === 200 && body.code === 0 && body.data) {
                         (0, perf_1.setPageCache)(cacheKey, body.data, TEMPLATE_DETAIL_CACHE_TTL);
                         void (0, perf_1.prefetchImages)([(0, asset_1.normalizeCosUrl)(body.data.preview_url || ''), (0, asset_1.normalizeCosUrl)(body.data.thumbnail || '')], 2);
                     }

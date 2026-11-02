@@ -46,3 +46,62 @@ page{overflow:visible}.pages{width:100vw;min-height:100vh;background:linear-grad
   color: #b3a696;
   font-size: 34rpx;
 }
+
+/* APP 式未读消息横幅 */
+.unread-banner {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin: 16rpx 24rpx 0;
+  padding: 20rpx 24rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, #fff8ef 0%, #f1e4d2 100%);
+  border: 1rpx solid #dfcbb3;
+  box-shadow: 0 4rpx 16rpx rgba(168, 121, 67, 0.12);
+  animation: unread-slide-in 0.3s ease-out;
+}
+
+@keyframes unread-slide-in {
+  from { opacity: 0; transform: translateY(-20rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.unread-banner-icon {
+  font-size: 40rpx;
+  flex-shrink: 0;
+}
+
+.unread-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.unread-banner-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #352e27;
+}
+
+.unread-banner-desc {
+  font-size: 24rpx;
+  color: #817568;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unread-banner-arrow {
+  font-size: 36rpx;
+  color: #b49a7e;
+  flex-shrink: 0;
+}
+
+.unread-banner-close {
+  padding: 10rpx;
+  font-size: 28rpx;
+  color: #b49a7e;
+  flex-shrink: 0;
+}
