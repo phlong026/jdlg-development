@@ -12,7 +12,7 @@ const writingTypes = [
 const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '保存为新内容草稿', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
+  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '带入编辑器', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');

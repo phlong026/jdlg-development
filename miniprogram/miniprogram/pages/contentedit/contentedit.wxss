@@ -83,7 +83,7 @@ page {
   font-weight: 600;
 }
 
-.settings-toggle {
+button.settings-toggle {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -141,9 +141,21 @@ page {
   min-width: 0;
 }
 
+.content-heading .section-title {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .heading-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10rpx;
+}
+
+.heading-actions button.text-action {
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .ai-action {

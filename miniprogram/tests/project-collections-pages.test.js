@@ -187,7 +187,7 @@ test('collection editor keeps a single hierarchy and disables preview without wo
   assert.doesNotMatch(template, /page-title\">我的合集/);
   assert.match(template, /{{collections\.length}}个合集/);
   assert.match(template, /wx:if="{{selectedItems\.length}}" class="section selected-section"/);
-  assert.match(template, /暂无可添加的已发布作品/);
+  assert.match(template, /暂无已发布作品/);
   assert.doesNotMatch(template, /class="secondary" bindtap="closeEditor"/);
   assert.match(template, /bindtap="previewCurrent" disabled="{{busy \|\| !selectedItems\.length}}"/);
   assert.match(style, /\.form-card input\{[^}]*height:88rpx;[^}]*line-height:88rpx;[^}]*padding:0 24rpx/);

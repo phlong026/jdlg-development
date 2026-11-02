@@ -111,10 +111,7 @@ page {
   gap: 16rpx;
 }
 
-.edit-hint {
-  font-size: 23rpx;
-  color: #938879;
-}
+
 
 .writing-result {
   box-sizing: border-box;
@@ -175,14 +172,6 @@ page {
 
 .generation-hint {
   display: block;
-  font-size: 23rpx;
-  color: #8f867b;
-  line-height: 1.7;
-}
-
-.tab-hint {
-  display: block;
-  margin: -6rpx 0 18rpx;
   font-size: 23rpx;
   color: #8f867b;
   line-height: 1.7;
@@ -295,36 +284,6 @@ button {
 
 button::after {
   border: 0;
-}
-
-.save-hint {
-  display: block;
-  margin-top: 10rpx;
-  color: #817568;
-  font-size: 23rpx;
-  text-align: center;
-}
-
-.example-card {
-  margin: 14rpx 0 4rpx;
-  padding: 20rpx 24rpx;
-  border: 1rpx dashed #dfcbb3;
-  border-radius: 14rpx;
-  background: #fffdf9;
-}
-
-.example-title {
-  display: block;
-  color: #98683a;
-  font-size: 23rpx;
-}
-
-.example-body {
-  display: block;
-  margin-top: 10rpx;
-  color: #6d6258;
-  font-size: 25rpx;
-  line-height: 1.7;
 }
 
 .stream-preview {

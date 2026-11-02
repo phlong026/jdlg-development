@@ -9,7 +9,7 @@
 
     <block wx:elif="{{!editing}}">
       <view class="toolbar"><text class="collection-count">{{collections.length}}个合集</text><button class="primary small-button" bindtap="startCreate">＋ 新建</button></view>
-      <view wx:if="{{!collections.length}}" class="empty"><text class="empty-title">还没有合集</text><text>选择已发布作品，组合成一个对外页面</text></view>
+      <view wx:if="{{!collections.length}}" class="empty"><text class="empty-title">还没有合集</text><text>公开展示已发布作品</text></view>
       <view wx:for="{{collections}}" wx:key="collection_id" class="collection-card">
         <image wx:if="{{item.cover_url}}" class="cover" src="{{item.cover_url}}" mode="aspectFill" />
         <view wx:else class="cover placeholder">甲</view>
@@ -24,17 +24,17 @@
     <block wx:else>
       <view class="form-card">
         <text class="label">合集名称</text><input value="{{title}}" bindinput="setTitle" maxlength="80" placeholder="例如：新中式乡墅精选" />
-        <text class="label">简介（选填）</text><textarea value="{{description}}" bindinput="setDescription" maxlength="500" placeholder="一句话介绍这个合集" />
+        <text class="label">简介（选填）</text><textarea value="{{description}}" bindinput="setDescription" maxlength="500" />
         <view wx:if="{{ownerChoices.length > 1}}" class="owner-row"><text class="label">内容归属</text><picker range="{{ownerChoices}}" range-key="display_name" value="{{ownerIndex}}" bindchange="setOwner" disabled="{{!!current}}"><view>{{ownerChoices[ownerIndex].display_name}} <text>›</text></view></picker></view>
       </view>
 
       <view wx:if="{{selectedItems.length}}" class="section selected-section"><view class="section-head"><text>已选作品</text><text class="count">{{selectedItems.length}}</text></view>
-        <view wx:for="{{selectedItems}}" wx:key="content_id" class="selected-row"><text class="order">{{index + 1}}</text><view class="selected-main"><text>{{item.title}}</text><text class="meta">V{{item.content_version}}</text></view><view class="sort-actions"><button wx:if="{{index > 0}}" data-index="{{index}}" bindtap="topItem">置顶</button><button data-index="{{index}}" data-direction="-1" bindtap="moveItem" disabled="{{index === 0}}">↑</button><button data-index="{{index}}" data-direction="1" bindtap="moveItem" disabled="{{index === selectedItems.length - 1}}">↓</button><button class="{{coverItemIndex === index ? 'cover-on' : ''}}" data-index="{{index}}" bindtap="setCoverItem">{{coverItemIndex === index ? '封面' : '设封面'}}</button><button class="danger" data-index="{{index}}" bindtap="removeItem">移除</button></view></view>
+        <view wx:for="{{selectedItems}}" wx:key="content_id" class="selected-row"><text class="order">{{index + 1}}</text><view class="selected-main"><text>{{item.title}}</text><text class="meta">第{{item.content_version}}版</text></view><view class="sort-actions"><button wx:if="{{index > 0}}" data-index="{{index}}" bindtap="topItem">置顶</button><button data-index="{{index}}" data-direction="-1" bindtap="moveItem" disabled="{{index === 0}}">↑</button><button data-index="{{index}}" data-direction="1" bindtap="moveItem" disabled="{{index === selectedItems.length - 1}}">↓</button><button class="{{coverItemIndex === index ? 'cover-on' : ''}}" data-index="{{index}}" bindtap="setCoverItem">{{coverItemIndex === index ? '已设封面' : '设封面'}}</button><button class="danger" data-index="{{index}}" bindtap="removeItem">移除</button></view></view>
       </view>
 
       <view class="section"><view class="section-head"><text>添加作品</text></view>
-        <text wx:if="{{!candidates.length}}" class="section-empty">暂无可添加的已发布作品</text>
-        <view wx:for="{{candidates}}" wx:key="content_id" class="candidate-row" data-id="{{item.content_id}}" data-version="{{item.content_version}}" bindtap="toggleCandidate"><view class="check">{{item.selected ? '✓' : '○'}}</view><view><text>{{item.title}}</text><text class="meta">已发布 · V{{item.content_version}}</text></view><text class="add">{{item.selected ? '已选' : '选择'}}</text></view>
+        <text wx:if="{{!candidates.length}}" class="section-empty">暂无已发布作品</text>
+        <view wx:for="{{candidates}}" wx:key="content_id" class="candidate-row" data-id="{{item.content_id}}" data-version="{{item.content_version}}" bindtap="toggleCandidate"><view class="check">{{item.selected ? '✓' : '○'}}</view><view><text>{{item.title}}</text><text class="meta">已发布 · 第{{item.content_version}}版</text></view></view>
         <button wx:if="{{candidateCursor}}" class="load-more" bindtap="loadMoreCandidates">加载更多</button>
       </view>
 

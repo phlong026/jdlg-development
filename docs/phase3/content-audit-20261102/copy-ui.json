@@ -1,0 +1,27 @@
+[
+  {
+    "page": "pages/contentworkbench/contentworkbench",
+    "mounted": true,
+    "error": ""
+  },
+  {
+    "page": "pages/contentwriting/contentwriting",
+    "mounted": true,
+    "error": ""
+  },
+  {
+    "page": "pages/contentedit/contentedit",
+    "mounted": true,
+    "error": ""
+  },
+  {
+    "page": "pages/nativereferences/nativereferences",
+    "mounted": true,
+    "error": ""
+  },
+  {
+    "page": "pages/projectcollections/projectcollections",
+    "mounted": true,
+    "error": ""
+  }
+]

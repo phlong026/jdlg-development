@@ -520,35 +520,11 @@ button::after {
   background: #fff;
 }
 
-.onboarding-step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52rpx;
-  height: 52rpx;
-  border-radius: 999rpx;
-  background: #f1e4d2;
-  color: #8b5c2d;
-  font-size: 26rpx;
-}
-
-.onboarding-texts {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
 .onboarding-title {
+  flex: 1;
   font-size: 28rpx;
   font-weight: 600;
   color: #2b211b;
-}
-
-.onboarding-desc {
-  font-size: 23rpx;
-  color: #817568;
 }
 
 .quota-strip {

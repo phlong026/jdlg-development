@@ -106,10 +106,6 @@ test('tab examples arrive from the server registry and never feed fabricated fac
   assert.ok(h.page.data.instruction.indexOf('短句为主') >= 0);
   assert.equal(h.page.data.facts, '', '示例是虚构事实，绝不能自动进入已知资料');
 
-  const writingWxml = fs.readFileSync(path.join(root, 'pages/contentwriting/contentwriting.wxml'), 'utf8');
-  assert.match(writingWxml, /wx:if="\{\{example\}\}" class="example-card"/);
-  const exampleBlock = writingWxml.slice(writingWxml.indexOf('example-card'), writingWxml.indexOf('login-state'));
-  assert.ok(exampleBlock.indexOf('bindtap') < 0, '示例卡必须只读，不得有点填动作');
 });
 
 test('prompt registry drives generation while the anti-fabrication clause stays client-side', async () => {
