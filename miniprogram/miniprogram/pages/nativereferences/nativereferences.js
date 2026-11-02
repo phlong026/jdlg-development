@@ -10,7 +10,7 @@ Page({
     const pickerMode = options && (options.picker === 'media' || options.picker === 'content') ? options.picker : '';
     const mediaKinds = pickerMode === 'media' ? String(options.kind || '') : '';
     this._pickerMode = pickerMode; this._mediaKinds = mediaKinds;
-    this._pickerChannel = wx.getOpenerEventChannel ? wx.getOpenerEventChannel() : null;
+    this._pickerChannel = this.getOpenerEventChannel ? this.getOpenerEventChannel() : null;
     this.setData(empty(pickerMode, mediaKinds));
   },
   onShow() {

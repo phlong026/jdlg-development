@@ -72,7 +72,7 @@ Page({
     if (token && !this._loaded) this.load(this._epoch);
   },
   onHide() { this.pauseLayoutVideos(); },
-  onUnload() { this._epoch = (this._epoch || 0) + 1; this.pauseLayoutVideos(); },
+  onUnload() { this._unloaded = true; this._epoch = (this._epoch || 0) + 1; this.pauseLayoutVideos(); },
   current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   retry() { this._loaded = false; const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this.load(epoch); },
@@ -128,20 +128,23 @@ Page({
   toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
   openMediaPicker() {
     if (this.data.busy) return;
-    const token = this._token, epoch = this._epoch;
+    const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false };
     wx.navigateTo({
       url: '/pages/nativereferences/nativereferences?picker=media&kind=image%2Cvideo',
-      events: { selectMaterial: payload => this.receivePickedMedia(payload, token, epoch) },
+      events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
     });
   },
-  async receivePickedMedia(payload, token, epoch) {
+  async receivePickedMedia(payload, launch) {
     const asset = payload && payload.kind === 'media' ? payload.asset : null;
     if (!asset || !asset.media_id || (asset.kind !== 'image' && asset.kind !== 'video')) return;
-    if (token !== this._token || !this.current(epoch) || this.data.busy || this.data.layoutReadOnly) return;
+    // 选择页返回会触发 onShow，改变请求 epoch；用原草稿身份保护跨页素材回填。
+    const current = () => !this._unloaded && launch.token === this._token && launch.token === String(wx.getStorageSync('token') || '') && launch.id === this.data.id && launch.signature === this.draftSignature() && !this.data.busy && !this.data.layoutReadOnly;
+    if (launch.handled || !current()) return;
+    launch.handled = true;
     let selected = { ...asset };
     try { selected.local_path = await api.downloadWorkbenchMedia(asset.media_id); }
     catch (_) { selected.preview_error = '私有媒体预览加载失败'; }
-    if (token !== this._token || !this.current(epoch) || this.data.busy || this.data.layoutReadOnly) return;
+    if (!current()) return;
     const media = mergeAssets(this.data.media, [selected]);
     const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
     this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), preview: null, notice: '已加入正文' });
@@ -163,7 +166,7 @@ Page({
   },
   pauseLayoutVideos() { [...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || [])].filter(block => block.kind === 'video').forEach(block => wx.createVideoContext(block.domId, this).pause()); },
   draftSignature() {
-    return JSON.stringify({ id: this.data.id, title: this.data.title, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks });
+    return JSON.stringify({ id: this.data.id, title: this.data.title, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks, tagsText: this.data.tagsText, pinned: this.data.pinned });
   },
   rejectWritingReturn(message) {
     this.setData({ notice: message });

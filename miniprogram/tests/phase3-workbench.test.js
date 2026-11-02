@@ -714,3 +714,46 @@ test('refresh supersedes delayed load-more and duplicate load-more stays single-
   resolveMore({ items: [{ share_id: 'stale-more' }] }); await refresh; await tick();
   assert.deepEqual(page.data.items.map(item => item.share_id), ['refreshed']);
 });
+
+for (const outcome of ['return', 'account-change', 'draft-change', 'unload']) {
+  test(`media selection survives return and rejects stale ${outcome}`, async () => {
+    let picker, finish, token = 'session-token';
+    const page = pageHarness('contentedit', { downloadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) }, {
+      getStorageSync: () => token, hideShareMenu() {}, navigateTo(options) { picker = options; },
+    });
+    page._token = token; page._epoch = 2; page._loaded = true;
+    page.data.blocks = [{ kind: 'paragraph', text: '保留正文' }]; page.data.media = [];
+    page.openMediaPicker(); page.onHide();
+    const pending = picker.events.selectMaterial({ kind: 'media', asset: { media_id: 'picked', kind: 'image' } });
+    page.onShow();
+    if (outcome === 'account-change') token = 'other-account';
+    if (outcome === 'draft-change') page.data.title = '另一份修改';
+    if (outcome === 'unload') page.onUnload();
+    finish('/tmp/picked'); await pending;
+    assert.equal(page.data.blocks.some(block => block.media_id === 'picked'), outcome === 'return');
+  });
+}
+
+for (const field of ['tagsText', 'pinned']) {
+  test(`editor warns for unsaved ${field} and clears warning after saving`, async () => {
+    let warned = 0, left = 0, finish;
+    const page = pageHarness('contentedit', { saveContent: () => new Promise(resolve => { finish = resolve; }) }, {
+      showModal() { warned++; }, navigateBack() { left++; },
+    });
+    page._token = 'session-token'; page._epoch = 1;
+    Object.assign(page.data, { id: 'content-1', title: '作品', owner_id: 'designer-1', blocks: [{ kind: 'paragraph', text: '正文' }] });
+    page._savedSignature = page.draftSignature();
+    page.setData({ [field]: field === 'pinned' ? true : '庭院' });
+    page.handleBack(); assert.equal(warned, 1); assert.equal(left, 0);
+    const save = page.saveDraft();
+    finish({ content_id: 'content-1', revision: 2, version: 0, status: 'draft' }); await save;
+    assert.equal(page._savedSignature, page.draftSignature());
+    page.handleBack(); assert.equal(left, 1);
+    page.setData({ [field]: field === 'pinned' ? false : '别墅' });
+    const secondSave = page.saveDraft();
+    page.setData({ [field]: field === 'pinned' ? true : '花园' });
+    finish({ content_id: 'content-1', revision: 3, version: 0, status: 'draft' }); await secondSave;
+    assert.notEqual(page._savedSignature, page.draftSignature());
+    page.handleBack(); assert.equal(warned, 2);
+  });
+}

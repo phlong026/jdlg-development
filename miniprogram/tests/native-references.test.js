@@ -46,10 +46,10 @@ function pageHarness(api, storage = { token: 'account-a' }) {
   let definition; const navigation = [], emitted = [];
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/nativereferences/nativereferences.js'), 'utf8'), {
     Page: value => { definition = value; }, require: () => api,
-    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {}, getOpenerEventChannel: () => ({ emit: (name, value) => emitted.push({ name, value }) }) },
+    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {} },
     Promise, Object, String, Number, Array, Set, Error, encodeURIComponent,
   });
-  const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(value) { Object.assign(this.data, value); } }, definition);
+  const page = Object.assign({ getOpenerEventChannel: () => ({ emit: (name, value) => emitted.push({ name, value }) }), data: JSON.parse(JSON.stringify(definition.data)), setData(value) { Object.assign(this.data, value); } }, definition);
   return { page, navigation, emitted, storage };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
