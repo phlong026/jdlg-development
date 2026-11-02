@@ -9,6 +9,10 @@
       <text class="lg-sub">请稍候</text>
     </view>
     <view wx:elif="{{!completingProfile}}" class="login-guard aw-card" catchtap="stopPropagation">
+      <!-- 审核要求：登录环节提供显著的可取消/拒绝按钮 -->
+      <view class="lg-close" catchtap="onDismiss" hover-class="lg-close-active">
+        <text class="lg-close-icon">✕</text>
+      </view>
       <text class="lg-title">{{needsLogin ? '免费开启您的理想家' : '重新连接，继续发现好设计'}}</text>
       <text class="lg-sub">海量乡墅案例 · AI设计体验 · 建房造价测算</text>
       <text wx:if="{{error}}" class="lg-error">{{error}}</text>
@@ -27,11 +31,18 @@
         <text class="lg-agreement-text">我已阅读并同意</text>
         <text class="lg-link" catchtap="onOpenPrivacy">《用户协议与隐私政策》</text>
       </view>
+      <!-- 暂不登录：公开页关闭浮层继续浏览，功能页返回上一页 -->
+      <view wx:if="{{!loggingIn}}" class="lg-skip" catchtap="onDismiss" hover-class="lg-skip-active">
+        <text>暂不登录，先逛逛</text>
+      </view>
     </view>
     <view class="lg-profile-card" hidden="{{!completingProfile}}">
       <view class="lg-profile-head">
         <text class="lg-title">补充头像和昵称后继续</text>
         <text class="lg-sub">账号仍在登录状态，完善资料即可返回当前页面继续使用</text>
+      </view>
+      <view class="lg-later" catchtap="onDismiss" hover-class="lg-skip-active">
+        <text>稍后补充，继续浏览</text>
       </view>
       <nickname-guard id="nicknameGuard" embedded="{{true}}" bind:completed="onProfileCompleted" bind:authrequired="onProfileAuthRequired" />
     </view>

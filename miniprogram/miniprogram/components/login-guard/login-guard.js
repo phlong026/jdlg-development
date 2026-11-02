@@ -5,6 +5,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const parameter_1 = require("../../utils/parameter");
 const profile_validation_1 = require("../nickname-guard/profile-validation");
+// 宿主页是否公开浏览页（决定"暂不登录"的导航行为）
+const { isPublicBrowseRoute } = require('../../utils/profile-access');
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 Component({
     data: {
@@ -29,12 +31,40 @@ Component({
         },
     },
     methods: {
+        // 用户拒绝登录（"暂不登录"/关闭按钮）。公开浏览页仅关闭浮层继续浏览；
+        // 身份功能页返回上一页（无上一页则回首页）。
+        onDismiss() {
+            this._dismissed = true;
+            this.setData({ visible: false, checking: false, loggingIn: false });
+            this.triggerEvent('dismissed');
+            try {
+                const pages = getCurrentPages();
+                const current = pages[pages.length - 1];
+                const route = current ? String(current.route || '') : '';
+                if (!isPublicBrowseRoute(route)) {
+                    if (pages.length > 1)
+                        wx.navigateBack({ delta: 1 });
+                    else
+                        wx.switchTab({ url: '/pages/index/index' });
+                }
+            }
+            catch (e) { /* 导航失败时保持当前页，浮层已关闭 */ }
+        },
         async check(options) {
             var _a, _b, _c, _d;
             const silent = !!(options && options.silent);
             const revision = (this._checkRevision || 0) + 1;
             this._checkRevision = revision;
             const token = wx.getStorageSync('token');
+            // 曾拒绝登录且为静默核验失败：不再弹浮层（审核"不得反复弹窗"），
+            // 直接按拒绝处理返回，等用户主动再触发。
+            const deniedAgain = () => {
+                if (silent && this._dismissed) {
+                    this.onDismiss();
+                    return true;
+                }
+                return false;
+            };
             // 缓存只用于预填资料，不能替代服务器确认；否则旧包或换号缓存会先加载内容并写入访问记录。
             // silent 供已放行页面的后台重验使用：不弹核验面板、不提前上锁，仅在真正失败时 gated。
             this.setData({ visible: false, checking: !silent && !!token, needsLogin: !token, completingProfile: false, error: '' });
@@ -42,6 +72,8 @@ Component({
             if (!token) {
                 editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
                 this.triggerEvent('gated');
+                if (deniedAgain())
+                    return false;
                 this.setData({ visible: true, checking: false });
                 return false;
             }
@@ -59,6 +91,8 @@ Component({
                     wx.removeStorageSync('userInfo');
                     editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
                     this.triggerEvent('gated');
+                    if (deniedAgain())
+                        return false;
                     this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
                     return false;
                 }
@@ -71,6 +105,8 @@ Component({
                     wx.removeStorageSync('userInfo');
                     editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
                     this.triggerEvent('gated');
+                    if (deniedAgain())
+                        return false;
                     this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
                     return false;
                 }
@@ -99,6 +135,8 @@ Component({
                 if (current()) {
                     console.error('分享资料核验失败:', error);
                     this.triggerEvent('gated');
+                    if (deniedAgain())
+                        return false;
                     this.setData({ visible: true, checking: false, error: error.message || '资料读取失败，请重试' });
                 }
                 return false;

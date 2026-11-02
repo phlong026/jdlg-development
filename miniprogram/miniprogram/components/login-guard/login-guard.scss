@@ -15,6 +15,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* lg-close 绝对定位的锚点 */
+  position: relative;
 }
 
 .lg-checking {
@@ -156,4 +158,60 @@
   opacity: 0.6;
   color: #fff;
   background: #b3925f;
+}
+
+/* ===== 审核整改：登录环节可取消（×关闭 + 暂不登录）===== */
+.login-guard .lg-close {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(94, 65, 47, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-guard .lg-close-icon {
+  font-size: 34rpx;
+  color: #5e412f;
+  line-height: 1;
+}
+
+.login-guard .lg-close-active {
+  background: rgba(94, 65, 47, 0.18);
+}
+
+.login-guard .lg-skip {
+  margin-top: 28rpx;
+  padding: 20rpx 0 4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-guard .lg-skip text {
+  font-size: 30rpx;
+  color: #8a6d4b;
+  text-decoration: underline;
+}
+
+.login-guard .lg-skip-active {
+  opacity: 0.6;
+}
+
+.lg-profile-card .lg-later {
+  margin: 8rpx 0 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12rpx 0;
+}
+
+.lg-profile-card .lg-later text {
+  font-size: 28rpx;
+  color: #8a6d4b;
+  text-decoration: underline;
 }

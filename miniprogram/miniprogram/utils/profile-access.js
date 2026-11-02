@@ -269,4 +269,6 @@ function install() {
     return typeof definition.onHide === 'function' ? definition.onHide.apply(this, arguments) : undefined;
   } });
 }
-module.exports = { install, wrapProfileAccess };
+// 宿主页是否公开浏览页（login-guard 用它决定"暂不登录"的导航行为）。
+const isPublicBrowseRoute = route => PUBLIC_BROWSE_ROUTES.has(String(route || '').replace(/^\//, ''));
+module.exports = { install, wrapProfileAccess, isPublicBrowseRoute };

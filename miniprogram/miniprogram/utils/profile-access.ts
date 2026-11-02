@@ -270,5 +270,8 @@ function install() {
     return typeof definition.onHide === 'function' ? definition.onHide.apply(this, arguments) : undefined;
   } });
 }
-module.exports = { install, wrapProfileAccess };
+// login-guard 等组件用它判断宿主页是否公开浏览页（决定"暂不登录"的
+// 行为：公开页仅关浮层继续浏览，身份页返回上一页）。纯函数，无副作用。
+const isPublicBrowseRoute = route => PUBLIC_BROWSE_ROUTES.has(String(route || '').replace(/^\//, ''));
+module.exports = { install, wrapProfileAccess, isPublicBrowseRoute };
 export {};

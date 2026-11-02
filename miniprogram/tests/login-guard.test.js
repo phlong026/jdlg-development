@@ -12,10 +12,15 @@ test('权威资料核验期间显示品牌加载态，不露出内容或登录�
   assert.match(wxml, /wx:if="\{\{checking\}\}"[^>]*class="login-guard aw-card lg-checking"/);
   assert.match(wxml, /正在核验登录资料/);
   assert.match(wxml, /hidden="\{\{!visible && !checking && !loggingIn && !completingProfile\}\}" class="login-guard-panel"/);
+  // 审核整改：登录环节必须有显著的取消/拒绝按钮
+  assert.match(wxml, /lg-close" catchtap="onDismiss"/, '右上角关闭按钮');
+  assert.match(wxml, /lg-skip" catchtap="onDismiss"/, '暂不登录按钮');
+  assert.match(wxml, /暂不登录，先逛逛/);
+  assert.match(wxml, /稍后补充，继续浏览/);
 });
 function load(extension, { token = '', loginOk = true, profile = complete, status = 200, defer = false, deferLogin = false, offline = false, cachedProfile = null } = {}) {
   let definition;
-  const storage = { token, userInfo: cachedProfile ? { id: 9, ...cachedProfile } : { id: 9 } }, toasts = [], events = [], requests = [], shows = [];
+  const storage = { token, userInfo: cachedProfile ? { id: 9, ...cachedProfile } : { id: 9 } }, toasts = [], events = [], requests = [], shows = [], navigations = [];
   const nicknameGuard = { data: { visible: false }, setData(v) { Object.assign(this.data, v); }, show(v) { shows.push(v); this.data.visible = true; } };
   const wx = {
     getStorageSync: key => storage[key], setStorageSync: (key, value) => { storage[key] = value; }, removeStorageSync: key => { delete storage[key]; },
@@ -29,16 +34,37 @@ function load(extension, { token = '', loginOk = true, profile = complete, statu
       o.success({ statusCode: status, data: { code: status === 200 ? 0 : status, data: profile } });
     },
     showToast: o => toasts.push(o.title), navigateTo() {},
+    getCurrentPages: () => [{ route: 'pages/index/index' }, { route: 'pages/aigenerate/aigenerate' }],
+    navigateBack: o => navigations.push({ kind: 'back', delta: o && o.delta }),
+    switchTab: o => navigations.push({ kind: 'switchTab', url: o && o.url }),
   };
   const source = fs.readFileSync(path.join(root, `miniprogram/components/login-guard/login-guard.${extension}`), 'utf8');
   const code = extension === 'ts' ? ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText : source;
-  vm.runInNewContext(code, { exports: {}, require: name => name.endsWith('profile-validation') ? require(path.join(root, 'miniprogram/components/nickname-guard/profile-validation.js')) : name.endsWith('deviceFingerprint')
+  vm.runInNewContext(code, { exports: {}, require: name => name.endsWith('profile-validation') ? require(path.join(root, 'miniprogram/components/nickname-guard/profile-validation.js')) : name.endsWith('profile-access') ? { isPublicBrowseRoute: route => String(route || '').startsWith('pages/index/') } : name.endsWith('deviceFingerprint')
     ? { generateDeviceFingerprint: async () => 'dev', getCachedDeviceFingerprint: () => 'dev', cacheDeviceFingerprint() {} }
-    : { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }, Component: d => { definition = d; }, wx, console: { error() {} } });
+    : { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }, Component: d => { definition = d; }, wx, getCurrentPages: wx.getCurrentPages, console: { error() {} } });
   const instance = { ...definition.methods, data: { ...definition.data }, setData(v) { Object.assign(this.data, v); }, selectComponent: () => nicknameGuard, triggerEvent(name, detail) { events.push({ name, detail }); } };
-  return { instance, storage, toasts, events, requests, shows, nicknameGuard, detach: () => definition.lifetimes.detached.call(instance) };
+  return { instance, storage, toasts, events, requests, shows, navigations, nicknameGuard, detach: () => definition.lifetimes.detached.call(instance) };
 }
 for (const ext of ['ts', 'js']) {
+  test(`${ext}: 拒绝登录关闭浮层并返回上一页（审核整改）`, async () => {
+    const f = load(ext);
+    await f.instance.check();
+    assert.equal(f.instance.data.visible, true, '未登录时浮层展示');
+    f.instance.onDismiss();
+    assert.equal(f.instance.data.visible, false, '拒绝后浮层关闭');
+    assert.ok(f.events.some(e => e.name === 'dismissed'));
+    assert.equal(f.navigations.length, 1, '身份页拒绝登录返回上一页');
+    assert.equal(f.navigations[0].kind, 'back');
+  });
+  test(`${ext}: 拒绝后切后台核验失败不再重弹（审核整改）`, async () => {
+    const f = load(ext, { token: 'tk', cachedProfile: complete, offline: true });
+    f.instance.onDismiss();
+    f.navigations.splice(0);
+    assert.equal(await f.instance.check({ silent: true }), false);
+    assert.equal(f.instance.data.visible, false, '静默失败不重弹浮层');
+    assert.equal(f.navigations.length, 1, '自动按拒绝处理返回');
+  });
   test(`${ext}: missing token remains blocked`, async () => {
     const f = load(ext); assert.equal(await f.instance.check(), false); assert.equal(f.instance.data.visible, true); assert.ok(f.events.some(e => e.name === 'gated')); assert.equal(f.requests.length, 0);
   });
