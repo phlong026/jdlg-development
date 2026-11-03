@@ -1,0 +1,10 @@
+{
+  "status": "active",
+  "pid": 1970775,
+  "binary_sha256": "b9c7e4efcb7148c78d29a2822228ab8ff7ea464c548e7b8474e0d56f650dcbb0",
+  "runtime_preserved": true,
+  "config_files_preserved": true,
+  "project_notes_enabled": "true",
+  "config_http": 200,
+  "unauth_workbench_http": 401
+}
