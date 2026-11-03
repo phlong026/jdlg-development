@@ -1,0 +1,19 @@
+{
+  "status": "uploaded",
+  "release_channel": "development",
+  "version": "7.2.22",
+  "appid": "wx94fdc48861913ede",
+  "source_commit": "3c04328e82d35cfffee3c41b778f28715c05de06",
+  "miniprogram_tree": "45cfd1930bba1d2cc37e8d83b7fdba1ceffdb9f0",
+  "uploaded_at": "2026-11-03T08:04:26+08:00",
+  "timestamp_source": "official_cli_info_file_mtime",
+  "project_path": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "description": "设计师工作台与内容创作体验优化，修复素材选择、合集封面、项目资料保存和新建笔记",
+  "official_cli_success_marker": "✔ upload",
+  "upload_log_sha256": "e8fac81cdc6e4ed2a64784fbe840c4354c29dbddfb06fa52a975db9ac9330aea",
+  "upload_info_sha256": "dd9920cc9379179dbe9626267376eae0c3ec2426e15e25a6789951781d898b9b",
+  "source_changes_during_upload": false,
+  "trial_version_changed": false,
+  "submitted_for_review": false,
+  "production_published": false
+}
