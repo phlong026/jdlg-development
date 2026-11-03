@@ -1,0 +1,38 @@
+{
+  "startedAt": "2026-11-03T05:31:38.148Z",
+  "steps": [
+    {
+      "label": "点击生成记录并加载首屏",
+      "path": "pages/generatehistory/generatehistory",
+      "page": "pages/generatehistory/generatehistory",
+      "count": 10,
+      "total": 48,
+      "tokenPresent": true
+    },
+    {
+      "label": "加载第二页",
+      "path": "pages/generatehistory/generatehistory",
+      "page": "pages/generatehistory/generatehistory",
+      "count": 20,
+      "total": 48,
+      "tokenPresent": true
+    },
+    {
+      "label": "刷新回到第一页",
+      "path": "pages/generatehistory/generatehistory",
+      "page": "pages/generatehistory/generatehistory",
+      "count": 10,
+      "total": 48,
+      "tokenPresent": true
+    },
+    {
+      "label": "等待后台请求结束仍保留登录",
+      "path": "pages/generatehistory/generatehistory",
+      "page": "pages/generatehistory/generatehistory",
+      "count": 10,
+      "total": 48,
+      "tokenPresent": true
+    }
+  ],
+  "passed": true
+}
