@@ -1,0 +1,17 @@
+{
+  "status": "uploaded",
+  "release_channel": "development",
+  "version": "7.2.24",
+  "appid": "wx94fdc48861913ede",
+  "source_commit": "6f2f51fdf48c45ebfa4fc618e981197895af8ac4",
+  "miniprogram_tree": "0c7fc295be74e45cca1552bcd804f3896f628423",
+  "uploaded_at": "2026-11-03T18:25:39+08:00",
+  "timestamp_source": "official_cli_info_file_mtime",
+  "official_cli_success_marker": "✔ upload",
+  "upload_log_sha256": "e86f58d378e578d46295237d41c93e8db23d1cc24bb4f459ace05a020eee2991",
+  "upload_info_sha256": "f413c44e7b240db31309adffe0ba4c88ed4d6aea274660bd48b3da7681b6176e",
+  "source_changes_during_upload": false,
+  "trial_version_changed": false,
+  "submitted_for_review": false,
+  "production_published": false
+}

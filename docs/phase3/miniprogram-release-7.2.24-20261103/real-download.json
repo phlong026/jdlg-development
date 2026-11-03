@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-03T10:24:47.335Z",
+  "steps": [],
+  "historyStatus": 200,
+  "passed": true,
+  "imageCount": 0,
+  "results": [
+    {
+      "index": 0,
+      "status": 200,
+      "passed": true,
+      "width": 3840,
+      "height": 2160
+    }
+  ],
+  "sessionRetained": true
+}
