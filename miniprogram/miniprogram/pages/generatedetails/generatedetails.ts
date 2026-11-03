@@ -1693,16 +1693,24 @@ Page({
     return `${API_BASE_URL}/api/v1/miniprogram/user/ai/video/download-original-file?task_no=${taskNo}`;
   },
 
+  getDownloadHeaders(url: string): Record<string, string> {
+    const token = this.getSimpleToken();
+    const apiPath = url.slice(API_BASE_URL.length);
+    const device = String(wx.getStorageSync('device_fingerprint') || '');
+    // wx.downloadFile 不经过 wx.request 的自动签名，必须按实际文件地址单独签名。
+    return paramsToHeaders(generateRequestParams(token, {}, apiPath, device));
+  },
+
   async performAuthorizedImageDownload(imageIndex: number = 0) {
     try {
       this.setData({ showEnterpriseWechatModal: false });
       wx.showLoading({ title: '校验下载权限中...' });
-      const token = this.getSimpleToken();
       await this.requestOriginalDownloadUrl(imageIndex);
       const url = this.buildImageDownloadProxyUrl(imageIndex);
+      const headers = this.getDownloadHeaders(url);
       wx.hideLoading();
       this.clearPendingEnterpriseWechatDownload();
-      this.saveImageToAlbum(url, '保存图片中...', '图片已保存到相册', { token });
+      this.saveImageToAlbum(url, '保存图片中...', '图片已保存到相册', headers);
     } catch (error: any) {
       wx.hideLoading();
       const message = String(error?.message || '图片下载失败');
@@ -1887,11 +1895,11 @@ Page({
     wx.showLoading({ title: '下载中...' });
     this.requestVideoDownloadUrl()
       .then(() => {
-        const token = this.getSimpleToken();
         const videoUrl = this.buildVideoDownloadProxyUrl();
+        const headers = this.getDownloadHeaders(videoUrl);
         wx.downloadFile({
           url: videoUrl,
-          header: { token },
+          header: headers,
           success: (res) => {
             if (res.statusCode !== 200) {
               this.readDownloadErrorMessage(res.tempFilePath, '下载失败').then((message: string) => {
