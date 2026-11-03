@@ -297,9 +297,12 @@ type Filter struct {
 	// Group controls visit timeline grouping: session (legacy, one session +
 	// one material), batch (same visitor within 30 minutes, across materials)
 	// or day (same visitor and Beijing calendar day). Empty means session.
-	Group   string
-	Limit   int
-	Related bool
+	Group string
+	Limit int
+	// CreatedWindow 把时间窗应用到"分享创建时间"而非访问时间。仅本人分享列表
+	// 使用（近3天/7天/30天 chips）；访问详情路径必须清零它，窗口语义不变。
+	CreatedWindow bool
+	Related       bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`
