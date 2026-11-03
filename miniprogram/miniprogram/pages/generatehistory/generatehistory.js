@@ -136,8 +136,7 @@ Page({
                 return;
             }
             const apiPath = '/api/v1/miniprogram/ai-tools';
-            const params = (0, parameter_1.generateRequestParams)(token, '', apiPath);
-            const headers = (0, parameter_1.paramsToHeaders)(params);
+            const headers = await this.getAuthHeaders(apiPath);
             const res = await new Promise((resolve, reject) => {
                 wx.request({
                     url: `${API_BASE_URL}${apiPath}`,
@@ -184,14 +183,14 @@ Page({
             url: '/pages/aigenerate/aigenerate'
         });
     },
-    async getAuthHeaders() {
+    async getAuthHeaders(apiPath) {
         const token = wx.getStorageSync('token');
         if (!token) {
             throw new Error('未登录');
         }
         const requestBody = '';
-        const apiPath = '/api/v1/miniprogram/user/tasks';
-        const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath);
+        const device = String(wx.getStorageSync('device_fingerprint') || '');
+        const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath, device);
         return (0, parameter_1.paramsToHeaders)(params);
     },
     async loadHistory() {
@@ -199,15 +198,15 @@ Page({
             return;
         this.setData({ loading: true });
         try {
-            const headers = await this.getAuthHeaders();
             const { page, pageSize, selectedToolId } = this.data;
-            let url = `${API_BASE_URL}/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
+            let apiPath = `/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
             if (selectedToolId) {
-                url += `&tool_id=${selectedToolId}`;
+                apiPath += `&tool_id=${encodeURIComponent(selectedToolId)}`;
             }
+            const headers = await this.getAuthHeaders(apiPath);
             return new Promise((resolve, reject) => {
                 wx.request({
-                    url,
+                    url: `${API_BASE_URL}${apiPath}`,
                     method: 'GET',
                     header: headers,
                     success: (res) => {
@@ -252,14 +251,14 @@ Page({
             page: this.data.page + 1
         });
         try {
-            const headers = await this.getAuthHeaders();
             const { page, pageSize, selectedToolId } = this.data;
-            let url = `${API_BASE_URL}/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
+            let apiPath = `/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
             if (selectedToolId) {
-                url += `&tool_id=${selectedToolId}`;
+                apiPath += `&tool_id=${encodeURIComponent(selectedToolId)}`;
             }
+            const headers = await this.getAuthHeaders(apiPath);
             wx.request({
-                url,
+                url: `${API_BASE_URL}${apiPath}`,
                 method: 'GET',
                 header: headers,
                 success: (res) => {
@@ -659,13 +658,8 @@ Page({
     },
     /** 按 task_no 删除（通用方法） */
     async doDeleteByTaskNo(taskNo) {
-        const token = wx.getStorageSync('token');
-        if (!token) {
-            throw new Error('未登录');
-        }
-        const apiPath = `/api/v1/miniprogram/user/tasks/${taskNo}`;
-        const params = (0, parameter_1.generateRequestParams)(token, '', apiPath);
-        const headers = (0, parameter_1.paramsToHeaders)(params);
+        const apiPath = `/api/v1/miniprogram/user/tasks/${encodeURIComponent(taskNo)}`;
+        const headers = await this.getAuthHeaders(apiPath);
         const res = await new Promise((resolve, reject) => {
             wx.request({
                 url: `${API_BASE_URL}${apiPath}`,
