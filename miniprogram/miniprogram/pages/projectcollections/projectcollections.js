@@ -17,7 +17,7 @@ Page({
     wx.hideShareMenu();
     this.visible = true;
     const token = String(wx.getStorageSync('token') || '');
-    if (this.account !== token) { this.account = token; this.createKey = ''; this.publishKey = ''; this.setData(initial()); }
+    if (this.account !== token) { this.account = token; this.loaded = false; this.createKey = ''; this.publishKey = ''; this.setData(initial()); }
     this.epoch = (this.epoch || 0) + 1;
     if (!token) { this.setData({ loginRequired: true, loading: false }); return; }
     this.loadHome(this.epoch);
@@ -33,7 +33,8 @@ Page({
     return Promise.all((items || []).map(async item => { const decorated = this.decorate(item); return decorated.cover_url ? Object.assign({}, decorated, { cover_url: await resolveProtectedMediaURL(decorated.cover_url) }) : decorated; }));
   },
   async loadHome(epoch) {
-    this.setData({ loading: true, loginRequired: false, denied: false, error: '', notice: '' });
+    const quiet = this.loaded === true;
+    this.setData({ loading: !quiet, loginRequired: false, denied: false, error: '', notice: '' });
     try {
       const [context, page] = await Promise.all([api.workbenchContext(), api.listCollections({ limit: 20 })]);
       if (!this.currentRequest(epoch)) return;
@@ -44,10 +45,17 @@ Page({
       const collections = await this.resolveCovers(page.items);
       if (!this.currentRequest(epoch)) return;
       this.setData({ owners, ownerChoices, ownerIndex: Math.max(0, ownerChoices.findIndex(item => item.owner_id === selectedOwner)), busy: false, collections, nextCursor: page.next_cursor || '', loading: false });
+      this.loaded = true;
       if (this.requestedID) { const id = this.requestedID; this.requestedID = ''; await this.openEditorByID(id, epoch); }
     } catch (error) {
       if (!this.currentRequest(epoch)) return;
-      this.setData({ loading: false, denied: error.statusCode === 403, loginRequired: error.statusCode === 401, error: error.statusCode === 401 || error.statusCode === 403 ? '' : (error.message || '合集加载失败') });
+      const denied = error.statusCode === 403, loginRequired = error.statusCode === 401;
+      if (denied || loginRequired) this.loaded = false;
+      this.setData({
+        loading: false, denied, loginRequired,
+        ...(denied || loginRequired ? { collections: [], nextCursor: '' } : {}),
+        error: denied || loginRequired ? '' : (error.message || '合集加载失败'),
+      });
     }
   },
   async loadMore() {

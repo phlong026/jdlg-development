@@ -95,6 +95,26 @@ test('returning while a save is pending restores controls and keeps its retry ke
   assert.deepEqual(keys, ['same-attempt', 'same-attempt']);
   assert.equal(page.data.references.length, 1);
 });
+test('same-account return keeps the reference library visible during refresh', async () => {
+  let finishReferences;
+  let referenceCalls = 0;
+  const { page } = pageHarness({
+    listNativeReferences: () => {
+      referenceCalls += 1;
+      if (referenceCalls === 1) return Promise.resolve({ items: [{ reference_id: 'ref-old' }] });
+      return new Promise(resolve => { finishReferences = resolve; });
+    },
+    listNativeReferenceCandidates: async () => ({ items: [] }),
+  });
+  page.onShow(); await tick();
+  assert.equal(page.data.references.length, 1);
+  page.onHide(); page.onShow(); await tick();
+  assert.equal(page.data.loading, false, '后台刷新不替换已显示主体');
+  assert.equal(page.data.references[0].reference_id, 'ref-old');
+  finishReferences({ items: [{ reference_id: 'ref-new' }] });
+  await tick();
+  assert.equal(page.data.references[0].reference_id, 'ref-new');
+});
 test('bounded reference window can still reach sources after the first two hundred', async () => {
   const { page } = pageHarness({ listNativeReferenceCandidates: async input => { assert.equal(input.cursor, 'next-page'); return { items: [{ content_id: 'source-0201', content_version: 1 }], next_cursor: 'later-page' }; } });
   page._visible = true; page._epoch = 1; page._token = 'account-a';

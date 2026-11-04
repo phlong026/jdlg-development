@@ -94,6 +94,29 @@ test('collection page discards late data after account switch', async () => {
   assert.equal(runtime.page.data.collections.length, 0);
 });
 
+test('collection page keeps the rendered list during same-account foreground refresh', async () => {
+  let finishRefresh;
+  let calls = 0;
+  const api = {
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [] }),
+    listCollections: () => {
+      calls += 1;
+      if (calls === 1) return Promise.resolve({ items: [{ collection_id: 'collection-0001', title: '已显示合集', items: [], version: 1, status: 'published' }] });
+      return new Promise(resolve => { finishRefresh = resolve; });
+    },
+    mediaURL: () => '',
+  };
+  const { page } = pageRuntime(api);
+  page.onShow(); await tick(); await tick();
+  assert.equal(page.data.collections.length, 1);
+  page.onHide(); page.onShow(); await tick();
+  assert.equal(page.data.loading, false, '后台刷新不替换已显示主体');
+  assert.equal(page.data.collections[0].title, '已显示合集');
+  finishRefresh({ items: [{ collection_id: 'collection-0002', title: '刷新合集', items: [], version: 1, status: 'published' }] });
+  await tick(); await tick();
+  assert.equal(page.data.collections[0].title, '刷新合集');
+});
+
 test('collection workbench renders protected covers from authenticated temporary files', async () => {
   const api = {
     workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [] }),

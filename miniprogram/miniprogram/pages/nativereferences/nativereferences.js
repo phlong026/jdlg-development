@@ -16,7 +16,7 @@ Page({
   onShow() {
     wx.hideShareMenu(); this._visible = true; this._epoch = (this._epoch || 0) + 1;
     const token = String(wx.getStorageSync('token') || '');
-    if (this._token !== token) { this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); }
+    if (this._token !== token) { this._loaded = false; this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); }
     this._token = token;
     if (!token) { this.setData({ loginRequired: true }); return; }
     this.load();
@@ -25,17 +25,24 @@ Page({
   onUnload() { this._visible = false; this._epoch += 1; this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); },
   current(epoch) { return this._visible && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   async load() {
-    const epoch = this._epoch = (this._epoch || 0) + 1; this.setData({ loading: true, busy: false, error: '', notice: '' });
+    const epoch = this._epoch = (this._epoch || 0) + 1;
+    const quiet = this._loaded === true;
+    this.setData({ loading: !quiet, busy: false, error: '', notice: '' });
     try {
       if (this.data.pickerMode === 'media') {
         const media = await api.listWorkbenchMedia(searchQuery(this.data.search, this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}));
-        if (this.current(epoch)) this.setData({ media: media.items || [], mediaCursor: media.next_cursor || '', loading: false });
+        if (this.current(epoch)) { this._loaded = true; this.setData({ media: media.items || [], mediaCursor: media.next_cursor || '', loading: false }); }
         return;
       }
       const query = searchQuery(this.data.search);
       const [refs, candidates] = await Promise.all([this.data.pickerMode ? Promise.resolve({ items: [] }) : api.listNativeReferences({ limit: 20 }), api.listNativeReferenceCandidates(query)]);
-      if (this.current(epoch)) this.setData({ references: refs.items || [], candidates: candidates.items || [], referenceCursor: refs.next_cursor || '', candidateCursor: candidates.next_cursor || '', loading: false });
-    } catch (error) { if (this.current(epoch)) this.setData({ loading: false, error: error.message || '原生内容暂不可用' }); }
+      if (this.current(epoch)) { this._loaded = true; this.setData({ references: refs.items || [], candidates: candidates.items || [], referenceCursor: refs.next_cursor || '', candidateCursor: candidates.next_cursor || '', loading: false }); }
+    } catch (error) {
+      if (!this.current(epoch)) return;
+      const authFailed = error.statusCode === 401 || error.statusCode === 403;
+      if (authFailed) { this._loaded = false; this.setData(empty(this._pickerMode, this._mediaKinds)); }
+      this.setData({ loading: false, loginRequired: error.statusCode === 401, error: error.statusCode === 403 ? '暂无资料库权限' : error.statusCode === 401 ? '' : (error.message || '原生内容暂不可用') });
+    }
   },
   async loadMore(event) {
     if (this.data.busy) return;

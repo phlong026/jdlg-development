@@ -319,13 +319,14 @@ Page({
     this.__workbenchAccessRequestId = requestId;
 
     this.setData({
-      hasContentWorkbenchAccess: false,
-      showWorkbenchSection: false,
       showShareMaterialsPanel: false,
       workbenchAccessLoading: !!token,
     });
-    this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
-    if (!token || token !== String(wx.getStorageSync('token') || '')) return;
+    if (!token || token !== String(wx.getStorageSync('token') || '')) {
+      this.setData({ hasContentWorkbenchAccess: false, showWorkbenchSection: false, workbenchAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
+      return;
+    }
 
     try {
       const context = await phase3API.workbenchContext();
@@ -341,15 +342,17 @@ Page({
       this.setData({ hasContentWorkbenchAccess, workbenchAccessLoading: false });
       this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess });
       if (hasContentWorkbenchAccess) this.refreshShareMaterials();
-    } catch (error) {
+    } catch (error: any) {
       if (
         requestId !== this.__workbenchAccessRequestId
         || token !== String(this.data.token || '')
         || token !== String(wx.getStorageSync('token') || '')
       ) return;
       console.warn('获取内容创作权限失败:', error);
-      this.setData({ hasContentWorkbenchAccess: false, workbenchAccessLoading: false });
-      this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
+      const revoked = error?.statusCode === 401 || error?.statusCode === 403;
+      const hasContentWorkbenchAccess = revoked ? false : this.data.hasContentWorkbenchAccess;
+      this.setData({ hasContentWorkbenchAccess, workbenchAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess });
     }
   },
 
@@ -357,9 +360,12 @@ Page({
     const token = String(this.data.token || wx.getStorageSync('token') || '');
     const requestId = Number(this.__shareVisitAccessRequestId || 0) + 1;
     this.__shareVisitAccessRequestId = requestId;
-    this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: !!token });
-    this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
-    if (!token || token !== String(wx.getStorageSync('token') || '')) return;
+    this.setData({ shareVisitAccessLoading: !!token });
+    if (!token || token !== String(wx.getStorageSync('token') || '')) {
+      this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
+      return;
+    }
 
     try {
       const context = await phase3API.mySharesContext();
@@ -373,15 +379,17 @@ Page({
         && context.owners.length > 0;
       this.setData({ hasShareVisitAccess, shareVisitAccessLoading: false });
       this.refreshWorkbenchMenuItems({ hasShareVisitAccess });
-    } catch (error) {
+    } catch (error: any) {
       if (
         requestId !== this.__shareVisitAccessRequestId
         || token !== String(this.data.token || '')
         || token !== String(wx.getStorageSync('token') || '')
       ) return;
       console.warn('获取分享访问权限失败:', error);
-      this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: false });
-      this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
+      const revoked = error?.statusCode === 401 || error?.statusCode === 403;
+      const hasShareVisitAccess = revoked ? false : this.data.hasShareVisitAccess;
+      this.setData({ hasShareVisitAccess, shareVisitAccessLoading: false });
+      this.refreshWorkbenchMenuItems({ hasShareVisitAccess });
     }
   },
 
@@ -417,6 +425,8 @@ Page({
         certRealName: accountChanged ? '' : this.data.certRealName,
         certRealNameMasked: accountChanged ? '' : this.data.certRealNameMasked,
         isApprovedDesigner: accountChanged ? false : this.data.isApprovedDesigner,
+        hasContentWorkbenchAccess: accountChanged ? false : this.data.hasContentWorkbenchAccess,
+        showWorkbenchSection: accountChanged ? false : this.data.showWorkbenchSection,
         hasShareVisitAccess: accountChanged ? false : this.data.hasShareVisitAccess,
         commonMenuItems: buildCommonMenuItems({
           hasShareVisitAccess: accountChanged ? false : this.data.hasShareVisitAccess,

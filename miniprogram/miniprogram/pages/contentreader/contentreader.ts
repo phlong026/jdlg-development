@@ -16,7 +16,8 @@ Page({
  async loadContent(){
   const sequence=(this.loadSequence||0)+1;this.loadSequence=sequence;
   const entryGeneration=this.entryGeneration,entryValid=tracking.captureEntryValidity?tracking.captureEntryValidity():()=>true;
-  this.pausePlayers();if(wx.hideShareMenu)wx.hideShareMenu();this.setData({loading:true,error:'',content:null,media:[],articleBlocks:[],contentReady:false});
+  const quiet=this.data.contentReady===true&&!!this.data.content;
+  this.pausePlayers();if(wx.hideShareMenu)wx.hideShareMenu();this.setData(quiet?{error:''}:{loading:true,error:'',content:null,media:[],articleBlocks:[],contentReady:false});
   try{
    const resolvedOptions=await api.resolveReaderOptions(this.options);
    if(sequence!==this.loadSequence)return;
@@ -50,7 +51,7 @@ Page({
    if(content.cover){const coverURL=api.mediaURL(content.cover.url);content.cover={...content.cover,url:coverURL?await resolveProtectedMediaURL(coverURL):''};}
    if(sequence!==this.loadSequence)return;
    this.setData({content,media,articleBlocks,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
-  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,contentReady:false,error:error&&error.code==='MEDIA_DOWNLOAD_FAILED'?'素材加载失败，请检查网络后重试。':'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
+  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,content:null,media:[],articleBlocks:[],contentReady:false,error:error&&error.code==='MEDIA_DOWNLOAD_FAILED'?'素材加载失败，请检查网络后重试。':'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
  },
  renderedMedia(){return this.data.content&&this.data.content.body_format==='article_v2'?this.data.articleBlocks.filter(block=>block.kind==='image'||block.kind==='video'):this.data.media;},
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},
