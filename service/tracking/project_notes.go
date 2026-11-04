@@ -69,6 +69,8 @@ type ProjectNoteProject struct {
 	CreatorDisplayName string    `json:"creator_display_name,omitempty"`
 	ConfirmerID        int64     `json:"confirmer_id,omitempty"`
 	Revision           int       `json:"revision"`
+	Stage              int       `json:"stage,omitempty"`
+	NextAction         string    `json:"next_action,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -315,6 +317,7 @@ func projectNoteNormalizeProject(project ProjectNoteProject) ProjectNoteProject 
 	if project.Status == "" {
 		project.Status = ProjectNoteProjectStatusInitial
 	}
+	project.Stage, project.NextAction = projectNoteStage(project)
 	return project
 }
 
@@ -414,6 +417,39 @@ func projectNoteEditableStatus(status string) bool {
 	return status == ProjectNoteProjectStatusInitial || status == ProjectNoteProjectStatusRevising
 }
 
+// projectNoteStatusTransition 归档状态机（仿真稿步骤⑥）：
+// 任何非归档状态可归档；归档后仅能取消归档回到修改中；
+// confirmed 只能由指定业主确认产生，也仅随归档动作离开（保留业主确认语义）。
+func projectNoteStatusTransition(from, to string) bool {
+	if from == to {
+		return true
+	}
+	if from == ProjectNoteProjectStatusArchived {
+		return to == ProjectNoteProjectStatusRevising
+	}
+	return to == ProjectNoteProjectStatusRevising || to == ProjectNoteProjectStatusArchived || to == ProjectNoteProjectStatusInitial
+}
+
+// ProjectNoteProjectStatusArchived 归档态：一户一档的终态（仿真稿步骤⑥）。
+// 任何状态可归档；归档后可取消归档回到修改中继续跟进。
+const ProjectNoteProjectStatusArchived = "archived"
+
+// projectNoteStage 甲第工作流阶段推导（纯函数，基于项目现有字段）：
+// ①②由素材关联推断（批次5 挂档后回写），这里先按 版本/状态 推导 ③-⑥。
+// 返回 stage（2-6）与下一步动作文案。
+func projectNoteStage(p ProjectNoteProject) (int, string) {
+	switch p.Status {
+	case ProjectNoteProjectStatusArchived:
+		return 6, "已归档"
+	case ProjectNoteProjectStatusConfirmed:
+		return 5, "等客户反馈，可先归档交流记录"
+	}
+	if p.CurrentVersionID != "" {
+		return 4, "转发给客户，开始追踪"
+	}
+	return 2, "生成方案与设计说明"
+}
+
 func (s *Service) ProjectNoteCreateProject(ctx context.Context, scope Scope, input ProjectNoteProjectInput) (ProjectNoteProject, error) {
 	var out ProjectNoteProject
 	input.Name, input.Owner, input.CRMID = strings.TrimSpace(input.Name), strings.TrimSpace(input.Owner), strings.TrimSpace(input.CRMID)
@@ -430,6 +466,7 @@ func (s *Service) ProjectNoteCreateProject(ctx context.Context, scope Scope, inp
 		Location: input.Location, BuildingArea: input.BuildingArea, Floors: input.Floors, Style: input.Style,
 		Status: ProjectNoteProjectStatusInitial, DesignerID: scope.Actor, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
+	out.Stage, out.NextAction = projectNoteStage(out)
 	err := s.transaction(ctx, func(r Repository) error {
 		row := projectNoteRecord(projectNoteProjectKind, out.ID, out.Owner, now, out, projectNoteActorKey(scope.Actor), "", out.ID, "")
 		return r.Insert(row)
@@ -463,23 +500,24 @@ func (s *Service) ProjectNoteUpdateProject(ctx context.Context, scope Scope, pro
 			project.Style = strings.TrimSpace(*input.Style)
 		}
 		if input.Status != nil {
-			project.Status = strings.TrimSpace(*input.Status)
-			if !projectNoteEditableStatus(project.Status) {
-				return fail(400, "项目状态无效；确认状态仅能由指定业主操作产生")
+			target := strings.TrimSpace(*input.Status)
+			if !projectNoteStatusTransition(project.Status, target) {
+				return fail(400, "项目状态无效；确认状态仅能由指定业主操作产生，归档后仅能取消归档")
 			}
+			project.Status = target
 		}
 		if !projectNoteValidMetadata(project.Name, project.Location, project.Style, project.BuildingArea, project.Floors) {
 			return fail(400, "项目结构资料无效")
 		}
 		project.Revision++
 		project.UpdatedAt = s.Now().UTC()
-		out = project
+		out = projectNoteNormalizeProject(project)
 		return r.Put(projectNoteRecord(projectNoteProjectKind, project.ID, project.Owner, project.UpdatedAt, project, projectNoteActorKey(project.DesignerID), "", project.ID, ""))
 	})
 	return out, err
 }
 
-func (s *Service) ProjectNoteListProjects(ctx context.Context, scope Scope, limit int, cursor string) (ProjectNoteProjectPage, error) {
+func (s *Service) ProjectNoteListProjects(ctx context.Context, scope Scope, limit int, cursor string, statusFilter string) (ProjectNoteProjectPage, error) {
 	out := ProjectNoteProjectPage{Items: []ProjectNoteProject{}}
 	if err := s.authorized(scope); err != nil {
 		return out, err
@@ -518,7 +556,11 @@ func (s *Service) ProjectNoteListProjects(ctx context.Context, scope Scope, limi
 			if json.Unmarshal(row.Payload, &project) != nil || project.DesignerID != scope.Actor {
 				return ErrUnavailable
 			}
-			out.Items = append(out.Items, projectNoteNormalizeProject(project))
+			normalized := projectNoteNormalizeProject(project)
+			if statusFilter != "" && normalized.Status != statusFilter {
+				continue
+			}
+			out.Items = append(out.Items, normalized)
 		}
 		return nil
 	})

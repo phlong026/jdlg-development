@@ -133,6 +133,15 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	version := 0
 	var oldPinned bool
 	var oldTags []string
+	var oldProjectID string
+	// ProjectID 关联必须校验项目归属：项目 DesignerID 必须是当前账号，
+	// 防止把他人的私有项目挂到自己的素材上（codex 批次2 P1）。
+	if in.ProjectID != "" {
+		project, perr := s.projectNoteManaged(r, scope, in.ProjectID)
+		if perr != nil || project.DesignerID != scope.Actor {
+			return out, fail(403, "项目关联不可访问")
+		}
+	}
 	if id != "" {
 		old, e := loadCatalogContent(r, "content", id)
 		if e != nil || !scope.Allows(old.Owner) {
@@ -156,7 +165,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		revision = old.Revision + 1
 		version = old.Version
 		created = *old.CreatedAt
-		oldPinned, oldTags = old.Pinned, old.Tags
+		oldPinned, oldTags, oldProjectID = old.Pinned, old.Tags, old.ProjectID
 	} else {
 		id = opaque()
 	}
@@ -207,7 +216,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	if in.BodyFormat == "document_v1" {
 		contentType = "document"
 	}
-	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Tags: in.Tags, Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, Rights: in.Rights, Owner: in.Owner}
+	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Tags: in.Tags, Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, ProjectID: in.ProjectID, Rights: in.Rights, Owner: in.Owner}
 	// B11 置顶：新内容默认 false；更新时显式传入则覆盖，否则保留原值。
 	if id != "" {
 		if in.Pinned != nil {
@@ -217,6 +226,9 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		}
 		if out.Tags == nil && oldTags != nil {
 			out.Tags = oldTags // 未传标签时保留原标签
+		}
+		if in.ProjectID == "" && oldProjectID != "" {
+			out.ProjectID = oldProjectID // 未显式改关联时保留原关联
 		}
 	}
 	if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {

@@ -9,6 +9,41 @@ import (
 
 // Catalog metadata is read inside the same bounded transaction as the facts.
 // Legacy source rows are owner-scoped, then deduplicated by material ID.
+// contentWorkbenchCategory 与前端 contentworkbench.ts contentKind 同规则：
+// 含视频媒体的图文归为视频；笔记/文档单列；其余为图文。
+func contentWorkbenchCategory(c Content) string {
+	switch c.Type {
+	case "note", "project_note":
+		return "note"
+	case "document":
+		return "document"
+	case "video":
+		return "video"
+	}
+	for _, m := range c.Media {
+		if m.Kind == "video" {
+			return "video"
+		}
+	}
+	return "article"
+}
+
+// mapTypeFilter 把前端分类Tab标签映射到内容类型枚举。
+// 笔记此前淹没在"全部"里（kind=note 无独立分类），这里补上映射。
+func mapTypeFilter(label string) string {
+	switch label {
+	case "图文", "article":
+		return "article"
+	case "笔记", "note":
+		return "note"
+	case "视频", "video":
+		return "video"
+	case "文档", "document":
+		return "document"
+	}
+	return ""
+}
+
 func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, error) {
 	rows, err := scopedRecords(r, "content", RecordQuery{Owners: permittedOwners(scope, f.Owner), Content: id, CatalogAsOf: f.AsOf})
 	if err != nil {
@@ -54,6 +89,17 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 			return nil, ErrUnavailable
 		}
 		if c.Status == "deleted" {
+			continue
+		}
+		// 服务端过滤：类型与项目关联（仿真稿⑦分类Tab真筛选）。
+		// 前端 Tab 传中文标签，映射到后端类型枚举（note/article/video/document）。
+		if f.TypeFilter != "" {
+			typeName := mapTypeFilter(f.TypeFilter)
+			if typeName != "" && contentWorkbenchCategory(c) != typeName {
+				continue
+			}
+		}
+		if f.ProjectID != "" && c.ProjectID != f.ProjectID {
 			continue
 		}
 		c.PageViews, c.VisibleMS, c.LastVisit, c.Identified, c.Anonymous = 0, 0, nil, 0, 0
@@ -174,6 +220,11 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 	f.Search, f.Intent = "", ""
 	if !scope.View && hasVisitorFilter(f) {
 		return out, fail(403, "无访客筛选权限")
+	}
+	// 工作台 Scope 只有 Manage 没有 View：分享计数恒为零，shares 排序退化为
+	// 默认排序而不是静默按 ID 排（codex 批次2 P2）。
+	if f.Sort == "shares" && !scope.View {
+		f.Sort = ""
 	}
 	var err error
 	f, err = s.Normalize(f)

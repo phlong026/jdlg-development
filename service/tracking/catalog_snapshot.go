@@ -44,6 +44,8 @@ func contentSortValue(c Content, order string) int64 {
 	switch order {
 	case "page_views":
 		return int64(c.PageViews)
+	case "shares":
+		return int64(c.Shares)
 	case "visible_ms":
 		return c.VisibleMS
 	default:

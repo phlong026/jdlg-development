@@ -56,10 +56,11 @@ func registerGenerationImportRoute(g *gin.RouterGroup, svc *tracking.Service, us
 	g.POST("/contents/from-generation", func(c *gin.Context) {
 		scope := c.MustGet("workbench.scope").(tracking.Scope)
 		var body struct {
-			TaskNo  string `json:"task_no"`
-			Title   string `json:"title"`
-			OwnerID string `json:"owner_id"`
-			Rights  string `json:"rights"`
+			TaskNo    string `json:"task_no"`
+			Title     string `json:"title"`
+			OwnerID   string `json:"owner_id"`
+			Rights    string `json:"rights"`
+			ProjectID string `json:"project_id"`
 		}
 		if c.ShouldBindJSON(&body) != nil || !generationTaskNoPattern.MatchString(body.TaskNo) {
 			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "请提供有效的生成任务编号"})
@@ -157,6 +158,7 @@ func registerGenerationImportRoute(g *gin.RouterGroup, svc *tracking.Service, us
 		draft := tracking.Draft{
 			Title: title, Body: string(document), BodyFormat: "article_v2",
 			Rights: rights, Owner: owner, CoverID: mediaIDs[0], MediaIDs: mediaIDs,
+			ProjectID:  body.ProjectID,
 			SourceNote: "来自AI生成任务 " + body.TaskNo,
 		}
 		content, err := svc.SaveContent(c.Request.Context(), ownerScope, "", draft)

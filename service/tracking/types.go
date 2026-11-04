@@ -155,6 +155,7 @@ type Content struct {
 	BodyFormat  string     `json:"body_format"`
 	SourceURL   string     `json:"source_url,omitempty"`
 	SourceNote  string     `json:"source_note,omitempty"`
+	ProjectID   string     `json:"project_id,omitempty"`
 	Rights      string     `json:"rights"`
 	Owner       string     `json:"owner_id"`
 	CreatedAt   *time.Time `json:"created_at,omitempty"`
@@ -172,6 +173,7 @@ type Draft struct {
 	BodyFormat string   `json:"body_format"`
 	SourceURL  string   `json:"source_url"`
 	SourceNote string   `json:"source_note"`
+	ProjectID  string   `json:"project_id,omitempty"`
 	Rights     string   `json:"rights"`
 	Owner      string   `json:"owner_id"`
 	CoverID    string   `json:"cover_media_id"`
@@ -302,7 +304,11 @@ type Filter struct {
 	// CreatedWindow 把时间窗应用到"分享创建时间"而非访问时间。仅本人分享列表
 	// 使用（近3天/7天/30天 chips）；访问详情路径必须清零它，窗口语义不变。
 	CreatedWindow bool
-	Related       bool
+	// TypeFilter/ProjectID 供内容工作台列表做服务端过滤（仿真稿⑦的
+	// 分类Tab与"进行中的单子"卡）：type ∈ 图文/笔记/视频/文档由路由层映射。
+	TypeFilter string
+	ProjectID  string
+	Related    bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`
