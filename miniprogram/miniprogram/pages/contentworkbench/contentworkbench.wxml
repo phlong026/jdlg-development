@@ -10,6 +10,12 @@
     <block wx:else>
       <block wx:if="{{view === 'studio'}}">
         <view class="workspace-heading"><text class="workspace-title">我的内容</text><view class="workspace-destinations"><button class="workspace-destination" bindtap="openCollections">项目合集<text class="destination-arrow">›</text></button><button class="workspace-destination" bindtap="openExistingAssets">资料库<text class="destination-arrow">›</text></button></view></view>
+  <view class="active-projects" wx:if="{{activeProjects.length}}">
+   <view class="proj-card" wx:for="{{activeProjects}}" wx:key="project_id" data-id="{{item.project_id}}" bindtap="openProject">
+    <view class="proj-head"><text class="proj-name">{{item.name}}</text><text class="proj-stage">{{item.next_action}}</text></view>
+    <text class="proj-meta">{{item.meta_text}}</text>
+   </view>
+  </view>
         <view class="workspace-links">
           <button class="workspace-link" bindtap="openImportView"><t-icon name="link" size="17px" /><text>链接导入</text></button>
           <button class="workspace-link" bindtap="openAIWriting"><t-icon name="edit-1" size="17px" /><text>AI文案</text></button>
@@ -26,7 +32,7 @@
           <block wx:if="{{visibleItems.length > 0}}">
             <view wx:for="{{visibleItems}}" wx:key="content_id" class="content-row" data-id="{{item.content_id}}" data-status="{{item.status}}" data-version="{{item.version}}" data-read-only="{{item.read_only}}" data-route="{{item.route_key}}" bindtap="openContent" role="button" aria-label="{{item.title}}">
               <view class="content-cover"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFill" /><view wx:else class="cover-placeholder"><t-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="32px" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
-              <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}}{{item.pinned ? ' · 📌' : ''}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{item.status === 'published' && !item.read_only}}" class="edit-link" catchtap="editContent" data-id="{{item.content_id}}">编辑</button></view></view><text class="row-chevron">›</text>
+              <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}} · 查看 {{item.view_count || 0}} · 转发 {{item.share_count || 0}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{item.status === 'published' && !item.read_only}}" class="edit-link" catchtap="editContent" data-id="{{item.content_id}}">编辑</button></view></view><text class="row-chevron">›</text>
             </view>
           </block>
           <view wx:else class="empty-state">

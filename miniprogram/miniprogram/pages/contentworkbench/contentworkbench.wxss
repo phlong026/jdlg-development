@@ -583,3 +583,10 @@ button::after {
   background: #f1e4d2;
   color: #8b5c2d;
 }
+
+.active-projects { display: flex; flex-direction: column; gap: 12rpx; margin: 0 0 16rpx; }
+.proj-card { display: flex; flex-direction: column; gap: 6rpx; background: #fff; border: 1rpx solid #eee8e1; border-radius: 12rpx; padding: 18rpx 20rpx; }
+.proj-head { display: flex; align-items: center; justify-content: space-between; }
+.proj-name { font-size: 28rpx; font-weight: 600; color: #302316; }
+.proj-stage { font-size: 21rpx; color: #91622f; background: #f8f0e2; border-radius: 6rpx; padding: 2rpx 10rpx; }
+.proj-meta { font-size: 23rpx; color: #968d83; }

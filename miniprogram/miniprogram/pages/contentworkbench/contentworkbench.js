@@ -28,13 +28,16 @@ function contentRow(item) {
     action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
     cover_path: '', cover_error: false,
+    view_count: Number(item.page_views || 0),
+    share_count: Number(item.share_count || 0),
+    visitor_count: Number(item.identified_count || 0) + Number(item.anonymous_count || 0),
   });
 }
 
 Page({
   data: {
     view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [], ownerFilter: '',
-    categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
+    categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'note', label: '笔记' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importServiceEnabled: false, importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
@@ -57,13 +60,14 @@ Page({
     }
     this._loaded = false;
     this.setData({
-      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false, hasShareVisitAccess: false,
+      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, activeProjects: [], error: '', denied: false, disabled: false, hasShareVisitAccess: false,
       loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
       importError: '', imports: [], importPolling: false,
     });
     if (token) {
       void this.loadShareVisitAccess(token);
+      void this.loadActiveProjects(token);
       this.load(true, this._epoch);
     }
   },
@@ -182,6 +186,21 @@ Page({
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
   // 引导卡直达新建图文：不经过 openCreateMenu，保持"创建菜单入口唯一"的既有护栏。
   startFirstContent() { this.navigate('/pages/contentedit/contentedit'); },
+  async loadActiveProjects(token) {
+    try {
+      const page = await api.listProjectNoteProjects({ limit: 3 });
+      const projects = (page.items || []).filter(p => p.status !== 'archived').slice(0, 2).map(p => ({
+        project_id: p.project_id, name: p.name || '未命名项目',
+        next_action: p.next_action || '继续推进',
+        meta_text: p.location || p.style || '资料待完善',
+      }));
+      this.setData({ activeProjects: projects });
+    } catch (_) { this.setData({ activeProjects: [] }); }
+  },
+  openProject(event) {
+    const id = event.currentTarget.dataset.id;
+    if (id) this.navigate('/pages/projectnotes/projectnotes');
+  },
   openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },
   openShareVisits() {
@@ -192,9 +211,10 @@ Page({
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
   openCreateMenu() {
     wx.showActionSheet({
-      itemList: ['图文内容', '图片或视频', 'PDF / Word / PPT'],
+      itemList: ['新建项目笔记', 'AI 生成设计', '口述转设计说明', '图文内容', '导入链接'],
       success: result => {
-        const url = ['/pages/contentedit/contentedit', '/pages/contentedit/contentedit?action=media', '/pages/contentedit/contentedit?action=document'][Number(result.tapIndex)];
+        const routes = ['/pages/projectnotes/projectnotes', '/pages/aigenerate/aigenerate', '/pages/contentwriting/contentwriting', '/pages/contentedit/contentedit', '/pages/contentworkbench/contentworkbench?view=import'];
+        const url = routes[Number(result.tapIndex)];
         if (url) this.navigate(url);
       },
     });
