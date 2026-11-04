@@ -96,6 +96,7 @@ Page({
     if (!this._token) return;
     if (!reset && (this._customerMorePending || !this.data.customers_cursor)) return;
     const epoch = suppliedEpoch || this.bumpEpoch('customers');
+    if (reset && this._customerMorePending && !this.tokenAlive(this._customerMorePending, 'customers')) this._customerMorePending = false;
     if (reset) this.setData({ customerLoading: true, customerError: '', customers_cursor: '', customers_as_of: '' });
     else { this._customerMorePending = epoch; this.setData({ customerLoadingMore: true }); }
     try {
@@ -138,6 +139,7 @@ Page({
     if (!this._token) return;
     if (!reset && (this._materialMorePending || !this.data.materials_cursor)) return;
     const epoch = suppliedEpoch || this.bumpEpoch('materials');
+    if (reset && this._materialMorePending && !this.tokenAlive(this._materialMorePending, 'materials')) this._materialMorePending = false;
     if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
     else { this._materialMorePending = epoch; this.setData({ materialLoadingMore: true }); }
     try {
@@ -174,6 +176,7 @@ Page({
     if (!reset && (this._shareMorePending || !this.data.next_cursor)) return;
     const epoch = suppliedEpoch || this.bumpEpoch('shares');
     if (!reset) this._shareMorePending = epoch;
+    if (reset && this._shareMorePending && !this.tokenAlive(this._shareMorePending, 'shares')) this._shareMorePending = false;
     if (reset) this.setData({ loading: true, error: '', denied: false, items: [], next_cursor: '', as_of: '', metric_version: '' });
     else this.setData({ loadingMore: true, error: '' });
     try {

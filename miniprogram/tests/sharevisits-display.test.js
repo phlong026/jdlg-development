@@ -115,3 +115,38 @@ test('codex P1-2回归：retry 分配新 epoch，旧慢响应不得覆盖新结�
  await oldRequest;
  assert.deepEqual(page.data.items.map(i=>i.share_id),['fresh']);
 });
+
+test('codex终审回归：旧分页挂起时reset成功后新分页可用，旧finally不释放新锁',async()=>{
+ const pending=[];
+ let taken=0;
+ const {page}=runtime([],{listMyShares:async()=>{
+  const index=taken++;
+  if(index===0)return {items:[{share_id:'p1',status:'published',channel:'app_message'}],next_cursor:'c1'}; // 首屏
+  if(index===1)return new Promise(resolve=>pending.push({resolve})); // 旧分页挂起
+  if(index===2)return {items:[{share_id:'fresh',status:'published',channel:'app_message'}],next_cursor:'c2'}; // reset 立即返回
+  return new Promise(resolve=>pending.push({resolve})); // 新分页挂起
+ }});
+ page._token='login-token';
+ await page.loadShares(true);
+ assert.equal(page.data.next_cursor,'c1');
+ // 旧分页挂起（持有锁）
+ const staleMore=page.loadShares(false);
+ assert.ok(page._shareMorePending,'旧分页应持锁');
+ // reset 成功返回（推进 epoch，废弃已被作废的旧锁）
+ await page.loadShares(true);
+ assert.equal(page.data.next_cursor,'c2');
+ assert.equal(page._shareMorePending,false,'reset应废弃已被作废的旧分页锁');
+ // 新分页立即放行并持新锁
+ const newMore=page.loadShares(false);
+ assert.ok(page._shareMorePending,'新分页应持新锁');
+ // 旧分页响应迟到：不得写入数据，也不得释放新分页的锁
+ pending[0].resolve({items:[{share_id:'stale',status:'published',channel:'timeline'}],next_cursor:'stale-c'});
+ await staleMore;
+ assert.deepEqual(page.data.items.map(i=>i.share_id),['fresh']); // reset B 已清掉 p1，旧分页不得追加
+ assert.ok(page._shareMorePending,'旧分页finally不得释放新分页锁');
+ // 新分页完成：正常写入并释放
+ pending[1].resolve({items:[{share_id:'p3',status:'published',channel:'app_message'}],next_cursor:''});
+ await newMore;
+ assert.deepEqual(page.data.items.map(i=>i.share_id),['fresh','p3']);
+ assert.equal(page._shareMorePending,false);
+});
