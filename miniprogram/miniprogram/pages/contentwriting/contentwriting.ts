@@ -37,7 +37,7 @@ Page({
     }
     this._token = token;
     this.setData({ navigating: false, loginRequired: !token });
-    if (token && !this._typesLoadedOnce) { this._typesLoadedOnce = true; this.loadWritingTypes(); }
+    if (token) this.loadWritingTypes();
   },
   onUnload() { this._unloaded = true; this.cancelStream(); },
   receiveWritingContext(payload) {
@@ -60,7 +60,9 @@ Page({
   },
   // 拉取服务端 Prompt 注册表；失败静默保持本地兜底，不打扰创作流程。
   loadWritingTypes() {
-    api.writingPrompts().then(result => {
+    if (this._typesLoadedOnce) return Promise.resolve();
+    if (this._typesRequest) return this._typesRequest;
+    this._typesRequest = api.writingPrompts().then(result => {
       const prompts = ((result && result.prompts) || []).filter(item => item && item.key && item.heading && item.instruction).map(item => {
         // 已有类型的名称属于产品导航；运营仍可调整指令，扩展类型保留服务端命名。
         const productType = writingTypes.find(type => type.key === item.key);
@@ -80,7 +82,9 @@ Page({
       const presets = ((result && result.intro_presets) || []).filter(item => item && item.name && item.content).map(item => ({ id: item.id, name: item.name, content: item.content }));
       if (presets.length) update.introPresets = presets;
       if (Object.keys(update).length) this.setData(update);
-    }).catch(() => {});
+      this._typesLoadedOnce = true;
+    }).catch(() => {}).finally(() => { this._typesRequest = null; });
+    return this._typesRequest;
   },
   selectIntroPreset(event) {
     const index = Number(event.detail.value) || 0;

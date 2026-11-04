@@ -108,6 +108,20 @@ test('tab examples arrive from the server registry and never feed fabricated fac
 
 });
 
+test('first show reuses the prompt request started by onLoad', async () => {
+  const h = harness('contentwriting');
+  let calls = 0;
+  let finish;
+  h.apiStub.writingPrompts = () => { calls += 1; return new Promise(resolve => { finish = resolve; }); };
+  h.page.onLoad({});
+  h.page.onShow();
+  assert.equal(calls, 1);
+  finish({ prompts: [] });
+  await tick();
+  h.page.onShow();
+  assert.equal(calls, 1);
+});
+
 test('prompt registry drives generation while the anti-fabrication clause stays client-side', async () => {
   const h = harness('contentwriting');
   h.apiStub.writingPrompts = async () => ({ prompts: [
