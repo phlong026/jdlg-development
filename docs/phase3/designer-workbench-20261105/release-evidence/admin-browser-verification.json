@@ -1,0 +1,12 @@
+{
+  "url": "https://api.jiadilingguang.com/admin/",
+  "actual_path": "/admin/login",
+  "title": "后台管理",
+  "heading": "欢迎登录",
+  "inputs": [
+    "text: 请输入账号",
+    "password: 请输入密码",
+    "checkbox"
+  ],
+  "evidence": "Chrome当前真实页面DOM；未登录后执行业务写入"
+}

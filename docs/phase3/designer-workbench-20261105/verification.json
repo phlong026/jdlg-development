@@ -39,5 +39,7 @@
     "live enabled import success",
     "published content and collection reading with a valid target"
   ],
-  "race_test": "not run: local go-m1cpu cgo initializer SIGSEGV before tests"
+  "race_test": "not run: local go-m1cpu cgo initializer SIGSEGV before tests",
+  "postdeploy": "passed: running binary hash, preserved configuration, 323 HTTPS assets and authenticated Mini Program reads",
+  "official_account_status": "disabled; inbox works; binding status no error"
 }
