@@ -79,6 +79,7 @@ Page({
     const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false;
     this.setData({ hasShareVisitAccess: false });
     void this.loadShareVisitAccess(this._token);
+    void this.loadActiveProjects(this._token);
     this.load(true, epoch).finally(() => wx.stopPullDownRefresh());
   },
   async loadShareVisitAccess(token) {
