@@ -1,14 +1,14 @@
 <import src="/templates/auth-welcome.wxml" />
-<scroll-view hidden="{{!visible && !checking && !loggingIn && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
+<!-- 资料核验沿用业务页底色与导航尺寸，避免先闪现完整登录品牌画面。 -->
+<view wx:if="{{checking}}" class="profile-loading-shell">
+  <navigation-bar background="#fbfaf7" />
+  <view class="profile-loading-body" role="status"><view class="lg-spinner"></view><text>正在加载…</text></view>
+</view>
+<scroll-view hidden="{{!visible && !loggingIn && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
   <template is="auth-backdrop" />
   <view class="aw-content">
     <template is="auth-intro" data="{{motto: '乡村住宅AI设计与协作平台', headline: '建别墅'}}" />
-    <view wx:if="{{checking}}" class="login-guard aw-card lg-checking" catchtap="stopPropagation">
-      <view class="lg-spinner"></view>
-      <text class="lg-title">正在核验登录资料</text>
-      <text class="lg-sub">请稍候</text>
-    </view>
-    <view wx:elif="{{!completingProfile}}" class="login-guard aw-card" catchtap="stopPropagation">
+    <view wx:if="{{!completingProfile}}" class="login-guard aw-card" catchtap="stopPropagation">
       <!-- 审核要求：登录环节提供显著的可取消/拒绝按钮 -->
       <view class="lg-close" catchtap="onDismiss" hover-class="lg-close-active">
         <text class="lg-close-icon">✕</text>

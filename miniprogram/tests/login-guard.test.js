@@ -7,11 +7,8 @@ const ts = require('./report-runtime')('typescript');
 const root = path.resolve(__dirname, '..');
 const complete = { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/portrait.jpg' };
 
-test('权威资料核验期间显示品牌加载态，不露出内容或登录按钮', () => {
+test('真实登录与资料补全仍保留明确的拒绝或返回入口', () => {
   const wxml = fs.readFileSync(path.join(root, 'miniprogram/components/login-guard/login-guard.wxml'), 'utf8');
-  assert.match(wxml, /wx:if="\{\{checking\}\}"[^>]*class="login-guard aw-card lg-checking"/);
-  assert.match(wxml, /正在核验登录资料/);
-  assert.match(wxml, /hidden="\{\{!visible && !checking && !loggingIn && !completingProfile\}\}" class="login-guard-panel"/);
   // 审核整改：登录环节必须有显著的取消/拒绝按钮
   assert.match(wxml, /lg-close" catchtap="onDismiss"/, '右上角关闭按钮');
   assert.match(wxml, /lg-skip" catchtap="onDismiss"/, '暂不登录按钮');

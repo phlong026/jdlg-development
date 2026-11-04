@@ -1,4 +1,7 @@
 {
   "component": true,
-  "usingComponents": { "nickname-guard": "/components/nickname-guard/nickname-guard" }
+  "usingComponents": {
+    "nickname-guard": "/components/nickname-guard/nickname-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
 }

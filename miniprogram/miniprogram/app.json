@@ -481,6 +481,7 @@
     }
   },
   "window": {
+    "backgroundColor": "#fbfaf7",
     "navigationBarTextStyle": "black",
     "navigationStyle": "custom"
   },
