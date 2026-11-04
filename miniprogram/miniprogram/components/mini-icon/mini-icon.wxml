@@ -1,0 +1,1 @@
+<view class="mi mi-{{name || 'none'}}" style="width:{{size}};height:{{size}}" />

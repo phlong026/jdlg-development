@@ -61,6 +61,14 @@
       {
         "type": "file",
         "value": "pages/Invitefriends/intro-logo.png"
+      },
+      {
+        "type": "folder",
+        "value": "assets/welcome"
+      },
+      {
+        "type": "file",
+        "value": ".DS_Store"
       }
     ],
     "include": []

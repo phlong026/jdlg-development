@@ -42,7 +42,7 @@
           <view class="account-recharge" bindtap="goToTopupCenter">充值中心 <text>›</text></view>
         </view>
         <view class="account-order" bindtap="onProjectMenuTap" data-action="orders">
-          <view class="account-order-main"><t-icon class="account-order-icon" name="order-list" size="22px" /><text class="account-order-title">我的订单</text><text class="account-order-meta">交易与服务记录</text></view>
+          <view class="account-order-main"><mini-icon class="account-order-icon" name="order-list" size="22px" /><text class="account-order-title">我的订单</text><text class="account-order-meta">交易与服务记录</text></view>
           <text class="menu-list-arrow">›</text>
         </view>
       </view>
@@ -56,13 +56,13 @@
       <view class="workbench-card">
         <view class="workbench-grid workbench-grid-{{workbenchMenuItems.length}}">
           <view wx:for="{{workbenchMenuItems}}" wx:key="action" class="workbench-item {{item.available === false ? 'workbench-item-disabled' : ''}}" bindtap="onWorkbenchMenuTap" data-action="{{item.action}}">
-            <t-icon class="workbench-icon" name="{{item.icon}}" size="25px" />
+            <mini-icon class="workbench-icon" name="{{item.icon}}" size="25px" />
             <text class="workbench-label">{{item.label}}</text>
             <text class="workbench-description">{{item.available === false ? item.meta : item.description}}</text>
           </view>
         </view>
         <view wx:if="{{hasShareVisitAccess}}" class="share-visits-entry" bindtap="onWorkbenchMenuTap" data-action="shareVisits">
-          <view><t-icon class="share-visits-icon" name="share" size="20px" /><text class="share-visits-title">分享记录</text></view>
+          <view><mini-icon class="share-visits-icon" name="share" size="20px" /><text class="share-visits-title">分享记录</text></view>
           <text class="menu-list-arrow">›</text>
         </view>
       </view>
@@ -88,7 +88,7 @@
       <view class="menu-section-title">我的资料</view>
       <view class="section-grid section-grid-two">
         <view wx:for="{{commonMenuItems}}" wx:key="action" class="section-grid-item" bindtap="onProjectMenuTap" data-action="{{item.action}}">
-          <t-icon class="section-grid-icon" name="{{item.icon}}" size="22px" />
+          <mini-icon class="section-grid-icon" name="{{item.icon}}" size="22px" />
           <view class="section-grid-copy"><text class="section-grid-label">{{item.label}}</text><text class="section-grid-meta">{{item.meta}}</text></view>
           <text class="menu-list-arrow">›</text>
         </view>
@@ -97,18 +97,18 @@
       <view class="menu-section-title">账号与服务</view>
       <view class="section-grid section-grid-service">
         <view wx:for="{{serviceMenuItems}}" wx:key="action" class="section-grid-item" bindtap="onAccountMenuTap" data-action="{{item.action}}">
-          <t-icon class="section-grid-icon" name="{{item.icon}}" size="22px" />
+          <mini-icon class="section-grid-icon" name="{{item.icon}}" size="22px" />
           <view class="section-grid-copy"><text class="section-grid-label">{{item.label}}</text><text class="section-grid-meta">{{item.meta}}</text></view>
           <text class="menu-list-arrow">›</text>
         </view>
       </view>
       <view class="admin-entry" bindtap="onAccountMenuTap" data-action="adminLogin">
-        <view><t-icon class="section-grid-icon" name="user" size="22px" /><text class="admin-entry-title">管理员登录</text></view>
+        <view><mini-icon class="section-grid-icon" name="user" size="22px" /><text class="admin-entry-title">管理员登录</text></view>
         <view><text class="admin-entry-meta">进入管理后台</text><text class="menu-list-arrow">›</text></view>
       </view>
 
       <view class="logout-btn" wx:if="{{hasLoginToken}}" bindtap="onLogoutTap">
-        <t-icon class="logout-icon" name="logout" size="20px" /><text>退出登录</text>
+        <mini-icon class="logout-icon" name="logout" size="20px" /><text>退出登录</text>
       </view>
     </view>
   </view>

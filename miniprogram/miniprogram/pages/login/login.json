@@ -1,7 +1,7 @@
 {
   "usingComponents": {
-    "t-icon": "/components/tdesign-miniprogram/icon/icon",
-    "nickname-guard": "/components/nickname-guard/nickname-guard"
+    "nickname-guard": "/components/nickname-guard/nickname-guard",
+    "mini-icon": "/components/mini-icon/mini-icon"
   },
   "navigationStyle": "custom"
 }

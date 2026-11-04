@@ -50,7 +50,12 @@ for (const source of [aicostTs, aicostJs]) {
   assert.match(source, /windowStandard/);
   assert.match(source, /燕尾脊/);
 }
-assert.match(appJson, /pages\/aicostresult\/aicostresult/);
+// 2026-11-04 分包化：低频页转 subPackages（root=pages/aicostresult），路径不变，注册断言同时接受主包/分包
+assert.ok(
+  /pages\/aicostresult\/aicostresult/.test(appJson.replace(/\s+/g, '')) ||
+  /"root":\s*"pages\/aicostresult"[\s\S]{0,40}"pages":\s*\[\s*"aicostresult"\s*\]/.test(appJson),
+  'aicostresult 应已注册（主包 pages 或 subPackages）',
+);
 assert.match(aicostWxml, /title="造价测算"/);
 assert.match(aicostWxml, /mode="multiSelector"/);
 assert.match(aicostWxml, /bindcancel="onRegionCancel"/);
