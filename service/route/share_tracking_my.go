@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -73,39 +74,43 @@ func loadMiniTrackingMyScope(ctx context.Context, db *sql.DB, tenant string, act
 func registerTrackingMyRoutes(pub *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
 	my := pub.Group("/my-shares", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
 	registerTrackingMyHandlers(my, svc)
-	// 我的客户视图：与分享记录同数据源（tracking_records），按访客聚合。
-	visitors := pub.Group("/my-visitors", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
-	visitors.GET("", func(c *gin.Context) {
-		filter, err := trackingFilter(c)
-		if err != nil {
-			trackingResponse(c, nil, err)
-			return
-		}
-		current := c.MustGet("tracking.my.scope").(tracking.Scope)
-		out, err := svc.MyVisitors(c.Request.Context(), current, current.Actor, filter)
-		trackingResponse(c, out, err)
-	})
-	visitors.GET("/entries", func(c *gin.Context) {
-		filter, err := trackingFilter(c)
-		if err != nil {
-			trackingResponse(c, nil, err)
-			return
-		}
-		current := c.MustGet("tracking.my.scope").(tracking.Scope)
-		out, err := svc.MyVisitorEntries(c.Request.Context(), current, current.Actor, filter)
-		trackingResponse(c, out, err)
-	})
-	stats := pub.Group("/my-content-stats", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
-	stats.GET("", func(c *gin.Context) {
-		filter, err := trackingFilter(c)
-		if err != nil {
-			trackingResponse(c, nil, err)
-			return
-		}
-		current := c.MustGet("tracking.my.scope").(tracking.Scope)
-		out, err := svc.MyContentStats(c.Request.Context(), current, current.Actor, filter)
-		trackingResponse(c, out, err)
-	})
+	// 我的客户视图（客户榜/素材热度）：与分享记录同数据源（tracking_records），按访客/素材聚合。
+	// 9.6 策略预留开关：默认关闭（不配置=不注册路由，保持历史行为），
+	// 发布时在服务器 .env 配置 TRACKING_MY_CUSTOMER_VIEW_ENABLED=true 开启。
+	if os.Getenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED") == "true" {
+		visitors := pub.Group("/my-visitors", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
+		visitors.GET("", func(c *gin.Context) {
+			filter, err := trackingFilter(c)
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			current := c.MustGet("tracking.my.scope").(tracking.Scope)
+			out, err := svc.MyVisitors(c.Request.Context(), current, current.Actor, filter)
+			trackingResponse(c, out, err)
+		})
+		visitors.GET("/entries", func(c *gin.Context) {
+			filter, err := trackingFilter(c)
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			current := c.MustGet("tracking.my.scope").(tracking.Scope)
+			out, err := svc.MyVisitorEntries(c.Request.Context(), current, current.Actor, filter)
+			trackingResponse(c, out, err)
+		})
+		stats := pub.Group("/my-content-stats", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
+		stats.GET("", func(c *gin.Context) {
+			filter, err := trackingFilter(c)
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			current := c.MustGet("tracking.my.scope").(tracking.Scope)
+			out, err := svc.MyContentStats(c.Request.Context(), current, current.Actor, filter)
+			trackingResponse(c, out, err)
+		})
+	}
 }
 
 func miniTrackingMyScopeMiddleware(db *sql.DB, tenant string) gin.HandlerFunc {

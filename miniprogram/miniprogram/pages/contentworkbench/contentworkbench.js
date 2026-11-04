@@ -67,7 +67,7 @@ Page({
     });
     if (token) {
       void this.loadShareVisitAccess(token);
-      void this.loadActiveProjects(token);
+      void this.loadActiveProjects(token, this._epoch);
       this.load(true, this._epoch);
     }
   },
@@ -79,7 +79,7 @@ Page({
     const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false;
     this.setData({ hasShareVisitAccess: false });
     void this.loadShareVisitAccess(this._token);
-    void this.loadActiveProjects(this._token);
+    void this.loadActiveProjects(this._token, epoch);
     this.load(true, epoch).finally(() => wx.stopPullDownRefresh());
   },
   async loadShareVisitAccess(token) {
@@ -187,9 +187,11 @@ Page({
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
   // 引导卡直达新建图文：不经过 openCreateMenu，保持"创建菜单入口唯一"的既有护栏。
   startFirstContent() { this.navigate('/pages/contentedit/contentedit'); },
-  async loadActiveProjects(token) {
+  async loadActiveProjects(token, epoch) {
     try {
       const page = await api.listProjectNoteProjects({ limit: 3 });
+      // 竞态守卫：onShow 快速切换后旧响应不得覆盖新会话的数据
+      if (epoch !== undefined && epoch !== this._epoch) return;
       const projects = (page.items || []).filter(p => p.status !== 'archived').slice(0, 2).map(p => ({
         project_id: p.project_id, name: p.name || '未命名项目',
         next_action: p.next_action || '继续推进',

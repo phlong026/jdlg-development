@@ -167,10 +167,16 @@ Page({
   retryProjectAccess() { return this._loaded ? this.revalidateProjectAccess() : this.loadProjects(); },
 
   async fetchAllProjects() {
+    // 甲第工作流阶段短标签（后端只给 stage 数字，pill 文案在前端映射）
+    const stageLabels = { 2: '方案制作', 4: '待转发', 5: '待反馈', 6: '已归档' };
     const items = [], seen = new Set(); let cursor = '';
     do {
       const page = await api.listProjectNoteProjects({ limit: 50, cursor });
-      for (const item of page.items || []) if (!seen.has(item.project_id)) { seen.add(item.project_id); items.push(item); }
+      for (const item of page.items || []) {
+        if (seen.has(item.project_id)) continue;
+        seen.add(item.project_id);
+        items.push(Object.assign({}, item, { stage_label: stageLabels[item.stage] || '' }));
+      }
       const next = String(page.next_cursor || '');
       if (!next || next === cursor) break;
       cursor = next;
