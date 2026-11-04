@@ -2,31 +2,27 @@
 <view class="page">
   <navigation-bar title="消息中心" background="#e6daca" />
   <view class="content">
-    <view wx:if="{{!loginRequired}}" class="notice-strip">
-      <view class="notice-status"><text class="notice-name">服务号提醒</text><text class="notice-text">{{bindingLabel}}</text></view>
-      <button wx:if="{{canBind}}" class="strip-action" bindtap="onBind" loading="{{bindingBusy}}">连接</button>
-      <button wx:else class="strip-action quiet" bindtap="loadBinding">刷新</button>
-    </view>
-    <view wx:if="{{!loginRequired && prefsVisible}}" class="pref-card">
-      <view class="pref-row">
-        <view class="pref-texts"><text class="pref-title">浏览类提醒</text><text class="pref-desc">内容或合集被访问时推送；关闭后仅在消息中心保留</text></view>
-        <switch checked="{{browseDelivery}}" disabled="{{prefsBusy}}" color="#a87943" bindchange="onToggleBrowse" aria-label="浏览类提醒推送开关" />
-      </view>
-      <view class="pref-row">
-        <view class="pref-texts"><text class="pref-title">项目动态提醒</text><text class="pref-desc">业主反馈、阅读回执与加入申请；关闭后仅在消息中心保留</text></view>
-        <switch checked="{{projectDelivery}}" disabled="{{prefsBusy}}" color="#a87943" bindchange="onToggleProject" aria-label="项目动态提醒推送开关" />
-      </view>
-    </view>
     <view wx:if="{{loginRequired}}" class="empty-card"><text class="empty-title">登录后查看消息</text><text class="empty-desc">访问提醒和项目反馈会保留在这里</text><button class="primary-action" bindtap="onLogin">登录</button></view>
     <block wx:else>
-      <view class="toolbar"><text>未读 {{unread}}</text><button bindtap="onReadAll" size="mini" disabled="{{!unread}}">全部已读</button></view>
+      <view class="toolbar"><text>未读 {{unread}}</text><view class="toolbar-actions"><button bindtap="toggleSettings" size="mini">提醒设置</button><button bindtap="onReadAll" size="mini" disabled="{{!unread}}">全部已读</button></view></view>
+      <view wx:if="{{settingsOpen}}" class="settings-panel">
+        <view class="settings-head"><text class="settings-title">提醒设置</text><button class="panel-close" bindtap="toggleSettings">收起</button></view>
+        <view wx:if="{{settingsLoading}}" class="panel-state">正在读取…</view>
+        <view class="binding-row"><view class="pref-texts"><text class="pref-title">服务号提醒</text><text class="pref-desc">{{bindingLabel}}</text></view><button wx:if="{{canBind}}" class="panel-action" bindtap="onBind" loading="{{bindingBusy}}">连接</button><button wx:else class="panel-action quiet" bindtap="loadBinding">刷新</button></view>
+        <view wx:if="{{settingsError}}" class="panel-error">{{settingsError}}</view>
+        <view wx:if="{{prefsVisible}}" class="pref-card">
+          <view class="pref-row"><view class="pref-texts"><text class="pref-title">浏览类提醒</text><text class="pref-desc">内容或合集被访问时推送</text></view><switch checked="{{browseDelivery}}" disabled="{{prefsBusy || !prefsLoaded}}" color="#a87943" bindchange="onToggleBrowse" aria-label="浏览类提醒推送开关" /></view>
+          <view class="pref-row"><view class="pref-texts"><text class="pref-title">项目动态提醒</text><text class="pref-desc">反馈、回执与加入申请</text></view><switch checked="{{projectDelivery}}" disabled="{{prefsBusy || !prefsLoaded}}" color="#a87943" bindchange="onToggleProject" aria-label="项目动态提醒推送开关" /></view>
+        </view>
+      </view>
+      <view wx:if="{{unreadError}}" class="inline-warning">{{unreadError}}</view>
       <view wx:if="{{error}}" class="status-card"><text>{{error}}</text><button bindtap="onRetry" size="mini">重试</button></view>
-      <view wx:for="{{messages}}" wx:key="notification_id" class="message-card {{item.read_at ? 'read' : ''}}" bindtap="onOpenMessage" data-id="{{item.notification_id}}">
+      <block wx:for="{{messages}}" wx:key="notification_id"><text wx:if="{{item.groupLabel}}" class="date-group">{{item.groupLabel}}</text><view class="message-card {{item.read_at ? 'read' : ''}}" bindtap="onOpenMessage" data-id="{{item.notification_id}}">
         <view class="message-heading"><text class="message-kind">{{item.categoryLabel}}</text><text wx:if="{{!item.read_at}}" class="unread-dot"></text></view>
         <text class="message-title">{{item.title}}</text>
         <text class="message-body">{{item.body}}</text><text class="message-time">{{item.timeLabel}}</text>
         <text class="message-action">{{item.cancelled_at ? '提醒已失效' : item.actionLabel + ' ›'}}</text>
-      </view>
+      </view></block>
       <view wx:if="{{loading}}" class="status-card">正在加载…</view>
       <view wx:elif="{{!error && !messages.length}}" class="empty-card"><text class="empty-title">暂时没有消息</text><text class="empty-desc">新的访问和项目反馈会显示在这里</text></view>
       <button wx:if="{{cursor}}" class="load-more" bindtap="onLoadMore" loading="{{loading}}">加载更多</button>

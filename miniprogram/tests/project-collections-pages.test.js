@@ -12,7 +12,7 @@ function pageRuntime(api, token = 'designer-session', resolveProtectedMediaURL =
   let definition;
   const storage = { token, userInfo: { id: 9, nickname: '设计师', avatar: 'https://cdn.example/avatar.png', token } };
   const navigations = [];
-  const modals = [];
+  const modals = [], actionSheets = [];
   const wx = {
     getStorageSync: key => storage[key] || '',
     hideShareMenu() {},
@@ -20,6 +20,7 @@ function pageRuntime(api, token = 'designer-session', resolveProtectedMediaURL =
     navigateTo: options => { navigations.push(options.url); if(options.success) options.success(); },
     navigateBack() {},
     showToast() {},
+    showActionSheet(options) { actionSheets.push(options); },
     showModal(options) { modals.push(options); options.success && options.success({ confirm: true }); },
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.js'), 'utf8'), {
@@ -38,7 +39,7 @@ function pageRuntime(api, token = 'designer-session', resolveProtectedMediaURL =
       if (callback) callback();
     },
   });
-  return { page, storage, navigations, modals };
+  return { page, storage, navigations, modals, actionSheets };
 }
 
 test('collection access loss clears private editing state before a later retry', async () => {
@@ -367,4 +368,31 @@ test('collection preview cover completion cannot restore a previous account prev
   await pending;
   await tick();
   assert.equal(page.data.preview, null);
+});
+
+test('published collection opens its fixed reader only after the draft has been saved', () => {
+  const { page, navigations } = pageRuntime({});
+  page.setData({ current: { collection_id: 'collection-0001', version: 2, status: 'published' }, dirty: false });
+  page.openPublished();
+  assert.equal(navigations[0], '/pages/collectionreader/collectionreader?collection_id=collection-0001&collection_version=2');
+  page.setData({ dirty: true });
+  page.openPublished();
+  assert.equal(navigations.length, 1, '新修改不能被误当成已发布版本');
+  page.setData({ dirty: false, current: { collection_id: 'collection-0001', version: 0, status: 'draft' } });
+  page.openPublished();
+  assert.equal(navigations.length, 1);
+});
+
+
+test('collection more actions preserve confirmation and ignore a previous-account choice', () => {
+  const { page, storage, modals, actionSheets } = pageRuntime({});
+  page.visible = true; page.epoch = 1; page.account = storage.token;
+  page.setData({ collections: [{ collection_id: 'collection-a', version: 0, revision: 1, status: 'draft' }] });
+  const event = { currentTarget: { dataset: { id: 'collection-a' } } };
+  page.openCollectionMore(event);
+  assert.deepEqual(Array.from(actionSheets[0].itemList), ['删除草稿']);
+  assert.equal(modals.length, 0);
+  storage.token = 'other-account';
+  actionSheets[0].success({ tapIndex: 0 });
+  assert.equal(modals.length, 0, '旧账号选择不弹出新账号的删除确认');
 });

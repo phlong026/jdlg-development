@@ -327,6 +327,24 @@
   line-height: 48rpx;
 }
 
+.designer-field-with-unit {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.designer-field-with-unit .designer-input {
+  flex: 1;
+  padding-right: 88rpx;
+}
+
+.designer-field-unit {
+  position: absolute;
+  right: 24rpx;
+  color: #8c7553;
+  font-size: 24rpx;
+}
+
 .designer-textarea {
   height: 220rpx;
   min-height: 200rpx;

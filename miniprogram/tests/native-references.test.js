@@ -149,3 +149,17 @@ test('content picker searches on the server and returns a fixed version without 
   page.selectContent({ currentTarget: { dataset: { id: 'content-0001', version: 3 } } });
   assert.deepEqual(JSON.parse(JSON.stringify(emitted)), [{ name: 'selectMaterial', value: { kind: 'content', target: candidate } }]);
 });
+
+test('repeated identical search coalesces in-flight reads while a new query may supersede them', async () => {
+  let reads=0;const pending=[];
+  const {page}=pageHarness({listNativeReferences:async()=>({items:[]}),listNativeReferenceCandidates:()=>{reads++;return new Promise(resolve=>pending.push(resolve));}});
+  page.onShow();page.submitSearch();page.submitSearch();assert.equal(reads,1);
+  page.setData({search:'庭院'});page.submitSearch();assert.equal(reads,2);
+  pending.forEach(resolve=>resolve({items:[]}));await tick();assert.equal(page.data.searching,false);
+});
+
+test('returning to the library restarts a read invalidated on hide', async () => {
+  let reads=0;const pending=[];const {page}=pageHarness({listNativeReferences:async()=>({items:[]}),listNativeReferenceCandidates:()=>{reads++;return new Promise(resolve=>pending.push(resolve));}});
+  page.onShow();page.onHide();page.onShow();assert.equal(reads,2);
+  pending[1]({items:[{content_id:'new'}]});await tick();pending[0]({items:[{content_id:'old'}]});await tick();assert.equal(page.data.candidates[0].content_id,'new');
+});

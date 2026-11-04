@@ -6,7 +6,7 @@
   <block wx:else>
     <view wx:if="{{error}}" class="notice error"><text>{{error}}</text><button bindtap="retry" disabled="{{busy}}">重试</button></view>
     <text wx:if="{{notice}}" class="notice">{{notice}}</text>
-    <view wx:if="{{pickerMode || libraryTab === 'available'}}" class="search"><input value="{{search}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="submitSearch" placeholder="搜索标题" /><button bindtap="submitSearch" disabled="{{busy}}">搜索</button></view>
+    <view wx:if="{{pickerMode || libraryTab === 'available'}}" class="search"><input value="{{search}}" bindinput="onSearchInput" confirm-type="search" bindconfirm="submitSearch" placeholder="搜索标题" /><button bindtap="submitSearch" disabled="{{busy || searching}}">搜索</button></view>
     <view wx:if="{{pickerMode === 'media'}}" class="content-section">
       <text wx:if="{{!media.length}}" class="empty">未找到素材</text>
       <view wx:for="{{media}}" wx:key="media_id" class="row"><text class="name">{{item.title || (item.kind === 'image' ? '图片' : item.kind === 'video' ? '视频' : '文档')}}</text><button class="primary compact" data-id="{{item.media_id}}" bindtap="selectMedia">选择</button></view>

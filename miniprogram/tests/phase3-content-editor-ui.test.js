@@ -427,3 +427,36 @@ test('editor and reader implement the selected warm-gold content studio hierarch
   assert.match(readerStyle, /#a87943/i);
   assert.match(readerStyle, /\.reader-actions\s*\{[^}]*position:\s*fixed/);
 });
+
+test('cover picker returns an image without changing body blocks and rejects a stale return', async () => {
+  const harness = loadEditor();
+  const { page, navigationOptions } = harness;
+  page.setData({ blocks: [{ kind: 'paragraph', text: '原正文' }], preview: { preview_token: 'old' } });
+  page.openCoverPicker();
+  assert.equal(navigationOptions[0].url, '/pages/nativereferences/nativereferences?picker=media&kind=image');
+  await navigationOptions[0].events.selectMaterial({ kind: 'media', asset: { media_id: 'image-a', kind: 'image' } });
+  assert.equal(page.data.cover_media_id, 'image-a');
+  assert.equal(page.data.blocks.length, 1);
+  assert.equal(page.data.blocks[0].text, '原正文');
+  assert.equal(page.data.preview, null);
+  page.openCoverPicker();
+  harness.token('other-account');
+  await navigationOptions[1].events.selectMaterial({ kind: 'media', asset: { media_id: 'image-other', kind: 'image' } });
+  assert.equal(page.data.cover_media_id, 'image-a');
+});
+
+test('adding an uploaded asset to the body remains independent of the cover picker', () => {
+  const { page } = loadEditor();
+  page.setData({ media: [{ media_id: 'image-a', kind: 'image' }], blocks: [{ kind: 'paragraph', text: '原正文' }], cover_media_id: '' });
+  page.addMediaBlock({ currentTarget: { dataset: { index: 0 } } });
+  assert.equal(page.data.blocks.length, 2);
+  assert.equal(page.data.blocks[1].media_id, 'image-a');
+  assert.equal(page.data.cover_media_id, '');
+});
+
+test('published reader action does not imply unsaved edits have been published', () => {
+  const {page,navigations,toasts}=loadEditor();
+  page.setData({id:'content-one',status:'published',version:2,title:'原稿'});
+  page._savedSignature=page.draftSignature();page.setData({title:'未保存修改'});page.openPublished();
+  assert.equal(navigations.length,0);assert.match(toasts[0].title,/修改.*未发布/);
+});

@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use strict';
 const api = require('../../utils/phase3-api');
+function routeValue(value) { try { return decodeURIComponent(String(value || '')); } catch (_) { return String(value || ''); } }
 
 function displayTime(value) {
   if (!value) return '--';
@@ -11,20 +12,22 @@ function displayTime(value) {
 function duration(ms) { const seconds = Math.max(0, Math.round(Number(ms || 0) / 1000)); return seconds < 60 ? seconds + '秒' : Math.floor(seconds / 60) + '分' + (seconds % 60) + '秒'; }
 
 Page({
-  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '' },
+  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '', customerViews: 0, customerContents: 0, customerDuration: '0秒', canConvertLead: false, leadBusy: false, leadID: 0 },
   onLoad(options) {
-    const visitorKey = String(options.visitor || '');
-    const id = String(options.id || options.share_id || '');
+    const visitorKey = routeValue(options.visitor);
+    const id = routeValue(options.id || options.share_id);
     this._visitor = visitorKey;
+    this._entryFilters = {};
+    for (const key of ['as_of', 'start', 'end']) if (options[key] && !Number.isNaN(new Date(routeValue(options[key])).getTime())) this._entryFilters[key] = routeValue(options[key]);
     this._mode = visitorKey ? 'customer' : 'share';
     if (this._mode === 'share' && !id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
     this.setData({
       mode: visitorKey ? 'customer' : 'share',
       visitor: visitorKey,
       id,
-      title: String(options.title || '客户访问详情'),
-      intent_level: String(options.intent || ''),
-      visitor_name: String(options.name || ''),
+      title: routeValue(options.title) || '客户访问详情',
+      intent_level: routeValue(options.intent),
+      visitor_name: routeValue(options.name),
     });
   },
   onShow() {
@@ -48,7 +51,7 @@ Page({
     if (reset) this.setData({ loading: true, error: '', denied: false, items: [], next_cursor: '', as_of: '', metric_version: '' });
     else this.setData({ loadingMore: true, error: '' });
     try {
-      const query = { limit: 20 };
+      const query = { limit: 20, ...(this._entryFilters || {}) };
       if (!reset) Object.assign(query, { cursor: this.data.next_cursor, as_of: this.data.as_of, metric_version: this.data.metric_version });
       const page = await api.listMyShareVisits(this.data.id, query);
       if (!this.current(epoch)) return;
@@ -77,33 +80,49 @@ Page({
     if (reset) this.setData({ loading: true, error: '', entries: [], next_cursor: '', as_of: '' });
     else this.setData({ loadingMore: true });
     try {
-      const query = { limit: 50, as_of: this.data.as_of || undefined };
+      const query = { limit: 50, ...(this._entryFilters || {}), as_of: this.data.as_of || (this._entryFilters || {}).as_of };
       if (!reset) query.cursor = this.data.next_cursor;
       const detail = await api.listMyVisitorEntries(this._visitor, query);
-      if (epoch !== this._epoch) return;
+      if (!this.current(epoch)) return;
       const rows = (detail.items || []).map(entry => ({
         view_id: entry.view_id,
         session_id: entry.session_id,
         occurred_text: displayTime(entry.occurred_at),
-        title: entry.title || entry.content_id || '浏览',
+        title: entry.title && !String(entry.title).startsWith('pages/') ? entry.title : '分享内容',
         visible_text: duration(entry.visible_ms),
         watch_text: duration(entry.video_watch_ms),
         progress: Number(entry.progress_pct || 0),
       }));
-      const info = detail.visitor || {};
+      const info = detail.visitor || detail;
       this.setData({
         entries: reset ? rows : this.data.entries.concat(rows),
         next_cursor: detail.next_cursor || '',
         as_of: detail.as_of || this.data.as_of,
-        identified_count: info.views || 0,
-        anonymous_count: info.visible_ms || 0,
+        visitor_name: info.nickname || this.data.visitor_name || '匿名访客',
+        customerViews: Number(detail.page_views || info.page_views || 0),
+        customerContents: Number(detail.content_count || 0),
+        customerDuration: duration(detail.visible_ms || info.visible_ms || 0),
+        canConvertLead: detail.can_convert_lead === true,
         intent_level: info.intent && info.intent.level ? info.intent.level : this.data.intent_level,
         loading: false, loadingMore: false,
       });
     } catch (error) {
-      if (epoch === this._epoch) this.setData({ error: error.message || '客户浏览明细加载失败', loading: false, loadingMore: false });
-    } finally { if (epoch === this._epoch) this.setData({ loading: false, loadingMore: false }); }
+      if (this.current(epoch)) this.setData({ error: error.message || '客户浏览明细加载失败', loading: false, loadingMore: false });
+    } finally { if (this.current(epoch)) this.setData({ loading: false, loadingMore: false }); }
   },
+  async convertLead() {
+    if (!this.data.canConvertLead || this.data.leadBusy || !this._visitor || this._token !== String(wx.getStorageSync('token') || '')) return;
+    const epoch = this._epoch;
+    this.setData({ leadBusy: true });
+    try {
+      const result = await api.convertMyVisitorToLead(this._visitor);
+      if (!this.current(epoch)) return;
+      this.setData({ leadID: Number(result.lead_id || 0), canConvertLead: false });
+      wx.showToast({ title: result.existed ? '已在线索中' : '已转为线索', icon: 'success' });
+    } catch (error) { if (this.current(epoch)) wx.showToast({ title: error.message || '暂时无法转为线索', icon: 'none' }); }
+    finally { if (this.current(epoch)) this.setData({ leadBusy: false }); }
+  },
+  goBackToCustomers() { wx.navigateBack({ fail: () => wx.redirectTo({ url: '/pages/sharevisits/sharevisits' }) }); },
   retry() { this.load(true); },
   loadMore() { this.load(false, this._epoch); },
   goArchive() { wx.navigateTo({ url: '/pages/projectnotes/projectnotes' }); },

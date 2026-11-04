@@ -353,3 +353,11 @@ button::after {
 }
 
 .writing-navigation { position: sticky; top: 0; z-index: 30; background: #fbfaf7; }
+
+button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
+button.writing-tab { flex: 1; }
+button.deep-chat { margin: 12rpx auto 0; padding: 12rpx 18rpx; background: transparent; color: #8b643b; }
+.writing-footer-actions > button.primary, .writing-footer-actions > button.secondary { flex: 1; min-width: 0; width: 0; }
+.writing-panel { border-radius: 12rpx; box-shadow: none; }
+
+.writing-footer-actions > button:only-child { width: 100%; }

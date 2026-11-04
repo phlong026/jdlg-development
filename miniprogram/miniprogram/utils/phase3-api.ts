@@ -72,6 +72,7 @@ function listMyShares(query) { return request(MY_SHARES, 'GET', {}, query); }
 function listMyShareVisits(id, query) { return request(MY_SHARES + '/' + encodeURIComponent(id) + '/visits', 'GET', {}, query); }
 function listMyVisitors(query) { return request(MY_VISITORS, 'GET', {}, query); }
 function listMyVisitorEntries(visitor, query) { return request(MY_VISITORS + '/entries', 'GET', {}, Object.assign({ visitor: visitor }, query || {})); }
+function convertMyVisitorToLead(visitor) { return request(MY_VISITORS + '/lead', 'POST', { visitor }); }
 function listMyContentStats(query) { return request(MY_CONTENT_STATS, 'GET', {}, query); }
 function importCapabilities() { return request(IMPORTS + '/capabilities'); }
 function listImports() { return request(IMPORTS); }
@@ -202,7 +203,7 @@ async function writingPrompts() {
 
 module.exports = {
   ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
-  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, listMyContentStats, listMyShareVisits,
+  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, convertMyVisitorToLead, listMyContentStats, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
   getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject,

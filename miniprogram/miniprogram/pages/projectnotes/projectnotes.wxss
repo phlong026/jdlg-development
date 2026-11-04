@@ -18,3 +18,12 @@ button {
 button::after {
   border: 0;
 }
+
+.field-row > label { min-width: 0; flex: 1; }
+.editor-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16rpx; margin-top: 18rpx; }
+.editor-action-grid .tool-row { grid-column: 1 / -1; margin: 0; display: contents; }
+.editor-action-grid > .primary, .editor-action-grid > .secondary { width: 100%; margin-top: 0 !important; }
+.editor-action-grid .tool-button { min-height: 82rpx; }
+.list-header{padding:12rpx 4rpx 20rpx}.create-card,.card,.project-list,.empty-card{margin-bottom:18rpx}.empty-card{padding:58rpx 30rpx}.project-head{padding:14rpx 4rpx 22rpx}
+.editor-more-row{display:flex;justify-content:flex-end}.project-name-line{display:flex;align-items:center;gap:10rpx;min-width:0}.stage-label{flex:none;font-size:20rpx;color:#91622f;background:#f8f0e2;border-radius:6rpx;padding:2rpx 10rpx}
+.action-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14rpx}.action-card>button{width:100%;margin-top:0!important}.history-row:last-child,.feedback:last-child{border-bottom:0}

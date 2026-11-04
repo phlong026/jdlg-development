@@ -14,7 +14,7 @@
         <image wx:if="{{item.cover_url}}" class="cover" src="{{item.cover_url}}" mode="aspectFill" />
         <view wx:else class="cover placeholder">暂无封面</view>
         <view class="collection-main"><text class="collection-title">{{item.title}}</text><text class="meta">{{item.items.length}}个作品 · {{item.status_text}}</text>
-          <view class="row-actions"><button data-id="{{item.collection_id}}" bindtap="openEditor">编辑</button><button wx:if="{{item.version > 0 && item.status === 'published'}}" data-id="{{item.collection_id}}" data-version="{{item.version}}" bindtap="openReader">查看</button><button wx:if="{{item.version === 0}}" class="danger" data-id="{{item.collection_id}}" bindtap="deleteDraft">删除</button><button wx:if="{{item.status === 'published'}}" class="danger" data-id="{{item.collection_id}}" bindtap="revokePublished">撤回</button></view>
+          <view class="row-actions"><button data-id="{{item.collection_id}}" bindtap="openEditor">编辑</button><button wx:if="{{item.version > 0 && item.status === 'published'}}" data-id="{{item.collection_id}}" data-version="{{item.version}}" bindtap="openReader">查看</button><button wx:if="{{item.version === 0 || item.status === 'published'}}" data-id="{{item.collection_id}}" bindtap="openCollectionMore">更多</button></view>
         </view>
       </view>
       <button wx:if="{{nextCursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
@@ -41,6 +41,7 @@
         <button wx:if="{{candidateCursor}}" class="load-more" bindtap="loadMoreCandidates">加载更多</button>
       </view>
 
+      <view wx:if="{{current && current.status === 'published' && !dirty}}" class="published-result"><text>已发布</text><button class="primary" bindtap="openPublished">查看并分享</button></view>
       <view wx:if="{{notice}}" class="notice">{{notice}}</view><view wx:if="{{error}}" class="error">{{error}}</view>
       <view class="editor-actions"><button class="secondary" bindtap="saveDraft" loading="{{busy}}">保存草稿</button><button class="primary" bindtap="previewCurrent" disabled="{{busy || !selectedItems.length}}">预览发布</button></view>
     </block>

@@ -2,14 +2,13 @@
 <!--pages/release/release.wxml-->
 <view class="page {{isManageMode ? 'page-manage-mode' : ''}}">
   <!-- 统一导航栏 -->
-  <navigation-bar title="我的发布" subtitle="作品数据 · 收益概览" background="#e6daca" />
+  <navigation-bar title="我的发布" background="#e6daca" />
 
   <!-- 顶部统计卡片 -->
   <view class="summary-card">
     <view class="summary-header">
       <view>
         <text class="summary-title">发布概览</text>
-        <text class="summary-subtitle">创作影响力与作品经营数据</text>
       </view>
     </view>
     <view class="influence-row">

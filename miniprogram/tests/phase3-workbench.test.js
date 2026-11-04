@@ -38,6 +38,7 @@ function pageHarness(name, api, wxOverrides = {}) {
   }, wxOverrides);
   vm.runInNewContext(source, { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/phase3-api') return api;
+    if (id === '../../utils/protected-media') return { resolveProtectedMediaURL: async url => url };
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     throw new Error(`unexpected require ${id}`);
   }, console, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent });

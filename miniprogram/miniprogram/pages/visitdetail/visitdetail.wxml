@@ -1,44 +1,24 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="private-page">
- <navigation-bar title="访问详情" back="{{true}}" background="#f7f3ee" />
+ <navigation-bar title="{{mode === 'customer' ? '客户详情' : '分享详情'}}" back="{{true}}" background="#f7f3ee" />
  <view class="page-body">
-  <view wx:if="{{loading}}" class="state" role="status">正在加载访问统计…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>请先登录后查看访问详情。</text><button bindtap="goLogin">去登录</button></view>
-  <view wx:elif="{{denied}}" class="state"><text>该分享不属于当前账号，或已无查看权限。</text><button bindtap="retry">重新检查</button></view>
-  <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="retry">重试</button></view>
+  <view wx:if="{{loading}}" class="state" role="status">正在加载访问统计…</view><view wx:elif="{{loginRequired}}" class="state"><text>请先登录后查看访问详情</text><button bindtap="goLogin">去登录</button></view><view wx:elif="{{denied}}" class="state"><text>该分享已无查看权限</text><button bindtap="retry">重新检查</button></view><view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="retry">重试</button></view>
   <block wx:else>
-   <view class="summary">
-    <view class="title-row"><text class="title">{{title}}</text><text wx:if="{{intent_level === 'high'}}" class="intent intent-high">高意向</text><text wx:elif="{{intent_level === 'medium'}}" class="intent intent-mid">中意向</text></view>
-    <text>已识别 {{identified_count}} 人 · 匿名 {{anonymous_count}} 人</text>
-    <text class="muted">可见时长只表示页面在前台，不代表已读或认可。</text>
-   </view>
-   <view class="archive-entry" bindtap="goArchive"><text>进一户一档，查看该客户的全部方案与交流记录 ›</text></view>
    <block wx:if="{{mode === 'customer'}}">
-    <view class="state" wx:if="{{!entries.length && !loading}}">该客户窗口内暂无浏览明细</view>
-    <view wx:for="{{entries}}" wx:key="view_id" class="card entry-card">
-     <view class="card-heading"><text class="title">{{item.title}}</text><text class="status" wx:if="{{item.progress}}">{{item.progress}}%</text></view>
-     <text class="meta">{{item.occurred_text}}</text>
-     <view class="metrics"><text>可见 {{item.visible_text}}</text><text>观看 {{item.watch_text}}</text></view>
-    </view>
+    <view class="customer-summary"><view class="customer-identity"><view class="customer-avatar">客</view><view><view class="title-row"><text class="page-title">{{visitor_name || title}}</text><text wx:if="{{intent_level === 'high'}}" class="intent intent-high">高意向</text><text wx:elif="{{intent_level === 'medium'}}" class="intent intent-mid">中意向</text></view><text class="muted">客户访问概览</text></view></view><view class="summary-metrics"><view><text>查看</text><text class="summary-value">{{customerViews}}次</text></view><view><text>内容</text><text class="summary-value">{{customerContents}}份</text></view><view><text>停留</text><text class="summary-value">{{customerDuration}}</text></view></view></view>
+    <view class="section-head"><text>浏览记录</text><view class="back-link" bindtap="goBackToCustomers" role="button">返回客户列表</view></view>
+    <view class="state compact" wx:if="{{!entries.length && !loading}}">该客户窗口内暂无浏览明细</view>
+    <view wx:for="{{entries}}" wx:key="view_id" class="card entry-card"><view class="card-heading"><text class="title">{{item.title}}</text><text class="status" wx:if="{{item.progress}}">{{item.progress}}%</text></view><text class="meta">{{item.occurred_text}}</text><view class="metrics"><text>停留 {{item.visible_text}}</text><text wx:if="{{item.watch_text !== '0秒'}}">观看 {{item.watch_text}}</text></view></view>
+    <button wx:if="{{canConvertLead}}" class="lead-action" bindtap="convertLead" loading="{{leadBusy}}" disabled="{{leadBusy}}">转为线索</button><view wx:elif="{{leadID}}" class="lead-done">已转为线索</view>
    </block>
    <block wx:else>
-    <view class="state" wx:if="{{!items.length}}">当前统计窗口暂无访问。</view>
-    <view wx:for="{{items}}" wx:key="visitor_key" class="card">
-     <view class="visitor" data-key="{{item.visitor_key}}" bindtap="toggleTimeline"><image wx:if="{{item.visitor.avatar_url}}" src="{{item.visitor.avatar_url}}" mode="aspectFill" /><view><text class="title">{{item.visitor_name}}</text><text class="muted">{{item.visitor.identity_state === 'identified' ? '已识别' : '匿名访客'}}{{item.visitor.identity_type ? ' · ' + item.visitor.identity_type : ''}}</text></view><text class="chevron">{{item.expanded ? '⌃' : '⌄'}}</text></view>
-     <view class="metrics"><text>{{item.page_views}} 次浏览</text><text>{{item.session_count}} 次会话</text><text>可见 {{item.visible_text}}</text></view>
-     <block wx:if="{{item.expanded && item.timeline.length}}">
-      <view class="timeline">
-       <view wx:for="{{item.timeline}}" wx:for-item="node" wx:key="label" class="timeline-node">
-        <view class="timeline-dot"></view>
-        <view class="timeline-body"><text class="timeline-label">{{node.label}}</text><text class="timeline-time">{{node.time}}</text><text class="timeline-detail">{{node.detail}}</text></view>
-       </view>
-      </view>
-     </block>
-     <text wx:else class="muted">首次 {{item.first_visit_text}} · 最近 {{item.last_visit_text}}</text>
-    </view>
+    <view class="share-summary"><text class="page-title">{{title}}</text><view class="summary-metrics two"><view><text>已识别</text><text class="summary-value">{{identified_count}}人</text></view><view><text>匿名</text><text class="summary-value">{{anonymous_count}}人</text></view></view><text class="muted">停留时长仅表示页面在前台</text></view>
+    <view class="section-head"><text>访问记录</text></view><view class="state compact" wx:if="{{!items.length}}">当前统计窗口暂无访问</view>
+    <view wx:for="{{items}}" wx:key="visitor_key" class="card"><view class="visitor" data-key="{{item.visitor_key}}" bindtap="toggleTimeline" role="button"><image wx:if="{{item.visitor.avatar_url}}" src="{{item.visitor.avatar_url}}" mode="aspectFill" /><view wx:else class="visitor-placeholder">访</view><view><text class="title">{{item.visitor_name}}</text><text class="muted">{{item.visitor.identity_state === 'identified' ? '已识别' : '匿名访客'}}{{item.visitor.identity_type ? ' · ' + item.visitor.identity_type : ''}}</text></view><text class="chevron">{{item.expanded ? '⌃' : '⌄'}}</text></view><view class="metrics"><text>{{item.page_views}} 次浏览</text><text>{{item.session_count}} 次会话</text><text>停留 {{item.visible_text}}</text></view><block wx:if="{{item.expanded && item.timeline.length}}"><view class="timeline"><view wx:for="{{item.timeline}}" wx:for-item="node" wx:key="label" class="timeline-node"><view class="timeline-dot"></view><view class="timeline-body"><text class="timeline-label">{{node.label}}</text><text class="timeline-time">{{node.time}}</text><text class="timeline-detail">{{node.detail}}</text></view></view></view></block><text wx:else class="muted">首次 {{item.first_visit_text}} · 最近 {{item.last_visit_text}}</text></view>
    </block>
+   <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
   </block>
-  </view>
  </view>
+</view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -439,3 +439,10 @@ button::after {
 }
 
 .annotate-hint { padding: 16rpx 24rpx; margin: 12rpx 0; background: #f8f0e2; border-radius: 10rpx; color: #9a6835; font-size: 24rpx; }
+
+button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
+.reader-actions { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 10rpx; }
+.reader-actions button { width: 100%; min-height: 88rpx; margin: 0; padding: 12rpx 8rpx; font-size: 25rpx; line-height: 1.4; }
+.reader-actions .action-icon { display: none; }
+.reader-brand { padding-top: 14px; }
+.article-header .meta { flex-wrap: wrap; }

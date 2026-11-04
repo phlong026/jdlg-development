@@ -1,7 +1,7 @@
 'use strict';
 const api = require('../../utils/phase3-api');
 const pageTitle = pickerMode => pickerMode === 'media' ? '选择素材' : pickerMode === 'content' ? '选择内容' : '资料库';
-const empty = (pickerMode = '', mediaKinds = '') => ({ pickerMode, mediaKinds, navigationTitle: pageTitle(pickerMode), libraryTab: 'selected', search: '', references: [], candidates: [], media: [], referenceCursor: '', candidateCursor: '', mediaCursor: '', loading: false, busy: false, error: '', notice: '', loginRequired: false });
+const empty = (pickerMode = '', mediaKinds = '') => ({ pickerMode, mediaKinds, navigationTitle: pageTitle(pickerMode), libraryTab: 'selected', search: '', references: [], candidates: [], media: [], referenceCursor: '', candidateCursor: '', mediaCursor: '', loading: false, busy: false, searching: false, error: '', notice: '', loginRequired: false });
 const candidateKey = item => String(item.content_id) + ':' + String(item.content_version);
 const searchQuery = (search, extra = {}) => ({ limit: 20, ...extra, ...(search ? { q: search } : {}) });
 Page({
@@ -21,13 +21,17 @@ Page({
     if (!token) { this.setData({ loginRequired: true }); return; }
     this.load();
   },
-  onHide() { this._visible = false; this._epoch += 1; },
-  onUnload() { this._visible = false; this._epoch += 1; this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); },
+  onHide() { this._loadPending = 0; this._visible = false; this._epoch += 1; },
+  onUnload() { this._loadPending = 0; this._visible = false; this._epoch += 1; this._attempts = new Map(); this.setData(empty(this._pickerMode, this._mediaKinds)); },
   current(epoch) { return this._visible && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   async load() {
+    const key = JSON.stringify([this._token, this.data.pickerMode, this.data.mediaKinds, this.data.search]);
+    if (this._loadPending && this._loadKey === key) return;
+    this._loadKey = key;
     const epoch = this._epoch = (this._epoch || 0) + 1;
+    this._loadPending = epoch;
     const quiet = this._loaded === true;
-    this.setData({ loading: !quiet, busy: false, error: '', notice: '' });
+    this.setData({ loading: !quiet, busy: false, searching: true, error: '', notice: '' });
     try {
       if (this.data.pickerMode === 'media') {
         const media = await api.listWorkbenchMedia(searchQuery(this.data.search, this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}));
@@ -42,10 +46,13 @@ Page({
       const authFailed = error.statusCode === 401 || error.statusCode === 403;
       if (authFailed) { this._loaded = false; this.setData(empty(this._pickerMode, this._mediaKinds)); }
       this.setData({ loading: false, loginRequired: error.statusCode === 401, error: error.statusCode === 403 ? '暂无资料库权限' : error.statusCode === 401 ? '' : (error.message || '原生内容暂不可用') });
+    } finally {
+      if (this._loadPending === epoch) this._loadPending = 0;
+      if (this.current(epoch)) this.setData({ searching: false });
     }
   },
   async loadMore(event) {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.searching) return;
     if (event.currentTarget.dataset.kind === 'media') {
       const cursor = this.data.mediaCursor; if (!cursor) return;
       const epoch = this._epoch; this.setData({ busy: true, error: '' });
@@ -98,7 +105,7 @@ Page({
       const ref = await api.saveNativeReference(id, version, this._attempts.get(signature));
       if (!this.current(epoch)) return;
       this._attempts.delete(signature);
-      this.setData({ references: [ref, ...this.data.references.filter(item => item.reference_id !== ref.reference_id)], busy: false, notice: '已选用这一已发布版本。打开后可分享原生卡片。' });
+      this.setData({ references: [ref, ...this.data.references.filter(item => item.reference_id !== ref.reference_id)], busy: false, notice: '已选用' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '选用失败，可重试' }); }
   },
   async openReference(event) {
@@ -115,7 +122,7 @@ Page({
   async removeReference(event) {
     if (this.data.busy) return;
     const id = String(event.currentTarget.dataset.id || ''), epoch = this._epoch; this.setData({ busy: true, error: '' });
-    try { await api.deleteNativeReference(id); if (this.current(epoch)) this.setData({ references: this.data.references.filter(item => item.reference_id !== id), busy: false, notice: '已移除引用，原作品保持不变。' }); }
+    try { await api.deleteNativeReference(id); if (this.current(epoch)) this.setData({ references: this.data.references.filter(item => item.reference_id !== id), busy: false, notice: '已移除，原作品保留' }); }
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '移除失败' }); }
   },
   retry() { this.load(); },

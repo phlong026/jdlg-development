@@ -9,18 +9,7 @@
     <view wx:elif="{{error && !items.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
     <block wx:else>
       <block wx:if="{{view === 'studio'}}">
-        <view class="workspace-heading"><text class="workspace-title">我的内容</text><view class="workspace-destinations"><button class="workspace-destination" bindtap="openCollections">项目合集<text class="destination-arrow">›</text></button><button class="workspace-destination" bindtap="openExistingAssets">资料库<text class="destination-arrow">›</text></button></view></view>
-  <view class="active-projects" wx:if="{{activeProjects.length}}">
-   <view class="proj-card" wx:for="{{activeProjects}}" wx:key="project_id" data-id="{{item.project_id}}" bindtap="openProject">
-    <view class="proj-head"><text class="proj-name">{{item.name}}</text><text class="proj-stage">{{item.next_action}}</text></view>
-    <text class="proj-meta">{{item.meta_text}}</text>
-   </view>
-  </view>
-        <view class="workspace-links">
-          <button class="workspace-link" bindtap="openImportView"><t-icon name="link" size="17px" /><text>链接导入</text></button>
-          <button class="workspace-link" bindtap="openAIWriting"><t-icon name="edit-1" size="17px" /><text>AI文案</text></button>
-          <button wx:if="{{hasShareVisitAccess}}" class="workspace-link" bindtap="openShareVisits"><t-icon name="share" size="17px" /><text>分享记录</text></button>
-        </view>
+        <view class="workspace-tabs" role="tablist"><text class="workspace-tab active" role="tab" aria-selected="{{true}}">我的内容</text><button class="workspace-tab" bindtap="openCollections">合集</button><button class="workspace-tab" bindtap="openExistingAssets">资料库</button></view>
         <view wx:if="{{context.owner_choices.length > 1}}" class="owner-tabs" role="tablist">
           <button class="owner-tab {{ownerFilter === '' ? 'active' : ''}}" data-owner="" bindtap="selectOwnerTab" role="tab" aria-selected="{{ownerFilter === ''}}">全部</button>
           <button wx:for="{{context.owner_choices}}" wx:key="owner_id" class="owner-tab {{ownerFilter === item.owner_id ? 'active' : ''}}" data-owner="{{item.owner_id}}" bindtap="selectOwnerTab" role="tab" aria-selected="{{ownerFilter === item.owner_id}}">{{item.display_name}}</button>
@@ -33,29 +22,24 @@
           <block wx:elif="{{visibleItems.length > 0}}">
             <view wx:for="{{visibleItems}}" wx:key="content_id" class="content-row" data-id="{{item.content_id}}" data-status="{{item.status}}" data-version="{{item.version}}" data-read-only="{{item.read_only}}" data-route="{{item.route_key}}" bindtap="openContent" role="button" aria-label="{{item.title}}">
               <view class="content-cover"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFill" /><view wx:else class="cover-placeholder"><t-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="32px" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
-              <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}} · 查看 {{item.view_count || 0}} · 转发 {{item.share_count || 0}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{item.status === 'published' && !item.read_only}}" class="edit-link" catchtap="editContent" data-id="{{item.content_id}}">编辑</button></view></view><text class="row-chevron">›</text>
+              <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}}</text><text wx:if="{{item.status === 'published'}}" class="content-metrics">查看 {{item.view_count || 0}} · 转发 {{item.share_count || 0}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{item.status === 'published' && !item.read_only}}" class="edit-link" catchtap="editContent" data-id="{{item.content_id}}">编辑</button></view></view><text class="row-chevron">›</text>
             </view>
           </block>
           <view wx:else class="empty-state">
             <block wx:if="{{category === 'all' && !searchTerm && !next_cursor}}">
               <t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">暂无内容</text>
-              <view class="onboarding-cards">
-                <view class="onboarding-card" bindtap="openImportView" role="button" aria-label="链接导入"><text class="onboarding-title">链接导入</text><text class="row-chevron">›</text></view>
-                <view class="onboarding-card" bindtap="startFirstContent" role="button" aria-label="新建图文"><text class="onboarding-title">新建图文</text><text class="row-chevron">›</text></view>
-                <view class="onboarding-card" bindtap="openAIWriting" role="button" aria-label="AI文案"><text class="onboarding-title">AI文案</text><text class="row-chevron">›</text></view>
-              </view>
+
             </block>
-            <block wx:else><t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : next_cursor ? '已加载内容中暂无此类' : '暂无这类内容'}}</text></block>
+            <block wx:else><t-icon name="file" size="42px" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : '暂无这类内容'}}</text></block>
           </view>
         </view>
-        <text wx:if="{{category !== 'all' && next_cursor}}" class="pagination-note">仅筛选已加载内容</text>
         <view wx:if="{{context.stones_balance >= 0}}" class="quota-strip"><text>灵石 {{context.stones_balance}}</text><text wx:if="{{context.month_generations >= 0}}" class="quota-divider">·</text><text wx:if="{{context.month_generations >= 0}}">本月生成 {{context.month_generations}}</text></view>
         <view wx:if="{{error}}" class="inline-error">{{error}}</view>
         <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
       </block>
       <block wx:else>
         <view wx:if="{{importCapabilityLoading}}" class="import-gate import-gate-loading" role="status"><view class="loading-mark"></view><text>正在确认导入能力…</text></view>
-        <view wx:elif="{{!importEnabled}}" class="import-gate">{{importCapabilityReason || '链接导入暂未开通'}}</view>
+        <view wx:elif="{{!importEnabled}}" class="import-gate"><text>{{importCapabilityReason || '链接导入暂未开通'}}</text><button class="outline-button" bindtap="backToContent">返回内容创作</button></view>
         <view wx:else class="import-editor">
           <text class="import-heading">粘贴分享链接</text>
           <view class="link-input-box"><textarea value="{{importURL}}" bindinput="setImportURL" maxlength="4000" placeholder="粘贴完整链接或分享文字" auto-height="{{false}}" aria-label="分享链接" /><button class="paste-button" bindtap="pasteImportLink"><t-icon name="file-copy" size="17px" /> 粘贴</button></view>

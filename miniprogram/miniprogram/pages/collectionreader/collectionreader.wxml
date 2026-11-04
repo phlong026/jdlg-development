@@ -5,10 +5,10 @@
     <view wx:if="{{loading}}" class="state">正在加载合集…</view>
     <view wx:elif="{{error && !collection}}" class="state"><text>{{error}}</text><button bindtap="loadCollection">重试</button></view>
     <block wx:else>
-      <view class="hero"><image wx:if="{{collection.cover}}" src="{{collection.cover.url}}" mode="aspectFill" /><view wx:else class="hero-mark">甲</view><view class="hero-overlay"><text class="hero-title">{{collection.title}}</text><text wx:if="{{collection.description}}" class="hero-description">{{collection.description}}</text><text class="hero-meta">{{items.length}}个作品</text></view></view>
+      <view class="hero {{collection.cover ? '' : 'no-cover'}}"><image wx:if="{{collection.cover}}" src="{{collection.cover.url}}" mode="aspectFill" /><view class="hero-overlay"><text class="hero-title">{{collection.title}}</text><text wx:if="{{collection.description}}" class="hero-description">{{collection.description}}</text><text class="hero-meta">{{items.length}}个作品</text></view></view>
       <view class="directory"><view wx:for="{{items}}" wx:key="index" class="item {{item.available ? '' : 'unavailable'}}" data-index="{{index}}" bindtap="openItem">
         <image wx:if="{{item.available && item.cover_url}}" class="item-cover" src="{{item.cover_url}}" mode="aspectFill" /><view wx:else class="item-cover placeholder">{{item.available ? index + 1 : '—'}}</view>
-        <view class="item-main"><text class="item-title">{{item.available ? item.title : '该作品已不可访问'}}</text><text wx:if="{{item.available}}" class="item-meta">V{{item.content_version}}</text></view><text wx:if="{{item.available}}" class="chevron">{{opening === index ? '…' : '›'}}</text>
+        <view class="item-main"><text class="item-title">{{item.available ? item.title : '该作品已不可访问'}}</text></view><text wx:if="{{item.available}}" class="chevron">{{opening === index ? '…' : '›'}}</text>
       </view></view>
       <view class="share-actions"><button class="copy-link" bindtap="copyWebLink" loading="{{webLinkBusy}}" disabled="{{webLinkBusy}}">复制链接</button><button class="share-primary" open-type="share">分享合集</button></view>
       <view wx:if="{{error}}" class="error">{{error}}</view>

@@ -18,10 +18,17 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
     previous = position;
   }
   assert.match(wxml, /class="workbench-grid workbench-grid-/);
+  assert.doesNotMatch(wxml, /workbench-description/);
   assert.match(wxml, /class="account-card"/);
   assert.match(wxml, /class="section-grid section-grid-two"/);
   assert.doesNotMatch(wxml, /待处理反馈|今日回访/);
+  assert.doesNotMatch(wxml, /class="share-visits-entry"/);
+  assert.match(scssForLayout(), /\.page \.workbench-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\)/s);
 });
+
+function scssForLayout() {
+  return read('my.scss');
+}
 
 test('工作台入口由后端创作能力控制，普通功能移出设计师分区', () => {
   const source = read('my.ts');

@@ -48,7 +48,7 @@ Page({
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
-    settingsExpanded: false, mediaExpanded: true, moreExpanded: false, tagsText: '', pinned: false,
+    settingsExpanded: false, mediaExpanded: false, moreExpanded: false, tagsText: '', pinned: false,
   },
   onLoad(options) {
     this.setData({ id: String(options.id || '') });
@@ -129,6 +129,15 @@ Page({
   },
   toggleSettings() { this.setData({ settingsExpanded: !this.data.settingsExpanded }); },
   toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
+  openCoverPicker() {
+    if (this.data.busy || this.data.documentReadOnly || this.data.legacyReadOnly) return;
+    const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, cover: true };
+    wx.navigateTo({
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=image',
+      events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
+      fail: () => this.setData({ error: '素材选择页暂时无法打开，请重试' }),
+    });
+  },
   openMediaPicker() {
     if (this.data.busy) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false };
@@ -139,9 +148,9 @@ Page({
   },
   async receivePickedMedia(payload, launch) {
     const asset = payload && payload.kind === 'media' ? payload.asset : null;
-    if (!asset || !asset.media_id || (asset.kind !== 'image' && asset.kind !== 'video')) return;
+    if (!asset || !asset.media_id || (asset.kind !== 'image' && asset.kind !== 'video') || launch.cover && asset.kind !== 'image') return;
     // 选择页返回会触发 onShow，改变请求 epoch；用原草稿身份保护跨页素材回填。
-    const current = () => !this._unloaded && launch.token === this._token && launch.token === String(wx.getStorageSync('token') || '') && launch.id === this.data.id && launch.signature === this.draftSignature() && !this.data.busy && !this.data.layoutReadOnly;
+    const current = () => !this._unloaded && launch.token === this._token && launch.token === String(wx.getStorageSync('token') || '') && launch.id === this.data.id && launch.signature === this.draftSignature() && !this.data.busy && (!this.data.layoutReadOnly || launch.cover);
     if (launch.handled || !current()) return;
     launch.handled = true;
     let selected = { ...asset };
@@ -149,6 +158,7 @@ Page({
     catch (_) { selected.preview_error = '私有媒体预览加载失败'; }
     if (!current()) return;
     const media = mergeAssets(this.data.media, [selected]);
+    if (launch.cover) { this.setData({ media, cover_media_id: asset.media_id, preview: null, notice: '封面已选择，请保存' }); return; }
     const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
     this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), preview: null, notice: '已加入正文' });
   },
@@ -552,6 +562,7 @@ Page({
   },
   openPublished() {
     if (!this.data.id || this.data.status !== 'published' || this.data.version < 1) return;
+    if (this._savedSignature && this._savedSignature !== this.draftSignature()) { wx.showToast({ title: '当前修改尚未发布，请先保存并发布', icon: 'none' }); return; }
     wx.navigateTo({ url: '/pages/contentreader/contentreader?content_id=' + encodeURIComponent(this.data.id) + '&content_version=' + encodeURIComponent(String(this.data.version)) });
   },
   revoke() {

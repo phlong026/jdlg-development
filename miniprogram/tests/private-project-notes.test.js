@@ -439,6 +439,26 @@ test('a new note form stays separate from existing drafts after a refresh', asyn
   assert.equal(page.data.frozenVersion, null);
 });
 
+test('cancelling a new note keeps the loaded version and share context on project detail', async () => {
+  const detail = {
+    project: { project_id: 'p', name: '张宅' },
+    notes: [{ note_id: 'n', title: '方案', body: '正文', body_format: 'plain', revision: 1 }],
+    versions: [{ version_id: 'v', note_id: 'n', title: '方案', revision: 1 }],
+    shares: [{ share_id: 's', version_id: 'v', revoked: false }],
+    feedbacks: [], confirmations: [],
+  };
+  const page = pageHarness('projectnotes', {});
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail(detail);
+  const versionCount = page.data.versionChoices.length;
+  const shareID = page.data.activeShare.share_id;
+  await page.startNewNote();
+  await page.handleBack();
+  assert.equal(page.data.pageView, 'detail');
+  assert.equal(page.data.versionChoices.length, versionCount);
+  assert.equal(page.data.activeShare.share_id, shareID);
+});
+
 test('feedback can be selected directly and reply retries preserve a semantic idempotency key', async () => {
   const calls = []; let count = 0, keys = 0;
   const page = pageHarness('projectnotes', {
@@ -546,7 +566,7 @@ test('designer history paginates with bounded replacement and can return to the 
   const calls = [];
   const page = pageHarness('projectnotes', { getProjectNoteHistory: async (project, type, query) => {
     calls.push({ project, type, ...query });
-    return query.cursor ? { items: [{ version_id: 'v-old', title: '旧方案', revision: 1 }], next_cursor: '' } : { items: [{ version_id: 'v-new', title: '新方案', revision: 2 }], next_cursor: 'next' };
+    return query.cursor ? { items: [{ version_id: 'v-old', title: '旧方案', revision: 1, created_at: '2026-11-02T16:59:42.883Z' }], next_cursor: '' } : { items: [{ version_id: 'v-new', title: '新方案', revision: 2, created_at: '2026-11-03T08:09:10Z' }], next_cursor: 'next' };
   } });
   page._visible = true; page._token = 'session-token'; page._epoch = 1; page.setData({ selectedProject: { project_id: 'p' } });
   await page.loadHistory();
@@ -556,6 +576,27 @@ test('designer history paginates with bounded replacement and can return to the 
   assert.equal(page.data.historyItems[0].version_id, 'v-new');
   assert.deepEqual(calls.map(item => item.cursor), ['', 'next', '']);
   assert.ok(calls.every(item => item.project === 'p' && item.type === 'versions' && item.limit <= 50));
+  assert.match(page.data.historyItems[0].displayTime, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+});
+
+test('project workspace scrolls new in-page views to top and keeps copy/delete under more', async () => {
+  const scrolls = [];
+  let sheet;
+  const page = pageHarness('projectnotes', {}, {
+    pageScrollTo: options => scrolls.push(options),
+    showActionSheet: options => { sheet = options; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 1 }, pageView: 'detail' });
+  await page.startNewNote();
+  assert.equal(scrolls.at(-1).scrollTop, 0);
+  assert.equal(scrolls.at(-1).duration, 0);
+  page.setData({ note: { note_id: 'n', revision: 1 }, historyMode: false });
+  page.openNoteMore();
+  assert.equal(sheet.itemList.join(','), '复制笔记,删除笔记');
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /bindtap="openNoteMore"/);
+  assert.doesNotMatch(template, /class="inline-actions"[\s\S]*?bindtap="copyProjectNote"/);
 });
 
 test('old notification loads its exact feedback and old selected draft outside the initial window', async () => {

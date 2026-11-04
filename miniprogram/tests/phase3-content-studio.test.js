@@ -54,7 +54,7 @@ test('confirmed workbench access loss clears all private state and invalidates p
     return { enabled: true, can_manage: true, owners: ['owner-a'] };
   } });
   page.onShow(); await tick(); await tick();
-  page.setData({ imports: [{ import_id: 'private-import' }], importURL: 'private-link', activeProjects: [{ project_id: 'private-project' }] });
+  page.setData({ imports: [{ import_id: 'private-import' }], importURL: 'private-link' });
   revoked = true;
   page.onHide(); page.onShow();
   const epoch = page._epoch;
@@ -62,23 +62,56 @@ test('confirmed workbench access loss clears all private state and invalidates p
   assert.equal(page.data.denied, true);
   assert.equal(page._loaded, false);
   assert.equal(page.data.context, null);
-  for (const key of ['items', 'visibleItems', 'imports', 'activeProjects']) assert.equal(page.data[key].length, 0, key);
+  for (const key of ['items', 'visibleItems', 'imports']) assert.equal(page.data[key].length, 0, key);
   assert.equal(page.data.importURL, '');
   assert.equal(page.data.hasShareVisitAccess, false);
   assert.ok(page._epoch > epoch, '失权后在途回调立即作废');
 });
 
-test('content categories filter loaded records without manufacturing assets or totals', async () => {
-  const { page } = runtime();
+test('category changes query the full catalog and reset pagination while keeping search and owner', async () => {
+  const calls = [];
+  const { page } = runtime({ listContents: async query => {
+    calls.push({ ...query });
+    return { items: query.type ? [{ content_id: query.type + '-remote', type: query.type, media: [] }] : [], next_cursor: 'more', as_of: '2026-11-04T00:00:00Z', metric_version: 'v1' };
+  }});
   page.onShow(); await tick(); await tick();
-  page.selectCategory({ currentTarget: { dataset: { key: 'video' } } });
-  assert.equal(page.data.visibleItems.length, 1);
-  assert.equal(page.data.visibleItems[0].content_id, 'video-a');
-  page.selectCategory({ currentTarget: { dataset: { key: 'document' } } });
-  assert.equal(page.data.category, 'document');
-  assert.equal(page.data.visibleItems.length, 1);
-  assert.equal(page.data.visibleItems[0].content_id, 'document-a');
-  assert.equal(page.data.next_cursor, 'page-2');
+  page.setData({ ownerFilter: 'owner-a', searchTerm: '庭院' });
+  await page.selectCategory({ currentTarget: { dataset: { key: 'video' } } });
+  assert.equal(calls.at(-1).type, 'video');
+  assert.equal(calls.at(-1).owner, 'owner-a');
+  assert.equal(calls.at(-1).content_q, '庭院');
+  assert.equal(calls.at(-1).cursor, undefined);
+  assert.equal(calls.at(-1).as_of, undefined);
+  assert.equal(page.data.visibleItems[0].content_id, 'video-remote');
+  await page.load(false, page._epoch);
+  assert.equal(calls.at(-1).type, 'video');
+  assert.equal(calls.at(-1).cursor, 'more');
+  assert.equal(calls.at(-1).as_of, '2026-11-04T00:00:00Z');
+  await page.selectCategory({ currentTarget: { dataset: { key: 'all' } } });
+  assert.equal(calls.at(-1).type, undefined);
+  assert.equal(calls.at(-1).cursor, undefined);
+});
+
+test('a late category response cannot replace the newly selected catalog', async () => {
+  const pending = [];
+  const { page } = runtime({ listContents: query => query.type ? new Promise(resolve => pending.push({ type: query.type, resolve })) : Promise.resolve({ items: [] }) });
+  page.onShow(); await tick(); await tick();
+  const video = page.selectCategory({ currentTarget: { dataset: { key: 'video' } } });
+  await tick();
+  const note = page.selectCategory({ currentTarget: { dataset: { key: 'note' } } });
+  await tick();
+  assert.equal(pending.length, 2);
+  pending[1].resolve({ items: [{ content_id: 'note-current', type: 'note' }] }); await note;
+  pending[0].resolve({ items: [{ content_id: 'video-old', type: 'video' }] }); await video;
+  assert.equal(page.data.visibleItems[0].content_id, 'note-current');
+});
+
+test('content studio never fetches unrelated project tasks', async () => {
+  let projectCalls = 0;
+  const { page } = runtime({ listProjectNoteProjects: async () => { projectCalls += 1; return { items: [] }; }});
+  page.onShow(); await tick(); await tick();
+  page.onHide(); page.onShow(); await tick(); await tick();
+  assert.equal(projectCalls, 0);
 });
 
 test('disabling the import service keeps content usable without requesting import tasks', async () => {
@@ -177,12 +210,10 @@ for (const statusCode of [undefined, 503, 401, 403]) {
     });
     page.onShow(); await tick(); await tick();
     assert.equal(page.data.hasShareVisitAccess, true);
-    assert.equal(page.data.activeProjects.length, 1);
     failed = true;
     page.onHide(); page.onShow(); await tick(); await tick();
     const revoked = statusCode === 401 || statusCode === 403;
     assert.equal(page.data.hasShareVisitAccess, !revoked);
-    assert.equal(page.data.activeProjects.length, revoked ? 0 : 1);
   });
 }
 
@@ -190,14 +221,14 @@ test('studio offers real destinations for existing assets and visits', async () 
   const { page, navigations } = runtime();
   page.onShow(); await tick();
   page.openExistingAssets(); page.openShareVisits();
-  assert.deepEqual(navigations, ['/pages/nativereferences/nativereferences', '/pages/sharevisits/sharevisits']);
+  assert.deepEqual(navigations, ['/pages/nativereferences/nativereferences', '/pages/sharevisits/sharevisits?tab=shares']);
 });
 
 test('studio has one create action and routes each supported type into the existing editor', () => {
   const harness = runtime();
   // 批次4：新建菜单按甲第工作流扩为 5 项（项目笔记→AI生成→口述→图文→导入）
   harness.page.openCreateMenu();
-  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['新建项目笔记', 'AI 生成设计', '口述转设计说明', '图文内容', '导入链接']);
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['项目笔记', '生成设计', '设计说明', '图文内容', '导入链接']);
   for (const tapIndex of [0, 1, 2, 3, 4]) {
     harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex });
   }
@@ -239,7 +270,7 @@ test('studio template removes duplicate create and unavailable note controls', (
   assert.equal((template.match(/bindtap="openCreateMenu"/g) || []).length, 1);
   assert.doesNotMatch(template, /上传资料|项目笔记协作尚未开通|已有生成记录、模板与作品可直接选用/);
   assert.match(template, /bindtap="openExistingAssets"/);
-  assert.match(template, /bindtap="openAIWriting"/);
+  assert.doesNotMatch(template, /class="active-projects"|仅筛选已加载内容/);
 });
 
 test('content pages use one clear title and hide unavailable writing actions', () => {
@@ -258,11 +289,10 @@ test('content pages use one clear title and hide unavailable writing actions', (
   assert.match(references, /bindtap="selectLibraryTab"/);
   assert.doesNotMatch(references, /保存已发布的固定版本|仅展示当前授权范围/);
   assert.match(workbench, /wx:if="{{context\.owner_choices\.length > 1}}"/);
-  // U2：全空工作台的首次引导三卡（导入/新建/AI文案），搜索或分类筛选时不出现
-  assert.match(workbench, /wx:if="\{\{category === 'all' && !searchTerm && !next_cursor\}\}"/);
-  assert.match(workbench, /bindtap="openImportView"[^>]*aria-label="链接导入"/);
-  assert.match(workbench, /bindtap="startFirstContent"[^>]*aria-label="新建图文"/);
-  assert.match(workbench, /bindtap="openAIWriting"[^>]*aria-label="AI文案"/);
+  assert.match(workbench, /class="workspace-tabs"/);
+  assert.match(workbench, /bindtap="openCollections"/);
+  assert.match(workbench, /bindtap="openExistingAssets"/);
+  assert.match(workbench, /bindtap="openCreateMenu"/);
   assert.match(workbench, /range-key="display_name"/);
   assert.doesNotMatch(workbench, />{{importOwner \|\| '请选择'}}/);
   assert.match(editor, /range="{{context\.owner_choices}}" range-key="display_name"/);

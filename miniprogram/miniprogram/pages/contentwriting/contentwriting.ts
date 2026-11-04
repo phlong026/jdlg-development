@@ -52,7 +52,7 @@ Page({
       this._contentID = String(payload.content_id || '');
       this._revision = Number(payload.revision || 0);
     }
-    this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: this._source === 'project_note' ? '已带入项目笔记的明确事实，请核对后继续创作' : '已带入当前草稿的标题和正文，请核对后继续创作', error: '' });
+    this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: this._source === 'project_note' ? '已带入项目笔记' : '已带入当前草稿', error: '' });
   },
   selectType(event) {
     const type = this.data.writingTypes.find(item => item.key === event.currentTarget.dataset.type);
@@ -180,7 +180,7 @@ Page({
           if (!current()) return;
           settled = true; this._streamTask = null;
           const value = String(full || '').trim();
-          this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '生成完成，请核对事实后使用' : '生成为空，请调整资料后重试' });
+          this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '已生成，请核对后使用' : '生成为空，请调整资料后重试' });
         },
         onError,
       });

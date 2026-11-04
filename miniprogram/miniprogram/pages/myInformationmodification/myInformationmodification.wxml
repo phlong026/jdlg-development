@@ -132,7 +132,7 @@
 
       <view class="designer-form-item">
         <text class="designer-form-label">服务报价（灵石）</text>
-        <input class="designer-input" value="{{designerForm.serviceQuote}}" bindinput="onDesignerFieldInput" data-field="serviceQuote" type="digit" placeholder="例如：199" placeholder-style="color: rgba(140, 117, 83, 0.58);" />
+        <view class="designer-field-with-unit"><input class="designer-input" value="{{designerForm.serviceQuote}}" bindinput="onDesignerFieldInput" data-field="serviceQuote" type="digit" placeholder="例如：199" placeholder-style="color: rgba(140, 117, 83, 0.58);" /><text class="designer-field-unit">灵石</text></view>
       </view>
 
       <view class="designer-form-item">

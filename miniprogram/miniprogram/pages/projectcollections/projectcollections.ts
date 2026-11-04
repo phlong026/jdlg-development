@@ -246,6 +246,22 @@ Page({
     const collections = await this.resolveCovers(page.items);
     if (this.currentRequest(epoch)) this.setData({ collections, nextCursor: page.next_cursor || '' });
   },
+  openCollectionMore(event) {
+    if (this.data.busy) return;
+    const id = String(event.currentTarget.dataset.id || '');
+    const collection = this.data.collections.find(item => item.collection_id === id);
+    if (!collection || !(collection.version === 0 || collection.status === 'published')) return;
+    const epoch = this.epoch, draft = collection.version === 0;
+    wx.showActionSheet({
+      itemList: [draft ? '删除草稿' : '撤回发布'],
+      success: result => {
+        if (result.tapIndex !== 0 || !this.currentRequest(epoch) || this.data.busy) return;
+        const current = this.data.collections.find(item => item.collection_id === id);
+        if (!current || current.revision !== collection.revision || current.status !== collection.status) return;
+        if (draft) this.deleteDraft(event); else this.revokePublished(event);
+      },
+    });
+  },
   deleteDraft(event) {
     const collection = this.data.collections.find(item => item.collection_id === String(event.currentTarget.dataset.id || ''));
     if (!collection || collection.version > 0 || this.data.busy) return;
@@ -266,6 +282,11 @@ Page({
     try { await api.revokeCollection(collection.collection_id, collection.revision, '创建者撤回', key); if (this.currentRequest(epoch)) await this.refreshList(epoch); }
     catch (error) { if (this.currentRequest(epoch)) this.setData({ error: error.message || '撤回失败' }); }
     finally { if (this.currentRequest(epoch)) this.setData({ busy: false }); }
+  },
+  openPublished() {
+    const current = this.data.current;
+    if (!current || this.data.dirty || current.status !== 'published' || Number(current.version) < 1) return;
+    this.openReader({ currentTarget: { dataset: { id: current.collection_id, version: current.version } } });
   },
   openReader(event) {
     const id = String(event.currentTarget.dataset.id || ''), version = Number(event.currentTarget.dataset.version);

@@ -11,6 +11,27 @@
   gap: 18rpx;
 }
 
+.designer-works-single {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  width: 100%;
+}
+
+.designer-works-single .designer-work-card {
+  width: 100%;
+}
+
+.designer-service-edit {
+  margin-left: auto;
+  padding: 6rpx 10rpx;
+}
+
+.designer-service-edit-text {
+  font-size: 24rpx;
+  color: #9b7958;
+}
+
 .designer-profile-card {
   width: 694rpx;
   padding: 20rpx 20rpx 22rpx;

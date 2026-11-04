@@ -216,7 +216,9 @@ test('工作台区块按权限隐藏，普通生成记录与独立客户管理�
   const source = fs.readFileSync(path.join(pageRoot, 'my.ts'), 'utf8');
   assert.match(wxml, /wx:if="\{\{showWorkbenchSection\}\}"/);
   assert.match(wxml, /\{\{workbenchSectionTitle\}\}/);
-  assert.match(wxml, /wx:if="\{\{hasShareVisitAccess\}\}"/);
+  assert.match(wxml, /bindtap="onWorkbenchMenuTap"/);
+  assert.match(source, /action: 'customers'/);
+  assert.doesNotMatch(wxml, /class="share-visit-entry"/);
   assert.match(source, /buildCommonMenuItems[\s\S]+action: 'project'/);
   assert.match(source, /buildServiceMenuItems[\s\S]+action: 'customerManagement'/);
   assert.doesNotMatch(source, /action: 'contentWorkbench'[^\n]+available: hasLoginToken/);

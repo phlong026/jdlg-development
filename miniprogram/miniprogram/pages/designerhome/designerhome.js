@@ -111,6 +111,7 @@ Page({
       contentReady: false,
         userId: 0,
         isSelfHomepage: false,
+        isPreviewMode: false,
         loading: true,
         isFollowed: false,
         isFavorited: false,
@@ -166,6 +167,7 @@ Page({
         avatarManageHint: '',
         specialtyTags: [],
         allWorks: [],
+        visibleWorks: [],
         visibleWorkCount: INITIAL_VISIBLE_WORK_COUNT,
         worksHasMore: false,
         worksLeft: [],
@@ -177,6 +179,7 @@ Page({
         this.initNavLayout();
         const userId = Number(options?.userId || options?.id || 0);
         const currentUserId = this.getCurrentUserId();
+        const isPreviewMode = String(options?.preview || '') === '1';
         if (!userId) {
             wx.showToast({
                 title: '缺少设计师信息',
@@ -188,6 +191,7 @@ Page({
         this.setData({
             userId,
             isSelfHomepage: currentUserId > 0 && currentUserId === userId,
+            isPreviewMode,
             isFollowed: false,
             showProfileOverviewSections: false,
             avatarManageHint: buildAvatarManageHint(currentUserId > 0 && currentUserId === userId, false),
@@ -220,6 +224,7 @@ Page({
         const columns = this.splitWorks(visibleWorks);
         this.setData({
             allWorks,
+            visibleWorks,
             visibleWorkCount: nextVisibleWorkCount,
             worksHasMore: nextVisibleWorkCount < allWorks.length,
             worksLeft: columns.left,
@@ -427,6 +432,7 @@ Page({
             this.setData({
                 loading: false,
                 allWorks: [],
+                visibleWorks: [],
                 visibleWorkCount: INITIAL_VISIBLE_WORK_COUNT,
                 worksHasMore: false,
                 worksLeft: [],
@@ -672,6 +678,12 @@ Page({
                 });
             },
         });
+    },
+    onPreviewHomepage() {
+        const userId = Number(this.data.userId || 0);
+        if (!userId)
+            return;
+        wx.navigateTo({ url: `/pages/designerhome/designerhome?userId=${encodeURIComponent(String(userId))}&preview=1` });
     },
     onOpenDesignerCertification() {
         wx.navigateTo({

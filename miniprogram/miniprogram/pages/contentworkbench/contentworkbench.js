@@ -55,15 +55,12 @@ Page({
     if (quiet) {
       this.setData({ loginRequired: false, loading: false, error: '' });
       void this.loadShareVisitAccess(token);
-      // 静默刷新也要带项目卡：修改项目后返回工作台时不显示旧单子
-      void this.loadActiveProjects(token, this._epoch);
       this.load(true, this._epoch, true);
       return;
     }
     this.resetPrivateState({ loginRequired: !token, loading: !!token });
     if (token) {
       void this.loadShareVisitAccess(token);
-      void this.loadActiveProjects(token, this._epoch);
       this.load(true, this._epoch);
     }
   },
@@ -75,7 +72,7 @@ Page({
     this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1;
     this.stopImportPoll();
     this.setData({
-      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, activeProjects: [], error: '', denied: false, disabled: false, hasShareVisitAccess: false,
+      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, error: '', denied: false, disabled: false, hasShareVisitAccess: false,
       keyword: '', searchTerm: '', ownerFilter: '', category: 'all',
       loginRequired: false, loading: false, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
@@ -90,7 +87,6 @@ Page({
     this.stopImportPoll();
     const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false;
     void this.loadShareVisitAccess(this._token);
-    void this.loadActiveProjects(this._token, epoch);
     this.load(true, epoch).finally(() => wx.stopPullDownRefresh());
   },
   async loadShareVisitAccess(token) {
@@ -127,6 +123,7 @@ Page({
         return;
       }
       const query = { limit: 20 };
+      if (this.data.category !== 'all') query.type = this.data.category;
       if (this.data.searchTerm) query.content_q = this.data.searchTerm;
       if (this.data.ownerFilter) query.owner = this.data.ownerFilter;
       if (!reset && this.data.next_cursor) query.cursor = this.data.next_cursor;
@@ -167,7 +164,10 @@ Page({
     const category = this.data.categories.find(item => item.key === event.currentTarget.dataset.key);
     if (!category) return;
     if (category.unavailable) { wx.showToast({ title: category.label + '资料尚未开通', icon: 'none' }); return; }
-    this.setData({ category: category.key }); this.filterItems();
+    if (category.key === this.data.category) return;
+    this.stopImportPoll();
+    this.setData({ category: category.key });
+    return this.load(true);
   },
   // B13 公司/个人空间 Tab：复用服务端 ?owner= 过滤（带权限交集校验），切换即整表重载。
   selectOwnerTab(event) {
@@ -209,43 +209,19 @@ Page({
     state.running = false;
   },
   navigate(url) { wx.navigateTo({ url, fail: () => wx.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }); },
+  backToContent() { wx.redirectTo({ url: '/pages/contentworkbench/contentworkbench', fail: () => wx.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }); },
   openImportView() { this.navigate('/pages/contentworkbench/contentworkbench?view=import'); },
-  // 引导卡直达新建图文：不经过 openCreateMenu，保持"创建菜单入口唯一"的既有护栏。
-  startFirstContent() { this.navigate('/pages/contentedit/contentedit'); },
-  async loadActiveProjects(token, epoch) {
-    const current = () => token === this._token && token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._epoch);
-    try {
-      const page = await api.listProjectNoteProjects({ limit: 3 });
-      // 竞态守卫：onShow 快速切换后旧响应不得覆盖新会话的数据
-      if (!current()) return;
-      const projects = (page.items || []).filter(p => p.status !== 'archived').slice(0, 2).map(p => ({
-        project_id: p.project_id, name: p.name || '未命名项目',
-        next_action: p.next_action || '继续推进',
-        meta_text: p.location || p.style || '资料待完善',
-      }));
-      this.setData({ activeProjects: projects });
-    } catch (error) {
-      // 失败同样不得跨会话：旧请求失败时不能清空新会话已显示的项目卡
-      if (!current()) return;
-      if (error.statusCode === 401 || error.statusCode === 403) this.setData({ activeProjects: [] });
-    }
-  },
-  openProject(event) {
-    const id = event.currentTarget.dataset.id;
-    // 携带项目 ID，让 projectnotes 直接展开被点击的单子（目标页 onLoad 支持 project_id）
-    if (id) this.navigate('/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(id));
-  },
   openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },
   openShareVisits() {
     if (!this.data.hasShareVisitAccess || !this.current(this._epoch)) return;
-    this.navigate('/pages/sharevisits/sharevisits');
+    this.navigate('/pages/sharevisits/sharevisits?tab=shares');
   },
   openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
   openCreateMenu() {
     wx.showActionSheet({
-      itemList: ['新建项目笔记', 'AI 生成设计', '口述转设计说明', '图文内容', '导入链接'],
+      itemList: ['项目笔记', '生成设计', '设计说明', '图文内容', '导入链接'],
       success: result => {
         const routes = ['/pages/projectnotes/projectnotes', '/pages/aigenerate/aigenerate', '/pages/contentwriting/contentwriting', '/pages/contentedit/contentedit', '/pages/contentworkbench/contentworkbench?view=import'];
         const url = routes[Number(result.tapIndex)];

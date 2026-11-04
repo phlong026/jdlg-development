@@ -58,12 +58,7 @@
           <view wx:for="{{workbenchMenuItems}}" wx:key="action" class="workbench-item {{item.available === false ? 'workbench-item-disabled' : ''}}" bindtap="onWorkbenchMenuTap" data-action="{{item.action}}">
             <mini-icon class="workbench-icon" name="{{item.icon}}" size="25px" />
             <text class="workbench-label">{{item.label}}</text>
-            <text class="workbench-description">{{item.available === false ? item.meta : item.description}}</text>
           </view>
-        </view>
-        <view wx:if="{{hasShareVisitAccess}}" class="share-visits-entry" bindtap="onWorkbenchMenuTap" data-action="shareVisits">
-          <view><mini-icon class="share-visits-icon" name="share" size="20px" /><text class="share-visits-title">分享记录</text></view>
-          <text class="menu-list-arrow">›</text>
         </view>
       </view>
       </block>

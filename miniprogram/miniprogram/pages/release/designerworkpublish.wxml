@@ -1,12 +1,11 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="page">
   <!-- 统一导航栏 -->
-  <navigation-bar title="{{editMode ? '编辑发布作品' : '上传设计作品'}}" subtitle="{{editMode ? '调整作品信息后重新提交审核' : '先上传到主页，可选同步到模板广场'}}" background="#e6daca" />
+  <navigation-bar title="{{editMode ? '编辑发布作品' : '上传设计作品'}}" background="#e6daca" />
 
   <view class="content">
     <view class="panel-card hero-card">
-      <text class="panel-title">发布说明</text>
-      <text class="panel-desc">设计师可以先把真实作品上传到个人主页展示。如果你想让更多用户看到，也可以选择同步发布到模板广场。所有作品都会先进入审核。</text>
+      <text class="panel-desc">审核通过后在主页展示，可选同步到模板广场。</text>
     </view>
 
     <view class="panel-card">
