@@ -29,6 +29,7 @@
   <view class="reader-actions"><button class="copy-action" bindtap="copyWebLink" loading="{{webLinkBusy}}" disabled="{{webLinkBusy}}"><text class="action-icon">⌁</text><text>复制分享链接</text></button><button class="share-action" open-type="share"><text class="action-icon">↗</text><text>分享给微信好友</text></button><button class="poster-action" bindtap="generatePoster" loading="{{posterBusy}}" disabled="{{posterBusy}}"><text class="action-icon">▦</text><text>生成海报</text></button></view>
   <canvas type="2d" id="posterCanvas" class="poster-canvas" style="position:fixed;left:-9999px;top:-9999px;width:750px;height:1000px;"></canvas>
  </block>
+  <view class="annotate-hint" wx:if="{{annotationEnabled}}"><text>长按图片可写写画画标注修改意见（即将上线）</text></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

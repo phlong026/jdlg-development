@@ -437,3 +437,5 @@ button::after {
 .poster-canvas {
   pointer-events: none;
 }
+
+.annotate-hint { padding: 16rpx 24rpx; margin: 12rpx 0; background: #f8f0e2; border-radius: 10rpx; color: #9a6835; font-size: 24rpx; }
