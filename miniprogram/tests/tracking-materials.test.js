@@ -55,7 +55,7 @@ test('reader native share uses the published target, title and cover, with menus
  const share=page.onShareAppMessage();assert.equal(share.title,material.title);assert.equal(share.path,'/'+route+'?content_id=material_one&content_version=2');assert.equal(share.imageUrl,'wxfile://tmp/image_one');assert.equal(page.data.media[0].url,'wxfile://tmp/image_one');assert.equal(page.data.articleBlocks[0].url,'wxfile://tmp/image_one');assert.equal(shown.length,1);
  assert.equal(page.onShareTimeline().query,'content_id=material_one&content_version=2');
  assert.equal(preheats.length,1);const successShare=page.onShareTimeline();assert.deepEqual(preheats[0],successShare);
- page.loadContent();await settle();rejectRead(new Error('revoked'));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');
+ page.loadContent();await settle();rejectRead(Object.assign(new Error('revoked'),{statusCode:410}));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');
  // 预热缓存键一致性：预热收到的对象必须与 onShareTimeline 返回值完全一致，否则首次分享拿不到缓存令牌
  assert.deepEqual(preheats[0],successShare);
 });
@@ -65,5 +65,5 @@ test('reader WXML uses evaluated conditions for loading error consent media and 
  const conditions=[...s.matchAll(/wx:(?:if|elif)="([^"]*)"/g)].map(m=>m[1]);
  assert.ok(conditions.length>=8);
  conditions.forEach(value=>assert.match(value,/^\{\{.+\}\}$/,'unbound WXML condition would be a truthy literal: '+value));
- assert.ok(s.includes('wx:if="{{loading}}"'));assert.ok(s.includes('wx:elif="{{error}}"'));
+ assert.ok(s.includes('wx:if="{{loading}}"'));assert.ok(s.includes('wx:elif="{{error && !contentReady}}"'));
 });

@@ -60,18 +60,28 @@ Page({
       this.load(true, this._epoch, true);
       return;
     }
-    this._loaded = false;
-    this.setData({
-      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, activeProjects: [], error: '', denied: false, disabled: false, hasShareVisitAccess: false,
-      loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '',
-      importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
-      importError: '', imports: [], importPolling: false,
-    });
+    this.resetPrivateState({ loginRequired: !token, loading: !!token });
     if (token) {
       void this.loadShareVisitAccess(token);
       void this.loadActiveProjects(token, this._epoch);
       this.load(true, this._epoch);
     }
+  },
+  resetPrivateState(state = {}) {
+    this._loaded = false;
+    this._morePending = false;
+    this._coverState = null;
+    this._epoch = (this._epoch || 0) + 1;
+    this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1;
+    this.stopImportPoll();
+    this.setData({
+      context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, activeProjects: [], error: '', denied: false, disabled: false, hasShareVisitAccess: false,
+      keyword: '', searchTerm: '', ownerFilter: '', category: 'all',
+      loginRequired: false, loading: false, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '',
+      importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
+      importError: '', imports: [], importPolling: false,
+      ...state,
+    });
   },
   onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
   onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
@@ -96,7 +106,7 @@ Page({
     } catch (error) {
       if (!current()) return;
       console.warn('获取分享访问权限失败:', error);
-      this.setData({ hasShareVisitAccess: false });
+      if (error.statusCode === 401 || error.statusCode === 403) this.setData({ hasShareVisitAccess: false });
     }
   },
   async load(reset, suppliedEpoch, quiet) {
@@ -113,7 +123,7 @@ Page({
       if (reset || !context) context = await api.workbenchContext();
       if (!this.current(epoch)) return;
       if (!context.enabled || context.can_manage === false) {
-        this.setData({ context, disabled: !context.enabled, denied: context.can_manage === false, loading: false, loadingMore: false });
+        this.resetPrivateState({ disabled: !context.enabled, denied: context.can_manage === false });
         return;
       }
       const query = { limit: 20 };
@@ -143,7 +153,10 @@ Page({
       this.loadCovers(epoch, page.items || []);
       if (reset) await this.loadImports(epoch);
     } catch (error) {
-      if (this.current(epoch)) this.setData({ error: error.message || '内容工作台加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false });
+      if (!this.current(epoch)) return;
+      if (error.statusCode === 401 || error.statusCode === 403) {
+        this.resetPrivateState({ denied: error.statusCode === 403, loginRequired: error.statusCode === 401 });
+      } else this.setData({ error: error.message || '内容工作台加载失败', loading: false, loadingMore: false });
     } finally { if (this.current(epoch)) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
   },
   filterItems() { this.setData({ visibleItems: this.data.items.filter(item => this.data.category === 'all' || item.kind === this.data.category) }); },
@@ -200,20 +213,21 @@ Page({
   // 引导卡直达新建图文：不经过 openCreateMenu，保持"创建菜单入口唯一"的既有护栏。
   startFirstContent() { this.navigate('/pages/contentedit/contentedit'); },
   async loadActiveProjects(token, epoch) {
+    const current = () => token === this._token && token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._epoch);
     try {
       const page = await api.listProjectNoteProjects({ limit: 3 });
       // 竞态守卫：onShow 快速切换后旧响应不得覆盖新会话的数据
-      if (epoch !== undefined && epoch !== this._epoch) return;
+      if (!current()) return;
       const projects = (page.items || []).filter(p => p.status !== 'archived').slice(0, 2).map(p => ({
         project_id: p.project_id, name: p.name || '未命名项目',
         next_action: p.next_action || '继续推进',
         meta_text: p.location || p.style || '资料待完善',
       }));
       this.setData({ activeProjects: projects });
-    } catch (_) {
+    } catch (error) {
       // 失败同样不得跨会话：旧请求失败时不能清空新会话已显示的项目卡
-      if (epoch !== undefined && epoch !== this._epoch) return;
-      this.setData({ activeProjects: [] });
+      if (!current()) return;
+      if (error.statusCode === 401 || error.statusCode === 403) this.setData({ activeProjects: [] });
     }
   },
   openProject(event) {

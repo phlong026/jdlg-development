@@ -6,6 +6,9 @@ const {createVideoTracker}=require('../../utils/tracking/video');
 const {renderArticleDocument}=require('../../utils/article-document');
 const {resolveProtectedMediaURL}=require('../../utils/protected-media');
 const ROUTE='pages/contentreader/contentreader';
+const INVALID_ENTRY_ERRORS=new Set(['扫码入口无效','扫码内容不可访问','内容入口不完整','合集入口不完整','合集作品已改变']);
+function clearsVerifiedContent(error){const status=Number(error&&error.statusCode);return [401,403,404,410].includes(status)||[401,403,404,410].includes(Number(error&&error.code))||error&&error.code==='MEDIA_IDENTITY_CHANGED'||INVALID_ENTRY_ERRORS.has(String(error&&error.message||''));}
+function refreshErrorMessage(error){if(error&&error.code==='MEDIA_DOWNLOAD_FAILED')return '素材刷新失败，请检查网络后重试。';if(error&&error.networkError)return '内容刷新失败，网络不可用，请检查连接后重试。';if(Number(error&&error.statusCode)>=500)return '内容刷新失败，服务暂不可用，请稍后重试。';return '内容刷新失败，请稍后重试。';}
 Page({
  data:{loading:true,error:'',content:null,contentReady:false,media:[],articleBlocks:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false,webLinkBusy:false},
  onLoad(options){this.entryGeneration=(this.entryGeneration||0)+1;this.hasShown=false;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.evaluateGuide();this.loadContent();},
@@ -51,7 +54,7 @@ Page({
    if(content.cover){const coverURL=api.mediaURL(content.cover.url);content.cover={...content.cover,url:coverURL?await resolveProtectedMediaURL(coverURL):''};}
    if(sequence!==this.loadSequence)return;
    this.setData({content,media,articleBlocks,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
-  }catch(error){if(sequence!==this.loadSequence)return;this.setData({loading:false,content:null,media:[],articleBlocks:[],contentReady:false,error:error&&error.code==='MEDIA_DOWNLOAD_FAILED'?'素材加载失败，请检查网络后重试。':'内容暂不可访问，可能已撤回、无权限或网络不可用。请重试。'});}
+  }catch(error){if(sequence!==this.loadSequence)return;if(quiet&&!clearsVerifiedContent(error)){this.setData({loading:false,error:refreshErrorMessage(error)});return;}this.setData({loading:false,content:null,media:[],articleBlocks:[],contentReady:false,error:'内容暂不可访问，可能已撤回或无权限。请重试。'});}
  },
  renderedMedia(){return this.data.content&&this.data.content.body_format==='article_v2'?this.data.articleBlocks.filter(block=>block.kind==='image'||block.kind==='video'):this.data.media;},
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},

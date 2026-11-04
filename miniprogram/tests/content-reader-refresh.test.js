@@ -8,6 +8,21 @@ const vm = require('node:vm');
 const root = path.join(__dirname, '../miniprogram');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+const compiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
+test('native reader keeps the article beside a transient error but hides it after access is lost', { skip: !fs.existsSync(compiler) }, () => {
+  const source = require('node:child_process').execFileSync(compiler, ['./pages/contentreader/contentreader.wxml'], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  const context = { window: {}, console };
+  vm.createContext(context); vm.runInContext(source, context);
+  const render = context.$gwx('./pages/contentreader/contentreader.wxml');
+  const data = { __profileAccessMounted: true, loading: false, contentReady: true, error: '刷新失败，请重试', content: { title: '已验证正文', body: '保留的文章文字' }, media: [], articleBlocks: [] };
+  const retained = JSON.stringify(render(data));
+  assert.match(retained, /保留的文章文字/);
+  assert.match(retained, /刷新失败，请重试/);
+  const blocked = JSON.stringify(render({ ...data, contentReady: false, content: null }));
+  assert.doesNotMatch(blocked, /保留的文章文字|已验证正文/);
+  assert.match(blocked, /刷新失败，请重试/);
+});
+
 function harness() {
   let definition;
   const pendingReads = [];
@@ -70,14 +85,14 @@ test('reader keeps verified content visible while foreground refresh is pending'
   assert.equal(page.data.content.title, '新正文');
 });
 
-test('reader removes previously displayed content after a verified inaccessible response', async () => {
+for (const response of [{ statusCode: 403 }, { statusCode: 200, code: 403 }]) test('reader removes verified inaccessible content: ' + JSON.stringify(response), async () => {
   const { page, fail } = harness();
   page.pageVisible = true;
   await page.loadContent();
   page.setData({ media: [{ media_id: 'old-media' }], articleBlocks: [{ key: 'old-block' }] });
   const pending = page.loadContent();
   await tick();
-  const forbidden = Object.assign(new Error('forbidden'), { statusCode: 403 });
+  const forbidden = Object.assign(new Error('forbidden'), response);
   fail(forbidden);
   await pending;
   assert.equal(page.data.content, null);
@@ -86,6 +101,28 @@ test('reader removes previously displayed content after a verified inaccessible 
   assert.equal(page.data.contentReady, false);
   assert.match(page.data.error, /不可访问/);
 });
+
+for (const [label, refreshError, message] of [
+  ['network failure', Object.assign(new Error('offline'), { networkError: true }), /网络/],
+  ['server failure', Object.assign(new Error('server unavailable'), { statusCode: 503 }), /稍后/],
+  ['media download failure', Object.assign(new Error('media unavailable'), { code: 'MEDIA_DOWNLOAD_FAILED', networkError: true }), /素材/],
+]) {
+  test(`reader keeps verified content after a quiet refresh ${label}`, async () => {
+    const { page, fail } = harness();
+    page.pageVisible = true;
+    await page.loadContent();
+    page.setData({ media: [{ media_id: 'old-media' }], articleBlocks: [{ key: 'old-block' }] });
+    const pending = page.loadContent();
+    await tick();
+    fail(refreshError);
+    await pending;
+    assert.equal(page.data.content.title, '已显示正文');
+    assert.equal(page.data.contentReady, true);
+    assert.equal(page.data.media[0].media_id, 'old-media');
+    assert.equal(page.data.articleBlocks[0].key, 'old-block');
+    assert.match(page.data.error, message);
+  });
+}
 
 test('reader ignores an older refresh that completes after a newer successful refresh', async () => {
   const { page, finish } = harness();

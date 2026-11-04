@@ -50,10 +50,15 @@ Page({
     } catch (error) {
       if (!this.currentRequest(epoch)) return;
       const denied = error.statusCode === 403, loginRequired = error.statusCode === 401;
-      if (denied || loginRequired) this.loaded = false;
+      if (denied || loginRequired) {
+        this.loaded = false;
+        this.epoch = (this.epoch || 0) + 1;
+        this.createKey = ''; this.publishKey = '';
+        this.setData({ ...initial(), denied, loginRequired });
+        return;
+      }
       this.setData({
         loading: false, denied, loginRequired,
-        ...(denied || loginRequired ? { collections: [], nextCursor: '' } : {}),
         error: denied || loginRequired ? '' : (error.message || '合集加载失败'),
       });
     }

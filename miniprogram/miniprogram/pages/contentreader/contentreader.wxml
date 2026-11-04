@@ -2,9 +2,10 @@
 <view class="reader">
  <navigation-bar class="reader-navigation" title="内容阅读" back="{{true}}" background="#f7f5f1" />
  <view wx:if="{{loading}}" class="state" role="status">正在加载内容…</view>
- <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="loadContent">重试</button></view>
+ <view wx:elif="{{error && !contentReady}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="loadContent">重试</button></view>
  <block wx:else>
   <view class="reader-brand"><view class="brand-mark">甲</view><view><text class="brand-name">甲第灵光</text><text class="brand-subtitle">传承东方居住美学</text></view><text class="brand-share">甲第内容</text></view>
+  <view wx:if="{{error}}" class="error"><text>{{error}}</text><button class="secondary" bindtap="loadContent">重试</button></view>
   <view class="article-header"><view class="title">{{content.title}}</view><view class="meta"><text>{{content.source_note || (content.source_url ? '外部素材' : '创作者资料')}}</text><text>公开版 V{{content.version}}</text><text>{{content.published_at || ''}}</text></view></view>
   <view wx:if="{{consentAvailable}}" class="notice"><text class="notice-title">访问分析设置</text><text>{{consentNotice}}</text><text class="notice-caption">是否同意不影响阅读；可见时长不代表已读或理解。</text><view class="notice-actions"><button wx:if="{{!consented}}" class="primary" bindtap="acceptTracking">同意</button><button class="secondary" bindtap="declineTracking">{{consented ? '关闭访问分析' : '暂不同意'}}</button></view></view>
   <view class="article-paper">

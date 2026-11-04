@@ -21,6 +21,7 @@ test('资料核验只显示业务色加载框架，真实登录需要时仍显�
   const render = context.$gwx('./components/login-guard/login-guard.wxml');
   const checking = visibleNodes(render({ checking: true }));
   assert.ok(checking.some(node => node.tag === 'wx-navigation-bar'), '核验期保留同尺寸导航框架');
+  assert.equal(checking.find(node => node.tag === 'wx-navigation-bar').attr.back, false, '等待框架不能新增宿主页原本没有的返回动作');
   assert.ok(checking.includes('正在加载…'));
   assert.ok(!checking.some(node => node.attr?.class === 'login-guard-panel'), '核验不能闪现整页登录品牌画面');
   assert.ok(!checking.some(node => node.tag === 'wx-button'), '未核验时不渲染登录按钮');

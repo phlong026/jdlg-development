@@ -47,6 +47,27 @@ test('content studio searches the authorized catalog and resets cursor snapshots
   assert.equal(page.data.searchTerm, '庭院');
 });
 
+test('confirmed workbench access loss clears all private state and invalidates pending requests', async () => {
+  let revoked = false;
+  const { page } = runtime({ workbenchContext: async () => {
+    if (revoked) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+    return { enabled: true, can_manage: true, owners: ['owner-a'] };
+  } });
+  page.onShow(); await tick(); await tick();
+  page.setData({ imports: [{ import_id: 'private-import' }], importURL: 'private-link', activeProjects: [{ project_id: 'private-project' }] });
+  revoked = true;
+  page.onHide(); page.onShow();
+  const epoch = page._epoch;
+  await tick(); await tick();
+  assert.equal(page.data.denied, true);
+  assert.equal(page._loaded, false);
+  assert.equal(page.data.context, null);
+  for (const key of ['items', 'visibleItems', 'imports', 'activeProjects']) assert.equal(page.data[key].length, 0, key);
+  assert.equal(page.data.importURL, '');
+  assert.equal(page.data.hasShareVisitAccess, false);
+  assert.ok(page._epoch > epoch, '失权后在途回调立即作废');
+});
+
 test('content categories filter loaded records without manufacturing assets or totals', async () => {
   const { page } = runtime();
   page.onShow(); await tick(); await tick();
@@ -139,6 +160,31 @@ test('quiet refresh preserves matching cover and share entry while fresh checks 
   page.onHide(); page.onShow(); await tick(); await tick(); await tick();
   assert.equal(coverCalls, 2, '内容版本变化后重新解析封面');
 });
+
+for (const statusCode of [undefined, 503, 401, 403]) {
+  test(`quiet refresh ${statusCode || 'network'} preserves transient UI but clears real lost access`, async () => {
+    let failed = false;
+    const failure = () => Object.assign(new Error('refresh failed'), { statusCode });
+    const { page } = runtime({
+      mySharesContext: async () => {
+        if (failed) throw failure();
+        return { can_view: true, owners: ['owner-a'] };
+      },
+      listProjectNoteProjects: async () => {
+        if (failed) throw failure();
+        return { items: [{ project_id: 'project-a', name: '已显示的项目' }] };
+      },
+    });
+    page.onShow(); await tick(); await tick();
+    assert.equal(page.data.hasShareVisitAccess, true);
+    assert.equal(page.data.activeProjects.length, 1);
+    failed = true;
+    page.onHide(); page.onShow(); await tick(); await tick();
+    const revoked = statusCode === 401 || statusCode === 403;
+    assert.equal(page.data.hasShareVisitAccess, !revoked);
+    assert.equal(page.data.activeProjects.length, revoked ? 0 : 1);
+  });
+}
 
 test('studio offers real destinations for existing assets and visits', async () => {
   const { page, navigations } = runtime();

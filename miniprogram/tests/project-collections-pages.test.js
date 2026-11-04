@@ -41,6 +41,31 @@ function pageRuntime(api, token = 'designer-session', resolveProtectedMediaURL =
   return { page, storage, navigations, modals };
 }
 
+test('collection access loss clears private editing state before a later retry', async () => {
+  let revoked = false;
+  const { page } = pageRuntime({
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [] }),
+    listCollections: async () => {
+      if (revoked) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+      return { items: [] };
+    },
+  });
+  page.onShow(); await tick(); await tick();
+  page.setData({ editing: true, current: { collection_id: 'private' }, selectedItems: [{ content_id: 'private' }], candidates: [{ content_id: 'private' }], preview: { preview_token: 'private' }, title: 'private', owners: ['owner-a'] });
+  revoked = true;
+  await page.loadHome(page.epoch);
+  assert.equal(page.data.denied, true);
+  assert.equal(page.data.editing, false);
+  assert.equal(page.data.current, null);
+  assert.equal(page.data.preview, null);
+  assert.equal(page.data.title, '');
+  for (const key of ['selectedItems', 'candidates', 'owners', 'ownerChoices']) assert.equal(page.data[key].length, 0, key);
+  revoked = false;
+  await page.loadHome(page.epoch);
+  assert.equal(page.data.denied, false);
+  assert.equal(page.data.editing, false, '权限恢复后不能重新出现旧私有编辑内容');
+});
+
 test('collection editor multi-selects, reorders, saves, previews and publishes fixed items', async () => {
   const calls = [];
   const candidates = [

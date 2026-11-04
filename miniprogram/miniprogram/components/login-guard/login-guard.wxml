@@ -1,7 +1,7 @@
 <import src="/templates/auth-welcome.wxml" />
 <!-- 资料核验沿用业务页底色与导航尺寸，避免先闪现完整登录品牌画面。 -->
 <view wx:if="{{checking}}" class="profile-loading-shell">
-  <navigation-bar background="#fbfaf7" />
+  <navigation-bar background="#fbfaf7" back="{{false}}" />
   <view class="profile-loading-body" role="status"><view class="lg-spinner"></view><text>正在加载…</text></view>
 </view>
 <scroll-view hidden="{{!visible && !loggingIn && !completingProfile}}" class="login-guard-panel" scroll-y="{{true}}">
