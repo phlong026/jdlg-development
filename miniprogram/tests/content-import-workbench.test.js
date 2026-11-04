@@ -180,7 +180,7 @@ test('disabled import capability leaves normal content workbench usable and expl
   assert.equal(listCalls, 0);
   const template = fs.readFileSync(path.join(root, 'pages/contentworkbench/contentworkbench.wxml'), 'utf8');
   assert.match(template, /wx:if="\{\{importServiceEnabled\}\}"[^>]*class="recent-imports"/);
-  assert.match(template, /wx:if="\{\{!importEnabled\}\}"[^>]*class="import-gate"/);
+  assert.match(template, /wx:elif="\{\{!importEnabled\}\}"[^>]*class="import-gate"/);
   assert.match(template, /wx:else[^>]*class="import-editor"/);
 });
 

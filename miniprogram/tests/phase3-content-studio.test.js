@@ -98,6 +98,48 @@ test('link import is an explicit view and paste reuses the existing submission f
   assert.equal(navigations[0], '/pages/contentworkbench/contentworkbench?view=import');
 });
 
+test('import view keeps a neutral loading state until capability is known and skips the content catalog', async () => {
+  let finishCapability;
+  let listCalls = 0;
+  const { page } = runtime({
+    listContents: async () => { listCalls += 1; return { items: [] }; },
+    importCapabilities: () => new Promise(resolve => { finishCapability = resolve; }),
+  });
+  page.onLoad({ view: 'import' });
+  page.onShow();
+  await tick(); await tick();
+  assert.equal(listCalls, 0, '导入页不应为不可见的内容列表等待');
+  assert.equal(page.data.loading, false, '工作台权限确认后应展示稳定的导入页壳');
+  assert.equal(page.data.importCapabilityLoading, true);
+  const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  assert.match(template, /wx:if="\{\{importCapabilityLoading\}\}"[^>]*class="import-gate/);
+  finishCapability({ enabled: true, platforms: [{ platform: 'wechat_article', available: true }] });
+  await tick(); await tick();
+  assert.equal(page.data.importCapabilityLoading, false);
+  assert.equal(page.data.importEnabled, true);
+});
+
+test('quiet refresh preserves matching cover and share entry while fresh checks run', async () => {
+  let contentCalls = 0, coverCalls = 0;
+  const { page } = runtime({
+    listContents: async () => {
+      contentCalls += 1;
+      return { items: [{ content_id: 'article-a', version: contentCalls < 3 ? 1 : 2, type: 'article', status: 'draft', media: [], cover: { kind: 'image', media_id: 'cover-a' } }] };
+    },
+    downloadWorkbenchMedia: async id => { coverCalls += 1; return '/tmp/' + id; },
+  });
+  page.onShow(); await tick(); await tick(); await tick();
+  assert.equal(page.data.items[0].cover_path, '/tmp/cover-a');
+  assert.equal(page.data.hasShareVisitAccess, true);
+  page.onHide();
+  assert.equal(page.data.hasShareVisitAccess, true, '隐藏页面不等于失去权限');
+  page.onShow(); await tick(); await tick();
+  assert.equal(page.data.items[0].cover_path, '/tmp/cover-a', '相同媒体刷新时保留已解码封面');
+  assert.equal(coverCalls, 1, '相同媒体不重复下载');
+  page.onHide(); page.onShow(); await tick(); await tick(); await tick();
+  assert.equal(coverCalls, 2, '内容版本变化后重新解析封面');
+});
+
 test('studio offers real destinations for existing assets and visits', async () => {
   const { page, navigations } = runtime();
   page.onShow(); await tick();

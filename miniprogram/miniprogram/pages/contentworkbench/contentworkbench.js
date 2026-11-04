@@ -19,7 +19,7 @@ function contentKind(item) {
   if (item.type === 'video' || (item.media || []).some(asset => asset.kind === 'video')) return 'video';
   return 'article';
 }
-function contentRow(item) {
+function contentRow(item, previous) {
   const kind = contentKind(item);
   const date = item.created_at ? new Date(item.created_at) : null;
   return Object.assign({}, item, {
@@ -27,7 +27,7 @@ function contentRow(item) {
     status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
     action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
-    cover_path: '', cover_error: false,
+    cover_path: previous && previous.cover_path && previous.version === item.version && previous.cover?.media_id === item.cover?.media_id ? previous.cover_path : '', cover_error: false,
     view_count: Number(item.page_views || 0),
     share_count: Number(item.share_count || 0),
     visitor_count: Number(item.identified_count || 0) + Number(item.anonymous_count || 0),
@@ -40,7 +40,7 @@ Page({
     categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'note', label: '笔记' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
-    importServiceEnabled: false, importEnabled: false, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
+    importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
     importRights: '', importBusy: false, importError: '', imports: [], importPolling: false,
   },
   onLoad(options) { this.setData({ view: options && options.view === 'import' ? 'import' : 'studio' }); },
@@ -63,7 +63,7 @@ Page({
     this._loaded = false;
     this.setData({
       context: null, items: [], visibleItems: [], next_cursor: '', snapshot: null, activeProjects: [], error: '', denied: false, disabled: false, hasShareVisitAccess: false,
-      loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityReason: '',
+      loginRequired: !token, loading: !!token, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
       importError: '', imports: [], importPolling: false,
     });
@@ -73,13 +73,12 @@ Page({
       this.load(true, this._epoch);
     }
   },
-  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
+  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
   onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() {
     this.stopImportPoll();
     const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false;
-    this.setData({ hasShareVisitAccess: false });
     void this.loadShareVisitAccess(this._token);
     void this.loadActiveProjects(this._token, epoch);
     this.load(true, epoch).finally(() => wx.stopPullDownRefresh());
@@ -122,13 +121,21 @@ Page({
       if (this.data.ownerFilter) query.owner = this.data.ownerFilter;
       if (!reset && this.data.next_cursor) query.cursor = this.data.next_cursor;
       if (!reset && this.data.snapshot) { query.as_of = this.data.snapshot.as_of; query.metric_version = this.data.snapshot.metric_version; }
+      const owners = context.owners || [];
+      const selectedOwner = owners.includes(this.data.importOwner) ? this.data.importOwner : (owners[0] || '');
+      if (this.data.view === 'import') {
+        this.setData({ context, importOwner: selectedOwner, importOwnerIndex: Math.max(0, owners.indexOf(selectedOwner)), loading: false, loadingMore: false });
+        this._loaded = true;
+        if (reset) await this.loadImports(epoch);
+        return;
+      }
       const page = await api.listContents(query);
       if (!this.current(epoch)) return;
       const snapshot = page.as_of ? { as_of: page.as_of, metric_version: page.metric_version } : this.data.snapshot;
-      const owners = context.owners || [];
-      const selectedOwner = owners.includes(this.data.importOwner) ? this.data.importOwner : (owners[0] || '');
+      const previousRows = new Map(this.data.items.map(item => [item.content_id, item]));
+      const incoming = (page.items || []).map(item => contentRow(item, previousRows.get(item.content_id)));
       this.setData({
-        context, items: reset ? (page.items || []).map(contentRow) : this.data.items.concat((page.items || []).map(contentRow)), next_cursor: page.next_cursor || '', snapshot,
+        context, items: reset ? incoming : this.data.items.concat(incoming), next_cursor: page.next_cursor || '', snapshot,
         importOwner: selectedOwner, importOwnerIndex: Math.max(0, owners.indexOf(selectedOwner)), loading: false, loadingMore: false,
       });
       this._loaded = true;
@@ -162,7 +169,10 @@ Page({
     if (!api.downloadWorkbenchMedia) return;
     if (!this._coverState || this._coverState.epoch !== epoch) this._coverState = { epoch, queue: [], seen: new Set(), running: false };
     const state = this._coverState;
+    const existingByID = new Map(this.data.items.map(row => [row.content_id, row]));
     rows.filter(item => item.cover && item.cover.kind === 'image').forEach(item => {
+      const existing = existingByID.get(item.content_id);
+      if (existing?.cover_path && existing.version === item.version && existing.cover?.media_id === item.cover.media_id) return;
       if (!state.seen.has(item.content_id)) { state.seen.add(item.content_id); state.queue.push(item); }
     });
     if (state.running) return;
@@ -232,6 +242,7 @@ Page({
   pasteImportLink() { wx.getClipboardData({ success: result => this.setImportURL({ detail: { value: result.data } }), fail: () => wx.showToast({ title: '未能读取剪贴板，请手动粘贴', icon: 'none' }) }); },
   refreshImportList() { return this.loadImports(this._epoch); },
   async loadImports(epoch) {
+    this.setData({ importCapabilityLoading: true, importCapabilityReason: '' });
     try {
       const capability = await api.importCapabilities();
       if (!this.current(epoch)) return;
@@ -241,7 +252,7 @@ Page({
       const platformReasons = [...new Set(platforms.map(item => String(item.reason || '').trim()).filter(Boolean))];
       const reason = capability.reason || (!available ? platformReasons.join('；') : '');
       this.setData({
-        importServiceEnabled: serviceEnabled, importEnabled: available,
+        importServiceEnabled: serviceEnabled, importEnabled: available, importCapabilityLoading: false,
         importCapabilityReason: reason || (!serviceEnabled ? '链接导入功能当前未开启' : ''),
         importPlatforms: platforms, importError: '', importPolling: false,
         ...(!serviceEnabled ? { imports: [] } : {}),
@@ -251,7 +262,7 @@ Page({
     } catch (error) {
       if (this.current(epoch)) {
         this.stopImportPoll();
-        this.setData({ importServiceEnabled: false, importEnabled: false, importCapabilityReason: '链接导入能力暂不可用', importError: '', importPolling: false });
+        this.setData({ importServiceEnabled: false, importEnabled: false, importCapabilityLoading: false, importCapabilityReason: '链接导入能力暂不可用', importError: '', importPolling: false });
       }
     }
   },

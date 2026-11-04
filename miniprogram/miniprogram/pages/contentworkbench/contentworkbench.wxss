@@ -240,6 +240,11 @@ button::after {
   justify-content: center;
 }
 
+.content-list-loading {
+  min-height: 240rpx;
+  margin: 0;
+}
+
 .state-title {
   display: block;
   color: #51402e;

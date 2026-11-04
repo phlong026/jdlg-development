@@ -5,7 +5,7 @@
     <view wx:if="{{loginRequired}}" class="state-card"><text class="state-title">登录后开始创作</text><button class="gold-button" bindtap="goLogin">去登录</button></view>
     <view wx:elif="{{denied}}" class="state-card"><text class="state-title">暂未获得内容管理权限</text><text class="muted">请联系管理员开通</text><button class="outline-button" bindtap="retry">重新检查</button></view>
     <view wx:elif="{{disabled}}" class="state-card"><text class="state-title">内容创作暂未开通</text><button class="outline-button" bindtap="retry">重新检查</button></view>
-    <view wx:elif="{{loading}}" class="state-card" role="status"><view class="loading-mark"></view><text>正在加载…</text></view>
+    <view wx:elif="{{loading && !context}}" class="state-card" role="status"><view class="loading-mark"></view><text>正在加载…</text></view>
     <view wx:elif="{{error && !items.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
     <block wx:else>
       <block wx:if="{{view === 'studio'}}">
@@ -29,7 +29,8 @@
         <view class="category-tabs" role="tablist"><button wx:for="{{categories}}" wx:key="key" class="category-tab {{category === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="selectCategory" role="tab" aria-selected="{{category === item.key}}">{{item.label}}</button></view>
         <view wx:if="{{searchTerm}}" class="filter-note">“{{searchTerm}}”<button class="text-button" bindtap="clearSearch">清空</button></view>
         <view class="content-list">
-          <block wx:if="{{visibleItems.length > 0}}">
+          <view wx:if="{{loading}}" class="state-card content-list-loading" role="status"><view class="loading-mark"></view><text>正在加载内容…</text></view>
+          <block wx:elif="{{visibleItems.length > 0}}">
             <view wx:for="{{visibleItems}}" wx:key="content_id" class="content-row" data-id="{{item.content_id}}" data-status="{{item.status}}" data-version="{{item.version}}" data-read-only="{{item.read_only}}" data-route="{{item.route_key}}" bindtap="openContent" role="button" aria-label="{{item.title}}">
               <view class="content-cover"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFill" /><view wx:else class="cover-placeholder"><t-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="32px" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
               <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.kind_label}} · {{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}} · 查看 {{item.view_count || 0}} · 转发 {{item.share_count || 0}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{item.status === 'published' && !item.read_only}}" class="edit-link" catchtap="editContent" data-id="{{item.content_id}}">编辑</button></view></view><text class="row-chevron">›</text>
@@ -53,7 +54,8 @@
         <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
       </block>
       <block wx:else>
-        <view wx:if="{{!importEnabled}}" class="import-gate">{{importCapabilityReason || '链接导入暂未开通'}}</view>
+        <view wx:if="{{importCapabilityLoading}}" class="import-gate import-gate-loading" role="status"><view class="loading-mark"></view><text>正在确认导入能力…</text></view>
+        <view wx:elif="{{!importEnabled}}" class="import-gate">{{importCapabilityReason || '链接导入暂未开通'}}</view>
         <view wx:else class="import-editor">
           <text class="import-heading">粘贴分享链接</text>
           <view class="link-input-box"><textarea value="{{importURL}}" bindinput="setImportURL" maxlength="4000" placeholder="粘贴完整链接或分享文字" auto-height="{{false}}" aria-label="分享链接" /><button class="paste-button" bindtap="pasteImportLink"><t-icon name="file-copy" size="17px" /> 粘贴</button></view>
