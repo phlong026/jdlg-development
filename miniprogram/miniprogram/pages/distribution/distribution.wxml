@@ -36,6 +36,7 @@
       <view class="designer-result-summary" wx:if="{{resultSummaryText}}">
         <text class="designer-result-summary-text">{{resultSummaryText}}</text>
       </view>
+      <view class="load-more" wx:if="{{loading && designerCards.length > 0}}">正在切换，暂时保留当前结果…</view>
 
       <view class="designer-list" wx:if="{{designerCards.length}}">
         <view class="designer-person-card" wx:for="{{designerCards}}" wx:key="designerUserId">
@@ -136,8 +137,7 @@
         </view>
       </view>
 
-      <view class="load-more" wx:if="{{loading && designerCards.length > 0}}">加载中...</view>
-      <view class="load-more" wx:elif="{{!hasMore && designerCards.length > 0}}">已经到底了，去看看设计师主页吧</view>
+      <view class="load-more" wx:if="{{!loading && !hasMore && designerCards.length > 0}}">已经到底了，去看看设计师主页吧</view>
     </view>
   </view>
 </view>

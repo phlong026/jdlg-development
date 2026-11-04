@@ -86,12 +86,17 @@ Component({
             if (!tab || index === this.data.current) {
                 return;
             }
-            const previousCurrent = this.data.current;
-            this.setCurrent(index);
+            if (this._switchingTo !== undefined) {
+                return;
+            }
+            this._switchingTo = index;
             wx.switchTab({
                 url: tab.pagePath,
+                success: () => {
+                    this._switchingTo = undefined;
+                },
                 fail: () => {
-                    this.setCurrent(previousCurrent);
+                    this._switchingTo = undefined;
                     wx.showToast({
                         title: '页面跳转失败',
                         icon: 'none'

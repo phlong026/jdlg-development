@@ -22,9 +22,17 @@
 }
 
 .tabbar-background {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tabbar-background--active {
+  opacity: 1;
 }
 
 .tabbar-hitbox-layer {

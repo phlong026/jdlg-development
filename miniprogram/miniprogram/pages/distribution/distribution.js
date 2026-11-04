@@ -241,7 +241,7 @@ function getNavLayout() {
 const INITIAL_NAV_LAYOUT = getNavLayout();
 Page({
     data: {
-      contentReady: false,
+        contentReady: false,
         loading: false,
         navSafeTop: INITIAL_NAV_LAYOUT.navSafeTop,
         navBarHeight: INITIAL_NAV_LAYOUT.navBarHeight,
@@ -308,7 +308,7 @@ Page({
     },
     async loadDesigners(reset) {
         if (this.data.loading) {
-            return;
+            return false;
         }
         const currentTab = this.getCurrentMainTab();
         const currentTabValue = currentTab?.value || 'all';
@@ -316,10 +316,11 @@ Page({
         const requestPage = reset ? 1 : this.data.page;
         const keyword = String(this.data.searchKeyword || '').trim();
         const selectedTrait = String(this.data.selectedTrait || '全部').trim();
+        const hasRetainedCards = reset && this.data.designerCards.length > 0;
         this.setData({
             loading: true,
-            contentReady: false,
-            currentCategoryLabel: currentTabLabel,
+            contentReady: hasRetainedCards ? this.data.contentReady : false,
+            ...(hasRetainedCards ? {} : { currentCategoryLabel: currentTabLabel }),
             emptyTipText: buildDesignerEmptyTip(currentTabLabel, keyword, selectedTrait),
         });
         const result = await requestDesignerApi({
@@ -333,10 +334,21 @@ Page({
         let nextEmptyTipText = buildDesignerEmptyTip(currentTabLabel, keyword, selectedTrait);
         let nextDesignerCountText = String(reset ? 0 : this.data.designerCountText || 0);
         if (!result) {
-            sourceCards = [];
-            nextHasMore = false;
-            nextEmptyTipText = '设计师列表加载失败，请稍后重试';
-            nextDesignerCountText = '0';
+            if (hasRetainedCards) {
+                this.setData({ loading: false });
+                wx.showToast({ title: '设计师列表加载失败，请稍后重试', icon: 'none' });
+                return false;
+            }
+            this.setData({
+                designerCards: [],
+                contentReady: false,
+                loading: false,
+                hasMore: false,
+                designerCountText: '0',
+                currentCategoryLabel: currentTabLabel,
+                emptyTipText: '设计师列表加载失败，请稍后重试',
+            });
+            return false;
         }
         else {
             const list = Array.isArray(result.list) ? result.list : [];
@@ -360,80 +372,98 @@ Page({
             resultSummaryText: buildResultSummary(keyword, selectedTrait),
             emptyTipText: nextEmptyTipText,
         });
+        return true;
     },
     onSearchInput(e) {
         this.setData({
             searchInputValue: String(e.detail.value || ''),
         });
     },
-    onSearchConfirm() {
+    async onSearchConfirm() {
+        if (this.data.loading)
+            return false;
         const keyword = String(this.data.searchInputValue || '').trim();
         const currentTab = this.getCurrentMainTab();
         const selectedTrait = String(this.data.selectedTrait || '全部').trim();
+        const previousKeyword = this.data.searchKeyword;
+        const hasRetainedCards = this.data.designerCards.length > 0;
         this.setData({
             searchKeyword: keyword,
             page: 1,
             hasMore: true,
-            designerCards: [],
-            currentCategoryLabel: currentTab?.label || DEFAULT_MAIN_TABS[0].label,
-            resultSummaryText: buildResultSummary(keyword, selectedTrait),
             emptyTipText: buildDesignerEmptyTip(currentTab?.label || DEFAULT_MAIN_TABS[0].label, keyword, selectedTrait),
         });
-        this.loadDesigners(true);
+        const loaded = await this.loadDesigners(true);
+        if (!loaded && hasRetainedCards)
+            this.setData({ searchKeyword: previousKeyword });
+        return loaded;
     },
-    onSearchClear() {
+    async onSearchClear() {
+        if (this.data.loading)
+            return false;
         const currentTab = this.getCurrentMainTab();
         const selectedTrait = String(this.data.selectedTrait || '全部').trim();
         if (!this.data.searchKeyword && !this.data.searchInputValue) {
             return;
         }
+        const previousInputValue = this.data.searchInputValue;
+        const previousKeyword = this.data.searchKeyword;
+        const hasRetainedCards = this.data.designerCards.length > 0;
         this.setData({
             searchInputValue: '',
             searchKeyword: '',
             page: 1,
             hasMore: true,
-            designerCards: [],
-            currentCategoryLabel: currentTab?.label || DEFAULT_MAIN_TABS[0].label,
-            resultSummaryText: buildResultSummary('', selectedTrait),
             emptyTipText: buildDesignerEmptyTip(currentTab?.label || DEFAULT_MAIN_TABS[0].label, '', selectedTrait),
         });
-        this.loadDesigners(true);
+        const loaded = await this.loadDesigners(true);
+        if (!loaded && hasRetainedCards)
+            this.setData({ searchInputValue: previousInputValue, searchKeyword: previousKeyword });
+        return loaded;
     },
-    onTraitFilterTap(e) {
+    async onTraitFilterTap(e) {
+        if (this.data.loading)
+            return false;
         const index = Number(e.currentTarget.dataset.index);
         const selectedTrait = this.data.traitFilters[index];
         const currentTab = this.getCurrentMainTab();
         if (Number.isNaN(index) || !selectedTrait || selectedTrait === this.data.selectedTrait) {
             return;
         }
+        const previousTrait = this.data.selectedTrait;
+        const hasRetainedCards = this.data.designerCards.length > 0;
         this.setData({
             selectedTrait,
             page: 1,
             hasMore: true,
-            designerCards: [],
-            currentCategoryLabel: currentTab?.label || DEFAULT_MAIN_TABS[0].label,
-            resultSummaryText: buildResultSummary(this.data.searchKeyword, selectedTrait),
             emptyTipText: buildDesignerEmptyTip(currentTab?.label || DEFAULT_MAIN_TABS[0].label, this.data.searchKeyword, selectedTrait),
         });
-        this.loadDesigners(true);
+        const loaded = await this.loadDesigners(true);
+        if (!loaded && hasRetainedCards)
+            this.setData({ selectedTrait: previousTrait });
+        return loaded;
     },
     async onMainTabTap(e) {
+        if (this.data.loading)
+            return;
         const index = Number(e.currentTarget.dataset.index);
         const tab = this.data.tabs[index];
         const selectedTrait = String(this.data.selectedTrait || '全部').trim();
         if (Number.isNaN(index) || index === this.data.currentTabIndex || !tab) {
             return;
         }
+        const previousTabIndex = this.data.currentTabIndex;
+        const hasRetainedCards = this.data.designerCards.length > 0;
         this.setData({
             currentTabIndex: index,
             page: 1,
             hasMore: true,
-            designerCards: [],
-            currentCategoryLabel: tab.label,
-            resultSummaryText: buildResultSummary(this.data.searchKeyword, selectedTrait),
             emptyTipText: buildDesignerEmptyTip(tab.label, this.data.searchKeyword, selectedTrait),
         });
-        await this.loadDesigners(true);
+        const loaded = await this.loadDesigners(true);
+        if (!loaded && hasRetainedCards) {
+            this.setData({ currentTabIndex: previousTabIndex });
+        }
     },
     onWorkTap(e) {
         const id = Number(e.currentTarget.dataset.id);

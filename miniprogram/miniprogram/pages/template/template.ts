@@ -661,7 +661,8 @@ Page({
     leftColumnCards: [] as TemplateListItem[],
     rightColumnCards: [] as TemplateListItem[],
     skeletonCards: [0, 1, 2, 3],
-    loading: false,
+    loading: true,
+    initialLoadPending: true,
     page: 1,
     pageSize: 12,
     hasMore: true,
@@ -754,7 +755,9 @@ Page({
         const nextCards = this.applyKnownImageSizes(this.data.displayCards || []);
         const changed = nextCards.some((item, index) => Number(item.mediaHeightRpx || 0) !== Number(this.data.displayCards?.[index]?.mediaHeightRpx || 0));
         if (changed) {
-          const { leftColumnCards, rightColumnCards } = splitWaterfallColumns(nextCards);
+          const byKey = new Map(nextCards.map((item) => [item.cardKey, item]));
+          const leftColumnCards = this.data.leftColumnCards.map((item) => byKey.get(item.cardKey) || item);
+          const rightColumnCards = this.data.rightColumnCards.map((item) => byKey.get(item.cardKey) || item);
           this.setData({
             displayCards: nextCards,
             leftColumnCards,
@@ -827,6 +830,7 @@ Page({
         currentMainTabIndex: -1,
         currentSubTabIndex: -1,
         currentThirdTabIndex: -1,
+        loading: false,
         hasMore: false,
         resultSummaryText: '模板广场分类配置不可用',
         emptyTipText: '请先在管理端配置一级、二级、三级标签',
@@ -855,6 +859,7 @@ Page({
   },
 
   async onMainTabTap(e: IndexTapEvent) {
+    if (this.data.loading) return;
     const index = Number(e.currentTarget.dataset.index);
     const tab = this.data.mainTabs[index];
     if (Number.isNaN(index) || index === this.data.currentMainTabIndex || !tab) {
@@ -899,6 +904,7 @@ Page({
   },
 
   async onSubTabTap(e: IndexTapEvent) {
+    if (this.data.loading) return;
     const index = Number(e.currentTarget.dataset.index);
     const subTab = this.data.subTabs[index];
     const currentMainTab = this.getCurrentMainTab();
@@ -922,6 +928,7 @@ Page({
   },
 
   async onThirdTabTap(e: IndexTapEvent) {
+    if (this.data.loading) return;
     const index = Number(e.currentTarget.dataset.index);
     const thirdTab = this.data.thirdTabs[index];
     if (Number.isNaN(index) || index === this.data.currentThirdTabIndex || !thirdTab) {
@@ -956,6 +963,7 @@ Page({
   },
 
   onSearchConfirm() {
+    if (this.data.loading) return;
     const keyword = String(this.data.searchInputValue || '').trim();
     const currentMainTab = this.getCurrentMainTab();
     if (!currentMainTab) {
@@ -984,6 +992,7 @@ Page({
   },
 
   onSearchClear() {
+    if (this.data.loading) return;
     const currentMainTab = this.getCurrentMainTab();
     if (!currentMainTab) {
       return;
@@ -1007,7 +1016,7 @@ Page({
   },
 
   async loadTemplates(reset: boolean) {
-    if (this.data.loading) {
+    if (this.data.loading && !this.data.initialLoadPending) {
       return;
     }
 
@@ -1041,6 +1050,7 @@ Page({
 
     this.setData({
       loading: true,
+      initialLoadPending: false,
       contentReady: false,
       resultSummaryText: buildSummaryText(currentMainLabel, currentThirdLabel || currentSubLabel, keyword),
       emptyTipText: keyword ? buildSearchEmptyTip(currentMainLabel, keyword) : buildEmptyTip(currentMainLabel, currentSubLabel),

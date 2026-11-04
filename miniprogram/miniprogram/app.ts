@@ -4,13 +4,14 @@ require('./utils/profile-access').install();
 require('./utils/tracking/index').install();
 // app.ts
 import { blockUnsafeText, initPromptReview } from './utils/promptReview';
+import { HOME_ASSETS } from './utils/homeAssets';
 
 const TABBAR_IMAGE_PATHS = [
-  '/assets/tabbar/未选中态@2x.png',
-  '/assets/tabbar/首页导航栏@2x.png',
-  '/assets/tabbar/模板广场导航栏@2x.png',
-  '/assets/tabbar/设计师导航栏@2x.png',
-  '/assets/tabbar/我的导航栏@2x.png'
+  HOME_ASSETS.defaultTabbar,
+  HOME_ASSETS.homeTabbar,
+  HOME_ASSETS.templateTabbar,
+  HOME_ASSETS.designerTabbar,
+  HOME_ASSETS.myTabbar,
 ];
 
 // 服务端邀请码固定 6 位字母数字。options.scene 是微信启动场景值（1007/1047 等），不是邀请码，
