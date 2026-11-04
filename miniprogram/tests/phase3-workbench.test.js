@@ -275,7 +275,7 @@ test('editor uploads a PDF or DOCX as a private document draft and reopens the o
     chooseMessageFile(options) { options.success({ tempFiles: [{ path: '/tmp/source.pdf', name: '庭院方案.pdf', size: 1024 }] }); },
     openDocument(options) { opened = options.filePath; options.success(); },
   });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   page.setData({ context: { media_upload_configured: true }, owner_id: 'owner-a', rights: 'own', title: '' });
   page.chooseDocument();
   await tick(); await tick();
@@ -303,7 +303,7 @@ test('archiving a document preserves the existing or unsaved article and its nex
         return { content_id: contentID || (draft.body_format === 'document_v1' ? 'new-document' : 'new-article'), revision: 1, version: 0, status: 'draft' };
       },
     });
-    page._token = 'session-token'; page._epoch = 1;
+    page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
     page.setData({ id, title: '尚未保存的图文', revision: id ? 4 : 0, owner_id: 'owner-a', blocks: [
       { kind: 'paragraph', text: '尚未保存的正文' }, { kind: 'image', media_id: 'article-image' },
     ], cover_media_id: 'article-image' });
@@ -326,7 +326,7 @@ test('archiving a document preserves the existing or unsaved article and its nex
 test('typing while a document is being archived keeps the new article editable', async () => {
   let finishArchive;
   const page = pageHarness('contentedit', { saveContent: () => new Promise(resolve => { finishArchive = resolve; }) });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   page.setData({ owner_id: 'owner-a' });
   const pending = page.archiveDocumentAsset({ media_id: 'document-asset', title: '方案.pdf' }, 1);
   page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '上传时继续输入的正文' } });
@@ -342,7 +342,7 @@ test('document chooser reports real failures but ignores user cancellation', () 
   const page = pageHarness('contentedit', {}, {
     chooseMessageFile(options) { options.fail({ errMsg: failures.shift() }); },
   });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   page.setData({ context: { media_upload_configured: true }, owner_id: 'owner-a', rights: 'own' });
   page.chooseDocument();
   assert.equal(page.data.error, '文档选择失败，请重试');
@@ -362,7 +362,7 @@ test('reopened editor archives an uploaded document without uploading it again',
     },
     uploadWorkbenchMedia: async () => { calls.push({ action: 'upload' }); throw new Error('不应重复上传'); },
   });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   await page.load(1);
   assert.equal(page.data.documentCandidates.length, 1);
   await page.archiveDocument({ currentTarget: { dataset: { index: 0 } } });
@@ -385,7 +385,7 @@ test('editor explicitly soft-deletes only a never-published draft without revoki
     showModal(options) { options.success({ confirm: true }); },
     redirectTo(options) { calls.push({ action: 'redirect', url: options.url }); },
   });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   page.setData({ id: 'draft-content-001', revision: 3, version: 0, status: 'draft' });
   page.deleteDraft();
   await tick(); await tick();
@@ -408,7 +408,7 @@ test('reopened document metadata stays read-only and downloads only after explic
     getContent: async () => ({ content_id: 'document-content-0001', type: 'document', title: '庭院方案', owner_id: 'owner-a', rights: 'own', revision: 1, version: 0, status: 'draft', body_format: 'document_v1', body: '{"schema":1,"media_id":"document-asset-0001"}', media: [{ media_id: 'document-asset-0001', kind: 'document', mime: 'application/pdf', title: '庭院方案.pdf' }] }),
     downloadWorkbenchMedia: async id => { downloads.push(id); return '/tmp/reopened.pdf'; },
   }, { openDocument(options) { opened = options.filePath; options.success(); } });
-  page._token = 'session-token'; page._epoch = 1; page.setData({ id: 'document-content-0001' });
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;; page.setData({ id: 'document-content-0001' });
   await page.load(1);
   assert.equal(page.data.documentReadOnly, true);
   assert.equal(page.data.documentAsset.media_id, 'document-asset-0001');
@@ -470,7 +470,7 @@ test('saving keeps edits made during the request and the next save uses the retu
       saveContent: (draft, id) => { calls.push({ draft, id }); return new Promise(resolve => responses.push(resolve)); },
       previewContent: async () => { previewCalls++; return { preview_token: 'outdated-preview', content: {} }; },
     });
-    page._token = 'session-token'; page._epoch = 1;
+    page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
     page.setData({ id: 'content-one', revision: 4, title: '提交时的标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '提交时的正文' }] });
     const pending = page[action]();
     page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '保存期间继续输入的正文' } });
@@ -504,7 +504,7 @@ test('edits during preview or preview-media requests prevent an outdated publish
       previewContent: () => stage === 'preview' ? new Promise(resolve => { finish = () => resolve(preview); }) : Promise.resolve(preview),
       downloadWorkbenchMedia: () => stage === 'media' ? new Promise(resolve => { finish = () => resolve('/tmp/preview-image'); }) : Promise.resolve('/tmp/preview-image'),
     });
-    page._token = 'session-token'; page._epoch = 1;
+    page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
     page.setData({ id: 'content-one', revision: 1, title: '图文', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '预览请求前的正文' }] });
     const pending = page.saveAndPreview();
     await tick();
@@ -526,7 +526,7 @@ test('a stale save response cannot overwrite or unlock a newer editor request', 
       saveContent: () => new Promise(resolve => responses.push(resolve)),
       previewContent: async () => ({ preview_token: 'current-preview', content: {} }),
     });
-    page._token = 'session-token'; page._epoch = 1;
+    page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
     page.setData({ title: '旧页面标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '旧页面正文' }] });
     const oldRequest = page[action]();
     page.onUnload();
@@ -566,7 +566,7 @@ test('publish preview renders normalized server content and only its signed priv
       return '/tmp/' + id;
     },
   });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   page.setData({ title: '本地标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '本地未归一化正文' }], media: [{ media_id: 'local-extra', kind: 'image', local_path: '/tmp/local-extra' }] });
   await page.saveAndPreview();
   assert.equal(page.data.preview.content.title, '服务端标题');
@@ -652,7 +652,7 @@ test('publish and revoke reuse the same idempotency key after a lost response', 
       return { revision: 5, status: 'revoked' };
     },
   });
-  page._token = 'session-token'; page._epoch = 1;
+  page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
   page.setData({ id: 'content-one', revision: 3, preview: { preview_token: 'preview-one' } });
   await page.publish(); await page.publish();
   assert.deepEqual(publishKeys, ['publish-1', 'publish-1']);
@@ -747,7 +747,7 @@ for (const field of ['tagsText', 'pinned']) {
     const page = pageHarness('contentedit', { saveContent: () => new Promise(resolve => { finish = resolve; }) }, {
       showModal() { warned++; }, navigateBack() { left++; },
     });
-    page._token = 'session-token'; page._epoch = 1;
+    page._token = 'session-token'; page._epochShares = 1; page._epochCustomers = 1; page._epochMaterials = 1;;
     Object.assign(page.data, { id: 'content-1', title: '作品', owner_id: 'designer-1', blocks: [{ kind: 'paragraph', text: '正文' }] });
     page._savedSignature = page.draftSignature();
     page.setData({ [field]: field === 'pinned' ? true : '庭院' });

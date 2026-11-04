@@ -3,7 +3,7 @@
 const api = require('../../utils/phase3-api');
 
 function displayTime(value) {
-  if (!value) return '暂无访问';
+  if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   const two = number => String(number).padStart(2, '0');
@@ -34,17 +34,17 @@ function displayStatus(item) {
 Page({
   data: {
     activeTab: 'customers',
-    // 客户 Tab
-    customers: [], customers_cursor: '', customerQuery: '', customerIntent: '', customerLoading: true, customerLoadingMore: false, customerError: '',
-    // 素材 Tab
-    materials: [], materials_cursor: '', materialLoading: false, materialLoadingMore: false, materialError: '', materialsLoaded: false,
-    // 分享 Tab（原 sharevisits 逻辑迁入）
+    customers: [], customers_cursor: '', customers_as_of: '', customerQuery: '', customerIntent: '', customerLoading: true, customerLoadingMore: false, customerError: '',
+    materials: [], materials_cursor: '', materials_as_of: '', materialQuery: '', materialLoading: false, materialLoadingMore: false, materialError: '', materialsLoaded: false,
     shareQuery: '', loading: false, loadingMore: false, error: '', denied: false, loginRequired: false,
     items: [], next_cursor: '', as_of: '', metric_version: '', sharesLoaded: false,
   },
+  // 每个 Tab 独立 epoch：慢响应不会覆盖其它 Tab 的新响应（codex 批次3 P2）。
   onShow() {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
+    this._epoch = (this._epoch || 0) + 1;
+    this._epoch = (this._epoch || 0) + 1;
     this._epoch = (this._epoch || 0) + 1;
     this.setData({ loginRequired: !this._token });
     if (!this._token) return;
@@ -54,43 +54,55 @@ Page({
     if (this.data.activeTab === 'shares') this.loadShares(true, this._epoch);
     else if (this.data.activeTab === 'materials') this.loadMaterials(true, this._epoch);
   },
-  onUnload() { this._epoch = (this._epoch || 0) + 1; },
-  current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
+  onUnload() {
+    this._epoch = (this._epoch || 0) + 1;
+    this._epoch = (this._epoch || 0) + 1;
+    this._epoch = (this._epoch || 0) + 1;
+  },
+  tokenAlive(epoch, which) {
+    const map = { customers: '_epoch', materials: '_epoch', shares: '_epoch' };
+    return epoch === this[map[which]] && this._token === String(wx.getStorageSync('token') || '');
+  },
   onPullDownRefresh() {
-    const epoch = (this._epoch || 0) + 1; this._epoch = epoch;
-    const tab = this.data.activeTab;
     const done = () => wx.stopPullDownRefresh();
-    if (tab === 'customers') this.loadCustomers(true, epoch).finally(done);
-    else if (tab === 'materials') this.loadMaterials(true, epoch).finally(done);
-    else this.loadShares(true, epoch).finally(done);
+    if (this.data.activeTab === 'customers') this.loadCustomers(true, ++this._epoch).finally(done);
+    else if (this.data.activeTab === 'shares') this.loadShares(true, ++this._epoch).finally(done);
+    else this.loadMaterials(true, ++this._epoch).finally(done);
   },
   switchTab(event) {
     const tab = event.currentTarget.dataset.tab;
-    if (tab === this.data.activeTab) return;
+    if (tab === this.data.activeTab) { this.reloadActive(); return; }
     this.setData({ activeTab: tab });
     if (!this._token) return;
     if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true, this._epoch);
     if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true, this._epoch); }
     if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true, this._epoch); }
   },
+  reloadActive() {
+    const tab = this.data.activeTab;
+    if (tab === 'customers') this.loadCustomers(true, this._epoch);
+    else if (tab === 'materials') this.loadMaterials(true, this._epoch);
+    else this.loadShares(true, this._epoch);
+  },
 
   // ===== 客户 Tab（my-visitors 意向榜） =====
   setCustomerQuery(e) { this.setData({ customerQuery: e.detail.value }); },
-  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, this._epoch); },
-  reloadCustomers() { return this.loadCustomers(true, this._epoch); },
+  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, ++this._epoch); },
+  reloadCustomers() { this.loadCustomers(true, ++this._epoch); },
+  loadMoreCustomers() { this.loadCustomers(false, ++this._epoch); },
   async loadCustomers(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this.data.customerLoadingMore || !this.data.customers_cursor)) return;
-    const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
-    if (reset) this.setData({ customerLoading: true, customerError: '', customers: reset && !this.data.customers.length ? [] : this.data.customers, customers_cursor: '' });
+    const epoch = suppliedEpoch || ++this._epoch;
+    if (reset) this.setData({ customerLoading: true, customerError: '', customers_cursor: '', customers_as_of: '' });
     else this.setData({ customerLoadingMore: true });
     try {
-      const query = { limit: 20 };
+      const query = { limit: 20, as_of: this.data.customers_as_of };
       if (this.data.customerIntent) query.intent = this.data.customerIntent;
       if (this.data.customerQuery) query.q = this.data.customerQuery;
-      if (!reset) Object.assign(query, { cursor: this.data.customers_cursor });
+      if (!reset) query.cursor = this.data.customers_cursor;
       const page = await api.listMyVisitors(query);
-      if (!this.current(epoch)) return;
+      if (!this.tokenAlive(epoch, 'customers')) return;
       const rows = (page.items || []).map(item => ({
         visitor_key: item.visitor_key,
         nickname: item.nickname || '',
@@ -102,13 +114,13 @@ Page({
       this.setData({
         customers: reset ? rows : this.data.customers.concat(rows),
         customers_cursor: page.next_cursor || '',
+        customers_as_of: page.as_of || this.data.customers_as_of,
         customerLoading: false, customerLoadingMore: false, customerError: '',
       });
     } catch (error) {
-      if (this.current(epoch)) this.setData({ customerError: error.message || '客户加载失败', customerLoading: false, customerLoadingMore: false });
-    } finally { if (this.current(epoch)) this.setData({ customerLoading: false, customerLoadingMore: false }); }
+      if (this.tokenAlive(epoch, 'customers')) this.setData({ customerError: error.message || '客户加载失败', customerLoading: false, customerLoadingMore: false });
+    } finally { if (this.tokenAlive(epoch, 'customers')) this.setData({ customerLoading: false, customerLoadingMore: false }); }
   },
-  loadMoreCustomers() { return this.loadCustomers(false, this._epoch); },
   openCustomer(event) {
     const item = this.data.customers[Number(event.currentTarget.dataset.index)];
     if (!item) return;
@@ -117,52 +129,47 @@ Page({
   },
 
   // ===== 素材 Tab（my-content-stats 热度榜） =====
-  reloadMaterials() { this.loadMaterials(true, this._epoch); },
-  loadMoreMaterials() { return this.loadMaterials(false, this._epoch); },
+  reloadMaterials() { this.loadMaterials(true, ++this._epoch); },
+  loadMoreMaterials() { this.loadMaterials(false, ++this._epoch); },
   async loadMaterials(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this.data.materialLoadingMore || !this.data.materials_cursor)) return;
-    const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
-    if (reset) this.setData({ materialLoading: true, materialError: '', materials: reset ? [] : this.data.materials, materials_cursor: '' });
+    const epoch = suppliedEpoch || ++this._epoch;
+    if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
     else this.setData({ materialLoadingMore: true });
     try {
-      const query = { limit: 20 };
-      if (!reset) Object.assign(query, { cursor: this.data.materials_cursor });
+      const query = { limit: 20, as_of: this.data.materials_as_of };
+      if (!reset) query.cursor = this.data.materials_cursor;
       const page = await api.listMyContentStats(query);
-      if (!this.current(epoch)) return;
+      if (!this.tokenAlive(epoch, 'materials')) return;
       const rows = (page.items || []).map(item => ({
-        content_key: item.route_key + '\x00' + item.content_id,
+        content_key: item.route_key + '\x00' + (item.content_id || '') + ':' + (item.content_version || 0),
         content_id: item.content_id, route_key: item.route_key,
         title: item.title || '未命名素材',
         visitor_count: Number(item.visitor_count || 0),
-        views: Number(item.views || 0),
-        forwards: Number(item.forwards || 0),
-        created_at_text: item.created_at_text || '',
+        views: Number(item.page_views || 0),
+        forwards: Number(item.forward_count || 0),
+        last_visit_text: displayTime(item.last_visit) || '',
       }));
       this.setData({
         materials: reset ? rows : this.data.materials.concat(rows),
         materials_cursor: page.next_cursor || '',
+        materials_as_of: page.as_of || this.data.materials_as_of,
         materialLoading: false, materialLoadingMore: false, materialError: '',
       });
     } catch (error) {
-      if (this.current(epoch)) this.setData({ materialError: error.message || '素材热度加载失败', materialLoading: false, materialLoadingMore: false });
-    } finally { if (this.current(epoch)) this.setData({ materialLoading: false, materialLoadingMore: false }); }
-  },
-  openMaterial(event) {
-    const item = this.data.materials[Number(event.currentTarget.dataset.index)];
-    if (!item || !item.content_id) return;
-    // 打开素材详情并触发原生分享（现有 materials 出口）
-    wx.navigateTo({ url: '/pages/contentedit/contentedit?id=' + encodeURIComponent(item.content_id) });
+      if (this.tokenAlive(epoch, 'materials')) this.setData({ materialError: error.message || '素材热度加载失败', materialLoading: false, materialLoadingMore: false });
+    } finally { if (this.tokenAlive(epoch, 'materials')) this.setData({ materialLoading: false, materialLoadingMore: false }); }
   },
 
   // ===== 分享 Tab（原 sharevisits 迁入） =====
   setShareQuery(e) { this.setData({ shareQuery: e.detail.value }); this._shareQueryTimer && clearTimeout(this._shareQueryTimer); this._shareQueryTimer = setTimeout(() => this.reloadShares(), 400); },
-  reloadShares() { return this.loadShares(true, this._epoch); },
+  reloadShares() { this.loadShares(true, ++this._epoch); },
   async loadShares(reset, suppliedEpoch) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token) return;
     if (!reset && (this._morePending || !this.data.next_cursor)) return;
-    const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
+    const epoch = suppliedEpoch || ++this._epoch;
     if (!reset) this._morePending = true;
     if (reset) this.setData({ loading: true, error: '', denied: false, items: [], next_cursor: '', as_of: '', metric_version: '' });
     else this.setData({ loadingMore: true, error: '' });
@@ -171,7 +178,7 @@ Page({
       if (this.data.shareQuery) query.q = this.data.shareQuery;
       if (!reset) Object.assign(query, { cursor: this.data.next_cursor, as_of: this.data.as_of, metric_version: this.data.metric_version });
       const page = await api.listMyShares(query);
-      if (!this.current(epoch)) return;
+      if (!this.tokenAlive(epoch, 'shares')) return;
       const rows = (page.items || []).map(item => {
         const visitorCount = Number(item.visitor_count || 0), pageViews = Number(item.page_views || 0);
         return { ...item, is_collection: item.route_key === 'pages/collectionreader/collectionreader', directory_views: Number(item.directory_views || 0), content_views: Number(item.content_views || 0), visitor_count: visitorCount, page_views: pageViews, avg_views_per_visitor: Number(item.avg_views_per_visitor || 0) || '', status_text: displayStatus(item), channel_text: displayChannel(item.channel), has_visits: visitorCount > 0 || pageViews > 0 || !!item.last_visit, last_visit_text: displayTime(item.last_visit), created_at_text: displayTime(item.created_at) };
@@ -179,11 +186,11 @@ Page({
       this._loadedTabs = this._loadedTabs || {};
       this._loadedTabs.shares = true;
       this.setData({ items: reset ? rows : this.data.items.concat(rows), next_cursor: page.next_cursor || '', as_of: page.as_of || this.data.as_of, metric_version: page.metric_version || this.data.metric_version, loading: false, loadingMore: false });
-    } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '本人分享记录加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false }); }
-    finally { if (this.current(epoch)) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
+    } catch (error) { if (this.tokenAlive(epoch, 'shares')) this.setData({ error: error.message || '本人分享记录加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false }); }
+    finally { if (this.tokenAlive(epoch, 'shares')) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
   },
   retry() { this.loadShares(true); },
-  loadMore() { this.loadShares(false, this._epoch); },
+  loadMore() { this.loadShares(false, ++this._epoch); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   openVisits(event) {
     const item = this.data.items[Number(event.currentTarget.dataset.index)];

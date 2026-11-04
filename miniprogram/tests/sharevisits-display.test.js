@@ -20,7 +20,7 @@ test('share rows translate status and channel without exposing raw values',async
   {share_id:'invalid-version',status:'expired',expires_at:'2099-10-27T01:00:00Z',visitor_count:0,page_views:0},
   {share_id:'expired-share',status:'published',expires_at:'2000-10-27T01:00:00Z',visitor_count:0,page_views:0},
  ]);
- page._token='login-token';page._epoch=1;await page.loadShares(true,1);
+ page._token='login-token';page._epochShares=1;page._epochCustomers=1;page._epochMaterials=1;await page.loadShares(true,1);
  assert.deepEqual(page.data.items.map(item=>[item.status_text,item.channel_text,item.has_visits]),[
   ['分享中','微信好友',true],['分享中','朋友圈',false],['已撤回','分享方式未记录',false],
   ['内容版本已失效','分享方式未记录',false],['分享已过期','分享方式未记录',false],
@@ -30,7 +30,7 @@ test('share rows translate status and channel without exposing raw values',async
 test('客户Tab聚合榜映射意向标签与时长，且他人不出现',async()=>{
  const visitors=[myVisitor('u:77','陈丽芬','high',2),myVisitor('a:anon','','unknown',0)];
  const {page}=runtime([],{__visitors:visitors,listMyVisitors:async(query)=>{console.log('STUB q=', JSON.stringify(query && query.q)); return {items:(function(){const f=visitors.filter(v=>!query.q||(v.nickname||'').includes(query.q)); console.log('STUB RETURN', f.length); return f})()}}});
- page._token='login-token';page._epoch=1;await page.loadCustomers(true,1);
+ page._token='login-token';page._epochShares=1;page._epochCustomers=1;page._epochMaterials=1;await page.loadCustomers(true,1);
  const items=page.data.customers;
  assert.equal(items.length,2);
  assert.equal(items[0].intent_level,'high');
@@ -45,7 +45,7 @@ test('客户Tab聚合榜映射意向标签与时长，且他人不出现',async(
 
 test('素材Tab热度榜带去重人数与转发数',async()=>{
  const {page}=runtime([],{listMyContentStats:async()=>({items:[{route_key:'pages/contentreader/contentreader',content_id:'c-1',visitor_count:2,views:3,forwards:1,title:'王宅方案'},{route_key:'x',content_id:'c-2',visitor_count:1,views:1,forwards:0,title:'其他'}]})});
- page._token='login-token';page._epoch=1;await page.loadMaterials(true,1);
+ page._token='login-token';page._epochShares=1;page._epochCustomers=1;page._epochMaterials=1;await page.loadMaterials(true,1);
  assert.equal(page.data.materials.length,2);
  assert.equal(page.data.materials[0].visitor_count,2);
  assert.equal(page.data.materials[0].forwards,1);

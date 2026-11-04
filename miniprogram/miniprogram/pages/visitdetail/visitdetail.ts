@@ -11,12 +11,18 @@ function displayTime(value) {
 function duration(ms) { const seconds = Math.max(0, Math.round(Number(ms || 0) / 1000)); return seconds < 60 ? seconds + '秒' : Math.floor(seconds / 60) + '分' + (seconds % 60) + '秒'; }
 
 Page({
-  data: { id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '' },
+  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '' },
   onLoad(options) {
-    const id = String(options.id || options.share_id || ''); if (!id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
+    const visitorKey = String(options.visitor || '');
+    const id = String(options.id || options.share_id || '');
+    this._visitor = visitorKey;
+    this._mode = visitorKey ? 'customer' : 'share';
+    if (this._mode === 'share' && !id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
     this.setData({
+      mode: visitor ? 'customer' : 'share',
+      visitor,
       id,
-      title: String(options.title || '分享访问详情'),
+      title: String(options.title || '客户访问详情'),
       intent_level: String(options.intent || ''),
       visitor_name: String(options.name || ''),
     });
@@ -26,13 +32,15 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
     this.setData({ items: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, error: '', denied: false, loginRequired: !token, loading: !!token, loadingMore: false });
-    if (!this.data.id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
+    if (this._mode === 'customer' && !this._visitor) { this.setData({ loading: false, error: '缺少访客标识' }); return; }
+    if (this._mode === 'share' && !this.data.id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
     if (token) this.load(true, this._epoch);
   },
   onUnload() { this._epoch = (this._epoch || 0) + 1; },
   current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() { const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false; this.load(true, epoch).finally(() => wx.stopPullDownRefresh()); },
   async load(reset, suppliedEpoch) {
+    if (this._mode === 'customer') return this.loadCustomerEntries(reset, suppliedEpoch);
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token || !this.data.id || !reset && (this._morePending || !this.data.next_cursor)) return;
     const epoch = suppliedEpoch || (reset ? (this._epoch = (this._epoch || 0) + 1) : this._epoch);
@@ -62,10 +70,44 @@ Page({
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '分享访问详情加载失败', denied: error.statusCode === 403 || error.statusCode === 404, loginRequired: error.statusCode === 401, loading: false, loadingMore: false }); }
     finally { if (this.current(epoch)) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
   },
+  async loadCustomerEntries(reset, suppliedEpoch) {
+    if (this._mode !== 'customer' || !this._visitor) return;
+    if (!reset && (this._morePending || !this.data.next_cursor)) return;
+    const epoch = suppliedEpoch || (this._epoch = (this._epoch || 0) + 1);
+    if (reset) this.setData({ loading: true, error: '', entries: [], next_cursor: '', as_of: '' });
+    else this.setData({ loadingMore: true });
+    try {
+      const query = { limit: 50, as_of: this.data.as_of || undefined };
+      if (!reset) query.cursor = this.data.next_cursor;
+      const detail = await api.listMyVisitorEntries(this._visitor, query);
+      if (epoch !== this._epoch) return;
+      const rows = (detail.items || []).map(entry => ({
+        view_id: entry.view_id,
+        session_id: entry.session_id,
+        occurred_text: displayTime(entry.occurred_at),
+        title: entry.title || entry.content_id || '浏览',
+        visible_text: duration(entry.visible_ms),
+        watch_text: duration(entry.video_watch_ms),
+        progress: Number(entry.progress_pct || 0),
+      }));
+      const info = detail.visitor || {};
+      this.setData({
+        entries: reset ? rows : this.data.entries.concat(rows),
+        next_cursor: detail.next_cursor || '',
+        as_of: detail.as_of || this.data.as_of,
+        identified_count: info.views || 0,
+        anonymous_count: info.visible_ms || 0,
+        intent_level: info.intent && info.intent.level ? info.intent.level : this.data.intent_level,
+        loading: false, loadingMore: false,
+      });
+    } catch (error) {
+      if (epoch === this._epoch) this.setData({ error: error.message || '客户浏览明细加载失败', loading: false, loadingMore: false });
+    } finally { if (epoch === this._epoch) this.setData({ loading: false, loadingMore: false }); }
+  },
   retry() { this.load(true); },
   loadMore() { this.load(false, this._epoch); },
   goArchive() { wx.navigateTo({ url: '/pages/projectnotes/projectnotes' }); },
-  goLogin() { { wx.navigateTo({ url: '/pages/login/login' }); },
+  goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   toggleTimeline(event) {
     const key = String(event.currentTarget.dataset.key || '');
     this.setData({ items: this.data.items.map(item => item.visitor_key === key ? { ...item, expanded: !item.expanded } : item) });
