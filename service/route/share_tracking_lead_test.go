@@ -33,6 +33,7 @@ func TestTrackingLeadGateIdentityMatrix(t *testing.T) {
 		{name: "builder crew excluded", state: "identified", identityType: "施工队", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "supplier excluded", state: "identified", identityType: "建材商", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "institution excluded", state: "identified", identityType: "机构用户", wantBlocked: true, wantMessage: "B端用户"},
+		{name: "enterprise owner fails closed", state: "identified", identityType: "企业主", wantBlocked: true, wantMessage: "无法识别的访客身份"},
 		{name: "padded bside still excluded", state: "identified", identityType: " 设计师 ", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "unknown identity fails closed", state: "identified", identityType: "魔法师", wantBlocked: true, wantMessage: "无法识别的访客身份"},
 		{name: "homeowner passes regardless of share", state: "identified", identityType: "乡墅业主", customerShare: 0, wantBlocked: false},
@@ -201,6 +202,99 @@ func TestTrackingLeadEndpointRegisteredBehindAuth(t *testing.T) {
 	}
 	if got := w.Header().Get("Cache-Control"); got != "private, no-store" {
 		t.Fatalf("cache header %q", got)
+	}
+}
+
+func TestMyTrackingLeadEndpointRegisteredBehindMiniAuth(t *testing.T) {
+	t.Setenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED", "true")
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	registerTrackingMyLeadRoute(router.Group("/api/v1/miniprogram/tracking"), tracking.New(nil, tracking.Config{Tenant: "tenant"}), nil, &model.UserModel{}, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/miniprogram/tracking/my-visitors/lead", strings.NewReader(`{"visitor":"u:1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMyVisitorLeadContentsUseOnlyScopedEntries(t *testing.T) {
+	contents := myVisitorLeadContents([]tracking.MyVisitEntry{
+		{Content: "c-1", Version: 2, Route: "pages/contentreader/contentreader", Title: "方案甲", Visible: 8000},
+		{Content: "c-1", Version: 2, Route: "pages/contentreader/contentreader", Title: "方案甲", Visible: 3000},
+		{Content: "c-2", Version: 1, Route: "pages/collectionreader/collectionreader", Title: "合集乙", Visible: 5000},
+	})
+	if len(contents) != 2 || contents[0].Title != "方案甲" || contents[0].PageViews != 2 || contents[0].VisibleMS != 11000 {
+		t.Fatalf("scoped content summary mismatch: %+v", contents)
+	}
+}
+
+func TestMyVisitorSnapshotLeadRejectsUncontactableVisitorsBeforePersistence(t *testing.T) {
+	for _, visitor := range []tracking.Visitor{
+		{Key: "a:anon", State: "anonymous"},
+		{Key: "u:77", State: "identified", IdentityType: "设计师"},
+	} {
+		if _, err := convertVisitorSnapshotToLead(nil, nil, 11, visitor, nil, trackingMyLeadSource, true); err == nil {
+			t.Fatalf("visitor must be rejected before persistence: %+v", visitor)
+		}
+	}
+}
+
+func TestMyTrackingLeadResponseHidesExistingManagementLeadID(t *testing.T) {
+	existing := myTrackingLeadResponse(trackingLeadOutcome{LeadID: 987, Existed: true})
+	if existing["lead_id"] != int64(0) || existing["existed"] != true {
+		t.Fatalf("existing management lead leaked: %+v", existing)
+	}
+	created := myTrackingLeadResponse(trackingLeadOutcome{LeadID: 123, Existed: false})
+	if created["lead_id"] != int64(123) || created["existed"] != false {
+		t.Fatalf("new lead response mismatch: %+v", created)
+	}
+}
+
+func TestTrackingLeadConversionLockSerializesSameAccount(t *testing.T) {
+	unlock := lockTrackingLeadConversion(77)
+	acquired := make(chan struct{})
+	go func() {
+		release := lockTrackingLeadConversion(77)
+		close(acquired)
+		release()
+	}()
+	select {
+	case <-acquired:
+		t.Fatal("same-account conversion was not serialized")
+	case <-time.After(20 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("same-account conversion lock did not release")
+	}
+}
+
+func TestMyTrackingLeadContractUsesSelfScopedEvidence(t *testing.T) {
+	source, err := os.ReadFile("share_tracking_lead.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		`"/my-visitors"`, `POST("/lead"`, `json:"visitor"`, "MyVisitorEntries", "myVisitorLeadContents", trackingMyLeadSource,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("self-scoped lead contract missing %q", want)
+		}
+	}
+	if strings.Contains(content, "svc.Visitors(c.Request.Context(), current") || strings.Contains(content, "svc.VisitorContents(c.Request.Context(), current") {
+		t.Fatal("mini-program conversion must not query management visitor aggregates")
+	}
+	wiring, err := os.ReadFile("share_tracking.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wiring), "registerTrackingMyLeadRoute(pub, svc, customerServiceModel, users, codes)") {
+		t.Fatal("mini-program lead route is not wired")
 	}
 }
 

@@ -97,6 +97,9 @@ func registerTrackingMyRoutes(pub *gin.RouterGroup, svc *tracking.Service, users
 			}
 			current := c.MustGet("tracking.my.scope").(tracking.Scope)
 			out, err := svc.MyVisitorEntries(c.Request.Context(), current, current.Actor, filter)
+			if err == nil {
+				out.CanConvertLead = trackingLeadGate(out.State, out.IdentityType, out.Intent.CustomerShare) == nil
+			}
 			trackingResponse(c, out, err)
 		})
 		stats := pub.Group("/my-content-stats", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))

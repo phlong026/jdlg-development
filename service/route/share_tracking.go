@@ -701,6 +701,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	registerPublicProjectCollectionHandlers(pub, svc)
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	registerTrackingMyRoutes(pub, svc, users, codes)
+	registerTrackingMyLeadRoute(pub, svc, customerServiceModel, users, codes)
 	pub.POST("/share-entry", func(c *gin.Context) {
 		var in struct {
 			Scene string `json:"scene"`

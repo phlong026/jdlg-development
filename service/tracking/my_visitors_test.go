@@ -2,6 +2,7 @@ package tracking
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -143,6 +144,23 @@ func TestMyVisitorEntriesTimelineIsPerVisitor(t *testing.T) {
 	}
 }
 
+func TestMyVisitorsReturnedKeyOpensDetailAtSameSnapshot(t *testing.T) {
+	s, _, scope, now := myVisitorsFixture(t)
+	list, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Sort: "page_views", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range myVisitorItems(t, list) {
+		detail, err := s.MyVisitorEntries(context.Background(), scope, 11, Filter{AsOf: list.AsOf, Visitor: item.Key, Limit: 20})
+		if err != nil {
+			t.Fatalf("list visitor %q cannot open detail at snapshot %s: %v", item.Key, list.AsOf, err)
+		}
+		if detail.Key != item.Key || detail.Views != item.Views {
+			t.Fatalf("detail drift for %q: list=%+v detail=%+v", item.Key, item, detail)
+		}
+	}
+}
+
 func TestMyContentStatsDedupeVisitorsAndCountForwards(t *testing.T) {
 	s, _, scope, now := myVisitorsFixture(t)
 	out, err := s.MyContentStats(context.Background(), scope, 11, Filter{AsOf: now, Limit: 20})
@@ -166,6 +184,47 @@ func TestMyContentStatsDedupeVisitorsAndCountForwards(t *testing.T) {
 	c2 := items[1]
 	if c2.ContentID != "c-2" || c2.Views != 1 || c2.Visitors != 1 {
 		t.Fatalf("c-2 = views %d visitors %d, want 1/1", c2.Views, c2.Visitors)
+	}
+}
+
+func TestMyContentStatsUsesBusinessFallbackAndVisitorSort(t *testing.T) {
+	s, _, scope, now := myVisitorsFixture(t)
+	s.Config.Routes["page"] = Route{Title: "pages/contentreader/contentreader", Type: "owned-content", Public: true}
+	out, err := s.MyContentStats(context.Background(), scope, 11, Filter{AsOf: now, Sort: "visitor_count", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := out.Items.([]MyContentStat)
+	if len(items) == 0 {
+		t.Fatal("content stats empty")
+	}
+	for _, item := range items {
+		if item.Title == "" || item.Title == item.Route {
+			t.Fatalf("content title leaked raw route: %+v", item)
+		}
+	}
+}
+
+func TestMyContentStatsSearchesResolvedTitleBeforePagination(t *testing.T) {
+	s, rows, scope, now := myVisitorsFixture(t)
+	s.Config.Routes[publishedReaderRoute] = Route{Title: "甲方案", Type: "detail", Public: true}
+	s.Config.Routes["other-page"] = Route{Title: "乙方案", Type: "detail", Public: true}
+	row := rows["event/view-2"]
+	var event Event
+	if err := json.Unmarshal(row.Payload, &event); err != nil {
+		t.Fatal(err)
+	}
+	event.Route = "other-page"
+	row.Payload = marshal(event)
+	rows["event/view-2"] = row
+
+	out, err := s.MyContentStats(context.Background(), scope, 11, Filter{AsOf: now, Search: "甲", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := out.Items.([]MyContentStat)
+	if len(items) != 1 || items[0].Title != "甲方案" || items[0].ContentID != "c-1" || out.Cursor != "" {
+		t.Fatalf("title search result = %+v cursor=%q", items, out.Cursor)
 	}
 }
 

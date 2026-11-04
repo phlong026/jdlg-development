@@ -3,8 +3,11 @@ package route
 import (
 	"context"
 	"log"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,11 +21,23 @@ import (
 
 const (
 	trackingLeadSource       = "share_tracking"
+	trackingMyLeadSource     = "share_tracking_my"
 	trackingLeadEventType    = "share_intent_convert"
 	trackingCustomerIdentity = "乡墅业主"
 	trackingLeadEvidenceCap  = 20
 	trackingLeadSummaryTopN  = 3
 )
+
+// Conversions for the same account are serialized inside the service process.
+// CreateLead performs a second dedupe read, but the table has no unique key
+// that can make the read-then-insert sequence atomic by itself.
+var trackingLeadConversionLocks [64]sync.Mutex
+
+func lockTrackingLeadConversion(userID int64) func() {
+	lock := &trackingLeadConversionLocks[uint64(userID)%uint64(len(trackingLeadConversionLocks))]
+	lock.Lock()
+	return lock.Unlock
+}
 
 // B-side accounts distribute and consume tooling; they are channels, never
 // house-building prospects. Fail closed on unknown identity values. The
@@ -177,6 +192,47 @@ func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, l
 	})
 }
 
+// registerTrackingMyLeadRoute exposes conversion only after MyVisitorEntries
+// proves the visitor belongs to the authenticated actor's own share graph.
+// It intentionally does not reuse the management visitor query.
+func registerTrackingMyLeadRoute(pub *gin.RouterGroup, svc *tracking.Service, leads *model.CustomerServiceModel, users *model.UserModel, codes *model.CodeSessionRedisModel) {
+	if os.Getenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED") != "true" {
+		return
+	}
+	visitors := pub.Group("/my-visitors", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
+	identities := model.NewUserIdentityModel(users.DB)
+	visitors.POST("/lead", func(c *gin.Context) {
+		if leads == nil || leads.DB == nil {
+			trackingResponse(c, nil, &tracking.Error{Status: 503, Message: "客服线索服务不可用"})
+			return
+		}
+		var in struct {
+			Visitor string `json:"visitor"`
+		}
+		if !trackingBind(c, &in) {
+			return
+		}
+		current := c.MustGet("tracking.my.scope").(tracking.Scope)
+		detail, err := svc.MyVisitorEntries(c.Request.Context(), current, current.Actor, tracking.Filter{Visitor: strings.TrimSpace(in.Visitor), Limit: 100})
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		outcome, err := convertVisitorSnapshotToLead(leads, identities, current.Actor, detail.Visitor, myVisitorLeadContents(detail.Items), trackingMyLeadSource, true)
+		trackingResponse(c, myTrackingLeadResponse(outcome), err)
+	})
+}
+
+func myTrackingLeadResponse(outcome trackingLeadOutcome) gin.H {
+	leadID := outcome.LeadID
+	if outcome.Existed {
+		// An existing lead may have been created by another designer or channel.
+		// Keep the idempotency signal, but never disclose that management-domain ID.
+		leadID = 0
+	}
+	return gin.H{"lead_id": leadID, "existed": outcome.Existed}
+}
+
 type trackingLeadOutcome struct {
 	LeadID        int64
 	Existed       bool
@@ -189,10 +245,6 @@ type trackingLeadOutcome struct {
 // decisions (identity gate, evidence snapshot, phone lookup) happen here so
 // the two entry points can never drift apart.
 func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *model.CustomerServiceModel, identities *model.UserIdentityModel, scope tracking.Scope, key, source string) (trackingLeadOutcome, error) {
-	userID, ok := trackingVisitorAccount(key)
-	if !ok {
-		return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"}
-	}
 	list, e := svc.Visitors(ctx, scope, tracking.Filter{Visitor: key})
 	if e != nil {
 		return trackingLeadOutcome{}, e
@@ -202,15 +254,6 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		return trackingLeadOutcome{}, &tracking.Error{Status: 404, Message: "访客不存在或无权访问"}
 	}
 	visitor := items[0]
-	if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
-		return trackingLeadOutcome{}, e
-	}
-	phone := ""
-	if phones, err := identities.GetUserPhones(userID); err != nil {
-		log.Printf("[Tracking] lead conversion phone lookup failed user=%d: %v", userID, err)
-	} else if len(phones) > 0 {
-		phone = phones[0]
-	}
 	// Content taste is enriching context, never a blocker: on failure the
 	// snapshot simply carries no top contents and the summary says so.
 	contents := []tracking.VisitorContent{}
@@ -218,6 +261,25 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		log.Printf("[Tracking] lead conversion contents failed visitor=%s: %v", key, err)
 	} else if cs, ok := cl.Items.([]tracking.VisitorContent); ok {
 		contents = cs
+	}
+	return convertVisitorSnapshotToLead(leads, identities, scope.Actor, visitor, contents, source, false)
+}
+
+func convertVisitorSnapshotToLead(leads *model.CustomerServiceModel, identities *model.UserIdentityModel, actor int64, visitor tracking.Visitor, contents []tracking.VisitorContent, source string, idempotent bool) (trackingLeadOutcome, error) {
+	userID, ok := trackingVisitorAccount(visitor.Key)
+	if !ok {
+		return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"}
+	}
+	if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
+		return trackingLeadOutcome{}, e
+	}
+	unlock := lockTrackingLeadConversion(userID)
+	defer unlock()
+	phone := ""
+	if phones, err := identities.GetUserPhones(userID); err != nil {
+		log.Printf("[Tracking] lead conversion phone lookup failed user=%d: %v", userID, err)
+	} else if len(phones) > 0 {
+		phone = phones[0]
 	}
 	existingID, err := leads.FindLatestOpenLeadID(userID)
 	if err != nil {
@@ -232,9 +294,12 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		Source:        source,
 		IntentLevel:   intentLevel,
 		DemandSummary: summary,
-		Payload:       buildTrackingLeadEvidence(visitor, contents, scope.Actor, time.Now()),
+		Payload:       buildTrackingLeadEvidence(visitor, contents, actor, time.Now()),
 	}
 	if existingID > 0 {
+		if idempotent {
+			return trackingLeadOutcome{LeadID: existingID, Existed: true, IntentLevel: intentLevel, DemandSummary: summary}, nil
+		}
 		// Keep the open lead untouched; append the conversion evidence as a
 		// follow-up signal instead of silently rewriting its fields.
 		event.LeadID = existingID
@@ -254,7 +319,7 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		DemandSummary: summary,
 	})
 	if err != nil {
-		log.Printf("[Tracking] create lead from visitor=%s failed: %v", key, err)
+		log.Printf("[Tracking] create lead from visitor=%s failed: %v", visitor.Key, err)
 		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "创建线索失败，请稍后重试"}
 	}
 	event.LeadID = leadID
@@ -264,4 +329,39 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 		log.Printf("[Tracking] conversion event for lead=%d failed: %v", leadID, err)
 	}
 	return trackingLeadOutcome{LeadID: leadID, Existed: false, IntentLevel: intentLevel, DemandSummary: summary}, nil
+}
+
+func myVisitorLeadContents(entries []tracking.MyVisitEntry) []tracking.VisitorContent {
+	byKey := make(map[string]tracking.VisitorContent)
+	for _, entry := range entries {
+		key := entry.Route + "\x00" + entry.Content + ":" + strconv.Itoa(entry.Version)
+		content := byKey[key]
+		content.ID, content.Version, content.Route = entry.Content, entry.Version, entry.Route
+		if strings.TrimSpace(entry.Title) != "" {
+			content.Title = strings.TrimSpace(entry.Title)
+		}
+		content.PageViews++
+		content.VisibleMS += entry.Visible
+		if entry.Occurred.After(content.LastVisit) {
+			content.LastVisit = entry.Occurred
+		}
+		byKey[key] = content
+	}
+	contents := make([]tracking.VisitorContent, 0, len(byKey))
+	for _, content := range byKey {
+		contents = append(contents, content)
+	}
+	sort.Slice(contents, func(i, j int) bool {
+		if contents[i].PageViews != contents[j].PageViews {
+			return contents[i].PageViews > contents[j].PageViews
+		}
+		if contents[i].VisibleMS != contents[j].VisibleMS {
+			return contents[i].VisibleMS > contents[j].VisibleMS
+		}
+		return contents[i].Route+contents[i].ID < contents[j].Route+contents[j].ID
+	})
+	if len(contents) > trackingLeadSummaryTopN {
+		contents = contents[:trackingLeadSummaryTopN]
+	}
+	return contents
 }

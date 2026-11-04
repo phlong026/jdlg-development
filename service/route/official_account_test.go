@@ -243,6 +243,19 @@ func TestOfficialBindingNilStoreReturnsUnavailable(t *testing.T) {
 	}
 }
 
+func TestOfficialBindingDisabledWithoutStoreReturnsCapabilityOff(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	public := router.Group("/api/v1")
+	authed := router.Group("/api/v1/miniprogram/official-account", func(c *gin.Context) { c.Set("user_id", int64(42)); c.Next() })
+	registerOfficialAccountHandlers(public, authed, OfficialAccountDeps{Config: officialaccount.Config{}})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/official-account/binding", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"enabled":false`) || !strings.Contains(w.Body.String(), `"bound":false`) || !strings.Contains(w.Body.String(), `"subscribed":false`) {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestOfficialBindingReadAndDeleteDoNotRequireCallbackCrypto(t *testing.T) {
 	config := officialaccount.Config{Enabled: true, AppID: "wx-official"}
 	store := &officialRouteStore{bound: officialaccount.Binding{AppID: config.AppID, OpenID: "official-openid", UserID: 42, Version: 2, Active: true, Subscribed: true}}

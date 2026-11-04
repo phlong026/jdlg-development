@@ -178,7 +178,7 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 		if err != nil {
 			return err
 		}
-		if f.Search == "" {
+		if f.Search == "" && f.Content == "" {
 			// 无搜索：保持既有单次取页的键集语义（游标=页内最后一条收录项）。
 			shares, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, f.Limit+1)
 			if err != nil {
@@ -225,13 +225,13 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 			}
 			return nil
 		}
-		// q 搜索模式：标题过滤先于分页，扫描前进直到凑满 limit+1 或扫完；
+		// 标题/素材过滤先于分页，扫描前进直到凑满 limit+1 或扫完；
 		// 游标推进到最后一条已扫描位置（页面可能稀疏，但不跳过任何分享）。
 		collected := make([]MyShare, 0, f.Limit+1)
 		var returned actorShareRow
 		hasMore := false
 		exhausted := false
-		for !exhausted && len(collected) <= f.Limit {
+		for !exhausted && !hasMore && len(collected) <= f.Limit {
 			shares, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, myVisitorSharePage)
 			if err != nil {
 				return err
@@ -240,8 +240,16 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 				exhausted = true
 				break
 			}
-			ids := make([]string, 0, len(shares))
+			candidates := make([]actorShareRow, 0, len(shares))
 			for _, item := range shares {
+				share := item.share
+				if f.Content != "" && (share.Content != f.Content || f.ContentVersion > 0 && share.Version != f.ContentVersion) {
+					continue
+				}
+				candidates = append(candidates, item)
+			}
+			ids := make([]string, 0, len(candidates))
+			for _, item := range candidates {
 				ids = append(ids, item.share.ID)
 			}
 			traffic, err := myShareTraffic(r, permittedOwners(scope, f.Owner), ids, f, actorVisitorKey(actor))
@@ -249,11 +257,11 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 				return err
 			}
 			effective := ownerScope(scope, f.Owner)
-			materials, err := s.myShareMaterials(ctx, r, effective, shares)
+			materials, err := s.myShareMaterials(ctx, r, effective, candidates)
 			if err != nil {
 				return err
 			}
-			for _, row := range shares {
+			for _, row := range candidates {
 				share := row.share
 				item := MyShare{ID: share.ID, At: row.at, Route: share.Route, Content: share.Content, Version: share.Version, Channel: share.Channel, Expires: share.Expires, Revoked: share.Revoked}
 				stats := traffic[share.ID]
@@ -277,6 +285,8 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 					hasMore = true
 					break
 				}
+				collected = append(collected, item)
+				returned = row
 			}
 			if len(shares) < myVisitorSharePage {
 				exhausted = true

@@ -63,6 +63,7 @@ type MyContentStat struct {
 	Title     string     `json:"title"`
 	Type      string     `json:"type,omitempty"`
 	Status    string     `json:"status,omitempty"`
+	Cover     *Asset     `json:"cover,omitempty"`
 	Visitors  int        `json:"visitor_count"`
 	Views     int        `json:"page_views"`
 	Forwards  int        `json:"forward_count"`
@@ -73,19 +74,20 @@ type MyContentStat struct {
 // 与逐次明细一次返回，小程序访问详情页一次拉取即可渲染。
 type MyVisitorDetail struct {
 	Visitor
-	Intent       Intent         `json:"intent"`
-	First        time.Time      `json:"first_visit"`
-	Last         time.Time      `json:"last_visit"`
-	Views        int            `json:"page_views"`
-	Visible      int64          `json:"visible_ms"`
-	Sessions     int            `json:"session_count"`
-	ShareCount   int            `json:"share_count"`
-	ContentCount int            `json:"content_count"`
-	VideoWatch   int64          `json:"video_watch_ms"`
-	Progress     int            `json:"progress_pct"`
-	Items        []MyVisitEntry `json:"items"`
-	Cursor       string         `json:"next_cursor,omitempty"`
-	FirstCursor  string         `json:"first_cursor,omitempty"`
+	CanConvertLead bool           `json:"can_convert_lead"`
+	Intent         Intent         `json:"intent"`
+	First          time.Time      `json:"first_visit"`
+	Last           time.Time      `json:"last_visit"`
+	Views          int            `json:"page_views"`
+	Visible        int64          `json:"visible_ms"`
+	Sessions       int            `json:"session_count"`
+	ShareCount     int            `json:"share_count"`
+	ContentCount   int            `json:"content_count"`
+	VideoWatch     int64          `json:"video_watch_ms"`
+	Progress       int            `json:"progress_pct"`
+	Items          []MyVisitEntry `json:"items"`
+	Cursor         string         `json:"next_cursor,omitempty"`
+	FirstCursor    string         `json:"first_cursor,omitempty"`
 	Snapshot
 }
 
@@ -711,7 +713,7 @@ func (s *Service) MyVisitorEntries(ctx context.Context, scope Scope, actor int64
 			return ruleErr
 		}
 		ruleFilter := Filter{Start: f.AsOf.AddDate(0, 0, -rule.WindowDays), End: f.AsOf.Add(time.Nanosecond), AsOf: f.AsOf}
-		dispAgg, _, err := s.myVisitorAggregates(ctx, r, scope, actor, f)
+		dispAgg, shares, err := s.myVisitorAggregates(ctx, r, scope, actor, f)
 		if err != nil {
 			return err
 		}
@@ -733,6 +735,27 @@ func (s *Service) MyVisitorEntries(ctx context.Context, scope Scope, actor int64
 			}
 			return entries[i].Occurred.After(entries[j].Occurred)
 		})
+		rows := make([]actorShareRow, 0, len(shares))
+		for _, share := range shares {
+			rows = append(rows, actorShareRow{share: share})
+		}
+		materials, err := s.myShareMaterials(ctx, r, effective, rows)
+		if err != nil {
+			return err
+		}
+		shareIndex := sharesByID(shares)
+		for i := range entries {
+			entry := &entries[i]
+			key, ok := myEventContentKey(Event{Route: entry.Route, Content: entry.Content, Version: entry.Version, Share: entry.ShareID}, shareIndex)
+			if ok {
+				if material, exists := materials[key]; exists && strings.TrimSpace(material.Title) != "" {
+					entry.Title = material.Title
+				}
+			}
+			if strings.TrimSpace(entry.Title) == "" || entry.Title == entry.Route || strings.HasPrefix(entry.Title, "pages/") {
+				entry.Title = s.myRouteTitle(entry.Route)
+			}
+		}
 		profiles, _, err := s.queryProfiles(ctx, r, []factView{{PageView: PageView{ID: "my-visitor-" + f.Visitor}, Visitor: f.Visitor}})
 		if err != nil {
 			return err
@@ -785,6 +808,12 @@ func (s *Service) MyContentStats(ctx context.Context, scope Scope, actor int64, 
 	out := List{Items: []MyContentStat{}}
 	if err := s.authorizeMyShares(scope, actor); err != nil {
 		return out, err
+	}
+	contentSort := f.Sort
+	if contentSort == "visitor_count" {
+		// visitor_count is specific to this projection; keep global Filter
+		// normalization unchanged for every other tracking endpoint.
+		f.Sort = ""
 	}
 	var err error
 	f, err = s.Normalize(f)
@@ -866,11 +895,23 @@ func (s *Service) MyContentStats(ctx context.Context, scope Scope, actor int64, 
 				}
 			}
 			if material, ok := materials[key]; ok {
-				item.Version, item.Title, item.Type, item.Status = material.Version, material.Title, material.Type, material.Status
+				item.Version, item.Title, item.Type, item.Status, item.Cover = material.Version, material.Title, material.Type, material.Status, material.Cover
+			}
+			if strings.TrimSpace(item.Title) == "" || item.Title == item.Route || strings.HasPrefix(item.Title, "pages/") {
+				item.Title = s.myRouteTitle(item.Route)
+			}
+			if f.Search != "" && !strings.Contains(strings.ToLower(item.Title), strings.ToLower(f.Search)) {
+				continue
 			}
 			items = append(items, item)
 		}
 		sort.Slice(items, func(i, j int) bool {
+			if contentSort == "visitor_count" && items[i].Visitors != items[j].Visitors {
+				if f.Direction == "asc" {
+					return items[i].Visitors < items[j].Visitors
+				}
+				return items[i].Visitors > items[j].Visitors
+			}
 			if items[i].Views != items[j].Views {
 				return items[i].Views > items[j].Views
 			}
@@ -887,4 +928,32 @@ func (s *Service) MyContentStats(ctx context.Context, scope Scope, actor int64, 
 		return nil
 	})
 	return out, err
+}
+
+// myRouteTitle is used only when the immutable material snapshot has no usable
+// title. Route keys are implementation details and must not become UI copy.
+func (s *Service) myRouteTitle(route string) string {
+	if configured, ok := s.Config.Routes[route]; ok {
+		title := strings.TrimSpace(configured.Title)
+		if title != "" && title != route && !strings.HasPrefix(title, "pages/") {
+			return title
+		}
+		switch configured.Type {
+		case "home":
+			return "首页"
+		case "list", "catalog":
+			return "内容列表"
+		case "form":
+			return "服务工具"
+		case "collection":
+			return "项目合集"
+		case "owned-content":
+			return "内容作品"
+		case "landing":
+			return "方案介绍"
+		case "detail":
+			return "内容详情"
+		}
+	}
+	return "内容页面"
 }
