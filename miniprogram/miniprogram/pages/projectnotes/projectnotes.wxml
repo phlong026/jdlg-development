@@ -11,7 +11,7 @@
     <block wx:if="{{pageView === 'list'}}">
       <view class="list-header"><text class="count">{{projects.length}} 个项目</text><button wx:if="{{projects.length}}" class="primary list-create" bindtap="openProjectCreation" disabled="{{busy}}">新建项目</button></view>
       <view wx:if="{{!projects.length}}" class="empty-card"><text class="empty-title">还没有项目</text><button class="primary empty-action" bindtap="openProjectCreation">新建项目</button></view>
-      <view wx:else class="project-list"><button wx:for="{{projects}}" wx:key="project_id" class="project-row" data-id="{{item.project_id}}" bindtap="selectProject"><view><text class="project-name">{{item.name}}</text><text class="project-meta">{{item.location || item.style || '项目资料待完善'}}</text></view><text class="arrow">›</text></button></view>
+      <view wx:else class="project-list"><button wx:for="{{projects}}" wx:key="project_id" class="project-row" data-id="{{item.project_id}}" bindtap="selectProject"><view><view style="display:flex;align-items:center;gap:8rpx;"><text class="project-name">{{item.name}}</text><text wx:if="{{item.stage}}" style="font-size:20rpx;color:#91622f;background:#f8f0e2;border-radius:6rpx;padding:2rpx 10rpx;">{{item.stage_label}}</text></view><text class="project-meta">{{item.location || item.style || '项目资料待完善'}}</text><text class="project-meta" wx:if="{{item.next_action}}">下一步：{{item.next_action}}</text></view><text class="arrow">›</text></button></view>
     </block>
 
     <block wx:elif="{{pageView === 'create'}}">

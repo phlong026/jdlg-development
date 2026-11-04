@@ -149,6 +149,7 @@ function buildWorkbenchMenuItems(options: {
   const items: MyMenuItem[] = [
     { action: 'myProjects', label: '我的项目', icon: 'folder', description: '项目与方案', available: true },
     { action: 'contentWorkbench', label: '内容创作', icon: 'video', description: '作品与资料', available: true },
+    { action: 'customers', label: '客户', icon: 'user', description: '浏览 · 意向 · 追踪', available: true },
   ];
   if (hasDesignerAccess) {
     items.push({ action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示', available: true });
@@ -1224,6 +1225,11 @@ Page({
 
     if (action === 'myProjects') {
       wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+      return;
+    }
+
+    if (action === 'customers') {
+      wx.navigateTo({ url: '/pages/sharevisits/sharevisits', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
       return;
     }
 
