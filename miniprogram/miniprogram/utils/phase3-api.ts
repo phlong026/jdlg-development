@@ -5,6 +5,8 @@ const ORIGIN = 'https://api.jiadilingguang.com';
 const WORKBENCH = '/api/v1/miniprogram/workbench';
 const IMPORTS = WORKBENCH + '/imports';
 const MY_SHARES = '/api/v1/miniprogram/tracking/my-shares';
+const MY_VISITORS = '/api/v1/miniprogram/tracking/my-visitors';
+const MY_CONTENT_STATS = '/api/v1/miniprogram/tracking/my-content-stats';
 const PROJECT_NOTES = '/api/v1/miniprogram/project-notes';
 let mutationSequence = 0;
 
@@ -68,6 +70,9 @@ function revokeContent(id, revision, reason, key) { return request(WORKBENCH + '
 function mySharesContext() { return request(MY_SHARES + '/context'); }
 function listMyShares(query) { return request(MY_SHARES, 'GET', {}, query); }
 function listMyShareVisits(id, query) { return request(MY_SHARES + '/' + encodeURIComponent(id) + '/visits', 'GET', {}, query); }
+function listMyVisitors(query) { return request(MY_VISITORS, 'GET', {}, query); }
+function listMyVisitorEntries(visitor, query) { return request(MY_VISITORS + '/entries', 'GET', {}, Object.assign({ visitor: visitor }, query || {})); }
+function listMyContentStats(query) { return request(MY_CONTENT_STATS, 'GET', {}, query); }
 function importCapabilities() { return request(IMPORTS + '/capabilities'); }
 function listImports() { return request(IMPORTS); }
 function submitImport(input) { return request(IMPORTS, 'POST', input); }
@@ -197,7 +202,7 @@ async function writingPrompts() {
 
 module.exports = {
   ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
-  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyShareVisits,
+  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, listMyContentStats, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
   getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject,

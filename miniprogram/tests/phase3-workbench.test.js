@@ -229,8 +229,8 @@ test('self-share pagination appends only the server page and replays snapshot fi
     { items: [{ share_id: 'share-two', visitor_count: 1, page_views: 1 }], as_of: '2026-10-27T00:00:00Z', metric_version: 'visible-v1' },
   ];
   const page = pageHarness('sharevisits', { listMyShares: async query => { queries.push(query); return pages.shift(); } });
-  await page.load(true);
-  await page.load(false);
+  await page.loadShares(true);
+  await page.loadShares(false);
   assert.deepEqual(page.data.items.map(item => item.share_id), ['share-one', 'share-two']);
   assert.equal(queries[1].cursor, 'next-one');
   assert.equal(queries[1].as_of, '2026-10-27T00:00:00Z');
@@ -670,10 +670,16 @@ test('account change clears private share rows and ignores the previous account 
       if (calls === 1) return new Promise(resolve => { resolveOld = resolve; });
       return { items: [{ share_id: 'share-account-b' }], as_of: '2026-10-27T01:00:00Z', metric_version: 'visible-v1' };
     },
+    listMyVisitors: async () => ({ items: [] }),
+    listMyContentStats: async () => ({ items: [] }),
   }, { getStorageSync: key => storage[key] || '', hideShareMenu() {} });
   page.onShow(); await tick();
+  // 新交互：分享在切 Tab 时加载
+  page.switchTab({ currentTarget: { dataset: { tab: 'shares' } } }); await tick();
   storage.token = 'account-b'; page.onShow(); await tick();
+  page.switchTab({ currentTarget: { dataset: { tab: 'shares' } } }); await tick();
   resolveOld({ items: [{ share_id: 'share-account-a' }], as_of: '2026-10-27T00:00:00Z', metric_version: 'visible-v1' }); await tick();
+  console.log('DBG2', JSON.stringify(page.data.items.map(i=>i.share_id)), 'tab=', page.data.activeTab, '_loadedTabs=', JSON.stringify(page._loadedTabs), 'cursor=', page.data.next_cursor)
   assert.deepEqual(page.data.items.map(item => item.share_id), ['share-account-b']);
 });
 
@@ -708,9 +714,10 @@ test('refresh supersedes delayed load-more and duplicate load-more stays single-
     },
   }, { hideShareMenu() {}, stopPullDownRefresh() {} });
   page.onShow(); await tick();
+  page.switchTab({ currentTarget: { dataset: { tab: 'shares' } } }); await tick();
   page.loadMore(); page.loadMore(); await tick();
   assert.equal(calls, 2);
-  const refresh = page.load(true); await tick();
+  const refresh = page.loadShares(true); await tick();
   resolveMore({ items: [{ share_id: 'stale-more' }] }); await refresh; await tick();
   assert.deepEqual(page.data.items.map(item => item.share_id), ['refreshed']);
 });

@@ -115,3 +115,22 @@ button::after {
   color: #76593a;
   font-size: 25rpx;
 }
+
+.top-tabs { display: flex; gap: 24rpx; border-bottom: 1rpx solid #e6e1d9; margin-bottom: 16rpx; }
+.top-tab { position: relative; min-height: 72rpx; padding: 0 8rpx 14rpx; display: flex; align-items: center; font-size: 28rpx; color: #90877d; border-radius: 0; background: transparent; }
+.top-tab.active { color: #432b18; font-weight: 500; }
+.top-tab.active::after { content: ''; position: absolute; left: 10rpx; right: 10rpx; bottom: 0; height: 5rpx; border-radius: 3rpx; background: #a87943; }
+.filter-row { display: flex; align-items: center; gap: 14rpx; margin-bottom: 16rpx; }
+.search-box { flex: 1; min-width: 0; height: 72rpx; background: #fff; border: 1rpx solid #e8dfd3; border-radius: 999rpx; display: flex; align-items: center; padding: 0 20rpx; gap: 10rpx; }
+.search-box input { flex: 1; min-width: 0; font-size: 25rpx; color: #302316; }
+.search-symbol { font-size: 34rpx; color: #a09589; }
+.filter-chip { flex-shrink: 0; min-height: 60rpx; padding: 0 24rpx; border: 1rpx solid #eee8e1; border-radius: 999rpx; background: #fff; color: #65584e; font-size: 24rpx; display: flex; align-items: center; }
+.filter-chip.on { border-color: #a87943; background: #f1e4d2; color: #8b5c2d; }
+.customer-card { display: flex; flex-direction: column; gap: 10rpx; align-items: stretch; }
+.customer-head { display: flex; align-items: center; gap: 12rpx; }
+.customer-name { flex: 1; min-width: 0; font-size: 30rpx; font-weight: 600; color: #34291f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intent { flex-shrink: 0; font-size: 21rpx; border-radius: 6rpx; padding: 4rpx 12rpx; }
+.intent-high { color: #b86b50; background: #f9ede7; }
+.intent-mid { color: #9a6835; background: #f8f0e2; }
+.intent-low { color: #9a938a; background: #f0ece6; }
+.rank { flex-shrink: 0; width: 40rpx; height: 40rpx; border-radius: 8rpx; background: #a87943; color: #fff; font-size: 24rpx; display: flex; align-items: center; justify-content: center; }

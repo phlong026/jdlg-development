@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "分享记录",
+  "navigationBarTitleText": "客户",
   "navigationStyle": "custom",
   "enablePullDownRefresh": true,
   "usingComponents": {

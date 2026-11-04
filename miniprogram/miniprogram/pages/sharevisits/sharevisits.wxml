@@ -1,20 +1,67 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="private-page">
- <navigation-bar title="分享记录" back="{{true}}" background="#f7f3ee" />
+ <navigation-bar title="客户" back="{{true}}" background="#f7f3ee" />
  <view class="page-body">
-  <view wx:if="{{loading}}" class="state" role="status">正在加载分享记录…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>登录后查看分享记录</text><button class="primary" bindtap="goLogin">登录</button></view>
-  <view wx:elif="{{denied}}" class="state"><text>当前账号无法查看分享记录</text><button bindtap="retry">重新检查</button></view>
-  <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button bindtap="retry">重试</button></view>
+  <view class="top-tabs" role="tablist">
+   <button class="top-tab {{activeTab === 'customers' ? 'active' : ''}}" data-tab="customers" bindtap="switchTab" role="tab" aria-selected="{{activeTab === 'customers'}}">客户</button>
+   <button class="top-tab {{activeTab === 'materials' ? 'active' : ''}}" data-tab="materials" bindtap="switchTab" role="tab" aria-selected="{{activeTab === 'materials'}}">素材</button>
+   <button class="top-tab {{activeTab === 'shares' ? 'active' : ''}}" data-tab="shares" bindtap="switchTab" role="tab" aria-selected="{{activeTab === 'shares'}}">分享</button>
+  </view>
+
+  <block wx:if="{{activeTab === 'customers'}}">
+   <view class="filter-row">
+    <view class="search-box"><text class="search-symbol">⌕</text><input value="{{customerQuery}}" bindinput="setCustomerQuery" bindconfirm="reloadCustomers" confirm-type="search" placeholder="搜索客户名称" aria-label="搜索客户名称" /></view>
+    <button class="filter-chip {{customerIntent === 'high' ? 'on' : ''}}" bindtap="toggleIntent">高意向</button>
+   </view>
+   <view class="state" wx:if="{{customerLoading}}" role="status">正在加载客户…</view>
+   <view class="state" wx:elif="{{customerError}}"><text>{{customerError}}</text><button class="primary" bindtap="reloadCustomers">重试</button></view>
+   <view class="state" wx:elif="{{!customers.length}}">窗口内还没有客户浏览，先去分享一条素材吧</view>
+   <block wx:else>
+    <button wx:for="{{customers}}" wx:key="visitor_key" class="card customer-card" data-index="{{index}}" bindtap="openCustomer">
+     <view class="customer-head">
+      <text class="customer-name">{{item.nickname || item.visitor_label}}</text>
+      <text wx:if="{{item.intent_level === 'high'}}" class="intent intent-high">高意向</text>
+      <text wx:elif="{{item.intent_level === 'medium'}}" class="intent intent-mid">中意向</text>
+      <text wx:elif="{{item.intent_level === 'low' && item.views}}" class="intent intent-low">低意向</text>
+     </view>
+     <text class="meta">最近 {{item.last_visit_text}} · 累计 {{item.views}} 次 · {{item.duration_text}}</text>
+    </button>
+    <button wx:if="{{customers_cursor}}" class="load-more" bindtap="loadMoreCustomers" loading="{{customerLoadingMore}}" disabled="{{customerLoadingMore}}">加载更多</button>
+   </block>
+  </block>
+
+  <block wx:elif="{{activeTab === 'materials'}}">
+   <view class="state" wx:if="{{materialLoading}}" role="status">正在加载素材热度…</view>
+   <view class="state" wx:elif="{{materialError}}"><text>{{materialError}}</text><button class="primary" bindtap="reloadMaterials">重试</button></view>
+   <view class="state" wx:elif="{{!materials.length}}">还没有客户浏览记录，分享一条素材就会出现在这里</view>
+   <block wx:else>
+    <button wx:for="{{materials}}" wx:key="content_key" class="card material-card" data-index="{{index}}" bindtap="openMaterial">
+     <view class="card-heading"><text class="title">{{item.title || '未命名素材'}}</text><text wx:if="{{index < 3}}" class="rank">{{index + 1}}</text></view>
+     <text class="meta">创建于 {{item.created_at_text}}</text>
+     <view class="metrics"><text>查看人数 {{item.visitor_count}}（去重）</text><text>浏览 {{item.views}} 次</text><text wx:if="{{item.forwards}}">被转发 {{item.forwards}}</text></view>
+    </button>
+    <button wx:if="{{materials_cursor}}" class="load-more" bindtap="loadMoreMaterials" loading="{{materialLoadingMore}}" disabled="{{materialLoadingMore}}">加载更多</button>
+   </block>
+  </block>
+
   <block wx:else>
-   <view wx:if="{{!items.length}}" class="state">暂时没有分享记录</view>
-   <button wx:for="{{items}}" wx:key="share_id" class="card" data-index="{{index}}" bindtap="openVisits">
-    <view class="card-heading"><text class="title">{{item.title || '分享内容'}}</text><text class="status">{{item.status_text}}</text></view>
-    <text class="meta">{{item.channel_text}} · 分享于 {{item.created_at_text}}</text>
-    <view class="metrics"><text>{{item.visitor_count}} 位访客</text><block wx:if="{{item.is_collection}}"><text>目录 {{item.directory_views}} 次</text><text>作品 {{item.content_views}} 次</text></block><text wx:else>{{item.page_views}} 次浏览</text><text wx:if="{{item.avg_views_per_visitor}}">人均 {{item.avg_views_per_visitor}}</text></view>
-    <text class="visit-time">{{item.has_visits ? '最近访问 ' + item.last_visit_text : '暂时没有访问'}}</text>
-   </button>
-   <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
+   <view class="filter-row">
+    <view class="search-box"><text class="search-symbol">⌕</text><input value="{{shareQuery}}" bindinput="setShareQuery" bindconfirm="reloadShares" confirm-type="search" placeholder="搜索素材标题" aria-label="搜索素材标题" /></view>
+   </view>
+   <view class="state" wx:if="{{loading}}" role="status">正在加载分享记录…</view>
+   <view class="state" wx:elif="{{loginRequired}}"><text>登录后查看分享记录</text><button class="primary" bindtap="goLogin">登录</button></view>
+   <view class="state" wx:elif="{{denied}}"><text>当前账号无法查看分享记录</text><button bindtap="retry">重新检查</button></view>
+   <view class="state" wx:elif="{{error}}"><text>{{error}}</text><button bindtap="retry">重试</button></view>
+   <view class="state" wx:elif="{{!items.length}}">暂时没有分享记录</view>
+   <block wx:else>
+    <button wx:for="{{items}}" wx:key="share_id" class="card" data-index="{{index}}" bindtap="openVisits">
+     <view class="card-heading"><text class="title">{{item.title || '分享内容'}}</text><text class="status">{{item.status_text}}</text></view>
+     <text class="meta">{{item.channel_text}} · 分享于 {{item.created_at_text}}</text>
+     <view class="metrics"><text>{{item.visitor_count}} 位访客</text><block wx:if="{{item.is_collection}}"><text>目录 {{item.directory_views}} 次</text><text>作品 {{item.content_views}} 次</text></block><text wx:else>{{item.page_views}} 次浏览</text><text wx:if="{{item.avg_views_per_visitor}}">人均 {{item.avg_views_per_visitor}}</text></view>
+     <text class="visit-time">{{item.has_visits ? '最近访问 ' + item.last_visit_text : '暂时没有访问'}}</text>
+    </button>
+    <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
+   </block>
   </block>
  </view>
 </view>

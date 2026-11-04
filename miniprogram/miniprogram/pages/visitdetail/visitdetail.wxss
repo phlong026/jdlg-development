@@ -58,3 +58,9 @@
   font-size: 22rpx;
   color: #a89a8c;
 }
+
+.title-row { display: flex; align-items: center; gap: 12rpx; flex-wrap: wrap; }
+.intent { font-size: 21rpx; border-radius: 6rpx; padding: 4rpx 12rpx; }
+.intent-high { color: #b86b50; background: #f9ede7; }
+.intent-mid { color: #9a6835; background: #f8f0e2; }
+.archive-entry { margin: 12rpx 0; padding: 18rpx 24rpx; border: 1rpx solid #e4d4bf; border-radius: 14rpx; background: #fbf8f3; color: #95632f; font-size: 26rpx; }

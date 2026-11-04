@@ -13,7 +13,12 @@ Page({
   data: { id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0 },
   onLoad(options) {
     const id = String(options.id || options.share_id || ''); if (!id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
-    this.setData({ id, title: String(options.title || '分享访问详情') });
+    this.setData({
+      id,
+      title: String(options.title || '分享访问详情'),
+      intent_level: String(options.intent || ''),
+      visitor_name: String(options.name || ''),
+    });
   },
   onShow() {
     wx.hideShareMenu();
@@ -58,7 +63,8 @@ Page({
   },
   retry() { this.load(true); },
   loadMore() { this.load(false, this._epoch); },
-  goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
+  goArchive() { wx.navigateTo({ url: '/pages/projectnotes/projectnotes' }); },
+  goLogin() { { wx.navigateTo({ url: '/pages/login/login' }); },
   toggleTimeline(event) {
     const key = String(event.currentTarget.dataset.key || '');
     this.setData({ items: this.data.items.map(item => item.visitor_key === key ? { ...item, expanded: !item.expanded } : item) });
