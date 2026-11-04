@@ -123,3 +123,7 @@
 | [service/tracking/my_visitors_test.go](../../../service/tracking/my_visitors_test.go) | 5、147、190 | 行为/界面/构建回归与测试契约 |
 | [miniprogram/tests/customer-workflow-rectification.test.js](../../../miniprogram/tests/customer-workflow-rectification.test.js) | 新增文件 | 行为/界面/构建回归与测试契约 |
 | [miniprogram/tests/designer-workbench-rectification.test.js](../../../miniprogram/tests/designer-workbench-rectification.test.js) | 新增文件 | 行为/界面/构建回归与测试契约 |
+
+## 部署后小幅复核修正
+
+消息中心提醒设置的小按钮增加明确宽度上限，避免原生button默认宽度导致半行按钮；原生实测刷新64px、收起41px。对应messagecenter.scss与visual-verdict.json。代码提交和部署回执见 RELEASE.md。交付目录还新增本清单、原生证据、验证摘要与视觉复核记录，实施计划同步更新。

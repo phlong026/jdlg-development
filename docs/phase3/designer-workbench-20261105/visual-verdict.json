@@ -1,5 +1,5 @@
 {
-  "iteration": 1,
+  "iteration": 3,
   "evidence": "整改后逐页核验/07-客户.png,08-客户详情.png",
   "observed": {
     "customer_card_css_width": 398,
@@ -8,10 +8,21 @@
     "note_actions": "2x2",
     "version_count_after_cancel": 1
   },
-  "verdict": "主流程通过；客户及详情页导航后多留92rpx顶部空白，下一轮压缩为24rpx",
+  "verdict": "通过：客户卡全宽、详情无404、2x2笔记按钮、取消保留版本；提醒设置按钮紧凑且服务号状态正确",
   "pending": [
     "实际服务号外发",
     "受邀接收人多成员真机",
     "发布内容阅读有效态"
-  ]
+  ],
+  "settings_button_evidence": {
+    "action": {
+      "width": 64,
+      "height": 30
+    },
+    "close": {
+      "width": 41,
+      "height": 24.3515625
+    },
+    "bindingLabel": "服务号提醒未开启"
+  }
 }

@@ -235,10 +235,10 @@ button::after {
 .settings-head,
 .binding-row { justify-content: space-between; gap: 20rpx; }
 .settings-title { font-size: 29rpx; font-weight: 600; }
-.panel-close { width: auto; flex: none; padding: 6rpx 0; background: transparent; color: #8a673f; font-size: 24rpx; }
+.panel-close { width: 72rpx; max-width: 72rpx; min-width: 0; flex: none; padding: 6rpx 0; background: transparent; color: #8a673f; font-size: 24rpx; }
 .binding-row { padding: 20rpx 0; border-bottom: 1rpx solid #eee8e1; }
 .binding-row > view { min-width: 0; flex: 1; }
-.panel-action { width: auto; height: 54rpx; line-height: 54rpx; flex: none; min-width: 88rpx; min-height: 54rpx; padding: 0 18rpx; border-radius: 10rpx; background: #a87943; color: #fff; font-size: 23rpx; }
+.panel-action { width: 112rpx; max-width: 112rpx; height: 54rpx; line-height: 54rpx; flex: none; min-width: 88rpx; min-height: 54rpx; padding: 0 18rpx; border-radius: 10rpx; background: #a87943; color: #fff; font-size: 23rpx; }
 .panel-action.quiet { border: 1rpx solid #ded3c5; background: #fff; color: #79624b; }
 .panel-state,.panel-error,.inline-warning { color: #8b6540; font-size: 23rpx; line-height: 1.5; }
 .panel-state,.panel-error { padding: 14rpx 0; }
