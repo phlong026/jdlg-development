@@ -98,7 +98,8 @@ Page({
       const assets = mergeAssets(mediaPage.items || [], associated);
       const previews = new Set(legacyReadOnly || layoutReadOnly ? associated.map(asset => asset.media_id) : mediaIDs(blocks));
       if (content && content.cover) previews.add(content.cover.media_id);
-      const loadedMedia = await this.loadPrivatePaths(assets, previews);
+      const waitsForPreviews = legacyReadOnly || layoutReadOnly || documentReadOnly;
+      const loadedMedia = waitsForPreviews ? await this.loadPrivatePaths(assets, previews) : assets.map(asset => ({ ...asset, local_path: '' }));
       if (!this.current(epoch)) return;
       this._loaded = true;
       const legacyIDs = new Set(associated.map(asset => asset.media_id));
@@ -113,6 +114,7 @@ Page({
       this.applyPendingPrefill();
       this._savedSignature = content ? this.draftSignature() : '';
       this.performCreateAction();
+      if (!waitsForPreviews && previews.size) void this.hydratePrivatePaths(epoch, assets, previews);
     } catch (error) { if (this.current(epoch)) this.setData({ error: error.message || '编辑器加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false }); }
   },
   editorWidth() { const window = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync ? wx.getSystemInfoSync() : { windowWidth: 375 }; return Math.max(240, Number(window.windowWidth || 375) - 64); },
@@ -223,6 +225,18 @@ Page({
       try { return { ...asset, local_path: await api.downloadWorkbenchMedia(asset.media_id) }; }
       catch (_) { return { ...asset, local_path: '', preview_error: '预览暂不可用' }; }
     }));
+  },
+  async hydratePrivatePaths(epoch, items, previews) {
+    const loaded = await this.loadPrivatePaths(items, previews);
+    if (!this.current(epoch) || !this._loaded) return;
+    const paths = new Map(loaded.map(asset => [asset.media_id, asset]));
+    const mergePaths = assets => assets.map(asset => {
+      const preview = paths.get(asset.media_id);
+      if (!preview || asset.local_path) return asset;
+      return { ...asset, local_path: preview.local_path || '', preview_error: preview.preview_error || '' };
+    });
+    const media = mergePaths(this.data.media || []);
+    this.setData({ media, documentCandidates: mergePaths(this.data.documentCandidates || []), renderedBlocks: decorateBlocks(this.data.blocks, media) });
   },
   async previewMedia(event) {
     const index = Number(event.currentTarget.dataset.index), asset = this.data.media[index];

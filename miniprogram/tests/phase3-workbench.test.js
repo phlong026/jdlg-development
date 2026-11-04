@@ -257,6 +257,34 @@ test('editor serializes paragraph-image-video order and only referenced media ID
   assert.equal(savedDraft.body_format, 'article_v2');
 });
 
+test('editor reveals fetched text before private media previews finish', async () => {
+  let finishPreview;
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '我的内容' }] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    getContent: async () => ({ content_id: 'content-one', title: '庭院说明', owner_id: 'owner-a', rights: 'own', revision: 1, version: 0, status: 'draft', body_format: 'article_v2', body: JSON.stringify({ blocks: [{ kind: 'paragraph', text: '先显示这段正文' }, { kind: 'image', media_id: 'image-one' }] }), media: [{ media_id: 'image-one', kind: 'image' }] }),
+    downloadWorkbenchMedia: () => new Promise(resolve => { finishPreview = resolve; }),
+  }, { hideShareMenu() {} });
+  page.onLoad({ id: 'content-one' });
+  page.onShow();
+  await tick(); await tick();
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.title, '庭院说明');
+  assert.equal(page.data.blocks[0].text, '先显示这段正文');
+  assert.equal(page.data.media[0].local_path, '');
+  page.setData({
+    blocks: [{ kind: 'paragraph', text: '用户已经修改正文' }, { kind: 'image', media_id: 'image-new' }],
+    media: [{ ...page.data.media[0], title: '用户刚更新的素材标题', local_path: '/tmp/image-one-newer', preview_error: '' }]
+      .concat({ media_id: 'image-new', kind: 'image', local_path: '/tmp/image-new' }),
+  });
+  finishPreview('/tmp/image-one');
+  await tick(); await tick();
+  assert.equal(page.data.media[0].local_path, '/tmp/image-one-newer', '迟到预览不得覆盖更新的本地路径');
+  assert.equal(page.data.media[0].title, '用户刚更新的素材标题', '迟到预览不得覆盖当前素材元数据');
+  assert.equal(page.data.blocks[0].text, '用户已经修改正文');
+  assert.equal(page.data.media.find(asset => asset.media_id === 'image-new').local_path, '/tmp/image-new');
+});
+
 test('editor uploads a PDF or DOCX as a private document draft and reopens the original file on demand', async () => {
   const calls = [];
   const api = {
