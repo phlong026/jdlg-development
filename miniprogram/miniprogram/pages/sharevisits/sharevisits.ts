@@ -76,28 +76,29 @@ Page({
     if (tab === this.data.activeTab) { this.reloadActive(); return; }
     this.setData({ activeTab: tab });
     if (!this._token) return;
-    if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true, this.bumpEpoch('customers'));
-    if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true, this.bumpEpoch('materials')); }
-    if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true, this.bumpEpoch('shares')); }
+    if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true);
+    if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true); }
+    if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true); }
   },
   reloadActive() {
     const tab = this.data.activeTab;
-    if (tab === 'customers') this.loadCustomers(true, this.bumpEpoch('customers'));
-    else if (tab === 'materials') this.loadMaterials(true, this.bumpEpoch('materials'));
-    else this.loadShares(true, this.bumpEpoch('shares'));
+    if (tab === 'customers') this.loadCustomers(true);
+    else if (tab === 'materials') this.loadMaterials(true);
+    else this.loadShares(true);
   },
 
   // ===== 客户 Tab（my-visitors 意向榜） =====
+  // 操作入口不推进 epoch：loader 在通过锁检查后才自动分配（codex 复审 P1：先 bump 再被锁挡会作废在途请求）。
   setCustomerQuery(e) { this.setData({ customerQuery: e.detail.value }); },
-  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, this.bumpEpoch('customers')); },
-  reloadCustomers() { return this.loadCustomers(true, this.bumpEpoch('customers')); },
-  loadMoreCustomers() { return this.loadCustomers(false, this.bumpEpoch('customers')); },
+  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true); },
+  reloadCustomers() { return this.loadCustomers(true); },
+  loadMoreCustomers() { return this.loadCustomers(false); },
   async loadCustomers(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this._customerMorePending || !this.data.customers_cursor)) return;
     const epoch = suppliedEpoch || this.bumpEpoch('customers');
     if (reset) this.setData({ customerLoading: true, customerError: '', customers_cursor: '', customers_as_of: '' });
-    else { this._customerMorePending = true; this.setData({ customerLoadingMore: true }); }
+    else { this._customerMorePending = epoch; this.setData({ customerLoadingMore: true }); }
     try {
       const query = { limit: 20, as_of: this.data.customers_as_of };
       if (this.data.customerIntent) query.intent = this.data.customerIntent;
@@ -121,7 +122,8 @@ Page({
       });
     } catch (error) {
       if (this.tokenAlive(epoch, 'customers')) this.setData({ customerError: error.message || '客户加载失败', customerLoading: false, customerLoadingMore: false });
-    } finally { this._customerMorePending = false; if (this.tokenAlive(epoch, 'customers')) this.setData({ customerLoading: false, customerLoadingMore: false }); }
+    // 锁只由持有者释放（codex 复审 P2：reset 不持分页锁，不得误清新分页的锁）；loading UI 态仅在请求存活时重置。
+    } finally { if (this._customerMorePending === epoch) this._customerMorePending = false; if (this.tokenAlive(epoch, 'customers')) this.setData({ customerLoading: false, customerLoadingMore: false }); }
   },
   openCustomer(event) {
     const item = this.data.customers[Number(event.currentTarget.dataset.index)];
@@ -131,14 +133,14 @@ Page({
   },
 
   // ===== 素材 Tab（my-content-stats 热度榜） =====
-  reloadMaterials() { return this.loadMaterials(true, this.bumpEpoch('materials')); },
-  loadMoreMaterials() { return this.loadMaterials(false, this.bumpEpoch('materials')); },
+  reloadMaterials() { return this.loadMaterials(true); },
+  loadMoreMaterials() { return this.loadMaterials(false); },
   async loadMaterials(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this._materialMorePending || !this.data.materials_cursor)) return;
     const epoch = suppliedEpoch || this.bumpEpoch('materials');
     if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
-    else { this._materialMorePending = true; this.setData({ materialLoadingMore: true }); }
+    else { this._materialMorePending = epoch; this.setData({ materialLoadingMore: true }); }
     try {
       const query = { limit: 20, as_of: this.data.materials_as_of };
       if (!reset) query.cursor = this.data.materials_cursor;
@@ -161,18 +163,18 @@ Page({
       });
     } catch (error) {
       if (this.tokenAlive(epoch, 'materials')) this.setData({ materialError: error.message || '素材热度加载失败', materialLoading: false, materialLoadingMore: false });
-    } finally { this._materialMorePending = false; if (this.tokenAlive(epoch, 'materials')) this.setData({ materialLoading: false, materialLoadingMore: false }); }
+    } finally { if (this._materialMorePending === epoch) this._materialMorePending = false; if (this.tokenAlive(epoch, 'materials')) this.setData({ materialLoading: false, materialLoadingMore: false }); }
   },
 
   // ===== 分享 Tab（原 sharevisits 迁入） =====
   setShareQuery(e) { this.setData({ shareQuery: e.detail.value }); this._shareQueryTimer && clearTimeout(this._shareQueryTimer); this._shareQueryTimer = setTimeout(() => this.reloadShares(), 400); },
-  reloadShares() { return this.loadShares(true, this.bumpEpoch('shares')); },
+  reloadShares() { return this.loadShares(true); },
   async loadShares(reset, suppliedEpoch) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token) return;
     if (!reset && (this._shareMorePending || !this.data.next_cursor)) return;
     const epoch = suppliedEpoch || this.bumpEpoch('shares');
-    if (!reset) this._shareMorePending = true;
+    if (!reset) this._shareMorePending = epoch;
     if (reset) this.setData({ loading: true, error: '', denied: false, items: [], next_cursor: '', as_of: '', metric_version: '' });
     else this.setData({ loadingMore: true, error: '' });
     try {
@@ -189,11 +191,11 @@ Page({
       this._loadedTabs.shares = true;
       this.setData({ items: reset ? rows : this.data.items.concat(rows), next_cursor: page.next_cursor || '', as_of: page.as_of || this.data.as_of, metric_version: page.metric_version || this.data.metric_version, loading: false, loadingMore: false });
     } catch (error) { if (this.tokenAlive(epoch, 'shares')) this.setData({ error: error.message || '本人分享记录加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false }); }
-    // 锁无条件释放（防同Tab作废后分页卡死）；loading UI 态只在请求仍存活时重置。
-    finally { this._shareMorePending = false; if (this.tokenAlive(epoch, 'shares')) this.setData({ loading: false, loadingMore: false }); }
+    // 锁只由持有者释放；loading UI 态仅在请求仍存活时重置。
+    finally { if (this._shareMorePending === epoch) this._shareMorePending = false; if (this.tokenAlive(epoch, 'shares')) this.setData({ loading: false, loadingMore: false }); }
   },
-  retry() { return this.loadShares(true, this.bumpEpoch('shares')); },
-  loadMore() { return this.loadShares(false, this.bumpEpoch('shares')); },
+  retry() { return this.loadShares(true); },
+  loadMore() { return this.loadShares(false); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   openVisits(event) {
     const item = this.data.items[Number(event.currentTarget.dataset.index)];

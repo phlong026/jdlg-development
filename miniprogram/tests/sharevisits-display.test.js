@@ -89,10 +89,10 @@ test('codex P1-3回归：Tab间不作废对方请求，分页锁不卡死',async
  assert.equal(page.data.next_cursor,'c1');
  // 分页请求挂起（锁置位）
  const pendingMore=page.loadShares(false,page.bumpEpoch('shares'));
- assert.equal(page._shareMorePending,true);
+ assert.ok(page._shareMorePending,'分页锁应置为持有者epoch');
  // 客户Tab并发刷新：不得作废分享请求，也不得卡死其锁
  await page.loadCustomers(true,page.bumpEpoch('customers'));
- assert.equal(page._shareMorePending,true);
+ assert.ok(page._shareMorePending,'客户Tab刷新不得释放分享分页锁');
  // 释放分享分页：数据写入、锁释放
  secondResolver({items:[{share_id:'p2',status:'published',channel:'timeline'}],next_cursor:''});
  await pendingMore;
@@ -101,18 +101,17 @@ test('codex P1-3回归：Tab间不作废对方请求，分页锁不卡死',async
 });
 
 test('codex P1-2回归：retry 分配新 epoch，旧慢响应不得覆盖新结果',async()=>{
- const dq=deferredQueue(2);
- const {page}=runtime([],{listMyShares:async()=>dq.calls[dq.calls.length-2+ (++dq.taken-0)]});
- // 简化：直接按调用序返回挂起 promise
- dq.taken=0;
- const {page:page2}=runtime([],{listMyShares:async()=>{const p=dq.calls[dq.taken];dq.taken++;return p}});
- page2._token='login-token';
- const oldRequest=page2.loadShares(true,page2.bumpEpoch('shares'));
- const newRequest=page2.retry();
- // 旧响应先返回（慢），新响应后返回
- dq.release(0,{items:[{share_id:'old',status:'published',channel:'timeline'}],next_cursor:''});
+ const dq=deferredQueue(2);let taken=0;
+ const {page}=runtime([],{listMyShares:async()=>{const p=dq.calls[taken];taken++;return p}});
+ page._token='login-token';
+ const oldRequest=page.loadShares(true);
+ const newRequest=page.retry();
+ // 新响应先返回并断言生效（retry 复用旧 epoch 或丢守卫则此处即失败）
  dq.release(1,{items:[{share_id:'fresh',status:'published',channel:'app_message'}],next_cursor:''});
- await Promise.all([oldRequest,newRequest]);
- assert.equal(page2.data.items.length,1);
- assert.equal(page2.data.items[0].share_id,'fresh');
+ await newRequest;
+ assert.deepEqual(page.data.items.map(i=>i.share_id),['fresh']);
+ // 旧响应随后才到：不得覆盖已生效的新结果（删除成功分支 tokenAlive 守卫则此处失败）
+ dq.release(0,{items:[{share_id:'old',status:'published',channel:'timeline'}],next_cursor:''});
+ await oldRequest;
+ assert.deepEqual(page.data.items.map(i=>i.share_id),['fresh']);
 });

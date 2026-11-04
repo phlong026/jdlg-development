@@ -200,7 +200,11 @@ Page({
         meta_text: p.location || p.style || '资料待完善',
       }));
       this.setData({ activeProjects: projects });
-    } catch (_) { this.setData({ activeProjects: [] }); }
+    } catch (_) {
+      // 失败同样不得跨会话：旧请求失败时不能清空新会话已显示的项目卡
+      if (epoch !== undefined && epoch !== this._epoch) return;
+      this.setData({ activeProjects: [] });
+    }
   },
   openProject(event) {
     const id = event.currentTarget.dataset.id;
