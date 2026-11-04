@@ -38,61 +38,65 @@ Page({
     shareQuery: '', loading: false, loadingMore: false, error: '', denied: false, loginRequired: false,
     items: [], next_cursor: '', as_of: '', metric_version: '', sharesLoaded: false,
   },
-  // 每个 Tab 独立 epoch：慢响应不会覆盖其它 Tab 的新响应（codex 批次3 P2）。
+  // 每个 Tab 独立 epoch：慢响应不会覆盖其它 Tab 的新响应，Tab 间互不作废。
+  bumpEpoch(which) {
+    const key = { customers: '_epochCustomers', materials: '_epochMaterials', shares: '_epochShares' }[which];
+    this[key] = (this[key] || 0) + 1;
+    return this[key];
+  },
   onShow() {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
-    this._epoch = (this._epoch || 0) + 1;
+    ['customers', 'materials', 'shares'].forEach(which => this.bumpEpoch(which));
     this.setData({ loginRequired: !this._token });
     if (!this._token) return;
     // 每次 onShow 刷新当前激活 Tab（旧页语义：onShow 必重拉）；其余 Tab 待切换时再拉。
     this._loadedTabs = {};
-    this.loadCustomers(true, this._epoch);
-    if (this.data.activeTab === 'shares') this.loadShares(true, this._epoch);
-    else if (this.data.activeTab === 'materials') this.loadMaterials(true, this._epoch);
+    this.loadCustomers(true, this._epochCustomers);
+    if (this.data.activeTab === 'shares') this.loadShares(true, this._epochShares);
+    else if (this.data.activeTab === 'materials') this.loadMaterials(true, this._epochMaterials);
   },
-  current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
+  current(epoch) { return epoch === this._epochCustomers && this._token === String(wx.getStorageSync('token') || ''); },
   onUnload() {
-    this._epoch = (this._epoch || 0) + 1;
+    ['customers', 'materials', 'shares'].forEach(which => this.bumpEpoch(which));
   },
   tokenAlive(epoch, which) {
-    const map = { customers: '_epoch', materials: '_epoch', shares: '_epoch' };
+    const map = { customers: '_epochCustomers', materials: '_epochMaterials', shares: '_epochShares' };
     return epoch === this[map[which]] && this._token === String(wx.getStorageSync('token') || '');
   },
   onPullDownRefresh() {
     const done = () => wx.stopPullDownRefresh();
-    if (this.data.activeTab === 'customers') this.loadCustomers(true, this._epoch = (this._epoch || 0) + 1).finally(done);
-    else if (this.data.activeTab === 'shares') this.loadShares(true, this._epoch = (this._epoch || 0) + 1).finally(done);
-    else this.loadMaterials(true, this._epoch = (this._epoch || 0) + 1).finally(done);
+    if (this.data.activeTab === 'customers') this.loadCustomers(true, this.bumpEpoch('customers')).finally(done);
+    else if (this.data.activeTab === 'shares') this.loadShares(true, this.bumpEpoch('shares')).finally(done);
+    else this.loadMaterials(true, this.bumpEpoch('materials')).finally(done);
   },
   switchTab(event) {
     const tab = event.currentTarget.dataset.tab;
     if (tab === this.data.activeTab) { this.reloadActive(); return; }
     this.setData({ activeTab: tab });
     if (!this._token) return;
-    if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true, this._epoch);
-    if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true, this._epoch); }
-    if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true, this._epoch); }
+    if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true, this.bumpEpoch('customers'));
+    if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true, this.bumpEpoch('materials')); }
+    if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true, this.bumpEpoch('shares')); }
   },
   reloadActive() {
     const tab = this.data.activeTab;
-    if (tab === 'customers') this.loadCustomers(true, this._epoch);
-    else if (tab === 'materials') this.loadMaterials(true, this._epoch);
-    else this.loadShares(true, this._epoch);
+    if (tab === 'customers') this.loadCustomers(true, this.bumpEpoch('customers'));
+    else if (tab === 'materials') this.loadMaterials(true, this.bumpEpoch('materials'));
+    else this.loadShares(true, this.bumpEpoch('shares'));
   },
 
   // ===== 客户 Tab（my-visitors 意向榜） =====
   setCustomerQuery(e) { this.setData({ customerQuery: e.detail.value }); },
-  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, this._epoch = (this._epoch || 0) + 1); },
-  reloadCustomers() { return this.loadCustomers(true, this._epoch = (this._epoch || 0) + 1); },
-  loadMoreCustomers() { return this.loadCustomers(false, this._epoch = (this._epoch || 0) + 1); },
+  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, this.bumpEpoch('customers')); },
+  reloadCustomers() { return this.loadCustomers(true, this.bumpEpoch('customers')); },
+  loadMoreCustomers() { return this.loadCustomers(false, this.bumpEpoch('customers')); },
   async loadCustomers(reset, suppliedEpoch) {
     if (!this._token) return;
-    if (!reset && (this.data.customerLoadingMore || !this.data.customers_cursor)) return;
-    const epoch = suppliedEpoch;
-    this._epoch = epoch;
+    if (!reset && (this._customerMorePending || !this.data.customers_cursor)) return;
+    const epoch = suppliedEpoch || this.bumpEpoch('customers');
     if (reset) this.setData({ customerLoading: true, customerError: '', customers_cursor: '', customers_as_of: '' });
-    else this.setData({ customerLoadingMore: true });
+    else { this._customerMorePending = true; this.setData({ customerLoadingMore: true }); }
     try {
       const query = { limit: 20, as_of: this.data.customers_as_of };
       if (this.data.customerIntent) query.intent = this.data.customerIntent;
@@ -116,7 +120,7 @@ Page({
       });
     } catch (error) {
       if (this.tokenAlive(epoch, 'customers')) this.setData({ customerError: error.message || '客户加载失败', customerLoading: false, customerLoadingMore: false });
-    } finally { if (this.tokenAlive(epoch, 'customers')) this.setData({ customerLoading: false, customerLoadingMore: false }); }
+    } finally { this._customerMorePending = false; if (this.tokenAlive(epoch, 'customers')) this.setData({ customerLoading: false, customerLoadingMore: false }); }
   },
   openCustomer(event) {
     const item = this.data.customers[Number(event.currentTarget.dataset.index)];
@@ -126,15 +130,14 @@ Page({
   },
 
   // ===== 素材 Tab（my-content-stats 热度榜） =====
-  reloadMaterials() { return this.loadMaterials(true, this._epoch = (this._epoch || 0) + 1); },
-  loadMoreMaterials() { return this.loadMaterials(false, this._epoch = (this._epoch || 0) + 1); },
+  reloadMaterials() { return this.loadMaterials(true, this.bumpEpoch('materials')); },
+  loadMoreMaterials() { return this.loadMaterials(false, this.bumpEpoch('materials')); },
   async loadMaterials(reset, suppliedEpoch) {
     if (!this._token) return;
-    if (!reset && (this.data.materialLoadingMore || !this.data.materials_cursor)) return;
-    const epoch = suppliedEpoch;
-    this._epoch = epoch;
+    if (!reset && (this._materialMorePending || !this.data.materials_cursor)) return;
+    const epoch = suppliedEpoch || this.bumpEpoch('materials');
     if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
-    else this.setData({ materialLoadingMore: true });
+    else { this._materialMorePending = true; this.setData({ materialLoadingMore: true }); }
     try {
       const query = { limit: 20, as_of: this.data.materials_as_of };
       if (!reset) query.cursor = this.data.materials_cursor;
@@ -157,19 +160,18 @@ Page({
       });
     } catch (error) {
       if (this.tokenAlive(epoch, 'materials')) this.setData({ materialError: error.message || '素材热度加载失败', materialLoading: false, materialLoadingMore: false });
-    } finally { if (this.tokenAlive(epoch, 'materials')) this.setData({ materialLoading: false, materialLoadingMore: false }); }
+    } finally { this._materialMorePending = false; if (this.tokenAlive(epoch, 'materials')) this.setData({ materialLoading: false, materialLoadingMore: false }); }
   },
 
   // ===== 分享 Tab（原 sharevisits 迁入） =====
   setShareQuery(e) { this.setData({ shareQuery: e.detail.value }); this._shareQueryTimer && clearTimeout(this._shareQueryTimer); this._shareQueryTimer = setTimeout(() => this.reloadShares(), 400); },
-  reloadShares() { return this.loadShares(true, this._epoch = (this._epoch || 0) + 1); },
+  reloadShares() { return this.loadShares(true, this.bumpEpoch('shares')); },
   async loadShares(reset, suppliedEpoch) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token) return;
-    if (!reset && (this._morePending || !this.data.next_cursor)) return;
-    const epoch = suppliedEpoch;
-    this._epoch = epoch;
-    if (!reset) this._morePending = true;
+    if (!reset && (this._shareMorePending || !this.data.next_cursor)) return;
+    const epoch = suppliedEpoch || this.bumpEpoch('shares');
+    if (!reset) this._shareMorePending = true;
     if (reset) this.setData({ loading: true, error: '', denied: false, items: [], next_cursor: '', as_of: '', metric_version: '' });
     else this.setData({ loadingMore: true, error: '' });
     try {
@@ -177,7 +179,7 @@ Page({
       if (this.data.shareQuery) query.q = this.data.shareQuery;
       if (!reset) Object.assign(query, { cursor: this.data.next_cursor, as_of: this.data.as_of, metric_version: this.data.metric_version });
       const page = await api.listMyShares(query);
-      if (!this.tokenAlive(epoch, 'shares')) { console.log('DBG_TOKEN_FAIL'); return; }
+      if (!this.tokenAlive(epoch, 'shares')) return;
       const rows = (page.items || []).map(item => {
         const visitorCount = Number(item.visitor_count || 0), pageViews = Number(item.page_views || 0);
         return { ...item, is_collection: item.route_key === 'pages/collectionreader/collectionreader', directory_views: Number(item.directory_views || 0), content_views: Number(item.content_views || 0), visitor_count: visitorCount, page_views: pageViews, avg_views_per_visitor: Number(item.avg_views_per_visitor || 0) || '', status_text: displayStatus(item), channel_text: displayChannel(item.channel), has_visits: visitorCount > 0 || pageViews > 0 || !!item.last_visit, last_visit_text: displayTime(item.last_visit), created_at_text: displayTime(item.created_at) };
@@ -186,10 +188,11 @@ Page({
       this._loadedTabs.shares = true;
       this.setData({ items: reset ? rows : this.data.items.concat(rows), next_cursor: page.next_cursor || '', as_of: page.as_of || this.data.as_of, metric_version: page.metric_version || this.data.metric_version, loading: false, loadingMore: false });
     } catch (error) { if (this.tokenAlive(epoch, 'shares')) this.setData({ error: error.message || '本人分享记录加载失败', denied: error.statusCode === 403, loginRequired: error.statusCode === 401, loading: false, loadingMore: false }); }
-    finally { if (this.tokenAlive(epoch, 'shares')) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
+    // 锁无条件释放（防同Tab作废后分页卡死）；loading UI 态只在请求仍存活时重置。
+    finally { this._shareMorePending = false; if (this.tokenAlive(epoch, 'shares')) this.setData({ loading: false, loadingMore: false }); }
   },
-  retry() { this.loadShares(true); },
-  loadMore() { this.loadShares(false, this._epoch = (this._epoch || 0) + 1); },
+  retry() { return this.loadShares(true, this.bumpEpoch('shares')); },
+  loadMore() { return this.loadShares(false, this.bumpEpoch('shares')); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   openVisits(event) {
     const item = this.data.items[Number(event.currentTarget.dataset.index)];

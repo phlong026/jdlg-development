@@ -19,8 +19,8 @@ Page({
     this._mode = visitorKey ? 'customer' : 'share';
     if (this._mode === 'share' && !id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
     this.setData({
-      mode: visitor ? 'customer' : 'share',
-      visitor,
+      mode: visitorKey ? 'customer' : 'share',
+      visitor: visitorKey,
       id,
       title: String(options.title || '客户访问详情'),
       intent_level: String(options.intent || ''),

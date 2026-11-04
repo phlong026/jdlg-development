@@ -56,6 +56,8 @@ Page({
     if (quiet) {
       this.setData({ loginRequired: false, loading: false, error: '' });
       void this.loadShareVisitAccess(token);
+      // 静默刷新也要带项目卡：修改项目后返回工作台时不显示旧单子
+      void this.loadActiveProjects(token, this._epoch);
       this.load(true, this._epoch, true);
       return;
     }
@@ -203,7 +205,8 @@ Page({
   },
   openProject(event) {
     const id = event.currentTarget.dataset.id;
-    if (id) this.navigate('/pages/projectnotes/projectnotes');
+    // 携带项目 ID，让 projectnotes 直接展开被点击的单子（目标页 onLoad 支持 project_id）
+    if (id) this.navigate('/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(id));
   },
   openCollections() { this.navigate('/pages/projectcollections/projectcollections'); },
   openExistingAssets() { this.navigate('/pages/nativereferences/nativereferences'); },

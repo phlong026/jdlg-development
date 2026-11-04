@@ -1059,8 +1059,9 @@ Page({
             return;
         }
         const storedToken = String(wx.getStorageSync('token') || '');
-        if (action === 'shareVisits'
+        if ((action === 'shareVisits' || action === 'customers')
             && (!this.data.hasShareVisitAccess || !storedToken || storedToken !== String(this.data.token || ''))) {
+            // customers 与 shareVisits 同页同权限：无追踪授权的账号进入只会收到 403，提前拦截
             wx.showToast({ title: '当前账号无分享访问权限', icon: 'none' });
             return;
         }
