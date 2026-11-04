@@ -43,8 +43,6 @@ Page({
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
     this._epoch = (this._epoch || 0) + 1;
-    this._epoch = (this._epoch || 0) + 1;
-    this._epoch = (this._epoch || 0) + 1;
     this.setData({ loginRequired: !this._token });
     if (!this._token) return;
     // 每次 onShow 刷新当前激活 Tab（旧页语义：onShow 必重拉）；其余 Tab 待切换时再拉。
@@ -53,9 +51,8 @@ Page({
     if (this.data.activeTab === 'shares') this.loadShares(true, this._epoch);
     else if (this.data.activeTab === 'materials') this.loadMaterials(true, this._epoch);
   },
+  current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onUnload() {
-    this._epoch = (this._epoch || 0) + 1;
-    this._epoch = (this._epoch || 0) + 1;
     this._epoch = (this._epoch || 0) + 1;
   },
   tokenAlive(epoch, which) {
@@ -64,9 +61,9 @@ Page({
   },
   onPullDownRefresh() {
     const done = () => wx.stopPullDownRefresh();
-    if (this.data.activeTab === 'customers') this.loadCustomers(true, ++this._epoch).finally(done);
-    else if (this.data.activeTab === 'shares') this.loadShares(true, ++this._epoch).finally(done);
-    else this.loadMaterials(true, ++this._epoch).finally(done);
+    if (this.data.activeTab === 'customers') this.loadCustomers(true, this._epoch = (this._epoch || 0) + 1).finally(done);
+    else if (this.data.activeTab === 'shares') this.loadShares(true, this._epoch = (this._epoch || 0) + 1).finally(done);
+    else this.loadMaterials(true, this._epoch = (this._epoch || 0) + 1).finally(done);
   },
   switchTab(event) {
     const tab = event.currentTarget.dataset.tab;
@@ -86,13 +83,14 @@ Page({
 
   // ===== 客户 Tab（my-visitors 意向榜） =====
   setCustomerQuery(e) { this.setData({ customerQuery: e.detail.value }); },
-  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, ++this._epoch); },
-  reloadCustomers() { this.loadCustomers(true, ++this._epoch); },
-  loadMoreCustomers() { this.loadCustomers(false, ++this._epoch); },
+  toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true, this._epoch = (this._epoch || 0) + 1); },
+  reloadCustomers() { return this.loadCustomers(true, this._epoch = (this._epoch || 0) + 1); },
+  loadMoreCustomers() { return this.loadCustomers(false, this._epoch = (this._epoch || 0) + 1); },
   async loadCustomers(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this.data.customerLoadingMore || !this.data.customers_cursor)) return;
-    const epoch = suppliedEpoch || ++this._epoch;
+    const epoch = suppliedEpoch;
+    this._epoch = epoch;
     if (reset) this.setData({ customerLoading: true, customerError: '', customers_cursor: '', customers_as_of: '' });
     else this.setData({ customerLoadingMore: true });
     try {
@@ -128,12 +126,13 @@ Page({
   },
 
   // ===== 素材 Tab（my-content-stats 热度榜） =====
-  reloadMaterials() { this.loadMaterials(true, ++this._epoch); },
-  loadMoreMaterials() { this.loadMaterials(false, ++this._epoch); },
+  reloadMaterials() { return this.loadMaterials(true, this._epoch = (this._epoch || 0) + 1); },
+  loadMoreMaterials() { return this.loadMaterials(false, this._epoch = (this._epoch || 0) + 1); },
   async loadMaterials(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this.data.materialLoadingMore || !this.data.materials_cursor)) return;
-    const epoch = suppliedEpoch || ++this._epoch;
+    const epoch = suppliedEpoch;
+    this._epoch = epoch;
     if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
     else this.setData({ materialLoadingMore: true });
     try {
@@ -163,12 +162,13 @@ Page({
 
   // ===== 分享 Tab（原 sharevisits 迁入） =====
   setShareQuery(e) { this.setData({ shareQuery: e.detail.value }); this._shareQueryTimer && clearTimeout(this._shareQueryTimer); this._shareQueryTimer = setTimeout(() => this.reloadShares(), 400); },
-  reloadShares() { this.loadShares(true, ++this._epoch); },
+  reloadShares() { return this.loadShares(true, this._epoch = (this._epoch || 0) + 1); },
   async loadShares(reset, suppliedEpoch) {
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token) return;
     if (!reset && (this._morePending || !this.data.next_cursor)) return;
-    const epoch = suppliedEpoch || ++this._epoch;
+    const epoch = suppliedEpoch;
+    this._epoch = epoch;
     if (!reset) this._morePending = true;
     if (reset) this.setData({ loading: true, error: '', denied: false, items: [], next_cursor: '', as_of: '', metric_version: '' });
     else this.setData({ loadingMore: true, error: '' });
@@ -177,7 +177,7 @@ Page({
       if (this.data.shareQuery) query.q = this.data.shareQuery;
       if (!reset) Object.assign(query, { cursor: this.data.next_cursor, as_of: this.data.as_of, metric_version: this.data.metric_version });
       const page = await api.listMyShares(query);
-      if (!this.tokenAlive(epoch, 'shares')) return;
+      if (!this.tokenAlive(epoch, 'shares')) { console.log('DBG_TOKEN_FAIL'); return; }
       const rows = (page.items || []).map(item => {
         const visitorCount = Number(item.visitor_count || 0), pageViews = Number(item.page_views || 0);
         return { ...item, is_collection: item.route_key === 'pages/collectionreader/collectionreader', directory_views: Number(item.directory_views || 0), content_views: Number(item.content_views || 0), visitor_count: visitorCount, page_views: pageViews, avg_views_per_visitor: Number(item.avg_views_per_visitor || 0) || '', status_text: displayStatus(item), channel_text: displayChannel(item.channel), has_visits: visitorCount > 0 || pageViews > 0 || !!item.last_visit, last_visit_text: displayTime(item.last_visit), created_at_text: displayTime(item.created_at) };
@@ -189,7 +189,7 @@ Page({
     finally { if (this.tokenAlive(epoch, 'shares')) { this._morePending = false; this.setData({ loading: false, loadingMore: false }); } }
   },
   retry() { this.loadShares(true); },
-  loadMore() { this.loadShares(false, ++this._epoch); },
+  loadMore() { this.loadShares(false, this._epoch = (this._epoch || 0) + 1); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   openVisits(event) {
     const item = this.data.items[Number(event.currentTarget.dataset.index)];

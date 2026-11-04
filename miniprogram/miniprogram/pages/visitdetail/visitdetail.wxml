@@ -37,8 +37,8 @@
      <text wx:else class="muted">首次 {{item.first_visit_text}} · 最近 {{item.last_visit_text}}</text>
     </view>
    </block>
+  </block>
   </view>
  </view>
-</view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

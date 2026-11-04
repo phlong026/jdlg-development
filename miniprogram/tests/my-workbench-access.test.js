@@ -197,8 +197,9 @@ test('认证设计师工作台只保留任务入口，收起能力仍从内容�
   const designer = loadPage();
   designer.page.setData({ certStatus: 'approved', certType: 'designer', certIdentityType: '设计师' });
   await designer.page.loadWorkbenchAccess();
+  // 批次6：工作台网格新增「客户」入口（客户追踪三Tab页），置于内容创作之后
   assert.deepEqual(Array.from(designer.page.data.workbenchMenuItems, item => item.action), [
-    'myProjects', 'contentWorkbench', 'designerHome',
+    'myProjects', 'contentWorkbench', 'customers', 'designerHome',
   ]);
   designer.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action: 'contentWorkbench' } } });
   assert.deepEqual(designer.navigations, ['/pages/contentworkbench/contentworkbench']);

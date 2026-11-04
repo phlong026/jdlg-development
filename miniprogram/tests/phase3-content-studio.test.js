@@ -107,15 +107,18 @@ test('studio offers real destinations for existing assets and visits', async () 
 
 test('studio has one create action and routes each supported type into the existing editor', () => {
   const harness = runtime();
+  // 批次4：新建菜单按甲第工作流扩为 5 项（项目笔记→AI生成→口述→图文→导入）
   harness.page.openCreateMenu();
-  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['图文内容', '图片或视频', 'PDF / Word / PPT']);
-  harness.actionSheet().success({ tapIndex: 0 });
-  harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex: 1 });
-  harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex: 2 });
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['新建项目笔记', 'AI 生成设计', '口述转设计说明', '图文内容', '导入链接']);
+  for (const tapIndex of [0, 1, 2, 3, 4]) {
+    harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex });
+  }
   assert.deepEqual(harness.navigations, [
+    '/pages/projectnotes/projectnotes',
+    '/pages/aigenerate/aigenerate',
+    '/pages/contentwriting/contentwriting',
     '/pages/contentedit/contentedit',
-    '/pages/contentedit/contentedit?action=media',
-    '/pages/contentedit/contentedit?action=document',
+    '/pages/contentworkbench/contentworkbench?view=import',
   ]);
 });
 
