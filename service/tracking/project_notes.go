@@ -1462,6 +1462,11 @@ func (s *Service) projectNoteMarkCurrentVersionConfirmed(r Repository, project P
 	if project.Status == ProjectNoteProjectStatusConfirmed && project.CurrentVersionID == current.ID {
 		return nil
 	}
+	// 归档态（仿真稿步骤⑥）是终态：业主确认不能把已归档项目拉回工作流，
+	// 需设计师先取消归档（codex 四轮 P1：确认入口绕过状态机）。
+	if project.Status == ProjectNoteProjectStatusArchived {
+		return fail(409, "项目已归档，如需继续确认请先取消归档")
+	}
 	project.CurrentVersionID = current.ID
 	project.Status = ProjectNoteProjectStatusConfirmed
 	project.Revision++
