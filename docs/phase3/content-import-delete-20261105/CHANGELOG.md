@@ -16,9 +16,11 @@
 | 作品/生成记录 | 长按复用已有删除与二次确认；保留已有侧滑，异步回调复核当前账号，长按不误开详情 |
 | 状态保护 | 确认取消不发送删除；账号/epoch/revision变化拒绝旧回调；409保留行并恢复读取；同账号前后台切换释放旧epoch操作锁，旧响应不释放新锁；删除当前笔记后清理表单并重建笔记基线，返回项目列表不误报未保存 |
 
+- 导入封面：修正原生setData数组下标写法，避免封面加载把内容列表覆盖成对象；增加复现测试，并用真实导入封面验证数组与列表完整。
+
 ## 验证与数据边界
 
-- 小程序完整1088项测试、原生WXML编译零失败零跳过，TypeScript通过。
+- 小程序完整1089项测试、原生WXML编译零失败零跳过，TypeScript通过。
 - Go完整测试及go vet通过；发布工具58项隔离测试通过；JS语法、生成物同步、签名/跟踪路由及差异检查通过。
 - 生产导入任务表19列与全部必需索引已核验，启用前队列为空，无需迁移。
 - 真实导入仅使用本次用户提供并授权验收的抖音链接。导入生成草稿，不自动发布；不删除该草稿。
@@ -55,6 +57,7 @@
 | [miniprogram/miniprogram/utils/phase3-api.ts](../../../miniprogram/miniprogram/utils/phase3-api.ts) | 66、111、208、214 | 界面交互及运行产物 |
 | [miniprogram/miniprogram/utils/project-collections-api.js](../../../miniprogram/miniprogram/utils/project-collections-api.js) | 51、70 | 界面交互及运行产物 |
 | [miniprogram/miniprogram/utils/project-collections-api.ts](../../../miniprogram/miniprogram/utils/project-collections-api.ts) | 52、71 | 界面交互及运行产物 |
+| [miniprogram/tests/phase3-content-studio.test.js](../../../miniprogram/tests/phase3-content-studio.test.js) | 33、313 | 导入封面列表回归测试 |
 | [miniprogram/tests/created-content-api.test.js](../../../miniprogram/tests/created-content-api.test.js) | 新增文件 | 行为/权限/回归测试 |
 | [miniprogram/tests/created-content-deletion-ui.test.js](../../../miniprogram/tests/created-content-deletion-ui.test.js) | 新增文件 | 行为/权限/回归测试 |
 | [miniprogram/tests/native-references.test.js](../../../miniprogram/tests/native-references.test.js) | 46、49、53、82 | 行为/权限/回归测试 |

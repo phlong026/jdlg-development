@@ -200,8 +200,8 @@ Page({
         const index = this.data.items.findIndex(row => row.content_id === item.content_id);
         const visible = this.data.visibleItems.findIndex(row => row.content_id === item.content_id);
         const patch = {};
-        if (index >= 0) { patch['items.' + index + '.cover_path'] = local; patch['items.' + index + '.cover_error'] = !local; }
-        if (visible >= 0) { patch['visibleItems.' + visible + '.cover_path'] = local; patch['visibleItems.' + visible + '.cover_error'] = !local; }
+        if (index >= 0) { patch['items[' + index + '].cover_path'] = local; patch['items[' + index + '].cover_error'] = !local; }
+        if (visible >= 0) { patch['visibleItems[' + visible + '].cover_path'] = local; patch['visibleItems[' + visible + '].cover_error'] = !local; }
         this.setData(patch);
       }
     };

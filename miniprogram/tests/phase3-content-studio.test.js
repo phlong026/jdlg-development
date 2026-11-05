@@ -30,7 +30,7 @@ function runtime(overrides = {}) {
     wx: { getStorageSync: () => 'account-a', hideShareMenu() {}, stopPullDownRefresh() {}, navigateTo: value => navigations.push(value.url), showToast() {}, showActionSheet(options) { actionSheet = options; }, getClipboardData: options => options.success({ data: 'https://mp.weixin.qq.com/s/original' }) },
     setTimeout, clearTimeout, console,
   });
-  const page = Object.assign({}, definition, { data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { for (const [key, value] of Object.entries(values)) { const parts = key.split('.'); let object = this.data; for (const part of parts.slice(0, -1)) object = object[part]; object[parts.at(-1)] = value; } if (callback) callback(); } });
+  const page = Object.assign({}, definition, { data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { for (const [key, value] of Object.entries(values)) { const parts = key.replace(/\[(\d+)\]/g, '.$1').split('.'); let object = this.data; for (const part of parts.slice(0, -1)) object = object[part]; object[parts.at(-1)] = value; } if (callback) callback(); } });
   return { page, queries, navigations, actionSheet: () => actionSheet };
 }
 
@@ -308,4 +308,31 @@ test('switching owner reloads the selected catalog from its first page', async (
   assert.equal(queries.at(-1).owner, 'owner-b');
   assert.equal(queries.at(-1).cursor, undefined);
   assert.equal(page.data.items.length, 3);
+});
+
+test('an imported cover preserves the complete native list and searchable rows', async () => {
+  const { page } = runtime({ downloadWorkbenchMedia: async () => '/tmp/imported-cover' });
+  page._token = 'account-a';
+  page._visible = true;
+  page._epoch = 1;
+  const rows = [
+    { content_id: 'plain', title: '普通内容', version: 0 },
+    { content_id: 'imported', title: '导入视频', version: 0, cover: { kind: 'image', media_id: 'cover' } },
+  ];
+  page.setData({ items: rows, visibleItems: rows, category: 'all', keyword: '' });
+  const setData = page.setData.bind(page);
+  page.setData = (patch, callback) => {
+    // Native wx.setData reserves brackets for array indices. The old fixture
+    // accepted dotted numbers, masking the real simulator's array replacement.
+    for (const key of Object.keys(patch)) {
+      if (/^(items|visibleItems)\.\d+\./.test(key)) throw Error('unsupported native array data path');
+    }
+    return setData(patch, callback);
+  };
+  await page.loadCovers(1, rows);
+  assert.equal(Array.isArray(page.data.items), true);
+  assert.equal(page.data.items.length, 2);
+  assert.equal(page.data.visibleItems.length, 2);
+  assert.equal(page.data.items[1].cover_path, '/tmp/imported-cover');
+  assert.equal(page.data.items[0].content_id, 'plain');
 });
