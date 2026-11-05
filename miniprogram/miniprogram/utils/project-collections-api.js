@@ -48,6 +48,7 @@ function listCollections(query) { return request(collectionPath() + queryString(
 function getCollection(id) { return request(collectionPath(id)); }
 function saveCollection(input, id) { return request(collectionPath(id), id ? 'PATCH' : 'POST', input); }
 function deleteCollectionDraft(id, revision) { return request(collectionPath(id), 'DELETE', { expected_revision: Number(revision) }); }
+function deleteCollection(id, revision) { return request(collectionPath(id) + '/delete', 'POST', { expected_revision: Number(revision) }); }
 function previewCollection(id, revision) { return request(collectionPath(id) + '/preview', 'POST', { expected_revision: Number(revision) }); }
 function publishCollection(id, revision, previewToken, key) {
   return request(collectionPath(id) + '/publish', 'POST', { expected_revision: Number(revision), preview_token: previewToken, idempotency_key: key });
@@ -66,7 +67,7 @@ function mediaURL(value) {
 
 module.exports = {
   ORIGIN, WORKBENCH, PUBLIC, request, workbenchContext,
-  listCandidates, listCollections, getCollection, saveCollection, deleteCollectionDraft,
+  listCandidates, listCollections, getCollection, saveCollection, deleteCollectionDraft, deleteCollection,
   previewCollection, publishCollection, revokeCollection,
   readPublishedCollection, openPublishedItem, mutationKey, mediaURL,
 };

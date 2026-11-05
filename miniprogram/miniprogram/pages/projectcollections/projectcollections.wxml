@@ -10,7 +10,7 @@
     <block wx:elif="{{!editing}}">
       <view class="toolbar"><text class="collection-count">{{collections.length}}个合集</text><button class="primary small-button" bindtap="startCreate">＋ 新建</button></view>
       <view wx:if="{{!collections.length}}" class="empty"><text class="empty-title">还没有合集</text><text>公开展示已发布作品</text></view>
-      <view wx:for="{{collections}}" wx:key="collection_id" class="collection-card">
+      <view wx:for="{{collections}}" wx:key="collection_id" class="collection-card" data-id="{{item.collection_id}}" bindlongpress="deleteCollectionMenu">
         <image wx:if="{{item.cover_url}}" class="cover" src="{{item.cover_url}}" mode="aspectFill" />
         <view wx:else class="cover placeholder">暂无封面</view>
         <view class="collection-main"><text class="collection-title">{{item.title}}</text><text class="meta">{{item.items.length}}个作品 · {{item.status_text}}</text>

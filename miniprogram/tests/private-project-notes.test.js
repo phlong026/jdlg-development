@@ -1203,3 +1203,108 @@ for (const update of [false, true]) {
     assert.equal(page.data.note.note_id, 'note-one');
   });
 }
+
+test('project long press requires menu and confirmation, suppresses opening, and keeps stale rows', async () => {
+  const calls = [];
+  let sheet, modal;
+  const project = { project_id: 'project-one', revision: 3, name: '张宅' };
+  const page = pageHarness('projectnotes', {
+    deleteProjectNoteProject: async (id, revision) => { calls.push([id, revision]); throw Object.assign(new Error('项目资料已更新'), { statusCode: 409 }); },
+  }, {
+    showActionSheet: options => { sheet = options; },
+    showModal: options => { modal = options; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ projects: [project], loading: false });
+
+  const pending = page.openProjectDeleteMenu({ currentTarget: { dataset: { id: project.project_id } } });
+  assert.deepEqual(Array.from(sheet.itemList), ['删除项目']);
+  sheet.success({ tapIndex: 0 });
+  modal.success({ confirm: true });
+  await pending;
+  assert.deepEqual(calls, [['project-one', 3]]);
+  assert.equal(page.data.projects.length, 1);
+  assert.match(page.data.error, /已更新/);
+
+  let opened = 0;
+  page.openProject = async () => { opened += 1; };
+  await page.selectProject({ currentTarget: { dataset: { id: project.project_id } } });
+  assert.equal(opened, 0);
+});
+
+test('project and note long-press confirmations reject account or revision changes', async () => {
+  let token = 'session-token', projectDeletes = 0, noteDeletes = 0;
+  let sheet, modal;
+  const project = { project_id: 'project-one', revision: 3 };
+  const note = { note_id: 'note-one', revision: 2, title: '草稿' };
+  const page = pageHarness('projectnotes', {
+    deleteProjectNoteProject: async () => { projectDeletes += 1; },
+    deleteProjectNote: async () => { noteDeletes += 1; },
+  }, {
+    getStorageSync: key => key === 'token' ? token : '',
+    showActionSheet: options => { sheet = options; },
+    showModal: options => { modal = options; },
+  });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ projects: [project], selectedProject: project, notes: [note] });
+
+  let pending = page.openProjectDeleteMenu({ currentTarget: { dataset: { id: project.project_id } } });
+  sheet.success({ tapIndex: 0 });
+  token = 'other-account';
+  modal.success({ confirm: true });
+  await pending;
+  assert.equal(projectDeletes, 0);
+
+  token = 'session-token'; page._token = token;
+  pending = page.openNoteDeleteMenu({ currentTarget: { dataset: { id: note.note_id } } });
+  sheet.success({ tapIndex: 0 });
+  page.setData({ notes: [{ ...note, revision: 3 }] });
+  modal.success({ confirm: true });
+  await pending;
+  assert.equal(noteDeletes, 0);
+});
+
+test('cancelled long-press deletion makes no mutation', async () => {
+  let mutations = 0, sheet, modal;
+  const project = { project_id: 'project-one', revision: 1 };
+  const page = pageHarness('projectnotes', { deleteProjectNoteProject: async () => { mutations += 1; } }, {
+    showActionSheet: options => { sheet = options; }, showModal: options => { modal = options; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.setData({ projects: [project] });
+  const pending = page.openProjectDeleteMenu({ currentTarget: { dataset: { id: project.project_id } } });
+  sheet.success({ tapIndex: 0 });
+  modal.success({ confirm: false });
+  await pending;
+  assert.equal(mutations, 0);
+  assert.equal(page.data.projects.length, 1);
+});
+
+test('same-account resume releases an old pending project deletion lock without releasing a new lock', async () => {
+  let finishDelete, sheet, modal;
+  const project = { project_id: 'project-one', revision: 2, name: '张宅' };
+  const page = pageHarness('projectnotes', {
+    deleteProjectNoteProject: () => new Promise(resolve => { finishDelete = resolve; }),
+    getProjectNoteProject: async () => ({ project, notes: [], versions: [] }),
+  }, {
+    showActionSheet: options => { sheet = options; }, showModal: options => { modal = options; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ projects: [project] });
+  page.applyProjectDetail({ project, notes: [], versions: [] });
+
+  const pending = page.openProjectDeleteMenu({ currentTarget: { dataset: { id: project.project_id } } });
+  sheet.success({ tapIndex: 0 });
+  modal.success({ confirm: true });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(page.data.busy, true);
+
+  page.onHide();
+  await page.onShow();
+  assert.equal(page.data.busy, false);
+
+  page.setData({ busy: true });
+  finishDelete({});
+  await pending;
+  assert.equal(page.data.busy, true);
+  assert.equal(page.data.projects.length, 1);
+});

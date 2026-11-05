@@ -355,6 +355,7 @@ Page({
     const id = String(data.id || '');
     const version = Number(data.version || 0);
     if (!id) return;
+	if (this._suppressOpenID === id) { this._suppressOpenID = ''; return; }
     if (data.status === 'published' && version > 0 && !data.readOnly && (!data.route || data.route === 'pages/contentreader/contentreader')) {
       this.navigate('/pages/contentreader/contentreader?content_id=' + encodeURIComponent(id) + '&content_version=' + encodeURIComponent(String(version)));
       return;
@@ -364,5 +365,36 @@ Page({
   editContent(event) {
     const id = String(event.currentTarget.dataset.id || '');
     if (id) this.navigate('/pages/contentedit/contentedit?id=' + encodeURIComponent(id));
+  },
+  deleteContentMenu(event) {
+	const id = String(event.currentTarget.dataset.id || '');
+	const item = this.data.items.find(row => row.content_id === id);
+	if (!item || item.read_only || !this.current(this._epoch)) return;
+	this._suppressOpenID = id;
+	setTimeout(() => { if (this._suppressOpenID === id) this._suppressOpenID = ''; }, 400);
+	const epoch = this._epoch, revision = Number(item.revision);
+	wx.showActionSheet({ itemList: ['删除内容'], success: result => {
+		if (result.tapIndex !== 0 || !this.current(epoch)) return;
+		const current = this.data.items.find(row => row.content_id === id);
+		if (!current || Number(current.revision) !== revision) return;
+		wx.showModal({ title: '删除内容', content: '删除后已发出的访问入口将失效，素材与历史记录保留。', confirmText: '删除', confirmColor: '#c4543a', success: modal => {
+			if (modal.confirm) this.performContentDelete(id, revision, epoch);
+		} });
+	} });
+  },
+  async performContentDelete(id, revision, epoch) {
+	if (!this.current(epoch)) return;
+	const current = this.data.items.find(row => row.content_id === id);
+	if (!current || Number(current.revision) !== revision) return;
+	try {
+		await api.deleteCreatedContent(id, revision);
+		if (!this.current(epoch)) return;
+		this.setData({ items: this.data.items.filter(row => row.content_id !== id), visibleItems: this.data.visibleItems.filter(row => row.content_id !== id) });
+		wx.showToast({ title: '已删除', icon: 'success' });
+	} catch (error) {
+		if (!this.current(epoch)) return;
+		wx.showToast({ title: error.statusCode === 409 ? '内容已更新，请重试' : (error.message || '删除失败'), icon: 'none' });
+		if (error.statusCode === 409) this.load(true);
+	}
   },
 });

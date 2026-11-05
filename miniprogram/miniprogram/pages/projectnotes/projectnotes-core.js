@@ -149,7 +149,9 @@ Page({
     wx.navigateTo({ url: '/pages/projectpackage/projectpackage?project_id=' + encodeURIComponent(project.project_id) });
   },
   openNote(event) {
-    const id = String(event.currentTarget.dataset.id || ''), index = this.data.notes.findIndex(item => item.note_id === id);
+    const id = String(event.currentTarget.dataset.id || '');
+    if (this._noteLongPress && this._noteLongPress.id === id && Date.now() < this._noteLongPress.until) { this._noteLongPress = null; return; }
+    const index = this.data.notes.findIndex(item => item.note_id === id);
     if (index >= 0) return this.selectNote({ detail: { value: index } });
   },
 
@@ -157,9 +159,11 @@ Page({
     const epoch = this._epoch = (this._epoch || 0) + 1;
     const project = this.data.selectedProject;
     // 已加载过的页面静默重验：返回本页时不再整页切到"正在加载…"造成闪屏。
+    // 新 epoch 已废弃上一轮写操作，在发起重验时同步释放旧锁；
+    // 重验完成回调不再写 busy，避免清掉新 epoch 后启动的操作。
     this.setData(this._loaded
-      ? { loginRequired: false, accessRecheckRequired: false, error: '', notice: '' }
-      : { loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
+      ? { busy: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' }
+      : { busy: false, loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
     try {
       if (project) await api.getProjectNoteProject(project.project_id); else await api.workbenchContext();
       if (!this.current(epoch)) return;
@@ -265,7 +269,42 @@ Page({
       if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },
-  async selectProject(event) { if (this.data.busy || !await this.confirmDiscardChanges()) return; this._selectedNoteID = ''; this._newNote = false; this._targetVersionID = ''; this._selectedVersionID = ''; return this.openProject(String(event.currentTarget.dataset.id || ''), this._epoch); },
+  async selectProject(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    if (this._projectLongPress && this._projectLongPress.id === id && Date.now() < this._projectLongPress.until) { this._projectLongPress = null; return; }
+    if (this.data.busy || !await this.confirmDiscardChanges()) return;
+    this._selectedNoteID = ''; this._newNote = false; this._targetVersionID = ''; this._selectedVersionID = '';
+    return this.openProject(id, this._epoch);
+  },
+  openProjectDeleteMenu(event) {
+    const id = String(event.currentTarget.dataset.id || ''), project = this.data.projects.find(item => item.project_id === id);
+    if (!project || this.data.busy) return Promise.resolve();
+    const launch = { epoch: this._epoch, token: this._token, id, revision: Number(project.revision) };
+    this._projectLongPress = { id, until: Date.now() + 1000 };
+    return new Promise(resolve => wx.showActionSheet({
+      itemList: ['删除项目'],
+      success: result => {
+        if (result.tapIndex !== 0 || !this.current(launch.epoch) || this._token !== launch.token) { resolve(); return; }
+        this.deleteProjectNoteProject(launch).then(resolve, resolve);
+      },
+      fail: resolve,
+    }));
+  },
+  async deleteProjectNoteProject(launch) {
+    const confirmed = await new Promise(resolve => wx.showModal({ title: '删除这个项目？', content: '删除后将从项目列表移除，原分享和邀请也会立即失效。', confirmText: '删除项目', confirmColor: '#a33b31', success: result => resolve(result.confirm === true), fail: () => resolve(false) }));
+    const current = this.data.projects.find(item => item.project_id === launch.id);
+    if (!confirmed || !this.current(launch.epoch) || this._token !== launch.token || !current || Number(current.revision) !== launch.revision || this.data.busy) return;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      await api.deleteProjectNoteProject(launch.id, launch.revision);
+      if (!this.current(launch.epoch) || this._token !== launch.token) return;
+      this.setData({ projects: this.data.projects.filter(item => item.project_id !== launch.id), busy: false, notice: '项目已删除。' });
+    } catch (error) {
+      if (!this.current(launch.epoch) || this._token !== launch.token) return;
+      const message = Number(error && error.statusCode) === 409 ? '项目已更新，请刷新后再删除。' : error.message || '项目删除失败';
+      this.setData({ busy: false, error: message });
+    }
+  },
   async openProject(projectID, epoch, notice) {
     if (!projectID) return;
     const request = this._projectRequest = (this._projectRequest || 0) + 1;
@@ -434,6 +473,20 @@ Page({
       },
     });
   },
+  openNoteDeleteMenu(event) {
+    const id = String(event.currentTarget.dataset.id || ''), note = this.data.notes.find(item => item.note_id === id);
+    if (!note || this.data.busy) return Promise.resolve();
+    const launch = { epoch: this._epoch, token: this._token, id, revision: Number(note.revision) };
+    this._noteLongPress = { id, until: Date.now() + 1000 };
+    return new Promise(resolve => wx.showActionSheet({
+      itemList: ['删除笔记'],
+      success: result => {
+        if (result.tapIndex !== 0 || !this.current(launch.epoch) || this._token !== launch.token) { resolve(); return; }
+        this.deleteProjectNote(note, true, launch).then(resolve, resolve);
+      },
+      fail: resolve,
+    }));
+  },
   selectFeedback(event) {
     const feedback = this.data.feedbacks.find(item => item.feedback_id === String(event.currentTarget.dataset.id || ''));
     if (!feedback || this.data.busy) return;
@@ -594,19 +647,27 @@ Page({
       await this.refreshProject('已复制保存过的笔记内容；副本不含历史分享、业主反馈或确认记录。');
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '笔记复制失败' }); }
   },
-  async deleteProjectNote() {
-    const note = this.data.note; if (!note || this.data.busy || this.data.historyMode) return;
-    const epoch = this._epoch;
+  async deleteProjectNote(target, fromList, launched) {
+    const note = target && target.note_id ? target : this.data.note; if (!note || this.data.busy || this.data.historyMode) return;
+    const epoch = launched ? launched.epoch : this._epoch, token = launched ? launched.token : this._token;
     const confirmed = await new Promise(resolve => wx.showModal({ title: '删除这条草稿？', content: '删除后将从草稿列表移除。已冻结版本、业主反馈和现有分享仍保留；需要停止分享时请另行撤回。', confirmText: '删除草稿', confirmColor: '#a33b31', success: result => resolve(result.confirm === true), fail: () => resolve(false) }));
-    if (!confirmed || !this.current(epoch) || !this.data.note || this.data.note.note_id !== note.note_id || this.data.note.revision !== note.revision) return;
+    const current = fromList ? this.data.notes.find(item => item.note_id === note.note_id) : this.data.note;
+    if (!confirmed || !this.current(epoch) || this._token !== token || !current || current.note_id !== note.note_id || Number(current.revision) !== Number(note.revision)) return;
     this.setData({ busy: true, error: '', notice: '' });
     try {
       await api.deleteProjectNote(note.note_id, note.revision);
-      if (!this.current(epoch)) return;
+      if (!this.current(epoch) || this._token !== token) return;
+      if (fromList) {
+        const notes = this.data.notes.filter(item => item.note_id !== note.note_id);
+        const values = { notes, busy: false, notice: '笔记已移除。' };
+        if (this.data.note && this.data.note.note_id === note.note_id) values.note = null;
+        this.setData(values);
+        return;
+      }
       this._selectedNoteID = ''; this._newNote = true; this._selectedVersionID = ''; this._shareAttempt = null;
       this.setData({ busy: false });
       await this.refreshProject('草稿已移除，历史版本与业主记录仍保留。');
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '笔记删除失败' }); }
+    } catch (error) { if (this.current(epoch) && this._token === token) this.setData({ busy: false, error: Number(error && error.statusCode) === 409 ? '笔记已更新，请刷新后再删除。' : error.message || '笔记删除失败' }); }
   },
   async createProjectNote() { return this.persistNote(false); },
   async saveProjectNote() { return this.persistNote(true); },

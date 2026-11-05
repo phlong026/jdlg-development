@@ -43,14 +43,14 @@ test('workbench media helper signs paginated server-side filters', async () => {
 });
 
 function pageHarness(api, storage = { token: 'account-a' }) {
-  let definition; const navigation = [], emitted = [];
+  let definition; const navigation = [], emitted = [], modals = [], actionSheets = [];
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/nativereferences/nativereferences.js'), 'utf8'), {
     Page: value => { definition = value; }, require: () => api,
-    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {} },
+    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {}, showModal: value => modals.push(value), showActionSheet: value => actionSheets.push(value) },
     Promise, Object, String, Number, Array, Set, Error, encodeURIComponent,
   });
   const page = Object.assign({ getOpenerEventChannel: () => ({ emit: (name, value) => emitted.push({ name, value }) }), data: JSON.parse(JSON.stringify(definition.data)), setData(value) { Object.assign(this.data, value); } }, definition);
-  return { page, navigation, emitted, storage };
+  return { page, navigation, emitted, storage, modals, actionSheets };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 test('reference page preserves an idempotency attempt after a lost save response', async () => {
@@ -78,6 +78,19 @@ test('reference page rejects late previous-account data and untrusted target pat
   storage.token = 'account-a'; page._token = storage.token; page._visible = true;
   await page.openReference({ currentTarget: { dataset: { id: 'ref-0001' } } });
   assert.equal(navigation.length, 0); assert.match(page.data.error, /目标/);
+});
+test('reference removal requires confirmation and preserves the source wording', async () => {
+  const removed = [];
+  const { page, modals, actionSheets } = pageHarness({ deleteNativeReference: async id => removed.push(id) });
+  page._visible = true; page._epoch = 1; page._token = 'account-a';
+  page.setData({ references: [{ reference_id: 'ref-0001' }] });
+  const event = { currentTarget: { dataset: { id: 'ref-0001' } } };
+  page.referenceDeleteMenu(event); actionSheets[0].success({ tapIndex: 0 });
+  assert.match(modals[0].content, /不会删除原作品/);
+  modals[0].success({ confirm: false }); assert.equal(removed.length, 0);
+  page.removeReference(event); modals[1].success({ confirm: true }); await tick();
+  assert.deepEqual(removed, ['ref-0001']);
+  assert.equal(page.data.references.length, 0);
 });
 test('returning while a save is pending restores controls and keeps its retry key', async () => {
   let finish; const keys = [];

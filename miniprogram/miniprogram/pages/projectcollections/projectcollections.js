@@ -261,6 +261,19 @@ Page({
       },
     });
   },
+  deleteCollectionMenu(event) {
+	if (this.data.busy) return;
+	const id = String(event.currentTarget.dataset.id || '');
+	const collection = this.data.collections.find(item => item.collection_id === id);
+	if (!collection) return;
+	const epoch = this.epoch, revision = Number(collection.revision);
+	wx.showActionSheet({ itemList: ['删除合集'], success: result => {
+		if (result.tapIndex !== 0 || !this.currentRequest(epoch)) return;
+		const current = this.data.collections.find(item => item.collection_id === id);
+		if (!current || Number(current.revision) !== revision) return;
+		wx.showModal({ title: '删除合集', content: '删除后已发出的合集将不可访问，原作品保留。', confirmText: '删除', confirmColor: '#c4543a', success: modal => { if (modal.confirm) this.performDelete(current); } });
+	} });
+  },
   deleteDraft(event) {
     const collection = this.data.collections.find(item => item.collection_id === String(event.currentTarget.dataset.id || ''));
     if (!collection || collection.version > 0 || this.data.busy) return;
@@ -268,8 +281,8 @@ Page({
   },
   async performDelete(collection) {
     const epoch = this.epoch; this.setData({ busy: true, error: '' });
-    try { await api.deleteCollectionDraft(collection.collection_id, collection.revision); if (this.currentRequest(epoch)) this.setData({ collections: this.data.collections.filter(item => item.collection_id !== collection.collection_id), busy: false }); }
-    catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '删除失败' }); }
+    try { await api.deleteCollection(collection.collection_id, collection.revision); if (this.currentRequest(epoch)) this.setData({ collections: this.data.collections.filter(item => item.collection_id !== collection.collection_id), busy: false }); }
+    catch (error) { if (this.currentRequest(epoch)) { this.setData({ busy: false, error: error.message || '删除失败' }); if (error.statusCode === 409) this.refreshList(epoch); } }
   },
   revokePublished(event) {
     const collection = this.data.collections.find(item => item.collection_id === String(event.currentTarget.dataset.id || ''));

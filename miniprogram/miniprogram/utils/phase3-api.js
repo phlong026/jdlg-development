@@ -62,6 +62,7 @@ function listContents(query) { return request(WORKBENCH + '/contents', 'GET', {}
 function getContent(id) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id)); }
 function listWorkbenchMedia(query) { return request(WORKBENCH + '/media', 'GET', {}, query); }
 function saveContent(draft, id) { return request(WORKBENCH + '/contents' + (id ? '/' + encodeURIComponent(id) : ''), id ? 'PATCH' : 'POST', draft); }
+function deleteCreatedContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/delete', 'POST', { expected_revision: Number(revision) }); }
 function deleteContentDraft(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id), 'DELETE', { expected_revision: Number(revision) }); }
 function previewContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/preview', 'POST', { expected_revision: revision }); }
 function publishContent(id, revision, previewToken, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/publish', 'POST', { expected_revision: revision, preview_token: previewToken, idempotency_key: key }); }
@@ -106,6 +107,7 @@ function revokeProjectNoteMember(projectID, accountID) { return request(projectN
 function setProjectNoteConfirmer(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/confirmer'), 'PUT', { account_id: Number(accountID) }); }
 function createProjectNote(projectID, draft) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/notes'), 'POST', draft); }
 function copyProjectNote(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID) + '/copy'), 'POST', { expected_revision: Number(revision) }); }
+function deleteProjectNoteProject(projectID, revision) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID)), 'DELETE', { expected_revision: Number(revision) }); }
 function deleteProjectNote(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID)), 'DELETE', { expected_revision: Number(revision) }); }
 function saveProjectNote(noteID, draft) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID)), 'PATCH', draft); }
 function freezeProjectNoteVersion(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID) + '/versions'), 'POST', { expected_revision: Number(revision) }); }
@@ -202,13 +204,13 @@ async function writingPrompts() {
 
 module.exports = {
   ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
-  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, convertMyVisitorToLead, listMyContentStats, listMyShareVisits,
+  saveContent, deleteCreatedContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, convertMyVisitorToLead, listMyContentStats, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
   getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject,
   createProjectInvitation, listProjectInvitations, revokeProjectInvitation, getProjectInvitation, applyProjectInvitation, listProjectJoinRequests, approveProjectJoinRequest,
   revokeProjectNoteMember,
-  setProjectNoteConfirmer, copyProjectNote, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
+  setProjectNoteConfirmer, copyProjectNote, deleteProjectNoteProject, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
   addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
   uploadProjectNoteMedia,

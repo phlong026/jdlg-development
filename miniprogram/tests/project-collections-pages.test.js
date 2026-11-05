@@ -396,3 +396,15 @@ test('collection more actions preserve confirmation and ignore a previous-accoun
   actionSheets[0].success({ tapIndex: 0 });
   assert.equal(modals.length, 0, '旧账号选择不弹出新账号的删除确认');
 });
+
+test('collection long press deletes the current revision through the general endpoint', async () => {
+  const calls = [];
+  const { page, actionSheets } = pageRuntime({ deleteCollection: async (...args) => calls.push(args) });
+  page.visible = true; page.epoch = 1; page.account = 'designer-session';
+  page.setData({ collections: [{ collection_id: 'collection-a', version: 2, revision: 5, status: 'revoked' }] });
+  page.deleteCollectionMenu({ currentTarget: { dataset: { id: 'collection-a' } } });
+  actionSheets[0].success({ tapIndex: 0 });
+  await tick();
+  assert.deepEqual(calls[0], ['collection-a', 5]);
+  assert.equal(page.data.collections.length, 0);
+});

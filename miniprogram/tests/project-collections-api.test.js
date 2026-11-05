@@ -39,16 +39,20 @@ test('collection API signs management and published-reader calls', async () => {
   await api.saveCollection({ title: '案例合集', owner_id: 'owner-a', items: [] });
   await api.previewCollection('collection-1', 3);
   await api.publishCollection('collection-1', 3, 'preview-token', 'publish-key');
+	await api.deleteCollection('collection-1', 4);
   await api.readPublishedCollection('collection-1', 2);
   await api.openPublishedItem('collection-1', 2, 0);
 
-  assert.equal(signatures.length, 6);
+	assert.equal(signatures.length, 7);
   assert.equal(signatures[0].route, '/api/v1/miniprogram/workbench/project-collections/candidates?cursor=next%20page&limit=20');
   assert.equal(signatures[0].device, 'known-device');
-  assert.equal(requests[4].header.token, 'designer-session');
+	assert.match(requests[4].url, /\/workbench\/project-collections\/collection-1\/delete$/);
+	assert.equal(requests[4].method, 'POST');
+	assert.deepEqual(JSON.parse(JSON.stringify(requests[4].data)), { expected_revision: 4 });
   assert.equal(requests[5].header.token, 'designer-session');
-  assert.match(requests[4].url, /\/tracking\/project-collections\/collection-1\/versions\/2$/);
-  assert.match(requests[5].url, /\/items\/0$/);
+  assert.equal(requests[6].header.token, 'designer-session');
+  assert.match(requests[5].url, /\/tracking\/project-collections\/collection-1\/versions\/2$/);
+  assert.match(requests[6].url, /\/items\/0$/);
   assert.deepEqual(JSON.parse(JSON.stringify(requests[3].data)), {
     expected_revision: 3,
     preview_token: 'preview-token',

@@ -121,6 +121,8 @@
         bindtouchstart="onWorkTouchStart"
         bindtouchmove="onWorkTouchMove"
         bindtouchend="onWorkTouchEnd"
+        bindlongpress="onWorkLongPress"
+        data-title="{{item.title}}"
       >
         <image
           class="work-cover"

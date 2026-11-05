@@ -119,11 +119,27 @@ Page({
       wx.navigateTo({ url: target.path, fail: () => { if (this.current(epoch)) this.setData({ error: '目标页面打开失败，请重试' }); } });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '来源已失效，无法打开' }); }
   },
-  async removeReference(event) {
+  removeReference(event) {
     if (this.data.busy) return;
-    const id = String(event.currentTarget.dataset.id || ''), epoch = this._epoch; this.setData({ busy: true, error: '' });
-    try { await api.deleteNativeReference(id); if (this.current(epoch)) this.setData({ references: this.data.references.filter(item => item.reference_id !== id), busy: false, notice: '已移除，原作品保留' }); }
-    catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '移除失败' }); }
+    const id = String(event.currentTarget.dataset.id || ''), epoch = this._epoch;
+	if (!this.data.references.some(item => item.reference_id === id)) return;
+	wx.showModal({ title: '移除引用', content: '仅从我的资料库移除，不会删除原作品。', confirmText: '移除', success: result => {
+		if (result.confirm && this.current(epoch) && this.data.references.some(item => item.reference_id === id)) this.performRemoveReference(id, epoch);
+	} });
+  },
+  referenceDeleteMenu(event) {
+	if (this.data.busy) return;
+	const id = String(event.currentTarget.dataset.id || ''), epoch = this._epoch;
+	if (!this.data.references.some(item => item.reference_id === id)) return;
+	wx.showActionSheet({ itemList: ['移除引用'], success: result => {
+		if (result.tapIndex === 0 && this.current(epoch)) this.removeReference({ currentTarget: { dataset: { id } } });
+	} });
+  },
+  async performRemoveReference(id, epoch) {
+	if (!this.current(epoch)) return;
+	this.setData({ busy: true, error: '' });
+	try { await api.deleteNativeReference(id); if (this.current(epoch)) this.setData({ references: this.data.references.filter(item => item.reference_id !== id), busy: false, notice: '已移除，原作品保留' }); }
+	catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '移除失败' }); }
   },
   retry() { this.load(); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
