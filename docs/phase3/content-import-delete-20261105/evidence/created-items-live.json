@@ -1,0 +1,88 @@
+{
+  "started_at": "2026-11-05T04:10:55.838Z",
+  "scope": "Only objects created by this acceptance run; user import draft retained",
+  "native_longpress": true,
+  "dialog_responses_controlled": true,
+  "checks": [
+    {
+      "name": "note cancel keeps item",
+      "passed": true
+    },
+    {
+      "name": "note confirm removes item",
+      "passed": true
+    },
+    {
+      "name": "note cancel keeps item",
+      "passed": true
+    },
+    {
+      "name": "note confirm removes item",
+      "passed": true
+    },
+    {
+      "name": "project cancel keeps item",
+      "passed": true
+    },
+    {
+      "name": "project confirm removes item",
+      "passed": true
+    },
+    {
+      "name": "preexisting projects preserved",
+      "passed": true
+    },
+    {
+      "name": "published content readable before deletion",
+      "passed": true
+    },
+    {
+      "name": "published collection readable before deletion",
+      "passed": true
+    },
+    {
+      "name": "collection cancel keeps item",
+      "passed": true
+    },
+    {
+      "name": "collection confirm removes item",
+      "passed": true
+    },
+    {
+      "name": "old collection version denied",
+      "passed": true
+    },
+    {
+      "name": "collection deletion preserves original work",
+      "passed": true
+    },
+    {
+      "name": "content cancel keeps item",
+      "passed": true
+    },
+    {
+      "name": "published content confirm removes item",
+      "passed": true
+    },
+    {
+      "name": "old published content version denied",
+      "passed": true
+    },
+    {
+      "name": "user imported video draft preserved unpublished",
+      "passed": true
+    }
+  ],
+  "created": {
+    "project_id": "-ez0OqDrMWyDh9UVDdtlEPACQ9vwPiqC",
+    "note_id": "2Y0oX_bVq0AAq4IBqrbtET5LGS8xt_sR",
+    "content_id": "CXJUNFnGNuxaw9YTnmCZJNsF7Cs2bA92",
+    "content_version": 1,
+    "collection_id": "77u4USvBwC16kvTjyVxGW6HjTlx94Jd7",
+    "collection_version": 1
+  },
+  "passed": true,
+  "wx_mocks_restored": true,
+  "resumed_at": "2026-11-05T04:27:32.896Z",
+  "prior_test_modal_cancelled": true
+}

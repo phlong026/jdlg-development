@@ -36,8 +36,8 @@
 | [docs/api/created-content-deletion.md](../../../docs/api/created-content-deletion.md) | 新增文件 | 接口与实施说明 |
 | [docs/api/project-note-project-deletion.md](../../../docs/api/project-note-project-deletion.md) | 新增文件 | 接口与实施说明 |
 | [docs/superpowers/plans/2026-11-05-content-import-and-deletion.md](../../../docs/superpowers/plans/2026-11-05-content-import-and-deletion.md) | 1 | 接口与实施说明 |
-| [miniprogram/miniprogram/pages/contentworkbench/contentworkbench.js](../../../miniprogram/miniprogram/pages/contentworkbench/contentworkbench.js) | 357、368 | 界面交互及运行产物 |
-| [miniprogram/miniprogram/pages/contentworkbench/contentworkbench.ts](../../../miniprogram/miniprogram/pages/contentworkbench/contentworkbench.ts) | 358、369 | 界面交互及运行产物 |
+| [miniprogram/miniprogram/pages/contentworkbench/contentworkbench.js](../../../miniprogram/miniprogram/pages/contentworkbench/contentworkbench.js) | 203、357、368 | 界面交互及运行产物 |
+| [miniprogram/miniprogram/pages/contentworkbench/contentworkbench.ts](../../../miniprogram/miniprogram/pages/contentworkbench/contentworkbench.ts) | 204、358、369 | 界面交互及运行产物 |
 | [miniprogram/miniprogram/pages/contentworkbench/contentworkbench.wxml](../../../miniprogram/miniprogram/pages/contentworkbench/contentworkbench.wxml) | 23 | 界面交互及运行产物 |
 | [miniprogram/miniprogram/pages/generatehistory/generatehistory.js](../../../miniprogram/miniprogram/pages/generatehistory/generatehistory.js) | 49、469、489、614、622、625 | 界面交互及运行产物 |
 | [miniprogram/miniprogram/pages/generatehistory/generatehistory.ts](../../../miniprogram/miniprogram/pages/generatehistory/generatehistory.ts) | 106、554、571、705、714、716 | 界面交互及运行产物 |

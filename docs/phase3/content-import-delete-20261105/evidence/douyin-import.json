@@ -1,0 +1,62 @@
+{
+  "source_url": "https://www.douyin.com/jingxuan?modal_id=7703942270734568713",
+  "started_at": "2026-11-05T03:37:51.379Z",
+  "events": [
+    {
+      "at": "2026-11-05T03:37:58.714Z",
+      "status": "queued",
+      "error_code": "",
+      "error_text": "",
+      "content_id": ""
+    },
+    {
+      "at": "2026-11-05T03:38:02.736Z",
+      "status": "downloading",
+      "error_code": "",
+      "error_text": "",
+      "content_id": ""
+    },
+    {
+      "at": "2026-11-05T03:38:06.766Z",
+      "status": "ready",
+      "error_code": "",
+      "error_text": "",
+      "content_id": "VNs74VfW7ACvekW-z_If0rHyB5m_cFvJ"
+    }
+  ],
+  "import_id": "6e7af8a5c60128517420d10770bbbe38bfe9cac2c9eac94e",
+  "owner_id": "designer-40",
+  "final_job": {
+    "import_id": "6e7af8a5c60128517420d10770bbbe38bfe9cac2c9eac94e",
+    "status": "ready",
+    "content_id": "VNs74VfW7ACvekW-z_If0rHyB5m_cFvJ",
+    "error_code": "",
+    "error_text": ""
+  },
+  "editor": {
+    "route": "pages/contentedit/contentedit",
+    "id": "VNs74VfW7ACvekW-z_If0rHyB5m_cFvJ",
+    "status": "draft",
+    "title": "用好AI的真正绝招，跟网上吹的完全相反 高手都在这样用AI，跟网上吹的正好相反。",
+    "error": "",
+    "version": 0,
+    "media_count": 2,
+    "blocks": [
+      {
+        "kind": "video",
+        "media_id": "xoW4sAcCT0Qk9qC-55Oxxq4ZhXR3eV5N",
+        "text_length": 0
+      }
+    ]
+  },
+  "passed": true,
+  "video_verification": {
+    "private_download_succeeded": true,
+    "duration_seconds": 162,
+    "size_kb": 16934,
+    "width": 1080,
+    "height": 1920,
+    "type": "video/mp4",
+    "errMsg": "getVideoInfo:ok"
+  }
+}
