@@ -733,8 +733,47 @@ func (s *Service) DeleteProjectCollectionDraft(ctx context.Context, scope Scope,
 		if err = r.Put(projectCollectionRecord(projectCollectionKind, collection, now)); err != nil {
 			return err
 		}
+		if s.OnCollectionRevoke != nil {
+			if err = s.OnCollectionRevoke(sourceReadContext(ctx, r), id); err != nil {
+				return err
+			}
+		}
 		out = ProjectCollectionDeletion{CollectionID: id, Revision: collection.Revision, Status: collection.Status, DeletedAt: now}
 		return audit(r, collection.Owner, "delete_project_collection_draft", scope.Actor, id, now, map[string]any{"revision": collection.Revision})
+	})
+	return out, err
+}
+
+// DeleteProjectCollection soft-deletes any actor-owned collection lifecycle
+// state. Immutable manifests and source works remain stored for audit, while
+// current-master validation makes every old public URL unavailable.
+func (s *Service) DeleteProjectCollection(ctx context.Context, scope Scope, id string, revision int) (ProjectCollectionDeletion, error) {
+	var out ProjectCollectionDeletion
+	if err := s.projectCollectionAccess(scope); err != nil {
+		return out, err
+	}
+	err := s.transaction(ctx, func(r Repository) error {
+		collection, err := projectCollectionOwned(r, scope, id)
+		if err != nil {
+			return err
+		}
+		if collection.Revision != revision {
+			return fail(409, "合集已更新，请重新读取")
+		}
+		now := s.Now().UTC()
+		collection.Status = "deleted"
+		collection.Revision++
+		collection.UpdatedAt = now
+		if err = r.Put(projectCollectionRecord(projectCollectionKind, collection, now)); err != nil {
+			return err
+		}
+		if s.OnCollectionRevoke != nil {
+			if err = s.OnCollectionRevoke(sourceReadContext(ctx, r), id); err != nil {
+				return err
+			}
+		}
+		out = ProjectCollectionDeletion{CollectionID: id, Revision: collection.Revision, Status: collection.Status, DeletedAt: now}
+		return audit(r, collection.Owner, "delete_project_collection", scope.Actor, id, now, map[string]any{"revision": collection.Revision, "last_version": collection.Version})
 	})
 	return out, err
 }

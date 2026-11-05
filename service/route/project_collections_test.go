@@ -118,6 +118,19 @@ func TestProjectCollectionRoutesManagePublishAndPublicFixedItem(t *testing.T) {
 	}
 }
 
+func TestProjectCollectionGeneralDeleteRoute(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	router, svc := newProjectCollectionRouteFixture(t, &scope)
+	source := publishCollectionRouteContent(t, svc, scope, "删除来源", "route-collection-delete-source")
+	createdRec := workbenchRequest(t, router, http.MethodPost, "/workbench/project-collections", tracking.ProjectCollectionDraft{Title: "待删除合集", Owner: "owner-a", IdempotencyKey: "route-collection-delete-create", Items: []tracking.ProjectCollectionItemInput{{ContentID: source.ID, ContentVersion: 1}}})
+	created := projectCollectionRouteData[tracking.ProjectCollection](t, createdRec.Body.Bytes())
+	deleted := workbenchRequest(t, router, http.MethodPost, "/workbench/project-collections/"+created.ID+"/delete", map[string]any{"expected_revision": created.Revision})
+	if deleted.Code != http.StatusOK {
+		t.Fatal(deleted.Code, deleted.Body.String())
+	}
+}
+
 func TestProjectCollectionManagementRoutesKeepActorAndOwnerScope(t *testing.T) {
 	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
 	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}

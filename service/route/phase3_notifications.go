@@ -78,6 +78,13 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 			}
 			return projections.CancelPendingTx(ctx, tx, contentID, "", svc.Now())
 		}
+		svc.OnCollectionRevoke = func(ctx context.Context, collectionID string) error {
+			tx, ok := tracking.NoticeWriteTx(ctx)
+			if !ok {
+				return notification.ErrUnavailable
+			}
+			return projections.CancelCollectionPendingTx(ctx, tx, collectionID, svc.Now())
+		}
 	}
 	var inbox *notification.SQLStore
 	if os.Getenv("NOTIFICATIONS_ENABLED") == "true" {

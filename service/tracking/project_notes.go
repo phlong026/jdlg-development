@@ -302,7 +302,7 @@ func (s *Service) projectNoteGrant(ctx context.Context, r Repository, project Pr
 	return nil
 }
 
-func projectNoteLoadProject(r Repository, projectID string) (ProjectNoteProject, error) {
+func projectNoteLoadProjectRaw(r Repository, projectID string) (ProjectNoteProject, error) {
 	project, err := decode[ProjectNoteProject](r, projectNoteProjectKind, projectID)
 	if errors.Is(err, ErrNotFound) {
 		return project, fail(404, "私人项目不可访问")
@@ -311,6 +311,17 @@ func projectNoteLoadProject(r Repository, projectID string) (ProjectNoteProject,
 		return project, err
 	}
 	return projectNoteNormalizeProject(project), nil
+}
+
+func projectNoteLoadProject(r Repository, projectID string) (ProjectNoteProject, error) {
+	project, err := projectNoteLoadProjectRaw(r, projectID)
+	if err != nil {
+		return project, err
+	}
+	if err = projectNoteRequireProjectActive(r, projectID); err != nil {
+		return project, err
+	}
+	return project, nil
 }
 
 func projectNoteNormalizeProject(project ProjectNoteProject) ProjectNoteProject {

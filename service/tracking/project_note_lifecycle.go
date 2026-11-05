@@ -8,6 +8,8 @@ import (
 
 const projectNoteDeletionKind = "note_deletion"
 
+const projectNoteProjectDeletionKind = "note_project_deletion"
+
 // ProjectNoteDeletion is an append-only tombstone. The draft record, frozen
 // versions, feedback, shares and project media remain intact for auditability.
 type ProjectNoteDeletion struct {
@@ -16,6 +18,41 @@ type ProjectNoteDeletion struct {
 	Revision  int       `json:"revision"`
 	DeletedBy int64     `json:"deleted_by"`
 	DeletedAt time.Time `json:"deleted_at"`
+}
+
+// ProjectNoteProjectDeletion is the audit tombstone for a deleted project.
+// Project records and their private history remain stored, but every active
+// read path rejects the project after this record is written.
+type ProjectNoteProjectDeletion struct {
+	ProjectID string    `json:"project_id"`
+	Revision  int       `json:"revision"`
+	DeletedBy int64     `json:"deleted_by"`
+	DeletedAt time.Time `json:"deleted_at"`
+}
+
+func projectNoteLoadProjectDeletion(r Repository, projectID string) (ProjectNoteProjectDeletion, bool, error) {
+	deletion, err := decode[ProjectNoteProjectDeletion](r, projectNoteProjectDeletionKind, projectID)
+	if errors.Is(err, ErrNotFound) {
+		return ProjectNoteProjectDeletion{}, false, nil
+	}
+	if err != nil {
+		return ProjectNoteProjectDeletion{}, false, err
+	}
+	if deletion.ProjectID != projectID || deletion.Revision <= 0 || deletion.DeletedBy <= 0 || deletion.DeletedAt.IsZero() {
+		return ProjectNoteProjectDeletion{}, false, ErrUnavailable
+	}
+	return deletion, true, nil
+}
+
+func projectNoteRequireProjectActive(r Repository, projectID string) error {
+	_, deleted, err := projectNoteLoadProjectDeletion(r, projectID)
+	if err != nil {
+		return err
+	}
+	if deleted {
+		return fail(404, "私人项目不可访问")
+	}
+	return nil
 }
 
 func projectNoteLoadDeletion(r Repository, noteID string) (ProjectNoteDeletion, bool, error) {
@@ -41,6 +78,39 @@ func projectNoteRequireActive(r Repository, noteID string) error {
 		return fail(404, "项目笔记不存在")
 	}
 	return nil
+}
+
+// ProjectNoteDeleteProject records a tombstone and removes only the project's
+// active-list index. Private drafts, frozen versions and audit history remain.
+func (s *Service) ProjectNoteDeleteProject(ctx context.Context, scope Scope, projectID string, expectedRevision int) (ProjectNoteProjectDeletion, error) {
+	var out ProjectNoteProjectDeletion
+	err := s.transaction(ctx, func(r Repository) error {
+		project, err := projectNoteLoadProjectRaw(r, projectID)
+		if err != nil {
+			return err
+		}
+		if err = s.projectNoteDesigner(scope, project); err != nil {
+			return err
+		}
+		if err = projectNoteRequireProjectActive(r, project.ID); err != nil {
+			return err
+		}
+		if project.Revision != expectedRevision {
+			return fail(409, "项目资料已更新，请重新读取")
+		}
+		projectRow, err := r.Get(projectNoteProjectKind, project.ID)
+		if err != nil {
+			return err
+		}
+		now := s.Now().UTC()
+		out = ProjectNoteProjectDeletion{ProjectID: project.ID, Revision: project.Revision, DeletedBy: scope.Actor, DeletedAt: now}
+		if err = r.Insert(projectNoteRecord(projectNoteProjectDeletionKind, project.ID, project.Owner, now, out, projectNoteActorKey(scope.Actor), project.ID, project.ID, "")); err != nil {
+			return err
+		}
+		projectRow.Visitor = ""
+		return r.Put(projectRow)
+	})
+	return out, err
 }
 
 // ProjectNoteCopy creates one new editable draft in the source project. It

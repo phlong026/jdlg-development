@@ -17,6 +17,7 @@ type Service struct {
 	OnNoticeEvent        func(context.Context, NoticeEvent) error
 	OnRemoveNoticeEvents func(context.Context, []string) error
 	OnContentRevoke      func(context.Context, string) error
+	OnCollectionRevoke   func(context.Context, string) error
 	VerifyBusiness       func(context.Context, BusinessProof) (bool, error)
 	// Server-side, current account grant lookup. Never derived from client fields.
 	IsContentOperator         func(context.Context, int64, string) (bool, error)

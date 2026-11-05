@@ -59,6 +59,16 @@ func registerProjectCollectionHandlers(group *gin.RouterGroup, svc *tracking.Ser
 		out, err := svc.DeleteProjectCollectionDraft(c.Request.Context(), scope(c), c.Param("id"), input.Revision)
 		trackingResponse(c, out, err)
 	})
+	collections.POST("/:id/delete", func(c *gin.Context) {
+		var input struct {
+			Revision int `json:"expected_revision"`
+		}
+		if !trackingBind(c, &input) {
+			return
+		}
+		out, err := svc.DeleteProjectCollection(c.Request.Context(), scope(c), c.Param("id"), input.Revision)
+		trackingResponse(c, out, err)
+	})
 	collections.POST("/:id/preview", func(c *gin.Context) {
 		var input struct {
 			Revision int `json:"expected_revision"`

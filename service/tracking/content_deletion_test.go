@@ -98,3 +98,85 @@ func TestDeletedImportedDraftCannotReplayAsReadyContent(t *testing.T) {
 		t.Fatal("已删除导入草稿在幂等重放中重现")
 	}
 }
+
+func TestDeleteCreatedContentSupportsPublishedAndRevokedAndInvalidatesFixedVersion(t *testing.T) {
+	s, scope := fixture(t)
+	ctx := context.Background()
+	draft, err := s.SaveContent(ctx, scope, "", Draft{Title: "可删除作品", Body: "v1", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := s.Preview(ctx, scope, draft.ID, draft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := s.Publish(ctx, scope, draft.ID, draft.Revision, preview["preview_token"].(string), "delete-created-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := published["content"].(Content)
+	if _, err = s.ReadContent(ctx, current.ID, current.Version); err != nil {
+		t.Fatal(err)
+	}
+	reference, err := s.CreateNativeReference(ctx, scope, NativeReferenceInput{ContentID: current.ID, ContentVersion: current.Version, IdempotencyKey: "delete-created-reference"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := s.Enter(ctx, EntryInput{Route: publishedReaderRoute, Content: current.ID, Version: current.Version, Client: "delete-created-client", Consent: s.Config.ConsentVersion}, scope.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, err := s.CreateShare(ctx, ShareInput{Route: publishedReaderRoute, Content: current.ID, Version: current.Version, Channel: "app_message", Key: "delete-created-share"}, entry.Token, scope.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokeHookCalled := false
+	s.OnContentRevoke = func(context.Context, string) error { revokeHookCalled = true; return nil }
+	if err = s.Store.Transaction(ctx, s.Config.Tenant, func(r Repository) error {
+		row := record("notice_event", "delete-created-notice", current.Owner, s.Now(), map[string]bool{"queued": true})
+		row.Content = current.ID
+		return r.Insert(row)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DeleteCreatedContent(ctx, Scope{Tenant: scope.Tenant, Actor: scope.Actor, Owners: []string{"owner-b"}, Manage: true}, current.ID, current.Revision); err == nil {
+		t.Fatal("跨归属删除成功")
+	}
+	if _, err = s.DeleteCreatedContent(ctx, scope, current.ID, current.Revision+1); err == nil {
+		t.Fatal("过期版本删除成功")
+	}
+	deleted, err := s.DeleteCreatedContent(ctx, scope, current.ID, current.Revision)
+	if err != nil || deleted.Status != "deleted" || deleted.Revision != current.Revision+1 {
+		t.Fatalf("deleted=%#v err=%v", deleted, err)
+	}
+	if _, err = s.ReadContent(ctx, current.ID, current.Version); err == nil {
+		t.Fatal("删除后固定版本仍可访问")
+	}
+	if _, err = s.NativeReferenceTarget(ctx, scope, reference.ReferenceID); err == nil {
+		t.Fatal("删除后已保存引用仍可打开")
+	}
+	if _, err = s.ResolveShareRecord(ctx, shared["share_token"].(string)); err == nil {
+		t.Fatal("删除后旧分享仍可打开")
+	}
+	if !revokeHookCalled {
+		t.Fatal("删除已发布内容未取消待投递通知")
+	}
+
+	revokedDraft, err := s.SaveContent(ctx, scope, "", Draft{Title: "先撤回再删除", Body: "v1", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedPreview, _ := s.Preview(ctx, scope, revokedDraft.ID, revokedDraft.Revision)
+	revokedPub, err := s.Publish(ctx, scope, revokedDraft.ID, revokedDraft.Revision, revokedPreview["preview_token"].(string), "delete-revoked-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	revoked := revokedPub["content"].(Content)
+	revoked, err = s.Revoke(ctx, scope, revoked.ID, revoked.Revision, "下架", "delete-revoked-revoke")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DeleteCreatedContent(ctx, scope, revoked.ID, revoked.Revision); err != nil {
+		t.Fatal(err)
+	}
+}

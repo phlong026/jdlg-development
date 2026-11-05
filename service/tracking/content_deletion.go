@@ -60,3 +60,53 @@ func (s *Service) DeleteContentDraft(ctx context.Context, scope Scope, id string
 	})
 	return out, err
 }
+
+// DeleteCreatedContent hides an actor-authorized work without removing its
+// immutable versions, media, or audit history. Published links are revoked in
+// the same transaction so deletion is not merely a list filter.
+func (s *Service) DeleteCreatedContent(ctx context.Context, scope Scope, id string, revision int) (ContentDeletion, error) {
+	var out ContentDeletion
+	if err := s.authorized(scope); err != nil {
+		return out, err
+	}
+	if !scope.Manage {
+		return out, fail(403, "无内容删除权限")
+	}
+	err := s.transaction(ctx, func(r Repository) error {
+		content, err := loadCatalogContent(r, "content", id)
+		if err != nil || !scope.Allows(content.Owner) || content.ReadOnly {
+			return fail(404, "素材不可访问")
+		}
+		if content.Revision != revision {
+			return fail(409, "内容已更新，请重新读取")
+		}
+		if content.Status == "deleted" {
+			return fail(409, "内容已删除")
+		}
+		now := s.Now().UTC()
+		if content.Version > 0 {
+			if err = r.Put(record("content_revoked", id, content.Owner, now, map[string]any{"revoked_at": now})); err != nil {
+				return err
+			}
+			if s.OnContentRevoke != nil {
+				notices, queryErr := scopedRecords(r, "notice_event", RecordQuery{Content: id, Limit: 1})
+				if queryErr != nil {
+					return queryErr
+				}
+				if len(notices) > 0 {
+					if err = s.OnContentRevoke(sourceReadContext(ctx, r), id); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		content.Status = "deleted"
+		content.Revision++
+		if err = r.Put(record("content", id, content.Owner, now, content)); err != nil {
+			return err
+		}
+		out = ContentDeletion{ContentID: id, Revision: content.Revision, Status: content.Status, DeletedAt: now}
+		return audit(r, content.Owner, "delete_created_content", scope.Actor, id, now, map[string]any{"revision": content.Revision, "last_version": content.Version})
+	})
+	return out, err
+}
