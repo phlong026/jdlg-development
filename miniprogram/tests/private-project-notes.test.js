@@ -562,6 +562,62 @@ test('copy selects the new draft while delete clears only the selected draft aft
   assert.equal(page.data.notes.length, 1);
 });
 
+test('long-press deleting the selected note clears its editor baseline so returning to projects needs no discard confirmation', async () => {
+  let modalCount = 0;
+  const project = { project_id: 'p', name: '验收项目' };
+  const note = { note_id: 'n', revision: 1, title: '验收笔记', body: '已保存正文', body_format: 'plain' };
+  const page = pageHarness('projectnotes', {
+    deleteProjectNote: async () => ({}),
+  }, {
+    showActionSheet: options => options.success({ tapIndex: 0 }),
+    showModal: options => { modalCount++; options.success({ confirm: true }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project, notes: [note], versions: [] });
+
+  await page.openNoteDeleteMenu({ currentTarget: { dataset: { id: 'n' } } });
+  assert.equal(page.data.note, null);
+  assert.equal(page.data.noteTitle, '');
+  assert.equal(page.data.noteBody, '');
+  assert.equal(page.data.noteMedia.length, 0);
+  assert.equal(page._selectedNoteID, '');
+  assert.equal(page.hasUnsavedChanges(), false);
+
+  await page.handleBack();
+  assert.equal(modalCount, 1);
+  assert.equal(page.data.pageView, 'list');
+});
+
+test('long-press deleting another note does not mark the selected note edits as saved', async () => {
+  let modalCount = 0;
+  const project = { project_id: 'p', name: '验收项目' };
+  const selected = { note_id: 'selected', revision: 2, title: '当前笔记', body: '已保存正文', body_format: 'plain' };
+  const other = { note_id: 'other', revision: 1, title: '其它笔记', body: '其它正文', body_format: 'plain' };
+  const page = pageHarness('projectnotes', {
+    deleteProjectNote: async () => ({}),
+  }, {
+    showActionSheet: options => options.success({ tapIndex: 0 }),
+    showModal: options => { modalCount++; options.success({ confirm: modalCount === 1 }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page._selectedNoteID = 'selected';
+  page.applyProjectDetail({ project, notes: [selected, other], versions: [] });
+  const baseline = page._noteFormBaseline;
+  const loadedBody = page._loadedFormState.noteBody;
+  page.setNoteBody({ detail: { value: '尚未保存的正文' } });
+
+  await page.openNoteDeleteMenu({ currentTarget: { dataset: { id: 'other' } } });
+  assert.equal(page.data.note.note_id, 'selected');
+  assert.equal(page.data.noteBody, '尚未保存的正文');
+  assert.equal(page._noteFormBaseline, baseline);
+  assert.equal(page._loadedFormState.noteBody, loadedBody);
+  assert.equal(page.hasUnsavedChanges(), true);
+
+  await page.handleBack();
+  assert.equal(modalCount, 2);
+  assert.equal(page.data.pageView, 'detail');
+});
+
 test('designer history paginates with bounded replacement and can return to the previous page', async () => {
   const calls = [];
   const page = pageHarness('projectnotes', { getProjectNoteHistory: async (project, type, query) => {

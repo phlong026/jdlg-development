@@ -660,8 +660,16 @@ Page({
       if (fromList) {
         const notes = this.data.notes.filter(item => item.note_id !== note.note_id);
         const values = { notes, busy: false, notice: '笔记已移除。' };
-        if (this.data.note && this.data.note.note_id === note.note_id) values.note = null;
-        this.setData(values);
+        const selected = this.data.note && this.data.note.note_id === note.note_id;
+        if (selected) {
+          this._selectedNoteID = ''; this._newNote = false;
+          Object.assign(values, { note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false });
+        }
+        this.setData(values, () => {
+          if (!selected) return;
+          this._noteFormBaseline = this.noteFormSignature();
+          if (this._loadedFormState) Object.assign(this._loadedFormState, { noteTitle: '', noteBody: '', noteMedia: [] });
+        });
         return;
       }
       this._selectedNoteID = ''; this._newNote = true; this._selectedVersionID = ''; this._shareAttempt = null;
