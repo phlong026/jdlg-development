@@ -28,3 +28,4 @@ button.library-tab { flex: 1; }
 button.compact { flex: none; min-height: 72rpx; padding: 12rpx 20rpx; }
 button.load-more, button.history-link { width: 100%; }
 .content-section { border-radius: 12rpx; }
+.media-thumb{flex:none;width:112rpx;height:112rpx;border-radius:12rpx;overflow:hidden;background:#eee7dd;color:#8b6338;display:flex;align-items:center;justify-content:center;font-size:24rpx}.media-thumb.video{width:84rpx;height:112rpx;background:#302b26;color:#fff}.media-thumb image{width:100%;height:100%}.media-row .row-main{align-self:center}

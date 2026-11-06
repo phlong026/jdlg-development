@@ -77,7 +77,7 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
   adapter.install(); sandbox.App({}); appDefinition.onShow({});
   vm.runInNewContext(fs.readFileSync(path.join(root, route + '.js'), 'utf8'), {
     Page: sandbox.Page, exports: {}, wx, Date, Math, Promise,
-    require: name => name.endsWith('/tracking/index') ? adapter : name.endsWith('/tracking/api') ? api : require(path.join(root, 'utils/tracking/video'))
+    require: name => name.endsWith('/tracking/index') ? adapter : name.endsWith('/tracking/api') ? api : name.endsWith('/content-presentation') ? require(path.join(root, 'utils/content-presentation')) : require(path.join(root, 'utils/tracking/video'))
   });
   const page = {
     ...pageDefinition, route, data: JSON.parse(JSON.stringify(pageDefinition.data)),

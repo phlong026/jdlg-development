@@ -230,6 +230,26 @@ test('collection pages stay clean and use the existing navigation and brand pale
   }
 });
 
+test('collection editing and reading keep each work format visible', async () => {
+  const api = {
+    mutationKey: () => 'collection-format-key',
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [] }),
+    listCollections: async () => ({ items: [] }),
+    listCandidates: async () => ({ items: [
+      { content_id: 'gallery-0001', content_version: 1, title: '图集', presentation: 'gallery' },
+      { content_id: 'video-0001', content_version: 1, title: '视频', presentation: 'video' },
+    ] }),
+    mediaURL: () => '',
+  };
+  const { page } = pageRuntime(api);
+  page.onShow(); await tick(); await page.startCreate();
+  assert.deepEqual(Array.from(page.data.candidates, item => item.format_label), ['图集笔记', '视频笔记']);
+  const editor = fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.wxml'), 'utf8');
+  const reader = fs.readFileSync(path.join(root, 'pages/collectionreader/collectionreader.wxml'), 'utf8');
+  assert.match(editor, /{{item\.format_label}}/);
+  assert.match(reader, /{{item\.format_label}}/);
+});
+
 test('collection editor keeps a single hierarchy and disables preview without works', () => {
   const template = fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.wxml'), 'utf8');
   const style = fs.readFileSync(path.join(root, 'pages/projectcollections/projectcollections.wxss'), 'utf8');

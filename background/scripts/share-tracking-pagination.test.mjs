@@ -64,7 +64,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     },
   };
   const actual = load('src/pages/shareTracking/components.tsx', { react, './model': model, './evidence': { IntentEvidenceDetails: 'IntentEvidenceDetails' } });
-  const components = Object.fromEntries(Object.keys(actual).map(name => [name, name === 'useResource' ? actual[name] : name]));
+  const components = Object.fromEntries(Object.keys(actual).map(name => [name, ['useResource', 'articleReferencesMedia'].includes(name) ? actual[name] : name]));
   function page(method, params = {}) {
     const as_of = params.as_of || `2026-10-11T00:00:${String(++serial).padStart(2, '0')}Z`;
     return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : method === 'visits' ? visit : method === 'channels' ? channel : visitor], identified_count: 1, anonymous_count: 0 };

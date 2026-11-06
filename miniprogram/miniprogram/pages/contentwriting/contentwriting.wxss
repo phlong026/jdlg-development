@@ -10,7 +10,7 @@ page {
 }
 
 .writing-body {
-  padding: 24rpx 32rpx calc(156rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx 28rpx;
 }
 
 .writing-tabs {
@@ -178,16 +178,16 @@ page {
 }
 
 .writing-footer {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
   z-index: 10;
   box-sizing: border-box;
   padding: 18rpx 32rpx calc(22rpx + env(safe-area-inset-bottom));
   background: #fbfaf7;
   border-top: 1rpx solid #eee6dc;
 }
+
+.result-ready { color: #8d6a43; font-size: 22rpx; }
 
 .primary, .secondary {
   box-sizing: border-box;

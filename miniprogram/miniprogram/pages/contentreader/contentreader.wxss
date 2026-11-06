@@ -1,3 +1,5 @@
+@import "../../components/content-presentation/content-presentation.wxss";
+
 page {
   background: #f7f5f1;
   color: #2d231d;

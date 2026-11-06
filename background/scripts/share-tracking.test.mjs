@@ -73,7 +73,7 @@ function editorHarness(overrides = {}, initial = {}) {
  const react={...React,useState(init){const i=index++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useRef(init){const i=index++;if(!(i in slots))slots[i]={current:init};return slots[i]},useEffect(effect,deps){const i=index++;if(!slots[i]){const cleanup=effect();slots[i]={cleanup};lifecycle.push(()=>{cleanup?.();slots[i].cleanup=effect()})}}};
  const content={content_id:'content1',revision:1,version:1,title:'文章',body:'已授权正文',status:'draft',rights:'own',owner_id:'owner1',cover:{media_id:'image1'},media:[],...initial};
  const api={save:async(...args)=>{calls.push(['save',...args]);return content},preview:async(...args)=>{calls.push(['preview',...args]);return{content,preview_token:'verified'}},publish:async(...args)=>{calls.push(['publish',...args]);return{content:{...content,status:'published'},share_methods:{}}},upload:async(...args)=>{calls.push(['upload',...args]);return{media_id:'uploaded'}},media:async()=>({items:[]}),revoke:async(...args)=>{calls.push(['revoke',...args]);return{...content,status:'revoked'}},...overrides};
- const components={Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',useResource:()=>({data:{items:[]},reload(){}})};
+ const components={articleReferencesMedia:()=>false,ArticleBlockEditor:'ArticleBlockEditor',Feedback:'Feedback',MediaPreview:'MediaPreview',Pager:'Pager',useResource:()=>({data:{items:[]},reload(){}})};
  const module=load('src/pages/shareTracking/editor.tsx',{'react':react,'../../api/shareTracking':{tracking:api},'./components':components,'./model':model,globals:{crypto:{randomUUID:()=> 'idempotency-one'},window:{confirm:()=>true}}});
  const nodes=x=>Array.isArray(x)?x.flatMap(nodes):!x||typeof x!=='object'?[]:[x,...nodes(x.props?.children)];
  const text=x=>Array.isArray(x)?x.map(text).join(''):x==null||typeof x==='boolean'?'':typeof x==='object'?text(x.props?.children):String(x);
@@ -121,6 +121,58 @@ test('article_v2 preview keeps interleaved blocks and never interprets document 
  assert.match(html,/class="st-article-block st-article-heading st-article-heading-2"/);
  const editor=fs.readFileSync(new URL('src/pages/shareTracking/editor.tsx',root),'utf8');
  assert.match(editor,/value="article_v2"/);
+});
+
+test('admin article block editor changes text without losing media, captions or presentation', () => {
+ const { ArticleBlockEditor }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ let next;
+ const body=JSON.stringify({schema:1,presentation:'gallery',blocks:[{kind:'paragraph',text:'旧文案'},{kind:'image',media_id:'asset-one',caption:'平面图'}]});
+ const tree=ArticleBlockEditor({body,media:[],onChange:value=>{next=JSON.parse(value)}});
+ const nodes=x=>Array.isArray(x)?x.flatMap(nodes):!x||typeof x!=='object'?[]:[x,...nodes(x.props?.children)];
+ const input=nodes(tree).find(node=>node.type==='textarea'&&node.props.value==='旧文案');
+ assert.ok(input);input.props.onChange({target:{value:'新文案'}});
+ assert.equal(next.presentation,'gallery');assert.equal(next.blocks[0].text,'新文案');assert.equal(next.blocks[1].caption,'平面图');assert.equal(next.blocks[1].media_id,'asset-one');
+});
+
+test('admin social preview places media before a single copy of the full note text', () => {
+ const { ContentBody }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
+ const content={body_format:'article_v2',body:JSON.stringify({schema:1,presentation:'gallery',blocks:[{kind:'paragraph',text:'完整图集文案'},{kind:'image',media_id:'asset-one'},{kind:'image',media_id:'asset-two'}]}),media:[{media_id:'asset-one',kind:'image',url:'/authorized/media/one'},{media_id:'asset-two',kind:'image',url:'/authorized/media/two'}]};
+ const html=renderToStaticMarkup(React.createElement(ContentBody,{content}));
+ assert.match(html,/st-gallery-preview/);assert.ok(html.indexOf('<img')<html.indexOf('完整图集文案'));assert.equal(html.split('完整图集文案').length,2);
+});
+
+test('admin social preview falls back to top-level presentation for imported content', () => {
+ const { ContentBody }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
+ const content={presentation:'video',body_format:'article_v2',body:JSON.stringify({schema:1,blocks:[{kind:'paragraph',text:'完整视频文案'},{kind:'video',media_id:'asset-video'}]}),media:[{media_id:'asset-video',kind:'video',url:'/authorized/media/video'}]};
+ const html=renderToStaticMarkup(React.createElement(ContentBody,{content}));
+ assert.match(html,/st-video-preview/);assert.ok(html.indexOf('<video')<html.indexOf('完整视频文案'));
+});
+
+test('article editor downgrades invalid gallery and video shapes before save', () => {
+ const { ArticleBlockEditor }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const nodes=x=>Array.isArray(x)?x.flatMap(nodes):!x||typeof x!=='object'?[]:[x,...nodes(x.props?.children)];
+ let next;
+ let tree=ArticleBlockEditor({body:JSON.stringify({schema:1,presentation:'gallery',blocks:[{kind:'image',media_id:'one'},{kind:'paragraph',text:'图间文字'},{kind:'image',media_id:'two'}]}),media:[],onChange:value=>{next=JSON.parse(value)}});
+ nodes(tree).find(node=>node.type==='textarea'&&node.props.value==='图间文字').props.onChange({target:{value:'图间文字更新'}});
+ assert.equal(next.presentation,'article');
+ tree=ArticleBlockEditor({body:JSON.stringify({schema:1,presentation:'video',blocks:[{kind:'video',media_id:'one'}]}),media:[{media_id:'two',kind:'video'}],onChange:value=>{next=JSON.parse(value)}});
+ nodes(tree).find(node=>node.type==='button'&&JSON.stringify(node.props.children).includes('视频')).props.onClick();
+ assert.equal(next.presentation,'article');assert.equal(next.blocks.filter(block=>block.kind==='video').length,2);
+});
+
+test('article cover is separate only when the document does not already reference it', () => {
+ const { articleReferencesMedia }=load('src/pages/shareTracking/components.tsx',{'./model':model});
+ const block={body_format:'article_v2',body:JSON.stringify({schema:1,blocks:[{kind:'image',media_id:'cover-one'}]})};
+ const layout={body_format:'article_v2',body:JSON.stringify({schema:1,layout_html:'<img data-media-id="cover-two">',blocks:[{kind:'paragraph',text:'正文'}]})};
+ assert.equal(articleReferencesMedia(block,'cover-one'),true);
+ assert.equal(articleReferencesMedia(layout,'cover-two'),true);
+ assert.equal(articleReferencesMedia(block,'other-cover'),false);
+ const editor=fs.readFileSync(new URL('src/pages/shareTracking/editor.tsx',root),'utf8');
+ const details=fs.readFileSync(new URL('src/pages/shareTracking/details.tsx',root),'utf8');
+ assert.match(editor,/!articleReferencesMedia\(preview\.content, preview\.content\.cover\?\.media_id\)/);
+ assert.match(details,/!articleReferencesMedia\(item, item\.cover\?\.media_id\)/);
 });
 
 test('article_v2 original layout preview binds only authorized media and rejects active markup', () => {

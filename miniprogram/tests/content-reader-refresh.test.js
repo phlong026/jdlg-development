@@ -10,11 +10,11 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 
 const compiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
 test('native reader keeps the article beside a transient error but hides it after access is lost', { skip: !fs.existsSync(compiler) }, () => {
-  const source = require('node:child_process').execFileSync(compiler, ['./pages/contentreader/contentreader.wxml'], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  const source = require('node:child_process').execFileSync(compiler, ['./components/content-presentation/content-presentation.wxml', './pages/contentreader/contentreader.wxml'], { cwd: root, encoding: 'utf8', timeout: 10000 });
   const context = { window: {}, console };
   vm.createContext(context); vm.runInContext(source, context);
   const render = context.$gwx('./pages/contentreader/contentreader.wxml');
-  const data = { __profileAccessMounted: true, loading: false, contentReady: true, error: '刷新失败，请重试', content: { title: '已验证正文', body: '保留的文章文字' }, media: [], articleBlocks: [] };
+  const data = { __profileAccessMounted: true, loading: false, contentReady: true, error: '刷新失败，请重试', content: { title: '已验证正文', body: '保留的文章文字' }, presentationView: { kind: 'article', title: '已验证正文', sourceNote: '', publishedAt: '', blocks: [{ key: 'paragraph-0', kind: 'paragraph', text: '保留的文章文字', className: 'article-block' }] }, mediaErrors: {}, media: [], articleBlocks: [] };
   const retained = JSON.stringify(render(data));
   assert.match(retained, /保留的文章文字/);
   assert.match(retained, /刷新失败，请重试/);
@@ -23,7 +23,7 @@ test('native reader keeps the article beside a transient error but hides it afte
   assert.match(blocked, /刷新失败，请重试/);
 });
 
-function harness() {
+function harness(options = {}) {
   let definition;
   const pendingReads = [];
   let reads = 0;
@@ -40,7 +40,7 @@ function harness() {
     request: async path => {
       assert.match(path, /^\/contents\//);
       reads += 1;
-      if (reads === 1) return { title: '已显示正文', body: '旧正文', media: [] };
+      if (reads === 1) return options.firstContent || { title: '已显示正文', body: '旧正文', media: [] };
       return new Promise((resolve, reject) => { pendingReads.push({ resolve, reject }); });
     },
   };
@@ -53,7 +53,8 @@ function harness() {
     Page: value => { definition = value; }, wx, Promise, Object, Array, String, Number, Math, Error, encodeURIComponent,
     require: name => name.includes('tracking/index') ? tracking
       : name.includes('tracking/api') ? api
-      : name.includes('protected-media') ? { resolveProtectedMediaURL: async value => value }
+      : name.includes('protected-media') ? { resolveProtectedMediaURL: async value => { if (options.mediaError) throw options.mediaError; if (options.failMedia) throw new Error('cdn unavailable'); return value; } }
+      : name.includes('content-presentation') ? require(path.join(root, 'utils/content-presentation'))
       : name.includes('article-document') ? { renderArticleDocument: () => [] }
       : { createVideoTracker: () => ({}) },
   });
@@ -69,6 +70,18 @@ function harness() {
     fail: (error, index = 0) => pendingReads[index].reject(error),
   };
 }
+
+test('reader keeps note copy and an inline retry when protected media is temporarily unavailable', async () => {
+  const { page } = harness({
+    failMedia: true,
+    firstContent: { title: '乡墅日记', body_format: 'article_v2', body: JSON.stringify({ schema: 1, presentation: 'gallery', blocks: [{ kind: 'paragraph', text: '保留整条文案' }, { kind: 'image', media_id: 'image-one' }] }), media: [{ media_id: 'image-one', kind: 'image', url: 'https://example.test/image.jpg' }] },
+  });
+  await page.loadContent();
+  assert.equal(page.data.contentReady, true);
+  assert.equal(page.data.presentationView.bodyText, '保留整条文案');
+  assert.equal(page.data.presentationView.media.length, 1);
+  assert.match(page.data.mediaErrors[page.data.presentationView.media[0].errorKey], /加载失败/);
+});
 
 test('reader keeps verified content visible while foreground refresh is pending', async () => {
   const { page, finish } = harness();
@@ -137,4 +150,10 @@ test('reader ignores an older refresh that completes after a newer successful re
   finish({ title: '迟到旧正文', body: 'old', media: [] }, 0);
   await older;
   assert.equal(page.data.content.title, '最新正文');
+});
+
+test('media account boundary failure clears content instead of becoming a retry placeholder', async () => {
+ const {page}=harness({mediaError:Object.assign(new Error('account changed'),{code:'MEDIA_IDENTITY_CHANGED'}),firstContent:{title:'旧账户内容',body:'正文',media:[{media_id:'image-one',kind:'image',url:'https://example.test/image.jpg'}]}});
+ await page.loadContent();
+ assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);
 });

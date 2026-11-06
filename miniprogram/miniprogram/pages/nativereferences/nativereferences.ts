@@ -5,6 +5,12 @@ const pageTitle = pickerMode => pickerMode === 'media' ? '选择素材' : picker
 const empty = (pickerMode = '', mediaKinds = '') => ({ pickerMode, mediaKinds, navigationTitle: pageTitle(pickerMode), libraryTab: 'selected', search: '', references: [], candidates: [], media: [], referenceCursor: '', candidateCursor: '', mediaCursor: '', loading: false, busy: false, searching: false, error: '', notice: '', loginRequired: false });
 const candidateKey = item => String(item.content_id) + ':' + String(item.content_version);
 const searchQuery = (search, extra = {}) => ({ limit: 20, ...extra, ...(search ? { q: search } : {}) });
+const mediaRow = item => {
+  const mime = String(item.mime || item.mime_type || '');
+  const format = mime.includes('/') ? mime.split('/').pop().replace('jpeg', 'jpg').toUpperCase() : '';
+  const size = Number(item.width) > 0 && Number(item.height) > 0 ? item.width + '×' + item.height : '';
+  return Object.assign({}, item, { preview_path: '', meta_label: [format, size].filter(Boolean).join(' · ') || ({ image: '图片', video: '视频', document: '文件' }[item.kind] || '素材') });
+};
 Page({
   data: empty(),
   onLoad(options) {
@@ -36,7 +42,12 @@ Page({
     try {
       if (this.data.pickerMode === 'media') {
         const media = await api.listWorkbenchMedia(searchQuery(this.data.search, this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}));
-        if (this.current(epoch)) { this._loaded = true; this.setData({ media: media.items || [], mediaCursor: media.next_cursor || '', loading: false }); }
+        if (this.current(epoch)) {
+          this._loaded = true;
+          const rows = (media.items || []).map(mediaRow);
+          this.setData({ media: rows, mediaCursor: media.next_cursor || '', loading: false });
+          await this.loadMediaPreviews(epoch, rows);
+        }
         return;
       }
       const query = searchQuery(this.data.search);
@@ -61,7 +72,9 @@ Page({
         const page = await api.listWorkbenchMedia(searchQuery(this.data.search, { cursor, ...(this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}) }));
         if (!this.current(epoch)) return;
         const seen = new Set(this.data.media.map(item => item.media_id));
-        this.setData({ media: [...this.data.media, ...(page.items || []).filter(item => !seen.has(item.media_id))], mediaCursor: page.next_cursor || '', busy: false });
+        const incoming = (page.items || []).filter(item => !seen.has(item.media_id)).map(mediaRow);
+        this.setData({ media: [...this.data.media, ...incoming], mediaCursor: page.next_cursor || '', busy: false });
+        await this.loadMediaPreviews(epoch, incoming);
       } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '加载失败，可重试' }); }
       return;
     }
@@ -81,13 +94,28 @@ Page({
   },
   onSearchInput(event) { this.setData({ search: String(event.detail.value || '').slice(0, 100) }); },
   submitSearch() { return this.load(); },
+  async loadMediaPreviews(epoch, rows) {
+    if (!api.downloadWorkbenchMedia) return;
+    const queue = rows.filter(item => item.kind === 'image');
+    const consume = async () => {
+      while (queue.length && this.current(epoch)) {
+        const item = queue.shift();
+        let path = '';
+        try { path = await api.downloadWorkbenchMedia(item.media_id); } catch (_) { /* 缩略图失败不影响选择。 */ }
+        if (!this.current(epoch)) return;
+        if (this.data.media.some(asset => asset.media_id === item.media_id)) this.setData({ media: this.data.media.map(asset => asset.media_id === item.media_id ? Object.assign({}, asset, { preview_path: path }) : asset) });
+      }
+    };
+    await Promise.all([consume(), consume(), consume()]);
+  },
   selectLibraryTab(event) {
     const tab = String(event.currentTarget.dataset.tab || '');
     if (tab === 'selected' || tab === 'available') this.setData({ libraryTab: tab });
   },
   selectMedia(event) {
     const id = String(event.currentTarget.dataset.id || '');
-    const asset = this.data.media.find(item => item.media_id === id); if (!asset || !this._pickerChannel) return;
+    const row = this.data.media.find(item => item.media_id === id); if (!row || !this._pickerChannel) return;
+    const { preview_path, meta_label, ...asset } = row;
     this._pickerChannel.emit('selectMaterial', { kind: 'media', asset }); wx.navigateBack();
   },
   selectContent(event) {

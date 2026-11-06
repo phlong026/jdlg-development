@@ -3,6 +3,7 @@
 const api = require('../../utils/project-collections-api');
 const tracking = require('../../utils/tracking/index');
 const { resolveProtectedMediaURL } = require('../../utils/protected-media');
+const formatLabel = item => ({ gallery: '图集笔记', video: '视频笔记', article: '文章', note: '项目笔记', document: '文件' }[item.presentation || item.type] || '内容');
 
 Page({
   data: { webLinkBusy: false, contentReady: false, loading: true, opening: -1, error: '', collection: null, items: [] },
@@ -27,7 +28,7 @@ Page({
       if (sequence !== this.loadSequence) return;
       if (collection.collection_id !== id || Number(collection.version) !== version) throw new Error('合集版本不匹配');
       if (collection.cover) { const url = api.mediaURL(collection.cover.url); collection.cover = Object.assign({}, collection.cover, { url: url ? await resolveProtectedMediaURL(url) : '' }); }
-      const items = await Promise.all((collection.items || []).map(async (item, index) => { const url = item.cover ? api.mediaURL(item.cover.url) : ''; return Object.assign({}, item, { index, cover_url: url ? await resolveProtectedMediaURL(url) : '' }); }));
+      const items = await Promise.all((collection.items || []).map(async (item, index) => { const url = item.cover ? api.mediaURL(item.cover.url) : ''; return Object.assign({}, item, { index, format_label: formatLabel(item), cover_url: url ? await resolveProtectedMediaURL(url) : '' }); }));
       if (sequence !== this.loadSequence) return;
       this.setData({ collection, items, contentReady: true, loading: false }, () => { tracking.preheatTimelineShare(this, this.timelineShareValue()); if (wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] }); });
     } catch (error) { if (sequence === this.loadSequence) this.setData({ contentReady: false, loading: false, error: '合集暂不可访问，可能已撤回或网络不可用。' }); }

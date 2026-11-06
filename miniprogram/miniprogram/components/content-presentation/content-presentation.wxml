@@ -1,0 +1,51 @@
+<template name="content-presentation">
+ <view class="content-presentation content-presentation-{{view.kind}}">
+  <block wx:if="{{view.kind === 'gallery'}}">
+   <view class="presentation-media presentation-gallery" style="height:{{view.galleryHeight}}px">
+    <swiper current="{{view.galleryIndex}}" style="height:{{view.galleryHeight}}px" data-tracking="{{tracking}}" bindchange="onContentGalleryChange">
+     <swiper-item wx:for="{{view.media}}" wx:key="key">
+      <view class="presentation-gallery-slide">
+       <image class="presentation-gallery-image" style="width:{{item.width}}px;height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" lazy-load="{{true}}" aria-label="{{item.caption || view.title}}" data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" data-tracking="{{tracking}}" bindtap="openImage" binderror="mediaError" />
+      </view>
+     </swiper-item>
+    </swiper>
+    <text wx:if="{{view.media.length > 1}}" class="presentation-gallery-count">{{view.galleryIndex + 1}}/{{view.media.length}}</text>
+   </view>
+   <text wx:if="{{view.media[view.galleryIndex].caption}}" class="presentation-media-caption" selectable="{{true}}">{{view.media[view.galleryIndex].caption}}</text>
+   <view wx:if="{{mediaErrors[view.media[view.galleryIndex].errorKey]}}" class="presentation-media-error"><text>{{mediaErrors[view.media[view.galleryIndex].errorKey]}}</text><button data-media-id="{{view.media[view.galleryIndex].media_id}}" data-error-key="{{view.media[view.galleryIndex].errorKey}}" bindtap="retryMedia">重新加载</button></view>
+  </block>
+
+  <block wx:elif="{{view.kind === 'video'}}">
+   <view wx:if="{{view.media[0]}}" class="presentation-media presentation-video-shell" style="height:{{view.media[0].height}}px">
+    <video id="{{view.media[0].domId}}" class="presentation-video" style="width:{{view.media[0].width}}px;height:{{view.media[0].height}}px" src="{{view.media[0].url}}" controls object-fit="contain" data-media-id="{{view.media[0].media_id}}" data-player-key="{{view.media[0].playerKey}}" data-error-key="{{view.media[0].errorKey}}" data-tracking="{{tracking}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindloadedmetadata="onContentVideoMetadata" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+   </view>
+   <view wx:if="{{mediaErrors[view.media[0].errorKey]}}" class="presentation-media-error"><text>{{mediaErrors[view.media[0].errorKey]}}</text><button data-media-id="{{view.media[0].media_id}}" data-error-key="{{view.media[0].errorKey}}" bindtap="retryMedia">重新加载</button></view>
+  </block>
+
+  <view wx:if="{{view.kind !== 'article'}}" class="presentation-note-copy">
+   <view wx:if="{{view.title}}" class="presentation-title" selectable="{{true}}">{{view.title}}</view>
+   <text wx:if="{{view.bodyText}}" class="presentation-body" selectable="{{true}}">{{view.bodyText}}</text>
+   <view wx:if="{{view.sourceNote || view.publishedAt}}" class="presentation-meta"><text>{{view.sourceNote}}</text><text>{{view.publishedAt}}</text></view>
+  </view>
+
+  <block wx:else>
+   <view class="presentation-article-header">
+    <view wx:if="{{view.title}}" class="presentation-title" selectable="{{true}}">{{view.title}}</view>
+    <view wx:if="{{view.sourceNote || view.publishedAt}}" class="presentation-meta"><text>{{view.sourceNote}}</text><text>{{view.publishedAt}}</text></view>
+   </view>
+   <view class="presentation-article">
+    <block wx:for="{{view.blocks}}" wx:key="key">
+     <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
+     <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+     <view wx:elif="{{item.kind === 'list'}}" class="{{item.className}}" style="{{item.style}}"><view wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex" class="article-list-item"><text class="article-list-marker">{{item.ordered ? (listIndex + 1) + '.' : '•'}}</text><text selectable="{{true}}">{{listItem}}</text></view></view>
+     <view wx:else class="{{item.className}} presentation-article-media" style="{{item.style}}">
+      <image wx:if="{{item.kind === 'image'}}" class="presentation-article-image" aria-label="{{item.caption || item.title || view.title}}" style="height:{{item.height}}px" src="{{item.url}}" mode="aspectFit" lazy-load="{{true}}" data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" data-tracking="{{tracking}}" bindtap="openImage" binderror="mediaError" />
+      <video wx:else id="{{item.domId}}" class="presentation-article-video" style="height:{{item.height}}px" src="{{item.url}}" controls object-fit="contain" data-media-id="{{item.media_id}}" data-player-key="{{item.playerKey}}" data-error-key="{{item.errorKey}}" data-tracking="{{tracking}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindloadedmetadata="onContentVideoMetadata" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+      <text wx:if="{{item.caption}}" class="presentation-media-caption" selectable="{{true}}">{{item.caption}}</text>
+      <view wx:if="{{mediaErrors[item.errorKey]}}" class="presentation-media-error"><text>{{mediaErrors[item.errorKey]}}</text><button data-media-id="{{item.media_id}}" data-error-key="{{item.errorKey}}" bindtap="retryMedia">重新加载</button></view>
+     </view>
+    </block>
+   </view>
+  </block>
+ </view>
+</template>

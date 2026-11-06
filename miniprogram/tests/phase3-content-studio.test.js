@@ -226,19 +226,42 @@ test('studio offers real destinations for existing assets and visits', async () 
 
 test('studio has one create action and routes each supported type into the existing editor', () => {
   const harness = runtime();
-  // 批次4：新建菜单按甲第工作流扩为 5 项（项目笔记→AI生成→口述→图文→导入）
   harness.page.openCreateMenu();
-  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['项目笔记', '生成设计', '设计说明', '图文内容', '导入链接']);
-  for (const tapIndex of [0, 1, 2, 3, 4]) {
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['图集笔记', '视频笔记', '写文章', '上传文件', '导入链接', '项目笔记']);
+  for (const tapIndex of [0, 1, 2, 3, 4, 5]) {
     harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex });
   }
   assert.deepEqual(harness.navigations, [
-    '/pages/projectnotes/projectnotes',
-    '/pages/aigenerate/aigenerate',
-    '/pages/contentwriting/contentwriting',
-    '/pages/contentedit/contentedit',
+    '/pages/contentedit/contentedit?kind=gallery',
+    '/pages/contentedit/contentedit?kind=video',
+    '/pages/contentedit/contentedit?kind=article',
+    '/pages/contentedit/contentedit?action=document',
     '/pages/contentworkbench/contentworkbench?view=import',
+    '/pages/projectnotes/projectnotes',
   ]);
+});
+
+test('studio trusts presentation and never turns a mixed article into a video row', async () => {
+  const seen = [];
+  const { page } = runtime({
+    listContents: async query => { seen.push(query); return { items: [
+      { content_id: 'mixed-article', title: '图文混排', type: 'article', presentation: 'article', media: [{ kind: 'video' }] },
+      { content_id: 'gallery-note', title: '图集', type: 'article', presentation: 'gallery', media: [] },
+    ] }; },
+  });
+  page.onShow(); await tick(); await tick();
+  assert.deepEqual(page.data.items.map(item => item.kind), ['article', 'gallery']);
+  assert.deepEqual(page.data.categories.map(item => item.key), ['all', 'gallery', 'video', 'article', 'note', 'document']);
+  await page.selectCategory({ currentTarget: { dataset: { key: 'gallery' } } });
+  assert.equal(seen.at(-1).type, 'gallery');
+});
+
+test('failed imports can go straight to a truthful manual editor path', () => {
+  const harness = runtime();
+  harness.page._visible = true; harness.page._token = 'account-a'; harness.page._epoch = 1;
+  harness.page.setData({ imports: [{ import_id: 'failed-xhs', platform: 'xiaohongshu', status: 'failed' }] });
+  harness.page.manualImport({ currentTarget: { dataset: { id: 'failed-xhs' } } });
+  assert.deepEqual(harness.navigations, ['/pages/contentedit/contentedit?kind=gallery']);
 });
 
 test('published rows open their immutable reader while drafts continue in the editor', () => {
@@ -275,7 +298,9 @@ test('studio template removes duplicate create and unavailable note controls', (
 
 test('content pages use one clear title and hide unavailable writing actions', () => {
   const writing = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentwriting/contentwriting.wxml'), 'utf8');
+  const writingStyle = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentwriting/contentwriting.wxss'), 'utf8');
   const references = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/nativereferences/nativereferences.wxml'), 'utf8');
+  const referenceSource = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/nativereferences/nativereferences.js'), 'utf8');
   const workbench = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
   const editor = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentedit/contentedit.wxml'), 'utf8');
   const workbenchConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.json'), 'utf8'));
@@ -285,8 +310,12 @@ test('content pages use one clear title and hide unavailable writing actions', (
   assert.match(writing, /<block wx:elif="{{result}}">[\s\S]*?<button class="primary" bindtap="saveToDraft"/);
   assert.match(writing, /bindtap="quickGenerate"/);
   assert.match(writing, /bindtap="generateWriting"[^>]*/); // 深聊入口保留
+  assert.match(writingStyle, /\.writing-footer\s*\{[^}]*position:\s*sticky/s);
   assert.match(references, /<navigation-bar title="{{navigationTitle}}"/);
   assert.match(references, /bindtap="selectLibraryTab"/);
+  assert.match(references, /class="media-thumb/);
+  assert.match(references, /{{item\.meta_label}}/);
+  assert.match(referenceSource, /downloadWorkbenchMedia/);
   assert.doesNotMatch(references, /保存已发布的固定版本|仅展示当前授权范围/);
   assert.match(workbench, /wx:if="{{context\.owner_choices\.length > 1}}"/);
   assert.match(workbench, /class="workspace-tabs"/);

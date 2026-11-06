@@ -100,7 +100,8 @@ function journey({ extension = 'js', token = '', profile = completeProfile, cach
     if (modules.has(relative)) return modules.get(relative).exports;
     const module = { exports: {} };
     modules.set(relative, module);
-    let source = fs.readFileSync(path.join(root, `${relative}.${extension}`), 'utf8');
+    const sourceExtension = fs.existsSync(path.join(root, `${relative}.${extension}`)) ? extension : 'js';
+    let source = fs.readFileSync(path.join(root, `${relative}.${sourceExtension}`), 'utf8');
     if (extension === 'ts') source = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
     const run = vm.runInContext(`(function(module, exports, require) {\n${source}\n})`, context, { filename: `${relative}.${extension}` });
     run(module, module.exports, name => {

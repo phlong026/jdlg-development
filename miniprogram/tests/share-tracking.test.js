@@ -137,13 +137,15 @@ test('public readiness hooks have matching TypeScript and JavaScript transitions
  }
 });
 
-test('reader uses rich-text only for explicit server format and retains escaped legacy text',()=>{
+test('reader presentation uses rich-text only for explicit server format and retains escaped legacy text',()=>{
  const fs=require('node:fs'),path=require('node:path');
- const template=fs.readFileSync(path.join(__dirname,'../miniprogram/pages/contentreader/contentreader.wxml'),'utf8');
- const rich=template.match(/<block wx:if="\{\{content\.body_format === 'rich_text'\}\}"><rich-text ([^>]+)\s*\/><\/block>/);
- assert.ok(rich,'rich_text format must gate one rich-text body branch');
- assert.match(rich[1],/class="body"/);assert.match(rich[1],/nodes="\{\{content\.body\}\}"/);assert.match(rich[1],/selectable="\{\{true\}\}"/);
- assert.match(template,/<block wx:else><text class="body"[^>]*>\{\{content\.body\}\}<\/text><\/block>/);
+ const template=fs.readFileSync(path.join(__dirname,'../miniprogram/components/content-presentation/content-presentation.wxml'),'utf8');
+ const {buildContentPresentation}=require('../miniprogram/utils/content-presentation');
+ const rich=buildContentPresentation({title:'rich',body_format:'rich_text',body:'<p>安全正文</p>'},[],{windowWidth:375,windowHeight:667});
+ const plain=buildContentPresentation({title:'plain',body_format:'plain',body:'<p>作为文字显示</p>'},[],{windowWidth:375,windowHeight:667});
+ assert.equal(rich.blocks[0].kind,'layout');assert.equal(rich.blocks[0].html,'<p>安全正文</p>');
+ assert.equal(plain.blocks[0].kind,'paragraph');assert.equal(plain.blocks[0].text,'<p>作为文字显示</p>');
+ assert.match(template,/<rich-text wx:if="\{\{item\.kind === 'layout'\}\}"[^>]*nodes="\{\{item\.html\}\}"/);
  const image=template.match(/<image wx:if="\{\{item\.kind === 'image'\}\}"([^>]+)\/>/);
  assert.ok(image,'article image branch must remain explicit');assert.match(image[1],/bindtap="openImage"/);assert.match(image[1],/data-media-id="\{\{item\.media_id\}\}"/);assert.match(image[1],/src="\{\{item\.url\}\}"/);
 });

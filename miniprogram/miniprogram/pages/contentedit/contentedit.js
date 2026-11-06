@@ -1,6 +1,8 @@
 'use strict';
 const api = require('../../utils/phase3-api');
 const { preserveLayoutBody, renderArticleDocument } = require('../../utils/article-document');
+let presentationTools;
+function contentPresentation() { if (!presentationTools) presentationTools = require('../../utils/content-presentation'); return presentationTools; }
 
 function textBlock(text = '') { return { kind: 'paragraph', text }; }
 function headingBlock(level = 2) { return { kind: 'heading', level: level === 3 ? 3 : 2, text: '' }; }
@@ -14,23 +16,77 @@ function writingFacts(blocks) {
     return String(block.text || '').trim();
   }).filter(Boolean).join('\n\n').slice(0, 6000);
 }
-function articleBody(blocks) {
-  return JSON.stringify({ schema: 1, blocks: blocks.map(block => {
+function articleBody(blocks, presentation, includePresentation) {
+  const document = { schema: 1, blocks: blocks.map(block => {
     if (block.kind === 'image' || block.kind === 'video') return { kind: block.kind, media_id: block.media_id, caption: block.caption || '' };
     if (block.kind === 'heading') return { kind: 'heading', level: block.level === 3 ? 3 : 2, text: String(block.text || '').trim() };
     if (block.kind === 'quote') return { kind: 'quote', text: String(block.text || '').trim() };
     if (block.kind === 'list') return { kind: 'list', ordered: !!block.ordered, items: (block.items || []).filter(Boolean) };
     return { kind: 'paragraph', text: String(block.text || '').trim() };
-  }) });
+  }) };
+  if (includePresentation) document.presentation = presentation;
+  return JSON.stringify(document);
 }
-function initialBlocks(content) {
+function articleDocument(content) {
+  if (!content || content.body_format !== 'article_v2') return null;
+  try { return JSON.parse(content.body); } catch (_) { return null; }
+}
+function initialBlocks(content, presentation) {
   if (!content) return [textBlock('')];
   if (content.body_format !== 'article_v2') return [textBlock(content.body || '')];
-  try { const doc = JSON.parse(content.body); return Array.isArray(doc.blocks) && doc.blocks.length ? doc.blocks : [textBlock('')]; } catch (_) { return [textBlock(content.body || '')]; }
+  const document = articleDocument(content);
+  const blocks = document && Array.isArray(document.blocks) && document.blocks.length ? document.blocks : [textBlock('')];
+  if (presentation === 'article') return blocks;
+  const migrated = migrateRepeatedCaptions(blocks);
+  return socialBlocks(presentation === 'video' ? migrateLegacyVideoCaption(migrated) : migrated);
+}
+function mediaHeight(asset) {
+  const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
+  const frameWidth = Math.max(240, Number(windowInfo.windowWidth || 375));
+  const width = Math.max(1, Number(asset && asset.width) || (asset && asset.kind === 'video' ? 16 : 3));
+  const height = Math.max(1, Number(asset && asset.height) || (asset && asset.kind === 'video' ? 9 : 4));
+  return Math.max(120, Math.min(Math.round(frameWidth * height / width), Math.round(Number(windowInfo.windowHeight || 667) * 0.68)));
+}
+function migrateRepeatedCaptions(blocks) {
+  const captions = new Map();
+  blocks.forEach(block => {
+    const caption = block.kind === 'image' || block.kind === 'video' ? String(block.caption || '').trim() : '';
+    if (caption.length >= 30) captions.set(caption, (captions.get(caption) || 0) + 1);
+  });
+  const repeated = [...captions].filter(([, count]) => count > 1).map(([caption]) => caption);
+  if (!repeated.length) return blocks;
+  const existingText = new Set(blocks.filter(block => block.kind === 'paragraph').map(block => String(block.text || '').trim()));
+  const next = blocks.map(block => repeated.includes(String(block.caption || '').trim()) ? { ...block, caption: '' } : block);
+  repeated.forEach(text => { if (!existingText.has(text)) next.push(textBlock(text)); });
+  return next;
+}
+function migrateLegacyVideoCaption(blocks) {
+  const video = blocks.find(block => block.kind === 'video');
+  const caption = String(video && video.caption || '').trim();
+  if (!video || caption.length < 30) return blocks;
+  const paragraphs = blocks.filter(block => block.kind === 'paragraph' && String(block.text || '').trim());
+  if (paragraphs.length && !paragraphs.some(block => String(block.text || '').trim() === caption)) return blocks;
+  const next = blocks.map(block => block === video ? { ...block, caption: '' } : block);
+  if (!paragraphs.length) next.push(textBlock(caption));
+  return next;
+}
+function socialBlocks(blocks) {
+  return blocks.filter(block => block.kind === 'image' || block.kind === 'video').concat(blocks.filter(block => block.kind === 'paragraph'));
 }
 function decorateBlocks(blocks, media) {
   const byID = new Map((media || []).map(asset => [asset.media_id, asset]));
-  return blocks.map((block, index) => ({ ...block, index, asset: block.media_id ? byID.get(block.media_id) || null : null }));
+  return blocks.map((block, index) => {
+    const asset = block.media_id ? byID.get(block.media_id) || null : null;
+    return { ...block, index, asset, mediaHeight: asset ? mediaHeight(asset) : 0 };
+  });
+}
+function blockViews(blocks, media) {
+  const renderedBlocks = decorateBlocks(blocks, media);
+  return {
+    renderedBlocks,
+    imageBlocks: renderedBlocks.filter(block => block.kind === 'image').map(block => ({ ...block, blockIndex: block.index })),
+    videoBlocks: renderedBlocks.filter(block => block.kind === 'video').map(block => ({ ...block, blockIndex: block.index })),
+  };
 }
 function mergeAssets(...groups) {
   const assets = new Map();
@@ -38,12 +94,31 @@ function mergeAssets(...groups) {
   return [...assets.values()];
 }
 function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx|pptx)$/i, '').trim().slice(0, 80) || '文档资料'; }
+function postText(blocks) { return blocks.filter(block => block.kind === 'paragraph').map(block => String(block.text || '').trim()).filter(Boolean).join('\n\n'); }
+function hasStructuredBlocks(blocks) { return blocks.some(block => !['paragraph', 'image', 'video'].includes(block.kind)); }
+function mediaBlocks(blocks, kind) { return blocks.filter(block => block.kind === kind); }
+function presentationErrors(view, media) {
+  const errors = new Map((media || []).filter(asset => asset.preview_error).map(asset => [asset.media_id, asset.preview_error]));
+  return (view.media || []).concat(view.blocks || []).reduce((result, item) => {
+    if (item.media_id && item.errorKey && errors.has(item.media_id)) result[item.errorKey] = errors.get(item.media_id);
+    return result;
+  }, {});
+}
+function presentationSourceMedia(view) {
+  const items = (view && view.media || []).concat(view && view.blocks || []).filter(item => item && ['image', 'video'].includes(item.kind));
+  return mergeAssets(items.map(item => ({
+    ...item,
+    width: Number(item.intrinsicWidth) || Number(item.width) || 0,
+    height: Number(item.intrinsicHeight) || Number(item.height) || 0,
+  })));
+}
 
 Page({
   data: {
     id: '', loading: true, busy: false, error: '', denied: false, disabled: false, loginRequired: false, context: null,
     title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
-    blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
+    presentation: 'article', postText: '', activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {},
+    blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
@@ -54,14 +129,14 @@ Page({
     const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
     const sourceToken = String(wx.getStorageSync('token') || '');
     this._createToken = sourceToken;
-    this._pendingCreateAction = !options.id && ['media', 'document'].includes(options.action) ? options.action : '';
+    this._pendingCreateAction = !options.id && ['media', 'document', 'gallery', 'video', 'article'].includes(options.action || options.kind) ? (options.action || options.kind) : '';
     if (channel && channel.on) channel.on('prefillContent', payload => this.receivePrefill(payload, sourceToken));
   },
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', blocks: [textBlock('')], renderedBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
       this._savedSignature = '';
@@ -70,6 +145,7 @@ Page({
     this._token = token; this._epoch = (this._epoch || 0) + 1;
     this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: false });
     if (token && !this._loaded) this.load(this._epoch);
+    else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
   onHide() { this.pauseLayoutVideos(); },
   onUnload() { this._unloaded = true; this._epoch = (this._epoch || 0) + 1; this.pauseLayoutVideos(); },
@@ -93,7 +169,8 @@ Page({
       const legacyReadOnly = !!content && bodyFormat !== 'article_v2' && !documentReadOnly;
       let layoutReadOnly = false;
       if (content && bodyFormat === 'article_v2') { try { const document = JSON.parse(content.body); layoutReadOnly = typeof document.layout_html === 'string' && !!document.layout_html; } catch (_) {} }
-      const blocks = initialBlocks(content);
+      const presentation = content && bodyFormat === 'article_v2' ? contentPresentation().inferContentPresentation(content) : 'article';
+      const blocks = initialBlocks(content, presentation);
       const associated = mergeAssets(content && content.media || [], content && content.cover || []);
       const assets = mergeAssets(mediaPage.items || [], associated);
       const previews = new Set(legacyReadOnly || layoutReadOnly ? associated.map(asset => asset.media_id) : mediaIDs(blocks));
@@ -110,7 +187,7 @@ Page({
       const ownerID = content ? content.owner_id : (context.owners || [])[0] || '';
       const ownerChoices = context.owner_choices || [];
       const ownerIndex = Math.max(0, ownerChoices.findIndex(item => item.owner_id === ownerID));
-      this.setData({ context, media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, renderedBlocks: decorateBlocks(blocks, media), loading: false });
+      this.setData({ context, presentation: layoutReadOnly ? 'article' : presentation, postText: postText(blocks), media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, ...blockViews(blocks, media), loading: false });
       this.applyPendingPrefill();
       this._savedSignature = content ? this.draftSignature() : '';
       this.performCreateAction();
@@ -123,11 +200,32 @@ Page({
     const action = this._pendingCreateAction;
     this._pendingCreateAction = '';
     if (!action || this.data.id || this._createToken !== String(wx.getStorageSync('token') || '')) return;
-    if (action === 'media') this.chooseMedia();
+    if (['gallery', 'video', 'article'].includes(action)) this.setData({ presentation: action, postText: postText(this.data.blocks) });
+    if (action === 'media' || action === 'gallery' || action === 'video') this.chooseMedia();
     if (action === 'document') this.chooseDocument();
   },
   toggleSettings() { this.setData({ settingsExpanded: !this.data.settingsExpanded }); },
   toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
+  selectPresentation(event) {
+    if (this.data.layoutReadOnly || this.data.legacyReadOnly || this.data.documentReadOnly) return;
+    const presentation = String(event.currentTarget.dataset.presentation || 'article');
+    if (!['article', 'gallery', 'video'].includes(presentation) || presentation === this.data.presentation) return;
+    const blocks = this.data.blocks || [];
+    if (presentation !== 'article' && hasStructuredBlocks(blocks)) { wx.showToast({ title: '已有文章排版，请保持文章模式', icon: 'none' }); return; }
+    if (presentation === 'gallery' && mediaBlocks(blocks, 'video').length) { wx.showToast({ title: '已有视频，请先移除再切换图集', icon: 'none' }); return; }
+    if (presentation === 'video' && (mediaBlocks(blocks, 'image').length || mediaBlocks(blocks, 'video').length > 1)) { wx.showToast({ title: '视频笔记仅保留一个主视频', icon: 'none' }); return; }
+    const next = presentation === 'article' ? blocks : socialBlocks(blocks);
+    this.setData({ presentation, blocks: next, ...blockViews(next, this.data.media), postText: postText(next), preview: null, notice: '已切换排版，请保存后预览' });
+  },
+  editPostText(event) {
+    if (this.data.layoutReadOnly) return;
+    const text = String(event.detail.value || '');
+    const media = this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video');
+    const blocks = text.trim() ? media.concat(textBlock(text)) : media;
+    const next = blocks.length ? blocks : [textBlock('')];
+    this.setData({ postText: text, blocks: next, ...blockViews(next, this.data.media), preview: null, notice: '有未保存修改' });
+  },
+  selectBlock(event) { this.setData({ activeBlockIndex: Number(event.currentTarget.dataset.index) }); },
   openCoverPicker() {
     if (this.data.busy || this.data.documentReadOnly || this.data.legacyReadOnly) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, cover: true };
@@ -139,9 +237,10 @@ Page({
   },
   openMediaPicker() {
     if (this.data.busy) return;
-    const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false };
+    const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, replaceVideo: this.data.presentation === 'video' && mediaBlocks(this.data.blocks, 'video').length > 0 };
+    const kinds = this.data.presentation === 'gallery' ? 'image' : this.data.presentation === 'video' ? 'video' : 'image%2Cvideo';
     wx.navigateTo({
-      url: '/pages/nativereferences/nativereferences?picker=media&kind=image%2Cvideo',
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=' + kinds,
       events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
     });
   },
@@ -158,8 +257,12 @@ Page({
     if (!current()) return;
     const media = mergeAssets(this.data.media, [selected]);
     if (launch.cover) { this.setData({ media, cover_media_id: asset.media_id, preview: null, notice: '封面已选择，请保存' }); return; }
-    const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
-    this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), preview: null, notice: '已加入正文' });
+    if (this.data.presentation === 'gallery' && asset.kind !== 'image') { this.setData({ media, error: '图集仅支持加入图片' }); return; }
+    if (this.data.presentation === 'video' && asset.kind !== 'video') { this.setData({ media, error: '视频笔记请选择视频' }); return; }
+    const baseBlocks = launch.replaceVideo ? this.data.blocks.filter(block => block.kind !== 'video') : this.data.blocks;
+    const appended = baseBlocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
+    const blocks = this.data.presentation === 'article' ? appended : socialBlocks(appended);
+    this.setData({ media, blocks, cover_media_id: this.data.cover_media_id || (asset.kind === 'image' ? asset.media_id : ''), ...blockViews(blocks, media), preview: null, notice: '已加入正文' });
   },
   toggleMore() { this.setData({ moreExpanded: !this.data.moreExpanded }); },
   returnToEdit() {
@@ -176,9 +279,12 @@ Page({
     const epoch = this._epoch;
     wx.showModal({ title: '离开编辑？', content: '还有未保存的修改', confirmText: '离开', cancelText: '继续编辑', success: result => { if (result.confirm && this.current(epoch)) leave(); } });
   },
-  pauseLayoutVideos() { [...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || [])].filter(block => block.kind === 'video').forEach(block => wx.createVideoContext(block.domId, this).pause()); },
+  pauseLayoutVideos() {
+    const presentationVideos = this.data.presentationView ? (this.data.presentationView.media || []).concat(this.data.presentationView.blocks || []).filter(block => block.kind === 'video') : [];
+    [...new Set([...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || []), ...presentationVideos].filter(block => block.kind === 'video' && block.domId).map(block => block.domId))].forEach(domId => wx.createVideoContext(domId, this).pause());
+  },
   draftSignature() {
-    return JSON.stringify({ id: this.data.id, title: this.data.title, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks, tagsText: this.data.tagsText, pinned: this.data.pinned });
+    return JSON.stringify({ id: this.data.id, title: this.data.title, presentation: this.data.presentation, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks, tagsText: this.data.tagsText, pinned: this.data.pinned });
   },
   rejectWritingReturn(message) {
     this.setData({ notice: message });
@@ -200,7 +306,7 @@ Page({
     if (!text) { this.rejectWritingReturn('AI 文案没有正文，未采用；原内容保持不变'); return; }
     if (blocks.some(block => String(block.text || '').trim() === text)) { this.setData({ notice: 'AI 文案已处理，正文中已存在，未重复追加' }); return; }
     const next = blocks.concat(textBlock(text));
-    this.setData({ blocks: next, renderedBlocks: decorateBlocks(next, this.data.media), preview: null, notice: 'AI 文案已追加到正文末尾，请核对后保存' });
+    this.setData({ blocks: next, postText: postText(next), ...blockViews(next, this.data.media), preview: null, notice: 'AI 文案已追加到正文末尾，请核对后保存' });
   },
   receivePrefill(payload, sourceToken) {
     if (this.data.id || this.data.busy) return;
@@ -216,7 +322,7 @@ Page({
     delete this._pendingPrefill;
     if (this.data.id || pending.token !== String(wx.getStorageSync('token') || '') || String(this.data.title || '').trim() || this.validBlocks().length) return;
     const blocks = pending.text ? [textBlock(pending.text)] : this.data.blocks;
-    this.setData({ title: pending.title, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: 'AI 文案已带入，请核对后保存' });
+    this.setData({ title: pending.title, blocks, postText: postText(blocks), ...blockViews(blocks, this.data.media), preview: null, notice: 'AI 文案已带入，请核对后保存' });
   },
   openAIWriting() {
     if (this.data.busy || this.data.legacyReadOnly || this.data.layoutReadOnly) return;
@@ -246,17 +352,26 @@ Page({
       return { ...asset, local_path: preview.local_path || '', preview_error: preview.preview_error || '' };
     });
     const media = mergePaths(this.data.media || []);
-    this.setData({ media, documentCandidates: mergePaths(this.data.documentCandidates || []), renderedBlocks: decorateBlocks(this.data.blocks, media) });
+    this.setData({ media, documentCandidates: mergePaths(this.data.documentCandidates || []), ...blockViews(this.data.blocks, media) });
+  },
+  async resumeMediaPreviews(epoch) {
+    const previews = new Set(mediaIDs(this.data.blocks || []));
+    if (this.data.cover_media_id) previews.add(this.data.cover_media_id);
+    const missing = (this.data.media || []).filter(asset => previews.has(asset.media_id) && !asset.local_path);
+    if (missing.length) await this.hydratePrivatePaths(epoch, missing, previews);
   },
   async previewMedia(event) {
-    const index = Number(event.currentTarget.dataset.index), asset = this.data.media[index];
+    const mediaID = String(event.currentTarget.dataset.mediaId || '');
+    const requestedIndex = Number(event.currentTarget.dataset.index);
+    const index = mediaID ? this.data.media.findIndex(item => item.media_id === mediaID) : requestedIndex;
+    const asset = this.data.media[index];
     if (!asset || asset.local_path || this.data.busy) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '' });
     try {
       const media = this.data.media.slice();
       media[index] = { ...asset, local_path: await api.downloadWorkbenchMedia(asset.media_id), preview_error: '' };
       if (!this.current(epoch)) return;
-      this.setData({ media, renderedBlocks: decorateBlocks(this.data.blocks, media), busy: false });
+      this.setData({ media, ...blockViews(this.data.blocks, media), busy: false });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有媒体预览加载失败' }); }
   },
   setField(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value, preview: null, notice: '有未保存修改' }); },
@@ -268,7 +383,7 @@ Page({
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     blocks[index] = { ...blocks[index], text: event.detail.value };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
   addParagraph() { if (this.data.layoutReadOnly) return; this.insertBlock('paragraph'); },
   showInsertMenu() {
@@ -292,14 +407,14 @@ Page({
     else if (spec === 'list-ordered') block = listBlock(true);
     else block = textBlock('');
     const blocks = this.data.blocks.concat(block);
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   setHeadingLevel(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || blocks[index].kind !== 'heading') return;
     blocks[index] = { ...blocks[index], level: Number(event.currentTarget.dataset.level) === 3 ? 3 : 2 };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   convertBlock(event) {
     if (this.data.layoutReadOnly) return;
@@ -309,14 +424,14 @@ Page({
     const converted = { kind: target, text: String(current.text || '') };
     if (target === 'heading') converted.level = current.kind === 'heading' ? current.level : 2;
     blocks[index] = converted;
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   editCaption(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || (blocks[index].kind !== 'image' && blocks[index].kind !== 'video')) return;
     blocks[index] = { ...blocks[index], caption: event.detail.value };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
   editListItem(event) {
     if (this.data.layoutReadOnly) return;
@@ -325,7 +440,7 @@ Page({
     const items = blocks[index].items.slice();
     items[itemIndex] = event.detail.value;
     blocks[index] = { ...blocks[index], items };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null, notice: '有未保存修改' });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
   addListItem(event) {
     if (this.data.layoutReadOnly) return;
@@ -334,7 +449,7 @@ Page({
     const items = blocks[index].items || [];
     if (items.length >= 100) { wx.showToast({ title: '列表最多 100 项', icon: 'none' }); return; }
     blocks[index] = { ...blocks[index], items: items.concat('') };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   removeListItem(event) {
     if (this.data.layoutReadOnly) return;
@@ -342,41 +457,56 @@ Page({
     if (!blocks[index] || blocks[index].kind !== 'list') return;
     const items = blocks[index].items || [];
     blocks[index] = { ...blocks[index], items: items.length > 1 ? items.filter((_, position) => position !== itemIndex) : [''] };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   toggleListOrdered(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || blocks[index].kind !== 'list') return;
     blocks[index] = { ...blocks[index], ordered: !blocks[index].ordered };
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   addMediaBlock(event) {
     if (this.data.layoutReadOnly) return;
     const asset = this.data.media[Number(event.currentTarget.dataset.index)];
     if (!asset) return;
-    const blocks = this.data.blocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    if (this.data.presentation === 'gallery' && asset.kind !== 'image') { wx.showToast({ title: '图集仅添加图片', icon: 'none' }); return; }
+    if (this.data.presentation === 'video' && asset.kind !== 'video') { wx.showToast({ title: '视频笔记请选择视频', icon: 'none' }); return; }
+    const baseBlocks = this.data.presentation === 'video' ? this.data.blocks.filter(block => block.kind !== 'video') : this.data.blocks;
+    const appended = baseBlocks.concat({ kind: asset.kind, media_id: asset.media_id, caption: '' });
+    const blocks = this.data.presentation === 'article' ? appended : socialBlocks(appended);
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   setCover(event) { const asset = this.data.media[Number(event.currentTarget.dataset.index)]; if (asset && asset.kind === 'image') this.setData({ cover_media_id: asset.media_id, preview: null }); },
+  setBlockCover(event) { const mediaID = String(event.currentTarget.dataset.mediaId || ''); if (mediaID) this.setData({ cover_media_id: mediaID, preview: null, notice: '已设为封面' }); },
   moveBlock(event) {
     if (this.data.layoutReadOnly) return;
-    const from = Number(event.currentTarget.dataset.index), to = from + Number(event.currentTarget.dataset.step), blocks = this.data.blocks.slice();
+    const from = Number(event.currentTarget.dataset.index), step = Number(event.currentTarget.dataset.step), blocks = this.data.blocks.slice();
+    let to = from + step;
+    if (this.data.presentation !== 'article' && blocks[from] && ['image', 'video'].includes(blocks[from].kind)) {
+      const positions = blocks.map((block, index) => ['image', 'video'].includes(block.kind) ? index : -1).filter(index => index >= 0);
+      const mediaPosition = positions.indexOf(from);
+      to = positions[mediaPosition + step];
+      if (to === undefined) return;
+    }
     if (to < 0 || to >= blocks.length) return;
     const item = blocks.splice(from, 1)[0]; blocks.splice(to, 0, item);
-    this.setData({ blocks, renderedBlocks: decorateBlocks(blocks, this.data.media), preview: null });
+    this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
   removeBlock(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.filter((_, index) => index !== Number(event.currentTarget.dataset.index));
     const next = blocks.length ? blocks : [textBlock('')];
-    this.setData({ blocks: next, renderedBlocks: decorateBlocks(next, this.data.media), preview: null });
+    const coverStillUsed = next.some(block => block.media_id === this.data.cover_media_id);
+    const nextCover = coverStillUsed ? this.data.cover_media_id : (next.find(block => block.kind === 'image') || {}).media_id || '';
+    this.setData({ blocks: next, postText: postText(next), cover_media_id: nextCover, ...blockViews(next, this.data.media), activeBlockIndex: -1, preview: null });
   },
   chooseMedia() {
     if (!this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
     // epoch 必须在选图回调内取：相册/相机全屏页会触发页面 onHide/onShow，
     // 提前捕获的代次会被返回时的 onShow 作废，导致选中的文件被静默丢弃。
-    wx.chooseMedia({ count: 9, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => {
+    const mediaType = this.data.presentation === 'gallery' ? ['image'] : this.data.presentation === 'video' ? ['video'] : ['image', 'video'];
+    wx.chooseMedia({ count: this.data.presentation === 'video' ? 1 : 9, mediaType, sourceType: ['album', 'camera'], success: result => {
       const epoch = this._epoch;
       if (!this.current(epoch)) return;
       this.uploadMediaBatch(result.tempFiles || []);
@@ -445,6 +575,7 @@ Page({
     this.setData({ busy: true, error: '', notice: '' });
     const media = this.data.media.slice();
     const blocks = this.data.blocks.slice();
+    let coverMediaID = this.data.cover_media_id;
     let failures = 0;
     // 串行上传：并发会互相争抢 busy 状态且服务端按 owner 串行建档；中途会话失效立即停止，
     // 已成功的不回滚，失败的计数提示可重试。
@@ -454,13 +585,20 @@ Page({
         const asset = await api.uploadWorkbenchMedia(file.tempFilePath, file.fileType || 'image', this.data.owner_id, this.data.rights);
         if (!this.current(epoch)) { this.setData({ busy: false }); return; }
         media.push({ ...asset, local_path: file.tempFilePath });
-        blocks.push({ kind: asset.kind || file.fileType || 'image', media_id: asset.media_id, caption: '' });
+        const kind = asset.kind || file.fileType || 'image';
+        if (this.data.presentation === 'gallery' && kind !== 'image' || this.data.presentation === 'video' && kind !== 'video') { failures += 1; continue; }
+        if (this.data.presentation === 'video') {
+          for (let index = blocks.length - 1; index >= 0; index -= 1) if (blocks[index].kind === 'video') blocks.splice(index, 1);
+        }
+        blocks.push({ kind, media_id: asset.media_id, caption: '' });
+        if (!coverMediaID && kind === 'image') coverMediaID = asset.media_id;
       } catch (error) {
         if (!this.current(epoch)) { this.setData({ busy: false }); return; }
         failures += 1;
       }
     }
-    this.setData({ media, blocks, renderedBlocks: decorateBlocks(blocks, media), busy: false, preview: null, notice: failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入正文，请保存预览' });
+    const arranged = this.data.presentation === 'article' ? blocks : socialBlocks(blocks);
+    this.setData({ media, blocks: arranged, postText: postText(arranged), cover_media_id: coverMediaID, ...blockViews(arranged, media), busy: false, preview: null, notice: failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入正文，请保存预览' });
     // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
     if (failures) wx.showToast({ title: `${failures} 个媒体上传失败`, icon: 'none' });
   },
@@ -472,7 +610,10 @@ Page({
     if (this.data.legacyReadOnly) { this.setData({ error: '旧格式内容仅支持查看，请前往后台编辑，避免自动转换破坏原文。' }); return null; }
     const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
     if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return null; }
-    const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks));
+    const supported = Array.isArray(this.data.context && this.data.context.presentation_formats) && this.data.context.presentation_formats.includes(this.data.presentation);
+    if (supported && this.data.presentation === 'gallery' && (!mediaBlocks(blocks, 'image').length || mediaBlocks(blocks, 'video').length || hasStructuredBlocks(blocks))) { this.setData({ error: '图集需要至少一张图片，文案请填在独立正文中' }); return null; }
+    if (supported && this.data.presentation === 'video' && (mediaBlocks(blocks, 'video').length !== 1 || mediaBlocks(blocks, 'image').length || hasStructuredBlocks(blocks))) { this.setData({ error: '视频笔记需要一个主视频，封面请单独选择' }); return null; }
+    const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks, this.data.presentation, supported));
     const tags = String(this.data.tagsText || '').split(/[\s,，]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
     return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), tags, pinned: this.data.pinned, expected_revision: this.data.revision } };
   },
@@ -482,7 +623,7 @@ Page({
     if (!this.current(epoch)) return null;
     const draftChanged = signature !== this.draftSignature();
     const blocks = draftChanged ? this.data.blocks : input.blocks;
-    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, renderedBlocks: decorateBlocks(blocks, this.data.media) });
+    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, ...blockViews(blocks, this.data.media) });
     // 保存的是提交时的内容，不能把请求期间的新输入误当成已保存。
     this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
     return { ...saved, draftChanged };
@@ -512,11 +653,20 @@ Page({
     const content = preview.content || {};
     const assets = mergeAssets(content.media || [], content.cover || []);
     const paths = await this.loadPrivatePaths(assets, new Set(assets.map(asset => asset.media_id)));
+    const presentationMedia = paths.map(asset => ({ ...asset, url: asset.local_path || '' }));
     const cover = content.cover ? paths.find(asset => asset.media_id === content.cover.media_id) || null : null;
     let layoutReadOnly = false;
     if (content.body_format === 'article_v2') { try { const document = JSON.parse(content.body); layoutReadOnly = typeof document.layout_html === 'string' && !!document.layout_html; } catch (_) {} }
     const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, paths, this.editorWidth(), 'contentedit-preview') : [];
-    return { blocks: decorateBlocks(initialBlocks(content), paths), cover, layoutReadOnly, layoutBlocks };
+    const presentation = contentPresentation().buildContentPresentation(content, presentationMedia, wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 }, { prefix: 'contentedit-preview' });
+    return {
+      blocks: decorateBlocks(initialBlocks(content, contentPresentation().inferContentPresentation(content)), paths),
+      cover,
+      layoutReadOnly,
+      layoutBlocks,
+      presentation,
+      errors: presentationErrors(presentation, presentationMedia),
+    };
   },
   async retryPreviewMedia(event) {
     const mediaID = String(event.currentTarget.dataset.mediaId || '');
@@ -527,7 +677,9 @@ Page({
       if (!this.current(epoch)) return;
       const previewBlocks = this.data.previewBlocks.map(block => block.media_id === mediaID ? { ...block, asset: { ...(block.asset || {}), local_path: localPath, preview_error: '' } } : block);
       const previewCover = this.data.previewCover && this.data.previewCover.media_id === mediaID ? { ...this.data.previewCover, local_path: localPath, preview_error: '' } : this.data.previewCover;
-      this.setData({ previewBlocks, previewCover, busy: false });
+      const previewMedia = mergeAssets(previewBlocks.map(block => block.asset).filter(Boolean), previewCover || []).map(asset => ({ ...asset, url: asset.local_path || '' }));
+      const presentationView = this.data.preview ? contentPresentation().buildContentPresentation(this.data.preview.content || {}, previewMedia, wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 }, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView && this.data.presentationView.galleryIndex || 0 }) : this.data.presentationView;
+      this.setData({ previewBlocks, previewCover, presentationView, presentationMediaErrors: presentationErrors(presentationView, previewMedia), busy: false });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '预览媒体重试失败' }); }
   },
   async saveAndPreview() {
@@ -545,7 +697,7 @@ Page({
       const view = await this.previewView(preview);
       if (!this.current(epoch)) return;
       if (signature !== this.draftSignature()) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
-      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, busy: false, notice: '' });
+      this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, presentationView: view.presentation, presentationMediaErrors: view.errors, busy: false, notice: '' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
@@ -559,6 +711,47 @@ Page({
       this._savedSignature = this.draftSignature();
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '发布失败' }); }
   },
+  openImage(event) {
+    const mediaID = String(event.currentTarget.dataset.mediaId || '');
+    const view = this.data.presentationView || {};
+    const visibleMedia = (view.media || []).concat((view.blocks || []).filter(block => block.kind === 'image'));
+    const currentItem = visibleMedia.find(item => item.media_id === mediaID);
+    const current = String(event.currentTarget.dataset.url || currentItem && currentItem.url || '');
+    const urls = visibleMedia.map(item => item.url).filter(Boolean);
+    if (current && urls.length) wx.previewImage({ current, urls });
+  },
+  mediaError(event) {
+    const key = String(event.currentTarget.dataset.errorKey || event.currentTarget.dataset.mediaId || '');
+    if (key) this.setData({ presentationMediaErrors: { ...this.data.presentationMediaErrors, [key]: '媒体加载失败' } });
+  },
+  retryMedia(event) {
+    const mediaID = String(event.currentTarget.dataset.mediaId || event.currentTarget.dataset.errorKey || '');
+    if (mediaID) return this.retryPreviewMedia({ currentTarget: { dataset: { mediaId: mediaID } } });
+  },
+  onContentGalleryChange(event) {
+    if (!this.data.presentationView) return;
+    this.setData({ presentationView: { ...this.data.presentationView, galleryIndex: Number(event.detail.current) || 0 } });
+  },
+  onContentVideoMetadata(event) {
+    const detail = event && event.detail || {};
+    const width = Number(detail.width || detail.videoWidth || 0), height = Number(detail.height || detail.videoHeight || 0);
+    const mediaID = String(event && event.currentTarget && event.currentTarget.dataset.mediaId || '');
+    if (!mediaID || width <= 0 || height <= 0) return;
+    if (event.currentTarget.dataset.editor) {
+      const media = (this.data.media || []).map(asset => asset.media_id === mediaID ? { ...asset, width, height } : asset);
+      this.setData({ media, ...blockViews(this.data.blocks, media) });
+      return;
+    }
+    if (!this.data.preview || !this.data.presentationView) return;
+    const sourceMedia = presentationSourceMedia(this.data.presentationView).map(asset => asset.media_id === mediaID ? { ...asset, width, height } : asset);
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 };
+    const presentationView = contentPresentation().buildContentPresentation(this.data.preview.content || {}, sourceMedia, windowInfo, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView.galleryIndex || 0 });
+    this.setData({ presentationView, presentationMediaErrors: presentationErrors(presentationView, sourceMedia) });
+  },
+  videoState(event) { if (event && event.type === 'error') this.mediaError(event); },
+  videoProgress() {},
+  videoRate() {},
+  videoFullscreen() {},
   openPublished() {
     if (!this.data.id || this.data.status !== 'published' || this.data.version < 1) return;
     if (this._savedSignature && this._savedSignature !== this.draftSignature()) { wx.showToast({ title: '当前修改尚未发布，请先保存并发布', icon: 'none' }); return; }

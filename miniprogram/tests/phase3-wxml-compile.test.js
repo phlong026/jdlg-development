@@ -12,7 +12,7 @@ const available = fs.existsSync(compiler);
 const root = path.resolve(__dirname, '../miniprogram');
 function compile(file) {
   const shared = './components/project-note-document/note-document.wxml';
-  const files = /pages\/(?:projectnotes|projectnoteview|projectpackageview)\//.test(file) ? [file, shared] : [file];
+  const files = /pages\/(?:projectnotes|projectnoteview|projectpackageview)\//.test(file) ? [file, shared] : /pages\/(?:contentedit|contentreader)\//.test(file) ? [file, './components/content-presentation/content-presentation.wxml'] : [file];
   const result = spawnSync(compiler, files, { cwd: root, encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024 });
   if (result.error) throw result.error;
   return result;
@@ -104,3 +104,26 @@ test('content workbench keeps filters mounted while only the authorized list rel
   assert.doesNotMatch(rendered, /旧归属内容/);
   assert.doesNotMatch(rendered, /暂无内容|未找到相关内容|暂无这类内容/);
 });
+
+for (const kind of ['gallery', 'video', 'article']) {
+ test('compiled editor preview and reader share ' + kind + ' content', {skip: !available}, () => {
+  const {buildContentPresentation} = require('../miniprogram/utils/content-presentation');
+  const blocks = kind === 'article' ? [{kind:'heading',text:'空间布局',level:2},{kind:'quote',text:'保留庭院'},{kind:'paragraph',text:'完整发布文案'}] : [{kind:'paragraph',text:'完整发布文案'}, {kind:kind === 'gallery' ? 'image' : 'video',media_id:'media-one'}];
+  if(kind === 'gallery') blocks.push({kind:'image',media_id:'media-two'});
+  const content = {title:'原生排版验证',body_format:'article_v2',body:JSON.stringify({schema:1,presentation:kind,blocks}),cover:{media_id:'media-one'}};
+  const media = ['media-one','media-two'].map(media_id=>({media_id,kind:kind === 'video' ? 'video':'image',url:'/tmp/'+media_id,width:1600,height:900}));
+  const presentationView = buildContentPresentation(content,media,{windowWidth:390,windowHeight:844});
+  for(const page of ['contentedit','contentreader']) {
+   const result = compile(`./pages/${page}/${page}.wxml`);
+   assert.equal(result.status,0,result.stderr);
+   const context={window:{},console};vm.createContext(context);vm.runInContext(result.stdout,context);
+   const data={__profileAccessMounted:true,loading:false,preview:{},contentReady:true,presentationView,mediaErrors:{},presentationMediaErrors:{},content,context:{owner_choices:[]}};
+   const rendered=JSON.stringify(context.$gwx(`./pages/${page}/${page}.wxml`)(data));
+   assert.ok(rendered.includes('原生排版验证'),page);
+   assert.equal(rendered.split('完整发布文案').length-1,1,page+' body once');
+   if(kind === 'gallery') {assert.match(rendered,/presentation-gallery/);assert.match(rendered,/media-one/);assert.match(rendered,/media-two/);}
+   if(kind === 'video') {assert.match(rendered,/presentation-video/);assert.match(rendered,/player-key/);}
+   if(kind === 'article') {assert.match(rendered,/空间布局/);assert.match(rendered,/保留庭院/);}
+  }
+ });
+}

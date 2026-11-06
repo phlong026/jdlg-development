@@ -1,0 +1,29 @@
+{
+  "mode": "WeChat DevTools native synthetic fixture only; no save, publish, send, auth mutation, or production write",
+  "origin_route": "pages/projectnotes/projectnotes",
+  "returned_route": "pages/projectnotes/projectnotes",
+  "screenshots": [
+    "01-workbench-content-cards.png",
+    "02-import-failed-manual-path.png",
+    "03-ai-writing-long-result.png",
+    "04-material-picker-mixed.png",
+    "05-collection-editor-formats.png",
+    "06-collection-publish-preview.png",
+    "07-public-collection-reader.png"
+  ],
+  "checks": [
+    "workbench visually distinguishes gallery, video, article and file cards",
+    "failed import exposes manual supplement and retry without claiming success",
+    "long AI result remains readable and keeps the in-flow adopt action visible",
+    "material picker distinguishes image, video and file with format and dimensions",
+    "public collection editing shows covers and original work formats",
+    "collection publish preview matches the public reading hierarchy",
+    "public collection reader keeps hero, directory covers and original formats visible",
+    "every fixture page was opened with navigateTo and returned with navigateBack"
+  ],
+  "limitations": [
+    "synthetic fixture coverage only",
+    "no real account, network content, save, publish, share, or device acceptance"
+  ],
+  "passed": true
+}

@@ -9,6 +9,7 @@ const initial = () => ({
   candidates: [], candidateCursor: '', selectedItems: [], preview: null, dirty: false, coverItemIndex: null,
 });
 const sourceKey = item => String(item.content_id) + ':' + String(item.content_version);
+const formatLabel = item => ({ gallery: '图集笔记', video: '视频笔记', article: '文章', note: '项目笔记', document: '文件' }[item.presentation || item.type] || '内容');
 
 Page({
   data: initial(),
@@ -27,7 +28,7 @@ Page({
   currentRequest(epoch) { return this.visible && epoch === this.epoch && this.account === String(wx.getStorageSync('token') || ''); },
   decorate(item) {
     const cover = item && item.cover ? api.mediaURL(item.cover.url) : '';
-    return Object.assign({}, item, { cover_url: cover, status_text: item.status === 'revoked' ? '已撤回' : item.version > 0 ? '已发布 V' + item.version : '草稿' });
+    return Object.assign({}, item, { cover_url: cover, format_label: formatLabel(item), status_text: item.status === 'revoked' ? '已撤回' : item.version > 0 ? '已发布 V' + item.version : '草稿' });
   },
   async resolveCovers(items) {
     return Promise.all((items || []).map(async item => { const decorated = this.decorate(item); return decorated.cover_url ? Object.assign({}, decorated, { cover_url: await resolveProtectedMediaURL(decorated.cover_url) }) : decorated; }));

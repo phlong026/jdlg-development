@@ -16,14 +16,17 @@ const decorateImport = item => Object.assign({}, item, { status_text: statusText
 function contentKind(item) {
   if (item.type === 'note' || item.type === 'project_note') return 'note';
   if (item.type === 'document') return 'document';
-  if (item.type === 'video' || (item.media || []).some(asset => asset.kind === 'video')) return 'video';
+  if (item.presentation === 'gallery' || item.type === 'gallery') return 'gallery';
+  if (item.presentation === 'video' || item.type === 'video') return 'video';
   return 'article';
 }
 function contentRow(item, previous) {
   const kind = contentKind(item);
   const date = item.created_at ? new Date(item.created_at) : null;
+  const source = item.source_platform || item.platform || item.source?.platform || '';
   return Object.assign({}, item, {
-    kind, kind_label: { note: '项目笔记', document: '文档资料', video: '视频', article: '图文' }[kind],
+    kind, kind_label: { note: '项目笔记', document: '文件', gallery: '图集笔记', video: '视频笔记', article: '文章' }[kind],
+    source_label: source ? platformText(source) : '',
     status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
     action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
@@ -37,7 +40,7 @@ function contentRow(item, previous) {
 Page({
   data: {
     view: 'studio', keyword: '', searchTerm: '', category: 'all', visibleItems: [], ownerFilter: '',
-    categories: [{ key: 'all', label: '全部' }, { key: 'article', label: '图文' }, { key: 'note', label: '笔记' }, { key: 'video', label: '视频' }, { key: 'document', label: '文档' }],
+    categories: [{ key: 'all', label: '全部' }, { key: 'gallery', label: '图集' }, { key: 'video', label: '视频' }, { key: 'article', label: '文章' }, { key: 'note', label: '项目笔记' }, { key: 'document', label: '文件' }],
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
@@ -221,9 +224,9 @@ Page({
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
   openCreateMenu() {
     wx.showActionSheet({
-      itemList: ['项目笔记', '生成设计', '设计说明', '图文内容', '导入链接'],
+      itemList: ['图集笔记', '视频笔记', '写文章', '上传文件', '导入链接', '项目笔记'],
       success: result => {
-        const routes = ['/pages/projectnotes/projectnotes', '/pages/aigenerate/aigenerate', '/pages/contentwriting/contentwriting', '/pages/contentedit/contentedit', '/pages/contentworkbench/contentworkbench?view=import'];
+        const routes = ['/pages/contentedit/contentedit?kind=gallery', '/pages/contentedit/contentedit?kind=video', '/pages/contentedit/contentedit?kind=article', '/pages/contentedit/contentedit?action=document', '/pages/contentworkbench/contentworkbench?view=import', '/pages/projectnotes/projectnotes'];
         const url = routes[Number(result.tapIndex)];
         if (url) this.navigate(url);
       },
@@ -338,6 +341,13 @@ Page({
       importURL: item.source_url, importOwner: item.owner_id, importOwnerIndex: owners.indexOf(item.owner_id), importRights: '',
       importError: '已填入原链接，请确认素材权属后再次开始导入',
     });
+  },
+  manualImport(event) {
+    if (!this.current(this._epoch)) return;
+    const item = this.data.imports.find(job => job.import_id === String(event.currentTarget.dataset.id || ''));
+    if (!item || (item.status !== 'failed' && item.status !== 'blocked')) return;
+    const kind = item.platform === 'xiaohongshu' ? 'gallery' : ['douyin', 'channels', 'kuaishou'].includes(item.platform) ? 'video' : 'article';
+    this.navigate('/pages/contentedit/contentedit?kind=' + kind);
   },
   openImport(event) {
     if (!this.current(this._epoch)) return;

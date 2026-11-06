@@ -85,16 +85,16 @@ test('article editor save keeps the complete imported layout body byte-for-byte'
   assert.equal(preserveLayoutBody(rebuilt, rebuilt), rebuilt);
 });
 
-test('reader has an article branch and does not append article media as legacy attachments', () => {
+test('reader delegates all presentation kinds to the shared template', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
-  assert.match(wxml, /body_format === 'article_v2'/);
-  assert.match(wxml, /wx:for="\{\{articleBlocks\}\}"/);
-  assert.match(wxml, /body_format !== 'article_v2'/);
-  assert.match(wxml, /data-player-key="\{\{item\.playerKey\}\}"/);
-  assert.match(wxml, /item\.kind === 'layout'/);
+  const presentation = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
+  assert.match(wxml, /template is="content-presentation"/);
+  assert.match(presentation, /view\.kind !== 'article'/);
+  assert.match(presentation, /data-player-key="\{\{item\.playerKey\}\}"/);
+  assert.match(presentation, /item\.kind === 'layout'/);
 	const editor = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.js'), 'utf8');
 	const editorView = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
 	assert.match(editor, /preserveLayoutBody\(this\.data\.layoutBody/);
 	assert.match(editor, /layoutMediaIDs/);
-	assert.match(editorView, /正文保留原排版，暂不支持编辑/);
+	assert.match(editorView, /正文保留原排版/);
 });

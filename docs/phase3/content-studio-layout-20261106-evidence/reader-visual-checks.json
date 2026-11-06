@@ -1,0 +1,22 @@
+{
+  "mode": "native synthetic layout fixtures; no save/publish/analytics acceptance",
+  "checks": [
+    {
+      "galleryIndex": 1
+    },
+    {
+      "orientation": "wide",
+      "size": {
+        "width": 394,
+        "height": 222
+      }
+    },
+    {
+      "orientation": "portrait",
+      "size": {
+        "width": 357,
+        "height": 634
+      }
+    }
+  ]
+}

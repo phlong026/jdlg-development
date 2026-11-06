@@ -3,24 +3,25 @@
 const tracking=require('../../utils/tracking/index');
 const api=require('../../utils/tracking/api');
 const {createVideoTracker}=require('../../utils/tracking/video');
-const {renderArticleDocument}=require('../../utils/article-document');
+const {buildContentPresentation}=require('../../utils/content-presentation');
 const {resolveProtectedMediaURL}=require('../../utils/protected-media');
 const ROUTE='pages/contentreader/contentreader';
 const INVALID_ENTRY_ERRORS=new Set(['扫码入口无效','扫码内容不可访问','内容入口不完整','合集入口不完整','合集作品已改变']);
 function clearsVerifiedContent(error){const status=Number(error&&error.statusCode);return [401,403,404,410].includes(status)||[401,403,404,410].includes(Number(error&&error.code))||error&&error.code==='MEDIA_IDENTITY_CHANGED'||INVALID_ENTRY_ERRORS.has(String(error&&error.message||''));}
 function refreshErrorMessage(error){if(error&&error.code==='MEDIA_DOWNLOAD_FAILED')return '素材刷新失败，请检查网络后重试。';if(error&&error.networkError)return '内容刷新失败，网络不可用，请检查连接后重试。';if(Number(error&&error.statusCode)>=500)return '内容刷新失败，服务暂不可用，请稍后重试。';return '内容刷新失败，请稍后重试。';}
+function eventTracks(event){const value=event&&event.currentTarget&&event.currentTarget.dataset&&event.currentTarget.dataset.tracking;return value!==false&&value!=='false';}
 Page({
- data:{loading:true,error:'',content:null,contentReady:false,media:[],articleBlocks:[],consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false,webLinkBusy:false},
+ data:{loading:true,error:'',content:null,contentReady:false,media:[],articleBlocks:[],presentationView:null,consentNotice:'',consentAvailable:false,consented:false,mediaErrors:{},sourceOpen:false,guideVisible:false,webLinkBusy:false},
  onLoad(options){this.entryGeneration=(this.entryGeneration||0)+1;this.hasShown=false;this.entryAttributionAllowed=true;this.options=options||{};this.players={};this.playerVisible={};this.observers=[];this.evaluateGuide();this.loadContent();},
  onShow(){this.pageVisible=true;tracking.block(this,false);if(this.hasShown)this.loadContent();this.hasShown=true;this.syncPlayerVisibility();},
  onHide(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;this.pageVisible=false;this.setData({webLinkBusy:false});this.syncPlayerVisibility();this.pausePlayers();},
  onUnload(){if(this.stopObservingTracking)this.stopObservingTracking();this.loadSequence=(this.loadSequence||0)+1;this.pageVisible=false;this.pausePlayers();this.observers.forEach(o=>o.disconnect());this.observers=[];},
- acceptExternalEntry(options){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=true;this.options=options||{};this.setData({content:null,contentReady:false,loading:true});this.loadContent();},
+ acceptExternalEntry(options){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=true;this.options=options||{};this.setData({content:null,contentReady:false,loading:true,presentationView:null});this.loadContent();},
  async loadContent(){
   const sequence=(this.loadSequence||0)+1;this.loadSequence=sequence;
   const entryGeneration=this.entryGeneration,entryValid=tracking.captureEntryValidity?tracking.captureEntryValidity():()=>true;
   const quiet=this.data.contentReady===true&&!!this.data.content;
-  this.pausePlayers();if(wx.hideShareMenu)wx.hideShareMenu();this.setData(quiet?{error:''}:{loading:true,error:'',content:null,media:[],articleBlocks:[],contentReady:false});
+  this.pausePlayers();if(wx.hideShareMenu)wx.hideShareMenu();this.setData(quiet?{error:''}:{loading:true,error:'',content:null,media:[],articleBlocks:[],presentationView:null,contentReady:false});
   try{
    const resolvedOptions=await api.resolveReaderOptions(this.options);
    if(sequence!==this.loadSequence)return;
@@ -47,16 +48,22 @@ Page({
    const content=await api.request(readPath,'GET',{},undefined,true);
    if(inCollection&&(content.content_id!==id||Number(content.version)!==version))throw new Error('合集作品已改变');
    if(sequence!==this.loadSequence)return;
-   const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync(),width=Math.max(240,window.windowWidth-40);
-   const media=await Promise.all((content.media||[]).map(asset=>({...asset,url:api.mediaURL(asset.url)})).filter(asset=>['image','video'].includes(asset.kind)&&/^https:\/\//.test(asset.url||'')).map(async(asset,index)=>({...asset,url:await resolveProtectedMediaURL(asset.url),domId:'media-'+index,playerKey:asset.media_id,errorKey:'legacyMedia'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16)))})));
+   const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync();
+   const media=await Promise.all((content.media||[]).filter(asset=>['image','video'].includes(asset.kind)).map(async asset=>{const source=api.mediaURL(asset.url);if(!/^https:\/\//.test(source||''))return {...asset,url:'',preview_error:'素材地址不可用'};try{return {...asset,url:await resolveProtectedMediaURL(source)};}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;return {...asset,url:'',preview_error:'素材加载失败'};}}));
    if(sequence!==this.loadSequence)return;
-   const articleBlocks=content.body_format==='article_v2'?renderArticleDocument(content.body,media,width):[];
-   if(content.cover){const coverURL=api.mediaURL(content.cover.url);content.cover={...content.cover,url:coverURL?await resolveProtectedMediaURL(coverURL):''};}
+   const presentationView=buildContentPresentation(content,media,window,{prefix:'reader',galleryIndex:this.data.presentationView&&this.data.presentationView.galleryIndex});
+   const articleBlocks=presentationView.blocks;
+   const mediaErrors={};presentationView.media.filter(item=>item.preview_error||!item.url).forEach(item=>{mediaErrors[item.errorKey]=item.preview_error||'素材暂不可用，请重试。';});
+   if(content.cover){const coverURL=api.mediaURL(content.cover.url);try{content.cover={...content.cover,url:coverURL?await resolveProtectedMediaURL(coverURL):''};}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;content.cover={...content.cover,url:''};}}
    if(sequence!==this.loadSequence)return;
-   this.setData({content,media,articleBlocks,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
-  }catch(error){if(sequence!==this.loadSequence)return;if(quiet&&!clearsVerifiedContent(error)){this.setData({loading:false,error:refreshErrorMessage(error)});return;}this.setData({loading:false,content:null,media:[],articleBlocks:[],contentReady:false,error:'内容暂不可访问，可能已撤回或无权限。请重试。'});}
+   this.setData({content,media,articleBlocks,presentationView,mediaErrors,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());});
+  }catch(error){if(sequence!==this.loadSequence)return;if(quiet&&!clearsVerifiedContent(error)){this.setData({loading:false,error:refreshErrorMessage(error)});return;}this.setData({loading:false,content:null,media:[],articleBlocks:[],presentationView:null,contentReady:false,error:'内容暂不可访问，可能已撤回或无权限。请重试。'});}
  },
- renderedMedia(){return this.data.content&&this.data.content.body_format==='article_v2'?this.data.articleBlocks.filter(block=>block.kind==='image'||block.kind==='video'):this.data.media;},
+ renderedMedia(){return this.data.presentationView&&Array.isArray(this.data.presentationView.media)?this.data.presentationView.media:[];},
+ rebuildPresentation(galleryIndex){if(!this.data.content)return;const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync();const presentationView=buildContentPresentation(this.data.content,this.data.media,window,{prefix:'reader',galleryIndex});this.setData({presentationView,articleBlocks:presentationView.blocks});},
+ onContentGalleryChange(event){const index=Math.max(0,Number(event.detail&&event.detail.current)||0);if(this.data.presentationView&&index===this.data.presentationView.galleryIndex)return;this.rebuildPresentation(index);if(eventTracks(event))tracking.emit(this,'content_click',{component_key:'content_gallery',action_key:'swipe',item_position:index});},
+ onContentVideoMetadata(event){const width=Number(event.detail&&event.detail.width),height=Number(event.detail&&event.detail.height),id=event.currentTarget.dataset.mediaId;if(!(width>0&&height>0&&id))return;let changed=false;const media=this.data.media.map(item=>{if(item.media_id!==id||item.width===width&&item.height===height)return item;changed=true;return {...item,width,height};});if(!changed)return;this.setData({media},()=>this.rebuildPresentation(this.data.presentationView&&this.data.presentationView.galleryIndex));},
+ onResize(){this.rebuildPresentation(this.data.presentationView&&this.data.presentationView.galleryIndex);},
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true});}},
  declineTracking(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;tracking.setConsent(false);this.setData({consented:false});},
  observePlayers(){
@@ -79,17 +86,16 @@ Page({
  },
  syncPlayerVisibility(){Object.keys(this.players||{}).forEach(id=>this.players[id].visible(!!this.pageVisible&&(!!this.playerVisible[id]||this.fullscreenMedia===id)&&!this.data.sourceOpen));},
  pausePlayers(){(this.renderedMedia?this.renderedMedia():(this.data.media||[])).filter(m=>m.kind==='video').forEach(m=>{wx.createVideoContext(m.domId,this).pause();const p=this.players[m.playerKey||m.media_id];if(p)p.state('paused');});},
- videoState(event){const key=event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId,p=this.players[key];if(!p)return;
+ videoState(event){if(event.type==='error')this.setData({['mediaErrors.'+event.currentTarget.dataset.errorKey]:'视频源不可播放，请稍后重试。'});if(!eventTracks(event))return;const key=event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId,p=this.players[key];if(!p)return;
   const states={play:'playing',pause:'paused',ended:'ended',waiting:'buffering',error:'error'};
   p.state(states[event.type]||'paused');
-  if(event.type==='error')this.setData({['mediaErrors.'+event.currentTarget.dataset.errorKey]:'视频源不可播放，请稍后重试。'});
  },
- videoFullscreen(event){this.fullscreenMedia=event.detail.fullScreen?(event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId):'';this.syncPlayerVisibility();},
- videoProgress(event){const p=this.players[event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId];if(p)p.progress(event.detail.currentTime,event.detail.duration);},
- videoRate(event){const p=this.players[event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId];if(p)p.rate(event.detail.playbackRate);},
+ videoFullscreen(event){if(!eventTracks(event))return;this.fullscreenMedia=event.detail.fullScreen?(event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId):'';this.syncPlayerVisibility();},
+ videoProgress(event){if(!eventTracks(event))return;const p=this.players[event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId];if(p)p.progress(event.detail.currentTime,event.detail.duration);},
+ videoRate(event){if(!eventTracks(event))return;const p=this.players[event.currentTarget.dataset.playerKey||event.currentTarget.dataset.mediaId];if(p)p.rate(event.detail.playbackRate);},
  openImage(event){const media=this.renderedMedia().find(m=>m.media_id===event.currentTarget.dataset.mediaId);if(!media||media.kind!=='image')return;
-  tracking.emit(this,'image_open',{media_id:media.media_id});tracking.block(this,true);this.pausePlayers();
-  wx.previewImage({urls:[media.url],current:media.url,showmenu:false});
+  if(eventTracks(event)){tracking.emit(this,'image_open',{media_id:media.media_id});tracking.block(this,true);this.pausePlayers();}
+  const urls=this.renderedMedia().filter(item=>item.kind==='image').map(item=>item.url);wx.previewImage({urls,current:media.url,showmenu:false});
  },
  retryMedia(){this.setData({mediaErrors:{}});this.loadContent();},
  mediaError(event){this.setData({['mediaErrors.'+event.currentTarget.dataset.errorKey]:'图片加载失败，请重试。'});},

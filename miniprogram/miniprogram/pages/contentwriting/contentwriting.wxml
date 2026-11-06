@@ -8,7 +8,7 @@
     <view wx:if="{{loginRequired}}" class="login-state"><text>登录后使用AI文案</text><button class="secondary" bindtap="goLogin">去登录</button></view>
     <block wx:else>
       <view class="writing-panel facts-panel">
-        <text class="section-title">资料</text>
+        <text class="section-title">创作素材</text>
         <label class="field"><text class="field-title">标题 <text class="optional">选填</text></text><input value="{{title}}" maxlength="80" bindinput="editTitle" placeholder="输入标题" placeholder-class="placeholder" /></label>
         <label class="field"><text class="field-title">创作要求</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写项目资料、设计重点和表达要求" placeholder-class="placeholder" auto-height /></label>
         <view wx:if="{{introPresets.length && type === 'promotion'}}" class="field">
@@ -20,13 +20,13 @@
         <view class="voice-row"><button class="voice-button {{voiceActive ? 'active' : ''}}" bindtouchstart="startVoiceInput" bindtouchend="stopVoiceInput" bindtouchcancel="stopVoiceInput" disabled="{{loginRequired}}" aria-label="按住说话进行语音输入"><t-icon name="microphone" size="20px" /><text>{{voiceActive ? '松开结束' : '按住说话'}}</text></button></view>
       </view>
       <view class="writing-panel result-panel">
-        <view class="section-heading"><text class="section-title">文案</text></view>
+        <view class="section-heading"><text class="section-title">文案结果</text><text wx:if="{{result && !streaming}}" class="result-ready">可编辑</text></view>
         <view wx:if="{{streaming && streamPartial}}" class="stream-preview"><text class="stream-text">{{streamPartial}}▌</text></view>
         <textarea wx:else class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="{{streaming ? '正在生成…' : '输入或生成文案'}}" placeholder-class="placeholder" disabled="{{streaming}}" />
         <text class="panel-caption">使用前请核对内容。</text>
       </view>
       <view wx:if="{{result}}" class="writing-panel refine-panel">
-        <text class="section-title">编辑优化</text>
+        <text class="section-title">快速调整</text>
         <view class="refine-actions"><button data-action="concise" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">精简</button><button data-action="expand" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">扩写</button><button data-action="tone" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">调整语气</button></view>
       </view>
       <text wx:if="{{notice}}" class="feedback notice" role="status">{{notice}}</text>
