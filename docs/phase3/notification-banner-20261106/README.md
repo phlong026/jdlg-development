@@ -23,8 +23,18 @@
 
 目标 AppID：`wx94fdc48861913ede`。上传前公众平台显示体验版 7.4.3，线上版 7.3.3。
 
-上传结果、源码提交和公众平台复核见 `evidence/receipt.json`（上传完成后记录）。不以命令发起或开发版上传代替体验版确认。
+7.4.4 已上传成功，任务终态为 `success / execution_success / result.success=true`。公众平台重新登录后已确认开发版本 7.4.4 带“体验版”标记，提交时间为 2026-11-06 16:05:24，备注中的源码为 `4d890d1`。正式线上仍为 7.3.3，没有待审核版本。
+
+功能提交 `4d890d1faaec6fa5bf3f72c869b9f20f22c7ae76` 已推送至 `origin/fix/unread-banner-dismiss-20261106`。主包 1,250,475 字节，总包 3,035,746 字节。上传前后小程序源码一致。
+
+上传结果、源码提交和公众平台复核见 [receipt.json](evidence/receipt.json)、[上传终态](evidence/upload-result.json)及[公众平台状态](evidence/official-console-status.json)。
+
+## 修改文件
+
+- `miniprogram/miniprogram/pages/index/index.ts`、`index.js`：关闭状态、生命周期和请求回写。
+- 同目录 `index.wxml`、`index.scss`、`index.wxss`：安全区、点击区域及文案。
+- `miniprogram/tests/home-unread-banner.test.js`：关闭与竞态回归；`home-share.test.js`：补充首页初始化夹具。
 
 ## 回滚
 
-本次没有迁移或新增依赖，按功能提交执行 `git revert` 后重新上传上一版本即可。反向补丁检查在提交前执行。
+本次没有迁移或新增依赖。依次回退上传回执提交、功能提交 `4d890d1`，再重新上传上一版本。提交前已验证按此顺序反向应用补丁可以干净回退。
