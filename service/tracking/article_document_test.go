@@ -30,6 +30,104 @@ func TestArticleDocumentKeepsMediaOrderAndNormalizesStyles(t *testing.T) {
 	}
 }
 
+func TestArticlePresentationRoundTripAndShape(t *testing.T) {
+	for _, presentation := range []string{"article", "gallery", "video"} {
+		kind := "image"
+		if presentation == "video" {
+			kind = "video"
+		}
+		input := `{"schema":1,"presentation":"` + presentation + `","blocks":[{"kind":"paragraph","text":"独立完整文案"},{"kind":"` + kind + `","media_id":"asset-0001"}]}`
+		got, _, err := normalizeBody(input, "article_v2")
+		if err != nil || !strings.Contains(got, `"presentation":"`+presentation+`"`) {
+			t.Fatalf("呈现类型未保留: %s %v", got, err)
+		}
+	}
+	for _, input := range []string{
+		`{"schema":1,"presentation":"unknown","blocks":[{"kind":"paragraph","text":"正文"}]}`,
+		`{"schema":1,"presentation":"gallery","blocks":[{"kind":"video","media_id":"asset-0001"}]}`,
+		`{"schema":1,"presentation":"video","blocks":[{"kind":"image","media_id":"asset-0001"}]}`,
+		`{"schema":1,"presentation":"gallery","blocks":[{"kind":"image","media_id":"asset-0001"},{"kind":"paragraph","text":"图间说明"},{"kind":"image","media_id":"asset-0002"}]}`,
+	} {
+		if _, _, err := normalizeBody(input, "article_v2"); err == nil {
+			t.Fatalf("接受了冲突的呈现类型: %s", input)
+		}
+	}
+}
+
+func TestContentPresentationKeepsMixedArticleAndSeparatesGallery(t *testing.T) {
+	for _, tc := range []struct{ body, want string }{
+		{`{"schema":1,"blocks":[{"kind":"paragraph","text":"视频文案"},{"kind":"video","media_id":"asset-0001"}]}`, "video"},
+		{`{"schema":1,"blocks":[{"kind":"paragraph","text":"图集文案"},{"kind":"image","media_id":"asset-0001"},{"kind":"image","media_id":"asset-0002"}]}`, "gallery"},
+		{`{"schema":1,"blocks":[{"kind":"heading","level":2,"text":"空间介绍"},{"kind":"video","media_id":"asset-0001"}]}`, "article"},
+		{`{"schema":1,"presentation":"article","blocks":[{"kind":"image","media_id":"asset-0001"}]}`, "article"},
+	} {
+		c := Content{Type: "article", BodyFormat: "article_v2", Body: tc.body, Media: []Asset{{Kind: "video"}}}
+		if got := ContentPresentation(c); got != tc.want {
+			t.Fatalf("got=%s want=%s", got, tc.want)
+		}
+		category := tc.want
+		if got := contentWorkbenchCategory(c); got != category {
+			t.Fatalf("category=%s want=%s", got, category)
+		}
+	}
+}
+
+func TestPresentationSurvivesDraftPreviewAndPublishedVersion(t *testing.T) {
+	s, scope := fixture(t)
+	ctx := context.Background()
+	asset := Asset{ID: "asset-layout", Kind: "image", URL: "/api/v1/miniprogram/tracking/media/asset-layout", Width: 1200, Height: 1600, MIME: "image/jpeg"}
+	if err := s.AddMedia(ctx, scope, asset, "owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"schema":1,"presentation":"gallery","blocks":[{"kind":"image","media_id":"asset-layout"},{"kind":"paragraph","text":"整条图集文案"}]}`
+	saved, err := s.SaveContent(ctx, scope, "", Draft{Title: "图集方案", Body: body, BodyFormat: "article_v2", Rights: "own", Owner: "owner-a", CoverID: asset.ID, MediaIDs: []string{asset.ID}})
+	if err != nil || saved.Presentation != "gallery" {
+		t.Fatalf("saved=%+v err=%v", saved, err)
+	}
+	preview, err := s.Preview(ctx, scope, saved.ID, saved.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Publish(ctx, scope, saved.ID, saved.Revision, preview["preview_token"].(string), "publish-gallery-layout"); err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.ReadContent(ctx, saved.ID, 1)
+	if err != nil || read.Presentation != "gallery" || !strings.Contains(read.Body, `"presentation":"gallery"`) {
+		t.Fatalf("read=%+v err=%v", read, err)
+	}
+	candidates, err := s.NativeReferenceCandidates(ctx, scope, "", 20)
+	if err != nil || len(candidates.Items) != 1 || candidates.Items[0].Presentation != "gallery" {
+		t.Fatalf("候选作品未保留呈现类型: %+v err=%v", candidates.Items, err)
+	}
+	collection, err := s.SaveProjectCollection(ctx, scope, "", collectionInput(scope.Owners[0], "gallery-collection", read))
+	if err != nil || len(collection.Items) != 1 || collection.Items[0].Presentation != "gallery" {
+		t.Fatalf("合集目录未保留呈现类型: %+v err=%v", collection.Items, err)
+	}
+}
+
+func TestReadContentBackfillsPresentationForLegacyVersion(t *testing.T) {
+	s, rows, _, now := reviewFixture()
+	legacy := Content{
+		ID: "legacy-gallery", Owner: "one", Status: "published", Version: 1, Type: "article",
+		BodyFormat: "article_v2", Body: `{"schema":1,"blocks":[{"kind":"image","media_id":"asset-0001"},{"kind":"image","media_id":"asset-0002"},{"kind":"paragraph","text":"完整图集文案"}]}`,
+	}
+	if err := rows.Put(record("content", legacy.ID, legacy.Owner, now, legacy)); err != nil {
+		t.Fatal(err)
+	}
+	if err := rows.Put(record("version", contentKey(legacy.ID, 1), legacy.Owner, now, legacy)); err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.ReadContent(context.Background(), legacy.ID, 1)
+	if err != nil || read.Presentation != "gallery" {
+		t.Fatalf("legacy presentation=%q err=%v", read.Presentation, err)
+	}
+	var stored Content
+	stored, err = decode[Content](rows, "version", contentKey(legacy.ID, 1))
+	if err != nil || stored.Presentation != "" {
+		t.Fatalf("read-time backfill must not rewrite the immutable version: %+v err=%v", stored, err)
+	}
+}
+
 func TestArticleDocumentRejectsInvalidShapeAndLimits(t *testing.T) {
 	invalid := []string{
 		`{"schema":1,"script":"evil()","blocks":[{"kind":"paragraph","text":"正文"}]}`,

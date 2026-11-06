@@ -27,6 +27,7 @@ func loadCatalogContent(r Repository, kind, id string) (Content, error) {
 	}
 	created := catalogCreatedAt(c, row.At).UTC()
 	c.CreatedAt = &created
+	c.Presentation = ContentPresentation(c)
 	return c, nil
 }
 

@@ -288,4 +288,19 @@ func TestDouyidouDouyinGalleryConsumesImages(t *testing.T) {
 	if len(source.Media) != 2 || source.Media[0].Kind != "image" {
 		t.Fatalf("got=%#v", source.Media)
 	}
+	if source.Text != "改造前后" || source.Media[0].Caption != "" || source.Media[1].Caption != "" {
+		t.Fatalf("整条文案应独立保存，不逐图重复: %+v", source)
+	}
+}
+
+func TestDouyidouLongCaptionBecomesOneBodyParagraph(t *testing.T) {
+	text := strings.Repeat("乡村住宅完整设计说明。", 90)
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return response(http.StatusOK, `{"code":0,"data":{"aweme_id":"7419320667310492928","title":"方案介绍","text":"`+text+`","video":["https://video.example/item.mp4"]}}`), nil
+	})}
+	r := VideoDocumentResolver{Resolver: NewDouyidouResolver(DouyidouConfig{AppID: "app", AppSecret: "secret", HTTPClient: client})}
+	doc, err := r.ResolveDocument(context.Background(), "https://www.douyin.com/video/7419320667310492928")
+	if err != nil || len(doc.Body.Blocks) != 2 || doc.Body.Blocks[0].Text != text || doc.Body.Blocks[1].Caption != "" {
+		t.Fatalf("长文案未保留为独立正文: %+v err=%v", doc.Body.Blocks, err)
+	}
 }

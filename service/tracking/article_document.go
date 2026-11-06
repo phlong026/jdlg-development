@@ -21,7 +21,13 @@ func normalizeArticleDocument(body string) (string, error) {
 	if len(input.Blocks) == 0 || len(input.Blocks) > maxArticleBlocks {
 		return "", fail(400, "原排版正文块数无效")
 	}
-	out := ArticleDocument{Schema: 1, Blocks: make([]ArticleBlock, 0, len(input.Blocks))}
+	if input.Presentation != "" && input.Presentation != "article" && input.Presentation != "gallery" && input.Presentation != "video" {
+		return "", fail(400, "内容呈现类型无效")
+	}
+	if input.Presentation != "" && input.Presentation != "article" && articlePresentation(input) != input.Presentation {
+		return "", fail(400, "内容与所选呈现类型不符，请保留文章排版")
+	}
+	out := ArticleDocument{Schema: 1, Presentation: input.Presentation, Blocks: make([]ArticleBlock, 0, len(input.Blocks))}
 	if input.LayoutHTML != "" {
 		layout, err := NormalizeArticleLayoutHTML(input.LayoutHTML)
 		if err != nil {
@@ -41,6 +47,64 @@ func normalizeArticleDocument(body string) (string, error) {
 		return "", ErrUnavailable
 	}
 	return string(encoded), nil
+}
+
+// ContentPresentation reads display intent without rewriting an immutable body.
+func ContentPresentation(content Content) string {
+	if content.Type == "document" || content.Type == "note" || content.Type == "project_note" {
+		return ""
+	}
+	if content.BodyFormat != "article_v2" {
+		if content.Type == "video" {
+			return "video"
+		}
+		return "article"
+	}
+	var document ArticleDocument
+	if json.Unmarshal([]byte(content.Body), &document) != nil {
+		return "article"
+	}
+	if document.Presentation == "article" {
+		return "article"
+	}
+	return articlePresentation(document)
+}
+
+func articlePresentation(document ArticleDocument) string {
+	if document.LayoutHTML != "" {
+		return "article"
+	}
+	images, videos, firstImage, lastImage := 0, 0, -1, -1
+	for index, block := range document.Blocks {
+		if block.Style != (ArticleStyle{}) {
+			return "article"
+		}
+		switch block.Kind {
+		case "paragraph":
+		case "image":
+			images++
+			if firstImage < 0 {
+				firstImage = index
+			}
+			lastImage = index
+		case "video":
+			videos++
+		default:
+			return "article"
+		}
+	}
+	if videos == 1 && images == 0 {
+		return "video"
+	}
+	if images > 0 && videos == 0 {
+		for index := firstImage; index <= lastImage; index++ {
+			if document.Blocks[index].Kind != "image" {
+				return "article"
+			}
+		}
+		return "gallery"
+	}
+	return "article"
 }
 
 func normalizeArticleBlock(block ArticleBlock) (ArticleBlock, error) {

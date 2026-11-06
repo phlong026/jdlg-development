@@ -36,6 +36,8 @@ type ProjectCollectionDraft struct {
 }
 
 type ProjectCollectionItem struct {
+	Type           string     `json:"type,omitempty"`
+	Presentation   string     `json:"presentation,omitempty"`
 	RouteKey       string     `json:"route_key,omitempty"`
 	ContentID      string     `json:"content_id,omitempty"`
 	ContentVersion int        `json:"content_version,omitempty"`
@@ -176,6 +178,7 @@ func (s *Service) projectCollectionItems(r Repository, scope Scope, owner string
 			return nil, fail(404, "已发布来源不可访问")
 		}
 		items = append(items, ProjectCollectionItem{
+			Type: item.Type, Presentation: item.Presentation,
 			RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion,
 			Title: item.Title, Cover: item.Cover, PublishedAt: item.PublishedAt, Available: true,
 		})
@@ -532,7 +535,7 @@ func (s *Service) ReadPublishedProjectCollection(ctx context.Context, id string,
 				}
 				cover = &copy
 			}
-			items = append(items, ProjectCollectionItem{RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion, Title: item.Title, Cover: cover, PublishedAt: item.PublishedAt, Available: true})
+			items = append(items, ProjectCollectionItem{Type: item.Type, Presentation: item.Presentation, RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion, Title: item.Title, Cover: cover, PublishedAt: item.PublishedAt, Available: true})
 		}
 		out.Items = items
 		out.Cover = projectCollectionCover(items, nil)

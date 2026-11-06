@@ -9,8 +9,7 @@ import (
 
 // Catalog metadata is read inside the same bounded transaction as the facts.
 // Legacy source rows are owner-scoped, then deduplicated by material ID.
-// contentWorkbenchCategory 与前端 contentworkbench.ts contentKind 同规则：
-// 含视频媒体的图文归为视频；笔记/文档单列；其余为图文。
+// 分类取作品的主呈现形态，文章里的讲解视频不会改变文章分类。
 func contentWorkbenchCategory(c Content) string {
 	switch c.Type {
 	case "note", "project_note":
@@ -20,18 +19,15 @@ func contentWorkbenchCategory(c Content) string {
 	case "video":
 		return "video"
 	}
-	for _, m := range c.Media {
-		if m.Kind == "video" {
-			return "video"
-		}
-	}
-	return "article"
+	return ContentPresentation(c)
 }
 
 // mapTypeFilter 把前端分类Tab标签映射到内容类型枚举。
 // 笔记此前淹没在"全部"里（kind=note 无独立分类），这里补上映射。
 func mapTypeFilter(label string) string {
 	switch label {
+	case "图集", "图集笔记", "gallery":
+		return "gallery"
 	case "图文", "article":
 		return "article"
 	case "笔记", "note":
@@ -91,11 +87,14 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 		if c.Status == "deleted" {
 			continue
 		}
+		c.Presentation = ContentPresentation(c)
 		// 服务端过滤：类型与项目关联（仿真稿⑦分类Tab真筛选）。
 		// 前端 Tab 传中文标签，映射到后端类型枚举（note/article/video/document）。
 		if f.TypeFilter != "" {
 			typeName := mapTypeFilter(f.TypeFilter)
-			if typeName != "" && contentWorkbenchCategory(c) != typeName {
+			category := contentWorkbenchCategory(c)
+			legacyGraphic := f.TypeFilter == "图文" && category == "gallery"
+			if typeName != "" && category != typeName && !legacyGraphic {
 				continue
 			}
 		}

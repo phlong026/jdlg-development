@@ -217,6 +217,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		contentType = "document"
 	}
 	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Tags: in.Tags, Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, ProjectID: in.ProjectID, Rights: in.Rights, Owner: in.Owner}
+	out.Presentation = ContentPresentation(out)
 	// B11 置顶：新内容默认 false；更新时显式传入则覆盖，否则保留原值。
 	if id != "" {
 		if in.Pinned != nil {
@@ -389,6 +390,9 @@ func (s *Service) ReadContent(ctx context.Context, id string, version int) (Cont
 		}
 		var e error
 		out, e = decode[Content](r, "version", contentKey(id, version))
+		if e == nil && out.Presentation == "" {
+			out.Presentation = ContentPresentation(out)
+		}
 		return e
 	})
 	return out, e

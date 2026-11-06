@@ -117,7 +117,8 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			stones, monthGenerations = quota(GetTokenUserID(c))
 		}
 		trackingResponse(c, gin.H{
-			"enabled": workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
+			"presentation_formats": []string{"article", "gallery", "video"},
+			"enabled":              workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
 			"publish_enabled":             svc.Config.ContentEnabled,
 			"native_tracking_enabled":     svc.Config.Enabled,
 			"media_upload_configured":     media,

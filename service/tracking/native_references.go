@@ -18,6 +18,8 @@ type NativeReferenceInput struct {
 	IdempotencyKey string `json:"idempotency_key"`
 }
 type NativeReferenceTarget struct {
+	Type           string     `json:"type,omitempty"`
+	Presentation   string     `json:"presentation,omitempty"`
 	RouteKey       string     `json:"route_key"`
 	ContentID      string     `json:"content_id"`
 	ContentVersion int        `json:"content_version"`
@@ -119,7 +121,9 @@ func (s *Service) nativeReferenceSources(r Repository, scope Scope, targets []Na
 		if !ok || master.ReadOnly || master.Status == "revoked" || master.Version < c.Version || c.Version < 1 || c.Status != "published" || c.Owner != master.Owner || !scope.Allows(master.Owner) {
 			continue
 		}
-		items[row.ID] = nativeReferenceTarget(PublishedMaterial{ID: c.ID, Version: c.Version, Title: c.Title, Cover: c.Cover, PublishedAt: c.PublishedAt, Route: publishedReaderRoute})
+		target := nativeReferenceTarget(PublishedMaterial{ID: c.ID, Version: c.Version, Title: c.Title, Cover: c.Cover, PublishedAt: c.PublishedAt, Route: publishedReaderRoute})
+		target.Type, target.Presentation = c.Type, ContentPresentation(c)
+		items[row.ID] = target
 		owners[row.ID] = master.Owner
 	}
 	return items, owners, nil

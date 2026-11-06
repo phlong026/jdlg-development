@@ -306,3 +306,11 @@ result, err := strategy.Login(ctx, req)
 导入默认关闭，运行变量、独立迁移、平台适配范围及恢复规则见 [导入方案](../docs/phase3/content-import-plan-20261027.md)。主服务只使用服务端供应商配置和受保护的Cookie文件；公众号视频浏览器采集为独立进程，部署门禁见 [Capture Worker](contentcapture/README.md)。不要把配置已填、单元测试或临时媒体地址当作已导入/已发布/生产验收完成。
 
 三期媒体可通过 `CONTENT_MEDIA_STORAGE=cos` 选用私有COS，Bucket/Region默认复用既有服务端COS配置，或用 `CONTENT_MEDIA_COS_BUCKET`、`CONTENT_MEDIA_COS_REGION` 显式指定；`CONTENT_MEDIA_COS_PREFIX` 默认 jd-content-private。图片/视频先校验并以私有ACL保存，再验证匿名读取被拒绝；客户端继续走原授权媒体接口，不得到COS公开直链。文件系统模式继续使用原本地文件；COS模式只读取私有COS，切换前应完成既有素材受检转存。支持JPEG、PNG、GIF、WebP和MP4；Range读取采用有界流，并发与来源限速独立于浏览事件写入。
+# 内容创作呈现契约
+
+`article_v2` 正文继续使用 `schema: 1`、有序 `blocks`，支持可选字段 `presentation: article | gallery | video`。
+图集包含连续图片和独立正文，视频包含单个主视频和独立正文；复杂混排、公众号 `layout_html` 保留文章形态。
+保存与查询响应中的 `presentation` 由服务端按正文推导，不接受额外客户端归属或权限字段。
+工作台上下文返回 `presentation_formats`；小程序仅在后端声明支持时保存该可选字段，旧服务端继续接收原有正文格式。
+`type=gallery` 可筛选图集，`type=article` 筛选文章，旧中文 `type=图文` 仍包含两者。无数据库迁移。
+导入网关作品的整条文案存入独立正文段落，媒体 `caption` 只承载单个媒体的短说明。
