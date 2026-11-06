@@ -2,6 +2,7 @@
 'use strict';
 const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
+const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
 
 const blankProtected = () => ({
   pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectLoadFailed: false,
@@ -13,6 +14,8 @@ const blankProtected = () => ({
   note: null, noteTitle: '', noteBody: '', bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
+  editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
+  previewMediaGroups: [], versionMediaGroups: [], galleryPositions: {},
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
@@ -61,9 +64,12 @@ Page({
     }
     return this._loaded ? this.revalidateProjectAccess() : this.loadProjects(this._epoch);
   },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; },
+  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.editNote(); },
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
-  onPageScroll(event) { if (this.data.pageView === 'list') this._listScrollTop = Number(event && event.scrollTop || 0); },
+  onPageScroll(event) {
+    if (this.data.pageView === 'list') this._listScrollTop = Number(event && event.scrollTop || 0);
+    if (this.data.pageView === 'editor' && this.data.editorMode === 'edit') this._editorScrollTop = Number(event && event.scrollTop || 0);
+  },
   scrollPage(view) {
     if (typeof wx.pageScrollTo !== 'function') return;
     wx.pageScrollTo({ scrollTop: view === 'list' ? Number(this._listScrollTop || 0) : 0, duration: 0 });
@@ -227,6 +233,53 @@ Page({
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
   setNoteTitle(event) { this.setData({ noteTitle: value(event) }); },
   setNoteBody(event) { if (!this.data.bodyReadOnly) this.setData({ noteBody: String(event.detail && event.detail.value || '') }); },
+  onNoteKeyboardHeight(event) { this.setData({ keyboardHeight: Math.max(0, Number(event.detail && event.detail.height) || 0) }); },
+  onNoteGalleryChange(event) {
+    this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
+  },
+  onResize(event) {
+    const size = event.size || {}, windowInfo = { windowWidth: size.windowWidth, windowHeight: size.windowHeight };
+    const previewMedia = fitNoteMedia(this.data.previewMedia, windowInfo), versionMedia = fitNoteMedia(this.data.versionMedia, windowInfo);
+    this.setData({ previewMedia, versionMedia, previewMediaGroups: groupNoteImages(previewMedia, previewMedia, windowInfo), versionMediaGroups: groupNoteImages(versionMedia, versionMedia, windowInfo), previewBlocks: fitNoteBlocks(this.data.previewBlocks, previewMedia, windowInfo), versionBlocks: fitNoteBlocks(this.data.versionBlocks, versionMedia, windowInfo) });
+  },
+  onNoteVideoMetadata(event) {
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const previewMedia = noteVideoMetadata(this.data.previewMedia, event, windowInfo), versionMedia = noteVideoMetadata(this.data.versionMedia, event, windowInfo);
+    this.setData({ previewMedia, versionMedia, previewMediaGroups: groupNoteImages(previewMedia, previewMedia, windowInfo), versionMediaGroups: groupNoteImages(versionMedia, versionMedia, windowInfo), previewBlocks: fitNoteBlocks(this.data.previewBlocks, previewMedia, windowInfo), versionBlocks: fitNoteBlocks(this.data.versionBlocks, versionMedia, windowInfo) });
+  },
+  editNote() {
+    this._notePreviewRequest = (this._notePreviewRequest || 0) + 1;
+    this.setData({ editorMode: 'edit', previewLoading: false, previewError: '', previewBody: '', previewBlocks: [], previewMedia: [], previewMediaGroups: [], galleryPositions: {}, keyboardHeight: 0 });
+    if (this._visible !== false && typeof wx.pageScrollTo === 'function') wx.pageScrollTo({ scrollTop: this._editorScrollTop || 0, duration: 0 });
+  },
+  async previewNote() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.pageView !== 'editor' || this.data.busy || this.data.previewLoading) return;
+    const draft = this.noteDraft(), signature = this.noteFormSignature();
+    const epoch = this._epoch, projectRequest = this._projectRequest;
+    const request = this._notePreviewRequest = (this._notePreviewRequest || 0) + 1;
+    this.setData({ editorMode: 'preview', previewLoading: true, previewError: '', previewBody: '', previewBlocks: [], previewMedia: [], previewMediaGroups: [], galleryPositions: {}, keyboardHeight: 0 });
+    if (typeof wx.hideKeyboard === 'function') wx.hideKeyboard();
+    this.scrollPage('preview');
+    const current = () => this.current(epoch) && request === this._notePreviewRequest
+      && this.data.pageView === 'editor' && this.data.editorMode === 'preview' && signature === this.noteFormSignature();
+    try {
+      // 预览复用固定版本的私有媒体与正文渲染，不写草稿或创建对外版本。
+      const presentation = await this.fixedVersionPresentation(project.project_id, Object.assign({}, draft, { media: this.data.noteMedia }), epoch, projectRequest);
+      if (!current() || !presentation) return;
+      this.setData({ previewLoading: false, previewBodyFormat: draft.body_format, previewBody: draft.body, previewBlocks: presentation.blocks, previewMedia: presentation.media, previewMediaGroups: presentation.groups });
+    } catch (error) {
+      if (current()) this.setData({ previewLoading: false, previewError: error.message || '预览加载失败，内容已保留，请重试。' });
+    }
+  },
+  openImage(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    const media = this.data.pageView === 'version' ? this.data.versionMedia : this.data.editorMode === 'preview' ? this.data.previewMedia : this.data.noteMedia;
+    const images = (media || []).filter(item => item.kind === 'image' && item.local_path);
+    const selected = images.find(item => mediaID(item) === id);
+    if (!selected) return;
+    wx.previewImage({ current: selected.local_path, urls: images.map(item => item.local_path), fail: () => this.setData({ error: '图片打开失败，请重新预览。' }) });
+  },
   setFeedbackReply(event) { this.setData({ feedbackReply: value(event) }); },
 
   setProjectField(event) {
@@ -362,8 +415,9 @@ Page({
     await Promise.all([consume(), consume()]);
     if (!this.current(epoch) || request !== this._projectRequest) return null;
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    const blocks = fixed.body_format === 'article_v2' ? renderArticleDocument(fixed.body, media, Math.max(240, windowInfo.windowWidth - 40), 'fixed-note') : [];
-    return { media, blocks };
+    const fittedMedia = fitNoteMedia(media, windowInfo);
+    const blocks = fixed.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(fixed.body, fittedMedia, windowInfo.windowWidth * 636 / 750, 'fixed-note'), fittedMedia, windowInfo) : [];
+    return { media: fittedMedia, blocks, groups: groupNoteImages(fittedMedia, fittedMedia, windowInfo) };
   },
   applyProjectDetail(result, notice, fixed, presentation, requestedView) {
     const project = result.project || result, notes = result.notes || [], versions = result.versions || [], shares = result.shares || [];
@@ -399,6 +453,7 @@ Page({
       noteMedia: note ? ((note.media && note.media.length ? note.media.map(assetOf) : (note.media_ids || []).map(id => ({ media_id: id, kind: id === note.cover_media_id ? 'image' : 'private' }))).map(item => Object.assign({}, item, { media_id: mediaID(item) }))) : [],
       frozenVersion: version, activeShare: share,
       historyMode: !!requested, versionView: fixed || null, versionMedia: presentation && presentation.media || [], versionBlocks: presentation && presentation.blocks || [],
+      versionMediaGroups: presentation && presentation.groups || [], galleryPositions: {},
       feedbacks, selectedFeedback, feedbackID: selectedFeedback && selectedFeedback.feedback_id || '', feedbackReply: '',
       confirmations: targetID ? (result.confirmations || []).filter(item => item.version_id === targetID).map(item => Object.assign({}, item, { confirmed_at: localTime(item.confirmed_at) })) : [],
       truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
@@ -461,6 +516,7 @@ Page({
   async startNewNote() {
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
     this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null;
+    this.editNote(); this._editorScrollTop = 0;
     this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
   },
   openNoteMore() {
@@ -698,7 +754,10 @@ Page({
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const uploaded = [];
-      for (const file of files) uploaded.push(assetOf(await api.uploadProjectNoteMedia(project.project_id, file.tempFilePath)));
+      for (const file of files) {
+        const asset = assetOf(await api.uploadProjectNoteMedia(project.project_id, file.tempFilePath));
+        uploaded.push(Object.assign({}, asset, { local_path: file.tempFilePath }));
+      }
       if (this.current(epoch)) this.setData({ noteMedia: [...this.data.noteMedia, ...uploaded], busy: false, notice: '私有素材已上传，仅用于当前项目笔记。' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有素材上传失败' }); }
   },

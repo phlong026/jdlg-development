@@ -1,0 +1,25 @@
+{
+  "mode": "DevTools synthetic view fixture with mounted rendering state; no live auth or production write acceptance",
+  "checks": [
+    "long draft retains save and preview dock",
+    "keyboard state hides fixed actions",
+    "native swiper switches to the second image and updates its page indicator",
+    "native 16:9 and 9:16 frame dimensions match computed fit",
+    "fixed version and long feedback layouts rendered"
+  ],
+  "window": {
+    "windowWidth": 430,
+    "windowHeight": 932
+  },
+  "videoFrames": [
+    {
+      "width": 364,
+      "height": 205
+    },
+    {
+      "width": 325,
+      "height": 577
+    }
+  ],
+  "passed": true
+}

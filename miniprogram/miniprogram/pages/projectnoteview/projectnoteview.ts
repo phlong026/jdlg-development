@@ -2,6 +2,7 @@
 'use strict';
 const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
+const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
 
 const GENERIC_ERROR = '该私密方案暂不可访问，请确认已使用受邀账号登录。';
 const satisfactionLabels = { very_satisfied: '非常满意', needs_adjustment: '基本满意，需要调整', unsatisfied: '不太满意' };
@@ -13,11 +14,24 @@ const feedbackRows = view => {
 };
 
 Page({
+  onNoteGalleryChange(event) {
+    this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
+  },
+  onResize(event) {
+    const windowInfo = event.size || {}, media = fitNoteMedia(this.data.media, windowInfo);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
+  onNoteVideoMetadata(event) {
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const media = noteVideoMetadata(this.data.media, event, windowInfo);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
   data: {
     loading: true, busy: false, loginRequired: false, error: '', notice: '',
     activityTypes: [{ key: 'feedbacks', label: '反馈意见' }, { key: 'resolutions', label: '处理记录' }, { key: 'confirmations', label: '确认记录' }], activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false,
     satisfaction: '', readAcknowledged: false, acknowledgingRead: false,
     view: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], feedbackText: '', canConfirm: false, confirmed: false, shareReady: false,
+    mediaGroups: [], galleryPositions: {},
   },
   onLoad(options) {
     wx.hideShareMenu();
@@ -41,7 +55,7 @@ Page({
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
   clearProtected() {
     this._accessVerified = false;
-    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
+    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
   },
   async loadShared() {
     const accountToken = String(wx.getStorageSync('token') || '');
@@ -56,16 +70,17 @@ Page({
       const assets = [];
       if (view.version && view.version.cover) assets.push(view.version.cover);
       for (const asset of view.version && view.version.media || []) if (!assets.some(item => item.media_id === asset.media_id)) assets.push(asset);
-      const media = await Promise.all(assets.map(async asset => Object.assign({}, asset, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, asset.media_id) })));
+      let media = await Promise.all(assets.map(async asset => Object.assign({}, asset, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, asset.media_id) })));
       if (!this.current(epoch)) return;
       const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-      const width = Math.max(240, windowInfo.windowWidth - 40);
-      const articleBlocks = view.version.body_format === 'article_v2' ? renderArticleDocument(view.version.body, media, width, 'private-note') : [];
+      media = fitNoteMedia(media, windowInfo);
+      const width = windowInfo.windowWidth * 636 / 750;
+      const articleBlocks = view.version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(view.version.body, media, width, 'private-note'), media, windowInfo) : [];
       const attachments = media.filter(asset => asset.kind !== 'image' && asset.kind !== 'video');
       const canConfirm = view.can_confirm === true;
       const confirmed = !!view.confirmation;
       this._accessVerified = true;
-      this.setData({ view, media, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, shareReady: !!view.share && !!this._shareToken }, () => {
+      this.setData({ view, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, shareReady: !!view.share && !!this._shareToken }, () => {
         if (!this.current(epoch)) return;
         if (wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
 

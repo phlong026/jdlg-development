@@ -1,35 +1,25 @@
 <block wx:if="{{__profileAccessMounted}}">
+<import src="/components/project-note-document/note-document.wxml" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
   <view wx:elif="{{loginRequired}}" class="state"><text>请使用受邀的甲第账号登录后查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button></view>
   <block wx:elif="{{view}}">
     <view class="brand"><view class="brand-mark">甲</view><view><text class="brand-name">甲第灵光</text><text class="muted">私人项目协作</text></view><text class="private-label">受邀可见</text></view>
-    <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><text class="muted">固定版本 V{{view.version.revision}} · 转发不增加查看权限</text></view>
-    <view class="paper">
-      <block wx:if="{{view.version.body_format === 'article_v2'}}"><block wx:for="{{articleBlocks}}" wx:key="key">
-        <rich-text wx:if="{{item.kind === 'layout'}}" class="article-layout" nodes="{{item.html}}" selectable="{{true}}" />
-        <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
-        <view wx:elif="{{item.kind === 'list'}}" class="{{item.className}}" style="{{item.style}}"><view wx:for="{{item.items}}" wx:for-item="listItem" wx:key="*this" class="list-item">{{item.ordered ? index + 1 + '.' : '•'}} {{listItem}}</view></view>
-        <view wx:else class="media"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" style="height:{{item.height}}px" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" style="height:{{item.height}}px" /><button wx:else class="attachment" data-id="{{item.media_id}}" bindtap="openAttachment">打开附件</button><text wx:if="{{item.caption}}" class="caption">{{item.caption}}</text></view>
-      </block></block>
-      <rich-text wx:elif="{{view.version.body_format === 'rich_text'}}" class="rich-body" nodes="{{view.version.body}}" selectable="{{true}}" />
-      <text wx:else class="plain" selectable="{{true}}">{{view.version.body}}</text>
-      <view wx:if="{{view.version.body_format !== 'article_v2'}}" wx:for="{{media}}" wx:key="media_id" class="media"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" /><button wx:else class="attachment" data-id="{{item.media_id}}" bindtap="openAttachment">打开{{item.title || '附件'}}</button></view>
-      <block wx:if="{{view.version.body_format === 'article_v2'}}"><button wx:for="{{attachments}}" wx:key="media_id" class="attachment" data-id="{{item.media_id}}" bindtap="openAttachment">打开{{item.title || '附件'}}</button></block>
-    </view>
+    <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本 · 转发不增加查看权限</text></view></view>
+    <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true}}" /></view>
     <view class="card">
       <text class="section-title">阅读回执</text><text class="muted">自愿发送后，设计师会看到当前账号已查看此版本及发送时间；不发送也可继续查看。</text>
       <button class="secondary" bindtap="acknowledgeRead" loading="{{acknowledgingRead}}" disabled="{{readAcknowledged || acknowledgingRead}}">{{readAcknowledged ? '已发送阅读回执' : '告知设计师我已查看'}}</button>
     </view>
     <view class="card"><text class="section-title">下载当前固定版本</text><text class="muted">Word 保留文字、图片的内容顺序；视频请在甲第方案中查看。</text><button class="secondary" bindtap="exportSharedProjectNoteWord" disabled="{{busy}}" loading="{{busy}}">导出 Word</button><block wx:for="{{media}}" wx:key="media_id"><button wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveOriginalImage" disabled="{{busy}}">保存原图{{index + 1}}</button></block></view>
-    <view class="card"><text class="section-title">反馈给设计师</text><text wx:if="{{view.activity_truncated}}" class="muted">仅显示当前版本最近50条反馈与处理记录。</text><view wx:for="{{feedbackRows}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text><text>{{item.text}}</text><text class="muted">{{item.resolved ? '已处理' : '待设计师处理'}}</text><text wx:if="{{item.resolution_reply}}" class="muted">设计师处理说明：{{item.resolution_reply}}</text></view><text class="muted">提交的评价和意见将以当前账号发送给项目设计师，并保留在此方案版本下。</text>
+    <view class="card feedback-card"><text class="section-title">反馈给设计师</text><text wx:if="{{view.activity_truncated}}" class="muted">仅显示当前版本最近50条反馈与处理记录。</text><view wx:for="{{feedbackRows}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text><text class="feedback-text">{{item.text}}</text><text class="muted">{{item.resolved ? '已处理' : '待设计师处理'}}</text><text wx:if="{{item.resolution_reply}}" class="resolution">设计师处理说明：{{item.resolution_reply}}</text></view><text class="muted feedback-help">提交的评价和意见将以当前账号发送给项目设计师，并保留在此方案版本下。</text>
       <radio-group class="satisfaction-options" bindchange="setSatisfaction">
         <label><radio value="very_satisfied" checked="{{satisfaction === 'very_satisfied'}}" color="#a7793d" />非常满意</label>
         <label><radio value="needs_adjustment" checked="{{satisfaction === 'needs_adjustment'}}" color="#a7793d" />基本满意，需要调整</label>
         <label><radio value="unsatisfied" checked="{{satisfaction === 'unsatisfied'}}" color="#a7793d" />不太满意</label>
       </radio-group>
-      <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" placeholder="说明希望修改的位置或内容" /><button class="secondary" bindtap="submitFeedback" loading="{{busy}}" disabled="{{busy || !feedbackText}}">提交反馈</button></view>
+      <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" cursor-spacing="120" placeholder="说明希望修改的位置或内容" /><button class="primary" bindtap="submitFeedback" loading="{{busy}}" disabled="{{busy || !feedbackText}}">提交反馈</button></view>
     <view class="card">
       <text class="section-title">此版本完整协作记录</text>
       <picker range="{{activityTypes}}" range-key="label" value="{{activityIndex}}" bindchange="setActivityType"><view class="picker">{{activityTypes[activityIndex].label}}</view></picker>

@@ -39,6 +39,7 @@ function pageHarness(name, api, wxOverrides = {}) {
   const context = { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/phase3-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
+    if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
     if (id === './projectnotes-core') {
       const core = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes-core.js'), 'utf8');
       vm.runInNewContext(core, context);
@@ -50,6 +51,125 @@ function pageHarness(name, api, wxOverrides = {}) {
   const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values, done) { Object.assign(this.data, values); if (done) done(); } }, definition);
   return page;
 }
+
+test('draft preview reads unsaved text and project media without saving, freezing or sharing', async () => {
+  const downloads = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (project, id) => { downloads.push([project, id]); return '/tmp/' + id; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '庭院方案', noteBody: '入口保留大树。\n\n客厅面向庭院。', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.previewNote();
+  assert.equal(page.data.editorMode, 'preview');
+  assert.equal(page.data.previewBody, '入口保留大树。\n\n客厅面向庭院。');
+  assert.equal(page.data.previewBodyFormat, 'plain');
+  assert.equal(page.data.previewMedia[0].local_path, '/tmp/image-one');
+  assert.deepEqual(downloads, [['project-one', 'image-one']]);
+  assert.equal(page.data.note, null);
+  assert.equal(page.hasUnsavedChanges(), false);
+  page.editNote();
+  assert.equal(page.data.editorMode, 'edit');
+  assert.equal(page.data.noteBody, '入口保留大树。\n\n客厅面向庭院。');
+  assert.equal(page.data.noteMedia[0].media_id, 'image-one');
+});
+
+test('structured draft preview preserves original block order, headings and captions', async () => {
+  const body = JSON.stringify({ schema: 1, blocks: [{ kind: 'heading', level: 2, text: '空间布局' }, { kind: 'image', media_id: 'image-one', caption: '一层平面' }, { kind: 'paragraph', text: '老人房靠近入口。' }] });
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => '/tmp/plan.png' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, note: { note_id: 'note-one', body, body_format: 'article_v2', media_ids: ['image-one'] }, noteTitle: '方案说明', noteBody: body, bodyReadOnly: true, noteMedia: [{ media_id: 'image-one', kind: 'image', width: 1000, height: 1500 }] });
+  await page.previewNote();
+  assert.equal(page.data.previewBody, body);
+  assert.deepEqual(Array.from(page.data.previewBlocks, item => item.kind), ['heading', 'image', 'paragraph']);
+  assert.equal(page.data.previewBlocks[1].caption, '一层平面');
+  assert.equal(page.data.previewBlocks[1].local_path, '/tmp/plan.png');
+});
+
+test('preview download failure keeps the draft intact and permits a complete retry', async () => {
+  let fail = true;
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => { if (fail) throw new Error('图片暂时无法读取'); return '/tmp/retry.png'; } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '待保存方案', noteBody: '保留这段修改', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
+  await page.previewNote();
+  assert.equal(page.data.previewLoading, false);
+  assert.match(page.data.previewError, /图片暂时无法读取/);
+  assert.equal(page.data.previewMedia.length, 0);
+  assert.equal(page.data.noteBody, '保留这段修改');
+  fail = false;
+  await page.previewNote();
+  assert.equal(page.data.previewError, '');
+  assert.equal(page.data.previewMedia[0].local_path, '/tmp/retry.png');
+});
+
+test('returning to edit ignores a late preview response and retains later input', async () => {
+  let finish;
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: () => new Promise(resolve => { finish = resolve; }) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '庭院', noteBody: '初稿', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
+  const pending = page.previewNote();
+  page.editNote();
+  page.setNoteBody({ detail: { value: '继续修改后的正文' } });
+  finish('/tmp/stale.png');
+  await pending;
+  assert.equal(page.data.editorMode, 'edit');
+  assert.equal(page.data.previewMedia.length, 0);
+  assert.equal(page.data.previewLoading, false);
+  assert.equal(page.data.noteBody, '继续修改后的正文');
+});
+
+test('keyboard height and preview state reset when the project editor leaves the foreground', () => {
+  const page = pageHarness('projectnotes', {});
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ noteTitle: '未保存', noteBody: '继续保留', editorMode: 'preview', previewMedia: [{ media_id: 'private-image', local_path: '/tmp/private.png' }] });
+  page.onNoteKeyboardHeight({ detail: { height: 320 } });
+  assert.equal(page.data.keyboardHeight, 320);
+  page.onHide();
+  assert.equal(page.data.keyboardHeight, 0);
+  assert.equal(page.data.editorMode, 'edit');
+  assert.equal(page.data.previewMedia.length, 0);
+  assert.equal(page.data.noteBody, '继续保留');
+});
+
+test('preview UI and downloaded paths never enter the saved note payload or dirty state', async () => {
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => '/tmp/private-preview.png' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '现场方案', noteBody: '未保存修改', noteMedia: [{ media_id: 'image-one', kind: 'image', local_path: '/tmp/picked.png' }] });
+  page._noteFormBaseline = page.noteFormSignature();
+  const before = JSON.stringify(page.noteDraft());
+  await page.previewNote();
+  assert.equal(JSON.stringify(page.noteDraft()), before);
+  assert.equal(page.hasUnsavedChanges(), false);
+  page.editNote();
+  page.setNoteBody({ detail: { value: '真正的新修改' } });
+  assert.equal(page.hasUnsavedChanges(), true);
+});
+
+test('preview response from a previous account cannot restore private media', async () => {
+  let token = 'session-token', finish;
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: () => new Promise(resolve => { finish = resolve; }) }, { getStorageSync: key => key === 'token' ? token : '' });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '私密方案', noteBody: '私密正文', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
+  const pending = page.previewNote();
+  token = 'new-account';
+  page.clearProtected();
+  finish('/tmp/old-account.png');
+  await pending;
+  assert.equal(page.data.previewMedia.length, 0);
+  assert.equal(page.data.previewBody, '');
+  assert.equal(page.data.noteBody, '');
+});
+
+test('gallery swipe keeps its own position and opening an uploaded image uses the original file', () => {
+  let opened;
+  const page = pageHarness('projectnotes', {}, { previewImage: options => { opened = options; } });
+  page.setData({ pageView: 'editor', editorMode: 'edit', noteMedia: [{ media_id: 'image-one', kind: 'image', local_path: '/tmp/original-one.png' }, { media_id: 'image-two', kind: 'image', local_path: '/tmp/original-two.png' }] });
+  page.onNoteGalleryChange({ currentTarget: { dataset: { key: 'note-gallery-0' } }, detail: { current: 1 } });
+  assert.equal(page.data.galleryPositions['note-gallery-0'], 1);
+  page.openImage({ currentTarget: { dataset: { id: 'image-two' } } });
+  assert.equal(opened.current, '/tmp/original-two.png');
+  assert.deepEqual(Array.from(opened.urls), ['/tmp/original-one.png', '/tmp/original-two.png']);
+});
 
 test('private project-note API helpers use signed member-checked endpoints and private media download', async () => {
   const { api, calls } = loadAPI();
@@ -914,10 +1034,13 @@ test('private share card uses pns only and never enters public tracking or a fab
 
 test('private reader template uses native branches for view, rich text, truncation and completed confirmation', () => {
   const template = fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.wxml'), 'utf8');
+  const document = fs.readFileSync(path.join(root, 'components/project-note-document/note-document.wxml'), 'utf8');
   assert.doesNotMatch(template, /wx:else-if=/);
   assert.match(template, /<block\s+wx:elif="\{\{view\}\}">/);
-  assert.match(template, /<rich-text\s+wx:elif="\{\{view\.version\.body_format === 'rich_text'\}\}"[^>]*nodes="\{\{view\.version\.body\}\}"/);
-  assert.match(template, /<text\s+wx:else\s+class="plain"[^>]*>\{\{view\.version\.body\}\}<\/text>/);
+  assert.match(template, /<template[^>]+is="note-document"/);
+  assert.match(document, /format === 'rich_text'/);
+  assert.match(document, /nodes="\{\{body\}\}"/);
+  assert.match(document, />\{\{body\}\}<\/text>/);
   assert.match(template, /wx:if="\{\{view\.activity_truncated\}\}"[^>]*>[^<]*最近50条反馈与处理记录/);
   assert.match(template, /wx:if="\{\{canConfirm \|\| confirmed\}\}"\s+class="card confirm"/);
   assert.match(template, /disabled="\{\{busy \|\| confirmed\}\}"/);

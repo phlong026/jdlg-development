@@ -1,14 +1,28 @@
 'use strict';
 const api = require('../../utils/project-packages-api');
 const { renderArticleDocument } = require('../../utils/article-document');
+const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
 
 const labels = { very_satisfied: '非常满意', needs_adjustment: '基本满意，需要调整', unsatisfied: '不太满意' };
 const eventID = () => 'package-read-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
 
 Page({
+  onNoteGalleryChange(event) {
+    this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
+  },
+  onResize(event) {
+    const windowInfo = event.size || {}, media = fitNoteMedia(this.data.media, windowInfo);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
+  onNoteVideoMetadata(event) {
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
+    const media = noteVideoMetadata(this.data.media, event, windowInfo);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
   data: {
     loading: true, busy: false, loginRequired: false, error: '', notice: '', pageView: 'directory',
     directory: null, versionView: null, media: [], articleBlocks: [], feedbackText: '', satisfaction: '',
+    mediaGroups: [], galleryPositions: {},
     readAcknowledged: false, confirmed: false,
   },
   onLoad(options) {
@@ -33,7 +47,7 @@ Page({
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   clearProtected(preserveInput) {
     this.setData({
-      directory: null, versionView: null, media: [], articleBlocks: [], pageView: 'directory',
+      directory: null, versionView: null, media: [], mediaGroups: [], galleryPositions: {}, articleBlocks: [], pageView: 'directory',
       feedbackText: preserveInput ? this.data.feedbackText : '', satisfaction: preserveInput ? this.data.satisfaction : '',
       readAcknowledged: false, confirmed: false, notice: '', error: '', loginRequired: false, loading: true, busy: false,
     });
@@ -61,17 +75,18 @@ Page({
       const assets = [];
       if (versionView.version && versionView.version.cover) assets.push(versionView.version.cover);
       for (const asset of versionView.version && versionView.version.media || []) if (!assets.some(item => item.media_id === asset.media_id)) assets.push(asset);
-      const media = await Promise.all(assets.map(async asset => Object.assign({}, asset, { local_path: await api.downloadSharedProjectPackageMedia(this._packageToken, versionID, asset.media_id) })));
+      let media = await Promise.all(assets.map(async asset => Object.assign({}, asset, { local_path: await api.downloadSharedProjectPackageMedia(this._packageToken, versionID, asset.media_id) })));
       if (!this.current(epoch)) return;
       const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375 };
-      const articleBlocks = versionView.version.body_format === 'article_v2' ? renderArticleDocument(versionView.version.body, media, Math.max(240, windowInfo.windowWidth - 40), 'package-version') : [];
+      media = fitNoteMedia(media, windowInfo);
+      const articleBlocks = versionView.version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(versionView.version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
       const versionKey = String(versionView.version && versionView.version.version_id || versionID);
-      this.setData({ versionView, media, articleBlocks, pageView: 'version', busy: false, confirmed: !!versionView.confirmation, readAcknowledged: this._acknowledgedVersions.has(versionKey) });
+      this.setData({ versionView, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, articleBlocks, pageView: 'version', busy: false, confirmed: !!versionView.confirmation, readAcknowledged: this._acknowledgedVersions.has(versionKey) });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '方案加载失败' }); }
   },
   handleBack() {
     if (this.data.pageView === 'version') {
-      this.setData({ pageView: 'directory', versionView: null, media: [], articleBlocks: [], feedbackText: '', satisfaction: '', notice: '' });
+      this.setData({ pageView: 'directory', versionView: null, media: [], mediaGroups: [], galleryPositions: {}, articleBlocks: [], feedbackText: '', satisfaction: '', notice: '' });
       return;
     }
     wx.navigateBack();

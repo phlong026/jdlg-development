@@ -18,6 +18,7 @@ function pageHarness(name, api = {}, wxOverrides = {}) {
   const context = { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/project-packages-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
+    if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
     throw new Error(`unexpected require ${id}`);
   }, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent, decodeURIComponent, console };
   vm.runInNewContext(source, context);
