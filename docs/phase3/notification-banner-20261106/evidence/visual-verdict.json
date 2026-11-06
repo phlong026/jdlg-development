@@ -1,0 +1,32 @@
+{
+  "scope": "notification-banner-20261106",
+  "status": "pass",
+  "method": "native simulator screenshot and element tap; manual visual review (visual-verdict skill unavailable)",
+  "viewport_width": 430,
+  "capsule_bottom_px": 90,
+  "banner_top_px": 98,
+  "close_bounds_px": {
+    "left": 366,
+    "top": 110,
+    "width": 44,
+    "height": 44
+  },
+  "fixture_unread": 3,
+  "after_close": {
+    "route": "pages/index/index",
+    "banner": false,
+    "unread_count": 3
+  },
+  "after_page_roundtrip": {
+    "banner": false,
+    "unread_count": 0,
+    "source": "real unread request"
+  },
+  "checks": {
+    "capsule_overlap": false,
+    "homepage_reflow": false,
+    "close_tap_stays_on_home": true,
+    "close_preserves_unread": true
+  },
+  "physical_device_verified": false
+}

@@ -11,6 +11,45 @@ page {
   box-sizing: border-box;
 }
 
+/* 浮在首页画布上方，避开状态栏和微信胶囊。 */
+.unread-banner {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 12rpx 20rpx 24rpx;
+  border: 1rpx solid #dfcbb3;
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, #fff8ef 0%, #f1e4d2 100%);
+  box-shadow: 0 4rpx 16rpx rgba(168, 121, 67, 0.12);
+  box-sizing: border-box;
+  animation: unread-slide-in 0.3s ease-out;
+}
+
+@keyframes unread-slide-in {
+  from { opacity: 0; transform: translateY(-20rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.unread-banner-icon { flex-shrink: 0; font-size: 40rpx; }
+.unread-banner-body { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4rpx; }
+.unread-banner-title { color: #352e27; font-size: 28rpx; font-weight: 600; }
+.unread-banner-desc { overflow: hidden; color: #817568; font-size: 24rpx; text-overflow: ellipsis; white-space: nowrap; }
+.unread-banner-arrow { flex-shrink: 0; color: #b49a7e; font-size: 36rpx; }
+.unread-banner-close {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: #8e7256;
+  font-size: 32rpx;
+}
+
 .home-canvas {
   position: relative;
   width: 750rpx;

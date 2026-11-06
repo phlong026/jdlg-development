@@ -49,15 +49,19 @@ page{overflow:visible}.pages{width:100vw;min-height:100vh;background:linear-grad
 
 /* APP 式未读消息横幅 */
 .unread-banner {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 16rpx;
-  margin: 16rpx 24rpx 0;
-  padding: 20rpx 24rpx;
+  padding: 20rpx 12rpx 20rpx 24rpx;
   border-radius: 18rpx;
   background: linear-gradient(135deg, #fff8ef 0%, #f1e4d2 100%);
   border: 1rpx solid #dfcbb3;
   box-shadow: 0 4rpx 16rpx rgba(168, 121, 67, 0.12);
+  box-sizing: border-box;
   animation: unread-slide-in 0.3s ease-out;
 }
 
@@ -100,8 +104,12 @@ page{overflow:visible}.pages{width:100vw;min-height:100vh;background:linear-grad
 }
 
 .unread-banner-close {
-  padding: 10rpx;
-  font-size: 28rpx;
-  color: #b49a7e;
+  display: flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 32rpx;
+  color: #8e7256;
 }

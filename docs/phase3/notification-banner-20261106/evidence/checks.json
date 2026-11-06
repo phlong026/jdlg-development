@@ -1,0 +1,28 @@
+{
+  "tests": {
+    "passed": 1102,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typescript_diagnostics": 0,
+  "js_syntax": "pass",
+  "ts_js_match": true,
+  "scss_compile": "pass",
+  "native_wxml_compile": "pass",
+  "json_parse": "pass",
+  "auth_signer": "pass",
+  "tracking_artifacts": "pass",
+  "tracking_routes": "pass",
+  "dependency_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "changed_credentials_scan": "pass",
+  "new_dependencies": false,
+  "backend_changes": false,
+  "device_uat": "not_run"
+}

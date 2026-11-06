@@ -101,6 +101,7 @@ for (const extension of ['ts', 'js']) {
     definition.onLoad.call({
       prepareHomeShareCovers() {},
       showHomeIntroPopupOnce() { introCalls += 1; },
+      initializeUnreadBannerLayout() {},
     });
     assert.equal(introCalls, 1);
     assert.equal(menus.length, 0, '单页模式禁止分享菜单，由全局 onShow 判断后再开启');
@@ -117,6 +118,7 @@ for (const extension of ['ts', 'js']) {
       const page = {
         prepareHomeShareCovers() {},
         showHomeIntroPopupOnce() {},
+        initializeUnreadBannerLayout() {},
         syncTabBar() {},
         loadFeaturedGroups() { contentLoads++; },
         promptNicknameIfMissing() {},
@@ -135,7 +137,7 @@ for (const extension of ['ts', 'js']) {
   test(`${extension}: 普通登录返回首页仍可恢复报告`, () => {
     let resumeCalls = 0;
     const { definition } = loadPage(extension, { resumeReportAfterLogin: () => { resumeCalls++; return true; } });
-    const page = { prepareHomeShareCovers() {}, showHomeIntroPopupOnce() {}, syncTabBar() { assert.fail('应先恢复报告'); } };
+    const page = { prepareHomeShareCovers() {}, showHomeIntroPopupOnce() {}, initializeUnreadBannerLayout() {}, syncTabBar() { assert.fail('应先恢复报告'); } };
     definition.onLoad.call(page, {});
     definition.onShow.call(page);
     assert.equal(resumeCalls, 1);
