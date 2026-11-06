@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "tool": "automation_evaluate",
+  "clientName": "Codex",
+  "result": {
+    "success": true,
+    "result": {
+      "result": [
+        {
+          "left": 16,
+          "right": 414,
+          "top": 115,
+          "bottom": 156,
+          "width": "394px",
+          "height": 41,
+          "margin-left": "0px",
+          "margin-right": "0px",
+          "flex": "0 1 auto",
+          "flex-grow": "0",
+          "flex-shrink": "1",
+          "display": "flex"
+        },
+        {
+          "left": 226.5,
+          "right": 262.5,
+          "top": 115,
+          "bottom": 156,
+          "width": "36px",
+          "height": 41,
+          "margin-left": "149.5px",
+          "margin-right": "149.5px",
+          "flex": "0 1 auto",
+          "flex-grow": "0",
+          "flex-shrink": "1",
+          "display": "flex"
+        },
+        {
+          "left": 18,
+          "right": 66,
+          "top": 121.25,
+          "bottom": 149.75,
+          "width": "26px",
+          "height": 28.5,
+          "margin-left": "0px",
+          "margin-right": "0px",
+          "flex": "0 1 auto",
+          "flex-grow": "0",
+          "flex-shrink": "1",
+          "display": "block"
+        }
+      ]
+    }
+  }
+}

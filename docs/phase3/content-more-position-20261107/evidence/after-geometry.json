@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "tool": "automation_evaluate",
+  "clientName": "Codex",
+  "result": {
+    "success": true,
+    "result": {
+      "result": [
+        {
+          "left": 16,
+          "right": 414,
+          "top": 115,
+          "bottom": 156,
+          "width": 398,
+          "height": 41,
+          "margin-left": "0px",
+          "margin-right": "0px",
+          "flex": "0 1 auto"
+        },
+        {
+          "left": 376,
+          "right": 412,
+          "top": 115,
+          "bottom": 156,
+          "width": 36,
+          "height": 41,
+          "margin-left": "299px",
+          "margin-right": "0px",
+          "flex": "0 0 auto"
+        },
+        {
+          "left": 18,
+          "right": 66,
+          "top": 121.25,
+          "bottom": 149.75,
+          "width": 48,
+          "height": 28.5,
+          "margin-left": "0px",
+          "margin-right": "0px",
+          "flex": "0 1 auto"
+        }
+      ]
+    }
+  }
+}

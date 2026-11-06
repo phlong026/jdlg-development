@@ -24,6 +24,31 @@ page {
   padding: 0 4rpx;
 }
 
+/* 覆盖原生按钮自动边距，让状态与更多操作分别贴齐两侧。 */
+.editor-hero .editor-more {
+  flex: none;
+  margin: 0 0 0 auto;
+}
+
+.more-menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12rpx;
+  margin: 12rpx 0 18rpx;
+  padding: 16rpx;
+  border: 1rpx solid #eee8e1;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.more-menu button {
+  flex: none;
+  min-height: 72rpx;
+  margin: 0;
+  padding: 12rpx 20rpx;
+}
+
 .status-badge {
   padding: 10rpx 20rpx;
   border-radius: 999rpx;
@@ -400,16 +425,6 @@ input, textarea, .picker {
   color: #a12622;
   border: 1rpx solid #d9aaa6;
   background: #fff;
-}
-
-.revoke-button {
-  width: 100%;
-  margin: 18rpx 0;
-}
-
-.delete-draft-button {
-  width: 100%;
-  margin: 22rpx 0 0;
 }
 
 .editor-actions {
