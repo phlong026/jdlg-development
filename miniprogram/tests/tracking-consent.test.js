@@ -56,16 +56,16 @@ async function legacy(t) {
   await settle();return page;
 }
 
-test('unselected users get silent consent: no modal, analytics records, share carries attribution',async()=>{
+test('unselected users can read and share without analytics or implicit attribution',async()=>{
   const t=runtime(),page=await legacy(t);
-  assert.equal(t.modals.length,0,'silent consent never prompts');
-  assert.equal(t.adapter.consented(),true);
-  assert.ok(t.entries.length>=1,'silent consent reports the entry');
-  assert.equal(t.storage.share_tracking_consent_choice_v1,undefined,'silence writes no choice record');
+  assert.equal(t.modals.length,0,'the page uses its inline first-choice controls instead of an automatic modal');
+  assert.equal(t.adapter.consented(),false);
+  assert.equal(t.entries.length,0,'no analytics entry is created before an explicit choice');
+  assert.equal(t.storage.share_tracking_consent_choice_v1,undefined,'reading alone writes no choice record');
+  assert.equal(t.adapter.consentChoice().resolved,false);assert.equal(t.adapter.consentChoice().accepted,false);
   assert.equal(page.data.contentReady,true);
   const shared=page.onShareAppMessage();
-  const resolved=await Promise.resolve(shared.promise).then(value=>({...shared,...value}));
-  assert.match(resolved.path,/st=/,'share card carries the attribution token');
+  assert.doesNotMatch(shared.path,/st=/,'ordinary sharing remains available without an analytics token');
 });
 
 test('explicit withdrawal survives config refresh and restart',async()=>{
@@ -77,22 +77,37 @@ test('explicit withdrawal survives config refresh and restart',async()=>{
   assert.equal(restarted.entries.length,0);assert.equal(restarted.adapter.consented(),false);
 });
 
-test('legacy implicit and outdated accepted choices silently continue recording',async()=>{
+test('only acceptance of the current version and notice enables collection',async()=>{
   for(const old of [
     {share_tracking_consent_v1:{version:'notice-v1'}},
     {share_tracking_consent_choice_v1:{accepted:true,version:'notice-v1',notice}},
     {share_tracking_consent_choice_v1:{accepted:true,explicit:true,version:'old',notice}},
+    {share_tracking_consent_choice_v1:{accepted:false,explicit:true,version:'notice-v1',notice:'old notice'}},
   ]){
     const t=runtime({storage:old}),page=await legacy(t);
-    assert.equal(t.adapter.consented(),true);assert.ok(t.entries.length>=1);
+    assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);
+    assert.equal(t.adapter.consentChoice().resolved,false,'a stale choice must return to the unresolved state');
     assert.equal(page.data.contentReady,true);
   }
-  const declined=runtime();declined.adapter.setConsent(false);
-  declined.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+' changed'});
-  await declined.adapter.refreshConfig();assert.equal(declined.adapter.consented(),false,'declines survive notice updates');
+  const accepted=runtime({accepted:true});await legacy(accepted);
+  assert.equal(accepted.adapter.consented(),true);assert.ok(accepted.entries.length>=1);
 });
 
-test('incomplete or disabled server configuration cannot grant silent consent',async()=>{
+test('a changed notice collects nothing, asks again, and resumes only after a new explicit acceptance',async()=>{
+  const t=runtime({accepted:true}),page=await legacy(t);assert.ok(t.entries.length>0);
+  const before=t.entries.length;
+  t.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+' changed'});
+  await t.adapter.refreshConfig();await settle();
+  assert.equal(t.adapter.consented(),false);assert.equal(t.adapter.consentChoice().resolved,false);
+  assert.equal(t.entries.length,before,'a new declaration cannot inherit the old acceptance');
+  const choosing=t.adapter.showConsentChoices(page);await settle();
+  assert.equal(t.modals.length,1);assert.match(t.modals[0].content,/changed/);
+  t.answer(0,true);await choosing;await settle();
+  assert.equal(t.adapter.consented(),true);assert.equal(t.adapter.consentChoice().resolved,true);
+  assert.ok(t.entries.length>before,'collection resumes only after accepting the current declaration');
+});
+
+test('incomplete or disabled server configuration cannot grant consent',async()=>{
   for(const configuration of [{enabled:false,consent_version:'v',privacy_notice:notice},{enabled:true,privacy_notice:notice},{enabled:true,consent_version:'v'}]){
     const t=runtime({configuration}),page=t.register('pages/index/index',{onShow(){return 'business-result';}});
     page.onLoad({});assert.equal(page.onShow(),'business-result');page.onReady();await settle();
@@ -113,7 +128,7 @@ test('route policy still gates collection: collectable routes register, private 
   assert.equal(t.events.filter(e=>e.route_key==='pages/designerhome/designerhome').length,0,'self-management visits stay unobserved');
 });
 
-test('async configuration with silent consent never collects private pages',async()=>{
+test('async configuration without consent never collects private pages',async()=>{
   let finish;const t=runtime({configRequest:()=>new Promise(resolve=>{finish=resolve;})});
   const page=t.register('pages/index/index');t.mount(page);page.onHide();t.mount(t.register('pages/login/login'));
   finish({enabled:true,consent_version:'notice-v1',privacy_notice:notice});await settle();
@@ -170,10 +185,10 @@ test('settings page owns the switch and stale consent UI is gone from My and pag
     const code=fs.readFileSync(path.join(root,'pages/my/my.'+ext),'utf8');
     assert.doesNotMatch(code,/onTrackingConsentTap|onWithdrawTrackingConsent|syncTrackingConsent/,ext);
   }
-  // 编译产物守卫：index.js 必须实现静默同意（默认记录、拒绝持续有效），且页面展示不再自动弹窗
+  // 编译产物守卫：index.js 仅在明确同意后记录，且页面展示不自动弹窗。
   const bundled=fs.readFileSync(path.join(root,'utils/tracking/index.js'),'utf8');
   assert.doesNotMatch(bundled,/safely\(\(\)=>setConsent\(true\)\)/,'configuration cannot imply agreement');
-  assert.match(bundled,/choice\.accepted===false/,'explicit declines keep gating');
-  assert.doesNotMatch(bundled,/choice\.explicit===true/,'silent consent must not require explicit records');
+  assert.match(bundled,/choice\.version===config\.consent_version/,'choice must match the current consent version');
+  assert.match(bundled,/choice\.notice===config\.privacy_notice/,'choice must match the current full notice');
   assert.doesNotMatch(bundled,/if\(visible\)\{consentPage=page;showConsentChoices\(page\);\}/,'auto prompt must stay removed');
 });

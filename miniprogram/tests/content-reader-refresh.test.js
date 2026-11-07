@@ -21,6 +21,15 @@ test('native reader keeps the article beside a transient error but hides it afte
   const blocked = JSON.stringify(render({ ...data, contentReady: false, content: null }));
   assert.doesNotMatch(blocked, /保留的文章文字|已验证正文/);
   assert.match(blocked, /刷新失败，请重试/);
+
+  const videoView = { kind: 'video', videoLayout: 'channels', title: '视频', bodyText: '', poster: 'wxfile://cover.jpg', nativePoster: '', media: [{ domId: 'reader-media-0', playerKey: 'reader-player-0', media_id: 'video-one', errorKey: 'readerMedia0', url: 'wxfile://video.mp4', width: 300, height: 180 }] };
+  const videoData = { ...data, error: '', content: { title: '视频' }, presentationView: videoView, videoStarted: {} };
+  const covered = JSON.stringify(render(videoData));
+  assert.match(covered, /wxfile:\/\/cover\.jpg/);
+  assert.doesNotMatch(covered, /wxfile:\/\/video\.mp4/, '封面初态不得创建原生 video');
+  const requested = JSON.stringify(render({ ...videoData, videoStarted: { 'reader-player-0': true } }));
+  assert.doesNotMatch(requested, /wxfile:\/\/cover\.jpg/);
+  assert.match(requested, /wxfile:\/\/video\.mp4/, '点击请求后才创建原生 video');
 });
 
 function harness(options = {}) {
@@ -44,16 +53,18 @@ function harness(options = {}) {
       return new Promise((resolve, reject) => { pendingReads.push({ resolve, reject }); });
     },
   };
+  let plays = 0;
   const wx = {
     hideShareMenu() {}, showShareMenu() {},
-    getWindowInfo: () => ({ windowWidth: 400 }),
-    createVideoContext: () => ({ pause() {} }),
+    getWindowInfo: () => ({ windowWidth: 400, windowHeight: 800, statusBarHeight: 20 }),
+    createVideoContext: () => ({ pause() {}, play() { plays += 1; } }),
+    getStorageSync: () => null,
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.js'), 'utf8'), {
     Page: value => { definition = value; }, wx, Promise, Object, Array, String, Number, Math, Error, encodeURIComponent,
     require: name => name.includes('tracking/index') ? tracking
       : name.includes('tracking/api') ? api
-      : name.includes('protected-media') ? { resolveProtectedMediaURL: async value => { if (options.mediaError) throw options.mediaError; if (options.failMedia) throw new Error('cdn unavailable'); return value; } }
+      : name.includes('protected-media') ? { resolveProtectedMediaURL: async value => { if (options.mediaError) throw options.mediaError; if (options.failMedia || options.failVideoMedia && /video/.test(value)) throw new Error('cdn unavailable'); return value; } }
       : name.includes('content-presentation') ? require(path.join(root, 'utils/content-presentation'))
       : name.includes('article-document') ? { renderArticleDocument: () => [] }
       : { createVideoTracker: () => ({}) },
@@ -68,6 +79,7 @@ function harness(options = {}) {
     page,
     finish: (value, index = 0) => pendingReads[index].resolve(value),
     fail: (error, index = 0) => pendingReads[index].reject(error),
+    plays: () => plays,
   };
 }
 
@@ -81,6 +93,57 @@ test('reader keeps note copy and an inline retry when protected media is tempora
   assert.equal(page.data.presentationView.bodyText, '保留整条文案');
   assert.equal(page.data.presentationView.media.length, 1);
   assert.match(page.data.mediaErrors[page.data.presentationView.media[0].errorKey], /加载失败/);
+});
+
+for (const invalidContent of [{}, { title: '空内容', body_format: 'unsupported', body: '不支持' }]) {
+  test('reader rejects unusable content without rendering source or consultation shell: ' + JSON.stringify(invalidContent), async () => {
+    const { page } = harness({ firstContent: invalidContent });
+    await page.loadContent();
+    assert.equal(page.data.contentReady, false);
+    assert.equal(page.data.content, null);
+    assert.match(page.data.error, /内容.*完整|内容.*支持/);
+  });
+}
+
+test('reader keeps video copy when authenticated media fails and uses the authenticated cover as poster', async () => {
+  const { page } = harness({
+    failVideoMedia: true,
+    firstContent: {
+      title: '新中式别墅',
+      body_format: 'article_v2',
+      body: JSON.stringify({ schema: 1, presentation: 'video', video_layout: 'channels', share_copy: '分享文案', moments_copy: '朋友圈文案', blocks: [{ kind: 'paragraph', text: '视频介绍' }, { kind: 'video', media_id: 'video-one' }] }),
+      cover: { media_id: 'cover-one', kind: 'image', url: 'https://example.test/cover.jpg' },
+      media: [{ media_id: 'video-one', kind: 'video', url: 'https://example.test/video.mp4' }],
+    },
+  });
+  await page.loadContent();
+  assert.equal(page.data.contentReady, true);
+  assert.equal(page.data.presentationView.bodyText, '视频介绍');
+  assert.equal(page.data.presentationView.poster, 'https://example.test/cover.jpg');
+  assert.equal(page.data.presentationView.nativePoster, 'https://example.test/cover.jpg');
+  assert.equal(page.data.presentationView.shareCopy, '分享文案');
+  assert.match(page.data.mediaErrors[page.data.presentationView.media[0].errorKey], /加载失败/);
+});
+
+test('reader creates a covered video after one tap, preserves it through pause or reflow, and restores the cover on error', () => {
+  const { page, plays } = harness();
+  page.setData({
+    videoStarted: {},
+    content: { title: '视频', body_format: 'article_v2', body: JSON.stringify({ schema: 1, presentation: 'video', blocks: [{ kind: 'video', media_id: 'video-one' }] }) },
+    media: [{ media_id: 'video-one', kind: 'video', url: 'wxfile://video.mp4', width: 1920, height: 1080 }],
+    presentationView: { kind: 'video', galleryIndex: 0, descriptionExpanded: false },
+  });
+  const target = { dataset: { domId: 'reader-media-0', playerKey: 'reader-player-0', tracking: false } };
+  page.playContentVideo({ currentTarget: target });
+  assert.equal(plays(), 1);
+  assert.equal(page.data.videoStarted['reader-player-0'], true, '点击封面后先创建原生播放器');
+  page.videoState({ type: 'play', currentTarget: target });
+  assert.equal(page.data.videoStarted['reader-player-0'], true);
+  page.videoState({ type: 'pause', currentTarget: target });
+  page.rebuildPresentation(0);
+  assert.equal(page.data.videoStarted['reader-player-0'], true, 'metadata/layout rebuild must preserve playback state');
+  page.videoState({ type: 'error', currentTarget: { dataset: { ...target.dataset, errorKey: 'readerMedia0' } } });
+  assert.equal(page.data.videoStarted['reader-player-0'], undefined, '播放失败后应退回可重试封面');
 });
 
 test('reader keeps verified content visible while foreground refresh is pending', async () => {

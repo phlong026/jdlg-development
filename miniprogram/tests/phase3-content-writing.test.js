@@ -369,3 +369,24 @@ test('manual writing clears stale generation errors without changing the entered
   assert.equal(h.page.data.result, '手动填写的文案');
   assert.equal(h.page.data.error, '');
 });
+
+test('video writing generates a validated bundle and adopts only selected fields', () => {
+ const h = harness('contentwriting'); h.page.onLoad({source:'editor'}); h.page.onShow();
+ h.listeners.writingContext({source:'editor',target:'video_bundle',content_id:'video-content',revision:4,title:'人工标题',facts:'庭院改造',share_copy:'人工转发文案'});
+ assert.equal(h.page.data.videoBundle,true);
+ assert.match(h.page.buildPrompt(), /share_copy/); assert.match(h.page.buildPrompt(), /不得编造/);
+ let callbacks;h.aiStreamStub.startAIStream=options=>{callbacks=options;return {abort(){}}};
+ h.page.quickGenerate();callbacks.onDone(JSON.stringify({title:'生成标题',share_copy:'生成转发',moments_copy:'生成朋友圈'}));
+ assert.equal(h.page.data.videoCopy.moments_copy,'生成朋友圈');
+ h.page.saveToDraft();const emitted=h.calls.find(call=>call.event==='prefillContent').value;
+ assert.equal(emitted.content_id,'video-content');assert.equal(emitted.revision,4);
+ assert.equal(emitted.video_copy.moments_copy,'生成朋友圈');assert.equal(emitted.video_copy.title,undefined);assert.equal(emitted.video_copy.share_copy,undefined);
+});
+
+test('video writing rejects malformed structured output and preserves previous results', () => {
+ const h=harness('contentwriting');h.page.onLoad({source:'editor'});h.page.onShow();h.listeners.writingContext({source:'editor',target:'video_bundle',title:'已知主题',facts:''});
+ let callbacks;h.aiStreamStub.startAIStream=options=>{callbacks=options;return {abort(){}}};
+ h.page.quickGenerate();assert.equal(h.page.data.streaming,true,'video theme alone can supply known facts');callbacks.onDone('没有结构化字段的普通正文');
+ assert.equal(h.page.data.streaming,false);assert.match(h.page.data.error,/格式|结构/);assert.equal(h.page.data.videoCopy,null);
+ h.page.saveToDraft();assert.equal(h.calls.some(call=>call.event==='prefillContent'),false);
+});

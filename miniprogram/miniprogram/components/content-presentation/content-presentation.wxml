@@ -16,19 +16,32 @@
   </block>
 
   <block wx:elif="{{view.kind === 'video'}}">
-   <view wx:if="{{view.media[0]}}" class="presentation-media presentation-video-shell" style="height:{{view.media[0].height}}px">
-    <video id="{{view.media[0].domId}}" class="presentation-video" style="width:{{view.media[0].width}}px;height:{{view.media[0].height}}px" src="{{view.media[0].url}}" controls object-fit="contain" data-media-id="{{view.media[0].media_id}}" data-player-key="{{view.media[0].playerKey}}" data-error-key="{{view.media[0].errorKey}}" data-tracking="{{tracking}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindloadedmetadata="onContentVideoMetadata" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+   <view class="content-video content-video-{{view.videoLayout}}">
+    <view class="presentation-video-brand"><text class="presentation-video-brand-mark">甲</text><text>甲第灵光</text><text class="presentation-video-brand-type">{{view.videoLayout === 'douyin' ? '沉浸视频' : '视频号作品'}}</text></view>
+    <view wx:if="{{view.media[0]}}" class="presentation-media presentation-video-shell" style="height:{{view.media[0].height}}px">
+     <view wx:if="{{view.poster && !videoStarted[view.media[0].playerKey]}}" class="presentation-video-poster" data-dom-id="{{view.media[0].domId}}" data-player-key="{{view.media[0].playerKey}}" bindtap="playContentVideo">
+      <image src="{{view.poster}}" mode="aspectFit" />
+      <text class="presentation-video-play" aria-label="播放视频">▶</text>
+     </view>
+     <video wx:else id="{{view.media[0].domId}}" class="presentation-video" style="width:{{view.media[0].width}}px;height:{{view.media[0].height}}px" src="{{view.media[0].url}}" poster="{{view.nativePoster}}" autoplay="{{videoStarted[view.media[0].playerKey]}}" controls object-fit="contain" data-media-id="{{view.media[0].media_id}}" data-player-key="{{view.media[0].playerKey}}" data-error-key="{{view.media[0].errorKey}}" data-tracking="{{tracking}}" bindplay="videoState" bindpause="videoState" bindended="videoState" bindwaiting="videoState" binderror="videoState" bindloadedmetadata="onContentVideoMetadata" bindtimeupdate="videoProgress" bindratechange="videoRate" bindfullscreenchange="videoFullscreen" />
+    </view>
+    <view wx:if="{{view.media[0] && mediaErrors[view.media[0].errorKey]}}" class="presentation-media-error"><text>{{mediaErrors[view.media[0].errorKey]}}</text><button data-media-id="{{view.media[0].media_id}}" data-error-key="{{view.media[0].errorKey}}" bindtap="retryMedia">重新加载</button></view>
+    <view class="presentation-note-copy presentation-video-copy">
+     <view wx:if="{{view.title}}" class="presentation-title" selectable="{{true}}">{{view.title}}</view>
+     <text wx:if="{{view.bodyText}}" class="presentation-body {{view.descriptionExpanded ? 'is-expanded' : ''}}" selectable="{{true}}">{{view.bodyText}}</text>
+     <button wx:if="{{view.bodyExpandable}}" class="presentation-copy-toggle" bindtap="toggleContentDescription">{{view.descriptionExpanded ? '收起' : '展开全文'}}</button>
+     <view wx:if="{{view.sourceNote || view.publishedAt}}" class="presentation-meta"><text>{{view.sourceNote}}</text><text>{{view.publishedAt}}</text></view>
+    </view>
    </view>
-   <view wx:if="{{mediaErrors[view.media[0].errorKey]}}" class="presentation-media-error"><text>{{mediaErrors[view.media[0].errorKey]}}</text><button data-media-id="{{view.media[0].media_id}}" data-error-key="{{view.media[0].errorKey}}" bindtap="retryMedia">重新加载</button></view>
   </block>
 
-  <view wx:if="{{view.kind !== 'article'}}" class="presentation-note-copy">
+  <view wx:if="{{view.kind === 'gallery'}}" class="presentation-note-copy">
    <view wx:if="{{view.title}}" class="presentation-title" selectable="{{true}}">{{view.title}}</view>
    <text wx:if="{{view.bodyText}}" class="presentation-body" selectable="{{true}}">{{view.bodyText}}</text>
    <view wx:if="{{view.sourceNote || view.publishedAt}}" class="presentation-meta"><text>{{view.sourceNote}}</text><text>{{view.publishedAt}}</text></view>
   </view>
 
-  <block wx:else>
+  <block wx:if="{{view.kind === 'article'}}">
    <view class="presentation-article-header">
     <view wx:if="{{view.title}}" class="presentation-title" selectable="{{true}}">{{view.title}}</view>
     <view wx:if="{{view.sourceNote || view.publishedAt}}" class="presentation-meta"><text>{{view.sourceNote}}</text><text>{{view.publishedAt}}</text></view>

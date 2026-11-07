@@ -2,7 +2,9 @@
 const api = require('../../utils/phase3-api');
 const { preserveLayoutBody, renderArticleDocument } = require('../../utils/article-document');
 let presentationTools;
+let videoUploadTools;
 function contentPresentation() { if (!presentationTools) presentationTools = require('../../utils/content-presentation'); return presentationTools; }
+function resumableVideoUpload() { if (!videoUploadTools) videoUploadTools = require('../../utils/resumable-video-upload'); return videoUploadTools; }
 
 function textBlock(text = '') { return { kind: 'paragraph', text }; }
 function headingBlock(level = 2) { return { kind: 'heading', level: level === 3 ? 3 : 2, text: '' }; }
@@ -16,7 +18,7 @@ function writingFacts(blocks) {
     return String(block.text || '').trim();
   }).filter(Boolean).join('\n\n').slice(0, 6000);
 }
-function articleBody(blocks, presentation, includePresentation) {
+function articleBody(blocks, presentation, includePresentation, videoFields, draftOnly) {
   const document = { schema: 1, blocks: blocks.map(block => {
     if (block.kind === 'image' || block.kind === 'video') return { kind: block.kind, media_id: block.media_id, caption: block.caption || '' };
     if (block.kind === 'heading') return { kind: 'heading', level: block.level === 3 ? 3 : 2, text: String(block.text || '').trim() };
@@ -25,6 +27,12 @@ function articleBody(blocks, presentation, includePresentation) {
     return { kind: 'paragraph', text: String(block.text || '').trim() };
   }) };
   if (includePresentation) document.presentation = presentation;
+  if (presentation === 'video' && videoFields) {
+    document.video_layout = videoFields.videoLayout;
+    document.share_copy = videoFields.shareCopy;
+    document.moments_copy = videoFields.momentsCopy;
+  }
+  if (draftOnly) document.draft_only = true;
   return JSON.stringify(document);
 }
 function articleDocument(content) {
@@ -97,6 +105,12 @@ function documentTitle(name) { return String(name || '').replace(/\.(pdf|docx|pp
 function postText(blocks) { return blocks.filter(block => block.kind === 'paragraph').map(block => String(block.text || '').trim()).filter(Boolean).join('\n\n'); }
 function hasStructuredBlocks(blocks) { return blocks.some(block => !['paragraph', 'image', 'video'].includes(block.kind)); }
 function mediaBlocks(blocks, kind) { return blocks.filter(block => block.kind === kind); }
+function sessionAccountKey(value) {
+  let hash = 2166136261;
+  const text = String(value || '');
+  for (let index = 0; index < text.length; index += 1) hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+  return `account-${(hash >>> 0).toString(16)}`;
+}
 function presentationErrors(view, media) {
   const errors = new Map((media || []).filter(asset => asset.preview_error).map(asset => [asset.media_id, asset.preview_error]));
   return (view.media || []).concat(view.blocks || []).reduce((result, item) => {
@@ -117,7 +131,7 @@ Page({
   data: {
     id: '', loading: true, busy: false, error: '', denied: false, disabled: false, loginRequired: false, context: null,
     title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
-    presentation: 'article', postText: '', activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {},
+    presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoIntroductionExpanded: false, videoAdvancedExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {},
     blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
     legacyReadOnly: false, legacyBody: '', legacyMedia: [], notice: '',
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
@@ -136,14 +150,15 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoIntroductionExpanded: false, videoAdvancedExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
       this._savedSignature = '';
+      this._videoUploadActive = null;
       this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
     this._token = token; this._epoch = (this._epoch || 0) + 1;
-    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: false });
+    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._videoUploadActive });
     if (token && !this._loaded) this.load(this._epoch);
     else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
@@ -156,7 +171,7 @@ Page({
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');
     if (!this._token) return;
     const epoch = suppliedEpoch || (this._epoch = (this._epoch || 0) + 1);
-    this.setData({ loading: true, error: '', denied: false, disabled: false, loginRequired: false });
+    this.setData({ loading: true, error: '', denied: false, disabled: false, loginRequired: false, videoStarted: {} });
     try {
       const context = await api.workbenchContext();
       if (!this.current(epoch)) return;
@@ -170,6 +185,7 @@ Page({
       let layoutReadOnly = false;
       if (content && bodyFormat === 'article_v2') { try { const document = JSON.parse(content.body); layoutReadOnly = typeof document.layout_html === 'string' && !!document.layout_html; } catch (_) {} }
       const presentation = content && bodyFormat === 'article_v2' ? contentPresentation().inferContentPresentation(content) : 'article';
+      const parsedDocument = articleDocument(content) || {};
       const blocks = initialBlocks(content, presentation);
       const associated = mergeAssets(content && content.media || [], content && content.cover || []);
       const assets = mergeAssets(mediaPage.items || [], associated);
@@ -187,7 +203,7 @@ Page({
       const ownerID = content ? content.owner_id : (context.owners || [])[0] || '';
       const ownerChoices = context.owner_choices || [];
       const ownerIndex = Math.max(0, ownerChoices.findIndex(item => item.owner_id === ownerID));
-      this.setData({ context, presentation: layoutReadOnly ? 'article' : presentation, postText: postText(blocks), media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, ...blockViews(blocks, media), loading: false });
+      this.setData({ context, presentation: layoutReadOnly ? 'article' : presentation, postText: postText(blocks), videoLayout: parsedDocument.video_layout === 'douyin' ? 'douyin' : 'channels', shareCopy: String(parsedDocument.share_copy || ''), momentsCopy: String(parsedDocument.moments_copy || ''), media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, ...blockViews(blocks, media), loading: false });
       this.applyPendingPrefill();
       this._savedSignature = content ? this.draftSignature() : '';
       this.performCreateAction();
@@ -270,6 +286,10 @@ Page({
     this.pauseLayoutVideos();
     this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, notice: '' });
   },
+  toggleContentDescription() {
+    if (!this.data.presentationView) return;
+    this.setData({ presentationView: { ...this.data.presentationView, descriptionExpanded: !this.data.presentationView.descriptionExpanded } });
+  },
   handleBack() {
     if (this.data.busy) { wx.showToast({ title: '正在处理，请稍候', icon: 'none' }); return; }
     if (this.data.preview) { this.returnToEdit(); return; }
@@ -284,7 +304,7 @@ Page({
     [...new Set([...(this.data.layoutBlocks || []), ...(this.data.previewLayoutBlocks || []), ...presentationVideos].filter(block => block.kind === 'video' && block.domId).map(block => block.domId))].forEach(domId => wx.createVideoContext(domId, this).pause());
   },
   draftSignature() {
-    return JSON.stringify({ id: this.data.id, title: this.data.title, presentation: this.data.presentation, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks, tagsText: this.data.tagsText, pinned: this.data.pinned });
+    return JSON.stringify({ id: this.data.id, title: this.data.title, presentation: this.data.presentation, videoLayout: this.data.videoLayout, shareCopy: this.data.shareCopy, momentsCopy: this.data.momentsCopy, owner_id: this.data.owner_id, rights: this.data.rights, source_note: this.data.source_note, source_url: this.data.source_url, cover_media_id: this.data.cover_media_id, revision: this.data.revision, blocks: this.data.blocks, tagsText: this.data.tagsText, pinned: this.data.pinned });
   },
   rejectWritingReturn(message) {
     this.setData({ notice: message });
@@ -298,6 +318,16 @@ Page({
     if (this.data.busy) { this.rejectWritingReturn('草稿正在保存或处理，AI 文案未采用；原内容保持不变'); return; }
     if (launch.contentID !== String(this.data.id || '') || launch.revision !== Number(this.data.revision || 0)) { this.rejectWritingReturn('草稿版本已变化，AI 文案未采用；请重新发起'); return; }
     if (launch.signature !== this.draftSignature()) { this.rejectWritingReturn('编辑内容已发生变化，AI 文案未采用；原内容保持不变'); return; }
+    const videoCopy = payload && payload.video_copy;
+    if (this.data.presentation === 'video' && videoCopy && typeof videoCopy === 'object') {
+      const changes = {};
+      if (Object.prototype.hasOwnProperty.call(videoCopy, 'title')) changes.title = String(videoCopy.title || '').trim().slice(0, 80);
+      if (Object.prototype.hasOwnProperty.call(videoCopy, 'share_copy')) changes.shareCopy = String(videoCopy.share_copy || '').trim().slice(0, 2000);
+      if (Object.prototype.hasOwnProperty.call(videoCopy, 'moments_copy')) changes.momentsCopy = String(videoCopy.moments_copy || '').trim().slice(0, 2000);
+      if (!Object.keys(changes).length) { this.rejectWritingReturn('返回的 AI 视频文案为空，未采用'); return; }
+      this.setData({ ...changes, preview: null, notice: 'AI 文案已填入，请核对后保存' });
+      return;
+    }
     const title = String(payload && payload.title || '').trim();
     const text = String(payload && payload.text || '').trim();
     if (!title && !text) { this.rejectWritingReturn('返回的 AI 文案为空，未采用'); return; }
@@ -328,6 +358,10 @@ Page({
     if (this.data.busy || this.data.legacyReadOnly || this.data.layoutReadOnly) return;
     const launch = { token: String(wx.getStorageSync('token') || ''), contentID: String(this.data.id || ''), revision: Number(this.data.revision || 0), signature: this.draftSignature(), handled: false };
     const context = { source: 'editor', content_id: launch.contentID, revision: launch.revision, title: String(this.data.title || '').trim(), facts: writingFacts(this.data.blocks || []) };
+    if (this.data.presentation === 'video') {
+      if (!context.title && !context.facts) { this.setData({ error: '先填写一句视频主题，AI 才能生成准确文案', 'fieldErrors.title': '请填写视频主题' }); return; }
+      Object.assign(context, { target: 'video_bundle', share_copy: String(this.data.shareCopy || ''), moments_copy: String(this.data.momentsCopy || ''), auto_generate: true });
+    }
     wx.navigateTo({
       url: '/pages/contentwriting/contentwriting?source=editor',
       events: { prefillContent: payload => this.receiveWritingReturn(payload, launch) },
@@ -374,11 +408,27 @@ Page({
       this.setData({ media, ...blockViews(this.data.blocks, media), busy: false });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有媒体预览加载失败' }); }
   },
-  setField(event) { this.setData({ [event.currentTarget.dataset.field]: event.detail.value, preview: null, notice: '有未保存修改' }); },
+  setField(event) { const field = event.currentTarget.dataset.field; this.setData({ [field]: event.detail.value, [`fieldErrors.${field}`]: '', error: '', preview: null, notice: '有未保存修改' }); },
+  setVideoLayout(event) { this.setData({ videoLayout: event.currentTarget.dataset.layout === 'douyin' ? 'douyin' : 'channels', error: '', preview: null, notice: '有未保存修改' }); },
+  openEditorVideo(event) {
+    const asset = this.data.media.find(item => item.media_id === event.currentTarget.dataset.mediaId && item.kind === 'video');
+    if (!asset || !asset.local_path) { wx.showToast({ title: '视频未加载，请重试', icon: 'none' }); return; }
+    wx.previewMedia({ sources: [{ url: asset.local_path, type: 'video', poster: asset.poster_path || '' }], showmenu: false,
+      fail: error => { if (!/cancel/.test(String(error.errMsg || ''))) wx.showToast({ title: '播放失败，请重试', icon: 'none' }); },
+    });
+  },
+  copyVideoField(event) {
+    const field = event.currentTarget.dataset.field === 'momentsCopy' ? 'momentsCopy' : 'shareCopy';
+    const value = String(this.data[field] || '').trim();
+    if (!value) { wx.showToast({ title: '还没有可复制的文案', icon: 'none' }); return; }
+    wx.setClipboardData({ data: value, success: () => this.setData({ notice: '文案已复制' }), fail: () => wx.showToast({ title: '复制失败，请重试', icon: 'none' }) });
+  },
+  toggleVideoIntroduction() { this.setData({ videoIntroductionExpanded: !this.data.videoIntroductionExpanded }); },
+  toggleVideoAdvanced() { this.setData({ videoAdvancedExpanded: !this.data.videoAdvancedExpanded }); },
   setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
   togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
-  setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, preview: null }); },
+  setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, 'fieldErrors.owner_id': '', error: '', preview: null }); },
   editBlock(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
@@ -503,13 +553,24 @@ Page({
   },
   chooseMedia() {
     if (!this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
+    if (!this.data.owner_id) { this.setData({ error: '请先选择内容归属', 'fieldErrors.owner_id': '请选择内容归属', settingsExpanded: true }); if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0 }); return; }
+    if (this.data.presentation === 'video' && !this.data.context.video_resumable_upload) { this.setData({ error: '当前版本暂不支持本地上传，请从素材库选择视频' }); return; }
     // epoch 必须在选图回调内取：相册/相机全屏页会触发页面 onHide/onShow，
     // 提前捕获的代次会被返回时的 onShow 作废，导致选中的文件被静默丢弃。
+    const chooserToken = String(wx.getStorageSync('token') || ''), chooserID = String(this.data.id || ''), chooserOwner = String(this.data.owner_id || ''), chooserRights = String(this.data.rights || '');
+    const chooserCurrent = () => chooserToken === String(wx.getStorageSync('token') || '') && chooserID === String(this.data.id || '') && chooserOwner === String(this.data.owner_id || '') && chooserRights === String(this.data.rights || '');
     const mediaType = this.data.presentation === 'gallery' ? ['image'] : this.data.presentation === 'video' ? ['video'] : ['image', 'video'];
     wx.chooseMedia({ count: this.data.presentation === 'video' ? 1 : 9, mediaType, sourceType: ['album', 'camera'], success: result => {
+      if (!chooserCurrent()) return;
       const epoch = this._epoch;
       if (!this.current(epoch)) return;
-      this.uploadMediaBatch(result.tempFiles || []);
+      this.uploadMediaBatch(result.tempFiles || [], result.type);
+    }, fail: result => {
+      if (!chooserCurrent()) return;
+      const epoch = this._epoch;
+      if (!this.current(epoch)) return;
+      if (/cancel/i.test(String(result && result.errMsg || ''))) this.setData({ notice: '已取消选择，原内容保持不变' });
+      else this.setData({ error: '无法打开相册或读取视频，请检查权限后重试' });
     } });
   },
   chooseDocument() {
@@ -569,51 +630,97 @@ Page({
       wx.openDocument({ filePath, showMenu: true, success: () => this.setData({ busy: false }), fail: () => this.setData({ busy: false, error: '原文件无法打开，请稍后重试' }) });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件下载失败' }); }
   },
-  async uploadMediaBatch(files) {
+  async uploadMediaBatch(files, pickedType) {
     if (!files || !files.length || this.data.busy) return;
+    const includesVideo = String(pickedType || '') === 'video' || files.some(file => file.fileType === 'video') || this.data.presentation === 'video';
+    if (includesVideo && !(this.data.context && this.data.context.video_resumable_upload)) { this.setData({ error: '当前服务尚未升级视频可续传，暂时无法上传本地视频' }); return; }
     const epoch = this._epoch;
+    const operationID = `video-${Date.now()}-${this._videoUploadSequence = (this._videoUploadSequence || 0) + 1}`;
+    const uploadIdentity = String(pickedType || files[0].fileType || (this.data.presentation === 'video' ? 'video' : 'image')) === 'video' ? { operationID, token: this._token, id: this.data.id, ownerID: this.data.owner_id, rights: this.data.rights } : null;
+    const ownsVideoUpload = () => !uploadIdentity || !!this._videoUploadActive && this._videoUploadActive.operationID === uploadIdentity.operationID;
+    const sameVideoDraft = () => !uploadIdentity || ownsVideoUpload() && !this._unloaded && uploadIdentity.token === this._token && uploadIdentity.token === String(wx.getStorageSync('token') || '') && uploadIdentity.id === this.data.id && uploadIdentity.ownerID === this.data.owner_id && uploadIdentity.rights === this.data.rights;
+    const releaseBusy = () => {
+      if (uploadIdentity && !ownsVideoUpload()) return;
+      if (uploadIdentity) this._videoUploadActive = null;
+      this.setData({ busy: false });
+    };
+    if (uploadIdentity) this._videoUploadActive = uploadIdentity;
     this.setData({ busy: true, error: '', notice: '' });
     const media = this.data.media.slice();
     const blocks = this.data.blocks.slice();
     let coverMediaID = this.data.cover_media_id;
     let failures = 0;
+    let lastError = '';
+    let coverWarning = '';
     // 串行上传：并发会互相争抢 busy 状态且服务端按 owner 串行建档；中途会话失效立即停止，
     // 已成功的不回滚，失败的计数提示可重试。
     for (let position = 0; position < files.length; position += 1) {
       const file = files[position];
       try {
-        const asset = await api.uploadWorkbenchMedia(file.tempFilePath, file.fileType || 'image', this.data.owner_id, this.data.rights);
-        if (!this.current(epoch)) { this.setData({ busy: false }); return; }
+        const kind = String(pickedType || file.fileType || (this.data.presentation === 'video' ? 'video' : 'image'));
+        const asset = kind === 'video' ? await resumableVideoUpload().uploadResumableVideo({
+          api,
+          wx,
+          file,
+          accountKey: sessionAccountKey(this._token),
+          ownerID: this.data.owner_id,
+          rights: this.data.rights,
+          isCurrent: sameVideoDraft,
+          onProgress: progress => { if (sameVideoDraft()) this.setData({ videoUploadProgress: progress, videoUploadMessage: `正在上传 ${progress}%` }); },
+          onPhase: message => { if (sameVideoDraft()) this.setData({ videoUploadMessage: message }); },
+        }) : await api.uploadWorkbenchMedia(file.tempFilePath, kind, this.data.owner_id, this.data.rights);
+        if (kind === 'video' ? !sameVideoDraft() : !this.current(epoch)) { releaseBusy(); return; }
         media.push({ ...asset, local_path: file.tempFilePath });
-        const kind = asset.kind || file.fileType || 'image';
-        if (this.data.presentation === 'gallery' && kind !== 'image' || this.data.presentation === 'video' && kind !== 'video') { failures += 1; continue; }
+        const assetKind = asset.kind || kind;
+        if (this.data.presentation === 'gallery' && assetKind !== 'image' || this.data.presentation === 'video' && assetKind !== 'video') { failures += 1; continue; }
         if (this.data.presentation === 'video') {
           for (let index = blocks.length - 1; index >= 0; index -= 1) if (blocks[index].kind === 'video') blocks.splice(index, 1);
         }
-        blocks.push({ kind, media_id: asset.media_id, caption: '' });
-        if (!coverMediaID && kind === 'image') coverMediaID = asset.media_id;
+        blocks.push({ kind: assetKind, media_id: asset.media_id, caption: '' });
+        if (!coverMediaID && assetKind === 'image') coverMediaID = asset.media_id;
+        if (assetKind === 'video' && file.thumbTempFilePath) {
+          try {
+            const cover = await api.uploadWorkbenchMedia(file.thumbTempFilePath, 'image', this.data.owner_id, this.data.rights);
+            if (sameVideoDraft() && cover && cover.media_id) { media.push({ ...cover, local_path: file.thumbTempFilePath }); coverMediaID = cover.media_id; }
+          } catch (_) { coverWarning = '视频已上传，但自动封面生成失败，可手动选择封面'; }
+        }
       } catch (error) {
-        if (!this.current(epoch)) { this.setData({ busy: false }); return; }
+        if (uploadIdentity ? !sameVideoDraft() : !this.current(epoch)) { releaseBusy(); return; }
         failures += 1;
+        lastError = error && error.message || '媒体上传失败';
       }
     }
     const arranged = this.data.presentation === 'article' ? blocks : socialBlocks(blocks);
-    this.setData({ media, blocks: arranged, postText: postText(arranged), cover_media_id: coverMediaID, ...blockViews(arranged, media), busy: false, preview: null, notice: failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入正文，请保存预览' });
+    if (uploadIdentity && !ownsVideoUpload()) return;
+    if (uploadIdentity) this._videoUploadActive = null;
+    this.setData({ media, blocks: arranged, postText: postText(arranged), cover_media_id: coverMediaID, ...blockViews(arranged, media), busy: false, videoUploadProgress: failures ? this.data.videoUploadProgress : 100, videoUploadMessage: '', 'fieldErrors.video': failures ? this.data.fieldErrors.video : '', error: failures && files.length === 1 ? lastError : '', preview: null, notice: coverWarning || (failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入内容，请保存预览') });
     // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
     if (failures) wx.showToast({ title: `${failures} 个媒体上传失败`, icon: 'none' });
   },
   validBlocks() {
     return this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video' || block.kind === 'list' && (block.items || []).some(Boolean) || String(block.text || '').trim());
   },
-  draftInput() {
+  draftInput(allowIncompleteVideo = false) {
     if (this.data.documentReadOnly) { this.setData({ error: '文档资料保留原文件，小程序不提供在线编辑或发布' }); return null; }
     if (this.data.legacyReadOnly) { this.setData({ error: '旧格式内容仅支持查看，请前往后台编辑，避免自动转换破坏原文。' }); return null; }
     const title = String(this.data.title || '').trim(), blocks = this.validBlocks();
-    if (!title || !this.data.owner_id || !blocks.length) { this.setData({ error: '请填写标题、归属并保留至少一个正文块' }); return null; }
+    if (!this.data.owner_id) { this.setData({ error: '请选择内容归属', 'fieldErrors.owner_id': '请选择内容归属', settingsExpanded: true }); if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0 }); return null; }
     const supported = Array.isArray(this.data.context && this.data.context.presentation_formats) && this.data.context.presentation_formats.includes(this.data.presentation);
+    if (this.data.presentation !== 'video' && (!title || !blocks.length)) { this.setData({ error: '请填写标题并保留可发布内容', 'fieldErrors.title': title ? '' : '请填写标题' }); return null; }
     if (supported && this.data.presentation === 'gallery' && (!mediaBlocks(blocks, 'image').length || mediaBlocks(blocks, 'video').length || hasStructuredBlocks(blocks))) { this.setData({ error: '图集需要至少一张图片，文案请填在独立正文中' }); return null; }
-    if (supported && this.data.presentation === 'video' && (mediaBlocks(blocks, 'video').length !== 1 || mediaBlocks(blocks, 'image').length || hasStructuredBlocks(blocks))) { this.setData({ error: '视频笔记需要一个主视频，封面请单独选择' }); return null; }
-    const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks, this.data.presentation, supported));
+    if (supported && this.data.presentation === 'video' && (mediaBlocks(blocks, 'image').length || hasStructuredBlocks(blocks) || mediaBlocks(blocks, 'video').length > 1)) { this.setData({ error: '视频内容只保留一个主视频，封面请单独选择' }); return null; }
+    const missingVideo = this.data.presentation === 'video' && mediaBlocks(blocks, 'video').length !== 1;
+    const incompleteVideo = this.data.presentation === 'video' && (!title || missingVideo);
+    if (incompleteVideo && !allowIncompleteVideo) {
+      const fieldErrors = { title: title ? '' : '请填写标题', video: missingVideo ? '请添加主视频' : '' };
+      this.setData({ error: !title && missingVideo ? '请填写标题并添加主视频' : !title ? '请填写标题' : '请添加主视频', fieldErrors });
+      if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0 });
+      return null;
+    }
+    const hasNewVideoFields = this.data.videoLayout === 'douyin' || String(this.data.shareCopy || '').trim() || String(this.data.momentsCopy || '').trim();
+    if (this.data.presentation === 'video' && hasNewVideoFields && !this.data.context.video_editor_fields) { this.setData({ error: '当前版本暂不能保存视频文案，内容已保留，请联系管理员更新' }); return null; }
+    const videoFields = this.data.presentation === 'video' && this.data.context.video_editor_fields ? { videoLayout: this.data.videoLayout, shareCopy: String(this.data.shareCopy || '').trim(), momentsCopy: String(this.data.momentsCopy || '').trim() } : null;
+    const body = preserveLayoutBody(this.data.layoutBody, articleBody(blocks, this.data.presentation, supported, videoFields, incompleteVideo));
     const tags = String(this.data.tagsText || '').split(/[\s,，]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
     return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), tags, pinned: this.data.pinned, expected_revision: this.data.revision } };
   },
@@ -630,7 +737,7 @@ Page({
   },
   async saveDraft() {
     if (this.data.busy) return;
-    const input = this.draftInput();
+    const input = this.draftInput(this.data.presentation === 'video');
     if (!input) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
@@ -655,10 +762,11 @@ Page({
     const paths = await this.loadPrivatePaths(assets, new Set(assets.map(asset => asset.media_id)));
     const presentationMedia = paths.map(asset => ({ ...asset, url: asset.local_path || '' }));
     const cover = content.cover ? paths.find(asset => asset.media_id === content.cover.media_id) || null : null;
+    const presentationContent = cover ? { ...content, cover: { ...(content.cover || {}), url: cover.local_path || '' } } : content;
     let layoutReadOnly = false;
     if (content.body_format === 'article_v2') { try { const document = JSON.parse(content.body); layoutReadOnly = typeof document.layout_html === 'string' && !!document.layout_html; } catch (_) {} }
     const layoutBlocks = layoutReadOnly ? renderArticleDocument(content.body, paths, this.editorWidth(), 'contentedit-preview') : [];
-    const presentation = contentPresentation().buildContentPresentation(content, presentationMedia, wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 }, { prefix: 'contentedit-preview' });
+    const presentation = contentPresentation().buildContentPresentation(presentationContent, presentationMedia, wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 }, { prefix: 'contentedit-preview' });
     return {
       blocks: decorateBlocks(initialBlocks(content, contentPresentation().inferContentPresentation(content)), paths),
       cover,
@@ -678,7 +786,9 @@ Page({
       const previewBlocks = this.data.previewBlocks.map(block => block.media_id === mediaID ? { ...block, asset: { ...(block.asset || {}), local_path: localPath, preview_error: '' } } : block);
       const previewCover = this.data.previewCover && this.data.previewCover.media_id === mediaID ? { ...this.data.previewCover, local_path: localPath, preview_error: '' } : this.data.previewCover;
       const previewMedia = mergeAssets(previewBlocks.map(block => block.asset).filter(Boolean), previewCover || []).map(asset => ({ ...asset, url: asset.local_path || '' }));
-      const presentationView = this.data.preview ? contentPresentation().buildContentPresentation(this.data.preview.content || {}, previewMedia, wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 }, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView && this.data.presentationView.galleryIndex || 0 }) : this.data.presentationView;
+      const previewContent = this.data.preview && this.data.preview.content || {};
+      const presentationContent = previewCover ? { ...previewContent, cover: { ...(previewContent.cover || {}), url: previewCover.local_path || '' } } : previewContent;
+      const presentationView = this.data.preview ? contentPresentation().buildContentPresentation(presentationContent, previewMedia, wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 }, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView && this.data.presentationView.galleryIndex || 0, descriptionExpanded: !!(this.data.presentationView && this.data.presentationView.descriptionExpanded) }) : this.data.presentationView;
       this.setData({ previewBlocks, previewCover, presentationView, presentationMediaErrors: presentationErrors(presentationView, previewMedia), busy: false });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '预览媒体重试失败' }); }
   },
@@ -686,7 +796,7 @@ Page({
     if (this.data.busy) return;
     const input = this.draftInput();
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false });
+    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, videoStarted: {} });
     try {
       const saved = await this.persistDraft(input, epoch);
       if (!saved || !this.current(epoch)) return;
@@ -745,10 +855,13 @@ Page({
     if (!this.data.preview || !this.data.presentationView) return;
     const sourceMedia = presentationSourceMedia(this.data.presentationView).map(asset => asset.media_id === mediaID ? { ...asset, width, height } : asset);
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 };
-    const presentationView = contentPresentation().buildContentPresentation(this.data.preview.content || {}, sourceMedia, windowInfo, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView.galleryIndex || 0 });
+    const previewContent = this.data.preview.content || {};
+    const presentationContent = this.data.presentationView.poster ? { ...previewContent, cover: { ...(previewContent.cover || {}), url: this.data.presentationView.poster } } : previewContent;
+    const presentationView = contentPresentation().buildContentPresentation(presentationContent, sourceMedia, windowInfo, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView.galleryIndex || 0, descriptionExpanded: !!this.data.presentationView.descriptionExpanded });
     this.setData({ presentationView, presentationMediaErrors: presentationErrors(presentationView, sourceMedia) });
   },
-  videoState(event) { if (event && event.type === 'error') this.mediaError(event); },
+  playContentVideo(event) { const data = event && event.currentTarget && event.currentTarget.dataset || {}, id = String(data.domId || ''), key = String(data.playerKey || ''); if (!id || !key) return; this.setData({ videoStarted: { ...this.data.videoStarted, [key]: true } }, () => wx.createVideoContext(id, this).play()); },
+  videoState(event) { const key = String(event && event.currentTarget && (event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId) || ''); if (event && event.type === 'play' && key && !this.data.videoStarted[key]) this.setData({ videoStarted: { ...this.data.videoStarted, [key]: true } }); if (event && event.type === 'error') { const videoStarted = { ...this.data.videoStarted }; delete videoStarted[key]; this.setData({ videoStarted }); this.mediaError(event); } },
   videoProgress() {},
   videoRate() {},
   videoFullscreen() {},

@@ -175,3 +175,18 @@ test('AI writing navigation failure keeps the draft and reports a retryable erro
   assert.equal(h.page.data.blocks[0].text, '原文');
   assert.match(h.page.data.notice, /无法打开|重试/);
 });
+
+test('video editor requests one-click bundle copy and preserves omitted returned fields', () => {
+  const h = loadPage('contentedit');
+  h.page.setData({ presentation: 'video', title: '新中式乡村别墅', shareCopy: '保留的转发文案', momentsCopy: '', blocks: [{ kind: 'video', media_id: 'video-1', caption: '' }] });
+  h.page.openAIWriting();
+  h.navigations[0].success({ eventChannel: h.channel });
+  const context = h.emitted.find(item => item.event === 'writingContext').value;
+  assert.equal(context.target, 'video_bundle');
+  assert.equal(context.auto_generate, true);
+  assert.equal(context.share_copy, '保留的转发文案');
+  h.navigations[0].events.prefillContent({ video_copy: { title: 'AI 新标题', moments_copy: 'AI 朋友圈文案' } });
+  assert.equal(h.page.data.title, 'AI 新标题');
+  assert.equal(h.page.data.shareCopy, '保留的转发文案');
+  assert.equal(h.page.data.momentsCopy, 'AI 朋友圈文案');
+});

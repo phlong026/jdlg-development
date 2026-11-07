@@ -78,10 +78,10 @@ function sourceMedia(content, media, document) {
   return ordered;
 }
 
-function mediaFrame(asset, index, frameWidth, windowHeight, prefix, caption) {
+function mediaFrame(asset, index, frameWidth, windowHeight, prefix, caption, maxHeightOverride) {
   const intrinsicWidth = Math.max(1, Number(asset.width) || (asset.kind === 'video' ? 16 : 3));
   const intrinsicHeight = Math.max(1, Number(asset.height) || (asset.kind === 'video' ? 9 : 4));
-  const maxHeight = Math.max(240, Math.round(windowHeight * 0.68));
+  const maxHeight = Math.max(240, Number(maxHeightOverride) || Math.round(windowHeight * 0.68));
   const naturalHeight = Math.round(frameWidth * intrinsicHeight / intrinsicWidth);
   const height = Math.max(120, Math.min(naturalHeight, maxHeight));
   const displayWidth = Math.min(frameWidth, Math.round(height * intrinsicWidth / intrinsicHeight));
@@ -144,6 +144,12 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   const frameWidth = Math.max(240, Math.round(Number(windowInfo && windowInfo.windowWidth || 375) - 36));
   const windowHeight = Math.max(480, Number(windowInfo && windowInfo.windowHeight || 667));
   const prefix = String(options.prefix || 'content-presentation').replace(/[^A-Za-z0-9_-]/g, '-') || 'content-presentation';
+  const videoLayout = document && document.video_layout === 'douyin' ? 'douyin' : 'channels';
+  const videoChromeHeight = Math.max(120, Number(options.videoChromeHeight) || 150);
+  // Both layouts keep copy in normal flow so native controls never cover text actions.
+  const videoReserve = videoChromeHeight + 160;
+  const videoMaxHeight = Math.max(240, windowHeight - videoReserve);
+  const poster = String(safeContent.cover && safeContent.cover.url || '');
   let bodyText = textBody(safeContent, document);
   let blocks = [];
   let viewMedia = [];
@@ -161,7 +167,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
     const videoBlock = document && document.blocks.find(block => block.kind === 'video');
     const caption = String(videoBlock && videoBlock.caption || primary && primary.caption || '').trim();
     bodyText = [bodyText, caption].filter(Boolean).filter((value, index, all) => all.indexOf(value) === index).join('\n\n');
-    viewMedia = primary ? [mediaFrame(primary, 0, frameWidth, windowHeight, prefix)] : [];
+    viewMedia = primary ? [mediaFrame(primary, 0, frameWidth, windowHeight, prefix, undefined, videoMaxHeight)] : [];
   }
 
   const maxGalleryIndex = Math.max(0, viewMedia.length - 1);
@@ -171,6 +177,13 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
     sourceNote: String(safeContent.source_note || ''),
     publishedAt: String(safeContent.published_at || ''),
     bodyText,
+    bodyExpandable: kind === 'video' && bodyText.length > 110,
+    descriptionExpanded: options.descriptionExpanded === true,
+    videoLayout,
+    shareCopy: String(document && document.share_copy || ''),
+    momentsCopy: String(document && document.moments_copy || ''),
+    poster,
+    nativePoster: /^https:\/\//.test(poster) ? poster : '',
     blocks,
     media: viewMedia,
     frameWidth,

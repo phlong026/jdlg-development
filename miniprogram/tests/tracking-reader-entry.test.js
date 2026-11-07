@@ -56,8 +56,8 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
         events.push(...request.data.events);
         return ok(request, { results: request.data.events.map(event => ({ event_id: event.event_id, status: 'accepted' })) });
       }
-      if (suffix.startsWith('/project-collections/')) { reads.push(suffix); return ok(request, { content_id: 'content_one', version: 1, title: '合集作品', media: [] }); }
-      if (suffix.startsWith('/contents/')) return ok(request, { title: request.data.title || '可读内容', media: [] });
+      if (suffix.startsWith('/project-collections/')) { reads.push(suffix); return ok(request, { content_id: 'content_one', version: 1, title: '合集作品', body: '合集正文', media: [] }); }
+      if (suffix.startsWith('/contents/')) return ok(request, { title: request.data.title || '可读内容', body: '可读正文', media: [] });
       throw new Error('Unexpected request ' + suffix);
     }
   };
@@ -106,11 +106,13 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
 }
 
 for (const options of [direct, { scene: sceneA }]) {
-  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until the config arrives, then silent consent collects it', async () => {
+  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until config and explicit consent arrive', async () => {
     const t = runtime({ deferConfig: true }); await t.mount(options);
     assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
     t.resolveConfig(); await settle();
-    assert.ok(t.entries.length >= 1, 'silent consent collects once the config arrives');
+    assert.equal(t.entries.length, 0, 'configuration alone cannot imply consent');
+    t.grant();await settle();
+    assert.ok(t.entries.length >= 1, 'the held entry starts only after explicit consent');
     assert.equal(t.page.data.contentReady, true);
     assert.equal(t.entries.at(-1).share_token, 'original_share');
     assert.equal(t.views().at(-1).share_id, 'share:original_share');

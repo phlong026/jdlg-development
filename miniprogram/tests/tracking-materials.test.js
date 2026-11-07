@@ -43,7 +43,7 @@ test('My template provides visible title cover status empty/error/retry without 
 
 test('reader native share uses the published target, title and cover, with menus blocked on initial load and read failure',async()=>{
  let definition,resolveRead,rejectRead;const hidden=[],shown=[];
- const wx={hideShareMenu:()=>hidden.push(true),showShareMenu:x=>shown.push(x),getWindowInfo:()=>({windowWidth:375})};
+ const wx={getStorageSync:()=>'',hideShareMenu:()=>hidden.push(true),showShareMenu:x=>shown.push(x),getWindowInfo:()=>({windowWidth:375})};
  const api={resolveReaderOptions:async x=>x,mediaURL:x=>'https://api.jiadilingguang.com'+x,request:()=>new Promise((resolve,reject)=>{resolveRead=resolve;rejectRead=reject;})};
  const protectedMedia={resolveProtectedMediaURL:async url=>'wxfile://tmp/'+url.split('/').at(-1)};
  const articleDocument=require('../miniprogram/utils/article-document');
@@ -59,6 +59,23 @@ test('reader native share uses the published target, title and cover, with menus
  page.loadContent();await settle();rejectRead(Object.assign(new Error('revoked'),{statusCode:410}));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');
  // 预热缓存键一致性：预热收到的对象必须与 onShareTimeline 返回值完全一致，否则首次分享拿不到缓存令牌
  assert.deepEqual(preheats[0],successShare);
+});
+
+test('reader share metadata stays inside native share boundaries and video copy has a separate clipboard action',()=>{
+ const source=fs.readFileSync(path.join(root,route+'.js'),'utf8');
+ const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
+ assert.match(source,/copyVideoCopy\(\)/);
+ assert.match(source,/view&&view\.shareCopy/);
+ assert.match(source,/view&&view\.momentsCopy/);
+ assert.match(template,/bindtap="copyVideoCopy"/);
+ assert.match(template,/wx:if="\{\{presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
+});
+
+test('reader privacy choice is explicit after content and resolved users only see a compact settings entry',()=>{
+ const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
+ assert.match(template,/wx:if="\{\{consentAvailable && consentChoicePending\}\}" class="notice"/);
+ assert.match(template,/wx:elif="\{\{consentAvailable && presentationView.kind !== 'video'\}\}" class="consent-settings"/);
+ assert.ok(template.indexOf('class="article-paper"') < template.indexOf('class="notice"'), 'first consent choice belongs after readable content');
 });
 
 test('reader WXML uses evaluated conditions for loading error consent media and sharing visibility',()=>{

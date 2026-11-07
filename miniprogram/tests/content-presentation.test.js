@@ -55,17 +55,49 @@ test('gallery view shows one note body and only keeps genuinely distinct image c
 });
 
 test('video view preserves native player identity and caps portrait and landscape media to the viewport', () => {
-  const content = article([{ kind: 'paragraph', text: '建造全过程' }, { kind: 'video', media_id: 'video-a' }]);
+  const content = { ...article([{ kind: 'paragraph', text: '建造全过程' }, { kind: 'video', media_id: 'video-a' }]), cover: { url: 'wxfile://cover.jpg' } };
   const landscape = buildContentPresentation(content, [video('video-a')], { windowWidth: 390, windowHeight: 844 }, { prefix: 'reader' });
   assert.equal(landscape.kind, 'video');
+  assert.equal(landscape.videoLayout, 'channels');
+  assert.equal(landscape.poster, 'wxfile://cover.jpg');
+  assert.equal(landscape.nativePoster, '', 'wxfile cover must not be passed to the native video poster attribute');
   assert.equal(landscape.media[0].height, 199);
   assert.equal(landscape.media[0].domId, 'reader-media-0');
   assert.equal(landscape.media[0].playerKey, 'reader-player-0');
   assert.equal(landscape.media[0].errorKey, 'readerMedia0');
 
   const portrait = buildContentPresentation(content, [video('video-a', 1080, 1920)], { windowWidth: 390, windowHeight: 600 }, { prefix: 'reader' });
-  assert.ok(portrait.media[0].height <= 408, 'portrait video must stay below 68% of viewport height');
+  assert.ok(portrait.media[0].height <= 360, 'portrait video must reserve navigation, copy and dock space instead of using a blanket viewport percentage');
   assert.ok(portrait.media[0].width < portrait.frameWidth, 'portrait video should be centered without stretching to full width');
+  const square = buildContentPresentation(content, [video('video-a', 1080, 1080)], { windowWidth: 390, windowHeight: 844 });
+  assert.equal(square.media[0].width, square.media[0].height, 'square video remains square without stretching');
+  const remote = buildContentPresentation({ ...content, cover: { url: 'https://example.test/cover.jpg' } }, [video('video-a')], { windowWidth: 390, windowHeight: 844 });
+  assert.equal(remote.nativePoster, 'https://example.test/cover.jpg');
+});
+
+test('video document supplies layout and channel-specific share copy without changing article or gallery defaults', () => {
+  const content = {
+    title: '三层新中式乡村别墅',
+    body_format: 'article_v2',
+    body: JSON.stringify({
+      schema: 1,
+      presentation: 'video',
+      video_layout: 'douyin',
+      share_copy: '哥/姐，给你看这套方案。',
+      moments_copy: '今天分享一套好房子。',
+      blocks: [{ kind: 'paragraph', text: '竖屏看房更沉浸' }, { kind: 'video', media_id: 'video-a' }],
+    }),
+  };
+  const view = buildContentPresentation(content, [video('video-a', 1080, 1920)], { windowWidth: 390, windowHeight: 844 });
+  assert.equal(view.videoLayout, 'douyin');
+  assert.ok(view.media[0].height <= 844 - 150 - 160, 'dark video must reserve visible title and description space above the fixed action bar');
+  assert.equal(view.shareCopy, '哥/姐，给你看这套方案。');
+  assert.equal(view.momentsCopy, '今天分享一套好房子。');
+  assert.equal(view.bodyExpandable, false);
+  const expanded = buildContentPresentation({ ...content, body: JSON.stringify({ schema: 1, presentation: 'video', blocks: [{ kind: 'paragraph', text: '长文案'.repeat(50) }, { kind: 'video', media_id: 'video-a' }] }) }, [video('video-a')], { windowWidth: 390, windowHeight: 844 }, { descriptionExpanded: true });
+  assert.equal(expanded.bodyExpandable, true);
+  assert.equal(expanded.descriptionExpanded, true);
+  assert.equal(buildContentPresentation(article([{ kind: 'image', media_id: 'image-a' }]), [image('image-a')], { windowWidth: 390, windowHeight: 844 }).videoLayout, 'channels');
 });
 
 test('article view preserves original mixed layout and excludes an unrelated cover', () => {
@@ -85,13 +117,19 @@ test('shared presentation template keeps swiper, native video controls, tracking
   assert.match(template, /<template name="content-presentation">/);
   assert.match(template, /<swiper[^>]*bindchange="onContentGalleryChange"/);
   assert.match(template, /\{\{view\.galleryIndex \+ 1\}\}\/\{\{view\.media\.length\}\}/);
-  assert.match(template, /<video[^>]*controls[^>]*bindplay="videoState"[^>]*bindfullscreenchange="videoFullscreen"/s);
+  assert.match(template, /<video wx:else[^>]*autoplay="\{\{videoStarted\[view\.media\[0\]\.playerKey\]\}\}"[^>]*controls[^>]*bindplay="videoState"[^>]*bindfullscreenchange="videoFullscreen"/s);
+  assert.match(template, /poster="\{\{view\.nativePoster\}\}"/);
+  assert.match(template, /wx:if="\{\{view\.poster && !videoStarted\[view\.media\[0\]\.playerKey\]\}\}"[^>]*bindtap="playContentVideo"[\s\S]*<video wx:else/);
+  assert.match(template, /<image[^>]*src="\{\{view\.poster\}\}"[^>]*mode="aspectFit"/s);
+  assert.match(template, /content-video-\{\{view\.videoLayout\}\}/);
+  assert.match(template, /bindtap="toggleContentDescription"/);
+  assert.match(template, /<block wx:if="\{\{view\.kind === 'article'\}\}">/);
   assert.match(template, /data-tracking="\{\{tracking\}\}"/);
 
   const reader = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
   assert.equal(reader.split(/\r?\n/)[0], '<block wx:if="{{__profileAccessMounted}}">');
   assert.match(reader, /<import src="\.\.\/\.\.\/components\/content-presentation\/content-presentation\.wxml"\/>/);
-  assert.match(reader, /<template is="content-presentation" data="\{\{view: presentationView, tracking: true, mediaErrors: mediaErrors\}\}"\/>/);
+  assert.match(reader, /<template is="content-presentation" data="\{\{view: presentationView, tracking: true, mediaErrors: mediaErrors, videoStarted: videoStarted\}\}"\/>/);
 });
 
  test('video keeps legacy full captions without duplicating body copy', () => {

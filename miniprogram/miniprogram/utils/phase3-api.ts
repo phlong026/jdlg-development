@@ -189,8 +189,28 @@ function uploadWorkbenchMedia(filePath, kind, owner, rights, originalName) {
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
       else reject(Object.assign(new Error(data.msg || '媒体上传失败'), { statusCode: response.statusCode }));
     },
-    fail() { reject(new Error('媒体上传失败')); },
+    fail(error) { reject(new Error(error && error.errMsg || '媒体上传失败，请检查网络后重试')); },
   }));
+}
+
+function beginVideoUpload(input) { return request(WORKBENCH + '/media-uploads', 'POST', input); }
+function videoUploadStatus(id) { return request(WORKBENCH + '/media-uploads/' + encodeURIComponent(id)); }
+function completeVideoUpload(id) { return request(WORKBENCH + '/media-uploads/' + encodeURIComponent(id) + '/complete', 'POST', {}); }
+function uploadVideoPart(id, part, filePath, options = {}) {
+  const path = WORKBENCH + '/media-uploads/' + encodeURIComponent(id) + '/parts/' + encodeURIComponent(part);
+  return new Promise((resolve, reject) => {
+    const task = wx.uploadFile({
+      url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 120000,
+      success(response) {
+        let data;
+        try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(new Error('分片上传响应无法读取，请重试')); return; }
+        if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
+        else reject(Object.assign(new Error(data.msg || '分片上传失败，请重试'), { statusCode: response.statusCode }));
+      },
+      fail(error) { reject(Object.assign(new Error(error && error.errMsg || '分片网络传输失败，请重试'), { networkError: true })); },
+    });
+    if (task && task.onProgressUpdate && options.onProgress) task.onProgressUpdate(options.onProgress);
+  });
 }
 
 function mutationKey(prefix) {
@@ -204,7 +224,7 @@ async function writingPrompts() {
 }
 
 module.exports = {
-  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
+  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, beginVideoUpload, videoUploadStatus, uploadVideoPart, completeVideoUpload, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
   saveContent, deleteCreatedContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, convertMyVisitorToLead, listMyContentStats, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,

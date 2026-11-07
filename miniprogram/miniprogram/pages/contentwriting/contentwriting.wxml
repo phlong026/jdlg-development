@@ -1,16 +1,16 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="writing-page">
-  <view class="writing-navigation"><navigation-bar title="AI文案" back="{{true}}" background="#fbfaf7" /></view>
+  <view class="writing-navigation"><navigation-bar title="{{videoBundle ? '视频文案' : 'AI文案'}}" back="{{true}}" background="#fbfaf7" /></view>
   <view class="writing-body">
-    <view class="writing-tabs" role="tablist">
+    <view wx:if="{{!videoBundle}}" class="writing-tabs" role="tablist">
       <button wx:for="{{writingTypes}}" wx:key="key" class="writing-tab {{type === item.key ? 'active' : ''}}" data-type="{{item.key}}" bindtap="selectType" aria-role="tab" aria-selected="{{type === item.key}}">{{item.label}}</button>
     </view>
     <view wx:if="{{loginRequired}}" class="login-state"><text>登录后使用AI文案</text><button class="secondary" bindtap="goLogin">去登录</button></view>
     <block wx:else>
       <view class="writing-panel facts-panel">
         <text class="section-title">创作素材</text>
-        <label class="field"><text class="field-title">标题 <text class="optional">选填</text></text><input value="{{title}}" maxlength="80" bindinput="editTitle" placeholder="输入标题" placeholder-class="placeholder" /></label>
-        <label class="field"><text class="field-title">创作要求</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写项目资料、设计重点和表达要求" placeholder-class="placeholder" auto-height /></label>
+        <label class="field"><text class="field-title">{{videoBundle ? '视频主题' : '标题'}} <text class="optional">{{videoBundle ? '' : '选填'}}</text></text><input value="{{title}}" maxlength="80" bindinput="editTitle" placeholder="输入标题" placeholder-class="placeholder" /></label>
+        <label class="field"><text class="field-title">{{videoBundle ? '补充资料（选填）' : '创作要求'}}</text><textarea value="{{facts}}" maxlength="6000" bindinput="editFacts" placeholder="填写项目资料、设计重点和表达要求" placeholder-class="placeholder" auto-height /></label>
         <view wx:if="{{introPresets.length && type === 'promotion'}}" class="field">
           <text class="field-title">介绍预设</text>
           <picker range="{{introPresets}}" range-key="name" value="{{introPresetIndex}}" bindchange="selectIntroPreset">
@@ -19,7 +19,18 @@
         </view>
         <view class="voice-row"><button class="voice-button {{voiceActive ? 'active' : ''}}" bindtouchstart="startVoiceInput" bindtouchend="stopVoiceInput" bindtouchcancel="stopVoiceInput" disabled="{{loginRequired}}" aria-label="按住说话进行语音输入"><t-icon name="microphone" size="20px" /><text>{{voiceActive ? '松开结束' : '按住说话'}}</text></button></view>
       </view>
-      <view class="writing-panel result-panel">
+      <view wx:if="{{videoBundle}}" class="writing-panel video-copy-results">
+        <view class="section-heading"><text class="section-title">标题与分发文案</text></view>
+        <text wx:if="{{streaming}}" class="panel-caption">正在生成，请稍候…</text>
+        <checkbox-group wx:elif="{{videoCopy}}" bindchange="selectVideoFields">
+          <view class="video-copy-field"><label class="video-copy-label"><checkbox value="title" checked="{{videoSelections.title}}" color="#a87943" />采纳标题</label><input value="{{videoCopy.title}}" data-field="title" bindinput="editVideoCopy" maxlength="80" /></view>
+          <view class="video-copy-field"><label class="video-copy-label"><checkbox value="share_copy" checked="{{videoSelections.share_copy}}" color="#a87943" />采纳转发文案</label><textarea value="{{videoCopy.share_copy}}" data-field="share_copy" bindinput="editVideoCopy" maxlength="2000" auto-height /></view>
+          <view class="video-copy-field"><label class="video-copy-label"><checkbox value="moments_copy" checked="{{videoSelections.moments_copy}}" color="#a87943" />采纳朋友圈文案</label><textarea value="{{videoCopy.moments_copy}}" data-field="moments_copy" bindinput="editVideoCopy" maxlength="2000" auto-height /></view>
+          <text class="panel-caption">已有文案默认保留，勾选后才替换。使用前请核对内容。</text>
+        </checkbox-group>
+        <text wx:else class="panel-caption">根据视频主题，生成标题、转发文案和朋友圈文案。</text>
+      </view>
+      <view wx:else class="writing-panel result-panel">
         <view class="section-heading"><text class="section-title">文案结果</text><text wx:if="{{result && !streaming}}" class="result-ready">可编辑</text></view>
         <view wx:if="{{streaming && streamPartial}}" class="stream-preview"><text class="stream-text">{{streamPartial}}▌</text></view>
         <textarea wx:else class="writing-result" value="{{result}}" maxlength="20000" bindinput="editResult" auto-height placeholder="{{streaming ? '正在生成…' : '输入或生成文案'}}" placeholder-class="placeholder" disabled="{{streaming}}" />
@@ -30,7 +41,7 @@
         <view class="refine-actions"><button data-action="concise" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">精简</button><button data-action="expand" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">扩写</button><button data-action="tone" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">调整语气</button></view>
       </view>
       <text wx:if="{{notice}}" class="feedback notice" role="status">{{notice}}</text>
-      <button class="text-action deep-chat" bindtap="generateWriting" disabled="{{streaming || navigating}}">继续对话</button>
+      <button wx:if="{{!videoBundle}}" class="text-action deep-chat" bindtap="generateWriting" disabled="{{streaming || navigating}}">继续对话</button>
       <text class="generation-hint">对话费用以发送前提示为准。</text>
       <text wx:if="{{error}}" class="writing-error writing-error-reserve" aria-hidden="{{true}}">{{error}}</text>
     </block>

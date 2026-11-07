@@ -41,9 +41,10 @@ function pageHarness(name, api, wxOverrides = {}) {
     if (id === '../../utils/protected-media') return { resolveProtectedMediaURL: async url => url };
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
+    if (id === '../../utils/resumable-video-upload') return require(path.join(root, 'utils/resumable-video-upload.js'));
     throw new Error(`unexpected require ${id}`);
   }, console, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent });
-  const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values) { Object.assign(this.data, values); } }, definition);
+  const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { Object.assign(this.data, values); if (callback) callback.call(this); } }, definition);
   return page;
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -340,6 +341,7 @@ test('editor keeps legacy video caption copy readable and exposes a real video l
 test('video metadata replaces fallback ratios in both editor and shared preview frames', () => {
   const page = pageHarness('contentedit', {});
   page.setData({
+    videoStarted: { 'contentedit-preview-player-0': true },
     blocks: [{ kind: 'video', media_id: 'portrait-video', caption: '' }],
     media: [{ media_id: 'portrait-video', kind: 'video', local_path: '/tmp/portrait.mp4' }],
   });
@@ -360,8 +362,25 @@ test('video metadata replaces fallback ratios in both editor and shared preview 
   assert.equal(page.data.presentationView.media[0].intrinsicWidth, 1080);
   assert.equal(page.data.presentationView.media[0].intrinsicHeight, 1920);
   assert.ok(page.data.presentationView.media[0].height > 190, '必须用原始竖屏比例重算，不能把已缩放的 337x190 当源尺寸');
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true, '元数据重排不应恢复封面');
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
   assert.match(wxml, /data-editor="true"[^>]+bindloadedmetadata="onContentVideoMetadata"/);
+});
+
+test('editor preview creates the native video after tapping the cover and restores it after an error', () => {
+  let plays = 0;
+  const page = pageHarness('contentedit', {}, { createVideoContext: () => ({ pause() {}, play() { plays += 1; } }) });
+  page.setData({ videoStarted: {} });
+  const target = { dataset: { domId: 'contentedit-preview-media-0', playerKey: 'contentedit-preview-player-0' } };
+  page.playContentVideo({ currentTarget: target });
+  assert.equal(plays, 1);
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true);
+  page.videoState({ type: 'play', currentTarget: target });
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true);
+  page.videoState({ type: 'pause', currentTarget: target });
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true);
+  page.videoState({ type: 'error', currentTarget: { dataset: { ...target.dataset, errorKey: 'contentedit-previewMedia0' } } });
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], undefined);
 });
 
 test('editor does not flatten structured articles when switching to social presentation', () => {
@@ -386,13 +405,158 @@ test('editor resumes missing private media previews after returning from another
 test('replacing a video keeps the existing main video when the new upload fails', async () => {
   const page = pageHarness('contentedit', { uploadWorkbenchMedia: async () => { throw new Error('上传失败'); } });
   page._token = 'session-token'; page._epoch = 1;
-  page.setData({ presentation: 'video', owner_id: 'owner-a', rights: 'own', blocks: [
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-a', rights: 'own', blocks: [
     { kind: 'video', media_id: 'existing-video', caption: '' },
     { kind: 'paragraph', text: '保留文案' },
   ] });
   await page.uploadMediaBatch([{ tempFilePath: '/tmp/replacement.mp4', fileType: 'video' }]);
   assert.equal(page.data.blocks.find(block => block.kind === 'video').media_id, 'existing-video');
   assert.equal(page.data.postText, '保留文案');
+});
+
+test('successful video replacement survives an onShow epoch change from the system picker', async () => {
+  const stored = new Map();
+  let finishPart;
+  const api = {
+    beginVideoUpload: async () => ({ upload_id: 'upload-return', chunk_size: 20, uploaded_parts: [] }),
+    videoUploadStatus: async () => ({ upload_id: 'upload-return', chunk_size: 20, uploaded_parts: [] }),
+    uploadVideoPart: () => new Promise(resolve => { finishPart = resolve; }),
+    completeVideoUpload: async () => ({ media_id: 'replacement-video', kind: 'video' }),
+  };
+  const page = pageHarness('contentedit', api, {
+    env: { USER_DATA_PATH: '/user' }, hideShareMenu() {},
+    getStorageSync(key) { return key === 'token' ? 'session-token' : stored.get(key); },
+    setStorageSync(key, value) { stored.set(key, value); }, removeStorageSync(key) { stored.delete(key); },
+    getFileInfo(options) { options.success({ size: 10, digest: 'replacement-sha1' }); },
+    getFileSystemManager() { return {
+      readFile(options) { options.success({ data: new ArrayBuffer(options.length) }); },
+      writeFile(options) { options.success(); }, unlink(options) { options.success(); },
+    }; },
+  });
+  page._token = 'session-token'; page._epoch = 2; page._loaded = true;
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-a', rights: 'own', blocks: [{ kind: 'video', media_id: 'old-video', caption: '' }], media: [{ kind: 'video', media_id: 'old-video' }] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: '/tmp/new.mp4', size: 10 }], 'video');
+  for (let attempt = 0; attempt < 10 && !finishPart; attempt += 1) await tick();
+  assert.equal(typeof finishPart, 'function', page.data.error || '视频分片未开始');
+  page.onShow();
+  assert.equal(page.data.blocks[0].media_id, 'old-video', '上传完成前保留原视频');
+  finishPart();
+  await pending;
+  assert.equal(page.data.blocks.find(block => block.kind === 'video').media_id, 'replacement-video');
+  assert.equal(page.data.busy, false);
+});
+
+test('a delayed upload from the previous account cannot unlock the new account upload', async () => {
+  const stored = new Map();
+  let token = 'old-token';
+  const releases = new Map();
+  let uploadCount = 0;
+  const api = {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, media_upload_configured: true, video_resumable_upload: true, owners: ['owner-new'], owner_choices: [{ owner_id: 'owner-new', display_name: '新账号' }] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    beginVideoUpload: async () => { uploadCount += 1; return { upload_id: `upload-${uploadCount}`, chunk_size: 20, uploaded_parts: [] }; },
+    videoUploadStatus: async id => ({ upload_id: id, chunk_size: 20, uploaded_parts: [] }),
+    uploadVideoPart: id => new Promise(resolve => { releases.set(id, resolve); }),
+    completeVideoUpload: async id => ({ media_id: `video-${id}`, kind: 'video' }),
+  };
+  const page = pageHarness('contentedit', api, {
+    env: { USER_DATA_PATH: '/user' }, hideShareMenu() {},
+    getStorageSync(key) { return key === 'token' ? token : stored.get(key); },
+    setStorageSync(key, value) { stored.set(key, value); }, removeStorageSync(key) { stored.delete(key); },
+    getFileInfo({ filePath, success }) { success({ size: 10, digest: filePath.includes('old') ? 'sha1-old' : 'sha1-new' }); },
+    getFileSystemManager() { return {
+      readFile(options) { options.success({ data: new ArrayBuffer(options.length) }); },
+      writeFile(options) { options.success(); }, unlink(options) { options.success(); },
+    }; },
+  });
+  page._token = token; page._epoch = 1; page._loaded = true;
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-old', rights: 'own', blocks: [], media: [] });
+  const oldUpload = page.uploadMediaBatch([{ tempFilePath: '/tmp/old.mp4', size: 10 }], 'video');
+  for (let attempt = 0; attempt < 10 && !releases.has('upload-1'); attempt += 1) await tick();
+
+  token = 'new-token';
+  page.onShow();
+  await tick(); await tick();
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-new', rights: 'own', blocks: [], media: [] });
+  const newUpload = page.uploadMediaBatch([{ tempFilePath: '/tmp/new.mp4', size: 10 }], 'video');
+  for (let attempt = 0; attempt < 10 && !releases.has('upload-2'); attempt += 1) await tick();
+  assert.equal(page.data.busy, true);
+
+  releases.get('upload-1')();
+  await oldUpload;
+  assert.equal(page.data.busy, true, '旧账号迟到回调不得解锁新上传');
+  assert.equal(page._videoUploadActive.ownerID, 'owner-new');
+
+  releases.get('upload-2')();
+  await newUpload;
+  assert.equal(page.data.busy, false);
+  assert.equal(page.data.blocks.find(block => block.kind === 'video').media_id, 'video-upload-2');
+});
+
+test('video drafts persist bundle fields and mark only incomplete drafts as draft-only', () => {
+  const page = pageHarness('contentedit', {});
+  page.setData({
+    context: { presentation_formats: ['video'], video_editor_fields: true }, presentation: 'video', owner_id: 'owner-a', rights: 'own',
+    title: '乡村别墅', videoLayout: 'douyin', shareCopy: '转发文案', momentsCopy: '朋友圈文案',
+    blocks: [{ kind: 'video', media_id: 'video-one', caption: '' }],
+  });
+  const complete = JSON.parse(page.draftInput().draft.body);
+  assert.equal(complete.video_layout, 'douyin');
+  assert.equal(complete.share_copy, '转发文案');
+  assert.equal(complete.moments_copy, '朋友圈文案');
+  assert.equal(complete.draft_only, undefined);
+
+  page.setData({ title: '', blocks: [{ kind: 'paragraph', text: '' }], shareCopy: '', momentsCopy: '', videoLayout: 'channels' });
+  const incomplete = JSON.parse(page.draftInput(true).draft.body);
+  assert.equal(incomplete.draft_only, true);
+  assert.deepEqual(incomplete.blocks, []);
+  assert.equal(page.draftInput(), null, '预览发布仍必须满足完整条件');
+});
+
+test('unsupported video capabilities explain the next user action without backend terminology', () => {
+  const page = pageHarness('contentedit', {});
+  page.setData({ context: { media_upload_configured: true, video_resumable_upload: false }, presentation: 'video', owner_id: 'owner-a' });
+  page.chooseMedia();
+  assert.equal(page.data.error, '当前版本暂不支持本地上传，请从素材库选择视频');
+
+  page.setData({
+    context: { presentation_formats: ['video'], video_editor_fields: false },
+    title: '视频标题', videoLayout: 'douyin', shareCopy: '转发文案', momentsCopy: '',
+    blocks: [{ kind: 'video', media_id: 'video-one', caption: '' }], media: [{ kind: 'video', media_id: 'video-one' }],
+  });
+  assert.equal(page.draftInput(), null);
+  assert.equal(page.data.error, '当前版本暂不能保存视频文案，内容已保留，请联系管理员更新');
+});
+
+test('video editor uses a compact workspace instead of the full-height media stage', () => {
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxss'), 'utf8');
+  assert.match(wxml, /presentation !== 'video'.*class="mode-tabs"/);
+  assert.match(wxml, /class="video-media-card"/);
+  assert.match(wxml, /AI 生成文案/);
+  assert.match(wxml, /maxlength="2000"/);
+  assert.match(style, /\.video-thumbnail\s*\{[^}]*width:\s*188rpx/);
+  assert.match(wxml, /class="video-media-summary"/);
+  assert.match(wxml, /data-field="shareCopy" bindtap="copyVideoField"/);
+  assert.match(wxml, /data-field="momentsCopy" bindtap="copyVideoField"/);
+  assert.ok(wxml.indexOf('class="video-media-card"') < wxml.indexOf('class="panel video-title-card"'));
+});
+
+test('video preview builder receives the resolved private cover path on initial load and retry', async () => {
+  const page = pageHarness('contentedit', { downloadWorkbenchMedia: async id => '/private/' + id });
+  page._token = 'session-token'; page._epoch = 1;
+  const content = {
+    title: '视频预览', body_format: 'article_v2', body: JSON.stringify({ presentation: 'video', blocks: [{ kind: 'video', media_id: 'video-one' }] }),
+    media: [{ media_id: 'video-one', kind: 'video' }], cover: { media_id: 'cover-one', kind: 'image' },
+  };
+  const first = await page.previewView({ content });
+  assert.equal(first.presentation.poster, '/private/cover-one');
+  assert.equal(first.presentation.nativePoster, '', '本地私有封面不能交给原生 video poster');
+
+  page.setData({ preview: { content }, previewBlocks: first.blocks, previewCover: { media_id: 'cover-one', kind: 'image', local_path: '', preview_error: '失败' }, presentationView: first.presentation });
+  await page.retryPreviewMedia({ currentTarget: { dataset: { mediaId: 'cover-one' } } });
+  assert.equal(page.data.presentationView.poster, '/private/cover-one');
+  assert.equal(page.data.presentationView.nativePoster, '', '失败重试后的本地封面仍只用于覆盖层');
 });
 
 test('editor reveals fetched text before private media previews finish', async () => {

@@ -89,7 +89,7 @@ test('reader delegates all presentation kinds to the shared template', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
   const presentation = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
   assert.match(wxml, /template is="content-presentation"/);
-  assert.match(presentation, /view\.kind !== 'article'/);
+  assert.match(presentation, /view\.kind === 'gallery'/);
   assert.match(presentation, /data-player-key="\{\{item\.playerKey\}\}"/);
   assert.match(presentation, /item\.kind === 'layout'/);
 	const editor = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.js'), 'utf8');

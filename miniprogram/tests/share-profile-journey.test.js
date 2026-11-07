@@ -28,7 +28,7 @@ const settle = async () => { for (let i = 0; i < 16; i++) await new Promise(reso
 // are replaced; no request can reach a network transport from this harness.
 function journey({ extension = 'js', token = '', profile = completeProfile, cachedID = profile.id, profileMode = 'ok', enabled = true, declined = false, defaultShare = false, reader = false } = {}) {
   const storage = { token, userInfo: token ? { id: cachedID, staleBusinessField: 'must-not-cross-account' } : {}, device_fingerprint: 'test-device', share_tracking_instance_v1: 'test-installation' };
-  if (declined) storage.share_tracking_consent_choice_v1 = { accepted: false, explicit: true, version: 'v1' };
+  storage.share_tracking_consent_choice_v1 = { accepted: !declined, explicit: true, version: 'v1', notice: 'Public visit analytics.' };
   const server = { profile: { ...profile }, profileMode, holdProfile: false, persistNickname: true };
   const requests = [], events = [], errors = [], pendingProfile = [], modules = new Map();
   let pageDefinition, componentDefinition, app, page, sequence = 0;
@@ -69,7 +69,7 @@ function journey({ extension = 'js', token = '', profile = completeProfile, cach
         const next = options.data.scene === nextScene;
         return reply(options, { route_key: readerRoute, content_id: next ? 'content_two' : 'content_one', content_version: next ? 2 : 1, share_token: next ? 'next-share' : 'incoming-token' });
       }
-      if (requestPath.includes('/tracking/contents/')) return reply(options, { title: '公开正文', media: [] });
+      if (requestPath.includes('/tracking/contents/')) return reply(options, { title: '公开正文', body: '公开正文内容', media: [] });
       if (requestPath.endsWith('/tracking/entry')) return reply(options, {
         entry_token: `entry_${++sequence}`, session_id: `session_${sequence}`, content_version: 5123,
         content_accessible: true, visitor_key: options.header.token === 'session-A' ? 'u:41' : 'anonymous',

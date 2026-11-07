@@ -10,10 +10,22 @@ const writingTypes = [
   { key: 'project', label: '项目介绍', heading: '项目内容介绍', example: '', instruction: '请撰写项目内容介绍。' },
   { key: 'promotion', label: '推广文案', heading: '作品推广文案', example: '', instruction: '请撰写作品推广文案。' },
 ];
+function parseVideoCopy(value) {
+  const source = String(value || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const result = JSON.parse(source);
+  if (!result || Array.isArray(result) || typeof result !== 'object') throw new Error('视频文案格式不正确');
+  const copy = {};
+  for (const key of ['title', 'share_copy', 'moments_copy']) {
+    if (typeof result[key] !== 'string' || !result[key].trim() || result[key].length > (key === 'title' ? 80 : 2000)) throw new Error('视频文案结构或长度不正确，请重新生成');
+    copy[key] = result[key].trim();
+  }
+  return copy;
+}
+
 const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
 
 Page({
-  data: { writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '带入编辑器', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
+  data: { videoBundle: false, videoCopy: null, videoSelections: { title: true, share_copy: true, moments_copy: true }, writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '带入编辑器', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
   onLoad(options) {
     wx.hideShareMenu();
     this._token = String(wx.getStorageSync('token') || '');
@@ -33,7 +45,7 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this.cancelStream();
-      this.setData({ title: '', facts: '', result: '', notice: '', streaming: false, streamPartial: '', error: '账号已变化，请重新填写创作内容' });
+      this.setData({ videoCopy: null, title: '', facts: '', result: '', notice: '', streaming: false, streamPartial: '', error: '账号已变化，请重新填写创作内容' });
     }
     this._token = token;
     this.setData({ navigating: false, loginRequired: !token });
@@ -43,6 +55,9 @@ Page({
   receiveWritingContext(payload) {
     if ((this._source !== 'editor' && this._source !== 'project_note') || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
     if (!payload || payload.source !== this._source) return;
+    if (payload.target === 'video_bundle' && this._source === 'editor') {
+      this.setData({ videoBundle: true, heading: '视频推广文案', videoSelections: { title: !String(payload.title || '').trim(), share_copy: !String(payload.share_copy || '').trim(), moments_copy: !String(payload.moments_copy || '').trim() } });
+    }
     this._contextLoaded = true;
     if (this._source === 'project_note') {
       this._projectID = String(payload.project_id || '');
@@ -53,6 +68,7 @@ Page({
       this._revision = Number(payload.revision || 0);
     }
     this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: this._source === 'project_note' ? '已带入项目笔记' : '已带入当前草稿', error: '' });
+    if (this.data.videoBundle && payload.auto_generate === true) this.quickGenerate();
   },
   selectType(event) {
     const type = this.data.writingTypes.find(item => item.key === event.currentTarget.dataset.type);
@@ -138,7 +154,7 @@ Page({
   editResult(event) { this.setData({ result: String(event.detail.value || ''), notice: '', error: '' }); },
   // B6 就地流式生成：不跳 chat 页，复用 SSE 通道直接在结果区流式回显。
   buildPrompt(action) {
-    const facts = String(this.data.facts || '').trim();
+    const facts = String(this.data.facts || (this.data.videoBundle ? this.data.title : '') || '').trim();
     if (!facts) return '';
     const instruction = { concise: '精简下面的文案，保留已知事实和重点。', expand: '适当扩写下面的文案，只补充表达，不增添未经提供的事实。', tone: '将下面的文案改为自然、专业、适合与业主沟通的语气。' }[action || ''];
     // B8: 名片/品牌预设作为额外已知资料注入，不进自由 prompt——维持防臆造边界。
@@ -147,6 +163,13 @@ Page({
     if (preset && preset.content) {
       extendedFacts = facts + '\n\n介绍信息（可作为署名或结尾参考）：\n' + String(preset.content).slice(0, 500);
     }
+    if (this.data.videoBundle) return [
+      '为视频作品生成标题、聊天转发文案和朋友圈文案。只返回一个JSON对象，三个字段均为字符串：title、share_copy、moments_copy。标题最多80字，其他每项最多2000字。不要输出Markdown或其他字段。',
+      ANTI_FABRICATION_CLAUSE,
+      '已知主题：' + String(this.data.title || ''),
+      '已知资料与要求：' + extendedFacts,
+      instruction && this.data.result ? instruction + '\n待调整内容：' + this.data.result : '',
+    ].filter(Boolean).join('\n\n');
     return [
       `${this.data.instruction || '请撰写' + this.data.heading + '。'}${this.data.title ? '主题：' + this.data.title.trim() + '。' : ''}`,
       ANTI_FABRICATION_CLAUSE,
@@ -180,6 +203,11 @@ Page({
           if (!current()) return;
           settled = true; this._streamTask = null;
           const value = String(full || '').trim();
+          if (this.data.videoBundle) {
+            try { const videoCopy = parseVideoCopy(value); this.setData({ videoCopy, result: JSON.stringify(videoCopy), streaming: false, streamPartial: '', error: '', notice: '已生成，请勾选要采纳的内容；未勾选项保留原文' }); }
+            catch (_) { this.setData({ streaming: false, streamPartial: '', error: '生成结果格式不完整，请重试；原文案已保留', notice: '' }); }
+            return;
+          }
           this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '已生成，请核对后使用' : '生成为空，请调整资料后重试' });
         },
         onError,
@@ -232,8 +260,34 @@ Page({
       fail: () => this.setData({ navigating: false, error: 'AI对话暂时无法打开，已保留填写的资料，请重试' }),
     });
   },
+  editVideoCopy(event) {
+    const key = String(event.currentTarget.dataset.field || '');
+    if (!this.data.videoCopy || !['title', 'share_copy', 'moments_copy'].includes(key)) return;
+    const videoCopy = { ...this.data.videoCopy, [key]: String(event.detail.value || '').slice(0, key === 'title' ? 80 : 2000) };
+    this.setData({ videoCopy, result: JSON.stringify(videoCopy), error: '' });
+  },
+  selectVideoFields(event) {
+    const selected = new Set(event.detail.value || []);
+    this.setData({ videoSelections: { title: selected.has('title'), share_copy: selected.has('share_copy'), moments_copy: selected.has('moments_copy') } });
+  },
   saveToDraft() {
     if (this.data.navigating) return;
+    if (this.data.videoBundle) {
+      if (!this.data.videoCopy) { this.setData({ error: '请先生成完整视频文案' }); return; }
+      if (!this._token || this._token !== String(wx.getStorageSync('token') || '')) { this.setData({ error: '账号已变化，请重新登录后创作' }); return; }
+      if (!this._returnChannel || typeof this._returnChannel.emit !== 'function') { this.setData({ error: '原页面连接已失效，请保留文案后重试' }); return; }
+      const video_copy = {};
+      for (const key of ['title', 'share_copy', 'moments_copy']) if (this.data.videoSelections[key]) {
+        const value = String(this.data.videoCopy[key] || '').trim();
+        if (!value) { this.setData({ error: '请补全勾选的文案' }); return; }
+        video_copy[key] = value;
+      }
+      if (!Object.keys(video_copy).length) { this.setData({ error: '请选择至少一项需要采纳的文案' }); return; }
+      this.setData({ navigating: true, error: '' });
+      this._returnChannel.emit('prefillContent', { source: 'editor', content_id: String(this._contentID || ''), revision: Number(this._revision || 0), video_copy });
+      wx.navigateBack({ delta: 1, fail: () => this.setData({ navigating: false, error: '文案已带回原页面，请返回继续编辑' }) });
+      return;
+    }
     const text = String(this.data.result || '').trim();
     if (!text) { this.setData({ error: this._source === 'project_note' ? '请先生成或填写文案，再采纳到项目笔记' : '请先生成或填写文案，再保存到内容草稿' }); return; }
     const token = String(wx.getStorageSync('token') || '');

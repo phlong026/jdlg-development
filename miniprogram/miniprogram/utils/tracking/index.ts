@@ -34,13 +34,18 @@ function getSDK() {
   });
   return sdk;
 }
-function enabledConsent() {
-  if(config.enabled!==true || !config.consent_version || !config.privacy_notice) return '';
+function currentConsentChoice() {
+  if(config.enabled!==true || !config.consent_version || !config.privacy_notice) return null;
   const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
-  // Silent consent: absent, implicit and outdated accepted choices all record under the
-  // current notice; only an explicit decline stays effective across notice versions.
-  if(choice && choice.accepted===false) return '';
-  return config.consent_version;
+  return choice&&choice.explicit===true&&choice.version===config.consent_version&&choice.notice===config.privacy_notice ? choice : null;
+}
+function enabledConsent() {
+  const choice=currentConsentChoice();
+  return choice&&choice.accepted===true ? config.consent_version : '';
+}
+function consentChoiceState() {
+  const choice=currentConsentChoice();
+  return {resolved:!!choice,accepted:!!(choice&&choice.accepted===true)};
 }
 function refreshConfig() {
   return api.request('/config').then(value => {
@@ -73,8 +78,7 @@ function showConsentChoices(page, manual=false) {
     // manual 由"我的"页主动触发，页面本身不是采集页，跳过采集页可见性校验。
     if(!target || (!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))))return false;
     if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
-    const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
-    if(!manual && (enabledConsent() || (choice&&choice.version===value.consent_version&&(choice.notice===value.privacy_notice||(!choice.notice&&choice.accepted===false)))))return false;
+    if(!manual && consentChoiceState().resolved)return false;
     const version=value.consent_version, notice=value.privacy_notice, revision=consentRevision;
     return new Promise(resolve=>{
       // Pass the complete configured notice, without truncation or implicit consent.
@@ -417,5 +421,5 @@ function shareDiagnostics(page){
     ? {...(state.shareFailure||{}),attribution_status:status} : state.shareFailure||null;
 }
 function captureEntryValidity(){const revision=entryInvalidation,account=safely(()=>String(wx.getStorageSync('token')||''),'');return()=>revision===entryInvalidation&&account===safely(()=>String(wx.getStorageSync('token')||''),'');}
-module.exports={collectionToken:page=>safely(()=>getSDK().collectionToken(page),''),observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,confirmPreparedShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+module.exports={collectionToken:page=>safely(()=>getSDK().collectionToken(page),''),observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,confirmPreparedShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consentChoice:consentChoiceState,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
 export {};
