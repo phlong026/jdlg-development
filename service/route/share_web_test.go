@@ -67,14 +67,14 @@ func shareWebFixture(t *testing.T) (*gin.Engine, *tracking.Service, *governanceT
 
 func TestShareWebGETEscapesBodyAndCreatesNoTrackingRecord(t *testing.T) {
 	router, _, store, code, _ := shareWebFixture(t)
-	before := len(store.records)
+	before := store.count()
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/share/s/"+code, nil))
 	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), "<script>alert(1)</script>") {
 		t.Fatalf("GET %d %s", w.Code, w.Body.String())
 	}
-	if len(store.records) != before {
-		t.Fatalf("GET created records: before=%d after=%d", before, len(store.records))
+	if after := store.count(); after != before {
+		t.Fatalf("GET created records: before=%d after=%d", before, after)
 	}
 }
 
@@ -138,7 +138,7 @@ func shareWebCollectionFixture(t *testing.T) (*gin.Engine, *tracking.Service, *g
 
 func TestShareWebCollectionDirectoryAndItemGETCreateNoTrackingRecords(t *testing.T) {
 	router, _, store, code, collection, content := shareWebCollectionFixture(t)
-	before := len(store.records)
+	before := store.count()
 	directory := httptest.NewRecorder()
 	router.ServeHTTP(directory, httptest.NewRequest(http.MethodGet, "/share/s/"+code, nil))
 	if directory.Code != http.StatusOK || strings.Contains(directory.Body.String(), collection.Title) || !strings.Contains(directory.Body.String(), "登录后查看完整内容") {
@@ -149,21 +149,21 @@ func TestShareWebCollectionDirectoryAndItemGETCreateNoTrackingRecords(t *testing
 	if item.Code != http.StatusOK || strings.Contains(item.Body.String(), content.Title) || strings.Contains(item.Body.String(), "合集作品正文") || !strings.Contains(item.Body.String(), `data-item-position="0"`) {
 		t.Fatalf("item = %d %s", item.Code, item.Body.String())
 	}
-	if len(store.records) != before {
-		t.Fatalf("collection GET created records: before=%d after=%d", before, len(store.records))
+	if after := store.count(); after != before {
+		t.Fatalf("collection GET created records: before=%d after=%d", before, after)
 	}
 }
 
 func TestShareWebCollectionItemRequiresNativeLoginBeforeRecording(t *testing.T) {
 	router, _, store, code, _, _ := shareWebCollectionFixture(t)
-	before := len(store.records)
+	before := store.count()
 	body, _ := json.Marshal(map[string]any{"code": code, "item_position": 0, "client_instance": "browser-collection-reader", "consent_version": "v1"})
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/share-web/entry", bytes.NewReader(body))
 	req.Header.Set("Origin", "https://www.jiadilingguang.com")
 	req.Header.Set("X-Share-Web", "1")
 	router.ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized || len(store.records) != before {
+	if w.Code != http.StatusUnauthorized || store.count() != before {
 		t.Fatalf("anonymous collection entry = %d %s", w.Code, w.Body.String())
 	}
 }
@@ -287,14 +287,14 @@ func TestShareWebCollectionDirectorySourceCannotClaimChildHandoffReady(t *testin
 func TestShareWebEntryRejectsUnauthenticatedCrossOrigin(t *testing.T) {
 	router, _, store, code, _ := shareWebFixture(t)
 	body, _ := json.Marshal(map[string]any{"code": code, "client_instance": "browser-client-1234", "consent_version": "v1"})
-	before := len(store.records)
+	before := store.count()
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/share-web/entry", strings.NewReader(string(body)))
 	req.Header.Set("Origin", "https://attacker.example")
 	req.Header.Set("X-Share-Web", "1")
 	router.ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized || len(store.records) != before {
-		t.Fatalf("cross-origin entry %d %s records=%d/%d", w.Code, w.Body.String(), len(store.records), before)
+	if after := store.count(); w.Code != http.StatusUnauthorized || after != before {
+		t.Fatalf("cross-origin entry %d %s records=%d/%d", w.Code, w.Body.String(), after, before)
 	}
 }
 
@@ -320,7 +320,7 @@ func TestHistoricalShareWebVideoFactsAggregateAndStopAfterContentRevoke(t *testi
 		t.Fatalf("video results = %+v", results)
 	}
 	eventCount := 0
-	for _, row := range store.records {
+	for _, row := range store.snapshot() {
 		if row.Kind == "event" {
 			eventCount++
 		}
@@ -352,7 +352,7 @@ func TestHistoricalShareWebVideoFactsAggregateAndStopAfterContentRevoke(t *testi
 		t.Fatalf("revoked event result = %+v", lateResults)
 	}
 	after := 0
-	for _, row := range store.records {
+	for _, row := range store.snapshot() {
 		if row.Kind == "event" {
 			after++
 		}
