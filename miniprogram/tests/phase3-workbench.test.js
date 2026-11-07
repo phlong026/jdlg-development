@@ -338,7 +338,7 @@ test('editor keeps legacy video caption copy readable and exposes a real video l
   assert.match(wxml, /正在加载视频…/);
 });
 
-test('video metadata replaces fallback ratios in both editor and shared preview frames', () => {
+test('video metadata replaces fallback ratios in the editor media model and shared preview frames', () => {
   const page = pageHarness('contentedit', {});
   page.setData({
     videoStarted: { 'contentedit-preview-player-0': true },
@@ -364,7 +364,9 @@ test('video metadata replaces fallback ratios in both editor and shared preview 
   assert.ok(page.data.presentationView.media[0].height > 190, '必须用原始竖屏比例重算，不能把已缩放的 337x190 当源尺寸');
   assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true, '元数据重排不应恢复封面');
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
-  assert.match(wxml, /data-editor="true"[^>]+bindloadedmetadata="onContentVideoMetadata"/);
+  assert.match(wxml, /<template is="content-presentation"/);
+  const shared = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
+  assert.match(shared, /bindloadedmetadata="onContentVideoMetadata"/);
 });
 
 test('editor preview creates the native video after tapping the cover and restores it after an error', () => {

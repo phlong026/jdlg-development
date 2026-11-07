@@ -553,3 +553,15 @@ test('compact video opens full-screen playback with its original video and poste
   page.openEditorVideo({ currentTarget: { dataset: { mediaId: 'missing' } } });
   assert.equal(mediaPreviews.length, 1);
 });
+
+
+test('library videos without a thumbnail use a touchable preview card without an inline native video layer', () => {
+  const { page, mediaPreviews } = loadEditor();
+  page.setData({ media: [{ media_id: 'library-video', kind: 'video', local_path: '/private/library.mp4' }] });
+  page.openEditorVideo({ currentTarget: { dataset: { mediaId: 'library-video' } } });
+  assert.equal(mediaPreviews[0].sources[0].url, '/private/library.mp4');
+  const template = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const thumbnail = template.slice(template.indexOf('class="video-thumbnail"'), template.indexOf('class="video-media-details"'));
+  assert.ok(thumbnail.includes('bindtap="openEditorVideo"'));
+  assert.doesNotMatch(thumbnail, /<video\b/, 'a controls=false native video would intercept the full-screen preview tap');
+});
