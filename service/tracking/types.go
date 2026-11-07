@@ -133,6 +133,10 @@ type ArticleBlock struct {
 	Style   ArticleStyle `json:"style,omitempty"`
 }
 type ArticleDocument struct {
+	VideoLayout  string         `json:"video_layout,omitempty"`
+	ShareCopy    string         `json:"share_copy,omitempty"`
+	MomentsCopy  string         `json:"moments_copy,omitempty"`
+	DraftOnly    bool           `json:"draft_only,omitempty"`
 	Schema       int            `json:"schema"`
 	Presentation string         `json:"presentation,omitempty"`
 	LayoutHTML   string         `json:"layout_html,omitempty"`

@@ -122,6 +122,9 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			"publish_enabled":             svc.Config.ContentEnabled,
 			"native_tracking_enabled":     svc.Config.Enabled,
 			"media_upload_configured":     media,
+			"video_editor_fields":         true,
+			"video_resumable_upload":      media && videoUploadConfigured(),
+			"video_upload_chunk_size":     videoUploadChunkSize,
 			"url_link_configured":         media && trackingURLLinkEnabled() && miniprogramCredentials().AppID != "" && miniprogramCredentials().Secret != "",
 			"official_account_configured": os.Getenv("OFFICIAL_ACCOUNT_APP_ID") != "" && os.Getenv("OFFICIAL_ACCOUNT_APP_SECRET") != "",
 			"import_capabilities_path":    "/api/v1/miniprogram/workbench/imports/capabilities",
@@ -262,4 +265,5 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 		}
 		uploadTrackingMedia(c, svc, scope(c))
 	})
+	registerVideoUploadHandlers(writes, svc, scope)
 }

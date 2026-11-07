@@ -312,3 +312,22 @@ func TestWorkbenchDraftMediaRequiresAuthorizedOwnerAndIsNotPublic(t *testing.T) 
 		t.Fatal(denied.Code, denied.Body.String())
 	}
 }
+
+func TestWorkbenchAdvertisesVideoDocumentFieldsIndependentlyOfUploadStorage(t *testing.T) {
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	router, _ := newWorkbenchHandlerFixture(t, &scope)
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	t.Setenv("CONTENT_MEDIA_STORAGE", "filesystem")
+	t.Setenv("TRACKING_MEDIA_DIR", "")
+	t.Setenv("CONTENT_VIDEO_UPLOAD_DIR", "")
+	w := workbenchRequest(t, router, "GET", "/workbench/context", nil)
+	var result struct {
+		Data struct {
+			Fields bool `json:"video_editor_fields"`
+			Upload bool `json:"video_resumable_upload"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || w.Code != 200 || !result.Data.Fields || result.Data.Upload {
+		t.Fatalf("video document editing must remain available without local upload storage: status=%d response=%s err=%v", w.Code, w.Body.String(), err)
+	}
+}

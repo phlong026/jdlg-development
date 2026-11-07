@@ -8,6 +8,8 @@ import (
 	"hash/crc64"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,6 +175,102 @@ func TestPutExistingIdenticalStillProvesPrivateWithoutWriting(t *testing.T) {
 	}
 	if !probed {
 		t.Fatal("existing object skipped anonymous privacy proof")
+	}
+}
+
+func TestMultipartFileUploadAbortsWhenSecondPartFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large.mp4")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Truncate((8 << 20) + 1); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	var uploaded, aborted int
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Query().Has("uploads"):
+			return response(req, http.StatusOK, []byte(`<InitiateMultipartUploadResult><UploadId>upload-one</UploadId></InitiateMultipartUploadResult>`), "application/xml"), nil
+		case req.Method == http.MethodPut && req.URL.Query().Get("partNumber") != "":
+			uploaded++
+			if req.URL.Query().Get("partNumber") == "2" {
+				return response(req, http.StatusInternalServerError, nil, ""), nil
+			}
+			resp := response(req, http.StatusOK, nil, "")
+			resp.Header.Set("ETag", `"part-one"`)
+			return resp, nil
+		case req.Method == http.MethodDelete && req.URL.Query().Get("uploadId") == "upload-one":
+			aborted++
+			return response(req, http.StatusNoContent, nil, ""), nil
+		default:
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+	store := newTestStore(t, transport, nil)
+	err = store.putMultipartFile(context.Background(), "key", path, (8<<20)+1, "video/mp4", strings.Repeat("a", 64))
+	if err == nil || uploaded < 2 || aborted != 1 {
+		t.Fatalf("err=%v uploaded=%d aborted=%d", err, uploaded, aborted)
+	}
+}
+
+func TestMultipartFileUploadCancelsStalledPartAndAborts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large.mp4")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Truncate(minimumCOSPartSize); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+
+	var aborted int
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Query().Has("uploads"):
+			return response(req, http.StatusOK, []byte(`<InitiateMultipartUploadResult><UploadId>stalled-upload</UploadId></InitiateMultipartUploadResult>`), "application/xml"), nil
+		case req.Method == http.MethodPut && req.URL.Query().Get("partNumber") == "1":
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		case req.Method == http.MethodDelete && req.URL.Query().Get("uploadId") == "stalled-upload":
+			aborted++
+			return response(req, http.StatusNoContent, nil, ""), nil
+		default:
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+	store := newTestStore(t, transport, nil)
+	store.uploadPartTimeout = 20 * time.Millisecond
+	started := time.Now()
+	err = store.putMultipartFile(context.Background(), "key", path, minimumCOSPartSize, "video/mp4", strings.Repeat("a", 64))
+	if err == nil || time.Since(started) > time.Second || aborted != 1 {
+		t.Fatalf("err=%v elapsed=%v aborted=%d", err, time.Since(started), aborted)
+	}
+}
+
+func TestMultipartPartSizeKeepsLargeObjectsWithinCOSPartCount(t *testing.T) {
+	size := minimumCOSPartSize*maximumCOSParts + 1
+	partSize, ok := cosMultipartPartSize(size)
+	if !ok || (size+partSize-1)/partSize > maximumCOSParts || partSize <= minimumCOSPartSize {
+		t.Fatalf("size=%d part=%d ok=%v count=%d", size, partSize, ok, (size+partSize-1)/partSize)
+	}
+	if _, ok = cosMultipartPartSize(maximumCOSPartSize*maximumCOSParts + 1); ok {
+		t.Fatal("object beyond COS technical multipart boundary was accepted")
+	}
+}
+
+func TestMultipartUploadTimeoutScalesPerPartWithoutWholeObjectDeadline(t *testing.T) {
+	small := cosUploadPartTimeout(minimumCOSPartSize, defaultTimeout)
+	large := cosUploadPartTimeout(maximumCOSPartSize, defaultTimeout)
+	if small < minimumPartTimeout || large <= small {
+		t.Fatalf("small=%v large=%v", small, large)
+	}
+	if configured := cosUploadPartTimeout(minimumCOSPartSize, 2*time.Minute); configured != 8*time.Minute {
+		t.Fatalf("configured timeout=%v", configured)
 	}
 }
 
@@ -581,13 +679,13 @@ func TestGetChecksBoundsLengthHashAndMIME(t *testing.T) {
 	}
 }
 
-func TestHeadRejectsOversizeOrMissingHash(t *testing.T) {
+func TestHeadAcceptsLargeStreamObjectsButRejectsMissingHash(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		size int64
 		hash string
 	}{
-		{"oversize", MaxObjectSize + 1, strings.Repeat("a", 64)},
+		{"large stream object", MaxObjectSize + 1, strings.Repeat("a", 64)},
 		{"missing hash", 1, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -598,8 +696,12 @@ func TestHeadRejectsOversizeOrMissingHash(t *testing.T) {
 				h.Set(sha256MetadataHeader, tc.hash)
 				return responseWithHeaders(req, http.StatusOK, nil, h), nil
 			}), nil)
-			if _, err := store.Head(context.Background(), "tenant", testAssetID); !errors.Is(err, ErrIntegrity) {
+			metadata, err := store.Head(context.Background(), "tenant", testAssetID)
+			if tc.hash == "" && !errors.Is(err, ErrIntegrity) {
 				t.Fatalf("Head error = %v, want ErrIntegrity", err)
+			}
+			if tc.hash != "" && (err != nil || metadata.Size != tc.size) {
+				t.Fatalf("Head = %+v, %v", metadata, err)
 			}
 		})
 	}

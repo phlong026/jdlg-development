@@ -210,6 +210,38 @@ func TestCOSProxyNeverUsesSameIDLocalFileAndStreamsRanges(t *testing.T) {
 	}
 }
 
+func TestFilesystemProxyStreamsVideoLargerThanLegacyUploadLimit(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CONTENT_MEDIA_STORAGE", "filesystem")
+	t.Setenv("TRACKING_MEDIA_DIR", root)
+	id := strings.Repeat("v", 32)
+	path := filepath.Join(root, id)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = file.Seek((50<<20)+8, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = file.Write([]byte("tail")); err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.GET("/media", func(c *gin.Context) {
+		serveContentMediaBytes(c, nil, tracking.Asset{ID: id, Kind: "video", MIME: "video/mp4"})
+	})
+	request := httptest.NewRequest(http.MethodGet, "/media", nil)
+	request.Header.Set("Range", "bytes=52428808-")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, request)
+	if w.Code != http.StatusPartialContent || w.Body.String() != "tail" {
+		t.Fatalf("large range=%d %q %v", w.Code, w.Body.String(), w.Header())
+	}
+}
+
 func TestCOSConfigurationFailureNeverFallsBackToFilesystem(t *testing.T) {
 	t.Setenv("CONTENT_MEDIA_STORAGE", "cos")
 	root := t.TempDir()
@@ -371,6 +403,23 @@ func TestSlowCOSClientHasFiniteDeadlineAndReleasesStreamSlot(t *testing.T) {
 	}
 	if w.deadlines[len(w.deadlines)-1].IsZero() {
 		t.Fatal("cleared failed-write deadline before server abort")
+	}
+}
+
+func TestCOSStreamRefreshesIdleWriteDeadlineAfterData(t *testing.T) {
+	t.Setenv("CONTENT_MEDIA_STORAGE", "cos")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	_, svc := newWorkbenchHandlerFixture(t, &scope)
+	id := strings.Repeat("y", 32)
+	svc.MediaObjects = &testPrivateObjects{data: map[string][]byte{scope.Tenant + ":" + id: []byte("stream-data")}, mime: map[string]string{scope.Tenant + ":" + id: "video/mp4"}}
+	router := gin.New()
+	router.GET("/media", func(c *gin.Context) {
+		serveContentMediaBytes(c, svc, tracking.Asset{ID: id, Kind: "video", MIME: "video/mp4"})
+	})
+	w := newMediaDeadlineRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/media", nil))
+	if w.Code != http.StatusOK || len(w.deadlines) < 3 || !w.deadlines[len(w.deadlines)-1].IsZero() {
+		t.Fatalf("deadlines were not refreshed and cleared: %#v", w.deadlines)
 	}
 }
 func TestWorkbenchMediaHEADUsesSameGrantAsGET(t *testing.T) {

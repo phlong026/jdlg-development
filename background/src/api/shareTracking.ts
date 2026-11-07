@@ -26,7 +26,7 @@ export interface Visit { visit_id: string; started_at: string; /** 30 分钟批�
 export interface Asset { media_id: string; kind: 'image' | 'video'; url: string; width: number; height: number; mime: string; title?: string; }
 export interface ArticleStyle { align?: 'left' | 'center' | 'right'; font_size?: 'small' | 'normal' | 'large'; spacing_before?: number; spacing_after?: number; border?: 'none' | 'left' | 'box'; }
 export interface ArticleBlock { kind: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'quote'; text?: string; level?: 2 | 3; items?: string[]; ordered?: boolean; media_id?: string; caption?: string; style?: ArticleStyle; }
-export interface ArticleDocument { schema: 1; presentation?: 'article' | 'gallery' | 'video'; layout_html?: string; blocks: ArticleBlock[]; }
+export interface ArticleDocument { schema: 1; presentation?: 'article' | 'gallery' | 'video'; video_layout?: 'channels' | 'douyin'; share_copy?: string; moments_copy?: string; draft_only?: boolean; layout_html?: string; blocks: ArticleBlock[]; }
 export interface VisitorContent { latest_visit?: LatestVisit; content_id: string; content_version: number; title: string; type: string; status: string; cover?: Asset; page_views: number; visible_ms: number; /** 筛选范围内视频去重观看毫秒数与媒体总时长；进度按 min(100, 去重/时长) 封顶计算 */ video_unique_ms?: number; video_duration_ms?: number; last_visit: string; route_key?: string; content_accessible: boolean; }
 /** 访客发起的一次转发：素材、渠道与它带回来的下游流量（自访/预览/测试不计） */
 export interface VisitorShare { share_id: string; occurred_at: string; route_key?: string; content_id?: string; content_version?: number; title: string; type?: string; status?: string; /** app_message=聊天私发，timeline=朋友圈；为目标渠道，非送达凭证 */ channel?: string; brought_visitors: number; brought_views: number; }

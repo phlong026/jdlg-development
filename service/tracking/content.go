@@ -68,7 +68,7 @@ func (s *Service) validateDraft(scope Scope, in Draft) (Draft, error) {
 	if !scope.Manage {
 		return in, fail(403, "无素材管理权限")
 	}
-	if !trim(in.Title, 80) || !trim(in.Body, 100000) || len(in.SourceNote) > 2000 || (in.SourceURL != "" && !safeURL(in.SourceURL)) || (in.Rights != "own" && in.Rights != "authorized") || !scope.Allows(in.Owner) || len(in.MediaIDs) > 50 {
+	if (!trim(in.Title, 80) && !(incompleteVideoDraft(in.Body, in.BodyFormat) && strings.TrimSpace(in.Title) == "")) || !trim(in.Body, 100000) || len(in.SourceNote) > 2000 || (in.SourceURL != "" && !safeURL(in.SourceURL)) || (in.Rights != "own" && in.Rights != "authorized") || !scope.Allows(in.Owner) || len(in.MediaIDs) > 50 {
 		return in, fail(400, "标题正文权属或归属无效")
 	}
 	// B11: 标签最多 10 个，每个 ≤ 32 字符，去重去空白。
@@ -256,6 +256,9 @@ func (s *Service) Preview(ctx context.Context, scope Scope, id string, revision 
 		if c.Status != "draft" {
 			return fail(409, "当前内容不是可预览草稿")
 		}
+		if incompleteVideoDraft(c.Body, c.BodyFormat) {
+			return fail(400, "请补齐视频标题和主视频后再预览发布")
+		}
 		if c.Type == "document" {
 			return fail(400, "文档资料仅供私有下载，不支持发布预览")
 		}
@@ -295,6 +298,9 @@ func (s *Service) Publish(ctx context.Context, scope Scope, id string, revision 
 		}
 		if c.Revision != revision || c.Status != "draft" {
 			return fail(409, "草稿版本或状态已改变")
+		}
+		if incompleteVideoDraft(c.Body, c.BodyFormat) {
+			return fail(400, "请补齐视频标题和主视频后再预览发布")
 		}
 		if c.Type == "document" {
 			return fail(400, "文档资料仅供私有下载，不支持发布")

@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,6 +30,11 @@ const (
 	privateCanaryMIME    = "application/octet-stream"
 	privateCanaryData    = "content-storage-private-canary-v1"
 	cleanupTimeout       = 10 * time.Second
+	minimumCOSPartSize   = int64(8 << 20)
+	maximumCOSPartSize   = int64(5 << 30)
+	maximumCOSParts      = int64(10000)
+	minimumPartTimeout   = 5 * time.Minute
+	minimumPartBytesRate = int64(64 << 10)
 )
 
 var (
@@ -59,6 +65,10 @@ type COSStore struct {
 	anonymous     *http.Client
 	bucketURL     *url.URL
 	privatePrefix string
+	idleTimeout   time.Duration
+	// uploadPartTimeout is normally derived from each part size. Tests may set
+	// it to exercise stalled-write cancellation without waiting minutes.
+	uploadPartTimeout time.Duration
 }
 
 func NewCOSStore(cfg *Config) (*COSStore, error) {
@@ -92,7 +102,7 @@ func NewCOSStore(cfg *Config) (*COSStore, error) {
 	}
 	authBase := cfg.Transport
 	if authBase == nil {
-		authBase = defaultTransport()
+		authBase = defaultTransport(timeout)
 	}
 	authTransport := &cos.AuthorizationTransport{
 		SecretID:     cfg.SecretID,
@@ -101,7 +111,10 @@ func NewCOSStore(cfg *Config) (*COSStore, error) {
 		Transport:    &boundedResponseTransport{next: authBase},
 	}
 	authClient := &http.Client{
-		Timeout:       timeout,
+		// A Client.Timeout covers response-body reads and would truncate large
+		// authenticated streams. Transport header timeouts and Open's idle body
+		// deadline bound stalled calls without imposing a total video duration.
+		Timeout:       0,
 		Transport:     authTransport,
 		CheckRedirect: rejectRedirect,
 	}
@@ -110,7 +123,7 @@ func NewCOSStore(cfg *Config) (*COSStore, error) {
 
 	anonymousBase := cfg.AnonymousTransport
 	if anonymousBase == nil {
-		anonymousBase = defaultTransport()
+		anonymousBase = defaultTransport(timeout)
 	}
 	anonymous := &http.Client{
 		Timeout:       timeout,
@@ -124,6 +137,7 @@ func NewCOSStore(cfg *Config) (*COSStore, error) {
 		anonymous:     anonymous,
 		bucketURL:     bucketURL,
 		privatePrefix: prefix,
+		idleTimeout:   timeout,
 	}, nil
 }
 
@@ -184,6 +198,144 @@ func (s *COSStore) Put(ctx context.Context, tenant, assetID string, data []byte,
 		return s.cleanupCreatedObject(ctx, key, err)
 	}
 	return nil
+}
+
+// PutFile streams a private object from disk. It deliberately has no business
+// size ceiling; COS multipart limits remain the underlying technical boundary.
+func (s *COSStore) PutFile(ctx context.Context, tenant, assetID, filePath string, size int64, contentType, digest string) error {
+	key, err := s.ObjectKey(tenant, assetID)
+	if err != nil {
+		return err
+	}
+	if size <= 0 || validateMIME(contentType) != nil || len(digest) != sha256.Size*2 {
+		return ErrInvalidInput
+	}
+	decoded, err := hex.DecodeString(digest)
+	if err != nil || len(decoded) != sha256.Size || digest != strings.ToLower(digest) {
+		return ErrInvalidInput
+	}
+	info, err := os.Stat(filePath)
+	if err != nil || !info.Mode().IsRegular() || info.Size() != size {
+		return ErrInvalidInput
+	}
+	want := Metadata{Size: size, MIME: contentType, SHA256: digest}
+	existing, err := s.headKey(ctx, key)
+	switch {
+	case err == nil:
+		if existing != want {
+			return ErrConflict
+		}
+		return s.provePrivate(ctx, key)
+	case !errors.Is(err, ErrNotFound):
+		return err
+	}
+	if err = s.privacyPreflight(ctx); err != nil {
+		return err
+	}
+	if err = s.putMultipartFile(ctx, key, filePath, size, contentType, digest); err != nil {
+		return err
+	}
+	actual, err := s.headKey(ctx, key)
+	if err != nil {
+		return s.cleanupCreatedObject(ctx, key, err)
+	}
+	if actual != want {
+		return s.cleanupCreatedObject(ctx, key, ErrIntegrity)
+	}
+	if err = s.provePrivate(ctx, key); err != nil {
+		return s.cleanupCreatedObject(ctx, key, err)
+	}
+	return nil
+}
+
+func (s *COSStore) putMultipartFile(ctx context.Context, key, filePath string, size int64, contentType, digest string) (resultErr error) {
+	partSize, ok := cosMultipartPartSize(size)
+	if !ok {
+		return ErrInvalidInput
+	}
+	metadataHeaders := make(http.Header)
+	metadataHeaders.Set(sha256MetadataHeader, digest)
+	started, resp, err := s.client.Object.InitiateMultipartUpload(ctx, key, &cos.InitiateMultipartUploadOptions{
+		ACLHeaderOptions:       &cos.ACLHeaderOptions{XCosACL: "private"},
+		ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: contentType, XCosMetaXXX: &metadataHeaders},
+	})
+	closeResponse(resp)
+	if err != nil || started == nil || started.UploadID == "" {
+		return sanitizedCallError(ctx, "initiate multipart object")
+	}
+	completed := false
+	defer func() {
+		if completed {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		abortResp, abortErr := s.client.Object.AbortMultipartUpload(cleanupCtx, key, started.UploadID)
+		closeResponse(abortResp)
+		if abortErr != nil {
+			resultErr = ErrUnavailable
+		}
+	}()
+	file, err := os.Open(filePath)
+	if err != nil {
+		return ErrUnavailable
+	}
+	defer file.Close()
+	parts := make([]cos.Object, 0, (size+partSize-1)/partSize)
+	for offset, number := int64(0), 1; offset < size; offset, number = offset+partSize, number+1 {
+		length := partSize
+		if remaining := size - offset; remaining < length {
+			length = remaining
+		}
+		partTimeout := s.uploadPartTimeout
+		if partTimeout <= 0 {
+			partTimeout = cosUploadPartTimeout(length, s.idleTimeout)
+		}
+		partCtx, cancelPart := context.WithTimeout(ctx, partTimeout)
+		partResp, uploadErr := s.client.Object.UploadPart(partCtx, key, started.UploadID, number, io.NewSectionReader(file, offset, length), &cos.ObjectUploadPartOptions{ContentLength: length})
+		etag := ""
+		if partResp != nil {
+			etag = partResp.Header.Get("ETag")
+		}
+		closeResponse(partResp)
+		cancelPart()
+		if uploadErr != nil || etag == "" {
+			return sanitizedCallError(ctx, "upload multipart object part")
+		}
+		parts = append(parts, cos.Object{PartNumber: number, ETag: etag})
+	}
+	_, completeResp, err := s.client.Object.CompleteMultipartUpload(ctx, key, started.UploadID, &cos.CompleteMultipartUploadOptions{Parts: parts})
+	closeResponse(completeResp)
+	if err != nil {
+		return sanitizedCallError(ctx, "complete multipart object")
+	}
+	completed = true
+	return nil
+}
+
+func cosMultipartPartSize(size int64) (int64, bool) {
+	if size <= 0 {
+		return 0, false
+	}
+	const megabyte = int64(1 << 20)
+	partSize := (size-1)/maximumCOSParts + 1
+	partSize = ((partSize + megabyte - 1) / megabyte) * megabyte
+	if partSize < minimumCOSPartSize {
+		partSize = minimumCOSPartSize
+	}
+	return partSize, partSize <= maximumCOSPartSize
+}
+
+func cosUploadPartTimeout(size int64, requestTimeout time.Duration) time.Duration {
+	seconds := (size + minimumPartBytesRate - 1) / minimumPartBytesRate
+	timeout := time.Duration(seconds) * time.Second
+	if timeout < minimumPartTimeout {
+		timeout = minimumPartTimeout
+	}
+	if requestTimeout > 0 && requestTimeout <= time.Duration(1<<62)/4 && requestTimeout*4 > timeout {
+		timeout = requestTimeout * 4
+	}
+	return timeout
 }
 
 func (s *COSStore) putPrivate(ctx context.Context, key string, data []byte, contentType, hash string) (int, error) {
@@ -323,7 +475,7 @@ func (s *COSStore) headKey(ctx context.Context, key string) (Metadata, error) {
 	}
 	defer resp.Body.Close()
 	size, err := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
-	if err != nil || size < 0 || size > MaxObjectSize {
+	if err != nil || size < 0 {
 		return Metadata{}, ErrIntegrity
 	}
 	contentType := resp.Header.Get("Content-Type")
@@ -455,10 +607,10 @@ func closeResponse(resp *cos.Response) {
 
 func rejectRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
-func defaultTransport() http.RoundTripper {
+func defaultTransport(timeout time.Duration) http.RoundTripper {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = http.ProxyFromEnvironment
-	transport.ResponseHeaderTimeout = defaultTimeout
+	transport.ResponseHeaderTimeout = timeout
 	transport.TLSHandshakeTimeout = 10 * time.Second
 	transport.ExpectContinueTimeout = time.Second
 	return transport
@@ -471,11 +623,10 @@ func (t *boundedResponseTransport) RoundTrip(req *http.Request) (*http.Response,
 	if err != nil || resp == nil || resp.Body == nil {
 		return resp, err
 	}
-	limit := int64(maxErrorBody)
 	if req.Method == http.MethodGet && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		limit = MaxObjectSize + 1
+		return resp, nil
 	}
-	resp.Body = &limitedReadCloser{Reader: io.LimitReader(resp.Body, limit), Closer: resp.Body}
+	resp.Body = &limitedReadCloser{Reader: io.LimitReader(resp.Body, maxErrorBody), Closer: resp.Body}
 	return resp, nil
 }
 

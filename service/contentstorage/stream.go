@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	cos "github.com/tencentyun/cos-go-sdk-v5"
 )
@@ -49,8 +51,10 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 	if selection.rangeHeader != "" {
 		options.Range = selection.rangeHeader
 	}
-	resp, getErr := s.client.Object.Get(ctx, key, options)
+	streamCtx, cancel := context.WithCancel(ctx)
+	resp, getErr := s.client.Object.Get(streamCtx, key, options)
 	if getErr != nil {
+		cancel()
 		status := responseStatus(resp)
 		closeResponse(resp)
 		if status == http.StatusNotFound {
@@ -59,6 +63,7 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 		return nil, sanitizedCallError(ctx, "open object")
 	}
 	if err := validateStreamResponse(resp, metadata, selection); err != nil {
+		cancel()
 		closeResponse(resp)
 		return nil, err
 	}
@@ -66,7 +71,7 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 	if selection.status == http.StatusOK {
 		expectedHash = metadata.SHA256
 	}
-	body := newValidatingStreamBody(resp.Body, selection.length, expectedHash)
+	body := newValidatingStreamBody(newIdleReadCloser(resp.Body, cancel, s.idleTimeout), selection.length, expectedHash)
 	return &Stream{
 		Body:         body,
 		Status:       selection.status,
@@ -75,6 +80,41 @@ func (s *COSStore) Open(ctx context.Context, tenant, assetID, rangeHeader string
 		MIME:         metadata.MIME,
 		ContentRange: resp.Header.Get("Content-Range"),
 	}, nil
+}
+
+type idleReadCloser struct {
+	source io.ReadCloser
+	cancel context.CancelFunc
+	timer  *time.Timer
+	idle   time.Duration
+	once   sync.Once
+}
+
+func newIdleReadCloser(source io.ReadCloser, cancel context.CancelFunc, idle time.Duration) *idleReadCloser {
+	if idle <= 0 {
+		idle = defaultTimeout
+	}
+	body := &idleReadCloser{source: source, cancel: cancel, idle: idle}
+	body.timer = time.AfterFunc(idle, cancel)
+	return body
+}
+
+func (b *idleReadCloser) Read(buffer []byte) (int, error) {
+	n, err := b.source.Read(buffer)
+	if n > 0 {
+		b.timer.Reset(b.idle)
+	}
+	return n, err
+}
+
+func (b *idleReadCloser) Close() error {
+	var err error
+	b.once.Do(func() {
+		b.timer.Stop()
+		b.cancel()
+		err = b.source.Close()
+	})
+	return err
 }
 
 func parseByteRange(header string, size int64) (byteSelection, error) {

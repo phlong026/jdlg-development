@@ -55,7 +55,9 @@ func contentMediaConfigured(svc *tracking.Service) bool {
 }
 func contentMediaLimit(asset tracking.Asset) int64 {
 	if asset.Kind == "video" {
-		return 50 << 20
+		// Video upload is chunked and the read path streams. The legacy 50 MiB
+		// limit remains on the old single-request upload endpoint only.
+		return int64(^uint64(0) >> 1)
 	}
 	if asset.Kind == "document" {
 		return documentMaxBytes
@@ -278,7 +280,8 @@ func serveContentMediaBytes(c *gin.Context, svc *tracking.Service, asset trackin
 		return
 	}
 	c.Status(stream.Status)
-	copied, copyErr := io.CopyBuffer(c.Writer, stream.Body, make([]byte, 32<<10))
+	idleWriter := &contentMediaIdleWriter{writer: c.Writer, controller: controller, idle: 30 * time.Second}
+	copied, copyErr := io.CopyBuffer(idleWriter, stream.Body, make([]byte, 32<<10))
 	if copyErr != nil || copied != stream.Length {
 		log.Printf("[content-media] error asset=%s operation=stream_copy error_type=%T bytes=%d", asset.ID, copyErr, copied)
 		return
@@ -292,6 +295,22 @@ func serveContentMediaBytes(c *gin.Context, svc *tracking.Service, asset trackin
 	if err = controller.SetWriteDeadline(time.Time{}); err != nil {
 		log.Printf("[content-media] error asset=%s operation=clear_deadline error_type=%T", asset.ID, err)
 	}
+}
+
+type contentMediaIdleWriter struct {
+	writer     io.Writer
+	controller *http.ResponseController
+	idle       time.Duration
+}
+
+func (w *contentMediaIdleWriter) Write(data []byte) (int, error) {
+	written, err := w.writer.Write(data)
+	if written > 0 && err == nil {
+		if deadlineErr := w.controller.SetWriteDeadline(time.Now().Add(w.idle)); deadlineErr != nil {
+			return written, deadlineErr
+		}
+	}
+	return written, err
 }
 
 // The route never falls back to whole-object Get for a range request.

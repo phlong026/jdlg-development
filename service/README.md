@@ -314,3 +314,20 @@ result, err := strategy.Login(ctx, req)
 工作台上下文返回 `presentation_formats`；小程序仅在后端声明支持时保存该可选字段，旧服务端继续接收原有正文格式。
 `type=gallery` 可筛选图集，`type=article` 筛选文章，旧中文 `type=图文` 仍包含两者。无数据库迁移。
 导入网关作品的整条文案存入独立正文段落，媒体 `caption` 只承载单个媒体的短说明。
+
+### 视频工作区与可恢复上传
+
+视频编辑沿用 article_v2，新增可选 `video_layout`（`channels`/`douyin`）、`share_copy`、`moments_copy`（分别最多2000字）和 `draft_only`。`draft_only:true` 仅允许私有视频草稿，可以暂缺标题/主视频；授权归属与素材校验不放宽，预览和发布均拒绝未完成草稿。历史版本默认视频号式阅读且不原地改写。客户端必须读取 workbench context 的 `video_editor_fields` / `video_resumable_upload` 能力；不支持时明确提示升级，避免静默丢失新字段或回退到旧50MiB上传路径。
+
+新增 workbench 接口（沿用登录、资料及管理权限门禁）：
+
+- `POST /media-uploads`：`{owner_id,rights,filename,size,fingerprint,reset?}`，fingerprint为原文件SHA-1；按租户/操作者/归属/权属/指纹/大小恢复同一会话。只有状态明确返回 `reset_required:true` 时才发送 `reset:true`，已完成素材永不重置。
+- `GET /media-uploads/:id`：查询状态并可恢复后台完成任务。
+- `POST /media-uploads/:id/parts/:part`：multipart `file`，分片编号从0开始，4MiB传输单元；只约束单次请求，不限制作品总大小或时长。
+- `POST /media-uploads/:id/complete`：分片齐全后返回 `processing:true`，后台流式合并、校验、存储与入库；轮询状态直到 `asset` 或可重试 `error`。重复完成返回同一素材。
+
+状态为 `{upload_id,chunk_size,uploaded_parts,processing,error?,retryable,reset_required,asset?}`。`retryable:true` 只重试 complete，不重传已成功分片；`reset_required:true` 清除客户端会话并用同一原文件发起 `reset:true` 的 begin。客户端保存不含登录令牌的会话标识，重新选择同一原文件后可续传；切换账号/草稿停止回填与后续传输。分片用SHA-256校验，整文件核对声明的SHA-1，入库日志继续使用SHA-256。
+
+配置：文件系统模式要求 `TRACKING_MEDIA_DIR` 是绝对私有目录；可通过 `CONTENT_VIDEO_UPLOAD_DIR` 指定独立绝对暂存目录。COS模式除现有私有Bucket配置外，也必须提供本地私有暂存目录。未完成会话保留7天，完成会话保留30天；扫描清理每小时最多一次，进行中的处理不会被清理，已清理的完成会话会从已登记素材恢复幂等结果。合并期间暂存分片、合并文件与最终对象需要额外磁盘空间，应监控容量。反向代理需允许一个4MiB分片加multipart开销（至少5MiB）；保留请求级超时及防护，不再用旧单文件50MiB阈值判断视频作品。COS每个对象分片写入依分片大小设置独立技术超时，卡住时取消当前请求并Abort未完成multipart，不对整个视频作品设总超时。播放采用已授权Range流式读取，COS响应头和上下游连续30秒无数据会超时，但持续传输不会受到30秒总时长限制。
+
+当前播放格式仍为标准MP4，MOV会明确提示转换为MP4；此次未新增转码服务。没有业务时长与总大小上限，不代表设备、本地磁盘或存储服务拥有无限物理容量。真实COS大文件及微信iOS/Android录制/相册文件仍需部署后的联调验收。
