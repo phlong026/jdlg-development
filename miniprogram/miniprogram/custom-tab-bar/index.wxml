@@ -5,6 +5,7 @@
     <image class="tabbar-background {{current == 2 ? 'tabbar-background--active' : ''}}" src="{{designerTabbarImage}}" mode="scaleToFill" />
     <image class="tabbar-background {{current == 3 ? 'tabbar-background--active' : ''}}" src="{{myTabbarImage}}" mode="scaleToFill" />
 
+    <view class="designer-tab-label">找设计师</view>
     <view class="tabbar-hitbox-layer">
       <view
         class="tabbar-hitbox"

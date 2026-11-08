@@ -407,7 +407,7 @@
       },
       {
         "pagePath": "pages/distribution/distribution",
-        "text": "设计师中心",
+        "text": "找设计师",
         "iconPath": "assets/tabbar/未选中态@2x.png",
         "selectedIconPath": "assets/tabbar/设计师导航栏@2x.png"
       },

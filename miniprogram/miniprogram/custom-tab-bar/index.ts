@@ -24,7 +24,7 @@ const TABS = [
   {
     index: 2,
     key: 'designer',
-    text: '设计师中心',
+    text: '找设计师',
     pagePath: '/pages/distribution/distribution'
   },
   {

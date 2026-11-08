@@ -108,7 +108,7 @@ function buildAvatarManageHint(isSelfHomepage, expanded) {
 }
 Page({
     data: {
-      contentReady: false,
+        contentReady: false,
         userId: 0,
         isSelfHomepage: false,
         isPreviewMode: false,
@@ -196,7 +196,11 @@ Page({
             showProfileOverviewSections: false,
             avatarManageHint: buildAvatarManageHint(currentUserId > 0 && currentUserId === userId, false),
         });
-        this.loadDesignerHomepage();
+        this.loadDesignerHomepage().then(() => {
+            if (String(options?.consult || '') === '1' && this.data.contentReady) {
+                void this.onConsultDesigner();
+            }
+        });
         this.loadFollowState();
         this.loadFavoriteState();
     },

@@ -24,6 +24,20 @@ type DesignerCardItem = {
   designerAvatar: string;
   designerAvatarText: string;
   designerTitle: string;
+  certified: boolean;
+  specialtyText: string;
+  workSort: string;
+  works: DesignerPreview[];
+  workSets: { popular: DesignerPreview[]; latest: DesignerPreview[] };
+};
+
+type DesignerPreview = {
+  id: number;
+  title: string;
+  image: string;
+  likesText: string;
+  tagsText: string;
+  publishScope: string;
 };
 
 type DesignerApiWorkItem = {
@@ -47,6 +61,7 @@ type DesignerApiListItem = {
   specialties_text?: string;
   cert_status?: string;
   representative_work?: DesignerApiWorkItem;
+  work_previews?: { popular?: DesignerApiWorkItem[]; latest?: DesignerApiWorkItem[] };
 };
 
 type DesignerApiResponseData = {
@@ -88,12 +103,8 @@ type InputEvent = {
   };
 };
 
-type TabSwitchEvent = {
-  detail?: unknown;
-};
-
 const DEFAULT_MAIN_TABS: DesignerMainTabItem[] = [
-  { label: '全部设计师', value: 'all' },
+  { label: '全部', value: 'all' },
   { label: '乡墅私宅', value: 'template' },
   { label: '空间场景', value: 'scene' },
   { label: '材质软装', value: 'material' },
@@ -219,16 +230,19 @@ function requestDesignerApi(data?: Record<string, unknown>): Promise<DesignerApi
     wx.request({
       url: `${API_BASE_URL}/api/v1/miniprogram/designers`,
       method: 'GET',
+      timeout: 15000,
       data,
       success: (res) => {
         const response = (res.data || {}) as { code?: number; data?: DesignerApiResponseData };
         if (res.statusCode !== 200 || !res.data || response.code !== 0) {
+          console.error('设计师列表请求失败', res.statusCode);
           resolve(null);
           return;
         }
         resolve(response.data || {});
       },
-      fail: () => {
+      fail: (error) => {
+        console.error('设计师列表网络异常', error);
         resolve(null);
       },
     });
@@ -257,7 +271,17 @@ function buildDesignerCardFromApi(item: DesignerApiListItem, index: number, curr
     ...tags,
   ].join(' ');
 
+  const mapWorks = (list: DesignerApiWorkItem[]): DesignerPreview[] => list.filter(work => Number(work.id) > 0).slice(0, 2).map(work => ({
+    id: Number(work.id), title: String(work.title || '未命名作品'), image: normalizeImageUrl(String(work.image || '')),
+    likesText: formatCompactCount(Number(work.likes) || 0), tagsText: (work.tags || []).slice(0, 2).join(' · '),
+    publishScope: String(work.publish_scope || 'square'),
+  }));
+  const fallback = Number(representativeWork.id) > 0 ? [representativeWork] : [];
+  const workSets = { popular: mapWorks(item.work_previews?.popular || fallback), latest: mapWorks(item.work_previews?.latest || fallback) };
   return {
+    certified: item.cert_status === 'approved',
+    specialtyText: String(item.specialties_text || designerTitle).replace(/^专业领域[：:]\s*/, ''),
+    workSort: 'popular', works: workSets.popular, workSets,
     id: Number(representativeWork?.id) || 0,
     title: truncate(title, 22),
     tags,
@@ -391,7 +415,7 @@ Page({
 
   onShareAppMessage() {
     return {
-      title: '设计师中心',
+      title: '找设计师',
       path: '/pages/distribution/distribution',
     };
   },
@@ -587,6 +611,41 @@ Page({
     }
   },
 
+  onWorkSortTap(e: { currentTarget: { dataset: { userId?: number | string; sort?: string } } }) {
+    const { userId, sort } = e.currentTarget.dataset;
+    if (sort !== 'popular' && sort !== 'latest') return;
+    this.setData({ designerCards: this.data.designerCards.map(card => card.designerUserId === Number(userId)
+      ? { ...card, workSort: sort, works: card.workSets[sort] } : card) });
+  },
+
+  onConsultDesigner(e: UserIdTapEvent) {
+    const userId = Number(e.currentTarget.dataset.userId);
+    if (!userId) return;
+    wx.navigateTo({ url: `/pages/designerhome/designerhome?userId=${userId}&consult=1`,
+      fail: () => wx.showToast({ title: '咨询页面打开失败，请重试', icon: 'none' }) });
+  },
+
+  onTraitPickerChange(e: { detail: { value: string } }) {
+    return this.onTraitFilterTap({ currentTarget: { dataset: { index: Number(e.detail.value) } } });
+  },
+
+  onFeatureTap(e: { currentTarget: { dataset: { feature: string } } }) {
+    const feature = e.currentTarget.dataset.feature;
+    if (feature === 'villa' || feature === 'courtyard') {
+      const index = this.data.tabs.findIndex(tab => tab.value === (feature === 'villa' ? 'template' : 'villa'));
+      void this.onMainTabTap({ currentTarget: { dataset: { index } } });
+      return;
+    }
+    // 专题入口复用模板广场公开的灵感/案例精选，不进入设计师的管理页面。
+    const app = getApp<any>();
+    app.globalData = app.globalData || {};
+    app.globalData.designerTemplateEntry = feature === 'collections' ? 'inspiration' : 'scene';
+    wx.switchTab({ url: '/pages/template/template', fail: () => {
+      delete app.globalData.designerTemplateEntry;
+      wx.showToast({ title: '页面打开失败，请重试', icon: 'none' });
+    } });
+  },
+
   onWorkTap(e: IdTapEvent) {
     const id = Number(e.currentTarget.dataset.id);
     const userId = Number(e.currentTarget.dataset.userId);
@@ -637,9 +696,5 @@ Page({
         });
       },
     });
-  },
-
-  onTabSwitch(e: TabSwitchEvent) {
-    console.log('切换 tab', e.detail);
   },
 });

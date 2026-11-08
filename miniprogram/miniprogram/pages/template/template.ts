@@ -683,6 +683,30 @@ Page({
 
   onShow() {
     this.syncTabBar()
+    this.consumeDesignerEntry();
+  },
+
+  consumeDesignerEntry() {
+    const app = getApp<any>();
+    const entry = app.globalData?.designerTemplateEntry;
+    if (!entry || this.data.loading || !this.data.mainTabs.length) return false;
+    delete app.globalData.designerTemplateEntry;
+    const index = this.data.mainTabs.findIndex(tab => tab.value === entry);
+    if (index < 0) {
+      wx.showToast({ title: '该专题暂未配置', icon: 'none' });
+      return false;
+    }
+    const tab = this.data.mainTabs[index];
+    const subTabs = getSubTabsByMainTab(tab.value, this.data.allSubTabs || []);
+    const preferred = entry === 'inspiration' ? subTabs.findIndex(tab => tab.value === 'selected_cases') : 0;
+    const subIndex = preferred < 0 ? 0 : preferred;
+    const subTab = subTabs[subIndex];
+    const thirdTabs = getThirdTabsBySubTab(subTab?.value || '', this.data.allThirdTabs || []);
+    this.setData({ currentMainTabIndex: index, subTabs, currentSubTabIndex: subIndex,
+      thirdTabs, currentThirdTabIndex: thirdTabs.length ? 0 : -1,
+      searchKeyword: '', searchInputValue: '', page: 1, hasMore: true });
+    void this.loadTemplates(true);
+    return true;
   },
 
   onReachBottom() {
@@ -855,7 +879,8 @@ Page({
       resultSummaryText: buildSummaryText(firstMain?.label || '模板广场', firstSub?.label || firstMain?.label || '模板广场', ''),
       emptyTipText: buildEmptyTip(firstMain?.label || '模板广场', firstSub?.label || ''),
     });
-    await this.loadTemplates(true);
+    this.setData({ loading: false });
+    if (!this.consumeDesignerEntry()) await this.loadTemplates(true);
   },
 
   async onMainTabTap(e: IndexTapEvent) {

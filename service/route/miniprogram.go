@@ -1571,6 +1571,10 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 				"specialties_text": profile["specialties_text"],
 				"cert_status":      profile["cert_status"],
 				"designer_visible": profile["designer_visible"],
+				"work_previews": gin.H{
+					"popular": designerWorkPreviews(payload["works"], mainTab, false),
+					"latest":  designerWorkPreviews(payload["works"], mainTab, true),
+				},
 			}
 			if representativeWork != nil {
 				item["representative_work"] = representativeWork
