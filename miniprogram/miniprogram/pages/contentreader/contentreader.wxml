@@ -1,5 +1,5 @@
-<block wx:if="{{__profileAccessMounted}}">
 <import src="../../components/content-presentation/content-presentation.wxml"/>
+<block wx:if="{{__profileAccessMounted}}">
 <view class="reader">
  <navigation-bar class="reader-navigation" title="内容阅读" back="{{true}}" background="#f7f5f1" />
  <view wx:if="{{loading}}" class="state" role="status">正在加载内容…</view>
@@ -8,7 +8,7 @@
   <view wx:if="{{presentationView.kind !== 'video'}}" class="reader-brand"><view class="brand-mark">甲</view><view><text class="brand-name">甲第灵光</text></view><text class="brand-share">甲第内容</text></view>
   <view wx:if="{{error}}" class="error"><text>{{error}}</text><button class="secondary" bindtap="loadContent">重试</button></view>
   <view class="article-paper article-paper-{{presentationView.kind}}"><template is="content-presentation" data="{{view: presentationView, tracking: true, mediaErrors: mediaErrors, videoStarted: videoStarted}}"/></view>
-  <view wx:if="{{presentationView.kind !== 'video' || content.source_url}}" class="source-card"><view><text class="source-label">内容来源</text><text class="source-value">{{content.source_note || (content.source_url ? '外部素材' : '创作者资料')}}</text></view><button wx:if="{{content.source_url}}" class="source-action" bindtap="copySource">复制原文</button></view>
+  <view wx:if="{{presentationView.sourceNote || content.source_url}}" class="source-card"><view><text class="source-label">内容来源</text><text class="source-value">{{presentationView.sourceNote || '原文链接'}}</text></view><button wx:if="{{content.source_url}}" class="source-action" bindtap="copySource">复制原文</button></view>
 
   <view wx:if="{{consentAvailable && consentChoicePending}}" class="notice"><text class="notice-title">是否开启访问分析？</text><text>{{consentNotice}}</text><text class="notice-caption">阅读、播放和分享均可正常使用，只有明确同意后才会记录访问数据。</text><view class="notice-actions"><button class="primary" bindtap="acceptTracking">同意开启</button><button class="secondary" bindtap="declineTracking">保持关闭</button></view></view>
   <button wx:elif="{{consentAvailable && presentationView.kind !== 'video'}}" class="consent-settings" bindtap="openTrackingSettings">访问分析已{{consented ? '开启' : '关闭'}} · 设置</button>

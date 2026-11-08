@@ -30,7 +30,7 @@ test('两个项目入口都只保留微信要求的五张本地导航图，不�
   assert.equal(nativeIcons.size, 5);
   for (const file of ['project.config.json', 'miniprogram/project.config.json']) {
     const config = JSON.parse(fs.readFileSync(path.join(root, file)));
-    assert.deepEqual(config.packOptions.include, []);
+    assert.deepEqual(config.packOptions.include, [{ type: 'file', value: 'components/content-presentation/content-presentation.wxml' }]);
     for (const item of manifest.assets) {
       assert.equal(isIgnored(config, item.path), !nativeIcons.has(item.path), `${file}: ${item.path}`);
     }

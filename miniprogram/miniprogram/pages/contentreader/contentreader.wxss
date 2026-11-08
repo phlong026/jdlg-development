@@ -211,6 +211,9 @@ page {
 }
 
 .source-action {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-width: 88px;
   width: auto;
   min-height: 34px;
   margin: 0;

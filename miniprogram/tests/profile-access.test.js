@@ -21,7 +21,7 @@ test('every business route hides its content behind the shared profile guard', (
     const template = fs.readFileSync(path.join(root, route + '.wxml'), 'utf8');
     const config = JSON.parse(fs.readFileSync(path.join(root, route + '.json'), 'utf8'));
     assert.equal(config.usingComponents && config.usingComponents['login-guard'], '/components/login-guard/login-guard', route);
-    assert.match(template, /^<block wx:if="\{\{__profileAccessMounted\}\}">/, route);
+    assert.match(template, /^(?:<import src="[^"\n]+"\s*\/>\s*)*<block wx:if="\{\{__profileAccessMounted\}\}">/, route);
     assert.match(template, /<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked"\s*\/>\s*$/, route);
   }
 });
@@ -32,7 +32,7 @@ test('every public route mounts the profile guard outside its protected content'
     const template = fs.readFileSync(path.join(root, route + '.wxml'), 'utf8');
     const config = JSON.parse(fs.readFileSync(path.join(root, route + '.json'), 'utf8'));
     assert.ok(config.usingComponents['login-guard'], route);
-    assert.match(template, /^<block wx:if="\{\{__profileAccessMounted\}\}">/, route);
+    assert.match(template, /^(?:<import src="[^"\n]+"\s*\/>\s*)*<block wx:if="\{\{__profileAccessMounted\}\}">/, route);
     assert.match(template, /<\/block>\s*<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked"\s*\/>\s*$/, route);
   }
 });

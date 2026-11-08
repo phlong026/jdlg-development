@@ -127,7 +127,8 @@ test('shared presentation template keeps swiper, native video controls, tracking
   assert.match(template, /data-tracking="\{\{tracking\}\}"/);
 
   const reader = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
-  assert.equal(reader.split(/\r?\n/)[0], '<block wx:if="{{__profileAccessMounted}}">');
+  assert.match(reader.split(/\r?\n/)[0], /^<import src=/);
+  assert.match(reader, /<block wx:if="{{__profileAccessMounted}}">/);
   assert.match(reader, /<import src="\.\.\/\.\.\/components\/content-presentation\/content-presentation\.wxml"\/>/);
   assert.match(reader, /<template is="content-presentation" data="\{\{view: presentationView, tracking: true, mediaErrors: mediaErrors, videoStarted: videoStarted\}\}"\/>/);
 });

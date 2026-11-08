@@ -83,7 +83,12 @@
         "value": "pages/Invitefriends/intro-logo.png"
       }
     ],
-    "include": []
+    "include": [
+      {
+        "type": "file",
+        "value": "components/content-presentation/content-presentation.wxml"
+      }
+    ]
   },
   "appid": "wx94fdc48861913ede",
   "projectname": "甲第灵光-新版首页-云端图片"

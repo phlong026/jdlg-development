@@ -171,10 +171,12 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   }
 
   const maxGalleryIndex = Math.max(0, viewMedia.length - 1);
+  const sourceNote = String(safeContent.source_note || '').trim();
   return {
     kind,
     title: String(safeContent.title || ''),
-    sourceNote: String(safeContent.source_note || ''),
+    // Import guidance belongs to the editor, not the published attribution.
+    sourceNote: sourceNote === '链接导入的可编辑草稿，请在发布前核对正文、排版和媒体。' ? '' : sourceNote,
     publishedAt: String(safeContent.published_at || ''),
     bodyText,
     bodyExpandable: kind === 'video' && bodyText.length > 110,
