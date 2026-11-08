@@ -56,6 +56,32 @@ func TestParseArticleHTMLKeepsTextLazyImagesAndEmbeddedVideosInOrder(t *testing.
 	}
 }
 
+func TestParseArticleHTMLRejectsShareDescriptionWithoutBody(t *testing.T) {
+	for name, body := range map[string]string{
+		"standalone": `<div id="js_common_share_desc">这只是分享摘要</div>`,
+		"wrapper":    `<div class="rich_media_wrp"><div id="js_common_share_desc">这只是分享摘要</div></div>`,
+		"empty body": `<div id="js_content"></div><div id="js_common_share_desc">这只是分享摘要</div>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseArticleHTML("https://mp.weixin.qq.com/s/summary", `<meta property="og:title" content="文章标题">`+body)
+			var resolved *ResolveError
+			if !errors.As(err, &resolved) || resolved.Code != "article_body_missing" {
+				t.Fatalf("share description must not count as article body: %v", err)
+			}
+		})
+	}
+}
+
+func TestParseArticleHTMLFallbackExcludesShareDescription(t *testing.T) {
+	doc, err := ParseArticleHTML("https://mp.weixin.qq.com/s/fallback", `<div class="rich_media_wrp"><p>完整正文</p><div id="js_common_share_desc">这只是分享摘要</div></div>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Body.Blocks) != 1 || doc.Body.Blocks[0].Text != "完整正文" || strings.Contains(doc.Body.LayoutHTML, "分享摘要") {
+		t.Fatalf("share description leaked into body: %#v", doc.Body)
+	}
+}
+
 func TestParseArticleHTMLUsesFallbackAndWarnsForUnknownIframe(t *testing.T) {
 	doc, err := ParseArticleHTML("https://mp.weixin.qq.com/s/fallback", `<html><body><div class="rich_media_wrp"><p>备用正文</p><iframe src="https://example.com/embed"></iframe></div></body></html>`)
 	if err != nil {

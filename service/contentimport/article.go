@@ -539,7 +539,6 @@ func selectArticleRoot(root *html.Node) *html.Node {
 		{"id", "js_content"},
 		{"class", "js_inner"},
 		{"class", "rich_media_wrp"},
-		{"id", "js_common_share_desc"},
 	} {
 		if found := findNode(root, func(node *html.Node) bool {
 			if selector.key == "class" {
@@ -554,6 +553,10 @@ func selectArticleRoot(root *html.Node) *html.Node {
 }
 
 func isDroppedArticleNode(node *html.Node) bool {
+	// The share description is a preview, even when it sits inside the article wrapper.
+	if attribute(node, "id") == "js_common_share_desc" {
+		return true
+	}
 	tag := strings.ToLower(node.Data)
 	if tag == "mpprofile" || tag == "mp-weixin-profile" || tag == "mp-weapp" || tag == "mp-miniprogram" {
 		return true
