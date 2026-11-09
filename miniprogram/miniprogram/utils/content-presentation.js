@@ -141,7 +141,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   const document = articleDocument(safeContent);
   const availableMedia = sourceMedia(safeContent, media, document);
   const kind = inferContentPresentation({ ...safeContent, media: availableMedia });
-  const frameWidth = Math.max(240, Math.round(Number(windowInfo && windowInfo.windowWidth || 375) - 36));
+  const frameWidth = Math.max(240, Math.round(Number(windowInfo && windowInfo.windowWidth || 375) - (options.edgeToEdge && kind === 'gallery' ? 0 : 36)));
   const windowHeight = Math.max(480, Number(windowInfo && windowInfo.windowHeight || 667));
   const prefix = String(options.prefix || 'content-presentation').replace(/[^A-Za-z0-9_-]/g, '-') || 'content-presentation';
   const videoLayout = document && document.video_layout === 'douyin' ? 'douyin' : 'channels';
@@ -161,7 +161,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
     const images = availableMedia.filter(item => item.kind === 'image');
     const copy = galleryCopy(bodyText, imageCaptions(document, images));
     bodyText = copy.bodyText;
-    viewMedia = images.map((item, index) => mediaFrame(item, index, frameWidth, windowHeight, prefix, copy.captions[index]));
+    viewMedia = images.map((item, index) => mediaFrame(item, index, frameWidth, windowHeight, prefix, copy.captions[index], options.galleryMaxHeightRatio ? Math.round(windowHeight * options.galleryMaxHeightRatio) : undefined));
   } else {
     const primary = availableMedia.find(item => item.kind === 'video');
     const videoBlock = document && document.blocks.find(block => block.kind === 'video');
