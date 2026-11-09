@@ -103,6 +103,7 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 	registerNativeReferenceHandlers(g, svc)
 	registerProjectCollectionHandlers(g, svc)
 	scope := func(c *gin.Context) tracking.Scope { return c.MustGet("workbench.scope").(tracking.Scope) }
+	registerContentWordExportHandler(g, svc, scope)
 	g.GET("/context", func(c *gin.Context) {
 		media := contentMediaConfigured(svc)
 		currentScope := scope(c)

@@ -699,6 +699,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	})
 	pub := v1.Group("/miniprogram/tracking")
 	registerPublicProjectCollectionHandlers(pub, svc)
+	registerContentInteractionRoutes(pub, svc, users, codes, makeProjectNoteProfileResolver(users.DB))
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	registerTrackingMyRoutes(pub, svc, users, codes)
 	registerTrackingMyLeadRoute(pub, svc, customerServiceModel, users, codes)
