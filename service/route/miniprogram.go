@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"path"
 	"regexp"
@@ -916,51 +917,7 @@ func isDesignerPublicVisible(user *model.User, profileData *model.UserProfile, l
 }
 
 func listPublicDesignerUserIDs(userDBModel *model.UserModel, keyword, mainTab string, limit, offset int) ([]int64, int64, error) {
-	if userDBModel == nil || userDBModel.DB == nil {
-		return nil, 0, errors.New("服务不可用")
-	}
-	conditions := []string{
-		"u.user_type = 'miniprogram'",
-		"COALESCE(up.designer_visible, 1) = 1",
-		"EXISTS (SELECT 1 FROM templates tp WHERE tp.creator_user_id = u.id AND tp.status = 'published')",
-	}
-	args := make([]interface{}, 0)
-	trimmedKeyword := strings.TrimSpace(keyword)
-	if trimmedKeyword != "" {
-		like := "%" + trimmedKeyword + "%"
-		conditions = append(conditions, `(u.username LIKE ? OR COALESCE(up.nickname, '') LIKE ? OR COALESCE(up.service_title, '') LIKE ? OR COALESCE(up.designer_bio, '') LIKE ? OR COALESCE(up.specialty_styles, '') LIKE ? OR EXISTS (SELECT 1 FROM templates tx WHERE tx.creator_user_id = u.id AND tx.status = 'published' AND (tx.name LIKE ? OR tx.description LIKE ?)))`)
-		args = append(args, like, like, like, like, like, like, like)
-	}
-	trimmedMainTab := normalizeDesignerCategoryValue(mainTab)
-	if trimmedMainTab != "" && trimmedMainTab != "all" {
-		categoryCondition, categoryArgs := buildDesignerCategoryMatchCondition("t", trimmedMainTab)
-		if categoryCondition != "" {
-			conditions = append(conditions, `EXISTS (SELECT 1 FROM templates t WHERE t.creator_user_id = u.id AND t.status = 'published' AND `+categoryCondition+`)`)
-			args = append(args, categoryArgs...)
-		}
-	}
-	whereClause := strings.Join(conditions, " AND ")
-	countQuery := `SELECT COUNT(*) FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id WHERE ` + whereClause
-	var total int64
-	if err := userDBModel.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	query := `SELECT u.id FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id WHERE ` + whereClause + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
-	queryArgs := append(append([]interface{}{}, args...), limit, offset)
-	rows, err := userDBModel.DB.Query(query, queryArgs...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-	ids := make([]int64, 0)
-	for rows.Next() {
-		var userID int64
-		if err := rows.Scan(&userID); err != nil {
-			return nil, 0, err
-		}
-		ids = append(ids, userID)
-	}
-	return ids, total, nil
+	return listPublicDesignerUserIDsWithFilters(userDBModel, publicDesignerFilters{Keyword: keyword, MainTab: mainTab}, limit, offset)
 }
 
 func pickRepresentativeDesignerWork(worksAny interface{}, mainTab string) gin.H {
@@ -1047,6 +1004,10 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 		displayName = strings.TrimSpace(latestCert.RealName)
 	}
 
+	designerRegion := ""
+	if profileData != nil {
+		designerRegion = profileData.DesignerRegion
+	}
 	designerTitle := "室内设计师"
 	certStatus := ""
 	bioText := "个人信息：室内设计师"
@@ -1174,6 +1135,7 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 			"experience_text":  experienceText,
 			"bio_text":         bioText,
 			"specialties_text": specialtiesText,
+			"designer_region":  designerRegion,
 			"cert_status":      certStatus,
 			"designer_visible": designerVisible,
 		},
@@ -1546,9 +1508,21 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 		mainTab := strings.TrimSpace(c.Query("main_tab"))
 		keyword := strings.TrimSpace(c.Query("keyword"))
 		offset := (page - 1) * pageSize
-		ids, total, err := listPublicDesignerUserIDs(userDBModel, keyword, mainTab, pageSize, offset)
+		filters := publicDesignerFilters{
+			Keyword: keyword, MainTab: mainTab,
+			Specialty: strings.TrimSpace(c.Query("specialty")), Region: c.Query("region"),
+			Sort: c.Query("sort"),
+		}
+		ids, total, err := listPublicDesignerUserIDsWithFilters(userDBModel, filters, pageSize, offset)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取设计师列表失败: " + err.Error()})
+			log.Printf("[designer-discovery] error operation=list_public_designers err=%v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取设计师列表失败，请稍后重试"})
+			return
+		}
+		specialties, err := listPublicDesignerSpecialties(userDBModel)
+		if err != nil {
+			log.Printf("[designer-discovery] error operation=list_specialty_options err=%v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取筛选选项失败，请稍后重试"})
 			return
 		}
 		list := make([]gin.H, 0, len(ids))
@@ -1569,6 +1543,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 				"designer_title":   profile["title"],
 				"experience_text":  profile["experience_text"],
 				"specialties_text": profile["specialties_text"],
+				"designer_region":  profile["designer_region"],
 				"cert_status":      profile["cert_status"],
 				"designer_visible": profile["designer_visible"],
 				"work_previews": gin.H{
@@ -1592,10 +1567,12 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 			"code": 0,
 			"msg":  "success",
 			"data": gin.H{
-				"list":      list,
-				"total":     total,
-				"page":      page,
-				"page_size": pageSize,
+				"list":            list,
+				"total":           total,
+				"page":            page,
+				"page_size":       pageSize,
+				"filters_applied": true,
+				"filter_options":  gin.H{"specialties": specialties},
 			},
 		})
 	})

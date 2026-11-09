@@ -9,7 +9,7 @@
         <view class="designer-profile-card">
           <view class="designer-profile-main">
             <view class="designer-avatar-shell {{isSelfHomepage ? 'designer-avatar-shell-clickable' : ''}}" bindtap="onAvatarTap">
-              <image wx:if="{{profile.avatar}}" class="designer-avatar" src="{{profile.avatar}}" mode="aspectFill" lazy-load />
+              <image wx:if="{{profile.avatar}}" class="designer-avatar" src="{{profile.avatar}}" mode="aspectFill" lazy-load binderror="onProfileAvatarError" />
               <view wx:else class="designer-avatar designer-avatar-fallback">
                 <view class="designer-avatar-head"></view>
                 <view class="designer-avatar-body"></view>
@@ -31,6 +31,10 @@
             </view>
           </view>
           <text class="designer-profile-desc designer-profile-desc-clickable" bindtap="onPreviewText" data-title="设计师简介" data-content="{{profile.bioText}}">{{profile.bioText}}</text>
+          <view class="designer-profile-region" wx:if="{{profile.region}}">
+            <text class="designer-profile-region-label">所在地</text>
+            <text class="designer-profile-region-value">{{profile.region}}</text>
+          </view>
           <view class="profile-action-row" wx:if="{{!isPreviewMode}}">
             <view wx:if="{{!isSelfHomepage}}" class="profile-action-button profile-action-button-secondary" bindtap="onToggleFollowDesigner">
               <text class="profile-action-button-text-secondary">{{isFollowed ? '已关注设计师' : '关注设计师'}}</text>
@@ -119,7 +123,8 @@
         <view class="designer-panel-shell" wx:if="{{currentTopTab === 'works'}}">
           <view class="designer-works-single" wx:if="{{visibleWorks.length}}">
               <view class="designer-work-card" wx:for="{{visibleWorks}}" wx:for-item="item" wx:key="id" bindtap="onWorkTap" data-id="{{item.id}}" data-publish-scope="{{item.publishScope}}" data-image="{{item.image}}">
-                <image class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+                <image wx:if="{{item.image}}" class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+                <view wx:else class="designer-work-image designer-work-image-empty">暂无作品封面</view>
                 <view class="designer-work-body">
                   <text class="designer-work-title">{{item.title}}</text>
                   <view class="designer-work-tags" wx:if="{{item.tags.length}}">
@@ -188,7 +193,7 @@
           <view class="designer-review-list" wx:if="{{filteredReviews.length}}">
           <view class="designer-review-item" wx:for="{{filteredReviews}}" wx:key="id">
             <view class="designer-review-avatar-shell">
-              <image wx:if="{{item.avatar}}" class="designer-review-avatar" src="{{item.avatar}}" mode="aspectFill" lazy-load />
+              <image wx:if="{{item.avatar}}" class="designer-review-avatar" src="{{item.avatar}}" mode="aspectFill" lazy-load binderror="onReviewAvatarError" data-index="{{index}}" data-id="{{item.id}}" />
               <view wx:else class="designer-review-avatar designer-review-avatar-fallback">{{item.avatarText}}</view>
             </view>
             <view class="designer-review-content">

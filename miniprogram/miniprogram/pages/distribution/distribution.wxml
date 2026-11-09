@@ -9,10 +9,10 @@
       <text class="designer-search-btn" bindtap="onSearchConfirm">搜索</text>
     </view>
     <view class="feature-row">
-      <view class="feature-item" bindtap="onFeatureTap" data-feature="cases"><image src="/assets/designer/discovery-cases.svg" /><text>原创案例</text></view>
-      <view class="feature-item" bindtap="onFeatureTap" data-feature="villa"><image src="/assets/designer/discovery-villa.svg" /><text>乡墅私宅</text></view>
-      <view class="feature-item" bindtap="onFeatureTap" data-feature="courtyard"><image src="/assets/designer/discovery-courtyard.svg" /><text>庭院设计</text></view>
-      <view class="feature-item" bindtap="onFeatureTap" data-feature="collections"><image src="/assets/designer/discovery-collections.svg" /><text>灵感合集</text></view>
+      <view class="feature-item" bindtap="onFeatureTap" data-feature="cases"><view class="feature-icon feature-icon-cases"></view><text>原创案例</text></view>
+      <view class="feature-item" bindtap="onFeatureTap" data-feature="villa"><view class="feature-icon feature-icon-villa"></view><text>乡墅私宅</text></view>
+      <view class="feature-item" bindtap="onFeatureTap" data-feature="courtyard"><view class="feature-icon feature-icon-courtyard"></view><text>庭院设计</text></view>
+      <view class="feature-item" bindtap="onFeatureTap" data-feature="collections"><view class="feature-icon feature-icon-collections"></view><text>灵感合集</text></view>
     </view>
   </view>
   <view class="content">
@@ -20,21 +20,23 @@
       <view class="tabs-inner"><view wx:for="{{tabs}}" wx:key="value" class="main-tab-item {{currentTabIndex === index ? 'active' : ''}}" bindtap="onMainTabTap" data-index="{{index}}">{{item.label}}</view></view>
     </scroll-view>
     <view class="filter-row">
-      <picker range="{{traitFilters}}" bindchange="onTraitPickerChange"><view class="filter-item">{{selectedTrait === '全部' ? '擅长方向' : selectedTrait}}<text class="chevron">⌄</text></view></picker>
-      <text class="filter-item muted">地区不限</text>
-      <text class="filter-item muted">综合排序</text>
+      <picker class="filter-picker" range="{{traitFilters}}" value="{{traitFilterIndex}}" disabled="{{loading}}" bindchange="onTraitPickerChange"><view class="filter-item {{selectedTrait !== '全部' ? 'filter-active' : ''}}"><text class="filter-label">{{selectedTrait === '全部' ? '擅长方向' : selectedTrait}}</text><view class="filter-arrow"></view></view></picker>
+      <picker class="filter-picker" mode="region" custom-item="不限" value="{{regionPickerValue}}" disabled="{{loading}}" bindchange="onRegionChange"><view class="filter-item {{selectedRegionText ? 'filter-active' : ''}}"><text class="filter-label">{{selectedRegionText || '地区不限'}}</text><view class="filter-arrow"></view></view></picker>
+      <picker class="filter-picker" range="{{designerSorts}}" range-key="label" value="{{designerSortIndex}}" disabled="{{loading}}" bindchange="onDesignerSortChange"><view class="filter-item {{designerSortIndex ? 'filter-active' : ''}}"><text class="filter-label">{{designerSorts[designerSortIndex].label}}</text><view class="filter-arrow"></view></view></picker>
     </view>
+    <text wx:if="{{contentReady}}" class="designer-result-count">共 {{designerCountText}} 位设计师</text>
     <text wx:if="{{resultSummaryText}}" class="result-summary">{{resultSummaryText}}</text>
     <view wx:if="{{loading && designerCards.length > 0}}" class="status-text">正在切换，暂时保留当前结果…</view>
     <view class="designer-list" wx:if="{{designerCards.length}}">
       <view class="designer-person-card" wx:for="{{designerCards}}" wx:key="designerUserId">
         <view class="designer-person-top">
           <view class="designer-person-main" bindtap="onDesignerTap" data-user-id="{{item.designerUserId}}">
-            <image wx:if="{{item.designerAvatar}}" class="designer-person-avatar" src="{{item.designerAvatar}}" mode="aspectFill" lazy-load />
+            <image wx:if="{{item.designerAvatar}}" class="designer-person-avatar" binderror="onDesignerAvatarError" data-user-id="{{item.designerUserId}}" src="{{item.designerAvatar}}" mode="aspectFill" lazy-load />
             <view wx:else class="designer-person-avatar avatar-fallback">{{item.designerAvatarText}}</view>
             <view class="designer-person-copy">
               <view class="designer-person-head"><text class="designer-person-name">{{item.designerName}}</text><text wx:if="{{item.certified}}" class="designer-person-badge">✓ 已认证</text></view>
               <text class="designer-person-title">{{item.specialtyText}}</text>
+              <text class="designer-person-region">{{item.regionText}}</text>
               <text class="designer-home-link">查看主页 ›</text>
             </view>
           </view>
@@ -43,7 +45,7 @@
         <view class="work-toolbar"><text class="work-section-title">代表作品</text>
           <view class="work-sort"><text class="{{item.workSort === 'popular' ? 'selected' : ''}}" bindtap="onWorkSortTap" data-user-id="{{item.designerUserId}}" data-sort="popular">点赞最多</text><text class="{{item.workSort === 'latest' ? 'selected' : ''}}" bindtap="onWorkSortTap" data-user-id="{{item.designerUserId}}" data-sort="latest">最新发布</text></view>
         </view>
-        <view class="works-grid" wx:if="{{item.works.length}}">
+        <view class="works-grid {{item.works.length === 1 ? 'works-grid-single' : ''}}" wx:if="{{item.works.length}}">
           <view class="work-card" wx:for="{{item.works}}" wx:for-item="work" wx:key="id" bindtap="onWorkTap" data-id="{{work.id}}" data-user-id="{{item.designerUserId}}" data-publish-scope="{{work.publishScope}}">
             <view class="work-cover"><image wx:if="{{work.image}}" src="{{work.image}}" mode="aspectFill" lazy-load /><view wx:else class="cover-empty">暂无封面</view><text class="work-likes">♡ {{work.likesText}}</text></view>
             <text class="work-title">{{work.title}}</text><text class="work-tags">{{work.tagsText}}</text>
@@ -53,8 +55,10 @@
       </view>
     </view>
     <view wx:elif="{{loading}}" class="status-text">正在加载设计师…</view>
-    <view wx:else class="empty-card"><text>{{emptyTipText}}</text><view bindtap="initializePage" class="retry-button">重新加载</view></view>
-    <view class="status-text" wx:if="{{!loading && !hasMore && designerCards.length}}">已展示全部设计师</view>
+    <view wx:else class="empty-card"><text>{{emptyTipText}}</text><view bindtap="onRetryDesigners" class="retry-button">重新加载</view></view>
+    <view wx:if="{{loadError && designerCards.length}}" class="status-text"><text>{{loadError}}</text><view bindtap="onRetryDesigners" class="retry-button">重新加载</view></view>
+    <view class="load-more-designers" wx:if="{{!loading && hasMore && designerCards.length}}" bindtap="onLoadMoreDesigners">加载更多设计师</view>
+    <view class="status-text" wx:if="{{!loadError && !loading && !hasMore && designerCards.length}}">已展示全部设计师</view>
   </view>
 </view>
 </block>

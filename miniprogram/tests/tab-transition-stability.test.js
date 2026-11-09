@@ -82,6 +82,7 @@ function loadDistribution() {
   const toasts = [];
   vm.runInNewContext(read('miniprogram/pages/distribution/distribution.js'), {
     exports: {},
+    require: name => require(path.resolve(root, 'miniprogram/pages/distribution', name)),
     Page: value => { definition = value; },
     wx: {
       getSystemInfoSync: () => ({ statusBarHeight: 20, windowWidth: 375 }),
@@ -135,6 +136,7 @@ test('设计师搜索和特征筛选失败时保留列表并恢复筛选语义',
   assert.equal(instance.data.searchKeyword, '');
   assert.equal(instance.data.designerCards, oldCards);
 
+  instance.data.traitFilters = ['全部', '庭院设计'];
   const traitPending = instance.onTraitFilterTap({ currentTarget: { dataset: { index: 1 } } });
   assert.equal(instance.data.designerCards, oldCards);
   requests[1].fail(new Error('offline'));

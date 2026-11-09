@@ -179,6 +179,7 @@ Page({
       experienceText: '一年经验',
       bioText: '个人信息：室内设计师',
       specialtiesText: '专业领域：室内设计，室外设计，庭院设计',
+      region: '',
       certStatusLabel: '',
     },
     stats: {
@@ -459,6 +460,7 @@ Page({
           experienceText: String(data?.profile?.experience_text || '一年经验'),
           bioText: String(data?.profile?.bio_text || '个人信息：室内设计师'),
           specialtiesText: String(data?.profile?.specialties_text || '专业领域：室内设计，室外设计，庭院设计'),
+          region: String(data?.profile?.designer_region || '').trim(),
           certStatusLabel: mapCertStatusLabel(String(data?.profile?.cert_status || '')),
         },
         stats: {
@@ -644,6 +646,40 @@ Page({
         urls: [this.data.profile.avatar],
       });
     }
+  },
+
+  onProfileAvatarError() {
+    if (this.data.profile.avatar) {
+      this.setData({ 'profile.avatar': '' });
+    }
+  },
+
+  onReviewAvatarError(e: any) {
+    const index = Number(e.currentTarget?.dataset?.index);
+    const reviewId = Number(e.currentTarget?.dataset?.id) || 0;
+    const filteredReviews = Array.isArray(this.data.filteredReviews) ? this.data.filteredReviews : [];
+    if (!Number.isInteger(index) || index < 0 || index >= filteredReviews.length) {
+      return;
+    }
+    const target = filteredReviews[index];
+    const nextFilteredReviews = filteredReviews.map((review: DesignerReviewItem, reviewIndex: number) => (
+      reviewIndex === index ? { ...review, avatar: '' } : review
+    ));
+    let cleared = false;
+    const nextAllReviews = (Array.isArray(this.data.allReviews) ? this.data.allReviews : []).map((review: DesignerReviewItem) => {
+      const matches = reviewId > 0
+        ? Number(review.id) === reviewId
+        : !cleared && review.avatar === target.avatar && review.name === target.name;
+      if (!matches || cleared) {
+        return review;
+      }
+      cleared = true;
+      return { ...review, avatar: '' };
+    });
+    this.setData({
+      filteredReviews: nextFilteredReviews,
+      allReviews: nextAllReviews,
+    });
   },
 
   async onToggleFollowDesigner() {

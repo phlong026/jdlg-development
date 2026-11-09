@@ -7,7 +7,7 @@ const root = path.join(__dirname, '../miniprogram');
 function harness() {
   let page; const navigations = [];
   const wx = { getSystemInfoSync: () => ({}), showToast() {}, navigateTo: o => navigations.push(o.url), request: o => o.success({statusCode:200,data:{code:0,data:{list:[{designer_user_id:7,designer_name:'真实设计师',cert_status:'pending_review',work_previews:{popular:[{id:2,title:'高赞',likes:99},{id:1,title:'旧作',likes:3}],latest:[{id:3,title:'新作',likes:1},{id:2,title:'高赞',likes:99}]}}],total:1}}}) };
-  vm.runInNewContext(fs.readFileSync(path.join(root,'pages/distribution/distribution.js'),'utf8'), {exports:{},wx,console,Page:p=>page=p, require});
+  vm.runInNewContext(fs.readFileSync(path.join(root,'pages/distribution/distribution.js'),'utf8'), {exports:{},wx,console,Page:p=>page=p, require: name => require(path.resolve(root, 'pages/distribution', name))});
   page.data = JSON.parse(JSON.stringify(page.data)); page.setData = v => Object.assign(page.data,v);
   return {page,navigations};
 }
