@@ -15,6 +15,8 @@ npm run test:tracking
 
 `miniprogram/utils/parameter.js` 是确定性生成物，不应手工修改。CI 质量门禁会同时验证 TypeScript 源码、JavaScript 运行文件和 Go 鉴权中间件的跨语言契约；不需要微信或生产服务器凭据。
 
+内容阅读与编辑预览的正文模板以 `miniprogram/components/content-presentation/content-presentation.wxml` 为唯一维护源。执行 `npm run build:tracking` 会把模板定义同步到两个页面的生成标记内，保证分包单独编译时也能显示正文；不要手改生成区。发布前执行 `npm run check:tracking` 检查同步状态，并运行 `node --test tests/content-reader-package.test.js` 验证独立编译，避免完整项目编译掩盖缺失模板的问题。
+
 图片发布清单为 `assets-cloud-manifest.json`，记录 45 张原图的字节数、SHA-256 和不可变 CDN 地址。当前发布前缀：
 
 `https://static.jiadilingguang.com/assets/miniprogram-releases/20261022-292ba168e0ef/`
