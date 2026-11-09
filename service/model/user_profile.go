@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 var allowedUserIdentityTypes = map[string]bool{
@@ -87,6 +89,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 	avatar VARCHAR(512) DEFAULT '',
 	designer_bio VARCHAR(1024) DEFAULT '',
 	specialty_styles VARCHAR(512) DEFAULT '',
+	designer_region VARCHAR(128) NOT NULL DEFAULT '',
 	designer_experience_years BIGINT NOT NULL DEFAULT 0,
 	service_title VARCHAR(128) DEFAULT '',
 	service_quote BIGINT NOT NULL DEFAULT 0,
@@ -112,6 +115,12 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 	}
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN designer_bio VARCHAR(1024) DEFAULT ''`)
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN specialty_styles VARCHAR(512) DEFAULT ''`)
+	if _, err := m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN designer_region VARCHAR(128) NOT NULL DEFAULT ''`); err != nil {
+		var mysqlErr *mysql.MySQLError
+		if !errors.As(err, &mysqlErr) || mysqlErr.Number != 1060 {
+			return fmt.Errorf("add user_profiles.designer_region: %w", err)
+		}
+	}
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN designer_experience_years BIGINT NOT NULL DEFAULT 0`)
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN service_title VARCHAR(128) DEFAULT ''`)
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN service_quote BIGINT NOT NULL DEFAULT 0`)
