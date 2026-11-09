@@ -1,0 +1,22 @@
+{
+  "version": "8.0.2",
+  "appid": "wx94fdc48861913ede",
+  "source_commit": "54585b0133464f3556f574a8c40221156b9be5eb",
+  "miniprogram_tree": "11ee8f0cd8508425d8be41219a346379444cc7e1",
+  "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "upload_status": "success",
+  "upload_process_exit_code": 0,
+  "upload_receipt": "CLI returned ✔ upload",
+  "checked_at": "2026-11-09T16:46:25+08:00",
+  "experience_evidence": {
+    "surface": "微信开发者工具原生上传入口，上传成功后读取",
+    "message": "上次提交已被选为体验版，本次上传将会覆盖体验版，是否继续？",
+    "action": "核对提示后取消再次上传，未重复提交"
+  },
+  "source_unchanged_after_upload": true,
+  "official_console_verified": false,
+  "official_console_reason": "当前浏览器工具不允许访问该后台URL，未通过其他浏览器绕过",
+  "device_uat_verified": false,
+  "backend_sql_deployed": false,
+  "remote_git_pushed": false
+}

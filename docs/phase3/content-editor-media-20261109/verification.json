@@ -21,6 +21,9 @@
   },
   "native_scope": "isolated fixtures, no real upload or publication",
   "remote_push": false,
-  "development_upload": false,
-  "backend_deployed": false
+  "development_upload": true,
+  "backend_deployed": false,
+  "uploaded_version": "8.0.2",
+  "experience_status": "开发工具确认上次提交已选为体验版",
+  "upload_receipt": "release/receipt.json"
 }
