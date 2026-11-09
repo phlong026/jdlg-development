@@ -441,7 +441,7 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 .reader-actions-two { grid-template-columns: 1fr 1.4fr; }
 .video-reader-actions { grid-template-columns: 1.25fr 1fr .75fr; }
 .reader-actions button { width: 100%; min-height: 88rpx; margin: 0; padding: 12rpx 8rpx; font-size: 25rpx; line-height: 1.4; }
-.reader-actions .action-icon { display: none; }
+.reader-actions .action-icon { display: inline-block; flex:none; }
 .article-header .meta { flex-wrap: wrap; }
 
 /* Note controls live below the native capsule, in normal document flow. */
@@ -491,9 +491,9 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
   color:#956936
 }
 
-.note-share-icon {
-  font-size:30px;
-  font-weight:400
+.note-toolbar-icon {
+  display:block;
+  flex:none
 }
 
 
@@ -562,10 +562,7 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 
 
 .note-menu-icon {
-  position:relative;
   display:block;
-  width:19px;
-  height:19px;
   flex:none;
   color:#956936
 }
@@ -573,122 +570,6 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 .is-danger .note-menu-icon {
   color:#b3483e
 }
-
-.icon-edit::before {
-  content:'✎';
-  font-size:25px;
-  line-height:19px
-}
-
-.icon-copy::before {
-  position:absolute;
-  content:'';
-  width:13px;
-  height:15px;
-  border:1.5px solid;
-  border-radius:2px;
-  left:0;
-  top:3px
-}
-
-.icon-copy::after {
-  position:absolute;
-  content:'';
-  width:12px;
-  height:13px;
-  border-top:1.5px solid;
-  border-right:1.5px solid;
-  left:5px;
-  top:0;
-  border-radius:2px
-}
-
-.icon-folder {
-  height:14px;
-  border:1.5px solid;
-  border-radius:2px
-}
-
-.icon-folder::before {
-  position:absolute;
-  content:'';
-  width:8px;
-  height:4px;
-  top:-5px;
-  left:-1.5px;
-  border:1.5px solid;
-  border-bottom:0;
-  border-radius:2px;
-  background:#fff
-}
-
-.icon-image {
-  border:1.5px solid;
-  border-radius:2px
-}
-
-.icon-image::before {
-  content:'⌁';
-  position:absolute;
-  left:2px;
-  bottom:-4px;
-  font-size:24px
-}
-
-.icon-word {
-  border:1.5px solid;
-  border-radius:2px
-}
-
-.icon-word::before {
-  content:'W';
-  position:absolute;
-  left:3px;
-  top:0;
-  font-size:13px;
-  font-weight:600
-}
-
-.icon-link::before {
-  content:'↗';
-  font-size:25px;
-  line-height:19px
-}
-
-.icon-settings::before {
-  content:'⚙';
-  font-size:23px;
-  line-height:19px
-}
-
-.icon-delete {
-  height:17px;
-  width:14px;
-  margin-left:3px;
-  border:1.5px solid;
-  border-radius:0 0 3px 3px
-}
-
-.icon-delete::before {
-  position:absolute;
-  content:'';
-  width:20px;
-  left:-4px;
-  top:-5px;
-  border-top:1.5px solid
-}
-
-.icon-delete::after {
-  position:absolute;
-  content:'';
-  width:7px;
-  height:3px;
-  left:2px;
-  top:-8px;
-  border:1.5px solid;
-  border-bottom:0
-}
-
 
 .article-paper-gallery {
   margin:0 -18px
@@ -857,6 +738,9 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 }
 
 .note-comment-entry {
+  display:flex;
+  align-items:center;
+  gap:8px;
   flex:1;
   min-width:0;
   min-height:38px;
@@ -868,6 +752,11 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
   font-size:14px;
   text-align:left;
   line-height:1.5
+}
+
+.note-entry-icon {
+  display:block;
+  flex:none
 }
 
 .note-dock-action {
@@ -897,18 +786,9 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 }
 
 .note-dock-icon {
-  font-size:29px;
-  line-height:29px
-}
-
-.note-chat-icon {
-  height:20px;
-  min-width:23px;
-  border:1.5px solid;
-  border-radius:12px;
-  font-size:20px;
-  line-height:12px;
-  margin:3px 0 5px
+  display:block;
+  flex:none;
+  margin:2px 0 4px
 }
 
 .note-modal-mask {
