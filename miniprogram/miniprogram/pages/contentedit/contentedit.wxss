@@ -691,3 +691,18 @@ button.settings-toggle { width: 100%; }
   .page-body { max-width: 900rpx; margin: 0 auto; }
   .media-stage { margin-left: 0; margin-right: 0; border-radius: 18rpx; }
 }
+
+/* 空态只保留一个添加入口，媒体就绪后再使用深色预览舞台。 */
+.gallery-stage-empty {
+  min-height: 0;
+  margin: 18rpx 0 24rpx;
+  border: 1rpx dashed #d7bda0;
+  border-radius: 20rpx;
+  background: #fffaf3;
+}
+.gallery-stage-empty .media-empty { min-height: 320rpx; padding: 28rpx; gap: 12rpx; color: #756450; }
+.gallery-empty-icon { color: #a67a45; font-size: 54rpx; line-height: 1; }
+.gallery-empty-title { color: #483b2e; font-size: 29rpx; font-weight: 600; }
+.gallery-empty-hint { color: #938575; font-size: 23rpx; }
+.gallery-stage-empty .compact { margin-top: 8rpx; }
+.gallery-upload-status { margin: 12rpx 0; color: #8c5e32; font-size: 24rpx; text-align: center; }

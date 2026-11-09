@@ -565,3 +565,42 @@ test('library videos without a thumbnail use a touchable preview card without an
   assert.ok(thumbnail.includes('bindtap="openEditorVideo"'));
   assert.doesNotMatch(thumbnail, /<video\b/, 'a controls=false native video would intercept the full-screen preview tap');
 });
+
+
+test('image upload survives the picker returning after its success callback', async () => {
+  let finish;
+  const { page } = loadEditor({ uploadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) });
+  page.setData({ presentation: 'gallery', owner_id: 'owner-a', rights: 'own', blocks: [] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg' }], 'image');
+  page._epoch += 1;
+  finish({ media_id: 'image-one', kind: 'image' });
+  await pending;
+  assert.equal(page.data.imageBlocks.length, 1);
+  assert.equal(page.data.imageBlocks[0].asset.local_path, 'tmp://one.jpg');
+  assert.equal(page.data.busy, false);
+});
+
+test('image upload ignores results after changing owner or unloading', async () => {
+  for (const change of [page => page.setData({ owner_id: 'owner-b' }), page => page.onUnload()]) {
+    let finish;
+    const { page } = loadEditor({ uploadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) });
+    page.setData({ presentation: 'gallery', owner_id: 'owner-a', rights: 'own', blocks: [] });
+    const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg' }], 'image');
+    change(page);
+    finish({ media_id: 'image-one', kind: 'image' });
+    await pending;
+    assert.equal(page.data.imageBlocks.length, 0);
+  }
+});
+
+test('typing gallery copy during upload is preserved when images finish', async () => {
+  let finish;
+  const { page } = loadEditor({ uploadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) });
+  page.setData({ presentation: 'gallery', owner_id: 'owner-a', rights: 'own', blocks: [] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg' }], 'image');
+  page.editPostText({ detail: { value: '上传时继续填写的正文' } });
+  finish({ media_id: 'image-one', kind: 'image' });
+  await pending;
+  assert.equal(page.data.postText, '上传时继续填写的正文');
+  assert.equal(page.data.imageBlocks.length, 1);
+});

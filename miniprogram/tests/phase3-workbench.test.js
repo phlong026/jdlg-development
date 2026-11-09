@@ -487,7 +487,7 @@ test('a delayed upload from the previous account cannot unlock the new account u
   releases.get('upload-1')();
   await oldUpload;
   assert.equal(page.data.busy, true, '旧账号迟到回调不得解锁新上传');
-  assert.equal(page._videoUploadActive.ownerID, 'owner-new');
+  assert.equal(page._mediaUploadActive.ownerID, 'owner-new');
 
   releases.get('upload-2')();
   await newUpload;

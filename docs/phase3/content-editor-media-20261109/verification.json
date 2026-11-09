@@ -1,0 +1,26 @@
+{
+  "frontend": {
+    "total": 1225,
+    "passed": 1221,
+    "skipped": 4,
+    "failed": 0
+  },
+  "backend_packages": [
+    "tracking",
+    "route",
+    "contentimport",
+    "contentstorage",
+    "contentcapture"
+  ],
+  "backend_test_env": {
+    "CGO_ENABLED": "0"
+  },
+  "go_vet": "passed",
+  "npm_audit": {
+    "total": 0
+  },
+  "native_scope": "isolated fixtures, no real upload or publication",
+  "remote_push": false,
+  "development_upload": false,
+  "backend_deployed": false
+}

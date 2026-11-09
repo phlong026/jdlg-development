@@ -129,7 +129,7 @@ function presentationSourceMedia(view) {
 
 Page({
   data: {
-    id: '', loading: true, busy: false, error: '', denied: false, disabled: false, loginRequired: false, context: null,
+    id: '', loading: true, busy: false, mediaUploadMessage: '', error: '', denied: false, disabled: false, loginRequired: false, context: null,
     title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2',
     presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoIntroductionExpanded: false, videoAdvancedExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {},
     blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false,
@@ -150,15 +150,15 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoIntroductionExpanded: false, videoAdvancedExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false });
+      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoIntroductionExpanded: false, videoAdvancedExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false, mediaUploadMessage: '' });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
       this._savedSignature = '';
-      this._videoUploadActive = null;
+      this._mediaUploadActive = null;
       this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
     this._token = token; this._epoch = (this._epoch || 0) + 1;
-    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._videoUploadActive });
+    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._mediaUploadActive });
     if (token && !this._loaded) this.load(this._epoch);
     else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
@@ -223,7 +223,7 @@ Page({
   toggleSettings() { this.setData({ settingsExpanded: !this.data.settingsExpanded }); },
   toggleMedia() { this.setData({ mediaExpanded: !this.data.mediaExpanded }); },
   selectPresentation(event) {
-    if (this.data.layoutReadOnly || this.data.legacyReadOnly || this.data.documentReadOnly) return;
+    if (this.data.busy || this.data.layoutReadOnly || this.data.legacyReadOnly || this.data.documentReadOnly) return;
     const presentation = String(event.currentTarget.dataset.presentation || 'article');
     if (!['article', 'gallery', 'video'].includes(presentation) || presentation === this.data.presentation) return;
     const blocks = this.data.blocks || [];
@@ -552,7 +552,8 @@ Page({
     this.setData({ blocks: next, postText: postText(next), cover_media_id: nextCover, ...blockViews(next, this.data.media), activeBlockIndex: -1, preview: null });
   },
   chooseMedia() {
-    if (!this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
+    if (this.data.busy) return;
+    if (!this.data.context || !this.data.context.media_upload_configured) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
     if (!this.data.owner_id) { this.setData({ error: '请先选择内容归属', 'fieldErrors.owner_id': '请选择内容归属', settingsExpanded: true }); if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0 }); return; }
     if (this.data.presentation === 'video' && !this.data.context.video_resumable_upload) { this.setData({ error: '当前版本暂不支持本地上传，请从素材库选择视频' }); return; }
     // epoch 必须在选图回调内取：相册/相机全屏页会触发页面 onHide/onShow，
@@ -573,52 +574,75 @@ Page({
       else this.setData({ error: '无法打开相册或读取视频，请检查权限后重试' });
     } });
   },
+  beginDocumentOperation() {
+    const operation = { operationID: `document-${this._mediaUploadSequence = (this._mediaUploadSequence || 0) + 1}`, token: this._token, id: this.data.id, ownerID: this.data.owner_id, rights: this.data.rights };
+    this._mediaUploadActive = operation;
+    this.setData({ busy: true, error: '' });
+    return operation;
+  },
+  documentOperationCurrent(operation) {
+    return this._mediaUploadActive === operation && !this._unloaded && operation.token === this._token && operation.token === String(wx.getStorageSync('token') || '') && operation.id === this.data.id && operation.ownerID === this.data.owner_id && operation.rights === this.data.rights;
+  },
+  finishDocumentOperation(operation) {
+    if (this._mediaUploadActive !== operation) return;
+    this._mediaUploadActive = null;
+    if (!this._unloaded && operation.token === this._token && operation.token === String(wx.getStorageSync('token') || '')) this.setData({ busy: false });
+  },
   chooseDocument() {
     if (!this.data.context || !this.data.context.media_upload_configured || this.data.busy) { wx.showToast({ title: '文档上传尚未配置', icon: 'none' }); return; }
     if (!this.data.owner_id || (this.data.rights !== 'own' && this.data.rights !== 'authorized')) { this.setData({ error: '请先选择内容归属并确认文档权属' }); return; }
+    const selection = { token: this._token, id: this.data.id, ownerID: this.data.owner_id, rights: this.data.rights };
+    const current = () => !this._unloaded && selection.token === this._token && selection.token === String(wx.getStorageSync('token') || '') && selection.id === this.data.id && selection.ownerID === this.data.owner_id && selection.rights === this.data.rights;
     wx.chooseMessageFile({ count: 1, type: 'file', extension: ['pdf', 'docx', 'pptx'], success: result => {
-      const epoch = this._epoch;
-      if (!this.current(epoch)) return;
+      if (!current()) return;
       const file = result.tempFiles && result.tempFiles[0];
       if (file) this.uploadDocument(file);
     }, fail: result => {
-      const epoch = this._epoch;
-      if (this.current(epoch) && !/cancel/i.test(String(result && result.errMsg || ''))) this.setData({ error: '文档选择失败，请重试' });
+      if (current() && !/cancel/i.test(String(result && result.errMsg || ''))) this.setData({ error: '文档选择失败，请重试' });
     } });
   },
   async uploadDocument(file) {
+    if (this.data.busy) return;
     const name = String(file && file.name || '');
     if (!/\.(pdf|docx|pptx)$/i.test(name) || Number(file && file.size || 0) > 20 * 1024 * 1024) { this.setData({ error: '首批仅支持20MB以内的 PDF、无宏 DOCX 和无宏 PPTX 原文件' }); return; }
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    const operation = this.beginDocumentOperation();
+    this.setData({ notice: '' });
     try {
-      const asset = await api.uploadWorkbenchMedia(file.path, 'document', this.data.owner_id, this.data.rights, name);
-      if (!this.current(epoch)) return;
+      const asset = await api.uploadWorkbenchMedia(file.path, 'document', operation.ownerID, operation.rights, name);
+      if (!this.documentOperationCurrent(operation)) return;
       if (!asset || asset.kind !== 'document' || (asset.mime !== 'application/pdf' && asset.mime !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && asset.mime !== 'application/vnd.openxmlformats-officedocument.presentationml.presentation')) throw new Error('服务端未返回可用的 PDF/DOCX/PPTX 文档');
       const candidate = { ...asset, local_path: file.path };
-      this.setData({ documentCandidates: mergeAssets(this.data.documentCandidates, [candidate]), busy: false, notice: '原文件已上传，正在保存文档资料' });
-      await this.archiveDocumentAsset(candidate, epoch);
-    } catch (error) { if (this.current(epoch)) { this.setData({ busy: false, error: error.message || '文档资料上传失败' }); wx.showToast({ title: error.message || '文档资料上传失败', icon: 'none' }); } }
+      this.setData({ documentCandidates: mergeAssets(this.data.documentCandidates, [candidate]), notice: '原文件已上传，正在保存文档资料' });
+      await this.archiveDocumentAsset(candidate, operation);
+    } catch (error) { if (this.documentOperationCurrent(operation)) { this.setData({ error: error.message || '文档资料上传失败' }); wx.showToast({ title: error.message || '文档资料上传失败', icon: 'none' }); } }
+    finally { this.finishDocumentOperation(operation); }
   },
   async archiveDocument(event) {
     const asset = this.data.documentCandidates[Number(event.currentTarget.dataset.index)];
     if (!asset || this.data.busy) return;
-    await this.archiveDocumentAsset(asset, this._epoch);
+    await this.archiveDocumentAsset(asset);
   },
-  async archiveDocumentAsset(asset, epoch) {
-    this.setData({ busy: true, error: '' });
+  async archiveDocumentAsset(asset, operation) {
+    // 上传与归档共用一次操作身份，原生选择器返回后的 onShow 不应中断它。
+    if (!operation || typeof operation !== 'object') {
+      if (this.data.busy) return;
+      operation = this.beginDocumentOperation();
+    }
+    if (!this.documentOperationCurrent(operation)) { this.finishDocumentOperation(operation); return; }
     try {
       const title = documentTitle(asset.title);
       const body = JSON.stringify({ schema: 1, media_id: asset.media_id });
-      const saved = await api.saveContent({ title, body, body_format: 'document_v1', source_url: '', source_note: '', rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: '', media_ids: [asset.media_id], expected_revision: 0 });
-      if (!this.current(epoch)) return;
+      const saved = await api.saveContent({ title, body, body_format: 'document_v1', source_url: '', source_note: '', rights: operation.rights, owner_id: operation.ownerID, cover_media_id: '', media_ids: [asset.media_id], expected_revision: 0 });
+      if (!this.documentOperationCurrent(operation)) return;
       // 文档单独建档，不能替换正在编辑的图文；同时保留请求期间新输入的内容。
       if (this.data.id || String(this.data.title || '').trim() || this.validBlocks().length || this.data.cover_media_id || String(this.data.source_note || '').trim() || String(this.data.source_url || '').trim()) {
-        this.setData({ busy: false, notice: '文档资料已单独保存，可在内容工作台查看；请继续编辑并保存当前图文' });
+        this.setData({ notice: '文档资料已单独保存，可在内容工作台查看；请继续编辑并保存当前图文' });
         return;
       }
       this._loaded = true;
-      this.setData({ id: saved.content_id, title, revision: saved.revision, version: saved.version, status: saved.status, body_format: 'document_v1', documentReadOnly: true, documentAsset: asset, legacyReadOnly: false, layoutReadOnly: false, busy: false, notice: '文档资料已保存，仅授权账号可取得原文件' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '原文件已上传，保存资料失败，可直接重试建档' }); }
+      this.setData({ id: saved.content_id, title, revision: saved.revision, version: saved.version, status: saved.status, body_format: 'document_v1', documentReadOnly: true, documentAsset: asset, legacyReadOnly: false, layoutReadOnly: false, notice: '文档资料已保存，仅授权账号可取得原文件' });
+    } catch (error) { if (this.documentOperationCurrent(operation)) this.setData({ error: error.message || '原文件已上传，保存资料失败，可直接重试建档' }); }
+    finally { this.finishDocumentOperation(operation); }
   },
   async openDocument() {
     const asset = this.data.documentAsset;
@@ -634,28 +658,31 @@ Page({
     if (!files || !files.length || this.data.busy) return;
     const includesVideo = String(pickedType || '') === 'video' || files.some(file => file.fileType === 'video') || this.data.presentation === 'video';
     if (includesVideo && !(this.data.context && this.data.context.video_resumable_upload)) { this.setData({ error: '当前服务尚未升级视频可续传，暂时无法上传本地视频' }); return; }
-    const epoch = this._epoch;
-    const operationID = `video-${Date.now()}-${this._videoUploadSequence = (this._videoUploadSequence || 0) + 1}`;
-    const uploadIdentity = String(pickedType || files[0].fileType || (this.data.presentation === 'video' ? 'video' : 'image')) === 'video' ? { operationID, token: this._token, id: this.data.id, ownerID: this.data.owner_id, rights: this.data.rights } : null;
-    const ownsVideoUpload = () => !uploadIdentity || !!this._videoUploadActive && this._videoUploadActive.operationID === uploadIdentity.operationID;
-    const sameVideoDraft = () => !uploadIdentity || ownsVideoUpload() && !this._unloaded && uploadIdentity.token === this._token && uploadIdentity.token === String(wx.getStorageSync('token') || '') && uploadIdentity.id === this.data.id && uploadIdentity.ownerID === this.data.owner_id && uploadIdentity.rights === this.data.rights;
+    const operationID = `media-${Date.now()}-${this._mediaUploadSequence = (this._mediaUploadSequence || 0) + 1}`;
+    // 原生选择器的 success 与 onShow 顺序不固定，操作归属不能依赖页面代次。
+    const uploadIdentity = { operationID, token: this._token, id: this.data.id, ownerID: this.data.owner_id, rights: this.data.rights };
+    const ownsMediaUpload = () => !!this._mediaUploadActive && this._mediaUploadActive.operationID === uploadIdentity.operationID;
+    const sameMediaDraft = () => ownsMediaUpload() && !this._unloaded && uploadIdentity.token === this._token && uploadIdentity.token === String(wx.getStorageSync('token') || '') && uploadIdentity.id === this.data.id && uploadIdentity.ownerID === this.data.owner_id && uploadIdentity.rights === this.data.rights;
     const releaseBusy = () => {
-      if (uploadIdentity && !ownsVideoUpload()) return;
-      if (uploadIdentity) this._videoUploadActive = null;
-      this.setData({ busy: false });
+      if (!ownsMediaUpload()) return;
+      this._mediaUploadActive = null;
+      this.setData({ busy: false, mediaUploadMessage: '' });
     };
-    if (uploadIdentity) this._videoUploadActive = uploadIdentity;
+    this._mediaUploadActive = uploadIdentity;
     this.setData({ busy: true, error: '', notice: '' });
-    const media = this.data.media.slice();
-    const blocks = this.data.blocks.slice();
-    let coverMediaID = this.data.cover_media_id;
+    const media = [];
+    const blocks = [];
+    const initialCover = this.data.cover_media_id;
+    let coverMediaID = initialCover;
     let failures = 0;
     let lastError = '';
     let coverWarning = '';
     // 串行上传：并发会互相争抢 busy 状态且服务端按 owner 串行建档；中途会话失效立即停止，
     // 已成功的不回滚，失败的计数提示可重试。
     for (let position = 0; position < files.length; position += 1) {
+      if (!sameMediaDraft()) { releaseBusy(); return; }
       const file = files[position];
+      this.setData({ mediaUploadMessage: `正在上传 ${position + 1}/${files.length}` });
       try {
         const kind = String(pickedType || file.fileType || (this.data.presentation === 'video' ? 'video' : 'image'));
         const asset = kind === 'video' ? await resumableVideoUpload().uploadResumableVideo({
@@ -665,11 +692,11 @@ Page({
           accountKey: sessionAccountKey(this._token),
           ownerID: this.data.owner_id,
           rights: this.data.rights,
-          isCurrent: sameVideoDraft,
-          onProgress: progress => { if (sameVideoDraft()) this.setData({ videoUploadProgress: progress, videoUploadMessage: `正在上传 ${progress}%` }); },
-          onPhase: message => { if (sameVideoDraft()) this.setData({ videoUploadMessage: message }); },
+          isCurrent: sameMediaDraft,
+          onProgress: progress => { if (sameMediaDraft()) this.setData({ videoUploadProgress: progress, videoUploadMessage: `正在上传 ${progress}%` }); },
+          onPhase: message => { if (sameMediaDraft()) this.setData({ videoUploadMessage: message }); },
         }) : await api.uploadWorkbenchMedia(file.tempFilePath, kind, this.data.owner_id, this.data.rights);
-        if (kind === 'video' ? !sameVideoDraft() : !this.current(epoch)) { releaseBusy(); return; }
+        if (!sameMediaDraft()) { releaseBusy(); return; }
         media.push({ ...asset, local_path: file.tempFilePath });
         const assetKind = asset.kind || kind;
         if (this.data.presentation === 'gallery' && assetKind !== 'image' || this.data.presentation === 'video' && assetKind !== 'video') { failures += 1; continue; }
@@ -681,19 +708,24 @@ Page({
         if (assetKind === 'video' && file.thumbTempFilePath) {
           try {
             const cover = await api.uploadWorkbenchMedia(file.thumbTempFilePath, 'image', this.data.owner_id, this.data.rights);
-            if (sameVideoDraft() && cover && cover.media_id) { media.push({ ...cover, local_path: file.thumbTempFilePath }); coverMediaID = cover.media_id; }
+            if (sameMediaDraft() && cover && cover.media_id) { media.push({ ...cover, local_path: file.thumbTempFilePath }); coverMediaID = cover.media_id; }
           } catch (_) { coverWarning = '视频已上传，但自动封面生成失败，可手动选择封面'; }
         }
       } catch (error) {
-        if (uploadIdentity ? !sameVideoDraft() : !this.current(epoch)) { releaseBusy(); return; }
+        if (!sameMediaDraft()) { releaseBusy(); return; }
         failures += 1;
         lastError = error && error.message || '媒体上传失败';
       }
     }
-    const arranged = this.data.presentation === 'article' ? blocks : socialBlocks(blocks);
-    if (uploadIdentity && !ownsVideoUpload()) return;
-    if (uploadIdentity) this._videoUploadActive = null;
-    this.setData({ media, blocks: arranged, postText: postText(arranged), cover_media_id: coverMediaID, ...blockViews(arranged, media), busy: false, videoUploadProgress: failures ? this.data.videoUploadProgress : 100, videoUploadMessage: '', 'fieldErrors.video': failures ? this.data.fieldErrors.video : '', error: failures && files.length === 1 ? lastError : '', preview: null, notice: coverWarning || (failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入内容，请保存预览') });
+    if (!sameMediaDraft()) { releaseBusy(); return; }
+    // 上传期间仍可填写正文；仅合并新增媒体，避免用旧快照覆盖刚输入的内容。
+    const baseBlocks = this.data.presentation === 'video' && blocks.some(block => block.kind === 'video') ? this.data.blocks.filter(block => block.kind !== 'video') : this.data.blocks;
+    const mergedBlocks = baseBlocks.concat(blocks);
+    const mergedMedia = mergeAssets(this.data.media, media);
+    const arranged = this.data.presentation === 'article' ? mergedBlocks : socialBlocks(mergedBlocks);
+    if (this.data.cover_media_id !== initialCover) coverMediaID = this.data.cover_media_id;
+    this._mediaUploadActive = null;
+    this.setData({ media: mergedMedia, blocks: arranged, postText: postText(arranged), cover_media_id: coverMediaID, ...blockViews(arranged, mergedMedia), busy: false, mediaUploadMessage: '', videoUploadProgress: failures ? this.data.videoUploadProgress : 100, videoUploadMessage: '', 'fieldErrors.video': failures ? this.data.fieldErrors.video : '', error: failures && files.length === 1 ? lastError : '', preview: null, notice: coverWarning || (failures ? `已上传 ${files.length - failures} 个，${failures} 个失败，可重试` : '已上传并加入内容，请保存预览') });
     // 上传按钮在页面底部，仅顶部的错误横幅容易被视口挡住；同步 toast 保证反馈可见。
     if (failures) wx.showToast({ title: `${failures} 个媒体上传失败`, icon: 'none' });
   },
