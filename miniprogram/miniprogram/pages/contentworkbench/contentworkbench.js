@@ -71,6 +71,7 @@ Page({
     this._loaded = false;
     this._morePending = false;
     this._coverState = null;
+    this._importActionActive = null;
     this._epoch = (this._epoch || 0) + 1;
     this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1;
     this.stopImportPoll();
@@ -84,7 +85,7 @@ Page({
     });
   },
   onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
-  onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ hasShareVisitAccess: false }); this.stopImportPoll(); },
+  onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this._importActionActive = null; this.setData({ hasShareVisitAccess: false, importBusy: false }); this.stopImportPoll(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() {
     this.stopImportPoll();
@@ -295,6 +296,23 @@ Page({
     if (signature !== this._importSignature) { this._importSignature = signature; this._importKey = api.mutationKey('content-import'); }
     return this._importKey;
   },
+  beginImportAction() {
+    const action = { operationID: `import-${Date.now()}-${this._importActionSequence = (this._importActionSequence || 0) + 1}`, token: this._token };
+    this._importActionActive = action;
+    this.setData({ importBusy: true, importError: '' });
+    return action;
+  },
+  ownsImportAction(action) { return !!action && !!this._importActionActive && action.operationID === this._importActionActive.operationID; },
+  importActionCurrent(action) {
+    // 返回本页会更新 epoch；操作身份和账号不变时，仍应收尾这次导入。
+    return this.ownsImportAction(action) && action.token === this._token && action.token === String(wx.getStorageSync('token') || '');
+  },
+  finishImportAction(action, state = {}) {
+    if (!this.ownsImportAction(action)) return false;
+    this._importActionActive = null;
+    this.setData({ importBusy: false, ...state });
+    return true;
+  },
   async submitImport() {
     if (!this.current(this._epoch)) return;
     const sourceURL = String(this.data.importURL || '').trim();
@@ -303,32 +321,32 @@ Page({
     if (!this.data.importEnabled || !sourceURL || !owner || (rights !== 'own' && rights !== 'authorized') || this.data.importBusy) {
       this.setData({ importError: '请填写分享链接、内容归属并确认素材权属' }); return;
     }
-    const epoch = this._epoch; const signature = [sourceURL, owner, rights].join('\n');
-    this.setData({ importBusy: true, importError: '' });
+    const signature = [sourceURL, owner, rights].join('\n');
+    const action = this.beginImportAction();
     try {
       const job = await api.submitImport({ source_url: sourceURL, owner_id: owner, rights, idempotency_key: this.importKey(signature) });
-      if (!this.current(epoch)) return;
-      if (signature !== [String(this.data.importURL || '').trim(), this.data.importOwner, this.data.importRights].join('\n')) { this.setData({ importBusy: false }); return; }
+      if (!this.importActionCurrent(action)) return;
+      if (signature !== [String(this.data.importURL || '').trim(), this.data.importOwner, this.data.importRights].join('\n')) { this.finishImportAction(action); return; }
       this._importWriteVersion = (this._importWriteVersion || 0) + 1;
       const decorated = decorateImport(job);
-      this.setData({ imports: [decorated].concat(this.data.imports.filter(item => item.import_id !== job.import_id)), importBusy: false });
-      if (pendingImport(job.status)) this.scheduleImportPoll(epoch);
-    } catch (error) { if (this.current(epoch)) this.setData({ importBusy: false, importError: error.message || '链接提交失败，请重试' }); }
+      this.finishImportAction(action, { imports: [decorated].concat(this.data.imports.filter(item => item.import_id !== job.import_id)) });
+      if (pendingImport(job.status)) this.scheduleImportPoll(this._epoch);
+    } catch (error) { if (this.importActionCurrent(action)) this.finishImportAction(action, { importError: error.message || '链接提交失败，请重试' }); }
   },
   async retryImport(event) {
     if (!this.current(this._epoch)) return;
     const id = String(event.currentTarget.dataset.id || '');
     const current = this.data.imports.find(item => item.import_id === id);
     if (!current || !current.can_retry || current.status === 'uncertain' || current.error_code === 'media_source_expired' || this.data.importBusy) return;
-    const epoch = this._epoch; this.setData({ importBusy: true, importError: '' });
+    const action = this.beginImportAction();
     try {
       const job = await api.retryImport(id);
-      if (!this.current(epoch)) return;
+      if (!this.importActionCurrent(action)) return;
       this._importWriteVersion = (this._importWriteVersion || 0) + 1;
-      this.setData({ importBusy: false, imports: [decorateImport(job)].concat(this.data.imports.filter(item => item.import_id !== job.import_id)) });
-      if (pendingImport(job.status)) this.scheduleImportPoll(epoch);
+      this.finishImportAction(action, { imports: [decorateImport(job)].concat(this.data.imports.filter(item => item.import_id !== job.import_id)) });
+      if (pendingImport(job.status)) this.scheduleImportPoll(this._epoch);
     }
-    catch (error) { if (this.current(epoch)) this.setData({ importBusy: false, importError: error.message || '暂时无法重试' }); }
+    catch (error) { if (this.importActionCurrent(action)) this.finishImportAction(action, { importError: error.message || '暂时无法重试' }); }
   },
   prepareReimport(event) {
     if (!this.current(this._epoch)) return;

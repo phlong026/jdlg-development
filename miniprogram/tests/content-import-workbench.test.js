@@ -33,6 +33,7 @@ function baseAPI(overrides = {}) {
   let sequence = 0;
   return Object.assign({
     workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a', 'owner-b'] }),
+    mySharesContext: async () => ({ can_view: false, owners: [] }),
     listContents: async () => ({ items: [] }),
     importCapabilities: async () => ({ enabled: true, platforms: [{ platform: 'wechat_article', available: true, reason: '图文可导入' }] }),
     listImports: async () => ({ items: [] }),
@@ -274,4 +275,86 @@ test('retry patches returned queued task and keeps polling during an older list 
  finishList({items:[{import_id:'job-retry',status:'failed',can_retry:true}]});await inflight;
  assert.equal(page.data.imports[0].status,'queued','late list overwrote the requeued task');
  assert.ok(runtime.timers.some(timer=>!timer.cleared),'late response stopped polling');
+});
+
+test('submit result survives hiding and returning to the same account', async () => {
+  let finishSubmit;
+  const runtime = harness(baseAPI({
+    submitImport: () => new Promise(resolve => { finishSubmit = resolve; }),
+  }));
+  const { page } = runtime;
+  page.onShow(); await tick(); await tick();
+  page.setData({ importEnabled: true, importURL: 'https://mp.weixin.qq.com/s/return', importOwner: 'owner-a', importRights: 'own' });
+  const pending = page.submitImport();
+  assert.equal(page.data.importBusy, true);
+
+  page.onHide(); page.onShow(); await tick(); await tick();
+  finishSubmit({ import_id: 'job-return', source_url: page.data.importURL, owner_id: 'owner-a', status: 'queued' });
+  await pending;
+
+  assert.equal(page.data.importBusy, false);
+  assert.equal(page.data.imports[0].import_id, 'job-return');
+});
+
+test('retry result survives hiding and returning to the same account', async () => {
+  let finishRetry;
+  const runtime = harness(baseAPI({
+    retryImport: () => new Promise(resolve => { finishRetry = resolve; }),
+  }));
+  const { page } = runtime;
+  page.onShow(); await tick(); await tick();
+  page.setData({ imports: [{ import_id: 'job-retry-return', status: 'failed', can_retry: true }] });
+  const pending = page.retryImport({ currentTarget: { dataset: { id: 'job-retry-return' } } });
+  assert.equal(page.data.importBusy, true);
+
+  page.onHide(); page.onShow(); await tick(); await tick();
+  finishRetry({ import_id: 'job-retry-return', owner_id: 'owner-a', status: 'queued', can_retry: false });
+  await pending;
+
+  assert.equal(page.data.importBusy, false);
+  assert.equal(page.data.imports[0].status, 'queued');
+});
+
+test('submit failure after returning explains the error and unlocks the form', async () => {
+  let failSubmit;
+  const runtime = harness(baseAPI({
+    submitImport: () => new Promise((_, reject) => { failSubmit = reject; }),
+  }));
+  const { page } = runtime;
+  page.onShow(); await tick(); await tick();
+  page.setData({ importEnabled: true, importURL: 'https://mp.weixin.qq.com/s/fail-return', importOwner: 'owner-a', importRights: 'own' });
+  const pending = page.submitImport();
+
+  page.onHide(); page.onShow(); await tick(); await tick();
+  failSubmit(new Error('导入服务暂时繁忙'));
+  await pending;
+
+  assert.equal(page.data.importBusy, false);
+  assert.equal(page.data.importError, '导入服务暂时繁忙');
+});
+
+test('a previous account import result cannot unlock or overwrite the current operation', async () => {
+  const finishes = [];
+  const runtime = harness(baseAPI({
+    submitImport: () => new Promise(resolve => { finishes.push(resolve); }),
+  }));
+  const { page, storage } = runtime;
+  page.onShow(); await tick(); await tick();
+  page.setData({ importEnabled: true, importURL: 'https://mp.weixin.qq.com/s/account-a', importOwner: 'owner-a', importRights: 'own' });
+  const accountA = page.submitImport();
+
+  page.onHide(); storage.token = 'account-b'; page.onShow(); await tick(); await tick();
+  page.setData({ importEnabled: true, importURL: 'https://mp.weixin.qq.com/s/account-b', importOwner: 'owner-b', importRights: 'own' });
+  const accountB = page.submitImport();
+  assert.equal(finishes.length, 2);
+
+  finishes[0]({ import_id: 'job-account-a', owner_id: 'owner-a', status: 'queued' });
+  await accountA;
+  assert.equal(page.data.importBusy, true, '旧账号结果不得解锁新账号操作');
+  assert.equal(page.data.imports.some(item => item.import_id === 'job-account-a'), false);
+
+  finishes[1]({ import_id: 'job-account-b', owner_id: 'owner-b', status: 'queued' });
+  await accountB;
+  assert.equal(page.data.importBusy, false);
+  assert.equal(page.data.imports[0].import_id, 'job-account-b');
 });

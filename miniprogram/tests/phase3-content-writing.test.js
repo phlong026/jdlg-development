@@ -122,6 +122,49 @@ test('first show reuses the prompt request started by onLoad', async () => {
   assert.equal(calls, 1);
 });
 
+test('account switch clears personal intro presets before loading the new account', async () => {
+  const h = harness('contentwriting');
+  h.apiStub.writingPrompts = async () => ({ prompts: [], intro_presets: [{ id: 1, name: '旧账号名片', content: '旧账号私有介绍' }] });
+  h.page.onLoad({}); await tick();
+  h.page.selectIntroPreset({ detail: { value: 0 } });
+  let finish;
+  h.apiStub.writingPrompts = () => new Promise(resolve => { finish = resolve; });
+  h.token('session-two'); h.page.onShow();
+  assert.equal(h.page.data.introPresets.length, 0);
+  assert.equal(h.page.data.introPresetIndex, -1);
+  h.page.setData({ facts: '新账号资料' });
+  assert.doesNotMatch(h.page.buildPrompt(), /旧账号私有介绍/);
+  assert.equal(typeof finish, 'function', '新账号应重新加载自己的预设');
+  finish({ prompts: [], intro_presets: [] }); await tick();
+});
+
+test('late prompt response cannot cross accounts or release the new account request', async () => {
+  const h = harness('contentwriting');
+  const requests = [];
+  h.apiStub.writingPrompts = () => new Promise(resolve => requests.push(resolve));
+  h.page.onLoad({});
+  h.token('session-two'); h.page.onShow();
+  assert.equal(requests.length, 2);
+  const currentRequest = h.page._typesRequest;
+  requests[0]({ prompts: [], intro_presets: [{ name: '旧账号', content: '旧资料' }] }); await tick();
+  assert.equal(h.page.data.introPresets.length, 0);
+  assert.equal(h.page._typesRequest, currentRequest);
+  assert.equal(h.page._typesLoadedOnce, false);
+  requests[1]({ prompts: [], intro_presets: [{ name: '新账号', content: '新资料' }] }); await tick();
+  assert.equal(h.page.data.introPresets[0].content, '新资料');
+  assert.equal(h.page._typesLoadedOnce, true);
+});
+
+test('prompt response checks current storage even before account-change onShow', async () => {
+  const h = harness('contentwriting');
+  let finish;
+  h.apiStub.writingPrompts = () => new Promise(resolve => { finish = resolve; });
+  h.page.onLoad({}); h.token('session-two');
+  finish({ prompts: [], intro_presets: [{ name: '旧账号', content: '旧资料' }] }); await tick();
+  assert.equal(h.page.data.introPresets.length, 0);
+  assert.notEqual(h.page._typesLoadedOnce, true);
+});
+
 test('prompt registry drives generation while the anti-fabrication clause stays client-side', async () => {
   const h = harness('contentwriting');
   h.apiStub.writingPrompts = async () => ({ prompts: [

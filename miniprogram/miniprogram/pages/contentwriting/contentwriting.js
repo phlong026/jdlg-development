@@ -44,7 +44,9 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this.cancelStream();
-      this.setData({ videoCopy: null, title: '', facts: '', result: '', notice: '', streaming: false, streamPartial: '', error: '账号已变化，请重新填写创作内容' });
+      this._typesLoadedOnce = false;
+      this._typesRequest = null;
+      this.setData({ introPresets: [], introPresetIndex: -1, videoCopy: null, title: '', facts: '', result: '', notice: '', streaming: false, streamPartial: '', error: '账号已变化，请重新填写创作内容' });
     }
     this._token = token;
     this.setData({ navigating: false, loginRequired: !token });
@@ -77,7 +79,11 @@ Page({
   loadWritingTypes() {
     if (this._typesLoadedOnce) return Promise.resolve();
     if (this._typesRequest) return this._typesRequest;
-    this._typesRequest = api.writingPrompts().then(result => {
+    const token = this._token;
+    if (!token || token !== String(wx.getStorageSync('token') || '')) return Promise.resolve();
+    const current = () => !this._unloaded && token === this._token && token === String(wx.getStorageSync('token') || '') && this._typesRequest === request;
+    const request = api.writingPrompts().then(result => {
+      if (!current()) return;
       const prompts = ((result && result.prompts) || []).filter(item => item && item.key && item.heading && item.instruction).map(item => {
         // 已有类型的名称属于产品导航；运营仍可调整指令，扩展类型保留服务端命名。
         const productType = writingTypes.find(type => type.key === item.key);
@@ -95,11 +101,12 @@ Page({
       }
       // B8: intro presets（名片/品牌介绍），追加到已知资料末尾而非自由 prompt。
       const presets = ((result && result.intro_presets) || []).filter(item => item && item.name && item.content).map(item => ({ id: item.id, name: item.name, content: item.content }));
-      if (presets.length) update.introPresets = presets;
+      update.introPresets = presets;
       if (Object.keys(update).length) this.setData(update);
       this._typesLoadedOnce = true;
-    }).catch(() => {}).finally(() => { this._typesRequest = null; });
-    return this._typesRequest;
+    }).catch(() => {}).finally(() => { if (this._typesRequest === request) this._typesRequest = null; });
+    this._typesRequest = request;
+    return request;
   },
   selectIntroPreset(event) {
     const index = Number(event.detail.value) || 0;
