@@ -118,7 +118,7 @@ func loadIntroPresets(ctx context.Context, db *sql.DB, actor int64) []introPrese
 	if db == nil || actor <= 0 {
 		return nil
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id,owner_kind,name,content FROM content_intro_presets WHERE enabled=1 AND (owner_kind='personal' AND owner_id=?) OR (owner_kind='tenant' AND owner_id='default') ORDER BY sort_order,id`, strconv.FormatInt(actor, 10))
+	rows, err := db.QueryContext(ctx, `SELECT id,owner_kind,name,content FROM content_intro_presets WHERE enabled=1 AND ((owner_kind='personal' AND owner_id=?) OR (owner_kind='tenant' AND owner_id='default')) ORDER BY sort_order,id`, strconv.FormatInt(actor, 10))
 	if err != nil {
 		return nil // table missing or transient: presets are additive, never blocking
 	}
