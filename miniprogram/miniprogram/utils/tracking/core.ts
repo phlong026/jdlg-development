@@ -211,9 +211,9 @@ function createTracker(io) {
       enabled = flag === true; consent = version || ''; suspended = false; account = io.account();
       if (next && active && foreground && active.visible) enter(active, active.share, true);
     },
-    // A failed config fetch is not a server kill switch or withdrawn consent.
-    // Pause collection/retries, retaining the bounded, expiring offline queue.
-    suspend() { if (!suspended) { stop(active, false); suspended = true; observationEpoch++; for (const p of pages.values()) notifyObservation(p); } },
+    // Configuration outages and route-level pauses are not withdrawal. Flush
+    // the legal queue when possible, then retain any offline remainder.
+    suspend() { if (!suspended) { stop(active, false); flush(); suspended = true; observationEpoch++; for (const p of pages.values()) notifyObservation(p); } },
     register(key, route, content, share, handoff) {
       // Profile verification may complete before this page is registered.
       checkAccount();

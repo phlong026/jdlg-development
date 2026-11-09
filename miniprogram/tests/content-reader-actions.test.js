@@ -175,3 +175,14 @@ test('copying a web link leaves an in-flight note interaction intact', async () 
   assert.equal(page.data.noteActionBusy, true);
   assert.equal(invalidations, 0);
 });
+
+test('note web sharing does not introduce another analysis authorization step', async () => {
+  let requests = 0;
+  const { page } = reader({ account: { token: 'account-one' }, realCopy: true,
+    tracking: { consented: () => false, showConsentChoices() { throw new Error('unexpected consent prompt'); }, prepareShare: async () => ({ path: '/reader?st=proof' }), splitPath: () => ({ query: { st: 'proof' } }), confirmPreparedShare() {} },
+    phase3API: { request: async () => { requests += 1; return { web_url: 'https://example.test/note' }; } } });
+  page.options = { content_id: 'content-one', content_version: '3' };
+  page.data.content = { title: '笔记' };
+  await page.copyWebLink();
+  assert.equal(requests, 1);
+});

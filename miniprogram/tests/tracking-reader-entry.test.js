@@ -106,35 +106,45 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
 }
 
 for (const options of [direct, { scene: sceneA }]) {
-  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until config and explicit consent arrive', async () => {
+  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until config enables automatic collection', async () => {
     const t = runtime({ deferConfig: true }); await t.mount(options);
     assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
     t.resolveConfig(); await settle();
-    assert.equal(t.entries.length, 0, 'configuration alone cannot imply consent');
-    t.grant();await settle();
-    assert.ok(t.entries.length >= 1, 'the held entry starts only after explicit consent');
+    assert.ok(t.entries.length >= 1, 'the held entry starts in reader automatic mode');
+    assert.equal(t.storage.share_tracking_consent_choice_v1,undefined,'automatic mode writes no explicit choice');
     assert.equal(t.page.data.contentReady, true);
     assert.equal(t.entries.at(-1).share_token, 'original_share');
     assert.equal(t.views().at(-1).share_id, 'share:original_share');
   });
 }
 
-test('explicit consent while the scene is still resolving preserves the legitimate initial share', async () => {
+test('automatic reader mode while the scene is still resolving preserves the legitimate initial share', async () => {
   const t = runtime({ deferScene: true }); await t.mount({ scene: sceneA });
-  await t.adapter.refreshConfig();t.grant();
+  await t.adapter.refreshConfig();
   t.resolveScene(); await settle();
   assert.equal(t.entries.at(-1).content_id, 'content_one');
   assert.equal(t.entries.at(-1).share_token, 'original_share');
   assert.equal(t.views().at(-1).share_id, 'share:original_share');
 });
 
-test('same-page content retry before consent keeps its unconsumed valid share', async () => {
+test('same-page content retry before automatic config keeps its unconsumed valid share', async () => {
   const t = runtime({ deferConfig: true }); await t.mount();
   t.page.retryMedia(); await settle();
   assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
-  t.resolveConfig(); await settle();t.grant();await settle(); await untilReady(t.page); await settle();
+  t.resolveConfig(); await settle();await untilReady(t.page); await settle();
   assert.equal(t.entries.at(-1).share_token, 'original_share');
   assert.equal(t.views().at(-1).share_id, 'share:original_share');
+});
+
+test('explicit withdrawal discards a pending reader share before automatic config can consume it',async()=>{
+ const t=runtime({deferConfig:true});await t.mount();assert.equal(t.entries.length,0);
+ t.withdraw();t.resolveConfig();await settle();t.grant();await settle();
+ assert.ok(t.entries.length>0);assert.equal(t.entries.at(-1).share_token,undefined);assert.equal(t.views().at(-1).share_id,undefined);
+});
+
+test('an already-declined reader never preserves its launch share for a later re-enable',async()=>{
+ const t=runtime();await t.adapter.refreshConfig();t.withdraw();await t.mount();assert.equal(t.entries.length,0);
+ t.grant();await settle();assert.ok(t.entries.length>0);assert.equal(t.entries.at(-1).share_token,undefined);assert.equal(t.views().at(-1).share_id,undefined);
 });
 
 test('real reader return cannot restore a share cleared by withdrawal and hidden re-consent', async () => {

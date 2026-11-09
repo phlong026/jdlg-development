@@ -71,11 +71,12 @@ test('reader share metadata stays inside native share boundaries and video copy 
  assert.match(template,/wx:if="\{\{presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
 });
 
-test('reader privacy choice is explicit after content and resolved users only see a compact settings entry',()=>{
+test('note reading has no extra analysis authorization card and settings remain in more',()=>{
  const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
- assert.match(template,/wx:if="\{\{consentAvailable && consentChoicePending\}\}" class="notice"/);
- assert.match(template,/wx:elif="\{\{consentAvailable && presentationView.kind !== 'video'\}\}" class="consent-settings"/);
- assert.ok(template.indexOf('class="article-paper"') < template.indexOf('class="notice"'), 'first consent choice belongs after readable content');
+ assert.doesNotMatch(template,/是否开启访问分析|同意开启|保持关闭|class="consent-settings"/);
+ assert.match(template,/bindtap="openNoteMore"/);
+ const actions=fs.readFileSync(path.join(root,'utils/note-reader-actions.js'),'utf8');
+ assert.match(actions,/访问分析设置/);
 });
 
 test('reader WXML uses evaluated conditions for loading error consent media and sharing visibility',()=>{

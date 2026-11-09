@@ -6,8 +6,9 @@ test('note renders unbranded gallery with anchored author actions and genuine in
  const file='./pages/contentreader/contentreader.wxml',source=execFileSync(compiler,[file,'./components/content-presentation/content-presentation.wxml'],{cwd:root,encoding:'utf8'});
  const runtime={window:{},console};vm.createContext(runtime);vm.runInContext(source,runtime);const render=runtime.$gwx(file);
  const base={__profileAccessMounted:true,contentReady:true,loading:false,content:{title:'原木住宅'},presentationView:{kind:'gallery',title:'原木住宅',bodyText:'完整正文',media:[{media_id:'image-one',url:'wxfile://one',width:340,height:300}],galleryHeight:300,galleryIndex:0},comments:[],interactionAvailable:true,commentCount:0,noteMenuOpen:false};
- const output=JSON.stringify(render(base));
+ const output=JSON.stringify(render({...base,consentAvailable:true,consentChoicePending:true,consentNotice:'访问分析测试告知'}));
  assert.match(output,/note-toolbar/);assert.match(output,/完整正文/);assert.match(output,/note-interaction-dock/);assert.doesNotMatch(output,/reader-brand|甲第内容/);
+ assert.doesNotMatch(output,/是否开启访问分析|同意开启|保持关闭|访问分析已/);
  const menu=JSON.stringify(render({...base,noteMenuOpen:true,noteMenu:[{key:'edit',label:'编辑笔记'},{key:'delete',label:'删除笔记'}]}));
  assert.match(menu,/编辑笔记/);assert.match(menu,/删除笔记/);
  const hidden=JSON.stringify(render({...base,__profileAccessMounted:false}));assert.doesNotMatch(hidden,/完整正文|编辑笔记/);

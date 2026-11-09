@@ -204,6 +204,13 @@ test('temporary config suspension preserves queued events and pauses sampling an
     .reduce((sum, event) => sum + event.visible_delta_ms, 0), 2000, 'configuration outage time is not recorded as visible');
 });
 
+test('route suspension attempts the current legal queue once and retains it when upload is offline',async()=>{
+  const online=runtime();await mount(online);online.setOnline();online.advance(5000);online.sdk.suspend();await settle();
+  assert.ok(online.batches.length>0);assert.equal(online.sdk.diagnostics().queued,0);
+  const offline=runtime();await mount(offline);offline.advance(1000);offline.sdk.suspend();await settle();
+  assert.ok(offline.sdk.diagnostics().queued>0);assert.equal(offline.batches.length,0);
+});
+
 test('long config suspension resumes with a clean session and attribution', async () => {
   const t = runtime(); await mount(t); const first = t.events('page_view')[0];
   t.sdk.suspend(); t.advance(SESSION_IDLE + 1); t.sdk.configure(true, 'notice-v1'); await settle();

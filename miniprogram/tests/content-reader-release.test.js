@@ -26,7 +26,7 @@ test('published rendering hides the import editor hint but preserves actual sour
   assert.equal(content.source_note, editorHint, 'published record is never rewritten');
 });
 
-test('native shared reader displays title and body before analytics and never exposes editor guidance', { skip: !fs.existsSync(compiler) }, () => {
+test('native shared reader displays title and body without extra analytics authorization or editor guidance', { skip: !fs.existsSync(compiler) }, () => {
   const file = './pages/contentreader/contentreader.wxml';
   const source = execFileSync(compiler, [file, './components/content-presentation/content-presentation.wxml'], { cwd: root, encoding: 'utf8', timeout: 10000 });
   const runtime = { window: {}, console }; vm.createContext(runtime); vm.runInContext(source, runtime);
@@ -35,7 +35,7 @@ test('native shared reader displays title and body before analytics and never ex
   const data = { __profileAccessMounted: true, loading: false, contentReady: true, content, presentationView: buildContentPresentation(content, [], {}), consentAvailable: true, consentChoicePending: true, consentNotice: '访问分析说明', guideVisible: true };
   const output = JSON.stringify(render(data));
   assert.match(output, /乡墅方案标题/); assert.match(output, /房屋方案完整正文/);
-  assert.ok(output.indexOf('房屋方案完整正文') < output.indexOf('访问分析说明'));
+  assert.doesNotMatch(output, /访问分析说明|是否开启访问分析|同意开启|保持关闭/);
   assert.doesNotMatch(output, /链接导入的可编辑草稿|请在发布前核对/);
   assert.match(output, /复制原文/);
   const gated = JSON.stringify(render({ ...data, __profileAccessMounted: false }));

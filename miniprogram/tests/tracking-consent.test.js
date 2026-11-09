@@ -68,6 +68,27 @@ test('unselected users can read and share without analytics or implicit attribut
   assert.doesNotMatch(shared.path,/st=/,'ordinary sharing remains available without an analytics token');
 });
 
+test('content reader automatically collects after valid config without persisting an explicit choice',async()=>{
+  const t=runtime(),page=t.register('pages/contentreader/contentreader',{data:{contentReady:true}});t.mount(page,{content_id:'content_one',content_version:'1',st:'incoming_share'});await settle();
+  assert.ok(t.entries.length>=1);
+  assert.equal(t.storage.share_tracking_consent_choice_v1,undefined,'automatic mode is not an explicit choice');
+  assert.equal(t.storage.share_tracking_consent_v1,undefined,'automatic mode writes no legacy acceptance');
+  assert.equal(t.adapter.consented(),true);assert.deepEqual({...t.adapter.consentChoice()},{resolved:true,accepted:true,automatic:true});
+});
+
+test('a historical explicit decline keeps content reader automatic mode off after a notice upgrade until actively enabled',async()=>{
+  const storage={share_tracking_consent_choice_v1:{accepted:false,explicit:true,version:'old-version',notice:'old notice'}};
+  const t=runtime({storage}),page=t.register('pages/contentreader/contentreader',{data:{contentReady:true}});t.mount(page,{content_id:'content_one',content_version:'1'});await settle();
+  assert.equal(t.entries.length,0);assert.equal(t.adapter.consented(),false);assert.deepEqual({...t.adapter.consentChoice()},{resolved:true,accepted:false,automatic:false});
+  assert.equal(t.adapter.setConsent(true),true);await settle();assert.ok(t.entries.length>=1);assert.equal(t.adapter.consented(),true);
+});
+
+test('leaving content reader reconfigures before another public route shows so automatic collection cannot spread',async()=>{
+  const t=runtime({offlineEvents:true}),reader=t.register('pages/contentreader/contentreader',{data:{contentReady:true}});t.mount(reader,{content_id:'content_one',content_version:'1'});await settle();assert.ok(t.entries.length>=1);const before=t.entries.length,queued=t.adapter.getSDK().diagnostics().queued;assert.ok(queued>0);
+  reader.onHide();const other=t.register('pages/utilitytools/utilitytools',{data:{contentReady:true}});t.mount(other,{st:'must-not-collect'});await settle();
+  assert.equal(t.entries.length,before);assert.equal(t.adapter.consented(),false);assert.ok(t.adapter.getSDK().diagnostics().queued>=queued,'route suspension preserves queued reader events');
+});
+
 test('explicit withdrawal survives config refresh and restart',async()=>{
   const t=runtime({accepted:true}),page=await legacy(t);assert.equal(t.entries.length,1);
   t.adapter.setConsent(false);const count=t.entries.length;
@@ -86,11 +107,17 @@ test('only acceptance of the current version and notice enables collection',asyn
   ]){
     const t=runtime({storage:old}),page=await legacy(t);
     assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);
-    assert.equal(t.adapter.consentChoice().resolved,false,'a stale choice must return to the unresolved state');
+    assert.equal(t.adapter.consentChoice().resolved,false,'a stale choice must return to the unresolved state outside automatic reader mode');
     assert.equal(page.data.contentReady,true);
   }
   const accepted=runtime({accepted:true});await legacy(accepted);
   assert.equal(accepted.adapter.consented(),true);assert.ok(accepted.entries.length>=1);
+});
+
+test('a stale decline outside the automatic reader keeps the pending share until the user makes a current choice',async()=>{
+  const storage={share_tracking_consent_choice_v1:{accepted:false,explicit:true,version:'old-version',notice:'old notice'}};
+  const t=runtime({storage});await legacy(t);assert.equal(t.entries.length,0);assert.equal(t.adapter.consentChoice().resolved,false);
+  assert.equal(t.adapter.setConsent(true),true);await settle();assert.equal(t.entries.at(-1).share_token,'incoming_share');
 });
 
 test('a changed notice collects nothing, asks again, and resumes only after a new explicit acceptance',async()=>{
@@ -185,9 +212,10 @@ test('settings page owns the switch and stale consent UI is gone from My and pag
     const code=fs.readFileSync(path.join(root,'pages/my/my.'+ext),'utf8');
     assert.doesNotMatch(code,/onTrackingConsentTap|onWithdrawTrackingConsent|syncTrackingConsent/,ext);
   }
-  // 编译产物守卫：index.js 仅在明确同意后记录，且页面展示不自动弹窗。
+  // 编译产物守卫：只有内容阅读页允许自动模式，且页面展示不自动弹窗。
   const bundled=fs.readFileSync(path.join(root,'utils/tracking/index.js'),'utf8');
   assert.doesNotMatch(bundled,/safely\(\(\)=>setConsent\(true\)\)/,'configuration cannot imply agreement');
+  assert.match(bundled,/pages\/contentreader\/contentreader/,'automatic mode must remain route-scoped');
   assert.match(bundled,/choice\.version===config\.consent_version/,'choice must match the current consent version');
   assert.match(bundled,/choice\.notice===config\.privacy_notice/,'choice must match the current full notice');
   assert.doesNotMatch(bundled,/if\(visible\)\{consentPage=page;showConsentChoices\(page\);\}/,'auto prompt must stay removed');

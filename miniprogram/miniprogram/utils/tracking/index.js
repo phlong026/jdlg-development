@@ -5,7 +5,8 @@ const routes = require('./routes');
 const STORAGE = 'share_tracking_queue_v1';
 const CONSENT = 'share_tracking_consent_v1';
 const CONSENT_CHOICE = 'share_tracking_consent_choice_v1';
-let sdk, config = { enabled: false }, installed = false, instance = '', timer;
+const AUTOMATIC_ROUTE = 'pages/contentreader/contentreader';
+let sdk, config = { enabled: false }, configLoaded = false, installed = false, instance = '', timer;
 let consentPage = null, consentRequest = null, consentChoice = null, consentRevision = 0, entryInvalidation = 0;
 const safely = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
 function id() { return 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); }
@@ -33,25 +34,46 @@ function getSDK() {
   });
   return sdk;
 }
+function storedConsentChoice() { return consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null); }
 function currentConsentChoice() {
   if(config.enabled!==true || !config.consent_version || !config.privacy_notice) return null;
-  const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
+  const choice=storedConsentChoice();
   return choice&&choice.explicit===true&&choice.version===config.consent_version&&choice.notice===config.privacy_notice ? choice : null;
 }
-function enabledConsent() {
+function explicitDecline() { const choice=storedConsentChoice();return !!(choice&&choice.explicit===true&&choice.accepted===false); }
+function automaticPage(page) { return String(page&&page.route||'').replace(/^\//,'')===AUTOMATIC_ROUTE; }
+function enabledConsent(page=consentPage) {
   const choice=currentConsentChoice();
-  return choice&&choice.accepted===true ? config.consent_version : '';
+  if(choice)return choice.accepted===true ? config.consent_version : '';
+  return config.enabled===true&&!!config.consent_version&&!!config.privacy_notice&&automaticPage(page)&&!explicitDecline()?config.consent_version:'';
 }
-function consentChoiceState() {
+function consentChoiceState(page=consentPage) {
   const choice=currentConsentChoice();
-  return {resolved:!!choice,accepted:!!(choice&&choice.accepted===true)};
+  if(choice)return {resolved:true,accepted:choice.accepted===true,automatic:false};
+  if(explicitDecline()&&automaticPage(page))return {resolved:true,accepted:false,automatic:false};
+  const automatic=!!enabledConsent(page);
+  return {resolved:automatic,accepted:automatic,automatic};
+}
+function configureFor(page,awaitConsent=true) {
+  const s=getSDK();if(!s)return;
+  if(!configLoaded){s.suspend();return;}
+  const valid=config.enabled===true&&!!config.consent_version&&!!config.privacy_notice;
+  const choice=currentConsentChoice();
+  const declined=!!(choice&&choice.accepted===false)||(automaticPage(page)&&explicitDecline());
+  const version=valid?enabledConsent(page):'';
+  if(version){s.configure(true,version,{awaitConsent});return;}
+  // A route without automatic or explicit consent must not inherit the
+  // reader's active generation. Suspend instead of withdrawing so queued
+  // reader events survive ordinary navigation; explicit decline still purges.
+  if(valid&&!declined){s.suspend();return;}
+  s.configure(config.enabled===true,'',{awaitConsent:declined?false:awaitConsent});
 }
 function refreshConfig() {
   return api.request('/config').then(value => {
-    config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++;
-    const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
+    config = value || {enabled:false}; configLoaded=true; if(config.enabled!==true)entryInvalidation++;
+    configureFor(consentPage);
     return config;
-  }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });
+  }).catch(() => { config={enabled:false}; configLoaded=false; if (sdk) sdk.suspend(); return config; });
 }
 function setConsent(accepted) {
   accepted=accepted===true;
@@ -61,10 +83,13 @@ function setConsent(accepted) {
   consentChoice={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,explicit:true,at:new Date().toISOString()};
   safely(()=>wx.setStorageSync(CONSENT_CHOICE,consentChoice));
   safely(() => accepted ? wx.setStorageSync(CONSENT,{version:config.consent_version,at:new Date().toISOString()}) : wx.removeStorageSync(CONSENT));
-  const s=getSDK(); if (s) s.configure(config.enabled===true,accepted ? config.consent_version : ''); return true;
+  const s=getSDK();
+  if(accepted)configureFor(consentPage,true);
+  else if(s)s.configure(config.enabled===true,'',{awaitConsent:false});
+  return true;
 }
-// A versioned, optional choice on every collectable public route. Page business
-// lifecycle callbacks never await this promise; declining leaves reading/sharing intact.
+// Content reading starts automatically after a valid notice is loaded; all other
+// public routes still require an explicit choice. Declining never blocks content.
 function consentPublicPage(page) {
   const policy=routes.policy(page&&page.route);
   return policy.collect && !(policy.excludeSelf&&page.data&&page.data.isSelfHomepage);
@@ -77,11 +102,11 @@ function showConsentChoices(page, manual=false) {
     // manual 由"我的"页主动触发，页面本身不是采集页，跳过采集页可见性校验。
     if(!target || (!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))))return false;
     if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
-    if(!manual && consentChoiceState().resolved)return false;
+    if(!manual && consentChoiceState(target).resolved)return false;
     const version=value.consent_version, notice=value.privacy_notice, revision=consentRevision;
     return new Promise(resolve=>{
       // Pass the complete configured notice, without truncation or implicit consent.
-      const active = enabledConsent() === version;
+      const active = enabledConsent(target) === version;
       try { wx.showModal({title:'访问分析说明',
         content:notice+'\n\n登录后，已获访问权限的管理人员可见账号昵称、头像及访问记录；不公开手机号或输入正文。分析为自愿选择。'+(active
           ?'\n\n当前状态：已开启。关闭后我们不再记录浏览数据，不影响阅读、分享或其他功能，可随时回来开启。'
@@ -137,10 +162,10 @@ async function prepareShare(page, original, channel, cacheKey, emitIntent = true
   const content=routes.binding(target.route,target.query);
   let context=state && state.context;
   try {
-    if(!context){if(!instance)instance=await anonymousInstance();context=await api.request('/entry','POST',{route_key:target.route,content_id:content.id,content_version:content.version,client_instance:instance,anonymous_id:instance,consent_version:enabledConsent()},undefined,true);}
+    if(!context){if(!instance)instance=await anonymousInstance();context=await api.request('/entry','POST',{route_key:target.route,content_id:content.id,content_version:content.version,client_instance:instance,anonymous_id:instance,consent_version:enabledConsent(page)},undefined,true);}
     if(!context.entry_token)return original;
     let version=content.version || (state && state.route===target.route && state.content.id===content.id ? context.content_version : 0);
-    if(content.id && !version){const targetEntry=await api.request('/entry','POST',{route_key:target.route,content_id:content.id,client_instance:instance,anonymous_id:instance,consent_version:enabledConsent()},undefined,true);version=targetEntry.content_version;}
+    if(content.id && !version){const targetEntry=await api.request('/entry','POST',{route_key:target.route,content_id:content.id,client_instance:instance,anonymous_id:instance,consent_version:enabledConsent(page)},undefined,true);version=targetEntry.content_version;}
     const share=await api.request('/shares','POST',{route_key:target.route,content_id:content.id,content_version:version,
       parent_share_id:context.share_id || undefined,channel,prepared:emitIntent===false,idempotency_key:id()},context.entry_token,true);
     if (!isCurrent() || !share.share_token || validityAtStart!==entryInvalidation || accountAtStart!==safely(()=>String(wx.getStorageSync('token')||''),'') || !s.diagnostics().enabled || (state && (s.get(page)!==state || state.context!==context))) return original;
@@ -341,7 +366,7 @@ function wrapPage(definition) {
     return invoke('onLoad',this,arguments);
   };
   result.onReady=function() { const output=invoke('onReady',this,arguments); safely(()=>{this.__trackingRendered=true; updateReady(this);warmTimeline(this);if(this.__trackingConsentVisible===true)showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
-  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{consentPageVisible(this,true);const s=getSDK();if(s)s.show(this);updateReady(this);warmTimeline(this);showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
+  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{consentPageVisible(this,true);const s=getSDK();if(s){configureFor(this);s.show(this);if(explicitDecline())configureFor(this,false);}updateReady(this);warmTimeline(this);showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
   result.onHide=function() { safely(()=>{consentPageVisible(this,false);cancelTimeline(this);if(sdk)sdk.hide(this,false);}); return invoke('onHide',this,arguments); };
   result.onUnload=function() { safely(()=>{consentPageVisible(this,false);cancelTimeline(this);if(this.__trackingTimelineStop)this.__trackingTimelineStop();if(sdk)sdk.hide(this,true);}); return invoke('onUnload',this,arguments); };
   result.onShareAppMessage=function() {
