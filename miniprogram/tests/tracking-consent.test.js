@@ -82,7 +82,6 @@ test('only acceptance of the current version and notice enables collection',asyn
     {share_tracking_consent_v1:{version:'notice-v1'}},
     {share_tracking_consent_choice_v1:{accepted:true,version:'notice-v1',notice}},
     {share_tracking_consent_choice_v1:{accepted:true,explicit:true,version:'old',notice}},
-    {share_tracking_consent_choice_v1:{accepted:false,explicit:true,version:'notice-v1',notice:'old notice'}},
   ]){
     const t=runtime({storage:old}),page=await legacy(t);
     assert.equal(t.adapter.consented(),false);assert.equal(t.entries.length,0);
@@ -91,6 +90,40 @@ test('only acceptance of the current version and notice enables collection',asyn
   }
   const accepted=runtime({accepted:true});await legacy(accepted);
   assert.equal(accepted.adapter.consented(),true);assert.ok(accepted.entries.length>=1);
+});
+
+// T7.3：改 notice 不升 version 时，明确关闭的存量记录不能被默认开启覆盖。
+test('a notice-only change keeps an explicit decline closed and never re-enables collection',async()=>{
+  const stored={accepted:false,explicit:true,version:'notice-v1',notice:'old notice',at:'2026-01-01T00:00:00.000Z'};
+  const t=runtime({storage:{share_tracking_consent_choice_v1:{...stored}},configuration:{enabled:true,consent_version:'notice-v1',privacy_notice:notice+' 改版'}});
+  const page=await legacy(t);
+  assert.equal(t.adapter.consentChoice().resolved,true,'明确关闭必须保持 resolved');
+  assert.equal(t.adapter.consentChoice().accepted,false);
+  assert.equal(t.adapter.consented(),false);
+  assert.equal(t.entries.length,0,'关闭状态不得因 notice 变更而恢复采集');
+  assert.equal(t.modals.length,0,'默认开启阶段不得再自动询问');
+  assert.equal(page.data.contentReady,true,'阅读能力不受影响');
+});
+
+// T7.3：明确关闭是撤回语义，版本变化也不能静默开启。
+test('an explicit decline stays closed even if the consent version changes',async()=>{
+  const stored={accepted:false,explicit:true,version:'old-version',notice:'old notice'};
+  const t=runtime({storage:{share_tracking_consent_choice_v1:{...stored}}});
+  await legacy(t);
+  assert.equal(t.adapter.consentChoice().resolved,true);
+  assert.equal(t.adapter.consented(),false);
+  assert.equal(t.entries.length,0);
+});
+
+// T7.3：旧的明确同意在 notice/版本变化后回到未决；这里只锁定 resolved 合约，
+// 不预设未来 T7.1 是「重新征询」还是「默认开启并标记来源」。
+test('a stale explicit acceptance returns to the unresolved state for the default-on migration',async()=>{
+  const stored={accepted:true,explicit:true,version:'notice-v1',notice:'old notice'};
+  const t=runtime({storage:{share_tracking_consent_choice_v1:{...stored}},configuration:{enabled:true,consent_version:'notice-v1',privacy_notice:notice+' 改版'}});
+  await legacy(t);
+  assert.equal(t.adapter.consentChoice().resolved,false);
+  assert.equal(t.adapter.consented(),false,'未匹配当前告知前不采集');
+  assert.equal(t.storage.share_tracking_consent_choice_v1.notice,'old notice','只读流程不得改写存量记录');
 });
 
 test('a changed notice collects nothing, asks again, and resumes only after a new explicit acceptance',async()=>{

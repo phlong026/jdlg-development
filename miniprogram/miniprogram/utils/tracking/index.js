@@ -36,7 +36,12 @@ function getSDK() {
 function currentConsentChoice() {
   if(config.enabled!==true || !config.consent_version || !config.privacy_notice) return null;
   const choice=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null);
-  return choice&&choice.explicit===true&&choice.version===config.consent_version&&choice.notice===config.privacy_notice ? choice : null;
+  if(!choice||choice.explicit!==true) return null;
+  // 存量迁移规则（P7：CONSENT_VERSION 不升级）：明确关闭是撤回语义，version/notice 变化
+  // 都不能把它变回「未选择」，否则默认开启会静默覆盖用户已关闭的选择。
+  if(choice.accepted!==true) return choice;
+  // 明确开启仍须匹配当前版本与完整告知，才算当前同意。
+  return choice.version===config.consent_version&&choice.notice===config.privacy_notice ? choice : null;
 }
 function enabledConsent() {
   const choice=currentConsentChoice();
