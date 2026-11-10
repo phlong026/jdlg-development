@@ -2,7 +2,7 @@
 <import src="/components/project-note-document/note-document.wxml" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>请使用受邀的甲第账号登录后查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">登录后仅项目成员可查看，内容不会公开。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button></view>
   <block wx:elif="{{view}}">
     <view class="brand"><view class="brand-mark">甲</view><view><text class="brand-name">甲第灵光</text><text class="muted">私人项目协作</text></view><text class="private-label">受邀可见</text></view>

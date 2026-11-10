@@ -71,10 +71,15 @@ Component({
             const editor = this.selectComponent('#nicknameGuard');
             if (!token) {
                 editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
+                // 匿名说明态（分享页未登录）：页面本体负责解释与去登录，这里不得弹登录浮层。
+                if ((options === null || options === void 0 ? void 0 : options.anonymous) === true) {
+                    this.setData({ visible: false, checking: false });
+                    return false;
+                }
+                this.setData({ visible: true, checking: false });
                 this.triggerEvent('gated');
                 if (deniedAgain())
                     return false;
-                this.setData({ visible: true, checking: false });
                 return false;
             }
             const current = () => this._checkRevision === revision && wx.getStorageSync('token') === token;
@@ -90,10 +95,11 @@ Component({
                     wx.removeStorageSync('token');
                     wx.removeStorageSync('userInfo');
                     editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
+                    // 先写浮层状态再抛 gated：分享页匿名降级会在 gated 处理里隐藏浮层，反向顺序会重开浮层。
+                    this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
                     this.triggerEvent('gated');
                     if (deniedAgain())
                         return false;
-                    this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
                     return false;
                 }
                 if (res.statusCode !== 200 || ((_b = res.data) === null || _b === void 0 ? void 0 : _b.code) !== 0)
@@ -104,10 +110,10 @@ Component({
                     wx.removeStorageSync('token');
                     wx.removeStorageSync('userInfo');
                     editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
+                    this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
                     this.triggerEvent('gated');
                     if (deniedAgain())
                         return false;
-                    this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
                     return false;
                 }
                 const cachedProfile = wx.getStorageSync('userInfo') || {};
