@@ -43,6 +43,11 @@
 > - 管理台构建：`background npm run build` 成功，`npm test` 767/767 通过
 > - 包内禁止 `.env.local`；迁移名必须与 `runner.py` 的 `MIGRATIONS` 一致
 
+> 交付包已归档（项目目录，不入 Git）：
+> - 路径：`开发版916/交付/后端及管理台-20261111-f39ac81/`
+> - 归档：`jdlg-release-f39ac81.tar.gz`（29,794,932 字节，SHA-256 `d9dac81e…e9df40f`），解包 421 文件哈希复核通过
+> - 说明：同目录 `RELEASE.txt`（提交、哈希、部署与回滚步骤）
+
 
 1. **构建**（工作区必须干净，记录提交号）：
    ```bash
