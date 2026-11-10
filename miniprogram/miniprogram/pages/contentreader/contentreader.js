@@ -51,8 +51,14 @@ Page({
    if(!/^[A-Za-z0-9_-]{8,128}$/.test(id)||!Number.isInteger(version)||version<1)throw new Error('内容入口不完整');
    const configuration=await tracking.refreshConfig();
    if(sequence!==this.loadSequence)return;
-   const consentAvailable=configuration.enabled===true&&!!configuration.consent_version&&!!configuration.privacy_notice,choice=consentState();
-   this.setData({consentNotice:configuration.privacy_notice||'',consentAvailable,consentChoicePending:consentAvailable&&!choice.resolved,consented:choice.accepted});
+   const consentAvailable=configuration.enabled===true&&!!configuration.consent_version&&!!configuration.privacy_notice;
+   // T7.1：默认开启在 refreshConfig 内完成；若静默写入失败（例如存储异常），这里补一次，
+   // 仍未决时才降级显示提示，避免静默失败。
+   if(consentAvailable&&!consentState().resolved)tracking.ensureDefaultConsent();
+   const choice=consentState();
+   // 服务明确关闭（enabled=false）不提示；配置未就绪或请求失败时给非阻塞提示，避免静默失败。
+   const consentUnavailable=configuration.configError===true||configuration.enabled===true;
+   this.setData({consentNotice:configuration.privacy_notice||'',consentAvailable,consentUnavailable:consentUnavailable&&!consentAvailable,consentChoicePending:consentAvailable&&!choice.resolved,consented:choice.accepted});
    // Public published content is independently readable, even when analytics is disabled or declined.
    let readPath='/contents/'+encodeURIComponent(id)+'/versions/'+version;
    const collectionID=this.options.collection_id, collectionVersion=Number(this.options.collection_version), position=Number(this.options.item_position);
@@ -83,7 +89,7 @@ Page({
  onContentVideoMetadata(event){const width=Number(event.detail&&event.detail.width),height=Number(event.detail&&event.detail.height),id=event.currentTarget.dataset.mediaId;if(!(width>0&&height>0&&id))return;let changed=false;const media=this.data.media.map(item=>{if(item.media_id!==id||item.width===width&&item.height===height)return item;changed=true;return {...item,width,height};});if(!changed)return;this.setData({media},()=>this.rebuildPresentation(this.data.presentationView&&this.data.presentationView.galleryIndex));},
  onResize(){this.rebuildPresentation(this.data.presentationView&&this.data.presentationView.galleryIndex);},
  acceptTracking(){if(tracking.setConsent(true)){this.setData({consented:true,consentChoicePending:false});}},
- declineTracking(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;tracking.setConsent(false);this.setData({consented:false,consentChoicePending:false});},
+ declineTracking(){this.entryGeneration=(this.entryGeneration||0)+1;this.entryAttributionAllowed=false;const saved=tracking.setConsent(false);this.setData({consented:false,consentChoicePending:false,consentNotice:saved?this.data.consentNotice:this.data.consentNotice+'（关闭暂未保存成功，本次会话已停止记录）'});},
  async openTrackingSettings(){await tracking.showConsentChoices(this);const choice=consentState();this.setData({consented:choice.accepted,consentChoicePending:this.data.consentAvailable&&!choice.resolved});},
  observePlayers(){
   if(this.stopObservingTracking)this.stopObservingTracking();

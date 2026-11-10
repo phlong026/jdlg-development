@@ -117,9 +117,9 @@ Page({
       this.setData({ trackingEnabled: trackingConsent.consented() })
       return
     }
-    trackingConsent.setConsent(false)
-    this.setData({ trackingEnabled: false })
-    wx.showToast({ title: '已关闭访问分析', icon: 'none' })
+    const saved = trackingConsent.setConsent(false)
+    this.setData({ trackingEnabled: trackingConsent.consented() })
+    wx.showToast({ title: saved ? '已关闭访问分析' : '关闭暂未保存成功，本次会话已停止记录', icon: 'none' })
   },
 
   ensureLoggedIn() {

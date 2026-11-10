@@ -44,6 +44,27 @@ function currentConsentChoice() {
   // 明确开启仍须匹配当前版本与完整告知，才算当前同意。
   return choice.version===config.consent_version&&choice.notice===config.privacy_notice ? choice : null;
 }
+// 读取存量选择：把「读取异常」与「确实没有记录」分开，异常时必须失败关闭，
+// 不能把读不到当成未选择而默认开启（可能覆盖已明确关闭）。
+function readStoredChoice() {
+  try { return { ok: true, value: wx.getStorageSync(CONSENT_CHOICE) || null }; }
+  catch (_) { return { ok: false, value: null }; }
+}
+// 访问分析默认开启：仅当 config 就绪、且用户从未明确选择时才静默 setConsent(true)。
+// 已明确关闭（resolved+accepted=false）不得被覆盖；config.enabled=false 时不得启用。
+function ensureDefaultConsent() {
+  if (config.enabled !== true || !config.consent_version || !config.privacy_notice) return false;
+  if (consentChoiceState().resolved === true) return false;
+  // 用一次可靠读取快照做判断：读取失败立即退出；读到明确关闭必须保留，不能被覆盖。
+  let stored = consentChoice;
+  if (!stored) {
+    const read = readStoredChoice();
+    if (!read.ok) return false;
+    stored = read.value;
+  }
+  if (stored && stored.explicit === true && stored.accepted !== true) return false;
+  return setConsent(true, 'default');
+}
 function enabledConsent() {
   const choice=currentConsentChoice();
   return choice&&choice.accepted===true ? config.consent_version : '';
@@ -52,21 +73,47 @@ function consentChoiceState() {
   const choice=currentConsentChoice();
   return {resolved:!!choice,accepted:!!(choice&&choice.accepted===true)};
 }
+let configSequence=0, appliedConfigSequence=0;
 function refreshConfig() {
+  // 请求序号：迟到的旧响应不得覆盖较新的配置，否则旧 enabled=true 会把已停用重新打开。
+  const sequence=(configSequence+=1);
   return api.request('/config').then(value => {
+    if(sequence<appliedConfigSequence)return config;
+    appliedConfigSequence=sequence;
     config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++;
     const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
+    // 访问分析默认开启（T7.1）：只在「从未明确选择」时静默记录；不做每次启动强制开启。
+    if (config.enabled === true) ensureDefaultConsent();
     return config;
-  }).catch(() => { config={enabled:false}; if (sdk) sdk.suspend(); return config; });
+  }).catch(() => {
+    if(sequence<appliedConfigSequence)return config;
+    appliedConfigSequence=sequence;
+    config={enabled:false,configError:true}; if (sdk) sdk.suspend(); return config;
+  });
 }
-function setConsent(accepted) {
+function setConsent(accepted, source) {
   accepted=accepted===true;
   if (accepted && (config.enabled!==true || !config.consent_version || !config.privacy_notice)) return false;
   consentRevision++; if(accepted!==true)entryInvalidation++;
   const previous=consentChoice || safely(()=>wx.getStorageSync(CONSENT_CHOICE),null) || safely(()=>wx.getStorageSync(CONSENT),null) || {};
-  consentChoice={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,explicit:true,at:new Date().toISOString()};
-  safely(()=>wx.setStorageSync(CONSENT_CHOICE,consentChoice));
-  safely(() => accepted ? wx.setStorageSync(CONSENT,{version:config.consent_version,at:new Date().toISOString()}) : wx.removeStorageSync(CONSENT));
+  // source 区分「用户主动选择」与「默认开启迁移」，便于后台核查来源；关闭永远视为用户主动。
+  const origin=accepted===true ? (source==='default' ? 'default' : 'user') : 'user';
+  const record={version:config.consent_version||previous.version||'',notice:config.privacy_notice||previous.notice||'',accepted:accepted===true,explicit:true,source:origin,at:new Date().toISOString()};
+  // 主选择记录写成功后才更新内存并开启 SDK；写入失败保持未决，避免「没落盘却已采集」。
+  try { wx.setStorageSync(CONSENT_CHOICE,record); }
+  catch (_) {
+    if (accepted !== true) {
+      // 关闭写失败：先停止运行时采集并保留本会话的关闭意图，调用方仍会收到 false 以便提示未保存。
+      consentChoice=record;
+      const s=getSDK(); if (s) s.configure(false, '');
+      if (sdk) sdk.suspend();
+      if (typeof wx.showToast === 'function') wx.showToast({ title: '关闭暂未保存成功，本次会话已停止记录', icon: 'none' });
+    }
+    return false;
+  }
+  consentChoice=record;
+  try { accepted ? wx.setStorageSync(CONSENT,{version:config.consent_version,at:new Date().toISOString()}) : wx.removeStorageSync(CONSENT); }
+  catch (_) { /* 主记录已成功，次要标记失败不阻断 */ }
   const s=getSDK(); if (s) s.configure(config.enabled===true,accepted ? config.consent_version : ''); return true;
 }
 // A versioned, optional choice on every collectable public route. Page business
@@ -75,6 +122,23 @@ function consentPublicPage(page) {
   const policy=routes.policy(page&&page.route);
   return policy.collect && !(policy.excludeSelf&&page.data&&page.data.isSelfHomepage);
 }
+// 统一同步页面上的同意状态：所有弹窗出口（确认/取消/异常/失败）都走这里，
+// 避免存储恢复或告知刷新后页面仍停留在旧的 consented / pending / notice。
+function syncConsentPageState(target) {
+  if (!target || !target.data) return;
+  const available = config.enabled === true && !!config.consent_version && !!config.privacy_notice;
+  const unavailable = !available && (config.configError === true || config.enabled === true);
+  const actual = consentChoiceState();
+  safely(() => {
+    const update = {};
+    if (Object.prototype.hasOwnProperty.call(target.data, 'consented')) update.consented = actual.accepted;
+    if (Object.prototype.hasOwnProperty.call(target.data, 'consentAvailable')) update.consentAvailable = available;
+    if (Object.prototype.hasOwnProperty.call(target.data, 'consentChoicePending')) update.consentChoicePending = available && !actual.resolved;
+    if (Object.prototype.hasOwnProperty.call(target.data, 'consentUnavailable')) update.consentUnavailable = unavailable;
+    if (Object.prototype.hasOwnProperty.call(target.data, 'consentNotice')) update.consentNotice = String(config.privacy_notice || '');
+    if (Object.keys(update).length) target.setData(update);
+  });
+}
 function showConsentChoices(page, manual=false) {
   if(!manual && !consentPublicPage(page)) return Promise.resolve(false);
   if(consentRequest) return consentRequest;
@@ -82,25 +146,40 @@ function showConsentChoices(page, manual=false) {
     const target=manual?page:consentPage;
     // manual 由"我的"页主动触发，页面本身不是采集页，跳过采集页可见性校验。
     if(!target || (!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))))return false;
+    // 配置失效（停用/缺字段/请求失败）也要把页面同步到最新状态，避免保留旧的询问块。
+    syncConsentPageState(target);
     if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
     if(!manual && consentChoiceState().resolved)return false;
     const version=value.consent_version, notice=value.privacy_notice, revision=consentRevision;
     return new Promise(resolve=>{
       // Pass the complete configured notice, without truncation or implicit consent.
       const active = enabledConsent() === version;
+      const choiceState = consentChoiceState();
+      // 三态：已开启 / 用户明确关闭 / 未决（默认开启尚未写入成功）。不能把未决说成用户关闭。
+      const statusCopy = choiceState.resolved
+        ? (choiceState.accepted ? '\n\n当前状态：已开启。关闭后不再记录浏览数据，不影响阅读、分享或其他功能。' : '\n\n当前状态：已关闭（你已选择关闭）。开启后将恢复记录，可随时关闭，不影响任何功能。')
+        : '\n\n当前状态：未设置（默认开启尚未生效）。可在此手动开启或保持关闭，不影响阅读、分享或其他功能。';
       try { wx.showModal({title:'访问分析说明',
-        content:notice+'\n\n登录后，已获访问权限的管理人员可见账号昵称、头像及访问记录；不公开手机号或输入正文。分析为自愿选择。'+(active
-          ?'\n\n当前状态：已开启。关闭后我们不再记录浏览数据，不影响阅读、分享或其他功能，可随时回来开启。'
-          :'\n\n当前状态：未开启。开启后我们记录浏览与分享数据用于改进服务，可随时关闭，不影响任何功能。'),
+        content:notice+'\n\n登录后，已获访问权限的管理人员可见账号昵称、头像及访问记录；不公开手机号或输入正文。我们默认记录访问与分享数据用于改进服务，可在设置中随时关闭，关闭后不再记录。'+statusCopy,
         showCancel:true,confirmText:active?'保持开启':'开启分析',cancelText:active?'关闭分析':'保持关闭',
         success(result){
-          if((!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))) || revision!==consentRevision || version!==config.consent_version || notice!==config.privacy_notice || config.enabled!==true){resolve(false);return;}
-          if(result.confirm!==true && result.cancel!==true){resolve(false);return;}
+          if(result.confirm!==true && result.cancel!==true){syncConsentPageState(target);resolve(false);return;}
           const accepted=result.confirm===true;
-          setConsent(accepted);
-          safely(()=>{if(target.data&&Object.prototype.hasOwnProperty.call(target.data,'consented'))target.setData({consented:accepted});});
-          resolve(true);
-        },fail(){resolve(false);}
+          // 明确关闭永远优先：即使弹窗期间告知/版本已变化，也不能让「关闭」被过期 guard 吞掉。
+          if(!accepted){
+            setConsent(false);
+            syncConsentPageState(target);
+            resolve(consentChoiceState().accepted===false);
+            return;
+          }
+          if((!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))) || revision!==consentRevision || version!==config.consent_version || notice!==config.privacy_notice || config.enabled!==true){syncConsentPageState(target);resolve(false);return;}
+          const ok=setConsent(accepted);
+          if(!ok&&accepted===true&&typeof wx.showToast==='function')wx.showToast({title:'开启暂未保存成功，请稍后重试',icon:'none'});
+          // 页面状态从真实选择派生：写入失败时不得显示成功（关闭失败已在本会话停止采集）；
+          // 存储恢复后保存成功也要同步清掉「未决提示」，否则仍显示询问块。
+          syncConsentPageState(target);
+          resolve(ok);
+        },fail(){syncConsentPageState(target);resolve(false);}
       }); } catch (_) {resolve(false);}
     });
   }).catch(()=>false);
@@ -426,5 +505,5 @@ function shareDiagnostics(page){
     ? {...(state.shareFailure||{}),attribution_status:status} : state.shareFailure||null;
 }
 function captureEntryValidity(){const revision=entryInvalidation,account=safely(()=>String(wx.getStorageSync('token')||''),'');return()=>revision===entryInvalidation&&account===safely(()=>String(wx.getStorageSync('token')||''),'');}
-module.exports={collectionToken:page=>safely(()=>getSDK().collectionToken(page),''),observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,confirmPreparedShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consentChoice:consentChoiceState,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
+module.exports={ensureDefaultConsent,collectionToken:page=>safely(()=>getSDK().collectionToken(page),''),observation:page=>safely(()=>getSDK().observation(page),null),observe:(page,listener)=>safely(()=>getSDK().observe(page,listener),()=>{}),captureEntryValidity,install,wrapPage,resolvePageOptions,getSDK,refreshConfig,setConsent,showConsentChoices:(page)=>showConsentChoices(page,true),prepareShare,confirmPreparedShare,preheatTimelineShare,shareDiagnostics:page=>safely(()=>shareDiagnostics(page),null),appendToken,splitPath,config:()=>config,consentChoice:consentChoiceState,consented:()=>!!enabledConsent(),emit:(page,type,extra)=>safely(()=>sdk&&sdk.emit(page,type,extra)),block:(page,blocked)=>safely(()=>sdk&&sdk.block(page,blocked))};
 export {};

@@ -13,7 +13,7 @@
 
 - **明确关闭优先级最高**：任何 `explicit === true` 且 `accepted !== true` 的记录，跨 version / notice 都保持 `resolved=true, accepted=false`，T7.1 的默认开启不得覆盖。
 - **明确开启**：`explicit === true` 且 `accepted === true`，且 version 与 notice 均匹配当前配置，才算当前同意。
-- **旧同意（accepted=true 但 version/notice 不匹配）回到未决**：T7.1 可以选择「按未决重新征询」或「默认重新开启并标记来源」，本文档只保证它不会被当作撤回；实现 T7.1 时必须二选一并回写本节。
+- **旧同意（accepted=true 但 version/notice 不匹配）回到未决**：T7.1 已实现并选择「默认重新开启并标记 `source=default`」（见 `ensureDefaultConsent`），不再重新弹窗征询；旧记录不会被当作撤回。
 - **从未选择（无 explicit 记录）才是 T7.1「首次默认开启」的对象**；这与「旧同意回到未决」是两条不同规则，不能混为一谈。
 
 ## 二、理由
@@ -32,7 +32,7 @@
 |---|---|---|
 | `explicit === true` 且 `accepted !== true`（明确关闭；含 `false`、缺字段、非布尔值，按保守关闭处理） | **不看 version / notice**，直接视为已决（resolved） | 保持关闭，默认开启不得覆盖 |
 | `explicit === true` 且 `accepted === true` 且 version+notice 均匹配当前配置 | 视为当前同意 | 继续采集 |
-| `explicit === true` 且 `accepted === true` 但 version 或 notice 不匹配 | 回到未决（resolved=false） | 由 T7.1 二选一处理：重新征询，或默认开启并标记来源；本任务不预设 |
+| `explicit === true` 且 `accepted === true` 但 version 或 notice 不匹配 | 回到未决（resolved=false） | T7.1 已定：默认重新开启并标记 `source=default`（不重新弹窗） |
 | 无 `explicit` 记录（旧 `share_tracking_consent_v1` 也不算 explicit） | 未决 | 只有这一类属于 T7.1「首次默认开启」对象 |
 | `config.enabled !== true` 或 config 未就绪 | 不视为已决 | 不采集、不弹窗、不报错 |
 
