@@ -3,7 +3,7 @@
 import { generateDeviceFingerprint, getCachedDeviceFingerprint, cacheDeviceFingerprint } from '../../utils/deviceFingerprint';
 
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter';
-import { hasCompleteProfile } from '../nickname-guard/profile-validation';
+import { hasCompleteProfile, hasProfileNickname } from '../nickname-guard/profile-validation';
 // 宿主页是否公开浏览页（决定"暂不登录"的导航行为），require 避免 TS 循环依赖。
 const { isPublicBrowseRoute } = require('../../utils/profile-access');
 
@@ -18,6 +18,7 @@ Component({
     checking: false,
     needsLogin: false,
     completingProfile: false,
+    nicknameOnly: false,
     error: '',
     agreedPrivacy: false,
     loggingIn: false,
@@ -51,8 +52,11 @@ Component({
         }
       } catch (e) { /* 导航失败时保持当前页，浮层已关闭 */ }
     },
-    async check(options?: { silent?: boolean; anonymous?: boolean }): Promise<boolean> {
+    async check(options?: { silent?: boolean; anonymous?: boolean; scope?: 'share' | '' }): Promise<boolean> {
       const silent = !!(options && options.silent);
+      // 组件内部的保存/重试/微信登录都走无参数 check()，必须复用最近一次核验的 scope。
+      const scope = (options as any)?.scope !== undefined ? String((options as any).scope) : String((this as any)._checkScope || '');
+      (this as any)._checkScope = scope;
       const revision = ((this as any)._checkRevision || 0) + 1;
       (this as any)._checkRevision = revision;
       const token = wx.getStorageSync('token');
@@ -111,13 +115,15 @@ Component({
         const cachedProfile = wx.getStorageSync('userInfo') || {};
         const sameAccount = Number(cachedProfile.id || 0) === id;
         wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
-        if (!hasCompleteProfile(profile)) {
+        // 分享查看场景（scope=share）只要求昵称；P8 已定：缺头像放行，不校验头像。
+        const nicknameOnly = scope === 'share';
+        if (!(nicknameOnly ? hasProfileNickname(profile.nickname) : hasCompleteProfile(profile))) {
           if (!editor || typeof editor.show !== 'function') throw new Error('资料填写暂不可用，请重试');
-          this.setData({ visible: false, checking: false, completingProfile: true });
+          this.setData({ visible: false, checking: false, completingProfile: true, nicknameOnly });
           this.triggerEvent('gated');
           // 同一账号正在填写时保留尚未提交的输入和上传状态。
           if (!editor.data?.visible || editor.data.promptToken !== token) {
-            editor.show({ required: true, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
+            editor.show({ required: true, nicknameOnly, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
           }
           return false;
         }

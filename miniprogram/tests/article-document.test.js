@@ -70,12 +70,15 @@ test('article renderer keeps sanitized layout and splits nested video into a nat
   assert.match(blocks[2].html, /^<section[^>]*><table[^>]*><tbody><tr><td[^>]*><blockquote[^>]*>后文<\/blockquote>/);
 });
 
-test('article renderer rejects unsafe or incomplete layout at the client boundary', () => {
+test('article renderer rejects unsafe layout and degrades missing media at the client boundary', () => {
   const media = [{ media_id: 'asset-0001', kind: 'image', url: 'https://example.test/image' }];
-  for (const layout of ['<script>alert(1)</script>', '<img src="https://evil.test/x">', '<img data-media-id="asset-missing">']) {
+  for (const layout of ['<script>alert(1)</script>', '<img src="https://evil.test/x">']) {
     const body = JSON.stringify({ schema: 1, layout_html: layout, blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
     assert.throws(() => renderArticleDocument(body, media, 320), /排版|媒体/);
   }
+  const missing = JSON.stringify({ schema: 1, layout_html: '<img data-media-id="asset-missing">', blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
+  const blocks = renderArticleDocument(missing, media, 320);
+  assert.ok(blocks.some(block => block.html && /素材加载失败/.test(block.html)), '缺失媒体降级为占位');
 });
 
 test('article editor save keeps the complete imported layout body byte-for-byte', () => {

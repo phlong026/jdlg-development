@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"crypto/sha256"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"image"
@@ -20,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"service/contentstorage"
 	"service/model"
 	"service/notification"
 	"service/tracking"
@@ -603,5 +606,72 @@ func TestProjectNoteNotificationEligibilityUsesCurrentPrivateGrant(t *testing.T)
 	}
 	if eligible, err := phase3NoticeEligible(context.Background(), svc, event, *scope); err != nil || eligible {
 		t.Fatalf("revoked eligible=%v err=%v", eligible, err)
+	}
+}
+
+func TestProjectNoteMediaLimitsMatchProductDecision(t *testing.T) {
+	if projectNoteImageMaxBytes != 20<<20 || projectNoteVideoMaxBytes != 500<<20 {
+		t.Fatalf("media limits diverged from P4: image=%d video=%d", projectNoteImageMaxBytes, projectNoteVideoMaxBytes)
+	}
+	if projectNoteUploadBodyMaxBytes <= projectNoteVideoMaxBytes {
+		t.Fatalf("upload body cap must exceed the video cap: body=%d video=%d", projectNoteUploadBodyMaxBytes, projectNoteVideoMaxBytes)
+	}
+}
+
+type fakeMultipartMediaStore struct {
+	putCalls, putFileCalls int
+	lastPath, lastDigest  string
+	lastSize              int64
+}
+
+func (f *fakeMultipartMediaStore) Put(context.Context, string, string, []byte, string) error {
+	f.putCalls++
+	return nil
+}
+func (f *fakeMultipartMediaStore) Get(context.Context, string, string, int64) ([]byte, string, error) {
+	return nil, "", nil
+}
+func (f *fakeMultipartMediaStore) PutFile(_ context.Context, _ string, _ string, filePath string, size int64, _ string, digest string) error {
+	f.putFileCalls++
+	f.lastPath, f.lastSize, f.lastDigest = filePath, size, digest
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return err
+	}
+	if info.Size() != size {
+		return errors.New("size mismatch")
+	}
+	return nil
+}
+
+// D23：>50 MiB 的对象必须走分片 PutFile，参数、摘要与临时文件清理可核验。
+func TestPutContentMediaObjectRoutesLargeObjectsToMultipart(t *testing.T) {
+	small := &fakeMultipartMediaStore{}
+	smallService := &tracking.Service{Config: tracking.Config{Tenant: "tenant-a"}, MediaObjects: small}
+	if err := putContentMediaObject(context.Background(), smallService, "asset-small", []byte("small"), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	if small.putCalls != 1 || small.putFileCalls != 0 {
+		t.Fatalf("small object must use Put: put=%d putFile=%d", small.putCalls, small.putFileCalls)
+	}
+
+	big := &fakeMultipartMediaStore{}
+	bigService := &tracking.Service{Config: tracking.Config{Tenant: "tenant-a"}, MediaObjects: big}
+	data := bytes.Repeat([]byte{'x'}, int(contentstorage.MaxObjectSize)+1)
+	if err := putContentMediaObject(context.Background(), bigService, "asset-big", data, "video/mp4"); err != nil {
+		t.Fatal(err)
+	}
+	if big.putFileCalls != 1 || big.putCalls != 0 {
+		t.Fatalf("large object must use PutFile: put=%d putFile=%d", big.putCalls, big.putFileCalls)
+	}
+	if big.lastSize != int64(len(data)) {
+		t.Fatalf("size = %d, want %d", big.lastSize, len(data))
+	}
+	want := sha256.Sum256(data)
+	if big.lastDigest != hex.EncodeToString(want[:]) {
+		t.Fatalf("digest mismatch: %s", big.lastDigest)
+	}
+	if _, err := os.Stat(big.lastPath); !os.IsNotExist(err) {
+		t.Fatalf("temporary upload file must be removed, stat err = %v", err)
 	}
 }

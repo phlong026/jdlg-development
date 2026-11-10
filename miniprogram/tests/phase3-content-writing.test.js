@@ -30,6 +30,7 @@ function harness(name) {
       if (id.endsWith('/deviceFingerprint')) return { getCachedDeviceFingerprint: () => '' };
       if (id.endsWith('/aiError')) return { sanitizeAIGenerationErrorMessage: value => value };
       if (id.endsWith('/promptReview')) return { blockUnsafeText: () => false };
+      if (String(id).includes('writing-policy')) return { ANTI_FABRICATION_CLAUSE: require(path.join(__dirname, '../miniprogram/utils/writing-policy.js')).ANTI_FABRICATION_CLAUSE };
       throw new Error(`unexpected require ${id}`);
     },
     setTimeout() {}, clearTimeout() {}, Promise, JSON, Object, String, Number, Date, Map, Set, Error, Uint8Array, ArrayBuffer,

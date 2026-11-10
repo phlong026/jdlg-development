@@ -42,6 +42,8 @@ Page({
      */
     onLoad(options) {
         this._authPageUnloaded = false;
+        // 分享查看场景（projectnoteview 带 from=share-view）：只要求昵称，缺头像放行（P8）。
+        this._loginScene = String(options && options.from || '') === 'share-view' ? 'share' : '';
         this._authPageEpoch = (this._authPageEpoch || 0) + 1;
         this.initNavLayout();
         // 检查是否已登录
@@ -419,11 +421,12 @@ Page({
             const { token, profile } = await this.fetchVerifiedProfile();
             if (!current())
                 return false;
-            if (!(0, profile_validation_1.hasCompleteProfile)(profile)) {
+            const shareView = this._loginScene === 'share';
+            if (!(shareView ? (0, profile_validation_1.hasProfileNickname)(profile.nickname) : (0, profile_validation_1.hasCompleteProfile)(profile))) {
                 const guard = this.selectComponent('#nicknameGuard');
                 if (!guard || typeof guard.show !== 'function')
                     throw new Error('资料填写暂不可用，请重试');
-                guard.show({ required: true, userID: Number(profile.id), nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
+                guard.show({ required: true, nicknameOnly: shareView, userID: Number(profile.id), nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
                 this.setData({ completingProfile: true });
                 return false;
             }

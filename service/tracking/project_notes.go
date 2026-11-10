@@ -137,6 +137,8 @@ type ProjectNote struct {
 	BodyFormat string    `json:"body_format"`
 	CoverID    string    `json:"cover_media_id,omitempty"`
 	MediaIDs   []string  `json:"media_ids,omitempty"`
+	// Media 是草稿的媒体类型元数据（D2/D11）：只带类型/尺寸，不暴露对象地址。
+	Media      []Asset   `json:"media,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -644,6 +646,30 @@ func (s *Service) ProjectNoteGetProjectDetail(ctx context.Context, scope Scope, 
 				var value ProjectNote
 				if json.Unmarshal(row.Payload, &value) != nil {
 					return ErrUnavailable
+				}
+				// D2/D11：按草稿 media_ids/cover 回填轻量类型元数据，客户端不再靠扩展名猜测。
+				seen := map[string]bool{}
+				ordered := append([]string{}, value.MediaIDs...)
+				if value.CoverID != "" {
+					ordered = append([]string{value.CoverID}, ordered...)
+				}
+				for _, mediaID := range ordered {
+					if mediaID == "" || seen[mediaID] {
+						continue
+					}
+					seen[mediaID] = true
+					record, readErr := r.Get(projectNoteMediaKind, mediaID)
+					if errors.Is(readErr, ErrNotFound) {
+						continue
+					}
+					if readErr != nil {
+						return readErr
+					}
+					var stored ProjectNoteMedia
+					if json.Unmarshal(record.Payload, &stored) != nil || stored.ProjectID != project.ID {
+						continue
+					}
+					value.Media = append(value.Media, Asset{ID: stored.Asset.ID, Kind: stored.Asset.Kind, Width: stored.Asset.Width, Height: stored.Asset.Height, MIME: stored.Asset.MIME, Title: stored.Asset.Title})
 				}
 				out.Notes = append(out.Notes, value)
 			}

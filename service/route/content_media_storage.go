@@ -2,6 +2,8 @@ package route
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
@@ -62,7 +64,8 @@ func contentMediaLimit(asset tracking.Asset) int64 {
 	if asset.Kind == "document" {
 		return documentMaxBytes
 	}
-	return 10 << 20
+	// P4：私有笔记图片上限 20 MiB；读路径必须与上传一致，否则 11-20 MiB 图片读回会 404/503。
+	return projectNoteImageMaxBytes
 }
 func validStoredMediaID(id string) bool {
 	if len(id) != 32 {
@@ -122,6 +125,39 @@ func readContentMedia(ctx context.Context, svc *tracking.Service, id string, max
 	}
 	return data, true, nil
 }
+
+// multipartPutter 由支持分片写入的大对象存储实现（COSStore 已有 PutFile）。
+type multipartPutter interface {
+	PutFile(ctx context.Context, tenant, assetID, filePath string, size int64, contentType, digest string) error
+}
+
+// P1-2：超过单对象上限（50 MiB）的素材走分片上传能力，避免 50-500 MiB 视频在 COS 强制失败。
+// 内存峰值问题（D13）仍需后续改为流式落盘。
+func putContentMediaObject(ctx context.Context, svc *tracking.Service, id string, data []byte, mime string) error {
+	if int64(len(data)) > contentstorage.MaxObjectSize {
+		putter, ok := svc.MediaObjects.(multipartPutter)
+		if !ok {
+			return contentstorage.ErrInvalidInput
+		}
+		tmp, err := os.CreateTemp("", "content-media-*")
+		if err != nil {
+			return err
+		}
+		path := tmp.Name()
+		defer os.Remove(path)
+		hash := sha256.Sum256(data)
+		if _, err = tmp.Write(data); err != nil {
+			tmp.Close()
+			return err
+		}
+		if err = tmp.Close(); err != nil {
+			return err
+		}
+		return putter.PutFile(ctx, svc.Config.Tenant, id, path, int64(len(data)), mime, hex.EncodeToString(hash[:]))
+	}
+	return svc.MediaObjects.Put(ctx, svc.Config.Tenant, id, data, mime)
+}
+
 func storeContentMedia(ctx context.Context, svc *tracking.Service, id string, data []byte, mime string) error {
 	if !validStoredMediaID(id) {
 		return contentstorage.ErrInvalidInput
@@ -130,7 +166,7 @@ func storeContentMedia(ctx context.Context, svc *tracking.Service, id string, da
 		return contentstorage.ErrUnavailable
 	}
 	if svc != nil && svc.MediaObjects != nil {
-		if err := svc.MediaObjects.Put(ctx, svc.Config.Tenant, id, data, mime); err != nil {
+		if err := putContentMediaObject(ctx, svc, id, data, mime); err != nil {
 			log.Printf("[content-media] error asset=%s operation=private_put error_type=%T", id, err)
 			if errors.Is(err, contentstorage.ErrPublicObject) {
 				return &contentimport.ResolveError{Code: "private_storage_required"}

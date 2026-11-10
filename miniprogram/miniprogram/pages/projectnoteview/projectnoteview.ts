@@ -4,7 +4,27 @@ const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
 const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
 
-const GENERIC_ERROR = '该私密方案暂不可访问，请确认已使用受邀账号登录。';
+// T7.8：按后端语义映射错误文案，不按状态码一刀切；不暴露设计师个人联系方式。
+const SHARE_ERROR = {
+  forbidden: '当前账号没有该项目的访问权限，请联系设计师。',
+  changed: '分享内容已更新，请重新打开。',
+  gone: '分享不存在或已失效，请让设计师重新分享。',
+  projectGone: '该方案暂不可访问，请联系设计师。',
+  media: '部分素材加载失败，可重试（分享本身有效）。',
+  network: '加载失败，请重试。',
+};
+const mediaFailureCount = media => (media || []).filter(item => item && (item.preview_error || !item.local_path)).length;
+const shareErrorOf = error => {
+  const status = Number(error && error.statusCode);
+  const message = String(error && (error.message || error.msg) || '');
+  if (status === 401) return { loginRequired: true, text: '' };
+  if (message.includes('分享已变更')) return { loginRequired: false, text: SHARE_ERROR.changed };
+  if (message.includes('仅受邀') || status === 403) return { loginRequired: false, text: SHARE_ERROR.forbidden };
+  if (message.includes('私人项目不可访问')) return { loginRequired: false, text: SHARE_ERROR.projectGone };
+  if (message.includes('分享不存在')) return { loginRequired: false, text: SHARE_ERROR.gone };
+  if (message.includes('媒体不可访问') || message.includes('素材不可访问')) return { loginRequired: false, text: SHARE_ERROR.media };
+  return { loginRequired: false, text: SHARE_ERROR.network };
+};
 const satisfactionLabels = { very_satisfied: '非常满意', needs_adjustment: '基本满意，需要调整', unsatisfied: '不太满意' };
 const eventID = () => 'project-note-open-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
 const feedbackRows = view => {
@@ -50,9 +70,20 @@ Page({
     if (!token) { wx.hideShareMenu(); this.setData({ loading: false, loginRequired: true, error: '' }); return; }
     return this.data.view ? this.revalidateShared() : this.loadShared();
   },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; wx.hideShareMenu(); },
+  onHide() {
+    this._visible = false; this._epoch = (this._epoch || 0) + 1;
+    // 切后台后旧操作不会再写回，三个操作锁必须复位，避免返回时永久 loading。
+    this.setData({ acknowledgingRead: false, activityLoading: false, busy: false });
+    wx.hideShareMenu();
+  },
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
+  // 操作阶段失败：401 统一进入登录恢复；其它保留可重试提示。
+  readerFailure(error, fallback) {
+    const status = Number(error && error.statusCode);
+    if (status === 401) { this.clearProtected(); this.setData({ loginRequired: true, error: '', busy: false, activityLoading: false, acknowledgingRead: false }); return; }
+    this.setData({ busy: false, activityLoading: false, notice: (error && error.message) || fallback });
+  },
   clearProtected() {
     this._accessVerified = false;
     this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
@@ -60,7 +91,7 @@ Page({
   async loadShared() {
     const accountToken = String(wx.getStorageSync('token') || '');
     if (!accountToken) { this.clearProtected(); this.setData({ loading: false, loginRequired: true, error: '' }); return; }
-    if (!/^[A-Za-z0-9_-]{8,256}$/.test(this._shareToken || '')) { this.clearProtected(); this.setData({ loading: false, loginRequired: false, error: GENERIC_ERROR }); return; }
+    if (!/^[A-Za-z0-9_-]{8,256}$/.test(this._shareToken || '')) { this.clearProtected(); this.setData({ loading: false, loginRequired: false, error: SHARE_ERROR.gone }); return; }
     this._accountToken = accountToken;
     const epoch = this._epoch = (this._epoch || 0) + 1;
     wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: true, loginRequired: false, error: '' });
@@ -70,7 +101,38 @@ Page({
       const assets = [];
       if (view.version && view.version.cover) assets.push(view.version.cover);
       for (const asset of view.version && view.version.media || []) if (!assets.some(item => item.media_id === asset.media_id)) assets.push(asset);
-      let media = await Promise.all(assets.map(async asset => Object.assign({}, asset, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, asset.media_id) })));
+      // 分享读取与媒体下载分开：素材 404 只做素材级失败隔离，401/403 仍按撤权处理。
+      // 媒体接口会先校验分享，404 也可能代表分享已失效：此时必须重新核验分享。
+      let mediaFailed = false, shareValidity = null;
+      // T3.2：素材下载并发上限 4，避免弱网下同时发起过多请求。
+      let media = new Array(assets.length);
+      let mediaCursor = 0;
+      const worker = async () => {
+        while (mediaCursor < assets.length) {
+          const index = mediaCursor++;
+          const asset = assets[index];
+          try { media[index] = Object.assign({}, asset, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, asset.media_id) }); continue; }
+          catch (error) {
+            const status = Number(error && error.statusCode);
+            if ([401, 403].includes(status)) throw error;
+            if (status === 404) {
+              shareValidity = shareValidity || (async () => {
+                try {
+                  const fresh = await api.getSharedProjectNote(this._shareToken);
+                  const same = !!(fresh && fresh.share && String(fresh.share.share_id || '') === String(view.share && view.share.share_id || ''));
+                  return same ? { ok: true } : { ok: false, error: Object.assign(new Error('分享内容已更新'), { statusCode: 403 }) };
+                } catch (error) { return { ok: false, error }; }
+              })();
+              // 分享已失效：按真实错误语义清空受保护数据，不能继续展示正文/反馈。
+              const verdict = await shareValidity;
+              if (!verdict.ok) throw verdict.error || Object.assign(new Error('分享不存在或已失效'), { statusCode: 404 });
+            }
+            mediaFailed = true;
+            media[index] = Object.assign({}, asset, { local_path: '', preview_error: '素材加载失败' });
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, Math.max(1, assets.length)) }, () => worker()));
       if (!this.current(epoch)) return;
       const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
       media = fitNoteMedia(media, windowInfo);
@@ -80,14 +142,16 @@ Page({
       const canConfirm = view.can_confirm === true;
       const confirmed = !!view.confirmation;
       this._accessVerified = true;
-      this.setData({ view, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, shareReady: !!view.share && !!this._shareToken }, () => {
+      this.setData({ view, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, notice: mediaFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, () => {
         if (!this.current(epoch)) return;
         if (wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
 
       });
-    } catch (_) {
+    } catch (error) {
       if (!this.current(epoch)) return;
-      wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: false, loginRequired: false, error: GENERIC_ERROR });
+      const copy = shareErrorOf(error);
+      wx.hideShareMenu(); this.clearProtected();
+      this.setData({ loading: false, loginRequired: copy.loginRequired, error: copy.text });
     }
   },
   async revalidateShared() {
@@ -102,18 +166,29 @@ Page({
       const sameShare = String(view.share && view.share.share_id || '') === String(cached.share && cached.share.share_id || '');
       const sameVersion = String(view.version && view.version.version_id || '') === String(cached.version && cached.version.version_id || '');
       if (!sameShare || !sameVersion) throw Object.assign(new Error('分享已变更'), { statusCode: 403 });
+      const unchanged = String(view.version && view.version.revision || '') === String(cached.version && cached.version.revision || '') && (this.data.media || []).length >= 0;
       this._accessVerified = true;
-      this.setData({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, shareReady: !!view.share && !!this._shareToken }, () => {
+      if (unchanged) {
+        // T3.5：分享/版本未变化时不重建媒体与正文块，只刷新状态，避免整页闪动。
+        const mediaFailures = (this.data.media || []).some(item => item && (item.preview_error || !item.local_path));
+        this.setData({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: mediaFailures ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(this.data.media), shareReady: !!view.share && !!this._shareToken }, () => {
+          if (this.current(epoch) && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
+        });
+        return;
+      }
+      const pendingMediaFailures = (this.data.media || []).some(item => item && (item.preview_error || !item.local_path));
+      this.setData({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: pendingMediaFailures ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(this.data.media), shareReady: !!view.share && !!this._shareToken }, () => {
         if (this.current(epoch) && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
       });
     } catch (error) {
       if (!this.current(epoch)) return;
       const status = Number(error.statusCode);
-      if ([401, 403, 404].includes(status)) {
-        wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: false, loginRequired: status === 401, error: status === 401 ? '' : GENERIC_ERROR });
+      const copy = shareErrorOf(error);
+      if ([401, 403, 404].includes(status) || copy.loginRequired) {
+        wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: false, loginRequired: copy.loginRequired, error: copy.loginRequired ? '' : copy.text });
         return;
       }
-      this.setData({ loading: false, shareReady: false, canConfirm: false, error: '权限重验失败，已保留待提交内容，请重试。' });
+      this.setData({ loading: false, shareReady: false, canConfirm: false, error: copy.text });
     }
   },
   async setActivityType(event) {
@@ -139,7 +214,7 @@ Page({
         displayTime: item.resolved_at || item.confirmed_at || item.created_at || '',
       }));
       this.setData({ activityItems: items, activityPage: page, activityCursors: cursors, activityNextCursor: result.next_cursor || '', activityLoaded: true, activityLoading: false });
-    } catch (error) { if (this.current(epoch) && request === this._activityRequest) this.setData({ activityLoading: false, notice: error.message || '历史记录加载失败，可重试' }); }
+    } catch (error) { if (this.current(epoch) && request === this._activityRequest) { const status = Number(error && error.statusCode); if (status === 401) this.readerFailure(error, '历史记录加载失败'); else this.setData({ activityLoading: false, notice: error.message || '历史记录加载失败，可重试' }); } }
   },
   async acknowledgeRead() {
     if (!this.data.view || this.data.acknowledgingRead || this._openSent || this._accessVerified === false) return;
@@ -192,7 +267,7 @@ Page({
       const sameAttempt = this._feedbackAttempt === attempt;
       if (sameAttempt) this._feedbackAttempt = null;
       this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), busy: false, notice: '反馈已提交给设计师。' }, sameAttempt ? { feedbackText: '', satisfaction: '' } : {}));
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '反馈提交失败' }); }
+    } catch (error) { if (this.current(epoch)) this.readerFailure(error, '反馈提交失败'); }
   },
   async confirmVersion() {
     if (!this.data.canConfirm || this.data.confirmed || this.data.busy || !this.data.view || this._accessVerified === false) return;
@@ -201,7 +276,7 @@ Page({
       const confirmation = await api.confirmSharedProjectNote(this._shareToken, api.mutationKey('project-note-confirm'));
       if (!this.current(epoch)) return;
       this.setData({ view: Object.assign({}, this.data.view, { confirmation }), confirmed: true, busy: false, notice: '已确认当前固定版本。设计师后续新版本需另行确认。' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '版本确认失败' }); }
+    } catch (error) { if (this.current(epoch)) this.readerFailure(error, '版本确认失败'); }
   },
   async exportSharedProjectNoteWord() {
     if (!this.data.view || this.data.busy || this._accessVerified === false) return;
@@ -211,7 +286,7 @@ Page({
       if (!this.current(epoch)) return;
       await new Promise((resolve, reject) => wx.openDocument({ filePath, fileType: 'docx', showMenu: true, success: resolve, fail: () => reject(new Error('Word 文件打开失败，请重试')) }));
       if (this.current(epoch)) this.setData({ busy: false, notice: '已打开当前固定版本的 Word 文件。' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || 'Word 导出失败' }); }
+    } catch (error) { if (this.current(epoch)) this.readerFailure(error, 'Word 导出失败'); }
   },
   async saveOriginalImage(event) {
     if (!this.data.view || this.data.busy || this._accessVerified === false) return;
@@ -223,7 +298,7 @@ Page({
       if (!this.current(epoch)) return;
       await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath, success: resolve, fail: () => reject(new Error('原图未保存，请检查相册权限后重试')) }));
       if (this.current(epoch)) this.setData({ busy: false, notice: '原图已保存到相册。' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '原图保存失败，请确认分享仍有效' }); }
+    } catch (error) { if (this.current(epoch)) this.readerFailure(error, '原图保存失败，请确认分享仍有效'); }
   },
   openImage(event) {
     const mediaID = String(event.currentTarget.dataset.id || '');
@@ -235,8 +310,34 @@ Page({
     const asset = this.data.media.find(item => item.media_id === mediaID);
     if (asset && asset.local_path && asset.kind !== 'image' && asset.kind !== 'video') wx.openDocument({ filePath: asset.local_path, showMenu: false, fail: () => wx.showToast({ title: '附件暂无法打开', icon: 'none' }) });
   },
-  goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
+  goLogin() { wx.navigateTo({ url: '/pages/login/login?from=share-view' }); },
+  // T7.8 / P9：错误区联系客服跳平台客服页，不暴露设计师个人联系方式。
+  openCustomerService() { wx.navigateTo({ url: '/pages/customerservice/customerservice' }); },
   retry() { return this.data.view ? this.revalidateShared() : this.loadShared(); },
+  // D16：分享有效时定向重试失败素材，只重下失败项（并发上限 4）。
+  async retryMediaDownloads() {
+    const failures = (this.data.media || []).filter(item => item && (item.preview_error || !item.local_path));
+    if (!failures.length || this._mediaRetrying) return;
+    const epoch = this._epoch;
+    this._mediaRetrying = true;
+    this.setData({ notice: '正在重新加载素材…' });
+    const updated = new Map();
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < failures.length) {
+        const item = failures[cursor++];
+        try { updated.set(item.media_id, Object.assign({}, item, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, item.media_id), preview_error: '' })); }
+        catch (_) { /* 保持失败状态，等下次重试 */ }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    this._mediaRetrying = false;
+    if (!this.current(epoch)) return;
+    const media = (this.data.media || []).map(item => updated.get(item.media_id) || item);
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const failuresLeft = mediaFailureCount(media);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), mediaFailuresCount: failuresLeft, notice: failuresLeft ? SHARE_ERROR.media : '素材已重新加载。' });
+  },
   onShareAppMessage() {
     if (!this.data.shareReady || !this.data.view || !this._shareToken || this._accessVerified === false) return {};
     const version = this.data.view.version;
@@ -245,4 +346,3 @@ Page({
     return { imageUrl: cover && cover.local_path || '', title: version.title || '项目方案', path: '/pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(this._shareToken) };
   },
 });
-export {};

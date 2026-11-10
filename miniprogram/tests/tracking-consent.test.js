@@ -414,7 +414,7 @@ test('declining still wins when the notice updated while the modal was open',asy
   const choosing=t.adapter.showConsentChoices(page);await settle();
   assert.equal(t.modals.length,1);
   t.updateConfig({enabled:true,consent_version:'notice-v2',privacy_notice:notice+' v2'});
-  t.adapter.setConsent(true,'default');
+  await t.adapter.refreshConfig();
   assert.equal(t.adapter.consented(),true);
   t.answer(0,false);
   await choosing;
@@ -433,4 +433,33 @@ test('a stale enabled config cannot override a newer disabled config',async()=>{
   await settle();await settle();
   assert.equal(t.adapter.consented(),false,'旧响应不得启用采集');
   assert.equal(t.entries.length,0);
+});
+
+// D18：关闭保存失败时弹窗必须返回实际结果（false），不能谎报成功。
+test('the modal reports a failed close instead of claiming success',async()=>{
+  const t=runtime({accepted:true,failChoiceWrite:true});
+  const page=t.register('pages/my/my',{data:{consented:true,consentAvailable:true,consentChoicePending:false,consentUnavailable:false,consentNotice:notice}});
+  await legacy(t);
+  const choosing=t.adapter.showConsentChoices(page);await settle();
+  t.answer(0,false);
+  const ok=await choosing;
+  assert.equal(ok,false,'关闭未持久化必须返回 false');
+  assert.equal(page.data.consented,false,'本会话已停止采集');
+});
+
+// D6：关闭写失败后重启，必须优先重放关闭意图，不能被默认开启覆盖。
+test('a failed close is replayed on the next launch before default-on runs',async()=>{
+  const t=runtime({accepted:true,failChoiceWrite:true});
+  await legacy(t);
+  assert.ok(t.entries.length>=1,'默认开启后应有上报');
+  const ok=t.adapter.setConsent(false);
+  assert.equal(ok,false,'写入失败返回 false');
+  assert.equal(t.adapter.consented(),false,'本会话已停止采集');
+  assert.ok(t.storage.share_tracking_consent_close_pending_v1,'必须记录待重放意图');
+
+  const next=runtime({storage:t.storage});
+  await legacy(next);
+  assert.equal(next.adapter.consented(),false,'重启后仍保持关闭');
+  assert.equal(next.entries.length,0,'重启后不得恢复采集');
+  assert.equal(next.storage.share_tracking_consent_choice_v1.accepted,false,'关闭记录已补写');
 });

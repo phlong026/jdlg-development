@@ -5,6 +5,8 @@ const routes = require('./routes');
 const STORAGE = 'share_tracking_queue_v1';
 const CONSENT = 'share_tracking_consent_v1';
 const CONSENT_CHOICE = 'share_tracking_consent_choice_v1';
+// D6：关闭记录写入失败时记下意图，下次启动重放，避免重启后恢复采集。
+const CONSENT_CLOSE_PENDING = 'share_tracking_consent_close_pending_v1';
 let sdk, config = { enabled: false }, installed = false, instance = '', timer;
 let consentPage = null, consentRequest = null, consentChoice = null, consentRevision = 0, entryInvalidation = 0;
 const safely = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
@@ -64,6 +66,22 @@ function ensureDefaultConsent() {
   if (stored && stored.explicit === true && stored.accepted !== true) return false;
   return setConsent(true, 'default');
 }
+// D6：补写上次失败的关闭记录；用户后来主动开启过则丢弃旧意图。
+function replayPendingClose() {
+  const pending = safely(() => wx.getStorageSync(CONSENT_CLOSE_PENDING), null);
+  if (!pending) return;
+  const current = currentConsentChoice();
+  // 仅当用户后来主动开启过（source=user）才放弃关闭意图；旧的 default 记录不算。
+  if (current && current.explicit === true && current.accepted === true && current.source === 'user') { safely(() => wx.removeStorageSync(CONSENT_CLOSE_PENDING)); return; }
+  const record = { version: String(pending.version || config.consent_version || ''), notice: String(pending.notice || config.privacy_notice || ''), accepted: false, explicit: true, source: 'user', at: new Date().toISOString() };
+  try {
+    wx.setStorageSync(CONSENT_CHOICE, record);
+    consentChoice = record;
+    try { wx.removeStorageSync(CONSENT); } catch (_) { /* 次要标记失败不阻断 */ }
+    safely(() => wx.removeStorageSync(CONSENT_CLOSE_PENDING));
+    const s = getSDK(); if (s) s.configure(config.enabled === true, '');
+  } catch (_) { /* 仍写失败则保留意图，下次再试 */ }
+}
 function enabledConsent() {
   const choice=currentConsentChoice();
   return choice&&choice.accepted===true ? config.consent_version : '';
@@ -81,6 +99,8 @@ function refreshConfig() {
     appliedConfigSequence=sequence;
     config = value || {enabled:false}; if(config.enabled!==true)entryInvalidation++;
     const s=getSDK(); if (s) s.configure(config.enabled===true, enabledConsent(), {awaitConsent:true});
+    // D6：上次关闭写失败的重放必须先于默认开启，否则会先被默认开启覆盖。
+    if (config.enabled === true) replayPendingClose();
     // 访问分析默认开启（T7.1）：只在「从未明确选择」时静默记录；不做每次启动强制开启。
     if (config.enabled === true) ensureDefaultConsent();
     return config;
@@ -103,6 +123,8 @@ function setConsent(accepted, source) {
   catch (_) {
     if (accepted !== true) {
       // 关闭写失败：先停止运行时采集并保留本会话的关闭意图，调用方仍会收到 false 以便提示未保存。
+      // 同时记录待重放意图，下次启动（refreshConfig 成功）优先补写关闭记录。
+      safely(() => wx.setStorageSync(CONSENT_CLOSE_PENDING, { version: record.version, notice: record.notice, at: record.at }));
       consentChoice=record;
       const s=getSDK(); if (s) s.configure(false, '');
       if (sdk) sdk.suspend();
@@ -150,6 +172,8 @@ function showConsentChoices(page, manual=false) {
     if(value.enabled!==true || !value.consent_version || !value.privacy_notice || typeof wx.showModal!=='function')return false;
     if(!manual && consentChoiceState().resolved)return false;
     const version=value.consent_version, notice=value.privacy_notice, revision=consentRevision;
+    // 并发刷新可能已应用更新配置：配置快照不一致时不再打开过期弹窗。
+    if(config.enabled!==true||config.consent_version!==version||config.privacy_notice!==notice){syncConsentPageState(target);return false;}
     return new Promise(resolve=>{
       // Pass the complete configured notice, without truncation or implicit consent.
       const active = enabledConsent() === version;
@@ -166,9 +190,9 @@ function showConsentChoices(page, manual=false) {
           const accepted=result.confirm===true;
           // 明确关闭永远优先：即使弹窗期间告知/版本已变化，也不能让「关闭」被过期 guard 吞掉。
           if(!accepted){
-            setConsent(false);
+            const closed=setConsent(false);
             syncConsentPageState(target);
-            resolve(consentChoiceState().accepted===false);
+            resolve(closed);
             return;
           }
           if((!manual&&(target.__trackingConsentVisible!==true||!consentPublicPage(target))) || revision!==consentRevision || version!==config.consent_version || notice!==config.privacy_notice || config.enabled!==true){syncConsentPageState(target);resolve(false);return;}

@@ -40,6 +40,8 @@ function pageHarness(name, api, wxOverrides = {}) {
     if (id === '../../utils/phase3-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
+    if (id === '../../utils/ai-stream') return wxOverrides.aiStream || { startAIStream: () => ({ abort() {} }) };
+    if (id === '../../utils/writing-policy') return require(path.join(root, 'utils/writing-policy.js'));
     if (id === './projectnotes-core') {
       const core = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes-core.js'), 'utf8');
       vm.runInNewContext(core, context);
@@ -609,39 +611,45 @@ test('changing satisfaction creates a different feedback retry while preserving 
   assert.equal(calls[2][3], 'unsatisfied'); assert.notEqual(calls[0][2], calls[2][2]);
 });
 
-test('project AI carries only known facts and returns to the same note across hide/show without losing media', async () => {
-  let navigation; const sent = [];
-  const page = pageHarness('projectnotes', { getProjectNoteProject: async () => ({ project: { project_id: 'p' } }) }, { navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); } });
+test('project AI carries only known facts and inserts into the same note without losing media', async () => {
+  const sent = [];
+  const page = pageHarness('projectnotes', {}, {
+    navigateTo: () => { throw new Error('AI 辅助不得跳页'); },
+    aiStream: { startAIStream: options => { sent.push(options); return { abort() {} }; } },
+  });
   page._visible = true; page._token = 'session-token'; page._epoch = 1;
   page.setData({ selectedProject: { project_id: 'p', name: '张宅', location: '苏州', floors: 2, crm_id: 'private-crm', revision: 1 }, note: { note_id: 'n', revision: 3 }, noteTitle: '方案说明', noteBody: '已知事实', noteMedia: [{ media_id: 'private-media' }], feedbacks: [{ text: '私人反馈' }] });
   page.openNoteAIWriting();
-  assert.match(navigation.url, /source=project_note/);
-  assert.equal(sent[0][0], 'writingContext');
-  assert.match(sent[0][1].facts, /苏州/);
-  assert.doesNotMatch(sent[0][1].facts, /private-|私人反馈|建筑面积/);
-  page.onHide();
-  const result = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: 'AI标题', text: '新的方案说明' };
-  navigation.events.prefillContent(result); navigation.events.prefillContent(result);
-  await page.onShow();
-  assert.equal(page.data.noteTitle, '方案说明');
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
+  assert.equal(page.data.aiPanelOpen, true);
+  assert.equal(page.data.aiPanelStreaming, false);
+  page.startNoteAI();
+  assert.equal(sent.length, 1, '就地发起流式生成');
+  const prompt = sent[0].messages[0].content;
+  assert.match(prompt, /苏州/);
+  assert.doesNotMatch(prompt, /private-|私人反馈|建筑面积/);
+  sent[0].onChunk('新的');
+  sent[0].onDone('新的方案说明');
+  await page.insertNoteAI();
   assert.equal(page.data.noteBody, '已知事实\n\n新的方案说明');
+  page.onHide();
+  await page.onShow();
   assert.equal(page.data.noteMedia[0].media_id, 'private-media');
   assert.equal(page.data.note.note_id, 'n');
 });
 
-test('project AI rejects changed drafts, revision mismatches and wrong target identities', () => {
-  for (const change of ['text', 'revision', 'identity']) {
-    let navigation;
-    const page = pageHarness('projectnotes', {}, { navigateTo: options => { navigation = options; } });
-    page._visible = true; page._token = 'session-token'; page._epoch = 1;
-    page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
-    page.openNoteAIWriting();
-    if (change === 'text') page.setData({ noteBody: '用户刚修改' });
-    if (change === 'revision') page.setData({ note: { note_id: 'n', revision: 4 } });
-    navigation.events.prefillContent({ source: 'project_note', project_id: change === 'identity' ? 'other' : 'p', note_id: 'n', note_revision: 3, text: '不能采用' });
-    assert.doesNotMatch(page.data.noteBody, /不能采用/);
-    assert.match(page.data.notice, /未采用/);
-  }
+test('project AI rejects generation and insertion after the identity changes', async () => {
+  const calls = [];
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: options => { calls.push(options); return { abort() {} }; } } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page._token = 'session-two';
+  page.startNoteAI();
+  assert.equal(calls.length, 0, '身份变化后不得发起生成');
+  page.setData({ aiPanelText: '不能采用' });
+  await page.insertNoteAI();
+  assert.doesNotMatch(page.data.noteBody, /不能采用/);
 });
 
 test('freezing requires the current form to be saved and never silently shares an older draft', async () => {
@@ -1273,17 +1281,19 @@ test('marking a project revising asks only when unsaved project fields would be 
   assert.equal(page.data.projectEdit.name, '未保存项目名');
 });
 
-test('AI return preserves its fill but still clears private content after permission revocation', async () => {
-  let navigation, checks = 0;
+test('AI panel result is cleared with the draft after permission revocation', async () => {
+  let options, checks = 0;
   const page = pageHarness('projectnotes', {
     getProjectNoteProject: async () => { checks += 1; throw Object.assign(new Error('已撤权'), { statusCode: 403 }); },
-  }, { navigateTo: options => { navigation = options; options.success({ eventChannel: { emit() {} } }); } });
+  }, { aiStream: { startAIStream: value => { options = value; return { abort() {} }; } } });
   page._visible = true; page._token = 'session-token'; page._epoch = 1;
   page.applyProjectDetail({ project: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', revision: 1, title: '标题', body: '已保存', body_format: 'plain' }], versions: [] });
   page.openNoteAIWriting();
-  page.onHide();
-  navigation.events.prefillContent({ source: 'project_note', project_id: 'project-one', note_id: 'note-one', note_revision: 1, text: 'AI 补充' });
+  page.startNoteAI();
+  options.onDone('AI 补充');
+  await page.insertNoteAI();
   assert.match(page.data.noteBody, /AI 补充/);
+  page.onHide();
   await page.onShow();
   assert.equal(checks, 1);
   assert.equal(page.data.noteBody, '');
@@ -1370,7 +1380,7 @@ for (const update of [false, true]) {
     const page = pageHarness('projectnotes', { createProjectNote: strictSave, saveProjectNote: strictSave });
     page._visible = true; page._token = 'session-token'; page._epoch = 1;
     page.refreshProject = async () => {};
-    page.setData({ selectedProject: { project_id: 'project-one' }, note: update ? { note_id: 'note-one', revision: 7 } : null, noteTitle: '方案说明', noteBody: '保留庭院入口', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
+    page.setData({ selectedProject: { project_id: 'project-one' }, note: update ? { note_id: 'note-one', revision: 7, cover_media_id: 'image-one' } : null, noteTitle: '方案说明', noteBody: '保留庭院入口', noteMedia: [{ media_id: 'image-one', kind: 'image' }] });
     await (update ? page.saveProjectNote() : page.createProjectNote());
     assert.equal(page.data.error, '');
     assert.ok(accepted);
@@ -1500,20 +1510,21 @@ test('project note AI return acknowledges once, replays applied, and separates b
   page._visible = true; page._token = token; page._epoch = 1;
   page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
   page.openNoteAIWriting();
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
   const acks = () => sent.filter(args => args[0] === 'writingAck').map(args => args[1]);
   const payload = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: '标题', text: '新文案' };
 
   page.setData({ busy: true });
-  navigation.events.prefillContent(payload);
+  page.receiveNoteWriting(payload, page._writingLaunch);
   assert.equal(acks()[0].state, 'retryable', '忙时属于暂时拒绝');
   assert.equal(page.data.noteBody, '原文', '暂时拒绝不得改动正文');
 
   page.setData({ busy: false });
-  navigation.events.prefillContent(payload);
+  page.receiveNoteWriting(payload, page._writingLaunch);
   assert.equal(acks()[1].state, 'applied');
   assert.equal(page.data.noteBody, '原文\n\n新文案');
 
-  navigation.events.prefillContent(payload);
+  page.receiveNoteWriting(payload, page._writingLaunch);
   assert.equal(acks()[2].state, 'applied', '已应用后重试只重放成功确认');
   assert.equal(acks()[2].replayed, true);
   assert.equal(page.data.noteBody, '原文\n\n新文案', '不得重复追加');
@@ -1522,7 +1533,8 @@ test('project note AI return acknowledges once, replays applied, and separates b
   page._token = 'session-token';
   page.setData({ noteBody: '原文', busy: false });
   page.openNoteAIWriting();
-  navigation.events.prefillContent(payload);
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
+  page.receiveNoteWriting(payload, page._writingLaunch);
   const last = acks().length - 1;
   assert.equal(acks()[last].state, 'invalid', '换账号必须永久拒绝');
   assert.equal(page.data.noteBody, '原文', '目标失效不得写入正文');
@@ -1536,8 +1548,9 @@ test('project note AI return rejects a changed revision even when the payload id
   page._visible = true; page._token = 'session-token'; page._epoch = 1;
   page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
   page.openNoteAIWriting();
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
   page.setData({ note: { note_id: 'n', revision: 4 } });
-  navigation.events.prefillContent({ source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, text: '不能采用' });
+  page.receiveNoteWriting({ source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, text: '不能采用' }, page._writingLaunch);
   const ack = sent.filter(args => args[0] === 'writingAck').map(args => args[1])[0];
   assert.equal(ack.state, 'invalid');
   assert.equal(page.data.noteBody, '原文');
@@ -1557,32 +1570,33 @@ test('an applied project note AI return never replays success after the target o
     page._visible = true; page._token = token; page._epoch = 1;
     page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
     page.openNoteAIWriting();
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
     const acks = () => sent.filter(args => args[0] === 'writingAck').map(args => args[1]);
     const payload = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: '标题', text: '新文案', request: 7, operation: 'op-1' };
     return { page, navigation, acks, payload, setToken(value) { token = value; } };
   };
 
   const replay = build();
-  replay.navigation.events.prefillContent(replay.payload);
+  replay.page.receiveNoteWriting(replay.payload, replay.page._writingLaunch);
   assert.equal(replay.acks()[0].state, 'applied');
   assert.equal(replay.acks()[0].request, 7, '回执必须回显请求 ID');
   assert.equal(replay.acks()[0].operation, 'op-1');
-  replay.navigation.events.prefillContent(replay.payload);
+  replay.page.receiveNoteWriting(replay.payload, replay.page._writingLaunch);
   assert.equal(replay.acks()[1].state, 'applied', '同载荷重放只确认成功');
   assert.equal(replay.acks()[1].replayed, true);
   assert.equal(replay.page.data.noteBody, '原文\n\n新文案');
 
   const changedPayload = build();
-  changedPayload.navigation.events.prefillContent(changedPayload.payload);
-  changedPayload.navigation.events.prefillContent(Object.assign({}, changedPayload.payload, { text: '改过的文案' }));
+  changedPayload.page.receiveNoteWriting(changedPayload.payload, changedPayload.page._writingLaunch);
+  changedPayload.page.receiveNoteWriting(Object.assign({}, changedPayload.payload, { text: '改过的文案' }), changedPayload.page._writingLaunch);
   assert.equal(changedPayload.acks()[1].state, 'invalid', '载荷变化不得重放旧成功');
   assert.equal(changedPayload.page.data.noteBody, '原文\n\n新文案', '改过的文案不得写入');
 
   const switchedAccount = build();
-  switchedAccount.navigation.events.prefillContent(switchedAccount.payload);
+  switchedAccount.page.receiveNoteWriting(switchedAccount.payload, switchedAccount.page._writingLaunch);
   switchedAccount.setToken('session-two');
   switchedAccount.page._token = 'session-token';
-  switchedAccount.navigation.events.prefillContent(switchedAccount.payload);
+  switchedAccount.page.receiveNoteWriting(switchedAccount.payload, switchedAccount.page._writingLaunch);
   assert.equal(switchedAccount.acks()[1].state, 'invalid', '换账号后不得重放旧成功');
 });
 
@@ -1610,9 +1624,10 @@ test('a draft instance id stays stable across AI re-entry and rotates on new, sw
   assert.equal(page.draftInstanceAccount(), '101', '实例身份绑定当前账号');
 
   page.openNoteAIWriting();
-  const context = sent.filter(args => args[0] === 'writingContext').map(args => args[1])[0];
-  assert.equal(context.draft_instance_id, firstInstance, 'AI 上下文必须带草稿实例 ID');
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
+  assert.equal(page._aiPanelLaunch.instanceID, firstInstance, 'AI 面板必须带草稿实例 ID');
   page.openNoteAIWriting();
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
   assert.equal(page._draftInstance.id, firstInstance, '同一草稿多次发起 AI 不产生新实例 ID');
 
   page._selectedNoteID = 'n2';
@@ -1658,11 +1673,13 @@ test('changing the account clears the draft instance so an old AI result cannot 
   page.applyProjectDetail({ project: { project_id: 'p' }, notes: [], versions: [] }, '', null, null, 'editor');
   const instance = page._draftInstance.id;
   page.openNoteAIWriting();
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
+  const launch = page._writingLaunch;
   token = 'session-two';
   page._token = 'session-token';
   await page.onShow();
   assert.equal(page._draftInstance, null, '换账号必须清空草稿实例');
-  navigation.events.prefillContent({ source: 'project_note', project_id: 'p', note_id: '', note_revision: 0, draft_instance_id: instance, text: '旧账号文案' });
+  page.receiveNoteWriting({ source: 'project_note', project_id: 'p', note_id: '', note_revision: 0, draft_instance_id: instance, text: '旧账号文案' }, launch);
   const ack = sent.filter(args => args[0] === 'writingAck').map(args => args[1]).pop();
   assert.equal(ack.state, 'invalid', '换账号后旧实例回填必须拒绝');
 });
@@ -1701,12 +1718,14 @@ test('re-adopting the same AI result after a lost ack replays success instead of
   const acks = () => sent.filter(args => args[0] === 'writingAck').map(args => args[1]);
   const payload = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: 'AI 改过的标题', text: 'AI 文案', request: 1, operation: 'ai-result-d1-r1' };
   page.openNoteAIWriting();
-  navigation.events.prefillContent(payload);
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
+  page.receiveNoteWriting(payload, page._writingLaunch);
   assert.equal(acks()[0].state, 'applied');
   assert.equal(page.data.noteBody, '原文\n\nAI 文案');
   // 回执丢失 → AI 页重进 → 原页发起新的 launch，同一 operation 再次采纳
   page.openNoteAIWriting();
-  navigation.events.prefillContent({ ...payload, request: 2 });
+  page._writingLaunch.channel = { emit: (...args) => sent.push(args) };
+  page.receiveNoteWriting({ ...payload, request: 2 }, page._writingLaunch);
   assert.equal(acks()[1].state, 'applied');
   assert.equal(acks()[1].replayed, true, '跨 launch 只重放成功确认');
   assert.equal(page.data.noteBody, '原文\n\nAI 文案', '不得重复追加');
@@ -2304,4 +2323,775 @@ test('a late media picker success cannot upload into another account', async () 
   pickers[0].success({ tempFiles: [{ tempFilePath: '/tmp/a.jpg' }] });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(uploads.length, 0, '旧账号的迟到选择结果不得上传');
+});
+
+// 批次 2 / T2.4：客户端预检先于请求（20 MiB / 500 MiB / 50 项）。
+test('client precheck rejects oversized or over-count media before any request', async () => {
+  const calls = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { calls.push('upload'); return { asset: { media_id: 'm' } }; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/big.jpg', fileType: 'image', size: 21 * 1024 * 1024 }]);
+  assert.equal(calls.length, 0, '超限不得发起上传');
+  assert.match(page.data.error, /图片不能超过 20\.0 MB/);
+
+  page.setData({ noteMedia: Array.from({ length: 50 }, (_, index) => ({ media_id: 'm' + index })), error: '' });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image', size: 1024 }]);
+  assert.equal(calls.length, 0, '累计超 50 项不得上传');
+  assert.match(page.data.error, /最多 50 项/);
+
+  page.setData({ noteMedia: [], error: '' });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/v.mp4', fileType: 'video', size: 501 * 1024 * 1024 }]);
+  assert.equal(calls.length, 0, '超大视频不得上传');
+  assert.match(page.data.error, /视频不能超过 500\.0 MB/);
+
+  page.setData({ error: '' });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/ok.jpg', fileType: 'image', size: 19 * 1024 * 1024 }]);
+  assert.equal(calls.length, 1, '合法大图照常上传');
+});
+
+// 批次 2 / T2.1：选择器取消与权限拒绝给出可行动提示且不改变内容。
+test('cancelled or permission-denied pickers report actionable messages', () => {
+  const pickers = [];
+  const page = pageHarness('projectnotes', {}, { chooseMedia: options => pickers.push(options) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteBody: '保留内容' });
+  page.chooseNoteMedia();
+  pickers[0].fail({ errMsg: 'chooseMedia:fail cancel' });
+  assert.match(page.data.notice, /已取消/);
+  assert.equal(page.data.noteBody, '保留内容');
+
+  page.chooseNoteMedia();
+  pickers[1].fail({ errMsg: 'chooseMedia:fail auth deny' });
+  assert.match(page.data.error, /权限/);
+  assert.equal(page.data.noteBody, '保留内容');
+});
+
+// 批次 2 / T2.2：重开草稿补缩略图、失败单项重试、补下载路径不进保存载荷。
+test('reopened drafts hydrate thumbnails without dirtying the form', async () => {
+  let fail = true;
+  const downloads = [];
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', media: [{ media_id: 'img1', kind: 'image' }, { media_id: 'vid1', kind: 'video' }] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+    downloadProjectNoteMedia: async (projectID, id) => { downloads.push(id); if (fail) throw new Error('下载失败'); return '/tmp/' + id; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  const tick = () => new Promise(resolve => setTimeout(resolve, 10));
+  await tick();
+  assert.equal(page.data.noteMedia.length, 2);
+  assert.match(page.data.noteMedia[0].preview_error, /素材暂时无法显示/);
+  assert.equal(page.hasUnsavedChanges(), false, '补缩略图不得弄脏表单');
+
+  fail = false;
+  page.retryNoteMediaPreview({ currentTarget: { dataset: { id: 'img1' } } });
+  await tick();
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/img1');
+  assert.equal(page.data.noteMedia[0].preview_error || '', '');
+  assert.equal(page.hasUnsavedChanges(), false, '补下载路径不进 dirty state');
+  assert.deepEqual(Array.from(page.noteDraft().media_ids), ['img1', 'vid1'], '保存载荷仍是 media_id');
+});
+
+// 批次 2 / T2.3：视频保留选择器缩略图并可进入原生播放。
+test('videos keep their picker thumbnail and can be previewed in the editor', async () => {
+  const previews = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => ({ asset: { media_id: 'v1', kind: 'video' } }),
+  }, { previewMedia: options => previews.push(options) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/v.mp4', fileType: 'video', size: 1024, thumbTempFilePath: '/tmp/v.jpg' }]);
+  assert.equal(page.data.noteMedia[0].thumb_path, '/tmp/v.jpg', '视频缩略图作为封面');
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  assert.equal(previews.length, 1);
+  assert.equal(previews[0].sources[0].type, 'video');
+  assert.equal(previews[0].sources[0].url, '/tmp/v.mp4');
+});
+
+test('the media list exposes fallbacks, retries and video playback wiring', () => {
+  const wxml = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(wxml, /binderror="noteMediaLoadError"/);
+  assert.match(wxml, /'retryNoteMediaPreview'/);
+  assert.match(wxml, /bindtap="openNoteVideo"/);
+  assert.match(wxml, /poster="\{\{item\.thumb_path \|\| ''\}\}"/);
+  assert.match(wxml, /item\.kind === 'private' \? '素材'/);
+});
+
+// 批次 2 复评回归：跨后台恢复、提示保留、身份守卫、单项重试、结构化草稿、视频闭环。
+test('thumbnail hydration interrupted by background resumes on return', async () => {
+  const downloads = [];
+  let resolveDownload;
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', media: [{ media_id: 'img1', kind: 'image' }] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+    downloadProjectNoteMedia: (projectID, id) => { downloads.push(id); if (downloads.length === 1) return new Promise(resolve => { resolveDownload = resolve; }); return Promise.resolve('/tmp/' + id); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1'; page._loaded = true;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  page.onHide();
+  resolveDownload('/tmp/img1');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(page.data.noteMedia[0].preview_loading, false, '中断后不得永久加载中');
+  await page.onShow();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(downloads, ['img1', 'img1'], '回前台后重新补下载');
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/img1');
+});
+
+test('picker cancellation feedback survives the access recheck', async () => {
+  const pickers = [];
+  const page = pageHarness('projectnotes', { getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [], versions: [] }) }, { chooseMedia: options => pickers.push(options) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._loaded = true;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  page.chooseNoteMedia();
+  pickers[0].fail({ errMsg: 'chooseMedia:fail cancel' });
+  assert.match(page.data.notice, /已取消/);
+  await page.onShow();
+  assert.match(page.data.notice, /已取消/, '重验不得清掉取消提示');
+});
+
+test('a late picker failure from an old account cannot rewrite the current message', () => {
+  const pickers = [];
+  let token = 'session-token';
+  const page = pageHarness('projectnotes', {}, {
+    getStorageSync: key => key === 'token' ? token : '',
+    chooseMedia: options => pickers.push(options),
+  });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, error: '新账号错误', notice: '' });
+  page.chooseNoteMedia();
+  token = 'session-two';
+  pickers[0].fail({ errMsg: 'chooseMedia:fail cancel' });
+  assert.equal(page.data.error, '新账号错误', '旧回调不得改写新账号错误');
+  assert.doesNotMatch(page.data.notice || '', /已取消/);
+});
+
+test('single-item retry only downloads the requested media', async () => {
+  const downloads = [];
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (projectID, id) => { downloads.push(id); return '/tmp/' + id; } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'a', kind: 'image' }, { media_id: 'b', kind: 'image' }] });
+  page.retryNoteMediaPreview({ currentTarget: { dataset: { id: 'a' } } });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(downloads, ['a'], '只重试目标素材');
+});
+
+test('structured drafts hydrate their media thumbnails too', async () => {
+  const downloads = [];
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'article_v2', media: [{ media_id: 'img1', kind: 'image' }] };
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (projectID, id) => { downloads.push(id); return '/tmp/' + id; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(downloads, ['img1'], '结构化草稿也要补缩略图');
+  assert.equal(page.data.bodyReadOnly, true);
+});
+
+test('a failed video preview falls back to a retryable placeholder', () => {
+  const page = pageHarness('projectnotes', {}, { previewMedia: options => options.fail() });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  assert.equal(page.data.noteMedia[0].local_path, '', '失败后回到占位');
+  assert.match(page.data.noteMedia[0].preview_error, /视频加载失败/);
+});
+
+test('a retried video upload keeps its picker thumbnail', async () => {
+  let attempt = 0;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { attempt += 1; if (attempt === 1) throw new Error('私有素材上传失败'); return { asset: { media_id: 'v1', kind: 'video' } }; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/v.mp4', fileType: 'video', size: 1024, thumbTempFilePath: '/tmp/v.jpg' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1);
+  assert.equal(page.data.mediaUploadFailures[0].thumbTempFilePath, '/tmp/v.jpg', '失败队列保留封面元数据');
+  await page.retryNoteMediaFailures();
+  assert.equal(page.data.noteMedia.length, 1);
+  assert.equal(page.data.noteMedia[0].thumb_path, '/tmp/v.jpg', '重试成功仍带封面');
+});
+
+// 批次 2 复评回归：ID-only 类型恢复、反馈身份、恢复调度、批量/单项交叠。
+test('id-only draft media infer their kind from the downloaded file', async () => {
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (projectID, id) => id === 'img2' ? '/tmp/img2.jpg' : '/tmp/vid1.mp4' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'img2', kind: 'private' }, { media_id: 'vid1', kind: 'private' }] });
+  await page.hydrateNoteMedia(1, 'p');
+  assert.equal(page.data.noteMedia[0].kind, 'image');
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/img2.jpg');
+  assert.equal(page.data.noteMedia[1].kind, 'video');
+  assert.equal(page.data.noteMedia[1].local_path, '/tmp/vid1.mp4');
+});
+
+test('deferred picker feedback is discarded once the account changes', () => {
+  const pickers = [];
+  let token = 'session-token';
+  const page = pageHarness('projectnotes', {}, { getStorageSync: key => key === 'token' ? token : '', chooseMedia: options => pickers.push(options) });
+  page._visible = true; page._token = token; page._epoch = 1; page._loaded = true;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  page.chooseNoteMedia();
+  pickers[0].fail({ errMsg: 'chooseMedia:fail cancel' });
+  assert.match(page.data.notice, /已取消/);
+  token = 'session-two'; page._token = 'session-two';
+  page.setData({ notice: '', error: '新账号错误' });
+  page.flushPickerFeedback();
+  assert.equal(page.data.notice, '', '旧账号反馈不得回填');
+  assert.equal(page.data.error, '新账号错误');
+});
+
+test('a recheck while a download is still in flight schedules a later resume', async () => {
+  const downloads = [];
+  const resolvers = [];
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', media: [{ media_id: 'img1', kind: 'image' }] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+    downloadProjectNoteMedia: (projectID, id) => { downloads.push(id); return new Promise(resolve => resolvers.push(resolve)); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1'; page._loaded = true;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  page.onHide();
+  await page.onShow();
+  assert.equal(downloads.length, 1, '旧下载在途时不得并发发起新下载');
+  resolvers[0]('/tmp/img1');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(downloads.length, 2, '旧下载收尾后自动恢复一次');
+  resolvers[1]('/tmp/img1');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/img1');
+});
+
+test('a retry during a batch hydration never downloads the same item twice', async () => {
+  const downloads = [];
+  const resolvers = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: (projectID, id) => { downloads.push(id); return new Promise(resolve => resolvers.push({ id, resolve })); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'a', kind: 'image' }, { media_id: 'b', kind: 'image' }] });
+  const batch = page.hydrateNoteMedia(1, 'p');
+  assert.deepEqual(downloads, ['a'], '批量串行，先下载第一项');
+  page.retryNoteMediaPreview({ currentTarget: { dataset: { id: 'b' } } });
+  assert.deepEqual(downloads, ['a', 'b'], '等待期间单项重试可先下载第二项');
+  resolvers[0].resolve('/tmp/a');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(downloads, ['a', 'b'], '批量循环不得重复下载已占用的项');
+  resolvers[1].resolve('/tmp/b');
+  await batch;
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(downloads, ['a', 'b']);
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/a');
+  assert.equal(page.data.noteMedia[1].local_path, '/tmp/b');
+});
+
+// 批次 2 三评回归：封面保持、媒体鉴权终态、草稿实例绑定。
+test('hydration never rewrites the loaded cover or dirties the form', async () => {
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: 'cover', media_ids: ['other', 'cover'] };
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (projectID, id) => '/tmp/' + id + '.jpg' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(page.data.noteMedia[0].kind, 'image', 'private 项恢复为图片');
+  assert.equal(page.noteDraft().cover_media_id, 'cover', '原封面不得被第一张图片替换');
+  assert.equal(page.hasUnsavedChanges(), false, '补图不得污染 dirty state');
+});
+
+test('a media auth failure during hydration clears protected content and stops', async () => {
+  const calls = [];
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '私密正文', body_format: 'plain', cover_media_id: 'cover', media_ids: ['cover', 'other'] };
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (projectID, id) => { calls.push(id); throw Object.assign(new Error('仅受邀账号可访问'), { statusCode: 403 }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(calls, ['cover'], '鉴权终态后停止后续下载');
+  assert.equal(page.data.noteBody, '', '清空受保护正文');
+  assert.equal(page.data.projectLoadFailed, true);
+});
+
+test('a stale media auth failure cannot clear the new identity state', async () => {
+  let rejectDownload;
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: 'A 正文', body_format: 'plain', cover_media_id: 'cover', media_ids: ['cover'] };
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: () => new Promise((resolve, reject) => { rejectDownload = reject; }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  page.onHide();
+  page._token = 'session-two';
+  page.setData({ noteBody: 'B 正文', projectLoadFailed: false });
+  rejectDownload(Object.assign(new Error('仅受邀账号可访问'), { statusCode: 403 }));
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(page.data.noteBody, 'B 正文', '旧身份迟到 403 不得清空新状态');
+  assert.equal(page.data.projectLoadFailed, false);
+});
+
+test('hydration write-back is bound to the draft instance that started it', async () => {
+  const resolvers = [];
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: 'cover', media_ids: ['cover'] };
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: () => new Promise(resolve => resolvers.push(resolve)) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  const oldInstance = page.currentDraftInstanceID();
+  page._newNote = true;
+  page.ensureDraftInstance(true);
+  assert.notEqual(page.currentDraftInstanceID(), oldInstance);
+  resolvers[0]('/tmp/cover.jpg');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(page.data.noteMedia[0].local_path || '', '', '旧草稿实例的下载不得写入新草稿');
+});
+
+// 批次 2 四评：已保存但无封面的草稿，补缩略图不得推导出封面或弄脏表单。
+test('a saved draft without a cover keeps the empty cover after hydration', async () => {
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: '', media_ids: ['img20001'] };
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (projectID, id) => '/tmp/' + id + '.jpg' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(page.data.noteMedia[0].kind, 'image', '类型恢复仍生效');
+  assert.equal(page.noteDraft().cover_media_id, '', '无封面草稿不得因补图产生封面');
+  assert.equal(page.hasUnsavedChanges(), false, '补图不得弄脏表单');
+});
+
+// 已保存无封面草稿：用户新增图片后才默认取封面。
+test('adding a new image to a coverless draft sets a default cover', async () => {
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: '', media_ids: [] };
+  const page = pageHarness('projectnotes', { uploadProjectNoteMedia: async () => ({ asset: { media_id: 'newimg01', kind: 'image' } }) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ note, selectedProject: { project_id: 'p' }, noteMedia: [] });
+  page.rememberLoadedForms();
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image', size: 1024 }]);
+  assert.equal(page.noteDraft().cover_media_id, 'newimg01', '用户新增图片成为默认封面');
+  assert.equal(page.hasUnsavedChanges(), true);
+  page.removeNoteMedia({ currentTarget: { dataset: { id: 'newimg01' } } });
+  assert.equal(page.noteDraft().cover_media_id, '', '删除新增图片后封面回到空');
+});
+
+// 批次 2 五评：删除非封面素材不得改变封面意图。
+test('removing a non-cover item keeps the coverless draft coverless', async () => {
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: '', media_ids: ['oldimg01', 'vid20001'] };
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (projectID, id) => '/tmp/' + id + '.jpg' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [note], versions: [] }, '', null, null, 'editor');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  page.removeNoteMedia({ currentTarget: { dataset: { id: 'vid20001' } } });
+  assert.equal(page.noteDraft().cover_media_id, '', '删除视频不得让旧图片变成封面');
+});
+
+test('removing a non-cover item keeps the user chosen default cover', async () => {
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: '', media_ids: ['oldimg01', 'vid20001'] };
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => ({ asset: { media_id: 'newimg01', kind: 'image' } }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ note, selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'oldimg01', kind: 'image' }, { media_id: 'vid20001', kind: 'video' }] });
+  page.rememberLoadedForms();
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/new.jpg', fileType: 'image', size: 1024 }]);
+  assert.equal(page.noteDraft().cover_media_id, 'newimg01');
+  page.removeNoteMedia({ currentTarget: { dataset: { id: 'vid20001' } } });
+  assert.equal(page.noteDraft().cover_media_id, 'newimg01', '删除无关视频不得覆盖新增封面');
+});
+
+// 批次 4 / T4.1+T4.2：就地面板、光标插入、8000 字截断、busy 排队、身份隔离。
+test('the AI panel inserts at the tracked cursor without navigating', async () => {
+  const page = pageHarness('projectnotes', {}, {
+    navigateTo: () => { throw new Error('不得跳页'); },
+    aiStream: { startAIStream: () => ({ abort() {} }) },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: 'abcdef' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: 'XY' });
+  page._noteCursor = 3;
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, 'abcXYdef', '按光标插入而不是只追加');
+});
+
+test('AI insertion truncates at 8000 characters and keeps the original text', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  const existing = 'a'.repeat(7990);
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: existing });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: 'b'.repeat(50) });
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody.length, 8000);
+  assert.ok(page.data.noteBody.startsWith(existing), '原文不得被破坏');
+  assert.match(page.data.aiPanelNotice, /剩余 42 字/, '剩余内容可复制');
+});
+
+test('AI insertion waits for the page to become idle instead of dropping the result', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '排队结果', busy: true });
+  const pending = page.insertNoteAI();
+  page.setData({ busy: false });
+  await pending;
+  assert.equal(page.data.noteBody, '原文\n\n排队结果', '保存结束后必须插入，不得丢弃');
+});
+
+test('AI insertion after an identity change is refused', async () => {
+  let token = 'session-token';
+  const page = pageHarness('projectnotes', {}, {
+    getStorageSync: key => key === 'token' ? token : '',
+    aiStream: { startAIStream: () => ({ abort() {} }) },
+  });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '旧账号结果' });
+  token = 'session-two'; page._token = 'session-two';
+  await page.insertNoteAI();
+  assert.doesNotMatch(page.data.noteBody, /旧账号结果/);
+});
+
+// Phase B P2 回归：去设置动作、private 单项重试、失败诊断字段、提示优先级。
+test('a permission denial offers the settings action and clears it after success', async () => {
+  const pickers = [];
+  const page = pageHarness('projectnotes', {}, { chooseMedia: options => pickers.push(options), openSetting: () => {} });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  page.chooseNoteMedia();
+  pickers[0].fail({ errMsg: 'chooseMedia:fail auth deny' });
+  assert.equal(page.data.mediaPermissionDenied, true);
+  page.chooseNoteMedia();
+  pickers[1].success({ tempFiles: [] });
+  assert.equal(page.data.mediaPermissionDenied, false);
+});
+
+test('failed uploads keep structured diagnostics for troubleshooting', async () => {
+  const page = pageHarness('projectnotes', { uploadProjectNoteMedia: async () => { throw Object.assign(new Error('网络异常：timeout'), { networkError: true, errMsg: 'uploadFile:fail timeout' }); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image', size: 1024 }]);
+  const failure = page.data.mediaUploadFailures[0];
+  assert.equal(failure.networkError, true);
+  assert.equal(failure.errMsg, 'uploadFile:fail timeout');
+  assert.match(failure.message, /网络异常/);
+});
+
+test('a recheck network error outranks a deferred cancel notice', async () => {
+  const pickers = [];
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => { throw new Error('网络异常'); },
+  }, { chooseMedia: options => pickers.push(options) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._loaded = true;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  page.chooseNoteMedia();
+  pickers[0].fail({ errMsg: 'chooseMedia:fail cancel' });
+  await page.onShow();
+  assert.match(page.data.notice, /重验失败/, '重验失败的提示优先，不被取消提示覆盖');
+  assert.doesNotMatch(page.data.notice, /已取消/);
+});
+
+// 批次 3-4 复评 P1：面板隐私、旧流回调、可编辑结果、结构签名。
+test('clearing protected state closes the AI panel and its result', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '私密结果' });
+  page.clearProtected();
+  assert.equal(page.data.aiPanelOpen, false);
+  assert.equal(page.data.aiPanelText, '');
+});
+
+test('a stream from a closed panel cannot write into a new draft', async () => {
+  let options;
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: value => { options = value; return { abort() {} }; } } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.startNoteAI();
+  page.closeNoteAI();
+  page.setData({ noteBody: '新草稿正文' });
+  options.onDone('旧账号结果');
+  assert.doesNotMatch(page.data.noteBody, /旧账号结果/, '关闭面板后旧回调必须失效');
+});
+
+test('the AI result is editable before insertion', async () => {
+  const wxml = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(wxml, /value="\{\{aiPanelText\}\}" bindinput="setNoteAIText"/, '结果区必须可编辑');
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '生成内容' });
+  page.setNoteAIText({ detail: { value: '手工改写后的内容' } });
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, '原文\n\n手工改写后的内容');
+});
+
+test('revision or media changes invalidate the AI panel adoption', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '结果' });
+  page.setData({ note: { note_id: 'n', revision: 4 } });
+  await page.insertNoteAI();
+  assert.doesNotMatch(page.data.noteBody, /结果/);
+});
+
+test('inserting the same AI result twice does not duplicate text', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '结果' });
+  await page.insertNoteAI();
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, '原文\n\n结果');
+});
+
+// 批次 3-4 复评 P2：光标离焦位置、申请加载归属释放。
+test('blur captures the cursor position used by the next insertion', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: 'abcdef' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: 'XY' });
+  page.onNoteBodyBlur({ detail: { cursor: 3 } });
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, 'abcXYdef', '离焦光标位置必须生效');
+});
+
+test('a background join-request load releases its loading lock', async () => {
+  let resolveList;
+  const page = pageHarness('projectnotes', {
+    listProjectJoinRequests: () => new Promise(resolve => { resolveList = resolve; }),
+    listProjectInvitations: async () => ({ items: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, requestsLoading: false });
+  const pending = page.loadJoinRequests();
+  page.onHide();
+  resolveList({ items: [] });
+  await pending;
+  assert.equal(page.data.requestsLoading, false, '后台返回后必须释放 requestsLoading');
+});
+
+// T3.1：本地文件可读时复用，失效时单项重下。
+test('a still-readable local file is reused while a stale one is re-downloaded', async () => {
+  const downloads = [];
+  const note = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', cover_media_id: '', media_ids: ['okfile01', 'stale001'] };
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (projectID, id) => { downloads.push(id); return '/tmp/' + id; },
+  }, {
+    getFileSystemManager: () => ({ accessSync(path) { if (String(path).includes('stale')) throw new Error('not found'); } }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._selectedNoteID = 'n1';
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'okfile01', kind: 'image', local_path: '/tmp/okfile01.jpg' }, { media_id: 'stale001', kind: 'image', local_path: '/tmp/stale001.jpg' }] });
+  await page.hydrateNoteMedia(1, 'p');
+  assert.deepEqual(downloads, ['stale001'], '仅重下失效文件');
+  assert.equal(page.data.noteMedia[1].local_path, '/tmp/stale001');
+});
+
+// 批次 3-4 复评：守卫锁定清面板、排队去重、连续插入光标推进。
+test('the profile guard lock clears the AI panel and blocks copying', () => {
+  const clipboard = [];
+  const page = pageHarness('projectnotes', {}, { setClipboardData: options => clipboard.push(options.data), aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '私密结果' });
+  page.onHide();
+  assert.equal(page.data.aiPanelOpen, false, '守卫锁定/后台返回必须关闭面板');
+  assert.equal(page.data.aiPanelText, '', '私密结果必须清空');
+  page.copyNoteAI();
+  assert.equal(clipboard.length, 0, '失效后不得复制旧结果');
+});
+
+test('queued insertion dedups and uses the edited result', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '旧编辑', busy: true });
+  const first = page.insertNoteAI();
+  const second = page.insertNoteAI();
+  page.setData({ aiPanelText: '新编辑', busy: false });
+  await Promise.all([first, second]);
+  assert.equal(page.data.noteBody, '原文\n\n新编辑', '队列去重且采用等待后的最新结果');
+});
+
+test('sequential appends account for the separator when advancing the cursor', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: 'AB' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '1234' });
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, 'AB\n\n1234');
+  page.setData({ aiPanelText: 'XY' });
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, 'AB\n\n1234\n\nXY', '第二次追加必须接在末尾而不是插进上次结果');
+});
+
+// 批次 3-4 三评：流式期间禁插、关闭后守卫锁定清空内存结果。
+test('a streaming result cannot be inserted as a partial', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '半截', aiPanelStreaming: true });
+  await page.insertNoteAI();
+  assert.equal(page.data.noteBody, '原文', '流式中的半截结果不得插入');
+});
+
+test('a manually closed panel is still wiped when the guard locks later', () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '私密结果' });
+  page.closeNoteAI();
+  page.onHide();
+  assert.equal(page.data.aiPanelText, '', '守卫锁定时必须清空内存中的私密结果');
+});
+
+// D21/D22：同 media_id 跨草稿实例不互相阻塞；迟到鉴权错误收尾加载态。
+test('the same media id downloads independently for a new draft instance', async () => {
+  const downloads = [];
+  const resolvers = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: (projectID, id) => { downloads.push(id); return new Promise(resolve => resolvers.push(resolve)); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 1 }, noteMedia: [{ media_id: 'shared01', kind: 'image' }] });
+  page.ensureDraftInstance();
+  const first = page.hydrateNoteMedia(1, 'p');
+  assert.equal(downloads.length, 1);
+  page.ensureDraftInstance(true);
+  const second = page.hydrateNoteMedia(1, 'p');
+  assert.equal(downloads.length, 2, '新草稿实例必须发起自己的下载');
+  resolvers[0]('/tmp/shared01');
+  resolvers[1]('/tmp/shared01');
+  await Promise.all([first, second]);
+});
+
+test('a late media auth error still clears the loading state', async () => {
+  let rejectDownload;
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: () => new Promise((resolve, reject) => { rejectDownload = reject; }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 1 }, noteMedia: [{ media_id: 'img40001', kind: 'image' }] });
+  page.ensureDraftInstance();
+  const pending = page.hydrateNoteMedia(1, 'p');
+  page.onHide();
+  rejectDownload(Object.assign(new Error('仅受邀账号可访问'), { statusCode: 403 }));
+  await pending;
+  assert.equal(page.data.noteMedia[0].preview_loading, false, '迟到鉴权错误也必须收尾加载态');
+});
+
+// D49/D53：面板 Prompt 复用统一构建函数；结构字段变化全部拒绝；后台旧请求失败不写错误。
+test('the AI panel prompt reuses the shared builder with the note title', async () => {
+  const { ANTI_FABRICATION_CLAUSE } = require(path.join(root, 'utils/writing-policy.js'));
+  let captured;
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: options => { captured = options; return { abort() {} }; } } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteTitle: '主题A', noteBody: '已知事实' });
+  page.openNoteAIWriting();
+  page.startNoteAI();
+  const prompt = captured.messages[0].content;
+  assert.match(prompt, /主题：主题A/, '必须保留标题主题');
+  assert.ok(prompt.includes(ANTI_FABRICATION_CLAUSE), '必须复用共享防臆造条款');
+});
+
+test('every forbidden structure change blocks AI adoption', async () => {
+  for (const change of ['note_id', 'revision', 'format', 'cover', 'media']) {
+    const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3, body_format: 'plain', cover_media_id: 'c1' }, noteBody: '原文', noteMedia: [{ media_id: 'c1', kind: 'image' }, { media_id: 'c2', kind: 'image' }] });
+    page.openNoteAIWriting();
+    page.setData({ aiPanelText: 'AI 结果' });
+    if (change === 'note_id') page.setData({ note: { note_id: 'n2', revision: 3, body_format: 'plain', cover_media_id: 'c1' } });
+    if (change === 'revision') page.setData({ note: { note_id: 'n', revision: 4, body_format: 'plain', cover_media_id: 'c1' } });
+    if (change === 'format') page.setData({ note: { note_id: 'n', revision: 3, body_format: 'article_v2', cover_media_id: 'c1' } });
+    if (change === 'cover') page.setData({ note: { note_id: 'n', revision: 3, body_format: 'plain', cover_media_id: 'c2' } });
+    if (change === 'media') page.setData({ noteMedia: [{ media_id: 'c1', kind: 'image' }, { media_id: 'm2', kind: 'image' }] });
+    await page.insertNoteAI();
+    assert.doesNotMatch(page.data.noteBody, /AI 结果/, `${change} 变化必须拒绝采纳`);
+  }
+});
+
+test('a backgrounded join-request failure never writes a stale error', async () => {
+  let rejectList;
+  const page = pageHarness('projectnotes', {
+    listProjectJoinRequests: () => new Promise((resolve, reject) => { rejectList = reject; }),
+    listProjectInvitations: async () => ({ items: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, requestsLoading: false, error: '' });
+  const pending = page.loadJoinRequests();
+  page.onHide();
+  rejectList(new Error('后台失败'));
+  await pending;
+  assert.equal(page.data.error, '', '后台旧请求失败不得写入错误');
+  assert.equal(page.data.requestsLoading, false);
+});
+
+// D1：后台完成的上传素材持久化，重启（新页面实例）后仍能补回。
+test('pending media survives a restart for the same owner', async () => {
+  const storage = { token: 'session-token' };
+  const wxStubs = {
+    getStorageSync: key => key === 'token' ? 'session-token' : storage[key],
+    setStorageSync: (key, value) => { storage[key] = value; },
+    removeStorageSync: key => { delete storage[key]; },
+  };
+  const first = pageHarness('projectnotes', {}, wxStubs);
+  first._visible = true; first._token = 'session-token'; first._epoch = 1;
+  first.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n1', revision: 1 } });
+  const owner = first.mediaFailureOwnerKey();
+  first.stashPendingMedia(owner, [{ file: { tempFilePath: '/tmp/a.jpg' }, asset: { media_id: 'm9001', kind: 'image' } }]);
+  assert.ok(storage.project_note_pending_media_v1, '挂起素材必须持久化');
+
+  const second = pageHarness('projectnotes', {}, wxStubs);
+  second._visible = true; second._token = 'session-token'; second._epoch = 1;
+  second._selectedNoteID = 'n1';
+  second.applyProjectDetail({ project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain' }], versions: [] }, '', null, null, 'editor');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(second.data.noteMedia.some(item => item.media_id === 'm9001'), '重启后补回挂起素材');
+});
+
+// D44/D53：真实守卫包装器锁定清面板；排队等待有超时。
+test('the real profile-access wrapper lock clears the AI panel', () => {
+  global.wx = { getStorageSync: () => '', hideShareMenu() {} };
+  const wrapper = require(path.join(root, 'utils/profile-access.js'));
+  const base = {
+    route: 'pages/projectnotes/projectnotes',
+    data: { aiPanelOpen: true, aiPanelText: '私密结果', aiPanelPrompt: 'p', aiPanelStreaming: false, aiPanelError: '', aiPanelNotice: '' },
+    setData(values, done) { Object.assign(this.data, values); if (done) done.call(this); },
+    onHide() { this.data.aiPanelOpen = false; this.data.aiPanelText = ''; },
+    onShow() {},
+    onLoad() {},
+    onReady() {},
+  };
+  base.__accessActive = true;
+  const wrapped = wrapper.wrapProfileAccess(base);
+  wrapped.onProfileAccessBlocked();
+  assert.equal(wrapped.data.aiPanelOpen, false, '真实守卫锁定必须关闭面板');
+  assert.equal(wrapped.data.aiPanelText, '', '真实守卫锁定必须清空私密结果');
+  delete global.wx;
+});
+
+test('the AI insertion queue times out instead of waiting forever', async () => {
+  const page = pageHarness('projectnotes', {}, { aiStream: { startAIStream: () => ({ abort() {} }) } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p', name: '张宅' }, note: { note_id: 'n', revision: 3 }, noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ aiPanelText: '排队结果', busy: true });
+  page._aiIdleTimeoutMs = 200;
+  const started = Date.now();
+  await page.insertNoteAI();
+  assert.ok(Date.now() - started >= 180, '必须等待到超时');
+  assert.equal(page.data.noteBody, '原文', '超时后不得插入');
 });

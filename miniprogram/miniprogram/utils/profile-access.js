@@ -1,5 +1,5 @@
 'use strict';
-const { hasCompleteProfile } = require('../components/nickname-guard/profile-validation');
+const { hasCompleteProfile, hasProfileNickname } = require('../components/nickname-guard/profile-validation');
 let installed = false;
 const ACCESS_FREE_ROUTES = new Set([
   'pages/login/login',
@@ -75,11 +75,12 @@ function wrapProfileAccess(definition) {
   const redirectToLogin = page => {
     if (page.__accessRedirecting || page.__accessDestroyed || !page.__accessVisible) return;
     page.__accessRedirecting = true;
+    // 分享页兜底跳登录时保留分享查看场景，登录页才不会重新要求头像。
     wx.navigateTo({
-      url: '/pages/login/login?from=profile-gate',
+      url: '/pages/login/login?from=' + (anonymousShare(page) ? 'share-view' : 'profile-gate'),
       fail() {
         page.__accessRedirecting = false;
-        wx.showToast({ title: '请先登录并补充头像、昵称', icon: 'none' });
+        wx.showToast({ title: anonymousShare(page) ? '请先登录并补充昵称' : '请先登录并补充头像、昵称', icon: 'none' });
       },
     });
   };
@@ -113,7 +114,9 @@ function wrapProfileAccess(definition) {
         const cachedProfile = wx.getStorageSync('userInfo') || {};
         const sameAccount = Number(cachedProfile.id || 0) === id;
         wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
-        if (!hasCompleteProfile(profile)) { redirectToLogin(page); return; }
+        // 分享查看场景：只要求昵称（P8：缺头像放行）；身份功能页仍要求完整资料。
+        const shareView = anonymousShare(page);
+        if (!(shareView ? hasProfileNickname(profile.nickname) : hasCompleteProfile(profile))) { redirectToLogin(page); return; }
         page.onProfileAccessGranted({ detail: { token, profile } });
       },
       fail() {
@@ -131,7 +134,8 @@ function wrapProfileAccess(definition) {
       verifyWithoutComponent(page); return;
     }
     const anonymous = anonymousShare(page) && !String(wx.getStorageSync('token') || '');
-    Promise.resolve(guard.check(anonymous ? { anonymous: true, silent: !!silent } : (silent ? { silent: true } : undefined)))
+    const scope = anonymousShare(page) ? 'share' : '';
+    Promise.resolve(guard.check(anonymous ? { anonymous: true, silent: !!silent, scope } : ((silent || scope) ? { silent: !!silent, scope } : undefined)))
       .catch(error => console.error('个人资料核验失败', page.route, error));
   };
   // 公开浏览页乐观放行：复用 granted 解锁路径但不做服务端资料核验，页面

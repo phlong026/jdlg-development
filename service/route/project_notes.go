@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,14 @@ type projectNoteHandlerDeps struct {
 	profiles     projectNoteProfileResolver
 }
 
+// P4（2026-11-10 用户定稿）：私有笔记素材上限图片 20 MiB、视频 500 MiB。
+// 请求体上限按视频上限 + 1 MiB 计；超时与流式落盘由 T5.1 负责。
+const (
+	projectNoteImageMaxBytes      = 20 << 20
+	projectNoteVideoMaxBytes      = 500 << 20
+	projectNoteUploadBodyMaxBytes = 501 << 20
+)
+
 func projectNotesEnabled() bool { return os.Getenv("PROJECT_NOTES_ENABLED") == "true" }
 
 func projectNotePrivateMiddlewares(users *model.UserModel, codes *model.CodeSessionRedisModel) []gin.HandlerFunc {
@@ -46,7 +55,7 @@ func projectNotePrivateMiddlewares(users *model.UserModel, codes *model.CodeSess
 		func(c *gin.Context) {
 			// Authentication verifies multipart requests before the handler. Bound
 			// the stream first so an unauthenticated upload cannot grow unchecked.
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 51<<20)
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, projectNoteUploadBodyMaxBytes)
 			c.Next()
 		},
 		TokenAuthRequired(codes),
@@ -376,7 +385,7 @@ func uploadProjectNoteMedia(c *gin.Context, svc *tracking.Service, scope trackin
 		trackingResponse(c, nil, &tracking.Error{Status: http.StatusServiceUnavailable, Message: "私人项目媒体存储尚未配置"})
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 51<<20)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, projectNoteUploadBodyMaxBytes)
 	if err := c.Request.ParseMultipartForm(1 << 20); err != nil {
 		trackingResponse(c, nil, &tracking.Error{Status: http.StatusRequestEntityTooLarge, Message: "上传体积超过限制"})
 		return
@@ -395,11 +404,11 @@ func uploadProjectNoteMedia(c *gin.Context, svc *tracking.Service, scope trackin
 	sniff := make([]byte, 512)
 	count, _ := io.ReadFull(source, sniff)
 	mime := http.DetectContentType(sniff[:count])
-	kind, max := "image", int64(10<<20)
+	kind, max := "image", int64(projectNoteImageMaxBytes)
 	switch mime {
 	case "image/png", "image/jpeg", "image/gif", "image/webp":
 	case "video/mp4":
-		kind, max = "video", 50<<20
+		kind, max = "video", projectNoteVideoMaxBytes
 	default:
 		trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "仅支持经过类型校验的PNG/JPEG/GIF/WebP和MP4文件"})
 		return
@@ -412,25 +421,54 @@ func uploadProjectNoteMedia(c *gin.Context, svc *tracking.Service, scope trackin
 		trackingResponse(c, nil, err)
 		return
 	}
-	data, err := io.ReadAll(io.LimitReader(source, max+1))
-	if err != nil || int64(len(data)) > max || len(data) == 0 {
-		trackingResponse(c, nil, &tracking.Error{Status: http.StatusRequestEntityTooLarge, Message: "上传失败或超出限制"})
-		return
-	}
+	var data []byte
+	var digestHex string
+	var videoPath string
+	var videoSize int64
 	width, height := 0, 0
-	if kind == "image" {
+	if kind == "video" {
+		// D4/D13：500 MiB 视频流式落盘 + 边写边算摘要，避免整文件驻留内存。
+		tmp, createErr := os.CreateTemp("", "project-note-video-*")
+		if createErr != nil {
+			trackingResponse(c, nil, tracking.ErrUnavailable)
+			return
+		}
+		videoPath = tmp.Name()
+		defer os.Remove(videoPath)
+		hash := sha256.New()
+		written, copyErr := io.Copy(io.MultiWriter(tmp, hash), io.LimitReader(source, max+1))
+		closeErr := tmp.Close()
+		if copyErr != nil || closeErr != nil || written <= 0 || written > max {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusRequestEntityTooLarge, Message: "上传失败或超出限制"})
+			return
+		}
+		videoSize = written
+		file, openErr := os.Open(videoPath)
+		if openErr != nil {
+			trackingResponse(c, nil, tracking.ErrUnavailable)
+			return
+		}
+		width, height, err = trackingMP4DimensionsAt(file, written)
+		file.Close()
+		if err != nil {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "无法识别MP4尺寸，请选择标准MP4原文件"})
+			return
+		}
+		digestHex = hex.EncodeToString(hash.Sum(nil))
+	} else {
+		data, err = io.ReadAll(io.LimitReader(source, max+1))
+		if err != nil || int64(len(data)) > max || len(data) == 0 {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusRequestEntityTooLarge, Message: "上传失败或超出限制"})
+			return
+		}
 		config, _, decodeErr := image.DecodeConfig(bytes.NewReader(data))
 		if decodeErr != nil || config.Width < 1 || config.Height < 1 || config.Width > 20000 || config.Height > 20000 {
 			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "图片尺寸无效"})
 			return
 		}
 		width, height = config.Width, config.Height
-	} else {
-		width, height, err = trackingMP4Dimensions(data)
-		if err != nil {
-			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "无法识别MP4尺寸，请选择标准MP4原文件"})
-			return
-		}
+		sum := sha256.Sum256(data)
+		digestHex = hex.EncodeToString(sum[:])
 	}
 	randomID := make([]byte, 24)
 	if _, err = rand.Read(randomID); err != nil {
@@ -442,19 +480,27 @@ func uploadProjectNoteMedia(c *gin.Context, svc *tracking.Service, scope trackin
 	if len(asset.Title) > 200 {
 		asset.Title = "已上传媒体"
 	}
-	digest := sha256.Sum256(data)
-	operation, already, err := svc.ProjectNotePrepareMedia(c.Request.Context(), scope, projectID, asset, fmt.Sprintf("%x", digest), "upload")
+	operation, already, err := svc.ProjectNotePrepareMedia(c.Request.Context(), scope, projectID, asset, digestHex, "upload")
 	if err != nil {
 		trackingResponse(c, nil, err)
 		return
 	}
 	if !already {
-		if err = storeContentMedia(c.Request.Context(), svc, mediaID, data, mime); err != nil {
+		if kind == "video" {
+			err = storeContentMediaFile(c.Request.Context(), svc, mediaID, videoPath, videoSize, mime, digestHex)
+		} else {
+			err = storeContentMedia(c.Request.Context(), svc, mediaID, data, mime)
+		}
+		if err != nil {
+			// D26：写存储失败时保留 pending journal 作为可重试证据（同一摘要重试会复用 operation）。
 			importResponse(c, nil, err)
 			return
 		}
 	}
 	media, err := svc.ProjectNoteFinalizeMedia(c.Request.Context(), scope, projectID, mediaID, operation)
+	if err != nil {
+		// D26：完成失败同样保留 pending；用同一摘要重试上传会复用 operation 并完成收尾。
+	}
 	trackingResponse(c, media, err)
 }
 

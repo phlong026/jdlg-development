@@ -22,7 +22,7 @@ function parseVideoCopy(value) {
   return copy;
 }
 
-const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
+const { ANTI_FABRICATION_CLAUSE } = require('../../utils/writing-policy');
 // 回填改为双向确认：原页面确认已应用后才关闭本页，避免「文案没回填、AI 页又已关闭」。
 // ack 通常同步回传，此超时只用于通道失效或原页面未处理时兜底；超时不得丢弃文案。
 const RETURN_ACK_TIMEOUT_MS = 2000;

@@ -38,7 +38,7 @@
       </view>
       <view wx:if="{{result}}" class="writing-panel refine-panel">
         <text class="section-title">快速调整</text>
-        <view class="refine-actions"><button data-action="concise" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">精简</button><button data-action="expand" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">扩写</button><button data-action="tone" bindtap="generateWriting" disabled="{{!result || streaming || navigating}}">调整语气</button></view>
+        <view class="refine-actions"><button data-action="concise" bindtap="quickGenerate" disabled="{{!result || streaming || navigating}}">精简</button><button data-action="expand" bindtap="quickGenerate" disabled="{{!result || streaming || navigating}}">扩写</button><button data-action="tone" bindtap="quickGenerate" disabled="{{!result || streaming || navigating}}">调整语气</button></view>
       </view>
       <text wx:if="{{notice}}" class="feedback notice" role="status">{{notice}}</text>
       <button wx:if="{{!videoBundle}}" class="text-action deep-chat" bindtap="generateWriting" disabled="{{streaming || navigating}}">继续对话</button>

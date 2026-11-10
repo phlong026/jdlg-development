@@ -43,6 +43,7 @@ function loadPage(name, shared) {
     require(id) {
       if (id.includes('phase3-api')) return { writingPrompts: async () => { throw new Error('offline'); } };
       if (id.includes('ai-stream')) return { startAIStream: options => aiStreamStub.startAIStream(options) };
+      if (id.includes('writing-policy')) return require(path.join(__dirname, '../miniprogram/utils/writing-policy.js'));
       if (id.includes('article-document')) return { preserveLayoutBody: (_layout, fallback) => fallback, renderArticleDocument: () => [] };
       throw new Error(`unexpected require ${id}`);
     },
@@ -606,4 +607,13 @@ test('an empty AI title keeps the actual adopted title across a lost ack and re-
   const secondPayload = second.emitted.find(item => item.event === 'prefillContent').value;
   assert.equal(secondPayload.title, firstPayload.title, '重进后采纳标题必须与首次一致');
   assert.equal(secondPayload.operation, firstPayload.operation, '同一次采纳沿用同一 operation');
+});
+
+// T4.3：三个「快速调整」就地生成，不再跳 chat 页；多轮对话仍走独立入口。
+test('quick adjustments stay on page while the deep chat entry still navigates', () => {
+  const wxml = fs.readFileSync(path.join(pagesRoot, 'contentwriting/contentwriting.wxml'), 'utf8');
+  const quick = wxml.match(/<button data-action="(?:concise|expand|tone)"[^>]*>/g) || [];
+  assert.equal(quick.length, 3, '三个快速调整按钮');
+  quick.forEach(tag => assert.match(tag, /bindtap="quickGenerate"/, '快速调整必须就地生成'));
+  assert.match(wxml, /class="text-action deep-chat" bindtap="generateWriting"/, '继续对话仍走 chat');
 });

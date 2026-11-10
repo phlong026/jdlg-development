@@ -4,7 +4,7 @@
   <view class="{{embedded ? 'ng-embedded-content' : 'aw-content ng-content'}}">
     <template wx:if="{{!embedded}}" is="auth-intro" />
     <form class="nickname-guard aw-card" catchtap="stopPropagation" bindsubmit="onConfirm">
-      <text class="ng-title">{{embedded ? '确认头像和昵称' : '完善资料，开启建房之旅'}}</text>
+      <text class="ng-title">{{embedded ? (nicknameOnly ? '确认昵称' : '确认头像和昵称') : '完善资料，开启建房之旅'}}</text>
       <text wx:if="{{!embedded}}" class="ng-welcome">完善昵称与头像，继续探索理想的家</text>
       <template wx:if="{{!embedded}}" is="auth-avatars" />
 
@@ -17,8 +17,8 @@
           </view>
         </button>
         <view class="ng-avatar-tip">
-          <text class="ng-avatar-tip-main">{{embedded ? '点击选择微信头像' : '点击设置头像'}}</text>
-          <text wx:if="{{!embedded}}" class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
+          <text class="ng-avatar-tip-main">{{nicknameOnly ? '头像选填，可跳过' : (embedded ? '点击选择微信头像' : '点击设置头像')}}</text>
+          <text wx:if="{{!embedded && !nicknameOnly}}" class="ng-avatar-tip-sub">{{required ? '必填，可直接使用微信头像' : '选填，可直接使用微信头像'}}</text>
         </view>
       </view>
 

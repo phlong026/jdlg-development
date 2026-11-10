@@ -42,12 +42,19 @@ function balancedLayoutParts(layout){
 }
 function layoutBlocks(document,assets,width,prefix){
  const layout=String(document.layout_html||'');safeLayout(layout);
- const media=id=>{const asset=assets.get(id),url=asset&&(asset.local_path||asset.url);if(!asset||!url||(!asset.local_path&&!/^https:\/\//.test(url)))throw new Error('原排版正文媒体不完整');return {...asset,url};};
- const withImages=layout.replace(/<img data-media-id="([A-Za-z0-9_-]{8,128})"((?: alt="[^"]*")?(?: style="[^"]*")?)>/g,(_,id,attrs)=>{const asset=media(id);if(asset.kind!=='image')throw new Error('原排版正文媒体类型无效');return '<img src="'+escapeAttribute(asset.url)+'"'+attrs+'>';});
+ // T5.3：媒体下载失败只降级为占位，不让整篇原排版分享失败。
+ const usableUrl=asset=>{const url=asset&&(asset.local_path||asset.url);return url&&(asset.local_path||/^https:\/\//.test(url))?url:'';};
+ const missingImage='<span class="article-media-missing">素材加载失败，可重试</span>';
+ const missingVideo='<span class="article-media-missing">视频加载失败，可重试</span>';
+ const withImages=layout.replace(/<img data-media-id="([A-Za-z0-9_-]{8,128})"((?: alt="[^"]*")?(?: style="[^"]*")?)>/g,(_,id,attrs)=>{const asset=assets.get(id);if(!asset)return missingImage;if(asset.kind!=='image')throw new Error('原排版正文媒体类型无效');const url=usableUrl(asset);if(!url)return missingImage;return '<img src="'+escapeAttribute(url)+'"'+attrs+'>';});
  return balancedLayoutParts(withImages).map((part,index)=>{
   if(part.kind==='layout')return {...part,key:prefix+'-'+index};
-  const asset=media(part.media_id);if(asset.kind!=='video')throw new Error('原排版正文媒体类型无效');
-  return {...asset,kind:'video',key:prefix+'-'+index,domId:prefix+'-media-'+index,playerKey:prefix+'-player-'+index,errorKey:prefix+'Media'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16))),style:part.style,className:part.className};
+  const asset=assets.get(part.media_id);
+  if(!asset)return {kind:'layout',html:missingVideo,key:prefix+'-'+index};
+  if(asset.kind!=='video')throw new Error('原排版正文媒体类型无效');
+  const url=usableUrl(asset);
+  if(!url)return {kind:'layout',html:missingVideo,key:prefix+'-'+index};
+  return {...asset,url,kind:'video',key:prefix+'-'+index,domId:prefix+'-media-'+index,playerKey:prefix+'-player-'+index,errorKey:prefix+'Media'+index,height:Math.max(120,Math.round(width*(asset.height||9)/(asset.width||16))),style:part.style,className:part.className};
  });
 }
 

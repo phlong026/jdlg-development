@@ -3,6 +3,8 @@
 const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
 const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
+const { startAIStream } = require('../../utils/ai-stream');
+const { ANTI_FABRICATION_CLAUSE, noteWritingPrompt } = require('../../utils/writing-policy');
 
 const blankProtected = () => ({
   pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectLoadFailed: false,
@@ -16,10 +18,77 @@ const blankProtected = () => ({
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
   editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
   previewMediaGroups: [], versionMediaGroups: [], galleryPositions: {}, mediaUploadFailures: [], mediaFailureSummary: '', mediaRetryLabel: '',
+  mediaPermissionDenied: false, aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '',
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
 const assetOf = item => item && item.asset ? item.asset : item;
+// T2.4 客户端预检：与服务端边界对齐（P4：图 20 MiB / 视频 500 MiB / 累计 50 项）。
+const NOTE_MEDIA_IMAGE_LIMIT = 20 * 1024 * 1024;
+const NOTE_MEDIA_VIDEO_LIMIT = 500 * 1024 * 1024;
+const NOTE_MEDIA_TOTAL_LIMIT = 50;
+const formatMegabytes = bytes => (Number(bytes) / 1024 / 1024).toFixed(1);
+// D1：后台完成的上传素材持久化，重启后仍能补回到原归属草稿（7 天过期，按 owner 隔离）。
+const PENDING_MEDIA_KEY = 'project_note_pending_media_v1';
+const PENDING_MEDIA_TTL_MS = 7 * 86400000;
+const readPendingMediaStore = () => {
+  try {
+    const raw = wx.getStorageSync(PENDING_MEDIA_KEY);
+    if (!raw || typeof raw !== 'object') return {};
+    const store = {}, now = Date.now();
+    for (const owner of Object.keys(raw)) {
+      const entry = raw[owner];
+      if (!entry || !Array.isArray(entry.assets) || !entry.at) continue;
+      if (now - Number(entry.at) > PENDING_MEDIA_TTL_MS || !entry.assets.length) continue;
+      store[owner] = entry.assets;
+    }
+    return store;
+  } catch (_) { return {}; }
+};
+const writePendingMediaStore = store => {
+  try {
+    const raw = {};
+    for (const owner of Object.keys(store || {})) if (store[owner] && store[owner].length) raw[owner] = { at: Date.now(), assets: store[owner] };
+    if (Object.keys(raw).length) wx.setStorageSync(PENDING_MEDIA_KEY, raw);
+    else wx.removeStorageSync(PENDING_MEDIA_KEY);
+  } catch (_) { /* 存储不可用时仅保留内存态 */ }
+};
+// T3.1：本地文件仍可读时才复用，失效则单项重下。
+const localFileUsable = filePath => {
+  const file = String(filePath || '');
+  if (!file) return false;
+  try {
+    const fs = typeof wx.getFileSystemManager === 'function' ? wx.getFileSystemManager() : null;
+    if (!fs || typeof fs.accessSync !== 'function') return true;
+    fs.accessSync(file);
+    return true;
+  } catch (_) { return false; }
+};
+// 只有 media_id 的私有素材：下载后按临时文件扩展名恢复类型，无法识别则保持占位。
+const inferNoteMediaKind = (filePath, fallback) => {
+  const path = String(filePath || '');
+  if (/\.(jpe?g|png|gif|webp|bmp)$/i.test(path)) return 'image';
+  if (/\.(mp4|mov|m4v|avi|mkv)$/i.test(path)) return 'video';
+  return fallback;
+};
+// 上传前预检：返回第一条拒绝原因；未超限返回空串。超限不得发起任何上传请求。
+const noteMediaPrecheck = (existing, files) => {
+  if (existing.length + files.length > NOTE_MEDIA_TOTAL_LIMIT) return `每个笔记最多 ${NOTE_MEDIA_TOTAL_LIMIT} 项素材，当前已有 ${existing.length} 项。`;
+  for (const file of files) {
+    const declared = String(file && file.fileType || '');
+    if (declared && declared !== 'image' && declared !== 'video') return '仅支持上传图片或视频素材。';
+    const filePath = String(file && file.tempFilePath || '');
+    const imageExt = /\.(jpe?g|png|gif|webp|bmp)$/i.test(filePath);
+    const videoExt = /\.(mp4|mov|m4v|avi|mkv)$/i.test(filePath);
+    if (filePath && !declared && !imageExt && !videoExt) return '仅支持 PNG/JPEG/GIF/WebP 图片或 MP4/MOV 视频。';
+    const kind = declared || (videoExt ? 'video' : 'image');
+    const size = Number(file && file.size);
+    if (!Number.isFinite(size) || size <= 0) continue;
+    const limit = kind === 'video' ? NOTE_MEDIA_VIDEO_LIMIT : NOTE_MEDIA_IMAGE_LIMIT;
+    if (size > limit) return `${kind === 'video' ? '视频' : '图片'}不能超过 ${formatMegabytes(limit)} MB，当前文件为 ${formatMegabytes(size)} MB。`;
+  }
+  return '';
+};
 // 上传失败要能区分「服务端拒绝」和「网络异常」：HTTP 错误保留 data.msg 与 statusCode。
 const uploadFailureMessage = error => {
   const status = Number(error && error.statusCode);
@@ -81,13 +150,27 @@ Page({
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
     if (this.data.pageView === 'editor') this.acceptPendingMedia();
+    const afterRecheck = () => {
+      this.flushPickerFeedback(); this.resumeNoteMediaPreviews();
+      if (this.data.pageView === 'version' || this.data.pageView === 'members') {
+        if (this.data.requestsLoading) this._joinRequestsRetry = true; else this.loadJoinRequests();
+      }
+    };
     if (this._writingLaunch && this._writingLaunch.token === token) {
       this._writingLaunch = null;
-      return this.revalidateProjectAccess();
+      return Promise.resolve(this.revalidateProjectAccess()).then(afterRecheck);
     }
-    return this._loaded ? this.revalidateProjectAccess() : this.loadProjects(this._epoch);
+    return Promise.resolve(this._loaded ? this.revalidateProjectAccess() : this.loadProjects(this._epoch)).then(afterRecheck);
   },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.editNote(); },
+  onHide() {
+    this._visible = false; this._epoch = (this._epoch || 0) + 1;
+    // 登录守卫锁定/切后台都走这里：AI 面板属于私密内容，必须立即失效并清空。
+    this._aiPanelRequest = (this._aiPanelRequest || 0) + 1;
+    this._aiPanelLaunch = null;
+    this.abortNoteAI();
+    this.setData({ aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '' });
+    this.editNote();
+  },
   onUnload() { this._unloaded = true; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   onPageScroll(event) {
     if (this.data.pageView === 'list') this._listScrollTop = Number(event && event.scrollTop || 0);
@@ -98,10 +181,27 @@ Page({
     wx.pageScrollTo({ scrollTop: view === 'list' ? Number(this._listScrollTop || 0) : 0, duration: 0 });
   },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
+  // 选择器反馈跨权限重验保留：重验会清空 error/notice，完成后回填一次。
+  flushPickerFeedback() {
+    const pending = this._pendingPickerFeedback;
+    if (!pending) return;
+    this._pendingPickerFeedback = null;
+    // 重验失败（如网络/权限）优先展示，不被延迟的取消/预检提示覆盖。
+    const recheckFailed = !!this.data.error || /重验失败/.test(String(this.data.notice || ''));
+    if (recheckFailed && pending.data && pending.data.notice && !pending.data.error) return;
+    const owner = pending.owner || {};
+    // 反馈只回填到发起时的账号/项目/草稿实例；换账号、撤权或切草稿后直接丢弃。
+    const sameDraft = owner.token === this._token && owner.token === String(wx.getStorageSync('token') || '')
+      && (this._protectedGeneration || 0) === owner.generation
+      && !!this.data.selectedProject && this.data.selectedProject.project_id === owner.projectID
+      && this.currentDraftInstanceID() === owner.instanceID;
+    if (!sameDraft) return;
+    this.setData(pending.data);
+  },
   clearProtected() {
     // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
     this._protectedGeneration = (this._protectedGeneration || 0) + 1;
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; writePendingMediaStore({}); this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -125,7 +225,7 @@ Page({
 
   restoreLoadedForms() {
     const state = this._loadedFormState;
-    if (state) this.setData({ projectEdit: Object.assign({}, state.projectEdit), noteTitle: state.noteTitle, noteBody: state.noteBody, noteMedia: state.noteMedia.map(item => Object.assign({}, item)) });
+    if (state) this.setData({ aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '', projectEdit: Object.assign({}, state.projectEdit), noteTitle: state.noteTitle, noteBody: state.noteBody, noteMedia: state.noteMedia.map(item => Object.assign({}, item)) });
   },
 
   async handleBack() {
@@ -258,7 +358,8 @@ Page({
   setOwnerID(event) { const index = Number(event.detail.value) || 0, choice = this.data.ownerChoices[index]; this.setData({ ownerIndex: index, ownerID: choice && choice.owner_id || this.data.owners[index] || '' }); },
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
   setNoteTitle(event) { this.setData({ noteTitle: value(event) }); },
-  setNoteBody(event) { if (!this.data.bodyReadOnly) this.setData({ noteBody: String(event.detail && event.detail.value || '') }); },
+  setNoteBody(event) { if (!this.data.bodyReadOnly) { this._noteCursor = Number(event.detail && event.detail.cursor); this.setData({ noteBody: String(event.detail && event.detail.value || '') }); } },
+  onNoteBodyBlur(event) { this._noteCursor = Number(event.detail && event.detail.cursor); },
   onNoteKeyboardHeight(event) { this.setData({ keyboardHeight: Math.max(0, Number(event.detail && event.detail.height) || 0) }); },
   onNoteGalleryChange(event) {
     this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
@@ -297,6 +398,103 @@ Page({
     } catch (error) {
       if (current()) this.setData({ previewLoading: false, previewError: error.message || '预览加载失败，内容已保留，请重试。' });
     }
+  },
+  // T2.2：重开草稿时按 media_id 补缩略图；只补目标项、并发去重、失败收尾，补下载路径不进入保存载荷。
+  async hydrateNoteMedia(epoch, projectID, onlyID) {
+    if (!projectID) return;
+    const instanceID = this.currentDraftInstanceID();
+    const sameDraft = () => this.current(epoch) && !!this.data.selectedProject
+      && this.data.selectedProject.project_id === projectID && this.currentDraftInstanceID() === instanceID;
+    this._hydratingIDs = this._hydratingIDs || new Set();
+    // T3.1：本地文件失效时先清空路径，走单项重下；仍可读则直接复用。
+    const stale = (this.data.noteMedia || []).filter(item => item.local_path && !localFileUsable(item.local_path));
+    if (stale.length) {
+      const staleIds = new Set(stale.map(mediaID));
+      this.setData({ noteMedia: this.data.noteMedia.map(item => staleIds.has(mediaID(item)) ? Object.assign({}, item, { local_path: '', preview_error: '', preview_loading: false }) : item) });
+    }
+    // private = 只有 media_id、没有类型明细的非封面项：下载后用文件扩展名恢复类型。
+    const targets = (this.data.noteMedia || []).filter(item => !item.local_path && (item.kind === 'image' || item.kind === 'video' || item.kind === 'private') && mediaID(item)
+      && (!onlyID || mediaID(item) === onlyID) && !this._hydratingIDs.has(instanceID + ':' + mediaID(item)));
+    for (const item of targets) {
+      const id = mediaID(item);
+      // 每项发起前重新核对：可能已被单项重试处理或已补到路径。
+      const live = (this.data.noteMedia || []).find(entry => mediaID(entry) === id);
+      const key = instanceID + ':' + id;
+      if (!live || live.local_path || this._hydratingIDs.has(key)) continue;
+      this._hydratingIDs.add(key);
+      this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { preview_loading: true, preview_error: '' }) : entry) });
+      let update;
+      try {
+        const path = await api.downloadProjectNoteMedia(projectID, id);
+        if (item.kind === 'private') {
+          const kind = inferNoteMediaKind(path, 'private');
+          update = kind === 'private'
+            ? { local_path: '', preview_error: '', preview_loading: false }
+            : { local_path: path, kind, preview_error: '', preview_loading: false };
+        } else update = { local_path: path, preview_error: '', preview_loading: false };
+      }
+      catch (error) {
+        const status = Number(error && error.statusCode);
+        this._hydratingIDs.delete(key);
+        // 媒体鉴权终态：与上传/重验同口径，仅当前身份才清空并终止；旧身份迟到响应不得动新状态。
+        if ([401, 403].includes(status)) {
+          if (sameDraft()) this.handleNoteMediaAccessFailure(status);
+          else {
+            this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { preview_loading: false }) : entry) });
+            if (this._hydrateResumePending) { this._hydrateResumePending = false; Promise.resolve().then(() => this.resumeNoteMediaPreviews()); }
+          }
+          return;
+        }
+        update = { preview_error: item.kind === 'video' ? '视频加载失败，可重试' : '素材暂时无法显示', preview_loading: false };
+      }
+      this._hydratingIDs.delete(key);
+      // 跨前后台/切页后 epoch 变化：不写旧页面，但要把占位收尾，等回前台重新补下载。
+      if (!sameDraft()) {
+        this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { preview_loading: false, local_path: entry.local_path || '' }) : entry) });
+        if (this._hydrateResumePending) { this._hydrateResumePending = false; Promise.resolve().then(() => this.resumeNoteMediaPreviews()); }
+        return;
+      }
+      this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, update) : entry) });
+    }
+    if (this._hydrateResumePending && this._hydratingIDs.size === 0) {
+      this._hydrateResumePending = false;
+      Promise.resolve().then(() => this.resumeNoteMediaPreviews());
+    }
+  },
+  // 回前台/重验后恢复未完成的缩略图下载（含被 epoch 中断的「加载中」项）。
+  resumeNoteMediaPreviews() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.pageView !== 'editor') return;
+    const items = this.data.noteMedia || [];
+    const pending = items.filter(item => !item.local_path && (item.kind === 'image' || item.kind === 'video' || item.kind === 'private') && mediaID(item) && !item.preview_error);
+    if (!pending.length) return;
+    // 还有下载在途：登记待恢复，等它们收尾后再跑，避免被并发去重直接跳过。
+    if (this._hydratingIDs && this._hydratingIDs.size) { this._hydrateResumePending = true; return; }
+    const ids = new Set(pending.map(item => mediaID(item)));
+    this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => ids.has(mediaID(entry)) ? Object.assign({}, entry, { preview_loading: false }) : entry) });
+    void this.hydrateNoteMedia(this._epoch, project.project_id);
+  },
+  retryNoteMediaPreview(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    const project = this.data.selectedProject;
+    const item = (this.data.noteMedia || []).find(entry => mediaID(entry) === id);
+    if (!project || !item || this.data.busy) return;
+    if (this._hydratingIDs && this._hydratingIDs.has(id)) return;
+    this.setData({ noteMedia: this.data.noteMedia.map(entry => mediaID(entry) === id ? Object.assign({}, entry, { preview_error: '', preview_loading: false }) : entry) });
+    void this.hydrateNoteMedia(this._epoch, project.project_id, id);
+  },
+  noteMediaLoadError(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { local_path: '', preview_error: '素材暂时无法显示', preview_loading: false }) : entry) });
+  },
+  // T2.3：编辑态点击视频进入原生播放；不可用时明确提示。
+  openNoteVideo(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    const item = (this.data.noteMedia || []).find(entry => mediaID(entry) === id);
+    if (!item || !item.local_path) return;
+    const failed = () => this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { local_path: '', preview_error: '视频加载失败', preview_loading: false }) : entry) });
+    if (typeof wx.previewMedia === 'function') { wx.previewMedia({ sources: [{ url: item.local_path, type: 'video' }], current: 0, fail: failed }); return; }
+    failed();
   },
   openImage(event) {
     const id = String(event.currentTarget.dataset.id || '');
@@ -434,6 +632,7 @@ Page({
       while (cursor < assets.length) {
         if (failed || !this.current(epoch) || request !== this._projectRequest) return;
         const index = cursor++, asset = assets[index];
+        if (asset.local_path && localFileUsable(asset.local_path)) { media[index] = Object.assign({}, asset); continue; }
         try { media[index] = Object.assign({}, asset, { local_path: await api.downloadProjectNoteMedia(projectID, asset.media_id) }); }
         catch (error) { failed = true; throw error; }
       }
@@ -486,10 +685,13 @@ Page({
       error: share && !share.share_token ? '该分享入口凭证不再保存在当前会话中，请撤回后重新生成。' : '',
     }, () => {
       // 先用服务端结果建立未修改基线，再接纳后台素材，使其保持「未保存」状态。
+      this._noteNewCoverID = '';
+      if (pageView === 'version' || pageView === 'members') void this.loadJoinRequests();
       if (pageView === 'editor') this.ensureDraftInstance();
       this.publishMediaFailures();
       this.rememberLoadedForms();
-      if (pageView === 'editor') this.acceptPendingMedia();
+      if (pageView === 'editor') { this.restorePendingMedia(); this.acceptPendingMedia(); }
+      if (pageView === 'editor') void this.hydrateNoteMedia(this._epoch, project.project_id);
       this.scrollPage(pageView);
     });
   },
@@ -606,17 +808,24 @@ Page({
     const project = this.data.selectedProject;
     if (!project || this.data.requestsLoading) return;
     const epoch = this._epoch, projectID = project.project_id;
+    const request = this._joinRequestsRequest = (this._joinRequestsRequest || 0) + 1;
+    this._joinRequestsRetry = false;
     this.setData({ requestsLoading: true });
     try {
       const [result, invitations] = await Promise.all([api.listProjectJoinRequests(projectID), api.listProjectInvitations(projectID)]);
-      if (!this.current(epoch) || !this.data.selectedProject || this.data.selectedProject.project_id !== projectID) return;
+      if (!this.current(epoch) || request !== this._joinRequestsRequest || !this.data.selectedProject || this.data.selectedProject.project_id !== projectID) { if (request === this._joinRequestsRequest && this.data.requestsLoading) this.setData({ requestsLoading: false }); return; }
       this.setData({
         joinRequests: (result.items || []).filter(item => item.status === 'pending'),
         memberInvitations: (invitations.items || []).map(item => Object.assign({}, item, { expiryLabel: invitationLabel(item) })),
         requestsLoading: false,
       });
+      if (this._joinRequestsRetry && this.current(epoch) && !this.data.requestsLoading) { this._joinRequestsRetry = false; void this.loadJoinRequests(); }
     } catch (error) {
-      if (this.current(epoch) && this.data.selectedProject && this.data.selectedProject.project_id === projectID) this.setData({ requestsLoading: false, error: error.message || '加入申请加载失败' });
+      if (request === this._joinRequestsRequest && this.data.requestsLoading) {
+        this.setData({ requestsLoading: false });
+        if (this.current(epoch) && this.data.selectedProject && this.data.selectedProject.project_id === projectID
+          && (this.data.pageView === 'version' || this.data.pageView === 'members')) this.setData({ error: (error && error.message) || '加入申请加载失败' });
+      }
     }
   },
   async createProjectInvitation() {
@@ -696,8 +905,21 @@ Page({
   noteDraft() {
     const note = this.data.note;
     if (note && this.data.bodyReadOnly) return { title: this.data.noteTitle, body: note.body, body_format: note.body_format, cover_media_id: note.cover_media_id || '', media_ids: (note.media_ids || []).slice(), expected_revision: note.revision || 0 };
-    const ids = (this.data.noteMedia || []).map(mediaID).filter(Boolean), cover = (this.data.noteMedia || []).find(item => item.kind === 'image');
-    return { title: this.data.noteTitle, body: this.data.noteBody, body_format: 'plain', cover_media_id: cover ? mediaID(cover) : '', media_ids: ids, expected_revision: note && note.revision || 0 };
+    const items = this.data.noteMedia || [];
+    const ids = items.map(mediaID).filter(Boolean);
+    const firstImage = items.find(item => item.kind === 'image');
+    const savedCover = String(note && note.cover_media_id || '');
+    let coverID = '';
+    if (note && savedCover) {
+      // 已保存封面仍存在则保留；用户删掉封面后才回退首张图片。
+      coverID = ids.includes(savedCover) ? savedCover : (firstImage ? mediaID(firstImage) : '');
+    } else if (note) {
+      // 已保存但没有封面：补缩略图的类型推导不得生成封面；仅用户新增素材后默认取首张。
+      coverID = this._noteNewCoverID && ids.includes(this._noteNewCoverID) ? this._noteNewCoverID : '';
+    } else {
+      coverID = firstImage ? mediaID(firstImage) : '';
+    }
+    return { title: this.data.noteTitle, body: this.data.noteBody, body_format: 'plain', cover_media_id: coverID, media_ids: ids, expected_revision: note && note.revision || 0 };
   },
   noteWritingSignature() { return JSON.stringify({ project: this.data.selectedProject, note: this.noteDraft() }); },
   newDraftInstanceID() { return 'draft-' + Date.now().toString(36) + '-' + (this._draftSequence = (this._draftSequence || 0) + 1); },
@@ -714,26 +936,149 @@ Page({
     return this._draftInstance.id;
   },
   currentDraftInstanceID() { return this._draftInstance ? this._draftInstance.id : ''; },
-  resetDraftInstance() { this._draftInstance = null; },
+  resetDraftInstance() {
+    this._noteCursor = -1; this._draftInstance = null; },
   draftInstanceMatches(instanceID) {
     return !instanceID || !!(this._draftInstance && this._draftInstance.id === instanceID);
   },
+  // T4.1/T4.2：编辑页就地 AI 面板，不跳页；结果插入光标处并受 8000 字与身份约束。
   openNoteAIWriting() {
     const project = this.data.selectedProject, note = this.data.note;
     if (!project || this.data.busy || this.data.historyMode || this.data.bodyReadOnly) return;
     const instanceID = this.ensureDraftInstance();
-    const launch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, signature: this.noteWritingSignature(), instanceID, state: '', message: '', channel: null };
-    this._writingLaunch = launch;
-    const facts = [project.name && '项目：' + project.name, project.location && '地点：' + project.location,
-      project.building_area > 0 && '建筑面积：' + project.building_area + ' 平方米', project.floors > 0 && '层数：' + project.floors,
-      project.style && '风格：' + project.style, this.data.noteBody].filter(Boolean).join('\n').slice(0, 6000);
-    wx.navigateTo({
-      url: '/pages/contentwriting/contentwriting?source=project_note',
-      success: result => { launch.channel = result.eventChannel; result.eventChannel.emit('writingContext', { source: 'project_note', project_id: launch.projectID, note_id: launch.noteID, note_revision: launch.revision, draft_instance_id: launch.instanceID, title: this.data.noteTitle, facts }); },
-      events: { prefillContent: payload => this.receiveNoteWriting(payload, launch) },
-      fail: () => { this._writingLaunch = null; this.setData({ notice: 'AI 文案页未能打开，原笔记已保留。' }); },
+    const launch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, instanceID,
+      structure: this.noteAIStructureSignature(), request: (this._aiPanelRequest = (this._aiPanelRequest || 0) + 1) };
+    this._aiPanelLaunch = launch;
+    this._aiPanelApplied = '';
+    // 兼容：既有 ack 协议调用方仍可通过 receiveNoteWriting(payload, this._writingLaunch) 回传。
+    this._writingLaunch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, signature: this.noteWritingSignature(), instanceID, state: '', message: '', channel: null };
+    this.setData({ aiPanelOpen: true, aiPanelText: '', aiPanelError: '', aiPanelNotice: '', aiPanelPrompt: '', aiPanelStreaming: false });
+  },
+  closeNoteAI() {
+    this._aiPanelRequest = (this._aiPanelRequest || 0) + 1;
+    this._aiPanelLaunch = null;
+    this.abortNoteAI();
+    this.setData({ aiPanelOpen: false, aiPanelStreaming: false });
+  },
+  setNoteAIPrompt(event) { this.setData({ aiPanelPrompt: String(event.detail && event.detail.value || '') }); },
+  setNoteAIText(event) { this.setData({ aiPanelText: String(event.detail && event.detail.value || '') }); },
+  stopPropagation() {},
+  abortNoteAI() {
+    if (this._aiPanelTask && typeof this._aiPanelTask.abort === 'function') { try { this._aiPanelTask.abort(); } catch (_) { /* 已结束 */ } }
+    this._aiPanelTask = null;
+  },
+  // 结构签名只包含「不允许被 AI 结果改变」的字段（账号/项目/笔记/修订/实例/格式/封面/媒体）。
+  noteAIStructureSignature() {
+    const note = this.data.note;
+    const ids = (this.data.noteMedia || []).map(mediaID).filter(Boolean);
+    return JSON.stringify({
+      project: this.data.selectedProject && this.data.selectedProject.project_id || '',
+      note: note && note.note_id || '', revision: note && note.revision || 0,
+      instance: this.currentDraftInstanceID(), format: note && note.body_format || 'plain',
+      cover: this.noteDraft().cover_media_id || '', media: ids,
     });
   },
+  noteAIPanelValid() {
+    const project = this.data.selectedProject, launch = this._aiPanelLaunch;
+    if (!project || !launch) return false;
+    return launch.request === (this._aiPanelRequest || 0)
+      && launch.token === this._token && launch.token === String(wx.getStorageSync('token') || '')
+      && project.project_id === launch.projectID
+      && String(this.data.note && this.data.note.note_id || '') === launch.noteID
+      && Number(this.data.note && this.data.note.revision || 0) === Number(launch.revision || 0)
+      && this.currentDraftInstanceID() === launch.instanceID
+      && this.noteAIStructureSignature() === launch.structure
+      && !this.data.historyMode && !this.data.bodyReadOnly;
+  },
+  noteAIFacts() {
+    const project = this.data.selectedProject || {};
+    return [project.name && '项目：' + project.name, project.location && '地点：' + project.location,
+      project.building_area > 0 && '建筑面积：' + project.building_area + ' 平方米', project.floors > 0 && '层数：' + project.floors,
+      project.style && '风格：' + project.style, this.data.noteBody].filter(Boolean).join('\n').slice(0, 6000);
+  },
+  startNoteAI() {
+    if (this.data.aiPanelStreaming || !this.noteAIPanelValid()) return;
+    const launch = this._aiPanelLaunch, token = this._token, facts = this.noteAIFacts();
+    if (!facts) { this.setData({ aiPanelError: '请先填写项目资料或笔记正文，AI 将以这些事实为依据。' }); return; }
+    const extra = String(this.data.aiPanelPrompt || '').trim();
+    const prompt = noteWritingPrompt({ title: this.data.noteTitle, facts, extra });
+    const request = launch.request;
+    const current = () => request === this._aiPanelRequest && launch === this._aiPanelLaunch && !this._unloaded
+      && token === this._token && token === String(wx.getStorageSync('token') || '') && this.noteAIPanelValid();
+    this.setData({ aiPanelStreaming: true, aiPanelText: '', aiPanelError: '', aiPanelNotice: '正在生成…' });
+    try {
+      this._aiPanelTask = startAIStream({
+        messages: [{ role: 'user', content: prompt }],
+        onChunk: partial => { if (current()) this.setData({ aiPanelText: String(partial || '') }); },
+        onDone: full => {
+          if (!current()) return;
+          this._aiPanelTask = null;
+          const text = String(full || '').trim();
+          this.setData({ aiPanelStreaming: false, aiPanelText: text, aiPanelNotice: text ? '已生成，可编辑后插入或复制。' : '生成为空，请调整资料后重试。' });
+        },
+        onError: message => {
+          if (!current()) return;
+          this._aiPanelTask = null;
+          this.setData({ aiPanelStreaming: false, aiPanelError: message || '生成失败，请重试' });
+        },
+      });
+    } catch (error) { this._aiPanelTask = null; this.setData({ aiPanelStreaming: false, aiPanelError: error.message || '生成失败，请重试' }); }
+  },
+  whenNoteIdle(launch) {
+    if (!this.data.busy) return Promise.resolve(true);
+    const epoch = this._epoch, started = Date.now();
+    return new Promise(resolve => {
+      const check = () => {
+        // 关闭面板/切换草稿/超时后立即结束等待，不再轮询。
+        if (this._unloaded || epoch !== this._epoch || !launch || launch !== this._aiPanelLaunch
+          || !this.data.aiPanelOpen || this.currentDraftInstanceID() !== launch.instanceID) { resolve(false); return; }
+        if (!this.data.busy) { resolve(true); return; }
+        const timeoutMs = Number(this._aiIdleTimeoutMs) > 0 ? Number(this._aiIdleTimeoutMs) : 5000;
+        if (Date.now() - started > timeoutMs) { resolve(false); return; }
+        setTimeout(check, 120);
+      };
+      setTimeout(check, 120);
+    });
+  },
+  async insertNoteAI() {
+    let text = String(this.data.aiPanelText || '').trim();
+    if (!text || this.data.aiPanelStreaming || !this.noteAIPanelValid()) return;
+    if (this._aiPanelApplied && this._aiPanelApplied === text) { this.setData({ aiPanelNotice: '该结果已插入过，可继续编辑或复制。' }); return; }
+    const launch = this._aiPanelLaunch;
+    const idled = await this.whenNoteIdle(launch);
+    if (!idled || launch !== this._aiPanelLaunch || !this.noteAIPanelValid()) {
+      if (launch === this._aiPanelLaunch) this.setData({ aiPanelNotice: '笔记已变化，结果未插入，可复制后手动粘贴。' });
+      return;
+    }
+    // 排队期间结果可能已被编辑或已采纳：等待后重新读取并二次去重。
+    if (this.data.aiPanelStreaming) { this.setData({ aiPanelNotice: '正在生成，完成后可插入。' }); return; }
+    const latest = String(this.data.aiPanelText || '').trim();
+    if (!latest) return;
+    if (this._aiPanelApplied && this._aiPanelApplied === latest) { this.setData({ aiPanelNotice: '该结果已插入过，可继续编辑或复制。' }); return; }
+    text = latest;
+    const existing = String(this.data.noteBody || '');
+    const cursorNow = this._noteCursor >= 0 ? Math.max(0, Math.min(this._noteCursor, existing.length)) : existing.length;
+    const separator = existing && cursorNow >= existing.length ? '\n\n' : '';
+    const room = Math.max(0, 8000 - existing.length - separator.length);
+    let inserted = room > 0 ? text.slice(0, room) : '';
+    // 截断不得产生孤立代理字符。
+    if (/[\uD800-\uDBFF]$/.test(inserted)) inserted = inserted.slice(0, -1);
+    const cursor = cursorNow;
+    let bodyValue;
+    if (!inserted) bodyValue = existing;
+    else if (cursor < existing.length) bodyValue = (existing.slice(0, cursor) + inserted + existing.slice(cursor)).slice(0, 8000);
+    else bodyValue = (existing + separator + inserted).slice(0, 8000);
+    const truncated = inserted.length < text.length;
+    if (inserted) this._aiPanelApplied = text;
+    this._noteCursor = cursor + separator.length + inserted.length;
+    this.setData({
+      noteBody: bodyValue,
+      aiPanelNotice: inserted
+        ? (truncated ? `已插入前 ${inserted.length} 字，剩余 ${text.length - inserted.length} 字可复制后手动补充。` : '已插入，可继续编辑。')
+        : '正文已满 8000 字，请复制后手动替换。',
+    });
+  },
+  copyNoteAI() { if (!this.noteAIPanelValid()) return; const text = String(this.data.aiPanelText || ''); if (text) wx.setClipboardData({ data: text }); },
   // T1.1 双向确认：回填结果分「已应用 / 暂时拒绝 / 目标失效」三类回传 AI 页。
   // 已应用的重复请求只重放成功确认，不重复追加；暂时拒绝可重试；目标失效须重新发起。
   receiveNoteWriting(payload, launch) {
@@ -957,6 +1302,10 @@ Page({
     // 挂起素材同样按归属有界，避免被放弃的草稿长期滞留。
     const keys = Object.keys(store);
     if (keys.length > 10) keys.slice(0, keys.length - 10).forEach(key => delete store[key]);
+    writePendingMediaStore(store);
+  },
+  restorePendingMedia() {
+    this._noteMediaPending = Object.assign(readPendingMediaStore(), this._noteMediaPending || {});
   },
   acceptPendingMedia() {
     const ownerKey = this.mediaFailureOwnerKey();
@@ -964,6 +1313,7 @@ Page({
     if (!ownerKey || !store || !store[ownerKey] || !store[ownerKey].length) return;
     const assets = store[ownerKey];
     delete store[ownerKey];
+    writePendingMediaStore(store);
     this.setData({ noteMedia: [...this.data.noteMedia, ...assets], notice: '已补回后台完成的上传素材。' });
   },
   chooseNoteMedia() {
@@ -973,20 +1323,33 @@ Page({
     const picker = { token: this._token, projectID: project.project_id, instanceID: this.currentDraftInstanceID(), generation: this._protectedGeneration || 0 };
     this._mediaPicker = picker;
     const release = () => { if (this._mediaPicker === picker) this._mediaPicker = null; };
+    const pickerOwned = () => this._mediaPicker === picker;
+    const pickerInDraft = () => picker.token === this._token && picker.token === String(wx.getStorageSync('token') || '')
+      && (this._protectedGeneration || 0) === picker.generation
+      && !!this.data.selectedProject && this.data.selectedProject.project_id === picker.projectID
+      && this.currentDraftInstanceID() === picker.instanceID;
     wx.chooseMedia({
       count: 9, mediaType: ['image', 'video'], sourceType: ['album', 'camera'],
       success: result => {
-        if (this._mediaPicker !== picker) return;
+        if (!pickerOwned()) return;
         release();
-        const sameAccount = picker.token === this._token && picker.token === String(wx.getStorageSync('token') || '');
-        const sameDraft = sameAccount && (this._protectedGeneration || 0) === picker.generation
-          && !!this.data.selectedProject && this.data.selectedProject.project_id === picker.projectID
-          && this.currentDraftInstanceID() === picker.instanceID
-          && !this.data.busy && !this.data.historyMode && !this.data.bodyReadOnly;
-        if (!sameDraft) return;
+        this.setData({ mediaPermissionDenied: false });
+        if (!pickerInDraft() || this.data.busy || this.data.historyMode || this.data.bodyReadOnly) return;
         this.uploadNoteMedia(result.tempFiles || []);
       },
-      fail: () => { release(); },
+      fail: error => {
+        if (!pickerOwned()) return;
+        release();
+        // 失效的旧回调不得污染新账号/新项目的提示。
+        if (!pickerInDraft()) return;
+        const message = String(error && (error.errMsg || error.message) || '');
+        // T2.1：取消与权限拒绝不再静默，且不改变已填内容；提示跨重验保留。
+        const feedback = /cancel/i.test(message)
+          ? { notice: '已取消，原内容保持不变。', error: '', mediaPermissionDenied: false }
+          : { error: '未获得相册/相机权限，请到设置中开启后重试。', notice: '', mediaPermissionDenied: true };
+        this._pendingPickerFeedback = { owner: { token: picker.token, projectID: picker.projectID, instanceID: picker.instanceID, generation: picker.generation }, data: feedback };
+        this.setData(feedback);
+      },
     });
   },
   // 串行逐文件上传：单个失败只进可重试队列，已成功的保留，剩余文件继续尝试。
@@ -994,6 +1357,14 @@ Page({
     const project = this.data.selectedProject;
     // 不允许并发重入：同一时间只允许一个上传批次持有锁与队列归属。
     if (!project || !files.length || this._noteMediaUpload || this.data.busy) return;
+    // 客户端预检先于任何请求：大小/类型/累计数量超限直接提示，不发起注定失败的请求。
+    const rejection = noteMediaPrecheck(this.data.noteMedia || [], files);
+    if (rejection) {
+      const project0 = this.data.selectedProject;
+      this._pendingPickerFeedback = { owner: { token: this._token, projectID: project0 && project0.project_id || '', instanceID: this.currentDraftInstanceID(), generation: this._protectedGeneration || 0 }, data: { error: rejection, notice: '' } };
+      this.setData({ error: rejection, notice: '' });
+      return;
+    }
     const ownerKey = this.mediaFailureOwnerKey();
     const queue = this.mediaFailuresFor(ownerKey);
     // 批次身份：账号/项目/草稿实例三元绑定。换账号后旧批次必须停止，不能用新账号凭证发旧账号的文件。
@@ -1036,7 +1407,8 @@ Page({
       const file = files[position];
       try {
         const asset = assetOf(await api.uploadProjectNoteMedia(project.project_id, file.tempFilePath));
-        uploadedFiles.push({ file, asset });
+        // T2.3：视频用选择器给的缩略图作编辑态封面。
+        uploadedFiles.push({ file, asset: Object.assign({}, asset, file.thumbTempFilePath ? { thumb_path: file.thumbTempFilePath } : {}) });
       } catch (error) {
         const status = Number(error && error.statusCode);
         // 上传接口直接返回权限终态：仅当批次仍是当前有效操作时才作废并清空；迟到响应不得动当前状态。
@@ -1046,7 +1418,7 @@ Page({
         }
         // 身份失效导致的失败不计入失败数；未尝试的文件也不会走到这里。
         if (!sameBatch()) break;
-        failures.push({ tempFilePath: file.tempFilePath, fileType: file.fileType || '', name: uploadFileName(file, position), message: uploadFailureMessage(error) });
+        failures.push({ tempFilePath: file.tempFilePath, fileType: file.fileType || '', thumbTempFilePath: file.thumbTempFilePath || '', name: uploadFileName(file, position), message: uploadFailureMessage(error), statusCode: Number(error && error.statusCode) || 0, networkError: !!(error && error.networkError), errMsg: String(error && error.errMsg || '') });
       }
     }
 
@@ -1059,6 +1431,11 @@ Page({
     if (sameDraft && ownsUpload()) {
       this._noteMediaUpload = null;
       const uploaded = uploadedFiles.map(item => Object.assign({}, item.asset, { local_path: item.file.tempFilePath }));
+      if (!this._noteNewCoverID) {
+        const savedCover = String(this.data.note && this.data.note.cover_media_id || '');
+        const addedImage = uploaded.find(item => item.kind === 'image') || uploadedFiles.find(item => item.file.fileType === 'image');
+        if (addedImage && !savedCover) this._noteNewCoverID = mediaID(addedImage) || mediaID(addedImage.asset || {});
+      }
       const historyCount = Math.max(0, remaining.length - failures.length);
       const baseNotice = `已上传 ${uploaded.length} 个，${failures.length} 个失败${failures.length ? '，可重试' : ''}`;
       this.setData({
@@ -1090,9 +1467,20 @@ Page({
     if (!failures.length || this.data.busy) return;
     // 单次批量上限 9：历史失败超过 9 项时分轮重试，保证本批 N+M ≤ 9，其余继续作为历史展示。
     const batch = failures.slice(0, 9);
-    return this.uploadNoteMedia(batch.map(item => ({ tempFilePath: item.tempFilePath, fileType: item.fileType })), new Set(batch.map(item => item.tempFilePath)));
+    return this.uploadNoteMedia(batch.map(item => ({ tempFilePath: item.tempFilePath, fileType: item.fileType, thumbTempFilePath: item.thumbTempFilePath || '' })), new Set(batch.map(item => item.tempFilePath)));
   },
-  removeNoteMedia(event) { if (!this.data.bodyReadOnly) { const id = String(event.currentTarget.dataset.id || ''); this.setData({ noteMedia: this.data.noteMedia.filter(item => mediaID(item) !== id) }); } },
+  removeNoteMedia(event) {
+    if (this.data.bodyReadOnly) return;
+    const id = String(event.currentTarget.dataset.id || '');
+    const beforeCover = this.noteDraft().cover_media_id;
+    const remaining = this.data.noteMedia.filter(item => mediaID(item) !== id);
+    // 只有删掉当前有效封面时才回退到剩余首图；删除其它素材必须保留封面意图。
+    if (id === beforeCover) {
+      const firstImage = remaining.find(item => item.kind === 'image');
+      this._noteNewCoverID = firstImage ? mediaID(firstImage) : '';
+    }
+    this.setData({ noteMedia: remaining });
+  },
   async freezeProjectNoteVersion() {
     const note = this.data.note; if (!note || this.data.busy) return;
     const draft = this.noteDraft();

@@ -82,7 +82,7 @@ function harness(route = 'pages/aitoolworkbench/aitoolworkbench') {
     onShareAppMessage() { return { path: '/original' }; },
     onPullDownRefresh() { calls.push(['refresh']); },
   });
-  const guard = { visible: false, setData(value) { Object.assign(this, value); }, check: async () => { checks++; return false; } };
+  const guard = { visible: false, options: null, setData(value) { Object.assign(this, value); }, check: async options => { checks++; guard.options = options || null; return false; } };
   const page = { ...definition, route, data: { ...definition.data }, _pendingCallbacks: [], deferCallbacks: false,
     setData(value, done) {
       Object.assign(this.data, value);
@@ -478,4 +478,35 @@ test('a late 401 while backgrounded keeps the page hidden and only clears conten
   assert.equal(h.page.data.__profileAccessMounted, true, '回到前台后恢复说明页');
   assert.equal(h.page.data.view, null, '受保护内容必须清空');
   assert.equal(h.page.data.media.length, 0);
+});
+
+// T7.7：分享查看页核验时带 scope=share，身份功能页保持原口径。
+test('the share page asks the guard to verify with the share scope', () => {
+  const share = harness('pages/projectnoteview/projectnoteview'); share.mount({ pns: 'opaque-share-token' });
+  share.storage.token = 'session-account';
+  share.page.onShow();
+  assert.equal(share.guard.options && share.guard.options.scope, 'share');
+  const business = harness('pages/aicost/aicost'); business.mount({});
+  business.storage.token = 'session-account';
+  business.page.onShow();
+  assert.notEqual(business.guard.options && business.guard.options.scope, 'share', '身份页不得使用分享场景');
+});
+
+// T7.7：无组件兜底跳登录时，分享页带 share-view 场景，其它页面保持 profile-gate。
+test('the fallback login redirect keeps the share-view scene for the share page only', () => {
+  const share = harness('pages/projectnoteview/projectnoteview');
+  share.page.selectComponent = () => null;
+  share.storage.token = 'session-account';
+  share.page.onShow(); share.page.onReady();
+  assert.equal(share.requests.length, 1, '无组件路径应发起资料核验请求');
+  share.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '', avatar: '' } } });
+  assert.match(share.navigations[0].url, /from=share-view/);
+
+  const business = harness('pages/aicost/aicost');
+  business.page.selectComponent = () => null;
+  business.storage.token = 'session-account';
+  business.page.onShow(); business.page.onReady();
+  assert.equal(business.requests.length, 1);
+  business.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '', avatar: '' } } });
+  assert.match(business.navigations[0].url, /from=profile-gate/);
 });
