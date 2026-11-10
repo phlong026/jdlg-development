@@ -1585,3 +1585,129 @@ test('an applied project note AI return never replays success after the target o
   switchedAccount.navigation.events.prefillContent(switchedAccount.payload);
   assert.equal(switchedAccount.acks()[1].state, 'invalid', '换账号后不得重放旧成功');
 });
+
+// F2 / T1.2：草稿实例 ID 在实例创建时生成、跨 AI 重进稳定，新建/切换/保存/丢弃/换账号时转换。
+test('a draft instance id stays stable across AI re-entry and rotates on new, switch, save, discard and account change', async () => {
+  const sent = [];
+  const detail = {
+    project: { project_id: 'p', name: '张宅' },
+    notes: [
+      { note_id: 'n1', revision: 2, title: '方案 A', body: '正文 A', body_format: 'plain' },
+      { note_id: 'n2', revision: 1, title: '方案 B', body: '正文 B', body_format: 'plain' },
+    ],
+    versions: [], feedbacks: [], confirmations: [],
+  };
+  const page = pageHarness('projectnotes', {}, {
+    navigateTo: options => { options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+
+  page.applyProjectDetail(detail, '', null, null, 'detail');
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  const firstInstance = page._draftInstance && page._draftInstance.id;
+  assert.ok(firstInstance, '进入编辑器必须生成草稿实例 ID');
+  assert.equal(page.draftInstanceAccount(), '101', '实例身份绑定当前账号');
+
+  page.openNoteAIWriting();
+  const context = sent.filter(args => args[0] === 'writingContext').map(args => args[1])[0];
+  assert.equal(context.draft_instance_id, firstInstance, 'AI 上下文必须带草稿实例 ID');
+  page.openNoteAIWriting();
+  assert.equal(page._draftInstance.id, firstInstance, '同一草稿多次发起 AI 不产生新实例 ID');
+
+  page._selectedNoteID = 'n2';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  const secondInstance = page._draftInstance.id;
+  assert.notEqual(secondInstance, firstInstance, '切换到另一篇草稿必须换实例');
+
+  await page.startNewNote();
+  const thirdInstance = page._draftInstance.id;
+  assert.notEqual(thirdInstance, secondInstance, '新建草稿必须换实例');
+  await page.startNewNote();
+  const beforeSaveInstance = page._draftInstance.id;
+  assert.notEqual(beforeSaveInstance, thirdInstance, '同项目连续新建两个空 ID 草稿实例不同');
+
+  const saved = { project: { project_id: 'p' }, notes: [{ note_id: 'n3', revision: 1, title: '新方案', body: '新正文', body_format: 'plain' }], versions: [] };
+  page._newNote = false; page._selectedNoteID = 'n3';
+  page.applyProjectDetail(saved, '', null, null, 'editor');
+  const savedInstance = page._draftInstance.id;
+  assert.notEqual(savedInstance, beforeSaveInstance, '保存后身份从新草稿转为已保存笔记');
+
+  const revised = { project: { project_id: 'p' }, notes: [{ note_id: 'n3', revision: 2, title: '新方案', body: '新正文', body_format: 'plain' }], versions: [] };
+  page.applyProjectDetail(revised, '', null, null, 'editor');
+  assert.notEqual(page._draftInstance.id, savedInstance, '修订变化必须换实例');
+
+  await page.handleBack();
+  assert.equal(page.data.pageView, 'detail');
+  assert.equal(page._draftInstance, null, '丢弃/离开编辑器必须清空实例');
+});
+
+test('changing the account clears the draft instance so an old AI result cannot be adopted', async () => {
+  let token = 'session-token';
+  let navigation = null;
+  const sent = [];
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [], versions: [] }),
+    listProjectNoteProjects: async () => ({ items: [], next_cursor: '' }),
+    workbenchContext: async () => ({ owners: [] }),
+  }, {
+    getStorageSync: key => key === 'token' ? token : '',
+    navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); },
+  });
+  page._visible = true; page._token = token; page._epoch = 1; page._loaded = true;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [], versions: [] }, '', null, null, 'editor');
+  const instance = page._draftInstance.id;
+  page.openNoteAIWriting();
+  token = 'session-two';
+  page._token = 'session-token';
+  await page.onShow();
+  assert.equal(page._draftInstance, null, '换账号必须清空草稿实例');
+  navigation.events.prefillContent({ source: 'project_note', project_id: 'p', note_id: '', note_revision: 0, draft_instance_id: instance, text: '旧账号文案' });
+  const ack = sent.filter(args => args[0] === 'writingAck').map(args => args[1]).pop();
+  assert.equal(ack.state, 'invalid', '换账号后旧实例回填必须拒绝');
+});
+
+// F2 / T1.2：丢弃当前编辑实例（含历史版本往返）后，即使回到同一笔记也要换新实例。
+test('discarding edits through the version view rotates the draft instance on return to the same note', async () => {
+  const detail = { project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 2, title: '方案', body: '正文', body_format: 'plain' }], versions: [{ version_id: 'v1', note_id: 'n1', revision: 2, label: 'V2' }] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => detail,
+    getProjectNoteVersion: async (projectID, versionID) => ({ project_id: projectID, version_id: versionID, note_id: 'n1', revision: 2, title: '方案', body: '正文', body_format: 'plain', media: [] }),
+  }, {
+    showModal: options => options.success({ confirm: true }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  const editing = page._draftInstance.id;
+
+  page.setData({ busy: false });
+  await page.selectVersion({ currentTarget: { dataset: { id: 'v1' } } });
+  assert.equal(page._draftInstance, null, '进入历史版本即放弃当前编辑实例');
+
+  page.setData({ busy: false });
+  await page.returnToDraft();
+  assert.ok(page._draftInstance && page._draftInstance.id, '返回草稿必须重新绑定实例');
+  assert.notEqual(page._draftInstance.id, editing, '同一笔记同一修订也不得复用已丢弃实例');
+});
+
+// F1+F2 / T1.2：回执丢失后重进再采纳，只重放成功确认，不重复追加。
+test('re-adopting the same AI result after a lost ack replays success instead of appending twice', () => {
+  const sent = [];
+  let navigation = null;
+  const page = pageHarness('projectnotes', {}, { navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
+  const acks = () => sent.filter(args => args[0] === 'writingAck').map(args => args[1]);
+  const payload = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: 'AI 改过的标题', text: 'AI 文案', request: 1, operation: 'ai-result-d1-r1' };
+  page.openNoteAIWriting();
+  navigation.events.prefillContent(payload);
+  assert.equal(acks()[0].state, 'applied');
+  assert.equal(page.data.noteBody, '原文\n\nAI 文案');
+  // 回执丢失 → AI 页重进 → 原页发起新的 launch，同一 operation 再次采纳
+  page.openNoteAIWriting();
+  navigation.events.prefillContent({ ...payload, request: 2 });
+  assert.equal(acks()[1].state, 'applied');
+  assert.equal(acks()[1].replayed, true, '跨 launch 只重放成功确认');
+  assert.equal(page.data.noteBody, '原文\n\nAI 文案', '不得重复追加');
+});

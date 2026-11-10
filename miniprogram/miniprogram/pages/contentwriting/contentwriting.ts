@@ -26,6 +26,37 @@ const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编�
 // 回填改为双向确认：原页面确认已应用后才关闭本页，避免「文案没回填、AI 页又已关闭」。
 // ack 通常同步回传，此超时只用于通道失效或原页面未处理时兜底；超时不得丢弃文案。
 const RETURN_ACK_TIMEOUT_MS = 2000;
+// AI 结果轻量暂存：新草稿没有 note_id，不能用它做唯一键，必须带草稿实例 ID 与账号。
+// 只保留最近一次未采纳结果，30 分钟有效；采纳成功即清理，换账号不匹配则不恢复。
+const AI_RESULT_CACHE_KEY = 'project_note_ai_result_v1';
+const AI_RESULT_TTL_MS = 30 * 60 * 1000;
+const AI_RESULT_SCHEMA = 1;
+function writingAccount() {
+  try {
+    const profile = wx.getStorageSync('userInfo') || {};
+    const id = profile && typeof profile === 'object' ? String(profile.id || '') : '';
+    if (id) return id;
+  } catch (_) { /* 资料未缓存时回退到登录凭证 */ }
+  return String(wx.getStorageSync('token') || '');
+}
+function readAIResult() {
+  try { const value = wx.getStorageSync(AI_RESULT_CACHE_KEY); return value && typeof value === 'object' ? value : null; } catch (_) { return null; }
+}
+function writeAIResult(value) {
+  try { if (typeof wx.setStorageSync === 'function') wx.setStorageSync(AI_RESULT_CACHE_KEY, value); } catch (_) { /* 存储不可用时不影响创作 */ }
+}
+function dropAIResult() {
+  try { if (typeof wx.removeStorageSync === 'function') wx.removeStorageSync(AI_RESULT_CACHE_KEY); } catch (_) { /* 同上 */ }
+}
+// 请求计数单独持久化：生成失败/中止/中途退出也必须让下一次请求拿到新 ID，
+// 不能依赖「有结果才有缓存」来延续计数。
+const AI_REQUEST_SEQ_KEY = 'project_note_ai_request_seq_v1';
+function readAIRequestSequence() {
+  try { const value = wx.getStorageSync(AI_REQUEST_SEQ_KEY); return value && typeof value === 'object' ? value : null; } catch (_) { return null; }
+}
+function writeAIRequestSequence(value) {
+  try { if (typeof wx.setStorageSync === 'function') wx.setStorageSync(AI_REQUEST_SEQ_KEY, value); } catch (_) { /* 存储不可用时不影响创作 */ }
+}
 
 Page({
   data: { videoBundle: false, videoCopy: null, videoSelections: { title: true, share_copy: true, moments_copy: true }, writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '带入编辑器', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
@@ -34,6 +65,7 @@ Page({
     this._token = String(wx.getStorageSync('token') || '');
     this._unloaded = false;
     this._source = String(options && options.source || '');
+    this._aiRequestID = 0;
     this.setData({ source: this._source });
     if (this._source === 'project_note') this.setData({ returnLabel: '采纳到项目笔记' });
     else if (this._source === 'editor') this.setData({ returnLabel: '采纳到当前草稿' });
@@ -62,7 +94,11 @@ Page({
     this.setData({ navigating: !!this._pendingReturn, loginRequired: !token });
     if (token) this.loadWritingTypes();
   },
-  onUnload() { this._unloaded = true; this.cancelStream(); this.clearReturnAck(); },
+  onUnload() {
+    // 采纳成功已清理缓存，这里只补存「生成完没点采纳就返回」的结果。
+    if (!this._returnSettled) this.persistAIResult(this.data.videoBundle && this.data.videoCopy ? JSON.stringify(this.data.videoCopy) : String(this.data.result || ''));
+    this._unloaded = true; this.cancelStream(); this.clearReturnAck();
+  },
   receiveWritingContext(payload) {
     if ((this._source !== 'editor' && this._source !== 'project_note') || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
     if (!payload || payload.source !== this._source) return;
@@ -74,12 +110,81 @@ Page({
       this._projectID = String(payload.project_id || '');
       this._noteID = String(payload.note_id || '');
       this._noteRevision = Number(payload.note_revision || 0);
+      this._draftInstanceID = String(payload.draft_instance_id || '');
+      this._cacheAccount = writingAccount();
     } else {
       this._contentID = String(payload.content_id || '');
       this._revision = Number(payload.revision || 0);
     }
     this.setData({ title: String(payload.title || '').trim(), facts: String(payload.facts || '').trim().slice(0, 6000), notice: this._source === 'project_note' ? '已带入项目笔记' : '已带入当前草稿', error: '' });
-    if (this.data.videoBundle && payload.auto_generate === true) this.quickGenerate();
+    // 重新进入同一草稿实例时恢复上次生成但未采纳的文案；不满足匹配条件则不恢复。
+    const restored = this.restoreAIResult();
+    if (!restored && this.data.videoBundle && payload.auto_generate === true) this.quickGenerate();
+  },
+  nextAIRequestID() {
+    if (!this.canStoreAIResult()) { this._aiRequestID = (this._aiRequestID || 0) + 1; return this._aiRequestID; }
+    const account = writingAccount();
+    const stored = readAIRequestSequence();
+    // 只按「账号+项目+实例」延续计数，不因结果 TTL 回退：否则过期后 request 会从 1 重来、
+    // operation 被新结果复用，原页会把新文案误判成旧操作。
+    const reusable = stored && stored.account === account && stored.project_id === this._projectID
+      && stored.draft_instance_id === this._draftInstanceID;
+    const base = Math.max(Number(this._aiRequestID) || 0, reusable ? Number(stored.seq) || 0 : 0);
+    this._aiRequestID = base + 1;
+    writeAIRequestSequence({ account, project_id: String(this._projectID || ''), draft_instance_id: this._draftInstanceID, seq: this._aiRequestID, updated_at: Date.now() });
+    return this._aiRequestID;
+  },
+  canStoreAIResult() {
+    return this._source === 'project_note' && !!this._draftInstanceID && !!String(this._projectID || '');
+  },
+  // 实际采纳标题：空标题回落到当前写作类型标题，缓存/恢复/发送三处必须用同一口径。
+  adoptTitle() { return String(this.data.title || '').trim() || String(this.data.heading || ''); },
+  // 结果操作 ID 绑定「这份文案」而不是「这次页面」：回执丢失后重进仍能识别同一次采纳。
+  resultOperationID() { return 'ai-result-' + (this._draftInstanceID || 'draft') + '-r' + (Number(this._aiRequestID) || 0) + '-' + (this._operationSalt = (this._operationSalt || 0) + 1) + Math.random().toString(36).slice(2, 8); },
+  ensureResultOperation() { if (!this._resultOperation) this._resultOperation = 'ai-result-' + (this._draftInstanceID || 'draft') + '-m' + Date.now().toString(36) + '-' + ((this._returnRequest || 0) + 1); return this._resultOperation; },
+  // 只清理属于当前项目笔记实例的缓存：其他来源的采纳不得误删本页结果。
+  dropAIResultIfOwned() {
+    const record = readAIResult();
+    if (!record || record.account !== this._cacheAccount) return false;
+    if (record.project_id !== String(this._projectID || '') || record.draft_instance_id !== this._draftInstanceID) return false;
+    dropAIResult();
+    return true;
+  },
+  persistAIResult(text) {
+    if (!this.canStoreAIResult() || !String(text || '').trim()) return false;
+    // 结果只属于生成时的账号：账号变了不得把旧文案写进新账号的缓存。
+    if (!this._cacheAccount || this._cacheAccount !== writingAccount()) return false;
+    writeAIResult({
+      schema: AI_RESULT_SCHEMA,
+      account: this._cacheAccount,
+      project_id: String(this._projectID || ''),
+      draft_instance_id: this._draftInstanceID,
+      request_id: Number(this._aiRequestID) || 0,
+      operation: String(this._resultOperation || ''),
+      title: this.adoptTitle(),
+      text: String(text),
+      video_copy: this.data.videoBundle && this.data.videoCopy ? this.data.videoCopy : null,
+      updated_at: Date.now(),
+    });
+    return true;
+  },
+  restoreAIResult() {
+    // 过期判定先于身份判定：身份不匹配的过期记录也必须清掉，不能长期留在本地。
+    const record = readAIResult();
+    if (!record || record.schema !== AI_RESULT_SCHEMA) { if (record) dropAIResult(); return false; }
+    const updated = Number(record.updated_at) || 0;
+    if (!updated || Date.now() - updated > AI_RESULT_TTL_MS) { dropAIResult(); return false; }
+    if (!this.canStoreAIResult() || String(this.data.result || '').trim()) return false;
+    if (record.account !== writingAccount() || record.account !== this._cacheAccount) return false;
+    if (record.project_id !== String(this._projectID || '') || record.draft_instance_id !== this._draftInstanceID) return false;
+    this._aiRequestID = Math.max(Number(this._aiRequestID) || 0, Number(record.request_id) || 0);
+    this._resultOperation = String(record.operation || '');
+    const update = { result: String(record.text || ''), notice: '已恢复上次生成但未采纳的文案，可继续核对或采纳。' };
+    // 标题也属于采纳载荷：缓存的是「实际采纳标题」，存在即恢复，空标题也不例外。
+    if (typeof record.title === 'string') update.title = record.title;
+    if (record.video_copy && typeof record.video_copy === 'object') update.videoCopy = record.video_copy;
+    this.setData(update);
+    return true;
   },
   selectType(event) {
     const type = this.data.writingTypes.find(item => item.key === event.currentTarget.dataset.type);
@@ -201,6 +306,7 @@ Page({
     const prompt = this.buildPrompt(action);
     if (!prompt) { this.setData({ error: '请先填写已知资料和要求，AI 将以这些事实为依据' }); return; }
     this.setData({ streaming: true, streamPartial: '', error: '', notice: '正在生成…' });
+    this.nextAIRequestID();
     const request = this._streamRequest = (this._streamRequest || 0) + 1;
     let settled = false;
     const current = () => !settled && !this._unloaded && request === this._streamRequest && token === this._token && token === String(wx.getStorageSync('token') || '');
@@ -220,11 +326,12 @@ Page({
           settled = true; this._streamTask = null;
           const value = String(full || '').trim();
           if (this.data.videoBundle) {
-            try { const videoCopy = parseVideoCopy(value); this.setData({ videoCopy, result: JSON.stringify(videoCopy), streaming: false, streamPartial: '', error: '', notice: '已生成，请勾选要采纳的内容；未勾选项保留原文' }); }
+            try { const videoCopy = parseVideoCopy(value); this._resultOperation = this.resultOperationID(); this.setData({ videoCopy, result: JSON.stringify(videoCopy), streaming: false, streamPartial: '', error: '', notice: '已生成，请勾选要采纳的内容；未勾选项保留原文' }); this.persistAIResult(JSON.stringify(videoCopy)); }
             catch (_) { this.setData({ streaming: false, streamPartial: '', error: '生成结果格式不完整，请重试；原文案已保留', notice: '' }); }
             return;
           }
           this.setData({ streaming: false, streamPartial: '', result: value || this.data.result, error: '', notice: value ? '已生成，请核对后使用' : '生成为空，请调整资料后重试' });
+          if (value) { this._resultOperation = this.resultOperationID(); this.persistAIResult(value); }
         },
         onError,
       });
@@ -269,7 +376,12 @@ Page({
           if (this._unloaded) return;
           if (token !== String(wx.getStorageSync('token') || '') || token !== this._token) { this.setData({ result: '', error: '账号已变化，本次文案未带入' }); return; }
           const value = String(result && result.text || '').trim();
-          if (value) this.setData({ result: value, navigating: false, error: '', notice: this._source === 'project_note' ? '已带入生成文案，可修改后采纳到项目笔记' : '已带入生成文案，可修改后保存到内容草稿' });
+          if (value) {
+            this.nextAIRequestID();
+            this._resultOperation = this.resultOperationID();
+            this.setData({ result: value, navigating: false, error: '', notice: this._source === 'project_note' ? '已带入生成文案，可修改后采纳到项目笔记' : '已带入生成文案，可修改后保存到内容草稿' });
+            this.persistAIResult(value);
+          }
         },
       },
       success: result => result.eventChannel.emit('contentWritingTask', { text }),
@@ -295,14 +407,14 @@ Page({
     }
     const request = (this._returnRequest || 0) + 1;
     this._returnRequest = request;
-    // operation 是本页稳定操作 ID，request 是每次发送的请求 ID：回执必须同时匹配，
-    // 否则「A 已应用但回执迟到、用户改成 B 再采纳」会被 A 的旧回执误确认。
-    if (!this._returnOperation) this._returnOperation = 'ai-return-' + Date.now().toString(36) + '-' + request;
+    // operation 标识「被采纳的这份文案」（跨重进稳定），request 标识每次发送：
+    // 回执必须同时匹配，否则旧回执会误确认新内容；原页也按 operation 识别已应用结果。
+    const operation = this.ensureResultOperation();
     this.clearReturnAckTimer();
     // 等待态绑定提交时的账号：账号变化后旧回执不得再关闭本页（即使 onShow 尚未执行）。
-    this._pendingReturn = { request, operation: this._returnOperation, token: this._token };
+    this._pendingReturn = { request, operation, token: this._token };
     this.setData({ navigating: true, error: '', notice: '正在等待原页面确认回填…' });
-    try { this._returnChannel.emit('prefillContent', Object.assign({}, payload, { request, operation: this._returnOperation })); }
+    try { this._returnChannel.emit('prefillContent', Object.assign({}, payload, { request, operation })); }
     catch (_) {
       this._pendingReturn = null;
       this.setData({ navigating: false, error: '文案未能送回原页面，请保留文案并返回重试' });
@@ -341,6 +453,8 @@ Page({
       this.setData({ navigating: false, notice: message || '原页面未采用本次文案，文案已保留；可复制或修改后再次采纳。' });
       return;
     }
+    this._returnSettled = true;
+    if (this._source === 'project_note') this.dropAIResultIfOwned();
     this.setData({ navigating: false, error: '', notice: message || '文案已采纳。' });
     // ack 可能在 emit 的同一调用栈内回传，延后一个微任务再返回，避免重入导航。
     Promise.resolve().then(() => {
@@ -378,7 +492,7 @@ Page({
     if (!text) { this.setData({ error: this._source === 'project_note' ? '请先生成或填写文案，再采纳到项目笔记' : '请先生成或填写文案，再保存到内容草稿' }); return; }
     const token = String(wx.getStorageSync('token') || '');
     if (!token || token !== this._token) { this.setData({ error: '账号已变化，请重新登录后创作' }); return; }
-    const title = String(this.data.title || '').trim() || this.data.heading;
+    const title = this.adoptTitle();
     if (this._source === 'editor' || this._source === 'project_note') {
       if (!this._returnChannel || typeof this._returnChannel.emit !== 'function') { this.setData({ navigating: false, error: '原页面连接已失效，请保留文案并返回重试' }); return; }
       const identity = this._source === 'project_note'

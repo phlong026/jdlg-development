@@ -20,6 +20,16 @@ const blankProtected = () => ({
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
 const assetOf = item => item && item.asset ? item.asset : item;
+// 草稿实例身份：新草稿没有 note_id、修订恒为 0，不能拿它们当唯一键。
+// 实例 ID 在草稿实例创建时生成，跨 AI 重进保持稳定；新建/切换/丢弃/保存后重新生成。
+const draftAccount = () => {
+  try {
+    const profile = wx.getStorageSync('userInfo') || {};
+    const id = profile && typeof profile === 'object' ? String(profile.id || '') : '';
+    if (id) return id;
+  } catch (_) { /* 资料未缓存时回退到登录凭证 */ }
+  return String(wx.getStorageSync('token') || '');
+};
 const activeMembers = members => (members || []).filter(item => item && item.active !== false);
 const memberLabel = member => String(member && member.display_name || '').trim() || '项目成员';
 const invitationLabel = item => {
@@ -76,7 +86,7 @@ Page({
   },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   clearProtected() {
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -122,6 +132,7 @@ Page({
     if (this.data.pageView !== 'detail') {
       if (!await this.confirmDiscardChanges() || !unchanged()) return;
       this.restoreLoadedForms();
+      this.resetDraftInstance();
       this.setData({ pageView: 'detail', navigationTitle: '项目详情', projectSettingsOpen: false, error: '', notice: '' }, () => this.scrollPage('detail'));
       return;
     }
@@ -458,7 +469,7 @@ Page({
       confirmations: targetID ? (result.confirmations || []).filter(item => item.version_id === targetID).map(item => Object.assign({}, item, { confirmed_at: localTime(item.confirmed_at) })) : [],
       truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
       error: share && !share.share_token ? '该分享入口凭证不再保存在当前会话中，请撤回后重新生成。' : '',
-    }, () => { this.rememberLoadedForms(); this.scrollPage(pageView); });
+    }, () => { if (pageView === 'editor') this.ensureDraftInstance(); this.rememberLoadedForms(); this.scrollPage(pageView); });
   },
   async setHistoryType(event) {
     if (this.data.busy) return;
@@ -502,6 +513,8 @@ Page({
     if (this.data.busy) return;
     const note = this.data.notes[Number(event.detail.value)]; if (!note) return;
     if (!await this.confirmDiscardChanges()) return;
+    // 已确认放弃当前编辑实例：即使之后回到同一笔记，也必须换新的草稿实例。
+    this.resetDraftInstance();
     this._targetFeedbackID = ''; this._selectedNoteID = note.note_id; this._newNote = false; this._selectedVersionID = ''; this._targetVersionID = '';
     this._nextPageView = 'editor';
     return this.refreshProject();
@@ -510,6 +523,8 @@ Page({
     const id = String(event.currentTarget.dataset.id || '');
     if (this.data.busy || !this.data.versionChoices.some(item => item.version_id === id)) return;
     if (!await this.confirmDiscardChanges()) return;
+    // 进入历史版本同样放弃当前编辑实例，returnToDraft 回来必须重新绑定。
+    this.resetDraftInstance();
     this._targetFeedbackID = ''; this._selectedVersionID = id; this._nextPageView = 'version';
     return this.refreshProject();
   },
@@ -517,7 +532,7 @@ Page({
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
     this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null;
     this.editNote(); this._editorScrollTop = 0;
-    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
+    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this.ensureDraftInstance(true); this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
   },
   openNoteMore() {
     if (!this.data.note || this.data.busy || this.data.historyMode) return;
@@ -663,17 +678,36 @@ Page({
     return { title: this.data.noteTitle, body: this.data.noteBody, body_format: 'plain', cover_media_id: cover ? mediaID(cover) : '', media_ids: ids, expected_revision: note && note.revision || 0 };
   },
   noteWritingSignature() { return JSON.stringify({ project: this.data.selectedProject, note: this.noteDraft() }); },
+  newDraftInstanceID() { return 'draft-' + Date.now().toString(36) + '-' + (this._draftSequence = (this._draftSequence || 0) + 1); },
+  draftInstanceAccount() { return draftAccount(); },
+  ensureDraftInstance(force) {
+    const project = this.data.selectedProject;
+    if (!project) { this._draftInstance = null; return ''; }
+    const note = this.data.note, account = draftAccount();
+    const noteID = this._newNote ? '' : String(note && note.note_id || '');
+    const revision = this._newNote ? 0 : Number(note && note.revision || 0);
+    const current = this._draftInstance;
+    if (!force && current && current.account === account && current.projectID === project.project_id && current.noteID === noteID && current.revision === revision) return current.id;
+    this._draftInstance = { id: this.newDraftInstanceID(), account, projectID: project.project_id, noteID, revision };
+    return this._draftInstance.id;
+  },
+  currentDraftInstanceID() { return this._draftInstance ? this._draftInstance.id : ''; },
+  resetDraftInstance() { this._draftInstance = null; },
+  draftInstanceMatches(instanceID) {
+    return !instanceID || !!(this._draftInstance && this._draftInstance.id === instanceID);
+  },
   openNoteAIWriting() {
     const project = this.data.selectedProject, note = this.data.note;
     if (!project || this.data.busy || this.data.historyMode || this.data.bodyReadOnly) return;
-    const launch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, signature: this.noteWritingSignature(), state: '', message: '', channel: null };
+    const instanceID = this.ensureDraftInstance();
+    const launch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, signature: this.noteWritingSignature(), instanceID, state: '', message: '', channel: null };
     this._writingLaunch = launch;
     const facts = [project.name && '项目：' + project.name, project.location && '地点：' + project.location,
       project.building_area > 0 && '建筑面积：' + project.building_area + ' 平方米', project.floors > 0 && '层数：' + project.floors,
       project.style && '风格：' + project.style, this.data.noteBody].filter(Boolean).join('\n').slice(0, 6000);
     wx.navigateTo({
       url: '/pages/contentwriting/contentwriting?source=project_note',
-      success: result => { launch.channel = result.eventChannel; result.eventChannel.emit('writingContext', { source: 'project_note', project_id: launch.projectID, note_id: launch.noteID, note_revision: launch.revision, title: this.data.noteTitle, facts }); },
+      success: result => { launch.channel = result.eventChannel; result.eventChannel.emit('writingContext', { source: 'project_note', project_id: launch.projectID, note_id: launch.noteID, note_revision: launch.revision, draft_instance_id: launch.instanceID, title: this.data.noteTitle, facts }); },
       events: { prefillContent: payload => this.receiveNoteWriting(payload, launch) },
       fail: () => { this._writingLaunch = null; this.setData({ notice: 'AI 文案页未能打开，原笔记已保留。' }); },
     });
@@ -699,10 +733,32 @@ Page({
     return launch.token === String(wx.getStorageSync('token') || '')
       && !!project && project.project_id === launch.projectID
       && (note && note.note_id || '') === launch.noteID && (note && note.revision || 0) === launch.revision
+      && this.draftInstanceMatches(launch.instanceID)
       && !this.data.historyMode && !this.data.bodyReadOnly;
   },
   settleNoteWriting(payload, launch) {
     const payloadKey = this.noteWritingPayloadKey(payload);
+    const operation = String(payload && payload.operation || '');
+    // 回执丢失后重进 AI 页的再次采纳：同一 operation 已在当前实例应用过，只重放成功确认。
+    const recorded = this._appliedNoteWriting;
+    if (recorded && operation && recorded.operation === operation
+      && recorded.account === draftAccount() && recorded.projectID === launch.projectID && recorded.instanceID === launch.instanceID) {
+      if (!this.sameAppliedNoteTarget(launch)) {
+        launch.state = 'invalid';
+        launch.message = '笔记、账号或版本已变化，AI 文案未采用，请重新发起。';
+        this.setData({ notice: launch.message });
+        return this.noteWritingAck('invalid', launch.message, launch, payload, false);
+      }
+      if (recorded.payloadKey === payloadKey) {
+        const message = 'AI 文案已采纳过，本次不会重复追加。';
+        this.setData({ notice: message });
+        return this.noteWritingAck('applied', message, launch, payload, true);
+      }
+      launch.state = 'invalid';
+      launch.message = '本次 AI 文案已采纳过，修改后的内容未采纳；请返回后重新发起。';
+      this.setData({ notice: launch.message });
+      return this.noteWritingAck('invalid', launch.message, launch, payload, false);
+    }
     if (launch.state === 'applied') {
       // 账号/草稿实例/修订/受保护状态在应用后变化时，旧成功不得再重放。
       if (!this.sameAppliedNoteTarget(launch)) {
@@ -726,6 +782,7 @@ Page({
     const accountChanged = launch.token !== String(wx.getStorageSync('token') || '');
     const targetChanged = !payload || payload.source !== 'project_note'
       || payload.project_id !== launch.projectID || payload.note_id !== launch.noteID || Number(payload.note_revision) !== launch.revision
+      || !this.draftInstanceMatches(launch.instanceID) || (payload.draft_instance_id && payload.draft_instance_id !== (launch.instanceID || ''))
       || (note && note.note_id || '') !== launch.noteID || (note && note.revision || 0) !== launch.revision;
     // 目标失效（换账号/换草稿实例/修订变化）属永久拒绝，必须重新发起并绑定当前目标。
     if (accountChanged || targetChanged || this.data.historyMode || this.data.bodyReadOnly || this.noteWritingSignature() !== launch.signature) {
@@ -755,6 +812,7 @@ Page({
     launch.state = 'applied';
     launch.message = 'AI 文案已带回此笔记，请核对后保存新修订。';
     launch.appliedPayloadKey = payloadKey;
+    this._appliedNoteWriting = { account: draftAccount(), projectID: launch.projectID, instanceID: launch.instanceID || '', operation, payloadKey };
     this.setData({ noteTitle: this.data.noteTitle || String(payload.title || '').trim(), noteBody: body, notice: launch.message });
     return this.noteWritingAck('applied', launch.message, launch, payload, false);
   },
@@ -796,6 +854,7 @@ Page({
         return;
       }
       this._selectedNoteID = ''; this._newNote = true; this._selectedVersionID = ''; this._shareAttempt = null;
+      this.resetDraftInstance();
       this.setData({ busy: false });
       await this.refreshProject('草稿已移除，历史版本与业主记录仍保留。');
     } catch (error) { if (this.current(epoch) && this._token === token) this.setData({ busy: false, error: Number(error && error.statusCode) === 409 ? '笔记已更新，请刷新后再删除。' : error.message || '笔记删除失败' }); }
