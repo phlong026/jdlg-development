@@ -69,21 +69,23 @@ func TestPublicDesignerCandidateScopeKeepsUnpublishedDesignersAndExcludesOrdinar
 	}
 	// 本地内存数据库只验证可移植的候选范围SQL，不连接业务MySQL。
 	const schema = `
-CREATE TABLE users (id INTEGER PRIMARY KEY, user_type TEXT, can_withdraw INTEGER DEFAULT 0);
-CREATE TABLE user_profiles (user_id INTEGER, designer_visible INTEGER, identity_type TEXT DEFAULT '', service_title TEXT DEFAULT '', designer_bio TEXT DEFAULT '', specialty_styles TEXT DEFAULT '');
+CREATE TABLE users (id INTEGER PRIMARY KEY, user_type TEXT, can_withdraw INTEGER DEFAULT 0, username TEXT DEFAULT '');
+CREATE TABLE user_profiles (user_id INTEGER, designer_visible INTEGER, nickname TEXT DEFAULT '', avatar TEXT DEFAULT '', identity_type TEXT DEFAULT '', service_title TEXT DEFAULT '', designer_bio TEXT DEFAULT '', specialty_styles TEXT DEFAULT '');
 CREATE TABLE certification_applications (user_id INTEGER, type TEXT, identity_type TEXT, status TEXT);
 CREATE TABLE templates (creator_user_id INTEGER, status TEXT, main_tab TEXT, category TEXT DEFAULT '', sub_tab TEXT DEFAULT '');
 INSERT INTO users (id, user_type) VALUES (1,'miniprogram'),(2,'miniprogram'),(3,'miniprogram'),(4,'miniprogram'),(5,'miniprogram'),(6,'miniprogram'),(7,'miniprogram'),(8,'miniprogram'),(9,'miniprogram'),(10,'management'),(11,'miniprogram'),(12,'miniprogram'),(13,'miniprogram'),(14,'miniprogram'),(15,'miniprogram');
 UPDATE users SET can_withdraw=1 WHERE id=11;
+UPDATE users SET username='设计师' || id;
 INSERT INTO user_profiles (user_id, designer_visible, identity_type) VALUES (1,1,'设计师'),(9,0,'设计师'),(10,1,'设计师');
 INSERT INTO user_profiles (user_id, designer_visible, service_title) VALUES (2,1,'主案设计师');
 INSERT INTO user_profiles (user_id, designer_visible, designer_bio) VALUES (3,1,'乡墅项目设计与落地');
 INSERT INTO user_profiles (user_id, designer_visible, specialty_styles) VALUES (4,1,'庭院设计');
+UPDATE user_profiles SET avatar='https://cdn.example/avatar' || user_id || '.jpg';
 INSERT INTO certification_applications VALUES (5,'designer','施工队','approved'),(6,'designer','设计师','pending_review'),(13,'enterprise','企业主','approved'),(14,'enterprise','设计师','approved');
 INSERT INTO templates (creator_user_id,status,main_tab) VALUES (7,'published','template'),(9,'published','template'),(12,'draft','template'),(15,'published','scene');
 `
 	for _, test := range []struct{ name, category, want string }{
-		{"all designers including no published works", "", "1,2,3,4,6,7,15\n7"},
+		{"all designers including no published works", "", "2,3,4,7,15\n5"},
 		{"work category still requires matching published works", "template", "7\n1"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

@@ -992,17 +992,13 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 		positiveCount, negativeCount, _ = designerReviewModel.SummaryByDesignerUserID(targetUserID)
 	}
 
-	displayName := strings.TrimSpace(user.Username)
+	nickname := ""
 	avatar := ""
 	if profileData != nil {
-		if strings.TrimSpace(profileData.Nickname) != "" {
-			displayName = strings.TrimSpace(profileData.Nickname)
-		}
+		nickname = profileData.Nickname
 		avatar = sanitizePublicImageURL(profileData.Avatar)
 	}
-	if displayName == "" && latestCert != nil && strings.TrimSpace(latestCert.RealName) != "" {
-		displayName = strings.TrimSpace(latestCert.RealName)
-	}
+	displayName := designerPublicDisplayName(user.Username, nickname)
 
 	designerRegion := ""
 	if profileData != nil {

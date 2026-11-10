@@ -20,17 +20,51 @@ type publicDesignerFilters struct {
 	Sort      string
 }
 
+var designerPlaceholderNames = []string{"待完善", "未填写", "微信用户", "新用户", "匿名用户", "匿名设计师", "设计师"}
+
+func usableDesignerNameSQL(field string) string {
+	value := "TRIM(COALESCE(" + field + ", ''))"
+	quoted := make([]string, 0, len(designerPlaceholderNames))
+	for _, name := range designerPlaceholderNames {
+		quoted = append(quoted, "'"+name+"'")
+	}
+	return "(" + value + " <> '' AND LOWER(SUBSTR(" + value + ", 1, 3)) <> 'wx_' AND " + value + " NOT IN (" + strings.Join(quoted, ", ") + "))"
+}
+
+func designerPublicDisplayName(username, nickname string) string {
+	for _, raw := range []string{nickname, username} {
+		name := strings.TrimSpace(raw)
+		if name == "" || strings.HasPrefix(strings.ToLower(name), "wx_") {
+			continue
+		}
+		placeholder := false
+		for _, value := range designerPlaceholderNames {
+			if name == value {
+				placeholder = true
+				break
+			}
+		}
+		if !placeholder {
+			return name
+		}
+	}
+	// 旧收藏或分享直达尚未完善的主页时，也不对外暴露内部微信账号名。
+	return "设计师"
+}
+
 func buildPublicDesignerWhere(filters publicDesignerFilters) (string, []interface{}) {
-	// “全部”保留尚未发布作品的设计师；提现资格和普通用户账号不能单独证明设计师身份。
+	// 身份选项和认证申请不代表已准备好公开名片。无作品者须有真实头像及设计师资料。
 	conditions := []string{
 		"u.user_type = 'miniprogram'",
 		"COALESCE(up.designer_visible, 1) = 1",
-		`(TRIM(COALESCE(up.identity_type, '')) = '设计师'
-			OR TRIM(COALESCE(up.service_title, '')) <> ''
-			OR TRIM(COALESCE(up.designer_bio, '')) <> ''
-			OR TRIM(COALESCE(up.specialty_styles, '')) <> ''
-			OR EXISTS (SELECT 1 FROM certification_applications ca WHERE ca.user_id = u.id AND ca.type = 'designer' AND TRIM(ca.identity_type) = '设计师')
-			OR EXISTS (SELECT 1 FROM templates tp WHERE tp.creator_user_id = u.id AND tp.status = 'published'))`,
+		"(" + usableDesignerNameSQL("up.nickname") + " OR " + usableDesignerNameSQL("u.username") + ")",
+		`(EXISTS (SELECT 1 FROM templates tp WHERE tp.creator_user_id = u.id AND tp.status = 'published')
+			OR ((LOWER(TRIM(COALESCE(up.avatar, ''))) LIKE 'https://%' OR LOWER(TRIM(COALESCE(up.avatar, ''))) LIKE 'http://%')
+				AND INSTR(LOWER(up.avatar), '/assets/images/default-avatar') = 0
+				AND INSTR(LOWER(up.avatar), '/assets/images/home.jpg') = 0
+				AND (TRIM(COALESCE(up.service_title, '')) NOT IN ('', '待完善', '未填写', '设计师', '室内设计师')
+					OR TRIM(COALESCE(up.designer_bio, '')) NOT IN ('', '待完善', '未填写', '暂无简介', '设计师', '室内设计师', '个人信息：设计师', '个人信息：室内设计师')
+					OR TRIM(COALESCE(up.specialty_styles, '')) NOT IN ('', '待完善', '未填写', '专业领域：待完善', '专业领域：未填写'))))`,
 	}
 	args := make([]interface{}, 0)
 	if keyword := strings.TrimSpace(filters.Keyword); keyword != "" {
@@ -63,7 +97,10 @@ func publicDesignerOrderBy(value string) string {
 	case "latest":
 		return "(SELECT MAX(ts.created_at) FROM templates ts WHERE ts.creator_user_id = u.id AND ts.status = 'published') DESC, u.id DESC"
 	default:
-		return "u.id DESC"
+		return `EXISTS (SELECT 1 FROM templates ts WHERE ts.creator_user_id = u.id AND ts.status = 'published') DESC,
+			EXISTS (SELECT 1 FROM certification_applications ca WHERE ca.user_id = u.id AND ca.status = 'approved') DESC,
+			COALESCE((SELECT SUM(ts.like_count) FROM templates ts WHERE ts.creator_user_id = u.id AND ts.status = 'published'), 0) DESC,
+			(SELECT MAX(ts.created_at) FROM templates ts WHERE ts.creator_user_id = u.id AND ts.status = 'published') DESC, u.id DESC`
 	}
 }
 

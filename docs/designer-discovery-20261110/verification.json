@@ -59,5 +59,36 @@
     "schema migration commit",
     "backend update",
     "Mini Program update"
-  ]
+  ],
+  "empty_profile_followup": {
+    "reason": "系统账号名、身份选项或认证申请被当作公开名片资格，默认账号ID倒序把新建空账号置顶",
+    "scope": "服务端展示准入、公开名称和综合排序；没有资料写入或数据库迁移",
+    "confirmed_order": [
+      "有公开作品",
+      "已认证",
+      "公开作品总点赞降序",
+      "最近公开作品发布时间降序",
+      "相同指标用用户ID倒序稳定打平"
+    ],
+    "regression_before": "旧条件在16账号隔离SQL夹具中错误纳入13个账号；综合排序只是ID倒序",
+    "regression_after": "同一夹具只纳入4个符合条件的账号，跨页和COUNT一致；保留已有作品作者及完整资料未发布设计师",
+    "checks": {
+      "go_test_all": "passed",
+      "go_test_route_model_count_1": "passed",
+      "go_vet_route_model": "passed",
+      "gofmt": "passed",
+      "diff_check": "passed"
+    },
+    "evidence": [
+      "/private/tmp/jdlg-designer-quality-repro.log",
+      "/private/tmp/jdlg-designer-quality-route-model.log",
+      "/private/tmp/jdlg-designer-quality-full.log",
+      "/private/tmp/jdlg-designer-quality-vet.log"
+    ],
+    "not_executed": [
+      "生产数据库结果核验",
+      "服务端部署"
+    ],
+    "note": "隔离SQL测试人数不是生产统计；本轮没有小程序源码或交互样式变更。"
+  }
 }
