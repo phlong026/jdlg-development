@@ -311,53 +311,137 @@ Page({
     this.setData({ notice: message });
     // toast 带原因：只写"未采用"用户不知道下一步该做什么。
     wx.showToast({ title: message, icon: 'none' });
+    return message;
   },
+  // T1.1 双向确认：回填结果分「已应用 / 暂时拒绝 / 目标失效」三类回传 AI 页。
+  // 已应用的重复请求只重放成功确认，不重复追加；暂时拒绝可重试；目标失效须重新发起。
   receiveWritingReturn(payload, launch) {
-    if (launch.handled) { this.setData({ notice: 'AI 文案已处理，未重复追加' }); return; }
-    launch.handled = true;
-    if (launch.token !== String(wx.getStorageSync('token') || '')) { this.rejectWritingReturn('账号已变化，AI 文案未采用；原内容保持不变'); return; }
-    if (this.data.busy) { this.rejectWritingReturn('草稿正在保存或处理，AI 文案未采用；原内容保持不变'); return; }
-    if (launch.contentID !== String(this.data.id || '') || launch.revision !== Number(this.data.revision || 0)) { this.rejectWritingReturn('草稿版本已变化，AI 文案未采用；请重新发起'); return; }
-    if (launch.signature !== this.draftSignature()) { this.rejectWritingReturn('编辑内容已发生变化，AI 文案未采用；原内容保持不变'); return; }
+    const ack = this.settleWritingReturn(payload, launch);
+    if (launch && launch.channel && typeof launch.channel.emit === 'function') {
+      try { launch.channel.emit('writingAck', ack); } catch (_) { /* 通道已关闭时由 AI 页超时兜底，文案留在 AI 页 */ }
+    }
+    return ack;
+  },
+  writingAck(state, message, launch, payload, replayed) {
+    return { state, message, replayed, request: Number(payload && payload.request) || 0, operation: String(payload && payload.operation || '') };
+  },
+  writingReturnFingerprint(payload) {
+    const video = payload && payload.video_copy;
+    return JSON.stringify({
+      title: String(payload && payload.title || ''),
+      text: String(payload && payload.text || ''),
+      video_copy: video && typeof video === 'object' ? video : null,
+    });
+  },
+  // 已应用后的重放只看「目标是否仍是同一个」：正文已被本次采纳改过，不能再拿旧签名比对。
+  sameAppliedWritingTarget(launch) {
+    return launch.token === String(wx.getStorageSync('token') || '')
+      && launch.contentID === String(this.data.id || '')
+      && launch.revision === Number(this.data.revision || 0)
+      && !this.data.deleted && !this.data.serverReadOnly;
+  },
+  settleWritingReturn(payload, launch) {
+    const fingerprint = this.writingReturnFingerprint(payload);
+    if (launch.state === 'applied') {
+      // 账号/草稿实例/修订在应用后发生变化时，旧成功不得再重放。
+      if (!this.sameAppliedWritingTarget(launch)) {
+        launch.state = 'invalid';
+        launch.message = '账号或草稿已变化，AI 文案未采用；请重新发起';
+        return this.writingAck('invalid', this.rejectWritingReturn(launch.message), launch, payload, false);
+      }
+      if (launch.appliedFingerprint && launch.appliedFingerprint !== fingerprint) {
+        launch.state = 'invalid';
+        launch.message = '本次 AI 文案已采用过，修改后的内容未采用；请返回后重新发起';
+        return this.writingAck('invalid', this.rejectWritingReturn(launch.message), launch, payload, false);
+      }
+      this.setData({ notice: 'AI 文案已处理，未重复追加' });
+      return this.writingAck('applied', 'AI 文案已处理，未重复追加', launch, payload, true);
+    }
+    if (launch.state === 'invalid') return this.writingAck('invalid', launch.message, launch, payload, true);
+    const accountChanged = launch.token !== String(wx.getStorageSync('token') || '');
+    if (accountChanged || launch.contentID !== String(this.data.id || '') || launch.revision !== Number(this.data.revision || 0)) {
+      launch.state = 'invalid';
+      launch.message = accountChanged ? '账号已变化，AI 文案未采用；原内容保持不变' : '草稿版本已变化，AI 文案未采用；请重新发起';
+      return this.writingAck('invalid', this.rejectWritingReturn(launch.message), launch, payload, false);
+    }
+    if (launch.signature !== this.draftSignature()) {
+      launch.state = 'invalid';
+      launch.message = '编辑内容已发生变化，AI 文案未采用；原内容保持不变';
+      return this.writingAck('invalid', this.rejectWritingReturn(launch.message), launch, payload, false);
+    }
+    if (this.data.busy) {
+      return this.writingAck('retryable', this.rejectWritingReturn('草稿正在保存或处理，AI 文案未采用；原内容保持不变'), launch, payload, false);
+    }
     const videoCopy = payload && payload.video_copy;
     if (this.data.presentation === 'video' && videoCopy && typeof videoCopy === 'object') {
       const changes = {};
       if (Object.prototype.hasOwnProperty.call(videoCopy, 'title')) changes.title = String(videoCopy.title || '').trim().slice(0, 80);
       if (Object.prototype.hasOwnProperty.call(videoCopy, 'share_copy')) changes.shareCopy = String(videoCopy.share_copy || '').trim().slice(0, 2000);
       if (Object.prototype.hasOwnProperty.call(videoCopy, 'moments_copy')) changes.momentsCopy = String(videoCopy.moments_copy || '').trim().slice(0, 2000);
-      if (!Object.keys(changes).length) { this.rejectWritingReturn('返回的 AI 视频文案为空，未采用'); return; }
-      this.setData({ ...changes, preview: null, notice: 'AI 文案已填入，请核对后保存' });
-      return;
+      if (!Object.keys(changes).length) return this.writingAck('retryable', this.rejectWritingReturn('返回的 AI 视频文案为空，未采用'), launch, payload, false);
+      launch.state = 'applied';
+      launch.message = 'AI 文案已填入，请核对后保存';
+      launch.appliedFingerprint = fingerprint;
+      this.setData({ ...changes, preview: null, notice: launch.message });
+      return this.writingAck('applied', launch.message, launch, payload, false);
     }
     const title = String(payload && payload.title || '').trim();
     const text = String(payload && payload.text || '').trim();
-    if (!title && !text) { this.rejectWritingReturn('返回的 AI 文案为空，未采用'); return; }
+    if (!title && !text) return this.writingAck('retryable', this.rejectWritingReturn('返回的 AI 文案为空，未采用'), launch, payload, false);
     const blocks = this.validBlocks();
-    if (!String(this.data.title || '').trim() && !blocks.length) { this.receivePrefill({ title, text }, launch.token); return; }
-    if (!text) { this.rejectWritingReturn('AI 文案没有正文，未采用；原内容保持不变'); return; }
-    if (blocks.some(block => String(block.text || '').trim() === text)) { this.setData({ notice: 'AI 文案已处理，正文中已存在，未重复追加' }); return; }
+    if (!String(this.data.title || '').trim() && !blocks.length) {
+      const outcome = this.receivePrefill({ title, text }, launch.token, launch, fingerprint);
+      if (outcome === 'applied') { launch.state = 'applied'; launch.message = 'AI 文案已带入，请核对后保存'; launch.appliedFingerprint = fingerprint; return this.writingAck('applied', launch.message, launch, payload, false); }
+      if (outcome === 'deferred') return this.writingAck('retryable', '编辑器正在载入，AI 文案会随后自动带入；请稍候再确认', launch, payload, false);
+      return this.writingAck('retryable', '当前草稿已有内容，AI 文案未带入；原内容保持不变', launch, payload, false);
+    }
+    if (!text) return this.writingAck('retryable', this.rejectWritingReturn('AI 文案没有正文，未采用；原内容保持不变'), launch, payload, false);
+    if (blocks.some(block => String(block.text || '').trim() === text)) {
+      launch.state = 'applied';
+      launch.message = 'AI 文案已处理，正文中已存在，未重复追加';
+      launch.appliedFingerprint = fingerprint;
+      this.setData({ notice: launch.message });
+      return this.writingAck('applied', launch.message, launch, payload, false);
+    }
     const next = blocks.concat(textBlock(text));
-    this.setData({ blocks: next, postText: postText(next), ...blockViews(next, this.data.media), preview: null, notice: 'AI 文案已追加到正文末尾，请核对后保存' });
+    launch.state = 'applied';
+    launch.message = 'AI 文案已追加到正文末尾，请核对后保存';
+    launch.appliedFingerprint = fingerprint;
+    this.setData({ blocks: next, postText: postText(next), ...blockViews(next, this.data.media), preview: null, notice: launch.message });
+    return this.writingAck('applied', launch.message, launch, payload, false);
   },
-  receivePrefill(payload, sourceToken) {
-    if (this.data.id || this.data.busy) return;
+  receivePrefill(payload, sourceToken, launch, fingerprint) {
+    if (this.data.id || this.data.busy) return 'dropped';
     const title = String(payload && payload.title || '').trim();
     const text = String(payload && payload.text || '').trim();
-    if (!title && !text) return;
-    this._pendingPrefill = { title, text, token: String(sourceToken === undefined ? wx.getStorageSync('token') || '' : sourceToken) };
-    this.applyPendingPrefill();
+    if (!title && !text) return 'dropped';
+    this._pendingPrefill = { title, text, token: String(sourceToken === undefined ? wx.getStorageSync('token') || '' : sourceToken), launch: launch || null, fingerprint: fingerprint || '' };
+    return this.applyPendingPrefill();
   },
   applyPendingPrefill() {
     const pending = this._pendingPrefill;
-    if (!pending || !this._loaded || !this.data.context) return;
+    if (!pending) return 'deferred';
+    // 已失效的操作不得靠延后带入复活。
+    if (pending.launch && pending.launch.state === 'invalid') { delete this._pendingPrefill; return 'dropped'; }
+    if (!this._loaded || !this.data.context) return 'deferred';
     delete this._pendingPrefill;
-    if (this.data.id || pending.token !== String(wx.getStorageSync('token') || '') || String(this.data.title || '').trim() || this.validBlocks().length) return;
+    const token = String(wx.getStorageSync('token') || '');
+    if (this.data.id || pending.token !== token || String(this.data.title || '').trim() || this.validBlocks().length) return 'dropped';
+    // 写入前重新核对发起时的账号与草稿身份，避免切到别的草稿后仍被旧 pending 写入。
+    if (pending.launch && (pending.launch.token !== token || pending.launch.contentID !== String(this.data.id || '') || pending.launch.revision !== Number(this.data.revision || 0))) return 'dropped';
     const blocks = pending.text ? [textBlock(pending.text)] : this.data.blocks;
+    // 延后带入也要回写原操作的终态，否则同请求重试会被正文变化误判成目标失效。
+    if (pending.launch && pending.launch.state !== 'applied') {
+      pending.launch.state = 'applied';
+      pending.launch.message = 'AI 文案已带入，请核对后保存';
+      pending.launch.appliedFingerprint = pending.fingerprint;
+    }
     this.setData({ title: pending.title, blocks, postText: postText(blocks), ...blockViews(blocks, this.data.media), preview: null, notice: 'AI 文案已带入，请核对后保存' });
+    return 'applied';
   },
   openAIWriting() {
     if (this.data.busy || this.data.legacyReadOnly || this.data.layoutReadOnly) return;
-    const launch = { token: String(wx.getStorageSync('token') || ''), contentID: String(this.data.id || ''), revision: Number(this.data.revision || 0), signature: this.draftSignature(), handled: false };
+    const launch = { token: String(wx.getStorageSync('token') || ''), contentID: String(this.data.id || ''), revision: Number(this.data.revision || 0), signature: this.draftSignature(), state: '', message: '', channel: null };
     const context = { source: 'editor', content_id: launch.contentID, revision: launch.revision, title: String(this.data.title || '').trim(), facts: writingFacts(this.data.blocks || []) };
     if (this.data.presentation === 'video') {
       if (!context.title && !context.facts) { this.setData({ error: '先填写一句视频主题，AI 才能生成准确文案', 'fieldErrors.title': '请填写视频主题' }); return; }
@@ -366,7 +450,7 @@ Page({
     wx.navigateTo({
       url: '/pages/contentwriting/contentwriting?source=editor',
       events: { prefillContent: payload => this.receiveWritingReturn(payload, launch) },
-      success: result => result.eventChannel.emit('writingContext', context),
+      success: result => { launch.channel = result.eventChannel; result.eventChannel.emit('writingContext', context); },
       fail: () => this.setData({ notice: 'AI 文案页无法打开，草稿已保留，请重试' }),
     });
   },

@@ -1487,3 +1487,101 @@ test('same-account resume releases an old pending project deletion lock without 
   assert.equal(page.data.busy, true);
   assert.equal(page.data.projects.length, 1);
 });
+
+// F1 / T1.1：项目笔记 AI 回填双向确认——成功只追加一次、忙时保留可重试、目标失效永久拒绝。
+test('project note AI return acknowledges once, replays applied, and separates busy from an invalid target', () => {
+  let token = 'session-token';
+  let navigation = null;
+  const sent = [];
+  const page = pageHarness('projectnotes', {}, {
+    getStorageSync: key => key === 'token' ? token : '',
+    navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); },
+  });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
+  page.openNoteAIWriting();
+  const acks = () => sent.filter(args => args[0] === 'writingAck').map(args => args[1]);
+  const payload = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: '标题', text: '新文案' };
+
+  page.setData({ busy: true });
+  navigation.events.prefillContent(payload);
+  assert.equal(acks()[0].state, 'retryable', '忙时属于暂时拒绝');
+  assert.equal(page.data.noteBody, '原文', '暂时拒绝不得改动正文');
+
+  page.setData({ busy: false });
+  navigation.events.prefillContent(payload);
+  assert.equal(acks()[1].state, 'applied');
+  assert.equal(page.data.noteBody, '原文\n\n新文案');
+
+  navigation.events.prefillContent(payload);
+  assert.equal(acks()[2].state, 'applied', '已应用后重试只重放成功确认');
+  assert.equal(acks()[2].replayed, true);
+  assert.equal(page.data.noteBody, '原文\n\n新文案', '不得重复追加');
+
+  token = 'session-two';
+  page._token = 'session-token';
+  page.setData({ noteBody: '原文', busy: false });
+  page.openNoteAIWriting();
+  navigation.events.prefillContent(payload);
+  const last = acks().length - 1;
+  assert.equal(acks()[last].state, 'invalid', '换账号必须永久拒绝');
+  assert.equal(page.data.noteBody, '原文', '目标失效不得写入正文');
+  assert.match(page.data.notice, /账号/);
+});
+
+test('project note AI return rejects a changed revision even when the payload identity is copied', () => {
+  let navigation = null;
+  const sent = [];
+  const page = pageHarness('projectnotes', {}, { navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
+  page.openNoteAIWriting();
+  page.setData({ note: { note_id: 'n', revision: 4 } });
+  navigation.events.prefillContent({ source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, text: '不能采用' });
+  const ack = sent.filter(args => args[0] === 'writingAck').map(args => args[1])[0];
+  assert.equal(ack.state, 'invalid');
+  assert.equal(page.data.noteBody, '原文');
+  assert.match(page.data.notice, /未采用/);
+});
+
+// F1 / T1.1：已应用后的重放必须重新核对目标；载荷变化或目标失效时不得确认成功。
+test('an applied project note AI return never replays success after the target or payload changes', () => {
+  const build = () => {
+    let token = 'session-token';
+    let navigation = null;
+    const sent = [];
+    const page = pageHarness('projectnotes', {}, {
+      getStorageSync: key => key === 'token' ? token : '',
+      navigateTo: options => { navigation = options; options.success({ eventChannel: { emit: (...args) => sent.push(args) } }); },
+    });
+    page._visible = true; page._token = token; page._epoch = 1;
+    page.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n', revision: 3 }, noteTitle: '标题', noteBody: '原文' });
+    page.openNoteAIWriting();
+    const acks = () => sent.filter(args => args[0] === 'writingAck').map(args => args[1]);
+    const payload = { source: 'project_note', project_id: 'p', note_id: 'n', note_revision: 3, title: '标题', text: '新文案', request: 7, operation: 'op-1' };
+    return { page, navigation, acks, payload, setToken(value) { token = value; } };
+  };
+
+  const replay = build();
+  replay.navigation.events.prefillContent(replay.payload);
+  assert.equal(replay.acks()[0].state, 'applied');
+  assert.equal(replay.acks()[0].request, 7, '回执必须回显请求 ID');
+  assert.equal(replay.acks()[0].operation, 'op-1');
+  replay.navigation.events.prefillContent(replay.payload);
+  assert.equal(replay.acks()[1].state, 'applied', '同载荷重放只确认成功');
+  assert.equal(replay.acks()[1].replayed, true);
+  assert.equal(replay.page.data.noteBody, '原文\n\n新文案');
+
+  const changedPayload = build();
+  changedPayload.navigation.events.prefillContent(changedPayload.payload);
+  changedPayload.navigation.events.prefillContent(Object.assign({}, changedPayload.payload, { text: '改过的文案' }));
+  assert.equal(changedPayload.acks()[1].state, 'invalid', '载荷变化不得重放旧成功');
+  assert.equal(changedPayload.page.data.noteBody, '原文\n\n新文案', '改过的文案不得写入');
+
+  const switchedAccount = build();
+  switchedAccount.navigation.events.prefillContent(switchedAccount.payload);
+  switchedAccount.setToken('session-two');
+  switchedAccount.page._token = 'session-token';
+  switchedAccount.navigation.events.prefillContent(switchedAccount.payload);
+  assert.equal(switchedAccount.acks()[1].state, 'invalid', '换账号后不得重放旧成功');
+});

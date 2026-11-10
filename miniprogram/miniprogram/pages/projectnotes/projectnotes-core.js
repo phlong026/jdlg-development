@@ -666,30 +666,97 @@ Page({
   openNoteAIWriting() {
     const project = this.data.selectedProject, note = this.data.note;
     if (!project || this.data.busy || this.data.historyMode || this.data.bodyReadOnly) return;
-    const launch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, signature: this.noteWritingSignature(), handled: false };
+    const launch = { token: this._token, projectID: project.project_id, noteID: note && note.note_id || '', revision: note && note.revision || 0, signature: this.noteWritingSignature(), state: '', message: '', channel: null };
     this._writingLaunch = launch;
     const facts = [project.name && '项目：' + project.name, project.location && '地点：' + project.location,
       project.building_area > 0 && '建筑面积：' + project.building_area + ' 平方米', project.floors > 0 && '层数：' + project.floors,
       project.style && '风格：' + project.style, this.data.noteBody].filter(Boolean).join('\n').slice(0, 6000);
     wx.navigateTo({
       url: '/pages/contentwriting/contentwriting?source=project_note',
-      success: result => result.eventChannel.emit('writingContext', { source: 'project_note', project_id: launch.projectID, note_id: launch.noteID, note_revision: launch.revision, title: this.data.noteTitle, facts }),
+      success: result => { launch.channel = result.eventChannel; result.eventChannel.emit('writingContext', { source: 'project_note', project_id: launch.projectID, note_id: launch.noteID, note_revision: launch.revision, title: this.data.noteTitle, facts }); },
       events: { prefillContent: payload => this.receiveNoteWriting(payload, launch) },
       fail: () => { this._writingLaunch = null; this.setData({ notice: 'AI 文案页未能打开，原笔记已保留。' }); },
     });
   },
+  // T1.1 双向确认：回填结果分「已应用 / 暂时拒绝 / 目标失效」三类回传 AI 页。
+  // 已应用的重复请求只重放成功确认，不重复追加；暂时拒绝可重试；目标失效须重新发起。
   receiveNoteWriting(payload, launch) {
-    if (launch.handled) return;
-    launch.handled = true;
-    const note = this.data.note, text = String(payload && payload.text || '').trim();
-    const valid = launch.token === String(wx.getStorageSync('token') || '') && !this.data.busy && !this.data.historyMode && !this.data.bodyReadOnly
-      && payload && payload.source === 'project_note' && payload.project_id === launch.projectID && payload.note_id === launch.noteID && Number(payload.note_revision) === launch.revision
-      && (note && note.note_id || '') === launch.noteID && (note && note.revision || 0) === launch.revision && this.noteWritingSignature() === launch.signature;
-    if (!valid) { this.setData({ notice: '笔记、账号或版本已变化，AI 文案未采用，请重新发起。' }); return; }
-    if (!text || text === this.data.noteBody.trim()) { this.setData({ notice: '没有新的文案可追加，原笔记已保留。' }); return; }
+    const ack = this.settleNoteWriting(payload, launch);
+    if (launch && launch.channel && typeof launch.channel.emit === 'function') {
+      try { launch.channel.emit('writingAck', ack); } catch (_) { /* 通道已关闭时由 AI 页超时兜底，文案留在 AI 页 */ }
+    }
+    return ack;
+  },
+  noteWritingAck(state, message, launch, payload, replayed) {
+    return { state, message, replayed, request: Number(payload && payload.request) || 0, operation: String(payload && payload.operation || '') };
+  },
+  noteWritingPayloadKey(payload) {
+    return JSON.stringify({ title: String(payload && payload.title || ''), text: String(payload && payload.text || '') });
+  },
+  // 已应用后的重放只看「目标是否仍是同一个」：正文已被本次采纳改过，不能再拿旧签名比对。
+  sameAppliedNoteTarget(launch) {
+    const note = this.data.note, project = this.data.selectedProject;
+    return launch.token === String(wx.getStorageSync('token') || '')
+      && !!project && project.project_id === launch.projectID
+      && (note && note.note_id || '') === launch.noteID && (note && note.revision || 0) === launch.revision
+      && !this.data.historyMode && !this.data.bodyReadOnly;
+  },
+  settleNoteWriting(payload, launch) {
+    const payloadKey = this.noteWritingPayloadKey(payload);
+    if (launch.state === 'applied') {
+      // 账号/草稿实例/修订/受保护状态在应用后变化时，旧成功不得再重放。
+      if (!this.sameAppliedNoteTarget(launch)) {
+        launch.state = 'invalid';
+        launch.message = '笔记、账号或版本已变化，AI 文案未采用，请重新发起。';
+        this.setData({ notice: launch.message });
+        return this.noteWritingAck('invalid', launch.message, launch, payload, false);
+      }
+      if (launch.appliedPayloadKey && launch.appliedPayloadKey !== payloadKey) {
+        launch.state = 'invalid';
+        launch.message = '本次 AI 文案已采纳过，修改后的内容未采纳；请返回后重新发起。';
+        this.setData({ notice: launch.message });
+        return this.noteWritingAck('invalid', launch.message, launch, payload, false);
+      }
+      const message = 'AI 文案已处理，本次重复采纳不会重复追加。';
+      this.setData({ notice: message });
+      return this.noteWritingAck('applied', message, launch, payload, true);
+    }
+    if (launch.state === 'invalid') return this.noteWritingAck('invalid', launch.message, launch, payload, true);
+    const note = this.data.note;
+    const accountChanged = launch.token !== String(wx.getStorageSync('token') || '');
+    const targetChanged = !payload || payload.source !== 'project_note'
+      || payload.project_id !== launch.projectID || payload.note_id !== launch.noteID || Number(payload.note_revision) !== launch.revision
+      || (note && note.note_id || '') !== launch.noteID || (note && note.revision || 0) !== launch.revision;
+    // 目标失效（换账号/换草稿实例/修订变化）属永久拒绝，必须重新发起并绑定当前目标。
+    if (accountChanged || targetChanged || this.data.historyMode || this.data.bodyReadOnly || this.noteWritingSignature() !== launch.signature) {
+      launch.state = 'invalid';
+      launch.message = accountChanged ? '账号已变化，AI 文案未采用；请用当前账号重新发起。' : '笔记、账号或版本已变化，AI 文案未采用，请重新发起。';
+      this.setData({ notice: launch.message });
+      return this.noteWritingAck('invalid', launch.message, launch, payload, false);
+    }
+    // 暂时拒绝（保存/处理中）不标记失效，解除后可再次采纳成功。
+    if (this.data.busy) {
+      const message = '笔记正在保存或处理，AI 文案暂未采用；稍后可再次采纳。';
+      this.setData({ notice: message });
+      return this.noteWritingAck('retryable', message, launch, payload, false);
+    }
+    const text = String(payload && payload.text || '').trim();
+    if (!text || text === this.data.noteBody.trim()) {
+      const message = '没有新的文案可追加，原笔记已保留。';
+      this.setData({ notice: message });
+      return this.noteWritingAck('retryable', message, launch, payload, false);
+    }
     const body = this.data.noteBody ? this.data.noteBody + '\n\n' + text : text;
-    if (body.length > 8000) { this.setData({ notice: '追加后超过笔记字数上限，AI 文案未采用，请先精简原文。' }); return; }
-    this.setData({ noteTitle: this.data.noteTitle || String(payload.title || '').trim(), noteBody: body, notice: 'AI 文案已带回此笔记，请核对后保存新修订。' });
+    if (body.length > 8000) {
+      const message = '追加后超过笔记字数上限，AI 文案未采用，请先精简原文。';
+      this.setData({ notice: message });
+      return this.noteWritingAck('retryable', message, launch, payload, false);
+    }
+    launch.state = 'applied';
+    launch.message = 'AI 文案已带回此笔记，请核对后保存新修订。';
+    launch.appliedPayloadKey = payloadKey;
+    this.setData({ noteTitle: this.data.noteTitle || String(payload.title || '').trim(), noteBody: body, notice: launch.message });
+    return this.noteWritingAck('applied', launch.message, launch, payload, false);
   },
   async copyProjectNote() {
     const note = this.data.note; if (!note || this.data.busy || this.data.historyMode) return;

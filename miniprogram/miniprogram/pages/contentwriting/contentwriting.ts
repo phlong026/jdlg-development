@@ -23,6 +23,9 @@ function parseVideoCopy(value) {
 }
 
 const ANTI_FABRICATION_CLAUSE = '只根据以下已知资料写作；不得编造面积、层数、造价、工期、地名、项目状态、业主评价或其他未提供的事实。缺失的信息请省略。';
+// 回填改为双向确认：原页面确认已应用后才关闭本页，避免「文案没回填、AI 页又已关闭」。
+// ack 通常同步回传，此超时只用于通道失效或原页面未处理时兜底；超时不得丢弃文案。
+const RETURN_ACK_TIMEOUT_MS = 2000;
 
 Page({
   data: { videoBundle: false, videoCopy: null, videoSelections: { title: true, share_copy: true, moments_copy: true }, writingTypes, type: 'design', heading: '方案设计说明', example: writingTypes[0].example, exampleLabel: writingTypes[0].label, instruction: writingTypes[0].instruction, title: '', facts: '', result: '', error: '', notice: '', navigating: false, loginRequired: false, returnLabel: '带入编辑器', voiceActive: false, voicePartial: '', source: '', streaming: false, streamPartial: '', introPresets: [], introPresetIndex: -1 },
@@ -36,7 +39,10 @@ Page({
     else if (this._source === 'editor') this.setData({ returnLabel: '采纳到当前草稿' });
     if ((this._source === 'editor' || this._source === 'project_note') && typeof this.getOpenerEventChannel === 'function') {
       this._returnChannel = this.getOpenerEventChannel();
-      if (this._returnChannel && this._returnChannel.on) this._returnChannel.on('writingContext', payload => this.receiveWritingContext(payload));
+      if (this._returnChannel && this._returnChannel.on) {
+        this._returnChannel.on('writingContext', payload => this.receiveWritingContext(payload));
+        this._returnChannel.on('writingAck', ack => this.receiveReturnAck(ack));
+      }
     }
     if (this._token) this.loadWritingTypes();
   },
@@ -45,15 +51,18 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this.cancelStream();
+      // 换账号时旧回执不再有效，必须先清掉等待态，避免旧 ack 关掉新账号的页面。
+      this.clearReturnAck();
       this._typesLoadedOnce = false;
       this._typesRequest = null;
       this.setData({ introPresets: [], introPresetIndex: -1, videoCopy: null, title: '', facts: '', result: '', notice: '', streaming: false, streamPartial: '', error: '账号已变化，请重新填写创作内容' });
     }
     this._token = token;
-    this.setData({ navigating: false, loginRequired: !token });
+    // 等待原页确认期间保持按钮锁；只有没有待确认回填时才解除。
+    this.setData({ navigating: !!this._pendingReturn, loginRequired: !token });
     if (token) this.loadWritingTypes();
   },
-  onUnload() { this._unloaded = true; this.cancelStream(); },
+  onUnload() { this._unloaded = true; this.cancelStream(); this.clearReturnAck(); },
   receiveWritingContext(payload) {
     if ((this._source !== 'editor' && this._source !== 'project_note') || this._contextLoaded || this._token !== String(wx.getStorageSync('token') || '')) return;
     if (!payload || payload.source !== this._source) return;
@@ -277,6 +286,78 @@ Page({
     const selected = new Set(event.detail.value || []);
     this.setData({ videoSelections: { title: selected.has('title'), share_copy: selected.has('share_copy'), moments_copy: selected.has('moments_copy') } });
   },
+  // 双向确认：先发起回填，只有原页面回传 applied 才关闭本页。
+  // 暂时拒绝（原页面忙/未确认）留在本页，文案可复制、可再次采纳；目标失效须重新发起。
+  submitReturn(payload) {
+    if (!this._returnChannel || typeof this._returnChannel.emit !== 'function') {
+      this.setData({ navigating: false, error: '原页面连接已失效，请保留文案并返回重试' });
+      return false;
+    }
+    const request = (this._returnRequest || 0) + 1;
+    this._returnRequest = request;
+    // operation 是本页稳定操作 ID，request 是每次发送的请求 ID：回执必须同时匹配，
+    // 否则「A 已应用但回执迟到、用户改成 B 再采纳」会被 A 的旧回执误确认。
+    if (!this._returnOperation) this._returnOperation = 'ai-return-' + Date.now().toString(36) + '-' + request;
+    this.clearReturnAckTimer();
+    // 等待态绑定提交时的账号：账号变化后旧回执不得再关闭本页（即使 onShow 尚未执行）。
+    this._pendingReturn = { request, operation: this._returnOperation, token: this._token };
+    this.setData({ navigating: true, error: '', notice: '正在等待原页面确认回填…' });
+    try { this._returnChannel.emit('prefillContent', Object.assign({}, payload, { request, operation: this._returnOperation })); }
+    catch (_) {
+      this._pendingReturn = null;
+      this.setData({ navigating: false, error: '文案未能送回原页面，请保留文案并返回重试' });
+      return false;
+    }
+    // ack 可能同步到达；仍在等待时才需要超时兜底，超时同样不得丢弃文案。
+    if (this._pendingReturn && this._pendingReturn.request === request && typeof setTimeout === 'function') {
+      this._returnAckTimer = setTimeout(() => {
+        this._returnAckTimer = null;
+        const pending = this._pendingReturn;
+        if (!pending || pending.request !== request || this._unloaded) return;
+        this._pendingReturn = null;
+        this.setData({ navigating: false, notice: '原页面未确认回填，文案已保留在此页；可复制或再次采纳。' });
+      }, RETURN_ACK_TIMEOUT_MS);
+    }
+    return true;
+  },
+  receiveReturnAck(ack) {
+    const pending = this._pendingReturn;
+    if (!pending || this._unloaded || !ack) return;
+    // 只接受本次发送的回执：旧请求的迟到回执不得关闭或改写当前等待。
+    if (Number(ack.request) !== pending.request) return;
+    if (String(ack.operation || '') !== pending.operation) return;
+    // 账号已变化的迟到回执同样不得关闭本页；交由 onShow 的统一清空处理。
+    if (pending.token !== String(wx.getStorageSync('token') || '')) {
+      this.clearReturnAck();
+      this.setData({ navigating: false, notice: '账号已变化，AI 文案未带回原页面；请返回后重新发起。' });
+      return;
+    }
+    const state = String(ack.state || '');
+    if (state !== 'applied' && state !== 'retryable' && state !== 'invalid') return;
+    this._pendingReturn = null;
+    this.clearReturnAckTimer();
+    const message = String(ack.message || '').trim();
+    if (state !== 'applied') {
+      this.setData({ navigating: false, notice: message || '原页面未采用本次文案，文案已保留；可复制或修改后再次采纳。' });
+      return;
+    }
+    this.setData({ navigating: false, error: '', notice: message || '文案已采纳。' });
+    // ack 可能在 emit 的同一调用栈内回传，延后一个微任务再返回，避免重入导航。
+    Promise.resolve().then(() => {
+      if (this._unloaded) return;
+      // 微任务执行前账号仍可能变化，导航前再核对一次。
+      if (pending.token !== String(wx.getStorageSync('token') || '')) {
+        this.setData({ navigating: false, notice: '账号已变化，AI 文案未带回原页面；请返回后重新发起。' });
+        return;
+      }
+      wx.navigateBack({ delta: 1, fail: () => this.setData({ error: '文案已带回原页面，请返回继续编辑' }) });
+    });
+  },
+  clearReturnAckTimer() {
+    if (this._returnAckTimer && typeof clearTimeout === 'function') clearTimeout(this._returnAckTimer);
+    this._returnAckTimer = null;
+  },
+  clearReturnAck() { this._pendingReturn = null; this.clearReturnAckTimer(); },
   saveToDraft() {
     if (this.data.navigating) return;
     if (this.data.videoBundle) {
@@ -290,9 +371,7 @@ Page({
         video_copy[key] = value;
       }
       if (!Object.keys(video_copy).length) { this.setData({ error: '请选择至少一项需要采纳的文案' }); return; }
-      this.setData({ navigating: true, error: '' });
-      this._returnChannel.emit('prefillContent', { source: 'editor', content_id: String(this._contentID || ''), revision: Number(this._revision || 0), video_copy });
-      wx.navigateBack({ delta: 1, fail: () => this.setData({ navigating: false, error: '文案已带回原页面，请返回继续编辑' }) });
+      this.submitReturn({ source: 'editor', content_id: String(this._contentID || ''), revision: Number(this._revision || 0), video_copy });
       return;
     }
     const text = String(this.data.result || '').trim();
@@ -300,16 +379,15 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     if (!token || token !== this._token) { this.setData({ error: '账号已变化，请重新登录后创作' }); return; }
     const title = String(this.data.title || '').trim() || this.data.heading;
-    this.setData({ navigating: true, error: '' });
     if (this._source === 'editor' || this._source === 'project_note') {
       if (!this._returnChannel || typeof this._returnChannel.emit !== 'function') { this.setData({ navigating: false, error: '原页面连接已失效，请保留文案并返回重试' }); return; }
       const identity = this._source === 'project_note'
         ? { project_id: String(this._projectID || ''), note_id: String(this._noteID || ''), note_revision: Number(this._noteRevision || 0) }
         : { content_id: String(this._contentID || ''), revision: Number(this._revision || 0) };
-      this._returnChannel.emit('prefillContent', { source: this._source, title, text, ...identity });
-      wx.navigateBack({ delta: 1, fail: () => this.setData({ navigating: false, error: '文案已带回原页面，请返回继续编辑' }) });
+      this.submitReturn({ source: this._source, title, text, ...identity });
       return;
     }
+    this.setData({ navigating: true, error: '' });
     wx.navigateTo({
       url: '/pages/contentedit/contentedit',
       success: result => result.eventChannel.emit('prefillContent', { title, text }),

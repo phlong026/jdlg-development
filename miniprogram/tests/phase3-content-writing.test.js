@@ -305,7 +305,7 @@ test('navigation failure and returning from chat preserve user-entered facts and
   assert.equal(h.page.data.result, '手动编辑的文案');
 });
 
-test('writing opened by the editor returns to that same editor instead of opening a second instance', () => {
+test('writing opened by the editor returns to that same editor only after the opener acknowledges', async () => {
   const h = harness('contentwriting'); h.page.onLoad({ source: 'editor' }); h.page.onShow();
   h.page.setData({ title: '庭院方案', result: '用户核对后的设计说明' });
   h.page.saveToDraft();
@@ -313,7 +313,10 @@ test('writing opened by the editor returns to that same editor instead of openin
   const prefill = h.calls.find(call => call.event === 'prefillContent');
   assert.equal(prefill.value.title, '庭院方案');
   assert.equal(prefill.value.text, '用户核对后的设计说明');
-  assert.ok(h.calls.some(call => call.back));
+  assert.equal(h.calls.some(call => call.back), false, '原页面确认前不得返回');
+  h.listeners.writingAck({ state: 'applied', message: '已采纳', request: prefill.value.request, operation: prefill.value.operation });
+  await tick();
+  assert.ok(h.calls.some(call => call.back), '确认成功后才返回同一编辑器');
 });
 
 test('the actual send button includes the current user message once and preserves a genuine repeated historical question', async () => {
