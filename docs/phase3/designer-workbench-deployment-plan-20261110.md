@@ -37,6 +37,12 @@
 > - `go version -m` 显示 `vcs.revision=16f89fd67a2b215f6aa59c03dc0e55c1b0939ade`、工作区干净
 > - 注意：必须在干净的主检出目录构建（worktree 构建不会嵌入 VCS 信息）
 
+> 发布包已用 `ops/phase3-release/package_release.py` 在本地生成：
+> - 目录：`/tmp/jdlg-release`（421 个文件：applinux + migrations×4 + admin/** + manifest.json）
+> - manifest：`/tmp/jdlg-release/manifest.json`，421 项 SHA-256 已逐条校验通过
+> - 管理台构建：`background npm run build` 成功，`npm test` 767/767 通过
+> - 包内禁止 `.env.local`；迁移名必须与 `runner.py` 的 `MIGRATIONS` 一致
+
 
 1. **构建**（工作区必须干净，记录提交号）：
    ```bash
