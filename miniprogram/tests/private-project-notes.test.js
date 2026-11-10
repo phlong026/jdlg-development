@@ -1711,3 +1711,597 @@ test('re-adopting the same AI result after a lost ack replays success instead of
   assert.equal(acks()[1].replayed, true, '跨 launch 只重放成功确认');
   assert.equal(page.data.noteBody, '原文\n\nAI 文案', '不得重复追加');
 });
+
+// F3 / T1.3：上传批次逐条保留、继续尝试剩余文件、失败项可重试且只重试失败项。
+test('a failed media upload keeps earlier successes, continues the batch and only retries failures', async () => {
+  const calls = [];
+  let failuresLeft = 1;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async (projectID, path) => {
+      calls.push(path);
+      if (path === '/tmp/3.jpg' && failuresLeft > 0) { failuresLeft -= 1; throw Object.assign(new Error('文件超出大小限制'), { statusCode: 413 }); }
+      return { asset: { media_id: 'm' + path.split('/').pop() } };
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const files = Array.from({ length: 9 }, (_, index) => ({ tempFilePath: `/tmp/${index + 1}.jpg`, fileType: 'image' }));
+  await page.uploadNoteMedia(files);
+
+  assert.equal(calls.length, 9, '第 3 张失败后仍继续尝试第 4~9 张');
+  assert.equal(page.data.noteMedia.length, 8, '已成功的 8 张全部保留');
+  assert.deepEqual(Array.from(page.data.noteMedia.slice(0, 2), item => item.media_id), ['m1.jpg', 'm2.jpg'], '前 2 张仍可见');
+  assert.equal(page.noteDraft().media_ids.length, 8, '已成功的素材可保存');
+  assert.equal(page.data.mediaUploadFailures.length, 1);
+  assert.equal(page.data.mediaUploadFailures[0].name, '3.jpg');
+  assert.equal(page.data.mediaUploadFailures[0].message, '文件超出大小限制');
+  assert.match(page.data.notice, /已上传 8 个，1 个失败，可重试/);
+  assert.match(page.data.mediaFailureSummary, /3\.jpg/);
+
+  calls.length = 0;
+  await page.retryNoteMediaFailures();
+  assert.deepEqual(calls, ['/tmp/3.jpg'], '重试只上传失败项，不重复已成功项');
+  assert.equal(page.data.noteMedia.length, 9);
+  assert.equal(page.data.mediaUploadFailures.length, 0);
+  assert.equal(page.data.mediaFailureSummary, '');
+});
+
+test('media upload errors keep the server message and flag network failures separately', async () => {
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async (projectID, path) => {
+      if (path === '/tmp/a.jpg') throw Object.assign(new Error('单张图片不能超过 10 MiB'), { statusCode: 413 });
+      throw new Error('私有素材上传失败');
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }, { tempFilePath: '/tmp/b.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures[0].message, '单张图片不能超过 10 MiB', 'HTTP 错误保留 data.msg');
+  assert.equal(page.data.mediaUploadFailures[1].message, '网络异常，请检查网络后重试', '网络错误给出可区分提示');
+  assert.equal(page.data.noteMedia.length, 0);
+  assert.equal(page.data.error, '单张图片不能超过 10 MiB');
+});
+
+// F3 / T1.3：失败队列跨保存保留、跨草稿隔离，并有可见的失败原因。
+test('unretried upload failures survive saving the same note and stay out of a new draft', async () => {
+  const saved = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', media_ids: [] };
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { throw Object.assign(new Error('网络异常'), { statusCode: 502 }); },
+    createProjectNote: async () => saved,
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [saved], versions: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [], versions: [] }, '', null, null, 'editor');
+  const draftInstance = page._draftInstance.id;
+  page.setData({ noteTitle: '标题', noteBody: '正文' });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1);
+  assert.equal(page.data.mediaUploadFailures[0].name, 'a.jpg');
+
+  // 保存当前（新）草稿：失败队列属于同一个笔记，必须保留
+  await page.persistNote(false);
+  const store = page._noteMediaFailures || {};
+  const noteKey = Object.keys(store).find(key => key.endsWith('|note:n1'));
+  assert.ok(noteKey, '保存后队列跟随新笔记身份');
+  assert.equal(store[noteKey].length, 1);
+  assert.equal(page.data.mediaUploadFailures.length, 1, '保存同一条草稿不得清空失败队列');
+
+  // 新建草稿：不得继承上一条草稿的失败队列
+  page._selectedNoteID = ''; page._newNote = false; page._draftInstance = null;
+  await page.startNewNote();
+  assert.notEqual(page._draftInstance.id, draftInstance);
+  assert.equal(page.data.mediaUploadFailures.length, 0, '新草稿不得出现旧草稿的失败队列');
+});
+
+test('a failed batch is merged with new failures without duplicating entries', async () => {
+  let fail = true;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { if (fail) throw new Error('私有素材上传失败'); return { asset: { media_id: 'm' + Math.random() } }; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1);
+  // 追加新批次：旧失败项保留、新的失败项合并，同一文件不重复
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }, { tempFilePath: '/tmp/b.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 2);
+  assert.match(page.data.notice, /已上传 0 个，2 个失败，可重试/);
+  fail = false;
+  await page.retryNoteMediaFailures();
+  assert.equal(page.data.mediaUploadFailures.length, 0, '重试成功后清空对应失败项');
+});
+
+test('the media retry surface exposes each failure reason, not only file names', () => {
+  const wxml = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(wxml, /wx:for="\{\{mediaUploadFailures\}\}"/);
+  assert.match(wxml, /\{\{item\.name\}\}：\{\{item\.message\}\}/, '失败项必须同时展示文件名与原因');
+  assert.match(wxml, /bindtap="retryNoteMediaFailures"/);
+  assert.match(wxml, /\{\{mediaRetryLabel\}\}/, '按钮文案必须与实际单轮处理数量一致');
+});
+
+test('an unparsable upload response keeps its http status code for error classification', () => {
+  const { api } = loadAPI({
+    uploadFile(options) { options.success({ statusCode: 502, data: '<html>bad gateway</html>' }); },
+  });
+  return api.uploadProjectNoteMedia('project-one', '/tmp/a.jpg').then(
+    () => { throw new Error('应当失败'); },
+    error => assert.equal(error.statusCode, 502),
+  );
+});
+
+// F3 / T1.3：后台完成的上传不得被失效回调丢弃，返回后要接纳；队列按笔记隔离且可恢复。
+test('uploads that finish while backgrounded are accepted on return instead of being lost', async () => {
+  let resolveUpload;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [], versions: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._loaded = true;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [], versions: [] }, '', null, null, 'editor');
+  const pendingUpload = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  page.onHide();
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pendingUpload;
+  assert.equal(page.data.noteMedia.length, 1, '同草稿后台完成的上传必须保留');
+  assert.equal(page.data.noteMedia[0].media_id, 'm-a');
+  assert.equal(page.data.busy, false, '完成后必须释放自己的锁');
+
+  await page.onShow();
+  assert.equal(page.data.noteMedia.length, 1, '返回后不得重复接纳');
+  assert.equal(page.data.noteMedia[0].media_id, 'm-a');
+});
+
+test('an access recheck keeps the in-flight upload lock so no save starts underneath it', async () => {
+  let resolveUpload, saves = 0;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+    createProjectNote: async () => { saves += 1; return { note_id: 'n1', revision: 1 }; },
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [], versions: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._loaded = true;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [], versions: [] }, '', null, null, 'editor');
+  page.setData({ noteTitle: '标题', noteBody: '正文' });
+  const pendingUpload = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  page.onHide();
+  await page.onShow();
+  assert.equal(page.data.busy, true, '同账号重验不得释放在途上传的锁');
+  await page.createProjectNote();
+  assert.equal(saves, 0, '上传未结束不得开始保存');
+
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pendingUpload;
+  assert.equal(page.data.busy, false);
+});
+
+test('failure queues are kept per note so switching away and back restores them', async () => {
+  const detail = {
+    project: { project_id: 'p' },
+    notes: [
+      { note_id: 'n1', revision: 1, title: '方案一', body: '正文一', body_format: 'plain' },
+      { note_id: 'n2', revision: 1, title: '方案二', body: '正文二', body_format: 'plain' },
+    ],
+    versions: [],
+  };
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { throw new Error('私有素材上传失败'); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1, 'n1 的失败队列可见');
+
+  page._selectedNoteID = 'n2';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  assert.equal(page.data.mediaUploadFailures.length, 0, 'n2 不得继承 n1 的失败队列');
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/b.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1);
+  assert.equal(page.data.mediaUploadFailures[0].name, 'b.jpg');
+
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  assert.equal(page.data.mediaUploadFailures.length, 1, '切回 n1 恢复自己的失败队列');
+  assert.equal(page.data.mediaUploadFailures[0].name, 'a.jpg');
+});
+
+// F3 / T1.3：批次身份校验——换账号立即停批、后台素材进保存载荷、接纳素材保持未保存、队列不被淘汰。
+test('an account change stops the rest of an in-flight upload batch', async () => {
+  let token = 'session-token';
+  let resolveFirst;
+  const calls = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: (projectID, path) => { calls.push(path); if (path === '/tmp/1.jpg') return new Promise(resolve => { resolveFirst = resolve; }); return Promise.resolve({ asset: { media_id: 'm2' } }); },
+    listProjectNoteProjects: async () => ({ items: [], next_cursor: '' }),
+    workbenchContext: async () => ({ owners: [] }),
+  }, { getStorageSync: key => key === 'token' ? token : (key === 'userInfo' ? { id: 101 } : '') });
+  page._visible = true; page._token = token; page._epoch = 1; page._loaded = true;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/1.jpg' }, { tempFilePath: '/tmp/2.jpg' }, { tempFilePath: '/tmp/3.jpg' }]);
+  token = 'session-two';
+  await page.onShow();
+  resolveFirst({ asset: { media_id: 'm1' } });
+  await pending;
+  assert.deepEqual(calls, ['/tmp/1.jpg'], '换账号后不得再用新账号凭证发旧账号的文件');
+  assert.equal(page.data.noteMedia.length, 0, '旧账号上传不得写入');
+  assert.equal(page.data.busy, false);
+  assert.equal(page._noteMediaFailures, null, '旧回调不得重建已清空的存储');
+});
+
+test('media uploaded while backgrounded is included in the next save payload', async () => {
+  let resolveUpload, savedPayload = null;
+  const saved = { note_id: 'n1', revision: 1, title: '标题', body: '正文', body_format: 'plain', media_ids: ['m-a'] };
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+    createProjectNote: async (projectID, draft) => { savedPayload = draft; return saved; },
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [saved], versions: [] }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._loaded = true;
+  page.applyProjectDetail({ project: { project_id: 'p' }, notes: [], versions: [] }, '', null, null, 'editor');
+  page.setData({ noteTitle: '标题', noteBody: '正文' });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  page.onHide();
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pending;
+  await page.onShow();
+  assert.equal(page.data.noteMedia.length, 1);
+  await page.persistNote(false);
+  assert.deepEqual(Array.from(savedPayload.media_ids), ['m-a'], '后台完成的素材必须进入保存载荷');
+});
+
+test('media accepted after a refresh stays unsaved so leaving asks before dropping it', () => {
+  const note = { note_id: 'n1', revision: 1, title: '方案', body: '正文', body_format: 'plain', media_ids: [] };
+  const detail = { project: { project_id: 'p' }, notes: [note], versions: [] };
+  const page = pageHarness('projectnotes', {});
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  assert.equal(page.hasUnsavedChanges(), false);
+  page.stashPendingMedia(page.mediaFailureOwnerKey(), [{ file: { tempFilePath: '/tmp/a.jpg' }, asset: { media_id: 'm-a' } }]);
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  assert.equal(page.data.noteMedia.length, 1);
+  assert.equal(page.data.noteMedia[0].media_id, 'm-a');
+  assert.equal(page.hasUnsavedChanges(), true, '接纳的素材必须保持未保存状态');
+});
+
+test('the current note failure queue is never evicted by many other owners', async () => {
+  const notes = Array.from({ length: 12 }, (_, index) => ({ note_id: 'n' + (index + 1), revision: 1, title: '方案' + index, body: '正文', body_format: 'plain' }));
+  const detail = { project: { project_id: 'p' }, notes, versions: [] };
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { throw new Error('私有素材上传失败'); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  const store = {};
+  for (let index = 1; index <= 11; index += 1) store['101|p|note:n' + index] = [{ tempFilePath: '/tmp/old' + index + '.jpg', name: 'old' + index + '.jpg', message: '网络异常' }];
+  page._noteMediaFailures = store;
+  page._selectedNoteID = 'n12';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1, '当前笔记的失败项不得被淘汰');
+  assert.equal(page.data.mediaUploadFailures[0].name, 'a.jpg');
+  assert.ok(Object.keys(page._noteMediaFailures).length <= 10, '归属数量保持有界');
+});
+
+test('a new batch reports its own counts while older failures stay pending separately', async () => {
+  let fail = true;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { if (fail) throw new Error('私有素材上传失败'); return { asset: { media_id: 'm' + Math.random() } }; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const batch = Array.from({ length: 9 }, (_, index) => ({ tempFilePath: `/tmp/${index + 1}.jpg`, fileType: 'image' }));
+  await page.uploadNoteMedia(batch);
+  assert.match(page.data.notice, /已上传 0 个，9 个失败，可重试/);
+  fail = false;
+  await page.uploadNoteMedia(Array.from({ length: 9 }, (_, index) => ({ tempFilePath: `/tmp/ok${index + 1}.jpg`, fileType: 'image' })));
+  assert.equal(page.data.mediaUploadFailures.length, 9, '历史失败仍在队列可重试');
+  assert.match(page.data.notice, /已上传 9 个，0 个失败/, '全成功也要显示本批 N/M 数量');
+  assert.doesNotMatch(page.data.notice, /9 个失败，可重试/);
+  assert.match(page.data.notice, /另有 9 个历史失败待重试/);
+});
+
+// F3 / T1.3：卸载/撤权后旧上传不得重建已清空的状态；回访旧 owner 不得丢失当前失败队列。
+test('an upload finishing after unload never rebuilds the cleared state', async () => {
+  let resolveUpload;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  page.onUnload();
+  assert.equal(page._noteMediaFailures, null);
+  assert.equal(page._noteMediaPending, null);
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pending;
+  assert.equal(page._noteMediaFailures, null, '卸载后旧回调不得重建失败队列');
+  assert.equal(page._noteMediaPending, null, '卸载后旧回调不得写挂起素材');
+  assert.equal(page.data.noteMedia.length, 0, '卸载后不得再写页面');
+});
+
+test('a revoked access invalidates an in-flight upload without rebuilding state', async () => {
+  let resolveUpload;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+    getProjectNoteProject: async () => { throw Object.assign(new Error('无权访问'), { statusCode: 403 }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._loaded = true;
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'old' }] });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  await page.revalidateProjectAccess();
+  assert.equal(page.data.noteMedia.length, 0, '撤权清空受保护内容');
+  assert.equal(page._noteMediaFailures, null);
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pending;
+  assert.equal(page._noteMediaFailures, null, '撤权后旧回调不得重建失败队列');
+  assert.equal(page.data.noteMedia.length, 0);
+});
+
+test('returning to the oldest failure owner keeps its queue visible and bounded', async () => {
+  const notes = Array.from({ length: 12 }, (_, index) => ({ note_id: 'n' + (index + 1), revision: 1, title: '方案' + index, body: '正文', body_format: 'plain' }));
+  const detail = { project: { project_id: 'p' }, notes, versions: [] };
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { throw new Error('私有素材上传失败'); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  const store = {};
+  for (let index = 1; index <= 11; index += 1) store['101|p|note:n' + index] = [{ tempFilePath: '/tmp/old' + index + '.jpg', name: 'old' + index + '.jpg', message: '网络异常' }];
+  page._noteMediaFailures = store;
+  for (let index = 0; index < 12; index += 1) {
+    page._selectedNoteID = 'n' + (index + 1);
+    page.applyProjectDetail(detail, '', null, null, 'editor');
+  }
+  assert.equal(Object.keys(page._noteMediaFailures).length, 11, '浏览笔记不得凭空创建空归属');
+
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/new.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 2, '回访最老 owner 时其失败队列必须可见');
+  const keys = Object.keys(page._noteMediaFailures);
+  assert.ok(keys.length <= 10, '归属数量保持有界');
+  assert.ok(keys.some(key => key.endsWith('|note:n1')), '当前 owner 不得被自己的写入淘汰');
+});
+
+// F3 / T1.3：成功批次不占用失败队列容量；历史失败超过 9 项时分轮重试。
+test('successful batches never store empty owners or evict a real failure queue', async () => {
+  const notes = Array.from({ length: 11 }, (_, index) => ({ note_id: 'n' + (index + 1), revision: 1, title: '方案' + index, body: '正文', body_format: 'plain' }));
+  const detail = { project: { project_id: 'p' }, notes, versions: [] };
+  let fail = true;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async () => { if (fail) throw new Error('私有素材上传失败'); return { asset: { media_id: 'm' + Math.random() } }; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  assert.equal(page.data.mediaUploadFailures.length, 1);
+
+  fail = false;
+  for (let index = 2; index <= 11; index += 1) {
+    page._selectedNoteID = 'n' + index;
+    page.applyProjectDetail(detail, '', null, null, 'editor');
+    await page.uploadNoteMedia([{ tempFilePath: '/tmp/ok' + index + '.jpg', fileType: 'image' }]);
+  }
+  const store = page._noteMediaFailures || {};
+  assert.equal(Object.keys(store).length, 1, '成功的批次不得留下空 owner');
+  assert.ok(Object.keys(store).some(key => key.endsWith('|note:n1')), '真实失败队列不得被挤掉');
+
+  page._selectedNoteID = 'n1';
+  page.applyProjectDetail(detail, '', null, null, 'editor');
+  assert.equal(page.data.mediaUploadFailures.length, 1, '切回后失败项仍可重试');
+});
+
+test('retrying more than nine failures splits into batches of nine', async () => {
+  const calls = [];
+  let fail = true;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async (projectID, path) => { calls.push(path); if (fail) throw new Error('私有素材上传失败'); return { asset: { media_id: 'm' + path.split('/').pop() } }; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const firstBatch = Array.from({ length: 9 }, (_, index) => ({ tempFilePath: `/tmp/a${index + 1}.jpg`, fileType: 'image' }));
+  const secondBatch = Array.from({ length: 9 }, (_, index) => ({ tempFilePath: `/tmp/b${index + 1}.jpg`, fileType: 'image' }));
+  await page.uploadNoteMedia(firstBatch);
+  await page.uploadNoteMedia(secondBatch);
+  assert.equal(page.data.mediaUploadFailures.length, 18);
+
+  calls.length = 0;
+  await page.retryNoteMediaFailures();
+  assert.equal(calls.length, 9, '单轮重试不得超过 9 项');
+  assert.match(page.data.notice, /已上传 0 个，9 个失败，可重试/);
+  assert.equal(page.data.mediaUploadFailures.length, 18, '未重试的 9 项继续保留');
+
+  assert.match(page.data.mediaRetryLabel, /重试下一批 9 个（共 18 个待处理）/, '按钮文案与实际处理数量一致');
+  calls.length = 0;
+  fail = false;
+  await page.retryNoteMediaFailures();
+  assert.equal(calls.length, 9, '第二轮仍只重试 9 项');
+  assert.ok(calls.every(path => path.startsWith('/tmp/b')), '队首持续失败项必须让位给未尝试项');
+  assert.equal(page.data.mediaUploadFailures.length, 9, '成功后只剩持续失败的第一批 9 项');
+  assert.ok(page.data.mediaUploadFailures.every(item => item.tempFilePath.startsWith('/tmp/a')));
+  assert.match(page.data.mediaRetryLabel, /重试失败的 9 个素材/);
+});
+
+// F3 / T1.3：旧重试收尾不得影响新重试的轮转集合（集合绑定单次上传操作）。
+test('an old retry cannot disturb the rotation of a newer retry', async () => {
+  const pending = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  // 先建立旧失败队列，并必须通过 retryNoteMediaFailures() 入口启动旧重试（旧缺陷就在它的 finally）。
+  const oldItems = Array.from({ length: 9 }, (_, index) => ({ tempFilePath: `/tmp/o${index + 1}.jpg`, name: `o${index + 1}.jpg`, message: '网络异常' }));
+  page.setMediaFailures(page.mediaFailureOwnerKey(), oldItems);
+  page.publishMediaFailures();
+  const oldRetry = page.retryNoteMediaFailures();
+  assert.equal(pending.length, 1, '旧重试发起首个请求');
+
+  // 旧重试期间撤权/清空，再重建队列并启动新重试
+  page.clearProtected();
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const seeded = [];
+  for (let index = 1; index <= 9; index += 1) seeded.push({ tempFilePath: `/tmp/b${index}.jpg`, name: `b${index}.jpg`, message: '网络异常' });
+  for (let index = 1; index <= 9; index += 1) seeded.push({ tempFilePath: `/tmp/a${index}.jpg`, name: `a${index}.jpg`, message: '网络异常' });
+  page.setMediaFailures(page.mediaFailureOwnerKey(), seeded);
+  page.publishMediaFailures();
+  const newRetry = page.retryNoteMediaFailures();
+  assert.equal(pending.length, 2, '新重试串行发起首个请求');
+
+  pending[0].reject(new Error('旧批次已失效'));
+  await oldRetry;
+  for (let index = 1; index <= 9; index += 1) {
+    pending[index].reject(new Error('仍然失败'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  await newRetry;
+
+  const order = Array.from(page.data.mediaUploadFailures, item => item.tempFilePath);
+  assert.equal(order.length, 18, '失败项一个都不丢');
+  assert.ok(order.slice(0, 9).every(path => path.startsWith('/tmp/a')), '未尝试项排在本轮失败项之前（轮转生效）');
+  assert.ok(order.slice(9).every(path => path.startsWith('/tmp/b')));
+});
+
+// F3 / T1.4：上传操作身份——进入历史/只读状态后，后续请求立即停止且不写回。
+test('an in-flight upload stops before the next request when the draft becomes read-only', async () => {
+  let resolveFirst;
+  const calls = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: (projectID, path) => {
+      calls.push(path);
+      if (path === '/tmp/1.jpg') return new Promise(resolve => { resolveFirst = resolve; });
+      return Promise.resolve({ asset: { media_id: 'm2' } });
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/1.jpg' }, { tempFilePath: '/tmp/2.jpg' }, { tempFilePath: '/tmp/3.jpg' }]);
+  page.setData({ historyMode: true });
+  resolveFirst({ asset: { media_id: 'm1' } });
+  await pending;
+  assert.deepEqual(calls, ['/tmp/1.jpg'], '身份失效后不得再发后续请求');
+  assert.equal(page.data.noteMedia.length, 0, '失效批次不得写回页面');
+});
+
+test('the notes page marks itself unloaded so late uploads never write back', async () => {
+  let resolveUpload;
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg', fileType: 'image' }]);
+  page.onUnload();
+  assert.equal(page._unloaded, true, 'onUnload 必须设置卸载标记');
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pending;
+  assert.equal(page.data.noteMedia.length, 0);
+});
+
+// F3 / 批次 1：上传接口权限终态、并发重入、token 变化未 onShow 的锁释放。
+test('an upload permission failure clears protected content and never enters the retry queue', async () => {
+  const calls = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async (projectID, path) => { calls.push(path); throw Object.assign(new Error('无权访问'), { statusCode: 403 }); },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'old' }], noteBody: '私密正文' });
+  await page.uploadNoteMedia([{ tempFilePath: '/tmp/1.jpg' }, { tempFilePath: '/tmp/2.jpg' }, { tempFilePath: '/tmp/3.jpg' }]);
+  assert.deepEqual(calls, ['/tmp/1.jpg'], '权限终态后立即停止余下请求');
+  assert.equal(page.data.noteMedia.length, 0, '清空受保护素材');
+  assert.equal(page.data.noteBody, '', '清空受保护正文');
+  assert.equal(page.data.mediaUploadFailures.length, 0, '权限错误不得进入重试队列');
+  assert.equal(page.data.projectLoadFailed, true);
+  assert.equal(page.data.busy, false);
+});
+
+test('concurrent upload batches are rejected and cannot unlock each other', async () => {
+  const pending = [];
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => pending.push(resolve)),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const first = page.uploadNoteMedia([{ tempFilePath: '/tmp/1.jpg' }]);
+  assert.equal(pending.length, 1);
+  const second = page.uploadNoteMedia([{ tempFilePath: '/tmp/2.jpg' }]);
+  assert.equal(pending.length, 1, '并发批次必须被拒绝');
+  await second;
+  pending[0]({ asset: { media_id: 'm1' } });
+  await first;
+  assert.equal(page.data.busy, false);
+  assert.equal(page.data.noteMedia.length, 1);
+  assert.equal(page.data.noteMedia[0].media_id, 'm1');
+});
+
+test('a token change without onShow still releases the upload lock without writing data', async () => {
+  let resolveUpload;
+  let token = 'session-token';
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise(resolve => { resolveUpload = resolve; }),
+  }, { getStorageSync: key => key === 'token' ? token : '' });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  const pending = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg' }]);
+  token = 'session-two';
+  resolveUpload({ asset: { media_id: 'm-a' } });
+  await pending;
+  assert.equal(page.data.busy, false, 'token 变化后必须释放自己的锁');
+  assert.equal(page.data.noteMedia.length, 0, '不得写入旧账号素材');
+});
+
+// F3 / 批次 1：迟到权限错误不得清理新账号状态；选择器迟到回调不得跨账号上传。
+test('a late permission error from an old upload cannot clear the new account state', async () => {
+  const pending = [];
+  let token = 'session-token';
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+  }, { getStorageSync: key => key === 'token' ? token : (key === 'userInfo' ? { id: 101 } : '') });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' }, noteBody: 'A 正文' });
+  const oldUpload = page.uploadNoteMedia([{ tempFilePath: '/tmp/a.jpg' }]);
+  assert.equal(pending.length, 1);
+
+  // 换账号并载入 B 的状态
+  token = 'session-two'; page._token = 'session-two';
+  page.clearProtected();
+  page._loaded = true;
+  page.setData({ selectedProject: { project_id: 'p' }, noteBody: 'B 正文', noteMedia: [{ media_id: 'b1' }] });
+  const newUpload = page.uploadNoteMedia([{ tempFilePath: '/tmp/b.jpg' }]);
+  assert.equal(pending.length, 2);
+
+  pending[0].reject(Object.assign(new Error('无权访问'), { statusCode: 403 }));
+  await oldUpload;
+  assert.equal(page.data.noteBody, 'B 正文', '旧账号迟到 403 不得清空新账号正文');
+  assert.equal(page.data.selectedProject && page.data.selectedProject.project_id, 'p');
+  assert.equal(page.data.noteMedia.length, 1, '既有素材保留');
+  assert.ok(page._noteMediaUpload, '新上传的锁不得被旧响应解除');
+
+  pending[1].resolve({ asset: { media_id: 'b2' } });
+  await newUpload;
+  assert.equal(page.data.noteMedia.length, 2);
+  assert.equal(page.data.busy, false);
+});
+
+test('a late media picker success cannot upload into another account', async () => {
+  const uploads = [];
+  const pickers = [];
+  let token = 'session-token';
+  const page = pageHarness('projectnotes', {
+    uploadProjectNoteMedia: async (projectID, path) => { uploads.push([token, projectID, path]); return { asset: { media_id: 'm1' } }; },
+  }, {
+    getStorageSync: key => key === 'token' ? token : (key === 'userInfo' ? { id: 101 } : ''),
+    chooseMedia: options => pickers.push(options),
+  });
+  page._visible = true; page._token = token; page._epoch = 1;
+  page.setData({ selectedProject: { project_id: 'p' } });
+  page.chooseNoteMedia();
+  page.chooseNoteMedia();
+  assert.equal(pickers.length, 1, '连续点击不得打开两个选择器');
+
+  token = 'session-two'; page._token = 'session-two';
+  page.clearProtected();
+  page.setData({ selectedProject: { project_id: 'p2' } });
+  pickers[0].success({ tempFiles: [{ tempFilePath: '/tmp/a.jpg' }] });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(uploads.length, 0, '旧账号的迟到选择结果不得上传');
+});

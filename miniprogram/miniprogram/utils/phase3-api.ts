@@ -146,7 +146,7 @@ function uploadProjectNoteMedia(projectID, filePath) {
     url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 60000,
     success(response) {
       let data = {};
-      try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(new Error('私有素材上传响应无法读取')); return; }
+      try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(Object.assign(new Error('私有素材上传响应无法读取'), { statusCode: response.statusCode })); return; }
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
       else reject(Object.assign(new Error(data.msg || '私有素材上传失败'), { statusCode: response.statusCode }));
     },
@@ -238,4 +238,3 @@ module.exports = {
   getProjectNoteVersion, downloadProjectNoteMedia, downloadProjectNoteWord, downloadSharedProjectNoteWord,
   listNativeReferenceCandidates, listNativeReferences, saveNativeReference, deleteNativeReference, getNativeReferenceTarget,
 };
-export {};

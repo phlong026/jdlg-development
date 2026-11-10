@@ -59,7 +59,8 @@
             <view class="material-info"><text class="row-title">{{item.title || (item.kind === 'video' ? '项目视频' : '项目图片')}}</text><button wx:if="{{!item.local_path}}" class="text-button material-preview" bindtap="previewNote" disabled="{{busy}}">查看素材</button></view>
             <button wx:if="{{!bodyReadOnly}}" class="danger-link material-remove" data-id="{{item.media_id}}" catchtap="removeNoteMedia">移除</button>
           </view>
-          <view wx:if="{{!bodyReadOnly}}" class="material-tools"><button class="tool-button" bindtap="chooseNoteMedia" disabled="{{busy}}">＋ 添加图片或视频</button></view>
+          <view wx:if="{{mediaUploadFailures.length}}" class="material-empty"><text wx:for="{{mediaUploadFailures}}" wx:key="tempFilePath" class="media-failure-line">{{item.name}}：{{item.message}}</text></view>
+          <view wx:if="{{!bodyReadOnly}}" class="material-tools"><button wx:if="{{mediaUploadFailures.length}}" class="text-button" bindtap="retryNoteMediaFailures" disabled="{{busy}}">{{mediaRetryLabel}}</button><button class="tool-button" bindtap="chooseNoteMedia" disabled="{{busy}}">＋ 添加图片或视频</button></view>
         </view>
 
         <view wx:if="{{note}}" class="card version-create-card"><view><text class="section-title">交付为固定版本</text><text class="project-meta">保存草稿后再生成，后续修改不会影响已经分享的版本。</text></view><button class="secondary" bindtap="freezeProjectNoteVersion" disabled="{{busy}}">生成方案版本</button></view>

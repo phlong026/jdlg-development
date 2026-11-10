@@ -15,11 +15,23 @@ const blankProtected = () => ({
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
   editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
-  previewMediaGroups: [], versionMediaGroups: [], galleryPositions: {},
+  previewMediaGroups: [], versionMediaGroups: [], galleryPositions: {}, mediaUploadFailures: [], mediaFailureSummary: '', mediaRetryLabel: '',
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
 const assetOf = item => item && item.asset ? item.asset : item;
+// 上传失败要能区分「服务端拒绝」和「网络异常」：HTTP 错误保留 data.msg 与 statusCode。
+const uploadFailureMessage = error => {
+  const status = Number(error && error.statusCode);
+  const message = String(error && (error.message || error.msg) || '').trim();
+  if (!status) return '网络异常，请检查网络后重试';
+  return message || `私有素材上传失败（${status}）`;
+};
+const uploadFileName = (file, position) => {
+  const path = String(file && file.tempFilePath || '');
+  const name = String(file && file.name || path.split('/').pop() || '').trim();
+  return name || `第 ${position + 1} 个文件`;
+};
 // 草稿实例身份：新草稿没有 note_id、修订恒为 0，不能拿它们当唯一键。
 // 实例 ID 在草稿实例创建时生成，跨 AI 重进保持稳定；新建/切换/丢弃/保存后重新生成。
 const draftAccount = () => {
@@ -50,9 +62,9 @@ const projectForm = project => ({ name: project.name || '', location: project.lo
 const truncationText = flags => Object.keys(flags || {}).some(key => flags[key]) ? '部分历史记录超过50条，当前仅显示最近50条。' : '';
 
 Page({
-  data: Object.assign({ historyTypes: [{ key: 'versions', label: '方案版本' }, { key: 'notes', label: '笔记草稿' }, { key: 'feedbacks', label: '业主意见' }, { key: 'resolutions', label: '处理记录' }, { key: 'confirmations', label: '业主确认' }], loading: true, busy: false, error: '', notice: '', loginRequired: false, accessRecheckRequired: false }, blankProtected()),
+  data: Object.assign({ historyTypes: [{ key: 'versions', label: '方案版本' }, { key: 'notes', label: '笔记草稿' }, { key: 'feedbacks', label: '业主意见' }, { key: 'resolutions', label: '处理记录' }, { key: 'confirmations', label: '业主确认' }], loading: true, busy: false, error: '', notice: '', loginRequired: false, accessRecheckRequired: false, mediaUploadFailures: [], mediaFailureSummary: '', mediaRetryLabel: '' }, blankProtected()),
   onLoad(options) {
-    wx.hideShareMenu(); this._visible = true;
+    wx.hideShareMenu(); this._visible = true; this._unloaded = false;
     this._targetProjectID = String(options && options.project_id || '');
     this._targetVersionID = String(options && options.version_id || '');
     this._targetFeedbackID = String(options && options.feedback_id || '');
@@ -68,6 +80,7 @@ Page({
     }
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
+    if (this.data.pageView === 'editor') this.acceptPendingMedia();
     if (this._writingLaunch && this._writingLaunch.token === token) {
       this._writingLaunch = null;
       return this.revalidateProjectAccess();
@@ -75,7 +88,7 @@ Page({
     return this._loaded ? this.revalidateProjectAccess() : this.loadProjects(this._epoch);
   },
   onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.editNote(); },
-  onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
+  onUnload() { this._unloaded = true; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   onPageScroll(event) {
     if (this.data.pageView === 'list') this._listScrollTop = Number(event && event.scrollTop || 0);
     if (this.data.pageView === 'editor' && this.data.editorMode === 'edit') this._editorScrollTop = Number(event && event.scrollTop || 0);
@@ -86,7 +99,9 @@ Page({
   },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   clearProtected() {
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance();
+    // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
+    this._protectedGeneration = (this._protectedGeneration || 0) + 1;
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null;
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -179,7 +194,7 @@ Page({
     // 新 epoch 已废弃上一轮写操作，在发起重验时同步释放旧锁；
     // 重验完成回调不再写 busy，避免清掉新 epoch 后启动的操作。
     this.setData(this._loaded
-      ? { busy: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' }
+      ? { busy: !!this._noteMediaUpload, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' }
       : { busy: false, loading: true, loginRequired: false, accessRecheckRequired: false, error: '', notice: '' });
     try {
       if (project) await api.getProjectNoteProject(project.project_id); else await api.workbenchContext();
@@ -469,7 +484,14 @@ Page({
       confirmations: targetID ? (result.confirmations || []).filter(item => item.version_id === targetID).map(item => Object.assign({}, item, { confirmed_at: localTime(item.confirmed_at) })) : [],
       truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
       error: share && !share.share_token ? '该分享入口凭证不再保存在当前会话中，请撤回后重新生成。' : '',
-    }, () => { if (pageView === 'editor') this.ensureDraftInstance(); this.rememberLoadedForms(); this.scrollPage(pageView); });
+    }, () => {
+      // 先用服务端结果建立未修改基线，再接纳后台素材，使其保持「未保存」状态。
+      if (pageView === 'editor') this.ensureDraftInstance();
+      this.publishMediaFailures();
+      this.rememberLoadedForms();
+      if (pageView === 'editor') this.acceptPendingMedia();
+      this.scrollPage(pageView);
+    });
   },
   async setHistoryType(event) {
     if (this.data.busy) return;
@@ -532,7 +554,7 @@ Page({
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
     this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null;
     this.editNote(); this._editorScrollTop = 0;
-    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this.ensureDraftInstance(true); this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
+    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this.ensureDraftInstance(true); this.publishMediaFailures(); this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
   },
   openNoteMore() {
     if (!this.data.note || this.data.busy || this.data.historyMode) return;
@@ -870,22 +892,205 @@ Page({
     try {
       const saved = update ? await api.saveProjectNote(note.note_id, draft) : await api.createProjectNote(project.project_id, draft);
       if (!this.current(epoch)) return;
-      this._shareAttempt = null; this._selectedNoteID = saved.note_id; this._newNote = false; this._selectedVersionID = ''; this.setData({ notes: [saved, ...this.data.notes.filter(item => item.note_id !== saved.note_id)], noteIndex: 0, note: saved, frozenVersion: null, activeShare: null, busy: false });
+      this._shareAttempt = null; this._selectedNoteID = saved.note_id; this._newNote = false; this._selectedVersionID = ''; this.adoptMediaFailureQueue(saved.note_id); this.setData({ notes: [saved, ...this.data.notes.filter(item => item.note_id !== saved.note_id)], noteIndex: 0, note: saved, frozenVersion: null, activeShare: null, busy: false });
       await this.refreshProject(update ? '草稿已更新，需重新冻结并分享新版本。' : '笔记草稿已创建。');
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '笔记保存失败' }); }
   },
-  chooseNoteMedia() { if (!this.data.selectedProject || this.data.busy) return; wx.chooseMedia({ count: 9, mediaType: ['image', 'video'], sourceType: ['album', 'camera'], success: result => this.uploadNoteMedia(result.tempFiles || []) }); },
-  async uploadNoteMedia(files) {
-    const project = this.data.selectedProject; if (!project || !files.length) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
-    try {
-      const uploaded = [];
-      for (const file of files) {
-        const asset = assetOf(await api.uploadProjectNoteMedia(project.project_id, file.tempFilePath));
-        uploaded.push(Object.assign({}, asset, { local_path: file.tempFilePath }));
+  // 失败队列按「账号+项目+草稿」分开保存：切换笔记不丢、连续新建不串、刷新竞态不覆盖。
+  mediaFailureOwnerKey() {
+    const project = this.data.selectedProject;
+    if (!project) return '';
+    const noteID = this.data.note && this.data.note.note_id || this._selectedNoteID || '';
+    return draftAccount() + '|' + project.project_id + '|' + (noteID ? 'note:' + noteID : 'draft:' + this.currentDraftInstanceID());
+  },
+  mediaFailureStore() { return this._noteMediaFailures || (this._noteMediaFailures = {}); },
+  mediaFailuresFor(ownerKey) {
+    if (!ownerKey) return [];
+    const store = this.mediaFailureStore();
+    return Array.isArray(store[ownerKey]) ? store[ownerKey] : [];
+  },
+  setMediaFailures(ownerKey, items) {
+    if (!ownerKey) return;
+    const store = this.mediaFailureStore();
+    // 先删再写：刷新该归属的最近性。空队列不占名额，否则成功批次会挤掉真实的失败队列。
+    delete store[ownerKey];
+    if (!items.length) return;
+    store[ownerKey] = items;
+    const keys = Object.keys(store);
+    // 只保留最近 10 个有失败项的归属，避免随草稿切换无限增长。
+    if (keys.length > 10) keys.slice(0, keys.length - 10).forEach(key => { if (key !== ownerKey) delete store[key]; });
+  },
+  adoptMediaFailureQueue(noteID) {
+    const project = this.data.selectedProject;
+    if (!project || !noteID) return;
+    const store = this.mediaFailureStore();
+    const prefix = draftAccount() + '|' + project.project_id + '|';
+    const draftKey = prefix + 'draft:' + this.currentDraftInstanceID();
+    const noteKey = prefix + 'note:' + noteID;
+    const items = store[draftKey];
+    if (!items || !items.length) return;
+    store[noteKey] = (store[noteKey] || []).concat(items);
+    delete store[draftKey];
+  },
+  // 只读取当前归属的队列，不创建也不销毁其它归属。
+  publishMediaFailures() {
+    const ownerKey = this.mediaFailureOwnerKey();
+    const items = this.mediaFailuresFor(ownerKey);
+    // 只看不建：浏览其它笔记不得凭空创建空归属，避免把真实失败挤掉；有关联时刷新最近性。
+    if (ownerKey && items.length) {
+      const store = this.mediaFailureStore();
+      delete store[ownerKey];
+      store[ownerKey] = items;
+    }
+    const retryCount = Math.min(items.length, 9);
+    this.setData({
+      mediaUploadFailures: items.slice(), mediaFailureSummary: items.map(item => item.name).join('、'),
+      mediaRetryLabel: items.length > 9 ? `重试下一批 ${retryCount} 个（共 ${items.length} 个待处理）` : `重试失败的 ${items.length} 个素材`,
+    });
+  },
+  // 失效回调先把已成功素材挂到对应归属，返回该草稿时再接纳，避免「队列删了、素材也没了」。
+  stashPendingMedia(ownerKey, uploadedFiles) {
+    if (!ownerKey || !uploadedFiles.length) return;
+    const store = this._noteMediaPending || (this._noteMediaPending = {});
+    const assets = uploadedFiles.map(item => Object.assign({}, item.asset, { local_path: item.file.tempFilePath }));
+    store[ownerKey] = (store[ownerKey] || []).concat(assets);
+    // 挂起素材同样按归属有界，避免被放弃的草稿长期滞留。
+    const keys = Object.keys(store);
+    if (keys.length > 10) keys.slice(0, keys.length - 10).forEach(key => delete store[key]);
+  },
+  acceptPendingMedia() {
+    const ownerKey = this.mediaFailureOwnerKey();
+    const store = this._noteMediaPending;
+    if (!ownerKey || !store || !store[ownerKey] || !store[ownerKey].length) return;
+    const assets = store[ownerKey];
+    delete store[ownerKey];
+    this.setData({ noteMedia: [...this.data.noteMedia, ...assets], notice: '已补回后台完成的上传素材。' });
+  },
+  chooseNoteMedia() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.busy || this._noteMediaUpload || this._mediaPicker) return;
+    // 选择器发起时绑定身份：原生 success 与 onShow 顺序不固定，迟到回调用原身份校验，避免跨账号上传。
+    const picker = { token: this._token, projectID: project.project_id, instanceID: this.currentDraftInstanceID(), generation: this._protectedGeneration || 0 };
+    this._mediaPicker = picker;
+    const release = () => { if (this._mediaPicker === picker) this._mediaPicker = null; };
+    wx.chooseMedia({
+      count: 9, mediaType: ['image', 'video'], sourceType: ['album', 'camera'],
+      success: result => {
+        if (this._mediaPicker !== picker) return;
+        release();
+        const sameAccount = picker.token === this._token && picker.token === String(wx.getStorageSync('token') || '');
+        const sameDraft = sameAccount && (this._protectedGeneration || 0) === picker.generation
+          && !!this.data.selectedProject && this.data.selectedProject.project_id === picker.projectID
+          && this.currentDraftInstanceID() === picker.instanceID
+          && !this.data.busy && !this.data.historyMode && !this.data.bodyReadOnly;
+        if (!sameDraft) return;
+        this.uploadNoteMedia(result.tempFiles || []);
+      },
+      fail: () => { release(); },
+    });
+  },
+  // 串行逐文件上传：单个失败只进可重试队列，已成功的保留，剩余文件继续尝试。
+  async uploadNoteMedia(files, retryPaths) {
+    const project = this.data.selectedProject;
+    // 不允许并发重入：同一时间只允许一个上传批次持有锁与队列归属。
+    if (!project || !files.length || this._noteMediaUpload || this.data.busy) return;
+    const ownerKey = this.mediaFailureOwnerKey();
+    const queue = this.mediaFailuresFor(ownerKey);
+    // 批次身份：账号/项目/草稿实例三元绑定。换账号后旧批次必须停止，不能用新账号凭证发旧账号的文件。
+    const operationID = 'note-media-' + Date.now() + '-' + (this._mediaUploadSequence = (this._mediaUploadSequence || 0) + 1);
+    const batch = { operationID, token: this._token, projectID: project.project_id, instanceID: this.currentDraftInstanceID(), generation: this._protectedGeneration || 0 };
+    const batchValid = () => !this._unloaded && (this._protectedGeneration || 0) === batch.generation;
+    const ownsUpload = () => !!(this._noteMediaUpload && this._noteMediaUpload.operationID === operationID);
+    const sameAccount = () => batch.token === this._token && batch.token === String(wx.getStorageSync('token') || '');
+    const sameBatch = () => batchValid() && sameAccount()
+      && !!this.data.selectedProject && this.data.selectedProject.project_id === batch.projectID
+      && this.currentDraftInstanceID() === batch.instanceID
+      && !this.data.historyMode && !this.data.bodyReadOnly;
+    const releaseBusy = () => { if (!ownsUpload()) return; this._noteMediaUpload = null; this.setData({ busy: false }); };
+    this._noteMediaUpload = batch;
+    this.setData({ busy: true, error: '', notice: '' });
+    this.publishMediaFailures();
+    const uploadedFiles = [], failures = [];
+    const commit = () => {
+      // 成功项（含重试成功）从队列移除；失败项合并去重并刷新原因。
+      const succeeded = new Set(uploadedFiles.map(item => item.file.tempFilePath));
+      let remaining = queue.filter(item => !succeeded.has(item.tempFilePath));
+      for (const item of failures) {
+        const existing = remaining.find(entry => entry.tempFilePath === item.tempFilePath);
+        if (existing) Object.assign(existing, item); else remaining.push(item);
       }
-      if (this.current(epoch)) this.setData({ noteMedia: [...this.data.noteMedia, ...uploaded], busy: false, notice: '私有素材已上传，仅用于当前项目笔记。' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有素材上传失败' }); }
+      // 重试轮转：本轮仍失败的项移到未尝试项之后，避免队首持续失败把所有后续项锁死。
+      // 轮转集合按操作传入（闭包），旧重试收尾不会清掉新重试的集合。
+      const retried = retryPaths;
+      if (retried && retried.size) {
+        const retriedFailures = remaining.filter(item => retried.has(item.tempFilePath));
+        const untouched = remaining.filter(item => !retried.has(item.tempFilePath));
+        remaining = untouched.concat(retriedFailures);
+      }
+      this.setMediaFailures(ownerKey, remaining.slice());
+      return remaining;
+    };
+
+    for (let position = 0; position < files.length; position += 1) {
+      if (!sameBatch()) break;
+      const file = files[position];
+      try {
+        const asset = assetOf(await api.uploadProjectNoteMedia(project.project_id, file.tempFilePath));
+        uploadedFiles.push({ file, asset });
+      } catch (error) {
+        const status = Number(error && error.statusCode);
+        // 上传接口直接返回权限终态：仅当批次仍是当前有效操作时才作废并清空；迟到响应不得动当前状态。
+        if ([401, 403, 404].includes(status)) {
+          if (sameAccount() && batchValid() && ownsUpload()) this.handleNoteMediaAccessFailure(status);
+          break;
+        }
+        // 身份失效导致的失败不计入失败数；未尝试的文件也不会走到这里。
+        if (!sameBatch()) break;
+        failures.push({ tempFilePath: file.tempFilePath, fileType: file.fileType || '', name: uploadFileName(file, position), message: uploadFailureMessage(error) });
+      }
+    }
+
+    // 换账号/卸载后不得再写入任何存储，避免旧回调重建已清空的状态。
+    // 卸载/撤权（clearProtected）后批次已废止：不得再写队列、挂起素材、发布或改 busy。
+    const accountValid = batchValid() && sameAccount();
+    const remaining = accountValid ? commit() : null;
+    const sameDraft = accountValid && !!this.data.selectedProject && this.data.selectedProject.project_id === batch.projectID
+      && this.currentDraftInstanceID() === batch.instanceID && !this.data.historyMode && !this.data.bodyReadOnly;
+    if (sameDraft && ownsUpload()) {
+      this._noteMediaUpload = null;
+      const uploaded = uploadedFiles.map(item => Object.assign({}, item.asset, { local_path: item.file.tempFilePath }));
+      const historyCount = Math.max(0, remaining.length - failures.length);
+      const baseNotice = `已上传 ${uploaded.length} 个，${failures.length} 个失败${failures.length ? '，可重试' : ''}`;
+      this.setData({
+        noteMedia: [...this.data.noteMedia, ...uploaded], busy: false,
+        notice: historyCount ? `${baseNotice}（另有 ${historyCount} 个历史失败待重试）` : baseNotice,
+        error: remaining.length && !uploaded.length ? remaining[0].message : '',
+      });
+      this.publishMediaFailures();
+      if (failures.length) wx.showToast({ title: `${failures.length} 个素材上传失败`, icon: 'none' });
+      return;
+    }
+    // 项目/草稿切走但账号未变：已成功素材挂到原草稿名下等待接纳。
+    if (accountValid && ownerKey && uploadedFiles.length) this.stashPendingMedia(ownerKey, uploadedFiles);
+    if (ownsUpload()) {
+      this._noteMediaUpload = null;
+      // 页面未卸载时释放自己的锁；换账号但尚未 onShow 也允许解锁（不写受保护数据、不重建队列）。
+      if (!this._unloaded) this.setData({ busy: false });
+    }
+    if (accountValid) this.publishMediaFailures();
+  },
+  // 上传接口返回权限终态（401/403/404）时与重验失败同口径：失效批次、清空受保护内容。
+  handleNoteMediaAccessFailure(status) {
+    this._loaded = false;
+    this.clearProtected();
+    this.setData({ loginRequired: status === 401, projectLoadFailed: status !== 401, error: status === 401 ? '' : '项目访问权限已变更，请重新加载或联系管理员。' });
+  },
+  async retryNoteMediaFailures() {
+    const failures = (this.data.mediaUploadFailures || []).slice();
+    if (!failures.length || this.data.busy) return;
+    // 单次批量上限 9：历史失败超过 9 项时分轮重试，保证本批 N+M ≤ 9，其余继续作为历史展示。
+    const batch = failures.slice(0, 9);
+    return this.uploadNoteMedia(batch.map(item => ({ tempFilePath: item.tempFilePath, fileType: item.fileType })), new Set(batch.map(item => item.tempFilePath)));
   },
   removeNoteMedia(event) { if (!this.data.bodyReadOnly) { const id = String(event.currentTarget.dataset.id || ''); this.setData({ noteMedia: this.data.noteMedia.filter(item => mediaID(item) !== id) }); } },
   async freezeProjectNoteVersion() {
