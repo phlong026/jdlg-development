@@ -31,6 +31,13 @@
 
 ## 三、后端增量部署步骤
 
+> 本地已按提交 `16f89fd` 预构建可部署产物（供发布时复用）：
+> - 产物：`/tmp/jdlg-build/applinux-vcs`（Linux amd64，静态）
+> - SHA-256：`e1d7e6a84c582ef5348b275ceddc2abb2c37f55a4b75abf0f138283e6767566f`
+> - `go version -m` 显示 `vcs.revision=16f89fd67a2b215f6aa59c03dc0e55c1b0939ade`、工作区干净
+> - 注意：必须在干净的主检出目录构建（worktree 构建不会嵌入 VCS 信息）
+
+
 1. **构建**（工作区必须干净，记录提交号）：
    ```bash
    cd service
