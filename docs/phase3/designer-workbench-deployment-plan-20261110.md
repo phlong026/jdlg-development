@@ -34,7 +34,7 @@
 1. **构建**（工作区必须干净，记录提交号）：
    ```bash
    cd service
-   GOCACHE=/tmp/jdlg-gocache GOMODCACHE=/tmp/jdlg-gomod GOOS=linux GOARCH=amd64 go build -o bin/applinux ./cmd/...   # 以实际 cmd 入口为准
+   GOCACHE=/tmp/jdlg-gocache GOMODCACHE=/tmp/jdlg-gomod GOOS=linux GOARCH=amd64 go build -o bin/applinux .   # 入口为 service/main.go
    ```
 2. **打包 + 清单**：用 `ops/phase3-release/binary_release.py` 生成发布包与 `manifest.json`（含 SHA-256、提交号、`vcs.modified=false`）。
 3. **上传**：`scp/rsync` 发布包到 `root@162.14.210.252:/root/jdlg-content-release/`，服务器侧核对 SHA-256。
