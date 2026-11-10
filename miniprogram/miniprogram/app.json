@@ -478,6 +478,12 @@
       "packages": [
         "pages/generatedetails"
       ]
+    },
+    "pages/projectnotes/projectnotes": {
+      "network": "wifi",
+      "packages": [
+        "pages/contentwriting"
+      ]
     }
   },
   "window": {
