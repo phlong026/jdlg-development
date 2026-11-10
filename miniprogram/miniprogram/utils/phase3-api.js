@@ -142,14 +142,14 @@ function downloadSharedProjectNoteWord(token) {
 function uploadProjectNoteMedia(projectID, filePath) {
   const path = projectNotePath('/projects/' + encodeURIComponent(projectID) + '/media');
   return new Promise((resolve, reject) => wx.uploadFile({
-    url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 60000,
+    url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 900000,
     success(response) {
       let data = {};
       try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(Object.assign(new Error('私有素材上传响应无法读取'), { statusCode: response.statusCode })); return; }
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
       else reject(Object.assign(new Error(data.msg || '私有素材上传失败'), { statusCode: response.statusCode }));
     },
-    fail() { reject(new Error('私有素材上传失败')); },
+    fail(error) { reject(Object.assign(new Error(error && error.errMsg ? '网络异常：' + error.errMsg : '网络异常，请检查网络后重试'), { networkError: true, errMsg: String(error && error.errMsg || '') })); },
   }));
 }
 
