@@ -735,7 +735,7 @@ Page({
     const members = (result.members || []).map(memberAttribution), available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
     const confirmerChoices = [{ actor_id: '', label: '选择确认人' }, ...available.map(item => Object.assign({}, item, { label: memberLabel(item) }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
-    const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
+    const historyNotice = requested ? '通知对应的固定版本，草稿不会在此修改。' : version && !note ? '历史草稿未加载，仅显示版本摘要。' : '';
     const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
     const navigationTitles = { detail: '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
@@ -752,7 +752,7 @@ Page({
       feedbacks, selectedFeedback, feedbackID: selectedFeedback && selectedFeedback.feedback_id || '', feedbackReply: '',
       confirmations: targetID ? (result.confirmations || []).filter(item => item.version_id === targetID).map(item => Object.assign({}, item, { confirmed_at: localTime(item.confirmed_at) })) : [],
       truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
-      error: share && !share.share_token ? '本机未保存该分享的入口凭证（服务端只保存哈希）。如需预览请撤回后重新创建分享，或在本机首次生成时打开预览。' : '',
+      error: share && !share.share_token && pageView === 'version' ? '分享凭证未同步，如需预览请重新生成分享。' : '',
     }, () => {
       // 先用服务端结果建立未修改基线，再接纳后台素材，使其保持「未保存」状态。
       this._noteNewCoverID = '';
@@ -934,6 +934,18 @@ Page({
         notice: '邀请已撤销。',
       });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '邀请撤销失败' }); }
+  },
+  async revokeAllProjectInvitations() {
+    if (this.data.busy || !(this.data.memberInvitations || []).length) return;
+    const items = this.data.memberInvitations.slice(), epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      for (const item of items) await api.revokeProjectInvitation(this.data.selectedProject && this.data.selectedProject.project_id, item.invitation_id);
+      if (!this.current(epoch)) return;
+      this.setData({ memberInvitations: [], busy: false, notice: '有效邀请已全部撤销。' });
+    } catch (error) {
+      if (this.current(epoch)) this.setData({ busy: false, error: error.message || '撤销邀请失败' });
+    }
   },
   async approveProjectJoinRequest(event) {
     const project = this.data.selectedProject, requestID = String(event && event.currentTarget.dataset.id || '');
