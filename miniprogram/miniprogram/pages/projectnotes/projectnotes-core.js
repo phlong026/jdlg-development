@@ -24,6 +24,24 @@ const blankProtected = () => ({
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
+// 分享入口凭证只在本机保存（服务端只存 token 哈希），用于同一设备重进页面后继续预览/复制。
+const SHARE_TOKEN_CACHE_KEY = 'project_note_share_tokens_v1';
+const shareTokenCache = () => {
+  try { const value = wx.getStorageSync(SHARE_TOKEN_CACHE_KEY); return value && typeof value === 'object' ? value : {}; } catch (_) { return {}; }
+};
+const rememberShareToken = share => {
+  if (!share || !share.share_id || !share.share_token) return;
+  try { const cache = shareTokenCache(); cache[share.share_id] = { token: String(share.share_token), saved_at: Date.now() }; wx.setStorageSync(SHARE_TOKEN_CACHE_KEY, cache); } catch (_) {}
+};
+const cachedShareToken = shareID => {
+  if (!shareID) return '';
+  const entry = shareTokenCache()[shareID];
+  return entry && typeof entry.token === 'string' ? entry.token : '';
+};
+const forgetShareToken = shareID => {
+  if (!shareID) return;
+  try { const cache = shareTokenCache(); delete cache[shareID]; wx.setStorageSync(SHARE_TOKEN_CACHE_KEY, cache); } catch (_) {}
+};
 const assetOf = item => item && item.asset ? item.asset : item;
 // T2.4 客户端预检：与服务端边界对齐（P4：图 20 MiB / 视频 500 MiB / 累计 50 项）。
 const NOTE_MEDIA_IMAGE_LIMIT = 20 * 1024 * 1024;
@@ -713,6 +731,7 @@ Page({
     const selectedFeedback = feedbacks.find(item => item.feedback_id === this._targetFeedbackID) || null;
     let share = targetID && result.active_share && result.active_share.version_id === targetID ? result.active_share : targetID ? shares.find(item => !item.revoked && item.version_id === targetID) || null : null;
     if (share && this._issuedShare && this._issuedShare.share_token && share.share_id === this._issuedShare.share_id) share = Object.assign({}, share, { share_token: this._issuedShare.share_token });
+    if (share && !share.share_token) { const saved = cachedShareToken(share.share_id); if (saved) share = Object.assign({}, share, { share_token: saved }); }
     const members = (result.members || []).map(memberAttribution), available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
     const confirmerChoices = [{ actor_id: '', label: '选择确认人' }, ...available.map(item => Object.assign({}, item, { label: memberLabel(item) }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
@@ -733,7 +752,7 @@ Page({
       feedbacks, selectedFeedback, feedbackID: selectedFeedback && selectedFeedback.feedback_id || '', feedbackReply: '',
       confirmations: targetID ? (result.confirmations || []).filter(item => item.version_id === targetID).map(item => Object.assign({}, item, { confirmed_at: localTime(item.confirmed_at) })) : [],
       truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
-      error: share && !share.share_token ? '该分享入口凭证不再保存在当前会话中，请撤回后重新生成。' : '',
+      error: share && !share.share_token ? '本机未保存该分享的入口凭证（服务端只保存哈希）。如需预览请撤回后重新创建分享，或在本机首次生成时打开预览。' : '',
     }, () => {
       // 先用服务端结果建立未修改基线，再接纳后台素材，使其保持「未保存」状态。
       this._noteNewCoverID = '';
@@ -1551,13 +1570,13 @@ Page({
       const share = await api.createProjectNoteShare(version.version_id, attempt.expiresAt, attempt.key);
       if (!this.current(epoch)) return;
       if (!share.share_token) { this.setData({ activeShare: share, busy: false, error: '分享已存在，但首次返回的入口凭证未保存。请撤回该分享后重新生成。' }); return; }
-      this._issuedShare = share; this._shareAttempt = null; this.setData({ activeShare: share, busy: false, notice: '私密分享入口已生成，只有受邀账号登录后可查看。' });
+      this._issuedShare = share; this._shareAttempt = null; rememberShareToken(share); this.setData({ activeShare: share, busy: false, notice: '私密分享入口已生成，只有受邀账号登录后可查看。' });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '分享创建失败，可直接重试本次请求。' }); }
   },
   async revokeProjectNoteShare() {
     const share = this.data.activeShare; if (!share || this.data.busy) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
-    try { await api.revokeProjectNoteShare(share.share_id); if (!this.current(epoch)) return; if (this._issuedShare && this._issuedShare.share_id === share.share_id) this._issuedShare = null; this._shareAttempt = null; this.setData({ activeShare: null, busy: false, notice: '分享已撤回，原入口立即失效。' }); }
+    try { await api.revokeProjectNoteShare(share.share_id); if (!this.current(epoch)) return; if (this._issuedShare && this._issuedShare.share_id === share.share_id) this._issuedShare = null; forgetShareToken(share.share_id); this._shareAttempt = null; this.setData({ activeShare: null, busy: false, notice: '分享已撤回，原入口立即失效。' }); }
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '分享撤回失败' }); }
   },
   copySharePath() { const token = this.data.activeShare && this.data.activeShare.share_token; if (token) wx.setClipboardData({ data: 'pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(token) }); },
