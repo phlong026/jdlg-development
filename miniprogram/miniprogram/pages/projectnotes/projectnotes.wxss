@@ -1,4 +1,5 @@
 @import "/components/project-note-document/note-document.wxss";
+@import "/components/content-presentation/content-presentation.wxss";
 
 page{background:#f8f5ef;color:#2f241a}.page{min-height:100vh;padding:28rpx 28rpx 120rpx;box-sizing:border-box}.page-editor{padding-bottom:220rpx}.page button{margin:0;box-sizing:border-box;font-weight:inherit;line-height:1.3}.page button::after{border:0}
 button{display:flex;min-height:82rpx;align-items:center;justify-content:center;border-radius:16rpx;font-size:27rpx;line-height:1.2}button::after{border:0}

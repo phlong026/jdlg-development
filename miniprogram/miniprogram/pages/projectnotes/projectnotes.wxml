@@ -1,5 +1,6 @@
 <block wx:if="{{__profileAccessMounted}}">
 <import src="/components/project-note-document/note-document.wxml" />
+<import src="/components/content-presentation/content-presentation.wxml" />
 <navigation-bar title="{{navigationTitle}}" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" background="#f8f5ef" />
 <view class="page {{pageView === 'editor' ? 'page-editor' : ''}}">
   <view wx:if="{{loading}}" class="state">正在加载…</view>
@@ -72,7 +73,7 @@
         <view class="preview-heading"><text class="preview-eyebrow">客户阅读效果</text><text class="preview-title">{{noteTitle}}</text><text class="project-meta">{{selectedProject.name}} · {{note ? '草稿修订 ' + (note.revision || 1) : '尚未保存'}}</text></view>
         <view wx:if="{{previewLoading}}" class="card preview-state">正在加载私有素材…</view>
         <view wx:elif="{{previewError}}" class="card preview-state preview-error"><text>{{previewError}}</text><button class="secondary" bindtap="previewNote" disabled="{{busy}}">重新预览</button></view>
-        <view wx:else class="paper note-preview-paper"><template is="note-document" data="{{format: previewBodyFormat, body: previewBody, blocks: previewBlocks, media: previewMedia, groups: previewMediaGroups, galleryPositions: galleryPositions, allowAttachments: false}}" /></view>
+        <view wx:else class="paper note-preview-paper"><template wx:if="{{previewPresentation}}" is="content-presentation" data="{{view: previewPresentation, tracking: false, mediaErrors: previewMediaErrors, videoStarted: previewVideoStarted}}" /><template wx:else is="note-document" data="{{format: previewBodyFormat, body: previewBody, blocks: previewBlocks, media: previewMedia, groups: previewMediaGroups, galleryPositions: galleryPositions, allowAttachments: false}}" /></view>
       </block>
 
       <view wx:if="{{keyboardHeight === 0}}" class="editor-dock">

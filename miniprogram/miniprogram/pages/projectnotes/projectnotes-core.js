@@ -3,6 +3,7 @@
 const api = require('../../utils/phase3-api');
 const { renderArticleDocument } = require('../../utils/article-document');
 const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
+const { buildContentPresentation } = require('../../utils/content-presentation');
 const { startAIStream } = require('../../utils/ai-stream');
 const { ANTI_FABRICATION_CLAUSE, noteWritingPrompt } = require('../../utils/writing-policy');
 
@@ -17,6 +18,7 @@ const blankProtected = () => ({
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
   editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
+  previewPresentation: null, previewMediaErrors: {}, previewVideoStarted: {},
   previewMediaGroups: [], versionMediaGroups: [], galleryPositions: {}, mediaUploadFailures: [], mediaFailureSummary: '', mediaRetryLabel: '',
   mediaPermissionDenied: false, aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '',
 });
@@ -281,7 +283,7 @@ Page({
     wx.navigateTo({ url: '/pages/projectpackage/projectpackage?project_id=' + encodeURIComponent(project.project_id) });
   },
   openNote(event) {
-    const id = String(event.currentTarget.dataset.id || '');
+    const id = String(event.currentTarget.dataset.id || event.currentTarget.dataset.mediaId || '');
     if (this._noteLongPress && this._noteLongPress.id === id && Date.now() < this._noteLongPress.until) { this._noteLongPress = null; return; }
     const index = this.data.notes.findIndex(item => item.note_id === id);
     if (index >= 0) return this.selectNote({ detail: { value: index } });
@@ -364,6 +366,28 @@ Page({
   onNoteGalleryChange(event) {
     this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
   },
+  onContentGalleryChange(event) {
+    if (this.data.previewPresentation) this.setData({ 'previewPresentation.galleryIndex': Number(event.detail.current) || 0 });
+  },
+  playContentVideo(event) {
+    const key = String(event.currentTarget.dataset.playerKey || '');
+    if (key) this.setData({ ['previewVideoStarted.' + key]: true });
+  },
+  mediaError(event) {
+    const key = String(event.currentTarget.dataset.errorKey || '');
+    if (key) this.setData({ ['previewMediaErrors.' + key]: '素材加载失败，可重试' });
+  },
+  retryMedia(event) {
+    const id = String(event.currentTarget.dataset.mediaId || '');
+    if (!id) return;
+    this.setData({ noteMedia: (this.data.noteMedia || []).map(item => mediaID(item) === id ? Object.assign({}, item, { local_path: '', preview_error: '', preview_loading: false }) : item) }, () => this.previewNote());
+  },
+  videoState() {},
+  onContentVideoMetadata() {},
+  videoProgress() {},
+  videoRate() {},
+  videoFullscreen() {},
+  toggleContentDescription() {},
   onResize(event) {
     const size = event.size || {}, windowInfo = { windowWidth: size.windowWidth, windowHeight: size.windowHeight };
     const previewMedia = fitNoteMedia(this.data.previewMedia, windowInfo), versionMedia = fitNoteMedia(this.data.versionMedia, windowInfo);
@@ -399,7 +423,19 @@ Page({
       if (!blocks.length && draft.body_format === 'article_v2' && draft.body && String(draft.body).trim() && !/^\s*[{\[]/.test(String(draft.body))) {
         blocks = [{ kind: 'paragraph', text: String(draft.body), className: 'article-paragraph', key: 'preview-fallback' }];
       }
-      this.setData({ previewLoading: false, previewBodyFormat: draft.body_format, previewBody: draft.body, previewBlocks: blocks, previewMedia: presentation.media, previewMediaGroups: presentation.groups });
+      // 图文/视频统一复用内容创作的阅读呈现（小红书图集 / 视频作品），纯文字仍用 note-document。
+      const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      const viewMedia = (this.data.noteMedia || []).map(item => ({ media_id: mediaID(item), kind: item.kind, url: item.local_path || '', width: item.width, height: item.height, caption: item.caption || '' }));
+      const images = viewMedia.filter(item => item.kind === 'image');
+      const videos = viewMedia.filter(item => item.kind === 'video');
+      let previewPresentation = null;
+      if (videos.length) {
+        const poster = images[0];
+        previewPresentation = buildContentPresentation({ title: draft.title || '', body: draft.body || '', body_format: draft.body_format || 'plain', presentation: 'video', cover: poster ? { media_id: poster.media_id, url: poster.url } : null, media: [videos[0]].concat(images) }, [videos[0]].concat(images), windowInfo, { prefix: 'note-preview' });
+      } else if (images.length) {
+        previewPresentation = buildContentPresentation({ title: draft.title || '', body: draft.body || '', body_format: draft.body_format || 'plain', presentation: 'gallery', media: images }, images, windowInfo, { prefix: 'note-preview' });
+      }
+      this.setData({ previewLoading: false, previewBodyFormat: draft.body_format, previewBody: draft.body, previewBlocks: blocks, previewMedia: presentation.media, previewMediaGroups: presentation.groups, previewPresentation, previewMediaErrors: {}, previewVideoStarted: {} });
     } catch (error) {
       if (current()) this.setData({ previewLoading: false, previewError: error.message || '预览加载失败，内容已保留，请重试。' });
     }

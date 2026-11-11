@@ -17,6 +17,7 @@ function pageHarness(api) {
   const context = { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/phase3-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
+    if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
     if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
     if (id === '../../utils/ai-stream') return { startAIStream: () => ({ abort() {} }) };
     if (id === '../../utils/writing-policy') return require(path.join(root, 'utils/writing-policy.js'));
