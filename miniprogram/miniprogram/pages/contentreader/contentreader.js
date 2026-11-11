@@ -71,45 +71,26 @@ Page({
    this.setData({consentNotice:configuration.privacy_notice||'',consentAvailable,consentUnavailable:consentUnavailable&&!consentAvailable,consentChoicePending:consentAvailable&&!choice.resolved,consented:choice.accepted});
    if(sequence!==this.loadSequence)return;
    const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync();
-   // 封面很小，先解析出来让分享卡片/海报立即可用；大图与视频随后在后台解析。
+   // 封面与正文一起就绪后再渲染：视频走签名直链可立即流式播放，不再整段下载。
    if(content.cover){const coverSource=api.mediaURL(content.cover.url);try{content.cover={...content.cover,url:coverSource?await resolveProtectedMediaURL(coverSource):''};}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;content.cover={...content.cover,url:''};}}
    if(sequence!==this.loadSequence)return;
-   // 先渲染文字与占位素材，素材在后台按图片优先/视频靠后的顺序解析，避免大视频阻塞正文展示。
-   const media=(content.media||[]).filter(asset=>['image','video'].includes(asset.kind)).map(asset=>({...asset,source_url:api.mediaURL(asset.url),url:''}));
+   const media=await Promise.all((content.media||[]).filter(asset=>['image','video'].includes(asset.kind)).map(async asset=>{
+    const source=api.mediaURL(asset.url);
+    if(!/^https:\/\//.test(source||''))return {...asset,url:'',preview_error:'素材地址不可用'};
+    if(asset.kind==='video'&&typeof api.signedMediaURL==='function'){
+     try{const signed=await api.signedMediaURL(asset.media_id);if(signed)return {...asset,url:signed};}catch(_){}
+    }
+    try{return {...asset,url:await resolveProtectedMediaURL(source)};}
+    catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;return {...asset,url:'',preview_error:'素材加载失败'};}
+   }));
+   if(sequence!==this.loadSequence)return;
    const presentationView=buildContentPresentation(content,media,window,presentationOptions(window,this.data.presentationView&&this.data.presentationView.galleryIndex,false));
    assertUsableContent(content,presentationView);
-   this.setData({content,media,articleBlocks:presentationView.blocks,presentationView,mediaErrors:{},loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());this.refreshPosterAvailability(content,sequence,posterCapabilitySequence);});
-   await this.resolveReaderMedia(content,media,sequence,window);
+   const articleBlocks=presentationView.blocks;
+   const mediaErrors={};presentationView.media.filter(item=>item.preview_error||!item.url).forEach(item=>{mediaErrors[item.errorKey]=item.preview_error||'素材暂不可用，请重试。';});
+   this.setData({content,media,articleBlocks,presentationView,mediaErrors,loading:false,contentReady:true},()=>{this.observePlayers();if(this.pageVisible&&wx.showShareMenu)wx.showShareMenu({menus:['shareAppMessage','shareTimeline']});tracking.preheatTimelineShare(this,this.timelineShareValue());this.refreshPosterAvailability(content,sequence,posterCapabilitySequence);});
   }catch(error){if(sequence!==this.loadSequence)return;if(quiet&&!clearsVerifiedContent(error)){this.setData({loading:false,error:refreshErrorMessage(error)});return;}this.setData({loading:false,content:null,media:[],articleBlocks:[],presentationView:null,contentReady:false,error:error&&error.code==='CONTENT_INVALID'?error.message:'内容暂不可访问，可能已撤回或无权限。请重试。'});}
  },
- async resolveReaderMedia(content,media,sequence,window){
-  const current=()=>sequence===this.loadSequence;
-  let working=media.map(item=>({...item}));
-  const commit=()=>{if(!current())return;const view=buildContentPresentation(this.data.content,working,window,presentationOptions(window,this.data.presentationView&&this.data.presentationView.galleryIndex,false));const errors={};view.media.filter(item=>item.preview_error||!item.url).forEach(item=>{errors[item.errorKey]=item.preview_error||'素材暂不可用，请重试。';});this.setData({media:working,presentationView:view,articleBlocks:view.blocks,mediaErrors:errors});};
-  const resolveOne=async item=>{
-   if(!/^https:\/\//.test(item.source_url||'')){item.preview_error='素材地址不可用';return;}
-   try{item.url=await resolveProtectedMediaURL(item.source_url);item.preview_error='';}
-   catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;item.preview_error='素材加载失败';}
-  };
-  const images=working.filter(item=>item.kind==='image'),videos=working.filter(item=>item.kind==='video');
-  let cursor=0,identityError=null;
-  const worker=async()=>{while(cursor<images.length){if(identityError)return;const item=images[cursor++];try{await resolveOne(item);}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED'){identityError=error;return;}throw error;}commit();}};
-  try{await Promise.all([worker(),worker(),worker()]);}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')identityError=error;else throw error;}
-  if(identityError)throw identityError;
-  for(const item of videos){
-   if(!current())return;
-   // 视频优先用短时签名直链交给原生播放器流式播放（支持 Range），避免整段下载。
-   let streamed=false;
-   if(typeof api.signedMediaURL==='function'){
-    try{const signed=await api.signedMediaURL(item.media_id);if(signed&&current()){item.url=signed;item.preview_error='';streamed=true;commit();}}catch(_){streamed=false;}
-   }
-   if(!streamed){
-    try{await resolveOne(item);}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;return;}
-    commit();
-   }
-  }
- },
-
  renderedMedia(){return this.data.presentationView&&Array.isArray(this.data.presentationView.media)?this.data.presentationView.media:[];},
  rebuildPresentation(galleryIndex){if(!this.data.content)return;const window=wx.getWindowInfo?wx.getWindowInfo():wx.getSystemInfoSync();const presentationView=buildContentPresentation(this.data.content,this.data.media,window,presentationOptions(window,galleryIndex,this.data.presentationView&&this.data.presentationView.descriptionExpanded));this.setData({presentationView,articleBlocks:presentationView.blocks});},
  toggleContentDescription(){if(!this.data.presentationView||this.data.presentationView.kind!=='video')return;this.setData({'presentationView.descriptionExpanded':!this.data.presentationView.descriptionExpanded});},
