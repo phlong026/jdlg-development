@@ -37,7 +37,7 @@ test('native shared reader displays title and body before analytics and never ex
   assert.match(output, /乡墅方案标题/); assert.match(output, /房屋方案完整正文/);
   assert.ok(output.indexOf('房屋方案完整正文') < output.indexOf('访问分析说明'));
   assert.doesNotMatch(output, /链接导入的可编辑草稿|请在发布前核对/);
-  assert.match(output, /复制原文/);
+  assert.doesNotMatch(output, /复制原文/, '分享阅读页不再展示内容来源块');
   const gated = JSON.stringify(render({ ...data, __profileAccessMounted: false }));
   assert.doesNotMatch(gated, /乡墅方案标题|房屋方案完整正文/);
   const invalid = JSON.stringify(render({ ...data, contentReady: false, error: '内容数据不完整，请重试。' }));
