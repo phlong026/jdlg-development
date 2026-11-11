@@ -14,7 +14,7 @@ const blankProtected = () => ({
   projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
   members: [], activeMembers: [], joinRequests: [], memberInvitations: [], requestsLoading: false, confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '',
   memberInvitation: null, memberInvitationPath: '',
-  note: null, noteTitle: '', noteBody: '', bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
+  note: null, noteTitle: '', noteBody: '', noteDirty: false, bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
   editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
@@ -392,8 +392,8 @@ Page({
   setProjectName(event) { this.setData({ projectName: value(event) }); },
   setOwnerID(event) { const index = Number(event.detail.value) || 0, choice = this.data.ownerChoices[index]; this.setData({ ownerIndex: index, ownerID: choice && choice.owner_id || this.data.owners[index] || '' }); },
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
-  setNoteTitle(event) { this.setData({ noteTitle: value(event) }); },
-  setNoteBody(event) { if (!this.data.bodyReadOnly) { this._noteCursor = Number(event.detail && event.detail.cursor); this.setData({ noteBody: String(event.detail && event.detail.value || '') }); } },
+  setNoteTitle(event) { this.setData({ noteTitle: value(event) }, () => this.setData({ noteDirty: this.hasUnsavedChanges() })); },
+  setNoteBody(event) { if (!this.data.bodyReadOnly) { this._noteCursor = Number(event.detail && event.detail.cursor); this.setData({ noteBody: String(event.detail && event.detail.value || '') }, () => this.setData({ noteDirty: this.hasUnsavedChanges() })); } },
   onNoteBodyBlur(event) { this._noteCursor = Number(event.detail && event.detail.cursor); },
   onNoteKeyboardHeight(event) { this.setData({ keyboardHeight: Math.max(0, Number(event.detail && event.detail.height) || 0) }); },
   onNoteGalleryChange(event) {
@@ -766,6 +766,7 @@ Page({
       if (pageView === 'editor') this.ensureDraftInstance();
       this.publishMediaFailures();
       this.rememberLoadedForms();
+      this.setData({ noteDirty: false });
       if (pageView === 'editor') { this.restorePendingMedia(); this.acceptPendingMedia(); }
       if (pageView === 'editor') void this.hydrateNoteMedia(this._epoch, project.project_id);
       this.scrollPage(pageView);
@@ -1329,7 +1330,7 @@ Page({
       const saved = update ? await api.saveProjectNote(note.note_id, draft) : await api.createProjectNote(project.project_id, draft);
       if (!this.current(epoch)) return;
       this._shareAttempt = null; this._selectedNoteID = saved.note_id; this._newNote = false; this._selectedVersionID = ''; this.adoptMediaFailureQueue(saved.note_id); this.setData({ notes: [saved, ...this.data.notes.filter(item => item.note_id !== saved.note_id)], noteIndex: 0, note: saved, frozenVersion: null, activeShare: null, busy: false });
-      await this.refreshProject(update ? '草稿已更新，需重新冻结并分享新版本。' : '笔记草稿已创建。');
+      await this.refreshProject(update ? '草稿已保存。下一步：生成方案版本，再创建分享。' : '笔记草稿已创建。下一步：生成方案版本，再创建分享。');
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '笔记保存失败' }); }
   },
   // 失败队列按「账号+项目+草稿」分开保存：切换笔记不丢、连续新建不串、刷新竞态不覆盖。

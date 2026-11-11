@@ -46,7 +46,7 @@
       <block wx:if="{{editorMode === 'edit'}}">
         <view wx:if="{{error}}" class="alert error editor-alert">{{error}}</view><view wx:if="{{notice}}" class="alert success editor-alert">{{notice}}</view>
         <view class="card editor-card">
-          <label class="editor-field"><text class="field-label">笔记标题</text><input class="title-input" value="{{noteTitle}}" bindinput="setNoteTitle" bindkeyboardheightchange="onNoteKeyboardHeight" maxlength="80" placeholder="例如：一层平面方案说明" /></label>
+          <label class="editor-field"><text class="field-label">笔记标题</text><input class="title-input" focus="{{!note && !noteTitle}}" value="{{noteTitle}}" bindinput="setNoteTitle" bindkeyboardheightchange="onNoteKeyboardHeight" maxlength="80" placeholder="例如：一层平面方案说明" /></label>
           <view class="editor-divider"></view>
           <view class="editor-field"><view class="field-heading"><text class="field-label">方案内容</text><view class="field-actions"><text class="field-hint">{{noteBody.length || 0}} / 8000</text><button wx:if="{{!bodyReadOnly}}" class="text-button ai-inline" bindtap="openNoteAIWriting" disabled="{{busy}}">AI 辅助</button></view></view><text wx:if="{{bodyReadOnly}}" class="readonly-note">此内容保留原排版。可修改标题，并通过“完整预览”查看正文与素材。</text><textarea wx:else class="note-body-input" value="{{noteBody}}" bindinput="setNoteBody" bindblur="onNoteBodyBlur" bindkeyboardheightchange="onNoteKeyboardHeight" cursor-spacing="140" maxlength="8000" auto-height placeholder="记录方案要点、沟通结论和设计说明。可按空间或问题分段，方便客户阅读。" /></view>
         </view>
@@ -77,7 +77,7 @@
       </block>
 
       <view wx:if="{{keyboardHeight === 0}}" class="editor-dock">
-        <block wx:if="{{editorMode === 'edit'}}"><button class="secondary" bindtap="previewNote" disabled="{{busy || !noteTitle || (!bodyReadOnly && !noteBody)}}">预览</button><button wx:if="{{!note}}" class="primary" bindtap="createProjectNote" loading="{{busy}}" disabled="{{busy || !noteTitle || !noteBody}}">保存草稿</button><button wx:else class="primary" bindtap="saveProjectNote" loading="{{busy}}" disabled="{{busy || !noteTitle || (!bodyReadOnly && !noteBody)}}">保存草稿</button></block>
+        <block wx:if="{{editorMode === 'edit'}}"><button class="secondary" bindtap="previewNote" disabled="{{busy || !noteTitle || (!bodyReadOnly && !noteBody)}}">预览</button><button wx:if="{{note && !noteDirty}}" class="primary" bindtap="freezeProjectNoteVersion" disabled="{{busy || !noteTitle}}">生成方案版本</button><button wx:elif="{{!note}}" class="primary" bindtap="createProjectNote" loading="{{busy}}" disabled="{{busy || !noteTitle || !noteBody}}">保存草稿</button><button wx:else class="primary" bindtap="saveProjectNote" loading="{{busy}}" disabled="{{busy || !noteTitle || (!bodyReadOnly && !noteBody)}}">保存草稿</button></block>
         <block wx:else><button class="secondary" bindtap="editNote" disabled="{{busy}}">返回编辑</button><button wx:if="{{!note}}" class="primary" bindtap="createProjectNote" loading="{{busy}}" disabled="{{busy || !noteTitle || !noteBody}}">保存草稿</button><button wx:else class="primary" bindtap="saveProjectNote" loading="{{busy}}" disabled="{{busy || !noteTitle || (!bodyReadOnly && !noteBody)}}">保存草稿</button></block>
       </view>
     </block>

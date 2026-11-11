@@ -2,7 +2,7 @@
 <import src="/components/project-note-document/note-document.wxml" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">仅项目成员可查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">登录后即可查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
   <block wx:elif="{{view}}">
     <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本</text></view></view>
@@ -29,9 +29,9 @@
     </view>
     <view wx:if="{{canConfirm || confirmed}}" class="card confirm"><text class="section-title">方案版本确认</text><text class="muted">确认仅针对当前 V{{view.version.revision}}，新版本需重新确认。</text><button class="primary" bindtap="confirmVersion" loading="{{busy}}" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
     <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="text-button" bindtap="retryMediaDownloads">重试失败素材</button></view>
-    <button wx:if="{{shareReady}}" class="share" open-type="share">转发小程序卡片</button>
-    <text class="footer">卡片只是入口；收件人仍需用受邀账号登录。</text>
+    <text class="footer">收到链接的用户登录后即可查看。</text>
   </block>
+  <view wx:if="{{shareReady}}" class="share-dock"><button class="primary" open-type="share">发给客户</button></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />
