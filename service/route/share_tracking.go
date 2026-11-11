@@ -62,6 +62,30 @@ func validTrackingMediaID(id string) bool {
 	return len(id) == 32 && !strings.ContainsAny(id, "/\\.")
 }
 
+func registerTrackingSignedMediaRoute(pub *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
+	pub.POST("/media/:id/signed", TokenAuthRequired(codes), MiniprogramBannedBlock(users), func(c *gin.Context) {
+		id := c.Param("id")
+		if !validTrackingMediaID(id) {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusNotFound, Message: "媒体不可访问"})
+			return
+		}
+		asset, err := svc.Media(c.Request.Context(), nil, id)
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		if !svc.Config.VideoEnabled {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "内容视频暂未开通"})
+			return
+		}
+		if err = requireSharedVideo(asset); err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		sharedVideoPlaybackResponse(c, sharedVideoPlaybackGrant{Kind: sharedVideoPublished, Actor: GetTokenUserID(c), AssetID: asset.ID})
+	})
+}
+
 func trackingResponse(c *gin.Context, v any, e error) {
 	if e != nil {
 		var te *tracking.Error
@@ -759,19 +783,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
 		trackingResponse(c, v, e)
 	})
-	pub.POST("/media/:id/signed", func(c *gin.Context) {
-		id := c.Param("id")
-		if !validTrackingMediaID(id) {
-			trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "媒体不可访问"})
-			return
-		}
-		if _, e := svc.Media(c.Request.Context(), nil, id); e != nil {
-			trackingResponse(c, nil, e)
-			return
-		}
-		expires := time.Now().Add(trackingMediaSignTTL).Unix()
-		trackingResponse(c, gin.H{"url": trackingMediaSignedPath(id, expires), "expires_at": time.Unix(expires, 0).UTC()}, nil)
-	})
+	registerTrackingSignedMediaRoute(pub, svc, users, codes)
 	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
 		if expiresRaw := c.Query("exp"); expiresRaw != "" {
 			if !trackingMediaSignatureValid(c.Param("id"), expiresRaw, c.Query("sig")) {

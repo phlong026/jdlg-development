@@ -25,8 +25,9 @@ var errSharedVideoPlaybackFull = errors.New("shared video playback ticket capaci
 type sharedVideoKind string
 
 const (
-	sharedVideoNote    sharedVideoKind = "note"
-	sharedVideoPackage sharedVideoKind = "package"
+	sharedVideoNote      sharedVideoKind = "note"
+	sharedVideoPackage   sharedVideoKind = "package"
+	sharedVideoPublished sharedVideoKind = "published"
 )
 
 type sharedVideoPlaybackGrant struct {
@@ -97,16 +98,27 @@ func sharedVideoPlaybackGrantFor(ticket, expiresRaw, signature string) (sharedVi
 func registerSharedVideoPlaybackRoutes(v1 *gin.RouterGroup, svc *tracking.Service, verifyActor func(context.Context, int64, sharedVideoKind) error) {
 	v1.Match([]string{http.MethodGet, http.MethodHead}, "/shared-video/:ticket", func(c *gin.Context) {
 		c.Header("Cache-Control", "private, no-store")
-		if !projectNotesEnabled() {
-			trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "私人项目笔记暂未开通"})
-			return
-		}
 		if verifyActor == nil {
 			trackingResponse(c, nil, tracking.ErrUnavailable)
 			return
 		}
 		grant, ok := sharedVideoPlaybackGrantFor(c.Param("ticket"), c.Query("exp"), c.Query("sig"))
 		if !ok {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "播放凭证无效或已过期"})
+			return
+		}
+		switch grant.Kind {
+		case sharedVideoNote, sharedVideoPackage:
+			if !projectNotesEnabled() {
+				trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "私人项目笔记暂未开通"})
+				return
+			}
+		case sharedVideoPublished:
+			if !svc.Config.ContentEnabled || !svc.Config.VideoEnabled {
+				trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "内容视频暂未开通"})
+				return
+			}
+		default:
 			trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "播放凭证无效或已过期"})
 			return
 		}
@@ -121,6 +133,8 @@ func registerSharedVideoPlaybackRoutes(v1 *gin.RouterGroup, svc *tracking.Servic
 				return svc.ProjectNoteReadShareMedia(validationContext, grant.ShareToken, grant.Actor, grant.AssetID)
 			case sharedVideoPackage:
 				return svc.ProjectPackageReadVersionMedia(validationContext, grant.ShareToken, grant.Actor, grant.VersionID, grant.AssetID)
+			case sharedVideoPublished:
+				return svc.Media(validationContext, nil, grant.AssetID)
 			default:
 				return tracking.Asset{}, &tracking.Error{Status: http.StatusForbidden, Message: "播放凭证无效或已过期"}
 			}

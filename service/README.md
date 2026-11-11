@@ -339,6 +339,8 @@ result, err := strategy.Login(ctx, req)
 
 ### 分享视频播放与链接导入（2026-11-11）
 
-项目笔记与分享资料接收页使用已鉴权 POST 获取10分钟播放票据，原生播放器经 `/api/v1/shared-video/:ticket` 读取自有存储并使用 Range；每次读取仍复核账号资料和分享权限。无需新增环境变量或数据库迁移；必须在API站点合并 `ops/phase3-release/shared-video.conf` 并执行 `nginx -t`、真实Range及敏感日志校验。沿用 `PROJECT_NOTES_ENABLED` 和现有私有媒体配置。接口及生命周期见 [项目笔记接口](../docs/phase3/private-project-notes.md)。
+内容阅读页、项目笔记与分享资料接收页使用已鉴权 POST 获取10分钟播放票据，原生播放器经 `/api/v1/shared-video/:ticket` 读取自有存储并使用 Range；每次读取仍复核账号资料和分享权限。无需新增环境变量或数据库迁移；必须在API站点合并 `ops/phase3-release/shared-video.conf` 并执行 `nginx -t`、真实Range及敏感日志校验。沿用 `PROJECT_NOTES_ENABLED` 和现有私有媒体配置。接口及生命周期见 [项目笔记接口](../docs/phase3/private-project-notes.md)。
 
 链接导入生产路径将 MP4 上限由50MiB提高为500MiB，并使用权限为0600的临时文件流式下载与转存；图片保持10MiB。临时目录沿用操作系统 `TMPDIR`，部署需为单个最大视频及转存过程预留磁盘空间。旧字节数组抓取接口仍保留原限额用于现有其他调用，不用于新的大视频导入。任务总窗口20分钟、来源下载最多15分钟，长媒体保存期间心跳续租且单次续租最多5秒；MP4累计最多10000个atom并支持取消。过期媒体仅由用户显式重试后重新解析，结果不明的付费解析仍不可重试。方案和限制见 [导入方案](../docs/phase3/content-import-plan-20261027.md)。
+
+已发布内容仍调用 `POST /api/v1/miniprogram/tracking/media/:id/signed`，响应保持 `{url, expires_at}`，但地址改为统一的 `/api/v1/shared-video/:ticket`；不再把带不了登录头的原生播放器导向全局资料门禁下的旧媒体路径。该POST显式要求登录与未封禁；播放GET逐次要求完整资料及当前有效已发布内容引用，内容撤回后拒绝。公开内容播放依赖 `ContentEnabled` 与 `VideoEnabled`，独立于私人项目开关。

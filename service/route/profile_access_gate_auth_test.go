@@ -43,6 +43,8 @@ func (c profileGateAuthConnector) QueryContext(_ context.Context, query string, 
 	switch {
 	case strings.Contains(query, "SELECT 1 FROM users"):
 		return &profileGateAuthRows{columns: []string{"1"}, values: [][]driver.Value{{int64(1)}}}, nil
+	case strings.Contains(query, "COALESCE(status, 'active')"):
+		return &profileGateAuthRows{columns: []string{"status", "banned_reason"}, values: [][]driver.Value{{"active", ""}}}, nil
 	case strings.Contains(query, "FROM users"):
 		// No merge record means CodeSessionRedisModel keeps the session user ID.
 		return &profileGateAuthRows{columns: []string{"user_type", "merge_status", "merged_to_user_id"}}, nil
