@@ -1,6 +1,8 @@
 # 视频号导入与分享播放修复候选（2026-11-11）
 
-本次从 `fix/shared-video-stream-20261111`、`1214ae1` 继续，保留11月11日设计师工作台版本；未切换到11月9日笔记样式分支。此前8.0.4已上传，本次候选未上传、未部署、未完成真机验收。
+本次从 `fix/shared-video-stream-20261111`、`1214ae1` 继续，保留11月11日设计师工作台版本。最终后端源码 `7402c41` 已部署，运行PID `2554154`，二进制SHA256与构建产物一致。小程序8.0.5上传成功，并在公众平台刷新核实其“体验版”标记（2026-11-11 18:36:57）。未提交新的审核或发布正式版；真实手机验收仍待完成。
+
+真实17,340,306字节已发布视频：修复前新签名地址无登录头GET返回401；修复后首段和中间段均206/1024字节，越界416，HEAD返回正确长度与video/mp4。详见 [部署回执](receipt.json)。
 
 ## 最终行为
 
@@ -32,4 +34,6 @@
 
 后端失败先用 `binary_release.py rollback --backup <本次私有备份目录>` 恢复旧程序。恢复Nginx备份并 `nginx -t`、reload；前端若已上传则恢复前一个已知可用版本。原业务数据、已转存媒体与任务记录不删除。当前程序回退会丢弃内存票据，用户重新加载即可重新申请。
 
-本机没有nginx命令，尚未执行生产 `nginx -t`。当前SSH身份被拒绝，原生Chrome计算机控制连接超时；已通过Chrome现有宝塔页恢复面板连接。本文件记录部署前候选，最终部署、上传结果以独立receipt为准。
+生产API主配置已确认是 `/www/server/panel/vhost/nginx/html_api.jiadilingguang.com.conf`；新增include为 `/www/server/panel/vhost/nginx/extension/api.jiadilingguang.com/jdlg-shared-video-fc55bc5.conf`。已备份到 `/root/jdlg-nginx-backup-20261111-fc55bc5`，通过生产 `nginx -t` 并reload。最终程序备份是 `/root/jdlg-video-backup-20261111-7402c41`；若需完整恢复本轮前的a394e9b，以首轮备份 `/root/jdlg-video-backup-20261111-fc55bc5/binary.previous` 为候选，重新核对当时PID/运行SHA并用新的私有备份目录执行prepare+activate；不能对两个历史state连续rollback，因为前一次恢复会产生新PID。Nginx仅撤销本轮新增include，经 `nginx -t` 后reload，原配置备份保留供核对，不盲目覆盖后续他人修改。
+
+生产正常分段请求后检查三个日志的最近2MiB：原始票据路径均0，应用脱敏route记录5条。没有额外制造生产502/timeout故障。工作区代码已分三次提交，未推送GitHub；客户端真机弱网/拖动/过期恢复、真实大视频导入及受邀账号私密分享仍需分别验收。

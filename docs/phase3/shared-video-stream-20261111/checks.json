@@ -1,5 +1,5 @@
 {
-  "status": "local_verified_deployment_pending",
+  "status": "backend_deployed_miniprogram_uploaded_and_trial_verified_device_uat_pending",
   "baseline": {
     "branch": "fix/shared-video-stream-20261111",
     "commit": "1214ae1",
@@ -29,21 +29,68 @@
     "generated_sources": "tracking/auth signer/content template --check passed",
     "large_file": "51MiB MP4 imported through file pipeline and persisted; fixture, not live Channels import",
     "secret_scan": "added tracked lines checked; no real credentials found",
-    "independent_security_review": "passed: no remaining critical/high/medium code blockers"
+    "independent_security_review": "passed: no remaining critical/high/medium code blockers",
+    "production_video_range": [
+      {
+        "method": "GET",
+        "range": "bytes=0-1023",
+        "status": 206,
+        "content_range": "bytes 0-1023/17340306",
+        "content_length": "1024",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 1024
+      },
+      {
+        "method": "GET",
+        "range": "bytes=1048576-1049599",
+        "status": 206,
+        "content_range": "bytes 1048576-1049599/17340306",
+        "content_length": "1024",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 1024
+      },
+      {
+        "method": "GET",
+        "range": "bytes=999999999-",
+        "status": 416,
+        "content_range": "bytes */17340306",
+        "content_length": "0",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 0
+      },
+      {
+        "method": "HEAD",
+        "range": null,
+        "status": 200,
+        "content_range": null,
+        "content_length": "17340306",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 0
+      }
+    ]
   },
   "not_verified": [
-    "production nginx configuration syntax and credential-free error paths",
-    "production HTTPS Range 206/416 and share revocation",
-    "real device first frame/seeking/weak network/ticket retry",
-    "live Channels import over 50MiB"
+    "real-device first frame, seek, weak network and ten-minute expiry retry",
+    "real invited-recipient note/package UAT",
+    "live Channels import over 50MiB; tested 51MiB file pipeline fixture",
+    "production content/share revocation mutation; covered by integration tests",
+    "forced production 502/timeout logging path"
   ],
   "deployment": {
-    "backend_deployed": false,
-    "miniprogram_uploaded": false,
+    "backend_deployed": true,
+    "miniprogram_uploaded": true,
     "database_migration_required": false,
     "ssh": "current identity rejected",
-    "browser": "connected to existing BaoTa tab through Chrome AppleScript fallback",
-    "required_nginx_candidate": "ops/phase3-release/shared-video.conf"
+    "browser": "existing BaoTa page; Chrome Apple Events fallback restored by user",
+    "required_nginx_candidate": "ops/phase3-release/shared-video.conf",
+    "miniprogram_version": "8.0.5",
+    "trial_verified_on_platform": true,
+    "backend_commit": "7402c41",
+    "backend_pid": 2554154
   },
   "limitations": [
     "single-process in-memory playback ticket store, TTL 10 minutes, max 4096 grants",

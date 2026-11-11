@@ -1,0 +1,127 @@
+{
+  "baseline": "2026-11-11 designer workbench",
+  "commits": {
+    "import": "4c00862",
+    "private_playback": "fc55bc5",
+    "published_playback": "7402c41"
+  },
+  "backend_first_activation": {
+    "pid": 2524962,
+    "sha256": "58076564fecdeba7cb925c3438a5d064566ef44e51411412a1c2eca98202075b",
+    "backup": "/root/jdlg-video-backup-20261111-fc55bc5",
+    "nginx_backup": "/root/jdlg-nginx-backup-20261111-fc55bc5",
+    "nginx_include": "/www/server/panel/vhost/nginx/extension/api.jiadilingguang.com/jdlg-shared-video-fc55bc5.conf",
+    "health": "tracking/config 200; workbench/context 401"
+  },
+  "real_reproduction": {
+    "source": "existing authenticated DevTools designer account through official automation protocol",
+    "content_id": "VNs74VfW7ACvekW-z_If0rHyB5m_cFvJ",
+    "asset_id": "xoW4sAcCT0Qk9qC-55Oxxq4ZhXR3eV5N",
+    "signed_endpoint": "POST /tracking/media/:id/signed",
+    "request": "GET returned URL without login headers; Range bytes=0-1023",
+    "result_before_published_hotfix": {
+      "status": 401,
+      "content_range": null,
+      "body_length": 36
+    },
+    "after": [
+      {
+        "method": "GET",
+        "range": "bytes=0-1023",
+        "status": 206,
+        "content_range": "bytes 0-1023/17340306",
+        "content_length": "1024",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 1024
+      },
+      {
+        "method": "GET",
+        "range": "bytes=1048576-1049599",
+        "status": 206,
+        "content_range": "bytes 1048576-1049599/17340306",
+        "content_length": "1024",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 1024
+      },
+      {
+        "method": "GET",
+        "range": "bytes=999999999-",
+        "status": 416,
+        "content_range": "bytes */17340306",
+        "content_length": "0",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 0
+      },
+      {
+        "method": "HEAD",
+        "range": null,
+        "status": 200,
+        "content_range": null,
+        "content_length": "17340306",
+        "content_type": "video/mp4",
+        "cache_control": "private, no-store",
+        "length_read": 0
+      }
+    ]
+  },
+  "checks": {
+    "miniprogram": {
+      "tests": 1438,
+      "pass": 1438,
+      "skips": 0
+    },
+    "go_all": "passed after 7402c41 code changes",
+    "go_vet": "passed",
+    "typescript": "229 preexisting errors; exact 232-line baseline match",
+    "independent_review": "passed both increments and published hotfix"
+  },
+  "status": "backend_deployed_miniprogram_uploaded_and_trial_verified_device_uat_pending",
+  "backend_final": {
+    "commit": "7402c41e6b8d281e764e4646abf1a4fdbc2942dc",
+    "pid": 2554154,
+    "binary_sha256": "9c7de02f240683adf4617c6d4c67ed4fe8df43d55f3af33180e360d7c59de319",
+    "archive_sha256": "3c198acef72632a1c17a272c1be5d1eb5d5b1a12e5d8e6d3f816d78d1eb176b4",
+    "backup": "/root/jdlg-video-backup-20261111-7402c41",
+    "nginx_test": "passed; existing fc55bc5 include unchanged",
+    "running_binary_hash_matched": true,
+    "database_migration_executed": false,
+    "environment_changed": false
+  },
+  "miniprogram": {
+    "version": "8.0.5",
+    "appid": "wx94fdc48861913ede",
+    "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+    "command_exit": 0,
+    "terminal_status": "upload success",
+    "total_bytes": 3186137,
+    "platform_verified": {
+      "account_name": "甲第灵光智能体",
+      "development_version": "8.0.5",
+      "trial_badge": true,
+      "submitted_at": "2026-11-11 18:36:57",
+      "official_online_version": "7.3.3",
+      "audit_version": "8.0.3",
+      "audit_status": "not approved; this run did not submit review"
+    }
+  },
+  "production_logs": {
+    "tail_window_bytes": 2097152,
+    "nginx_access_raw_ticket_paths": 0,
+    "nginx_error_raw_ticket_paths": 0,
+    "go_app_raw_ticket_paths": 0,
+    "go_sanitized_video_rows": 5,
+    "forced_502_timeout_exercised": false
+  },
+  "not_verified": [
+    "real-device first frame, seek, weak network and ten-minute expiry retry",
+    "real invited-recipient note/package UAT",
+    "live Channels import over 50MiB; tested 51MiB file pipeline fixture",
+    "production content/share revocation mutation; covered by integration tests",
+    "forced production 502/timeout logging path"
+  ],
+  "git_pushed": false,
+  "recorded_at": "2026-11-11T18:44:18.011690+08:00"
+}
