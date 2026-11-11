@@ -737,6 +737,7 @@ Page({
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
     const historyNotice = requested ? '通知对应的固定版本，草稿不会在此修改。' : version && !note ? '历史草稿未加载，仅显示版本摘要。' : '';
     const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
+    const shareError = share && !share.share_token && pageView === 'version' ? '分享凭证未同步，如需预览请重新生成分享。' : '';
     const navigationTitles = { detail: '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this._loaded = true;
@@ -751,8 +752,8 @@ Page({
       versionMediaGroups: presentation && presentation.groups || [], galleryPositions: {},
       feedbacks, selectedFeedback, feedbackID: selectedFeedback && selectedFeedback.feedback_id || '', feedbackReply: '',
       confirmations: targetID ? (result.confirmations || []).filter(item => item.version_id === targetID).map(item => Object.assign({}, item, { confirmed_at: localTime(item.confirmed_at) })) : [],
-      truncationNotice: truncationText(result.truncated), historyNotice, busy: false, notice: notice || this.data.notice,
-      error: share && !share.share_token && pageView === 'version' ? '分享凭证未同步，如需预览请重新生成分享。' : '',
+      truncationNotice: truncationText(result.truncated), historyNotice: shareError ? '' : historyNotice, busy: false, notice: notice || this.data.notice,
+      error: shareError,
     }, () => {
       // 先用服务端结果建立未修改基线，再接纳后台素材，使其保持「未保存」状态。
       this._noteNewCoverID = '';
@@ -913,7 +914,10 @@ Page({
       this._invitationAttempt = null;
       const summary = { invitation_id: invitation.invitation_id, status: 'active', expires_at: invitation.expires_at, expiryLabel: invitationLabel(invitation) };
       const memberInvitations = [summary, ...this.data.memberInvitations.filter(item => item.invitation_id !== summary.invitation_id)];
-      this.setData({ busy: false, memberInvitation: invitation, memberInvitationPath: '/pages/projectinvite/projectinvite?pni=' + encodeURIComponent(invitation.invitation_token), memberInvitations, notice: '邀请已生成。' });
+      const invitationPath = '/pages/projectinvite/projectinvite?pni=' + encodeURIComponent(invitation.invitation_token);
+      this.setData({ busy: false, memberInvitation: invitation, memberInvitationPath: invitationPath, memberInvitations, notice: '邀请链接已复制，发给对方即可。' }, () => {
+        if (typeof wx.setClipboardData === 'function') wx.setClipboardData({ data: invitationPath, fail: () => {} });
+      });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '邀请生成失败' }); }
   },
   async revokeProjectInvitation(event) {
@@ -1582,7 +1586,10 @@ Page({
       const share = await api.createProjectNoteShare(version.version_id, attempt.expiresAt, attempt.key);
       if (!this.current(epoch)) return;
       if (!share.share_token) { this.setData({ activeShare: share, busy: false, error: '分享已存在，但首次返回的入口凭证未保存。请撤回该分享后重新生成。' }); return; }
-      this._issuedShare = share; this._shareAttempt = null; rememberShareToken(share); this.setData({ activeShare: share, busy: false, notice: '私密分享入口已生成，只有受邀账号登录后可查看。' });
+      this._issuedShare = share; this._shareAttempt = null; rememberShareToken(share);
+      this.setData({ activeShare: share, busy: false, notice: '私密分享入口已生成，正在打开预览。' }, () => {
+        if (typeof wx.navigateTo === 'function') wx.navigateTo({ url: '/pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(share.share_token), fail: () => {} });
+      });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '分享创建失败，可直接重试本次请求。' }); }
   },
   async revokeProjectNoteShare() {
@@ -1590,6 +1597,21 @@ Page({
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try { await api.revokeProjectNoteShare(share.share_id); if (!this.current(epoch)) return; if (this._issuedShare && this._issuedShare.share_id === share.share_id) this._issuedShare = null; forgetShareToken(share.share_id); this._shareAttempt = null; this.setData({ activeShare: null, busy: false, notice: '分享已撤回，原入口立即失效。' }); }
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '分享撤回失败' }); }
+  },
+  async regenerateProjectShare() {
+    const share = this.data.activeShare;
+    if (!share || this.data.busy) return;
+    const epoch = this._epoch;
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      await api.revokeProjectNoteShare(share.share_id);
+      forgetShareToken(share.share_id);
+      if (!this.current(epoch)) return;
+      this.setData({ activeShare: null, busy: false });
+      await this.createProjectNoteShare();
+    } catch (error) {
+      if (this.current(epoch)) this.setData({ busy: false, error: error.message || '重新生成分享失败' });
+    }
   },
   copySharePath() { const token = this.data.activeShare && this.data.activeShare.share_token; if (token) wx.setClipboardData({ data: 'pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(token) }); },
   openSharePreview() { const token = this.data.activeShare && this.data.activeShare.share_token; if (token) wx.navigateTo({ url: '/pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(token) }); },
