@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,43 @@ import (
 	"service/model"
 	"service/tracking"
 )
+
+// 短时签名媒体地址：小程序原生 video 组件带不了鉴权头，用签名查询参数换取
+// 原生播放器的 Range 流式播放能力；默认 10 分钟过期。
+const trackingMediaSignTTL = 10 * time.Minute
+
+func trackingMediaSignKey() []byte {
+	if value := strings.TrimSpace(os.Getenv("TRACKING_MEDIA_SIGN_KEY")); value != "" {
+		return []byte(value)
+	}
+	seed := "content-media-sign:" + os.Getenv("TRACKING_TENANT") + ":" + os.Getenv("TRACKING_DEFAULT_OWNER")
+	sum := sha256.Sum256([]byte(seed))
+	return sum[:]
+}
+
+func trackingMediaSignature(id string, expires int64) string {
+	mac := hmac.New(sha256.New, trackingMediaSignKey())
+	mac.Write([]byte(id))
+	mac.Write([]byte("\n"))
+	mac.Write([]byte(strconv.FormatInt(expires, 10)))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func trackingMediaSignatureValid(id, expiresRaw, signature string) bool {
+	expires, err := strconv.ParseInt(expiresRaw, 10, 64)
+	if err != nil || expires < time.Now().Unix() || signature == "" {
+		return false
+	}
+	return hmac.Equal([]byte(signature), []byte(trackingMediaSignature(id, expires)))
+}
+
+func trackingMediaSignedPath(id string, expires int64) string {
+	return "/api/v1/miniprogram/tracking/media/" + id + "?exp=" + strconv.FormatInt(expires, 10) + "&sig=" + trackingMediaSignature(id, expires)
+}
+
+func validTrackingMediaID(id string) bool {
+	return len(id) == 32 && !strings.ContainsAny(id, "/\\.")
+}
 
 func trackingResponse(c *gin.Context, v any, e error) {
 	if e != nil {
@@ -721,7 +759,28 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
 		trackingResponse(c, v, e)
 	})
+	pub.POST("/media/:id/signed", func(c *gin.Context) {
+		id := c.Param("id")
+		if !validTrackingMediaID(id) {
+			trackingResponse(c, nil, &tracking.Error{Status: 404, Message: "媒体不可访问"})
+			return
+		}
+		if _, e := svc.Media(c.Request.Context(), nil, id); e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		expires := time.Now().Add(trackingMediaSignTTL).Unix()
+		trackingResponse(c, gin.H{"url": trackingMediaSignedPath(id, expires), "expires_at": time.Unix(expires, 0).UTC()}, nil)
+	})
 	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
+		if expiresRaw := c.Query("exp"); expiresRaw != "" {
+			if !trackingMediaSignatureValid(c.Param("id"), expiresRaw, c.Query("sig")) {
+				trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "媒体签名无效或已过期"})
+				return
+			}
+			serveTrackingMedia(c, svc, nil)
+			return
+		}
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant, cfg.DefaultOwner)
 		var selected *tracking.Scope
 		if e == nil {

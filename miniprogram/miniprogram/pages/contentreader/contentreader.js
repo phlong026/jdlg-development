@@ -98,8 +98,15 @@ Page({
   if(identityError)throw identityError;
   for(const item of videos){
    if(!current())return;
-   try{await resolveOne(item);}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;return;}
-   commit();
+   // 视频优先用短时签名直链交给原生播放器流式播放（支持 Range），避免整段下载。
+   let streamed=false;
+   if(typeof api.signedMediaURL==='function'){
+    try{const signed=await api.signedMediaURL(item.media_id);if(signed&&current()){item.url=signed;item.preview_error='';streamed=true;commit();}}catch(_){streamed=false;}
+   }
+   if(!streamed){
+    try{await resolveOne(item);}catch(error){if(error&&error.code==='MEDIA_IDENTITY_CHANGED')throw error;return;}
+    commit();
+   }
   }
  },
 

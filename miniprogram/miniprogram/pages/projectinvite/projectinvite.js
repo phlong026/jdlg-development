@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 const api = require('../../utils/phase3-api');
 

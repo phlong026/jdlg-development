@@ -41,5 +41,14 @@ async function resolveReaderOptions(options) {
   if(entry.route_key!=='pages/contentreader/contentreader'||!entry.content_id||!entry.content_version||!entry.share_token)throw new Error('扫码内容不可访问');
   return {...options,content_id:entry.content_id,content_version:entry.content_version,st:entry.share_token};
 }
-module.exports = { request, ROOT, ORIGIN, mediaURL, resolveReaderOptions };
+async function signedMediaURL(assetID) {
+  const id = String(assetID || '');
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) return '';
+  const out = await request('/media/' + id + '/signed', 'POST', {}, undefined, true);
+  const value = String((out && out.url) || '');
+  if (!value) return '';
+  return value.startsWith('/') ? ORIGIN + value : value;
+}
+
+module.exports = { request, ROOT, ORIGIN, mediaURL, resolveReaderOptions, signedMediaURL };
 export {};
