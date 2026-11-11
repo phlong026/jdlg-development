@@ -1,0 +1,27 @@
+{
+  "version": "8.0.4",
+  "appid": "wx94fdc48861913ede",
+  "source_commit": "72dd89b50ce8ed297c5a27d28cf0fc618052348b",
+  "miniprogram_tree": "08b4a4155bb8139720e786bd05f061ae9db56be2",
+  "branch": "fix/review-browse-tracking-20261111",
+  "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "checked_at": "2026-11-11T09:09:00.829Z",
+  "upload_status": "success",
+  "upload_process_exit_code": 0,
+  "official_cli_receipt": "✔ upload",
+  "total_bytes": 3178111,
+  "main_bytes": 1276507,
+  "source_unchanged_after_upload": true,
+  "experience_evidence": {
+    "surface": "WeChat DevTools native upload dialog after successful CLI upload",
+    "message": "Previous submission is selected as trial; next upload will overwrite the trial",
+    "action": "Cancelled duplicate upload after observing the trial marker"
+  },
+  "official_console_verified": false,
+  "device_acceptance_verified": false,
+  "backend_changes": false,
+  "backend_deployment_required": false,
+  "video_implementation_changed": false,
+  "official_review_submitted": false,
+  "production_released": false
+}
