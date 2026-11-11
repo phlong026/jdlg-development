@@ -7,6 +7,7 @@
   <view wx:else class="card">
     <view class="mark">甲</view>
     <text class="title">{{preview.project_name}}</text>
+    <text wx:if="{{preview.inviter_name}}" class="subtitle">由 {{preview.inviter_name}} 邀请加入</text>
     <text wx:if="{{busy}}" class="subtitle">正在加入项目…</text>
     <block wx:elif="{{requestStatus === 'approved'}}">
       <view class="done"><text class="done-icon">✓</text><text class="done-title">已加入项目</text></view>

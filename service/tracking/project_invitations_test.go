@@ -226,3 +226,30 @@ func TestProjectInvitationApplicationCreatesDesignerNoticeOnly(t *testing.T) {
 		t.Fatalf("auto-approved invitation must not queue an approval notice: %#v", notice)
 	}
 }
+
+func TestProjectInvitationRecordsJoinerAttribution(t *testing.T) {
+	ctx := context.Background()
+	s, designer, _ := projectNoteFixture(t)
+	project, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "张宅方案", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := s.ProjectNoteCreateInvitation(ctx, designer, project.ID, s.Now().Add(time.Hour), "invite-attribution-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ProjectNoteApplyInvitation(ctx, issued.Token, 101, "invite-attribution-apply"); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := s.ProjectNoteGetProjectDetail(ctx, designer, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Members) != 1 {
+		t.Fatalf("members = %#v", detail.Members)
+	}
+	member := detail.Members[0]
+	if member.ActorID != 101 || member.InviterID != designer.Actor || member.InvitationID != issued.ID || member.JoinedAt.IsZero() {
+		t.Fatalf("attribution = %#v (inviter=%d invitation=%s)", member, designer.Actor, issued.ID)
+	}
+}

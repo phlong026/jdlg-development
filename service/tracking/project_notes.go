@@ -118,6 +118,10 @@ type ProjectNoteMember struct {
 	Active    bool      `json:"active"`
 	InvitedAt time.Time `json:"invited_at"`
 	RevokedAt time.Time `json:"revoked_at,omitempty"`
+	// 归因：谁邀请（设计者 actor_id）、来源邀请、实际加入时间。
+	InviterID    int64     `json:"inviter_id,omitempty"`
+	InvitationID string    `json:"invitation_id,omitempty"`
+	JoinedAt     time.Time `json:"joined_at,omitempty"`
 }
 
 type ProjectNoteDraft struct {
@@ -761,15 +765,29 @@ func (s *Service) ProjectNoteInviteMember(ctx context.Context, scope Scope, proj
 }
 
 func (s *Service) projectNoteInviteMemberIn(r Repository, project ProjectNoteProject, actor int64) (ProjectNoteMember, error) {
+	return s.projectNoteJoinMemberIn(r, project, actor, project.DesignerID, "")
+}
+
+// projectNoteJoinMemberIn 建立成员关系并记录归因：邀请人、来源邀请、加入时间。
+func (s *Service) projectNoteJoinMemberIn(r Repository, project ProjectNoteProject, actor, inviterID int64, invitationID string) (ProjectNoteMember, error) {
 	now := s.Now().UTC()
 	id := projectNoteMemberID(project.ID, actor)
 	if old, err := decode[ProjectNoteMember](r, projectNoteMemberKind, id); err == nil {
 		old.Active, old.RevokedAt = true, time.Time{}
+		if inviterID > 0 {
+			old.InviterID = inviterID
+		}
+		if invitationID != "" {
+			old.InvitationID = invitationID
+		}
+		if old.JoinedAt.IsZero() {
+			old.JoinedAt = now
+		}
 		return old, r.Put(projectNoteRecord(projectNoteMemberKind, id, project.Owner, now, old, projectNoteActorKey(actor), project.ID, project.ID, ""))
 	} else if !errors.Is(err, ErrNotFound) {
 		return ProjectNoteMember{}, err
 	}
-	member := ProjectNoteMember{ID: id, ProjectID: project.ID, ActorID: actor, Active: true, InvitedAt: now}
+	member := ProjectNoteMember{ID: id, ProjectID: project.ID, ActorID: actor, Active: true, InvitedAt: now, InviterID: inviterID, InvitationID: invitationID, JoinedAt: now}
 	return member, r.Insert(projectNoteRecord(projectNoteMemberKind, id, project.Owner, now, member, projectNoteActorKey(actor), project.ID, project.ID, ""))
 }
 

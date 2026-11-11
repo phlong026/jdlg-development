@@ -114,6 +114,16 @@ const draftAccount = () => {
   return String(wx.getStorageSync('token') || '');
 };
 const activeMembers = members => (members || []).filter(item => item && item.active !== false);
+const pad2 = value => String(value).padStart(2, '0');
+const attributionDate = value => {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+};
+const memberAttribution = item => Object.assign({}, item, {
+  joined_label: attributionDate(item && item.joined_at),
+  inviter_label: item && item.inviter_name ? '由 ' + item.inviter_name + ' 邀请' : '',
+});
 const memberLabel = member => String(member && member.display_name || '').trim() || '项目成员';
 const invitationLabel = item => {
   const date = new Date(item && item.expires_at || '');
@@ -703,7 +713,7 @@ Page({
     const selectedFeedback = feedbacks.find(item => item.feedback_id === this._targetFeedbackID) || null;
     let share = targetID && result.active_share && result.active_share.version_id === targetID ? result.active_share : targetID ? shares.find(item => !item.revoked && item.version_id === targetID) || null : null;
     if (share && this._issuedShare && this._issuedShare.share_token && share.share_id === this._issuedShare.share_id) share = Object.assign({}, share, { share_token: this._issuedShare.share_token });
-    const members = result.members || [], available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
+    const members = (result.members || []).map(memberAttribution), available = activeMembers(members), foundIndex = available.findIndex(item => Number(item.actor_id) === Number(project.confirmer_id));
     const confirmerChoices = [{ actor_id: '', label: '选择确认人' }, ...available.map(item => Object.assign({}, item, { label: memberLabel(item) }))];
     const bodyReadOnly = !!note && note.body_format !== 'plain' && note.body_format !== 'plain_text';
     const historyNotice = requested ? '正在查看通知对应的固定版本；当前草稿不会在这里修改。' : version && !note ? '该版本对应的历史草稿未加载，当前仅可查看版本摘要。' : '';
