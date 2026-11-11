@@ -33,7 +33,7 @@ const version = { version_id: 'v1', note_id: 'n1', revision: 1, title: '方案',
 
 test('the share panel warns when nobody is a member and offers a one-tap invite', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
-  assert.match(wxml, /只有项目成员才能打开此链接，请先邀请对方成为项目成员/);
+  assert.match(wxml, /仅项目成员可打开，请先邀请对方/);
   assert.match(wxml, /一键邀请成员/);
   assert.match(wxml, /activeMembers\.length/);
   assert.match(wxml, /joinRequests\.length/);

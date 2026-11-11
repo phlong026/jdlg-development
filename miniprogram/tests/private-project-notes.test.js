@@ -1050,7 +1050,7 @@ test('private reader template uses native branches for view, rich text, truncati
   assert.match(document, /format === 'rich_text'/);
   assert.match(document, /nodes="\{\{body\}\}"/);
   assert.match(document, />\{\{body\}\}<\/text>/);
-  assert.match(template, /wx:if="\{\{view\.activity_truncated\}\}"[^>]*>[^<]*最近50条反馈与处理记录/);
+  assert.match(template, /wx:if="\{\{view\.activity_truncated\}\}"[^>]*>[^<]*最近 50 条记录/);
   assert.match(template, /wx:if="\{\{canConfirm \|\| confirmed\}\}"\s+class="card confirm"/);
   assert.match(template, /disabled="\{\{busy \|\| confirmed\}\}"/);
 });

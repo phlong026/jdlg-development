@@ -2,17 +2,17 @@
 <import src="/components/project-note-document/note-document.wxml" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">登录后仅项目成员可查看，内容不会公开。</text><button class="primary" bindtap="goLogin">去登录</button></view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">仅项目成员可查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
   <block wx:elif="{{view}}">
-    <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本 · 转发不增加查看权限</text></view></view>
+    <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本</text></view></view>
     <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true}}" /></view>
     <view class="card">
-      <text class="section-title">阅读回执</text><text class="muted">自愿发送后，设计师会看到当前账号已查看此版本及发送时间；不发送也可继续查看。</text>
+      <text class="section-title">阅读回执</text><text class="muted">发送后设计师会看到你已查看。</text>
       <button class="secondary" bindtap="acknowledgeRead" loading="{{acknowledgingRead}}" disabled="{{readAcknowledged || acknowledgingRead}}">{{readAcknowledged ? '已发送阅读回执' : '告知设计师我已查看'}}</button>
     </view>
-    <view class="card"><text class="section-title">下载当前固定版本</text><text class="muted">Word 保留文字、图片的内容顺序；视频请在甲第方案中查看。</text><button class="secondary" bindtap="exportSharedProjectNoteWord" disabled="{{busy}}" loading="{{busy}}">导出 Word</button><block wx:for="{{media}}" wx:key="media_id"><button wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveOriginalImage" disabled="{{busy}}">保存原图{{index + 1}}</button></block></view>
-    <view class="card feedback-card"><text class="section-title">反馈给设计师</text><text wx:if="{{view.activity_truncated}}" class="muted">仅显示当前版本最近50条反馈与处理记录。</text><view wx:for="{{feedbackRows}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text><text class="feedback-text">{{item.text}}</text><text class="muted">{{item.resolved ? '已处理' : '待设计师处理'}}</text><text wx:if="{{item.resolution_reply}}" class="resolution">设计师处理说明：{{item.resolution_reply}}</text></view><text class="muted feedback-help">提交的评价和意见将以当前账号发送给项目设计师，并保留在此方案版本下。</text>
+    <view class="card"><text class="section-title">下载当前固定版本</text><text class="muted">Word 保留文字与图片顺序。</text><button class="secondary" bindtap="exportSharedProjectNoteWord" disabled="{{busy}}" loading="{{busy}}">导出 Word</button><block wx:for="{{media}}" wx:key="media_id"><button wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveOriginalImage" disabled="{{busy}}">保存原图{{index + 1}}</button></block></view>
+    <view class="card feedback-card"><text class="section-title">反馈给设计师</text><text wx:if="{{view.activity_truncated}}" class="muted">仅显示最近 50 条记录。</text><view wx:for="{{feedbackRows}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text><text class="feedback-text">{{item.text}}</text><text class="muted">{{item.resolved ? '已处理' : '待设计师处理'}}</text><text wx:if="{{item.resolution_reply}}" class="resolution">设计师处理说明：{{item.resolution_reply}}</text></view><text class="muted feedback-help">提交的评价和意见将以当前账号发送给项目设计师，并保留在此方案版本下。</text>
       <radio-group class="satisfaction-options" bindchange="setSatisfaction">
         <label><radio value="very_satisfied" checked="{{satisfaction === 'very_satisfied'}}" color="#a7793d" />非常满意</label>
         <label><radio value="needs_adjustment" checked="{{satisfaction === 'needs_adjustment'}}" color="#a7793d" />基本满意，需要调整</label>

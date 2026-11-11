@@ -269,7 +269,7 @@ test('storage failures never silently enable analytics or override an explicit d
 test('a not-ready consent configuration surfaces a non-blocking notice',()=>{
   const wxml=fs.readFileSync(path.join(root,'pages/contentreader/contentreader.wxml'),'utf8');
   assert.match(wxml,/consentUnavailable/,'阅读页必须有配置未就绪提示');
-  assert.match(wxml,/访问分析设置暂时未就绪/);
+  assert.match(wxml,/访问分析暂不可用，不影响阅读/);
   const code=fs.readFileSync(path.join(root,'pages/contentreader/contentreader.ts'),'utf8');
   assert.match(code,/configError/,'请求失败要与服务明确关闭区分');
 });

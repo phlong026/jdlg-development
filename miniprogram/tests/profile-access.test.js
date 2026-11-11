@@ -320,7 +320,7 @@ test('the anonymous share page is not locked when the app goes to background', (
 test('the anonymous explanation copy and login entry are present on the share page', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.wxml'), 'utf8');
   assert.match(wxml, /设计师分享给你的私密方案/);
-  assert.match(wxml, /登录后仅项目成员可查看/);
+  assert.match(wxml, /仅项目成员可查看/);
   assert.match(wxml, /bindtap="goLogin"/);
 });
 
