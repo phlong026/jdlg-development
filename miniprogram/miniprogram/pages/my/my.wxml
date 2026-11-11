@@ -52,7 +52,7 @@
       </view>
 
       <block wx:if="{{showWorkbenchSection}}">
-      <view class="menu-section-title workbench-heading"><text>{{workbenchSectionTitle}}</text><button wx:if="{{hasContentWorkbenchAccess}}" class="workbench-more" bindtap="onWorkbenchMore">更多</button></view>
+      <view class="menu-section-title workbench-heading"><text>{{workbenchSectionTitle}}</text><view wx:if="{{hasContentWorkbenchAccess}}" class="workbench-more" bindtap="onWorkbenchMore"><text>更多</text><text class="workbench-more-arrow">›</text></view></view>
       <view class="workbench-card">
         <view class="workbench-grid workbench-grid-{{workbenchMenuItems.length}}">
           <view wx:for="{{workbenchMenuItems}}" wx:key="action" class="workbench-item {{item.available === false ? 'workbench-item-disabled' : ''}}" bindtap="onWorkbenchMenuTap" data-action="{{item.action}}">

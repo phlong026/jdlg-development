@@ -394,7 +394,12 @@ Page({
       // 预览复用固定版本的私有媒体与正文渲染，不写草稿或创建对外版本。
       const presentation = await this.fixedVersionPresentation(project.project_id, Object.assign({}, draft, { media: this.data.noteMedia }), epoch, projectRequest);
       if (!current() || !presentation) return;
-      this.setData({ previewLoading: false, previewBodyFormat: draft.body_format, previewBody: draft.body, previewBlocks: presentation.blocks, previewMedia: presentation.media, previewMediaGroups: presentation.groups });
+      // 兜底：结构化正文若没渲染出块但仍有纯文本正文，按段落渲染，避免预览出现空白纸。
+      let blocks = presentation.blocks || [];
+      if (!blocks.length && draft.body_format === 'article_v2' && draft.body && String(draft.body).trim() && !/^\s*[{\[]/.test(String(draft.body))) {
+        blocks = [{ kind: 'paragraph', text: String(draft.body), className: 'article-paragraph', key: 'preview-fallback' }];
+      }
+      this.setData({ previewLoading: false, previewBodyFormat: draft.body_format, previewBody: draft.body, previewBlocks: blocks, previewMedia: presentation.media, previewMediaGroups: presentation.groups });
     } catch (error) {
       if (current()) this.setData({ previewLoading: false, previewError: error.message || '预览加载失败，内容已保留，请重试。' });
     }
