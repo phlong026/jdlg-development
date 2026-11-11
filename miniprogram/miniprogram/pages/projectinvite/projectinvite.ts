@@ -30,11 +30,13 @@ Page({
   },
   onHide() {
     this._visible = false;
+    if (this._enterTimer) { clearTimeout(this._enterTimer); this._enterTimer = null; }
     this._epoch = (this._epoch || 0) + 1;
     // 重试键跨前后台保留，私有项目数据不保留。
     this.setData(initial());
   },
-  onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
+  onUnload() { this._visible = false;
+    if (this._enterTimer) { clearTimeout(this._enterTimer); this._enterTimer = null; } this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
   clearProtected() { this._applyAttempt = null; this.setData(initial()); },
   async loadInvitation() {
@@ -66,11 +68,17 @@ Page({
       const result = await api.applyProjectInvitation(this._invitationToken, attempt.key);
       if (this._applyAttempt === attempt) this._applyAttempt = null;
       if (!this._visible) return;
-      this.setData({
-        loading: false, busy: false, applied: true,
-        requestStatus: result && result.status === 'pending' ? 'pending' : 'approved',
-        projectID: String(result && result.project_id || this.data.projectID || ''),
-      });
+      const projectID = String(result && result.project_id || this.data.projectID || '');
+      const approved = !(result && result.status === 'pending');
+      this.setData({ loading: false, busy: false, applied: true, requestStatus: approved ? 'approved' : 'pending', projectID });
+      // 加入即进入项目，少一次点击；停留 0.9 秒让用户看到「已加入项目」。
+      if (approved && projectID) {
+        if (this._enterTimer) clearTimeout(this._enterTimer);
+        this._enterTimer = setTimeout(() => {
+          this._enterTimer = null;
+          if (this._visible) wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(projectID) });
+        }, 900);
+      }
     } catch (error) {
       if (!this._visible) return;
       this.setData({ busy: false, error: error.message || '加入失败，请重试。' });
