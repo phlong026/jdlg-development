@@ -3,8 +3,8 @@ package route
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"crypto/sha256"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
@@ -85,6 +85,7 @@ func newProjectNoteHandlerFixture(t *testing.T) (*gin.Engine, *tracking.Service,
 
 func newProjectNoteHandlerFixtureWithProfiles(t *testing.T, profiles projectNoteProfileResolver) (*gin.Engine, *tracking.Service, *tracking.Scope, *int64) {
 	t.Helper()
+	t.Setenv("PROJECT_NOTES_ENABLED", "true")
 	gin.SetMode(gin.TestMode)
 	svc := tracking.New(&governanceTestStore{records: map[string]tracking.Record{}}, tracking.Config{
 		Tenant: "project-notes", Enabled: true, ContentEnabled: true, DefaultOwner: "owner-a", ConsentVersion: "v1",
@@ -103,6 +104,7 @@ func newProjectNoteHandlerFixtureWithProfiles(t *testing.T, profiles projectNote
 		c.Next()
 	})
 	manage := root.Group("", func(c *gin.Context) { c.Set(projectNoteScopeKey, *scope); c.Next() })
+	registerSharedVideoPlaybackRoutes(router.Group("/api/v1"), svc, func(context.Context, int64, sharedVideoKind) error { return nil })
 	registerProjectNoteHandlers(root, manage, svc, projectNoteHandlerDeps{
 		actor:    func(*gin.Context) int64 { return actor },
 		profiles: profiles,
@@ -621,8 +623,8 @@ func TestProjectNoteMediaLimitsMatchProductDecision(t *testing.T) {
 
 type fakeMultipartMediaStore struct {
 	putCalls, putFileCalls int
-	lastPath, lastDigest  string
-	lastSize              int64
+	lastPath, lastDigest   string
+	lastSize               int64
 }
 
 func (f *fakeMultipartMediaStore) Put(context.Context, string, string, []byte, string) error {

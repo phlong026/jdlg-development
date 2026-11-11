@@ -27,7 +27,8 @@
         </view>
         <template wx:elif="{{item.kind === 'gallery'}}" is="note-gallery" data="{{gallery: item, positions: galleryPositions}}" />
         <view wx:elif="{{item.kind === 'image' || item.kind === 'video'}}" class="note-media">
-          <block wx:if="{{item.local_path}}"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="widthFix" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:else src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" bindloadedmetadata="onNoteVideoMetadata" /></block>
+          <block wx:if="{{item.local_path}}"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="widthFix" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{handleVideoErrors}}" src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" data-src="{{item.local_path}}" bindloadedmetadata="onNoteVideoMetadata" binderror="onSharedNoteVideoError" /><video wx:else src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" bindloadedmetadata="onNoteVideoMetadata" /></block>
+          <button wx:elif="{{handleVideoErrors && item.kind === 'video'}}" class="note-media-missing" bindtap="retryMediaDownloads">视频播放失败，重新加载</button>
           <view wx:else class="note-media-missing">素材加载失败，可重试</view>
           <text wx:if="{{item.caption}}" class="note-caption" selectable="{{true}}">{{item.caption}}</text>
         </view>
@@ -39,7 +40,8 @@
     <block wx:for="{{format === 'article_v2' ? media : (groups || media)}}" wx:key="key">
       <template wx:if="{{format !== 'article_v2' && item.kind === 'gallery'}}" is="note-gallery" data="{{gallery: item, positions: galleryPositions}}" />
       <view wx:elif="{{format !== 'article_v2' && (item.kind === 'image' || item.kind === 'video')}}" class="note-media">
-        <block wx:if="{{item.local_path}}"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="widthFix" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:else src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" bindloadedmetadata="onNoteVideoMetadata" /></block>
+        <block wx:if="{{item.local_path}}"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="widthFix" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{handleVideoErrors}}" src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" data-src="{{item.local_path}}" bindloadedmetadata="onNoteVideoMetadata" binderror="onSharedNoteVideoError" /><video wx:else src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" bindloadedmetadata="onNoteVideoMetadata" /></block>
+        <button wx:elif="{{handleVideoErrors && item.kind === 'video'}}" class="note-media-missing" bindtap="retryMediaDownloads">视频播放失败，重新加载</button>
         <view wx:else class="note-media-missing">素材加载失败，可重试</view>
       </view>
       <button wx:elif="{{item.kind !== 'image' && item.kind !== 'video' && allowAttachments}}" class="note-attachment" data-id="{{item.media_id}}" bindtap="openAttachment">打开{{item.title || '附件'}}</button>

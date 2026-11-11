@@ -197,6 +197,16 @@ test('private project-note API helpers use signed member-checked endpoints and p
   assert.doesNotMatch(calls[4].options.url, /[?&](?:token|authorization)=/i);
 });
 
+test('shared video playback helper requests a signed streaming URL without downloading the file', async () => {
+  const { api, calls } = loadAPI({ request(options) { calls.push({ kind: 'request', options }); options.success({ statusCode: 200, data: { code: 0, data: { url: '/api/v1/shared-video/ticket?sig=short', expires_at: '2026-11-11T09:00:00Z' } } }); } });
+  const playback = await api.getSharedProjectNoteMediaPlayback('opaque-private-token', 'video-0001');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].kind, 'request');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.header.signedPath, '/api/v1/miniprogram/project-notes/shared/opaque-private-token/media/video-0001/playback');
+  assert.equal(playback.url, 'https://api.jiadilingguang.com/api/v1/shared-video/ticket?sig=short');
+});
+
 test('fixed-version and Word downloads sign their exact private routes without query credentials', async () => {
   const { api, calls } = loadAPI();
   await api.getProjectNoteVersion('project-one', 'version-one');

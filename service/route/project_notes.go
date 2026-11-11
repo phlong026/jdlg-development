@@ -86,7 +86,30 @@ func verifyActiveMiniProgramAccount(ctx context.Context, db *sql.DB, account int
 	return nil
 }
 
+func verifyProjectPlaybackActor(ctx context.Context, db *sql.DB, account int64, kind sharedVideoKind) error {
+	if err := verifyActiveMiniProgramAccount(ctx, db, account); err != nil {
+		return err
+	}
+	profile, err := miniprogramProfileLoaderFromModel(model.NewUserProfileModel(db))(ctx, account)
+	if err != nil {
+		return tracking.ErrUnavailable
+	}
+	if kind == sharedVideoNote {
+		if miniprogramProfileNicknameMissing(profile) {
+			return &tracking.Error{Status: http.StatusPreconditionRequired, Message: "请先补充昵称"}
+		}
+		return nil
+	}
+	if missing := miniprogramProfileMissingFields(profile); len(missing) > 0 {
+		return &tracking.Error{Status: http.StatusPreconditionRequired, Message: "请先补充头像和昵称"}
+	}
+	return nil
+}
+
 func registerProjectNoteRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
+	registerSharedVideoPlaybackRoutes(v1, svc, func(ctx context.Context, actor int64, kind sharedVideoKind) error {
+		return verifyProjectPlaybackActor(ctx, users.DB, actor, kind)
+	})
 	root := v1.Group("/miniprogram/project-notes", projectNotePrivateMiddlewares(users, codes)...)
 	packageRoot := v1.Group("/miniprogram/project-packages", projectNotePrivateMiddlewares(users, codes)...)
 	manage := root.Group("", func(c *gin.Context) {
@@ -377,6 +400,17 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 			return
 		}
 		serveContentMediaBytes(c, svc, asset)
+	})
+	root.POST("/shared/:token/media/:id/playback", func(c *gin.Context) {
+		asset, err := svc.ProjectNoteReadShareMedia(c.Request.Context(), c.Param("token"), deps.actor(c), c.Param("id"))
+		if err == nil {
+			err = requireSharedVideo(asset)
+		}
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		sharedVideoPlaybackResponse(c, sharedVideoPlaybackGrant{Kind: sharedVideoNote, ShareToken: c.Param("token"), Actor: deps.actor(c), AssetID: asset.ID})
 	})
 }
 

@@ -116,6 +116,11 @@ function createProjectNoteShare(versionID, expiresAt, key) { return request(proj
 function revokeProjectNoteShare(shareID) { return request(projectNotePath('/shares/' + encodeURIComponent(shareID) + '/revoke'), 'POST', {}); }
 function resolveProjectNoteFeedback(feedbackID, reply, key) { return request(projectNotePath('/feedback/' + encodeURIComponent(feedbackID) + '/resolve'), 'POST', { reply, idempotency_key: key }); }
 function getSharedProjectNote(token) { return request(projectNotePath('/shared/' + encodeURIComponent(token))); }
+async function getSharedProjectNoteMediaPlayback(token, id) {
+  const playback = await request(projectNotePath('/shared/' + encodeURIComponent(token) + '/media/' + encodeURIComponent(id) + '/playback'), 'POST', {});
+  const url = String(playback && playback.url || '');
+  return Object.assign({}, playback, { url: url.startsWith('/') ? ORIGIN + url : url });
+}
 function openSharedProjectNote(token, eventID) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/open'), 'POST', { event_id: eventID, acknowledged: true }); }
 function addSharedProjectNoteFeedback(token, text, key, satisfaction) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/feedback'), 'POST', { text, idempotency_key: key, satisfaction: satisfaction || '' }); }
 function confirmSharedProjectNote(token, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/confirm'), 'POST', { idempotency_key: key }); }
@@ -233,7 +238,7 @@ module.exports = {
   revokeProjectNoteMember,
   setProjectNoteConfirmer, copyProjectNote, deleteProjectNoteProject, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
-  addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
+  addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia, getSharedProjectNoteMediaPlayback,
   uploadProjectNoteMedia,
   getProjectNoteVersion, downloadProjectNoteMedia, downloadProjectNoteWord, downloadSharedProjectNoteWord,
   listNativeReferenceCandidates, listNativeReferences, saveNativeReference, deleteNativeReference, getNativeReferenceTarget,

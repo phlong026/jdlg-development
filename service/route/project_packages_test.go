@@ -162,8 +162,11 @@ func TestProjectNoteRouteRegistrationIncludesIndependentPackageRecipientRoot(t *
 	}
 	for _, want := range []string{
 		"PUT /api/v1/miniprogram/project-notes/projects/:id/packages/draft",
+		"POST /api/v1/miniprogram/project-notes/shared/:token/media/:id/playback",
 		"GET /api/v1/miniprogram/project-packages/shared/:token",
 		"GET /api/v1/miniprogram/project-packages/shared/:token/versions/:version",
+		"POST /api/v1/miniprogram/project-packages/shared/:token/versions/:version/media/:id/playback",
+		"GET /api/v1/shared-video/:ticket",
 	} {
 		if !routes[want] {
 			t.Fatalf("missing registered package route %s", want)

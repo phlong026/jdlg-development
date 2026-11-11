@@ -90,6 +90,17 @@ func registerProjectPackageHandlers(manage, shared *gin.RouterGroup, svc *tracki
 		}
 		serveContentMediaBytes(c, svc, asset)
 	})
+	shared.POST("/shared/:token/versions/:version/media/:id/playback", func(c *gin.Context) {
+		asset, err := svc.ProjectPackageReadVersionMedia(c.Request.Context(), c.Param("token"), actor(c), c.Param("version"), c.Param("id"))
+		if err == nil {
+			err = requireSharedVideo(asset)
+		}
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		sharedVideoPlaybackResponse(c, sharedVideoPlaybackGrant{Kind: sharedVideoPackage, ShareToken: c.Param("token"), Actor: actor(c), VersionID: c.Param("version"), AssetID: asset.ID})
+	})
 	shared.POST("/shared/:token/versions/:version/feedback", func(c *gin.Context) {
 		var body struct {
 			Text           string `json:"text"`

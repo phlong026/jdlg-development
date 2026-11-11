@@ -86,6 +86,91 @@ test('a media-level 404 keeps the rest of the share visible with a retry notice'
   assert.ok(h.page.data.media.some(item => item.media_id === 'img2' && !item.local_path), '失败素材单独标记');
 });
 
+test('shared videos use a short-lived playback URL while images still download', async () => {
+  const downloads = [], playbackRequests = [];
+  const videoView = {
+    project: { project_id: 'p', name: '张宅' }, share: { share_id: 's-video' }, can_confirm: false,
+    version: { version_id: 'v-video', revision: 1, title: '视频方案', body: '', body_format: 'plain', cover: { media_id: 'cover1', kind: 'image' }, media: [{ media_id: 'video1', kind: 'video' }] },
+  };
+  const h = openPage({
+    getSharedProjectNote: async () => videoView,
+    downloadSharedProjectNoteMedia: async (_token, id) => { downloads.push(id); return '/tmp/' + id; },
+    getSharedProjectNoteMediaPlayback: async (token, id) => { playbackRequests.push([token, id]); return { url: 'https://stream.example/' + id + '?sig=short', expires_at: '2026-11-11T09:00:00Z' }; },
+  });
+  await h.page.loadShared();
+  assert.deepEqual(downloads, ['cover1'], '只有图片走全量下载');
+  assert.deepEqual(playbackRequests, [['opaque-share-token', 'video1']]);
+  assert.equal(h.page.data.media.find(item => item.media_id === 'video1').local_path, 'https://stream.example/video1?sig=short');
+});
+
+test('a late video playback response cannot restore media after backgrounding', async () => {
+  let finishPlayback;
+  const pendingPlayback = new Promise(resolve => { finishPlayback = resolve; });
+  const videoView = {
+    project: { project_id: 'p' }, share: { share_id: 's-video' }, can_confirm: false,
+    version: { version_id: 'v-video', revision: 1, title: '视频方案', body: '', body_format: 'plain', media: [{ media_id: 'video1', kind: 'video' }] },
+  };
+  const h = openPage({ getSharedProjectNote: async () => videoView, getSharedProjectNoteMediaPlayback: async () => pendingPlayback });
+  const loading = h.page.loadShared();
+  await Promise.resolve();
+  h.page.onHide();
+  finishPlayback({ url: 'https://stream.example/stale-video', expires_at: '2026-11-11T09:00:00Z' });
+  await loading;
+  assert.equal(h.page.data.media.length, 0);
+  assert.equal(h.page.data.view, null);
+});
+
+test('revalidation refreshes video playback URLs without redownloading images', async () => {
+  const downloads = [];
+  const videoView = {
+    project: { project_id: 'p' }, share: { share_id: 's-video' }, can_confirm: false,
+    version: { version_id: 'v-video', revision: 1, title: '视频方案', body: '', body_format: 'plain', media: [{ media_id: 'image1', kind: 'image' }, { media_id: 'video1', kind: 'video' }] },
+  };
+  const h = openPage({
+    getSharedProjectNote: async () => videoView,
+    downloadSharedProjectNoteMedia: async (_token, id) => { downloads.push(id); return '/tmp/' + id; },
+    getSharedProjectNoteMediaPlayback: async () => ({ url: 'https://stream.example/fresh-video', expires_at: '2026-11-11T09:00:00Z' }),
+  });
+  h.page.setData({ view: videoView, media: [{ media_id: 'image1', kind: 'image', local_path: '/tmp/cached-image' }, { media_id: 'video1', kind: 'video', local_path: 'https://stream.example/old-video' }] });
+  await h.page.revalidateShared();
+  assert.deepEqual(downloads, []);
+  assert.equal(h.page.data.media.find(item => item.kind === 'image').local_path, '/tmp/cached-image');
+  assert.equal(h.page.data.media.find(item => item.kind === 'video').local_path, 'https://stream.example/fresh-video');
+});
+
+test('a video playback error exposes manual retry and fetches a fresh ticket', async () => {
+  let ticket = 0;
+  const videoView = {
+    project: { project_id: 'p' }, share: { share_id: 's-video' }, can_confirm: false,
+    version: { version_id: 'v-video', revision: 1, title: '视频方案', body: '', body_format: 'plain', media: [{ media_id: 'video1', kind: 'video' }] },
+  };
+  const h = openPage({
+    getSharedProjectNote: async () => videoView,
+    getSharedProjectNoteMediaPlayback: async () => ({ url: 'https://stream.example/ticket-' + (++ticket), expires_at: '2026-11-11T09:00:00Z' }),
+  });
+  await h.page.loadShared();
+  assert.equal(h.page.data.media[0].local_path, 'https://stream.example/ticket-1');
+  h.page.onSharedNoteVideoError({ currentTarget: { dataset: { id: 'video1' } } });
+  assert.equal(h.page.data.media[0].local_path, '');
+  assert.equal(h.page.data.mediaFailuresCount, 1);
+  assert.match(h.page.data.notice, /视频播放失败/);
+  await h.page.retryMediaDownloads();
+  assert.equal(h.page.data.media[0].local_path, 'https://stream.example/ticket-2');
+  assert.equal(h.page.data.mediaFailuresCount, 0);
+  h.page.onSharedNoteVideoError({ currentTarget: { dataset: { id: 'video1', src: 'https://stream.example/ticket-1' } } });
+  assert.equal(h.page.data.media[0].local_path, 'https://stream.example/ticket-2', '旧播放器迟到错误不得清空新票据');
+});
+
+test('shared video error binding is opt-in so project editor previews keep their existing handlers', () => {
+  const template = fs.readFileSync(path.join(root, 'components/project-note-document/note-document.wxml'), 'utf8');
+  const sharedPage = fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.wxml'), 'utf8');
+  const editorPage = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /handleVideoErrors/);
+  assert.match(template, /binderror="onSharedNoteVideoError"/);
+  assert.match(sharedPage, /handleVideoErrors: true/);
+  assert.doesNotMatch(editorPage, /handleVideoErrors: true/);
+});
+
 test('authorization loss during media download is not shown as a partial media failure', async () => {
   const h = openPage({
     getSharedProjectNote: async () => view,

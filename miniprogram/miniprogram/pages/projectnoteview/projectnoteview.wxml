@@ -6,7 +6,7 @@
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
   <block wx:elif="{{view}}">
     <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本</text></view></view>
-    <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true}}" /></view>
+    <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true, handleVideoErrors: true}}" /></view>
     <view class="card">
       <text class="section-title">阅读回执</text><text class="muted">发送后设计师会看到你已查看。</text>
       <button class="secondary" bindtap="acknowledgeRead" loading="{{acknowledgingRead}}" disabled="{{readAcknowledged || acknowledgingRead}}">{{readAcknowledged ? '已发送阅读回执' : '告知设计师我已查看'}}</button>

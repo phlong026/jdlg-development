@@ -32,6 +32,15 @@ const feedbackRows = view => {
   for (const resolution of view && view.resolutions || []) replies.set(resolution.feedback_id, String(resolution.reply || ''));
   return (view && view.feedbacks || []).map(feedback => Object.assign({}, feedback, { resolution_reply: feedback.reply || replies.get(feedback.feedback_id) || '', satisfaction_label: satisfactionLabels[feedback.satisfaction] || '' }));
 };
+const loadSharedMedia = async (token, asset) => {
+  if (asset && asset.kind === 'video') {
+    const playback = await api.getSharedProjectNoteMediaPlayback(token, asset.media_id);
+    const url = String(playback && playback.url || '');
+    if (!url) throw new Error('视频播放地址获取失败');
+    return Object.assign({}, asset, { local_path: url, playback_expires_at: playback.expires_at || '', preview_error: '' });
+  }
+  return Object.assign({}, asset, { local_path: await api.downloadSharedProjectNoteMedia(token, asset.media_id), preview_error: '' });
+};
 
 Page({
   onNoteGalleryChange(event) {
@@ -45,6 +54,18 @@ Page({
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
     const media = noteVideoMetadata(this.data.media, event, windowInfo);
     this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
+  onSharedNoteVideoError(event) {
+    const mediaID = String(event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.id || '');
+    const failedURL = String(event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.src || '');
+    const currentAsset = (this.data.media || []).find(item => item.media_id === mediaID && item.kind === 'video');
+    if (!mediaID || !this.data.view || !this.current(this._epoch) || this._accessVerified === false || !currentAsset || (failedURL && failedURL !== currentAsset.local_path)) return;
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const media = fitNoteMedia((this.data.media || []).map(item => item.media_id === mediaID && item.kind === 'video'
+      ? Object.assign({}, item, { local_path: '', playback_expires_at: '', preview_error: '视频播放失败' }) : item), windowInfo);
+    const version = this.data.view.version || {};
+    const articleBlocks = version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(version.body, media, windowInfo.windowWidth * 636 / 750, 'private-note'), media, windowInfo) : [];
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks, mediaFailuresCount: mediaFailureCount(media), notice: '视频播放失败，请重新加载。' });
   },
   data: {
     loading: true, busy: false, loginRequired: false, error: '', notice: '',
@@ -112,7 +133,7 @@ Page({
         while (mediaCursor < assets.length) {
           const index = mediaCursor++;
           const asset = assets[index];
-          try { media[index] = Object.assign({}, asset, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, asset.media_id) }); continue; }
+          try { media[index] = await loadSharedMedia(this._shareToken, asset); continue; }
           catch (error) {
             const status = Number(error && error.statusCode);
             if ([401, 403].includes(status)) throw error;
@@ -168,17 +189,37 @@ Page({
       const sameVersion = String(view.version && view.version.version_id || '') === String(cached.version && cached.version.version_id || '');
       if (!sameShare || !sameVersion) throw Object.assign(new Error('分享已变更'), { statusCode: 403 });
       const unchanged = String(view.version && view.version.revision || '') === String(cached.version && cached.version.revision || '') && (this.data.media || []).length >= 0;
+      const hasVideos = (this.data.media || []).some(item => item && item.kind === 'video');
+      let media = this.data.media || [], articleBlocks = this.data.articleBlocks || [], videoRefreshFailed = false;
+      if (hasVideos) {
+        media = await Promise.all(media.map(async item => {
+          if (!item || item.kind !== 'video') return item;
+          try { return await loadSharedMedia(this._shareToken, item); }
+          catch (error) {
+            if ([401, 403].includes(Number(error && error.statusCode))) throw error;
+            videoRefreshFailed = true;
+            return Object.assign({}, item, { local_path: '', preview_error: '视频加载失败' });
+          }
+        }));
+        if (!this.current(epoch)) return;
+        const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+        media = fitNoteMedia(media, windowInfo);
+        const width = windowInfo.windowWidth * 636 / 750;
+        articleBlocks = view.version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(view.version.body, media, width, 'private-note'), media, windowInfo) : [];
+      }
       this._accessVerified = true;
       if (unchanged) {
-        // T3.5：分享/版本未变化时不重建媒体与正文块，只刷新状态，避免整页闪动。
-        const mediaFailures = (this.data.media || []).some(item => item && (item.preview_error || !item.local_path));
-        this.setData({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: mediaFailures ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(this.data.media), shareReady: !!view.share && !!this._shareToken }, () => {
+        // 图片/文档复用本地文件；视频签名地址短时有效，每次回到页面单独刷新。
+        const mediaFailures = media.some(item => item && (item.preview_error || !item.local_path));
+        const mediaPatch = hasVideos ? { media, mediaGroups: groupNoteImages(media, media, wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()), articleBlocks } : {};
+        this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: mediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, mediaPatch), () => {
           if (this.current(epoch) && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
         });
         return;
       }
-      const pendingMediaFailures = (this.data.media || []).some(item => item && (item.preview_error || !item.local_path));
-      this.setData({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: pendingMediaFailures ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(this.data.media), shareReady: !!view.share && !!this._shareToken }, () => {
+      const pendingMediaFailures = media.some(item => item && (item.preview_error || !item.local_path));
+      const mediaPatch = hasVideos ? { media, mediaGroups: groupNoteImages(media, media, wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()), articleBlocks } : {};
+      this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: pendingMediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, mediaPatch), () => {
         if (this.current(epoch) && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
       });
     } catch (error) {
@@ -327,7 +368,7 @@ Page({
     const worker = async () => {
       while (cursor < failures.length) {
         const item = failures[cursor++];
-        try { updated.set(item.media_id, Object.assign({}, item, { local_path: await api.downloadSharedProjectNoteMedia(this._shareToken, item.media_id), preview_error: '' })); }
+        try { updated.set(item.media_id, await loadSharedMedia(this._shareToken, item)); }
         catch (_) { /* 保持失败状态，等下次重试 */ }
       }
     };
@@ -337,7 +378,9 @@ Page({
     const media = (this.data.media || []).map(item => updated.get(item.media_id) || item);
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
     const failuresLeft = mediaFailureCount(media);
-    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), mediaFailuresCount: failuresLeft, notice: failuresLeft ? SHARE_ERROR.media : '素材已重新加载。' });
+    const version = this.data.view && this.data.view.version || {};
+    const articleBlocks = version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(version.body, media, windowInfo.windowWidth * 636 / 750, 'private-note'), media, windowInfo) : [];
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks, mediaFailuresCount: failuresLeft, notice: failuresLeft ? SHARE_ERROR.media : '素材已重新加载。' });
   },
   onShareAppMessage() {
     if (!this.data.shareReady || !this.data.view || !this._shareToken || this._accessVerified === false) return {};

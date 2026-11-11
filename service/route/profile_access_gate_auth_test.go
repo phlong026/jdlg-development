@@ -21,6 +21,7 @@ import (
 	"github.com/tjfoc/gmsm/sm4"
 	"service/function"
 	"service/model"
+	"service/tracking"
 )
 
 type profileGateAuthConnector struct {
@@ -40,6 +41,8 @@ func (c profileGateAuthConnector) Begin() (driver.Tx, error) {
 }
 func (c profileGateAuthConnector) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
 	switch {
+	case strings.Contains(query, "SELECT 1 FROM users"):
+		return &profileGateAuthRows{columns: []string{"1"}, values: [][]driver.Value{{int64(1)}}}, nil
 	case strings.Contains(query, "FROM users"):
 		// No merge record means CodeSessionRedisModel keeps the session user ID.
 		return &profileGateAuthRows{columns: []string{"user_type", "merge_status", "merged_to_user_id"}}, nil
@@ -53,6 +56,28 @@ func (c profileGateAuthConnector) QueryContext(_ context.Context, query string, 
 		}, nil
 	default:
 		return nil, errors.New("unexpected query")
+	}
+}
+
+func TestVerifyProjectPlaybackActorAppliesProfileRuleByShareKind(t *testing.T) {
+	db := sql.OpenDB(profileGateAuthConnector{profile: miniprogramProfile{Nickname: "用户"}})
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := verifyProjectPlaybackActor(ctx, db, 101, sharedVideoNote); err != nil {
+		t.Fatalf("nickname-only actor rejected: %v", err)
+	}
+	err := verifyProjectPlaybackActor(ctx, db, 101, sharedVideoPackage)
+	var trackingError *tracking.Error
+	if !errors.As(err, &trackingError) || trackingError.Status != http.StatusPreconditionRequired {
+		t.Fatalf("package missing avatar error = %T %v", err, err)
+	}
+
+	db = sql.OpenDB(profileGateAuthConnector{profile: miniprogramProfile{Avatar: "https://cdn.example.com/avatar.png"}})
+	defer db.Close()
+	err = verifyProjectPlaybackActor(ctx, db, 101, sharedVideoNote)
+	if !errors.As(err, &trackingError) || trackingError.Status != http.StatusPreconditionRequired {
+		t.Fatalf("missing nickname error = %T %v", err, err)
 	}
 }
 

@@ -336,3 +336,9 @@ result, err := strategy.Login(ctx, req)
 ### 固定版本内容海报
 
 `GET /workbench/content-poster?content_id=...&content_version=...` 必须带明确的已发布版本，按当前管理范围校验 owner，再生成可解析的真实 share_token；二维码固定进入内容阅读页。`GET /workbench/shares/:id/poster` 的路径参数必须为真实分享令牌，并验证分享仍有效以及当前实际分享者或授权 owner，不能把不透明 ID 当作权限。客户端默认隐藏海报，只有服务端工作台能力确认当前内容归属可管理后才显示。普通阅读、原生分享不依赖素材管理权限。
+
+### 分享视频播放与链接导入（2026-11-11）
+
+项目笔记与分享资料接收页使用已鉴权 POST 获取10分钟播放票据，原生播放器经 `/api/v1/shared-video/:ticket` 读取自有存储并使用 Range；每次读取仍复核账号资料和分享权限。无需新增环境变量或数据库迁移；必须在API站点合并 `ops/phase3-release/shared-video.conf` 并执行 `nginx -t`、真实Range及敏感日志校验。沿用 `PROJECT_NOTES_ENABLED` 和现有私有媒体配置。接口及生命周期见 [项目笔记接口](../docs/phase3/private-project-notes.md)。
+
+链接导入生产路径将 MP4 上限由50MiB提高为500MiB，并使用权限为0600的临时文件流式下载与转存；图片保持10MiB。临时目录沿用操作系统 `TMPDIR`，部署需为单个最大视频及转存过程预留磁盘空间。旧字节数组抓取接口仍保留原限额用于现有其他调用，不用于新的大视频导入。任务总窗口20分钟、来源下载最多15分钟，长媒体保存期间心跳续租且单次续租最多5秒；MP4累计最多10000个atom并支持取消。过期媒体仅由用户显式重试后重新解析，结果不明的付费解析仍不可重试。方案和限制见 [导入方案](../docs/phase3/content-import-plan-20261027.md)。

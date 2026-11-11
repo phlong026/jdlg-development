@@ -1,0 +1,53 @@
+{
+  "status": "local_verified_deployment_pending",
+  "baseline": {
+    "branch": "fix/shared-video-stream-20261111",
+    "commit": "1214ae1",
+    "ui_baseline": "2026-11-11 designer workbench",
+    "previous_miniprogram_upload": "8.0.4"
+  },
+  "checks": {
+    "miniprogram_native_wxml": {
+      "tests": 1438,
+      "pass": 1438,
+      "fail": 0,
+      "skipped": 0
+    },
+    "go_all": "CGO_ENABLED=0 go test ./... -count=1: exit 0",
+    "go_vet": "CGO_ENABLED=0 go vet ./route ./contentimport ./contentstorage: exit 0",
+    "typescript": {
+      "baseline_errors": 229,
+      "current_errors": 229,
+      "baseline_log_lines": 232,
+      "exact_match": true,
+      "status": "preexisting_errors_no_new_errors"
+    },
+    "npm_audit_production": {
+      "vulnerabilities": 0
+    },
+    "javascript_syntax_files": 9,
+    "generated_sources": "tracking/auth signer/content template --check passed",
+    "large_file": "51MiB MP4 imported through file pipeline and persisted; fixture, not live Channels import",
+    "secret_scan": "added tracked lines checked; no real credentials found",
+    "independent_security_review": "passed: no remaining critical/high/medium code blockers"
+  },
+  "not_verified": [
+    "production nginx configuration syntax and credential-free error paths",
+    "production HTTPS Range 206/416 and share revocation",
+    "real device first frame/seeking/weak network/ticket retry",
+    "live Channels import over 50MiB"
+  ],
+  "deployment": {
+    "backend_deployed": false,
+    "miniprogram_uploaded": false,
+    "database_migration_required": false,
+    "ssh": "current identity rejected",
+    "browser": "connected to existing BaoTa tab through Chrome AppleScript fallback",
+    "required_nginx_candidate": "ops/phase3-release/shared-video.conf"
+  },
+  "limitations": [
+    "single-process in-memory playback ticket store, TTL 10 minutes, max 4096 grants",
+    "explicit reparse of expired import may incur provider charge",
+    "500MiB import cap, 20-minute job window, 15-minute source download, 10000 MP4 atoms"
+  ]
+}

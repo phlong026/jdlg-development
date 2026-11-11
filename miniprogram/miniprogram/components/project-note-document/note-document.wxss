@@ -29,4 +29,5 @@
 .note-document .article-border-card{padding:22rpx;border:1rpx solid #e7dbcd;border-radius:16rpx}
 .note-document .article-border-divider{padding-bottom:22rpx;border-bottom:1rpx solid #e7dbcd}
 @media (max-width:360px){.note-document{font-size:28rpx}.note-document .article-heading-2{font-size:35rpx}.note-document .article-heading-3{font-size:31rpx}}
-.note-media-missing{display:block;margin:12rpx 0;padding:24rpx;text-align:center;color:#8a6d3b;background:#fbf3e2;border-radius:8rpx;font-size:24rpx}
+.note-media-missing{display:block;width:100%;box-sizing:border-box;margin:12rpx 0;padding:24rpx;text-align:center;color:#8a6d3b;background:#fbf3e2;border-radius:8rpx;font-size:24rpx;line-height:1.6}
+.note-media-missing::after{border:0}

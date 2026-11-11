@@ -17,7 +17,7 @@
 
   <block wx:elif="{{pageView === 'version' && versionView}}">
     <view class="header"><text class="eyebrow">{{directory.project.name}}</text><text class="title">{{versionView.version.title}}</text><view class="version-line"><text class="version-badge">V{{versionView.version.revision}}</text><text class="meta">固定版本</text></view></view>
-    <view class="paper"><template is="note-document" data="{{format: versionView.version.body_format, body: versionView.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: false}}" /></view>
+    <view class="paper"><template is="note-document" data="{{format: versionView.version.body_format, body: versionView.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: false, handleVideoErrors: true}}" /></view>
     <view class="card action-row"><button class="secondary" bindtap="acknowledgeRead" disabled="{{busy || readAcknowledged}}">{{readAcknowledged ? '已发送回执' : '发送阅读回执'}}</button><button wx:for="{{media}}" wx:key="media_id" wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveImage">保存原图</button></view>
     <view class="card feedback-card">
       <text class="section-title">反馈给设计师</text>
@@ -28,7 +28,7 @@
     </view>
     <view wx:if="{{versionView.can_confirm || confirmed}}" class="card"><text class="section-title">版本确认</text><button class="primary" bindtap="confirmVersion" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
   </block>
-  <view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="secondary" bindtap="retryMediaDownloads">重新加载视频</button></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />
