@@ -1,8 +1,9 @@
 <block wx:if="{{__profileAccessMounted}}">
 <navigation-bar title="加入项目" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" background="#f8f5ef" />
 <view class="page">
-  <view wx:if="{{loading}}" class="state">正在登录并确认邀请…</view>
-  <view wx:elif="{{error && !preview}}" class="state"><text>{{error}}</text><button class="primary" bindtap="retryLogin">重试</button></view>
+  <view wx:if="{{loading}}" class="state">正在确认邀请…</view>
+  <view wx:elif="{{loginRequired}}" class="state"><text>微信登录并完善头像昵称后即可加入项目</text><button class="primary" bindtap="goLogin">微信登录</button></view>
+  <view wx:elif="{{error && !preview}}" class="state"><text>{{error}}</text></view>
   <view wx:else class="card">
     <view class="mark">甲</view>
     <text class="title">{{preview.project_name}}</text>

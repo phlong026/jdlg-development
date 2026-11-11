@@ -1,7 +1,6 @@
 // @ts-nocheck
 'use strict';
 const api = require('../../utils/phase3-api');
-const API_BASE_URL = 'https://api.jiadilingguang.com';
 
 const initial = () => ({ loading: true, busy: false, loginRequired: false, error: '', preview: null, applied: false, requestStatus: '', projectID: '' });
 
@@ -18,8 +17,9 @@ Page({
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(this._invitationToken || '')) {
       this.setData({ loading: false, error: '该邀请已失效。' }); return;
     }
+    // 登录与头像昵称由 login-guard 统一核验（与普通用户一致，用于用户跟踪）。
     const accountToken = String(wx.getStorageSync('token') || '');
-    if (!accountToken) return this.signIn();
+    if (!accountToken) { this.setData({ loading: false, loginRequired: true }); return; }
     if (accountToken !== this._accountToken) {
       this._accountToken = accountToken;
       this._epoch = (this._epoch || 0) + 1;
@@ -37,45 +37,6 @@ Page({
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
   clearProtected() { this._applyAttempt = null; this.setData(initial()); },
-  // 邀请落地页走微信静默登录：不跳登录页、不强制头像昵称，登录后直接确认加入。
-  signIn() {
-    this.setData({ loading: true, loginRequired: true, error: '' });
-    return this.requestSilentLogin().then(token => {
-      if (!this._visible) return;
-      if (!token) { this.setData({ loading: false, loginRequired: true, error: '微信登录失败，请重试。' }); return; }
-      this._accountToken = String(token);
-      this._epoch = (this._epoch || 0) + 1;
-      this._applyAttempt = null;
-      this.setData(initial());
-      return this.loadInvitation();
-    });
-  },
-  requestSilentLogin() {
-    return new Promise(resolve => {
-      wx.login({
-        success: res => {
-          if (!res || !res.code) { resolve(''); return; }
-          wx.request({
-            url: `${API_BASE_URL}/api/v1/miniprogram/login`,
-            method: 'POST',
-            timeout: 15000,
-            data: { code: res.code },
-            header: { 'Content-Type': 'application/json' },
-            success: r => {
-              const payload = r.data || {}, data = payload.data || {};
-              if (r.statusCode === 200 && payload.code === 0 && data.token) {
-                wx.setStorageSync('token', data.token);
-                wx.setStorageSync('userInfo', data);
-                resolve(String(data.token));
-              } else resolve('');
-            },
-            fail: () => resolve(''),
-          });
-        },
-        fail: () => resolve(''),
-      });
-    });
-  },
   async loadInvitation() {
     const epoch = this._epoch = (this._epoch || 0) + 1;
     this.setData({ loading: true, error: '', preview: null, applied: false, requestStatus: '', projectID: '' });
@@ -90,7 +51,7 @@ Page({
       if (!this.current(epoch)) return;
       if (Number(error.statusCode) === 401) {
         wx.removeStorageSync('token'); this._accountToken = '';
-        void this.signIn();
+        this.setData({ loading: false, loginRequired: true, error: '' });
         return;
       }
       this.setData({ loading: false, error: '该邀请已失效。' });
@@ -120,6 +81,6 @@ Page({
     if (!projectID) { void this.loadInvitation(); return; }
     wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(projectID) });
   },
-  retryLogin() { void this.signIn(); },
+  goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   handleBack() { wx.navigateBack(); },
 });
