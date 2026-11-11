@@ -68,3 +68,11 @@ python3 /root/jdlg-backend-deploy-0be962c/binary_release.py rollback \
 2. 成员归因：inviter_id / invitation_id / joined_at，详情返回 inviter_name
 3. 媒体短时签名地址（10 分钟 TTL）+ Range 流式播放
 4. 无数据库迁移、无环境变量变更
+
+## 第三次后端部署（2026-11-11，提交 dab2b4a）
+
+- 背景：纠正 2026-11-11 早些时候引入的「方案分享需申请/审批」策略；恢复「有效分享链接 + 已登录」直接查看
+- 包：`开发版916/交付/后端-20261111-dab2b4a.tar.gz`（SHA-256 `42355af7…c18c1d3b`）
+- 二进制 SHA-256：`8ac049b2…8bb91bed`（Linux amd64，`vcs.revision=dab2b4a`）
+- 备份目录约定：`/root/jdlg-backend-backup-20261111-dab2b4a`
+- 无数据库迁移、无环境变量变更
