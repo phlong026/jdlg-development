@@ -1,0 +1,100 @@
+[
+  {
+    "method": "GET",
+    "path": "/ai/pricing",
+    "status": 200,
+    "code": 0,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai-tools",
+    "status": 200,
+    "code": 0,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai-tools/30",
+    "status": 200,
+    "code": 0,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai-tools/code/tpzcad",
+    "status": 200,
+    "code": 0,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai/pricing?scenes=private_runtime_config",
+    "status": 400,
+    "code": 400,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai/pricing?scenes=ai_video_1,ai_video_2",
+    "status": 200,
+    "code": 0,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai/pricing?scenes=ai_video_1,ai_video_2",
+    "status": 200,
+    "code": 0,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/user/stones",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/user/tasks",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "POST",
+    "path": "/ai/draw",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "POST",
+    "path": "/ai/upload-reference-image",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "POST",
+    "path": "/ai/video/create",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/tracking/contents/test/versions/1",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  },
+  {
+    "method": "GET",
+    "path": "/ai/cost/shares/test",
+    "status": 401,
+    "code": 401,
+    "sensitive_fields": 0
+  }
+]

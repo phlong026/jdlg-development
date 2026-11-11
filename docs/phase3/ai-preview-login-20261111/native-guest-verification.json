@@ -1,0 +1,449 @@
+{
+  "pages": [
+    {
+      "route": "pages/aigenerate/aigenerate",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "pricingLoaded": true,
+      "toolLoaded": false,
+      "arrays": {
+        "styleOptions": 6,
+        "qualityOptions": 2,
+        "canvasOptions": 3,
+        "uploadedImages": 0,
+        "originalImages": 2,
+        "referenceImages": 0,
+        "originalSlotIndices": 2,
+        "originalSlotLabels": 2,
+        "referenceSlotIndices": 4,
+        "referenceSlotLabels": 4,
+        "generateCountOptions": 3
+      }
+    },
+    {
+      "route": "pages/aivideo/aivideo",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "toolLoaded": false,
+      "arrays": {
+        "ratioOptions": 3,
+        "durationOptions": 2,
+        "segmentPrompts": 0
+      }
+    },
+    {
+      "route": "pages/aitools/aitools",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "toolLoaded": false,
+      "arrays": {
+        "categories": 4,
+        "displayTools": 17,
+        "leftColumnTools": 9,
+        "rightColumnTools": 8
+      }
+    },
+    {
+      "route": "pages/aitooldetail/aitooldetail",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "toolLoaded": true,
+      "arrays": {
+        "highlights": 0
+      }
+    },
+    {
+      "route": "pages/aitoolworkbench/aitoolworkbench",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "pricingLoaded": true,
+      "toolLoaded": true,
+      "arrays": {
+        "visualStyleOptions": 1,
+        "qualityOptions": 2,
+        "canvasOptions": 3,
+        "generateCountOptions": 3
+      }
+    },
+    {
+      "route": "pages/aicost/aicost",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "toolLoaded": false,
+      "arrays": {
+        "regionIndex": 2,
+        "windowOptions": 3,
+        "buildingStyleOptions": 4,
+        "structureOptions": 3,
+        "provinceOptions": 20,
+        "cityOptions": 9,
+        "regionOptions": 2,
+        "roofOptions": 4,
+        "basementOptions": 3,
+        "decorationOptions": 3,
+        "facadeOptions": 5,
+        "foundationOptions": 4
+      }
+    },
+    {
+      "route": "pages/newminnantool/newminnantool",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "pricingLoaded": true,
+      "toolLoaded": true,
+      "arrays": {
+        "canvasOptions": 3,
+        "generateCountOptions": 3
+      }
+    },
+    {
+      "route": "pages/allrounddesign/allrounddesign",
+      "hasLogin": false,
+      "ready": true,
+      "loginVisible": false,
+      "completingProfile": false,
+      "pricingLoaded": true,
+      "toolLoaded": false,
+      "arrays": {
+        "tabs": 4,
+        "styleOptions": 10,
+        "posterStyleOptions": 8,
+        "posterReferenceImages": 0,
+        "culturalStyleOptions": 8,
+        "culturalReferenceImages": 0,
+        "parentDesignTypes": 3,
+        "parentPrototypes": 3,
+        "parentStyleOptions": 4,
+        "parentReferenceImages": 0,
+        "qualityOptions": 2,
+        "canvasOptions": 3,
+        "generateCountOptions": 3
+      }
+    }
+  ],
+  "cancelPreservedInput": true,
+  "restoredAuthenticatedReturnPreservedInput": true,
+  "realInteractiveWeChatLoginTested": false,
+  "paidGenerationExecuted": false,
+  "requests": [
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 403,
+      "accepted": 0
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/ai/pricing",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 3
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/ai/pricing",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 503,
+      "accepted": 0
+    },
+    {
+      "path": "/api/v1/miniprogram/ai-tools",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 3
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/ai-tools/30",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/ai-tools/30",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/ai/pricing",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/ai/pricing",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/ai/pricing",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/ai/pricing",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 1
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "accepted": 2
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": false
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 403,
+      "accepted": 0
+    }
+  ],
+  "guestUnexpectedAuth": 0
+}
