@@ -53,3 +53,18 @@ python3 /root/jdlg-backend-deploy-0be962c/binary_release.py rollback \
 - 小程序前端：需微信开发者工具上传（本机/CI 持 appid 与上传私钥），或由人工上传体验版。
 - `TRACKING_PRIVACY_NOTICE` 文案更新：运维后台配置（T7.2 运营项），不随二进制。
 - T5.2 上传压测、T7.4 线上包核查、T7.5 真机分享链路：按人工验收清单执行。
+
+## 第二次部署（2026-11-11 12:2x，邀请免审批 + 归因 + 签名流式播放）
+
+- 包：`开发版916/交付/jdlg-backend-6895998.tar.gz`（包 SHA-256 `ccdc141a…c06307`）
+- 二进制：SHA-256 `b222aaaeb5478fd0845a9dd57c36009d10c470f92d3c5e30ef2ef84f4030df90`，Linux amd64，`vcs.revision=6895998`
+- 发布器 prepare：`{"status":"prepared","old_sha":"e1d7e6a8…","candidate_sha":"b222aaae…","pid":2066243}`
+- activate：`{"status":"active", ..., "pid":2141526}`
+- 备份：`/root/jdlg-backend-backup-20261111-6895998`（binary.previous、runtime-env.json、state.json）
+- 公网验证：`/tracking/config` 200、`/project-notes/projects` 401、`POST /tracking/media/<id>/signed` 未登录 401、根路径 301
+
+### 本包变更
+1. 邀请链接登录后直接加入（服务端 apply 即 approved，免审批）
+2. 成员归因：inviter_id / invitation_id / joined_at，详情返回 inviter_name
+3. 媒体短时签名地址（10 分钟 TTL）+ Range 流式播放
+4. 无数据库迁移、无环境变量变更
