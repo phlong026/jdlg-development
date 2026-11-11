@@ -1,16 +1,18 @@
 <block wx:if="{{__profileAccessMounted}}">
 <navigation-bar title="加入项目" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" background="#f8f5ef" />
 <view class="page">
-  <view wx:if="{{loading}}" class="state">正在加载…</view>
-  <view wx:elif="{{loginRequired}}" class="state"><text>登录后确认邀请</text><button class="primary" bindtap="goLogin">去登录</button></view>
-  <view wx:elif="{{error && !preview}}" class="state">{{error}}</view>
+  <view wx:if="{{loading}}" class="state">正在登录并确认邀请…</view>
+  <view wx:elif="{{error && !preview}}" class="state"><text>{{error}}</text><button class="primary" bindtap="retryLogin">重试</button></view>
   <view wx:else class="card">
     <view class="mark">甲</view>
     <text class="title">{{preview.project_name}}</text>
-    <text wx:if="{{!requestStatus}}" class="subtitle">申请加入该项目</text>
-    <view wx:if="{{requestStatus === 'approved'}}" class="done"><text class="done-icon">✓</text><text class="done-title">已加入项目</text></view>
+    <text wx:if="{{busy}}" class="subtitle">正在加入项目…</text>
+    <block wx:elif="{{requestStatus === 'approved'}}">
+      <view class="done"><text class="done-icon">✓</text><text class="done-title">已加入项目</text></view>
+      <button wx:if="{{projectID}}" class="primary" bindtap="enterProject">进入项目</button>
+    </block>
     <view wx:elif="{{requestStatus === 'pending'}}" class="done"><text class="done-icon">✓</text><text class="done-title">申请待审核</text></view>
-    <button wx:else class="primary" loading="{{busy}}" disabled="{{busy}}" bindtap="applyInvitation">确认申请</button>
+    <button wx:else class="primary" loading="{{busy}}" disabled="{{busy}}" bindtap="applyInvitation">加入项目</button>
     <text wx:if="{{error}}" class="error">{{error}}</text>
   </view>
 </view>

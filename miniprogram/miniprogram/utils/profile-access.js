@@ -25,6 +25,8 @@ const PUBLIC_BROWSE_ROUTES = new Set([
   'pages/report/questionnaire',
   'pages/report/preview',
   'pages/report/delivery',
+  // 邀请落地页要求最短链路：静默登录后直接加入，不强制补头像昵称。
+  'pages/projectinvite/projectinvite',
 ]);
 
 // 匿名说明态路由：未登录打开分享链接时只挂壳显示「设计师分享给你的私密方案」，

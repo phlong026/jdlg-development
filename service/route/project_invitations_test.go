@@ -35,7 +35,7 @@ func TestProjectInvitationRoutesKeepScopedLegacyGrantDuringClientTransition(t *t
 	}
 }
 
-func TestProjectInvitationRouteRequiresExplicitDesignerApproval(t *testing.T) {
+func TestProjectInvitationRouteGrantsMembershipOnApply(t *testing.T) {
 	router, _, _, actor := newProjectNoteHandlerFixture(t)
 	projectRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects", map[string]any{"name": "张宅方案", "owner_id": "owner-a"})
 	project := projectNoteData[map[string]any](t, projectRec)
@@ -64,18 +64,12 @@ func TestProjectInvitationRouteRequiresExplicitDesignerApproval(t *testing.T) {
 	request := projectNoteData[map[string]any](t, applyRec)
 	requestID, _ := request["request_id"].(string)
 
+	_ = requestID
 	*actor = 7
-	requestsRec := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects/"+projectID+"/member-requests", nil)
-	if requestsRec.Code != http.StatusOK || !strings.Contains(requestsRec.Body.String(), "张女士") || !strings.Contains(requestsRec.Body.String(), "member.png") {
-		t.Fatalf("requests = %d %s", requestsRec.Code, requestsRec.Body.String())
-	}
-	approveRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects/"+projectID+"/member-requests/"+requestID+"/approve", map[string]any{"idempotency_key": "route-invite-approve-1"})
-	if approveRec.Code != http.StatusOK {
-		t.Fatal(approveRec.Code, approveRec.Body.String())
-	}
+	// 邀请链接即准入凭据：受邀人登录后直接成为成员，无需设计师二次审批。
 	detailRec := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects/"+projectID, nil)
 	if detailRec.Code != http.StatusOK || !strings.Contains(detailRec.Body.String(), `"actor_id":101`) {
-		t.Fatalf("approved member missing = %d %s", detailRec.Code, detailRec.Body.String())
+		t.Fatalf("invitation member missing = %d %s", detailRec.Code, detailRec.Body.String())
 	}
 }
 
