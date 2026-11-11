@@ -1,0 +1,87 @@
+{
+  "status": "deployed_uploaded_trial_verified_audit_in_progress",
+  "source_commit": "b8ce03d7024e4f472dd08ea38fe2f71f88076d4a",
+  "guest_fix_commit": "cac56926cd40464bd32105a9ff7cde655fbc5764",
+  "branch": "fix/review-guest-entry-20261111",
+  "ui_baseline": "Nov11 designer workbench",
+  "backend": {
+    "pid": 2821770,
+    "sha256": "a6d9b7fb9210dfee10e1236ce985caa2e100bbeb46b18d5dd15d445b0f4082b6",
+    "archive_sha256": "bef0d0506b37e2a0f81b6b5b1257b9f6da86eaaac276593aef8187907cd60e48",
+    "go_vcs_modified": false,
+    "previous_pid": 2554154,
+    "previous_sha256": "9c7de02f240683adf4617c6d4c67ed4fe8df43d55f3af33180e360d7c59de319",
+    "backup": "/root/jdlg-review-backup-20261111-b8ce03d",
+    "publisher": "/root/jdlg-review-b8ce03d/binary_release.py",
+    "database_migration_executed": false,
+    "environment_changed": false,
+    "nginx_changed": false
+  },
+  "miniprogram": {
+    "version": "8.0.6",
+    "appid": "wx94fdc48861913ede",
+    "upload_exit_code": 0,
+    "terminal_status": "upload success",
+    "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram"
+  },
+  "platform": {
+    "account": "甲第灵光智能体",
+    "audit_version": "8.0.6",
+    "audit_status": "加急审核中",
+    "audit_submitted_at": "2026-11-11 23:17:36",
+    "platform_estimate": "预计2小时内完成",
+    "development_version": "8.0.6",
+    "development_uploaded_at": "2026-11-11 23:10:55",
+    "trial_badge": true,
+    "official_online_version": "7.3.3",
+    "verified_via": "existing authenticated Chrome version-management page; no tokens retained"
+  },
+  "checks": {
+    "miniprogram_native_wxml": {
+      "tests": 1447,
+      "passed": 1447,
+      "failed": 0,
+      "skipped": 0
+    },
+    "go_all": "CGO_ENABLED=0 go test ./... -count=1 passed",
+    "go_vet": "CGO_ENABLED=0 go vet ./... passed",
+    "typescript": "229 existing diagnostics, zero added diagnostic kinds after line-number normalization",
+    "independent_review": "guest transport/account-binding and uniform full-profile review passed",
+    "native_guest": {
+      "anonymous_entries": 3,
+      "accepted_events": 8,
+      "unauthorized_responses": 0,
+      "protected_prefetches": 0,
+      "original_login_restored": true,
+      "server_backed_guest_navigation": true,
+      "full_app_restart_cold_start_claimed": false
+    },
+    "login_identity_link": {
+      "authenticated_entry": true,
+      "original_anonymous_entry_linked": true
+    },
+    "public_api_before": "six endpoints all 401",
+    "public_api_after": "six endpoints all 200/code0, no sensitive field or phone-like name found in inspected response",
+    "protected_api_after": "template/inspiration/designer-home/content-details all 401 anonymously"
+  },
+  "registration_policy": {
+    "anonymous_pages": [
+      "pages/index/index",
+      "pages/template/template",
+      "pages/distribution/distribution"
+    ],
+    "protected_share_requires": [
+      "login",
+      "saved_nickname",
+      "saved_avatar"
+    ],
+    "phone_required": false,
+    "old_nickname_only_exception": false
+  },
+  "not_verified": [
+    "WeChat final audit decision",
+    "physical-phone guest startup and share interaction; native simulator plus production API verified"
+  ],
+  "git_pushed": false,
+  "recorded_at": "2026-11-11T23:25:48.008255+08:00"
+}

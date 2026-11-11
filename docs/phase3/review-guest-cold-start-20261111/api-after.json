@@ -1,0 +1,44 @@
+[
+  {
+    "path": "/templates/featured",
+    "status": 200,
+    "code": 0,
+    "sensitive_field_count": 0,
+    "phone_name_count": 0
+  },
+  {
+    "path": "/templates/tab-config",
+    "status": 200,
+    "code": 0,
+    "sensitive_field_count": 0,
+    "phone_name_count": 0
+  },
+  {
+    "path": "/templates?page=1&page_size=1",
+    "status": 200,
+    "code": 0,
+    "sensitive_field_count": 0,
+    "phone_name_count": 0
+  },
+  {
+    "path": "/templates/search?keyword=别墅&page=1&page_size=1",
+    "status": 200,
+    "code": 0,
+    "sensitive_field_count": 0,
+    "phone_name_count": 0
+  },
+  {
+    "path": "/inspirations?page=1&page_size=1",
+    "status": 200,
+    "code": 0,
+    "sensitive_field_count": 0,
+    "phone_name_count": 0
+  },
+  {
+    "path": "/designers?page=1&page_size=1",
+    "status": 200,
+    "code": 0,
+    "sensitive_field_count": 0,
+    "phone_name_count": 0
+  }
+]
