@@ -28,7 +28,7 @@ const dismissedUnreadBannerTokens = new Set<string>()
 
 function unreadBannerTop() {
   try {
-    const system = wx.getSystemInfoSync()
+    const system = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync())
     const statusBarHeight = Number(system.statusBarHeight || system.safeArea?.top || 0)
     const menu = typeof wx.getMenuButtonBoundingClientRect === 'function'
       ? wx.getMenuButtonBoundingClientRect()

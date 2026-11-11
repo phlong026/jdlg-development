@@ -333,6 +333,16 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 		}
 		trackingResponse(c, out, err)
 	})
+	root.POST("/shared/:token/access-requests", func(c *gin.Context) {
+		var input struct {
+			IdempotencyKey string `json:"idempotency_key"`
+		}
+		if !projectNoteBind(c, &input) {
+			return
+		}
+		out, err := svc.ProjectNoteRequestShareAccess(c.Request.Context(), c.Param("token"), deps.actor(c), input.IdempotencyKey)
+		trackingResponse(c, out, err)
+	})
 	root.POST("/shared/:token/open", func(c *gin.Context) {
 		var input struct {
 			EventID      string `json:"event_id"`

@@ -1200,7 +1200,7 @@ Page({
   initLayoutMetrics() {
     try {
       const menuRect = wx.getMenuButtonBoundingClientRect();
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       const safeTop = Number(systemInfo.statusBarHeight || systemInfo.safeArea?.top || 20);
       const heroHeight = Math.round((systemInfo.windowWidth || 375) * 0.72);
       this.setData({

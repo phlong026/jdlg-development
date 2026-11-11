@@ -253,3 +253,36 @@ func TestProjectInvitationRecordsJoinerAttribution(t *testing.T) {
 		t.Fatalf("attribution = %#v (inviter=%d invitation=%s)", member, designer.Actor, issued.ID)
 	}
 }
+
+func TestProjectShareAccessRequestRequiresOwnerApproval(t *testing.T) {
+	ctx := context.Background()
+	s, designer, _ := projectNoteFixture(t)
+	project, _, _, share := seedProjectNote(t, s, designer, 101)
+	request, err := s.ProjectNoteRequestShareAccess(ctx, share.Token, 202, "share-access-key-1")
+	if err != nil || request.Status != ProjectNoteJoinPending {
+		t.Fatalf("request = %#v err=%v", request, err)
+	}
+	if err = s.transaction(ctx, func(r Repository) error {
+		_, loadErr := projectNoteLoadMember(r, project.ID, 202)
+		return loadErr
+	}); err == nil {
+		t.Fatal("share access request must not grant membership before approval")
+	}
+	replay, err := s.ProjectNoteRequestShareAccess(ctx, share.Token, 202, "share-access-key-1")
+	if err != nil || replay.ID != request.ID || !replay.Replayed {
+		t.Fatalf("replay = %#v err=%v", replay, err)
+	}
+	approved, err := s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, request.ID, "share-access-approve-1")
+	if err != nil || approved.Status != ProjectNoteJoinApproved {
+		t.Fatalf("approved = %#v err=%v", approved, err)
+	}
+	if err = s.transaction(ctx, func(r Repository) error {
+		_, loadErr := projectNoteLoadMember(r, project.ID, 202)
+		return loadErr
+	}); err != nil {
+		t.Fatal("approved share access did not create membership:", err)
+	}
+	if _, err = s.ProjectNoteReadShare(ctx, share.Token, 202); err != nil {
+		t.Fatalf("approved member cannot read share: %v", err)
+	}
+}

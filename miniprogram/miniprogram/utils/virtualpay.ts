@@ -143,7 +143,7 @@ function detectPlatform(): string {
   } catch {}
   // 兼容老版本：getSystemInfoSync.platform 也提供同名字段
   try {
-    const sys = wx.getSystemInfoSync()
+    const sys = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync())
     return String(sys.platform || '').toLowerCase()
   } catch {}
   return ''
@@ -151,7 +151,7 @@ function detectPlatform(): string {
 
 function getWechatVersion(): string {
   try {
-    const sys = wx.getSystemInfoSync()
+    const sys = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync())
     return String(sys.version || '')
   } catch {
     return ''

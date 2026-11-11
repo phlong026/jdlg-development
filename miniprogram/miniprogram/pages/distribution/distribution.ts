@@ -272,7 +272,7 @@ function mergeDesignerCards(currentList: DesignerCardItem[], nextList: DesignerC
 
 function getNavLayout() {
   try {
-    const systemInfo = wx.getSystemInfoSync();
+    const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
 
     const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function'
       ? wx.getMenuButtonBoundingClientRect()

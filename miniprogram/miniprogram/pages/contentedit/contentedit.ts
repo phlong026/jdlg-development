@@ -934,8 +934,9 @@ Page({
       const result = await api.publishContent(this.data.id, this.data.revision, this.data.preview.preview_token, this.publishKey());
       if (!this.current(epoch)) return;
       this._publishSignature = ''; this._publishKey = '';
-      this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布' });
+      this.setData({ revision: result.content.revision, version: result.content.version, status: result.content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已发布，正在打开作品页分享。' });
       this._savedSignature = this.draftSignature();
+      setTimeout(() => { if (this.current(epoch)) this.openPublished(); }, 600);
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '发布失败' }); }
   },
   openImage(event) {

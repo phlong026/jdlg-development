@@ -51,7 +51,7 @@ Page({
     initLayoutMetrics() {
         try {
             const menuRect = wx.getMenuButtonBoundingClientRect();
-            const systemInfo = wx.getSystemInfoSync();
+            const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
             const safeTop = Number(systemInfo.statusBarHeight || systemInfo.safeArea?.top || 20);
             this.setData({
                 navTop: Math.max(safeTop + 4, Number(menuRect?.top || safeTop + 8) - 2),

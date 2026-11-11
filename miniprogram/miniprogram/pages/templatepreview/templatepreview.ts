@@ -80,7 +80,7 @@ Page({
 
   getPreviewContainerWidthPx(): number {
     try {
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       const windowWidth = Number(systemInfo.windowWidth || 375);
       return Math.max(1, Math.round(windowWidth * (750 - PREVIEW_HORIZONTAL_MARGIN_RPX) / 750));
     } catch (error) {

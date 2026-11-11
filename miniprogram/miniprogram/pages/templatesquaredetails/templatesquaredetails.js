@@ -1111,7 +1111,7 @@ Page({
         var _a;
         try {
             const menuRect = wx.getMenuButtonBoundingClientRect();
-            const systemInfo = wx.getSystemInfoSync();
+            const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
             const safeTop = Number(systemInfo.statusBarHeight || ((_a = systemInfo.safeArea) === null || _a === void 0 ? void 0 : _a.top) || 20);
             const heroHeight = Math.round((systemInfo.windowWidth || 375) * 0.72);
             this.setData({

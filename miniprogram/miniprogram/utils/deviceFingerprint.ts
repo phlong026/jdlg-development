@@ -15,7 +15,7 @@ export function generateDeviceFingerprint(): Promise<string> {
     try {
       
       // 1. 获取系统信息
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       
       // 2. 生成canvas指纹（带超时处理）
       const canvasPromise = generateCanvasFingerprint();

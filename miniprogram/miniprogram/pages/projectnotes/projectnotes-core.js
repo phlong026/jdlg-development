@@ -179,6 +179,11 @@ Page({
     }
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
+    if (this._pendingShareCopy && this.data.activeShare && this.data.activeShare.share_token) {
+      this._pendingShareCopy = false;
+      if (typeof wx.setClipboardData === 'function') wx.setClipboardData({ data: 'pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(this.data.activeShare.share_token), fail: () => {} });
+      this.setData({ notice: '分享链接已复制，发给客户即可。' });
+    }
     if (this.data.pageView === 'editor') this.acceptPendingMedia();
     const afterRecheck = () => {
       this.flushPickerFeedback(); this.resumeNoteMediaPreviews();
@@ -612,7 +617,7 @@ Page({
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
       const project = await api.createProjectNoteProject({ name: this.data.projectName, owner_id: this.data.ownerID });
-      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); }
+      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); setTimeout(() => { if (this.current(epoch)) void this.startNewNote(); }, 0); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },
   async selectProject(event) {
@@ -1587,6 +1592,7 @@ Page({
       if (!this.current(epoch)) return;
       if (!share.share_token) { this.setData({ activeShare: share, busy: false, error: '分享已存在，但首次返回的入口凭证未保存。请撤回该分享后重新生成。' }); return; }
       this._issuedShare = share; this._shareAttempt = null; rememberShareToken(share);
+      this._pendingShareCopy = true;
       this.setData({ activeShare: share, busy: false, notice: '私密分享入口已生成，正在打开预览。' }, () => {
         if (typeof wx.navigateTo === 'function') wx.navigateTo({ url: '/pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(share.share_token), fail: () => {} });
       });

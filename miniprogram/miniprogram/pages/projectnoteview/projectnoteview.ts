@@ -47,7 +47,7 @@ Page({
     this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
   },
   data: {
-    loading: true, busy: false, loginRequired: false, error: '', notice: '',
+    loading: true, busy: false, loginRequired: false, error: '', notice: '', canRequestAccess: false, accessRequested: false, accessBusy: false,
     activityTypes: [{ key: 'feedbacks', label: '反馈意见' }, { key: 'resolutions', label: '处理记录' }, { key: 'confirmations', label: '确认记录' }], activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false,
     satisfaction: '', readAcknowledged: false, acknowledgingRead: false,
     view: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], feedbackText: '', canConfirm: false, confirmed: false, shareReady: false,
@@ -85,8 +85,9 @@ Page({
     this.setData({ busy: false, activityLoading: false, notice: (error && error.message) || fallback });
   },
   clearProtected() {
+    this._accessAttempt = null;
     this._accessVerified = false;
-    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
+    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false, canRequestAccess: false, accessRequested: false, accessBusy: false });
   },
   async loadShared() {
     const accountToken = String(wx.getStorageSync('token') || '');
@@ -150,8 +151,9 @@ Page({
     } catch (error) {
       if (!this.current(epoch)) return;
       const copy = shareErrorOf(error);
+      const forbidden = Number(error && error.statusCode) === 403 && !copy.loginRequired;
       wx.hideShareMenu(); this.clearProtected();
-      this.setData({ loading: false, loginRequired: copy.loginRequired, error: copy.text });
+      this.setData({ loading: false, loginRequired: copy.loginRequired, error: copy.text, canRequestAccess: forbidden });
     }
   },
   async revalidateShared() {
@@ -185,7 +187,8 @@ Page({
       const status = Number(error.statusCode);
       const copy = shareErrorOf(error);
       if ([401, 403, 404].includes(status) || copy.loginRequired) {
-        wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: false, loginRequired: copy.loginRequired, error: copy.loginRequired ? '' : copy.text });
+        const forbidden = status === 403 && !copy.loginRequired;
+        wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: false, loginRequired: copy.loginRequired, error: copy.loginRequired ? '' : copy.text, canRequestAccess: forbidden });
         return;
       }
       this.setData({ loading: false, shareReady: false, canConfirm: false, error: copy.text });
@@ -313,6 +316,20 @@ Page({
   goLogin() { wx.navigateTo({ url: '/pages/login/login?from=share-view' }); },
   // T7.8 / P9：错误区联系客服跳平台客服页，不暴露设计师个人联系方式。
   openCustomerService() { wx.navigateTo({ url: '/pages/customerservice/customerservice' }); },
+  async requestShareAccess() {
+    if (this.data.accessBusy || this.data.accessRequested) return;
+    if (!this._accessAttempt) this._accessAttempt = { key: api.mutationKey('project-share-access') };
+    const attempt = this._accessAttempt, epoch = this._epoch;
+    this.setData({ accessBusy: true, error: '' });
+    try {
+      await api.requestProjectShareAccess(this._shareToken, attempt.key);
+      if (!this.current(epoch)) return;
+      this._accessAttempt = null;
+      this.setData({ accessBusy: false, accessRequested: true, canRequestAccess: false, notice: '已提交申请，等待设计师通过后再打开。' });
+    } catch (error) {
+      if (this.current(epoch)) this.setData({ accessBusy: false, error: error.message || '申请失败，请重试' });
+    }
+  },
   retry() { return this.data.view ? this.revalidateShared() : this.loadShared(); },
   // D16：分享有效时定向重试失败素材，只重下失败项（并发上限 4）。
   async retryMediaDownloads() {
