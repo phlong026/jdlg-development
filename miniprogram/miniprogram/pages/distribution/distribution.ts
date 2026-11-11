@@ -2,8 +2,17 @@
 export {};
 
 import { normalizeCosUrl } from '../../utils/asset';
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
 
 const API_BASE_URL = 'https://api.jiadilingguang.com';
+
+function hasRegisteredSession() {
+  if (typeof wx.getStorageSync !== 'function') return false;
+  const token = String(wx.getStorageSync('token') || '');
+  if (!token) return false;
+  const profile = wx.getStorageSync('userInfo') || {};
+  return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 
 type DesignerMainTabItem = {
   label: string;
@@ -194,6 +203,7 @@ const CATEGORY_ALIASES: Record<string, string[]> = {
 
 async function completeLegacyWorkPreviews(list: DesignerApiListItem[], mainTab: string): Promise<DesignerApiListItem[]> {
   const result = list.slice();
+  if (!hasRegisteredSession()) return result;
   let cursor = 0;
   // 仅兼容旧列表协议，按页最多三路补拉；不对新接口增加 N+1 请求。
   const worker = async () => {

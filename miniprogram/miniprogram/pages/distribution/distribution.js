@@ -1,7 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const asset_1 = require("../../utils/asset");
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
 const API_BASE_URL = 'https://api.jiadilingguang.com';
+function hasRegisteredSession() {
+    if (typeof wx.getStorageSync !== 'function')
+        return false;
+    const token = String(wx.getStorageSync('token') || '');
+    if (!token)
+        return false;
+    const profile = wx.getStorageSync('userInfo') || {};
+    return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 const DEFAULT_MAIN_TABS = [
     { label: '全部', value: 'all' },
     { label: '乡墅私宅', value: 'template' },
@@ -90,6 +100,8 @@ const CATEGORY_ALIASES = {
 };
 async function completeLegacyWorkPreviews(list, mainTab) {
     const result = list.slice();
+    if (!hasRegisteredSession())
+        return result;
     let cursor = 0;
     // 仅兼容旧列表协议，按页最多三路补拉；不对新接口增加 N+1 请求。
     const worker = async () => {

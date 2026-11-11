@@ -2,6 +2,7 @@
 
 import { resolveAssetPath, normalizeCosUrl } from '../../utils/asset';
 import { getPageCache, prefetchImages, setPageCache } from '../../utils/perf';
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
 
 export {};
 
@@ -9,6 +10,14 @@ const API_BASE_URL = 'https://api.jiadilingguang.com';
 const TEMPLATE_CARD_COLUMN_WIDTH_RPX = 347;
 const DEFAULT_CARD_MEDIA_HEIGHT_RPX = 320;
 const TEMPLATE_FETCH_BATCH_SIZE = 500;
+
+function hasRegisteredSession() {
+  if (typeof wx.getStorageSync !== 'function') return false;
+  const token = String(wx.getStorageSync('token') || '');
+  if (!token) return false;
+  const profile = wx.getStorageSync('userInfo') || {};
+  return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 
 type MainTabValue = string;
 
@@ -796,6 +805,9 @@ Page({
   },
 
   prefetchCardDetail(card: TemplateListItem) {
+    if (!hasRegisteredSession()) {
+      return;
+    }
     if (!card || !Number(card.id) || (card.targetType !== 'template' && card.targetType !== 'inspiration')) {
       return;
     }

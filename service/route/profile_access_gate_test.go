@@ -15,20 +15,25 @@ import (
 
 func profileGateTestRouter(t *testing.T, loader miniprogramProfileLoader) *gin.Engine {
 	t.Helper()
+	t.Setenv("MINIPROGRAM_PROFILE_GATE", "")
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	v1 := router.Group("/api/v1")
-	v1.Use(
-		miniprogramProfileAuthentication(func(c *gin.Context) {
+	middlewares := miniprogramProfileGateMiddlewares(
+		func(c *gin.Context) {
 			if c.GetHeader("token") != "valid" {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未登录"})
 				return
 			}
 			c.Set("user_id", int64(41))
 			c.Next()
-		}),
-		miniprogramProfileCompleteness(loader),
+		},
+		loader,
 	)
+	if len(middlewares) != 2 {
+		t.Fatalf("profile gate middleware count = %d", len(middlewares))
+	}
+	v1.Use(middlewares...)
 	v1.Any("/miniprogram/*path", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"code": 0}) })
 	v1.GET("/management/ping", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"code": 0}) })
 	return router
@@ -104,12 +109,55 @@ func TestMiniprogramProfileGateAllowsCompleteProfile(t *testing.T) {
 		}
 		return miniprogramProfile{Nickname: "  用户  ", Avatar: "https://cdn.example.com/avatar.png"}, nil
 	})
-	response := profileGateRequest(router, http.MethodPost, "/api/v1/miniprogram/tracking/entry", "valid")
+	response := profileGateRequest(router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects", "valid")
 	if response.Code != http.StatusOK {
 		t.Fatalf("complete profile = %d body=%s", response.Code, response.Body.String())
 	}
 	if got := response.Header().Get("Cache-Control"); got != "private,no-store" {
 		t.Fatalf("complete profile cache control = %q", got)
+	}
+}
+
+func TestMiniprogramProfileGateAllowsOnlyAnonymousPublicBrowseAndTrackingTransport(t *testing.T) {
+	loaded := 0
+	router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
+		loaded++
+		return miniprogramProfile{}, nil
+	})
+
+	allowed := [][2]string{
+		{http.MethodGet, "/api/v1/miniprogram/templates/featured"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/tab-config"},
+		{http.MethodGet, "/api/v1/miniprogram/templates"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/search?q=test"},
+		{http.MethodGet, "/api/v1/miniprogram/inspirations"},
+		{http.MethodGet, "/api/v1/miniprogram/designers"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/entry"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/events/batch"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/shares"},
+	}
+	for _, item := range allowed {
+		response := profileGateRequest(router, item[0], item[1], "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("anonymous transport %s %s = %d body=%s", item[0], item[1], response.Code, response.Body.String())
+		}
+	}
+	if loaded != 0 {
+		t.Fatalf("anonymous transport queried profile %d times", loaded)
+	}
+
+	protected := [][2]string{
+		{http.MethodGet, "/api/v1/miniprogram/templates/9"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/featured/extra"},
+		{http.MethodPost, "/api/v1/miniprogram/templates"},
+		{http.MethodGet, "/api/v1/miniprogram/designers/9/homepage"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/entry"},
+	}
+	for _, item := range protected {
+		response := profileGateRequest(router, item[0], item[1], "")
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("protected transport %s %s = %d body=%s", item[0], item[1], response.Code, response.Body.String())
+		}
 	}
 }
 
@@ -204,6 +252,15 @@ func TestMiniprogramProfileGateBootstrapAllowlistIsExact(t *testing.T) {
 		{http.MethodPost, "/api/v1/miniprogram/tracking/share-entry"},
 		{http.MethodGet, "/api/v1/miniprogram/tracking/config"},
 		{http.MethodPost, "/api/v1/miniprogram/wecom/enterprise-wechat/callback"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/featured"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/tab-config"},
+		{http.MethodGet, "/api/v1/miniprogram/templates"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/search"},
+		{http.MethodGet, "/api/v1/miniprogram/inspirations"},
+		{http.MethodGet, "/api/v1/miniprogram/designers"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/entry"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/events/batch"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/shares"},
 	}
 	for _, item := range allowed {
 		response := profileGateRequest(router, item[0], item[1], "")

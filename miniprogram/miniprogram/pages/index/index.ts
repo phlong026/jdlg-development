@@ -16,6 +16,7 @@ import {
   tryOpenCustomerServiceDirect,
 } from '../../utils/enterpriseWechat'
 const { request: requestPhase3 } = require('../../utils/phase3-api')
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation')
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
 const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始'
@@ -25,6 +26,14 @@ const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()
 const dismissedUnreadBannerTokens = new Set<string>()
+
+function hasRegisteredSession() {
+  if (typeof wx.getStorageSync !== 'function') return false
+  const token = String(wx.getStorageSync('token') || '')
+  if (!token) return false
+  const profile = wx.getStorageSync('userInfo') || {}
+  return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile)
+}
 
 function unreadBannerTop() {
   try {
@@ -418,6 +427,9 @@ Page({
     });
 
     void prefetchImages(uniqueCases.map((item) => normalizeCosUrl(item.thumbnail || item.preview_url || '')), 2);
+    if (!hasRegisteredSession()) {
+      return;
+    }
     uniqueCases.slice(0, 2).forEach((item) => {
       const templateId = Number(item?.id || 0);
       const cacheKey = buildPublicTemplateDetailCacheKey(templateId);

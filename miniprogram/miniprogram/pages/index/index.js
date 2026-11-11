@@ -10,6 +10,7 @@ const reportNavigation_1 = require("../../utils/reportNavigation");
 const perf_1 = require("../../utils/perf");
 const enterpriseWechat_1 = require("../../utils/enterpriseWechat");
 const { request: requestPhase3 } = require('../../utils/phase3-api');
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始';
 const HOME_CHAT_COVER = (0, asset_1.resolveAssetPath)('/assets/share/home-chat.jpg');
@@ -18,6 +19,15 @@ const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2';
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000;
 const featuredDetailPrefetching = new Set();
 const dismissedUnreadBannerTokens = new Set();
+function hasRegisteredSession() {
+    if (typeof wx.getStorageSync !== 'function')
+        return false;
+    const token = String(wx.getStorageSync('token') || '');
+    if (!token)
+        return false;
+    const profile = wx.getStorageSync('userInfo') || {};
+    return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 function unreadBannerTop() {
     try {
         const system = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
@@ -415,6 +425,9 @@ Page({
             return id > 0 && list.findIndex((candidate) => Number(candidate?.id || 0) === id) === index;
         });
         void (0, perf_1.prefetchImages)(uniqueCases.map((item) => (0, asset_1.normalizeCosUrl)(item.thumbnail || item.preview_url || '')), 2);
+        if (!hasRegisteredSession()) {
+            return;
+        }
         uniqueCases.slice(0, 2).forEach((item) => {
             const templateId = Number(item?.id || 0);
             const cacheKey = buildPublicTemplateDetailCacheKey(templateId);

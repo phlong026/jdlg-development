@@ -55,6 +55,25 @@ var miniprogramProfileBootstrap = map[string]map[string]bool{
 	},
 }
 
+// These routes carry only public browse data or tracking credentials. The
+// tracking handlers still validate any supplied login or entry credential.
+// Keep this list exact: detail pages and all business mutations remain gated.
+var miniprogramProfilePublicTransport = map[string]map[string]bool{
+	http.MethodGet: {
+		miniprogramAPIPrefix + "/templates/featured":   true,
+		miniprogramAPIPrefix + "/templates/tab-config": true,
+		miniprogramAPIPrefix + "/templates":            true,
+		miniprogramAPIPrefix + "/templates/search":     true,
+		miniprogramAPIPrefix + "/inspirations":         true,
+		miniprogramAPIPrefix + "/designers":            true,
+	},
+	http.MethodPost: {
+		miniprogramAPIPrefix + "/tracking/entry":        true,
+		miniprogramAPIPrefix + "/tracking/events/batch": true,
+		miniprogramAPIPrefix + "/tracking/shares":       true,
+	},
+}
+
 func isMiniprogramAPIPath(path string) bool {
 	return path == miniprogramAPIPrefix || strings.HasPrefix(path, miniprogramAPIPrefix+"/")
 }
@@ -87,12 +106,16 @@ func isMiniprogramProfileBootstrap(method, path string) bool {
 	return method == http.MethodOptions || miniprogramProfileBootstrap[method][path]
 }
 
+func isMiniprogramProfileGateExempt(method, path string) bool {
+	return isMiniprogramProfileBootstrap(method, path) || miniprogramProfilePublicTransport[method][path]
+}
+
 // miniprogramProfileAuthentication is deliberately separate from completeness.
 // TokenAuthRequired calls c.Next(), so the next middleware must own the profile
 // check to ensure no business handler runs first.
 func miniprogramProfileAuthentication(auth gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileBootstrap(c.Request.Method, c.Request.URL.Path) {
+		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileGateExempt(c.Request.Method, c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -103,7 +126,7 @@ func miniprogramProfileAuthentication(auth gin.HandlerFunc) gin.HandlerFunc {
 
 func miniprogramProfileCompleteness(load miniprogramProfileLoader) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileBootstrap(c.Request.Method, c.Request.URL.Path) {
+		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileGateExempt(c.Request.Method, c.Request.URL.Path) {
 			c.Next()
 			return
 		}

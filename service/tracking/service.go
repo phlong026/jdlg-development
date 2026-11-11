@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -120,6 +121,58 @@ func (s *Service) available(ctx context.Context, r Repository, route, content st
 func audit(r Repository, owner, action string, actor int64, target string, now time.Time, detail any) error {
 	return r.Insert(record("audit", opaque(), owner, now, map[string]any{"action": action, "actor": actor, "target": target, "detail": detail, "at": now}))
 }
+
+// MiniprogramPublicRoute reports the only pages that may be browsed and
+// tracked before registration is complete.
+func MiniprogramPublicRoute(route string) bool {
+	switch route {
+	case "pages/index/index", "pages/template/template", "pages/distribution/distribution":
+		return true
+	default:
+		return false
+	}
+}
+
+type MiniprogramProfileAccess struct {
+	Nickname bool
+	Complete bool
+}
+
+func miniprogramProfileAccess(values []MiniprogramProfileAccess) MiniprogramProfileAccess {
+	if len(values) == 0 {
+		return MiniprogramProfileAccess{}
+	}
+	return values[0]
+}
+
+func requireMiniprogramTrackingProfile(route string, account int64, access MiniprogramProfileAccess) error {
+	if account <= 0 || MiniprogramPublicRoute(route) {
+		return nil
+	}
+	if route == "pages/projectnoteview/projectnoteview" {
+		if !access.Nickname {
+			return fail(http.StatusPreconditionRequired, "请先补充昵称")
+		}
+		return nil
+	}
+	if !access.Complete {
+		return fail(http.StatusPreconditionRequired, "请先补充头像和昵称")
+	}
+	return nil
+}
+
+// EnterMiniprogram preserves account-bound tracking while limiting a visitor
+// without a verified account to the three pages approved for public browsing.
+func (s *Service) EnterMiniprogram(ctx context.Context, in EntryInput, account int64, access ...MiniprogramProfileAccess) (Entry, error) {
+	if account <= 0 && !MiniprogramPublicRoute(in.Route) {
+		return Entry{}, fail(401, "请先登录")
+	}
+	if err := requireMiniprogramTrackingProfile(in.Route, account, miniprogramProfileAccess(access)); err != nil {
+		return Entry{}, err
+	}
+	return s.Enter(ctx, in, account)
+}
+
 func (s *Service) Enter(ctx context.Context, in EntryInput, account int64) (Entry, error) {
 	var out Entry
 	if !s.Config.Enabled {
@@ -304,6 +357,18 @@ type ShareInput struct {
 // CreateShare records a share made inside the mini program.
 func (s *Service) CreateShare(ctx context.Context, in ShareInput, token string, account int64) (map[string]any, error) {
 	return s.createShare(ctx, in, token, account, "miniprogram")
+}
+
+// CreateMiniprogramShare is the public HTTP boundary. Anonymous sharing may
+// only originate from a page that is itself available without registration.
+func (s *Service) CreateMiniprogramShare(ctx context.Context, in ShareInput, token string, account int64, access ...MiniprogramProfileAccess) (map[string]any, error) {
+	if account <= 0 && !MiniprogramPublicRoute(in.Route) {
+		return nil, fail(401, "请先登录")
+	}
+	if err := requireMiniprogramTrackingProfile(in.Route, account, miniprogramProfileAccess(access)); err != nil {
+		return nil, err
+	}
+	return s.CreateShare(ctx, in, token, account)
 }
 
 // CreateConsoleShare records a code or URL Link minted by a management account.
@@ -568,19 +633,44 @@ func (s *Service) validateEvent(ctx context.Context, r Repository, en Entry, e *
 	return nil
 }
 func (s *Service) Accept(ctx context.Context, token string, events []Event) ([]Result, error) {
-	return s.accept(ctx, token, events, 0, false)
+	return s.accept(ctx, token, events, nil)
 }
 
-// AcceptForAccount is the Mini Program boundary: an authenticated account may
-// only append events to the entry token that the same account created.
+// AcceptForAccount requires an authenticated account to append events only to
+// the entry token that the same account created.
 func (s *Service) AcceptForAccount(ctx context.Context, token string, events []Event, account int64) ([]Result, error) {
 	if account <= 0 {
 		return nil, fail(401, "未登录")
 	}
-	return s.accept(ctx, token, events, account, true)
+	return s.accept(ctx, token, events, func(en Entry) error {
+		if en.Account != account || en.Visitor != actorVisitorKey(account) {
+			return fail(403, "采集凭据不属于当前账号")
+		}
+		return nil
+	})
 }
 
-func (s *Service) accept(ctx context.Context, token string, events []Event, account int64, requireAccount bool) ([]Result, error) {
+// AcceptMiniprogram accepts either the current account's entry token or an
+// anonymous token issued for one of the three public browse routes.
+func (s *Service) AcceptMiniprogram(ctx context.Context, token string, events []Event, account int64, access ...MiniprogramProfileAccess) ([]Result, error) {
+	if account > 0 {
+		profile := miniprogramProfileAccess(access)
+		return s.accept(ctx, token, events, func(en Entry) error {
+			if en.Account != account || en.Visitor != actorVisitorKey(account) {
+				return fail(403, "采集凭据不属于当前账号")
+			}
+			return requireMiniprogramTrackingProfile(en.Route, account, profile)
+		})
+	}
+	return s.accept(ctx, token, events, func(en Entry) error {
+		if en.Account != 0 || !MiniprogramPublicRoute(en.Route) {
+			return fail(403, "采集凭据不属于匿名公开访问")
+		}
+		return nil
+	})
+}
+
+func (s *Service) accept(ctx context.Context, token string, events []Event, authorize func(Entry) error) ([]Result, error) {
 	out := []Result{}
 	if !s.Config.Enabled {
 		return nil, fail(503, "采集关闭")
@@ -593,8 +683,10 @@ func (s *Service) accept(ctx context.Context, token string, events []Event, acco
 		if err != nil {
 			return err
 		}
-		if requireAccount && (en.Account != account || en.Visitor != actorVisitorKey(account)) {
-			return fail(403, "采集凭据不属于当前账号")
+		if authorize != nil {
+			if err = authorize(en); err != nil {
+				return err
+			}
 		}
 		now := s.Now()
 		// Transactional per-credential minute budget survives process restarts; duplicates still consume budget.

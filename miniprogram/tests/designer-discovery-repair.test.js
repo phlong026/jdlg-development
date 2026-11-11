@@ -5,13 +5,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.join(__dirname, '../miniprogram');
 
-function harness() {
+function harness({ token = 'valid-account', userInfo = { nickname: '设计师', avatar: 'https://static.jiadilingguang.com/avatar.jpg' } } = {}) {
   let page;
   const requests = [];
   const toasts = [];
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/distribution/distribution.js'), 'utf8'), {
     exports: {}, require: name => require(path.resolve(root, 'pages/distribution', name)), Page: value => { page = value; }, console: { error() {}, warn() {} },
-    wx: { getSystemInfoSync: () => ({}), request: request => requests.push(request), showToast: value => toasts.push(value.title) },
+    wx: {
+      getSystemInfoSync: () => ({}), getStorageSync: key => ({ token, userInfo })[key],
+      request: request => requests.push(request), showToast: value => toasts.push(value.title),
+    },
   });
   page.data = JSON.parse(JSON.stringify(page.data));
   page.setData = value => Object.assign(page.data, value);
@@ -76,6 +79,16 @@ test('旧列表只有代表作品时，从同一设计师公开主页补齐两�
   assert.deepEqual(Array.from(h.page.data.designerCards[0].works, work => work.id), [2, 3]);
   h.page.onWorkSortTap({ currentTarget: { dataset: { userId: 7, sort: 'latest' } } });
   assert.deepEqual(Array.from(h.page.data.designerCards[0].works, work => work.id), [3, 2]);
+});
+
+test('匿名浏览设计师列表时保留代表作图片，不自动请求受保护的设计师主页', async () => {
+  const h = harness({ token: '', userInfo: undefined });
+  const pending = h.page.loadDesigners(true);
+  h.respond(0, { list: [{ designer_user_id: 7, representative_work: { id: 1, image: '/1.jpg' } }], total: 1 });
+  await pending;
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.page.data.designerCards[0].works.length, 1);
+  assert.equal(h.page.data.designerCards[0].works[0].id, 1);
 });
 
 test('主页补图失败保留代表作品，单作品不重复伪造第二张', async () => {

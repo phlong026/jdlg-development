@@ -3,10 +3,20 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const asset_1 = require("../../utils/asset");
 const perf_1 = require("../../utils/perf");
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 const TEMPLATE_CARD_COLUMN_WIDTH_RPX = 347;
 const DEFAULT_CARD_MEDIA_HEIGHT_RPX = 320;
 const TEMPLATE_FETCH_BATCH_SIZE = 500;
+function hasRegisteredSession() {
+    if (typeof wx.getStorageSync !== 'function')
+        return false;
+    const token = String(wx.getStorageSync('token') || '');
+    if (!token)
+        return false;
+    const profile = wx.getStorageSync('userInfo') || {};
+    return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000;
 const detailPrefetchingKeys = new Set();
 const AI_TOOLS_MAIN_TAB = { label: '工具', value: 'ai_tools' };
@@ -651,6 +661,9 @@ Page({
         });
     },
     prefetchCardDetail(card) {
+        if (!hasRegisteredSession()) {
+            return;
+        }
         if (!card || !Number(card.id) || (card.targetType !== 'template' && card.targetType !== 'inspiration')) {
             return;
         }

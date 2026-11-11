@@ -130,6 +130,37 @@ func signedProfileGateRequest(t *testing.T, path, token, deviceID string) *http.
 	return request
 }
 
+func signedProfileGateJSONRequest(t *testing.T, path, token, deviceID string, body []byte) *http.Request {
+	t.Helper()
+	signature := function.GenerateTokenSignature(token)
+	sin, err := function.GenerateSin(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	md5Signature, err := function.GenerateMD5Signature(sin, signature, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	pass, err := function.GeneratePass(sin, md5Signature, deviceID, timestamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm, err := sm4.Sm4Ecb([]byte("0123456789abcdef"), []byte(timestamp+base64.StdEncoding.EncodeToString([]byte(path))), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(string(body)))
+	for key, value := range map[string]string{
+		"token": token, "token-signature": signature, "sin": sin, "md5-signature": md5Signature,
+		"pass": pass, "tm": base64.StdEncoding.EncodeToString(tm),
+	} {
+		request.Header.Set(key, value)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	return request
+}
+
 func TestMiniprogramProfileGateUsesRealTokenAuthenticationChain(t *testing.T) {
 	if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))); err != nil {
 		t.Fatal(err)
@@ -200,6 +231,84 @@ func TestMiniprogramProfileGateUsesRealTokenAuthenticationChain(t *testing.T) {
 			}
 			if got := response.Header().Get("Cache-Control"); got != "private,no-store" {
 				t.Fatalf("cache control = %q", got)
+			}
+		})
+	}
+}
+
+func TestTrackingEntryRealTokenRestoresProtectedProfileBoundary(t *testing.T) {
+	if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))); err != nil {
+		t.Fatal(err)
+	}
+	const path = "/api/v1/miniprogram/tracking/entry"
+	for _, test := range []struct {
+		name    string
+		profile miniprogramProfile
+		route   string
+		want    int
+	}{
+		{name: "public route permits incomplete profile", route: "pages/index/index", want: http.StatusOK},
+		{name: "protected route rejects incomplete profile", route: "pages/aitools/aitools", want: http.StatusPreconditionRequired},
+		{name: "protected route permits complete profile", profile: miniprogramProfile{Nickname: "用户", Avatar: "https://cdn.example.com/avatar.png"}, route: "pages/aitools/aitools", want: http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db := sql.OpenDB(profileGateAuthConnector{profile: test.profile})
+			defer db.Close()
+			mr := miniredis.RunT(t)
+			redisClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+			defer redisClient.Close()
+
+			session := model.CodeSession{SessionID: "tracking-profile-session", DeviceID: "tracking-profile-device", UserID: 41}
+			rawSession, err := json.Marshal(session)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = redisClient.HSet(context.Background(), "code_session:session:"+session.SessionID, "data", rawSession).Err(); err != nil {
+				t.Fatal(err)
+			}
+			token, err := function.GenerateToken(session.SessionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			codes := model.NewCodeSessionRedisModel(db, redisClient)
+			users := &model.UserModel{DB: db}
+			load := miniprogramProfileLoaderFromModel(model.NewUserProfileModel(db))
+			svc := tracking.New(&governanceTestStore{records: map[string]tracking.Record{}}, tracking.Config{
+				Tenant: "profile-boundary", Enabled: true, DefaultOwner: "owner", ConsentVersion: "v1",
+				Routes: map[string]tracking.Route{
+					"pages/index/index":     {Public: true},
+					"pages/aitools/aitools": {Public: true},
+				},
+			})
+
+			router := gin.New()
+			v1 := router.Group("/api/v1")
+			v1.Use(miniprogramProfileGateMiddlewares(TokenAuthRequired(codes), load)...)
+			v1.POST("/miniprogram/tracking/entry", miniprogramOptionalAuth(codes), MiniprogramBannedBlock(users), func(c *gin.Context) {
+				var input tracking.EntryInput
+				if !trackingBind(c, &input) {
+					return
+				}
+				account := GetTokenUserID(c)
+				access, profileErr := miniprogramTrackingProfileAccess(c.Request.Context(), load, account, input.Route)
+				if profileErr != nil {
+					trackingResponse(c, nil, profileErr)
+					return
+				}
+				entry, enterErr := svc.EnterMiniprogram(c.Request.Context(), input, account, access)
+				trackingResponse(c, entry, enterErr)
+			})
+
+			body := []byte(`{"route_key":"` + test.route + `","client_instance":"tracking-profile-client","consent_version":"v1"}`)
+			request := signedProfileGateJSONRequest(t, path, token, session.DeviceID, body)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, test.want, response.Body.String())
+			}
+			if test.want == http.StatusOK && !strings.Contains(response.Body.String(), `"account":41`) {
+				t.Fatalf("account was not bound: %s", response.Body.String())
 			}
 		})
 	}

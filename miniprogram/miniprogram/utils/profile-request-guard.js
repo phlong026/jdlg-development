@@ -11,6 +11,11 @@ const OPEN_PATHS = new Set([
   '/api/v1/miniprogram/tracking/share-entry',
 ]);
 const GATE_ROUTES = new Set(['pages/login/login', 'pages/privacy/privacy', 'pages/passwordrecovery/passwordrecovery']);
+const PUBLIC_BROWSE_ROUTES = new Set([
+  'pages/index/index',
+  'pages/template/template',
+  'pages/distribution/distribution',
+]);
 const AUTH_HEADERS = ['token', 'token-signature', 'sin', 'md5-signature', 'pass', 'tm'];
 
 let installed = false;
@@ -74,6 +79,15 @@ function activePage() {
   return pages[pages.length - 1];
 }
 
+function isPublicBrowsePage(page) {
+  return PUBLIC_BROWSE_ROUTES.has(String(page?.route || '').replace(/^\//, ''));
+}
+
+function clearSessionStorage() {
+  wx.removeStorageSync('token');
+  wx.removeStorageSync('userInfo');
+}
+
 function checkInlineProfileGate(page) {
   const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
   if (!guard || typeof guard.check !== 'function') return false;
@@ -99,8 +113,7 @@ function checkInlineProfileGate(page) {
 
 function openProfileGate(clearSession) {
   if (clearSession) {
-    wx.removeStorageSync('token');
-    wx.removeStorageSync('userInfo');
+    clearSessionStorage();
   }
   const page = activePage();
   if (!page || GATE_ROUTES.has(page.route)) return;
@@ -124,10 +137,17 @@ function handleProfileAccessResponse(statusCode, body, requestToken) {
   if (String(wx.getStorageSync('token') || '') !== String(requestToken || '')) return false;
   const data = body || {};
   if (statusCode === 401 || data.code === 401) {
+    if (isPublicBrowsePage(activePage())) {
+      // 公开浏览页的后台请求失败不应变成强制登录。仅当请求确实带了
+      // 已过期会话时清理缓存；纯匿名 tracking entry 失败不制造会话变化。
+      if (String(requestToken || '')) clearSessionStorage();
+      return true;
+    }
     openProfileGate(true);
     return true;
   }
   if (statusCode === 428 || data.code === 428) {
+    if (isPublicBrowsePage(activePage())) return true;
     openProfileGate(false);
     return true;
   }

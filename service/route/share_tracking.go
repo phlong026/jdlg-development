@@ -98,6 +98,34 @@ func trackingResponse(c *gin.Context, v any, e error) {
 	}
 	c.JSON(200, gin.H{"code": 0, "data": v})
 }
+
+func miniprogramTrackingProfileAccess(ctx context.Context, load miniprogramProfileLoader, account int64, route string) (tracking.MiniprogramProfileAccess, error) {
+	if account <= 0 || route != "" && tracking.MiniprogramPublicRoute(route) {
+		return tracking.MiniprogramProfileAccess{}, nil
+	}
+	profileCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	profile, err := load(profileCtx, account)
+	if err != nil {
+		log.Printf("[tracking] error reason=profile_read_failed error_type=%T", err)
+		return tracking.MiniprogramProfileAccess{}, &tracking.Error{Status: http.StatusServiceUnavailable, Message: "用户资料暂时无法核验，请重试"}
+	}
+	return tracking.MiniprogramProfileAccess{
+		Nickname: !miniprogramProfileNicknameMissing(profile),
+		Complete: len(miniprogramProfileMissingFields(profile)) == 0,
+	}, nil
+}
+
+func miniprogramOptionalAuth(codes *model.CodeSessionRedisModel) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetHeader("token") == "" {
+			c.Next()
+			return
+		}
+		TokenAuthRequired(codes)(c)
+	}
+}
+
 func trackingBind(c *gin.Context, v any) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 65536)
 	d := json.NewDecoder(c.Request.Body)
@@ -356,6 +384,7 @@ func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (trackin
 }
 func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel, customerServiceModel *model.CustomerServiceModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
+	profileLoader := miniprogramProfileLoaderFromModel(model.NewUserProfileModel(users.DB))
 	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
 		log.Printf("[Tracking] %s", warning)
 	}
@@ -803,7 +832,8 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		}
 		serveTrackingMedia(c, svc, selected)
 	})
-	pub.POST("/events/batch", func(c *gin.Context) {
+	optionalAuth := miniprogramOptionalAuth(codes)
+	pub.POST("/events/batch", optionalAuth, func(c *gin.Context) {
 		var in struct {
 			Batch  string           `json:"batch_id"`
 			Events []tracking.Event `json:"events"`
@@ -811,22 +841,27 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		results, e := svc.AcceptForAccount(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events, GetTokenUserID(c))
-		trackingResponse(c, gin.H{"results": results, "metric_version": tracking.MetricVersion}, e)
-	})
-	optionalAuth := func(c *gin.Context) {
-		if c.GetHeader("token") == "" {
-			c.Next()
+		account := GetTokenUserID(c)
+		access, e := miniprogramTrackingProfileAccess(c.Request.Context(), profileLoader, account, "")
+		if e != nil {
+			trackingResponse(c, nil, e)
 			return
 		}
-		TokenAuthRequired(codes)(c)
-	}
+		results, e := svc.AcceptMiniprogram(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events, account, access)
+		trackingResponse(c, gin.H{"results": results, "metric_version": tracking.MetricVersion}, e)
+	})
 	pub.POST("/entry", trackingEntryRateLimit(), optionalAuth, MiniprogramBannedBlock(users), func(c *gin.Context) {
 		var in tracking.EntryInput
 		if !trackingBind(c, &in) {
 			return
 		}
-		v, e := svc.Enter(c.Request.Context(), in, GetTokenUserID(c))
+		account := GetTokenUserID(c)
+		access, e := miniprogramTrackingProfileAccess(c.Request.Context(), profileLoader, account, in.Route)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.EnterMiniprogram(c.Request.Context(), in, account, access)
 		trackingResponse(c, v, e)
 	})
 	pub.POST("/shares", trackingEntryRateLimit(), optionalAuth, func(c *gin.Context) {
@@ -834,7 +869,13 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		v, e := svc.CreateShare(c.Request.Context(), in, c.GetHeader("X-Tracking-Token"), GetTokenUserID(c))
+		account := GetTokenUserID(c)
+		access, e := miniprogramTrackingProfileAccess(c.Request.Context(), profileLoader, account, in.Route)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.CreateMiniprogramShare(c.Request.Context(), in, c.GetHeader("X-Tracking-Token"), account, access)
 		trackingResponse(c, v, e)
 	})
 	return svc
