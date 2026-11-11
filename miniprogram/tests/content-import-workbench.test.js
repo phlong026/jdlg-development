@@ -223,6 +223,16 @@ test('import form names the tracking owner as content ownership rather than a bu
   assert.doesNotMatch(template, /归属项目/);
 });
 
+test('expired media retries the existing authorized job when the server allows fresh resolution', async () => {
+  const calls = [];
+  const runtime = harness(baseAPI({ retryImport: async id => { calls.push(id); return { import_id: id, status: 'queued', can_retry: false }; } }));
+  runtime.page.onShow(); await tick(); await tick();
+  runtime.page.setData({ imports: [{ import_id: 'expired-retry-job', status: 'blocked', error_code: 'media_source_expired', can_retry: true }] });
+  await runtime.page.retryImport({ currentTarget: { dataset: { id: 'expired-retry-job' } } });
+  assert.deepEqual(calls, ['expired-retry-job']);
+  assert.equal(runtime.page.data.imports[0].status, 'queued');
+});
+
 test('expired media can refill the original source but requires rights and a new idempotency key', async () => {
   const keys = [];
   const sourceURL = 'https://mp.weixin.qq.com/s/expired-example';

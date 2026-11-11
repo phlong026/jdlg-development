@@ -338,7 +338,7 @@ Page({
     if (!this.current(this._epoch)) return;
     const id = String(event.currentTarget.dataset.id || '');
     const current = this.data.imports.find(item => item.import_id === id);
-    if (!current || !current.can_retry || current.status === 'uncertain' || current.error_code === 'media_source_expired' || this.data.importBusy) return;
+    if (!current || !current.can_retry || current.status === 'uncertain' || this.data.importBusy) return;
     const action = this.beginImportAction();
     try {
       const job = await api.retryImport(id);

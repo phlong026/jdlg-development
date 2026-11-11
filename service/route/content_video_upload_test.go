@@ -2,6 +2,7 @@ package route
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
@@ -21,6 +22,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"service/tracking"
 )
+
+func TestTrackingMP4DimensionsBoundsAtomCountAndHonorsCancellation(t *testing.T) {
+	atom := []byte{0, 0, 0, 8, 'f', 'r', 'e', 'e'}
+	tooMany := bytes.Repeat(atom, trackingMP4MaxAtoms+1)
+	if _, _, err := trackingMP4DimensionsAtContext(context.Background(), bytes.NewReader(tooMany), int64(len(tooMany))); err == nil || !strings.Contains(err.Error(), "too many") {
+		t.Fatalf("atom budget err=%v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	valid := videoUploadMP4(1920, 1080)
+	if _, _, err := trackingMP4DimensionsAtContext(ctx, bytes.NewReader(valid), int64(len(valid))); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancel err=%v", err)
+	}
+	width, height, err := trackingMP4DimensionsAt(bytes.NewReader(valid), int64(len(valid)))
+	if err != nil || width != 1920 || height != 1080 {
+		t.Fatalf("normal dimensions=%dx%d err=%v", width, height, err)
+	}
+}
 
 func videoUploadMP4(width, height int) []byte {
 	box := func(kind string, payload []byte) []byte {

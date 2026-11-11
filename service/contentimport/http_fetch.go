@@ -1,7 +1,10 @@
 package contentimport
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"strings"
 	"syscall"
 	"time"
@@ -17,6 +21,22 @@ import (
 )
 
 type HTTPFetcher struct{ client *http.Client }
+
+// MediaFile is a private temporary download. Call Remove after persisting it.
+// Keeping the payload on disk prevents large imports from being buffered in RAM.
+type MediaFile struct {
+	Path   string
+	MIME   string
+	Size   int64
+	SHA256 string
+}
+
+func (m MediaFile) Remove() error {
+	if m.Path == "" {
+		return nil
+	}
+	return os.Remove(m.Path)
+}
 
 const (
 	maxXHSPageBytes        = 4 << 20
@@ -89,6 +109,40 @@ func (f *HTTPFetcher) FetchXHSPage(ctx context.Context, raw string) ([]byte, err
 func (f *HTTPFetcher) FetchMedia(ctx context.Context, platform Platform, raw string, max int64) ([]byte, string, error) {
 	return f.fetch(ctx, platform, raw, max, false)
 }
+
+func (f *HTTPFetcher) FetchMediaFile(ctx context.Context, platform Platform, raw string, max int64) (MediaFile, error) {
+	var media MediaFile
+	if f == nil || f.client == nil {
+		return media, ErrUnavailable
+	}
+	temp, err := os.CreateTemp("", "content-import-media-*")
+	if err != nil {
+		return media, fail("download_failed")
+	}
+	media.Path = temp.Name()
+	keep := false
+	defer func() {
+		_ = temp.Close()
+		if !keep {
+			_ = media.Remove()
+		}
+	}()
+	hasher := sha256.New()
+	client := *f.client
+	client.Timeout = 15 * time.Minute
+	streamingFetcher := *f
+	streamingFetcher.client = &client
+	media.Size, media.MIME, err = streamingFetcher.fetchInto(ctx, platform, raw, max, false, io.MultiWriter(temp, hasher))
+	if err != nil {
+		return MediaFile{}, err
+	}
+	if err = temp.Close(); err != nil {
+		return MediaFile{}, fail("download_failed")
+	}
+	media.SHA256 = hex.EncodeToString(hasher.Sum(nil))
+	keep = true
+	return media, nil
+}
 func allowedImportURL(platform Platform, raw string, article bool) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.User != nil || len(raw) > 16384 || u.Fragment != "" || u.Port() != "" && u.Port() != "443" || u.Scheme != "https" && u.Scheme != "http" {
@@ -133,12 +187,21 @@ func allowedImportURL(platform Platform, raw string, article bool) (*url.URL, er
 	return u, nil
 }
 func (f *HTTPFetcher) fetch(ctx context.Context, platform Platform, raw string, max int64, article bool) ([]byte, string, error) {
+	var buffer bytes.Buffer
+	_, mime, err := f.fetchInto(ctx, platform, raw, max, article, &buffer)
+	if err != nil {
+		return nil, "", err
+	}
+	return buffer.Bytes(), mime, nil
+}
+
+func (f *HTTPFetcher) fetchInto(ctx context.Context, platform Platform, raw string, max int64, article bool, destination io.Writer) (int64, string, error) {
 	if f == nil || f.client == nil || max <= 0 {
-		return nil, "", ErrUnavailable
+		return 0, "", ErrUnavailable
 	}
 	u, err := allowedImportURL(platform, raw, article)
 	if err != nil {
-		return nil, "", err
+		return 0, "", err
 	}
 	client := *f.client
 	client.Jar = nil
@@ -151,7 +214,7 @@ func (f *HTTPFetcher) fetch(ctx context.Context, platform Platform, raw string, 
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, "", fail("media_host_not_allowed")
+		return 0, "", fail("media_host_not_allowed")
 	}
 	req.Header.Set("User-Agent", "JDLG-ContentImport/1.0")
 	if article {
@@ -167,44 +230,44 @@ func (f *HTTPFetcher) fetch(ctx context.Context, platform Platform, raw string, 
 	}
 	response, err := client.Do(req)
 	if err != nil {
-		return nil, "", fail("download_failed")
+		return 0, "", fail("download_failed")
 	}
 	defer response.Body.Close()
 	if article && (response.StatusCode == 401 || response.StatusCode == 403 || response.StatusCode == 429) {
-		return nil, "", fail("risk_control")
+		return 0, "", fail("risk_control")
 	}
 	if article && (response.StatusCode == 404 || response.StatusCode == 410) {
-		return nil, "", fail("source_unavailable")
+		return 0, "", fail("source_unavailable")
 	}
 	if !article && (response.StatusCode == 401 || response.StatusCode == 403 || response.StatusCode == 404 || response.StatusCode == 410) {
-		return nil, "", fail("media_source_expired")
+		return 0, "", fail("media_source_expired")
 	}
 	if response.StatusCode != 200 && response.StatusCode != 206 {
-		return nil, "", fail("download_failed")
+		return 0, "", fail("download_failed")
 	}
 	if article && platform == Xiaohongshu && !strings.HasPrefix(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
-		return nil, "", fail("download_failed")
+		return 0, "", fail("download_failed")
 	}
 	if response.ContentLength > max {
-		return nil, "", fail("media_too_large")
+		return 0, "", fail("media_too_large")
 	}
 	if response.StatusCode == 206 {
 		var start, end, total int64
 		if _, err = fmt.Sscanf(response.Header.Get("Content-Range"), "bytes %d-%d/%d", &start, &end, &total); err != nil || start != 0 || total <= 0 || end+1 != total || response.ContentLength != total {
-			return nil, "", fail("partial_media")
+			return 0, "", fail("partial_media")
 		}
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, max+1))
-	if err != nil || len(data) == 0 {
-		return nil, "", fail("download_failed")
+	written, err := io.Copy(destination, io.LimitReader(response.Body, max+1))
+	if err != nil || written == 0 {
+		return 0, "", fail("download_failed")
 	}
-	if int64(len(data)) > max {
-		return nil, "", fail("media_too_large")
+	if written > max {
+		return 0, "", fail("media_too_large")
 	}
-	if response.ContentLength >= 0 && int64(len(data)) != response.ContentLength {
-		return nil, "", fail("partial_media")
+	if response.ContentLength >= 0 && written != response.ContentLength {
+		return 0, "", fail("partial_media")
 	}
-	return data, response.Header.Get("Content-Type"), nil
+	return written, response.Header.Get("Content-Type"), nil
 }
 
 func validXHSPageURL(raw string) bool {

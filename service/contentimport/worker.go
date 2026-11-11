@@ -12,15 +12,22 @@ import (
 )
 
 type Worker struct {
-	Store         JobStore
-	Resolvers     map[Platform]DocumentResolver
-	Authorize     func(context.Context, Job) error
-	SaveMedia     func(context.Context, Job, int, RemoteMedia) (tracking.Asset, error)
-	SaveDraft     func(context.Context, Job, Document, []tracking.Asset) (string, error)
-	LeaseDuration time.Duration
-	PollInterval  time.Duration
-	Now           func() time.Time
+	Store             JobStore
+	Resolvers         map[Platform]DocumentResolver
+	Authorize         func(context.Context, Job) error
+	SaveMedia         func(context.Context, Job, int, RemoteMedia) (tracking.Asset, error)
+	SaveDraft         func(context.Context, Job, Document, []tracking.Asset) (string, error)
+	LeaseDuration     time.Duration
+	PollInterval      time.Duration
+	Now               func() time.Time
+	leaseRenewTimeout time.Duration
 }
+
+const (
+	workerRunTimeout        = 20 * time.Minute
+	workerFinishTimeout     = 5 * time.Second
+	workerLeaseRenewTimeout = 5 * time.Second
+)
 
 func (w *Worker) now() time.Time {
 	if w.Now != nil {
@@ -40,7 +47,15 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	finish := func(status, contentID, code string) error {
-		return w.Store.Finish(ctx, job.ID, job.LeaseToken, status, contentID, code)
+		finishCtx := ctx
+		cancel := func() {}
+		if ctx.Err() != nil {
+			// The media operation may consume the job deadline. Keep the terminal
+			// write bounded, but do not leave a resumable job leased until expiry.
+			finishCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), workerFinishTimeout)
+		}
+		defer cancel()
+		return w.Store.Finish(finishCtx, job.ID, job.LeaseToken, status, contentID, code)
 	}
 	if err = w.Authorize(ctx, job); err != nil {
 		return true, finish(Blocked, "", "permission_revoked")
@@ -77,13 +92,13 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	assets := make([]tracking.Asset, 0, len(doc.Source.Media))
 	for i, media := range doc.Source.Media {
-		if err = w.Store.Renew(ctx, job.ID, job.LeaseToken, w.now(), w.LeaseDuration); err != nil {
+		if err = w.renewLease(ctx, job); err != nil {
 			return true, err
 		}
 		if err = w.Authorize(ctx, job); err != nil {
 			return true, finish(Blocked, "", "permission_revoked")
 		}
-		asset, saveErr := w.SaveMedia(ctx, job, i, media)
+		asset, saveErr := w.saveMediaWithLeaseRenewal(ctx, job, i, media)
 		if saveErr != nil {
 			status, code := failureState(saveErr)
 			return true, finish(status, "", code)
@@ -93,7 +108,7 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 		}
 		assets = append(assets, asset)
 	}
-	if err = w.Store.Renew(ctx, job.ID, job.LeaseToken, w.now(), w.LeaseDuration); err != nil {
+	if err = w.renewLease(ctx, job); err != nil {
 		return true, err
 	}
 	if err = w.Authorize(ctx, job); err != nil {
@@ -109,13 +124,62 @@ func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	return true, finish(Ready, contentID, "")
 }
+
+func (w *Worker) renewLease(ctx context.Context, job Job) error {
+	timeout := w.leaseRenewTimeout
+	if timeout <= 0 {
+		timeout = workerLeaseRenewTimeout
+	}
+	renewCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return w.Store.Renew(renewCtx, job.ID, job.LeaseToken, w.now(), w.LeaseDuration)
+}
+
+func (w *Worker) saveMediaWithLeaseRenewal(ctx context.Context, job Job, index int, media RemoteMedia) (tracking.Asset, error) {
+	operationCtx, cancel := context.WithCancel(ctx)
+	stop := make(chan struct{})
+	heartbeatDone := make(chan error, 1)
+	interval := w.LeaseDuration / 3
+	if interval <= 0 {
+		interval = time.Second
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				heartbeatDone <- nil
+				return
+			case <-operationCtx.Done():
+				heartbeatDone <- nil
+				return
+			case <-ticker.C:
+				if err := w.renewLease(operationCtx, job); err != nil {
+					heartbeatDone <- err
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	asset, saveErr := w.SaveMedia(operationCtx, job, index, media)
+	close(stop)
+	heartbeatErr := <-heartbeatDone
+	cancel()
+	if heartbeatErr != nil {
+		return tracking.Asset{}, heartbeatErr
+	}
+	return asset, saveErr
+}
+
 func (w *Worker) Run(ctx context.Context) {
 	poll := w.PollInterval
 	if poll <= 0 {
 		poll = 2 * time.Second
 	}
 	for ctx.Err() == nil {
-		jobCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		jobCtx, cancel := context.WithTimeout(ctx, workerRunTimeout)
 		worked, err := w.RunOnce(jobCtx)
 		cancel()
 		delay := poll

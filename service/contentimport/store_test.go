@@ -332,16 +332,21 @@ func TestPublicJobRetryProjectionUsesDurableEvidence(t *testing.T) {
 		}
 	}
 }
-func TestExpiredSnapshotCannotBeRetriedIndefinitely(t *testing.T) {
+func TestExpiredSnapshotRetryRequeuesFreshResolution(t *testing.T) {
 	job := Job{ID: "job-expired", Tenant: "tenant-a", Actor: 7, Owner: "owner-a", Status: Blocked, RequestSent: true, ErrorCode: "media_source_expired", Document: &Document{}}
-	if publicJob(job).CanRetry {
-		t.Fatal("expired signed media falsely retryable")
+	if !publicJob(job).CanRetry {
+		t.Fatal("expired signed media must allow an explicit fresh resolution")
 	}
 	payload, _ := json.Marshal(job.Document)
-	script := &sqlScript{t: t, steps: []sqlStep{{kind: "query", contains: "actor_id=? AND import_id=? FOR UPDATE", rows: [][]driver.Value{jobValues(job, "hash", payload)}}}}
+	script := &sqlScript{t: t, steps: []sqlStep{
+		{kind: "query", contains: "actor_id=? AND import_id=? FOR UPDATE", rows: [][]driver.Value{jobValues(job, "hash", payload)}},
+		{kind: "query", contains: "SELECT COUNT(*)", rows: [][]driver.Value{{int64(0)}}},
+		{kind: "exec", contains: "resolution_json=CASE", affected: 1},
+	}}
 	store, _ := NewSQLStore(scriptDB(script), "tenant-a")
-	if _, err := store.Retry(context.Background(), 7, job.ID); !errors.Is(err, ErrConflict) {
-		t.Fatal(err)
+	out, err := store.Retry(context.Background(), 7, job.ID)
+	if err != nil || out.Status != Queued || out.CanRetry || out.Document != nil {
+		t.Fatalf("out=%+v err=%v", out, err)
 	}
 	script.assertDone()
 }

@@ -10,9 +10,13 @@ import (
 
 type workerMemoryStore struct {
 	JobStore
-	job      Job
-	order    []string
-	finished string
+	job              Job
+	order            []string
+	finished         string
+	renewed          int
+	renewedSignal    chan struct{}
+	renew            func(context.Context) error
+	finishContextErr error
 }
 
 func (m *workerMemoryStore) Claim(context.Context, time.Time, time.Duration) (Job, error) {
@@ -27,13 +31,109 @@ func (m *workerMemoryStore) SaveResolution(_ context.Context, _, _ string, d Doc
 	m.job.Document = &d
 	return nil
 }
-func (m *workerMemoryStore) Renew(context.Context, string, string, time.Time, time.Duration) error {
+
+func (m *workerMemoryStore) Renew(ctx context.Context, _ string, _ string, _ time.Time, _ time.Duration) error {
+	m.renewed++
+	if m.renewedSignal != nil {
+		select {
+		case m.renewedSignal <- struct{}{}:
+		default:
+		}
+	}
+	if m.renew != nil {
+		return m.renew(ctx)
+	}
 	return nil
 }
-func (m *workerMemoryStore) Finish(_ context.Context, _, _, status, contentID, code string) error {
+func (m *workerMemoryStore) Finish(ctx context.Context, _, _, status, contentID, code string) error {
+	m.finishContextErr = ctx.Err()
 	m.finished = status
 	m.order = append(m.order, "finish:"+status)
 	return nil
+}
+
+func TestWorkerRenewsLeaseDuringLongMediaSave(t *testing.T) {
+	w, m := workerFixture()
+	w.LeaseDuration = 60 * time.Millisecond
+	m.renewedSignal = make(chan struct{}, 3)
+	d, _ := w.Resolvers[Douyin].ResolveDocument(context.Background(), m.job.URL)
+	m.job.Document = &d
+	m.order = nil
+	w.Resolvers = nil
+	release := make(chan struct{})
+	w.SaveMedia = func(ctx context.Context, _ Job, _ int, _ RemoteMedia) (tracking.Asset, error) {
+		select {
+		case <-release:
+			return tracking.Asset{ID: "saved-media-0001", Kind: "video"}, nil
+		case <-ctx.Done():
+			return tracking.Asset{}, ctx.Err()
+		}
+	}
+	done := make(chan error, 1)
+	go func() { _, err := w.RunOnce(context.Background()); done <- err }()
+	for i := 0; i < 3; i++ {
+		select {
+		case <-m.renewedSignal:
+		case <-time.After(time.Second):
+			t.Fatal("lease renewal timed out")
+		}
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	// One renewal happens before SaveMedia and at least two happen while it is
+	// blocked, so another worker cannot reclaim a large in-flight download.
+	if m.renewed < 3 {
+		t.Fatalf("renewals=%d", m.renewed)
+	}
+}
+
+func TestWorkerFinishesWithBoundedContextAfterOperationDeadline(t *testing.T) {
+	w, m := workerFixture()
+	d, _ := w.Resolvers[Douyin].ResolveDocument(context.Background(), m.job.URL)
+	m.job.Document = &d
+	w.Resolvers = nil
+	w.SaveMedia = func(ctx context.Context, _ Job, _ int, _ RemoteMedia) (tracking.Asset, error) {
+		return tracking.Asset{}, ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	worked, err := w.RunOnce(ctx)
+	if !worked || err != nil {
+		t.Fatalf("worked=%v err=%v", worked, err)
+	}
+	if m.finished != Failed || m.finishContextErr != nil {
+		t.Fatalf("status=%q finish_context_err=%v", m.finished, m.finishContextErr)
+	}
+}
+
+func TestWorkerBoundsLeaseRenewalAndCancelsMediaSave(t *testing.T) {
+	w, m := workerFixture()
+	w.LeaseDuration = 60 * time.Millisecond
+	w.leaseRenewTimeout = 30 * time.Millisecond
+	d, _ := w.Resolvers[Douyin].ResolveDocument(context.Background(), m.job.URL)
+	m.job.Document = &d
+	w.Resolvers = nil
+	m.renew = func(ctx context.Context) error {
+		if m.renewed == 1 {
+			return nil
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	w.SaveMedia = func(ctx context.Context, _ Job, _ int, _ RemoteMedia) (tracking.Asset, error) {
+		<-ctx.Done()
+		return tracking.Asset{}, ctx.Err()
+	}
+	started := time.Now()
+	worked, err := w.RunOnce(context.Background())
+	if !worked || err != nil || m.finished != Failed {
+		t.Fatalf("worked=%v err=%v status=%q", worked, err, m.finished)
+	}
+	if elapsed := time.Since(started); elapsed > 300*time.Millisecond {
+		t.Fatalf("blocked renewal took %v", elapsed)
+	}
 }
 
 type documentResolverFunc func(context.Context, string) (Document, error)

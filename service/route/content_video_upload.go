@@ -32,6 +32,7 @@ const (
 	videoUploadTTL       = 7 * 24 * time.Hour
 	videoUploadDoneTTL   = 30 * 24 * time.Hour
 	videoUploadLockCount = 256
+	trackingMP4MaxAtoms  = 10000
 )
 
 var videoUploadLocks [videoUploadLockCount]sync.Mutex
@@ -457,7 +458,7 @@ func finalizeVideoUpload(ctx context.Context, svc *tracking.Service, scope track
 	if err != nil {
 		return tracking.Asset{}, err
 	}
-	width, height, err := trackingMP4DimensionsAt(file, session.Size)
+	width, height, err := trackingMP4DimensionsAtContext(ctx, file, session.Size)
 	closeErr := file.Close()
 	if err != nil || closeErr != nil {
 		return tracking.Asset{}, &tracking.Error{Status: http.StatusBadRequest, Message: "无法识别MP4尺寸，请选择标准MP4原文件"}
@@ -574,11 +575,16 @@ func verifyContentMediaFile(path string, size int64, digest string) error {
 }
 
 func trackingMP4DimensionsAt(reader io.ReaderAt, size int64) (int, int, error) {
+	return trackingMP4DimensionsAtContext(context.Background(), reader, size)
+}
+
+func trackingMP4DimensionsAtContext(ctx context.Context, reader io.ReaderAt, size int64) (int, int, error) {
 	if size < 16 {
 		return 0, 0, errors.New("short mp4")
 	}
 	var foundFTYP bool
 	var width, height int
+	atoms := 0
 	var walk func(int64, int64, int) error
 	walk = func(offset, length int64, depth int) error {
 		if depth > 4 {
@@ -586,7 +592,14 @@ func trackingMP4DimensionsAt(reader io.ReaderAt, size int64) (int, int, error) {
 		}
 		end := offset + length
 		for offset+8 <= end {
-			header := make([]byte, 16)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			atoms++
+			if atoms > trackingMP4MaxAtoms {
+				return errors.New("too many mp4 atoms")
+			}
+			var header [16]byte
 			if _, err := reader.ReadAt(header[:8], offset); err != nil {
 				return err
 			}
