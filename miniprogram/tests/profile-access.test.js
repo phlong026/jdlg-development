@@ -18,6 +18,14 @@ const anonymousBusinessRoutes = new Set([
   'pages/index/index',
   'pages/template/template',
   'pages/distribution/distribution',
+  'pages/aigenerate/aigenerate',
+  'pages/aivideo/aivideo',
+  'pages/aitools/aitools',
+  'pages/aitooldetail/aitooldetail',
+  'pages/aitoolworkbench/aitoolworkbench',
+  'pages/aicost/aicost',
+  'pages/newminnantool/newminnantool',
+  'pages/allrounddesign/allrounddesign',
 ]);
 
 test('every business route hides its content behind the shared profile guard', () => {
@@ -58,7 +66,7 @@ test('native WXML compiler renders only the login gate before profile approval o
 });
 
 // 默认用身份功能页测门禁行为；公开浏览页的乐观放行在下方独立用例覆盖。
-function harness(route = 'pages/aitoolworkbench/aitoolworkbench') {
+function harness(route = 'pages/wallet/wallet') {
   const calls = [], storage = { token: '' }, navigations = [], requests = [], toasts = [];
   let checks = 0;
   const module = { exports: {} };
@@ -128,8 +136,8 @@ for (const route of anonymousBusinessRoutes) {
     assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
   });
 }
-test('exactly the three approved business pages run content lifecycle before profile approval', () => {
-  assert.equal(anonymousBusinessRoutes.size, 3);
+test('only the approved browse and AI input pages run content lifecycle before profile approval', () => {
+  assert.equal(anonymousBusinessRoutes.size, 11);
   for (const route of businessRoutes) {
     const h = harness(route); h.mount({ route });
     if (anonymousBusinessRoutes.has(route)) {
@@ -146,8 +154,8 @@ test('exactly the three approved business pages run content lifecycle before pro
     assert.deepEqual(h.calls.map(call => call[0]), ['load', 'show', 'ready'], route);
   }
 });
-// 身份功能页门禁行为保持不变（用户主动进入功能时才要求登录+资料完整）。
-for (const route of ['pages/aicost/aicost']) {
+// 报告问卷等业务页继续要求登录+资料完整。
+for (const route of ['pages/report/questionnaire']) {
   test(`${route}: no content/business/visit lifecycle before server profile approval`, () => {
     const h = harness(route); h.mount({ id: '17', report_id: 'report', st: 'shared' });
     assert.equal(h.checks(), 1);
@@ -168,6 +176,27 @@ test('ordinary business pages are protected even when analytics collection is di
   assert.deepEqual(h.calls, []);
   h.grant();
   assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
+});
+  for (const route of ['pages/generatedetails/generatedetails', 'pages/generatehistory/generatehistory', 'pages/generateprogress/generateprogress', 'pages/aicostresult/aicostresult']) {
+  test(`${route}: private AI account pages request account verification without requiring public profile`, () => {
+    const h = harness(route); h.mount({ task_no: 'private-task' });
+    assert.equal(h.checks(), 1);
+    assert.equal(h.guard.options.accountOnly, true);
+    assert.deepEqual(h.calls, []);
+  });
+}
+test('AI input survives anonymous login return but is cleared when switching between logged-in accounts', () => {
+  const anonymous = harness('pages/aigenerate/aigenerate');
+  anonymous.mount(); anonymous.page.data.value = 'user prompt';
+  anonymous.page.onHide(); anonymous.storage.token = 'account-a'; anonymous.page.onShow();
+  assert.equal(anonymous.page.data.value, 'user prompt', 'anonymous draft stays on the same page after login');
+  assert.equal(anonymous.calls.filter(call => call[0] === 'unload').length, 0);
+
+  const switched = harness('pages/aigenerate/aigenerate');
+  switched.storage.token = 'account-a'; switched.mount(); switched.page.data.value = 'account A prompt';
+  switched.page.onHide(); switched.storage.token = 'account-b'; switched.page.onShow();
+  assert.equal(switched.page.data.value, 'initial', 'another account cannot inherit the previous account form');
+  assert.equal(switched.calls.filter(call => call[0] === 'unload').length, 1);
 });
 test('cached token is not profile approval; stale approval cannot unlock another account', () => {
   const h = harness(); h.storage.token = 'cached'; h.mount();
@@ -313,7 +342,7 @@ test('the login guard writes its overlay state before emitting gated', () => {
     for (const marker of ['登录已过期，请重新登录', '账号资料无法确认，请重新登录']) {
       const visibleAt = code.indexOf("visible: true, checking: false, needsLogin: true, error: '" + marker + "'");
       assert.ok(visibleAt > 0, file + ' 缺少浮层写入: ' + marker);
-      const gatedAt = code.indexOf("triggerEvent('gated')", visibleAt);
+      const gatedAt = code.indexOf('emitGated()', visibleAt);
       assert.ok(gatedAt > visibleAt, file + ' 必须先写浮层状态再抛 gated: ' + marker);
     }
   }
@@ -336,7 +365,7 @@ test('the share page uses the same full-profile guard contract as other protecte
   share.storage.token = 'session-account';
   share.page.onShow();
   assert.notEqual(share.guard.options && share.guard.options.scope, 'share');
-  const business = harness('pages/aicost/aicost'); business.mount({});
+  const business = harness('pages/report/questionnaire'); business.mount({});
   business.storage.token = 'session-account';
   business.page.onShow();
   assert.deepEqual(share.guard.options, business.guard.options, '分享页不再有仅昵称的核验分支');
@@ -352,7 +381,7 @@ test('the fallback login redirect keeps the share-view scene for the share page 
   share.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '已登记昵称', avatar: '' } } });
   assert.match(share.navigations[0].url, /from=share-view/);
 
-  const business = harness('pages/aicost/aicost');
+  const business = harness('pages/report/questionnaire');
   business.page.selectComponent = () => null;
   business.storage.token = 'session-account';
   business.page.onShow(); business.page.onReady();

@@ -274,6 +274,20 @@ Page({
     this.setData({ promptText: String(e.detail.value || '') });
   },
 
+  ensureAIAccount(message: string = '登录后可继续使用 AI 综合设计'): string {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token) return token;
+    wx.showModal({
+      title: '提示',
+      content: message,
+      confirmText: '去登录',
+      success: (res) => {
+        if (res.confirm) wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
+      },
+    });
+    return '';
+  },
+
   async onOptimizePrompt() {
     if (this.data.optimizingPrompt) return;
     const rawPrompt = (this.data.promptText || '').trim();
@@ -281,6 +295,7 @@ Page({
       wx.showToast({ title: '请先输入提示词', icon: 'none' });
       return;
     }
+    if (!this.ensureAIAccount('登录后可使用 AI 提示词优化')) return;
     this.setData({ optimizingPrompt: true });
     const { optimizePrompt } = require('../../utils/promptOptimize');
     const result = await optimizePrompt(rawPrompt, 'architecture');
@@ -594,9 +609,8 @@ Page({
       wx.showToast({ title: validationMessage, icon: 'none' });
       return;
     }
-    const token = wx.getStorageSync('token');
+    const token = this.ensureAIAccount();
     if (!token) {
-      wx.showToast({ title: '请先登录', icon: 'none' });
       return;
     }
 

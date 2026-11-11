@@ -65,6 +65,16 @@ for (const ext of ['ts', 'js']) {
   test(`${ext}: missing token remains blocked`, async () => {
     const f = load(ext); assert.equal(await f.instance.check(), false); assert.equal(f.instance.data.visible, true); assert.ok(f.events.some(e => e.name === 'gated')); assert.equal(f.requests.length, 0);
   });
+  test(`${ext}: soft full-profile action can be dismissed without leaving the account-only page`, async () => {
+    const profile = { ...complete, avatar: '' };
+    const f = load(ext, { token: 'tk', profile });
+    assert.equal(await f.instance.check({ soft: true }), false);
+    assert.equal(f.events.find(e => e.name === 'gated').detail.soft, true);
+    profile.avatar = complete.avatar;
+    assert.equal(await f.instance.onProfileCompleted(), true, '补全后的重检继续沿用 soft 模式并放行');
+    f.instance.onDismiss();
+    assert.deepEqual(f.navigations, []);
+  });
   test(`${ext}: silent background verify keeps the panel hidden, never gates early and still grants`, async () => {
     const f = load(ext, { token: 'tk', cachedProfile: complete, defer: true });
     const pending = f.instance.check({ silent: true });

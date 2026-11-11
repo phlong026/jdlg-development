@@ -57,9 +57,15 @@ Page({
             this.openPublicSnapshot();
             return;
         }
+        const token = String(wx.getStorageSync('token') || '');
+        const userInfo = wx.getStorageSync('userInfo') || {};
+        const userID = Number(userInfo.id || 0);
+        const profileToken = String(userInfo.token || '');
         let result;
         try {
-            result = wx.getStorageSync(RESULT_STORAGE_KEY);
+            if (token && (!profileToken || profileToken === token) && Number.isInteger(userID) && userID > 0) {
+                result = wx.getStorageSync(`${RESULT_STORAGE_KEY}:${userID}`);
+            }
         }
         catch (error) {
             console.error('读取造价测算结果失败:', error);
@@ -121,6 +127,16 @@ Page({
     maybePrepareShareReport() {
         // Displaying or returning to a private result is never permission to publish.
     },
+    requestFullProfileForShare() {
+        const guard = this.selectComponent('#profileAccessGuard');
+        if (!guard || typeof guard.check !== 'function') {
+            wx.showToast({ title: '请先补充头像和昵称', icon: 'none' });
+            return;
+        }
+        Promise.resolve(guard.check({ soft: true })).catch(() => {
+            wx.showToast({ title: '资料填写暂不可用，请重试', icon: 'none' });
+        });
+    },
     async onPrepareShareReport() {
         if (this.data.sharePreparing || !this.reportSnapshot)
             return;
@@ -142,6 +158,10 @@ Page({
             if (this.pageDestroyed)
                 return;
             this.setData({ sharePreparing: false });
+            if (Number((error === null || error === void 0 ? void 0 : error.statusCode) || (error === null || error === void 0 ? void 0 : error.code) || 0) === 428) {
+                this.requestFullProfileForShare();
+                return;
+            }
             wx.showToast({ title: getErrorMessage(error, '公开分享失败，请重试'), icon: 'none' });
         }
     },

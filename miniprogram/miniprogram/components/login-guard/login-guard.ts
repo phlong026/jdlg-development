@@ -45,14 +45,19 @@ Component({
         const pages = getCurrentPages();
         const current = pages[pages.length - 1];
         const route = current ? String(current.route || '') : '';
-        if (!isPublicBrowseRoute(route)) {
+        if (!(this as any)._soft && !isPublicBrowseRoute(route)) {
           if (pages.length > 1) wx.navigateBack({ delta: 1 });
           else wx.switchTab({ url: '/pages/index/index' });
         }
       } catch (e) { /* 导航失败时保持当前页，浮层已关闭 */ }
     },
-    async check(options?: { silent?: boolean; anonymous?: boolean }): Promise<boolean> {
+    async check(options?: { silent?: boolean; anonymous?: boolean; accountOnly?: boolean; soft?: boolean }): Promise<boolean> {
       const silent = !!(options && options.silent);
+      const accountOnly = options?.accountOnly === true;
+      const soft = options?.soft === true;
+      (this as any)._accountOnly = accountOnly;
+      (this as any)._soft = soft;
+      const emitGated = () => this.triggerEvent('gated', { soft });
       const revision = ((this as any)._checkRevision || 0) + 1;
       (this as any)._checkRevision = revision;
       const token = wx.getStorageSync('token');
@@ -74,7 +79,7 @@ Component({
           return false;
         }
         this.setData({ visible: true, checking: false });
-        this.triggerEvent('gated');
+        emitGated();
         if (deniedAgain()) return false;
         return false;
       }
@@ -92,7 +97,7 @@ Component({
           editor?.setData({ visible: false });
           // 先写浮层状态再抛 gated：分享页匿名降级会在 gated 处理里隐藏浮层，反向顺序会重开浮层。
           this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
-          this.triggerEvent('gated');
+          emitGated();
           if (deniedAgain()) return false;
           return false;
         }
@@ -104,7 +109,7 @@ Component({
           wx.removeStorageSync('userInfo');
           editor?.setData({ visible: false });
           this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
-          this.triggerEvent('gated');
+          emitGated();
           if (deniedAgain()) return false;
           return false;
         }
@@ -112,17 +117,17 @@ Component({
         const sameAccount = Number(cachedProfile.id || 0) === id;
         wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
         // 单篇分享和其它受保护页统一要求服务器已保存的昵称与头像。
-        if (!hasCompleteProfile(profile)) {
+        if (!accountOnly && !hasCompleteProfile(profile)) {
           if (!editor || typeof editor.show !== 'function') throw new Error('资料填写暂不可用，请重试');
           this.setData({ visible: false, checking: false, completingProfile: true });
-          this.triggerEvent('gated');
+          emitGated();
           // 同一账号正在填写时保留尚未提交的输入和上传状态。
           if (!editor.data?.visible || editor.data.promptToken !== token) {
             editor.show({ required: true, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
           }
           return false;
         }
-        const verified = { ...profile, id, nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim() };
+        const verified = { ...profile, id, nickname: String(profile.nickname || '').trim(), avatar: String(profile.avatar || '').trim() };
         wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...verified, token });
         editor?.setData({ visible: false });
         this.setData({ visible: false, checking: false, completingProfile: false });
@@ -131,7 +136,7 @@ Component({
       } catch (error: any) {
         if (current()) {
           console.error('分享资料核验失败:', error);
-          this.triggerEvent('gated');
+          emitGated();
           if (deniedAgain()) return false;
           this.setData({ visible: true, checking: false, error: error.message || '资料读取失败，请重试' });
         }
@@ -139,9 +144,15 @@ Component({
       }
     },
 
-    onRetry() { return this.check(); },
-    onProfileCompleted() { return this.check(); },
-    onProfileAuthRequired() { return this.check(); },
+    repeatCheck() {
+      return this.check({
+        ...((this as any)._accountOnly ? { accountOnly: true } : {}),
+        ...((this as any)._soft ? { soft: true } : {}),
+      });
+    },
+    onRetry() { return this.repeatCheck(); },
+    onProfileCompleted() { return this.repeatCheck(); },
+    onProfileAuthRequired() { return this.repeatCheck(); },
 
     onTogglePrivacy() {
       this.setData({ agreedPrivacy: !this.data.agreedPrivacy });
@@ -195,7 +206,7 @@ Component({
         }
         wx.setStorageSync('token', body.data.token);
         wx.setStorageSync('userInfo', { ...body.data, token: body.data.token });
-        await this.check();
+        await this.repeatCheck();
       } catch (error: any) {
         if (!current()) return;
         console.error('登录门禁登录失败:', error);

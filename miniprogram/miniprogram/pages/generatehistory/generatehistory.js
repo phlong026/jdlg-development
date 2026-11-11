@@ -59,14 +59,25 @@ Page({
     onUnload() {
         this.disconnectManageVisibilityObserver();
     },
+    getGenerateDraftStorageKey() {
+        const token = String(wx.getStorageSync('token') || '');
+        const userInfo = wx.getStorageSync('userInfo') || {};
+        const userID = Number(userInfo.id || 0);
+        const profileToken = String(userInfo.token || '');
+        return token && (!profileToken || profileToken === token) && Number.isSafeInteger(userID) && userID > 0
+            ? `${GENERATE_DRAFT_STORAGE_KEY}:${userID}` : '';
+    },
     loadLocalDraft() {
-        const rawDraft = wx.getStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+        const storageKey = this.getGenerateDraftStorageKey();
+        const rawDraft = storageKey
+            ? wx.getStorageSync(storageKey)
+            : null;
         if (!rawDraft || typeof rawDraft !== 'object') {
             this.setData({
                 hasLocalDraft: false,
                 localDraft: null,
             });
-            return;
+            return false;
         }
         const prompt = String(rawDraft.promptText || '').trim();
         const imageCount = [
@@ -81,12 +92,12 @@ Page({
         const generateCount = Number(rawDraft.selectedGenerateCount || 1);
         const hasContent = !!prompt || imageCount > 0 || !!selectedStyle || generateCount > 1;
         if (!hasContent) {
-            wx.removeStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+            wx.removeStorageSync(storageKey);
             this.setData({
                 hasLocalDraft: false,
                 localDraft: null,
             });
-            return;
+            return false;
         }
         const title = prompt
             ? (prompt.length > 22 ? `${prompt.slice(0, 22)}...` : prompt)
@@ -105,13 +116,19 @@ Page({
                 draftTimeText: this.formatTime(String(rawDraft.updated_at || '')),
             },
         });
+        return true;
     },
     onContinueLocalDraft() {
+        if (!this.loadLocalDraft())
+            return;
         wx.navigateTo({
             url: '/pages/aigenerate/aigenerate?draft=1',
         });
     },
     onDiscardLocalDraft() {
+        const storageKey = this.getGenerateDraftStorageKey();
+        if (!storageKey || !this.loadLocalDraft())
+            return;
         wx.showModal({
             title: '丢弃草稿',
             content: '确定丢弃这份未提交的生成草稿吗？',
@@ -121,7 +138,7 @@ Page({
             success: (res) => {
                 if (!res.confirm)
                     return;
-                wx.removeStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+                wx.removeStorageSync(storageKey);
                 this.setData({
                     hasLocalDraft: false,
                     localDraft: null,

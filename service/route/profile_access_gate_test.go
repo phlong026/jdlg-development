@@ -161,6 +161,112 @@ func TestMiniprogramProfileGateAllowsOnlyAnonymousPublicBrowseAndTrackingTranspo
 	}
 }
 
+func TestMiniprogramProfileGateAllowsOnlyPublishedAIToolAndPricingReadsAnonymously(t *testing.T) {
+	loaded := 0
+	router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
+		loaded++
+		return miniprogramProfile{}, nil
+	})
+
+	allowed := []string{
+		"/api/v1/miniprogram/ai/pricing?scenes=ai_draw_single",
+		"/api/v1/miniprogram/ai-tools?category=architecture",
+		"/api/v1/miniprogram/ai-tools/42",
+		"/api/v1/miniprogram/ai-tools/code/rural-villa",
+	}
+	for _, path := range allowed {
+		if response := profileGateRequest(router, http.MethodGet, path, ""); response.Code != http.StatusOK {
+			t.Fatalf("anonymous AI read %s = %d body=%s", path, response.Code, response.Body.String())
+		}
+	}
+	if loaded != 0 {
+		t.Fatalf("anonymous AI reads queried profile %d times", loaded)
+	}
+
+	protected := []string{
+		"/api/v1/miniprogram/ai/pricing/private",
+		"/api/v1/miniprogram/ai-tools/0",
+		"/api/v1/miniprogram/ai-tools/-1",
+		"/api/v1/miniprogram/ai-tools/42/versions",
+		"/api/v1/miniprogram/ai-tools/code",
+		"/api/v1/miniprogram/ai-tools/code/rural-villa/private",
+		"/api/v1/miniprogram/ai-tools/management",
+	}
+	for _, path := range protected {
+		if response := profileGateRequest(router, http.MethodGet, path, ""); response.Code != http.StatusUnauthorized {
+			t.Fatalf("protected AI read %s = %d body=%s", path, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestMiniprogramProfileGateAIAccountOperationsRequireLoginButNotProfile(t *testing.T) {
+	loaded := 0
+	router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
+		loaded++
+		return miniprogramProfile{}, nil
+	})
+
+	requests := [][2]string{
+		{http.MethodPost, "/api/v1/miniprogram/ai/draw"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/chat"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/generate-prompt"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/upload-reference-image"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/rural-villa-design"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/allround-design"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/building-replacement"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/parent-child-design"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/cost/calculate"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/cost/doc"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/chat/stream"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/intent/stream"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/prompt/optimize"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/building-code/chat"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/task/status"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/video/create"},
+		{http.MethodPost, "/api/v1/miniprogram/ai/video/generate-prompts"},
+		{http.MethodGet, "/api/v1/miniprogram/ai/task/42/info"},
+		{http.MethodGet, "/api/v1/miniprogram/ai/video/poll/task-42"},
+		{http.MethodGet, "/api/v1/miniprogram/ai/video/query/task-42"},
+		{http.MethodGet, "/api/v1/miniprogram/building-code-documents"},
+		{http.MethodPost, "/api/v1/miniprogram/building-code-documents/upload"},
+		{http.MethodDelete, "/api/v1/miniprogram/building-code-documents/42"},
+		{http.MethodGet, "/api/v1/miniprogram/user/stones"},
+		{http.MethodGet, "/api/v1/miniprogram/user/stones/summary"},
+		{http.MethodPost, "/api/v1/miniprogram/user/stones/details"},
+		{http.MethodGet, "/api/v1/miniprogram/user/tasks"},
+		{http.MethodDelete, "/api/v1/miniprogram/user/tasks/task-42"},
+		{http.MethodGet, "/api/v1/miniprogram/user/ai/download-config"},
+		{http.MethodPost, "/api/v1/miniprogram/user/ai/wecom/verify-phone"},
+		{http.MethodPost, "/api/v1/miniprogram/user/ai/task/download-original"},
+		{http.MethodGet, "/api/v1/miniprogram/user/ai/task/download-original-file"},
+		{http.MethodPost, "/api/v1/miniprogram/user/ai/video/download-original"},
+		{http.MethodGet, "/api/v1/miniprogram/user/ai/video/download-original-file"},
+	}
+	for _, request := range requests {
+		if response := profileGateRequest(router, request[0], request[1], ""); response.Code != http.StatusUnauthorized {
+			t.Fatalf("anonymous AI operation %s %s = %d body=%s", request[0], request[1], response.Code, response.Body.String())
+		}
+		if response := profileGateRequest(router, request[0], request[1], "valid"); response.Code != http.StatusOK {
+			t.Fatalf("incomplete-profile AI operation %s %s = %d body=%s", request[0], request[1], response.Code, response.Body.String())
+		}
+	}
+	if loaded != 0 {
+		t.Fatalf("AI account operations queried profile %d times", loaded)
+	}
+
+	for _, request := range [][2]string{
+		{http.MethodPost, "/api/v1/miniprogram/ai/unknown"},
+		{http.MethodGet, "/api/v1/miniprogram/ai/task/42/info/private"},
+		{http.MethodGet, "/api/v1/miniprogram/user/tasks/task-42"},
+		{http.MethodPost, "/api/v1/miniprogram/project-notes/projects"},
+	} {
+		response := profileGateRequest(router, request[0], request[1], "valid")
+		if response.Code != http.StatusPreconditionRequired {
+			t.Fatalf("non-AI profile boundary %s %s = %d body=%s", request[0], request[1], response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestMiniprogramProfileGateShareReadingRequiresCompleteProfile(t *testing.T) {
 	requests := [][2]string{
 		{http.MethodGet, "/api/v1/miniprogram/project-notes/shared/note-token"},
@@ -261,7 +367,6 @@ func TestMiniprogramProfileGateBootstrapAllowlistIsExact(t *testing.T) {
 		{http.MethodPut, "/api/v1/miniprogram/profile/nickname"},
 		{http.MethodPut, "/api/v1/miniprogram/profile/avatar"},
 		{http.MethodPut, "/api/v1/miniprogram/profile/identity"},
-		{http.MethodPost, "/api/v1/miniprogram/ai/upload-reference-image"},
 		{http.MethodPost, "/api/v1/miniprogram/tracking/share-entry"},
 		{http.MethodGet, "/api/v1/miniprogram/tracking/config"},
 		{http.MethodPost, "/api/v1/miniprogram/wecom/enterprise-wechat/callback"},

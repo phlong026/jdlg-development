@@ -1,0 +1,32 @@
+[
+  {
+    "path": "/ai/pricing",
+    "status": 401,
+    "code": 401
+  },
+  {
+    "path": "/ai-tools",
+    "status": 401,
+    "code": 401
+  },
+  {
+    "path": "/ai-tools/1",
+    "status": 401,
+    "code": 401
+  },
+  {
+    "path": "/ai-tools/code/new_minnan_tool",
+    "status": 401,
+    "code": 401
+  },
+  {
+    "path": "/user/stones",
+    "status": 401,
+    "code": 401
+  },
+  {
+    "path": "/user/tasks",
+    "status": 401,
+    "code": 401
+  }
+]

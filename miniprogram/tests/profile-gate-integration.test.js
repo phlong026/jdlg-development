@@ -118,6 +118,30 @@ test('global request guard and inline login card grant a complete account withou
   assert.deepEqual(fixture.navigations, []);
 });
 
+test('private AI result page accepts a valid account even when avatar and nickname are incomplete', async () => {
+  const fixture = loadCombined({ profileResponses: [{ ...completeProfile, nickname: '', avatar: '' }] });
+  fixture.storage.token = 'session-9';
+  fixture.storage.userInfo = { id: 9, token: 'session-9' };
+  const granted = await fixture.component.check({ accountOnly: true });
+  assert.equal(granted, true);
+  assert.equal(fixture.editorShows.length, 0);
+  assert.equal(fixture.events.filter(event => event.name === 'authenticated').length, 1);
+  assert.equal(fixture.storage.userInfo.nickname, '');
+  assert.equal(fixture.storage.userInfo.avatar, '');
+});
+
+test('account-only verification never weakens a later report or share profile check', async () => {
+  const incomplete = { ...completeProfile, nickname: '', avatar: '' };
+  const fixture = loadCombined({ profileResponses: [incomplete, incomplete] });
+  fixture.storage.token = 'session-9';
+  fixture.storage.userInfo = { id: 9, token: 'session-9' };
+  assert.equal(await fixture.component.check({ accountOnly: true }), true);
+  assert.equal(await fixture.component.check(), false);
+  assert.equal(fixture.editorShows.length, 1);
+  assert.equal(fixture.events.filter(event => event.name === 'authenticated').length, 1);
+  assert.equal(fixture.events.filter(event => event.name === 'gated').length, 1);
+});
+
 test('profile 401 returns the same inline card to login instead of opening the standalone page', async () => {
   const fixture = loadCombined({ profileResponses: [{ statusCode: 401, data: { code: 401 } }] });
   await login(fixture);

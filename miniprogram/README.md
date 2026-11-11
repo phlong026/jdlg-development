@@ -57,3 +57,7 @@ npm run test:tracking
 首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](../docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
 
 2026-10-27前端新增AI内容策划私有子页，并接通内容制作、导入、编辑/预览/阅读和“我的”工作台。使用原对话计费和事件通道，不自动发送AI请求。页面验证、截图与尚未通过的原生点击链见[前端实施记录](../docs/phase3/frontend-implementation-20261027.md)；隔离原生验证脚本为 `node verification/phase3-frontend.cjs`，应在微信开发者工具已打开本目录且电脑已解锁时执行。
+
+## AI 先浏览后登录
+
+AI 表单允许匿名浏览，实际生成、优化和服务端上传在用户操作时要求账号登录；AI 登录不强制头像昵称。八个表单、四个个人结果/历史页面和受保护分享的访问边界见 [AI 访问契约](../docs/api/ai-preview-access.md)。配置调整需要同步前后端，原生验证与发布状态见 [本次记录](../docs/phase3/ai-preview-login-20261111/CHANGELOG.md)。

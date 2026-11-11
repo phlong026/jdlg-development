@@ -245,6 +245,70 @@ func TestMiniprogramProfileGateUsesRealTokenAuthenticationChain(t *testing.T) {
 	}
 }
 
+func TestMiniprogramProfileGateAIAccountOperationUsesRealAuthWithoutProfileCompletion(t *testing.T) {
+	if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))); err != nil {
+		t.Fatal(err)
+	}
+	const path = "/api/v1/miniprogram/user/stones"
+	db := sql.OpenDB(profileGateAuthConnector{err: errors.New("AI account operation must not query profile")})
+	defer db.Close()
+	mr := miniredis.RunT(t)
+	redisClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer redisClient.Close()
+
+	session := model.CodeSession{SessionID: "ai-profile-gate-auth-session", DeviceID: "ai-profile-gate-device", UserID: 41}
+	rawSession, err := json.Marshal(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = redisClient.HSet(context.Background(), "code_session:session:"+session.SessionID, "data", rawSession).Err(); err != nil {
+		t.Fatal(err)
+	}
+	token, err := function.GenerateToken(session.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handlerCalls := 0
+	router := gin.New()
+	v1 := router.Group("/api/v1")
+	v1.Use(miniprogramProfileGateMiddlewares(
+		TokenAuthRequired(model.NewCodeSessionRedisModel(db, redisClient)),
+		miniprogramProfileLoaderFromModel(model.NewUserProfileModel(db)),
+	)...)
+	v1.GET("/miniprogram/user/stones", func(c *gin.Context) {
+		handlerCalls++
+		if GetTokenUserID(c) != 41 {
+			t.Fatalf("authenticated user id = %d", GetTokenUserID(c))
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0})
+	})
+
+	valid := signedProfileGateRequest(t, path, token, session.DeviceID)
+	validResponse := httptest.NewRecorder()
+	router.ServeHTTP(validResponse, valid)
+	if validResponse.Code != http.StatusOK || handlerCalls != 1 {
+		t.Fatalf("valid incomplete-profile AI account request status=%d handler_calls=%d body=%s", validResponse.Code, handlerCalls, validResponse.Body.String())
+	}
+	if got := validResponse.Header().Get("Cache-Control"); got != "private,no-store" {
+		t.Fatalf("AI account response cache control = %q", got)
+	}
+
+	invalid := signedProfileGateRequest(t, path, token, session.DeviceID)
+	invalid.Header.Set("token-signature", "invalid")
+	invalidResponse := httptest.NewRecorder()
+	router.ServeHTTP(invalidResponse, invalid)
+	if invalidResponse.Code != http.StatusUnauthorized || handlerCalls != 1 {
+		t.Fatalf("invalid AI account request status=%d handler_calls=%d body=%s", invalidResponse.Code, handlerCalls, invalidResponse.Body.String())
+	}
+
+	missingResponse := httptest.NewRecorder()
+	router.ServeHTTP(missingResponse, httptest.NewRequest(http.MethodGet, path, nil))
+	if missingResponse.Code != http.StatusUnauthorized || handlerCalls != 1 {
+		t.Fatalf("missing-token AI account request status=%d handler_calls=%d body=%s", missingResponse.Code, handlerCalls, missingResponse.Body.String())
+	}
+}
+
 func TestTrackingEntryRealTokenRestoresProtectedProfileBoundary(t *testing.T) {
 	if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))); err != nil {
 		t.Fatal(err)
@@ -257,8 +321,9 @@ func TestTrackingEntryRealTokenRestoresProtectedProfileBoundary(t *testing.T) {
 		want    int
 	}{
 		{name: "public route permits incomplete profile", route: "pages/index/index", want: http.StatusOK},
-		{name: "protected route rejects incomplete profile", route: "pages/aitools/aitools", want: http.StatusPreconditionRequired},
-		{name: "protected route permits complete profile", profile: miniprogramProfile{Nickname: "用户", Avatar: "https://cdn.example.com/avatar.png"}, route: "pages/aitools/aitools", want: http.StatusOK},
+		{name: "AI browse route permits incomplete profile", route: "pages/aitools/aitools", want: http.StatusOK},
+		{name: "protected route rejects incomplete profile", route: "pages/projectnoteview/projectnoteview", want: http.StatusPreconditionRequired},
+		{name: "protected route permits complete profile", profile: miniprogramProfile{Nickname: "用户", Avatar: "https://cdn.example.com/avatar.png"}, route: "pages/projectnoteview/projectnoteview", want: http.StatusOK},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			db := sql.OpenDB(profileGateAuthConnector{profile: test.profile})
@@ -286,8 +351,9 @@ func TestTrackingEntryRealTokenRestoresProtectedProfileBoundary(t *testing.T) {
 			svc := tracking.New(&governanceTestStore{records: map[string]tracking.Record{}}, tracking.Config{
 				Tenant: "profile-boundary", Enabled: true, DefaultOwner: "owner", ConsentVersion: "v1",
 				Routes: map[string]tracking.Route{
-					"pages/index/index":     {Public: true},
-					"pages/aitools/aitools": {Public: true},
+					"pages/index/index":                     {Public: true},
+					"pages/aitools/aitools":                 {Public: true},
+					"pages/projectnoteview/projectnoteview": {Public: true},
 				},
 			})
 

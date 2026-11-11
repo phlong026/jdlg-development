@@ -122,11 +122,14 @@ func audit(r Repository, owner, action string, actor int64, target string, now t
 	return r.Insert(record("audit", opaque(), owner, now, map[string]any{"action": action, "actor": actor, "target": target, "detail": detail, "at": now}))
 }
 
-// MiniprogramPublicRoute reports the only pages that may be browsed and
-// tracked before registration is complete.
+// MiniprogramPublicRoute permits public lists and AI forms to be browsed and
+// tracked before login. AI execution keeps its independent account checks.
 func MiniprogramPublicRoute(route string) bool {
 	switch route {
 	case "pages/index/index", "pages/template/template", "pages/distribution/distribution":
+		return true
+	case "pages/aitools/aitools", "pages/aitooldetail/aitooldetail", "pages/aitoolworkbench/aitoolworkbench",
+		"pages/aigenerate/aigenerate", "pages/aivideo/aivideo", "pages/aicost/aicost", "pages/newminnantool/newminnantool", "pages/allrounddesign/allrounddesign":
 		return true
 	default:
 		return false
@@ -155,7 +158,7 @@ func requireMiniprogramTrackingProfile(route string, account int64, access Minip
 }
 
 // EnterMiniprogram preserves account-bound tracking while limiting a visitor
-// without a verified account to the three pages approved for public browsing.
+// without a verified account to the exact pages approved for public browsing.
 func (s *Service) EnterMiniprogram(ctx context.Context, in EntryInput, account int64, access ...MiniprogramProfileAccess) (Entry, error) {
 	if account <= 0 && !MiniprogramPublicRoute(in.Route) {
 		return Entry{}, fail(401, "请先登录")
@@ -644,7 +647,7 @@ func (s *Service) AcceptForAccount(ctx context.Context, token string, events []E
 }
 
 // AcceptMiniprogram accepts either the current account's entry token or an
-// anonymous token issued for one of the three public browse routes.
+// anonymous token issued for an approved public browse route.
 func (s *Service) AcceptMiniprogram(ctx context.Context, token string, events []Event, account int64, access ...MiniprogramProfileAccess) ([]Result, error) {
 	if account > 0 {
 		profile := miniprogramProfileAccess(access)

@@ -176,6 +176,22 @@ for (const extension of ['ts', 'js']) {
     assert.equal(fixture.navigation.length, 0);
   });
 
+  test(`${extension}: AI 操作登录成功后直接返回原表单，不要求头像昵称`, async () => {
+    const fixture = loadLoginPage(extension, {
+      profileNickname: '',
+      profileAvatar: '',
+      pageStack: [{ route: 'pages/aigenerate/aigenerate' }, { route: 'pages/login/login' }],
+    });
+    fixture.page.onLoad({ from: 'ai-action' });
+    fixture.page.setData({ agreedPrivacy: true });
+    await fixture.page.handleWechatLogin();
+
+    assert.equal(fixture.storage.token, 'login-token');
+    assert.equal(fixture.guardShows(), 0);
+    assert.equal(fixture.requests.filter(request => request.url.endsWith('/profile')).length, 0);
+    assert.deepEqual(fixture.navigation, [{ method: 'navigateBack', delta: 1 }]);
+  });
+
   test(`${extension}: 从分享内容登录后，资料回读完整才返回原页面`, async () => {
     const fixture = loadLoginPage(extension, {
       profileAvatar: '',

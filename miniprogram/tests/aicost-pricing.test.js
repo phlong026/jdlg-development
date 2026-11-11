@@ -14,6 +14,7 @@ function form(overrides = {}, storageFails = false) {
   }, Page: p => { config = p; }, wx: {
     showToast: p => { toast = p.title; },
     setStorageSync: (key, value) => { if (storageFails) throw new Error('storage full'); saved = value; },
+    getStorageSync: key => key === 'token' ? 'fixture-token' : key === 'userInfo' ? { id: 17 } : '',
     navigateTo: p => { route = p.url; },
   }, console: { error() {} } });
   const page = { ...config, data: { ...config.data, footprintArea: '120', buildingArea: '320', ...overrides },

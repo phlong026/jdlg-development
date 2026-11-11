@@ -350,3 +350,7 @@ result, err := strategy.Login(ctx, req)
 首页、模板广场、找设计师列表只读接口按GET完整路径允许匿名：`/templates/featured`、`/templates/tab-config`、`/templates`、`/templates/search`、`/inspirations`、`/designers`（均位于 `/api/v1/miniprogram`）。详情和写操作仍执行原登录/登记门禁，不按目录前缀放行。
 
 匿名tracking entry/events/shares仅用于这三个公开route，并验证entry临时凭据的匿名归属；登录后的事件仍核对账号和服务器entry route，受保护route保持原资料完整度要求。无需新增环境变量或数据库迁移。修复与发布证据见 [首次浏览审核修复](../docs/phase3/review-guest-cold-start-20261111/README.md)。
+
+### AI 预览与账号鉴权
+
+公开 AI 价格及已发布工具定义采用精确 GET 路径允许匿名；AI 执行、上传和个人任务保留有效账号鉴权，不再要求头像昵称。其他分享内容的完整资料门禁不变，无数据库或环境变量变更。详细路径、状态码与跟踪边界见 [AI 访问契约](../docs/api/ai-preview-access.md)。

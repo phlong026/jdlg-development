@@ -6,13 +6,29 @@ const ACCESS_FREE_ROUTES = new Set([
   'pages/privacy/privacy',
   'pages/passwordrecovery/passwordrecovery',
 ]);
-// 只有用户明确指定的三个入口允许匿名浏览；其它业务页必须先完成资料门禁。
+// 公开发现页与 AI 输入页允许先浏览；真正的 AI 账号动作在按钮层再登录。
 // 这些页面仍被包装（wxml 的 guard 结构不变），匿名浏览继续由 tracking 记录，
 // 登录后的真实核验会把页面与归因切换到账号身份。
 const PUBLIC_BROWSE_ROUTES = new Set([
   'pages/index/index',
   'pages/template/template',
   'pages/distribution/distribution',
+  'pages/aigenerate/aigenerate',
+  'pages/aivideo/aivideo',
+  'pages/aitools/aitools',
+  'pages/aitooldetail/aitooldetail',
+  'pages/aitoolworkbench/aitoolworkbench',
+  'pages/aicost/aicost',
+  'pages/newminnantool/newminnantool',
+  'pages/allrounddesign/allrounddesign',
+]);
+
+// AI 任务的个人结果与历史不允许匿名，但也不依赖对外展示用的头像昵称。
+const ACCOUNT_ONLY_ROUTES = new Set([
+  'pages/generatedetails/generatedetails',
+  'pages/generatehistory/generatehistory',
+  'pages/generateprogress/generateprogress',
+  'pages/aicostresult/aicostresult',
 ]);
 
 // 分享查看页保留登录后返回原页的场景参数，资料门禁与其它受保护页一致。
@@ -28,6 +44,7 @@ function wrapProfileAccess(definition) {
     ? definition[name].apply(page, args) : undefined;
   const protectedPage = page => !ACCESS_FREE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const publicBrowse = page => PUBLIC_BROWSE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
+  const accountOnly = page => ACCOUNT_ONLY_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const shareProfile = page => SHARE_PROFILE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const lock = page => {
     page.__accessRevision = (page.__accessRevision || 0) + 1;
@@ -41,7 +58,7 @@ function wrapProfileAccess(definition) {
     page.__accessRedirecting = true;
     // 分享页兜底跳登录时保留返回场景，但不放宽昵称和头像要求。
     wx.navigateTo({
-      url: '/pages/login/login?from=' + (shareProfile(page) ? 'share-view' : 'profile-gate'),
+      url: '/pages/login/login?from=' + (accountOnly(page) ? 'ai-action' : (shareProfile(page) ? 'share-view' : 'profile-gate')),
       fail() {
         page.__accessRedirecting = false;
         wx.showToast({ title: '请先登录并补充头像、昵称', icon: 'none' });
@@ -76,7 +93,7 @@ function wrapProfileAccess(definition) {
         const cachedProfile = wx.getStorageSync('userInfo') || {};
         const sameAccount = Number(cachedProfile.id || 0) === id;
         wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
-        if (!hasCompleteProfile(profile)) { redirectToLogin(page); return; }
+        if (!accountOnly(page) && !hasCompleteProfile(profile)) { redirectToLogin(page); return; }
         page.onProfileAccessGranted({ detail: { token, profile } });
       },
       fail() {
@@ -92,7 +109,8 @@ function wrapProfileAccess(definition) {
     if (!guard || typeof guard.check !== 'function') {
       verifyWithoutComponent(page); return;
     }
-    Promise.resolve(guard.check(silent ? { silent: true } : undefined))
+    const options = { ...(silent ? { silent: true } : {}), ...(accountOnly(page) ? { accountOnly: true } : {}) };
+    Promise.resolve(guard.check(Object.keys(options).length ? options : undefined))
       .catch(error => console.error('个人资料核验失败', page.route, error));
   };
   // 公开浏览页乐观放行：复用 granted 解锁路径但不做服务端资料核验，页面
@@ -135,6 +153,8 @@ function wrapProfileAccess(definition) {
     // 不在此触发资料核验弹窗（资料登记由其它受保护业务页承担）。
     if (publicBrowse(this)) {
       this.__accessSuspended = false;
+      const previousToken = String(this.__accessActiveToken || '');
+      if (previousToken && previousToken !== token) this.__accessReload = this.__accessLoaded === true;
       if (!this.__accessActive) optimisticGrant(this);
       return;
     }
@@ -148,8 +168,9 @@ function wrapProfileAccess(definition) {
     // 强制补全，把"先浏览"又变成"先授权"。身份页行为不变。
     if (!publicBrowse(this)) verify(this);
   };
-  result.onProfileAccessBlocked = function() {
+  result.onProfileAccessBlocked = function(event) {
     if (!protectedPage(this)) return;
+    if (event?.detail?.soft === true) return;
     // 公开浏览页即使收到 gated 也不锁内容（乐观放行语义）。
     if (!publicBrowse(this)) lock(this);
   };
@@ -273,4 +294,5 @@ function install() {
 // login-guard 等组件用它判断宿主页是否公开浏览页（决定"暂不登录"的
 // 行为：公开页仅关浮层继续浏览，身份页返回上一页）。纯函数，无副作用。
 const isPublicBrowseRoute = route => PUBLIC_BROWSE_ROUTES.has(String(route || '').replace(/^\//, ''));
-module.exports = { install, wrapProfileAccess, isPublicBrowseRoute };
+const isAccountOnlyRoute = route => ACCOUNT_ONLY_ROUTES.has(String(route || '').replace(/^\//, ''));
+module.exports = { install, wrapProfileAccess, isPublicBrowseRoute, isAccountOnlyRoute };

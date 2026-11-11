@@ -8,9 +8,9 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../miniprogram/utils/profile-request-guard.js'), 'utf8');
 
 function harness({ token = 'account-token', route = 'pages/index/index', inlineGate = true, gateCheck } = {}) {
-  const calls = [], navigations = [], removed = [], blocked = [], toasts = [], guardChecks = [];
+  const calls = [], navigations = [], removed = [], blocked = [], toasts = [], guardChecks = [], guardOptions = [];
   const storage = { token, device_fingerprint: 'login-device', userInfo: { id: 9 } };
-  const gate = { check() { guardChecks.push(route); return gateCheck ? gateCheck() : Promise.resolve(false); } };
+  const gate = { check(options) { guardChecks.push(route); guardOptions.push(options); return gateCheck ? gateCheck() : Promise.resolve(false); } };
   const page = { route, onProfileAccessBlocked() { blocked.push(route); }, selectComponent: () => inlineGate ? gate : null };
   const wx = {
     request(options) { calls.push(options); return { abort() {} }; },
@@ -30,7 +30,7 @@ function harness({ token = 'account-token', route = 'pages/index/index', inlineG
       };
     },
   });
-  return { guard: module.exports, wx, calls, navigations, removed, blocked, toasts, guardChecks, storage, page };
+  return { guard: module.exports, wx, calls, navigations, removed, blocked, toasts, guardChecks, guardOptions, storage, page };
 }
 
 test('same-origin miniprogram business requests receive the current signed session', () => {
@@ -128,6 +128,31 @@ test('428 keeps the valid token, locks protected content and opens profile compl
   assert.equal(h.navigations.length, 0);
   assert.deepEqual(h.guardChecks, ['pages/project/project']);
   assert.deepEqual(delivered, [response]);
+});
+
+test('an explicit soft full-profile action owns 428 while 401 still uses the account gate', () => {
+  const delivered = [];
+  const h = harness({ route: 'pages/aicostresult/aicostresult' }); h.guard.install();
+  wxCall(h, {
+    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/ai/cost/shares',
+    method: 'POST',
+    __profileAccessResponseMode: 'soft-full-profile',
+    success: response => delivered.push(response),
+  });
+  const response = { statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } };
+  h.calls[0].success(response);
+  assert.deepEqual(h.blocked, []);
+  assert.deepEqual(h.guardChecks, []);
+  assert.deepEqual(delivered, [response]);
+  assert.equal(h.calls[0].__profileAccessResponseMode, undefined);
+});
+
+test('a default 428 on an account-only page requests full profile completion', () => {
+  const h = harness({ route: 'pages/generatedetails/generatedetails' }); h.guard.install();
+  wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/ai/publish', method: 'POST' });
+  h.calls[0].success({ statusCode: 428, data: { code: 428 } });
+  assert.equal(h.guardChecks.length, 1);
+  assert.equal(h.guardOptions[0], undefined);
 });
 
 test('401 clears the expired session and reopens the inline login card on protected pages', () => {

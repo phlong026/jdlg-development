@@ -83,9 +83,9 @@ test('budget form prepares a local square cover and exposes the same Moments lan
   assert.equal(timeline.imageUrl, 'wxfile://user-data/cloud-images/budget-timeline-v2.jpg');
 });
 
-function createResultHarness({ cached = currentResult, options = {}, token = 'token', publishError = null, redirectError = false } = {}) {
+function createResultHarness({ cached = currentResult, options = {}, token = 'token', userID = 17, publishError = null, redirectError = false } = {}) {
   let definition, currentToken = token;
-  const calls = { create: [], navigation: [], redirects: [], toasts: [] };
+  const calls = { create: [], navigation: [], redirects: [], toasts: [], profileChecks: [] };
   const api = {
     createCostEstimateShare: async (result) => {
       calls.create.push(result);
@@ -107,14 +107,20 @@ function createResultHarness({ cached = currentResult, options = {}, token = 'to
     },
     console: { error() {}, warn() {} }, setTimeout(callback) { callback(); },
     wx: {
-      getStorageSync(key) { return key === 'aicostEstimateResult' ? cached : key === 'token' ? currentToken : ''; },
+      getStorageSync(key) {
+        if (key === `aicostEstimateResult:${userID}`) return cached;
+        if (key === 'token') return currentToken;
+        if (key === 'userInfo') return userID ? { id: userID } : {};
+        return '';
+      },
       showToast(value) { calls.toasts.push(value.title); }, navigateBack() {},
       navigateTo(value) { calls.navigation.push(value.url); },
       redirectTo(value) { calls.redirects.push(value.url); if (redirectError) value.fail(); },
     },
   });
   const page = { ...definition, data: JSON.parse(JSON.stringify(definition.data)),
-    setData(patch) { Object.assign(this.data, patch); }, loadEnterpriseWechatServiceConfig() {} };
+    setData(patch) { Object.assign(this.data, patch); }, loadEnterpriseWechatServiceConfig() {},
+    selectComponent() { return { check: options => { calls.profileChecks.push(options); return Promise.resolve(false); } }; } };
   page.onLoad(options);
   return { page, calls, setToken(value) { currentToken = value; } };
 }
@@ -140,13 +146,13 @@ test('explicit publishing creates one immutable snapshot and opens its public la
   assert.equal(Object.keys(h.page.onShareTimeline()).length, 0);
 });
 
-test('anonymous private owner cannot publish and viewing never triggers login', async () => {
+test('anonymous users cannot read or publish a private local result', async () => {
   const h = createResultHarness({ token: '' });
   h.page.onReady(); h.page.onShow();
-  assert.equal(h.calls.toasts.length, 0);
+  assert.deepEqual(h.calls.toasts, ['测算数据已更新，请重新测算']);
   await h.page.onPrepareShareReport();
   assert.equal(h.calls.create.length, 0);
-  assert.deepEqual(h.calls.toasts, ['请先登录后公开分享']);
+  assert.equal(h.page.reportSnapshot, null);
 });
 
 test('publish failure remains private and is retryable', async () => {
@@ -156,6 +162,18 @@ test('publish failure remains private and is retryable', async () => {
   assert.equal(h.page.data.shareReportId, '');
   assert.equal(h.calls.navigation.length, 0);
   assert.deepEqual(h.calls.toasts, ['网络连接失败']);
+});
+
+test('profile-required publish opens a soft full-profile editor without hiding the personal result', async () => {
+  const error = Object.assign(new Error('请先补充头像和昵称'), { code: 428, statusCode: 428 });
+  const h = createResultHarness({ publishError: error });
+  const snapshot = h.page.data.estimatedTotalCost;
+  await h.page.onPrepareShareReport();
+  assert.equal(h.calls.profileChecks.length, 1);
+  assert.equal(h.calls.profileChecks[0].soft, true);
+  assert.equal(h.page.data.estimatedTotalCost, snapshot);
+  assert.equal(h.page.data.sharePreparing, false);
+  assert.equal(h.calls.navigation.length, 0);
 });
 
 test('old public report links redirect without reading private cache and preserve st', () => {

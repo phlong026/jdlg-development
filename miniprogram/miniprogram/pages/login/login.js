@@ -36,6 +36,7 @@ Page({
         identityOptions: USER_IDENTITY_OPTIONS,
         selectedIdentity: '',
         pendingLoginResult: null,
+        accountOnly: false,
     },
     /**
      * 生命周期函数--监听页面加载
@@ -44,6 +45,7 @@ Page({
         this._authPageUnloaded = false;
         this._authPageEpoch = (this._authPageEpoch || 0) + 1;
         this.initNavLayout();
+        this.setData({ accountOnly: options.from === 'ai-action' });
         // 检查是否已登录
         const token = wx.getStorageSync('token');
         const agreedPrivacy = wx.getStorageSync(LOGIN_PRIVACY_AGREEMENT_STORAGE_KEY) === true;
@@ -416,6 +418,10 @@ Page({
         const current = () => this.isLoginContextCurrent(context) && this._profileCheckRevision === revision;
         this.setData({ loading: true, profileError: '' });
         try {
+            if (this.data.accountOnly) {
+                this.navigateToIndexAfterLogin(context.token);
+                return true;
+            }
             const { token, profile } = await this.fetchVerifiedProfile();
             if (!current())
                 return false;
