@@ -76,3 +76,11 @@ python3 /root/jdlg-backend-deploy-0be962c/binary_release.py rollback \
 - 二进制 SHA-256：`8ac049b2…8bb91bed`（Linux amd64，`vcs.revision=dab2b4a`）
 - 备份目录约定：`/root/jdlg-backend-backup-20261111-dab2b4a`
 - 无数据库迁移、无环境变量变更
+
+## 最新后端交付包（2026-11-11，提交 a394e9b）
+
+- 包：`开发版916/交付/后端-20261111-a394e9b.tar.gz`（27,770,451 字节，SHA-256 `a141bc0c…4d9f2047`）
+- 二进制 SHA-256：`53ef8838…48b2c8522`（Linux amd64，`vcs.revision=a394e9b`，vcs.modified=false）
+- 变更：分享链接登录即看（无需成员/审批）、邀请免审批、成员归因、媒体签名流式播放
+- 部署备份目录约定：`/root/jdlg-backend-backup-20261111-a394e9b`
+- 旧包 `后端-20261111-dab2b4a` 已删除，避免误传
