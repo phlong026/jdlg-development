@@ -84,3 +84,14 @@ python3 /root/jdlg-backend-deploy-0be962c/binary_release.py rollback \
 - 变更：分享链接登录即看（无需成员/审批）、邀请免审批、成员归因、媒体签名流式播放
 - 部署备份目录约定：`/root/jdlg-backend-backup-20261111-a394e9b`
 - 旧包 `后端-20261111-dab2b4a` 已删除，避免误传
+
+## 第四次后端部署（2026-11-11，提交 a394e9b）
+
+- 包：`开发版916/交付/后端-20261111-a394e9b.tar.gz`（SHA-256 `a141bc0c…4d9f2047`）
+- 二进制 SHA-256：`53ef8838…48b2c8522`（Linux amd64，`vcs.revision=a394e9b`）
+- 发布前：PID 2141526，旧 SHA `b222aaae…4030df90`
+- prepare：`{"status":"prepared", "pid":2141526}`
+- activate：`{"status":"active", "pid":2238331}`
+- 备份：`/root/jdlg-backend-backup-20261111-a394e9b`
+- 公网验证：tracking/config 200、project-notes/projects 401、根路径 301
+- 策略：方案分享链接「登录即可查看」，无成员/审批要求
