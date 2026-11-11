@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-11",
+  "appid": "wx94fdc48861913ede",
+  "regression_before": { "tests": 5, "pass": 0, "fail": 5 },
+  "focused_after": { "tests": 55, "pass": 55, "fail": 0, "skipped": 0 },
+  "all_tests": { "tests": 1434, "pass": 1434, "fail": 0, "skipped": 0, "native_wxml_compiler": true },
+  "generated_artifacts_check": "passed",
+  "route_inventory_check": "passed",
+  "changed_javascript_syntax": "passed",
+  "production_dependency_vulnerabilities": 0,
+  "typescript": { "status": "existing_errors", "baseline_diagnostics": 232, "current_diagnostics": 232, "identical_to_baseline": true },
+  "independent_review": "approved",
+  "original_record_devtools": { "content_id": "-0a9SiQ9z76CUGWvQsqkKEJRdQ2XPY34", "content_version": 1, "images": 4, "title_and_body_visible": true },
+  "backend_changes": false,
+  "backend_deployment_required": false,
+  "device_share_acceptance": "pending"
+}

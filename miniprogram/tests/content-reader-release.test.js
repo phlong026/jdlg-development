@@ -10,9 +10,10 @@ const root = path.resolve(__dirname, '../miniprogram');
 const compiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
 const editorHint = '链接导入的可编辑草稿，请在发布前核对正文、排版和媒体。';
 
-test('reader release explicitly includes its shared template outside the profile gate', () => {
+test('reader release carries its shared template with the page', () => {
   const source = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
-  assert.match(source.split('\n')[0], /^<import src=/);
+  assert.match(source.split('\n')[0], /^<block wx:if=/);
+  assert.ok(source.includes('<template name="content-presentation">'));
   for (const file of ['../project.config.json', 'project.config.json']) {
     const config = JSON.parse(fs.readFileSync(path.join(root, file)));
     assert.ok(config.packOptions.include.some(rule => rule.type === 'file' && rule.value === 'components/content-presentation/content-presentation.wxml'));
@@ -28,7 +29,7 @@ test('published rendering hides the import editor hint but preserves actual sour
 
 test('native shared reader displays title and body before analytics and never exposes editor guidance', { skip: !fs.existsSync(compiler) }, () => {
   const file = './pages/contentreader/contentreader.wxml';
-  const source = execFileSync(compiler, [file, './components/content-presentation/content-presentation.wxml'], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  const source = execFileSync(compiler, [file], { cwd: root, encoding: 'utf8', timeout: 10000 });
   const runtime = { window: {}, console }; vm.createContext(runtime); vm.runInContext(source, runtime);
   const render = runtime.$gwx(file);
   const content = { title: '乡墅方案标题', body_format: 'plain', body: '房屋方案完整正文', source_note: editorHint, source_url: 'https://example.test/original' };

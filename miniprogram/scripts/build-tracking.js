@@ -1,4 +1,5 @@
 'use strict';
+require('./build-content-templates');
 // New SDK sources intentionally use the JS-compatible TypeScript subset.
 // This deterministic build avoids relying on a developer's IDE transpilation settings.
 const fs=require('node:fs'),path=require('node:path');
