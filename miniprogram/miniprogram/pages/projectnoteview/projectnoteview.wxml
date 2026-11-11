@@ -3,7 +3,7 @@
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
   <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">仅项目成员可查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
-  <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button wx:if="{{canRequestAccess && !accessRequested}}" class="primary" bindtap="requestShareAccess" loading="{{accessBusy}}" disabled="{{accessBusy}}">申请查看方案</button><text wx:if="{{accessRequested}}" class="muted">已提交申请，等待设计师通过。</text><button wx:elif="{{!canRequestAccess}}" class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
+  <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
   <block wx:elif="{{view}}">
     <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本</text></view></view>
     <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true}}" /></view>

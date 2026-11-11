@@ -116,7 +116,6 @@ function revokeProjectNoteShare(shareID) { return request(projectNotePath('/shar
 function resolveProjectNoteFeedback(feedbackID, reply, key) { return request(projectNotePath('/feedback/' + encodeURIComponent(feedbackID) + '/resolve'), 'POST', { reply, idempotency_key: key }); }
 function getSharedProjectNote(token) { return request(projectNotePath('/shared/' + encodeURIComponent(token))); }
 function openSharedProjectNote(token, eventID) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/open'), 'POST', { event_id: eventID, acknowledged: true }); }
-function requestProjectShareAccess(token, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/access-requests'), 'POST', { idempotency_key: key }); }
 function addSharedProjectNoteFeedback(token, text, key, satisfaction) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/feedback'), 'POST', { text, idempotency_key: key, satisfaction: satisfaction || '' }); }
 function confirmSharedProjectNote(token, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/confirm'), 'POST', { idempotency_key: key }); }
 
@@ -232,7 +231,7 @@ module.exports = {
   createProjectInvitation, listProjectInvitations, revokeProjectInvitation, getProjectInvitation, applyProjectInvitation, listProjectJoinRequests, approveProjectJoinRequest,
   revokeProjectNoteMember,
   setProjectNoteConfirmer, copyProjectNote, deleteProjectNoteProject, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
-  revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote, requestProjectShareAccess,
+  revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
   addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
   uploadProjectNoteMedia,
   getProjectNoteVersion, downloadProjectNoteMedia, downloadProjectNoteWord, downloadSharedProjectNoteWord,

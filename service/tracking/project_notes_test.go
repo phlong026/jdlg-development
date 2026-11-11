@@ -65,14 +65,19 @@ func TestProjectNoteInvitedMemberCanReadAndFeedbackWithoutManage(t *testing.T) {
 	}
 }
 
-func TestProjectNoteForwardedTokenDoesNotGrantBodyOrMedia(t *testing.T) {
+func TestProjectNoteShareTokenGrantsLoggedInViewerReadWithoutMembership(t *testing.T) {
 	s, designer, _ := projectNoteFixture(t)
 	_, _, _, share := seedProjectNote(t, s, designer, 101)
-	if _, err := s.ProjectNoteReadShare(context.Background(), share.Token, 102); err == nil {
-		t.Fatal("forwarded token must not expose body")
+	view, err := s.ProjectNoteReadShare(context.Background(), share.Token, 102)
+	if err != nil || view.Version.Body == "" {
+		t.Fatalf("logged-in viewer without membership should read share: %#v %v", view, err)
 	}
-	if _, err := s.ProjectNoteReadShareMedia(context.Background(), share.Token, 102, "asset-0001"); err == nil {
-		t.Fatal("forwarded token must not expose media")
+	// 分享链接本身是访问凭据；撤销链接后立即失效。
+	if err = s.ProjectNoteRevokeShare(context.Background(), designer, share.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.ProjectNoteReadShare(context.Background(), share.Token, 102); err == nil {
+		t.Fatal("revoked share retained read access")
 	}
 }
 
@@ -106,8 +111,9 @@ func TestProjectNoteMemberAndShareRevocationTakeEffectImmediately(t *testing.T) 
 	if err := s.ProjectNoteRevokeMember(ctx, designer, project.ID, 101); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ProjectNoteReadShare(ctx, share.Token, 101); err == nil {
-		t.Fatal("revoked member retained access")
+	// 分享链接是访问凭据：成员被移除后仍可凭有效链接查看固定版本。
+	if _, err := s.ProjectNoteReadShare(ctx, share.Token, 101); err != nil {
+		t.Fatalf("valid share should stay readable after membership revoke: %v", err)
 	}
 	if _, err := s.ProjectNoteInviteMember(ctx, designer, project.ID, 101); err != nil {
 		t.Fatal(err)

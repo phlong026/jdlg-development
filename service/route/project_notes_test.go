@@ -243,8 +243,9 @@ func TestProjectNoteRoutesSeparateManagerAndInvitedAccount(t *testing.T) {
 	}
 
 	*actor = 102
+	// 方案分享链接本身是访问凭据：任意已登录用户拿到有效链接即可查看固定版本。
 	forwarded := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token, nil)
-	if forwarded.Code != http.StatusForbidden || strings.Contains(forwarded.Body.String(), "固定方案一") {
+	if forwarded.Code != http.StatusOK || !strings.Contains(forwarded.Body.String(), "固定方案一") {
 		t.Fatal(forwarded.Code, forwarded.Body.String())
 	}
 
@@ -413,9 +414,9 @@ func TestProjectNoteSharedMediaUsesOnlyTokenAuthorizedProxy(t *testing.T) {
 		t.Fatal(sharedMediaRec.Code, sharedMediaRec.Body.String(), sharedMediaRec.Header())
 	}
 	*actor = 102
-	denied := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/media/"+mediaID, nil)
-	if denied.Code != http.StatusForbidden || strings.Contains(denied.Body.String(), "private-note-image") {
-		t.Fatal(denied.Code, denied.Body.String())
+	sharedByViewer := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/media/"+mediaID, nil)
+	if sharedByViewer.Code != http.StatusOK || sharedByViewer.Body.Len() == 0 {
+		t.Fatal(sharedByViewer.Code, sharedByViewer.Body.String())
 	}
 	*scope = tracking.Scope{Tenant: "project-notes", Actor: 7, Owners: []string{"owner-a"}, Manage: true}
 	if rec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shares/"+share.ID+"/revoke", nil); rec.Code != http.StatusOK {

@@ -135,11 +135,18 @@ func TestProjectNoteSharedHistoryStaysOnInvitedVersionAndRechecksPermission(t *t
 	if err != nil || len(page.Feedbacks) != 1 || page.Feedbacks[0].VersionID != firstVersion.ID || page.NextCursor == "" {
 		t.Fatalf("shared page = %#v err=%v", page, err)
 	}
+	// 分享链接即访问凭据：成员被移除后历史仍可读；撤销分享后才失效。
 	if err = s.ProjectNoteRevokeMember(ctx, designer, project.ID, 101); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.ProjectNoteSharedHistory(ctx, firstShare.Token, 101, ProjectNoteHistoryFeedbacks, 1, page.NextCursor); err != nil {
+		t.Fatalf("valid share history rejected after membership revoke: %v", err)
+	}
+	if err = s.ProjectNoteRevokeShare(ctx, designer, firstShare.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = s.ProjectNoteSharedHistory(ctx, firstShare.Token, 101, ProjectNoteHistoryFeedbacks, 1, page.NextCursor); err == nil {
-		t.Fatal("shared history cursor bypassed revoked invitation")
+		t.Fatal("shared history cursor survived revoked share")
 	}
 }
 

@@ -1118,7 +1118,11 @@ func (s *Service) projectNoteReadShareIn(ctx context.Context, r Repository, toke
 	if err != nil {
 		return out, share, err
 	}
-	if err = s.projectNoteReadAccess(ctx, r, project, actor); err != nil {
+	// 方案分享链接本身就是访问凭据：登录用户拿到有效链接即可查看，无需项目成员身份或审批。
+	if actor <= 0 {
+		return out, share, fail(401, "请先登录")
+	}
+	if err = s.projectNoteGrant(ctx, r, project); err != nil {
 		return out, share, err
 	}
 	version, err := decode[ProjectNoteVersion](r, projectNoteVersionKind, share.VersionID)

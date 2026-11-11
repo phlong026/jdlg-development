@@ -33,20 +33,27 @@ func TestProjectNoteExactVersionKeepsFrozenBodyAndDesignerBoundary(t *testing.T)
 	}
 }
 
-func TestProjectNoteSharedVersionRechecksMemberAndShare(t *testing.T) {
+func TestProjectNoteSharedVersionRequiresOnlyValidShare(t *testing.T) {
 	s, designer, _ := projectNoteFixture(t)
 	project, _, v1, share := seedProjectNote(t, s, designer, 101)
 	version, err := s.ProjectNoteSharedVersion(context.Background(), share.Token, 101)
 	if err != nil || version.ID != v1.ID {
 		t.Fatalf("version=%#v err=%v", version, err)
 	}
-	if _, err = s.ProjectNoteSharedVersion(context.Background(), share.Token, 102); err == nil {
-		t.Fatal("uninvited account accepted")
+	// 分享链接即访问凭据：非成员登录后也可读取固定版本。
+	if _, err = s.ProjectNoteSharedVersion(context.Background(), share.Token, 102); err != nil {
+		t.Fatalf("logged-in non-member rejected: %v", err)
 	}
 	if err = s.ProjectNoteRevokeMember(context.Background(), designer, project.ID, 101); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.ProjectNoteSharedVersion(context.Background(), share.Token, 101); err != nil {
+		t.Fatalf("valid share rejected after membership revoke: %v", err)
+	}
+	if err = s.ProjectNoteRevokeShare(context.Background(), designer, share.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = s.ProjectNoteSharedVersion(context.Background(), share.Token, 101); err == nil {
-		t.Fatal("removed member accepted")
+		t.Fatal("revoked share accepted")
 	}
 }

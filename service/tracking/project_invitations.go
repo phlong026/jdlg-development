@@ -294,64 +294,6 @@ func (s *Service) ProjectNoteApplyInvitation(ctx context.Context, token string, 
 	return out, err
 }
 
-// ProjectNoteRequestShareAccess 允许持有有效方案分享链接的非成员发起加入申请；
-// 所有者批准后即可查看。分享链接本身仍不能直接放行，避免转发链接绕过审批。
-func (s *Service) ProjectNoteRequestShareAccess(ctx context.Context, token string, actor int64, key string) (ProjectNoteJoinRequest, error) {
-	var out ProjectNoteJoinRequest
-	if actor <= 0 || !validID(key) {
-		return out, fail(400, "申请账号或幂等标识无效")
-	}
-	err := s.transaction(ctx, func(r Repository) error {
-		if !validID(token) {
-			return fail(404, "分享不存在或已失效")
-		}
-		share, err := decode[projectNoteShareRecord](r, projectNoteShareKind, hash(token))
-		if errors.Is(err, ErrNotFound) {
-			return fail(404, "分享不存在或已失效")
-		}
-		if err != nil {
-			return err
-		}
-		if share.TokenHash != hash(token) || share.Revoked || !s.Now().Before(share.ExpiresAt) {
-			return fail(404, "分享不存在或已失效")
-		}
-		project, err := projectNoteLoadProject(r, share.ProjectID)
-		if err != nil {
-			return err
-		}
-		id := projectNoteJoinRequestID(share.ID, actor)
-		if old, readErr := decode[ProjectNoteJoinRequest](r, projectNoteJoinRequestKind, id); readErr == nil {
-			if old.FirstKeyHash != hash(key) {
-				return fail(409, "加入申请已提交")
-			}
-			old.Replayed = true
-			out = old
-			return nil
-		} else if !errors.Is(readErr, ErrNotFound) {
-			return readErr
-		}
-		now := s.Now().UTC()
-		out = ProjectNoteJoinRequest{ID: id, InvitationID: share.ID, ProjectID: project.ID, ActorID: actor, Status: ProjectNoteJoinPending, RequestedAt: now, FirstKeyHash: hash(key)}
-		if err = r.Insert(projectNoteRecord(projectNoteJoinRequestKind, id, project.Owner, now, out, projectNoteActorKey(actor), project.ID, id, share.ID)); err != nil {
-			return err
-		}
-		if !s.Config.Enabled || actor == project.DesignerID {
-			return nil
-		}
-		notice := NoticeEvent{ID: projectNoteJoinNoticeID(id), Kind: ProjectNoteJoinRequestNoticeKind, Owner: project.Owner, RecipientID: project.DesignerID, VisitorKey: projectNoteActorKey(actor), ShareID: share.ID, ProjectID: project.ID, ContentID: id, Route: ProjectNoteNoticeRoute, OccurredAt: now}
-		noticeRow := record("notice_event", notice.ID, notice.Owner, now, notice)
-		noticeRow.Visitor, noticeRow.Content, noticeRow.Share = notice.VisitorKey, notice.ContentID, notice.ShareID
-		if err = r.Insert(noticeRow); err != nil {
-			return err
-		}
-		if s.OnNoticeEvent != nil {
-			return s.OnNoticeEvent(sourceReadContext(ctx, r), notice)
-		}
-		return nil
-	})
-	return out, err
-}
-
 func (s *Service) ProjectNoteListJoinRequests(ctx context.Context, scope Scope, projectID string) ([]ProjectNoteJoinRequest, error) {
 	out := []ProjectNoteJoinRequest{}
 	err := s.readQueryTransaction(ctx, func(r Repository) error {
@@ -427,26 +369,15 @@ func (s *Service) ProjectNoteApproveJoinRequest(ctx context.Context, scope Scope
 		if err != nil {
 			return err
 		}
-		switch len(invitationRows) {
-		case 1:
-			invitation, decodeErr := decode[projectNoteInvitationRecord](r, projectNoteInvitationKind, invitationRows[0].ID)
-			if decodeErr != nil {
-				return decodeErr
-			}
-			if invitation.Revoked || !s.Now().Before(invitation.ExpiresAt) {
-				return fail(409, "邀请已失效，请重新邀请")
-			}
-		case 0:
-			// 方案分享链接发起的加入申请：链接有效即允许所有者批准。
-			_, shared, shareErr := projectNoteShareByID(r, project.Owner, request.InvitationID)
-			if shareErr != nil {
-				return fail(404, "邀请不存在或已失效")
-			}
-			if shared.Revoked || !s.Now().Before(shared.ExpiresAt) {
-				return fail(409, "分享已失效，请重新分享")
-			}
-		default:
+		if len(invitationRows) != 1 {
 			return fail(404, "邀请不存在或已失效")
+		}
+		invitation, err := decode[projectNoteInvitationRecord](r, projectNoteInvitationKind, invitationRows[0].ID)
+		if err != nil {
+			return err
+		}
+		if invitation.Revoked || !s.Now().Before(invitation.ExpiresAt) {
+			return fail(409, "邀请已失效，请重新邀请")
 		}
 		if _, err = s.projectNoteJoinMemberIn(r, project, request.ActorID, project.DesignerID, request.InvitationID); err != nil {
 			return err
