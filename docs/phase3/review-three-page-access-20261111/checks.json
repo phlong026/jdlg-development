@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-11",
+  "business_routes": 69,
+  "anonymous_business_routes": [
+    "pages/index/index",
+    "pages/template/template",
+    "pages/distribution/distribution"
+  ],
+  "home_red_failures": 4,
+  "access_red_failures": 5,
+  "focused": {
+    "passed": 135,
+    "failed": 0,
+    "skipped": 0
+  },
+  "full_miniprogram": {
+    "passed": 1427,
+    "failed": 0,
+    "skipped": 0,
+    "native_wxml": true
+  },
+  "independent_review": {
+    "decision": "approved",
+    "focused_passed": 276
+  },
+  "generated_files": "passed",
+  "homepage_ts_js_compilation": "identical",
+  "route_inventory": "passed",
+  "production_dependency_vulnerabilities": 0,
+  "typescript": {
+    "baseline_diagnostics": 232,
+    "current_diagnostics": 232,
+    "identical": true
+  },
+  "go_focused_packages": [
+    "tracking",
+    "route",
+    "contentstorage",
+    "contentimport"
+  ],
+  "go_focused_status": "passed",
+  "backend_changes": false,
+  "video_changes": false,
+  "official_review_submission": false,
+  "physical_device_acceptance": "pending"
+}

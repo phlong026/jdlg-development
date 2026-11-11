@@ -7,31 +7,17 @@ const ACCESS_FREE_ROUTES = new Set([
   'pages/privacy/privacy',
   'pages/passwordrecovery/passwordrecovery',
 ]);
-// 公开浏览页：匿名可先浏览（微信审核要求用户体验服务后再自行选择登录）。
-// 这些页面仍被包装（wxml 的 guard 结构不变），但 onShow 走乐观放行——
-// 不锁内容、不隐藏分享菜单、不因未登录跳登录页；登录与资料补全只在
-// 用户进入身份功能页（工作台/内容创作/订单/钱包等）时才要求。
+// 只有用户明确指定的三个入口允许匿名浏览；其它业务页必须先完成资料门禁。
+// 这些页面仍被包装（wxml 的 guard 结构不变），匿名浏览继续由 tracking 记录，
+// 登录后的真实核验会把页面与归因切换到账号身份。
 const PUBLIC_BROWSE_ROUTES = new Set([
   'pages/index/index',
   'pages/template/template',
-  'pages/templatesquaredetails/templatesquaredetails',
-  'pages/templatepreview/templatepreview',
-  'pages/designerhome/designerhome',
-  'pages/inspirationdetail/inspirationdetail',
-  'pages/contentreader/contentreader',
-  'pages/aicostshare/aicostshare',
-  'pages/customerservice/customerservice',
-  'pages/my/my',
-  'pages/report/landing',
-  'pages/report/questionnaire',
-  'pages/report/preview',
-  'pages/report/delivery',
+  'pages/distribution/distribution',
 ]);
 
-// 匿名说明态路由：未登录打开分享链接时只挂壳显示「设计师分享给你的私密方案」，
-// 不锁页、不跳登录、不核验；登录成功后回到正常门禁。刻意不并入 PUBLIC_BROWSE_ROUTES，
-// 避免已登录用户也跳过资料核验。
-const ANONYMOUS_SHARE_ROUTES = new Set([
+// 分享查看页仍沿用昵称登记口径，但不再允许未登录匿名挂载或访问内容。
+const SHARE_PROFILE_ROUTES = new Set([
   'pages/projectnoteview/projectnoteview',
 ]);
 
@@ -43,29 +29,7 @@ function wrapProfileAccess(definition) {
     ? definition[name].apply(page, args) : undefined;
   const protectedPage = page => !ACCESS_FREE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const publicBrowse = page => PUBLIC_BROWSE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
-  const anonymousShare = page => ANONYMOUS_SHARE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
-  const hideGuard = page => {
-    const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
-    if (guard && typeof guard.setData === 'function') guard.setData({ visible: false, checking: false, needsLogin: false, completingProfile: false });
-  };
-  // 统一的匿名态转换：清 token 后（核验 401、无组件 401、gated、换号）都回到说明页，
-  // 关掉登录浮层，不锁页、不跳登录。
-  const enterAnonymous = page => {
-    if (!anonymousShare(page) || page.__accessDestroyed) return false;
-    if (String(wx.getStorageSync('token') || '')) return false;
-    page.__accessAnonymous = true;
-    page.__accessRevision = (page.__accessRevision || 0) + 1;
-    page.__accessActive = false;
-    if (!page.__accessLoaded) {
-      page.__accessLoaded = true;
-      invoke('onLoad', page, [page.__accessOptions]);
-    }
-    hideGuard(page);
-    page.setData({ __profileAccessMounted: true, __profileAccessReady: false });
-    // 后台迟到的 401 只改状态，不补跑页面 onShow；等真正回到前台时由 wrapper onShow 恢复说明页。
-    if (page.__accessVisible) invoke('onShow', page);
-    return true;
-  };
+  const shareProfile = page => SHARE_PROFILE_ROUTES.has(String(page.route || '').replace(/^\//, ''));
   const lock = page => {
     page.__accessRevision = (page.__accessRevision || 0) + 1;
     if (page.__accessActive) invoke('onHide', page);
@@ -78,10 +42,10 @@ function wrapProfileAccess(definition) {
     page.__accessRedirecting = true;
     // 分享页兜底跳登录时保留分享查看场景，登录页才不会重新要求头像。
     wx.navigateTo({
-      url: '/pages/login/login?from=' + (anonymousShare(page) ? 'share-view' : 'profile-gate'),
+      url: '/pages/login/login?from=' + (shareProfile(page) ? 'share-view' : 'profile-gate'),
       fail() {
         page.__accessRedirecting = false;
-        wx.showToast({ title: anonymousShare(page) ? '请先登录并补充昵称' : '请先登录并补充头像、昵称', icon: 'none' });
+        wx.showToast({ title: shareProfile(page) ? '请先登录并补充昵称' : '请先登录并补充头像、昵称', icon: 'none' });
       },
     });
   };
@@ -99,7 +63,6 @@ function wrapProfileAccess(definition) {
         const data = response.data || {};
         if (response.statusCode === 401 || data.code === 401) {
           wx.removeStorageSync('token'); wx.removeStorageSync('userInfo');
-          if (enterAnonymous(page)) return;
           redirectToLogin(page); return;
         }
         const profile = data.data || {};
@@ -109,14 +72,13 @@ function wrapProfileAccess(definition) {
         }
         if (!Number.isSafeInteger(id) || id <= 0) {
           wx.removeStorageSync('token'); wx.removeStorageSync('userInfo');
-          if (enterAnonymous(page)) return;
           redirectToLogin(page); return;
         }
         const cachedProfile = wx.getStorageSync('userInfo') || {};
         const sameAccount = Number(cachedProfile.id || 0) === id;
         wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
         // 分享查看场景：只要求昵称（P8：缺头像放行）；身份功能页仍要求完整资料。
-        const shareView = anonymousShare(page);
+        const shareView = shareProfile(page);
         if (!(shareView ? hasProfileNickname(profile.nickname) : hasCompleteProfile(profile))) { redirectToLogin(page); return; }
         page.onProfileAccessGranted({ detail: { token, profile } });
       },
@@ -129,14 +91,12 @@ function wrapProfileAccess(definition) {
   };
   const verify = (page, silent) => {
     if (!page.__accessMounted || !page.__accessVisible || page.__accessDestroyed) return;
-    if (page.__accessAnonymous && !String(wx.getStorageSync('token') || '')) return;
     const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
     if (!guard || typeof guard.check !== 'function') {
       verifyWithoutComponent(page); return;
     }
-    const anonymous = anonymousShare(page) && !String(wx.getStorageSync('token') || '');
-    const scope = anonymousShare(page) ? 'share' : '';
-    Promise.resolve(guard.check(anonymous ? { anonymous: true, silent: !!silent, scope } : ((silent || scope) ? { silent: !!silent, scope } : undefined)))
+    const scope = shareProfile(page) ? 'share' : '';
+    Promise.resolve(guard.check((silent || scope) ? { silent: !!silent, scope } : undefined))
       .catch(error => console.error('个人资料核验失败', page.route, error));
   };
   // 公开浏览页乐观放行：复用 granted 解锁路径但不做服务端资料核验，页面
@@ -160,15 +120,6 @@ function wrapProfileAccess(definition) {
     this.__accessLoaded = false;
     this.__accessRendered = false;
     this.__accessActive = false;
-    // 匿名说明态：未登录打开分享链接时先执行页面 onLoad（初始化 pns 等入口参数），
-    // 只挂壳、不锁页、不跳登录；受保护内容保持为空。
-    if (anonymousShare(this) && !String(wx.getStorageSync('token') || '')) {
-      this.__accessAnonymous = true;
-      this.__accessLoaded = true;
-      invoke('onLoad', this, arguments);
-      hideGuard(this);
-      this.setData({ __profileAccessMounted: true });
-    }
   };
   result.onShow = function() {
     if (!protectedPage(this)) return invoke('onShow', this, arguments);
@@ -176,10 +127,6 @@ function wrapProfileAccess(definition) {
     this.__accessVisible = true;
     this.__accessRedirecting = false;
     const token = String(wx.getStorageSync('token') || '');
-    // 匿名说明态：无 token 时维持说明页（不锁页、不跳登录、不核验）；
-    // 登录中途取消返回（token 仍为空）也回到这里，不会形成重定向死循环。
-    if (anonymousShare(this) && !token) { enterAnonymous(this); return; }
-    if (this.__accessAnonymous) this.__accessAnonymous = false;
     // 同一账号被覆盖后返回：内容保持挂载、后台静默核验，核验通过后由放行回调
     // 恢复页面生命周期。整页上锁只保留给首次进入、换号和外部入口变化。
     // 公开浏览页恢复时不重核验（乐观放行），直接走下方公开页分支。
@@ -189,7 +136,7 @@ function wrapProfileAccess(definition) {
       return;
     }
     // 公开浏览页乐观放行：无论登录与否先解锁内容，不锁页、不跳登录、
-    // 不在此触发资料核验弹窗（补全引导由身份功能页和首页软引导承担）。
+    // 不在此触发资料核验弹窗（资料登记由其它受保护业务页承担）。
     if (publicBrowse(this)) {
       this.__accessSuspended = false;
       if (!this.__accessActive) optimisticGrant(this);
@@ -203,29 +150,25 @@ function wrapProfileAccess(definition) {
     this.__accessMounted = true;
     // 公开浏览页不核验：核验会对未登录用户弹登录面板/对资料不全用户弹
     // 强制补全，把"先浏览"又变成"先授权"。身份页行为不变。
-    if (anonymousShare(this) && !String(wx.getStorageSync('token') || '')) return;
     if (!publicBrowse(this)) verify(this);
   };
   result.onProfileAccessBlocked = function() {
     if (!protectedPage(this)) return;
-    // 核验发现未登录/登录失效（组件已清 token）：分享页回到匿名说明态并关掉浮层。
-    if (anonymousShare(this) && !String(wx.getStorageSync('token') || '')) { enterAnonymous(this); return; }
-    // 公开浏览页即使收到 gated 也不锁内容（乐观放行语义）；匿名说明态同理。
-    if (!publicBrowse(this) && !this.__accessAnonymous) lock(this);
+    // 公开浏览页即使收到 gated 也不锁内容（乐观放行语义）。
+    if (!publicBrowse(this)) lock(this);
   };
   result.onProfileAccessAppHide = function() {
     if (!protectedPage(this)) return;
     this.__accessVisible = false;
-    if (!publicBrowse(this) && !this.__accessAnonymous) lock(this);
+    if (!publicBrowse(this)) lock(this);
   };
   result.onProfileAccessGranted = function(event) {
     const token = wx.getStorageSync('token');
     // optimistic=公开浏览页乐观放行：detail.token 即构造时的当前 token
     // （含未登录的空串），不要求服务端核验结果，其余守卫不变。
-    const anonymousOptimistic = anonymousShare(this) && this.__accessAnonymous === true && !String(wx.getStorageSync('token') || '');
-    // 边界：optimistic 只服务于「公开浏览页」与「未登录匿名分享页」；其余页面收到该事件一律忽略。
-    if (event?.detail?.optimistic === true && !publicBrowse(this) && !anonymousOptimistic) return;
-    const optimistic = event?.detail?.optimistic === true && (publicBrowse(this) || anonymousOptimistic) && event?.detail?.token === String(token || '');
+    // 边界：optimistic 只服务于三类公开浏览页；其余页面收到该事件一律忽略。
+    if (event?.detail?.optimistic === true && !publicBrowse(this)) return;
+    const optimistic = event?.detail?.optimistic === true && publicBrowse(this) && event?.detail?.token === String(token || '');
     // upgrade=真实核验升级乐观放行：页面已被乐观放行（__accessOptimistic）
     // 时，服务端 authenticated 事件仍需进入以触发换号 reload（-1→真实id），
     // 让数据与 tracking 观察切到登录账号，否则登录后的转发丢失归因。
@@ -261,8 +204,6 @@ function wrapProfileAccess(definition) {
     this.setData({ __profileAccessReady: true, __profileAccessMounted: true }, () => {
       if (revision !== this.__accessRevision || !this.__accessActive || !this.__accessVisible || this.__accessDestroyed) return;
       if (token !== wx.getStorageSync('token')) {
-        // 分享页在渲染回调期间丢失 token（登录失效）：直接回到匿名说明态，避免白屏等下次 onShow。
-        if (anonymousShare(this) && !String(wx.getStorageSync('token') || '')) { enterAnonymous(this); return; }
         // 公开浏览页 token 变化（如前台登录）不锁内容：下次 onShow 会以
         // 新 token 乐观恢复；身份页维持原安全行为（上锁并重新核验）。
         if (!publicBrowse(this)) { lock(this); verify(this); }
@@ -286,13 +227,6 @@ function wrapProfileAccess(definition) {
       optimisticGrant(this);
       return;
     }
-    if (this.__accessAnonymous && !String(wx.getStorageSync('token') || '')) {
-      // 匿名说明态收到新的分享入口：更新入口参数并保持说明页，不锁页、不弹层。
-      this.__accessLoaded = true;
-      invoke('onLoad', this, [this.__accessOptions]);
-      this.setData({ __profileAccessMounted: true });
-      return;
-    }
     lock(this);
     verify(this);
   };
@@ -302,7 +236,6 @@ function wrapProfileAccess(definition) {
   result.onHide = function() {
     if (!protectedPage(this)) return invoke('onHide', this, arguments);
     this.__accessVisible = false;
-    if (this.__accessAnonymous) { invoke('onHide', this, arguments); return; }
     // 被其他页面覆盖时不再整页卸载：已放行内容留在层栈里，返回时走静默核验，
     // 避免每次子页面往返都出现白屏闪烁。安全上锁仍由门禁失败与 App 隐藏负责。
     if (this.__accessActive) {

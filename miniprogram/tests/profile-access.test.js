@@ -14,6 +14,11 @@ const businessRoutes = [
   ...(app.pages || []),
   ...(app.subPackages || []).flatMap(group => group.pages.map(page => `${group.root}/${page}`)),
 ].filter(route => !openRoutes.has(route));
+const anonymousBusinessRoutes = new Set([
+  'pages/index/index',
+  'pages/template/template',
+  'pages/distribution/distribution',
+]);
 
 test('every business route hides its content behind the shared profile guard', () => {
   assert.equal(businessRoutes.length, 69);
@@ -103,7 +108,7 @@ function harness(route = 'pages/aitoolworkbench/aitoolworkbench') {
 
 // 公开浏览页（微信审核整改）：匿名/资料不全用户先浏览，不锁页、不弹核验、
 // 不跳登录；登录与补全由身份功能页触发。匿名浏览由 tracking 匿名池记录。
-for (const route of ['pages/index/index', 'pages/templatesquaredetails/templatesquaredetails', 'pages/aicostshare/aicostshare']) {
+for (const route of anonymousBusinessRoutes) {
   test(`${route}: anonymous users browse immediately without login gate (审核整改)`, () => {
     const h = harness(route); h.mount({ id: '17', report_id: 'report', st: 'shared' });
     assert.equal(h.checks(), 0, '公开页不触发资料核验');
@@ -123,6 +128,24 @@ for (const route of ['pages/index/index', 'pages/templatesquaredetails/templates
     assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
   });
 }
+test('exactly the three approved business pages run content lifecycle before profile approval', () => {
+  assert.equal(anonymousBusinessRoutes.size, 3);
+  for (const route of businessRoutes) {
+    const h = harness(route); h.mount({ route });
+    if (anonymousBusinessRoutes.has(route)) {
+      assert.equal(h.checks(), 0, route);
+      assert.deepEqual(h.calls.map(call => call[0]), ['load', 'show', 'ready'], route);
+      continue;
+    }
+    assert.equal(h.checks(), 1, route);
+    assert.deepEqual(h.calls, [], route + ' must not run onLoad/onShow/content callbacks before grant');
+    assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0, route + ' must not expose sharing before grant');
+    h.page.onPullDownRefresh();
+    assert.deepEqual(h.calls, [], route + ' must not run content actions before grant');
+    h.grant();
+    assert.deepEqual(h.calls.map(call => call[0]), ['load', 'show', 'ready'], route);
+  }
+});
 // 身份功能页门禁行为保持不变（用户主动进入功能时才要求登录+资料完整）。
 for (const route of ['pages/aicost/aicost']) {
   test(`${route}: no content/business/visit lifecycle before server profile approval`, () => {
@@ -220,7 +243,7 @@ test('warm entry waits for profile and uses latest original options', () => {
   assert.equal(h.calls.filter(x => x[0] === 'load')[1][1].id, 'new');
 });
 test('public browse pages reload a new share entry immediately without waiting for login (审核整改)', () => {
-  const h = harness('pages/templatesquaredetails/templatesquaredetails'); h.mount({ id: 'old', st: 'old-share' });
+  const h = harness('pages/template/template'); h.mount({ id: 'old', st: 'old-share' });
   h.page.onHide(); h.page.queueProfileEntry({ id: 'new', st: 'new-share' }); h.page.onShow();
   assert.equal(h.navigations.length, 0, '不跳登录');
   assert.equal(h.calls.filter(x => x[0] === 'load').length, 2, '新入口立即乐观重载');
@@ -265,108 +288,23 @@ test('privacy/login pages remain accessible without recursively requiring login'
   }
 });
 
-// T7.6 匿名说明态：未登录打开分享链接不锁页、不跳登录、不弹浮层；登录后回到正常门禁。
-test('the project-note share page mounts an anonymous explanation state instead of locking the page', () => {
+test('the project-note share page stays locked until a verified profile is granted', () => {
   const route = 'pages/projectnoteview/projectnoteview';
   const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  assert.equal(h.page.data.__profileAccessMounted, true, '未登录只挂壳');
-  assert.equal(h.checks(), 0, '匿名说明态不触发资料核验');
-  assert.equal(h.navigations.length, 0, '不跳登录页');
-  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show'], '页面生命周期仍执行以显示说明态');
-  assert.equal(h.calls[0][1].pns, 'opaque-share-token', '入口参数已初始化');
-});
+  assert.equal(h.checks(), 1, '分享页必须进入登记门禁');
+  assert.deepEqual(h.calls, [], '未登记前不得初始化私密内容');
+  assert.equal(h.guard.options && h.guard.options.scope, 'share', '保留昵称登记口径，不新增手机号或头像要求');
+  assert.equal(h.page.data.__profileAccessMounted, false);
+  assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
 
-test('logging in from the anonymous share state re-runs the normal gate and reveals content', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
   h.storage.token = 'session-account';
-  h.page.onShow();
-  assert.equal(h.checks(), 1, '登录后回到正常门禁核验');
-  assert.equal(h.page.data.__profileAccessReady, false, '核验前不放行受保护内容');
-  h.grant('session-account');
-  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'show', 'ready']);
-  assert.equal(h.page.data.__profileAccessReady, true);
-});
-
-test('cancelling login returns to the explanation state without a redirect loop', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'session-account';
-  h.page.onShow();
-  delete h.storage.token;
-  h.page.onShow();
-  assert.equal(h.navigations.length, 0, '取消登录后不得跳登录页');
-  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'show'], '仍可再次进入说明态');
-  assert.equal(h.page.data.__profileAccessMounted, true);
-});
-
-test('a new share entry keeps the anonymous explanation state', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'first-token' });
-  h.page.queueProfileEntry({ pns: 'second-token' });
-  assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'load'], '新入口重新初始化但不锁页');
-  assert.equal(h.calls[2][1].pns, 'second-token');
-  assert.equal(h.page.data.__profileAccessMounted, true);
-  assert.equal(h.checks(), 0, '新入口仍不触发核验');
-});
-
-test('the anonymous share page is not locked when the app goes to background', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.page.onProfileAccessAppHide();
-  assert.equal(h.page.data.__profileAccessMounted, true, '后台返回不出现锁页闪烁');
-});
-
-test('the anonymous explanation copy and login entry are present on the share page', () => {
-  const wxml = fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.wxml'), 'utf8');
-  assert.match(wxml, /设计师分享给你的私密方案/);
-  assert.match(wxml, /登录后即可查看/);
-  assert.match(wxml, /bindtap="goLogin"/);
-});
-
-// T7.6：token 失效后必须真正回到匿名态（关浮层、不跳登录、不锁页）。
-test('an expired token on the share page falls back to the anonymous state with the overlay hidden', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  assert.equal(h.page.data.view, null, '未登录不得渲染受保护内容');
-  assert.equal(h.page.data.media.length, 0);
-
-  h.storage.token = 'expired-session';
-  h.page.onShow();
-  assert.equal(h.page.data.__profileAccessMounted, false, '已登录重验期间按原门禁上锁');
-  delete h.storage.token;
-  h.page.onProfileAccessBlocked();
-  assert.equal(h.page.data.__profileAccessMounted, true, 'token 失效后回到说明态');
-  assert.equal(h.page.data.__profileAccessReady, false, '受保护内容仍为空');
-  assert.equal(h.guard.visible, false, '旧登录浮层必须关闭');
-  assert.equal(h.navigations.length, 0, '不得跳登录页');
-
-  h.page.onShow();
-  assert.equal(h.navigations.length, 0, '后续 onShow 仍停留在说明态');
-  assert.equal(h.guard.visible, false);
-});
-
-test('a logged-in share page rejects optimistic grants from outside the anonymous state', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'session-account';
-  const before = h.calls.length;
   h.page.onProfileAccessGranted({ detail: { token: 'session-account', profile: { id: 9 }, optimistic: true } });
   assert.equal(h.page.data.__profileAccessReady, false, '已登录页面不得被乐观放行');
-  assert.equal(h.calls.length, before, '未核验不放行页面生命周期');
-});
+  assert.deepEqual(h.calls, [], '未核验不放行页面生命周期');
 
-// T7.6：组件 gated 前先写浮层状态，匿名降级必须赢过这次写入；渲染回调丢 token 不白屏。
-test('the anonymous downgrade wins over the overlay write that precedes gated', () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'expired-session';
-  h.page.onShow();
-  h.guard.setData({ visible: true, checking: false, needsLogin: true });
-  delete h.storage.token;
-  h.page.onProfileAccessBlocked();
-  assert.equal(h.page.data.__profileAccessMounted, true);
-  assert.equal(h.guard.visible, false, '匿名降级后浮层必须保持关闭');
+  h.grant('session-account');
+  assert.deepEqual(h.calls.map(call => call[0]), ['load', 'show', 'ready']);
+  assert.equal(h.calls[0][1].pns, 'opaque-share-token');
 });
 
 test('the login guard writes its overlay state before emitting gated', () => {
@@ -381,103 +319,16 @@ test('the login guard writes its overlay state before emitting gated', () => {
   }
 });
 
-test('losing the token during the granted render falls back to the anonymous state instead of a white screen', () => {
+test('losing the token during the granted render relocks the share page and rechecks access', () => {
   const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'session-account';
-  h.page.onShow();
+  const h = harness(route); h.storage.token = 'session-account'; h.mount({ pns: 'opaque-share-token' });
   h.page.deferCallbacks = true;
   h.page.onProfileAccessGranted({ detail: { token: 'session-account', profile: { id: 9 } } });
   delete h.storage.token;
   h.flush();
-  assert.equal(h.page.data.__profileAccessMounted, true, '渲染竞态下必须挂壳而不是白屏');
-  assert.equal(h.page.data.__profileAccessReady, false, '受保护内容不得放行');
-  assert.equal(h.guard.visible, false);
-});
-
-// T7.6：真实 login-guard 组件的失效分支联动（401、无 token、无效账号）。
-function realGuard(h, response) {
-  let definition;
-  const storage = h.storage;
-  const wxStub = {
-    getStorageSync: key => storage[key],
-    setStorageSync: (key, value) => { storage[key] = value; },
-    removeStorageSync: key => { delete storage[key]; },
-    request: options => { queueMicrotask(() => options.success(response)); },
-    showToast() {},
-  };
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'components/login-guard/login-guard.js'), 'utf8'), {
-    Component: value => { definition = value; }, wx: wxStub, console, Promise, setTimeout, clearTimeout,
-    require: name => name.includes('deviceFingerprint') ? { getCachedDeviceFingerprint: () => '' }
-      : name.includes('parameter') ? { generateRequestParams: () => ({}), paramsToHeaders: value => value }
-        : require(path.join(root, 'components/nickname-guard/profile-validation')),
-    exports: {}, module: { exports: {} },
-  });
-  const guard = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)) }, definition.methods);
-  guard.setData = function (value, done) { Object.assign(this.data, value); if (done) done.call(this); };
-  guard.triggerEvent = name => { if (name === 'gated') h.page.onProfileAccessBlocked(); };
-  guard.selectComponent = () => null;
-  return guard;
-}
-const flushAsync = () => new Promise(resolve => setTimeout(resolve, 0));
-
-test('the real login guard 401 branch degrades the share page to the anonymous state with the overlay hidden', async () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'expired-session';
-  const guard = realGuard(h, { statusCode: 401, data: { code: 401 } });
-  h.page.selectComponent = () => guard;
-  h.page.onShow();
-  await flushAsync();
-  assert.equal(h.page.data.__profileAccessMounted, true);
+  assert.equal(h.page.data.__profileAccessMounted, false, 'token 丢失后必须重新锁定私密内容');
   assert.equal(h.page.data.__profileAccessReady, false);
-  assert.equal(guard.data.visible, false, '401 后匿名降级必须关掉浮层');
-  assert.equal(h.navigations.length, 0, '不跳登录页');
-});
-
-test('the real login guard invalid-account branch also degrades to the anonymous state', async () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'odd-account';
-  const guard = realGuard(h, { statusCode: 200, data: { code: 0, data: {} } });
-  h.page.selectComponent = () => guard;
-  h.page.onShow();
-  await flushAsync();
-  assert.equal(h.page.data.__profileAccessMounted, true);
-  assert.equal(guard.data.visible, false, '无效账号后匿名降级必须关掉浮层');
-});
-
-test('the real login guard hides its overlay only when the anonymous option is passed without a token', async () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  const guard = realGuard(h, { statusCode: 200, data: { code: 0, data: {} } });
-  await guard.check({ anonymous: true });
-  assert.equal(guard.data.visible, false, '匿名态不得弹登录浮层');
-  // 非分享页无 token 时仍弹浮层（分享页的 gated 一律匿名降级）
-  const business = harness('pages/aicost/aicost'); business.mount();
-  const businessGuard = realGuard(business, { statusCode: 200, data: { code: 0, data: {} } });
-  await businessGuard.check({});
-  assert.equal(businessGuard.data.visible, true, '普通无 token 页面仍弹浮层');
-});
-
-test('a late 401 while backgrounded keeps the page hidden and only clears content on the next onShow', async () => {
-  const route = 'pages/projectnoteview/projectnoteview';
-  const h = harness(route); h.mount({ pns: 'opaque-share-token' });
-  h.storage.token = 'session-account';
-  h.page.onShow();
-  h.grant('session-account');
-  h.page.data.view = { project: { name: '私密方案' } };
-  h.page.data.media = [{ media_id: 'm-1' }];
-  h.page.onHide();
-  const shows = h.calls.filter(call => call[0] === 'show').length;
-  delete h.storage.token;
-  h.page.onProfileAccessBlocked();
-  assert.equal(h.calls.filter(call => call[0] === 'show').length, shows, '后台迟到 401 不得补跑 onShow');
-  assert.equal(h.page.data.__profileAccessReady, false);
-  h.page.onShow();
-  assert.equal(h.page.data.__profileAccessMounted, true, '回到前台后恢复说明页');
-  assert.equal(h.page.data.view, null, '受保护内容必须清空');
-  assert.equal(h.page.data.media.length, 0);
+  assert.equal(h.checks(), 2, '重新进入门禁核验');
 });
 
 // T7.7：分享查看页核验时带 scope=share，身份功能页保持原口径。

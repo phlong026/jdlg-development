@@ -106,7 +106,7 @@ Page({
     // Discard only the old intent; a later login may create a new report return.
     if (options.from === 'share') discardReportLoginReturn();
     this.shareCoversPromise = this.prepareHomeShareCovers();
-    this.showHomeIntroPopupOnce();
+    // 首屏先展示功能；资料登记由用户进入需要身份的页面时触发。
     this.initializeUnreadBannerLayout();
   },
   onShow() {
@@ -115,7 +115,6 @@ Page({
     this.loadFeaturedGroups();
     this._unreadBannerPageVisible = true;
     if (typeof this.checkUnreadNotifications === 'function') this.checkUnreadNotifications();
-    void this.promptNicknameIfMissing();
   },
   initializeUnreadBannerLayout() {
     this.setData({ unreadBannerTop: unreadBannerTop() });
@@ -321,7 +320,7 @@ Page({
     this.rememberHomeIntroPopupSeen();
     this.setData({
       homeIntroPopupVisible: false,
-    }, () => { void this.promptNicknameIfMissing(); });
+    });
   },
   onHomeIntroTopup() {
     this.closeHomeIntroPopup();

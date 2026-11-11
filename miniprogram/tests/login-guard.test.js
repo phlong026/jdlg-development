@@ -257,5 +257,5 @@ test('nickname-only mode removes the avatar requirement from the actual form', (
   assert.match(wxml, /nicknameOnly \? '确认昵称' : '确认头像和昵称'/);
   assert.match(wxml, /nicknameOnly \? '头像选填，可跳过'/);
   const access = fs.readFileSync(path.join(root, 'miniprogram/utils/profile-access.js'), 'utf8');
-  assert.match(access, /anonymousShare\(page\) \? '请先登录并补充昵称'/, '分享页兜底提示不得要求头像');
+  assert.match(access, /shareProfile\(page\) \? '请先登录并补充昵称'/, '分享页兜底提示不得要求头像');
 });

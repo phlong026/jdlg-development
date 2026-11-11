@@ -76,12 +76,12 @@ for (const extension of ['ts', 'js']) {
   });
 }
 
-// 契约：首页注册并放置弹窗，onShow 触发检查；首页自己的引导弹窗显示时不叠加昵称弹窗。
+// 首页保留已有组件接口，但浏览生命周期不得自动要求资料登记。
 for (const extension of ['ts', 'js']) {
-  test(`${extension}: 首页 onShow 触发昵称检查，且避开首页引导弹窗`, () => {
+  test(`${extension}: 首页 onShow 不自动触发昵称检查`, () => {
     const source = fs.readFileSync(path.join(root, `miniprogram/pages/index/index.${extension}`), 'utf8');
     const onShow = source.slice(source.indexOf('onShow()'), source.indexOf('onShareAppMessage()'));
-    assert.match(onShow, /promptNicknameIfMissing\(\)/);
+    assert.doesNotMatch(onShow, /(?:void\s+)?this\.promptNicknameIfMissing\(\)/);
     const method = source.slice(source.indexOf('promptNicknameIfMissing()'));
     assert.match(method, /homeIntroPopupVisible/);
     assert.match(method, /selectComponent\('#nicknameGuard'\)/);
