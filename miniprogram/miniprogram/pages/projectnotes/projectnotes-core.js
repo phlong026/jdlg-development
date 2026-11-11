@@ -1580,7 +1580,17 @@ Page({
     if (!sameDraft) { this.setData({ error: '请先保存当前修改，再冻结此方案版本。' }); return; }
     if (!await this.confirmDiscardChanges()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
-    try { await api.freezeProjectNoteVersion(note.note_id, note.revision); if (this.current(epoch)) { this._shareAttempt = null; this.setData({ busy: false }); await this.refreshProject('版本已冻结，后续修改不会改变本次分享。'); } }
+    try {
+      const version = await api.freezeProjectNoteVersion(note.note_id, note.revision);
+      if (this.current(epoch)) {
+        this._shareAttempt = null;
+        // 冻结后直接进入版本页，减少“返回项目→方案版本→创建分享”的中转步骤。
+        this._selectedVersionID = version && version.version_id || '';
+        this._nextPageView = this._selectedVersionID ? 'version' : '';
+        this.setData({ busy: false });
+        await this.refreshProject('版本已冻结，可直接创建分享发给客户。');
+      }
+    }
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '版本冻结失败' }); }
   },
   async createProjectNoteShare() {
