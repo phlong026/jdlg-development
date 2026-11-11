@@ -17,7 +17,6 @@ Component({
         checking: false,
         needsLogin: false,
         completingProfile: false,
-        nicknameOnly: false,
         error: '',
         agreedPrivacy: false,
         loggingIn: false,
@@ -54,9 +53,6 @@ Component({
         async check(options) {
             var _a, _b, _c, _d;
             const silent = !!(options && options.silent);
-            // 组件内部的保存/重试/微信登录都走无参数 check()，必须复用最近一次核验的 scope。
-            const scope = (options === null || options === void 0 ? void 0 : options.scope) !== undefined ? String(options.scope) : String(this._checkScope || '');
-            this._checkScope = scope;
             const revision = (this._checkRevision || 0) + 1;
             this._checkRevision = revision;
             const token = wx.getStorageSync('token');
@@ -123,16 +119,15 @@ Component({
                 const cachedProfile = wx.getStorageSync('userInfo') || {};
                 const sameAccount = Number(cachedProfile.id || 0) === id;
                 wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
-                // 分享查看场景（scope=share）只要求昵称；P8 已定：缺头像放行，不校验头像。
-                const nicknameOnly = scope === 'share';
-                if (!(nicknameOnly ? (0, profile_validation_1.hasProfileNickname)(profile.nickname) : (0, profile_validation_1.hasCompleteProfile)(profile))) {
+                // 单篇分享和其它受保护页统一要求服务器已保存的昵称与头像。
+                if (!(0, profile_validation_1.hasCompleteProfile)(profile)) {
                     if (!editor || typeof editor.show !== 'function')
                         throw new Error('资料填写暂不可用，请重试');
-                    this.setData({ visible: false, checking: false, completingProfile: true, nicknameOnly });
+                    this.setData({ visible: false, checking: false, completingProfile: true });
                     this.triggerEvent('gated');
                     // 同一账号正在填写时保留尚未提交的输入和上传状态。
                     if (!((_d = editor.data) === null || _d === void 0 ? void 0 : _d.visible) || editor.data.promptToken !== token) {
-                        editor.show({ required: true, nicknameOnly, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
+                        editor.show({ required: true, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
                     }
                     return false;
                 }

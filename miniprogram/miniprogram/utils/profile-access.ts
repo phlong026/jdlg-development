@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use strict';
-const { hasCompleteProfile, hasProfileNickname } = require('../components/nickname-guard/profile-validation');
+const { hasCompleteProfile } = require('../components/nickname-guard/profile-validation');
 let installed = false;
 const ACCESS_FREE_ROUTES = new Set([
   'pages/login/login',
@@ -16,7 +16,7 @@ const PUBLIC_BROWSE_ROUTES = new Set([
   'pages/distribution/distribution',
 ]);
 
-// 分享查看页仍沿用昵称登记口径，但不再允许未登录匿名挂载或访问内容。
+// 分享查看页保留登录后返回原页的场景参数，资料门禁与其它受保护页一致。
 const SHARE_PROFILE_ROUTES = new Set([
   'pages/projectnoteview/projectnoteview',
 ]);
@@ -40,12 +40,12 @@ function wrapProfileAccess(definition) {
   const redirectToLogin = page => {
     if (page.__accessRedirecting || page.__accessDestroyed || !page.__accessVisible) return;
     page.__accessRedirecting = true;
-    // 分享页兜底跳登录时保留分享查看场景，登录页才不会重新要求头像。
+    // 分享页兜底跳登录时保留返回场景，但不放宽昵称和头像要求。
     wx.navigateTo({
       url: '/pages/login/login?from=' + (shareProfile(page) ? 'share-view' : 'profile-gate'),
       fail() {
         page.__accessRedirecting = false;
-        wx.showToast({ title: shareProfile(page) ? '请先登录并补充昵称' : '请先登录并补充头像、昵称', icon: 'none' });
+        wx.showToast({ title: '请先登录并补充头像、昵称', icon: 'none' });
       },
     });
   };
@@ -77,9 +77,7 @@ function wrapProfileAccess(definition) {
         const cachedProfile = wx.getStorageSync('userInfo') || {};
         const sameAccount = Number(cachedProfile.id || 0) === id;
         wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
-        // 分享查看场景：只要求昵称（P8：缺头像放行）；身份功能页仍要求完整资料。
-        const shareView = shareProfile(page);
-        if (!(shareView ? hasProfileNickname(profile.nickname) : hasCompleteProfile(profile))) { redirectToLogin(page); return; }
+        if (!hasCompleteProfile(profile)) { redirectToLogin(page); return; }
         page.onProfileAccessGranted({ detail: { token, profile } });
       },
       fail() {
@@ -95,8 +93,7 @@ function wrapProfileAccess(definition) {
     if (!guard || typeof guard.check !== 'function') {
       verifyWithoutComponent(page); return;
     }
-    const scope = shareProfile(page) ? 'share' : '';
-    Promise.resolve(guard.check((silent || scope) ? { silent: !!silent, scope } : undefined))
+    Promise.resolve(guard.check(silent ? { silent: true } : undefined))
       .catch(error => console.error('个人资料核验失败', page.route, error));
   };
   // 公开浏览页乐观放行：复用 granted 解锁路径但不做服务端资料核验，页面

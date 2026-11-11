@@ -134,7 +134,6 @@ func MiniprogramPublicRoute(route string) bool {
 }
 
 type MiniprogramProfileAccess struct {
-	Nickname bool
 	Complete bool
 }
 
@@ -147,12 +146,6 @@ func miniprogramProfileAccess(values []MiniprogramProfileAccess) MiniprogramProf
 
 func requireMiniprogramTrackingProfile(route string, account int64, access MiniprogramProfileAccess) error {
 	if account <= 0 || MiniprogramPublicRoute(route) {
-		return nil
-	}
-	if route == "pages/projectnoteview/projectnoteview" {
-		if !access.Nickname {
-			return fail(http.StatusPreconditionRequired, "请先补充昵称")
-		}
 		return nil
 	}
 	if !access.Complete {

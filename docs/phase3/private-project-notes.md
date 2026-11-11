@@ -96,7 +96,7 @@ JSON 请求体最大 128 KiB，拒绝未知字段和尾随内容。除媒体上�
 | `POST` | `/shared/:token/feedback` | `text`、`idempotency_key` | 对固定版本提交反馈；正文最多 4000 UTF-8 字节。响应丢失后必须用相同键重试 |
 | `POST` | `/shared/:token/confirm` | `idempotency_key` | 仅当前指定业主确认精确版本；项目和版本维度唯一 |
 | `GET`、`HEAD` | `/shared/:token/media/:id` | 无 | 只能读取该分享固定版本实际引用的封面和媒体 |
-| `POST` | `/shared/:token/media/:id/playback` | 空对象 | 已登录且昵称有效的受邀账号，为 MP4 视频申请短时播放地址 |
+| `POST` | `/shared/:token/media/:id/playback` | 空对象 | 已登录且头像、昵称完整的受邀账号，为 MP4 视频申请短时播放地址 |
 | `GET`、`HEAD` | `/shared/:token/export.docx` | 无 | 登录受邀账号导出当前分享的固定版本；撤销、过期或成员被移除后拒绝 |
 
 受邀端反馈、处理结果各最多返回最近 50 条；超过时 `activity_truncated=true`。分享响应不返回 raw token，媒体 URL 也只使用该分享的鉴权代理路径。

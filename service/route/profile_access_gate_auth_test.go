@@ -66,11 +66,12 @@ func TestVerifyProjectPlaybackActorAppliesProfileRuleByShareKind(t *testing.T) {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := verifyProjectPlaybackActor(ctx, db, 101, sharedVideoNote); err != nil {
-		t.Fatalf("nickname-only actor rejected: %v", err)
-	}
-	err := verifyProjectPlaybackActor(ctx, db, 101, sharedVideoPackage)
 	var trackingError *tracking.Error
+	err := verifyProjectPlaybackActor(ctx, db, 101, sharedVideoNote)
+	if !errors.As(err, &trackingError) || trackingError.Status != http.StatusPreconditionRequired {
+		t.Fatalf("note missing avatar error = %T %v", err, err)
+	}
+	err = verifyProjectPlaybackActor(ctx, db, 101, sharedVideoPackage)
 	if !errors.As(err, &trackingError) || trackingError.Status != http.StatusPreconditionRequired {
 		t.Fatalf("package missing avatar error = %T %v", err, err)
 	}
@@ -80,6 +81,14 @@ func TestVerifyProjectPlaybackActorAppliesProfileRuleByShareKind(t *testing.T) {
 	err = verifyProjectPlaybackActor(ctx, db, 101, sharedVideoNote)
 	if !errors.As(err, &trackingError) || trackingError.Status != http.StatusPreconditionRequired {
 		t.Fatalf("missing nickname error = %T %v", err, err)
+	}
+
+	db = sql.OpenDB(profileGateAuthConnector{profile: miniprogramProfile{Nickname: "用户", Avatar: "https://cdn.example.com/avatar.png"}})
+	defer db.Close()
+	for _, kind := range []sharedVideoKind{sharedVideoNote, sharedVideoPackage} {
+		if err = verifyProjectPlaybackActor(ctx, db, 101, kind); err != nil {
+			t.Fatalf("complete profile kind=%s rejected: %v", kind, err)
+		}
 	}
 }
 

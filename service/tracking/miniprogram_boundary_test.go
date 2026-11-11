@@ -9,7 +9,7 @@ import (
 func miniprogramBoundaryFixture(t *testing.T) *Service {
 	t.Helper()
 	service, _ := fixture(t)
-	for _, route := range []string{"pages/index/index", "pages/template/template", "pages/distribution/distribution", "pages/aitools/aitools"} {
+	for _, route := range []string{"pages/index/index", "pages/template/template", "pages/distribution/distribution", "pages/aitools/aitools", "pages/projectnoteview/projectnoteview"} {
 		service.Config.Routes[route] = Route{Title: route, Public: true}
 	}
 	return service
@@ -34,7 +34,10 @@ func TestEnterMiniprogramRestrictsOnlyAnonymousRoutes(t *testing.T) {
 	if _, err := service.EnterMiniprogram(context.Background(), input("pages/aitools/aitools", "client-protected-incomplete"), 42, MiniprogramProfileAccess{}); trackingErrorStatus(err) != http.StatusPreconditionRequired {
 		t.Fatalf("incomplete authenticated entry status=%d err=%v", trackingErrorStatus(err), err)
 	}
-	if entry, err := service.EnterMiniprogram(context.Background(), input("pages/aitools/aitools", "client-protected-user"), 42, MiniprogramProfileAccess{Nickname: true, Complete: true}); err != nil || entry.Account != 42 {
+	if _, err := service.EnterMiniprogram(context.Background(), input("pages/projectnoteview/projectnoteview", "client-note-missing-avatar"), 42, MiniprogramProfileAccess{}); trackingErrorStatus(err) != http.StatusPreconditionRequired {
+		t.Fatalf("note missing avatar status=%d err=%v", trackingErrorStatus(err), err)
+	}
+	if entry, err := service.EnterMiniprogram(context.Background(), input("pages/aitools/aitools", "client-protected-user"), 42, MiniprogramProfileAccess{Complete: true}); err != nil || entry.Account != 42 {
 		t.Fatalf("authenticated entry=%+v err=%v", entry, err)
 	}
 }
@@ -60,7 +63,7 @@ func TestAcceptMiniprogramKeepsAnonymousTokenBoundToPublicAnonymousEntry(t *test
 		t.Fatalf("incomplete account public results=%+v err=%v", results, err)
 	}
 
-	logged, err := service.EnterMiniprogram(context.Background(), EntryInput{Route: "pages/aitools/aitools", Client: "client-account-events", Consent: "v1"}, 42, MiniprogramProfileAccess{Nickname: true, Complete: true})
+	logged, err := service.EnterMiniprogram(context.Background(), EntryInput{Route: "pages/aitools/aitools", Client: "client-account-events", Consent: "v1"}, 42, MiniprogramProfileAccess{Complete: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +75,7 @@ func TestAcceptMiniprogramKeepsAnonymousTokenBoundToPublicAnonymousEntry(t *test
 	if _, err = service.AcceptMiniprogram(context.Background(), logged.Token, []Event{loggedEvent}, 42, MiniprogramProfileAccess{}); trackingErrorStatus(err) != http.StatusPreconditionRequired {
 		t.Fatalf("incomplete account event status=%d err=%v", trackingErrorStatus(err), err)
 	}
-	if results, err = service.AcceptMiniprogram(context.Background(), logged.Token, []Event{loggedEvent}, 42, MiniprogramProfileAccess{Nickname: true, Complete: true}); err != nil || len(results) != 1 || results[0].Status != "accepted" {
+	if results, err = service.AcceptMiniprogram(context.Background(), logged.Token, []Event{loggedEvent}, 42, MiniprogramProfileAccess{Complete: true}); err != nil || len(results) != 1 || results[0].Status != "accepted" {
 		t.Fatalf("account results=%+v err=%v", results, err)
 	}
 
@@ -97,7 +100,7 @@ func TestCreateMiniprogramShareRestrictsOnlyAnonymousRoutes(t *testing.T) {
 		t.Fatalf("anonymous public share: %v", err)
 	}
 
-	protected, err := service.EnterMiniprogram(context.Background(), EntryInput{Route: "pages/aitools/aitools", Client: "client-account-share", Consent: "v1"}, 42, MiniprogramProfileAccess{Nickname: true, Complete: true})
+	protected, err := service.EnterMiniprogram(context.Background(), EntryInput{Route: "pages/aitools/aitools", Client: "client-account-share", Consent: "v1"}, 42, MiniprogramProfileAccess{Complete: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +110,7 @@ func TestCreateMiniprogramShareRestrictsOnlyAnonymousRoutes(t *testing.T) {
 	if _, err = service.CreateMiniprogramShare(context.Background(), ShareInput{Route: protected.Route, Key: "incomplete-account-share"}, protected.Token, 42, MiniprogramProfileAccess{}); trackingErrorStatus(err) != http.StatusPreconditionRequired {
 		t.Fatalf("incomplete protected share status=%d err=%v", trackingErrorStatus(err), err)
 	}
-	if _, err = service.CreateMiniprogramShare(context.Background(), ShareInput{Route: protected.Route, Key: "account-protected-share"}, protected.Token, 42, MiniprogramProfileAccess{Nickname: true, Complete: true}); err != nil {
+	if _, err = service.CreateMiniprogramShare(context.Background(), ShareInput{Route: protected.Route, Key: "account-protected-share"}, protected.Token, 42, MiniprogramProfileAccess{Complete: true}); err != nil {
 		t.Fatalf("authenticated protected share: %v", err)
 	}
 

@@ -20,10 +20,6 @@ import (
 
 const miniprogramAPIPrefix = "/api/v1/miniprogram"
 
-var miniprogramNicknameOnlyPrefixes = []string{
-	miniprogramAPIPrefix + "/project-notes/shared/",
-}
-
 type miniprogramProfile struct {
 	Nickname string
 	Avatar   string
@@ -143,40 +139,17 @@ func miniprogramProfileCompleteness(load miniprogramProfileLoader) gin.HandlerFu
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": 503, "msg": "用户资料暂时无法核验，请重试"})
 			return
 		}
-		missing := miniprogramProfileMissingFieldsForPath(profile, c.Request.URL.Path)
+		missing := miniprogramProfileMissingFields(profile)
 		if len(missing) > 0 {
-			message := "请先补充头像和昵称"
-			if isMiniprogramNicknameOnlyPath(c.Request.URL.Path) {
-				message = "请先补充昵称"
-			}
 			c.AbortWithStatusJSON(http.StatusPreconditionRequired, gin.H{
 				"code": 428,
-				"msg":  message,
+				"msg":  "请先补充头像和昵称",
 				"data": gin.H{"profile_required": true, "missing_fields": missing},
 			})
 			return
 		}
 		c.Next()
 	}
-}
-
-func isMiniprogramNicknameOnlyPath(path string) bool {
-	for _, prefix := range miniprogramNicknameOnlyPrefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func miniprogramProfileMissingFieldsForPath(profile miniprogramProfile, path string) []string {
-	if isMiniprogramNicknameOnlyPath(path) {
-		if miniprogramProfileNicknameMissing(profile) {
-			return []string{"nickname"}
-		}
-		return nil
-	}
-	return miniprogramProfileMissingFields(profile)
 }
 
 func miniprogramProfileLoaderFromModel(profiles *model.UserProfileModel) miniprogramProfileLoader {

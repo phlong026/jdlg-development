@@ -23,7 +23,6 @@ Component({
     nickname: '',
     avatarUrl: '',
     avatarTemp: '',
-    nicknameOnly: false,
     uploading: false,
     saving: false,
     promptUserID: 0,
@@ -31,11 +30,10 @@ Component({
   },
 
   methods: {
-    show(options: { nickname?: string; avatar?: string; userID?: number; required?: boolean; nicknameOnly?: boolean } = {}) {
+    show(options: { nickname?: string; avatar?: string; userID?: number; required?: boolean } = {}) {
       this.setData({
         visible: true,
         required: !!options.required,
-        nicknameOnly: !!options.nicknameOnly,
         promptUserID: Number(options.userID || wx.getStorageSync('userInfo')?.id || 0),
         promptToken: wx.getStorageSync('token') || '',
         nickname: String(options.nickname || ''),
@@ -76,7 +74,7 @@ Component({
 
     showIfMissing(profile: any, required = false) {
       const nickname = String(profile?.nickname || '').trim();
-      const complete = this.data.nicknameOnly ? hasProfileNickname(profile?.nickname) : hasCompleteProfile(profile);
+      const complete = hasCompleteProfile(profile);
       if (this.data.visible || (required ? complete : hasProfileNickname(nickname))) return false;
       const userID = Number(profile?.id || wx.getStorageSync('userInfo')?.id || 0);
       const now = new Date();
@@ -249,7 +247,7 @@ Component({
         wx.showToast({ title: '头像上传中，请稍候', icon: 'none' });
         return;
       }
-      if (this.data.required && !this.data.nicknameOnly && !hasSavedAvatar(this.data.avatarUrl)) {
+      if (this.data.required && !hasSavedAvatar(this.data.avatarUrl)) {
         wx.showToast({ title: '请选择并保存头像后继续', icon: 'none' });
         return;
       }
@@ -287,7 +285,7 @@ Component({
         }
         const profile = await this.readSavedProfile(tokenAtStart, userID);
         if (String(profile.nickname || '').trim() !== nickname) throw new Error('昵称保存结果未确认，请重试');
-        if (this.data.required && !this.data.nicknameOnly && (!hasCompleteProfile(profile) || String(profile.avatar).trim() !== avatarAtStart)) {
+        if (this.data.required && (!hasCompleteProfile(profile) || String(profile.avatar).trim() !== avatarAtStart)) {
           throw new Error('头像保存结果未确认，请重新选择头像');
         }
         const cachedUserInfo = wx.getStorageSync('userInfo') || {};
@@ -304,7 +302,7 @@ Component({
 
     // 软模式可稍后继续；required 模式必须完成昵称和头像后才能关闭。
     onMaskTap() {
-      wx.showToast({ title: this.data.required ? (this.data.nicknameOnly ? '请完善昵称后继续' : '请完善昵称和头像后继续') : '可选择稍后完善，继续浏览', icon: 'none' });
+      wx.showToast({ title: this.data.required ? '请完善昵称和头像后继续' : '可选择稍后完善，继续浏览', icon: 'none' });
     },
 
     buildAuthHeaders(apiPath: string, body: any = {}) {

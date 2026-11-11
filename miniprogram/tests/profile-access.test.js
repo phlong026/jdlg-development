@@ -293,7 +293,7 @@ test('the project-note share page stays locked until a verified profile is grant
   const h = harness(route); h.mount({ pns: 'opaque-share-token' });
   assert.equal(h.checks(), 1, '分享页必须进入登记门禁');
   assert.deepEqual(h.calls, [], '未登记前不得初始化私密内容');
-  assert.equal(h.guard.options && h.guard.options.scope, 'share', '保留昵称登记口径，不新增手机号或头像要求');
+  assert.notEqual(h.guard.options && h.guard.options.scope, 'share', '分享页不再传入放宽资料要求的 scope');
   assert.equal(h.page.data.__profileAccessMounted, false);
   assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
 
@@ -331,26 +331,25 @@ test('losing the token during the granted render relocks the share page and rech
   assert.equal(h.checks(), 2, '重新进入门禁核验');
 });
 
-// T7.7：分享查看页核验时带 scope=share，身份功能页保持原口径。
-test('the share page asks the guard to verify with the share scope', () => {
+test('the share page uses the same full-profile guard contract as other protected pages', () => {
   const share = harness('pages/projectnoteview/projectnoteview'); share.mount({ pns: 'opaque-share-token' });
   share.storage.token = 'session-account';
   share.page.onShow();
-  assert.equal(share.guard.options && share.guard.options.scope, 'share');
+  assert.notEqual(share.guard.options && share.guard.options.scope, 'share');
   const business = harness('pages/aicost/aicost'); business.mount({});
   business.storage.token = 'session-account';
   business.page.onShow();
-  assert.notEqual(business.guard.options && business.guard.options.scope, 'share', '身份页不得使用分享场景');
+  assert.deepEqual(share.guard.options, business.guard.options, '分享页不再有仅昵称的核验分支');
 });
 
-// T7.7：无组件兜底跳登录时，分享页带 share-view 场景，其它页面保持 profile-gate。
+// 无组件兜底跳登录时，分享页保留 share-view 返回场景，但缺头像也必须拦截。
 test('the fallback login redirect keeps the share-view scene for the share page only', () => {
   const share = harness('pages/projectnoteview/projectnoteview');
   share.page.selectComponent = () => null;
   share.storage.token = 'session-account';
   share.page.onShow(); share.page.onReady();
   assert.equal(share.requests.length, 1, '无组件路径应发起资料核验请求');
-  share.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '', avatar: '' } } });
+  share.requests[0].success({ statusCode: 200, data: { code: 0, data: { id: 9, nickname: '已登记昵称', avatar: '' } } });
   assert.match(share.navigations[0].url, /from=share-view/);
 
   const business = harness('pages/aicost/aicost');

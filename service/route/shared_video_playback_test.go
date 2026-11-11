@@ -111,7 +111,7 @@ func TestProjectNoteSharedVideoPlaybackTicketStreamsRangesAndRechecksShare(t *te
 	}
 }
 
-func TestSharedVideoPlaybackWorksThroughNicknameOnlyProfileMiddleware(t *testing.T) {
+func TestSharedVideoPlaybackRequiresCompleteProfileForIssueAndStream(t *testing.T) {
 	svc, scope, actor, setupRouter, project, version, share, asset, video := createSharedVideoFixture(t)
 	registerProjectPackageTestHandlers(setupRouter, svc, &scope, actor)
 	delivery := createProjectPackage(t, setupRouter, project, version)
@@ -131,10 +131,10 @@ func TestSharedVideoPlaybackWorksThroughNicknameOnlyProfileMiddleware(t *testing
 		miniprogramProfileCompleteness(func(context.Context, int64) (miniprogramProfile, error) { return profile, nil }),
 	)
 	validationDeadlineSeen := false
-	registerSharedVideoPlaybackRoutes(v1, svc, func(ctx context.Context, account int64, kind sharedVideoKind) error {
+	registerSharedVideoPlaybackRoutes(v1, svc, func(ctx context.Context, account int64, _ sharedVideoKind) error {
 		_, validationDeadlineSeen = ctx.Deadline()
-		if account != 101 || miniprogramProfileNicknameMissing(profile) || kind == sharedVideoPackage && len(miniprogramProfileMissingFields(profile)) > 0 {
-			return &tracking.Error{Status: http.StatusPreconditionRequired, Message: "请先补充昵称"}
+		if account != 101 || len(miniprogramProfileMissingFields(profile)) > 0 {
+			return &tracking.Error{Status: http.StatusPreconditionRequired, Message: "请先补充头像和昵称"}
 		}
 		return nil
 	})
@@ -150,8 +150,18 @@ func TestSharedVideoPlaybackWorksThroughNicknameOnlyProfileMiddleware(t *testing
 	issueRequest.Header.Set("token", "valid")
 	issueResponse := httptest.NewRecorder()
 	router.ServeHTTP(issueResponse, issueRequest)
+	if issueResponse.Code != http.StatusPreconditionRequired {
+		t.Fatalf("note POST missing avatar=%d body=%s", issueResponse.Code, issueResponse.Body.String())
+	}
+
+	profile = miniprogramProfile{Nickname: "用户", Avatar: "https://cdn.example.com/avatar.png"}
+	issueRequest = httptest.NewRequest(http.MethodPost, playbackPath, strings.NewReader("{}"))
+	issueRequest.Header.Set("Content-Type", "application/json")
+	issueRequest.Header.Set("token", "valid")
+	issueResponse = httptest.NewRecorder()
+	router.ServeHTTP(issueResponse, issueRequest)
 	if issueResponse.Code != http.StatusOK {
-		t.Fatalf("nickname-only playback issue=%d body=%s", issueResponse.Code, issueResponse.Body.String())
+		t.Fatalf("complete note playback issue=%d body=%s", issueResponse.Code, issueResponse.Body.String())
 	}
 	playback := playbackURL(t, issueResponse.Body.Bytes())
 	rangeRequest := httptest.NewRequest(http.MethodGet, playback, nil)
@@ -159,7 +169,23 @@ func TestSharedVideoPlaybackWorksThroughNicknameOnlyProfileMiddleware(t *testing
 	rangeResponse := httptest.NewRecorder()
 	router.ServeHTTP(rangeResponse, rangeRequest)
 	if rangeResponse.Code != http.StatusPartialContent || rangeResponse.Body.String() != string(video[:4]) || !validationDeadlineSeen {
-		t.Fatalf("nickname-only range=%d deadline=%v body=%q", rangeResponse.Code, validationDeadlineSeen, rangeResponse.Body.String())
+		t.Fatalf("complete note range=%d deadline=%v body=%q", rangeResponse.Code, validationDeadlineSeen, rangeResponse.Body.String())
+	}
+
+	profile = miniprogramProfile{Nickname: "用户"}
+	missingAvatarRangeRequest := httptest.NewRequest(http.MethodGet, playback, nil)
+	missingAvatarRangeRequest.Header.Set("Range", "bytes=0-3")
+	missingAvatarRangeResponse := httptest.NewRecorder()
+	router.ServeHTTP(missingAvatarRangeResponse, missingAvatarRangeRequest)
+	if missingAvatarRangeResponse.Code != http.StatusPreconditionRequired || missingAvatarRangeResponse.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("note GET missing avatar=%d cache=%q body=%s", missingAvatarRangeResponse.Code, missingAvatarRangeResponse.Header().Get("Cache-Control"), missingAvatarRangeResponse.Body.String())
+	}
+	missingAvatarPostRequest := httptest.NewRequest(http.MethodPost, playbackPath, strings.NewReader("{}"))
+	missingAvatarPostRequest.Header.Set("token", "valid")
+	missingAvatarPostResponse := httptest.NewRecorder()
+	router.ServeHTTP(missingAvatarPostResponse, missingAvatarPostRequest)
+	if missingAvatarPostResponse.Code != http.StatusPreconditionRequired {
+		t.Fatalf("note POST missing avatar=%d body=%s", missingAvatarPostResponse.Code, missingAvatarPostResponse.Body.String())
 	}
 
 	profile = miniprogramProfile{Avatar: "https://cdn.example.com/avatar.png"}

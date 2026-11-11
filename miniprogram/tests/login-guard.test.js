@@ -191,71 +191,76 @@ test('my 页：头像为官方 chooseAvatar 按钮且选完自动上传保存', 
   }
 });
 
-// T7.7 资料门禁分层：分享查看场景只要求昵称（缺头像放行，P8）；身份功能页仍要求完整资料。
+// 单篇项目笔记分享与其他受保护页统一：登录后必须有已保存的昵称和头像。
 for (const ext of ['ts', 'js']) {
-  test(`${ext}: 分享查看场景只要求昵称，缺头像放行`, async () => {
+  test(`${ext}: 分享查看场景缺头像仍拦截并打开完整资料表单`, async () => {
     const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: '' } });
     const ok = await f.instance.check({ scope: 'share' });
-    assert.equal(ok, true, '有昵称即放行');
-    assert.equal(f.events.some(e => e.name === 'gated'), false, '不得拦截');
-    assert.equal(f.shows.length, 0, '不得弹资料表单');
+    assert.equal(ok, false, '缺头像不得放行');
+    assert.ok(f.events.some(e => e.name === 'gated'));
+    assert.equal(f.shows.length, 1);
+    assert.equal(Object.hasOwn(f.shows[0], 'nicknameOnly'), false, '不得保留仅昵称的入参');
   });
-  test(`${ext}: 分享查看场景缺昵称仍要求补昵称`, async () => {
+  test(`${ext}: 分享查看场景缺昵称同样使用完整资料口径`, async () => {
     const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '', avatar: '' } });
     const ok = await f.instance.check({ scope: 'share' });
     assert.equal(ok, false, '缺昵称必须补');
     assert.ok(f.shows.length >= 1);
-    assert.equal(f.shows[f.shows.length - 1].nicknameOnly, true);
+    assert.equal(Object.hasOwn(f.shows[f.shows.length - 1], 'nicknameOnly'), false);
+  });
+  test(`${ext}: 分享查看只要求登录昵称和头像，不要求手机号`, async () => {
+    const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/avatar.jpg' } });
+    assert.equal(await f.instance.check({ scope: 'share' }), true);
+    assert.equal(f.shows.length, 0);
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
   });
   test(`${ext}: 身份功能页仍要求完整资料`, async () => {
     const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: '' } });
     const ok = await f.instance.check();
     assert.equal(ok, false, '身份页缺头像不放行');
     assert.ok(f.shows.length >= 1);
-    assert.notEqual(f.shows[f.shows.length - 1].nicknameOnly, true);
+    assert.equal(Object.hasOwn(f.shows[f.shows.length - 1], 'nicknameOnly'), false);
   });
 }
 
-// T7.7：分享页登录入口带场景参数，登录页按场景采用昵称口径。
-test('the share page passes the share-view scene into the login page', () => {
+// 分享页仍保留 share-view 返回语义，但登录页不得再降级为仅昵称。
+test('the share page keeps its return scene without a nickname-only login exception', () => {
   for (const file of ['projectnoteview.js', 'projectnoteview.ts']) {
     const code = fs.readFileSync(path.join(root, 'miniprogram/pages/projectnoteview', file), 'utf8');
     assert.match(code, /\/pages\/login\/login\?from=share-view/, file);
   }
   for (const file of ['login.js', 'login.ts']) {
     const code = fs.readFileSync(path.join(root, 'miniprogram/pages/login', file), 'utf8');
-    assert.match(code, /_loginScene = .*share-view/, file + ' 必须记录分享场景');
-    assert.match(code, /nicknameOnly/, file + ' 登录成功补资料必须支持昵称模式');
-  }
-  for (const file of ['nickname-guard.js', 'nickname-guard.ts']) {
-    const code = fs.readFileSync(path.join(root, 'miniprogram/components/nickname-guard', file), 'utf8');
-    assert.match(code, /nicknameOnly/, file + ' 资料表单必须支持昵称模式');
+    assert.doesNotMatch(code, /hasProfileNickname|_loginScene/, file + ' 分享登录不得再放宽资料要求');
+    assert.match(code, /hasCompleteProfile/, file + ' 必须统一校验完整资料');
   }
 });
 
-// T7.7：组件内部重检必须复用分享场景，不能在保存昵称后回退成要求头像。
+test('the removed P8 nickname-only mode cannot be re-enabled by any profile gate caller', () => {
+  for (const relativePath of [
+    'miniprogram/components/login-guard/login-guard.ts',
+    'miniprogram/components/login-guard/login-guard.js',
+    'miniprogram/components/login-guard/login-guard.wxml',
+    'miniprogram/components/nickname-guard/nickname-guard.ts',
+    'miniprogram/components/nickname-guard/nickname-guard.js',
+    'miniprogram/components/nickname-guard/nickname-guard.wxml',
+    'miniprogram/pages/login/login.ts',
+    'miniprogram/pages/login/login.js',
+  ]) {
+    const source = fs.readFileSync(path.join(root, relativePath), 'utf8');
+    assert.doesNotMatch(source, /nicknameOnly/, relativePath);
+  }
+});
+
+// 补齐头像后的内部重检仍复用分享场景，但只有完整资料才放行。
 for (const ext of ['ts', 'js']) {
-  test(`${ext}: 分享场景在保存/重试后的内部重检中保持`, async () => {
-    const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: '' } });
-    assert.equal(await f.instance.check({ scope: 'share' }), true);
-    assert.equal(await f.instance.onProfileCompleted(), true, '保存昵称后的重检仍按分享场景放行');
-    assert.equal(await f.instance.onRetry(), true, '重试仍按分享场景放行');
-    assert.equal(f.events.filter(e => e.name === 'gated').length, 0, '不得再拦截');
+  test(`${ext}: 分享场景补齐头像后重检才放行`, async () => {
+    const profile = { id: 9, nickname: '林间访客', avatar: '' };
+    const f = load(ext, { token: 'tk', profile });
+    assert.equal(await f.instance.check({ scope: 'share' }), false);
+    profile.avatar = 'https://cdn.example/confirmed-avatar.jpg';
+    assert.equal(await f.instance.onProfileCompleted(), true, '头像和昵称完整后放行');
+    assert.equal(await f.instance.onRetry(), true, '重试仍校验完整资料');
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 2);
   });
 }
-
-// T7.7：昵称模式下界面不得再要求头像。
-test('nickname-only mode never asks for an avatar', () => {
-  const wxml = fs.readFileSync(path.join(root, 'miniprogram/components/login-guard/login-guard.wxml'), 'utf8');
-  assert.match(wxml, /nicknameOnly \? '补充昵称后继续' : '补充头像和昵称后继续'/, '标题按模式区分');
-  assert.match(wxml, /昵称不再要求头像|填好昵称即可/, '说明文案不得要求头像');
-});
-
-// 7-B 复评：昵称模式的表单与兜底提示都不得再要求头像。
-test('nickname-only mode removes the avatar requirement from the actual form', () => {
-  const wxml = fs.readFileSync(path.join(root, 'miniprogram/components/nickname-guard/nickname-guard.wxml'), 'utf8');
-  assert.match(wxml, /nicknameOnly \? '确认昵称' : '确认头像和昵称'/);
-  assert.match(wxml, /nicknameOnly \? '头像选填，可跳过'/);
-  const access = fs.readFileSync(path.join(root, 'miniprogram/utils/profile-access.js'), 'utf8');
-  assert.match(access, /shareProfile\(page\) \? '请先登录并补充昵称'/, '分享页兜底提示不得要求头像');
-});

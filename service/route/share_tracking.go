@@ -111,7 +111,6 @@ func miniprogramTrackingProfileAccess(ctx context.Context, load miniprogramProfi
 		return tracking.MiniprogramProfileAccess{}, &tracking.Error{Status: http.StatusServiceUnavailable, Message: "用户资料暂时无法核验，请重试"}
 	}
 	return tracking.MiniprogramProfileAccess{
-		Nickname: !miniprogramProfileNicknameMissing(profile),
 		Complete: len(miniprogramProfileMissingFields(profile)) == 0,
 	}, nil
 }

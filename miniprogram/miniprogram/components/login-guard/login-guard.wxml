@@ -38,8 +38,8 @@
     </view>
     <view class="lg-profile-card" hidden="{{!completingProfile}}">
       <view class="lg-profile-head">
-        <text class="lg-title">{{nicknameOnly ? '补充昵称后继续' : '补充头像和昵称后继续'}}</text>
-        <text class="lg-sub">{{nicknameOnly ? '账号仍在登录状态，填好昵称即可返回当前页面继续使用' : '账号仍在登录状态，完善资料即可返回当前页面继续使用'}}</text>
+        <text class="lg-title">补充头像和昵称后继续</text>
+        <text class="lg-sub">账号仍在登录状态，完善资料即可返回当前页面继续使用</text>
       </view>
       <view class="lg-later" catchtap="onDismiss" hover-class="lg-skip-active">
         <text>稍后补充，继续浏览</text>

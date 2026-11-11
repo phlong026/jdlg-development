@@ -161,22 +161,35 @@ func TestMiniprogramProfileGateAllowsOnlyAnonymousPublicBrowseAndTrackingTranspo
 	}
 }
 
-func TestMiniprogramProfileGateShareReadingRequiresNicknameButNotAvatar(t *testing.T) {
-	paths := []string{"/api/v1/miniprogram/project-notes/shared/note-token/media/media-id/playback"}
-	for _, path := range paths {
-		t.Run(path, func(t *testing.T) {
+func TestMiniprogramProfileGateShareReadingRequiresCompleteProfile(t *testing.T) {
+	requests := [][2]string{
+		{http.MethodGet, "/api/v1/miniprogram/project-notes/shared/note-token"},
+		{http.MethodGet, "/api/v1/miniprogram/project-notes/shared/note-token/media/media-id"},
+		{http.MethodPost, "/api/v1/miniprogram/project-notes/shared/note-token/feedback"},
+		{http.MethodPost, "/api/v1/miniprogram/project-notes/shared/note-token/confirm"},
+		{http.MethodPost, "/api/v1/miniprogram/project-notes/shared/note-token/open"},
+		{http.MethodPost, "/api/v1/miniprogram/project-notes/shared/note-token/media/media-id/playback"},
+	}
+	for _, request := range requests {
+		t.Run(request[0]+" "+request[1], func(t *testing.T) {
 			router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
 				return miniprogramProfile{Nickname: "用户"}, nil
 			})
-			if response := profileGateRequest(router, http.MethodPost, path, "valid"); response.Code != http.StatusOK {
-				t.Fatalf("nickname-only share = %d body=%s", response.Code, response.Body.String())
+			if response := profileGateRequest(router, request[0], request[1], "valid"); response.Code != http.StatusPreconditionRequired || !strings.Contains(response.Body.String(), `"missing_fields":["avatar"]`) {
+				t.Fatalf("missing avatar share = %d body=%s", response.Code, response.Body.String())
 			}
 			router = profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
 				return miniprogramProfile{Avatar: "https://cdn.example.com/avatar.png"}, nil
 			})
-			response := profileGateRequest(router, http.MethodPost, path, "valid")
+			response := profileGateRequest(router, request[0], request[1], "valid")
 			if response.Code != http.StatusPreconditionRequired || !strings.Contains(response.Body.String(), `"missing_fields":["nickname"]`) {
 				t.Fatalf("missing nickname = %d body=%s", response.Code, response.Body.String())
+			}
+			router = profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
+				return miniprogramProfile{Nickname: "用户", Avatar: "https://cdn.example.com/avatar.png"}, nil
+			})
+			if response = profileGateRequest(router, request[0], request[1], "valid"); response.Code != http.StatusOK {
+				t.Fatalf("complete share = %d body=%s", response.Code, response.Body.String())
 			}
 		})
 	}

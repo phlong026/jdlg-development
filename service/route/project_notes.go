@@ -86,19 +86,13 @@ func verifyActiveMiniProgramAccount(ctx context.Context, db *sql.DB, account int
 	return nil
 }
 
-func verifyProjectPlaybackActor(ctx context.Context, db *sql.DB, account int64, kind sharedVideoKind) error {
+func verifyProjectPlaybackActor(ctx context.Context, db *sql.DB, account int64, _ sharedVideoKind) error {
 	if err := verifyActiveMiniProgramAccount(ctx, db, account); err != nil {
 		return err
 	}
 	profile, err := miniprogramProfileLoaderFromModel(model.NewUserProfileModel(db))(ctx, account)
 	if err != nil {
 		return tracking.ErrUnavailable
-	}
-	if kind == sharedVideoNote {
-		if miniprogramProfileNicknameMissing(profile) {
-			return &tracking.Error{Status: http.StatusPreconditionRequired, Message: "请先补充昵称"}
-		}
-		return nil
 	}
 	if missing := miniprogramProfileMissingFields(profile); len(missing) > 0 {
 		return &tracking.Error{Status: http.StatusPreconditionRequired, Message: "请先补充头像和昵称"}

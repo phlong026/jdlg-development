@@ -6,7 +6,7 @@ import {
 } from '../../utils/deviceFingerprint';
 import { generateRequestParams, paramsToHeaders } from '../../utils/parameter';
 import { resolveAssetPath } from '../../utils/asset';
-import { hasCompleteProfile, hasProfileNickname } from '../../components/nickname-guard/profile-validation';
+import { hasCompleteProfile } from '../../components/nickname-guard/profile-validation';
 
 // API基础地址
 const API_BASE_URL = 'https://api.jiadilingguang.com'; // 根据实际情况修改
@@ -48,8 +48,6 @@ Page({
    */
   onLoad(options: any) {
     (this as any)._authPageUnloaded = false;
-    // 分享查看场景（projectnoteview 带 from=share-view）：只要求昵称，缺头像放行（P8）。
-    (this as any)._loginScene = String(options && options.from || '') === 'share-view' ? 'share' : '';
     (this as any)._authPageEpoch = ((this as any)._authPageEpoch || 0) + 1;
     this.initNavLayout();
 
@@ -433,11 +431,10 @@ Page({
     try {
       const { token, profile } = await this.fetchVerifiedProfile();
       if (!current()) return false;
-      const shareView = (this as any)._loginScene === 'share';
-      if (!(shareView ? hasProfileNickname(profile.nickname) : hasCompleteProfile(profile))) {
+      if (!hasCompleteProfile(profile)) {
         const guard = this.selectComponent('#nicknameGuard') as any;
         if (!guard || typeof guard.show !== 'function') throw new Error('资料填写暂不可用，请重试');
-        guard.show({ required: true, nicknameOnly: shareView, userID: Number(profile.id), nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
+        guard.show({ required: true, userID: Number(profile.id), nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
         this.setData({ completingProfile: true });
         return false;
       }

@@ -165,6 +165,17 @@ for (const extension of ['ts', 'js']) {
     assert.equal(fixture.requests.filter(r => r.method === 'GET').length, 2);
   });
 
+  test(`${extension}: share-view 登录返回同样要求头像和昵称`, async () => {
+    const fixture = loadLoginPage(extension, { profileAvatar: '' });
+    fixture.page.onLoad({ from: 'share-view' });
+    fixture.page.setData({ agreedPrivacy: true });
+    await fixture.page.handleWechatLogin();
+    assert.equal(fixture.guardShows(), 1);
+    assert.equal(fixture.guardOptions[0].required, true);
+    assert.equal(Object.hasOwn(fixture.guardOptions[0], 'nicknameOnly'), false);
+    assert.equal(fixture.navigation.length, 0);
+  });
+
   test(`${extension}: 从分享内容登录后，资料回读完整才返回原页面`, async () => {
     const fixture = loadLoginPage(extension, {
       profileAvatar: '',
