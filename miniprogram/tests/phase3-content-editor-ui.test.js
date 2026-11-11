@@ -498,7 +498,7 @@ test('editor and reader implement the selected warm-gold content studio hierarch
   assert.match(editorStyle, /#a87943/i);
   assert.match(editorStyle, /position:\s*sticky/);
 
-  assert.match(readerWxml, /class="reader-brand"/);
+  assert.doesNotMatch(readerWxml, /class="reader-brand"/, '阅读页不再展示品牌头');
   assert.match(readerWxml, /class="reader-actions[^"]*"/);
   assert.match(readerWxml, /open-type="share"/);
   assert.match(readerWxml, /bindtap="copyWebLink"/);

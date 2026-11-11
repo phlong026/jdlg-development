@@ -71,10 +71,10 @@ test('reader share metadata stays inside native share boundaries and video copy 
  assert.match(template,/wx:if="\{\{presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
 });
 
-test('reader privacy choice is explicit after content and resolved users only see a compact settings entry',()=>{
+test('reader privacy choice stays explicit after content and moves settings to the settings page',()=>{
  const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
  assert.match(template,/wx:if="\{\{consentAvailable && consentChoicePending\}\}" class="notice"/);
- assert.match(template,/wx:elif="\{\{consentAvailable && presentationView.kind !== 'video'\}\}" class="consent-settings"/);
+ assert.doesNotMatch(template,/class="consent-settings"/,'访问分析入口已移出阅读页，统一走设置页');
  assert.ok(template.indexOf('class="article-paper"') < template.indexOf('class="notice"'), 'first consent choice belongs after readable content');
 });
 

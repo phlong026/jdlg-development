@@ -5,7 +5,6 @@
   <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">登录后仅项目成员可查看，内容不会公开。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
   <block wx:elif="{{view}}">
-    <view class="brand"><view class="brand-mark">甲</view><view><text class="brand-name">甲第灵光</text><text class="muted">私人项目协作</text></view><text class="private-label">受邀可见</text></view>
     <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本 · 转发不增加查看权限</text></view></view>
     <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true}}" /></view>
     <view class="card">
