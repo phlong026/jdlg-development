@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,67 @@ import (
 	"service/model"
 	"service/tracking"
 )
+
+// 短时签名媒体地址：小程序原生 video 组件带不了鉴权头，用签名查询参数换取
+// 原生播放器的 Range 流式播放能力；默认 10 分钟过期。
+const trackingMediaSignTTL = 10 * time.Minute
+
+func trackingMediaSignKey() []byte {
+	if value := strings.TrimSpace(os.Getenv("TRACKING_MEDIA_SIGN_KEY")); value != "" {
+		return []byte(value)
+	}
+	seed := "content-media-sign:" + os.Getenv("TRACKING_TENANT") + ":" + os.Getenv("TRACKING_DEFAULT_OWNER")
+	sum := sha256.Sum256([]byte(seed))
+	return sum[:]
+}
+
+func trackingMediaSignature(id string, expires int64) string {
+	mac := hmac.New(sha256.New, trackingMediaSignKey())
+	mac.Write([]byte(id))
+	mac.Write([]byte("\n"))
+	mac.Write([]byte(strconv.FormatInt(expires, 10)))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func trackingMediaSignatureValid(id, expiresRaw, signature string) bool {
+	expires, err := strconv.ParseInt(expiresRaw, 10, 64)
+	if err != nil || expires < time.Now().Unix() || signature == "" {
+		return false
+	}
+	return hmac.Equal([]byte(signature), []byte(trackingMediaSignature(id, expires)))
+}
+
+func trackingMediaSignedPath(id string, expires int64) string {
+	return "/api/v1/miniprogram/tracking/media/" + id + "?exp=" + strconv.FormatInt(expires, 10) + "&sig=" + trackingMediaSignature(id, expires)
+}
+
+func validTrackingMediaID(id string) bool {
+	return len(id) == 32 && !strings.ContainsAny(id, "/\\.")
+}
+
+func registerTrackingSignedMediaRoute(pub *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
+	pub.POST("/media/:id/signed", TokenAuthRequired(codes), MiniprogramBannedBlock(users), func(c *gin.Context) {
+		id := c.Param("id")
+		if !validTrackingMediaID(id) {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusNotFound, Message: "媒体不可访问"})
+			return
+		}
+		asset, err := svc.Media(c.Request.Context(), nil, id)
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		if !svc.Config.VideoEnabled {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "内容视频暂未开通"})
+			return
+		}
+		if err = requireSharedVideo(asset); err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		sharedVideoPlaybackResponse(c, sharedVideoPlaybackGrant{Kind: sharedVideoPublished, Actor: GetTokenUserID(c), AssetID: asset.ID})
+	})
+}
 
 func trackingResponse(c *gin.Context, v any, e error) {
 	if e != nil {
@@ -36,6 +98,33 @@ func trackingResponse(c *gin.Context, v any, e error) {
 	}
 	c.JSON(200, gin.H{"code": 0, "data": v})
 }
+
+func miniprogramTrackingProfileAccess(ctx context.Context, load miniprogramProfileLoader, account int64, route string) (tracking.MiniprogramProfileAccess, error) {
+	if account <= 0 || route != "" && tracking.MiniprogramPublicRoute(route) {
+		return tracking.MiniprogramProfileAccess{}, nil
+	}
+	profileCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	profile, err := load(profileCtx, account)
+	if err != nil {
+		log.Printf("[tracking] error reason=profile_read_failed error_type=%T", err)
+		return tracking.MiniprogramProfileAccess{}, &tracking.Error{Status: http.StatusServiceUnavailable, Message: "用户资料暂时无法核验，请重试"}
+	}
+	return tracking.MiniprogramProfileAccess{
+		Complete: len(miniprogramProfileMissingFields(profile)) == 0,
+	}, nil
+}
+
+func miniprogramOptionalAuth(codes *model.CodeSessionRedisModel) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetHeader("token") == "" {
+			c.Next()
+			return
+		}
+		TokenAuthRequired(codes)(c)
+	}
+}
+
 func trackingBind(c *gin.Context, v any) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 65536)
 	d := json.NewDecoder(c.Request.Body)
@@ -180,7 +269,7 @@ func readActiveTrackingManagementAccess(ctx context.Context, db *sql.DB, actor i
 	return access, err
 }
 func trackingFilter(c *gin.Context) (tracking.Filter, error) {
-	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor"), Channel: c.Query("channel"), Group: c.Query("group")}
+	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor"), Channel: c.Query("channel"), Group: c.Query("group"), CreatedWindow: c.Query("created_window") == "1"}
 	for name, target := range map[string]*time.Time{"start": &f.Start, "end": &f.End, "as_of": &f.AsOf} {
 		if raw := c.Query(name); raw != "" {
 			t, e := time.Parse(time.RFC3339Nano, raw)
@@ -294,6 +383,7 @@ func trackingPrivateMutationScope(c *gin.Context, scope tracking.Scope) (trackin
 }
 func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *model.CodeSessionRedisModel, customerServiceModel *model.CustomerServiceModel) *tracking.Service {
 	cfg := tracking.LoadConfig()
+	profileLoader := miniprogramProfileLoaderFromModel(model.NewUserProfileModel(users.DB))
 	if warning := trackingProxyPolicyWarning(cfg.Enabled, os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS")); warning != "" {
 		log.Printf("[Tracking] %s", warning)
 	}
@@ -701,6 +791,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	registerPublicProjectCollectionHandlers(pub, svc)
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	registerTrackingMyRoutes(pub, svc, users, codes)
+	registerTrackingMyLeadRoute(pub, svc, customerServiceModel, users, codes)
 	pub.POST("/share-entry", func(c *gin.Context) {
 		var in struct {
 			Scene string `json:"scene"`
@@ -720,7 +811,16 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
 		trackingResponse(c, v, e)
 	})
+	registerTrackingSignedMediaRoute(pub, svc, users, codes)
 	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
+		if expiresRaw := c.Query("exp"); expiresRaw != "" {
+			if !trackingMediaSignatureValid(c.Param("id"), expiresRaw, c.Query("sig")) {
+				trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "媒体签名无效或已过期"})
+				return
+			}
+			serveTrackingMedia(c, svc, nil)
+			return
+		}
 		scope, e := loadTrackingScope(c, users.DB, cfg.Tenant, cfg.DefaultOwner)
 		var selected *tracking.Scope
 		if e == nil {
@@ -731,7 +831,8 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		}
 		serveTrackingMedia(c, svc, selected)
 	})
-	pub.POST("/events/batch", func(c *gin.Context) {
+	optionalAuth := miniprogramOptionalAuth(codes)
+	pub.POST("/events/batch", optionalAuth, func(c *gin.Context) {
 		var in struct {
 			Batch  string           `json:"batch_id"`
 			Events []tracking.Event `json:"events"`
@@ -739,22 +840,27 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		results, e := svc.AcceptForAccount(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events, GetTokenUserID(c))
-		trackingResponse(c, gin.H{"results": results, "metric_version": tracking.MetricVersion}, e)
-	})
-	optionalAuth := func(c *gin.Context) {
-		if c.GetHeader("token") == "" {
-			c.Next()
+		account := GetTokenUserID(c)
+		access, e := miniprogramTrackingProfileAccess(c.Request.Context(), profileLoader, account, "")
+		if e != nil {
+			trackingResponse(c, nil, e)
 			return
 		}
-		TokenAuthRequired(codes)(c)
-	}
+		results, e := svc.AcceptMiniprogram(c.Request.Context(), c.GetHeader("X-Tracking-Token"), in.Events, account, access)
+		trackingResponse(c, gin.H{"results": results, "metric_version": tracking.MetricVersion}, e)
+	})
 	pub.POST("/entry", trackingEntryRateLimit(), optionalAuth, MiniprogramBannedBlock(users), func(c *gin.Context) {
 		var in tracking.EntryInput
 		if !trackingBind(c, &in) {
 			return
 		}
-		v, e := svc.Enter(c.Request.Context(), in, GetTokenUserID(c))
+		account := GetTokenUserID(c)
+		access, e := miniprogramTrackingProfileAccess(c.Request.Context(), profileLoader, account, in.Route)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.EnterMiniprogram(c.Request.Context(), in, account, access)
 		trackingResponse(c, v, e)
 	})
 	pub.POST("/shares", trackingEntryRateLimit(), optionalAuth, func(c *gin.Context) {
@@ -762,7 +868,13 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		if !trackingBind(c, &in) {
 			return
 		}
-		v, e := svc.CreateShare(c.Request.Context(), in, c.GetHeader("X-Tracking-Token"), GetTokenUserID(c))
+		account := GetTokenUserID(c)
+		access, e := miniprogramTrackingProfileAccess(c.Request.Context(), profileLoader, account, in.Route)
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e := svc.CreateMiniprogramShare(c.Request.Context(), in, c.GetHeader("X-Tracking-Token"), account, access)
 		trackingResponse(c, v, e)
 	})
 	return svc

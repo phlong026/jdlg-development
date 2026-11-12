@@ -3,10 +3,20 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const asset_1 = require("../../utils/asset");
 const perf_1 = require("../../utils/perf");
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 const TEMPLATE_CARD_COLUMN_WIDTH_RPX = 347;
 const DEFAULT_CARD_MEDIA_HEIGHT_RPX = 320;
 const TEMPLATE_FETCH_BATCH_SIZE = 500;
+function hasRegisteredSession() {
+    if (typeof wx.getStorageSync !== 'function')
+        return false;
+    const token = String(wx.getStorageSync('token') || '');
+    if (!token)
+        return false;
+    const profile = wx.getStorageSync('userInfo') || {};
+    return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000;
 const detailPrefetchingKeys = new Set();
 const AI_TOOLS_MAIN_TAB = { label: '工具', value: 'ai_tools' };
@@ -425,7 +435,7 @@ function splitWaterfallColumns(cards) {
 }
 function getNavLayout() {
     try {
-        const systemInfo = wx.getSystemInfoSync();
+        const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
         const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function' ? wx.getMenuButtonBoundingClientRect() : null;
         const safeTop = Number(systemInfo.statusBarHeight || systemInfo.safeArea?.top || 0);
         if (menuRect) {
@@ -458,51 +468,6 @@ function buildTemplateCacheKey(mainTabValue, subTabValue, thirdTabValue, keyword
 function buildDetailCacheKey(targetType, id) {
     return `${targetType}-detail:${Number(id || 0)}`;
 }
-function parseTemplateImages(value) {
-    const rawValue = typeof value === 'string' ? value.trim() : '';
-    if (!rawValue) {
-        return [];
-    }
-    try {
-        const parsed = JSON.parse(rawValue);
-        if (!Array.isArray(parsed)) {
-            return [];
-        }
-        const urls = [];
-        parsed.forEach((item) => {
-            if (typeof item === 'string' && item.trim()) {
-                urls.push(item.trim());
-                return;
-            }
-            if (item && typeof item === 'object') {
-                const imageUrl = String(item.image || item.url || item.preview_url || '').trim();
-                if (imageUrl) {
-                    urls.push(imageUrl);
-                }
-            }
-        });
-        return urls;
-    }
-    catch (error) {
-        return [];
-    }
-}
-function getTemplatePrefetchImageCandidates(payload, fallbackImage = '') {
-    return [
-        String(payload?.preview_url || '').trim(),
-        String(payload?.thumbnail || '').trim(),
-        ...parseTemplateImages(payload?.images),
-        String(fallbackImage || '').trim(),
-    ].filter((item, index, list) => Boolean(item) && list.indexOf(item) === index);
-}
-function getInspirationPrefetchImageCandidates(payload, fallbackImage = '') {
-    const images = Array.isArray(payload?.images) ? payload.images : [];
-    return [
-        String(payload?.cover_image || '').trim(),
-        ...images.map((item) => String(item || '').trim()),
-        String(fallbackImage || '').trim(),
-    ].filter((item, index, list) => Boolean(item) && list.indexOf(item) === index);
-}
 Page({
     templateFirstPageCache: {},
     requestSerial: 0,
@@ -529,7 +494,8 @@ Page({
         leftColumnCards: [],
         rightColumnCards: [],
         skeletonCards: [0, 1, 2, 3],
-        loading: false,
+        loading: true,
+        initialLoadPending: true,
         page: 1,
         pageSize: 12,
         hasMore: true,
@@ -547,6 +513,30 @@ Page({
     },
     onShow() {
         this.syncTabBar();
+        this.consumeDesignerEntry();
+    },
+    consumeDesignerEntry() {
+        const app = getApp();
+        const entry = app.globalData?.designerTemplateEntry;
+        if (!entry || this.data.loading || !this.data.mainTabs.length)
+            return false;
+        delete app.globalData.designerTemplateEntry;
+        const index = this.data.mainTabs.findIndex(tab => tab.value === entry);
+        if (index < 0) {
+            wx.showToast({ title: '该专题暂未配置', icon: 'none' });
+            return false;
+        }
+        const tab = this.data.mainTabs[index];
+        const subTabs = getSubTabsByMainTab(tab.value, this.data.allSubTabs || []);
+        const preferred = entry === 'inspiration' ? subTabs.findIndex(tab => tab.value === 'selected_cases') : 0;
+        const subIndex = preferred < 0 ? 0 : preferred;
+        const subTab = subTabs[subIndex];
+        const thirdTabs = getThirdTabsBySubTab(subTab?.value || '', this.data.allThirdTabs || []);
+        this.setData({ currentMainTabIndex: index, subTabs, currentSubTabIndex: subIndex,
+            thirdTabs, currentThirdTabIndex: thirdTabs.length ? 0 : -1,
+            searchKeyword: '', searchInputValue: '', page: 1, hasMore: true });
+        void this.loadTemplates(true);
+        return true;
     },
     onReachBottom() {
         if (this.data.hasMore && !this.data.loading) {
@@ -610,7 +600,9 @@ Page({
                 const nextCards = this.applyKnownImageSizes(this.data.displayCards || []);
                 const changed = nextCards.some((item, index) => Number(item.mediaHeightRpx || 0) !== Number(this.data.displayCards?.[index]?.mediaHeightRpx || 0));
                 if (changed) {
-                    const { leftColumnCards, rightColumnCards } = splitWaterfallColumns(nextCards);
+                    const byKey = new Map(nextCards.map((item) => [item.cardKey, item]));
+                    const leftColumnCards = this.data.leftColumnCards.map((item) => byKey.get(item.cardKey) || item);
+                    const rightColumnCards = this.data.rightColumnCards.map((item) => byKey.get(item.cardKey) || item);
                     this.setData({
                         displayCards: nextCards,
                         leftColumnCards,
@@ -624,6 +616,9 @@ Page({
         });
     },
     prefetchCardDetail(card) {
+        if (!hasRegisteredSession()) {
+            return;
+        }
         if (!card || !Number(card.id) || (card.targetType !== 'template' && card.targetType !== 'inspiration')) {
             return;
         }
@@ -644,10 +639,6 @@ Page({
                     return;
                 }
                 (0, perf_1.setPageCache)(cacheKey, response.data, TEMPLATE_DETAIL_CACHE_TTL);
-                const imageCandidates = targetType === 'template'
-                    ? getTemplatePrefetchImageCandidates(response.data, card.image)
-                    : getInspirationPrefetchImageCandidates(response.data, card.image);
-                void (0, perf_1.prefetchImages)(imageCandidates, 2);
             },
             complete: () => {
                 detailPrefetchingKeys.delete(cacheKey);
@@ -676,6 +667,7 @@ Page({
                 currentMainTabIndex: -1,
                 currentSubTabIndex: -1,
                 currentThirdTabIndex: -1,
+                loading: false,
                 hasMore: false,
                 resultSummaryText: '模板广场分类配置不可用',
                 emptyTipText: '请先在管理端配置一级、二级、三级标签',
@@ -700,9 +692,13 @@ Page({
             resultSummaryText: buildSummaryText(firstMain?.label || '模板广场', firstSub?.label || firstMain?.label || '模板广场', ''),
             emptyTipText: buildEmptyTip(firstMain?.label || '模板广场', firstSub?.label || ''),
         });
-        await this.loadTemplates(true);
+        this.setData({ loading: false });
+        if (!this.consumeDesignerEntry())
+            await this.loadTemplates(true);
     },
     async onMainTabTap(e) {
+        if (this.data.loading)
+            return;
         const index = Number(e.currentTarget.dataset.index);
         const tab = this.data.mainTabs[index];
         if (Number.isNaN(index) || index === this.data.currentMainTabIndex || !tab) {
@@ -741,6 +737,8 @@ Page({
         this.loadTemplates(true);
     },
     async onSubTabTap(e) {
+        if (this.data.loading)
+            return;
         const index = Number(e.currentTarget.dataset.index);
         const subTab = this.data.subTabs[index];
         const currentMainTab = this.getCurrentMainTab();
@@ -760,6 +758,8 @@ Page({
         this.loadTemplates(true);
     },
     async onThirdTabTap(e) {
+        if (this.data.loading)
+            return;
         const index = Number(e.currentTarget.dataset.index);
         const thirdTab = this.data.thirdTabs[index];
         if (Number.isNaN(index) || index === this.data.currentThirdTabIndex || !thirdTab) {
@@ -789,6 +789,8 @@ Page({
         });
     },
     onSearchConfirm() {
+        if (this.data.loading)
+            return;
         const keyword = String(this.data.searchInputValue || '').trim();
         const currentMainTab = this.getCurrentMainTab();
         if (!currentMainTab) {
@@ -814,6 +816,8 @@ Page({
         this.loadTemplates(true);
     },
     onSearchClear() {
+        if (this.data.loading)
+            return;
         const currentMainTab = this.getCurrentMainTab();
         if (!currentMainTab) {
             return;
@@ -834,7 +838,7 @@ Page({
         this.loadTemplates(true);
     },
     async loadTemplates(reset) {
-        if (this.data.loading) {
+        if (this.data.loading && !this.data.initialLoadPending) {
             return;
         }
         const currentMainTab = this.getCurrentMainTab();
@@ -865,6 +869,7 @@ Page({
         }
         this.setData({
             loading: true,
+            initialLoadPending: false,
             contentReady: false,
             resultSummaryText: buildSummaryText(currentMainLabel, currentThirdLabel || currentSubLabel, keyword),
             emptyTipText: keyword ? buildSearchEmptyTip(currentMainLabel, keyword) : buildEmptyTip(currentMainLabel, currentSubLabel),

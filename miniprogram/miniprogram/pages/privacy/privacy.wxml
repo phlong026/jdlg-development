@@ -20,6 +20,21 @@
         </view>
       </view>
 
+      <view class="policy-card analytics-card" wx:if="{{policyType === 'privacy'}}">
+        <view class="analytics-copy">
+          <text class="section-title">访问分析设置</text>
+          <text class="analytics-desc">默认开启。登录后，符合关联条件的访问可能关联账号，授权的内容分享方及运营人员可用于内容效果分析和意向判断。关闭不影响公开浏览、播放和普通分享。</text>
+          <text class="analytics-unavailable" wx:if="{{!trackingAvailable}}">访问分析设置暂不可用，本次不会记录。</text>
+        </view>
+        <switch
+          class="analytics-switch"
+          checked="{{trackingEnabled}}"
+          disabled="{{!trackingAvailable}}"
+          color="#a9855b"
+          bindchange="onToggleTracking"
+        />
+      </view>
+
       <view class="policy-card contact-card">
         <text class="section-title">{{contactSectionTitle}}</text>
         <view class="contact-item" wx:for="{{contactItems}}" wx:key="label">

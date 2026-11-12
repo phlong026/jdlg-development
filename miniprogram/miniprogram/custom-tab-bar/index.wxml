@@ -1,11 +1,11 @@
 <view class="tabbar-shell">
   <view class="tabbar">
-    <image
-      class="tabbar-background"
-      src="{{current == 0 ? homeTabbarImage : current == 1 ? templateTabbarImage : current == 2 ? designerTabbarImage : current == 3 ? myTabbarImage : defaultTabbarImage}}"
-      mode="scaleToFill"
-    />
+    <image class="tabbar-background {{current == 0 ? 'tabbar-background--active' : ''}}" src="{{homeTabbarImage}}" mode="scaleToFill" />
+    <image class="tabbar-background {{current == 1 ? 'tabbar-background--active' : ''}}" src="{{templateTabbarImage}}" mode="scaleToFill" />
+    <image class="tabbar-background {{current == 2 ? 'tabbar-background--active' : ''}}" src="{{designerTabbarImage}}" mode="scaleToFill" />
+    <image class="tabbar-background {{current == 3 ? 'tabbar-background--active' : ''}}" src="{{myTabbarImage}}" mode="scaleToFill" />
 
+    <view class="designer-tab-label">找设计师</view>
     <view class="tabbar-hitbox-layer">
       <view
         class="tabbar-hitbox"

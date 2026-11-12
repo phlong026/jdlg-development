@@ -15,6 +15,8 @@ import {
   resolveEnterpriseWechatServiceConfig,
   tryOpenCustomerServiceDirect,
 } from '../../utils/enterpriseWechat'
+const { request: requestPhase3 } = require('../../utils/phase3-api')
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation')
 
 const API_BASE_URL = 'https://api.jiadilingguang.com'
 const HOME_SHARE_TITLE = '甲第灵光 · AI建房助手\n建别墅从这里开始'
@@ -23,6 +25,28 @@ const HOME_TIMELINE_COVER = resolveAssetPath('/assets/share/home-timeline-v2.jpg
 const HOME_INTRO_POPUP_STORAGE_KEY = 'homeIntroPopupSeen:v2'
 const TEMPLATE_DETAIL_CACHE_TTL = 2 * 60 * 1000
 const featuredDetailPrefetching = new Set<number>()
+const dismissedUnreadBannerTokens = new Set<string>()
+
+function hasRegisteredSession() {
+  if (typeof wx.getStorageSync !== 'function') return false
+  const token = String(wx.getStorageSync('token') || '')
+  if (!token) return false
+  const profile = wx.getStorageSync('userInfo') || {}
+  return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile)
+}
+
+function unreadBannerTop() {
+  try {
+    const system = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync())
+    const statusBarHeight = Number(system.statusBarHeight || system.safeArea?.top || 0)
+    const menu = typeof wx.getMenuButtonBoundingClientRect === 'function'
+      ? wx.getMenuButtonBoundingClientRect()
+      : null
+    return Math.ceil(menu && menu.bottom > 0 ? menu.bottom + 8 : statusBarHeight + 52)
+  } catch (_) {
+    return 72
+  }
+}
 
 function buildPublicTemplateDetailCacheKey(templateId: number) {
   return `template-detail:public:${Number(templateId || 0)}`
@@ -45,6 +69,7 @@ Page({
     homeTimelineCover: '',
     unreadCount: 0,
     unreadBannerVisible: false,
+    unreadBannerTop: 72,
     contentReady: false,
     featuredGroupsLoading: false,
     lastFeaturedGroupsFetchTime: 0,
@@ -90,49 +115,80 @@ Page({
     // Discard only the old intent; a later login may create a new report return.
     if (options.from === 'share') discardReportLoginReturn();
     this.shareCoversPromise = this.prepareHomeShareCovers();
-    this.showHomeIntroPopupOnce();
+    // 首屏先展示功能；资料登记由用户进入需要身份的页面时触发。
+    this.initializeUnreadBannerLayout();
   },
   onShow() {
     if (resumeReportAfterLogin()) return;
     this.syncTabBar();
     this.loadFeaturedGroups();
+    this._unreadBannerPageVisible = true;
     if (typeof this.checkUnreadNotifications === 'function') this.checkUnreadNotifications();
-    void this.promptNicknameIfMissing();
   },
-  // APP 式消息弹窗：打开小程序时检查未读通知，有则显示顶部横幅
+  initializeUnreadBannerLayout() {
+    this.setData({ unreadBannerTop: unreadBannerTop() });
+  },
+  // 关闭只抑制当前运行期的横幅，消息仍保持未读。
   async checkUnreadNotifications() {
-    const token = wx.getStorageSync('token');
-    if (!token) return;
+    const epoch = (this._unreadRequestEpoch || 0) + 1;
+    this._unreadRequestEpoch = epoch;
+    const token = String(wx.getStorageSync('token') || '');
+    if (token !== this._unreadBannerToken) {
+      this._unreadBannerToken = token;
+      this.setData({ unreadCount: 0, unreadBannerVisible: false });
+    }
+    if (!token) {
+      return;
+    }
     try {
-      const result = await new Promise((resolve, reject) => {
-        wx.request({
-          url: 'https://api.jiadilingguang.com/api/v1/miniprogram/notifications/unread-count',
-          method: 'GET',
-          header: { token },
-          success: (res: any) => {
-            if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.code === 0) {
-              resolve(res.data.data);
-            } else { reject(new Error('failed')); }
-          },
-          fail: reject,
-        });
-      });
+      const result = await requestPhase3('/api/v1/miniprogram/notifications/unread-count');
+      if (epoch !== this._unreadRequestEpoch
+        || this._unreadBannerPageVisible === false
+        || token !== String(wx.getStorageSync('token') || '')) return;
       const count = Number((result as any).unread_count || 0);
-      if (count > 0) {
-        this.setData({ unreadCount: count, unreadBannerVisible: true });
-      } else {
-        this.setData({ unreadCount: 0, unreadBannerVisible: false });
+      this.setData({
+        unreadCount: count,
+        unreadBannerVisible: count > 0 && !dismissedUnreadBannerTokens.has(token),
+      });
+    } catch (error) {
+      if (epoch === this._unreadRequestEpoch && token === String(wx.getStorageSync('token') || '')) {
+        console.warn('读取未读消息失败', error);
       }
-    } catch (_) {
-      // 消息服务不可用不阻塞首页
     }
   },
   dismissUnreadBanner() {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token) dismissedUnreadBannerTokens.add(token);
+    this._unreadRequestEpoch = (this._unreadRequestEpoch || 0) + 1;
     this.setData({ unreadBannerVisible: false });
   },
   goToMessageCenter() {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token) dismissedUnreadBannerTokens.add(token);
+    this._unreadRequestEpoch = (this._unreadRequestEpoch || 0) + 1;
+    const navigationEpoch = this._unreadRequestEpoch;
     this.setData({ unreadBannerVisible: false });
-    wx.navigateTo({ url: '/pages/messagecenter/messagecenter' });
+    wx.navigateTo({
+      url: '/pages/messagecenter/messagecenter',
+      fail: () => {
+        if (navigationEpoch !== this._unreadRequestEpoch
+          || this._unreadBannerPageVisible === false
+          || token !== String(wx.getStorageSync('token') || '')) return;
+        if (token) dismissedUnreadBannerTokens.delete(token);
+        if (token === String(wx.getStorageSync('token') || '') && this.data.unreadCount > 0) {
+          this.setData({ unreadBannerVisible: true });
+        }
+        wx.showToast({ title: '消息中心打开失败，请重试', icon: 'none' });
+      },
+    });
+  },
+  onHide() {
+    this._unreadBannerPageVisible = false;
+    this._unreadRequestEpoch = (this._unreadRequestEpoch || 0) + 1;
+  },
+  onUnload() {
+    this._unreadBannerPageVisible = false;
+    this._unreadRequestEpoch = (this._unreadRequestEpoch || 0) + 1;
   },
   // 已登录但昵称为空时强制完善资料（登录即完善，新老用户一致）；首页引导弹窗显示期间不叠加，等下次进入首页再检查。
   async promptNicknameIfMissing() {
@@ -273,7 +329,7 @@ Page({
     this.rememberHomeIntroPopupSeen();
     this.setData({
       homeIntroPopupVisible: false,
-    }, () => { void this.promptNicknameIfMissing(); });
+    });
   },
   onHomeIntroTopup() {
     this.closeHomeIntroPopup();
@@ -371,6 +427,9 @@ Page({
     });
 
     void prefetchImages(uniqueCases.map((item) => normalizeCosUrl(item.thumbnail || item.preview_url || '')), 2);
+    if (!hasRegisteredSession()) {
+      return;
+    }
     uniqueCases.slice(0, 2).forEach((item) => {
       const templateId = Number(item?.id || 0);
       const cacheKey = buildPublicTemplateDetailCacheKey(templateId);
@@ -386,7 +445,6 @@ Page({
           const body = response?.data || {};
           if (response?.statusCode === 200 && body.code === 0 && body.data) {
             setPageCache(cacheKey, body.data, TEMPLATE_DETAIL_CACHE_TTL);
-            void prefetchImages([normalizeCosUrl(body.data.preview_url || ''), normalizeCosUrl(body.data.thumbnail || '')], 2);
           }
         },
         complete: () => {

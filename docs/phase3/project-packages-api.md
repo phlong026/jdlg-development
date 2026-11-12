@@ -76,6 +76,7 @@
 | GET | `/api/v1/miniprogram/project-packages/shared/:token` | `ProjectPackageRead` |
 | GET | `/api/v1/miniprogram/project-packages/shared/:token/versions/:version_id` | `ProjectPackageReadVersion` |
 | GET | `/api/v1/miniprogram/project-packages/shared/:token/versions/:version_id/media/:media_id` | `ProjectPackageReadVersionMedia` |
+| POST | `/api/v1/miniprogram/project-packages/shared/:token/versions/:version_id/media/:media_id/playback` | 返回 `{url, expires_at}` 短时视频播放地址，逐请求复核固定版本权限 |
 | POST | `/api/v1/miniprogram/project-packages/shared/:token/versions/:version_id/feedback` | `ProjectPackageAddFeedback` |
 | POST | `/api/v1/miniprogram/project-packages/shared/:token/versions/:version_id/confirm` | `ProjectPackageConfirmVersion` |
 | POST | `/api/v1/miniprogram/project-packages/shared/:token/receipts` | `ProjectPackageAcknowledge` |
@@ -89,3 +90,5 @@
 - `tracking_records` 为通用记录表，新增记录类型无需新增表。回退程序保留记录，不删除业务数据。
 - 独立 PDF/Word 文件组合尚未实现。页面只展示方案及其固定媒体，不把资料库文件假装成已授权项目附件。
 - 服务器启用、小程序上传和真机验收仍需分别记录。
+
+分享资料接收页与单篇项目笔记均要求昵称与头像登记完整。视频地址契约、10分钟票据生命周期和 Range 行为与 [单篇项目笔记](private-project-notes.md) 一致。只允许当前交付清单内的精确版本和 MP4 素材，不把组合令牌或账号长期凭据放入播放器 URL。

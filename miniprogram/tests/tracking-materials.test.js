@@ -43,21 +43,39 @@ test('My template provides visible title cover status empty/error/retry without 
 
 test('reader native share uses the published target, title and cover, with menus blocked on initial load and read failure',async()=>{
  let definition,resolveRead,rejectRead;const hidden=[],shown=[];
- const wx={hideShareMenu:()=>hidden.push(true),showShareMenu:x=>shown.push(x),getWindowInfo:()=>({windowWidth:375})};
+ const wx={getStorageSync:()=>'',hideShareMenu:()=>hidden.push(true),showShareMenu:x=>shown.push(x),getWindowInfo:()=>({windowWidth:375})};
  const api={resolveReaderOptions:async x=>x,mediaURL:x=>'https://api.jiadilingguang.com'+x,request:()=>new Promise((resolve,reject)=>{resolveRead=resolve;rejectRead=reject;})};
  const protectedMedia={resolveProtectedMediaURL:async url=>'wxfile://tmp/'+url.split('/').at(-1)};
  const articleDocument=require('../miniprogram/utils/article-document');
+ const contentPresentation=require('../miniprogram/utils/content-presentation');
  const preheats=[];const tracking={captureEntryValidity:()=>()=>true,resolvePageOptions(){},refreshConfig:async()=>({enabled:false}),consented:()=>false,block(){},preheatTimelineShare(page,value){preheats.push(value);}};
- vm.runInNewContext(fs.readFileSync(path.join(root,route+'.js'),'utf8'),{Page:x=>definition=x,wx,exports:{},require:name=>name.endsWith('/tracking/index')?tracking:name.endsWith('/tracking/api')?api:name.endsWith('/protected-media')?protectedMedia:name.endsWith('/article-document')?articleDocument:{},Promise,Date});
+ vm.runInNewContext(fs.readFileSync(path.join(root,route+'.js'),'utf8'),{Page:x=>definition=x,wx,exports:{},require:name=>name.endsWith('/tracking/index')?tracking:name.endsWith('/tracking/api')?api:name.endsWith('/protected-media')?protectedMedia:name.endsWith('/content-presentation')?contentPresentation:name.endsWith('/article-document')?articleDocument:{},Promise,Date});
  const page={...definition,data:JSON.parse(JSON.stringify(definition.data)),setData(v,callback){Object.assign(this.data,v);if(callback)callback();}};
  page.onLoad({content_id:material.content_id,content_version:2});page.onShow();await settle();assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(hidden.length,1);
  resolveRead({content_id:material.content_id,version:2,title:material.title,body_format:'article_v2',body:JSON.stringify({schema:1,blocks:[{kind:'image',media_id:'image_one'}]}),cover:material.cover,media:[{media_id:'image_one',kind:'image',url:material.cover.url}]});await settle();
- const share=page.onShareAppMessage();assert.equal(share.title,material.title);assert.equal(share.path,'/'+route+'?content_id=material_one&content_version=2');assert.equal(share.imageUrl,'wxfile://tmp/image_one');assert.equal(page.data.media[0].url,'wxfile://tmp/image_one');assert.equal(page.data.articleBlocks[0].url,'wxfile://tmp/image_one');assert.equal(shown.length,1);
+ const share=page.onShareAppMessage();assert.equal(share.title,material.title);assert.equal(share.path,'/'+route+'?content_id=material_one&content_version=2');assert.equal(share.imageUrl,'wxfile://tmp/image_one');assert.equal(page.data.media[0].url,'wxfile://tmp/image_one');assert.equal(page.data.presentationView.media[0].url,'wxfile://tmp/image_one');assert.equal(shown.length,1);
  assert.equal(page.onShareTimeline().query,'content_id=material_one&content_version=2');
  assert.equal(preheats.length,1);const successShare=page.onShareTimeline();assert.deepEqual(preheats[0],successShare);
- page.loadContent();await settle();rejectRead(new Error('revoked'));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');
+ page.loadContent();await settle();rejectRead(Object.assign(new Error('revoked'),{statusCode:410}));await settle();assert.equal(page.data.contentReady,false);assert.equal(page.data.content,null);assert.equal(Object.keys(page.onShareAppMessage()).length,0);assert.equal(Object.keys(page.onShareTimeline()).length,0);assert.equal(hidden.length,2);assert.equal(preheats.length,1,'failed reload must not preheat');
  // 预热缓存键一致性：预热收到的对象必须与 onShareTimeline 返回值完全一致，否则首次分享拿不到缓存令牌
  assert.deepEqual(preheats[0],successShare);
+});
+
+test('reader share metadata stays inside native share boundaries and video copy has a separate clipboard action',()=>{
+ const source=fs.readFileSync(path.join(root,route+'.js'),'utf8');
+ const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
+ assert.match(source,/copyVideoCopy\(\)/);
+ assert.match(source,/view&&view\.shareCopy/);
+ assert.match(source,/view&&view\.momentsCopy/);
+ assert.match(template,/bindtap="copyVideoCopy"/);
+ assert.match(template,/wx:if="\{\{presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
+});
+
+test('reader privacy choice stays explicit after content and moves settings to the settings page',()=>{
+ const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
+ assert.match(template,/wx:if="\{\{consentAvailable && consentChoicePending\}\}" class="notice"/);
+ assert.doesNotMatch(template,/class="consent-settings"/,'访问分析入口已移出阅读页，统一走设置页');
+ assert.ok(template.indexOf('class="article-paper"') < template.indexOf('class="notice"'), 'first consent choice belongs after readable content');
 });
 
 test('reader WXML uses evaluated conditions for loading error consent media and sharing visibility',()=>{
@@ -65,5 +83,5 @@ test('reader WXML uses evaluated conditions for loading error consent media and 
  const conditions=[...s.matchAll(/wx:(?:if|elif)="([^"]*)"/g)].map(m=>m[1]);
  assert.ok(conditions.length>=8);
  conditions.forEach(value=>assert.match(value,/^\{\{.+\}\}$/,'unbound WXML condition would be a truthy literal: '+value));
- assert.ok(s.includes('wx:if="{{loading}}"'));assert.ok(s.includes('wx:elif="{{error}}"'));
+ assert.ok(s.includes('wx:if="{{loading}}"'));assert.ok(s.includes('wx:elif="{{error && !contentReady}}"'));
 });

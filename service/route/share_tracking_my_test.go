@@ -308,3 +308,31 @@ func TestMySharesHTTPAlwaysUsesAuthenticatedActor(t *testing.T) {
 		t.Fatalf("authenticated actor isolation failed: %s", body)
 	}
 }
+
+// 9.6 策略：客户视图路由由 TRACKING_MY_CUSTOMER_VIEW_ENABLED 门控，默认不注册。
+func TestMyCustomerViewRoutesGateBehindEnvSwitch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := tracking.New(nil, tracking.Config{Tenant: "tenant"})
+	for _, test := range []struct {
+		enabled bool
+		want    int
+	}{
+		{false, http.StatusNotFound},
+		{true, http.StatusUnauthorized},
+	} {
+		if test.enabled {
+			t.Setenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED", "true")
+		} else {
+			t.Setenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED", "")
+		}
+		for _, path := range []string{"/api/v1/miniprogram/tracking/my-visitors", "/api/v1/miniprogram/tracking/my-content-stats"} {
+			router := gin.New()
+			registerTrackingMyRoutes(router.Group("/api/v1/miniprogram/tracking"), svc, &model.UserModel{}, nil)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+			if response.Code != test.want {
+				t.Fatalf("enabled=%v path=%s status=%d body=%s", test.enabled, path, response.Code, response.Body.String())
+			}
+		}
+	}
+}

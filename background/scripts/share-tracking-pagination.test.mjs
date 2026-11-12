@@ -64,7 +64,7 @@ function harness(kind = 'records', overrides = {}, initial = {}) {
     },
   };
   const actual = load('src/pages/shareTracking/components.tsx', { react, './model': model, './evidence': { IntentEvidenceDetails: 'IntentEvidenceDetails' } });
-  const components = Object.fromEntries(Object.keys(actual).map(name => [name, name === 'useResource' ? actual[name] : name]));
+  const components = Object.fromEntries(Object.keys(actual).map(name => [name, ['useResource', 'articleReferencesMedia'].includes(name) ? actual[name] : name]));
   function page(method, params = {}) {
     const as_of = params.as_of || `2026-10-11T00:00:${String(++serial).padStart(2, '0')}Z`;
     return { as_of, metric_version: 'v1', first_cursor: method === 'contents' ? undefined : `${method}:${as_of}:first`, next_cursor: `${method}:${as_of}:next`, items: [method === 'contents' ? content : method === 'visits' ? visit : method === 'channels' ? channel : visitor], identified_count: 1, anonymous_count: 0 };
@@ -407,4 +407,17 @@ test('oversized queries offer staged time narrowing and preserve owner material 
 });
 test('content visitor profile refresh clears rejected first cursor while retaining content scope',async()=>{
  let fail=false;const h=harness('details',{contentVisitors:(_call,result)=>fail?Promise.reject(new Error('访客资料或素材搜索范围已变化，请刷新')):Promise.resolve(result())},{query:{owner:'owner-1',as_of:'2026-10-12T00:00:00Z'}});await h.settle();fail=true;await h.next();fail=false;await h.act(()=>nodes(h.render()).find(n=>n.type==='Feedback'&&n.props.error).props.resetSnapshot());assert.equal(h.last('contentVisitors').params.cursor,undefined);assert.equal(h.last('contentVisitors').params.owner,'owner-1');
+});
+
+test('channel leaderboard labels historical leads accurately and exposes unavailable joins', async () => {
+  const h = harness('channels', { channels: (_call, page) => {
+    const data = page();
+    data.items[0] = { ...data.items[0], converted_leads: null, lead_history_available: false };
+    return Promise.resolve(data);
+  } });
+  await h.settle();
+  const rendered = text(h.render());
+  assert.match(rendered, /历史曾有线索/);
+  assert.match(rendered, /不代表由本次分享新增或已经成交/);
+  assert.match(rendered, /暂不可用/);
 });

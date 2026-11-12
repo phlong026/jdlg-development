@@ -31,24 +31,14 @@ func TestProjectInvitationRequiresDesignerApprovalBeforeMembership(t *testing.T)
 		t.Fatalf("preview leaked or failed: %#v err=%v", preview, err)
 	}
 	request, err := s.ProjectNoteApplyInvitation(ctx, issued.Token, 101, "invite-apply-key-1")
-	if err != nil || request.Status != ProjectNoteJoinPending {
+	if err != nil || request.Status != ProjectNoteJoinApproved {
 		t.Fatalf("request = %#v err=%v", request, err)
 	}
 	if err = s.transaction(ctx, func(r Repository) error {
 		_, loadErr := projectNoteLoadMember(r, project.ID, 101)
 		return loadErr
-	}); err == nil {
-		t.Fatal("pending request must not grant project membership")
-	}
-	approved, err := s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, request.ID, "invite-approve-key-1")
-	if err != nil || approved.Status != ProjectNoteJoinApproved {
-		t.Fatalf("approved = %#v err=%v", approved, err)
-	}
-	if err = s.transaction(ctx, func(r Repository) error {
-		_, loadErr := projectNoteLoadMember(r, project.ID, 101)
-		return loadErr
 	}); err != nil {
-		t.Fatal("approved request did not create membership:", err)
+		t.Fatal("invitation apply did not create membership:", err)
 	}
 }
 
@@ -70,15 +60,10 @@ func TestProjectInvitationApprovedPreviewRequiresCurrentMembership(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preview, readErr := s.ProjectNoteReadInvitation(ctx, issued.Token, 101); readErr != nil || preview.Status != ProjectNoteJoinPending {
-		t.Fatalf("pending invitation preview = %#v err=%v", preview, readErr)
-	}
-	if _, err = s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, request.ID, "invite-membership-approve"); err != nil {
-		t.Fatal(err)
-	}
 	if preview, readErr := s.ProjectNoteReadInvitation(ctx, issued.Token, 101); readErr != nil || preview.Status != ProjectNoteJoinApproved {
 		t.Fatalf("approved invitation preview = %#v err=%v", preview, readErr)
 	}
+	_ = request
 	if err = s.ProjectNoteRevokeMember(ctx, designer, project.ID, 101); err != nil {
 		t.Fatal(err)
 	}
@@ -122,8 +107,7 @@ func TestProjectInvitationExpiryRevocationAndDesignerScopeFailClosed(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	pending, err := s.ProjectNoteApplyInvitation(ctx, expiring.Token, 102, "invite-expiring-apply")
-	if err != nil {
+	if _, err = s.ProjectNoteApplyInvitation(ctx, expiring.Token, 102, "invite-expiring-apply"); err != nil {
 		t.Fatal(err)
 	}
 	s.Now = func() time.Time { return now.Add(31 * time.Minute) }
@@ -131,8 +115,6 @@ func TestProjectInvitationExpiryRevocationAndDesignerScopeFailClosed(t *testing.
 	projectInvitationStatus(t, err, 404)
 	_, err = s.ProjectNoteApplyInvitation(ctx, expiring.Token, 101, "invite-expired-apply")
 	projectInvitationStatus(t, err, 404)
-	_, err = s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, pending.ID, "invite-expired-approve")
-	projectInvitationStatus(t, err, 409)
 }
 
 func TestProjectInvitationPreviewAndApplyRequireCurrentDesignerGrant(t *testing.T) {
@@ -179,13 +161,8 @@ func TestProjectInvitationRetriesDoNotDuplicateTokenRequestOrMembership(t *testi
 	if err != nil || two.ID != one.ID || !two.Replayed {
 		t.Fatalf("application replay = %#v err=%v", two, err)
 	}
-	approved, err := s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, one.ID, "invite-approve-key-4")
-	if err != nil {
-		t.Fatal(err)
-	}
-	again, err := s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, one.ID, "invite-approve-key-4")
-	if err != nil || again.ID != approved.ID || !again.Replayed {
-		t.Fatalf("approval replay = %#v err=%v", again, err)
+	if one.Status != ProjectNoteJoinApproved {
+		t.Fatalf("apply status = %q", one.Status)
 	}
 	detail, err := s.ProjectNoteGetProjectDetail(ctx, designer, project.ID)
 	if err != nil || len(detail.Members) != 1 || detail.Members[0].ActorID != 101 {
@@ -242,22 +219,37 @@ func TestProjectInvitationApplicationCreatesDesignerNoticeOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := s.ProjectNoteApplyInvitation(ctx, issued.Token, 101, "invite-apply-key-5")
+	if _, err = s.ProjectNoteApplyInvitation(ctx, issued.Token, 101, "invite-apply-key-5"); err != nil {
+		t.Fatal(err)
+	}
+	if notice.Kind != "" {
+		t.Fatalf("auto-approved invitation must not queue an approval notice: %#v", notice)
+	}
+}
+
+func TestProjectInvitationRecordsJoinerAttribution(t *testing.T) {
+	ctx := context.Background()
+	s, designer, _ := projectNoteFixture(t)
+	project, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "张宅方案", Owner: "owner-a"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if notice.Kind != ProjectNoteJoinRequestNoticeKind || notice.RecipientID != designer.Actor || notice.ProjectID != project.ID || notice.ContentID != request.ID {
-		t.Fatalf("notice = %#v", notice)
-	}
-	eligible, err := s.ProjectNoteNoticeEligible(ctx, notice.ID, designer.Actor, project.Owner)
-	if err != nil || !eligible {
-		t.Fatalf("pending request notice eligible=%v err=%v", eligible, err)
-	}
-	if _, err = s.ProjectNoteApproveJoinRequest(ctx, designer, project.ID, request.ID, "invite-approve-key-5"); err != nil {
+	issued, err := s.ProjectNoteCreateInvitation(ctx, designer, project.ID, s.Now().Add(time.Hour), "invite-attribution-create")
+	if err != nil {
 		t.Fatal(err)
 	}
-	eligible, err = s.ProjectNoteNoticeEligible(ctx, notice.ID, designer.Actor, project.Owner)
-	if err != nil || eligible {
-		t.Fatalf("approved request notice eligible=%v err=%v", eligible, err)
+	if _, err = s.ProjectNoteApplyInvitation(ctx, issued.Token, 101, "invite-attribution-apply"); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := s.ProjectNoteGetProjectDetail(ctx, designer, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Members) != 1 {
+		t.Fatalf("members = %#v", detail.Members)
+	}
+	member := detail.Members[0]
+	if member.ActorID != 101 || member.InviterID != designer.Actor || member.InvitationID != issued.ID || member.JoinedAt.IsZero() {
+		t.Fatalf("attribution = %#v (inviter=%d invitation=%s)", member, designer.Actor, issued.ID)
 	}
 }

@@ -281,9 +281,12 @@ func (s *SQLStore) Retry(ctx context.Context, actor int64, id string) (Job, erro
 	}
 	nextStatus := Downloading
 	requestSent := true
-	if row.Document == nil {
+	refreshResolution := row.Document != nil && row.ErrorCode == "media_source_expired"
+	if row.Document == nil || refreshResolution {
 		if row.RequestSent && !retryableConfigurationError(row.ErrorCode) {
-			return Job{}, ErrConflict
+			if !refreshResolution {
+				return Job{}, ErrConflict
+			}
 		}
 		nextStatus, requestSent = Queued, false
 	}
@@ -295,7 +298,7 @@ func (s *SQLStore) Retry(ctx context.Context, actor int64, id string) (Job, erro
 		return Job{}, ErrConflict
 	}
 	now := s.now().UTC()
-	result, err := tx.ExecContext(ctx, `UPDATE content_import_jobs SET status=?,request_sent=?,content_id='',error_code='',lease_token=NULL,lease_until=NULL,updated_at=? WHERE tenant_id=? AND actor_id=? AND import_id=? AND status IN ('failed','blocked')`, nextStatus, requestSent, now, s.tenant, actor, id)
+	result, err := tx.ExecContext(ctx, `UPDATE content_import_jobs SET status=?,request_sent=?,content_id='',error_code='',resolution_json=CASE WHEN ? THEN NULL ELSE resolution_json END,lease_token=NULL,lease_until=NULL,updated_at=? WHERE tenant_id=? AND actor_id=? AND import_id=? AND status IN ('failed','blocked')`, nextStatus, requestSent, refreshResolution, now, s.tenant, actor, id)
 	if err = checkedImportUpdate("retry_update", result, err); err != nil {
 		return Job{}, err
 	}
@@ -303,6 +306,9 @@ func (s *SQLStore) Retry(ctx context.Context, actor int64, id string) (Job, erro
 		return Job{}, importStoreError("retry_commit", err)
 	}
 	row.Status, row.RequestSent, row.ContentID, row.ErrorCode, row.LeaseToken, row.LeaseUntil, row.UpdatedAt = nextStatus, requestSent, "", "", "", time.Time{}, now
+	if refreshResolution {
+		row.Document = nil
+	}
 	return publicJob(row.Job), nil
 }
 
@@ -416,10 +422,11 @@ func canRetryJob(job Job) bool {
 	if job.Document == nil {
 		return !job.RequestSent || retryableConfigurationError(job.ErrorCode)
 	}
-	// A saved resolution avoids a second provider charge. Only errors that can
-	// recover while using the same snapshot may resume its downloads/draft write.
+	// A saved resolution normally avoids a second provider charge. An explicitly
+	// retried expired-media error is the exception: Retry clears that stale
+	// snapshot and queues one fresh resolution. Uncertain jobs never reach here.
 	switch job.ErrorCode {
-	case "download_failed", "partial_media", "import_failed", "draft_save_failed", "permission_revoked", "private_storage_required":
+	case "download_failed", "partial_media", "import_failed", "draft_save_failed", "permission_revoked", "private_storage_required", "media_source_expired":
 		return true
 	}
 	return false

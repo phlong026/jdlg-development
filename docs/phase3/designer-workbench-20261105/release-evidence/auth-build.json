@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "commit": "ebafbb7934faa13e4ed311639af96c34ab0a5919",
+  "tree": "ac384b2e658e995c786b0f15d96738c336ad73dc",
+  "crypto_sha256": "2c547e3682e5726d3dde7ae1a4904eb3d16f1e74cac9a17f2f3a748a3a21f061",
+  "binary_sha256": "56d9c3f378b83b5c0d18547b86911d9fa170505866b968611475d410f95f39f0",
+  "auth_binary_hmac_match": true,
+  "auth_binary_sm4_match": true,
+  "go_version": "go1.26.2",
+  "goos": "linux",
+  "goarch": "amd64",
+  "built_at_utc": "2026-11-04T20:43:06Z"
+}

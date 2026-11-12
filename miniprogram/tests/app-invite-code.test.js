@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 const ts = require('./report-runtime')('typescript');
+const { HOME_ASSETS } = require('../miniprogram/utils/homeAssets.js');
 
 const root = path.resolve(__dirname, '..');
 
@@ -18,6 +19,7 @@ function loadApp(extension) {
     exports: {},
     require: name => name.endsWith('promptReview')
       ? { blockUnsafeText: () => '', initPromptReview: () => Promise.resolve() }
+      : name.endsWith('homeAssets') ? { HOME_ASSETS }
       : { install() {} },
     App: value => { definition = value; },
     wx: {

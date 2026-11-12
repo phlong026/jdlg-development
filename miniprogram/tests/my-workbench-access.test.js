@@ -126,6 +126,36 @@ test('账号切换后旧请求不能把前一个账号的工作台重新显示',
   assert.equal(harness.page.data.showWorkbenchSection, false);
 });
 
+test('同账号后台复核期间保留已授权工作台，复核拒绝后再收起', async () => {
+  const next = deferred();
+  const harness = loadPage({ context: () => next.promise });
+  harness.page.setData({ hasContentWorkbenchAccess: true, showWorkbenchSection: true });
+  const pending = harness.page.loadWorkbenchAccess();
+  assert.equal(harness.page.data.showWorkbenchSection, true, '复核等待期间保留当前授权视图');
+  next.resolve({ can_manage: false, owners: [] });
+  await pending;
+  assert.equal(harness.page.data.showWorkbenchSection, false, '服务端明确拒绝后及时收起');
+});
+
+test('同账号后台复核网络失败时保留上次已确认权限', async () => {
+  const harness = loadPage({ context: async () => { throw new Error('offline'); } });
+  harness.page.setData({ hasContentWorkbenchAccess: true, showWorkbenchSection: true });
+  await harness.page.loadWorkbenchAccess();
+  assert.equal(harness.page.data.showWorkbenchSection, true);
+  assert.equal(harness.page.data.hasContentWorkbenchAccess, true);
+  assert.equal(harness.page.data.workbenchAccessLoading, false);
+});
+
+test('退出登录后立即清理已显示的工作台和分享权限', async () => {
+  const harness = loadPage();
+  harness.page.setData({ hasContentWorkbenchAccess: true, showWorkbenchSection: true, hasShareVisitAccess: true });
+  harness.switchStoredAccount('');
+  await Promise.all([harness.page.loadWorkbenchAccess(), harness.page.loadShareVisitAccess()]);
+  assert.equal(harness.page.data.showWorkbenchSection, false);
+  assert.equal(harness.page.data.hasContentWorkbenchAccess, false);
+  assert.equal(harness.page.data.hasShareVisitAccess, false);
+});
+
 test('分享访问使用独立 can_view，不能从内容管理权限推断', async () => {
   const creator = loadPage();
   await Promise.all([creator.page.loadWorkbenchAccess(), creator.page.loadShareVisitAccess()]);
@@ -186,7 +216,9 @@ test('工作台区块按权限隐藏，普通生成记录与独立客户管理�
   const source = fs.readFileSync(path.join(pageRoot, 'my.ts'), 'utf8');
   assert.match(wxml, /wx:if="\{\{showWorkbenchSection\}\}"/);
   assert.match(wxml, /\{\{workbenchSectionTitle\}\}/);
-  assert.match(wxml, /wx:if="\{\{hasShareVisitAccess\}\}"/);
+  assert.match(wxml, /bindtap="onWorkbenchMenuTap"/);
+  assert.match(source, /action: 'customers'/);
+  assert.doesNotMatch(wxml, /class="share-visit-entry"/);
   assert.match(source, /buildCommonMenuItems[\s\S]+action: 'project'/);
   assert.match(source, /buildServiceMenuItems[\s\S]+action: 'customerManagement'/);
   assert.doesNotMatch(source, /action: 'contentWorkbench'[^\n]+available: hasLoginToken/);
@@ -197,8 +229,9 @@ test('认证设计师工作台只保留任务入口，收起能力仍从内容�
   const designer = loadPage();
   designer.page.setData({ certStatus: 'approved', certType: 'designer', certIdentityType: '设计师' });
   await designer.page.loadWorkbenchAccess();
+  // 批次6：工作台网格新增「客户」入口（客户追踪三Tab页），置于内容创作之后
   assert.deepEqual(Array.from(designer.page.data.workbenchMenuItems, item => item.action), [
-    'myProjects', 'contentWorkbench', 'designerHome',
+    'myProjects', 'contentWorkbench', 'customers', 'designerHome',
   ]);
   designer.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action: 'contentWorkbench' } } });
   assert.deepEqual(designer.navigations, ['/pages/contentworkbench/contentworkbench']);

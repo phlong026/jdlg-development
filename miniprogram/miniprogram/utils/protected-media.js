@@ -27,6 +27,11 @@ function protectedPath(url) {
   return url.slice(ORIGIN.length);
 }
 
+function publicReadPath(path) {
+  return /^\/api\/v1\/miniprogram\/tracking\/media\/[A-Za-z0-9_-]{32}(?:\?.*)?$/.test(path)
+    || /^\/api\/v1\/miniprogram\/tracking\/project-collections\/[A-Za-z0-9_-]{8,128}\/versions\/[1-9]\d*\/items\/\d+\/media\/[A-Za-z0-9_-]{8,128}(?:\?.*)?$/.test(path);
+}
+
 function currentIdentity(expected) {
   try { return identity() === expected; } catch (_) { return false; }
 }
@@ -67,14 +72,17 @@ function download(url, path, expectedIdentity) {
 function resolveProtectedMediaURL(value) {
   const url = String(value || '');
   if (!/^https:\/\//.test(url)) return Promise.reject(new Error('素材地址无效'));
+  const path = protectedPath(url);
+  // These exact read paths revalidate the current published content or
+  // collection reference on every request. They carry no management grant and
+  // can be handed directly to native image/video components, including Range.
+  if (!path || publicReadPath(path)) return Promise.resolve(url);
   let expectedIdentity = '';
   try { expectedIdentity = identity(); } catch (error) { return Promise.reject(error); }
   if (activeIdentity !== expectedIdentity) {
     cache.clear();
     activeIdentity = expectedIdentity;
   }
-  const path = protectedPath(url);
-  if (!path) return Promise.resolve(url);
   const key = expectedIdentity + '\n' + url;
   if (cache.has(key)) return cache.get(key);
   const pending = download(url, path, expectedIdentity).catch(error => {

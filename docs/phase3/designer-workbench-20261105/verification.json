@@ -1,0 +1,45 @@
+{
+  "checked_at": "2026-11-05",
+  "mini": {
+    "tests": 1075,
+    "pass": 1075,
+    "fail": 0,
+    "skipped": 0
+  },
+  "admin": {
+    "tests": 762,
+    "pass": 762,
+    "fail": 0,
+    "skipped": 0
+  },
+  "mini_typecheck": "passed",
+  "admin_typecheck": "passed",
+  "admin_build": "passed",
+  "go_full_suite": "passed",
+  "go_vet": "passed",
+  "release_tool_tests": 43,
+  "dependency_audit": {
+    "mini": 0,
+    "admin": 0
+  },
+  "added_secret_findings": 0,
+  "native_current_account": {
+    "customer_detail": "4 views; 31 seconds; no error",
+    "customer_card_width": 398,
+    "share_card_width": 398,
+    "viewport_width": 430,
+    "note_actions": "2x2",
+    "version_count_after_cancel": 1
+  },
+  "known_gaps": [
+    "WeChat production review/publication",
+    "actual service account delivery",
+    "device keyboard and larger font",
+    "nonempty receiver/multi-member UI",
+    "live enabled import success",
+    "published content and collection reading with a valid target"
+  ],
+  "race_test": "not run: local go-m1cpu cgo initializer SIGSEGV before tests",
+  "postdeploy": "passed: running binary hash, preserved configuration, 323 HTTPS assets and authenticated Mini Program reads",
+  "official_account_status": "disabled; inbox works; binding status no error"
+}

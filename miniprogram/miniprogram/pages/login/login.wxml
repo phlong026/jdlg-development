@@ -10,7 +10,7 @@
       <view class="page-nav-inner" style="height: {{navContentHeight}}px;">
         <view class="page-nav-side" style="width: {{navSideWidth}}px;">
           <view class="page-back" bindtap="goBack" hover-class="page-back--active">
-            <t-icon name="chevron-left" size="64rpx" color="#5e412f" />
+            <mini-icon name="chevron-left" size="64rpx" color="#5e412f" />
           </view>
         </view>
       </view>
@@ -57,19 +57,19 @@
       <view class="other-login-list">
         <view class="other-login-item" bindtap="openPhoneLogin">
           <view class="other-login-icon phone-icon">
-            <t-icon name="phone-locked" size="52rpx" color="#5e412f" />
+            <mini-icon name="phone-locked" size="52rpx" color="#5e412f" />
           </view>
           <text class="other-login-label">手机登录</text>
         </view>
         <view class="other-login-item" bindtap="openPasswordLogin">
           <view class="other-login-icon account-icon">
-            <t-icon name="user-password" size="52rpx" color="#5e412f" />
+            <mini-icon name="user-password" size="52rpx" color="#5e412f" />
           </view>
           <text class="other-login-label">账号登录</text>
         </view>
         <view class="other-login-item" bindtap="openEnterpriseLogin">
           <view class="other-login-icon enterprise-icon">
-            <t-icon name="verify" size="52rpx" color="#2563eb" />
+            <mini-icon name="verify" size="52rpx" color="#2563eb" />
           </view>
           <text class="other-login-label">企业登录</text>
         </view>
@@ -100,7 +100,7 @@
         <block wx:if="{{loginPanel === 'phone'}}">
           <view class="form-group">
             <view class="input-wrapper">
-              <t-icon name="call" size="40rpx" color="#b79066" />
+              <mini-icon name="call" size="40rpx" color="#b79066" />
               <input
                 class="form-input"
                 type="number"
@@ -115,7 +115,7 @@
           </view>
           <view class="form-group">
             <view class="input-wrapper sms-input-wrapper">
-              <t-icon name="lock-on" size="40rpx" color="#b79066" />
+              <mini-icon name="lock-on" size="40rpx" color="#b79066" />
               <input
                 class="form-input"
                 type="number"
@@ -147,7 +147,7 @@
         <block wx:if="{{loginPanel === 'password'}}">
           <view class="form-group">
             <view class="input-wrapper">
-              <t-icon name="user" size="40rpx" color="#b79066" />
+              <mini-icon name="user" size="40rpx" color="#b79066" />
               <input
                 class="form-input"
                 type="text"
@@ -161,7 +161,7 @@
           </view>
           <view class="form-group">
             <view class="input-wrapper">
-              <t-icon name="lock-on" size="40rpx" color="#b79066" />
+              <mini-icon name="lock-on" size="40rpx" color="#b79066" />
               <input
                 class="form-input"
                 type="password"
@@ -190,7 +190,7 @@
         <block wx:if="{{loginPanel === 'enterprise'}}">
           <view class="form-group">
             <view class="input-wrapper">
-              <t-icon name="shop" size="40rpx" color="#b79066" />
+              <mini-icon name="shop" size="40rpx" color="#b79066" />
               <input
                 class="form-input"
                 type="text"
@@ -204,7 +204,7 @@
           </view>
           <view class="form-group">
             <view class="input-wrapper">
-              <t-icon name="lock-on" size="40rpx" color="#b79066" />
+              <mini-icon name="lock-on" size="40rpx" color="#b79066" />
               <input
                 class="form-input"
                 type="password"

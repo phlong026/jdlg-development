@@ -19,9 +19,28 @@
   position: relative;
 }
 
-.lg-checking {
-  min-height: 260rpx;
+.profile-loading-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: #fbfaf7;
+  color: #665443;
+}
+
+.profile-loading-body {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 20rpx;
+  min-height: 240rpx;
+  padding: 24rpx 32rpx;
+  font-size: 28rpx;
+}
+
+.profile-loading-body .lg-spinner {
+  width: 28rpx;
+  height: 28rpx;
+  margin-bottom: 0;
 }
 
 .lg-spinner {

@@ -482,6 +482,7 @@ Page({
         const title = String(e.currentTarget.dataset.title || '该作品');
         if (!id)
             return;
+        const token = String(this.data.token || '');
         wx.showModal({
             title: '确认删除',
             content: `确定要删除「${title}」吗？删除后无法恢复。`,
@@ -489,10 +490,12 @@ Page({
             confirmColor: '#c4543a',
             cancelText: '取消',
             success: async (res) => {
-                if (!res.confirm)
+                if (!res.confirm || token !== String(wx.getStorageSync('token') || '') || !this.data.works.some((item) => item.id === id))
                     return;
                 try {
                     await this.deleteWork(id);
+                    if (token !== String(wx.getStorageSync('token') || ''))
+                        return;
                     const works = this.data.works.filter((item) => item.id !== id);
                     const selectedIds = this.data.selectedIds.filter((itemId) => itemId !== id);
                     this.setData({
@@ -511,6 +514,20 @@ Page({
                 }
             },
         });
+    },
+    onWorkLongPress(e) {
+        if (this.data.isManageMode)
+            return;
+        const id = Number(e.currentTarget.dataset.id || 0);
+        const title = String(e.currentTarget.dataset.title || '该作品');
+        const token = String(this.data.token || '');
+        if (!id || !this.data.works.some((item) => item.id === id))
+            return;
+        wx.showActionSheet({ itemList: ['删除作品'], success: (result) => {
+                if (result.tapIndex !== 0 || token !== String(wx.getStorageSync('token') || '') || !this.data.works.some((item) => item.id === id))
+                    return;
+                this.onDeleteWork({ currentTarget: { dataset: { id, title } } });
+            } });
     },
     async deleteWork(id) {
         const apiPath = `/api/v1/miniprogram/user/templates/${id}`;

@@ -82,8 +82,9 @@ function buildVisualStyleOptions(tool: AIToolItem | null | undefined): VisualSty
       const name = String(stylePreset.name || fallbackName || `风格${index + 1}`).trim()
       const referenceMode: VisualStyleOption['referenceMode'] = stylePreset.referenceMode === 'preview_only' ? 'preview_only' : 'preview_and_model'
       const previewImageUrl = normalizeUploadedImageUrl(stylePreset.previewImageUrl || stylePreset.imageUrl || fallbackReference?.imageUrl || '')
+      // 公开工具 DTO 只给预览图与 referenceMode；真正的模型参考图由服务端按 preset id 重建。
       const modelReferenceImageUrl = referenceMode === 'preview_and_model'
-        ? normalizeUploadedImageUrl(stylePreset.modelReferenceImageUrl || stylePreset.imageUrl || fallbackReference?.imageUrl || '')
+        ? normalizeUploadedImageUrl(stylePreset.modelReferenceImageUrl || '')
         : ''
       return {
         key: `style:${sourceId || index}`,
@@ -93,7 +94,7 @@ function buildVisualStyleOptions(tool: AIToolItem | null | undefined): VisualSty
         imageUrl: previewImageUrl,
         modelReferenceImageUrl,
         referenceMode,
-        modeLabel: modelReferenceImageUrl ? '图像参考' : '风格提示',
+        modeLabel: referenceMode === 'preview_and_model' ? '图像参考' : '风格提示',
         promptSuffix: String(stylePreset.promptSuffix || fallbackReference?.promptSuffix || '').trim(),
       }
     }).filter((item) => item.name || item.imageUrl || item.promptSuffix)
@@ -107,9 +108,9 @@ function buildVisualStyleOptions(tool: AIToolItem | null | undefined): VisualSty
       sourceId: sourceId || `reference-${index}`,
       name: String(reference.name || `风格${index + 1}`).trim(),
       imageUrl: normalizeUploadedImageUrl(reference.imageUrl || ''),
-      modelReferenceImageUrl: normalizeUploadedImageUrl(reference.imageUrl || ''),
+      modelReferenceImageUrl: '',
       referenceMode: 'preview_and_model' as const,
-      modeLabel: normalizeUploadedImageUrl(reference.imageUrl || '') ? '图像参考' : '风格提示',
+      modeLabel: '图像参考',
       promptSuffix: String(reference.promptSuffix || '').trim(),
     }
   }).filter((item) => item.name || item.imageUrl || item.promptSuffix)
@@ -213,7 +214,7 @@ Page({
       confirmText: '去登录',
       success: (res) => {
         if (res.confirm) {
-          wx.navigateTo({ url: '/pages/login/login' })
+          wx.navigateTo({ url: '/pages/login/login?from=ai-action' })
         }
       },
     })
@@ -254,7 +255,7 @@ Page({
   },
 
   hasVisualStyleReferenceImage(): boolean {
-    return !!this.getSelectedVisualStyleImageUrl()
+    return this.getSelectedVisualStyle()?.referenceMode === 'preview_and_model'
   },
 
   getCurrentScene(): 'ai_draw_single' | 'ai_draw_multi' {
@@ -568,6 +569,7 @@ Page({
       wx.showToast({ title: '请先输入提示词', icon: 'none' });
       return;
     }
+    if (!this.ensureToken()) return;
     this.setData({ optimizingPrompt: true });
     const { optimizePrompt } = require('../../utils/promptOptimize');
     const scene = (this.data.tool && this.data.tool.category) || 'architecture';

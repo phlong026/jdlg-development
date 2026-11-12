@@ -191,23 +191,20 @@ func douyidouSource(link ParsedLink, payload douyidouPayload) (Source, error) {
 	if title == "" {
 		title = "链接视频"
 	}
-	caption := truncateRunes(strings.TrimSpace(payload.Text), 2000)
 	media := make([]RemoteMedia, 0, len(imageURLs)+1)
 	if videoURL != "" {
 		media = append(media, RemoteMedia{
 			ID:         sourceID,
 			Kind:       "video",
 			URL:        videoURL,
-			Caption:    caption,
 			DurationMS: douyidouDuration(payload),
 		})
 	}
 	for index, image := range imageURLs {
 		media = append(media, RemoteMedia{
-			ID:      fmt.Sprintf("%s:image:%d", sourceID, index),
-			Kind:    "image",
-			URL:     image,
-			Caption: caption,
+			ID:   fmt.Sprintf("%s:image:%d", sourceID, index),
+			Kind: "image",
+			URL:  image,
 		})
 	}
 	return Source{
@@ -215,6 +212,7 @@ func douyidouSource(link ParsedLink, payload douyidouPayload) (Source, error) {
 		ID:                  sourceID,
 		SourceURL:           link.URL,
 		Title:               truncateRunes(title, 200),
+		Text:                strings.TrimSpace(payload.Text),
 		Author:              truncateRunes(douyidouAuthor(payload.Author), 120),
 		Media:               media,
 		CoverURL:            validRemoteURL(payload.Cover),

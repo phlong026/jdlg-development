@@ -73,7 +73,10 @@ function request(options) {
                     resolve(body.data);
                     return;
                 }
-                reject(new Error(String((body === null || body === void 0 ? void 0 : body.msg) || `请求失败: ${response.statusCode}`)));
+                const error = new Error(String((body === null || body === void 0 ? void 0 : body.msg) || `请求失败: ${response.statusCode}`));
+                error.statusCode = Number(response.statusCode || 0);
+                error.code = Number((body === null || body === void 0 ? void 0 : body.code) || 0);
+                reject(error);
             }, fail: () => reject(new Error('网络连接失败，请稍后重试')) }));
     });
 }
@@ -91,6 +94,7 @@ async function createCostEstimateShare(result) {
         method: 'POST',
         data: body,
         header: Object.assign(Object.assign({}, (0, parameter_1.paramsToHeaders)(params)), { 'Content-Type': 'application/json' }),
+        __profileAccessResponseMode: 'soft-full-profile',
     });
     if (!validShareIdentity(response))
         throw new Error('分享报告创建失败，请重试');

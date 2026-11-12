@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-contrib/sessions"
@@ -476,7 +479,17 @@ func main() {
 	log.Printf("监听地址: %s", cfg.Server.Addr)
 	log.Println("========================================")
 
-	if err := r.Run(cfg.Server.Addr); err != nil {
+	// T5.1：显式 http.Server 超时（P4：ReadHeader 10s / Read 900s / Write 900s / Idle 120s）。
+	// 原 r.Run 使用默认无超时配置，慢速连接可长期占用连接。
+	srv := &http.Server{
+		Addr:              cfg.Server.Addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       900 * time.Second,
+		WriteTimeout:      900 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("服务器启动失败: %v", err)
 	}
 }

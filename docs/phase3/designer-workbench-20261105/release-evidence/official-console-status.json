@@ -1,0 +1,33 @@
+{
+  "source": "微信公众平台当前登录账号版本管理页",
+  "path": "/wxamp/wacodepage/getcodepage",
+  "online": {
+    "version": "7.3.3",
+    "published_at": "2026-11-02 21:53:04",
+    "remark": "二轮整改：登录环节提供暂不登录与关闭按钮，拒绝后可返回继续浏览，不反复弹窗"
+  },
+  "review": {
+    "none": true,
+    "text": "你暂无提交审核的版本或者版本已发布上线"
+  },
+  "development": {
+    "version": "7.4.2",
+    "uploaded_at": "2026-11-05 04:51:25",
+    "experience_version": true,
+    "remark": "设计师工作台整改：项目内容流程、客户分享统计、主页消息与按钮布局"
+  },
+  "actions": [
+    "详情",
+    "",
+    "提交审核",
+    ""
+  ],
+  "verified_at": "2026-11-05T08:01:04.075773+08:00",
+  "account": {
+    "name": "甲第灵光智能体",
+    "appid": "wx94fdc48861913ede",
+    "appid_source": "同一登录账号开发管理页面可见AppID，已与上传回执一致核验"
+  },
+  "production_published_version_7_4_2": false,
+  "review_submitted_version_7_4_2": false
+}

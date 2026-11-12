@@ -28,7 +28,7 @@ const settle = async () => { for (let i = 0; i < 16; i++) await new Promise(reso
 // are replaced; no request can reach a network transport from this harness.
 function journey({ extension = 'js', token = '', profile = completeProfile, cachedID = profile.id, profileMode = 'ok', enabled = true, declined = false, defaultShare = false, reader = false } = {}) {
   const storage = { token, userInfo: token ? { id: cachedID, staleBusinessField: 'must-not-cross-account' } : {}, device_fingerprint: 'test-device', share_tracking_instance_v1: 'test-installation' };
-  if (declined) storage.share_tracking_consent_choice_v1 = { accepted: false, explicit: true, version: 'v1' };
+  storage.share_tracking_consent_choice_v1 = { accepted: !declined, explicit: true, version: 'v1', notice: 'Public visit analytics.' };
   const server = { profile: { ...profile }, profileMode, holdProfile: false, persistNickname: true };
   const requests = [], events = [], errors = [], pendingProfile = [], modules = new Map();
   let pageDefinition, componentDefinition, app, page, sequence = 0;
@@ -69,7 +69,7 @@ function journey({ extension = 'js', token = '', profile = completeProfile, cach
         const next = options.data.scene === nextScene;
         return reply(options, { route_key: readerRoute, content_id: next ? 'content_two' : 'content_one', content_version: next ? 2 : 1, share_token: next ? 'next-share' : 'incoming-token' });
       }
-      if (requestPath.includes('/tracking/contents/')) return reply(options, { title: '公开正文', media: [] });
+      if (requestPath.includes('/tracking/contents/')) return reply(options, { title: '公开正文', body: '公开正文内容', media: [] });
       if (requestPath.endsWith('/tracking/entry')) return reply(options, {
         entry_token: `entry_${++sequence}`, session_id: `session_${sequence}`, content_version: 5123,
         content_accessible: true, visitor_key: options.header.token === 'session-A' ? 'u:41' : 'anonymous',
@@ -100,7 +100,8 @@ function journey({ extension = 'js', token = '', profile = completeProfile, cach
     if (modules.has(relative)) return modules.get(relative).exports;
     const module = { exports: {} };
     modules.set(relative, module);
-    let source = fs.readFileSync(path.join(root, `${relative}.${extension}`), 'utf8');
+    const sourceExtension = fs.existsSync(path.join(root, `${relative}.${extension}`)) ? extension : 'js';
+    let source = fs.readFileSync(path.join(root, `${relative}.${sourceExtension}`), 'utf8');
     if (extension === 'ts') source = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
     const run = vm.runInContext(`(function(module, exports, require) {\n${source}\n})`, context, { filename: `${relative}.${extension}` });
     run(module, module.exports, name => {
@@ -155,17 +156,14 @@ function journey({ extension = 'js', token = '', profile = completeProfile, cach
   return h;
 }
 
-// 审核整改后公开分享落地页的行为：任何人（匿名/资料不全/已登录）先浏览，
-// 内容与匿名 entry 立即产生，登录与资料补全不再作为访问前置条件。
-function assertBrowsingOpenly(h, { anonymous = true } = {}) {
-  assert.equal(h.page.data.__profileAccessReady, true, '公开页乐观放行');
-  assert.equal(h.page.data.contentReady, true, '内容立即可见');
-  assert.ok(h.reports().length > 0, 'report 可拉取');
-  assert.ok(h.entries().length > 0, '匿名池 entry 照常记录');
-  if (anonymous) {
-    assert.ok(h.entries().every(request => request.header.token !== 'session-A' || h.storage.token === 'session-A'), 'entry 尊重当前登录态');
-  }
-  assert.ok(h.events.filter(event => event.event_type === 'page_view').length > 0, 'PV 记录');
+// 三个匿名列表入口以外，分享阅读须登记资料；保留原分享与再次转发归因。
+function assertBlocked(h) {
+  assert.equal(h.page.data.__profileAccessReady, false);
+  assert.equal(h.page.data.contentReady, false);
+  assert.equal(h.reports().length, 0, 'no report fetch before verified profile');
+  assert.equal(h.entries().length, 0, 'no anonymous entry while profile is required');
+  assert.equal(h.events.length, 0);
+  assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
 }
 
 async function assertAccessibleAndAttributed(h) {
@@ -185,98 +183,88 @@ async function assertAccessibleAndAttributed(h) {
 }
 
 for (const extension of ['ts', 'js']) {
-  test(`${extension}: new account browses share first, then login/completion merge attribution (审核整改)`, async t => {
+  test(`${extension}: new account must save avatar and nickname before report/PV; original share and re-share parent survive`, async t => {
     const h = journey({ extension, profile: { id: 41, nickname: '', avatar: '' } }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h);
-    await h.login();
-    assert.equal(h.editor.data.required, true, '登录后软引导补全仍为 required 表单');
-    await h.saveNickname();
+    await h.mount(); assertBlocked(h);
+    await h.login(); assertBlocked(h);
+    assert.equal(h.editor.data.required, true);
+    await h.saveNickname(); assertBlocked(h);
     assert.equal(h.requests.filter(request => request.path.endsWith('/profile/nickname')).length, 0, 'nickname alone cannot satisfy required avatar');
-    await h.chooseAvatar(); await h.saveNickname();
-    assert.equal(h.page.data.__profileAccessReady, true);
+    await h.chooseAvatar(); assertBlocked(h);
+    await h.saveNickname();
+    await assertAccessibleAndAttributed(h);
     assert.equal(h.storage.userInfo.nickname, '分享访客');
     assert.equal(h.storage.userInfo.avatar, avatar);
-    const shared = await h.page.onShareAppMessage().promise;
-    assert.match(shared.path, /[?&]st=prepared_/, '补全后转发携带本人归因');
-    // 入口归因保留在匿名期 entry（后端匿名池登录后归并）；换号 reload 主动
-    // 丢弃 st 防止跨账号串线，因此登录后的新转发从本人出发。
-    assert.equal(h.entries()[0].body.share_token, 'incoming-token', '匿名期入口归因保留');
-    assert.ok(h.shares().length > 0);
   });
 
-  for (const missing of ['nickname', 'avatar']) test(`${extension}: returning account missing ${missing} browses first, soft-completes profile (审核整改)`, async t => {
+  for (const missing of ['nickname', 'avatar']) test(`${extension}: returning account missing ${missing} completes server profile before access`, async t => {
     const h = journey({ extension, token: 'session-A', profile: { ...completeProfile, [missing]: '' } }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
-    await h.gate.check(); await settle();
-    await h.saveNickname();
+    await h.mount(); assertBlocked(h);
+    assert.equal(h.editor.data.nickname, missing === 'nickname' ? '' : completeProfile.nickname);
     if (missing === 'avatar') await h.chooseAvatar();
     await h.saveNickname();
-    assert.equal(h.page.data.__profileAccessReady, true);
-    assert.equal(h.storage.userInfo[missing === 'nickname' ? 'nickname' : 'avatar'] ? true : true, true);
+    await assertAccessibleAndAttributed(h);
   });
 
-  test(`${extension}: stale cached id is replaced when the authoritative account completes a missing avatar`, async t => {
+  test(`${extension}: stale cached id is replaced before the authoritative account completes a missing avatar`, async t => {
     const h = journey({ extension, token: 'session-A', cachedID: 99, profile: { ...completeProfile, avatar: '' } }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
-    assert.equal(h.storage.userInfo.id, 99, '乐观放行不触发核验，缓存保持');
-    await h.gate.check(); await settle();
-    await h.chooseAvatar(); await h.saveNickname();
-    assert.equal(h.storage.userInfo.id, 41, '补全核验后权威 id 替换缓存');
+    await h.mount(); assertBlocked(h);
+    assert.equal(h.storage.userInfo.id, 41);
     assert.equal(h.storage.userInfo.staleBusinessField, undefined, 'cross-account cache fields must be discarded');
+    assert.equal(h.editor.data.promptUserID, 41);
+    await h.chooseAvatar(); await h.saveNickname();
+    await assertAccessibleAndAttributed(h);
     assert.equal(h.storage.userInfo.avatar, avatar);
   });
 
-  test(`${extension}: complete returning account browses without waiting for profile read`, async t => {
+  test(`${extension}: complete returning account still waits for authoritative profile read`, async t => {
     const h = journey({ extension, token: 'session-A' }); t.after(() => h.close());
     h.server.holdProfile = true;
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
+    await h.mount(); assertBlocked(h);
     h.releaseProfile(); await settle();
-    assert.equal(h.page.data.contentReady, true);
+    await assertAccessibleAndAttributed(h);
     assert.equal(h.requests.filter(request => request.method === 'PUT' || request.method === 'UPLOAD').length, 0);
   });
 
-  test(`${extension}: expired stored token still browses; fresh login merges attribution`, async t => {
+  test(`${extension}: expired stored token stays blocked until a fresh login is verified`, async t => {
     const h = journey({ extension, token: 'expired-session' }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h);
-    assert.ok(h.entries().every(request => request.header.token !== 'session-A'), '过期 token 不产生实名 entry');
-    await h.login();
-    assert.equal(h.page.data.__profileAccessReady, true);
+    await h.mount(); assertBlocked(h);
+    assert.ok(!h.storage.token); assert.equal(h.gate.data.needsLogin, true);
+    await h.login(); await assertAccessibleAndAttributed(h);
   });
 
-  test(`${extension}: profile network failure never blocks browsing; retry recovers completion`, async t => {
+  test(`${extension}: profile network failure remains blocked and retry recovers same share`, async t => {
     const h = journey({ extension, token: 'session-A', profileMode: 'offline' }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
+    await h.mount(); assertBlocked(h); assert.ok(h.gate.data.error);
     h.server.profileMode = 'ok'; await h.gate.onRetry(); await settle();
-    assert.equal(h.page.data.contentReady, true);
+    await assertAccessibleAndAttributed(h);
   });
 
-  test(`${extension}: successful nickname write must be read back before completion`, async t => {
+  test(`${extension}: successful nickname write must be read back before unlocking`, async t => {
     const h = journey({ extension, token: 'session-A', profile: { ...completeProfile, nickname: '' } }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
-    await h.gate.check(); await settle();
+    await h.mount(); assertBlocked(h);
     h.server.holdProfile = true;
     const saving = h.editor.onConfirm({ detail: { value: { nickname: '新昵称' } } });
     await settle();
-    assert.equal(h.server.profile.nickname, '新昵称');
-    assert.equal(h.editor.data.visible, true, '读回未完成前补全表单不关闭');
+    assert.equal(h.server.profile.nickname, '新昵称'); assertBlocked(h);
     h.releaseProfile(); await saving; await settle();
-    assert.equal(h.storage.userInfo.nickname, '新昵称', '读回成功后写入缓存');
+    await assertAccessibleAndAttributed(h);
   });
 
-  test(`${extension}: acknowledged write with mismatched profile readback keeps completion open`, async t => {
+  test(`${extension}: acknowledged write with mismatched profile readback stays blocked`, async t => {
     const h = journey({ extension, token: 'session-A', profile: { ...completeProfile, nickname: '' } }); t.after(() => h.close());
-    await h.mount(); await h.gate.check(); await settle(); h.server.persistNickname = false;
-    await h.saveNickname();
+    await h.mount(); h.server.persistNickname = false;
+    await h.saveNickname(); assertBlocked(h);
     assert.equal(h.editor.data.visible, true);
-    assert.equal(h.page.data.__profileAccessReady, true, '浏览不受补全状态影响');
   });
 
-  test(`${extension}: declining analytics still browses but produces no tracking events`, async t => {
+  test(`${extension}: declining analytics still requires complete profile but produces no tracking events`, async t => {
     const h = journey({ extension, declined: true, profile: { id: 41, nickname: '', avatar: '' } }); t.after(() => h.close());
-    await h.mount();
+    await h.mount(); assertBlocked(h);
+    await h.login(); assertBlocked(h);
+    await h.chooseAvatar(); await h.saveNickname();
     assert.equal(h.page.data.__profileAccessReady, true); assert.equal(h.page.data.contentReady, true);
-    assert.equal(h.reports().length, 1);
-    assert.equal(h.entries().length, 0); assert.equal(h.shares().length, 0); assert.equal(h.events.length, 0);
+    assert.equal(h.reports().length, 1); assert.equal(h.entries().length, 0); assert.equal(h.shares().length, 0); assert.equal(h.events.length, 0);
     assert.equal(h.page.onShareAppMessage().path, `/${reportRoute}?report_id=${reportID}`);
   });
 
@@ -291,25 +279,30 @@ for (const extension of ['ts', 'js']) {
     assert.equal(h.shares().at(-1).body.parent_share_id, 'upstream-share');
   });
 
-  test(`${extension}: ordinary background return resumes browsing without replaying the same share visit`, async t => {
+  test(`${extension}: ordinary background return rechecks profile without replaying the same share visit`, async t => {
     const h = journey({ extension, token: 'session-A' }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
+    await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.holdProfile = true;
     await h.resume();
-    assert.equal(h.page.data.__profileAccessReady, true, '公开页恢复不等待核验');
-    assert.equal(h.entries().length, 1, '同 query 恢复不重放 entry');
+    assert.equal(h.page.data.__profileAccessReady, false, '热返回必须等待服务端再次确认');
+    assert.ok(h.requests.some(request => String(request.url || request.path || '').endsWith('/profile')), 'warm return must still re-verify the profile');
+    assert.equal(h.reports().length, 1); assert.equal(h.entries().length, 1);
     h.releaseProfile(); await settle();
-    assert.equal(h.reports().length, 2, '恢复后重新确认报告可用性（与原行为一致）');
+    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.reports().length, 2, '核验通过后才重新确认报告可用性');
     assert.equal(h.entries().length, 1, 'unchanged warm query is not another external share');
     assert.equal(h.events.filter(event => event.event_type === 'page_view').length, 1);
   });
 
-  test(`${extension}: warm different report reloads immediately and binds only the new report and share`, async t => {
+  test(`${extension}: warm different report waits for profile, then binds only the new report and share`, async t => {
     const h = journey({ extension, token: 'session-A' }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
+    await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.holdProfile = true;
     await h.resume({ report_id: nextReportID, st: 'next-share' });
-    assert.equal(h.page.data.__profileAccessReady, true, '公开页新入口乐观重载');
+    assert.equal(h.page.data.__profileAccessReady, false);
+    assert.equal(h.reports().length, 1);
+    assert.equal(h.entries().length, 1);
+    h.releaseProfile(); await settle();
     assert.equal(h.page.data.contentReady, true);
     assert.equal(h.page.data.reportId, nextReportID);
     assert.equal(h.entries().length, 2);
@@ -321,20 +314,21 @@ for (const extension of ['ts', 'js']) {
     assert.equal(h.shares().at(-1).body.parent_share_id, 'share:next-share');
   });
 
-  test(`${extension}: profile failure after background return never disturbs browsing or tracking`, async t => {
+  test(`${extension}: profile failure after background return never resumes an old tracked credential`, async t => {
     const h = journey({ extension, token: 'session-A' }); t.after(() => h.close());
-    await h.mount(); assertBrowsingOpenly(h, { anonymous: false });
+    await h.mount(); await assertAccessibleAndAttributed(h);
     h.background(); h.server.profileMode = 'offline';
     await h.resume();
-    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.reports().length, 1, '权威资料查询失败时不重新读取内容');
     const eventCount = h.events.length;
     h.tracking.getSDK().tick(); await settle();
+    assert.equal(h.page.data.__profileAccessReady, false);
     assert.equal(h.entries().length, 1);
-    assert.equal(h.events.length, eventCount, '异常恢复不重放访问');
-    assert.ok(h.page.onShareAppMessage().path || true);
+    assert.equal(h.events.length, eventCount);
+    assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
   });
 
-  test(`${extension}: second reader scene keeps its own share after optimistic reload`, async t => {
+  test(`${extension}: public reader switches to a second scene without waiting for profile verification`, async t => {
     const h = journey({ extension, token: 'session-A', reader: true }); t.after(() => h.close());
     await h.mount();
     assert.equal(h.page.data.contentReady, true);
@@ -344,8 +338,10 @@ for (const extension of ['ts', 'js']) {
     const firstGeneration = h.page.boundEntryGeneration;
     h.background(); h.server.holdProfile = true;
     await h.resume({ scene: nextScene });
-    assert.equal(h.page.data.contentReady, true, '乐观重载立即可见');
+    assert.equal(h.page.data.__profileAccessReady, true);
+    assert.equal(h.page.data.contentReady, true);
     assert.equal(h.entries().length, 2);
+    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 2);
     assert.equal(h.entries()[1].body.content_id, 'content_two');
     assert.equal(h.entries()[1].body.content_version, 2);
     assert.equal(h.entries()[1].body.share_token, 'next-share');
@@ -364,7 +360,10 @@ for (const extension of ['ts', 'js']) {
     assert.equal(h.entries().length, 0);
     h.background(); h.server.holdProfile = true;
     await h.resume({ report_id: nextReportID });
-    assert.equal(h.page.data.__profileAccessReady, true, '乐观重载不等核验');
+    assert.equal(h.page.data.__profileAccessReady, false);
+    assert.equal(h.reports().length, 1, '新报告在资料核验前不可读取');
+    h.releaseProfile(); await settle();
+    assert.equal(h.page.data.__profileAccessReady, true);
     assert.equal(h.page.data.contentReady, true);
     assert.equal(h.page.data.reportId, nextReportID);
     assert.equal(h.reports().length, 2);

@@ -36,6 +36,44 @@ function loadPage(extension, { resumeReportAfterLogin = () => false, discardRepo
 }
 
 for (const extension of ['ts', 'js']) {
+  test(`${extension}: first visit and returning home never open an authorization or introduction overlay`, () => {
+    const { definition } = loadPage(extension);
+    let profileChecks = 0;
+    let contentLoads = 0;
+    const page = {
+      ...definition,
+      data: { ...definition.data },
+      setData(values, callback) { Object.assign(this.data, values); if (callback) callback.call(this); },
+      prepareHomeShareCovers() {},
+      initializeUnreadBannerLayout() {},
+      syncTabBar() {},
+      loadFeaturedGroups() { contentLoads += 1; },
+      checkUnreadNotifications() {},
+      selectComponent() { return { checkAndShow() { profileChecks += 1; } }; },
+    };
+    page.onLoad();
+    page.onShow();
+    page.onShow();
+    assert.equal(page.data.homeIntroPopupVisible, false, '首页先展示功能，不自动覆盖引导');
+    assert.equal(profileChecks, 0, '昵称登记只由需要身份的功能触发');
+    assert.equal(contentLoads, 2, '首页内容仍正常加载和刷新');
+  });
+
+  test(`${extension}: dismissing an introduction never chains into required profile registration`, () => {
+    const { definition } = loadPage(extension);
+    let profileChecks = 0;
+    const page = {
+      ...definition,
+      data: { ...definition.data, homeIntroPopupVisible: true },
+      rememberHomeIntroPopupSeen() {},
+      setData(values, callback) { Object.assign(this.data, values); if (callback) callback.call(this); },
+      selectComponent() { return { checkAndShow() { profileChecks += 1; } }; },
+    };
+    page.closeHomeIntroPopup();
+    assert.equal(page.data.homeIntroPopupVisible, false);
+    assert.equal(profileChecks, 0);
+  });
+
   test(`${extension}: 首页分享使用建房助手标题、专用封面和首页路径`, () => {
     const { definition } = loadPage(extension);
     const share = definition.onShareAppMessage();
@@ -101,8 +139,9 @@ for (const extension of ['ts', 'js']) {
     definition.onLoad.call({
       prepareHomeShareCovers() {},
       showHomeIntroPopupOnce() { introCalls += 1; },
+      initializeUnreadBannerLayout() {},
     });
-    assert.equal(introCalls, 1);
+    assert.equal(introCalls, 0, '首页不自动弹出介绍或授权面板');
     assert.equal(menus.length, 0, '单页模式禁止分享菜单，由全局 onShow 判断后再开启');
   });
 
@@ -117,6 +156,7 @@ for (const extension of ['ts', 'js']) {
       const page = {
         prepareHomeShareCovers() {},
         showHomeIntroPopupOnce() {},
+        initializeUnreadBannerLayout() {},
         syncTabBar() {},
         loadFeaturedGroups() { contentLoads++; },
         promptNicknameIfMissing() {},
@@ -135,7 +175,7 @@ for (const extension of ['ts', 'js']) {
   test(`${extension}: 普通登录返回首页仍可恢复报告`, () => {
     let resumeCalls = 0;
     const { definition } = loadPage(extension, { resumeReportAfterLogin: () => { resumeCalls++; return true; } });
-    const page = { prepareHomeShareCovers() {}, showHomeIntroPopupOnce() {}, syncTabBar() { assert.fail('应先恢复报告'); } };
+    const page = { prepareHomeShareCovers() {}, showHomeIntroPopupOnce() {}, initializeUnreadBannerLayout() {}, syncTabBar() { assert.fail('应先恢复报告'); } };
     definition.onLoad.call(page, {});
     definition.onShow.call(page);
     assert.equal(resumeCalls, 1);

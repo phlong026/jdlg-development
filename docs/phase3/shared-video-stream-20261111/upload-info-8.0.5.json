@@ -1,0 +1,259 @@
+{
+  "size": {
+    "total": 3186137,
+    "packages": [
+      {
+        "name": "TOTAL",
+        "size": 3186137
+      },
+      {
+        "name": "main",
+        "size": 1278626
+      },
+      {
+        "name": "/pages/adminhome/",
+        "size": 890
+      },
+      {
+        "name": "/pages/adminlogin/",
+        "size": 677
+      },
+      {
+        "name": "/pages/aicost/",
+        "size": 18614
+      },
+      {
+        "name": "/pages/aicostresult/",
+        "size": 17138
+      },
+      {
+        "name": "/pages/aicostshare/",
+        "size": 6930
+      },
+      {
+        "name": "/pages/aigenerate/",
+        "size": 68434
+      },
+      {
+        "name": "/pages/aitoolworkbench/",
+        "size": 33622
+      },
+      {
+        "name": "/pages/aivideo/",
+        "size": 32642
+      },
+      {
+        "name": "/pages/allrounddesign/",
+        "size": 42204
+      },
+      {
+        "name": "/pages/buildingcodedocs/",
+        "size": 9562
+      },
+      {
+        "name": "/pages/buildingreplacement/",
+        "size": 18886
+      },
+      {
+        "name": "/pages/chat/",
+        "size": 40185
+      },
+      {
+        "name": "/pages/checkin/",
+        "size": 24215
+      },
+      {
+        "name": "/pages/collectionreader/",
+        "size": 12639
+      },
+      {
+        "name": "/pages/contentedit/",
+        "size": 106973
+      },
+      {
+        "name": "/pages/contentreader/",
+        "size": 43902
+      },
+      {
+        "name": "/pages/contentworkbench/",
+        "size": 44208
+      },
+      {
+        "name": "/pages/contentwriting/",
+        "size": 33175
+      },
+      {
+        "name": "/pages/customerservice/",
+        "size": 49178
+      },
+      {
+        "name": "/pages/designerhome/",
+        "size": 60537
+      },
+      {
+        "name": "/pages/generatedetails/",
+        "size": 109210
+      },
+      {
+        "name": "/pages/generatehistory/",
+        "size": 38868
+      },
+      {
+        "name": "/pages/generateprogress/",
+        "size": 9446
+      },
+      {
+        "name": "/pages/Identityauthen/",
+        "size": 21264
+      },
+      {
+        "name": "/pages/inspirationdetail/",
+        "size": 11615
+      },
+      {
+        "name": "/pages/Invitefriends/",
+        "size": 37754
+      },
+      {
+        "name": "/pages/lingshidetails/",
+        "size": 16792
+      },
+      {
+        "name": "/pages/messagecenter/",
+        "size": 19576
+      },
+      {
+        "name": "/pages/myfavorites/",
+        "size": 25963
+      },
+      {
+        "name": "/pages/myInformationmodification/",
+        "size": 39374
+      },
+      {
+        "name": "/pages/myplan/",
+        "size": 30673
+      },
+      {
+        "name": "/pages/nativereferences/",
+        "size": 20715
+      },
+      {
+        "name": "/pages/newminnantool/",
+        "size": 26438
+      },
+      {
+        "name": "/pages/orderdetail/",
+        "size": 16435
+      },
+      {
+        "name": "/pages/ordermanagement/",
+        "size": 41036
+      },
+      {
+        "name": "/pages/Parentchildcreativity/",
+        "size": 24478
+      },
+      {
+        "name": "/pages/passwordrecovery/",
+        "size": 7122
+      },
+      {
+        "name": "/pages/phonebind/",
+        "size": 6399
+      },
+      {
+        "name": "/pages/privacy/",
+        "size": 11569
+      },
+      {
+        "name": "/pages/projectcollections/",
+        "size": 34852
+      },
+      {
+        "name": "/pages/projectinvite/",
+        "size": 6850
+      },
+      {
+        "name": "/pages/projectnotes/",
+        "size": 137839
+      },
+      {
+        "name": "/pages/projectnoteview/",
+        "size": 34974
+      },
+      {
+        "name": "/pages/projectpackage/",
+        "size": 21160
+      },
+      {
+        "name": "/pages/projectpackageview/",
+        "size": 20234
+      },
+      {
+        "name": "/pages/real/",
+        "size": 15771
+      },
+      {
+        "name": "/pages/release/",
+        "size": 59166
+      },
+      {
+        "name": "/pages/report/",
+        "size": 76159
+      },
+      {
+        "name": "/pages/ruralvilladesign/",
+        "size": 28242
+      },
+      {
+        "name": "/pages/settings/",
+        "size": 36252
+      },
+      {
+        "name": "/pages/sharevisits/",
+        "size": 28503
+      },
+      {
+        "name": "/pages/specadvisor/",
+        "size": 25158
+      },
+      {
+        "name": "/pages/templatepreview/",
+        "size": 8399
+      },
+      {
+        "name": "/pages/templatesquaredetails/",
+        "size": 70637
+      },
+      {
+        "name": "/pages/topupcenter/",
+        "size": 52092
+      },
+      {
+        "name": "/pages/utilitytooldetail/",
+        "size": 6356
+      },
+      {
+        "name": "/pages/utilitytools/",
+        "size": 7412
+      },
+      {
+        "name": "/pages/visitdetail/",
+        "size": 16100
+      },
+      {
+        "name": "/pages/voicecall/",
+        "size": 5300
+      },
+      {
+        "name": "/pages/wallet/",
+        "size": 22643
+      },
+      {
+        "name": "/pages/withdrawcenter/",
+        "size": 14074
+      }
+    ]
+  }
+}

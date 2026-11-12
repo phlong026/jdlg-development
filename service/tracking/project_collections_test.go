@@ -235,6 +235,81 @@ func TestProjectCollectionDeleteOnlyUnpublishedDraftAndKeepsSource(t *testing.T)
 	}
 }
 
+func TestProjectCollectionDeleteSupportsPublishedAndRevokedAndInvalidatesFixedVersion(t *testing.T) {
+	s, scope := fixture(t)
+	var revokedCollectionID string
+	s.OnCollectionRevoke = func(_ context.Context, collectionID string) error {
+		revokedCollectionID = collectionID
+		return nil
+	}
+	s.Config.Routes[projectCollectionReaderRoute] = Route{Public: true}
+	ctx := context.Background()
+	source := publishNativeReferenceContent(t, s, scope, "原作品", "collection-delete-any-source")
+	draft, err := s.SaveProjectCollection(ctx, scope, "", collectionInput(scope.Owners[0], "collection-delete-any-create", source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := s.PreviewProjectCollection(ctx, scope, draft.ID, draft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := s.PublishProjectCollection(ctx, scope, draft.ID, draft.Revision, preview.PreviewToken, "collection-delete-any-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := s.Enter(ctx, EntryInput{Route: projectCollectionReaderRoute, Content: draft.ID, Version: published.Version, Client: "collection-delete-client", Consent: s.Config.ConsentVersion}, scope.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, err := s.CreateShare(ctx, ShareInput{Route: projectCollectionReaderRoute, Content: draft.ID, Version: published.Version, Channel: "app_message", Key: "collection-delete-share"}, entry.Token, scope.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DeleteProjectCollection(ctx, Scope{Tenant: scope.Tenant, Actor: scope.Actor + 1, Owners: scope.Owners, Manage: true}, draft.ID, published.Revision); err == nil {
+		t.Fatal("其他创建人删除成功")
+	}
+	if _, err = s.DeleteProjectCollection(ctx, scope, draft.ID, published.Revision+1); err == nil {
+		t.Fatal("过期版本删除成功")
+	}
+	deleted, err := s.DeleteProjectCollection(ctx, scope, draft.ID, published.Revision)
+	if err != nil || deleted.Status != "deleted" {
+		t.Fatalf("deleted=%#v err=%v", deleted, err)
+	}
+	if revokedCollectionID != draft.ID {
+		t.Fatalf("notification collection=%q want=%q", revokedCollectionID, draft.ID)
+	}
+	if _, err = s.ReadPublishedProjectCollection(ctx, draft.ID, published.Version); err == nil {
+		t.Fatal("删除后固定版本仍可访问")
+	}
+	if _, err = s.ResolveShareRecord(ctx, shared["share_token"].(string)); err == nil {
+		t.Fatal("删除后合集旧分享仍可打开")
+	}
+	if _, err = s.ReadContent(ctx, source.ID, source.Version); err != nil {
+		t.Fatalf("删除合集误删原作: %v", err)
+	}
+}
+
+func TestProjectCollectionDeleteRollsBackWhenNotificationCancellationFails(t *testing.T) {
+	s, scope := fixture(t)
+	ctx := context.Background()
+	source := publishNativeReferenceContent(t, s, scope, "回滚原作", "collection-delete-rollback-source")
+	draft, err := s.SaveProjectCollection(ctx, scope, "", collectionInput(scope.Owners[0], "collection-delete-rollback-create", source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.OnCollectionRevoke = func(context.Context, string) error {
+		return errors.New("notification cancellation failed")
+	}
+
+	if _, err = s.DeleteProjectCollection(ctx, scope, draft.ID, draft.Revision); err == nil {
+		t.Fatal("通知取消失败后合集仍被删除")
+	}
+	kept, err := s.ProjectCollection(ctx, scope, draft.ID)
+	if err != nil || kept.Status == "deleted" || kept.Revision != draft.Revision {
+		t.Fatalf("collection=%#v err=%v", kept, err)
+	}
+}
+
 func TestProjectCollectionStorageCorruptionIsNotDisguisedAsClientError(t *testing.T) {
 	s, scope := fixture(t)
 	ctx := context.Background()

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 )
@@ -47,6 +48,30 @@ func TestImportFetcherBoundsBodiesAndRejectsPartialMedia(t *testing.T) {
 	})
 	if _, _, err := f.FetchMedia(context.Background(), WechatArticle, "https://mpvideo.qpic.cn/v.mp4", 10); err == nil {
 		t.Fatal("unbounded body")
+	}
+}
+
+func TestImportFetcherStreamsMediaToTemporaryFile(t *testing.T) {
+	f := NewHTTPFetcher()
+	payload := strings.Repeat("0123456789abcdef", 4096)
+	f.client.Transport = importRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"video/mp4"}}, Body: io.NopCloser(strings.NewReader(payload)), ContentLength: int64(len(payload))}, nil
+	})
+	media, err := f.FetchMediaFile(context.Background(), Channels, "https://mpvideo.qpic.cn/v.mp4", int64(len(payload)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer media.Remove()
+	info, err := os.Stat(media.Path)
+	if err != nil || info.Size() != int64(len(payload)) || media.Size != int64(len(payload)) || media.SHA256 == "" || media.MIME != "video/mp4" {
+		t.Fatalf("media=%+v info=%v err=%v", media, info, err)
+	}
+
+	f.client.Transport = importRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(payload + "x")), ContentLength: -1}, nil
+	})
+	if _, err = f.FetchMediaFile(context.Background(), Channels, "https://mpvideo.qpic.cn/v.mp4", int64(len(payload))); errorCode(err) != "media_too_large" {
+		t.Fatalf("oversize err=%v", err)
 	}
 }
 func TestSourceLinkIncludesWechatArticleAndRejectsProfile(t *testing.T) {

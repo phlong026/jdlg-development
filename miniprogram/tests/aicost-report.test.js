@@ -9,7 +9,7 @@ const pagePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostr
 const shareCardPath = path.join(__dirname, '../miniprogram/utils/costEstimateShareImage.ts');
 const reportTemplatePath = path.join(__dirname, '../miniprogram/pages/aicostresult/aicostresult.wxml');
 
-function createHarness(cachedResult) {
+function createHarness(cachedResult, userID = 17) {
   let definition;
   const toasts = [];
   const navigation = [];
@@ -47,11 +47,12 @@ function createHarness(cachedResult) {
     console: { ...console, error() {} },
     wx: {
       getStorageSync(key) {
-        if (key === 'aicostEstimateResult') {
+        if (key === `aicostEstimateResult:${userID}`) {
           if (cachedResult instanceof Error) throw cachedResult;
           return cachedResult;
         }
         if (key === 'token') return 'fixture-token';
+        if (key === 'userInfo') return userID ? { id: userID } : {};
         return '';
       },
       showToast(options) { toasts.push(options.title); },
@@ -177,6 +178,13 @@ test('report rejects old or unreadable cache and asks for a fresh estimate', () 
     assert.equal(h.toasts[0], '测算数据已更新，请重新测算');
     assert.equal(h.navigatedBack, 1);
   }
+});
+
+test('private report never reads an unowned legacy cache or another account cache', () => {
+  const missingOwner = createHarness(currentResult, 0);
+  missingOwner.page.onLoad();
+  assert.equal(missingOwner.page.data.estimatedTotalCost, '');
+  assert.equal(missingOwner.navigatedBack, 1);
 });
 
 test('cost details toggle without changing the estimate snapshot', () => {

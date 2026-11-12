@@ -15,6 +15,7 @@ type projectNoteMemberPresentation struct {
 	tracking.ProjectNoteMember
 	DisplayName string `json:"display_name"`
 	Avatar      string `json:"avatar,omitempty"`
+	InviterName string `json:"inviter_name,omitempty"`
 }
 
 type projectNoteConfirmationPresentation struct {
@@ -85,6 +86,7 @@ func presentProjectNoteProjectDetail(ctx context.Context, detail tracking.Projec
 	for _, member := range detail.Members {
 		if member.Active {
 			addID(member.ActorID)
+			addID(member.InviterID)
 		}
 	}
 	for _, confirmation := range detail.Confirmations {
@@ -113,10 +115,15 @@ func presentProjectNoteProjectDetail(ctx context.Context, detail tracking.Projec
 		if name == "" {
 			name = "项目成员"
 		}
+		inviterName := ""
+		if member.Active && member.InviterID > 0 {
+			inviterName = projectNoteCreatorDisplayName(profiles[member.InviterID])
+		}
 		out.Members = append(out.Members, projectNoteMemberPresentation{
 			ProjectNoteMember: member,
 			DisplayName:       name,
 			Avatar:            sanitizePublicImageURL(profile.Avatar),
+			InviterName:       inviterName,
 		})
 	}
 	for _, confirmation := range detail.Confirmations {

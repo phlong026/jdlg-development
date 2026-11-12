@@ -118,6 +118,10 @@
             <text>下载会员</text>
           </view>
         </view>
+        <view class="account-enhancement-notice" wx:if="{{accountEnhancementState === 'retryable'}}">
+          <text class="account-enhancement-message">{{accountEnhancementError}}</text>
+          <button class="account-enhancement-retry" bindtap="retryTemplateAccountEnhancement">重试同步</button>
+        </view>
       </view>
     </view>
 

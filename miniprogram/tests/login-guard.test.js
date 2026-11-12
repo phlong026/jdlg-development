@@ -7,11 +7,8 @@ const ts = require('./report-runtime')('typescript');
 const root = path.resolve(__dirname, '..');
 const complete = { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/portrait.jpg' };
 
-test('权威资料核验期间显示品牌加载态，不露出内容或登录按钮', () => {
+test('真实登录与资料补全仍保留明确的拒绝或返回入口', () => {
   const wxml = fs.readFileSync(path.join(root, 'miniprogram/components/login-guard/login-guard.wxml'), 'utf8');
-  assert.match(wxml, /wx:if="\{\{checking\}\}"[^>]*class="login-guard aw-card lg-checking"/);
-  assert.match(wxml, /正在核验登录资料/);
-  assert.match(wxml, /hidden="\{\{!visible && !checking && !loggingIn && !completingProfile\}\}" class="login-guard-panel"/);
   // 审核整改：登录环节必须有显著的取消/拒绝按钮
   assert.match(wxml, /lg-close" catchtap="onDismiss"/, '右上角关闭按钮');
   assert.match(wxml, /lg-skip" catchtap="onDismiss"/, '暂不登录按钮');
@@ -67,6 +64,16 @@ for (const ext of ['ts', 'js']) {
   });
   test(`${ext}: missing token remains blocked`, async () => {
     const f = load(ext); assert.equal(await f.instance.check(), false); assert.equal(f.instance.data.visible, true); assert.ok(f.events.some(e => e.name === 'gated')); assert.equal(f.requests.length, 0);
+  });
+  test(`${ext}: soft full-profile action can be dismissed without leaving the account-only page`, async () => {
+    const profile = { ...complete, avatar: '' };
+    const f = load(ext, { token: 'tk', profile });
+    assert.equal(await f.instance.check({ soft: true }), false);
+    assert.equal(f.events.find(e => e.name === 'gated').detail.soft, true);
+    profile.avatar = complete.avatar;
+    assert.equal(await f.instance.onProfileCompleted(), true, '补全后的重检继续沿用 soft 模式并放行');
+    f.instance.onDismiss();
+    assert.deepEqual(f.navigations, []);
   });
   test(`${ext}: silent background verify keeps the panel hidden, never gates early and still grants`, async () => {
     const f = load(ext, { token: 'tk', cachedProfile: complete, defer: true });
@@ -193,3 +200,77 @@ test('my 页：头像为官方 chooseAvatar 按钮且选完自动上传保存', 
     assert.match(source, /profile\/avatar/, '选中后保存到资料接口');
   }
 });
+
+// 单篇项目笔记分享与其他受保护页统一：登录后必须有已保存的昵称和头像。
+for (const ext of ['ts', 'js']) {
+  test(`${ext}: 分享查看场景缺头像仍拦截并打开完整资料表单`, async () => {
+    const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: '' } });
+    const ok = await f.instance.check({ scope: 'share' });
+    assert.equal(ok, false, '缺头像不得放行');
+    assert.ok(f.events.some(e => e.name === 'gated'));
+    assert.equal(f.shows.length, 1);
+    assert.equal(Object.hasOwn(f.shows[0], 'nicknameOnly'), false, '不得保留仅昵称的入参');
+  });
+  test(`${ext}: 分享查看场景缺昵称同样使用完整资料口径`, async () => {
+    const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '', avatar: '' } });
+    const ok = await f.instance.check({ scope: 'share' });
+    assert.equal(ok, false, '缺昵称必须补');
+    assert.ok(f.shows.length >= 1);
+    assert.equal(Object.hasOwn(f.shows[f.shows.length - 1], 'nicknameOnly'), false);
+  });
+  test(`${ext}: 分享查看只要求登录昵称和头像，不要求手机号`, async () => {
+    const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/avatar.jpg' } });
+    assert.equal(await f.instance.check({ scope: 'share' }), true);
+    assert.equal(f.shows.length, 0);
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 1);
+  });
+  test(`${ext}: 身份功能页仍要求完整资料`, async () => {
+    const f = load(ext, { token: 'tk', profile: { id: 9, nickname: '林间访客', avatar: '' } });
+    const ok = await f.instance.check();
+    assert.equal(ok, false, '身份页缺头像不放行');
+    assert.ok(f.shows.length >= 1);
+    assert.equal(Object.hasOwn(f.shows[f.shows.length - 1], 'nicknameOnly'), false);
+  });
+}
+
+// 分享页仍保留 share-view 返回语义，但登录页不得再降级为仅昵称。
+test('the share page keeps its return scene without a nickname-only login exception', () => {
+  for (const file of ['projectnoteview.js', 'projectnoteview.ts']) {
+    const code = fs.readFileSync(path.join(root, 'miniprogram/pages/projectnoteview', file), 'utf8');
+    assert.match(code, /\/pages\/login\/login\?from=share-view/, file);
+  }
+  for (const file of ['login.js', 'login.ts']) {
+    const code = fs.readFileSync(path.join(root, 'miniprogram/pages/login', file), 'utf8');
+    assert.doesNotMatch(code, /hasProfileNickname|_loginScene/, file + ' 分享登录不得再放宽资料要求');
+    assert.match(code, /hasCompleteProfile/, file + ' 必须统一校验完整资料');
+  }
+});
+
+test('the removed P8 nickname-only mode cannot be re-enabled by any profile gate caller', () => {
+  for (const relativePath of [
+    'miniprogram/components/login-guard/login-guard.ts',
+    'miniprogram/components/login-guard/login-guard.js',
+    'miniprogram/components/login-guard/login-guard.wxml',
+    'miniprogram/components/nickname-guard/nickname-guard.ts',
+    'miniprogram/components/nickname-guard/nickname-guard.js',
+    'miniprogram/components/nickname-guard/nickname-guard.wxml',
+    'miniprogram/pages/login/login.ts',
+    'miniprogram/pages/login/login.js',
+  ]) {
+    const source = fs.readFileSync(path.join(root, relativePath), 'utf8');
+    assert.doesNotMatch(source, /nicknameOnly/, relativePath);
+  }
+});
+
+// 补齐头像后的内部重检仍复用分享场景，但只有完整资料才放行。
+for (const ext of ['ts', 'js']) {
+  test(`${ext}: 分享场景补齐头像后重检才放行`, async () => {
+    const profile = { id: 9, nickname: '林间访客', avatar: '' };
+    const f = load(ext, { token: 'tk', profile });
+    assert.equal(await f.instance.check({ scope: 'share' }), false);
+    profile.avatar = 'https://cdn.example/confirmed-avatar.jpg';
+    assert.equal(await f.instance.onProfileCompleted(), true, '头像和昵称完整后放行');
+    assert.equal(await f.instance.onRetry(), true, '重试仍校验完整资料');
+    assert.equal(f.events.filter(e => e.name === 'authenticated').length, 2);
+  });
+}

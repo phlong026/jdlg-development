@@ -151,6 +151,7 @@ Page({
     contentReady: false,
     userId: 0,
     isSelfHomepage: false,
+    isPreviewMode: false,
     loading: true,
     isFollowed: false,
     isFavorited: false,
@@ -178,6 +179,7 @@ Page({
       experienceText: '一年经验',
       bioText: '个人信息：室内设计师',
       specialtiesText: '专业领域：室内设计，室外设计，庭院设计',
+      region: '',
       certStatusLabel: '',
     },
     stats: {
@@ -206,6 +208,7 @@ Page({
     avatarManageHint: '',
     specialtyTags: [] as string[],
     allWorks: [] as DesignerWorkItem[],
+    visibleWorks: [] as DesignerWorkItem[],
     visibleWorkCount: INITIAL_VISIBLE_WORK_COUNT,
     worksHasMore: false,
     worksLeft: [] as DesignerWorkItem[],
@@ -218,6 +221,7 @@ Page({
     this.initNavLayout();
     const userId = Number(options?.userId || options?.id || 0);
     const currentUserId = this.getCurrentUserId();
+    const isPreviewMode = String(options?.preview || '') === '1';
     if (!userId) {
       wx.showToast({
         title: '缺少设计师信息',
@@ -229,11 +233,16 @@ Page({
     this.setData({
       userId,
       isSelfHomepage: currentUserId > 0 && currentUserId === userId,
+      isPreviewMode,
       isFollowed: false,
       showProfileOverviewSections: false,
       avatarManageHint: buildAvatarManageHint(currentUserId > 0 && currentUserId === userId, false),
     });
-    this.loadDesignerHomepage();
+    this.loadDesignerHomepage().then(() => {
+      if (String(options?.consult || '') === '1' && this.data.contentReady) {
+        void this.onConsultDesigner();
+      }
+    });
     this.loadFollowState();
     this.loadFavoriteState();
   },
@@ -266,6 +275,7 @@ Page({
     const columns = this.splitWorks(visibleWorks);
     this.setData({
       allWorks,
+      visibleWorks,
       visibleWorkCount: nextVisibleWorkCount,
       worksHasMore: nextVisibleWorkCount < allWorks.length,
       worksLeft: columns.left,
@@ -284,7 +294,7 @@ Page({
 
   initNavLayout() {
     try {
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function'
         ? wx.getMenuButtonBoundingClientRect()
         : null;
@@ -385,21 +395,50 @@ Page({
     this.setData({ loading: true, contentReady: false });
 
     try {
-      const data = await new Promise<any>((resolve, reject) => {
+      const requestHomepage = (path: string, token = '') => new Promise<any>((resolve, reject) => {
         wx.request({
-          url: `${API_BASE_URL}/api/v1/miniprogram/designers/${userId}/homepage`,
+          url: `${API_BASE_URL}${path}`,
           method: 'GET',
+          header: token ? { token } : {},
           success: (res) => {
             const body = (res.data || {}) as any;
             if (res.statusCode === 200 && body.code === 0) {
               resolve(body.data || {});
               return;
             }
-            reject(new Error(body.msg || `请求失败: ${res.statusCode}`));
+            reject(Object.assign(new Error(body.msg || `请求失败: ${res.statusCode}`), {
+              statusCode: Number(res.statusCode) || Number(body.code) || 0,
+            }));
           },
           fail: reject,
         });
       });
+      const publicPath = `/api/v1/miniprogram/designers/${userId}/homepage`;
+      let data: any;
+      const privateToken = this.getAuthToken();
+      if (this.data.isSelfHomepage && privateToken) {
+        try {
+          data = await requestHomepage('/api/v1/miniprogram/user/designer-center', privateToken);
+          const sameRoute = this.data.isSelfHomepage && Number(this.data.userId || 0) === userId;
+          const sameAccount = this.getAuthToken() === privateToken;
+          const responseUserId = Number(data?.profile?.user_id || 0);
+          if (!sameRoute || !sameAccount || responseUserId !== userId) {
+            throw Object.assign(new Error('账号或设计师主页已变更，请重新进入'), { statusCode: 409 });
+          }
+        } catch (error: any) {
+          const statusCode = Number(error?.statusCode || 0);
+          const currentToken = this.getAuthToken();
+          const sessionExpired = statusCode === 401 && currentToken === '';
+          const sameAccount = currentToken === privateToken;
+          if ((sessionExpired || sameAccount) && [401, 403, 428].includes(statusCode)) {
+            data = await requestHomepage(publicPath);
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        data = await requestHomepage(publicPath);
+      }
 
       const works = Array.isArray(data.works) ? data.works : [];
       const mappedWorks: DesignerWorkItem[] = works.map((item: any) => ({
@@ -450,6 +489,7 @@ Page({
           experienceText: String(data?.profile?.experience_text || '一年经验'),
           bioText: String(data?.profile?.bio_text || '个人信息：室内设计师'),
           specialtiesText: String(data?.profile?.specialties_text || '专业领域：室内设计，室外设计，庭院设计'),
+          region: String(data?.profile?.designer_region || '').trim(),
           certStatusLabel: mapCertStatusLabel(String(data?.profile?.cert_status || '')),
         },
         stats: {
@@ -486,6 +526,7 @@ Page({
       this.setData({
         loading: false,
         allWorks: [],
+        visibleWorks: [],
         visibleWorkCount: INITIAL_VISIBLE_WORK_COUNT,
         worksHasMore: false,
         worksLeft: [],
@@ -636,6 +677,40 @@ Page({
     }
   },
 
+  onProfileAvatarError() {
+    if (this.data.profile.avatar) {
+      this.setData({ 'profile.avatar': '' });
+    }
+  },
+
+  onReviewAvatarError(e: any) {
+    const index = Number(e.currentTarget?.dataset?.index);
+    const reviewId = Number(e.currentTarget?.dataset?.id) || 0;
+    const filteredReviews = Array.isArray(this.data.filteredReviews) ? this.data.filteredReviews : [];
+    if (!Number.isInteger(index) || index < 0 || index >= filteredReviews.length) {
+      return;
+    }
+    const target = filteredReviews[index];
+    const nextFilteredReviews = filteredReviews.map((review: DesignerReviewItem, reviewIndex: number) => (
+      reviewIndex === index ? { ...review, avatar: '' } : review
+    ));
+    let cleared = false;
+    const nextAllReviews = (Array.isArray(this.data.allReviews) ? this.data.allReviews : []).map((review: DesignerReviewItem) => {
+      const matches = reviewId > 0
+        ? Number(review.id) === reviewId
+        : !cleared && review.avatar === target.avatar && review.name === target.name;
+      if (!matches || cleared) {
+        return review;
+      }
+      cleared = true;
+      return { ...review, avatar: '' };
+    });
+    this.setData({
+      filteredReviews: nextFilteredReviews,
+      allReviews: nextAllReviews,
+    });
+  },
+
   async onToggleFollowDesigner() {
     const userId = Number(this.data.userId || 0);
     if (!userId) {
@@ -747,6 +822,12 @@ Page({
         });
       },
     });
+  },
+
+  onPreviewHomepage() {
+    const userId = Number(this.data.userId || 0);
+    if (!userId) return;
+    wx.navigateTo({ url: `/pages/designerhome/designerhome?userId=${encodeURIComponent(String(userId))}&preview=1` });
   },
 
   onOpenDesignerCertification() {

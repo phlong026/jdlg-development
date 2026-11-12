@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,10 +18,44 @@ import (
 
 // Exercise the production route handlers and service with an injected verified
 // scope. Authentication middleware is not replaced in production.
-type governanceTestStore struct{ records map[string]tracking.Record }
+type governanceTestStore struct {
+	mu      sync.RWMutex
+	records map[string]tracking.Record
+}
 type governanceTestRepo struct{ records map[string]tracking.Record }
 
+func TestGovernanceTestStoreSerializesConcurrentTransactions(t *testing.T) {
+	const workers = 16
+	store := &governanceTestStore{records: map[string]tracking.Record{}}
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	var wait sync.WaitGroup
+	for index := 0; index < workers; index++ {
+		wait.Add(1)
+		go func(index int) {
+			defer wait.Done()
+			<-start
+			errs <- store.Transaction(context.Background(), "tenant", func(repo tracking.Repository) error {
+				return repo.Insert(tracking.Record{Kind: "event", ID: string(rune('a' + index))})
+			})
+		}(index)
+	}
+	close(start)
+	wait.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if records := store.snapshot(); len(records) != workers {
+		t.Fatalf("stored records=%d, want %d", len(records), workers)
+	}
+}
+
 func (s *governanceTestStore) Transaction(_ context.Context, tenant string, fn func(tracking.Repository) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	next := map[string]tracking.Record{}
 	for key, row := range s.records {
 		if row.Tenant != tenant {
@@ -38,6 +73,42 @@ func (s *governanceTestStore) Transaction(_ context.Context, tenant string, fn f
 	}
 	s.records = next
 	return nil
+}
+
+func (s *governanceTestStore) ReadTransaction(_ context.Context, tenant string, fn func(tracking.Repository) error) error {
+	s.mu.RLock()
+	next := map[string]tracking.Record{}
+	for key, row := range s.records {
+		if row.Tenant != tenant {
+			s.mu.RUnlock()
+			return errors.New("unexpected tenant")
+		}
+		next[key] = row
+	}
+	s.mu.RUnlock()
+	return fn(&governanceTestRepo{records: next})
+}
+
+func (s *governanceTestStore) snapshot() map[string]tracking.Record {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	next := make(map[string]tracking.Record, len(s.records))
+	for key, row := range s.records {
+		next[key] = row
+	}
+	return next
+}
+
+func (s *governanceTestStore) count() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.records)
+}
+
+func (s *governanceTestStore) seed(row tracking.Record) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.records[row.Kind+":"+row.ID] = row
 }
 func (r *governanceTestRepo) Get(kind, id string) (tracking.Record, error) {
 	row, ok := r.records[kind+":"+id]
@@ -84,7 +155,7 @@ func governanceRouteFixture(t *testing.T, owners []string) (*gin.Engine, *govern
 	scope := tracking.Scope{Tenant: svc.Config.Tenant, Actor: 7, Owners: owners, View: true, CRM: true, Rules: true, Delete: true}
 	for _, owner := range []string{"owner-a", "owner-b"} {
 		row := tracking.Record{Tenant: scope.Tenant, Kind: "event", ID: "event-" + owner, Owner: owner, Visitor: "u:42", At: now, Payload: json.RawMessage(`{}`)}
-		store.records[row.Kind+":"+row.ID] = row
+		store.seed(row)
 		seedScope := scope
 		seedScope.Owners = []string{owner}
 		if err := svc.LinkCRM(context.Background(), seedScope, "u:42", "crm-"+owner, "number-"+owner, "verified seed"); err != nil {
@@ -116,7 +187,7 @@ func TestTrackingGovernanceMutationOwnerScope(t *testing.T) {
 		}{{"unauthorized", "?owner=outside", 403}, {"missing_mixed", "", 409}, {"empty", "?owner=", 400}, {"duplicate", "?owner=owner-a&owner=owner-b", 400}, {"selected", "?owner=owner-b", 200}} {
 			t.Run(mutation.name+"/"+query.name, func(t *testing.T) {
 				router, store, svc := governanceRouteFixture(t, []string{"owner-a", "owner-b"})
-				before := store.records
+				before := store.snapshot()
 				verified := []tracking.Scope{}
 				svc.VerifyCRM = func(_ context.Context, scope tracking.Scope, _, _, _ string) error {
 					verified = append(verified, scope)
@@ -128,18 +199,19 @@ func TestTrackingGovernanceMutationOwnerScope(t *testing.T) {
 					t.Fatalf("status %d, want %d: %s", response.Code, query.status, response.Body.String())
 				}
 				if query.status != 200 {
-					if !reflect.DeepEqual(before, store.records) || len(verified) != 0 {
+					if !reflect.DeepEqual(before, store.snapshot()) || len(verified) != 0 {
 						t.Fatal("rejected scope changed data or reached CRM verifier")
 					}
 					return
 				}
+				after := store.snapshot()
 				for key, row := range before {
-					if row.Owner != "owner-b" && !reflect.DeepEqual(row, store.records[key]) {
+					if row.Owner != "owner-b" && !reflect.DeepEqual(row, after[key]) {
 						t.Fatal("changed another owner's record", row.Kind, row.Owner)
 					}
 				}
 				selectedCount := 0
-				for _, row := range store.records {
+				for _, row := range after {
 					if row.Kind == mutation.kind && row.Owner == "owner-b" {
 						selectedCount++
 						if mutation.name == "link" && !strings.Contains(string(row.Payload), "new-customer") {
@@ -183,19 +255,19 @@ func TestTrackingDeletionIgnoresAnnotationSelectionAndRequiresFullScope(t *testi
 	}{{"full_scope", []string{"owner-a", "owner-b"}, 200}, {"partial_scope", []string{"owner-a"}, 403}} {
 		t.Run(tc.name, func(t *testing.T) {
 			router, store, _ := governanceRouteFixture(t, tc.owners)
-			before := store.records
+			before := store.snapshot()
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/management/tracking/deletions?owner=owner-a", strings.NewReader(`{"visitor_key":"u:42","reason":"verified deletion request"}`)))
 			if response.Code != tc.status {
 				t.Fatal(response.Code, response.Body.String())
 			}
 			if tc.status != 200 {
-				if !reflect.DeepEqual(before, store.records) {
+				if !reflect.DeepEqual(before, store.snapshot()) {
 					t.Fatal("partial-scope deletion changed records")
 				}
 				return
 			}
-			for _, row := range store.records {
+			for _, row := range store.snapshot() {
 				if row.Kind == "event" || row.Kind == "crm" {
 					t.Fatal("selection narrowed full identity deletion", row.Kind, row.Owner)
 				}

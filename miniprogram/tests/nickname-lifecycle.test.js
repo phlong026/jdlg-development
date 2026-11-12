@@ -44,7 +44,7 @@ for (const ext of ['ts','js']) {
     assert.deepEqual(f.navigation,[]);
     assert.equal(f.storage.token,'diagnostic-token');
   });
-  test(`${ext}: welcome popup close resumes nickname check in the same visit`,async()=>{
+  test(`${ext}: welcome popup close continues browsing without forced nickname registration`,async()=>{
     let checks=0;
     const f=load('pages/index/index',ext,{component:{checkAndShow:async()=>{checks++;}}});
     f.instance.syncTabBar=()=>{};f.instance.loadFeaturedGroups=()=>{};
@@ -52,7 +52,7 @@ for (const ext of ['ts','js']) {
     f.instance.onShow(); await Promise.resolve();
     assert.equal(checks,0);
     f.instance.closeHomeIntroPopup();await new Promise(setImmediate);
-    assert.equal(checks,1);
+    assert.equal(checks,0);
   });
   test(`${ext}: interrupted reminder reappears, explicit postponement is account scoped`,async()=>{
     const storage={token:'account-A',userInfo:{id:101}};

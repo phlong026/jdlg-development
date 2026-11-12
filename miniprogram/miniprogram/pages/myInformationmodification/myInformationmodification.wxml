@@ -104,6 +104,17 @@
       </view>
 
       <view class="designer-form-item">
+        <text class="designer-form-label">所在地</text>
+        <picker mode="region" custom-item="不限" value="{{designerForm.designerRegionParts}}" bindchange="onDesignerRegionChange">
+          <view class="designer-region-picker {{designerForm.designerRegion ? 'selected' : ''}}">
+            <text class="designer-region-value">{{designerForm.designerRegion || '不限'}}</text>
+            <text class="designer-region-arrow">›</text>
+          </view>
+        </picker>
+        <text class="designer-region-tip">所在地会在设计师中心和你的公开主页展示</text>
+      </view>
+
+      <view class="designer-form-item">
         <text class="designer-form-label">真实从业经验（年）</text>
         <input class="designer-input" value="{{designerForm.designerExperienceYears}}" bindinput="onDesignerFieldInput" data-field="designerExperienceYears" type="digit" placeholder="例如：8" placeholder-style="color: rgba(140, 117, 83, 0.58);" />
       </view>
@@ -132,7 +143,7 @@
 
       <view class="designer-form-item">
         <text class="designer-form-label">服务报价（灵石）</text>
-        <input class="designer-input" value="{{designerForm.serviceQuote}}" bindinput="onDesignerFieldInput" data-field="serviceQuote" type="digit" placeholder="例如：199" placeholder-style="color: rgba(140, 117, 83, 0.58);" />
+        <view class="designer-field-with-unit"><input class="designer-input" value="{{designerForm.serviceQuote}}" bindinput="onDesignerFieldInput" data-field="serviceQuote" type="digit" placeholder="例如：199" placeholder-style="color: rgba(140, 117, 83, 0.58);" /><text class="designer-field-unit">灵石</text></view>
       </view>
 
       <view class="designer-form-item">

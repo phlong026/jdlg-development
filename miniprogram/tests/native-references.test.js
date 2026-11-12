@@ -43,14 +43,14 @@ test('workbench media helper signs paginated server-side filters', async () => {
 });
 
 function pageHarness(api, storage = { token: 'account-a' }) {
-  let definition; const navigation = [], emitted = [];
+  let definition; const navigation = [], emitted = [], modals = [], actionSheets = [];
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/nativereferences/nativereferences.js'), 'utf8'), {
     Page: value => { definition = value; }, require: () => api,
-    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {}, getOpenerEventChannel: () => ({ emit: (name, value) => emitted.push({ name, value }) }) },
+    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), navigateBack() {}, showModal: value => modals.push(value), showActionSheet: value => actionSheets.push(value) },
     Promise, Object, String, Number, Array, Set, Error, encodeURIComponent,
   });
-  const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(value) { Object.assign(this.data, value); } }, definition);
-  return { page, navigation, emitted, storage };
+  const page = Object.assign({ getOpenerEventChannel: () => ({ emit: (name, value) => emitted.push({ name, value }) }), data: JSON.parse(JSON.stringify(definition.data)), setData(value) { Object.assign(this.data, value); } }, definition);
+  return { page, navigation, emitted, storage, modals, actionSheets };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 test('reference page preserves an idempotency attempt after a lost save response', async () => {
@@ -79,6 +79,19 @@ test('reference page rejects late previous-account data and untrusted target pat
   await page.openReference({ currentTarget: { dataset: { id: 'ref-0001' } } });
   assert.equal(navigation.length, 0); assert.match(page.data.error, /目标/);
 });
+test('reference removal requires confirmation and preserves the source wording', async () => {
+  const removed = [];
+  const { page, modals, actionSheets } = pageHarness({ deleteNativeReference: async id => removed.push(id) });
+  page._visible = true; page._epoch = 1; page._token = 'account-a';
+  page.setData({ references: [{ reference_id: 'ref-0001' }] });
+  const event = { currentTarget: { dataset: { id: 'ref-0001' } } };
+  page.referenceDeleteMenu(event); actionSheets[0].success({ tapIndex: 0 });
+  assert.match(modals[0].content, /不会删除原作品/);
+  modals[0].success({ confirm: false }); assert.equal(removed.length, 0);
+  page.removeReference(event); modals[1].success({ confirm: true }); await tick();
+  assert.deepEqual(removed, ['ref-0001']);
+  assert.equal(page.data.references.length, 0);
+});
 test('returning while a save is pending restores controls and keeps its retry key', async () => {
   let finish; const keys = [];
   const { page } = pageHarness({
@@ -94,6 +107,26 @@ test('returning while a save is pending restores controls and keeps its retry ke
   await page.saveReference(event); finish({ reference_id: 'same-ref' }); await old;
   assert.deepEqual(keys, ['same-attempt', 'same-attempt']);
   assert.equal(page.data.references.length, 1);
+});
+test('same-account return keeps the reference library visible during refresh', async () => {
+  let finishReferences;
+  let referenceCalls = 0;
+  const { page } = pageHarness({
+    listNativeReferences: () => {
+      referenceCalls += 1;
+      if (referenceCalls === 1) return Promise.resolve({ items: [{ reference_id: 'ref-old' }] });
+      return new Promise(resolve => { finishReferences = resolve; });
+    },
+    listNativeReferenceCandidates: async () => ({ items: [] }),
+  });
+  page.onShow(); await tick();
+  assert.equal(page.data.references.length, 1);
+  page.onHide(); page.onShow(); await tick();
+  assert.equal(page.data.loading, false, '后台刷新不替换已显示主体');
+  assert.equal(page.data.references[0].reference_id, 'ref-old');
+  finishReferences({ items: [{ reference_id: 'ref-new' }] });
+  await tick();
+  assert.equal(page.data.references[0].reference_id, 'ref-new');
 });
 test('bounded reference window can still reach sources after the first two hundred', async () => {
   const { page } = pageHarness({ listNativeReferenceCandidates: async input => { assert.equal(input.cursor, 'next-page'); return { items: [{ content_id: 'source-0201', content_version: 1 }], next_cursor: 'later-page' }; } });
@@ -128,4 +161,18 @@ test('content picker searches on the server and returns a fixed version without 
   assert.equal(calls.at(-1).q, '庭院');
   page.selectContent({ currentTarget: { dataset: { id: 'content-0001', version: 3 } } });
   assert.deepEqual(JSON.parse(JSON.stringify(emitted)), [{ name: 'selectMaterial', value: { kind: 'content', target: candidate } }]);
+});
+
+test('repeated identical search coalesces in-flight reads while a new query may supersede them', async () => {
+  let reads=0;const pending=[];
+  const {page}=pageHarness({listNativeReferences:async()=>({items:[]}),listNativeReferenceCandidates:()=>{reads++;return new Promise(resolve=>pending.push(resolve));}});
+  page.onShow();page.submitSearch();page.submitSearch();assert.equal(reads,1);
+  page.setData({search:'庭院'});page.submitSearch();assert.equal(reads,2);
+  pending.forEach(resolve=>resolve({items:[]}));await tick();assert.equal(page.data.searching,false);
+});
+
+test('returning to the library restarts a read invalidated on hide', async () => {
+  let reads=0;const pending=[];const {page}=pageHarness({listNativeReferences:async()=>({items:[]}),listNativeReferenceCandidates:()=>{reads++;return new Promise(resolve=>pending.push(resolve));}});
+  page.onShow();page.onHide();page.onShow();assert.equal(reads,2);
+  pending[1]({items:[{content_id:'new'}]});await tick();pending[0]({items:[{content_id:'old'}]});await tick();assert.equal(page.data.candidates[0].content_id,'new');
 });

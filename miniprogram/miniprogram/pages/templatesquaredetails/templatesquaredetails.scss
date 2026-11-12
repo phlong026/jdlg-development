@@ -469,6 +469,41 @@ page {
   margin-top: 18rpx;
 }
 
+.account-enhancement-notice {
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1px solid rgba(188, 168, 145, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.account-enhancement-message {
+  flex: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8a6548;
+}
+
+.account-enhancement-retry {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 18rpx;
+  height: 54rpx;
+  line-height: 52rpx;
+  border-radius: 999rpx;
+  border: 1px solid rgba(160, 108, 67, 0.28);
+  background: rgba(255, 253, 249, 0.72);
+  color: #8a5d3c;
+  font-size: 21rpx;
+
+  &::after {
+    border: 0;
+  }
+}
+
 .download-condition-item {
   display: inline-flex;
   align-items: center;

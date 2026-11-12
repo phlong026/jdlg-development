@@ -17,7 +17,7 @@ const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof
 const textOf = node => Array.isArray(node) ? node.map(textOf).join('') : node == null || typeof node === 'boolean' ? '' : typeof node === 'object' ? textOf(node.props?.children) : String(node);
 const endpoints = {
   OVERVIEW: '/overview', DOWNLOAD_RANKING: '/download-ranking', ENGAGEMENT_RANKING: '/engagement-ranking',
-  NEW_TEMPLATES: '/new-templates', LOW_CONVERSION: '/low-conversion', FEATURED_CASES: '/featured-cases',
+  NEW_TEMPLATES: '/new-templates', LOW_CONVERSION: '/low-conversion', FEATURED_CASES: '/featured-cases', PROPAGATION: '/propagation',
 };
 // 分类名来自模板分类与 Tab 配置；内容分析只读这两份数据，用于把 xsxmp 之类的代码翻成中文
 const templatesApi = {
@@ -41,7 +41,7 @@ const fixture = (overrides = {}) => ({
     total_interactions: 80, week_new_templates: 7, featured_case_group_count: 1 },
   '/download-ranking': list([template()]), '/engagement-ranking': list([template()]),
   '/new-templates': list([template()]), '/low-conversion': list([template({ conversion_type: 'download', conversion_count: 1, conversion_rate: 0.1 })]),
-  '/featured-cases': list([featured()]), ...overrides,
+  '/featured-cases': list([featured()]), '/propagation': list([]), ...overrides,
 });
 
 function mount() {
@@ -120,7 +120,7 @@ function mount() {
     button(label) { const button = page.all(n => n.type === 'button' && textOf(n).trim() === label)[0]; assert.ok(button, `Missing button: ${label}`); return button; },
     click(label) { const button = page.button(label); assert.ok(!button.props.disabled); button.props.onClick(); page.render(); },
     enter(value) { const input = page.all(n => n.type === 'input')[0]; input.props.onChange({ target: { value } }); page.render(); page.all(n => n.type === 'input')[0].props.onKeyDown({ key: 'Enter' }); page.render(); },
-    batch(index = 0) { const batch = requests.slice(index * 6, (index + 1) * 6); assert.equal(batch.length, 6); return batch; },
+    batch(index = 0) { const batch = requests.slice(index * 7, (index + 1) * 7); assert.equal(batch.length, 7); return batch; },
     async resolve(index = 0, data = fixture()) { page.batch(index).forEach(request => request.resolve({ code: 0, data: data[request.endpoint] })); await settle(); page.render(); },
     async reject(index = 0, endpoint = '/overview') { page.batch(index).find(request => request.endpoint === endpoint).reject(new Error('Fixture read failure')); await settle(); page.render(); },
     unmount() { slots.forEach(slot => slot?.cleanup?.()); unmounted = true; },
@@ -212,10 +212,10 @@ test('refresh hides old rows, coalesces same-render retries, and failed refresh 
   const page = mount(); await page.resolve();
   const refresh = page.button('刷新').props.onClick;
   refresh(); refresh(); page.render();
-  assert.equal(page.requests.length, 12); assert.equal(page.button('刷新中...').props.disabled, true);
+  assert.equal(page.requests.length, 14); assert.equal(page.button('刷新中...').props.disabled, true);
   assert.doesNotMatch(page.text(), /Same template name|暂无数据/);
   await page.reject(1); assert.match(page.text(), /读取失败/); assert.doesNotMatch(page.text(), /Same template name/);
-  page.enter(''); assert.equal(page.requests.length, 18, 'same-query search retries after failure');
+  page.enter(''); assert.equal(page.requests.length, 21, 'same-query search retries after failure');
   await page.resolve(2); assert.match(page.text(), /Same template name/);
 });
 
@@ -238,7 +238,7 @@ test('batched search then reset starts the reset query even when the final keywo
   const input = page.all(n => n.type === 'input')[0]; input.props.onChange({ target: { value: 'transient' } }); page.render();
   const search = page.button('搜索内容').props.onClick, reset = page.button('重置筛选').props.onClick;
   search(); reset(); page.render();
-  assert.equal(page.requests.length, 18);
+  assert.equal(page.requests.length, 21);
   assert.ok(page.batch(0).every(request => request.signal.aborted)); assert.ok(page.batch(1).every(request => request.signal.aborted));
   assert.ok(page.batch(2).filter(request => request.params).every(request => request.params.keyword === ''));
   await page.resolve(2); await page.resolve(1); await page.resolve(0);
@@ -285,7 +285,7 @@ test('unmounted analytics callbacks cannot restart GETs or navigate', async () =
   const templateLink = page.button('查看模板详情').props.onClick;
   const creatorLink = page.button('按创建者同名搜索').props.onClick;
   page.unmount(); refresh(); search(); reset(); templateLink(); creatorLink();
-  assert.equal(page.requests.length, 6);
+  assert.equal(page.requests.length, 7);
   assert.equal(page.updatesAfterUnmount, 0);
   assert.deepEqual(page.navigations, []);
 });

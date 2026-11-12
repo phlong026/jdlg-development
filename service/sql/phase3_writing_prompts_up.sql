@@ -4,6 +4,9 @@
 -- configuration can never disable it. Applying this migration does not change
 -- any behavior until rows are enabled; the API falls back to code defaults
 -- while the table is empty or missing.
+-- Table charset does not control how incoming SQL string literals are decoded.
+SET NAMES utf8mb4;
+
 CREATE TABLE IF NOT EXISTS content_writing_prompts (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   prompt_key VARCHAR(32) NOT NULL,

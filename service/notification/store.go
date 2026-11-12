@@ -516,6 +516,32 @@ func (s *SQLStore) CancelPendingTx(ctx context.Context, tx *sql.Tx, contentID, s
 	return err
 }
 
+// CancelCollectionPendingTx cancels directory and child-content notifications
+// created in one collection context without touching the source content itself.
+func (s *SQLStore) CancelCollectionPendingTx(ctx context.Context, tx *sql.Tx, collectionID string, at time.Time) error {
+	if tx == nil || collectionID == "" || at.IsZero() {
+		return ErrInvalidInput
+	}
+	at = at.UTC()
+	collectionFilter := "JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.collection_id'))=?"
+	if _, err := tx.ExecContext(ctx, `UPDATE mini_notification_event_jobs j JOIN tracking_records r ON r.tenant_id=j.tenant_id AND r.record_id=j.event_id AND r.kind='notice_event'
+SET j.status='cancelled',j.lease_token=NULL,j.lease_until=NULL,j.last_error='cancelled_source',j.updated_at=?
+WHERE j.tenant_id=? AND j.status IN ('pending','processing') AND `+collectionFilter, at, s.tenant, collectionID); err != nil {
+		return storeError("cancel_collection_jobs", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE mini_notifications n JOIN tracking_records r ON r.tenant_id=n.tenant_id AND r.record_id=n.event_id AND r.kind='notice_event'
+SET n.cancelled_at=? WHERE n.tenant_id=? AND n.cancelled_at IS NULL AND `+collectionFilter, at, s.tenant, collectionID); err != nil {
+		return storeError("cancel_collection_inbox", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE mini_notification_deliveries d JOIN mini_notifications n ON n.tenant_id=d.tenant_id AND n.notification_id=d.notification_id
+JOIN tracking_records r ON r.tenant_id=n.tenant_id AND r.record_id=n.event_id AND r.kind='notice_event'
+SET d.status='cancelled',d.lease_token=NULL,d.lease_until=NULL,d.updated_at=?
+WHERE d.tenant_id=? AND d.status IN ('pending','processing') AND `+collectionFilter, at, s.tenant, collectionID); err != nil {
+		return storeError("cancel_collection_delivery", err)
+	}
+	return nil
+}
+
 func (s *SQLStore) cancelPendingTx(ctx context.Context, tx *sql.Tx, contentID, shareID string, at time.Time) (int64, error) {
 	jobWhere, jobArgs := "j.tenant_id=? AND j.status IN ('pending','processing')", []any{s.tenant}
 	if contentID != "" {

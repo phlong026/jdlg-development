@@ -5,6 +5,10 @@ const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const parameter_1 = require("../../utils/parameter");
 const asset_1 = require("../../utils/asset");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
+function buildDesignerRegionParts(value) {
+    const parts = String(value || '').trim().split(/\s+/).filter(Boolean).slice(0, 3);
+    return parts.length === 3 ? parts : ['不限', '不限', '不限'];
+}
 function resolveEntryDisplay(section) {
     if (section === 'profile') {
         return {
@@ -66,6 +70,7 @@ Page({
             avatar: '',
             designerBio: '',
             specialtyStyles: '',
+            designerRegion: '',
             designerExperienceYears: 0,
             designerVisible: true,
             serviceTitle: '',
@@ -92,6 +97,8 @@ Page({
         designerForm: {
             designerBio: '',
             specialtyStyles: '',
+            designerRegion: '',
+            designerRegionParts: ['不限', '不限', '不限'],
             designerExperienceYears: '',
             designerVisible: true,
             serviceTitle: '',
@@ -194,9 +201,10 @@ Page({
                         id: data.id,
                         username: data.username || '',
                         nickname: data.nickname || '',
-                        avatar: data.avatar || '',
+                        avatar: (0, asset_1.normalizeCosUrl)(String(data.avatar || '')),
                         designerBio: data.designer_bio || '',
                         specialtyStyles: data.specialty_styles || '',
+                        designerRegion: data.designer_region || '',
                         designerExperienceYears: Number(data.designer_experience_years) || 0,
                         designerVisible: data.designer_visible !== false,
                         serviceTitle: data.service_title || '',
@@ -208,6 +216,8 @@ Page({
                     designerForm: {
                         designerBio: data.designer_bio || '',
                         specialtyStyles: data.specialty_styles || '',
+                        designerRegion: data.designer_region || '',
+                        designerRegionParts: buildDesignerRegionParts(data.designer_region || ''),
                         designerExperienceYears: String(Number(data.designer_experience_years) || 0),
                         designerVisible: data.designer_visible !== false,
                         serviceTitle: data.service_title || '',
@@ -389,9 +399,22 @@ Page({
             'designerForm.designerVisible': !!e.detail.value,
         });
     },
+    onDesignerRegionChange(e) {
+        const parts = Array.isArray(e.detail?.value)
+            ? e.detail.value.map((part) => String(part || '').trim()).slice(0, 3)
+            : [];
+        const designerRegion = parts[0] === '不限'
+            ? ''
+            : parts.filter((part) => part && part !== '不限').join(' ');
+        this.setData({
+            'designerForm.designerRegion': designerRegion,
+            'designerForm.designerRegionParts': designerRegion ? parts : ['不限', '不限', '不限'],
+        });
+    },
     async saveDesignerProfile() {
         const designerBio = String(this.data.designerForm.designerBio || '').trim();
         const specialtyStyles = String(this.data.designerForm.specialtyStyles || '').trim();
+        const designerRegion = String(this.data.designerForm.designerRegion || '').trim().replace(/\s+/g, ' ');
         const designerExperienceYears = Math.max(0, Number(this.data.designerForm.designerExperienceYears) || 0);
         const designerVisible = this.data.designerForm.designerVisible !== false;
         const serviceTitle = String(this.data.designerForm.serviceTitle || '').trim();
@@ -404,6 +427,7 @@ Page({
             const body = {
                 designer_bio: designerBio,
                 specialty_styles: specialtyStyles,
+                designer_region: designerRegion,
                 designer_experience_years: designerExperienceYears,
                 designer_visible: designerVisible,
                 service_title: serviceTitle,
@@ -430,6 +454,7 @@ Page({
                 this.setData({
                     'userInfo.designerBio': designerBio,
                     'userInfo.specialtyStyles': specialtyStyles,
+                    'userInfo.designerRegion': designerRegion,
                     'userInfo.designerExperienceYears': designerExperienceYears,
                     'userInfo.designerVisible': designerVisible,
                     'userInfo.serviceTitle': serviceTitle,

@@ -74,7 +74,7 @@ const OSS: React.FC = () => {
     }, []);
 
     // Only the newest successful read for the current scope may expose selectable files.
-    const fetchFiles = async () => {
+    const fetchFiles = async (restoreSelectedIDs: number[] = []) => {
         if (!mounted.current || scopeRef.current !== scope) return;
         invalidateList();
         const version = requestVersion.current;
@@ -99,7 +99,10 @@ const OSS: React.FC = () => {
                 return;
             }
             // Preserve the API's nullable-empty-list compatibility without accepting a missing payload.
-            setFiles(result.data.list || []);
+            const nextFiles: OSSFile[] = result.data.list || [];
+            const restoredIDs = restoreSelectedIDs.filter(id => nextFiles.some(file => file.id === id));
+            setFiles(nextFiles);
+            setSelectedFiles(restoredIDs);
             setTotal(result.data.total);
             setLoadedScope(scope);
             reportPageLoadRecovered('获取文件列表失败');
@@ -174,13 +177,37 @@ const OSS: React.FC = () => {
             });
             if (!response.ok) throw new Error(batch ? '批量删除失败' : '删除失败');
             const result = await response.json();
+            if (batch && result.code === 207) {
+                const requestedIDs = targets.map(file => file.id);
+                const requestedSet = new Set(requestedIDs);
+                const deletedIDs = Array.isArray(result.data?.deleted_ids) ? result.data.deleted_ids : [];
+                const alreadyMissingIDs = Array.isArray(result.data?.already_missing_ids) ? result.data.already_missing_ids : [];
+                const failureIDs = Array.isArray(result.data?.failures)
+                    ? result.data.failures.map((failure: any) => failure?.id)
+                    : [];
+                const accountedIDs = [...deletedIDs, ...alreadyMissingIDs, ...failureIDs];
+                const receiptValid = failureIDs.length > 0
+                    && accountedIDs.every(id => Number.isInteger(id) && requestedSet.has(id))
+                    && new Set(accountedIDs).size === accountedIDs.length
+                    && accountedIDs.length === requestedIDs.length;
+                if (!mounted.current || scopeRef.current !== scope) return;
+                if (!receiptValid) {
+                    alert('批量删除回执异常，已刷新列表确认最终结果。');
+                    void fetchFiles();
+                    return;
+                }
+                const failedIDs = failureIDs as number[];
+                alert(`批量删除完成：成功 ${requestedIDs.length - failedIDs.length} 个，失败 ${failedIDs.length} 个。失败项已保留勾选，可重试。`);
+                void fetchFiles(failedIDs);
+                return;
+            }
             if (result.code !== 0) throw new Error(result.msg || '删除失败');
-            if (mounted.current) {
+            if (mounted.current && scopeRef.current === scope) {
                 alert(batch ? '批量删除成功' : '删除成功');
-                if (scopeRef.current === scope) void fetchFiles();
+                void fetchFiles();
             }
         } catch (error: any) {
-            if (mounted.current) alert('删除失败: ' + (error?.message || '请重试'));
+            if (mounted.current && scopeRef.current === scope) alert('删除失败: ' + (error?.message || '请重试'));
         } finally {
             deletePending.current = false;
             if (mounted.current) setDeleting(false);
@@ -285,7 +312,7 @@ const OSS: React.FC = () => {
                                 </button>
                             )}
                             <button className="btn-secondary" onClick={handleReset}>重置筛选</button>
-                            <button className="btn-secondary" onClick={fetchFiles} disabled={loading}>
+                            <button className="btn-secondary" onClick={() => { void fetchFiles(); }} disabled={loading}>
                                 <FiRefreshCw />
                                 {loading ? '刷新中...' : '刷新'}
                             </button>

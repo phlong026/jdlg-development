@@ -1,16 +1,16 @@
 page {
-  background: #faf8f4;
+  background: #fbfaf7;
   color: #30251c;
 }
 
 .writing-page {
   min-height: 100vh;
-  background: #faf8f4;
+  background: #fbfaf7;
   font-size: 28rpx;
 }
 
 .writing-body {
-  padding: 24rpx 32rpx calc(250rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx 28rpx;
 }
 
 .writing-tabs {
@@ -111,10 +111,7 @@ page {
   gap: 16rpx;
 }
 
-.edit-hint {
-  font-size: 23rpx;
-  color: #938879;
-}
+
 
 .writing-result {
   box-sizing: border-box;
@@ -180,25 +177,17 @@ page {
   line-height: 1.7;
 }
 
-.tab-hint {
-  display: block;
-  margin: -6rpx 0 18rpx;
-  font-size: 23rpx;
-  color: #8f867b;
-  line-height: 1.7;
-}
-
 .writing-footer {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
   z-index: 10;
   box-sizing: border-box;
   padding: 18rpx 32rpx calc(22rpx + env(safe-area-inset-bottom));
-  background: #faf8f4;
+  background: #fbfaf7;
   border-top: 1rpx solid #eee6dc;
 }
+
+.result-ready { color: #8d6a43; font-size: 22rpx; }
 
 .primary, .secondary {
   box-sizing: border-box;
@@ -226,17 +215,13 @@ page {
 }
 
 .writing-footer .primary, .writing-footer .secondary {
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
-}
-
-.writing-footer .secondary {
-  margin-top: 0;
-}
-
-.writing-footer .primary + .secondary {
-  margin-top: 16rpx;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 12rpx;
+  white-space: nowrap;
+  font-size: 26rpx;
 }
 
 .primary[disabled] {
@@ -260,25 +245,29 @@ page {
   margin-top: 24rpx;
 }
 
+/* 语音是输入辅助，保持次级视觉权重与可长按的触控面积。 */
 .voice-row {
-  margin-top: 14rpx;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8rpx;
 }
 
-.voice-button {
-  width: 100%;
-  min-height: 76rpx;
-  border: 1rpx dashed #c9a06a;
-  border-radius: 14rpx;
-  background: #fff8ef;
-  color: #8c5e32;
+button.voice-button {
+  width: auto;
+  min-height: 88rpx;
+  margin: 0;
+  padding: 0 16rpx;
+  gap: 10rpx;
+  border: 0;
+  border-radius: 12rpx;
+  background: transparent;
+  color: #806345;
   font-size: 25rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.voice-button.active {
-  border-style: solid;
+button.voice-button.active {
+  color: #8c5e32;
   background: #f1e4d2;
 }
 
@@ -297,36 +286,6 @@ button::after {
   border: 0;
 }
 
-.save-hint {
-  display: block;
-  margin-top: 10rpx;
-  color: #817568;
-  font-size: 23rpx;
-  text-align: center;
-}
-
-.example-card {
-  margin: 14rpx 0 4rpx;
-  padding: 20rpx 24rpx;
-  border: 1rpx dashed #dfcbb3;
-  border-radius: 14rpx;
-  background: #fffdf9;
-}
-
-.example-title {
-  display: block;
-  color: #98683a;
-  font-size: 23rpx;
-}
-
-.example-body {
-  display: block;
-  margin-top: 10rpx;
-  color: #6d6258;
-  font-size: 25rpx;
-  line-height: 1.7;
-}
-
 .stream-preview {
   min-height: 200rpx;
   padding: 18rpx 20rpx;
@@ -343,14 +302,15 @@ button::after {
 }
 
 .deep-chat {
-  flex: 0 0 auto;
-  min-height: 82rpx;
-  margin: 0;
-  padding: 0 22rpx;
-  border: 1rpx solid #dfcbb3;
-  background: #fff;
+  width: auto;
+  min-height: 72rpx;
+  margin: 0 0 12rpx;
+  padding: 0;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
   color: #98683a;
-  font-size: 24rpx;
+  font-size: 26rpx;
 }
 
 .picker-value {
@@ -364,3 +324,46 @@ button::after {
   display: flex;
   align-items: center;
 }
+
+.writing-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.writing-error {
+  display: block;
+  box-sizing: border-box;
+  margin: 0 0 16rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 10rpx;
+  font-size: 25rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: #a54435;
+  background: #fcf0ec;
+}
+
+/* 与固定栏错误同宽同排版，按实际换行高度给正文留位。 */
+.writing-error-reserve {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.writing-navigation { position: sticky; top: 0; z-index: 30; background: #fbfaf7; }
+
+button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
+button.writing-tab { flex: 1; }
+button.deep-chat { margin: 12rpx auto 0; padding: 12rpx 18rpx; background: transparent; color: #8b643b; }
+.writing-footer-actions > button.primary, .writing-footer-actions > button.secondary { flex: 1; min-width: 0; width: 0; }
+.writing-panel { border-radius: 12rpx; box-shadow: none; }
+
+.writing-footer-actions > button:only-child { width: 100%; }
+
+.video-copy-field { margin-top: 24rpx; }
+.video-copy-label { display:flex;align-items:center;gap:12rpx;font-size:28rpx;color:#66584a;margin-bottom:12rpx; }
+.video-copy-field input,.video-copy-field textarea { box-sizing:border-box;width:100%;padding:18rpx;border:1rpx solid #e8e0d8;border-radius:12rpx;font-size:28rpx;line-height:1.65;background:#fbfaf7; }
+.video-copy-field input { height:84rpx; }
+.video-copy-field textarea { min-height:130rpx; }

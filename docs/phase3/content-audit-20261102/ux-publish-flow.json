@@ -1,0 +1,70 @@
+[
+  {
+    "label": "真实发布测试内容",
+    "path": "pages/contentedit/contentedit",
+    "error": "",
+    "notice": "已发布",
+    "id": "qEl7QprKvSsNMeLPiTm6RA7UfwEkVFxF",
+    "status": "published",
+    "revision": 2,
+    "version": 1,
+    "preview": false
+  },
+  {
+    "label": "真实阅读已发布内容",
+    "path": "pages/contentreader/contentreader",
+    "error": "",
+    "notice": "",
+    "preview": false
+  },
+  {
+    "label": "真实保存合集",
+    "path": "pages/projectcollections/projectcollections",
+    "error": "",
+    "notice": "已保存",
+    "id": "0HbM0F9g62_ztV70jL0WBQsnPZhPahQz",
+    "status": "draft",
+    "preview": false,
+    "selected": 1
+  },
+  {
+    "label": "合集发布预览",
+    "path": "pages/projectcollections/projectcollections",
+    "error": "",
+    "notice": "",
+    "id": "0HbM0F9g62_ztV70jL0WBQsnPZhPahQz",
+    "status": "draft",
+    "preview": true,
+    "selected": 1
+  },
+  {
+    "label": "合集发布结果",
+    "path": "pages/projectcollections/projectcollections",
+    "error": "",
+    "notice": "已发布 V1",
+    "id": "0HbM0F9g62_ztV70jL0WBQsnPZhPahQz",
+    "status": "published",
+    "preview": false,
+    "selected": 1
+  },
+  {
+    "label": "合集阅读",
+    "path": "pages/collectionreader/collectionreader",
+    "error": "",
+    "notice": "",
+    "preview": false
+  },
+  {
+    "label": "合集打开作品",
+    "path": "pages/contentreader/contentreader",
+    "error": "",
+    "notice": "",
+    "preview": false
+  },
+  {
+    "cleanup": {
+      "collection": "revoked",
+      "content": "revoked"
+    }
+  }
+]

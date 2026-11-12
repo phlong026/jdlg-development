@@ -270,7 +270,11 @@ Page({
         eventChannel.on('prefillGenerateData', (prefill) => {
             this.applyPrefillData(prefill);
         });
-        if (options.draft === '1' && this.restoreGenerateDraft()) {
+        const token = String(wx.getStorageSync('token') || '');
+        const requestsPrivateState = options.draft === '1' || Number(options.taskId || 0) > 0 || Number(options.templateId || 0) > 0;
+        if (requestsPrivateState && !token)
+            this.ensureAIAccount('登录后可恢复你的 AI 草稿或任务');
+        if (token && options.draft === '1' && this.restoreGenerateDraft()) {
             return;
         }
         if (options.prompt && !this.data.promptDirty) {
@@ -287,14 +291,14 @@ Page({
                 style_reference_priority: referencePriorityMode ? 'high' : '',
             });
         }
-        if (options.templateId) {
+        if (token && options.templateId) {
             const templateId = parseInt(options.templateId);
             if (templateId > 0) {
                 this.setData({ templateId });
                 await this.loadTemplateOriginalTask(templateId);
             }
         }
-        if (options.taskId) {
+        if (token && options.taskId) {
             const taskId = parseInt(options.taskId);
             if (taskId > 0) {
                 await this.loadTaskInfo(taskId);
@@ -340,18 +344,24 @@ Page({
         if (this.data.generating) {
             return;
         }
+        const storageKey = this.getGenerateDraftStorageKey();
+        if (!storageKey)
+            return;
         const draft = this.buildGenerateDraftData();
         if (!this.hasGenerateDraftContent(draft)) {
-            wx.removeStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+            wx.removeStorageSync(storageKey);
             return;
         }
-        wx.setStorageSync(GENERATE_DRAFT_STORAGE_KEY, draft);
+        wx.setStorageSync(storageKey, draft);
     },
     clearGenerateDraft() {
-        wx.removeStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+        const storageKey = this.getGenerateDraftStorageKey();
+        if (storageKey)
+            wx.removeStorageSync(storageKey);
     },
     restoreGenerateDraft() {
-        const rawDraft = wx.getStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+        const storageKey = this.getGenerateDraftStorageKey();
+        const rawDraft = storageKey ? wx.getStorageSync(storageKey) : null;
         if (!rawDraft || typeof rawDraft !== 'object') {
             wx.showToast({ title: '暂无可恢复草稿', icon: 'none' });
             return false;
@@ -384,6 +394,29 @@ Page({
             this.syncCurrentCost();
         });
         return true;
+    },
+    getGenerateDraftStorageKey() {
+        const token = String(wx.getStorageSync('token') || '');
+        const userInfo = wx.getStorageSync('userInfo') || {};
+        const userID = Number(userInfo.id || 0);
+        const profileToken = String(userInfo.token || '');
+        return token && (!profileToken || profileToken === token) && Number.isSafeInteger(userID) && userID > 0
+            ? `${GENERATE_DRAFT_STORAGE_KEY}:${userID}` : '';
+    },
+    ensureAIAccount(message = '登录后可继续使用 AI 生成功能') {
+        const token = String(wx.getStorageSync('token') || '');
+        if (token)
+            return token;
+        wx.showModal({
+            title: '提示',
+            content: message,
+            confirmText: '去登录',
+            success: (res) => {
+                if (res.confirm)
+                    wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
+            },
+        });
+        return '';
     },
     getOrderedImages() {
         if (this.data.useFixedSlots) {
@@ -460,7 +493,7 @@ Page({
     },
     initNavLayout() {
         try {
-            const systemInfo = wx.getSystemInfoSync();
+            const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
             const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function'
                 ? wx.getMenuButtonBoundingClientRect()
                 : null;
@@ -733,6 +766,8 @@ Page({
         this.onUploadReferenceImage();
     },
     async doUploadImages(maxCount, target = 'reference', slotIndex = -1) {
+        if (!this.ensureAIAccount('登录后可上传 AI 参考图'))
+            return;
         wx.chooseMedia({
             count: target === 'original' ? 1 : maxCount,
             mediaType: ['image'],
@@ -986,6 +1021,8 @@ Page({
             wx.showToast({ title: '请先输入提示词', icon: 'none' });
             return;
         }
+        if (!this.ensureAIAccount('登录后可使用 AI 提示词优化'))
+            return;
         this.setData({ optimizingPrompt: true });
         const { optimizePrompt } = require('../../utils/promptOptimize');
         const scene = this.data.selectedSceneTab === 'interior' ? 'interior' : 'architecture';
@@ -1022,18 +1059,8 @@ Page({
             this.loadAIPricing();
             return;
         }
-        const token = wx.getStorageSync('token');
+        const token = this.ensureAIAccount();
         if (!token) {
-            wx.showModal({
-                title: '提示',
-                content: '请先登录',
-                confirmText: '去登录',
-                success: (res) => {
-                    if (res.confirm) {
-                        wx.navigateTo({ url: '/pages/login/login' });
-                    }
-                }
-            });
             return;
         }
         try {

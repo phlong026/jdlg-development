@@ -1,0 +1,28 @@
+[
+  {
+    "label": "项目列表正常",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "list",
+    "error": "",
+    "notice": "",
+    "invitationCount": 0
+  },
+  {
+    "label": "真实创建项目",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "detail",
+    "error": "",
+    "notice": "项目已创建。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "invitationCount": 0
+  },
+  {
+    "label": "保存项目资料",
+    "path": "pages/projectnotes/projectnotes",
+    "view": "detail",
+    "error": "",
+    "notice": "项目资料已保存，已冻结版本仍保留原有资料。",
+    "projectId": "eLVvtwzakK4uPz4SGj4oUQSF9Zq-sfCy",
+    "invitationCount": 0
+  }
+]

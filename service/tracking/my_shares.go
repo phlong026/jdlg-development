@@ -35,6 +35,10 @@ type MyShare struct {
 	// AvgViewsPerVisitor 是"人均浏览"口径的参与度参考（B17）：总浏览/访客数，
 	// 保留一位小数。它是比值不是事实声明——访客数受匿名与登录流失影响。
 	AvgViewsPerVisitor float64 `json:"avg_views_per_visitor,omitempty"`
+	// HighIntentVisitors 预留：高意向访客数与访客榜同一引擎，但列表端点的
+	// 事件查询必须收敛在分享批次内（见 TestMySharesUseServerSharerAndBatchTrafficQuery），
+	// 意向计算需要跨分享扫描，改由客户Tab(my-visitors)下发的聚合承担。
+	HighIntentVisitors int `json:"high_intent_visitors,omitempty"`
 }
 
 // MyShareVisit is the cumulative, snapshot-pinned traffic from one visitor to
@@ -48,6 +52,8 @@ type MyShareVisit struct {
 	ContentViews   int       `json:"content_views,omitempty"`
 	Visible        int64     `json:"visible_ms"`
 	Sessions       int       `json:"session_count"`
+	VideoWatch     int64     `json:"video_watch_ms,omitempty"`
+	Progress       int       `json:"progress_pct,omitempty"`
 }
 
 func actorVisitorKey(actor int64) string {
@@ -99,6 +105,12 @@ func (s *Service) actorShares(r Repository, scope Scope, actor int64, f Filter, 
 		BeforeAt:      beforeAt,
 		BeforeID:      beforeID,
 		Limit:         limit,
+	}
+	// CreatedWindow 把时间窗应用到分享创建时间（近3天/7天/30天 chips）。
+	// 默认关闭：窗口语义历史上属于访问而非分享，只在显式请求时收窄。
+	if f.CreatedWindow {
+		query.AtFrom = f.Start
+		query.AtBefore = f.End
 	}
 	if shareID != "" {
 		query.Shares = []string{shareID}
@@ -166,48 +178,129 @@ func (s *Service) MyShares(ctx context.Context, scope Scope, actor int64, f Filt
 		if err != nil {
 			return err
 		}
-		shares, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, f.Limit+1)
-		if err != nil {
-			return err
+		if f.Search == "" && f.Content == "" {
+			// 无搜索：保持既有单次取页的键集语义（游标=页内最后一条收录项）。
+			shares, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, f.Limit+1)
+			if err != nil {
+				return err
+			}
+			hasMore := len(shares) > f.Limit
+			if hasMore {
+				shares = shares[:f.Limit]
+			}
+			ids := make([]string, 0, len(shares))
+			for _, item := range shares {
+				ids = append(ids, item.share.ID)
+			}
+			traffic, err := myShareTraffic(r, permittedOwners(scope, f.Owner), ids, f, actorVisitorKey(actor))
+			if err != nil {
+				return err
+			}
+			effective := ownerScope(scope, f.Owner)
+			materials, err := s.myShareMaterials(ctx, r, effective, shares)
+			if err != nil {
+				return err
+			}
+			items := make([]MyShare, 0, len(shares))
+			for _, row := range shares {
+				share := row.share
+				item := MyShare{ID: share.ID, At: row.at, Route: share.Route, Content: share.Content, Version: share.Version, Channel: share.Channel, Expires: share.Expires, Revoked: share.Revoked}
+				stats := traffic[share.ID]
+				item.Visitors, item.Views, item.DirectoryViews, item.ContentViews, item.LastVisit = len(stats.visitors), stats.views, stats.directoryViews, stats.contentViews, stats.last
+				if item.Visitors > 0 && item.Views > 0 {
+					item.AvgViewsPerVisitor = math.Round(float64(item.Views)/float64(item.Visitors)*10) / 10
+				}
+				if share.Content != "" && share.Version > 0 {
+					key := share.Route + "\x00" + contentKey(share.Content, share.Version)
+					material := materials[key]
+					item.Title, item.Type, item.Status = material.Title, material.Type, material.Status
+				} else {
+					item.Title = s.Config.Routes[share.Route].Title
+				}
+				items = append(items, item)
+			}
+			out.Items = items
+			if hasMore && len(shares) > 0 {
+				out.Cursor = nextMySharesCursor(f, scope, actor, shares[len(shares)-1])
+			}
+			return nil
 		}
-		hasMore := len(shares) > f.Limit
+		// 标题/素材过滤先于分页，扫描前进直到凑满 limit+1 或扫完；
+		// 游标推进到最后一条已扫描位置（页面可能稀疏，但不跳过任何分享）。
+		collected := make([]MyShare, 0, f.Limit+1)
+		var returned actorShareRow
+		hasMore := false
+		exhausted := false
+		for !exhausted && !hasMore && len(collected) <= f.Limit {
+			shares, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, myVisitorSharePage)
+			if err != nil {
+				return err
+			}
+			if len(shares) == 0 {
+				exhausted = true
+				break
+			}
+			candidates := make([]actorShareRow, 0, len(shares))
+			for _, item := range shares {
+				share := item.share
+				if f.Content != "" && (share.Content != f.Content || f.ContentVersion > 0 && share.Version != f.ContentVersion) {
+					continue
+				}
+				candidates = append(candidates, item)
+			}
+			ids := make([]string, 0, len(candidates))
+			for _, item := range candidates {
+				ids = append(ids, item.share.ID)
+			}
+			traffic, err := myShareTraffic(r, permittedOwners(scope, f.Owner), ids, f, actorVisitorKey(actor))
+			if err != nil {
+				return err
+			}
+			effective := ownerScope(scope, f.Owner)
+			materials, err := s.myShareMaterials(ctx, r, effective, candidates)
+			if err != nil {
+				return err
+			}
+			for _, row := range candidates {
+				share := row.share
+				item := MyShare{ID: share.ID, At: row.at, Route: share.Route, Content: share.Content, Version: share.Version, Channel: share.Channel, Expires: share.Expires, Revoked: share.Revoked}
+				stats := traffic[share.ID]
+				item.Visitors, item.Views, item.DirectoryViews, item.ContentViews, item.LastVisit = len(stats.visitors), stats.views, stats.directoryViews, stats.contentViews, stats.last
+				if item.Visitors > 0 && item.Views > 0 {
+					item.AvgViewsPerVisitor = math.Round(float64(item.Views)/float64(item.Visitors)*10) / 10
+				}
+				if share.Content != "" && share.Version > 0 {
+					key := share.Route + "\x00" + contentKey(share.Content, share.Version)
+					material := materials[key]
+					item.Title, item.Type, item.Status = material.Title, material.Type, material.Status
+				} else {
+					item.Title = s.Config.Routes[share.Route].Title
+				}
+				if f.Search != "" && !strings.Contains(strings.ToLower(item.Title), strings.ToLower(f.Search)) {
+					continue
+				}
+				// 已凑满 limit：本条命中证明还有下一页——游标绑定最后一条
+				// 实际返回项，本条留给下一页（不越过未返回的命中）。
+				if len(collected) >= f.Limit {
+					hasMore = true
+					break
+				}
+				collected = append(collected, item)
+				returned = row
+			}
+			if len(shares) < myVisitorSharePage {
+				exhausted = true
+				break
+			}
+			last := shares[len(shares)-1]
+			beforeAt, beforeID = last.at, last.id
+		}
 		if hasMore {
-			shares = shares[:f.Limit]
+			collected = collected[:f.Limit]
 		}
-		ids := make([]string, 0, len(shares))
-		for _, item := range shares {
-			ids = append(ids, item.share.ID)
-		}
-		traffic, err := myShareTraffic(r, permittedOwners(scope, f.Owner), ids, f, actorVisitorKey(actor))
-		if err != nil {
-			return err
-		}
-		effective := ownerScope(scope, f.Owner)
-		materials, err := s.myShareMaterials(ctx, r, effective, shares)
-		if err != nil {
-			return err
-		}
-		items := make([]MyShare, 0, len(shares))
-		for _, row := range shares {
-			share := row.share
-			item := MyShare{ID: share.ID, At: row.at, Route: share.Route, Content: share.Content, Version: share.Version, Channel: share.Channel, Expires: share.Expires, Revoked: share.Revoked}
-			stats := traffic[share.ID]
-			item.Visitors, item.Views, item.DirectoryViews, item.ContentViews, item.LastVisit = len(stats.visitors), stats.views, stats.directoryViews, stats.contentViews, stats.last
-			if item.Visitors > 0 && item.Views > 0 {
-				item.AvgViewsPerVisitor = math.Round(float64(item.Views)/float64(item.Visitors)*10) / 10
-			}
-			if share.Content != "" && share.Version > 0 {
-				key := share.Route + "\x00" + contentKey(share.Content, share.Version)
-				material := materials[key]
-				item.Title, item.Type, item.Status = material.Title, material.Type, material.Status
-			} else {
-				item.Title = s.Config.Routes[share.Route].Title
-			}
-			items = append(items, item)
-		}
-		out.Items = items
-		if hasMore && len(shares) > 0 {
-			out.Cursor = nextMySharesCursor(f, scope, actor, shares[len(shares)-1])
+		out.Items = collected
+		if hasMore && returned.id != "" {
+			out.Cursor = nextMySharesCursor(f, scope, actor, returned)
 		}
 		return nil
 	})
@@ -475,10 +568,11 @@ func (s *Service) MyShareVisits(ctx context.Context, scope Scope, actor int64, s
 	if err != nil {
 		return out, err
 	}
-	out.Snapshot = Snapshot{AsOf: f.AsOf, Metric: MetricVersion}
+	// The requested window applies to visits, not to when the share was
+	// created. An older share may still receive authorized traffic today.
+	f.CreatedWindow = false
+	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
 	err = s.readQueryTransaction(ctx, func(r Repository) error {
-		// The requested window applies to visits, not to when the share was
-		// created. An older share may still receive authorized traffic today.
 		shares, err := s.actorShares(r, scope, actor, f, shareID, time.Time{}, "", 2)
 		if err != nil {
 			return err
@@ -486,7 +580,9 @@ func (s *Service) MyShareVisits(ctx context.Context, scope Scope, actor int64, s
 		if len(shares) != 1 {
 			return fail(404, "分享访问记录不可访问")
 		}
-		items, identified, anonymous, err := s.myShareVisitItems(ctx, r, scope, shares[0].share, f, actorVisitorKey(actor))
+		var items []MyShareVisit
+		var identified, anonymous int
+		items, identified, anonymous, err = s.myShareVisitItems(ctx, r, scope, shares[0].share, f, actorVisitorKey(actor))
 		if err != nil {
 			return err
 		}
@@ -498,7 +594,10 @@ func (s *Service) MyShareVisits(ctx context.Context, scope Scope, actor int64, s
 		out.Identified, out.Anonymous = identified, anonymous
 		return nil
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	return out, nil
 }
 
 type myVisitAccumulator struct {
@@ -508,6 +607,8 @@ type myVisitAccumulator struct {
 	contentViews   int
 	sessions       map[string]bool
 	visible        int64
+	watch          int64
+	progress       int
 }
 
 type myShareAcceptedEvent struct {
@@ -594,6 +695,18 @@ func (s *Service) myShareVisitItems(ctx context.Context, r Repository, scope Sco
 			viewVisitor[event.View] = visitor
 			continue
 		}
+		if event.Type == "video_progress" {
+			visitor = viewVisitor[event.View]
+			acc := visits[visitor]
+			if visitor == "" || acc == nil || event.Watch <= 0 || !within(event.Occurred, f) {
+				continue
+			}
+			acc.watch += event.Watch
+			if pct := videoProgressPct(event); pct > acc.progress {
+				acc.progress = pct
+			}
+			continue
+		}
 		visitor = viewVisitor[event.View]
 		acc := visits[visitor]
 		if visitor == "" || acc == nil || event.Type != "visible_segment" || event.Delta <= 0 {
@@ -631,7 +744,7 @@ func (s *Service) myShareVisitItems(ctx context.Context, r Repository, scope Sco
 		} else {
 			anonymous++
 		}
-		items = append(items, MyShareVisit{Visitor: visitor, First: acc.first, Last: acc.last, Views: acc.views, DirectoryViews: acc.directoryViews, ContentViews: acc.contentViews, Visible: acc.visible, Sessions: len(acc.sessions)})
+		items = append(items, MyShareVisit{Visitor: visitor, First: acc.first, Last: acc.last, Views: acc.views, DirectoryViews: acc.directoryViews, ContentViews: acc.contentViews, Visible: acc.visible, Sessions: len(acc.sessions), VideoWatch: acc.watch, Progress: acc.progress})
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Last.Equal(items[j].Last) {

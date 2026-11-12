@@ -133,38 +133,45 @@ type ArticleBlock struct {
 	Style   ArticleStyle `json:"style,omitempty"`
 }
 type ArticleDocument struct {
-	Schema     int            `json:"schema"`
-	LayoutHTML string         `json:"layout_html,omitempty"`
-	Blocks     []ArticleBlock `json:"blocks"`
+	VideoLayout  string         `json:"video_layout,omitempty"`
+	ShareCopy    string         `json:"share_copy,omitempty"`
+	MomentsCopy  string         `json:"moments_copy,omitempty"`
+	DraftOnly    bool           `json:"draft_only,omitempty"`
+	Schema       int            `json:"schema"`
+	Presentation string         `json:"presentation,omitempty"`
+	LayoutHTML   string         `json:"layout_html,omitempty"`
+	Blocks       []ArticleBlock `json:"blocks"`
 }
 type Content struct {
-	ReadOnly    bool       `json:"read_only,omitempty"`
-	Route       string     `json:"route_key,omitempty"`
-	VersionMode string     `json:"version_mode,omitempty"`
-	ID          string     `json:"content_id"`
-	Version     int        `json:"version"`
-	Revision    int        `json:"revision"`
-	Title       string     `json:"title"`
-	Type        string     `json:"type"`
-	Status      string     `json:"status"`
-	Tags        []string   `json:"tags,omitempty"`
-	Pinned      bool       `json:"pinned,omitempty"`
-	Cover       *Asset     `json:"cover,omitempty"`
-	Media       []Asset    `json:"media"`
-	Body        string     `json:"body"`
-	BodyFormat  string     `json:"body_format"`
-	SourceURL   string     `json:"source_url,omitempty"`
-	SourceNote  string     `json:"source_note,omitempty"`
-	Rights      string     `json:"rights"`
-	Owner       string     `json:"owner_id"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
-	PublishedAt *time.Time `json:"published_at,omitempty"`
-	Identified  int        `json:"identified_count"`
-	Anonymous   int        `json:"anonymous_count"`
-	PageViews   int        `json:"page_views"`
-	Shares      int        `json:"share_count"`
-	VisibleMS   int64      `json:"visible_ms"`
-	LastVisit   *time.Time `json:"last_visit,omitempty"`
+	Presentation string     `json:"presentation,omitempty"`
+	ReadOnly     bool       `json:"read_only,omitempty"`
+	Route        string     `json:"route_key,omitempty"`
+	VersionMode  string     `json:"version_mode,omitempty"`
+	ID           string     `json:"content_id"`
+	Version      int        `json:"version"`
+	Revision     int        `json:"revision"`
+	Title        string     `json:"title"`
+	Type         string     `json:"type"`
+	Status       string     `json:"status"`
+	Tags         []string   `json:"tags,omitempty"`
+	Pinned       bool       `json:"pinned,omitempty"`
+	Cover        *Asset     `json:"cover,omitempty"`
+	Media        []Asset    `json:"media"`
+	Body         string     `json:"body"`
+	BodyFormat   string     `json:"body_format"`
+	SourceURL    string     `json:"source_url,omitempty"`
+	SourceNote   string     `json:"source_note,omitempty"`
+	ProjectID    string     `json:"project_id,omitempty"`
+	Rights       string     `json:"rights"`
+	Owner        string     `json:"owner_id"`
+	CreatedAt    *time.Time `json:"created_at,omitempty"`
+	PublishedAt  *time.Time `json:"published_at,omitempty"`
+	Identified   int        `json:"identified_count"`
+	Anonymous    int        `json:"anonymous_count"`
+	PageViews    int        `json:"page_views"`
+	Shares       int        `json:"share_count"`
+	VisibleMS    int64      `json:"visible_ms"`
+	LastVisit    *time.Time `json:"last_visit,omitempty"`
 }
 type Draft struct {
 	Title      string   `json:"title"`
@@ -172,6 +179,7 @@ type Draft struct {
 	BodyFormat string   `json:"body_format"`
 	SourceURL  string   `json:"source_url"`
 	SourceNote string   `json:"source_note"`
+	ProjectID  string   `json:"project_id,omitempty"`
 	Rights     string   `json:"rights"`
 	Owner      string   `json:"owner_id"`
 	CoverID    string   `json:"cover_media_id"`
@@ -297,9 +305,16 @@ type Filter struct {
 	// Group controls visit timeline grouping: session (legacy, one session +
 	// one material), batch (same visitor within 30 minutes, across materials)
 	// or day (same visitor and Beijing calendar day). Empty means session.
-	Group   string
-	Limit   int
-	Related bool
+	Group string
+	Limit int
+	// CreatedWindow 把时间窗应用到"分享创建时间"而非访问时间。仅本人分享列表
+	// 使用（近3天/7天/30天 chips）；访问详情路径必须清零它，窗口语义不变。
+	CreatedWindow bool
+	// TypeFilter/ProjectID 供内容工作台列表做服务端过滤（仿真稿⑦的
+	// 分类Tab与"进行中的单子"卡）：type ∈ 图文/笔记/视频/文档由路由层映射。
+	TypeFilter string
+	ProjectID  string
+	Related    bool
 }
 type Snapshot struct {
 	AsOf   time.Time `json:"as_of"`

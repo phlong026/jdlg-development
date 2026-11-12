@@ -41,6 +41,7 @@ Page({
     identityOptions: USER_IDENTITY_OPTIONS,
     selectedIdentity: '',
     pendingLoginResult: null as any,
+    accountOnly: false,
   },
 
   /**
@@ -50,6 +51,7 @@ Page({
     (this as any)._authPageUnloaded = false;
     (this as any)._authPageEpoch = ((this as any)._authPageEpoch || 0) + 1;
     this.initNavLayout();
+    this.setData({ accountOnly: options.from === 'ai-action' });
 
     // 检查是否已登录
     const token = wx.getStorageSync('token');
@@ -87,7 +89,7 @@ Page({
 
   initNavLayout() {
     try {
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function'
         ? wx.getMenuButtonBoundingClientRect()
         : null;
@@ -429,6 +431,10 @@ Page({
     const current = () => this.isLoginContextCurrent(context) && (this as any)._profileCheckRevision === revision;
     this.setData({ loading: true, profileError: '' });
     try {
+      if (this.data.accountOnly) {
+        this.navigateToIndexAfterLogin(context.token);
+        return true;
+      }
       const { token, profile } = await this.fetchVerifiedProfile();
       if (!current()) return false;
       if (!hasCompleteProfile(profile)) {

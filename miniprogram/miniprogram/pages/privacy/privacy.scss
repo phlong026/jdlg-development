@@ -85,6 +85,34 @@
   color: rgba(94, 65, 47, 0.74);
 }
 
+.analytics-card {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.analytics-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.analytics-desc,
+.analytics-unavailable {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.75;
+  color: rgba(94, 65, 47, 0.7);
+}
+
+.analytics-unavailable {
+  color: #a36f4b;
+}
+
+.analytics-switch {
+  flex-shrink: 0;
+}
+
 .contact-card {
   margin-bottom: 0;
 }

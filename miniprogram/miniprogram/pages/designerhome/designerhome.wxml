@@ -9,7 +9,7 @@
         <view class="designer-profile-card">
           <view class="designer-profile-main">
             <view class="designer-avatar-shell {{isSelfHomepage ? 'designer-avatar-shell-clickable' : ''}}" bindtap="onAvatarTap">
-              <image wx:if="{{profile.avatar}}" class="designer-avatar" src="{{profile.avatar}}" mode="aspectFill" lazy-load />
+              <image wx:if="{{profile.avatar}}" class="designer-avatar" src="{{profile.avatar}}" mode="aspectFill" lazy-load binderror="onProfileAvatarError" />
               <view wx:else class="designer-avatar designer-avatar-fallback">
                 <view class="designer-avatar-head"></view>
                 <view class="designer-avatar-body"></view>
@@ -31,10 +31,11 @@
             </view>
           </view>
           <text class="designer-profile-desc designer-profile-desc-clickable" bindtap="onPreviewText" data-title="设计师简介" data-content="{{profile.bioText}}">{{profile.bioText}}</text>
-          <view class="designer-avatar-manage-hint" wx:if="{{avatarManageHint}}">
-            <text class="designer-avatar-manage-hint-text">{{avatarManageHint}}</text>
+          <view class="designer-profile-region" wx:if="{{profile.region}}">
+            <text class="designer-profile-region-label">所在地</text>
+            <text class="designer-profile-region-value">{{profile.region}}</text>
           </view>
-          <view class="profile-action-row" wx:if="{{!isSelfHomepage || showProfileOverviewSections}}">
+          <view class="profile-action-row" wx:if="{{!isPreviewMode}}">
             <view wx:if="{{!isSelfHomepage}}" class="profile-action-button profile-action-button-secondary" bindtap="onToggleFollowDesigner">
               <text class="profile-action-button-text-secondary">{{isFollowed ? '已关注设计师' : '关注设计师'}}</text>
             </view>
@@ -45,26 +46,10 @@
               <text class="profile-action-button-text-primary">咨询设计师</text>
             </view>
             <view wx:if="{{isSelfHomepage}}" class="profile-action-button profile-action-button-secondary" bindtap="onEditDesignerProfile">
-              <text class="profile-action-button-text-secondary">编辑主页资料</text>
+              <text class="profile-action-button-text-secondary">编辑主页</text>
             </view>
-            <view wx:if="{{isSelfHomepage}}" class="profile-action-button profile-action-button-primary" bindtap="onEditDesignerService">
-              <text class="profile-action-button-text-primary">编辑服务配置</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="self-manage-card" wx:if="{{isSelfHomepage && showProfileOverviewSections}}">
-          <view class="designer-section-title-row specialty-title-row">
-            <view class="designer-section-line"></view>
-            <text class="designer-section-title">设计师主页管理</text>
-          </view>
-          <text class="self-manage-desc">设计师简介、擅长方向、服务报价、服务说明和认证资料，统一从这里进入管理。</text>
-          <view class="self-manage-row">
-            <view class="self-manage-btn self-manage-btn-secondary" bindtap="onEditDesignerProfile">
-              <text class="self-manage-btn-text-secondary">编辑主页资料</text>
-            </view>
-            <view class="self-manage-btn self-manage-btn-primary" bindtap="onOpenDesignerCertification">
-              <text class="self-manage-btn-text-primary">认证管理</text>
+            <view wx:if="{{isSelfHomepage}}" class="profile-action-button profile-action-button-primary" bindtap="onPreviewHomepage">
+              <text class="profile-action-button-text-primary">预览主页</text>
             </view>
           </view>
         </view>
@@ -130,16 +115,16 @@
             <view class="designer-panel-tab-line" wx:if="{{currentTopTab === 'works'}}"></view>
           </view>
           <view class="designer-panel-tab {{currentTopTab === 'service' ? 'active' : ''}}" bindtap="onTopTabTap" data-tab="service">
-            <text class="designer-panel-tab-text">工作服务</text>
+            <text class="designer-panel-tab-text">服务</text>
             <view class="designer-panel-tab-line" wx:if="{{currentTopTab === 'service'}}"></view>
           </view>
         </view>
 
         <view class="designer-panel-shell" wx:if="{{currentTopTab === 'works'}}">
-          <view class="designer-works-columns" wx:if="{{worksLeft.length || worksRight.length}}">
-            <view class="designer-works-column">
-              <view class="designer-work-card" wx:for="{{worksLeft}}" wx:key="id" bindtap="onWorkTap" data-id="{{item.id}}" data-publish-scope="{{item.publishScope}}" data-image="{{item.image}}">
-                <image class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+          <view class="designer-works-single" wx:if="{{visibleWorks.length}}">
+              <view class="designer-work-card" wx:for="{{visibleWorks}}" wx:for-item="item" wx:key="id" bindtap="onWorkTap" data-id="{{item.id}}" data-publish-scope="{{item.publishScope}}" data-image="{{item.image}}">
+                <image wx:if="{{item.image}}" class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
+                <view wx:else class="designer-work-image designer-work-image-empty">暂无作品封面</view>
                 <view class="designer-work-body">
                   <text class="designer-work-title">{{item.title}}</text>
                   <view class="designer-work-tags" wx:if="{{item.tags.length}}">
@@ -151,33 +136,20 @@
                   </view>
                 </view>
               </view>
-            </view>
-            <view class="designer-works-column">
-              <view class="designer-work-card" wx:for="{{worksRight}}" wx:key="id" bindtap="onWorkTap" data-id="{{item.id}}" data-publish-scope="{{item.publishScope}}" data-image="{{item.image}}">
-                <image class="designer-work-image" src="{{item.image}}" mode="aspectFill" lazy-load />
-                <view class="designer-work-body">
-                  <text class="designer-work-title">{{item.title}}</text>
-                  <view class="designer-work-tags" wx:if="{{item.tags.length}}">
-                    <text class="designer-work-tag" wx:for="{{item.tags}}" wx:key="*this">{{item}}</text>
-                  </view>
-                  <view class="designer-work-meta">
-                    <text class="designer-work-meta-text">{{item.viewsText}} 浏览</text>
-                    <text class="designer-work-meta-text">{{item.likesText}} 点赞</text>
-                  </view>
-                </view>
-              </view>
-            </view>
           </view>
           <view class="designer-load-more" wx:if="{{worksHasMore}}" bindtap="onLoadMoreWorks">
             <text class="designer-load-more-text">查看更多作品（还可展开 {{allWorks.length - visibleWorkCount}} 个）</text>
           </view>
-          <view class="designer-empty-tip" wx:if="{{!worksLeft.length && !worksRight.length}}">该设计师暂时还没有公开作品</view>
+          <view class="designer-empty-tip" wx:if="{{!visibleWorks.length}}">该设计师暂时还没有公开作品</view>
         </view>
 
         <view class="designer-service-card" wx:if="{{currentTopTab === 'service'}}">
           <view class="designer-section-title-row">
             <view class="designer-section-line"></view>
             <text class="designer-section-title">服务配置</text>
+            <view wx:if="{{isSelfHomepage && !isPreviewMode}}" class="designer-service-edit" bindtap="onEditDesignerService">
+              <text class="designer-service-edit-text">编辑</text>
+            </view>
           </view>
           <view class="designer-service-row">
             <text class="designer-service-label">服务状态</text>
@@ -221,7 +193,7 @@
           <view class="designer-review-list" wx:if="{{filteredReviews.length}}">
           <view class="designer-review-item" wx:for="{{filteredReviews}}" wx:key="id">
             <view class="designer-review-avatar-shell">
-              <image wx:if="{{item.avatar}}" class="designer-review-avatar" src="{{item.avatar}}" mode="aspectFill" lazy-load />
+              <image wx:if="{{item.avatar}}" class="designer-review-avatar" src="{{item.avatar}}" mode="aspectFill" lazy-load binderror="onReviewAvatarError" data-index="{{index}}" data-id="{{item.id}}" />
               <view wx:else class="designer-review-avatar designer-review-avatar-fallback">{{item.avatarText}}</view>
             </view>
             <view class="designer-review-content">

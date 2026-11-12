@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-08",
+  "timezone": "Asia/Shanghai",
+  "source_commit": "0030d7f9a8d7f8275c33ddb1193f840c2c5ffd40",
+  "evidence_kind": "sanitized_transcription_of_native_ui_and_public_probe_outputs",
+  "environment": "production_backend",
+  "binary": {
+    "path": "/www/wwwroot/jiadilingguang/api/applinux",
+    "old_pid": 1154047,
+    "active_pid": 1078970,
+    "old_sha256": "d05c55fecd339383bd9ed4660f604bd93e0b1e2292b03c0701b9526f55d61e6a",
+    "active_sha256": "4504e1f6ddc3655444d18a926b72075dec680ba7cac897c920c8202188e00385",
+    "archive_sha256": "c9be178f1efc3d6a21493455071b57c1ab45252812cd17d379e1acca56c83fa6",
+    "status": "active",
+    "disk_and_running_binary_verified": true,
+    "initial_runtime_and_arguments_preserved": true,
+    "prepared_configuration_unchanged_after_activation": true
+  },
+  "backup": {
+    "binary": "/root/jdlg-video-backup-20261108-0030d7f",
+    "prechange_configuration": "/root/jdlg-video-config-backup-20261108-0030d7f",
+    "release_tool": "/root/jdlg-video-deploy-0030d7f/binary_release.py"
+  },
+  "configuration": {
+    "file": "/www/wwwroot/jiadilingguang/api/.env.local",
+    "added_key": "CONTENT_VIDEO_UPLOAD_DIR",
+    "private_staging": "/var/lib/jdlg-video-uploads",
+    "staging_mode": "0700",
+    "other_configuration_bytes_preserved": true,
+    "database_migration": false
+  },
+  "checks": {
+    "public_tracking_config": 200,
+    "unauthenticated_workbench_context": 401,
+    "unauthenticated_video_upload_status": 401,
+    "public_multipart_probe": {
+      "request_bytes": 4194467,
+      "status": 401,
+      "proxy_body_limit_rejection": false,
+      "authenticated": false,
+      "business_mutation": false
+    },
+    "authenticated_workbench_context": {
+      "enabled": true,
+      "media_upload_configured": true,
+      "video_editor_fields": true,
+      "video_resumable_upload": true,
+      "video_upload_chunk_size": 4194304
+    },
+    "editor_stale_upload_warning_removed": true,
+    "editor_unsaved_content_preserved": true
+  },
+  "not_performed": [
+    "real_cos_large_video_upload_and_resume",
+    "ios_android_device_acceptance",
+    "miniprogram_upload_or_experience_selection",
+    "miniprogram_review_or_formal_release",
+    "production_rollback_drill",
+    "full_ui_zero_error_acceptance"
+  ]
+}

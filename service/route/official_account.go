@@ -41,13 +41,13 @@ func registerOfficialAccountHandlers(public, authed *gin.RouterGroup, deps Offic
 		c.Next()
 	})
 	authed.GET("/binding", func(c *gin.Context) {
-		if deps.Store == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"code": http.StatusServiceUnavailable, "msg": "服务号服务暂不可用"})
-			return
-		}
 		status := deps.Config.Status()
 		result := gin.H{"capability": status, "bound": false, "subscribed": false}
 		if deps.Config.Enabled && deps.Config.AppID != "" {
+			if deps.Store == nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"code": http.StatusServiceUnavailable, "msg": "服务号服务暂不可用"})
+				return
+			}
 			binding, err := deps.Store.ResolveBinding(c.Request.Context(), GetTokenUserID(c), deps.Config.AppID)
 			if err == nil {
 				result["bound"], result["subscribed"], result["binding_version"] = true, true, binding.Version

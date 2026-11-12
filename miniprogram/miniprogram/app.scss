@@ -6,6 +6,7 @@ scroll-view {
 /* 隐藏垂直+水平滚动条，直接加在 page 或目标 view 上 */
 page {
   overflow: auto;
+  background: #fbfaf7;
 }
 
 

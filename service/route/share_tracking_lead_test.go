@@ -33,6 +33,7 @@ func TestTrackingLeadGateIdentityMatrix(t *testing.T) {
 		{name: "builder crew excluded", state: "identified", identityType: "施工队", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "supplier excluded", state: "identified", identityType: "建材商", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "institution excluded", state: "identified", identityType: "机构用户", wantBlocked: true, wantMessage: "B端用户"},
+		{name: "enterprise owner fails closed", state: "identified", identityType: "企业主", wantBlocked: true, wantMessage: "无法识别的访客身份"},
 		{name: "padded bside still excluded", state: "identified", identityType: " 设计师 ", wantBlocked: true, wantMessage: "B端用户"},
 		{name: "unknown identity fails closed", state: "identified", identityType: "魔法师", wantBlocked: true, wantMessage: "无法识别的访客身份"},
 		{name: "homeowner passes regardless of share", state: "identified", identityType: "乡墅业主", customerShare: 0, wantBlocked: false},
@@ -146,6 +147,45 @@ func TestTrackingLeadDisplayName(t *testing.T) {
 	}
 }
 
+func TestTrackingLeadConversionRequiresBusinessContactConsent(t *testing.T) {
+	visitor := tracking.Visitor{Key: "u:42", State: "identified", IdentityType: "乡墅业主"}
+	_, err := convertVisitorSnapshotToLead(contactConsentReaderFixture(false), nil, 11, visitor, nil, trackingLeadSource, false)
+	if err == nil {
+		t.Fatal("tracking conversion should require explicit business contact consent")
+	}
+	trackingErr, ok := err.(*tracking.Error)
+	if !ok || trackingErr.Status != http.StatusUnprocessableEntity || !strings.Contains(trackingErr.Message, "业务联系") {
+		t.Fatalf("error=%T %v", err, err)
+	}
+}
+
+func TestTrackingLeadConversionRequiresBoundContactPhone(t *testing.T) {
+	visitor := tracking.Visitor{Key: "u:42", State: "identified", IdentityType: "乡墅业主"}
+	_, err := convertVisitorSnapshotToLead(contactPhoneUnavailableReaderFixture{}, nil, 11, visitor, nil, trackingLeadSource, false)
+	if err == nil {
+		t.Fatal("tracking conversion should require a bound contact phone")
+	}
+	trackingErr, ok := err.(*tracking.Error)
+	if !ok || trackingErr.Status != http.StatusUnprocessableEntity || !strings.Contains(trackingErr.Message, "手机号") {
+		t.Fatalf("error=%T %v", err, err)
+	}
+}
+
+type contactConsentReaderFixture bool
+
+func (f contactConsentReaderFixture) ConvertTrackingLead(*model.CustomerLeadCreateInput, *model.CustomerServiceEventCreateInput, bool) (model.TrackingLeadConversionResult, error) {
+	if !bool(f) {
+		return model.TrackingLeadConversionResult{}, model.ErrBusinessContactConsentRequired
+	}
+	return model.TrackingLeadConversionResult{LeadID: 73}, nil
+}
+
+type contactPhoneUnavailableReaderFixture struct{}
+
+func (contactPhoneUnavailableReaderFixture) ConvertTrackingLead(*model.CustomerLeadCreateInput, *model.CustomerServiceEventCreateInput, bool) (model.TrackingLeadConversionResult, error) {
+	return model.TrackingLeadConversionResult{}, model.ErrBusinessContactPhoneUnavailable
+}
+
 // Contract test: the conversion endpoint exists behind the tracking
 // management group and keeps the CRM handover rule, dedupe and evidence
 // snapshot wired. Follows the repository's source-contract test style.
@@ -159,9 +199,7 @@ func TestTrackingLeadConversionContract(t *testing.T) {
 		`"/visitors/:id/lead"`,
 		"!scope.CRM",
 		`"crm":`, // 响应告知前端：线索已交给 CRM 承接，由客户主管分配
-		"FindLatestOpenLeadID",
-		"CreateLead",
-		"CreateEvent",
+		"ConvertTrackingLead",
 		trackingLeadSource,
 		trackingLeadEventType,
 		"buildTrackingLeadEvidence",
@@ -204,6 +242,99 @@ func TestTrackingLeadEndpointRegisteredBehindAuth(t *testing.T) {
 	}
 }
 
+func TestMyTrackingLeadEndpointRegisteredBehindMiniAuth(t *testing.T) {
+	t.Setenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED", "true")
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	registerTrackingMyLeadRoute(router.Group("/api/v1/miniprogram/tracking"), tracking.New(nil, tracking.Config{Tenant: "tenant"}), nil, &model.UserModel{}, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/miniprogram/tracking/my-visitors/lead", strings.NewReader(`{"visitor":"u:1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMyVisitorLeadContentsUseOnlyScopedEntries(t *testing.T) {
+	contents := myVisitorLeadContents([]tracking.MyVisitEntry{
+		{Content: "c-1", Version: 2, Route: "pages/contentreader/contentreader", Title: "方案甲", Visible: 8000},
+		{Content: "c-1", Version: 2, Route: "pages/contentreader/contentreader", Title: "方案甲", Visible: 3000},
+		{Content: "c-2", Version: 1, Route: "pages/collectionreader/collectionreader", Title: "合集乙", Visible: 5000},
+	})
+	if len(contents) != 2 || contents[0].Title != "方案甲" || contents[0].PageViews != 2 || contents[0].VisibleMS != 11000 {
+		t.Fatalf("scoped content summary mismatch: %+v", contents)
+	}
+}
+
+func TestMyVisitorSnapshotLeadRejectsUncontactableVisitorsBeforePersistence(t *testing.T) {
+	for _, visitor := range []tracking.Visitor{
+		{Key: "a:anon", State: "anonymous"},
+		{Key: "u:77", State: "identified", IdentityType: "设计师"},
+	} {
+		if _, err := convertVisitorSnapshotToLead(nil, nil, 11, visitor, nil, trackingMyLeadSource, true); err == nil {
+			t.Fatalf("visitor must be rejected before persistence: %+v", visitor)
+		}
+	}
+}
+
+func TestMyTrackingLeadResponseHidesExistingManagementLeadID(t *testing.T) {
+	existing := myTrackingLeadResponse(trackingLeadOutcome{LeadID: 987, Existed: true})
+	if existing["lead_id"] != int64(0) || existing["existed"] != true {
+		t.Fatalf("existing management lead leaked: %+v", existing)
+	}
+	created := myTrackingLeadResponse(trackingLeadOutcome{LeadID: 123, Existed: false})
+	if created["lead_id"] != int64(123) || created["existed"] != false {
+		t.Fatalf("new lead response mismatch: %+v", created)
+	}
+}
+
+func TestTrackingLeadConversionLockSerializesSameAccount(t *testing.T) {
+	unlock := lockTrackingLeadConversion(77)
+	acquired := make(chan struct{})
+	go func() {
+		release := lockTrackingLeadConversion(77)
+		close(acquired)
+		release()
+	}()
+	select {
+	case <-acquired:
+		t.Fatal("same-account conversion was not serialized")
+	case <-time.After(20 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("same-account conversion lock did not release")
+	}
+}
+
+func TestMyTrackingLeadContractUsesSelfScopedEvidence(t *testing.T) {
+	source, err := os.ReadFile("share_tracking_lead.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(source)
+	for _, want := range []string{
+		`"/my-visitors"`, `POST("/lead"`, `json:"visitor"`, "MyVisitorEntries", "myVisitorLeadContents", trackingMyLeadSource,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("self-scoped lead contract missing %q", want)
+		}
+	}
+	if strings.Contains(content, "svc.Visitors(c.Request.Context(), current") || strings.Contains(content, "svc.VisitorContents(c.Request.Context(), current") {
+		t.Fatal("mini-program conversion must not query management visitor aggregates")
+	}
+	wiring, err := os.ReadFile("share_tracking.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wiring), "registerTrackingMyLeadRoute(pub, svc, customerServiceModel, users, codes)") {
+		t.Fatal("mini-program lead route is not wired")
+	}
+}
+
 // Contract: the recompute hook and the opt-in auto loop stay wired, and the
 // manual endpoint shares one conversion pipeline with automation.
 func TestTrackingLeadAutomationContract(t *testing.T) {
@@ -233,8 +364,8 @@ func TestTrackingLeadAutomationContract(t *testing.T) {
 	}
 }
 
-// Contract: mini-program lead creation auto-fills the phone from the bound
-// account identity before CreateLead, closing the contactless-lead hole.
+// Contract: mini-program lead creation delegates account-phone access to the
+// transaction that also locks the purpose-specific consent revision.
 func TestLeadPhoneAutofillContract(t *testing.T) {
 	source, err := os.ReadFile("customer_service.go")
 	if err != nil {
@@ -242,12 +373,23 @@ func TestLeadPhoneAutofillContract(t *testing.T) {
 	}
 	content := string(source)
 	for _, want := range []string{
-		"leadPhoneLookup",
-		"GetUserPhones",
+		"CreateLeadWithBusinessContact",
 		`strings.TrimSpace(req.Phone) == ""`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("phone autofill contract missing %q", want)
+		}
+	}
+	if strings.Contains(content, "GetUserPhones") || strings.Contains(content, "ContactPhoneConsent") {
+		t.Fatal("ordinary lead route must not read the account phone or mutate contact consent outside the atomic model operation")
+	}
+	modelSource, err := os.ReadFile("../model/customer_service_contact_consent.go")
+	if err != nil {
+		t.Fatalf("read atomic contact consent model: %v", err)
+	}
+	for _, want := range []string{"FOR UPDATE", "purpose", "consent_version", "PhoneConsentRevision", "ConvertTrackingLead"} {
+		if !strings.Contains(string(modelSource), want) {
+			t.Fatalf("atomic contact consent model missing %q", want)
 		}
 	}
 }

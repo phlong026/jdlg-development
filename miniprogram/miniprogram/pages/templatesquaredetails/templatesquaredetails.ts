@@ -18,35 +18,6 @@ function buildPublicTemplateDetailCacheKey(templateId: number) {
   return `template-detail:public:${Number(templateId || 0)}`;
 }
 
-function buildTokenCacheScope(token: string): string {
-  const value = String(token || '').trim();
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash).toString(36) || 'anonymous';
-}
-
-function getCachedLoginUserId(): number {
-  try {
-    const userInfo = wx.getStorageSync('userInfo') || wx.getStorageSync('user') || {};
-    return Number(userInfo.id || userInfo.user_id || userInfo.userId || 0) || 0;
-  } catch (error) {
-    return 0;
-  }
-}
-
-function buildTemplateDetailCacheKey(templateId: number, token = '') {
-  const safeTemplateId = Number(templateId || 0);
-  const safeToken = String(token || '').trim();
-  if (!safeToken) {
-    return buildPublicTemplateDetailCacheKey(safeTemplateId);
-  }
-  const userId = getCachedLoginUserId();
-  const authScope = userId > 0 ? `user:${userId}` : `token:${buildTokenCacheScope(safeToken)}`;
-  return `template-detail:auth:${authScope}:${safeTemplateId}`;
-}
-
 interface LocalCommentItem {
   id: string;
   userName: string;
@@ -144,6 +115,8 @@ Page({
     commentsLoading: false,
     previewShowMenu: false,
     canDownloadImages: false,
+    accountEnhancementState: 'idle',
+    accountEnhancementError: '',
     userPhoneVerified: false,
     userRechargeMember: false,
     downloadActionText: '登录后下载',
@@ -196,7 +169,7 @@ Page({
 
     if (id > 0) {
       this.setData({ templateId: id });
-      const hasCachedDetail = Boolean(getPageCache<any>(buildTemplateDetailCacheKey(id, token)));
+      const hasCachedDetail = Boolean(getPageCache<any>(buildPublicTemplateDetailCacheKey(id)));
       void this.loadTemplateDetail(hasCachedDetail);
     }
   },
@@ -947,6 +920,100 @@ Page({
     this.saveImageToAlbum(url, '保存二维码中...', '二维码已保存');
   },
 
+  async loadTemplateAccountEnhancement(expectedToken: string): Promise<void> {
+    const token = String(expectedToken || '').trim();
+    if (!token || token !== String(wx.getStorageSync('token') || '').trim()) return;
+    const apiPath = `/api/v1/miniprogram/templates/${this.data.templateId}/detail`;
+    const params = generateRequestParams(token, {}, apiPath, getCachedDeviceFingerprint() || '');
+    this.setData({ accountEnhancementState: 'loading', accountEnhancementError: '' });
+    try {
+      const res = await new Promise<any>((resolve, reject) => {
+        wx.request({
+          url: `${API_BASE_URL}${apiPath}`,
+          method: 'GET',
+          header: { ...paramsToHeaders(params), 'Content-Type': 'application/json' },
+          data: {},
+          success: (requestRes) => {
+            const body = (requestRes.data || {}) as any;
+            if (requestRes.statusCode === 200 && body.code === 0) {
+              resolve(body.data || {});
+              return;
+            }
+            const requestError = new Error('账号权益请求失败') as any;
+            requestError.statusCode = Number(requestRes.statusCode || 0);
+            requestError.responseCode = Number(body.code || 0);
+            requestError.errorType = 'http';
+            reject(requestError);
+          },
+          fail: () => {
+            const requestError = new Error('账号权益请求失败') as any;
+            requestError.errorType = 'network';
+            reject(requestError);
+          },
+        });
+      });
+      if (token !== String(wx.getStorageSync('token') || '').trim() || token !== String(this.data.token || '').trim()) return;
+
+      let imageList: string[] = [];
+      const images = typeof res.images === 'string' ? JSON.parse(res.images || '[]') : res.images;
+      if (Array.isArray(images)) {
+        imageList = images.map((item: any) => normalizeCosUrl(
+          typeof item === 'string' ? item : (item?.image || item?.url || item?.preview_url || ''),
+        )).filter(Boolean);
+      }
+      const mainImage = normalizeCosUrl(res.preview_url || res.thumbnail || '') || imageList[0] || this.data.mainImage || '';
+      if (mainImage) imageList = [mainImage, ...imageList.filter((item) => item !== mainImage)];
+
+      this.setData({
+        template: res,
+        unlocked: !!res.unlocked,
+        mainImage,
+        imageList,
+        price: Number(res.price || 0),
+        isFree: !!res.is_free,
+        canDownloadImages: !!res.can_download_images,
+        userPhoneVerified: !!res.user_phone_verified,
+        userRechargeMember: !!res.user_recharge_member,
+        downloadActionText: String(res.download_action_text || this.data.downloadActionText),
+        downloadActionHint: String(res.download_action_hint || this.data.downloadActionHint),
+        enterpriseWechatVerified: !!res.user_phone_verified,
+        accountEnhancementState: 'ready',
+        accountEnhancementError: '',
+      });
+      this.prepareHeroImageHeights(imageList, Number(res.image_width || 0), Number(res.image_height || 0));
+      void prefetchImages(imageList, 2);
+      this.updatePrimaryActionState();
+      await this.prepareCurrentShareImages(this.getCurrentShareSourceUrl());
+    } catch (error: any) {
+      const statusCode = Number(error?.statusCode || 0);
+      const responseCode = Number(error?.responseCode || 0);
+      if (statusCode === 401 || statusCode === 428 || responseCode === 401 || responseCode === 428) {
+        this.setData({ accountEnhancementState: 'idle', accountEnhancementError: '' });
+        return;
+      }
+      const errorType = String(error?.errorType || (error instanceof SyntaxError ? 'invalid_response' : 'unexpected'));
+      console.error('模板账号权益同步失败', {
+        templateId: Number(this.data.templateId || 0),
+        statusCode,
+        responseCode,
+        errorType,
+      });
+      this.setData({
+        accountEnhancementState: 'retryable',
+        accountEnhancementError: '账号权益暂未同步，不影响浏览，可重试。',
+      });
+    }
+  },
+
+  retryTemplateAccountEnhancement(): Promise<void> {
+    const token = String(wx.getStorageSync('token') || '').trim();
+    if (!token) {
+      this.setData({ accountEnhancementState: 'idle', accountEnhancementError: '' });
+      return Promise.resolve();
+    }
+    return this.loadTemplateAccountEnhancement(token);
+  },
+
   async loadTemplateDetail(silent = false): Promise<void> {
     if (this.data.loading && !silent) return;
     if (!silent) {
@@ -955,25 +1022,16 @@ Page({
     this.setData({ contentReady: false });
 
     const token = this.data.token;
-    const url = token
-      ? `${API_BASE_URL}/api/v1/miniprogram/templates/${this.data.templateId}/detail`
-      : `${API_BASE_URL}/api/v1/miniprogram/templates/${this.data.templateId}`;
+    const apiPath = `/api/v1/miniprogram/templates/${this.data.templateId}`;
+    const url = `${API_BASE_URL}${apiPath}`;
     try {
-      const cacheKey = buildTemplateDetailCacheKey(this.data.templateId, token);
+      const cacheKey = buildPublicTemplateDetailCacheKey(this.data.templateId);
       const cachedDetail = getPageCache<any>(cacheKey);
       const res = cachedDetail || await new Promise<any>((resolve, reject) => {
-        const deviceID = getCachedDeviceFingerprint() || '';
-        const body = {};
-        const apiPath = token
-          ? `/api/v1/miniprogram/templates/${this.data.templateId}/detail`
-          : `/api/v1/miniprogram/templates/${this.data.templateId}`;
-        const headers = token
-          ? { ...paramsToHeaders(generateRequestParams(token, body, apiPath, deviceID)), 'Content-Type': 'application/json' }
-          : {};
         wx.request({
           url,
           method: 'GET',
-          header: headers,
+          header: {},
           data: {},
           success: (requestRes) => {
             if (requestRes.statusCode === 200 && requestRes.data) {
@@ -1097,6 +1155,7 @@ Page({
       }
       this.updatePrimaryActionState();
       void Promise.allSettled([this.loadLikedState(), this.loadComments()]);
+      if (token) void this.loadTemplateAccountEnhancement(token);
     } catch (error: any) {
       console.error('加载模板详情失败:', error);
       if (!silent) {
@@ -1200,7 +1259,7 @@ Page({
   initLayoutMetrics() {
     try {
       const menuRect = wx.getMenuButtonBoundingClientRect();
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       const safeTop = Number(systemInfo.statusBarHeight || systemInfo.safeArea?.top || 20);
       const heroHeight = Math.round((systemInfo.windowWidth || 375) * 0.72);
       this.setData({

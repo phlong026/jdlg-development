@@ -1,0 +1,58 @@
+- initialize
+
+(node:41753) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `Electron --trace-deprecation ...` to show where the warning was created)
+✔ IDE server has started, listening on http://127.0.0.1:9420
+- preparing
+- Fetching AppID () permissions
+✔ Using AppID: wx94fdc48861913ede
+- Upload
+
+┌───────────────────────────────────┬────────────┬─────────────┐
+│ (index)                           │ size       │ size (Byte) │
+├───────────────────────────────────┼────────────┼─────────────┤
+│ TOTAL                             │ '2.9 MB'   │ 3036656     │
+│ main                              │ '1.6 MB'   │ 1717289     │
+│ /pages/adminhome/                 │ '890 B'    │ 890         │
+│ /pages/adminlogin/                │ '677 B'    │ 677         │
+│ /pages/allrounddesign/            │ '41.2 KB'  │ 42204       │
+│ /pages/buildingreplacement/       │ '18.4 KB'  │ 18886       │
+│ /pages/chat/                      │ '39.2 KB'  │ 40185       │
+│ /pages/checkin/                   │ '23.6 KB'  │ 24215       │
+│ /pages/collectionreader/          │ '11.5 KB'  │ 11820       │
+│ /pages/contentedit/               │ '56.5 KB'  │ 57883       │
+│ /pages/contentreader/             │ '28.7 KB'  │ 29367       │
+│ /pages/contentworkbench/          │ '38.0 KB'  │ 38923       │
+│ /pages/contentwriting/            │ '20.4 KB'  │ 20867       │
+│ /pages/designerhome/              │ '81.1 KB'  │ 83084       │
+│ /pages/generatedetails/           │ '106.5 KB' │ 109084      │
+│ /pages/generatehistory/           │ '37.1 KB'  │ 37994       │
+│ /pages/Identityauthen/            │ '20.8 KB'  │ 21264       │
+│ /pages/Invitefriends/             │ '36.6 KB'  │ 37490       │
+│ /pages/lingshidetails/            │ '16.4 KB'  │ 16792       │
+│ /pages/messagecenter/             │ '15.7 KB'  │ 16051       │
+│ /pages/myfavorites/               │ '25.4 KB'  │ 25963       │
+│ /pages/myInformationmodification/ │ '36.1 KB'  │ 36935       │
+│ /pages/myplan/                    │ '30.0 KB'  │ 30675       │
+│ /pages/nativereferences/          │ '15.6 KB'  │ 16016       │
+│ /pages/orderdetail/               │ '16.0 KB'  │ 16435       │
+│ /pages/ordermanagement/           │ '40.1 KB'  │ 41036       │
+│ /pages/Parentchildcreativity/     │ '23.9 KB'  │ 24478       │
+│ /pages/projectcollections/        │ '30.5 KB'  │ 31256       │
+│ /pages/projectinvite/             │ '5.6 KB'   │ 5707        │
+│ /pages/projectnotes/              │ '78.5 KB'  │ 80426       │
+│ /pages/projectnoteview/           │ '26.8 KB'  │ 27484       │
+│ /pages/projectpackage/            │ '19.9 KB'  │ 20416       │
+│ /pages/projectpackageview/        │ '16.1 KB'  │ 16515       │
+│ /pages/release/                   │ '57.4 KB'  │ 58781       │
+│ /pages/report/                    │ '74.4 KB'  │ 76167       │
+│ /pages/ruralvilladesign/          │ '27.6 KB'  │ 28242       │
+│ /pages/sharevisits/               │ '7.5 KB'   │ 7634        │
+│ /pages/templatesquaredetails/     │ '68.9 KB'  │ 70507       │
+│ /pages/topupcenter/               │ '50.7 KB'  │ 51962       │
+│ /pages/visitdetail/               │ '8.1 KB'   │ 8339        │
+│ /pages/wallet/                    │ '22.1 KB'  │ 22643       │
+│ /pages/withdrawcenter/            │ '13.7 KB'  │ 14074       │
+└───────────────────────────────────┴────────────┴─────────────┘
+
+✔ upload

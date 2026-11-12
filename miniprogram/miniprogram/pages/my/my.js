@@ -109,6 +109,7 @@ function buildWorkbenchMenuItems(options) {
     const items = [
         { action: 'myProjects', label: '我的项目', icon: 'folder', description: '项目与方案', available: true },
         { action: 'contentWorkbench', label: '内容创作', icon: 'video', description: '作品与资料', available: true },
+        { action: 'customers', label: '客户', icon: 'user', description: '浏览 · 意向 · 追踪', available: true },
     ];
     if (hasDesignerAccess) {
         items.push({ action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示', available: true });
@@ -267,14 +268,14 @@ Page({
         const requestId = Number(this.__workbenchAccessRequestId || 0) + 1;
         this.__workbenchAccessRequestId = requestId;
         this.setData({
-            hasContentWorkbenchAccess: false,
-            showWorkbenchSection: false,
             showShareMaterialsPanel: false,
             workbenchAccessLoading: !!token,
         });
-        this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
-        if (!token || token !== String(wx.getStorageSync('token') || ''))
+        if (!token || token !== String(wx.getStorageSync('token') || '')) {
+            this.setData({ hasContentWorkbenchAccess: false, showWorkbenchSection: false, workbenchAccessLoading: false });
+            this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
             return;
+        }
         try {
             const context = await phase3API.workbenchContext();
             if (requestId !== this.__workbenchAccessRequestId
@@ -296,18 +297,22 @@ Page({
                 || token !== String(wx.getStorageSync('token') || ''))
                 return;
             console.warn('获取内容创作权限失败:', error);
-            this.setData({ hasContentWorkbenchAccess: false, workbenchAccessLoading: false });
-            this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess: false });
+            const revoked = error?.statusCode === 401 || error?.statusCode === 403;
+            const hasContentWorkbenchAccess = revoked ? false : this.data.hasContentWorkbenchAccess;
+            this.setData({ hasContentWorkbenchAccess, workbenchAccessLoading: false });
+            this.refreshWorkbenchMenuItems({ hasContentWorkbenchAccess });
         }
     },
     async loadShareVisitAccess() {
         const token = String(this.data.token || wx.getStorageSync('token') || '');
         const requestId = Number(this.__shareVisitAccessRequestId || 0) + 1;
         this.__shareVisitAccessRequestId = requestId;
-        this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: !!token });
-        this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
-        if (!token || token !== String(wx.getStorageSync('token') || ''))
+        this.setData({ shareVisitAccessLoading: !!token });
+        if (!token || token !== String(wx.getStorageSync('token') || '')) {
+            this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: false });
+            this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
             return;
+        }
         try {
             const context = await phase3API.mySharesContext();
             if (requestId !== this.__shareVisitAccessRequestId
@@ -326,8 +331,10 @@ Page({
                 || token !== String(wx.getStorageSync('token') || ''))
                 return;
             console.warn('获取分享访问权限失败:', error);
-            this.setData({ hasShareVisitAccess: false, shareVisitAccessLoading: false });
-            this.refreshWorkbenchMenuItems({ hasShareVisitAccess: false });
+            const revoked = error?.statusCode === 401 || error?.statusCode === 403;
+            const hasShareVisitAccess = revoked ? false : this.data.hasShareVisitAccess;
+            this.setData({ hasShareVisitAccess, shareVisitAccessLoading: false });
+            this.refreshWorkbenchMenuItems({ hasShareVisitAccess });
         }
     },
     /**
@@ -362,6 +369,8 @@ Page({
                 certRealName: accountChanged ? '' : this.data.certRealName,
                 certRealNameMasked: accountChanged ? '' : this.data.certRealNameMasked,
                 isApprovedDesigner: accountChanged ? false : this.data.isApprovedDesigner,
+                hasContentWorkbenchAccess: accountChanged ? false : this.data.hasContentWorkbenchAccess,
+                showWorkbenchSection: accountChanged ? false : this.data.showWorkbenchSection,
                 hasShareVisitAccess: accountChanged ? false : this.data.hasShareVisitAccess,
                 commonMenuItems: buildCommonMenuItems({
                     hasShareVisitAccess: accountChanged ? false : this.data.hasShareVisitAccess,
@@ -1058,8 +1067,9 @@ Page({
             return;
         }
         const storedToken = String(wx.getStorageSync('token') || '');
-        if (action === 'shareVisits'
+        if ((action === 'shareVisits' || action === 'customers')
             && (!this.data.hasShareVisitAccess || !storedToken || storedToken !== String(this.data.token || ''))) {
+            // customers 与 shareVisits 同页同权限：无追踪授权的账号进入只会收到 403，提前拦截
             wx.showToast({ title: '当前账号无分享访问权限', icon: 'none' });
             return;
         }
@@ -1120,6 +1130,10 @@ Page({
         }
         if (action === 'myProjects') {
             wx.navigateTo({ url: '/pages/projectnotes/projectnotes', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
+            return;
+        }
+        if (action === 'customers') {
+            wx.navigateTo({ url: '/pages/sharevisits/sharevisits', fail: () => wx.showToast({ title: '页面跳转失败', icon: 'none' }) });
             return;
         }
         if (action === 'projectNotes') {

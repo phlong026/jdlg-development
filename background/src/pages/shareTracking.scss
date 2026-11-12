@@ -283,6 +283,19 @@
   .st-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; margin: 20px 0; }
   .st-body img, .st-body video { max-width: 100%; height: auto; object-fit: contain; }
   .st-article-body { white-space: normal; }
+  .st-gallery-preview { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; border-radius: 12px; background: #f5f3ef; }
+  .st-gallery-slide { flex: 0 0 100%; min-width: 0; margin: 0; scroll-snap-align: start; }
+  .st-gallery-slide .st-media { margin: 0; }
+  .st-gallery-preview .st-media img { width: 100%; height: min(500px, 58dvh); object-fit: contain; }
+  .st-gallery-slide figcaption { padding: 12px; color: var(--st-muted); font-size: var(--admin-font-caption); }
+  .st-video-preview video { max-height: 62dvh; width: 100%; height: auto; background: #161616; }
+  .st-note-copy { white-space: pre-wrap; }
+  .st-edit-block { margin: 14px 0; padding: 16px; border: 1px solid var(--st-line); border-radius: 12px; background: var(--st-surface); }
+  .st-edit-block header, .st-edit-block header > div, .st-add-blocks { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .st-edit-block header { justify-content: space-between; margin-bottom: 12px; }
+  .st-edit-block textarea { width: 100%; box-sizing: border-box; }
+  .st-source-editor { margin: 18px 0; }
+  .st-source-editor summary { cursor: pointer; color: var(--st-muted); }
 	.st-original-layout { white-space: normal; overflow-wrap: anywhere; }
 	.st-original-layout img, .st-original-layout video { display: block; max-width: 100%; height: auto; margin-inline: auto; }
 	.st-original-layout video { width: 100%; background: #000; }

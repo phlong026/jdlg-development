@@ -117,10 +117,14 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			stones, monthGenerations = quota(GetTokenUserID(c))
 		}
 		trackingResponse(c, gin.H{
-			"enabled": workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
+			"presentation_formats": []string{"article", "gallery", "video"},
+			"enabled":              workbenchEnabled(), "can_manage": true, "owners": currentScope.Owners, "owner_choices": ownerChoices,
 			"publish_enabled":             svc.Config.ContentEnabled,
 			"native_tracking_enabled":     svc.Config.Enabled,
 			"media_upload_configured":     media,
+			"video_editor_fields":         true,
+			"video_resumable_upload":      media && videoUploadConfigured(),
+			"video_upload_chunk_size":     videoUploadChunkSize,
 			"url_link_configured":         media && trackingURLLinkEnabled() && miniprogramCredentials().AppID != "" && miniprogramCredentials().Secret != "",
 			"official_account_configured": os.Getenv("OFFICIAL_ACCOUNT_APP_ID") != "" && os.Getenv("OFFICIAL_ACCOUNT_APP_SECRET") != "",
 			"import_capabilities_path":    "/api/v1/miniprogram/workbench/imports/capabilities",
@@ -136,6 +140,9 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			trackingResponse(c, nil, err)
 			return
 		}
+		// 分类Tab/项目关联的服务端过滤（仿真稿⑦）：type 由前端映射（article/note/video/document）。
+		filter.TypeFilter = c.Query("type")
+		filter.ProjectID = c.Query("project_id")
 		out, err := svc.Contents(c.Request.Context(), scope(c), filter, "")
 		trackingResponse(c, out, err)
 	})
@@ -182,6 +189,16 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			return
 		}
 		out, err := svc.DeleteContentDraft(c.Request.Context(), scope(c), c.Param("id"), in.Revision)
+		trackingResponse(c, out, err)
+	})
+	writes.POST("/contents/:id/delete", func(c *gin.Context) {
+		var in struct {
+			Revision int `json:"expected_revision"`
+		}
+		if !trackingBind(c, &in) {
+			return
+		}
+		out, err := svc.DeleteCreatedContent(c.Request.Context(), scope(c), c.Param("id"), in.Revision)
 		trackingResponse(c, out, err)
 	})
 	writes.POST("/contents/:id/preview", func(c *gin.Context) {
@@ -248,4 +265,5 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 		}
 		uploadTrackingMedia(c, svc, scope(c))
 	})
+	registerVideoUploadHandlers(writes, svc, scope)
 }

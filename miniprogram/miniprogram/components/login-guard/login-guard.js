@@ -5,7 +5,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const parameter_1 = require("../../utils/parameter");
 const profile_validation_1 = require("../nickname-guard/profile-validation");
-// 宿主页是否公开浏览页（决定"暂不登录"的导航行为）
+// 宿主页是否公开浏览页（决定"暂不登录"的导航行为），require 避免 TS 循环依赖。
 const { isPublicBrowseRoute } = require('../../utils/profile-access');
 const API_BASE_URL = 'https://api.jiadilingguang.com';
 Component({
@@ -31,8 +31,9 @@ Component({
         },
     },
     methods: {
-        // 用户拒绝登录（"暂不登录"/关闭按钮）。公开浏览页仅关闭浮层继续浏览；
-        // 身份功能页返回上一页（无上一页则回首页）。
+        // 用户拒绝登录（"暂不登录"/关闭按钮）。微信审核要求登录环节提供显著
+        // 的可取消/拒绝或返回按钮：公开浏览页仅关闭浮层继续浏览；身份功能页
+        // 返回上一页（无上一页则回首页），拒绝登录不等于被留在空白页。
         onDismiss() {
             this._dismissed = true;
             this.setData({ visible: false, checking: false, loggingIn: false });
@@ -41,7 +42,7 @@ Component({
                 const pages = getCurrentPages();
                 const current = pages[pages.length - 1];
                 const route = current ? String(current.route || '') : '';
-                if (!isPublicBrowseRoute(route)) {
+                if (!this._soft && !isPublicBrowseRoute(route)) {
                     if (pages.length > 1)
                         wx.navigateBack({ delta: 1 });
                     else
@@ -51,13 +52,17 @@ Component({
             catch (e) { /* 导航失败时保持当前页，浮层已关闭 */ }
         },
         async check(options) {
-            var _a, _b, _c, _d;
             const silent = !!(options && options.silent);
+            const accountOnly = options?.accountOnly === true;
+            const soft = options?.soft === true;
+            this._accountOnly = accountOnly;
+            this._soft = soft;
+            const emitGated = () => this.triggerEvent('gated', { soft });
             const revision = (this._checkRevision || 0) + 1;
             this._checkRevision = revision;
             const token = wx.getStorageSync('token');
-            // 曾拒绝登录且为静默核验失败：不再弹浮层（审核"不得反复弹窗"），
-            // 直接按拒绝处理返回，等用户主动再触发。
+            // 曾拒绝登录且为静默核验失败（切后台恢复等自动触发）：不再弹浮层
+            // （审核"不得反复弹窗"），直接按拒绝处理返回，等用户主动再触发。
             const deniedAgain = () => {
                 if (silent && this._dismissed) {
                     this.onDismiss();
@@ -70,11 +75,16 @@ Component({
             this.setData({ visible: false, checking: !silent && !!token, needsLogin: !token, completingProfile: false, error: '' });
             const editor = this.selectComponent('#nicknameGuard');
             if (!token) {
-                editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
-                this.triggerEvent('gated');
+                editor?.setData({ visible: false });
+                // 匿名说明态（分享页未登录）：页面本体负责解释与去登录，这里不得弹登录浮层。
+                if (options?.anonymous === true) {
+                    this.setData({ visible: false, checking: false });
+                    return false;
+                }
+                this.setData({ visible: true, checking: false });
+                emitGated();
                 if (deniedAgain())
                     return false;
-                this.setData({ visible: true, checking: false });
                 return false;
             }
             const current = () => this._checkRevision === revision && wx.getStorageSync('token') === token;
@@ -86,47 +96,49 @@ Component({
                 });
                 if (!current())
                     return false;
-                if (res.statusCode === 401 || ((_a = res.data) === null || _a === void 0 ? void 0 : _a.code) === 401) {
+                if (res.statusCode === 401 || res.data?.code === 401) {
                     wx.removeStorageSync('token');
                     wx.removeStorageSync('userInfo');
-                    editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
-                    this.triggerEvent('gated');
+                    editor?.setData({ visible: false });
+                    // 先写浮层状态再抛 gated：分享页匿名降级会在 gated 处理里隐藏浮层，反向顺序会重开浮层。
+                    this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
+                    emitGated();
                     if (deniedAgain())
                         return false;
-                    this.setData({ visible: true, checking: false, needsLogin: true, error: '登录已过期，请重新登录' });
                     return false;
                 }
-                if (res.statusCode !== 200 || ((_b = res.data) === null || _b === void 0 ? void 0 : _b.code) !== 0)
-                    throw new Error(((_c = res.data) === null || _c === void 0 ? void 0 : _c.msg) || '资料读取失败，请重试');
+                if (res.statusCode !== 200 || res.data?.code !== 0)
+                    throw new Error(res.data?.msg || '资料读取失败，请重试');
                 const profile = res.data.data || {};
                 const id = Number(profile.id);
                 if (!Number.isSafeInteger(id) || id <= 0) {
                     wx.removeStorageSync('token');
                     wx.removeStorageSync('userInfo');
-                    editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
-                    this.triggerEvent('gated');
+                    editor?.setData({ visible: false });
+                    this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
+                    emitGated();
                     if (deniedAgain())
                         return false;
-                    this.setData({ visible: true, checking: false, needsLogin: true, error: '账号资料无法确认，请重新登录' });
                     return false;
                 }
                 const cachedProfile = wx.getStorageSync('userInfo') || {};
                 const sameAccount = Number(cachedProfile.id || 0) === id;
                 wx.setStorageSync('userInfo', { ...(sameAccount ? cachedProfile : {}), ...profile, id, token });
-                if (!(0, profile_validation_1.hasCompleteProfile)(profile)) {
+                // 单篇分享和其它受保护页统一要求服务器已保存的昵称与头像。
+                if (!accountOnly && !(0, profile_validation_1.hasCompleteProfile)(profile)) {
                     if (!editor || typeof editor.show !== 'function')
                         throw new Error('资料填写暂不可用，请重试');
                     this.setData({ visible: false, checking: false, completingProfile: true });
-                    this.triggerEvent('gated');
+                    emitGated();
                     // 同一账号正在填写时保留尚未提交的输入和上传状态。
-                    if (!((_d = editor.data) === null || _d === void 0 ? void 0 : _d.visible) || editor.data.promptToken !== token) {
+                    if (!editor.data?.visible || editor.data.promptToken !== token) {
                         editor.show({ required: true, userID: id, nickname: String(profile.nickname || ''), avatar: String(profile.avatar || '') });
                     }
                     return false;
                 }
-                const verified = { ...profile, id, nickname: String(profile.nickname).trim(), avatar: String(profile.avatar).trim() };
+                const verified = { ...profile, id, nickname: String(profile.nickname || '').trim(), avatar: String(profile.avatar || '').trim() };
                 wx.setStorageSync('userInfo', { ...(wx.getStorageSync('userInfo') || {}), ...verified, token });
-                editor === null || editor === void 0 ? void 0 : editor.setData({ visible: false });
+                editor?.setData({ visible: false });
                 this.setData({ visible: false, checking: false, completingProfile: false });
                 this.triggerEvent('authenticated', { token, profile: verified });
                 return true;
@@ -134,7 +146,7 @@ Component({
             catch (error) {
                 if (current()) {
                     console.error('分享资料核验失败:', error);
-                    this.triggerEvent('gated');
+                    emitGated();
                     if (deniedAgain())
                         return false;
                     this.setData({ visible: true, checking: false, error: error.message || '资料读取失败，请重试' });
@@ -142,9 +154,15 @@ Component({
                 return false;
             }
         },
-        onRetry() { return this.check(); },
-        onProfileCompleted() { return this.check(); },
-        onProfileAuthRequired() { return this.check(); },
+        repeatCheck() {
+            return this.check({
+                ...(this._accountOnly ? { accountOnly: true } : {}),
+                ...(this._soft ? { soft: true } : {}),
+            });
+        },
+        onRetry() { return this.repeatCheck(); },
+        onProfileCompleted() { return this.repeatCheck(); },
+        onProfileAuthRequired() { return this.repeatCheck(); },
         onTogglePrivacy() {
             this.setData({ agreedPrivacy: !this.data.agreedPrivacy });
         },
@@ -152,7 +170,6 @@ Component({
             wx.navigateTo({ url: '/pages/privacy/privacy', fail: () => { } });
         },
         async onWxLogin() {
-            var _a;
             if (this.data.loggingIn || this._detached)
                 return;
             if (!this.data.agreedPrivacy) {
@@ -198,12 +215,12 @@ Component({
                 if (!current())
                     return;
                 const body = res.data || {};
-                if (res.statusCode !== 200 || body.code !== 0 || !((_a = body.data) === null || _a === void 0 ? void 0 : _a.token)) {
+                if (res.statusCode !== 200 || body.code !== 0 || !body.data?.token) {
                     throw new Error(body.msg || '登录失败');
                 }
                 wx.setStorageSync('token', body.data.token);
                 wx.setStorageSync('userInfo', { ...body.data, token: body.data.token });
-                await this.check();
+                await this.repeatCheck();
             }
             catch (error) {
                 if (!current())

@@ -72,7 +72,8 @@ Component({
         },
         showIfMissing(profile, required = false) {
             const nickname = String(profile?.nickname || '').trim();
-            if (this.data.visible || (required ? (0, profile_validation_1.hasCompleteProfile)(profile) : (0, profile_validation_1.hasProfileNickname)(nickname)))
+            const complete = (0, profile_validation_1.hasCompleteProfile)(profile);
+            if (this.data.visible || (required ? complete : (0, profile_validation_1.hasProfileNickname)(nickname)))
                 return false;
             const userID = Number(profile?.id || wx.getStorageSync('userInfo')?.id || 0);
             const now = new Date();

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const modulePath = '../miniprogram/utils/protected-media';
 const internalURL = 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/media/asset-one';
+const publicMediaID = 'a'.repeat(32);
 
 function runtime() {
   const storage = {
@@ -59,6 +60,30 @@ test('external HTTPS media remains remote and never receives account headers', a
   assert.equal(downloads.length, 0);
 });
 
+test('published content and collection media remain remote without an account', async () => {
+  const { storage, downloads, media } = runtime();
+  storage.token = '';
+  storage.userInfo = {};
+  const published = `https://api.jiadilingguang.com/api/v1/miniprogram/tracking/media/${publicMediaID}`;
+  const collection = `https://api.jiadilingguang.com/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/${publicMediaID}`;
+  assert.equal(await media.resolveProtectedMediaURL(published), published);
+  assert.equal(await media.resolveProtectedMediaURL(collection), collection);
+  assert.equal(downloads.length, 0);
+});
+
+test('nearby management and malformed media paths still require a complete account', async () => {
+  const { storage, downloads, media } = runtime();
+  storage.token = '';
+  storage.userInfo = {};
+  for (const url of [
+    `https://api.jiadilingguang.com/api/v1/miniprogram/workbench/media/${publicMediaID}`,
+    `https://api.jiadilingguang.com/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/${publicMediaID}/extra`,
+  ]) {
+    await assert.rejects(() => media.resolveProtectedMediaURL(url), error => error.statusCode === 401);
+  }
+  assert.equal(downloads.length, 0);
+});
+
 test('missing or incomplete profile cannot resolve media', async () => {
   const missing = runtime();
   missing.storage.token = '';
@@ -99,10 +124,10 @@ test('failed protected downloads are retryable with a readable error', async () 
   assert.equal(await retried, 'wxfile://tmp/retry');
 });
 
-test('profile rejection locks the current page and preserves the session for completion', async () => {
+test('profile rejection locks a protected page and preserves the session for completion', async () => {
   const { storage, downloads, navigations, media } = runtime();
   let blocked = 0;
-  global.getCurrentPages = () => [{ route: 'pages/contentreader/contentreader', onProfileAccessBlocked: () => { blocked++; } }];
+  global.getCurrentPages = () => [{ route: 'pages/wallet/wallet', onProfileAccessBlocked: () => { blocked++; } }];
   const pending = media.resolveProtectedMediaURL(internalURL);
   downloads[0].success({ statusCode: 428 });
   await assert.rejects(() => pending, error => error.statusCode === 428);

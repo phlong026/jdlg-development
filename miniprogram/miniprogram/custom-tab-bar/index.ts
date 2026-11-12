@@ -24,7 +24,7 @@ const TABS = [
   {
     index: 2,
     key: 'designer',
-    text: '设计师中心',
+    text: '找设计师',
     pagePath: '/pages/distribution/distribution'
   },
   {
@@ -100,14 +100,18 @@ Component({
         return
       }
 
-      const previousCurrent = this.data.current
-
-      this.setCurrent(index)
+      if ((this as any)._switchingTo !== undefined) {
+        return
+      }
+      (this as any)._switchingTo = index
 
       wx.switchTab({
         url: tab.pagePath,
+        success: () => {
+          (this as any)._switchingTo = undefined
+        },
         fail: () => {
-          this.setCurrent(previousCurrent)
+          (this as any)._switchingTo = undefined
           wx.showToast({
             title: '页面跳转失败',
             icon: 'none'

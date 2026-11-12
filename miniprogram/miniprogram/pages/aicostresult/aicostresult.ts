@@ -74,9 +74,15 @@ Page({
       this.openPublicSnapshot();
       return;
     }
+    const token = String(wx.getStorageSync('token') || '');
+    const userInfo = wx.getStorageSync('userInfo') || {};
+    const userID = Number(userInfo.id || 0);
+    const profileToken = String(userInfo.token || '');
     let result: unknown;
     try {
-      result = wx.getStorageSync(RESULT_STORAGE_KEY);
+      if (token && (!profileToken || profileToken === token) && Number.isInteger(userID) && userID > 0) {
+        result = wx.getStorageSync(`${RESULT_STORAGE_KEY}:${userID}`);
+      }
     } catch (error) {
       console.error('读取造价测算结果失败:', error);
     }
@@ -148,6 +154,17 @@ Page({
     // Displaying or returning to a private result is never permission to publish.
   },
 
+  requestFullProfileForShare() {
+    const guard = this.selectComponent('#profileAccessGuard') as any;
+    if (!guard || typeof guard.check !== 'function') {
+      wx.showToast({ title: '请先补充头像和昵称', icon: 'none' });
+      return;
+    }
+    Promise.resolve(guard.check({ soft: true })).catch(() => {
+      wx.showToast({ title: '资料填写暂不可用，请重试', icon: 'none' });
+    });
+  },
+
   async onPrepareShareReport() {
     if (this.data.sharePreparing || !this.reportSnapshot) return;
     if (!this.data.shareReportId && !wx.getStorageSync('token')) {
@@ -165,6 +182,10 @@ Page({
     } catch (error) {
       if (this.pageDestroyed) return;
       this.setData({ sharePreparing: false });
+      if (Number((error as any)?.statusCode || (error as any)?.code || 0) === 428) {
+        this.requestFullProfileForShare();
+        return;
+      }
       wx.showToast({ title: getErrorMessage(error, '公开分享失败，请重试'), icon: 'none' });
     }
   },

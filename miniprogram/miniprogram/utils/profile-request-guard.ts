@@ -12,6 +12,30 @@ const OPEN_PATHS = new Set([
   '/api/v1/miniprogram/tracking/share-entry',
 ]);
 const GATE_ROUTES = new Set(['pages/login/login', 'pages/privacy/privacy', 'pages/passwordrecovery/passwordrecovery']);
+const PUBLIC_BROWSE_ROUTES = new Set([
+  'pages/index/index',
+  'pages/template/template',
+  'pages/distribution/distribution',
+  'pages/templatesquaredetails/templatesquaredetails',
+  'pages/contentreader/contentreader',
+  'pages/collectionreader/collectionreader',
+  'pages/designerhome/designerhome',
+  'pages/inspirationdetail/inspirationdetail',
+  'pages/aigenerate/aigenerate',
+  'pages/aivideo/aivideo',
+  'pages/aitools/aitools',
+  'pages/aitooldetail/aitooldetail',
+  'pages/aitoolworkbench/aitoolworkbench',
+  'pages/aicost/aicost',
+  'pages/newminnantool/newminnantool',
+  'pages/allrounddesign/allrounddesign',
+]);
+const ACCOUNT_ONLY_ROUTES = new Set([
+  'pages/generatedetails/generatedetails',
+  'pages/generatehistory/generatehistory',
+  'pages/generateprogress/generateprogress',
+  'pages/aicostresult/aicostresult',
+]);
 const AUTH_HEADERS = ['token', 'token-signature', 'sin', 'md5-signature', 'pass', 'tm'];
 
 let installed = false;
@@ -75,7 +99,16 @@ function activePage() {
   return pages[pages.length - 1];
 }
 
-function checkInlineProfileGate(page) {
+function isPublicBrowsePage(page) {
+  return PUBLIC_BROWSE_ROUTES.has(String(page?.route || '').replace(/^\//, ''));
+}
+
+function clearSessionStorage() {
+  wx.removeStorageSync('token');
+  wx.removeStorageSync('userInfo');
+}
+
+function checkInlineProfileGate(page, requireFullProfile = false) {
   const guard = typeof page.selectComponent === 'function' && page.selectComponent('#profileAccessGuard');
   if (!guard || typeof guard.check !== 'function') return false;
   const token = String(wx.getStorageSync('token') || '');
@@ -90,7 +123,8 @@ function checkInlineProfileGate(page) {
     page.__profileGateCheckToken = undefined;
   };
   try {
-    Promise.resolve(guard.check()).then(done, done);
+    const route = String(page.route || '').replace(/^\//, '');
+    Promise.resolve(guard.check(!requireFullProfile && ACCOUNT_ONLY_ROUTES.has(route) ? { accountOnly: true } : undefined)).then(done, done);
   } catch (_) {
     done();
     return false;
@@ -98,16 +132,15 @@ function checkInlineProfileGate(page) {
   return true;
 }
 
-function openProfileGate(clearSession) {
+function openProfileGate(clearSession, requireFullProfile = false) {
   if (clearSession) {
-    wx.removeStorageSync('token');
-    wx.removeStorageSync('userInfo');
+    clearSessionStorage();
   }
   const page = activePage();
   if (!page || GATE_ROUTES.has(page.route)) return;
   if (typeof page.onProfileAccessBlocked === 'function') page.onProfileAccessBlocked();
   // 分享页已经挂载同一套登录与资料补全卡片，优先原地恢复，避免再叠加独立登录页。
-  if (checkInlineProfileGate(page)) return;
+  if (checkInlineProfileGate(page, requireFullProfile)) return;
   if (page.__accessRedirecting) return;
   page.__accessRedirecting = true;
   wx.navigateTo({
@@ -125,11 +158,18 @@ function handleProfileAccessResponse(statusCode, body, requestToken) {
   if (String(wx.getStorageSync('token') || '') !== String(requestToken || '')) return false;
   const data = body || {};
   if (statusCode === 401 || data.code === 401) {
+    if (isPublicBrowsePage(activePage())) {
+      // 公开浏览页的后台请求失败不应变成强制登录。仅当请求确实带了
+      // 已过期会话时清理缓存；纯匿名 tracking entry 失败不制造会话变化。
+      if (String(requestToken || '')) clearSessionStorage();
+      return true;
+    }
     openProfileGate(true);
     return true;
   }
   if (statusCode === 428 || data.code === 428) {
-    openProfileGate(false);
+    if (isPublicBrowsePage(activePage())) return true;
+    openProfileGate(false, true);
     return true;
   }
   return false;
@@ -151,7 +191,9 @@ function install() {
     const callerHandlesProfile = requestOptions.__profileAccessResponseHandled === true
       && String(requestOptions.method || 'GET').toUpperCase() === 'GET'
       && signedPath.split('?')[0] === '/api/v1/miniprogram/profile';
+    const softFullProfileAction = requestOptions.__profileAccessResponseMode === 'soft-full-profile';
     delete requestOptions.__profileAccessResponseHandled;
+    delete requestOptions.__profileAccessResponseMode;
     const header = alreadySigned ? { ...(requestOptions.header || {}) } : withoutAuthHeaders(requestOptions.header || {});
     const token = String(wx.getStorageSync('token') || '');
     if (token && !alreadySigned) {
@@ -179,7 +221,10 @@ function install() {
           if (typeof fail === 'function') fail(staleFailure());
           return;
         }
-        if (!callerHandlesProfile && !backgroundTracking) handleProfileAccessResponse(response && response.statusCode, response && response.data, dispatchToken);
+        const profileRequired = response?.statusCode === 428 || response?.data?.code === 428;
+        if (!callerHandlesProfile && !backgroundTracking && !(softFullProfileAction && profileRequired)) {
+          handleProfileAccessResponse(response && response.statusCode, response && response.data, dispatchToken);
+        }
         if (typeof success === 'function') success(response);
       },
       fail(error) {

@@ -22,9 +22,17 @@
 }
 
 .tabbar-background {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tabbar-background--active {
+  opacity: 1;
 }
 
 .tabbar-hitbox-layer {
@@ -39,4 +47,19 @@
 .tabbar-hitbox {
   flex: 1;
   height: 100%;
+}
+
+/* 原有底栏图片包含旧标题，用原生文字替换第三项，保留图标与点击区域。 */
+.designer-tab-label {
+  position: absolute;
+  left: 50%;
+  bottom: 5rpx;
+  width: 25%;
+  height: 34rpx;
+  line-height: 34rpx;
+  text-align: center;
+  background: #ffffff;
+  color: #302b26;
+  font-size: 28rpx;
+  pointer-events: none;
 }

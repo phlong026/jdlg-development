@@ -10,6 +10,7 @@ const initial = () => ({
   candidates: [], candidateCursor: '', selectedItems: [], preview: null, dirty: false, coverItemIndex: null,
 });
 const sourceKey = item => String(item.content_id) + ':' + String(item.content_version);
+const formatLabel = item => ({ gallery: '图集笔记', video: '视频笔记', article: '文章', note: '项目笔记', document: '文件' }[item.presentation || item.type] || '内容');
 
 Page({
   data: initial(),
@@ -18,7 +19,7 @@ Page({
     wx.hideShareMenu();
     this.visible = true;
     const token = String(wx.getStorageSync('token') || '');
-    if (this.account !== token) { this.account = token; this.createKey = ''; this.publishKey = ''; this.setData(initial()); }
+    if (this.account !== token) { this.account = token; this.loaded = false; this.createKey = ''; this.publishKey = ''; this.setData(initial()); }
     this.epoch = (this.epoch || 0) + 1;
     if (!token) { this.setData({ loginRequired: true, loading: false }); return; }
     this.loadHome(this.epoch);
@@ -28,13 +29,14 @@ Page({
   currentRequest(epoch) { return this.visible && epoch === this.epoch && this.account === String(wx.getStorageSync('token') || ''); },
   decorate(item) {
     const cover = item && item.cover ? api.mediaURL(item.cover.url) : '';
-    return Object.assign({}, item, { cover_url: cover, status_text: item.status === 'revoked' ? '已撤回' : item.version > 0 ? '已发布 V' + item.version : '草稿' });
+    return Object.assign({}, item, { cover_url: cover, format_label: formatLabel(item), status_text: item.status === 'revoked' ? '已撤回' : item.version > 0 ? '已发布 V' + item.version : '草稿' });
   },
   async resolveCovers(items) {
     return Promise.all((items || []).map(async item => { const decorated = this.decorate(item); return decorated.cover_url ? Object.assign({}, decorated, { cover_url: await resolveProtectedMediaURL(decorated.cover_url) }) : decorated; }));
   },
   async loadHome(epoch) {
-    this.setData({ loading: true, loginRequired: false, denied: false, error: '', notice: '' });
+    const quiet = this.loaded === true;
+    this.setData({ loading: !quiet, loginRequired: false, denied: false, error: '', notice: '' });
     try {
       const [context, page] = await Promise.all([api.workbenchContext(), api.listCollections({ limit: 20 })]);
       if (!this.currentRequest(epoch)) return;
@@ -45,10 +47,22 @@ Page({
       const collections = await this.resolveCovers(page.items);
       if (!this.currentRequest(epoch)) return;
       this.setData({ owners, ownerChoices, ownerIndex: Math.max(0, ownerChoices.findIndex(item => item.owner_id === selectedOwner)), busy: false, collections, nextCursor: page.next_cursor || '', loading: false });
+      this.loaded = true;
       if (this.requestedID) { const id = this.requestedID; this.requestedID = ''; await this.openEditorByID(id, epoch); }
     } catch (error) {
       if (!this.currentRequest(epoch)) return;
-      this.setData({ loading: false, denied: error.statusCode === 403, loginRequired: error.statusCode === 401, error: error.statusCode === 401 || error.statusCode === 403 ? '' : (error.message || '合集加载失败') });
+      const denied = error.statusCode === 403, loginRequired = error.statusCode === 401;
+      if (denied || loginRequired) {
+        this.loaded = false;
+        this.epoch = (this.epoch || 0) + 1;
+        this.createKey = ''; this.publishKey = '';
+        this.setData({ ...initial(), denied, loginRequired });
+        return;
+      }
+      this.setData({
+        loading: false, denied, loginRequired,
+        error: denied || loginRequired ? '' : (error.message || '合集加载失败'),
+      });
     }
   },
   async loadMore() {
@@ -82,7 +96,8 @@ Page({
       this.publishKey = '';
       const selectedItems = await this.resolveCovers(collection.items);
       if (!this.currentRequest(epoch)) return;
-      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, coverItemIndex: null, ownerIndex, busy: false, dirty: false });
+      const coverIndex = selectedItems.findIndex(item => collection.cover && collection.cover.media_id && item.cover && item.cover.media_id === collection.cover.media_id);
+      this.setData({ editing: true, current: collection, title: collection.title || '', description: collection.description || '', selectedItems, coverItemIndex: coverIndex >= 0 ? coverIndex : null, ownerIndex, busy: false, dirty: false });
       await this.loadCandidates(false);
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '合集不可访问' }); }
   },
@@ -126,13 +141,13 @@ Page({
       const source = this.data.candidates.find(item => sourceKey(item) === key);
       if (source) selected.push(source);
     }
-    this.setData({ selectedItems: selected, preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: selected.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: selected, coverItemIndex: this.reindexCover(selected), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: selected.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   removeItem(event) {
     const index = Number(event.currentTarget.dataset.index);
     if (!Number.isInteger(index) || index < 0 || index >= this.data.selectedItems.length) return;
     const items = this.data.selectedItems.slice(); items.splice(index, 1);
-    this.setData({ selectedItems: items, preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: items, coverItemIndex: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   moveItem(event) {
     const index = Number(event.currentTarget.dataset.index), direction = Number(event.currentTarget.dataset.direction);
@@ -140,7 +155,7 @@ Page({
     if (!Number.isInteger(index) || ![-1, 1].includes(direction) || target < 0 || target >= this.data.selectedItems.length) return;
     const items = this.data.selectedItems.slice();
     [items[index], items[target]] = [items[target], items[index]];
-    this.setData({ selectedItems: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: items, coverItemIndex: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   // B12 置顶：长列表省去逐级上移。条目重排后封面索引跟随条目走。
   topItem(event) {
@@ -149,7 +164,7 @@ Page({
     const items = this.data.selectedItems.slice();
     const [moved] = items.splice(index, 1);
     items.unshift(moved);
-    this.setData({ selectedItems: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
+    this.setData({ selectedItems: items, coverItemIndex: this.reindexCover(items), preview: null, dirty: true, candidates: this.data.candidates.map(item => ({...item, selected: items.some(ref => sourceKey(ref) === sourceKey(item))})) });
   },
   // B12 封面自选：记录所选条目当前序号；重排时同步平移，移除时清空回退首图。
   setCoverItem(event) {
@@ -158,12 +173,11 @@ Page({
     this.setData({ coverItemIndex: this.data.coverItemIndex === index ? null : index, preview: null, dirty: true });
   },
   reindexCover(items) {
-    if (this.data.coverItemIndex === null || this.data.coverItemIndex === undefined) return items;
+    if (this.data.coverItemIndex === null || this.data.coverItemIndex === undefined) return null;
     const current = this.data.selectedItems[this.data.coverItemIndex];
-    if (!current) return items;
+    if (!current) return null;
     const next = items.findIndex(item => sourceKey(item) === sourceKey(current));
-    this.data.coverItemIndex = next >= 0 ? next : null;
-    return items;
+    return next >= 0 ? next : null;
   },
   draftInput() {
     const choice = this.data.ownerChoices[this.data.ownerIndex];
@@ -206,7 +220,9 @@ Page({
     this.setData({ busy: true, error: '' });
     try {
       const preview = await api.previewCollection(collection.collection_id, collection.revision);
-      if (this.currentRequest(epoch)) this.setData({ preview, busy: false, notice: '' });
+      if (!this.currentRequest(epoch)) return;
+      const [collections, items] = await Promise.all([this.resolveCovers([preview.collection]), this.resolveCovers(preview.collection.items)]);
+      if (this.currentRequest(epoch)) this.setData({ preview: { ...preview, collection: { ...collections[0], items } }, busy: false, notice: '' });
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '预览失败' }); }
   },
   closePreview() { if (!this.data.busy) this.setData({ preview: null }); },
@@ -231,6 +247,35 @@ Page({
     const collections = await this.resolveCovers(page.items);
     if (this.currentRequest(epoch)) this.setData({ collections, nextCursor: page.next_cursor || '' });
   },
+  openCollectionMore(event) {
+    if (this.data.busy) return;
+    const id = String(event.currentTarget.dataset.id || '');
+    const collection = this.data.collections.find(item => item.collection_id === id);
+    if (!collection || !(collection.version === 0 || collection.status === 'published')) return;
+    const epoch = this.epoch, draft = collection.version === 0;
+    wx.showActionSheet({
+      itemList: [draft ? '删除草稿' : '撤回发布'],
+      success: result => {
+        if (result.tapIndex !== 0 || !this.currentRequest(epoch) || this.data.busy) return;
+        const current = this.data.collections.find(item => item.collection_id === id);
+        if (!current || current.revision !== collection.revision || current.status !== collection.status) return;
+        if (draft) this.deleteDraft(event); else this.revokePublished(event);
+      },
+    });
+  },
+  deleteCollectionMenu(event) {
+	if (this.data.busy) return;
+	const id = String(event.currentTarget.dataset.id || '');
+	const collection = this.data.collections.find(item => item.collection_id === id);
+	if (!collection) return;
+	const epoch = this.epoch, revision = Number(collection.revision);
+	wx.showActionSheet({ itemList: ['删除合集'], success: result => {
+		if (result.tapIndex !== 0 || !this.currentRequest(epoch)) return;
+		const current = this.data.collections.find(item => item.collection_id === id);
+		if (!current || Number(current.revision) !== revision) return;
+		wx.showModal({ title: '删除合集', content: '删除后已发出的合集将不可访问，原作品保留。', confirmText: '删除', confirmColor: '#c4543a', success: modal => { if (modal.confirm) this.performDelete(current); } });
+	} });
+  },
   deleteDraft(event) {
     const collection = this.data.collections.find(item => item.collection_id === String(event.currentTarget.dataset.id || ''));
     if (!collection || collection.version > 0 || this.data.busy) return;
@@ -238,8 +283,8 @@ Page({
   },
   async performDelete(collection) {
     const epoch = this.epoch; this.setData({ busy: true, error: '' });
-    try { await api.deleteCollectionDraft(collection.collection_id, collection.revision); if (this.currentRequest(epoch)) this.setData({ collections: this.data.collections.filter(item => item.collection_id !== collection.collection_id), busy: false }); }
-    catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '删除失败' }); }
+    try { await api.deleteCollection(collection.collection_id, collection.revision); if (this.currentRequest(epoch)) this.setData({ collections: this.data.collections.filter(item => item.collection_id !== collection.collection_id), busy: false }); }
+    catch (error) { if (this.currentRequest(epoch)) { this.setData({ busy: false, error: error.message || '删除失败' }); if (error.statusCode === 409) this.refreshList(epoch); } }
   },
   revokePublished(event) {
     const collection = this.data.collections.find(item => item.collection_id === String(event.currentTarget.dataset.id || ''));
@@ -251,6 +296,11 @@ Page({
     try { await api.revokeCollection(collection.collection_id, collection.revision, '创建者撤回', key); if (this.currentRequest(epoch)) await this.refreshList(epoch); }
     catch (error) { if (this.currentRequest(epoch)) this.setData({ error: error.message || '撤回失败' }); }
     finally { if (this.currentRequest(epoch)) this.setData({ busy: false }); }
+  },
+  openPublished() {
+    const current = this.data.current;
+    if (!current || this.data.dirty || current.status !== 'published' || Number(current.version) < 1) return;
+    this.openReader({ currentTarget: { dataset: { id: current.collection_id, version: current.version } } });
   },
   openReader(event) {
     const id = String(event.currentTarget.dataset.id || ''), version = Number(event.currentTarget.dataset.version);

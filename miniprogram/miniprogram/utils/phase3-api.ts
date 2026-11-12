@@ -5,6 +5,8 @@ const ORIGIN = 'https://api.jiadilingguang.com';
 const WORKBENCH = '/api/v1/miniprogram/workbench';
 const IMPORTS = WORKBENCH + '/imports';
 const MY_SHARES = '/api/v1/miniprogram/tracking/my-shares';
+const MY_VISITORS = '/api/v1/miniprogram/tracking/my-visitors';
+const MY_CONTENT_STATS = '/api/v1/miniprogram/tracking/my-content-stats';
 const PROJECT_NOTES = '/api/v1/miniprogram/project-notes';
 let mutationSequence = 0;
 
@@ -61,6 +63,7 @@ function listContents(query) { return request(WORKBENCH + '/contents', 'GET', {}
 function getContent(id) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id)); }
 function listWorkbenchMedia(query) { return request(WORKBENCH + '/media', 'GET', {}, query); }
 function saveContent(draft, id) { return request(WORKBENCH + '/contents' + (id ? '/' + encodeURIComponent(id) : ''), id ? 'PATCH' : 'POST', draft); }
+function deleteCreatedContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/delete', 'POST', { expected_revision: Number(revision) }); }
 function deleteContentDraft(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id), 'DELETE', { expected_revision: Number(revision) }); }
 function previewContent(id, revision) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/preview', 'POST', { expected_revision: revision }); }
 function publishContent(id, revision, previewToken, key) { return request(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/publish', 'POST', { expected_revision: revision, preview_token: previewToken, idempotency_key: key }); }
@@ -68,6 +71,10 @@ function revokeContent(id, revision, reason, key) { return request(WORKBENCH + '
 function mySharesContext() { return request(MY_SHARES + '/context'); }
 function listMyShares(query) { return request(MY_SHARES, 'GET', {}, query); }
 function listMyShareVisits(id, query) { return request(MY_SHARES + '/' + encodeURIComponent(id) + '/visits', 'GET', {}, query); }
+function listMyVisitors(query) { return request(MY_VISITORS, 'GET', {}, query); }
+function listMyVisitorEntries(visitor, query) { return request(MY_VISITORS + '/entries', 'GET', {}, Object.assign({ visitor: visitor }, query || {})); }
+function convertMyVisitorToLead(visitor) { return request(MY_VISITORS + '/lead', 'POST', { visitor }); }
+function listMyContentStats(query) { return request(MY_CONTENT_STATS, 'GET', {}, query); }
 function importCapabilities() { return request(IMPORTS + '/capabilities'); }
 function listImports() { return request(IMPORTS); }
 function submitImport(input) { return request(IMPORTS, 'POST', input); }
@@ -101,6 +108,7 @@ function revokeProjectNoteMember(projectID, accountID) { return request(projectN
 function setProjectNoteConfirmer(projectID, accountID) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/confirmer'), 'PUT', { account_id: Number(accountID) }); }
 function createProjectNote(projectID, draft) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/notes'), 'POST', draft); }
 function copyProjectNote(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID) + '/copy'), 'POST', { expected_revision: Number(revision) }); }
+function deleteProjectNoteProject(projectID, revision) { return request(projectNotePath('/projects/' + encodeURIComponent(projectID)), 'DELETE', { expected_revision: Number(revision) }); }
 function deleteProjectNote(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID)), 'DELETE', { expected_revision: Number(revision) }); }
 function saveProjectNote(noteID, draft) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID)), 'PATCH', draft); }
 function freezeProjectNoteVersion(noteID, revision) { return request(projectNotePath('/notes/' + encodeURIComponent(noteID) + '/versions'), 'POST', { expected_revision: Number(revision) }); }
@@ -108,6 +116,11 @@ function createProjectNoteShare(versionID, expiresAt, key) { return request(proj
 function revokeProjectNoteShare(shareID) { return request(projectNotePath('/shares/' + encodeURIComponent(shareID) + '/revoke'), 'POST', {}); }
 function resolveProjectNoteFeedback(feedbackID, reply, key) { return request(projectNotePath('/feedback/' + encodeURIComponent(feedbackID) + '/resolve'), 'POST', { reply, idempotency_key: key }); }
 function getSharedProjectNote(token) { return request(projectNotePath('/shared/' + encodeURIComponent(token))); }
+async function getSharedProjectNoteMediaPlayback(token, id) {
+  const playback = await request(projectNotePath('/shared/' + encodeURIComponent(token) + '/media/' + encodeURIComponent(id) + '/playback'), 'POST', {});
+  const url = String(playback && playback.url || '');
+  return Object.assign({}, playback, { url: url.startsWith('/') ? ORIGIN + url : url });
+}
 function openSharedProjectNote(token, eventID) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/open'), 'POST', { event_id: eventID, acknowledged: true }); }
 function addSharedProjectNoteFeedback(token, text, key, satisfaction) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/feedback'), 'POST', { text, idempotency_key: key, satisfaction: satisfaction || '' }); }
 function confirmSharedProjectNote(token, key) { return request(projectNotePath('/shared/' + encodeURIComponent(token) + '/confirm'), 'POST', { idempotency_key: key }); }
@@ -135,14 +148,14 @@ function downloadSharedProjectNoteWord(token) {
 function uploadProjectNoteMedia(projectID, filePath) {
   const path = projectNotePath('/projects/' + encodeURIComponent(projectID) + '/media');
   return new Promise((resolve, reject) => wx.uploadFile({
-    url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 60000,
+    url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 900000,
     success(response) {
       let data = {};
-      try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(new Error('私有素材上传响应无法读取')); return; }
+      try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(Object.assign(new Error('私有素材上传响应无法读取'), { statusCode: response.statusCode })); return; }
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
       else reject(Object.assign(new Error(data.msg || '私有素材上传失败'), { statusCode: response.statusCode }));
     },
-    fail() { reject(new Error('私有素材上传失败')); },
+    fail(error) { reject(Object.assign(new Error(error && error.errMsg ? '网络异常：' + error.errMsg : '网络异常，请检查网络后重试'), { networkError: true, errMsg: String(error && error.errMsg || '') })); },
   }));
 }
 
@@ -181,8 +194,28 @@ function uploadWorkbenchMedia(filePath, kind, owner, rights, originalName) {
       if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
       else reject(Object.assign(new Error(data.msg || '媒体上传失败'), { statusCode: response.statusCode }));
     },
-    fail() { reject(new Error('媒体上传失败')); },
+    fail(error) { reject(new Error(error && error.errMsg || '媒体上传失败，请检查网络后重试')); },
   }));
+}
+
+function beginVideoUpload(input) { return request(WORKBENCH + '/media-uploads', 'POST', input); }
+function videoUploadStatus(id) { return request(WORKBENCH + '/media-uploads/' + encodeURIComponent(id)); }
+function completeVideoUpload(id) { return request(WORKBENCH + '/media-uploads/' + encodeURIComponent(id) + '/complete', 'POST', {}); }
+function uploadVideoPart(id, part, filePath, options = {}) {
+  const path = WORKBENCH + '/media-uploads/' + encodeURIComponent(id) + '/parts/' + encodeURIComponent(part);
+  return new Promise((resolve, reject) => {
+    const task = wx.uploadFile({
+      url: ORIGIN + path, filePath, name: 'file', header: authHeaders(path, {}, false), timeout: 120000,
+      success(response) {
+        let data;
+        try { data = JSON.parse(response.data || '{}'); } catch (_) { reject(new Error('分片上传响应无法读取，请重试')); return; }
+        if (response.statusCode >= 200 && response.statusCode < 300 && data.code === 0) resolve(data.data || {});
+        else reject(Object.assign(new Error(data.msg || '分片上传失败，请重试'), { statusCode: response.statusCode }));
+      },
+      fail(error) { reject(Object.assign(new Error(error && error.errMsg || '分片网络传输失败，请重试'), { networkError: true })); },
+    });
+    if (task && task.onProgressUpdate && options.onProgress) task.onProgressUpdate(options.onProgress);
+  });
 }
 
 function mutationKey(prefix) {
@@ -196,18 +229,17 @@ async function writingPrompts() {
 }
 
 module.exports = {
-  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
-  saveContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyShareVisits,
+  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, beginVideoUpload, videoUploadStatus, uploadVideoPart, completeVideoUpload, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
+  saveContent, deleteCreatedContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, convertMyVisitorToLead, listMyContentStats, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
   getProjectNoteHistory, getSharedProjectNoteHistory, getProjectNoteFeedback, getProjectNote, listProjectNoteProjects, createProjectNoteProject, updateProjectNoteProject, getProjectNoteProject,
   createProjectInvitation, listProjectInvitations, revokeProjectInvitation, getProjectInvitation, applyProjectInvitation, listProjectJoinRequests, approveProjectJoinRequest,
   revokeProjectNoteMember,
-  setProjectNoteConfirmer, copyProjectNote, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
+  setProjectNoteConfirmer, copyProjectNote, deleteProjectNoteProject, deleteProjectNote, createProjectNote, saveProjectNote, freezeProjectNoteVersion, createProjectNoteShare,
   revokeProjectNoteShare, resolveProjectNoteFeedback, getSharedProjectNote, openSharedProjectNote,
-  addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia,
+  addSharedProjectNoteFeedback, confirmSharedProjectNote, downloadSharedProjectNoteMedia, getSharedProjectNoteMediaPlayback,
   uploadProjectNoteMedia,
   getProjectNoteVersion, downloadProjectNoteMedia, downloadProjectNoteWord, downloadSharedProjectNoteWord,
   listNativeReferenceCandidates, listNativeReferences, saveNativeReference, deleteNativeReference, getNativeReferenceTarget,
 };
-export {};

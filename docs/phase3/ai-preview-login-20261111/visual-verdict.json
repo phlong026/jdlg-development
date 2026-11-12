@@ -1,0 +1,14 @@
+{
+  "verdict": "pass",
+  "method": "原生截图与现有页面结构、配色核对；本轮未修改WXML样式",
+  "criteria": {
+    "brand_palette_preserved": true,
+    "anonymous_form_visible": true,
+    "automatic_auth_overlay_absent": true,
+    "real_public_tool_and_pricing_loaded": true
+  },
+  "screenshots": [
+    "guest-ai-form.png",
+    "guest-tool-form.png"
+  ]
+}

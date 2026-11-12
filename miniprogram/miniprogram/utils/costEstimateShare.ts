@@ -111,7 +111,10 @@ function request<T>(options: WechatMiniprogram.RequestOption): Promise<T> {
           resolve(body.data as T);
           return;
         }
-        reject(new Error(String(body?.msg || `请求失败: ${response.statusCode}`)));
+        const error: any = new Error(String(body?.msg || `请求失败: ${response.statusCode}`));
+        error.statusCode = Number(response.statusCode || 0);
+        error.code = Number(body?.code || 0);
+        reject(error);
       },
       fail: () => reject(new Error('网络连接失败，请稍后重试')),
     });
@@ -132,7 +135,8 @@ export async function createCostEstimateShare(result: CostEstimateShareResult): 
     method: 'POST',
     data: body,
     header: { ...paramsToHeaders(params), 'Content-Type': 'application/json' },
-  });
+    __profileAccessResponseMode: 'soft-full-profile',
+  } as any);
   if (!validShareIdentity(response)) throw new Error('分享报告创建失败，请重试');
   return response;
 }

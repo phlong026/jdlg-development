@@ -1,7 +1,18 @@
 // pages/distribution/distribution.ts
 export {};
 
+import { normalizeCosUrl } from '../../utils/asset';
+const { hasCompleteProfile } = require('../../components/nickname-guard/profile-validation');
+
 const API_BASE_URL = 'https://api.jiadilingguang.com';
+
+function hasRegisteredSession() {
+  if (typeof wx.getStorageSync !== 'function') return false;
+  const token = String(wx.getStorageSync('token') || '');
+  if (!token) return false;
+  const profile = wx.getStorageSync('userInfo') || {};
+  return (!profile.token || String(profile.token) === token) && hasCompleteProfile(profile);
+}
 
 type DesignerMainTabItem = {
   label: string;
@@ -9,21 +20,25 @@ type DesignerMainTabItem = {
 };
 
 type DesignerCardItem = {
-  id: number;
-  title: string;
-  tags: string[];
-  designerTraits: string[];
-  viewsText: string;
-  likesText: string;
-  workImage: string;
-  publishScope: string;
-  placeholderToneClass: string;
-  workPlaceholderText: string;
   designerUserId: number;
   designerName: string;
   designerAvatar: string;
   designerAvatarText: string;
-  designerTitle: string;
+  certified: boolean;
+  regionText: string;
+  specialtyText: string;
+  workSort: string;
+  works: DesignerPreview[];
+  workSets: { popular: DesignerPreview[]; latest: DesignerPreview[] };
+};
+
+type DesignerPreview = {
+  id: number;
+  title: string;
+  image: string;
+  likesText: string;
+  tagsText: string;
+  publishScope: string;
 };
 
 type DesignerApiWorkItem = {
@@ -36,6 +51,8 @@ type DesignerApiWorkItem = {
   main_tab?: string;
   category?: string;
   publish_scope?: string;
+  sub_tab?: string;
+  created_at?: string;
 };
 
 type DesignerApiListItem = {
@@ -46,7 +63,9 @@ type DesignerApiListItem = {
   experience_text?: string;
   specialties_text?: string;
   cert_status?: string;
+  designer_region?: string;
   representative_work?: DesignerApiWorkItem;
+  work_previews?: { popular?: DesignerApiWorkItem[]; latest?: DesignerApiWorkItem[] };
 };
 
 type DesignerApiResponseData = {
@@ -54,6 +73,9 @@ type DesignerApiResponseData = {
   total?: number | string;
   page?: number | string;
   page_size?: number | string;
+  works?: DesignerApiWorkItem[];
+  filters_applied?: boolean;
+  filter_options?: { specialties?: string[] };
 };
 
 type IndexTapEvent = {
@@ -88,12 +110,8 @@ type InputEvent = {
   };
 };
 
-type TabSwitchEvent = {
-  detail?: unknown;
-};
-
 const DEFAULT_MAIN_TABS: DesignerMainTabItem[] = [
-  { label: '全部设计师', value: 'all' },
+  { label: '全部', value: 'all' },
   { label: '乡墅私宅', value: 'template' },
   { label: '空间场景', value: 'scene' },
   { label: '材质软装', value: 'material' },
@@ -101,19 +119,18 @@ const DEFAULT_MAIN_TABS: DesignerMainTabItem[] = [
   { label: '庭院乡墅', value: 'villa' },
 ];
 
-const DESIGNER_TRAIT_FILTERS = ['全部', '主案统筹', '落地交付', '庭院营造', '软装陈设', '焕新改造'];
+const DESIGNER_TRAIT_FILTERS = ['全部'];
+const DESIGNER_SORTS = [
+  { label: '综合排序', value: 'comprehensive' },
+  { label: '作品点赞最多', value: 'popular' },
+  { label: '作品最新发布', value: 'latest' },
+];
 
 function formatCompactCount(value: number): string {
   const num = Number(value || 0);
   if (num >= 10000) return `${(num / 10000).toFixed(1).replace(/\.0$/, '')}W`;
   if (num >= 1000) return `${(num / 1000).toFixed(1).replace(/\.0$/, '')}K`;
   return String(num);
-}
-
-function truncate(str: string, maxLen: number): string {
-  const cleanText = str.replace(/\s+/g, ' ').trim();
-  if (cleanText.length <= maxLen) return cleanText;
-  return `${cleanText.slice(0, maxLen)}...`;
 }
 
 function getAvatarText(name: string): string {
@@ -127,77 +144,15 @@ function normalizeImageUrl(url: string): string {
     return '';
   }
   if (/^(https?:\/\/|wxfile:\/\/|file:\/\/|data:)/i.test(cleanUrl)) {
-    return cleanUrl;
+    return cleanUrl.startsWith('http') ? normalizeCosUrl(cleanUrl) : cleanUrl;
   }
   if (cleanUrl.startsWith('//')) {
-    return `https:${cleanUrl}`;
+    return normalizeCosUrl(`https:${cleanUrl}`);
   }
   if (cleanUrl.startsWith('/')) {
     return `${API_BASE_URL}${cleanUrl}`;
   }
   return `${API_BASE_URL}/${cleanUrl}`;
-}
-
-function buildTags(item: { category?: string }, currentTabLabel: string): string[] {
-  const category = String(item?.category || '').trim();
-  return [currentTabLabel, category]
-    .map((tag) => truncate(String(tag || '').trim(), 6))
-    .filter((tag, index, list) => Boolean(tag) && list.indexOf(tag) === index)
-    .slice(0, 3);
-}
-
-function buildDesignerTraits(sourceText: string, currentTabLabel: string): string[] {
-  const text = `${sourceText || ''} ${currentTabLabel || ''}`;
-  const traits: string[] = [];
-
-  if (/庭院|乡墅|别墅/.test(text)) traits.push('庭院营造');
-  if (/软装|材质|陈设|配色|氛围/.test(text)) traits.push('软装陈设');
-  if (/改造|更新|立面|翻新/.test(text)) traits.push('焕新改造');
-  if (/空间|落地|方案|设计/.test(text)) traits.push('落地交付');
-  if (!traits.length) traits.push('主案统筹');
-  if (!traits.includes('主案统筹')) traits.push('主案统筹');
-
-  return traits.slice(0, 3);
-}
-
-function getPlaceholderToneClass(index: number, currentTabValue: string): string {
-  const seed = index % 4;
-  if (currentTabValue === 'villa') return 'placeholder-tone-villa';
-  if (currentTabValue === 'material') return 'placeholder-tone-material';
-  if (currentTabValue === 'scene') return 'placeholder-tone-scene';
-  if (seed === 0) return 'placeholder-tone-villa';
-  if (seed === 1) return 'placeholder-tone-scene';
-  if (seed === 2) return 'placeholder-tone-material';
-  return 'placeholder-tone-creative';
-}
-
-function getWorkPlaceholderText(title: string, currentTabLabel: string): string {
-  const text = `${title || ''} ${currentTabLabel || ''}`;
-  if (/庭院|乡墅|别墅/.test(text)) return '庭院场景预览';
-  if (/软装|材质|陈设|配色/.test(text)) return '软装陈设预览';
-  if (/改造|更新|立面/.test(text)) return '焕新方案预览';
-  if (/亲子|活动|工坊|场景/.test(text)) return '空间氛围预览';
-  return `${truncate(currentTabLabel || '设计方案', 4)}方案预览`;
-}
-
-function matchesTraitFilter(item: DesignerCardItem, selectedTrait: string): boolean {
-  const trait = String(selectedTrait || '全部').trim();
-  if (!trait || trait === '全部') return true;
-  return item.designerTraits.includes(trait);
-}
-
-function filterDesignerList(items: DesignerCardItem[], keyword: string, selectedTrait: string): DesignerCardItem[] {
-  const safeKeyword = String(keyword || '').trim();
-  const filteredByTrait = items.filter((item) => matchesTraitFilter(item, selectedTrait));
-
-  if (!safeKeyword) {
-    return filteredByTrait;
-  }
-
-  return filteredByTrait.filter((item) => {
-    const text = [item.title, item.designerName, item.designerTitle, ...item.tags, ...item.designerTraits].join(' ');
-    return text.includes(safeKeyword);
-  });
 }
 
 function buildDesignerEmptyTip(currentTabLabel: string, keyword: string, selectedTrait: string): string {
@@ -214,72 +169,97 @@ function buildResultSummary(keyword: string, selectedTrait: string): string {
   return parts.length ? `已按${parts.join(' · ')}筛选` : '';
 }
 
-function requestDesignerApi(data?: Record<string, unknown>): Promise<DesignerApiResponseData | null> {
+function requestDesignerApi(data?: Record<string, unknown>, pathname = '/designers'): Promise<DesignerApiResponseData | null> {
   return new Promise((resolve) => {
     wx.request({
-      url: `${API_BASE_URL}/api/v1/miniprogram/designers`,
+      url: `${API_BASE_URL}/api/v1/miniprogram${pathname}`,
       method: 'GET',
+      timeout: pathname === '/designers' ? 15000 : 5000,
       data,
       success: (res) => {
         const response = (res.data || {}) as { code?: number; data?: DesignerApiResponseData };
         if (res.statusCode !== 200 || !res.data || response.code !== 0) {
+          console.error('设计师数据请求失败', pathname, res.statusCode);
           resolve(null);
           return;
         }
         resolve(response.data || {});
       },
-      fail: () => {
+      fail: (error) => {
+        console.error('设计师数据网络异常', pathname, error);
         resolve(null);
       },
     });
   });
 }
 
-function buildDesignerCardFromApi(item: DesignerApiListItem, index: number, currentTabValue: string, currentTabLabel: string): DesignerCardItem | null {
+const CATEGORY_ALIASES: Record<string, string[]> = {
+  template: ['template', 'xiangshu', 'villa', 'villa_exterior', 'interior_space'],
+  scene: ['scene', 'urban', 'family', 'culture', 'villa_exterior', 'interior_space', 'garden_courtyard', 'renovation', 'commercial_space', 'design_assist'],
+  material: ['material', 'style', 'new_minnan', 'new_chinese', 'modern', 'classic_european', 'regional'],
+  latest: ['latest', 'inspiration', 'gallery', 'rural_trend', 'lifestyle', 'regional_culture', 'function_innovation', 'selected_cases'],
+  villa: ['villa', 'xiangshu', 'villa_exterior', 'garden_courtyard', 'villa_case', 'villa_courtyard', 'villa_construction'],
+};
+
+async function completeLegacyWorkPreviews(list: DesignerApiListItem[], mainTab: string): Promise<DesignerApiListItem[]> {
+  const result = list.slice();
+  if (!hasRegisteredSession()) return result;
+  let cursor = 0;
+  // 仅兼容旧列表协议，按页最多三路补拉；不对新接口增加 N+1 请求。
+  const worker = async () => {
+    while (cursor < list.length) {
+      const index = cursor++;
+      const item = list[index];
+      if (item.work_previews || !Number(item.designer_user_id)) continue;
+      const homepage = await requestDesignerApi(undefined, `/designers/${Number(item.designer_user_id)}/homepage`);
+      if (!Array.isArray(homepage?.works)) continue;
+      const aliases = CATEGORY_ALIASES[mainTab];
+      const works = homepage.works.filter(work => Number(work.id) > 0 && (!aliases ||
+        [work.main_tab, work.category, work.sub_tab].some(value => aliases.includes(String(value || '').trim().toLowerCase()))));
+      const byLatest = (a: DesignerApiWorkItem, b: DesignerApiWorkItem) =>
+        (Date.parse(b.created_at || '') || 0) - (Date.parse(a.created_at || '') || 0) || Number(b.id) - Number(a.id);
+      result[index] = { ...item, work_previews: {
+        popular: works.slice().sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0) || byLatest(a, b)).slice(0, 2),
+        latest: works.slice().sort(byLatest).slice(0, 2),
+      } };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, list.length) }, worker));
+  return result;
+}
+
+function buildDesignerCardFromApi(item: DesignerApiListItem): DesignerCardItem | null {
   const designerUserId = Number(item?.designer_user_id) || 0;
   if (!designerUserId) {
     return null;
   }
 
   const representativeWork = item?.representative_work || {};
-  const title = String(representativeWork?.title || '暂未上传代表作品');
   const designerName = String(item?.designer_name || '匿名设计师');
   const designerTitle = String(item?.designer_title || '设计师');
-  const tags = Array.isArray(representativeWork?.tags)
-    ? representativeWork.tags.map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 3)
-    : buildTags({ category: String(representativeWork?.category || '') }, currentTabLabel);
-  const mergedText = [
-    title,
-    designerName,
-    designerTitle,
-    String(item?.experience_text || ''),
-    String(item?.specialties_text || ''),
-    ...tags,
-  ].join(' ');
-
+  const mapWorks = (list: DesignerApiWorkItem[]): DesignerPreview[] => list.filter(work => Number(work.id) > 0).slice(0, 2).map(work => ({
+    id: Number(work.id), title: String(work.title || '未命名作品'), image: normalizeImageUrl(String(work.image || '')),
+    likesText: formatCompactCount(Number(work.likes) || 0), tagsText: (work.tags || []).slice(0, 2).join(' · '),
+    publishScope: String(work.publish_scope || 'square'),
+  }));
+  const fallback = Number(representativeWork.id) > 0 ? [representativeWork] : [];
+  const workSets = { popular: mapWorks(item.work_previews?.popular || fallback), latest: mapWorks(item.work_previews?.latest || fallback) };
   return {
-    id: Number(representativeWork?.id) || 0,
-    title: truncate(title, 22),
-    tags,
-    designerTraits: buildDesignerTraits(mergedText, currentTabLabel),
-    viewsText: formatCompactCount(Number(representativeWork?.views) || 0),
-    likesText: formatCompactCount(Number(representativeWork?.likes) || 0),
-    workImage: normalizeImageUrl(String(representativeWork?.image || '')),
-    publishScope: String(representativeWork?.publish_scope || 'square'),
-    placeholderToneClass: getPlaceholderToneClass(index, currentTabValue),
-    workPlaceholderText: getWorkPlaceholderText(title, currentTabLabel),
+    certified: item.cert_status === 'approved',
+    regionText: String(item.designer_region || '').trim() || '未填写地区',
+    specialtyText: String(item.specialties_text || designerTitle).replace(/^专业领域[：:]\s*/, ''),
+    workSort: 'popular', works: workSets.popular, workSets,
     designerUserId,
     designerName,
     designerAvatar: normalizeImageUrl(String(item?.designer_avatar || '')),
     designerAvatarText: getAvatarText(designerName),
-    designerTitle: truncate(designerTitle, 12),
   };
 }
 
-function buildDesignerCardsFromApi(list: DesignerApiListItem[], currentTabValue: string, currentTabLabel: string): DesignerCardItem[] {
+function buildDesignerCardsFromApi(list: DesignerApiListItem[]): DesignerCardItem[] {
   const seen = new Set<number>();
-  return list.reduce<DesignerCardItem[]>((acc, item, index) => {
-    const card = buildDesignerCardFromApi(item, index, currentTabValue, currentTabLabel);
+  return list.reduce<DesignerCardItem[]>((acc, item) => {
+    const card = buildDesignerCardFromApi(item);
     if (!card || seen.has(card.designerUserId)) {
       return acc;
     }
@@ -302,7 +282,7 @@ function mergeDesignerCards(currentList: DesignerCardItem[], nextList: DesignerC
 
 function getNavLayout() {
   try {
-    const systemInfo = wx.getSystemInfoSync();
+    const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
 
     const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function'
       ? wx.getMenuButtonBoundingClientRect()
@@ -356,9 +336,15 @@ Page({
     currentCategoryLabel: DEFAULT_MAIN_TABS[0].label,
     traitFilters: DESIGNER_TRAIT_FILTERS,
     selectedTrait: '全部',
+    traitFilterIndex: 0,
+    regionPickerValue: [] as string[],
+    selectedRegionText: '',
+    designerSorts: DESIGNER_SORTS,
+    designerSortIndex: 0,
     searchInputValue: '',
     searchKeyword: '',
     resultSummaryText: '',
+    loadError: '',
     skeletonCards: [0, 1, 2],
   },
 
@@ -383,6 +369,11 @@ Page({
     }
   },
 
+  onLoadMoreDesigners() {
+    if (this.data.hasMore && !this.data.loading) return this.loadDesigners(false);
+    return Promise.resolve(false);
+  },
+
   onPullDownRefresh() {
     this.loadDesigners(true).finally(() => {
       wx.stopPullDownRefresh();
@@ -391,7 +382,7 @@ Page({
 
   onShareAppMessage() {
     return {
-      title: '设计师中心',
+      title: '找设计师',
       path: '/pages/distribution/distribution',
     };
   },
@@ -414,9 +405,9 @@ Page({
     });
   },
 
-  async loadDesigners(reset: boolean) {
+  async loadDesigners(reset: boolean): Promise<boolean> {
     if (this.data.loading) {
-      return;
+      return false;
     }
 
     const currentTab = this.getCurrentMainTab();
@@ -425,20 +416,32 @@ Page({
     const requestPage = reset ? 1 : this.data.page;
     const keyword = String(this.data.searchKeyword || '').trim();
     const selectedTrait = String(this.data.selectedTrait || '全部').trim();
+    const hasRetainedCards = reset && this.data.designerCards.length > 0;
 
     this.setData({
       loading: true,
-      contentReady: false,
-      currentCategoryLabel: currentTabLabel,
+      loadError: '',
+      contentReady: hasRetainedCards ? this.data.contentReady : false,
+      ...(hasRetainedCards ? {} : { currentCategoryLabel: currentTabLabel }),
       emptyTipText: buildDesignerEmptyTip(currentTabLabel, keyword, selectedTrait),
     });
 
     const result = await requestDesignerApi({
       keyword,
+      specialty: selectedTrait === '全部' ? '' : selectedTrait,
+      region: this.data.selectedRegionText,
+      sort: DESIGNER_SORTS[this.data.designerSortIndex].value,
       page: requestPage,
       page_size: this.data.pageSize,
       main_tab: currentTabValue === 'all' ? '' : currentTabValue,
     });
+
+    const needsFilterSupport = selectedTrait !== '全部' || !!this.data.selectedRegionText || this.data.designerSortIndex !== 0;
+    if (result && needsFilterSupport && !result.filters_applied) {
+      this.setData({ loading: false, loadError: '暂时无法筛选，请稍后重试' });
+      wx.showToast({ title: '暂时无法筛选，请稍后重试', icon: 'none' });
+      return false;
+    }
 
     let sourceCards: DesignerCardItem[] = [];
     let nextHasMore = false;
@@ -446,24 +449,43 @@ Page({
     let nextDesignerCountText = String(reset ? 0 : this.data.designerCountText || 0);
 
     if (!result) {
-      sourceCards = [];
-      nextHasMore = false;
-      nextEmptyTipText = '设计师列表加载失败，请稍后重试';
-      nextDesignerCountText = '0';
+      if (this.data.designerCards.length > 0) {
+        this.setData({ loading: false, loadError: '设计师列表加载失败，请稍后重试' });
+        wx.showToast({ title: '设计师列表加载失败，请稍后重试', icon: 'none' });
+        return false;
+      }
+      this.setData({
+        designerCards: [],
+        contentReady: false,
+        loading: false,
+        loadError: '设计师列表加载失败，请稍后重试',
+        hasMore: false,
+        designerCountText: '0',
+        currentCategoryLabel: currentTabLabel,
+        emptyTipText: '设计师列表加载失败，请稍后重试',
+      });
+      return false;
     } else {
-      const list = Array.isArray(result.list) ? result.list : [];
-      const mappedCards = buildDesignerCardsFromApi(list, currentTabValue, currentTabLabel);
-      sourceCards = filterDesignerList(mappedCards, keyword, selectedTrait);
+      const list = await completeLegacyWorkPreviews(Array.isArray(result.list) ? result.list : [], currentTabValue);
+      const mappedCards = buildDesignerCardsFromApi(list);
+      sourceCards = mappedCards;
       nextHasMore = Number(result.total || 0) > requestPage * this.data.pageSize;
       nextDesignerCountText = String(Number(result.total || 0));
     }
 
     const nextDesignerCards = reset ? sourceCards : mergeDesignerCards(this.data.designerCards, sourceCards);
-    if (selectedTrait && selectedTrait !== '全部') {
-      nextDesignerCountText = String(nextDesignerCards.length);
-    }
+    const specialtyOptions = result.filter_options?.specialties;
+    const traitFilters = Array.isArray(specialtyOptions)
+      ? ['全部', ...specialtyOptions.filter(value => typeof value === 'string' && value && value !== '全部')]
+      : this.data.traitFilters;
+    if (!traitFilters.includes(selectedTrait)) traitFilters.push(selectedTrait);
+    const summary = [buildResultSummary(keyword, selectedTrait),
+      this.data.selectedRegionText,
+      this.data.designerSortIndex ? DESIGNER_SORTS[this.data.designerSortIndex].label : ''].filter(Boolean).join(' · ');
 
     this.setData({
+      traitFilters,
+      traitFilterIndex: traitFilters.indexOf(selectedTrait),
       designerCards: nextDesignerCards,
       contentReady: !!result && Array.isArray(result.list),
       loading: false,
@@ -471,9 +493,10 @@ Page({
       hasMore: nextHasMore,
       designerCountText: nextDesignerCountText,
       currentCategoryLabel: currentTabLabel,
-      resultSummaryText: buildResultSummary(keyword, selectedTrait),
+      resultSummaryText: summary,
       emptyTipText: nextEmptyTipText,
     });
+    return true;
   },
 
   onSearchInput(e: InputEvent) {
@@ -482,46 +505,48 @@ Page({
     });
   },
 
-  onSearchConfirm() {
+  async onSearchConfirm() {
+    if (this.data.loading) return false;
     const keyword = String(this.data.searchInputValue || '').trim();
     const currentTab = this.getCurrentMainTab();
     const selectedTrait = String(this.data.selectedTrait || '全部').trim();
+    const previousKeyword = this.data.searchKeyword;
+    const hasRetainedCards = this.data.designerCards.length > 0;
 
     this.setData({
       searchKeyword: keyword,
-      page: 1,
-      hasMore: true,
-      designerCards: [],
-      currentCategoryLabel: currentTab?.label || DEFAULT_MAIN_TABS[0].label,
-      resultSummaryText: buildResultSummary(keyword, selectedTrait),
       emptyTipText: buildDesignerEmptyTip(currentTab?.label || DEFAULT_MAIN_TABS[0].label, keyword, selectedTrait),
     });
 
-    this.loadDesigners(true);
+    const loaded = await this.loadDesigners(true);
+    if (!loaded && hasRetainedCards) this.setData({ searchKeyword: previousKeyword });
+    return loaded;
   },
 
-  onSearchClear() {
+  async onSearchClear() {
+    if (this.data.loading) return false;
     const currentTab = this.getCurrentMainTab();
     const selectedTrait = String(this.data.selectedTrait || '全部').trim();
     if (!this.data.searchKeyword && !this.data.searchInputValue) {
       return;
     }
+    const previousInputValue = this.data.searchInputValue;
+    const previousKeyword = this.data.searchKeyword;
+    const hasRetainedCards = this.data.designerCards.length > 0;
 
     this.setData({
       searchInputValue: '',
       searchKeyword: '',
-      page: 1,
-      hasMore: true,
-      designerCards: [],
-      currentCategoryLabel: currentTab?.label || DEFAULT_MAIN_TABS[0].label,
-      resultSummaryText: buildResultSummary('', selectedTrait),
       emptyTipText: buildDesignerEmptyTip(currentTab?.label || DEFAULT_MAIN_TABS[0].label, '', selectedTrait),
     });
 
-    this.loadDesigners(true);
+    const loaded = await this.loadDesigners(true);
+    if (!loaded && hasRetainedCards) this.setData({ searchInputValue: previousInputValue, searchKeyword: previousKeyword });
+    return loaded;
   },
 
-  onTraitFilterTap(e: IndexTapEvent) {
+  async onTraitFilterTap(e: IndexTapEvent) {
+    if (this.data.loading) return false;
     const index = Number(e.currentTarget.dataset.index);
     const selectedTrait = this.data.traitFilters[index];
     const currentTab = this.getCurrentMainTab();
@@ -529,21 +554,20 @@ Page({
     if (Number.isNaN(index) || !selectedTrait || selectedTrait === this.data.selectedTrait) {
       return;
     }
+    const previousTrait = this.data.selectedTrait;
 
     this.setData({
       selectedTrait,
-      page: 1,
-      hasMore: true,
-      designerCards: [],
-      currentCategoryLabel: currentTab?.label || DEFAULT_MAIN_TABS[0].label,
-      resultSummaryText: buildResultSummary(this.data.searchKeyword, selectedTrait),
       emptyTipText: buildDesignerEmptyTip(currentTab?.label || DEFAULT_MAIN_TABS[0].label, this.data.searchKeyword, selectedTrait),
     });
 
-    this.loadDesigners(true);
+    const loaded = await this.loadDesigners(true);
+    if (!loaded) this.setData({ selectedTrait: previousTrait, traitFilterIndex: this.data.traitFilters.indexOf(previousTrait) });
+    return loaded;
   },
 
   async onMainTabTap(e: IndexTapEvent) {
+    if (this.data.loading) return;
     const index = Number(e.currentTarget.dataset.index);
     const tab = this.data.tabs[index];
     const selectedTrait = String(this.data.selectedTrait || '全部').trim();
@@ -551,17 +575,83 @@ Page({
       return;
     }
 
+    const previousTabIndex = this.data.currentTabIndex;
+    const hasRetainedCards = this.data.designerCards.length > 0;
     this.setData({
       currentTabIndex: index,
-      page: 1,
-      hasMore: true,
-      designerCards: [],
-      currentCategoryLabel: tab.label,
-      resultSummaryText: buildResultSummary(this.data.searchKeyword, selectedTrait),
       emptyTipText: buildDesignerEmptyTip(tab.label, this.data.searchKeyword, selectedTrait),
     });
 
-    await this.loadDesigners(true);
+    const loaded = await this.loadDesigners(true);
+    if (!loaded && hasRetainedCards) {
+      this.setData({ currentTabIndex: previousTabIndex });
+    }
+  },
+
+  onWorkSortTap(e: { currentTarget: { dataset: { userId?: number | string; sort?: string } } }) {
+    const { userId, sort } = e.currentTarget.dataset;
+    if (sort !== 'popular' && sort !== 'latest') return;
+    this.setData({ designerCards: this.data.designerCards.map(card => card.designerUserId === Number(userId)
+      ? { ...card, workSort: sort, works: card.workSets[sort] } : card) });
+  },
+
+  onDesignerAvatarError(e: UserIdTapEvent) {
+    const userId = Number(e.currentTarget.dataset.userId);
+    if (!userId) return;
+    console.warn('设计师头像加载失败', { designerUserId: userId });
+    this.setData({ designerCards: this.data.designerCards.map(card => card.designerUserId === userId
+      ? { ...card, designerAvatar: '' } : card) });
+  },
+
+  onConsultDesigner(e: UserIdTapEvent) {
+    const userId = Number(e.currentTarget.dataset.userId);
+    if (!userId) return;
+    wx.navigateTo({ url: `/pages/designerhome/designerhome?userId=${userId}&consult=1`,
+      fail: () => wx.showToast({ title: '咨询页面打开失败，请重试', icon: 'none' }) });
+  },
+
+  async onDesignerSortChange(e: { detail: { value: string } }) {
+    const index = Number(e.detail.value);
+    if (this.data.loading || !DESIGNER_SORTS[index] || index === this.data.designerSortIndex) return;
+    const previous = this.data.designerSortIndex;
+    this.setData({ designerSortIndex: index });
+    if (!await this.loadDesigners(true)) this.setData({ designerSortIndex: previous });
+  },
+
+  async onRegionChange(e: { detail: { value: string[] } }) {
+    const values = e.detail.value;
+    if (this.data.loading || !Array.isArray(values) || values.length !== 3 || values.some(value => typeof value !== 'string')) return;
+    const unlimitedIndex = values.indexOf('不限');
+    const selectedRegionText = (unlimitedIndex < 0 ? values : values.slice(0, unlimitedIndex)).join(' ').trim();
+    if (selectedRegionText === this.data.selectedRegionText) return;
+    const previous = { selectedRegionText: this.data.selectedRegionText, regionPickerValue: this.data.regionPickerValue };
+    this.setData({ selectedRegionText, regionPickerValue: values });
+    if (!await this.loadDesigners(true)) this.setData(previous);
+  },
+
+  onRetryDesigners() {
+    return this.loadDesigners(true);
+  },
+
+  onTraitPickerChange(e: { detail: { value: string } }) {
+    return this.onTraitFilterTap({ currentTarget: { dataset: { index: Number(e.detail.value) } } });
+  },
+
+  onFeatureTap(e: { currentTarget: { dataset: { feature: string } } }) {
+    const feature = e.currentTarget.dataset.feature;
+    if (feature === 'villa' || feature === 'courtyard') {
+      const index = this.data.tabs.findIndex(tab => tab.value === (feature === 'villa' ? 'template' : 'villa'));
+      void this.onMainTabTap({ currentTarget: { dataset: { index } } });
+      return;
+    }
+    // 专题入口复用模板广场公开的灵感/案例精选，不进入设计师的管理页面。
+    const app = getApp<any>();
+    app.globalData = app.globalData || {};
+    app.globalData.designerTemplateEntry = feature === 'collections' ? 'inspiration' : 'scene';
+    wx.switchTab({ url: '/pages/template/template', fail: () => {
+      delete app.globalData.designerTemplateEntry;
+      wx.showToast({ title: '页面打开失败，请重试', icon: 'none' });
+    } });
   },
 
   onWorkTap(e: IdTapEvent) {
@@ -614,9 +704,5 @@ Page({
         });
       },
     });
-  },
-
-  onTabSwitch(e: TabSwitchEvent) {
-    console.log('切换 tab', e.detail);
   },
 });

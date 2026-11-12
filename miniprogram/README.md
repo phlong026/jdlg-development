@@ -15,6 +15,8 @@ npm run test:tracking
 
 `miniprogram/utils/parameter.js` 是确定性生成物，不应手工修改。CI 质量门禁会同时验证 TypeScript 源码、JavaScript 运行文件和 Go 鉴权中间件的跨语言契约；不需要微信或生产服务器凭据。
 
+内容阅读与编辑预览的正文模板以 `miniprogram/components/content-presentation/content-presentation.wxml` 为唯一维护源。`npm run build:tracking` 将模板同步到两个页面的生成标记内，保证页面单独编译时也携带正文定义；不要手改生成区。发布前运行 `npm run check:tracking` 与 `node --test tests/content-reader-package.test.js`，分别检查模板同步和图集、视频、文章及编辑预览的独立编译渲染。
+
 图片发布清单为 `assets-cloud-manifest.json`，记录 45 张原图的字节数、SHA-256 和不可变 CDN 地址。当前发布前缀：
 
 `https://static.jiadilingguang.com/assets/miniprogram-releases/20261022-292ba168e0ef/`
@@ -50,6 +52,12 @@ npm run test:tracking
 
 ## 三期内容、分享和通知
 
+页面默认窗口与空白底色为 `#fbfaf7`，资料核验使用业务色加载框架；真实登录和资料补全继续使用原品牌界面。页面跳转稳定性修复顺序与验收边界见[修复记录](../docs/page-transition-flash-20261104.md)。
+
 首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](../docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
 
 2026-10-27前端新增AI内容策划私有子页，并接通内容制作、导入、编辑/预览/阅读和“我的”工作台。使用原对话计费和事件通道，不自动发送AI请求。页面验证、截图与尚未通过的原生点击链见[前端实施记录](../docs/phase3/frontend-implementation-20261027.md)；隔离原生验证脚本为 `node verification/phase3-frontend.cjs`，应在微信开发者工具已打开本目录且电脑已解锁时执行。
+
+## AI 先浏览后登录
+
+AI 表单允许匿名浏览，实际生成、优化和服务端上传在用户操作时要求账号登录；AI 登录不强制头像昵称。八个表单、四个个人结果/历史页面和受保护分享的访问边界见 [AI 访问契约](../docs/api/ai-preview-access.md)。配置调整需要同步前后端，原生验证与发布状态见 [本次记录](../docs/phase3/ai-preview-login-20261111/CHANGELOG.md)。

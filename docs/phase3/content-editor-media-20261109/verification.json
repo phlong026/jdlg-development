@@ -1,0 +1,29 @@
+{
+  "frontend": {
+    "total": 1225,
+    "passed": 1221,
+    "skipped": 4,
+    "failed": 0
+  },
+  "backend_packages": [
+    "tracking",
+    "route",
+    "contentimport",
+    "contentstorage",
+    "contentcapture"
+  ],
+  "backend_test_env": {
+    "CGO_ENABLED": "0"
+  },
+  "go_vet": "passed",
+  "npm_audit": {
+    "total": 0
+  },
+  "native_scope": "isolated fixtures, no real upload or publication",
+  "remote_push": false,
+  "development_upload": true,
+  "backend_deployed": false,
+  "uploaded_version": "8.0.2",
+  "experience_status": "开发工具确认上次提交已选为体验版",
+  "upload_receipt": "release/receipt.json"
+}

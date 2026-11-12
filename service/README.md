@@ -174,6 +174,8 @@ AI_VIDEO_MODEL=veo-3.1-landscape-fast-fl
 
 生图兼容 provider code 继续使用 `gpt-image-2-vip`，实际请求网关和模型由 `LAOZHANG_IMAGE_BASE_URL` 与 `LAOZHANG_IMAGE_MODEL` 决定；未配置或仅包含空白时使用上述默认值。数据库中的历史 Gemini 生图模板仍会经过兼容转换，后台修改普通生图地址不会覆盖这两项环境变量。修改后需重启 Go 服务生效。
 
+流式聊天的老张默认接口为 `https://api2.laozhang.ai/v1/chat/completions`（[官方备用域名公告](https://www.laozhang.ai/zh-cn)），模型仍为 `gpt-5.5`。`ai_api_config` 中启用的 `ai_chat` 配置可覆盖接口和密钥；修改数据库后需失效 Redis 的 `ai_api_config:task_type:ai_chat` 缓存。供应商决定模型及环境密钥，接口路径决定 Completions 或 Responses 协议；二者独立，不能根据 Completions 路径推断为老张。显式供应商与已知接口主机冲突时会拒绝请求。未配置老张密钥时继续沿用方舟默认；后台明确配置的原域名不会被强制替换。
+
 ## 数据库表结构
 
 ### users 表
@@ -304,3 +306,51 @@ result, err := strategy.Login(ctx, req)
 导入默认关闭，运行变量、独立迁移、平台适配范围及恢复规则见 [导入方案](../docs/phase3/content-import-plan-20261027.md)。主服务只使用服务端供应商配置和受保护的Cookie文件；公众号视频浏览器采集为独立进程，部署门禁见 [Capture Worker](contentcapture/README.md)。不要把配置已填、单元测试或临时媒体地址当作已导入/已发布/生产验收完成。
 
 三期媒体可通过 `CONTENT_MEDIA_STORAGE=cos` 选用私有COS，Bucket/Region默认复用既有服务端COS配置，或用 `CONTENT_MEDIA_COS_BUCKET`、`CONTENT_MEDIA_COS_REGION` 显式指定；`CONTENT_MEDIA_COS_PREFIX` 默认 jd-content-private。图片/视频先校验并以私有ACL保存，再验证匿名读取被拒绝；客户端继续走原授权媒体接口，不得到COS公开直链。文件系统模式继续使用原本地文件；COS模式只读取私有COS，切换前应完成既有素材受检转存。支持JPEG、PNG、GIF、WebP和MP4；Range读取采用有界流，并发与来源限速独立于浏览事件写入。
+# 内容创作呈现契约
+
+`article_v2` 正文继续使用 `schema: 1`、有序 `blocks`，支持可选字段 `presentation: article | gallery | video`。
+图集包含连续图片和独立正文，视频包含单个主视频和独立正文；复杂混排、公众号 `layout_html` 保留文章形态。
+保存与查询响应中的 `presentation` 由服务端按正文推导，不接受额外客户端归属或权限字段。
+工作台上下文返回 `presentation_formats`；小程序仅在后端声明支持时保存该可选字段，旧服务端继续接收原有正文格式。
+`type=gallery` 可筛选图集，`type=article` 筛选文章，旧中文 `type=图文` 仍包含两者。无数据库迁移。
+导入网关作品的整条文案存入独立正文段落，媒体 `caption` 只承载单个媒体的短说明。
+
+### 视频工作区与可恢复上传
+
+视频编辑沿用 article_v2，新增可选 `video_layout`（`channels`/`douyin`）、`share_copy`、`moments_copy`（分别最多2000字）和 `draft_only`。`draft_only:true` 仅允许私有视频草稿，可以暂缺标题/主视频；授权归属与素材校验不放宽，预览和发布均拒绝未完成草稿。历史版本默认视频号式阅读且不原地改写。客户端必须读取 workbench context 的 `video_editor_fields` / `video_resumable_upload` 能力；不支持时明确提示升级，避免静默丢失新字段或回退到旧50MiB上传路径。
+
+新增 workbench 接口（沿用登录、资料及管理权限门禁）：
+
+- `POST /media-uploads`：`{owner_id,rights,filename,size,fingerprint,reset?}`，fingerprint为原文件SHA-1；按租户/操作者/归属/权属/指纹/大小恢复同一会话。只有状态明确返回 `reset_required:true` 时才发送 `reset:true`，已完成素材永不重置。
+- `GET /media-uploads/:id`：查询状态并可恢复后台完成任务。
+- `POST /media-uploads/:id/parts/:part`：multipart `file`，分片编号从0开始，4MiB传输单元；只约束单次请求，不限制作品总大小或时长。
+- `POST /media-uploads/:id/complete`：分片齐全后返回 `processing:true`，后台流式合并、校验、存储与入库；轮询状态直到 `asset` 或可重试 `error`。重复完成返回同一素材。
+
+状态为 `{upload_id,chunk_size,uploaded_parts,processing,error?,retryable,reset_required,asset?}`。`retryable:true` 只重试 complete，不重传已成功分片；`reset_required:true` 清除客户端会话并用同一原文件发起 `reset:true` 的 begin。客户端保存不含登录令牌的会话标识，重新选择同一原文件后可续传；切换账号/草稿停止回填与后续传输。分片用SHA-256校验，整文件核对声明的SHA-1，入库日志继续使用SHA-256。
+
+配置：文件系统模式要求 `TRACKING_MEDIA_DIR` 是绝对私有目录；可通过 `CONTENT_VIDEO_UPLOAD_DIR` 指定独立绝对暂存目录。COS模式除现有私有Bucket配置外，也必须提供本地私有暂存目录。未完成会话保留7天，完成会话保留30天；扫描清理每小时最多一次，进行中的处理不会被清理，已清理的完成会话会从已登记素材恢复幂等结果。合并期间暂存分片、合并文件与最终对象需要额外磁盘空间，应监控容量。反向代理需允许一个4MiB分片加multipart开销（至少5MiB）；保留请求级超时及防护，不再用旧单文件50MiB阈值判断视频作品。COS每个对象分片写入依分片大小设置独立技术超时，卡住时取消当前请求并Abort未完成multipart，不对整个视频作品设总超时。播放采用已授权Range流式读取，COS响应头和上下游连续30秒无数据会超时，但持续传输不会受到30秒总时长限制。
+
+当前播放格式仍为标准MP4，MOV会明确提示转换为MP4；此次未新增转码服务。没有业务时长与总大小上限，不代表设备、本地磁盘或存储服务拥有无限物理容量。真实COS大文件及微信iOS/Android录制/相册文件仍需部署后的联调验收。
+
+
+### 固定版本内容海报
+
+`GET /workbench/content-poster?content_id=...&content_version=...` 必须带明确的已发布版本，按当前管理范围校验 owner，再生成可解析的真实 share_token；二维码固定进入内容阅读页。`GET /workbench/shares/:id/poster` 的路径参数必须为真实分享令牌，并验证分享仍有效以及当前实际分享者或授权 owner，不能把不透明 ID 当作权限。客户端默认隐藏海报，只有服务端工作台能力确认当前内容归属可管理后才显示。普通阅读、原生分享不依赖素材管理权限。
+
+### 分享视频播放与链接导入（2026-11-11）
+
+内容阅读页、项目笔记与分享资料接收页使用已鉴权 POST 获取10分钟播放票据，原生播放器经 `/api/v1/shared-video/:ticket` 读取自有存储并使用 Range；每次读取仍复核账号资料和分享权限。无需新增环境变量或数据库迁移；必须在API站点合并 `ops/phase3-release/shared-video.conf` 并执行 `nginx -t`、真实Range及敏感日志校验。沿用 `PROJECT_NOTES_ENABLED` 和现有私有媒体配置。接口及生命周期见 [项目笔记接口](../docs/phase3/private-project-notes.md)。
+
+链接导入生产路径将 MP4 上限由50MiB提高为500MiB，并使用权限为0600的临时文件流式下载与转存；图片保持10MiB。临时目录沿用操作系统 `TMPDIR`，部署需为单个最大视频及转存过程预留磁盘空间。旧字节数组抓取接口仍保留原限额用于现有其他调用，不用于新的大视频导入。任务总窗口20分钟、来源下载最多15分钟，长媒体保存期间心跳续租且单次续租最多5秒；MP4累计最多10000个atom并支持取消。过期媒体仅由用户显式重试后重新解析，结果不明的付费解析仍不可重试。方案和限制见 [导入方案](../docs/phase3/content-import-plan-20261027.md)。
+
+已发布内容仍调用 `POST /api/v1/miniprogram/tracking/media/:id/signed`，响应保持 `{url, expires_at}`，但地址改为统一的 `/api/v1/shared-video/:ticket`；不再把带不了登录头的原生播放器导向全局资料门禁下的旧媒体路径。该POST显式要求登录与未封禁；播放GET逐次要求完整资料及当前有效已发布内容引用，内容撤回后拒绝。公开内容播放依赖 `ContentEnabled` 与 `VideoEnabled`，独立于私人项目开关。
+
+### 首次未登录浏览边界（2026-11-11）
+
+首页、模板广场、找设计师列表只读接口按GET完整路径允许匿名：`/templates/featured`、`/templates/tab-config`、`/templates`、`/templates/search`、`/inspirations`、`/designers`（均位于 `/api/v1/miniprogram`）。详情和写操作仍执行原登录/登记门禁，不按目录前缀放行。
+
+匿名tracking entry/events/shares仅用于这三个公开route，并验证entry临时凭据的匿名归属；登录后的事件仍核对账号和服务器entry route，受保护route保持原资料完整度要求。无需新增环境变量或数据库迁移。修复与发布证据见 [首次浏览审核修复](../docs/phase3/review-guest-cold-start-20261111/README.md)。
+
+### AI 预览与账号鉴权
+
+公开 AI 价格及已发布工具定义采用精确 GET 路径允许匿名；AI 执行、上传和个人任务保留有效账号鉴权，不再要求头像昵称。其他分享内容的完整资料门禁不变，无数据库或环境变量变更。详细路径、状态码与跟踪边界见 [AI 访问契约](../docs/api/ai-preview-access.md)。

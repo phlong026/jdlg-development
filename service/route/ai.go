@@ -11,6 +11,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"service/component"
@@ -238,7 +239,12 @@ func extractStringArrayFromPayload(payload map[string]interface{}, key string) [
 	return nil
 }
 
-func enrichAIToolPayload(payload map[string]interface{}, aiToolModel *model.AIToolModel) (int64, error) {
+type aiToolLookup interface {
+	GetByID(int64) (*model.AITool, error)
+	GetByCode(string) (*model.AITool, error)
+}
+
+func enrichAIToolPayload(payload map[string]interface{}, aiToolModel aiToolLookup) (int64, error) {
 	if payload == nil || aiToolModel == nil {
 		return 0, nil
 	}
@@ -407,27 +413,76 @@ func detectUploadedImageMeta(fileData []byte) (string, string, error) {
 	}
 }
 
-func RegisterAIPublicRoutes(r *gin.RouterGroup, pricingModel *model.AIPricingModel) {
+type aiPricingReader interface {
+	GetByScene(string) (*model.AIPricing, error)
+}
+
+var publicAIPricingScenes = map[string]struct{}{
+	"ai_draw_single": {}, "ai_draw_multi": {}, "ai_chat_single": {}, "ai_chat_multi": {},
+	"new_minnan_tool_text_to_image": {}, "new_minnan_tool_image_to_image": {},
+	"building_code_chat": {}, "rural_villa_design": {}, "allround_design": {},
+	"building_replacement": {}, "parent_child_design": {}, "ai_cost_doc": {},
+	"ai_video_1": {}, "ai_video_2": {}, "ai_video_3": {}, "ai_video_4": {},
+}
+
+const maxPublicAIPricingScenes = 8
+
+func parsePublicAIPricingScenes(raw string) ([]string, bool) {
+	if strings.TrimSpace(raw) == "" {
+		return []string{"ai_draw_single", "ai_draw_multi", "ai_chat_single"}, true
+	}
+	scenes := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, rawScene := range strings.Split(raw, ",") {
+		scene := strings.TrimSpace(rawScene)
+		if scene == "" {
+			continue
+		}
+		if _, allowed := publicAIPricingScenes[scene]; !allowed {
+			return nil, false
+		}
+		if _, duplicate := seen[scene]; duplicate {
+			continue
+		}
+		seen[scene] = struct{}{}
+		scenes = append(scenes, scene)
+		if len(scenes) > maxPublicAIPricingScenes {
+			return nil, false
+		}
+	}
+	return scenes, len(scenes) > 0
+}
+
+func buildPublicPricingConfig(pricing *model.AIPricing) gin.H {
+	config := parsePricingExtraConfig(pricing)
+	if config == nil {
+		return nil
+	}
+	public := gin.H{}
+	for _, option := range []struct {
+		name    string
+		aliases []string
+	}{
+		{name: "duration_min", aliases: []string{"duration_min", "min_duration"}},
+		{name: "duration_max", aliases: []string{"duration_max", "max_duration"}},
+	} {
+		if value, ok := getPricingIntOption(config, option.aliases...); ok && value > 0 {
+			public[option.name] = value
+		}
+	}
+	if len(public) == 0 {
+		return nil
+	}
+	return public
+}
+
+func RegisterAIPublicRoutes(r *gin.RouterGroup, pricingModel aiPricingReader) {
 	ai := r.Group("/ai")
 	ai.GET("/pricing", func(c *gin.Context) {
-		scenes := []string{"ai_draw_single", "ai_draw_multi", "ai_chat_single"}
-		if scenesParam := strings.TrimSpace(c.Query("scenes")); scenesParam != "" {
-			parsed := make([]string, 0)
-			seen := make(map[string]struct{})
-			for _, rawScene := range strings.Split(scenesParam, ",") {
-				scene := strings.TrimSpace(rawScene)
-				if scene == "" {
-					continue
-				}
-				if _, ok := seen[scene]; ok {
-					continue
-				}
-				seen[scene] = struct{}{}
-				parsed = append(parsed, scene)
-			}
-			if len(parsed) > 0 {
-				scenes = parsed
-			}
+		scenes, valid := parsePublicAIPricingScenes(c.Query("scenes"))
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "AI 计费场景参数无效"})
+			return
 		}
 
 		prices := gin.H{}
@@ -438,14 +493,12 @@ func RegisterAIPublicRoutes(r *gin.RouterGroup, pricingModel *model.AIPricingMod
 				if err == sql.ErrNoRows {
 					continue
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "获取 AI 计费配置失败: " + err.Error(),
-				})
+				log.Printf("[ai-pricing-public] read failed scene=%s error_type=%T", scene, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取 AI 计费配置失败"})
 				return
 			}
 			prices[scene] = pricing.Stones
-			if cfg := parsePricingExtraConfig(pricing); cfg != nil {
+			if cfg := buildPublicPricingConfig(pricing); cfg != nil {
 				configs[scene] = cfg
 			}
 		}

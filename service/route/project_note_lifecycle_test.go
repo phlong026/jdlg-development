@@ -72,6 +72,26 @@ func TestProjectNoteLifecycleRoutesRejectUnknownFieldsAndStaleRevision(t *testin
 	}
 }
 
+func TestProjectNoteLifecycleRouteDeletesProjectWithRevisionGuard(t *testing.T) {
+	router, svc, scope := newProjectNoteLifecycleRouteFixture(t)
+	project, err := svc.ProjectNoteCreateProject(context.Background(), scope, tracking.ProjectNoteProjectInput{Name: "待删项目", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := projectNoteRequest(t, router, http.MethodDelete, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{"expected_revision": project.Revision + 1})
+	if stale.Code != http.StatusConflict {
+		t.Fatalf("stale project delete accepted: %d %s", stale.Code, stale.Body.String())
+	}
+	deletedRec := projectNoteRequest(t, router, http.MethodDelete, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{"expected_revision": project.Revision})
+	if deletedRec.Code != http.StatusOK {
+		t.Fatal(deletedRec.Code, deletedRec.Body.String())
+	}
+	deleted := projectNoteData[tracking.ProjectNoteProjectDeletion](t, deletedRec)
+	if deleted.ProjectID != project.ID || deleted.DeletedBy != scope.Actor {
+		t.Fatalf("unexpected project deletion: %#v", deleted)
+	}
+}
+
 func TestProjectNoteLifecycleRoutesAreRegisteredWithProjectNotes(t *testing.T) {
 	router, svc, scope, _ := newProjectNoteHandlerFixture(t)
 	project, err := svc.ProjectNoteCreateProject(context.Background(), *scope, tracking.ProjectNoteProjectInput{Name: "注册方案", Owner: "owner-a"})

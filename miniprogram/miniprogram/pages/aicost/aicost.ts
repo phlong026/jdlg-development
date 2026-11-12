@@ -350,6 +350,21 @@ Page({
       wx.showToast({ title: error, icon: 'none' });
       return;
     }
+    const token = String(wx.getStorageSync('token') || '');
+    const userInfo = wx.getStorageSync('userInfo') || {};
+    const userID = Number(userInfo.id || 0);
+    const profileToken = String(userInfo.token || '');
+    if (!token || (profileToken && profileToken !== token) || !Number.isInteger(userID) || userID <= 0) {
+      wx.showModal({
+        title: '提示',
+        content: '登录后可保存本次测算结果',
+        confirmText: '去登录',
+        success: (res) => {
+          if (res.confirm) wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
+        },
+      });
+      return;
+    }
     const result = estimateTotalCost({
       footprintArea, buildingArea, foundationType: data.foundationType, basementType: data.basementType,
       structureType: data.structureType, roofType: data.roofType,
@@ -373,7 +388,7 @@ Page({
       { label: '门窗标准', value: data.windowStandard },
     ];
     try {
-      wx.setStorageSync(RESULT_STORAGE_KEY, {
+      wx.setStorageSync(`${RESULT_STORAGE_KEY}:${userID}`, {
         version: 4,
         estimatedTotalCost: formatWan(result.totalCost),
         estimatedUnitCost: `${result.unitCost}元/㎡`,

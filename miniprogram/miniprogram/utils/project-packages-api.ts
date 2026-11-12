@@ -33,6 +33,11 @@ function getSharedProjectPackage(token) {
 function getSharedProjectPackageVersion(token, versionID) {
   return api.request(sharedPath(token, '/versions/' + pathID(versionID)));
 }
+async function getSharedProjectPackageMediaPlayback(token, versionID, mediaID) {
+  const playback = await api.request(sharedPath(token, '/versions/' + pathID(versionID) + '/media/' + pathID(mediaID) + '/playback'), 'POST', {});
+  const url = String(playback && playback.url || '');
+  return Object.assign({}, playback, { url: url.startsWith('/') ? api.ORIGIN + url : url });
+}
 function addSharedProjectPackageFeedback(token, versionID, text, satisfaction, key) {
   return api.request(sharedPath(token, '/versions/' + pathID(versionID) + '/feedback'), 'POST', {
     text, satisfaction: satisfaction || '', idempotency_key: key,
@@ -60,6 +65,6 @@ module.exports = {
   MANAGE, SHARED, mutationKey: api.mutationKey,
   getProjectPackageProject, saveProjectPackageDraft, previewProjectPackage, publishProjectPackage,
   revokeProjectPackageDelivery, getProjectPackageHistory,
-  getSharedProjectPackage, getSharedProjectPackageVersion, downloadSharedProjectPackageMedia,
+  getSharedProjectPackage, getSharedProjectPackageVersion, downloadSharedProjectPackageMedia, getSharedProjectPackageMediaPlayback,
   addSharedProjectPackageFeedback, confirmSharedProjectPackageVersion, acknowledgeSharedProjectPackage,
 };

@@ -121,9 +121,22 @@ func GetCOSObject(ctx context.Context, client *cos.Client, key string, maxBytes 
 
 // buildObjectKey 将配置的Prefix与key拼接
 func buildObjectKey(cfg *config.Config, key string) string {
+	return ResolveCOSObjectKey(cfg, key)
+}
+
+// ResolveCOSObjectKey 把相对键补上当前配置前缀。
+// 历史记录可能已保存完整键，已带同一前缀时不重复拼接。
+func ResolveCOSObjectKey(cfg *config.Config, key string) string {
+	if cfg == nil {
+		return strings.TrimLeft(key, "/")
+	}
 	prefix := component.NormalizePrefix(cfg.COS.Prefix)
 	key = strings.TrimLeft(key, "/")
 	if prefix != "" {
+		cleanPrefix := strings.Trim(prefix, "/")
+		if key == cleanPrefix || strings.HasPrefix(key, cleanPrefix+"/") {
+			return key
+		}
 		return path.Join(prefix, key)
 	}
 	return key

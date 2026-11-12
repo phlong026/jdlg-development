@@ -3,8 +3,10 @@ package route
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"image"
@@ -20,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"service/contentstorage"
 	"service/model"
 	"service/notification"
 	"service/tracking"
@@ -82,6 +85,7 @@ func newProjectNoteHandlerFixture(t *testing.T) (*gin.Engine, *tracking.Service,
 
 func newProjectNoteHandlerFixtureWithProfiles(t *testing.T, profiles projectNoteProfileResolver) (*gin.Engine, *tracking.Service, *tracking.Scope, *int64) {
 	t.Helper()
+	t.Setenv("PROJECT_NOTES_ENABLED", "true")
 	gin.SetMode(gin.TestMode)
 	svc := tracking.New(&governanceTestStore{records: map[string]tracking.Record{}}, tracking.Config{
 		Tenant: "project-notes", Enabled: true, ContentEnabled: true, DefaultOwner: "owner-a", ConsentVersion: "v1",
@@ -100,6 +104,7 @@ func newProjectNoteHandlerFixtureWithProfiles(t *testing.T, profiles projectNote
 		c.Next()
 	})
 	manage := root.Group("", func(c *gin.Context) { c.Set(projectNoteScopeKey, *scope); c.Next() })
+	registerSharedVideoPlaybackRoutes(router.Group("/api/v1"), svc, func(context.Context, int64, sharedVideoKind) error { return nil })
 	registerProjectNoteHandlers(root, manage, svc, projectNoteHandlerDeps{
 		actor:    func(*gin.Context) int64 { return actor },
 		profiles: profiles,
@@ -240,8 +245,9 @@ func TestProjectNoteRoutesSeparateManagerAndInvitedAccount(t *testing.T) {
 	}
 
 	*actor = 102
+	// 方案分享链接本身是访问凭据：任意已登录用户拿到有效链接即可查看固定版本。
 	forwarded := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token, nil)
-	if forwarded.Code != http.StatusForbidden || strings.Contains(forwarded.Body.String(), "固定方案一") {
+	if forwarded.Code != http.StatusOK || !strings.Contains(forwarded.Body.String(), "固定方案一") {
 		t.Fatal(forwarded.Code, forwarded.Body.String())
 	}
 
@@ -410,9 +416,9 @@ func TestProjectNoteSharedMediaUsesOnlyTokenAuthorizedProxy(t *testing.T) {
 		t.Fatal(sharedMediaRec.Code, sharedMediaRec.Body.String(), sharedMediaRec.Header())
 	}
 	*actor = 102
-	denied := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/media/"+mediaID, nil)
-	if denied.Code != http.StatusForbidden || strings.Contains(denied.Body.String(), "private-note-image") {
-		t.Fatal(denied.Code, denied.Body.String())
+	sharedByViewer := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/shared/"+share.Token+"/media/"+mediaID, nil)
+	if sharedByViewer.Code != http.StatusOK || sharedByViewer.Body.Len() == 0 {
+		t.Fatal(sharedByViewer.Code, sharedByViewer.Body.String())
 	}
 	*scope = tracking.Scope{Tenant: "project-notes", Actor: 7, Owners: []string{"owner-a"}, Manage: true}
 	if rec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/shares/"+share.ID+"/revoke", nil); rec.Code != http.StatusOK {
@@ -603,5 +609,72 @@ func TestProjectNoteNotificationEligibilityUsesCurrentPrivateGrant(t *testing.T)
 	}
 	if eligible, err := phase3NoticeEligible(context.Background(), svc, event, *scope); err != nil || eligible {
 		t.Fatalf("revoked eligible=%v err=%v", eligible, err)
+	}
+}
+
+func TestProjectNoteMediaLimitsMatchProductDecision(t *testing.T) {
+	if projectNoteImageMaxBytes != 20<<20 || projectNoteVideoMaxBytes != 500<<20 {
+		t.Fatalf("media limits diverged from P4: image=%d video=%d", projectNoteImageMaxBytes, projectNoteVideoMaxBytes)
+	}
+	if projectNoteUploadBodyMaxBytes <= projectNoteVideoMaxBytes {
+		t.Fatalf("upload body cap must exceed the video cap: body=%d video=%d", projectNoteUploadBodyMaxBytes, projectNoteVideoMaxBytes)
+	}
+}
+
+type fakeMultipartMediaStore struct {
+	putCalls, putFileCalls int
+	lastPath, lastDigest   string
+	lastSize               int64
+}
+
+func (f *fakeMultipartMediaStore) Put(context.Context, string, string, []byte, string) error {
+	f.putCalls++
+	return nil
+}
+func (f *fakeMultipartMediaStore) Get(context.Context, string, string, int64) ([]byte, string, error) {
+	return nil, "", nil
+}
+func (f *fakeMultipartMediaStore) PutFile(_ context.Context, _ string, _ string, filePath string, size int64, _ string, digest string) error {
+	f.putFileCalls++
+	f.lastPath, f.lastSize, f.lastDigest = filePath, size, digest
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return err
+	}
+	if info.Size() != size {
+		return errors.New("size mismatch")
+	}
+	return nil
+}
+
+// D23：>50 MiB 的对象必须走分片 PutFile，参数、摘要与临时文件清理可核验。
+func TestPutContentMediaObjectRoutesLargeObjectsToMultipart(t *testing.T) {
+	small := &fakeMultipartMediaStore{}
+	smallService := &tracking.Service{Config: tracking.Config{Tenant: "tenant-a"}, MediaObjects: small}
+	if err := putContentMediaObject(context.Background(), smallService, "asset-small", []byte("small"), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	if small.putCalls != 1 || small.putFileCalls != 0 {
+		t.Fatalf("small object must use Put: put=%d putFile=%d", small.putCalls, small.putFileCalls)
+	}
+
+	big := &fakeMultipartMediaStore{}
+	bigService := &tracking.Service{Config: tracking.Config{Tenant: "tenant-a"}, MediaObjects: big}
+	data := bytes.Repeat([]byte{'x'}, int(contentstorage.MaxObjectSize)+1)
+	if err := putContentMediaObject(context.Background(), bigService, "asset-big", data, "video/mp4"); err != nil {
+		t.Fatal(err)
+	}
+	if big.putFileCalls != 1 || big.putCalls != 0 {
+		t.Fatalf("large object must use PutFile: put=%d putFile=%d", big.putCalls, big.putFileCalls)
+	}
+	if big.lastSize != int64(len(data)) {
+		t.Fatalf("size = %d, want %d", big.lastSize, len(data))
+	}
+	want := sha256.Sum256(data)
+	if big.lastDigest != hex.EncodeToString(want[:]) {
+		t.Fatalf("digest mismatch: %s", big.lastDigest)
+	}
+	if _, err := os.Stat(big.lastPath); !os.IsNotExist(err) {
+		t.Fatalf("temporary upload file must be removed, stat err = %v", err)
 	}
 }

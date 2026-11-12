@@ -227,6 +227,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				response["avatar"] = sanitizePublicImageURL(profileData.Avatar)
 				response["designer_bio"] = profileData.DesignerBio
 				response["specialty_styles"] = profileData.SpecialtyStyles
+				response["designer_region"] = profileData.DesignerRegion
   				response["designer_experience_years"] = profileData.DesignerExperienceYears
   				response["service_title"] = profileData.ServiceTitle
   				response["service_quote"] = profileData.ServiceQuote
@@ -244,6 +245,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				response["avatar"] = ""
 				response["designer_bio"] = ""
 				response["specialty_styles"] = ""
+				response["designer_region"] = ""
   				response["designer_experience_years"] = 0
   				response["service_title"] = ""
   				response["service_quote"] = 0
@@ -411,6 +413,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				"data": gin.H{
 					"designer_bio":     profileData.DesignerBio,
 					"specialty_styles": profileData.SpecialtyStyles,
+					"designer_region": profileData.DesignerRegion,
 	  				"designer_experience_years": profileData.DesignerExperienceYears,
   				"service_title":    profileData.ServiceTitle,
   				"service_quote":    profileData.ServiceQuote,
@@ -434,6 +437,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			var req struct {
 				DesignerBio     string `json:"designer_bio" binding:"max=1024"`
 				SpecialtyStyles string `json:"specialty_styles" binding:"max=512"`
+				DesignerRegion *string `json:"designer_region" binding:"omitempty,max=128"`
 	  			DesignerExperienceYears int64 `json:"designer_experience_years" binding:"min=0,max=100"`
   			ServiceTitle    string `json:"service_title" binding:"max=128"`
   			ServiceQuote    int64  `json:"service_quote" binding:"min=0"`
@@ -458,7 +462,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
   				return
   			}
 
-  			if err := userProfileModel.UpdateDesignerProfile(codeSession.UserID, req.DesignerBio, req.SpecialtyStyles, req.DesignerExperienceYears, req.ServiceTitle, req.ServiceQuote, req.ServiceIntro, req.ServiceEnabled); err != nil {
+			if err := userProfileModel.UpdateDesignerProfile(codeSession.UserID, req.DesignerBio, req.SpecialtyStyles, req.DesignerExperienceYears, req.ServiceTitle, req.ServiceQuote, req.ServiceIntro, req.ServiceEnabled, req.DesignerRegion); err != nil {
   				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "保存设计师资料失败: " + err.Error(),

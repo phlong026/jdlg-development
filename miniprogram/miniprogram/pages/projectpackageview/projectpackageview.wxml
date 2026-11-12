@@ -1,4 +1,5 @@
 <block wx:if="{{__profileAccessMounted}}">
+<import src="/components/project-note-document/note-document.wxml" />
 <navigation-bar title="项目资料" back="{{true}}" custom-back="{{true}}" bind:back="handleBack" />
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在加载…</view>
@@ -15,29 +16,19 @@
   </block>
 
   <block wx:elif="{{pageView === 'version' && versionView}}">
-    <view class="header"><text class="eyebrow">{{directory.project.name}}</text><text class="title">{{versionView.version.title}}</text><text class="meta">固定版本 V{{versionView.version.revision}}</text></view>
-    <view class="paper">
-      <block wx:if="{{versionView.version.body_format === 'article_v2'}}"><block wx:for="{{articleBlocks}}" wx:key="key">
-        <rich-text wx:if="{{item.kind === 'layout'}}" nodes="{{item.html}}" selectable="{{true}}" />
-        <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
-        <view wx:elif="{{item.kind === 'list'}}"><view wx:for="{{item.items}}" wx:for-item="line" wx:key="*this">{{item.ordered ? index + 1 + '.' : '•'}} {{line}}</view></view>
-        <view wx:else class="media"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" /></view>
-      </block></block>
-      <rich-text wx:elif="{{versionView.version.body_format === 'rich_text'}}" nodes="{{versionView.version.body}}" selectable="{{true}}" />
-      <text wx:else class="plain" selectable="{{true}}">{{versionView.version.body}}</text>
-      <view wx:if="{{versionView.version.body_format !== 'article_v2'}}" wx:for="{{media}}" wx:key="media_id" class="media"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="aspectFit" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{item.kind === 'video'}}" src="{{item.local_path}}" controls object-fit="contain" /></view>
-    </view>
+    <view class="header"><text class="eyebrow">{{directory.project.name}}</text><text class="title">{{versionView.version.title}}</text><view class="version-line"><text class="version-badge">V{{versionView.version.revision}}</text><text class="meta">固定版本</text></view></view>
+    <view class="paper"><template is="note-document" data="{{format: versionView.version.body_format, body: versionView.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: false, handleVideoErrors: true}}" /></view>
     <view class="card action-row"><button class="secondary" bindtap="acknowledgeRead" disabled="{{busy || readAcknowledged}}">{{readAcknowledged ? '已发送回执' : '发送阅读回执'}}</button><button wx:for="{{media}}" wx:key="media_id" wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveImage">保存原图</button></view>
-    <view class="card">
-      <text class="section-title">反馈</text>
-      <view wx:for="{{versionView.feedbacks}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction}}" class="rating">{{item.satisfaction === 'very_satisfied' ? '非常满意' : item.satisfaction === 'needs_adjustment' ? '需要调整' : '不太满意'}}</text><text>{{item.text}}</text></view>
+    <view class="card feedback-card">
+      <text class="section-title">反馈给设计师</text>
+      <view wx:for="{{versionView.feedbacks}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction}}" class="rating">{{item.satisfaction === 'very_satisfied' ? '非常满意' : item.satisfaction === 'needs_adjustment' ? '需要调整' : '不太满意'}}</text><text class="feedback-text">{{item.text}}</text></view>
       <radio-group class="ratings" bindchange="setSatisfaction"><label><radio value="very_satisfied" color="#9f7140" />满意</label><label><radio value="needs_adjustment" color="#9f7140" />需要调整</label><label><radio value="unsatisfied" color="#9f7140" />不满意</label></radio-group>
-      <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" placeholder="写下修改意见" />
-      <button class="secondary" bindtap="submitFeedback" disabled="{{busy || !feedbackText}}">提交反馈</button>
+      <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" cursor-spacing="120" placeholder="请具体说明希望修改的位置或内容" />
+      <button class="primary" bindtap="submitFeedback" disabled="{{busy || !feedbackText}}">提交反馈</button>
     </view>
     <view wx:if="{{versionView.can_confirm || confirmed}}" class="card"><text class="section-title">版本确认</text><button class="primary" bindtap="confirmVersion" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
   </block>
-  <view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="secondary" bindtap="retryMediaDownloads">重新加载视频</button></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -65,7 +65,7 @@ function loadPage({ token = 'account-a', shareContext } = {}) {
   };
 }
 
-test('分享记录入口由服务端权限独立驱动，不阻塞内容列表', async () => {
+test('兼容分享入口保持独立鉴权且不阻塞内容列表，页面使用稳定导航', async () => {
   const request = deferred();
   const harness = loadPage({ shareContext: () => request.promise });
 
@@ -81,7 +81,11 @@ test('分享记录入口由服务端权限独立驱动，不阻塞内容列表',
   assert.equal(harness.page.data.hasShareVisitAccess, true);
 
   const template = fs.readFileSync(path.join(pageRoot, 'contentworkbench.wxml'), 'utf8');
-  assert.match(template, /wx:if="\{\{hasShareVisitAccess\}\}"[^>]*bindtap="openShareVisits"/);
+  assert.doesNotMatch(template, /bindtap="openShareVisits"/);
+  assert.match(template, /bindtap="openCollections"/);
+  assert.match(template, /bindtap="openExistingAssets"/);
+  harness.page.openShareVisits();
+  assert.equal(harness.navigations.at(-1), '/pages/sharevisits/sharevisits?tab=shares');
 });
 
 test('无权限、空归属和权限请求失败时始终隐藏入口', async () => {
@@ -147,7 +151,7 @@ test('点击分享记录时再次核对当前会话和权限', () => {
 
   harness.setToken('account-a');
   harness.page.openShareVisits();
-  assert.deepEqual(harness.navigations, ['/pages/sharevisits/sharevisits']);
+  assert.deepEqual(harness.navigations, ['/pages/sharevisits/sharevisits?tab=shares']);
 });
 
 test('内容搜索不会丢弃同一会话正在返回的分享权限', async () => {
@@ -161,5 +165,5 @@ test('内容搜索不会丢弃同一会话正在返回的分享权限', async ()
   await tick();
   assert.equal(harness.page.data.hasShareVisitAccess, true);
   harness.page.openShareVisits();
-  assert.deepEqual(harness.navigations, ['/pages/sharevisits/sharevisits']);
+  assert.deepEqual(harness.navigations, ['/pages/sharevisits/sharevisits?tab=shares']);
 });

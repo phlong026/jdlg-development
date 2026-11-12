@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-11-03T00:07:57.511Z",
+  "projectList": {
+    "path": "pages/projectnotes/projectnotes",
+    "error": "",
+    "count": 3,
+    "foundTestProject": true
+  },
+  "projectDetail": {
+    "error": "",
+    "view": "detail",
+    "name": "验收测试-工作台修复-1103",
+    "noteRevision": 2,
+    "versionCount": 1
+  },
+  "ai": {
+    "completed": true,
+    "error": "",
+    "result": "本方案为两层乡村住宅设计，整体顺应南向入口组织归家动线，并保留院内既有树木，以延续场地记忆、优化庭院景观与居住体验。",
+    "labels": [
+      "设计说明",
+      "项目介绍",
+      "推广文案"
+    ]
+  },
+  "passed": true
+}

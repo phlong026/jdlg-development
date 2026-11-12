@@ -7,38 +7,22 @@
   },
   "pages": [
     "pages/index/index",
-    "pages/customerservice/customerservice",
     "pages/my/my",
-    "pages/template/template",
     "pages/aitools/aitools",
     "pages/aitooldetail/aitooldetail",
-    "pages/aitoolworkbench/aitoolworkbench",
-    "pages/specadvisor/specadvisor",
-    "pages/buildingcodedocs/buildingcodedocs",
-    "pages/newminnantool/newminnantool",
-    "pages/distribution/distribution",
-    "pages/voicecall/voicecall",
     "pages/login/login",
-    "pages/passwordrecovery/passwordrecovery",
-    "pages/phonebind/phonebind",
-    "pages/privacy/privacy",
-    "pages/aigenerate/aigenerate",
-    "pages/generateprogress/generateprogress",
-    "pages/inspirationdetail/inspirationdetail",
-    "pages/templatepreview/templatepreview",
-    "pages/settings/settings",
-    "pages/aicost/aicost",
-    "pages/aicostresult/aicostresult",
-    "pages/aicostshare/aicostshare",
-    "pages/utilitytools/utilitytools",
-    "pages/utilitytooldetail/utilitytooldetail",
-    "pages/aivideo/aivideo",
-    "pages/real/real"
+    "pages/template/template",
+    "pages/distribution/distribution"
   ],
   "subPackages": [
     {
       "root": "pages/report",
-      "pages": ["landing", "questionnaire", "preview", "delivery"]
+      "pages": [
+        "landing",
+        "questionnaire",
+        "preview",
+        "delivery"
+      ]
     },
     {
       "root": "pages/generatedetails",
@@ -199,55 +183,207 @@
     },
     {
       "root": "pages/contentworkbench",
-      "pages": ["contentworkbench"]
+      "pages": [
+        "contentworkbench"
+      ]
     },
     {
       "root": "pages/contentedit",
-      "pages": ["contentedit"]
+      "pages": [
+        "contentedit"
+      ]
     },
     {
       "root": "pages/contentwriting",
-      "pages": ["contentwriting"]
+      "pages": [
+        "contentwriting"
+      ]
     },
     {
       "root": "pages/sharevisits",
-      "pages": ["sharevisits"]
+      "pages": [
+        "sharevisits"
+      ]
     },
     {
       "root": "pages/visitdetail",
-      "pages": ["visitdetail"]
+      "pages": [
+        "visitdetail"
+      ]
     },
     {
       "root": "pages/projectnotes",
-      "pages": ["projectnotes"]
+      "pages": [
+        "projectnotes"
+      ]
     },
     {
       "root": "pages/projectnoteview",
-      "pages": ["projectnoteview"]
+      "pages": [
+        "projectnoteview"
+      ]
     },
     {
       "root": "pages/projectcollections",
-      "pages": ["projectcollections"]
+      "pages": [
+        "projectcollections"
+      ]
     },
     {
       "root": "pages/collectionreader",
-      "pages": ["collectionreader"]
+      "pages": [
+        "collectionreader"
+      ]
     },
     {
       "root": "pages/projectpackage",
-      "pages": ["projectpackage"]
+      "pages": [
+        "projectpackage"
+      ]
     },
     {
       "root": "pages/projectpackageview",
-      "pages": ["projectpackageview"]
+      "pages": [
+        "projectpackageview"
+      ]
     },
     {
       "root": "pages/projectinvite",
-      "pages": ["projectinvite"]
+      "pages": [
+        "projectinvite"
+      ]
     },
     {
       "root": "pages/nativereferences",
-      "pages": ["nativereferences"]
+      "pages": [
+        "nativereferences"
+      ]
+    },
+    {
+      "root": "pages/aigenerate",
+      "pages": [
+        "aigenerate"
+      ]
+    },
+    {
+      "root": "pages/customerservice",
+      "pages": [
+        "customerservice"
+      ]
+    },
+    {
+      "root": "pages/aivideo",
+      "pages": [
+        "aivideo"
+      ]
+    },
+    {
+      "root": "pages/aitoolworkbench",
+      "pages": [
+        "aitoolworkbench"
+      ]
+    },
+    {
+      "root": "pages/settings",
+      "pages": [
+        "settings"
+      ]
+    },
+    {
+      "root": "pages/newminnantool",
+      "pages": [
+        "newminnantool"
+      ]
+    },
+    {
+      "root": "pages/specadvisor",
+      "pages": [
+        "specadvisor"
+      ]
+    },
+    {
+      "root": "pages/aicost",
+      "pages": [
+        "aicost"
+      ]
+    },
+    {
+      "root": "pages/real",
+      "pages": [
+        "real"
+      ]
+    },
+    {
+      "root": "pages/aicostresult",
+      "pages": [
+        "aicostresult"
+      ]
+    },
+    {
+      "root": "pages/inspirationdetail",
+      "pages": [
+        "inspirationdetail"
+      ]
+    },
+    {
+      "root": "pages/privacy",
+      "pages": [
+        "privacy"
+      ]
+    },
+    {
+      "root": "pages/aicostshare",
+      "pages": [
+        "aicostshare"
+      ]
+    },
+    {
+      "root": "pages/passwordrecovery",
+      "pages": [
+        "passwordrecovery"
+      ]
+    },
+    {
+      "root": "pages/phonebind",
+      "pages": [
+        "phonebind"
+      ]
+    },
+    {
+      "root": "pages/templatepreview",
+      "pages": [
+        "templatepreview"
+      ]
+    },
+    {
+      "root": "pages/buildingcodedocs",
+      "pages": [
+        "buildingcodedocs"
+      ]
+    },
+    {
+      "root": "pages/voicecall",
+      "pages": [
+        "voicecall"
+      ]
+    },
+    {
+      "root": "pages/utilitytools",
+      "pages": [
+        "utilitytools"
+      ]
+    },
+    {
+      "root": "pages/utilitytooldetail",
+      "pages": [
+        "utilitytooldetail"
+      ]
+    },
+    {
+      "root": "pages/generateprogress",
+      "pages": [
+        "generateprogress"
+      ]
     }
   ],
   "tabBar": {
@@ -271,7 +407,7 @@
       },
       {
         "pagePath": "pages/distribution/distribution",
-        "text": "设计师中心",
+        "text": "找设计师",
         "iconPath": "assets/tabbar/未选中态@2x.png",
         "selectedIconPath": "assets/tabbar/设计师导航栏@2x.png"
       },
@@ -342,9 +478,16 @@
       "packages": [
         "pages/generatedetails"
       ]
+    },
+    "pages/projectnotes/projectnotes": {
+      "network": "wifi",
+      "packages": [
+        "pages/contentwriting"
+      ]
     }
   },
   "window": {
+    "backgroundColor": "#fbfaf7",
     "navigationBarTextStyle": "black",
     "navigationStyle": "custom"
   },

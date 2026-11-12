@@ -2,7 +2,7 @@
 'use strict';
 const api = require('../../utils/phase3-api');
 
-const initial = () => ({ loading: true, busy: false, loginRequired: false, error: '', preview: null, applied: false, requestStatus: '' });
+const initial = () => ({ loading: true, busy: false, loginRequired: false, error: '', preview: null, applied: false, requestStatus: '', projectID: '' });
 
 Page({
   data: initial(),
@@ -13,56 +13,81 @@ Page({
   },
   onShow() {
     wx.hideShareMenu();
+    this._visible = true;
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(this._invitationToken || '')) {
+      this.setData({ loading: false, error: '该邀请已失效。' }); return;
+    }
+    // 登录与头像昵称由 login-guard 统一核验（与普通用户一致，用于用户跟踪）。
     const accountToken = String(wx.getStorageSync('token') || '');
+    if (!accountToken) { this.setData({ loading: false, loginRequired: true }); return; }
     if (accountToken !== this._accountToken) {
       this._accountToken = accountToken;
       this._epoch = (this._epoch || 0) + 1;
       this._applyAttempt = null;
       this.setData(initial());
     }
-    this._visible = true;
-    if (!accountToken) { this.setData({ loading: false, loginRequired: true }); return; }
-    if (!/^[A-Za-z0-9_-]{8,128}$/.test(this._invitationToken || '')) {
-      this.setData({ loading: false, error: '该邀请已失效。' }); return;
-    }
     if (!this.data.preview) return this.loadInvitation();
   },
   onHide() {
     this._visible = false;
+    if (this._enterTimer) { clearTimeout(this._enterTimer); this._enterTimer = null; }
     this._epoch = (this._epoch || 0) + 1;
-    // The retry key survives foreground changes, but private project data does not.
+    // 重试键跨前后台保留，私有项目数据不保留。
     this.setData(initial());
   },
-  onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
+  onUnload() { this._visible = false;
+    if (this._enterTimer) { clearTimeout(this._enterTimer); this._enterTimer = null; } this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
   clearProtected() { this._applyAttempt = null; this.setData(initial()); },
   async loadInvitation() {
     const epoch = this._epoch = (this._epoch || 0) + 1;
-    this.setData({ loading: true, loginRequired: false, error: '', preview: null, applied: false, requestStatus: '' });
+    this.setData({ loading: true, error: '', preview: null, applied: false, requestStatus: '', projectID: '' });
     try {
       const preview = await api.getProjectInvitation(this._invitationToken);
       if (!this.current(epoch)) return;
       const requestStatus = preview.request_status === 'pending' || preview.request_status === 'approved' ? preview.request_status : '';
-      this.setData({ loading: false, preview, requestStatus, applied: !!requestStatus });
+      this.setData({ loading: false, preview, requestStatus, applied: !!requestStatus, projectID: String(preview.project_id || '') });
+      // 邀请即成员：拿到有效邀请后自动确认，无需再点一次或等待设计师审批。
+      if (!requestStatus && typeof api.applyProjectInvitation === 'function') void this.applyInvitation();
     } catch (error) {
       if (!this.current(epoch)) return;
-      this.setData({ loading: false, loginRequired: Number(error.statusCode) === 401, error: Number(error.statusCode) === 401 ? '' : '该邀请已失效。' });
+      if (Number(error.statusCode) === 401) {
+        wx.removeStorageSync('token'); this._accountToken = '';
+        this.setData({ loading: false, loginRequired: true, error: '' });
+        return;
+      }
+      this.setData({ loading: false, error: '该邀请已失效。' });
     }
   },
   async applyInvitation() {
-    if (this.data.busy || this.data.applied || !this.data.preview) return;
-    const epoch = this._epoch;
+    if (this.data.busy) return;
     if (!this._applyAttempt) this._applyAttempt = { key: api.mutationKey('project-join-request') };
     const attempt = this._applyAttempt;
     this.setData({ busy: true, error: '' });
     try {
-      await api.applyProjectInvitation(this._invitationToken, attempt.key);
-      if (!this.current(epoch)) return;
+      const result = await api.applyProjectInvitation(this._invitationToken, attempt.key);
       if (this._applyAttempt === attempt) this._applyAttempt = null;
-      this.setData({ busy: false, applied: true, requestStatus: 'pending' });
+      if (!this._visible) return;
+      const projectID = String(result && result.project_id || this.data.projectID || '');
+      const approved = !(result && result.status === 'pending');
+      this.setData({ loading: false, busy: false, applied: true, requestStatus: approved ? 'approved' : 'pending', projectID });
+      // 加入即进入项目，少一次点击；停留 0.9 秒让用户看到「已加入项目」。
+      if (approved && projectID) {
+        if (this._enterTimer) clearTimeout(this._enterTimer);
+        this._enterTimer = setTimeout(() => {
+          this._enterTimer = null;
+          if (this._visible) wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(projectID) });
+        }, 900);
+      }
     } catch (error) {
-      if (this.current(epoch)) this.setData({ busy: false, error: error.message || '申请提交失败，请重试。' });
+      if (!this._visible) return;
+      this.setData({ busy: false, error: error.message || '加入失败，请重试。' });
     }
+  },
+  enterProject() {
+    const projectID = String(this.data.projectID || '');
+    if (!projectID) { void this.loadInvitation(); return; }
+    wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(projectID) });
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   handleBack() { wx.navigateBack(); },

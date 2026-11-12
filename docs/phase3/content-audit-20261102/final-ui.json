@@ -1,0 +1,52 @@
+[
+  {
+    "page": "pages/projectnotes/projectnotes",
+    "error": "私人项目笔记暂未开通",
+    "projectLoadFailed": true,
+    "buttons": [
+      "重新加载"
+    ]
+  },
+  {
+    "page": "pages/nativereferences/nativereferences",
+    "error": "",
+    "buttons": [
+      "已选用",
+      "可用内容",
+      "生成记录"
+    ]
+  },
+  {
+    "page": "pages/sharevisits/sharevisits",
+    "error": "",
+    "buttonCount": 21
+  },
+  {
+    "page": "pages/visitdetail/visitdetail",
+    "error": ""
+  },
+  {
+    "content": {
+      "status": "revoked",
+      "revision": 5
+    },
+    "collection": {
+      "status": "revoked",
+      "revision": 3
+    },
+    "prompts": [
+      {
+        "key": "design",
+        "label": "è®¾è®¡è¯´æ˜Ž"
+      },
+      {
+        "key": "project",
+        "label": "é¡¹ç›®ä»‹ç»"
+      },
+      {
+        "key": "promotion",
+        "label": "æŽ¨å¹¿æ–‡æ¡ˆ"
+      }
+    ]
+  }
+]

@@ -43,7 +43,7 @@ func TestMiniprogramProfileGateEnabledByDefault(t *testing.T) {
 		t.Fatalf("默认必须挂载资料门禁中间件，实际 %d 个", len(middlewares))
 	}
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/templates/9", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/project-notes/projects", nil)
 	gateSwitchRouter(t).ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("默认开关下匿名业务请求应被拒绝，实际 %d body=%s", response.Code, response.Body.String())
@@ -58,7 +58,7 @@ func TestMiniprogramProfileGateSwitchOffSkipsGate(t *testing.T) {
 			t.Fatalf("MINIPROGRAM_PROFILE_GATE=%s 应返回空中间件列表，实际 %d 个", value, len(middlewares))
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/templates/9", nil)
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/miniprogram/project-notes/projects", nil)
 		gateSwitchRouter(t).ServeHTTP(response, request)
 		if response.Code != http.StatusOK {
 			t.Fatalf("MINIPROGRAM_PROFILE_GATE=%s 时匿名业务请求应放行，实际 %d body=%s", value, response.Code, response.Body.String())

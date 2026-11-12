@@ -6,12 +6,13 @@ require('./utils/profile-access').install();
 require('./utils/tracking/index').install();
 // app.ts
 const promptReview_1 = require("./utils/promptReview");
+const homeAssets_1 = require("./utils/homeAssets");
 const TABBAR_IMAGE_PATHS = [
-    '/assets/tabbar/未选中态@2x.png',
-    '/assets/tabbar/首页导航栏@2x.png',
-    '/assets/tabbar/模板广场导航栏@2x.png',
-    '/assets/tabbar/设计师导航栏@2x.png',
-    '/assets/tabbar/我的导航栏@2x.png'
+    homeAssets_1.HOME_ASSETS.defaultTabbar,
+    homeAssets_1.HOME_ASSETS.homeTabbar,
+    homeAssets_1.HOME_ASSETS.templateTabbar,
+    homeAssets_1.HOME_ASSETS.designerTabbar,
+    homeAssets_1.HOME_ASSETS.myTabbar,
 ];
 // 服务端邀请码固定 6 位字母数字。options.scene 是微信启动场景值（1007/1047 等），不是邀请码，
 // 小程序码携带的参数在 options.query.scene 里。格式不符一律忽略，避免把无关数字绑成邀请人。

@@ -1,0 +1,51 @@
+<template name="note-gallery">
+  <view class="note-gallery">
+    <swiper class="note-gallery-swiper" style="height:{{gallery.frameHeight}}px" current="{{positions[gallery.key] || 0}}" data-key="{{gallery.key}}" bindchange="onNoteGalleryChange" circular="{{false}}" autoplay="{{false}}">
+      <swiper-item wx:for="{{gallery.items}}" wx:for-item="galleryItem" wx:key="galleryItemKey">
+        <view class="note-gallery-slide">
+          <image class="note-gallery-image" src="{{galleryItem.local_path}}" mode="aspectFit" lazy-load data-id="{{galleryItem.media_id}}" bindtap="openImage" />
+        </view>
+      </swiper-item>
+    </swiper>
+    <view class="note-gallery-meta">
+      <block wx:for="{{gallery.items}}" wx:for-item="galleryItem" wx:for-index="galleryIndex" wx:key="galleryItemKey">
+        <text wx:if="{{galleryIndex === (positions[gallery.key] || 0) && galleryItem.caption}}" class="note-gallery-caption" selectable="{{true}}">{{galleryItem.caption}}</text>
+      </block>
+      <text class="note-gallery-count">{{(positions[gallery.key] || 0) + 1}} / {{gallery.items.length}}</text>
+    </view>
+  </view>
+</template>
+
+<template name="note-document">
+  <view class="note-document">
+    <block wx:if="{{format === 'article_v2'}}">
+      <block wx:for="{{blocks}}" wx:key="key">
+        <rich-text wx:if="{{item.kind === 'layout'}}" class="note-layout" nodes="{{item.html}}" selectable="{{true}}" />
+        <view wx:elif="{{item.kind === 'paragraph' || item.kind === 'heading' || item.kind === 'quote'}}" class="{{item.className}}" style="{{item.style}}" selectable="{{true}}">{{item.text}}</view>
+        <view wx:elif="{{item.kind === 'list'}}" class="{{item.className}}" style="{{item.style}}">
+          <view wx:for="{{item.items}}" wx:for-item="listItem" wx:for-index="listIndex" wx:key="listIndex" class="note-list-item"><text class="note-list-marker">{{item.ordered ? (listIndex + 1) + '.' : '•'}}</text><text selectable="{{true}}">{{listItem}}</text></view>
+        </view>
+        <template wx:elif="{{item.kind === 'gallery'}}" is="note-gallery" data="{{gallery: item, positions: galleryPositions}}" />
+        <view wx:elif="{{item.kind === 'image' || item.kind === 'video'}}" class="note-media">
+          <block wx:if="{{item.local_path}}"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="widthFix" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{handleVideoErrors}}" src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" data-src="{{item.local_path}}" bindloadedmetadata="onNoteVideoMetadata" binderror="onSharedNoteVideoError" /><video wx:else src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" bindloadedmetadata="onNoteVideoMetadata" /></block>
+          <button wx:elif="{{handleVideoErrors && item.kind === 'video'}}" class="note-media-missing" bindtap="retryMediaDownloads">视频播放失败，重新加载</button>
+          <view wx:else class="note-media-missing">素材加载失败，可重试</view>
+          <text wx:if="{{item.caption}}" class="note-caption" selectable="{{true}}">{{item.caption}}</text>
+        </view>
+      </block>
+    </block>
+    <rich-text wx:elif="{{format === 'rich_text'}}" class="note-rich" nodes="{{body}}" selectable="{{true}}" />
+    <text wx:else class="note-plain" selectable="{{true}}">{{body}}</text>
+
+    <block wx:for="{{format === 'article_v2' ? media : (groups || media)}}" wx:key="key">
+      <template wx:if="{{format !== 'article_v2' && item.kind === 'gallery'}}" is="note-gallery" data="{{gallery: item, positions: galleryPositions}}" />
+      <view wx:elif="{{format !== 'article_v2' && (item.kind === 'image' || item.kind === 'video')}}" class="note-media">
+        <block wx:if="{{item.local_path}}"><image wx:if="{{item.kind === 'image'}}" src="{{item.local_path}}" mode="widthFix" data-id="{{item.media_id}}" bindtap="openImage" /><video wx:elif="{{handleVideoErrors}}" src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" data-src="{{item.local_path}}" bindloadedmetadata="onNoteVideoMetadata" binderror="onSharedNoteVideoError" /><video wx:else src="{{item.local_path}}" controls object-fit="contain" style="width:{{item.frameWidth}}px;height:{{item.frameHeight}}px;margin:0 auto" data-id="{{item.media_id}}" bindloadedmetadata="onNoteVideoMetadata" /></block>
+        <button wx:elif="{{handleVideoErrors && item.kind === 'video'}}" class="note-media-missing" bindtap="retryMediaDownloads">视频播放失败，重新加载</button>
+        <view wx:else class="note-media-missing">素材加载失败，可重试</view>
+      </view>
+      <button wx:elif="{{item.kind !== 'image' && item.kind !== 'video' && allowAttachments}}" class="note-attachment" data-id="{{item.media_id}}" bindtap="openAttachment">打开{{item.title || '附件'}}</button>
+      <view wx:elif="{{item.kind !== 'image' && item.kind !== 'video'}}" class="note-attachment note-attachment-unavailable">{{item.title || '此素材'}}暂不支持预览</view>
+    </block>
+  </view>
+</template>

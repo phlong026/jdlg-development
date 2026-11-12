@@ -1,0 +1,39 @@
+{
+  "source_commit": "7cfd34a7f49668e7f6f8cec0e5f517c34400bb5e",
+  "mini_source_tree": "cbf343cacffaa0a16449e92c4acfa961c2f472f4",
+  "backend_service_tree": "3c22719aec7e46556563ad196c553587402a9bf6",
+  "miniprogram": {
+    "passed": 1089,
+    "failed": 0,
+    "skipped": 0,
+    "native_wxml_compiler": true,
+    "typecheck_passed": true,
+    "auth_tracking_generation_checks_passed": true,
+    "tracking_routes_passed": true
+  },
+  "go": {
+    "full_suite_passed": true,
+    "vet_passed": true
+  },
+  "release_tools": {
+    "passed": 58
+  },
+  "security": {
+    "npm_production_audit_vulnerabilities": 0,
+    "new_dependencies": false,
+    "changed_files_credential_pattern_findings": 0,
+    "production_auth_source_staged": false
+  },
+  "native_live": {
+    "all_17_checks_passed": true,
+    "real_backend_and_native_longpress": true,
+    "dialogs_controlled": true,
+    "mocks_restored": true,
+    "physical_device_uat": false
+  },
+  "upload": {
+    "version": "7.4.3",
+    "exit_code": 0,
+    "receipt_contains_upload_success": true
+  }
+}

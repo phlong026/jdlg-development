@@ -327,6 +327,24 @@
   line-height: 48rpx;
 }
 
+.designer-field-with-unit {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.designer-field-with-unit .designer-input {
+  flex: 1;
+  padding-right: 88rpx;
+}
+
+.designer-field-unit {
+  position: absolute;
+  right: 24rpx;
+  color: #8c7553;
+  font-size: 24rpx;
+}
+
 .designer-textarea {
   height: 220rpx;
   min-height: 200rpx;
@@ -337,6 +355,45 @@
 .designer-textarea-short {
   height: 152rpx;
   min-height: 132rpx;
+}
+
+.designer-region-picker {
+  min-height: 88rpx;
+  padding: 0 24rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1rpx solid rgba(183, 144, 102, 0.28);
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  box-sizing: border-box;
+}
+
+.designer-region-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: rgba(140, 117, 83, 0.64);
+  overflow-wrap: anywhere;
+}
+
+.designer-region-picker.selected .designer-region-value {
+  color: #5e4735;
+}
+
+.designer-region-arrow {
+  flex-shrink: 0;
+  font-size: 40rpx;
+  color: #9b8369;
+}
+
+.designer-region-tip {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #8c7553;
 }
 
 .designer-switch-row {

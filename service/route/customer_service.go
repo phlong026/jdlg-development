@@ -47,6 +47,13 @@ func parseCustomerLeadNextFollowupAt(value string) (*time.Time, error) {
 
 type leadPhoneLookup func(userID int64) []string
 type publishedContentValidator func(ctx context.Context, id string, version int) error
+type businessContactConsentStore interface {
+	BusinessContactConsent(userID int64) (bool, error)
+	SetBusinessContactConsent(userID int64, accepted bool, source string) error
+}
+type businessContactLeadStore interface {
+	CreateLeadWithBusinessContact(input *model.CustomerLeadCreateInput) (leadID int64, usedBoundPhone bool, err error)
+}
 
 var errInvalidConsultationContent = errors.New("咨询内容已不可访问")
 
@@ -98,18 +105,8 @@ func validConsultationContentID(value string) bool {
 
 func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *model.CustomerServiceModel, trackingServices ...*tracking.Service) {
 	var store customerLeadStore
-	var phoneLookup leadPhoneLookup
 	if customerServiceModel != nil && customerServiceModel.DB != nil {
 		store = customerServiceModel
-		identities := model.NewUserIdentityModel(customerServiceModel.DB)
-		phoneLookup = func(userID int64) []string {
-			phones, err := identities.GetUserPhones(userID)
-			if err != nil {
-				log.Printf("[CustomerService] lead phone autofill failed user=%d: %v", userID, err)
-				return nil
-			}
-			return phones
-		}
 	}
 	var confirmed consultationConfirmed
 	var validateContent publishedContentValidator
@@ -120,15 +117,68 @@ func RegisterCustomerServiceRoutes(r *gin.RouterGroup, customerServiceModel *mod
 			return err
 		}
 	}
-	registerCustomerLeadRoutes(r, store, confirmed, phoneLookup, validateContent)
+	registerCustomerLeadRoutes(r, store, confirmed, nil, validateContent)
 }
 
 func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel customerLeadStore, confirmed consultationConfirmed, phoneLookup leadPhoneLookup, contentValidators ...publishedContentValidator) {
+	contactConsent, _ := customerServiceModel.(businessContactConsentStore)
+	contactLeadStore, _ := customerServiceModel.(businessContactLeadStore)
+	_ = phoneLookup // kept only for source-compatible route fixtures; never used for account-phone access.
 	var validateContent publishedContentValidator
 	if len(contentValidators) > 0 {
 		validateContent = contentValidators[0]
 	}
 	group := r.Group("/customer-service")
+
+	group.GET("/contact-consent", func(c *gin.Context) {
+		codeSession := GetTokenCodeSession(c)
+		if codeSession == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未通过token验证"})
+			return
+		}
+		if contactConsent == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"code": 503, "msg": "业务联系授权服务不可用"})
+			return
+		}
+		accepted, err := contactConsent.BusinessContactConsent(codeSession.UserID)
+		if err != nil {
+			log.Printf("[CustomerService] read business contact consent failed user=%d: %v", codeSession.UserID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取业务联系授权失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"accepted": accepted, "purpose": model.BusinessContactConsentPurpose, "version": model.BusinessContactConsentVersion}})
+	})
+
+	group.PUT("/contact-consent", func(c *gin.Context) {
+		codeSession := GetTokenCodeSession(c)
+		if codeSession == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未通过token验证"})
+			return
+		}
+		if contactConsent == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"code": 503, "msg": "业务联系授权服务不可用"})
+			return
+		}
+		var req struct {
+			Accepted *bool  `json:"accepted" binding:"required"`
+			Purpose  string `json:"purpose"`
+			Version  string `json:"version"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || req.Accepted == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "请明确选择是否允许使用账号手机号进行业务联系"})
+			return
+		}
+		if strings.TrimSpace(req.Purpose) != model.BusinessContactConsentPurpose || strings.TrimSpace(req.Version) != model.BusinessContactConsentVersion {
+			c.JSON(http.StatusConflict, gin.H{"code": 409, "msg": "联系授权说明已更新，请刷新页面后重新选择"})
+			return
+		}
+		if err := contactConsent.SetBusinessContactConsent(codeSession.UserID, *req.Accepted, "customer_service_settings"); err != nil {
+			log.Printf("[CustomerService] write business contact consent failed user=%d: %v", codeSession.UserID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "保存业务联系授权失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": gin.H{"accepted": *req.Accepted, "version": model.BusinessContactConsentVersion}})
+	})
 
 	group.POST("/events", func(c *gin.Context) {
 		if customerServiceModel == nil {
@@ -154,9 +204,13 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": FormatValidationError("参数错误: " + err.Error())})
 			return
 		}
-		// 这两类事件只由下方留资接口在线索落库后写入，是"提交线索"统计和列表排序的依据，
-		// 客户端自报会让任意线索被顶到最前。
-		if eventType := strings.TrimSpace(req.EventType); eventType == "lead_submit" || eventType == "consultation_request_submitted" {
+		// 这些事件只由对应的服务端接口写入。客户端自报不仅会污染线索排序，
+		// 还可以绕过用户必须亲自选择的业务联系授权。
+		eventType := strings.TrimSpace(req.EventType)
+		if eventType == "lead_submit" ||
+			eventType == "consultation_request_submitted" ||
+			eventType == model.BusinessContactConsentGranted ||
+			eventType == model.BusinessContactConsentWithdrawn {
 			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "该事件类型只能由服务端记录"})
 			return
 		}
@@ -220,20 +274,11 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
 				return
 			}
-			// Auto-fill the phone from the account's verified identity: leads
-			// used to land with no contact channel at all although the logged-in
-			// account owns a bound phone, leaving sales nothing to dial.
-			// updateExistingLead's IF(?='',…) keeps customer-entered numbers
-			// authoritative on repeat submits.
-			if strings.TrimSpace(req.Phone) == "" && codeSession.UserID > 0 && phoneLookup != nil {
-				if phones := phoneLookup(codeSession.UserID); len(phones) > 0 {
-					req.Phone = phones[0]
-				}
-			}
-			id, err := customerServiceModel.CreateLead(&model.CustomerLeadCreateInput{
+			leadInput := &model.CustomerLeadCreateInput{
 				UserID:                  codeSession.UserID,
 				Name:                    req.Name,
 				Phone:                   req.Phone,
+				PhoneSource:             model.CustomerLeadPhoneSourceUserProvided,
 				Wechat:                  req.Wechat,
 				EnterpriseWechatContact: req.EnterpriseWechatContact,
 				DemandSummary:           req.DemandSummary,
@@ -248,7 +293,14 @@ func registerCustomerLeadRoutes(r *gin.RouterGroup, customerServiceModel custome
 				IntentLevel:             req.IntentLevel,
 				Status:                  req.Status,
 				Remark:                  req.Remark,
-			})
+			}
+			var id int64
+			var err error
+			if strings.TrimSpace(req.Phone) == "" && contactLeadStore != nil {
+				id, _, err = contactLeadStore.CreateLeadWithBusinessContact(leadInput)
+			} else {
+				id, err = customerServiceModel.CreateLead(leadInput)
+			}
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "创建客服线索失败: " + err.Error()})
 				return

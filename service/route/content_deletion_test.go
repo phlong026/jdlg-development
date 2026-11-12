@@ -40,3 +40,20 @@ func TestWorkbenchDraftDeletionUsesRevisionAndHidesSoftDeletedContent(t *testing
 		t.Fatal(reopened.Code, reopened.Body.String())
 	}
 }
+
+func TestWorkbenchCreatedContentDeleteRouteKeepsLegacyDraftRoute(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	r, _ := newWorkbenchHandlerFixture(t, &scope)
+	created := workbenchRequest(t, r, http.MethodPost, "/workbench/contents", tracking.Draft{Title: "待删除", Body: "draft", Rights: "own", Owner: "owner-a"})
+	var saved struct {
+		Data tracking.Content `json:"data"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	deleted := workbenchRequest(t, r, http.MethodPost, "/workbench/contents/"+saved.Data.ID+"/delete", map[string]any{"expected_revision": saved.Data.Revision})
+	if deleted.Code != http.StatusOK {
+		t.Fatal(deleted.Code, deleted.Body.String())
+	}
+}

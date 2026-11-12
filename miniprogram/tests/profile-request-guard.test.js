@@ -8,9 +8,9 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../miniprogram/utils/profile-request-guard.js'), 'utf8');
 
 function harness({ token = 'account-token', route = 'pages/index/index', inlineGate = true, gateCheck } = {}) {
-  const calls = [], navigations = [], removed = [], blocked = [], toasts = [], guardChecks = [];
+  const calls = [], navigations = [], removed = [], blocked = [], toasts = [], guardChecks = [], guardOptions = [];
   const storage = { token, device_fingerprint: 'login-device', userInfo: { id: 9 } };
-  const gate = { check() { guardChecks.push(route); return gateCheck ? gateCheck() : Promise.resolve(false); } };
+  const gate = { check(options) { guardChecks.push(route); guardOptions.push(options); return gateCheck ? gateCheck() : Promise.resolve(false); } };
   const page = { route, onProfileAccessBlocked() { blocked.push(route); }, selectComponent: () => inlineGate ? gate : null };
   const wx = {
     request(options) { calls.push(options); return { abort() {} }; },
@@ -30,7 +30,7 @@ function harness({ token = 'account-token', route = 'pages/index/index', inlineG
       };
     },
   });
-  return { guard: module.exports, wx, calls, navigations, removed, blocked, toasts, guardChecks, storage, page };
+  return { guard: module.exports, wx, calls, navigations, removed, blocked, toasts, guardChecks, guardOptions, storage, page };
 }
 
 test('same-origin miniprogram business requests receive the current signed session', () => {
@@ -115,30 +115,119 @@ test('bootstrap and external requests never receive the account token', () => {
   assert.ok(h.calls.every(call => !call.header.token), 'no bootstrap or external request leaks the token');
 });
 
-test('428 keeps the valid token, locks content and opens profile completion only once', () => {
+test('428 keeps the valid token, locks protected content and opens profile completion only once', () => {
   const delivered = [];
-  const h = harness(); h.guard.install();
+  const h = harness({ route: 'pages/project/project' }); h.guard.install();
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/content', success: value => delivered.push(value) });
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/content/2' });
   const response = { statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称', data: { profile_required: true, missing_fields: ['avatar'] } } };
   h.calls[0].success(response); h.calls[1].success(response);
   assert.equal(h.storage.token, 'account-token');
   assert.deepEqual(h.removed, []);
-  assert.deepEqual(h.blocked, ['pages/index/index', 'pages/index/index']);
+  assert.deepEqual(h.blocked, ['pages/project/project', 'pages/project/project']);
   assert.equal(h.navigations.length, 0);
-  assert.deepEqual(h.guardChecks, ['pages/index/index']);
+  assert.deepEqual(h.guardChecks, ['pages/project/project']);
   assert.deepEqual(delivered, [response]);
 });
 
-test('401 clears the expired session and reopens the inline login card', () => {
-  const h = harness(); h.guard.install();
+test('an explicit soft full-profile action owns 428 while 401 still uses the account gate', () => {
+  const delivered = [];
+  const h = harness({ route: 'pages/aicostresult/aicostresult' }); h.guard.install();
+  wxCall(h, {
+    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/ai/cost/shares',
+    method: 'POST',
+    __profileAccessResponseMode: 'soft-full-profile',
+    success: response => delivered.push(response),
+  });
+  const response = { statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } };
+  h.calls[0].success(response);
+  assert.deepEqual(h.blocked, []);
+  assert.deepEqual(h.guardChecks, []);
+  assert.deepEqual(delivered, [response]);
+  assert.equal(h.calls[0].__profileAccessResponseMode, undefined);
+});
+
+test('a default 428 on an account-only page requests full profile completion', () => {
+  const h = harness({ route: 'pages/generatedetails/generatedetails' }); h.guard.install();
+  wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/ai/publish', method: 'POST' });
+  h.calls[0].success({ statusCode: 428, data: { code: 428 } });
+  assert.equal(h.guardChecks.length, 1);
+  assert.equal(h.guardOptions[0], undefined);
+});
+
+test('401 clears the expired session and reopens the inline login card on protected pages', () => {
+  const h = harness({ route: 'pages/project/project' }); h.guard.install();
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
   h.calls[0].success({ statusCode: 401, data: { code: 401 } });
   assert.equal(h.storage.token, undefined);
   assert.deepEqual(h.removed, ['token', 'userInfo']);
-  assert.deepEqual(h.blocked, ['pages/index/index']);
+  assert.deepEqual(h.blocked, ['pages/project/project']);
   assert.equal(h.navigations.length, 0);
-  assert.deepEqual(h.guardChecks, ['pages/index/index']);
+  assert.deepEqual(h.guardChecks, ['pages/project/project']);
+});
+
+test('public browse pages discard an expired cached account without opening a profile gate', () => {
+  for (const route of ['pages/index/index', 'pages/template/template', 'pages/distribution/distribution', 'pages/templatesquaredetails/templatesquaredetails', 'pages/contentreader/contentreader', 'pages/collectionreader/collectionreader', 'pages/designerhome/designerhome', 'pages/inspirationdetail/inspirationdetail']) {
+    const delivered = [];
+    const h = harness({ route, token: 'expired-account' }); h.guard.install();
+    wxCall(h, {
+      url: 'https://api.jiadilingguang.com/api/v1/miniprogram/templates/featured',
+      success: response => delivered.push(response),
+    });
+    const response = { statusCode: 401, data: { code: 401, msg: '登录已过期' } };
+    h.calls[0].success(response);
+    assert.equal(h.storage.token, undefined, route);
+    assert.deepEqual(h.removed, ['token', 'userInfo'], route);
+    assert.deepEqual(h.blocked, [], route);
+    assert.deepEqual(h.navigations, [], route);
+    assert.deepEqual(h.guardChecks, [], route);
+    assert.deepEqual(delivered, [response], route);
+  }
+});
+
+test('public browse pages keep a valid incomplete account on 428 without forcing profile completion', () => {
+  const h = harness({ route: 'pages/templatesquaredetails/templatesquaredetails', token: 'incomplete-account' }); h.guard.install();
+  wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/templates' });
+  h.calls[0].success({ statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } });
+  assert.equal(h.storage.token, 'incomplete-account');
+  assert.deepEqual(h.removed, []);
+  assert.deepEqual(h.blocked, []);
+  assert.deepEqual(h.navigations, []);
+  assert.deepEqual(h.guardChecks, []);
+});
+
+test('public designer and inspiration details keep incomplete accounts out of the profile gate', () => {
+  for (const route of ['pages/designerhome/designerhome', 'pages/inspirationdetail/inspirationdetail']) {
+    const h = harness({ route, token: 'incomplete-account' }); h.guard.install();
+    wxCall(h, { url: route.includes('designerhome')
+      ? 'https://api.jiadilingguang.com/api/v1/miniprogram/designers/9/homepage'
+      : 'https://api.jiadilingguang.com/api/v1/miniprogram/inspirations/9' });
+    h.calls[0].success({ statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } });
+    assert.equal(h.storage.token, 'incomplete-account', route);
+    assert.deepEqual(h.blocked, [], route);
+    assert.deepEqual(h.navigations, [], route);
+    assert.deepEqual(h.guardChecks, [], route);
+  }
+});
+
+test('the first anonymous tracking entry failure on a public page stays anonymous and never opens login', () => {
+  const delivered = [];
+  const h = harness({ route: 'pages/index/index', token: '' });
+  delete h.storage.userInfo;
+  h.guard.install();
+  wxCall(h, {
+    url: 'https://api.jiadilingguang.com/api/v1/miniprogram/tracking/entry',
+    method: 'POST',
+    data: { route: 'pages/index/index' },
+    success: response => delivered.push(response),
+  });
+  const response = { statusCode: 401, data: { code: 401, msg: '匿名入口建立失败' } };
+  h.calls[0].success(response);
+  assert.deepEqual(h.removed, []);
+  assert.deepEqual(h.blocked, []);
+  assert.deepEqual(h.navigations, []);
+  assert.deepEqual(h.guardChecks, []);
+  assert.deepEqual(delivered, [response]);
 });
 
 test('an expired tracking credential 401 never tears down the account session', () => {
@@ -162,7 +251,7 @@ test('an expired tracking credential 401 never tears down the account session', 
 
 test('a cleared session starts a new inline check and owns the busy marker', async () => {
   const pending = [];
-  const h = harness({ gateCheck: () => new Promise(resolve => pending.push(resolve)) });
+  const h = harness({ route: 'pages/project/project', gateCheck: () => new Promise(resolve => pending.push(resolve)) });
   h.guard.install();
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/workbench/context' });
@@ -182,7 +271,7 @@ test('a cleared session starts a new inline check and owns the busy marker', asy
 });
 
 test('a page without an inline gate still opens the standalone login page', () => {
-  const h = harness({ inlineGate: false }); h.guard.install();
+  const h = harness({ route: 'pages/project/project', inlineGate: false }); h.guard.install();
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });
   h.calls[0].success({ statusCode: 428, data: { code: 428 } });
   assert.equal(h.navigations.length, 1);
@@ -190,7 +279,7 @@ test('a page without an inline gate still opens the standalone login page', () =
 });
 
 test('ordinary profile readers still receive global session recovery', () => {
-  const h = harness(); h.guard.install();
+  const h = harness({ route: 'pages/project/project' }); h.guard.install();
   wxCall(h, {
     url: 'https://api.jiadilingguang.com/api/v1/miniprogram/profile',
     method: 'GET',
@@ -198,8 +287,8 @@ test('ordinary profile readers still receive global session recovery', () => {
   h.calls[0].success({ statusCode: 401, data: { code: 401 } });
   assert.equal(h.storage.token, undefined);
   assert.deepEqual(h.removed, ['token', 'userInfo']);
-  assert.deepEqual(h.blocked, ['pages/index/index']);
-  assert.deepEqual(h.guardChecks, ['pages/index/index']);
+  assert.deepEqual(h.blocked, ['pages/project/project']);
+  assert.deepEqual(h.guardChecks, ['pages/project/project']);
 });
 
 test('an explicitly owned GET profile response belongs to the calling login card', () => {
@@ -226,11 +315,11 @@ test('ownership marker cannot bypass the global gate outside an exact GET profil
     { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects', method: 'GET' },
     { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/profile', method: 'POST' },
   ]) {
-    const h = harness(); h.guard.install();
+    const h = harness({ route: 'pages/project/project' }); h.guard.install();
     wxCall(h, { ...request, __profileAccessResponseHandled: true });
     h.calls[0].success({ statusCode: 401, data: { code: 401 } });
     assert.equal(h.storage.token, undefined);
-    assert.deepEqual(h.guardChecks, ['pages/index/index']);
+    assert.deepEqual(h.guardChecks, ['pages/project/project']);
     assert.equal(h.calls[0].__profileAccessResponseHandled, undefined);
   }
 });

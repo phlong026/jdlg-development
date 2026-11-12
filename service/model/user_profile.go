@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 var allowedUserIdentityTypes = map[string]bool{
@@ -30,6 +32,7 @@ type UserProfile struct {
 	Avatar                     string     `json:"avatar" db:"avatar"`
 	DesignerBio                string     `json:"designer_bio" db:"designer_bio"`
 	SpecialtyStyles            string     `json:"specialty_styles" db:"specialty_styles"`
+	DesignerRegion             string     `json:"designer_region" db:"designer_region"`
 	DesignerExperienceYears    int64      `json:"designer_experience_years" db:"designer_experience_years"`
 	ServiceTitle               string     `json:"service_title" db:"service_title"`
 	ServiceQuote               int64      `json:"service_quote" db:"service_quote"`
@@ -59,14 +62,14 @@ func NewUserProfileModel(db *sql.DB) *UserProfileModel {
 	return &UserProfileModel{DB: db}
 }
 
-const userProfileSelectColumns = `id, user_id, COALESCE(nickname, '') AS nickname, COALESCE(avatar, '') AS avatar, COALESCE(designer_bio, '') AS designer_bio, COALESCE(specialty_styles, '') AS specialty_styles, designer_experience_years, COALESCE(service_title, '') AS service_title, service_quote, COALESCE(service_intro, '') AS service_intro, service_enabled, designer_visible, enterprise_wechat_verified, enterprise_wechat_verified_at, COALESCE(enterprise_wechat_contact, '') AS enterprise_wechat_contact, COALESCE(device_id, '') AS device_id, device_bind_time, last_device_change_time, has_password, COALESCE(phone, '') AS phone, COALESCE(identity_type, '') AS identity_type, created_at, updated_at`
+const userProfileSelectColumns = `id, user_id, COALESCE(nickname, '') AS nickname, COALESCE(avatar, '') AS avatar, COALESCE(designer_bio, '') AS designer_bio, COALESCE(specialty_styles, '') AS specialty_styles, COALESCE(designer_region, '') AS designer_region, designer_experience_years, COALESCE(service_title, '') AS service_title, service_quote, COALESCE(service_intro, '') AS service_intro, service_enabled, designer_visible, enterprise_wechat_verified, enterprise_wechat_verified_at, COALESCE(enterprise_wechat_contact, '') AS enterprise_wechat_contact, COALESCE(device_id, '') AS device_id, device_bind_time, last_device_change_time, has_password, COALESCE(phone, '') AS phone, COALESCE(identity_type, '') AS identity_type, created_at, updated_at`
 
 func scanUserProfile(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*UserProfile, error) {
 	profile := &UserProfile{}
 	err := scanner.Scan(
-		&profile.ID, &profile.UserID, &profile.Nickname, &profile.Avatar, &profile.DesignerBio, &profile.SpecialtyStyles, &profile.DesignerExperienceYears, &profile.ServiceTitle, &profile.ServiceQuote, &profile.ServiceIntro, &profile.ServiceEnabled, &profile.DesignerVisible, &profile.EnterpriseWechatVerified, &profile.EnterpriseWechatVerifiedAt, &profile.EnterpriseWechatContact, &profile.DeviceID,
+		&profile.ID, &profile.UserID, &profile.Nickname, &profile.Avatar, &profile.DesignerBio, &profile.SpecialtyStyles, &profile.DesignerRegion, &profile.DesignerExperienceYears, &profile.ServiceTitle, &profile.ServiceQuote, &profile.ServiceIntro, &profile.ServiceEnabled, &profile.DesignerVisible, &profile.EnterpriseWechatVerified, &profile.EnterpriseWechatVerifiedAt, &profile.EnterpriseWechatContact, &profile.DeviceID,
 		&profile.DeviceBindTime, &profile.LastDeviceChangeTime, &profile.HasPassword,
 		&profile.Phone, &profile.IdentityType,
 		&profile.CreatedAt, &profile.UpdatedAt,
@@ -87,6 +90,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 	avatar VARCHAR(512) DEFAULT '',
 	designer_bio VARCHAR(1024) DEFAULT '',
 	specialty_styles VARCHAR(512) DEFAULT '',
+	designer_region VARCHAR(128) NOT NULL DEFAULT '',
 	designer_experience_years BIGINT NOT NULL DEFAULT 0,
 	service_title VARCHAR(128) DEFAULT '',
 	service_quote BIGINT NOT NULL DEFAULT 0,
@@ -112,6 +116,12 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 	}
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN designer_bio VARCHAR(1024) DEFAULT ''`)
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN specialty_styles VARCHAR(512) DEFAULT ''`)
+	if _, err := m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN designer_region VARCHAR(128) NOT NULL DEFAULT ''`); err != nil {
+		var mysqlErr *mysql.MySQLError
+		if !errors.As(err, &mysqlErr) || mysqlErr.Number != 1060 {
+			return fmt.Errorf("add user_profiles.designer_region: %w", err)
+		}
+	}
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN designer_experience_years BIGINT NOT NULL DEFAULT 0`)
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN service_title VARCHAR(128) DEFAULT ''`)
 	_, _ = m.DB.Exec(`ALTER TABLE user_profiles ADD COLUMN service_quote BIGINT NOT NULL DEFAULT 0`)
@@ -140,9 +150,9 @@ func GetUserProfileByUserID(ctx context.Context, q SQLRowQueryer, userID int64) 
 
 // Create 创建用户扩展信息
 func (m *UserProfileModel) Create(profile *UserProfile) error {
-	query := `INSERT INTO user_profiles (user_id, nickname, avatar, designer_bio, specialty_styles, designer_experience_years, service_title, service_quote, service_intro, service_enabled, designer_visible, enterprise_wechat_verified, enterprise_wechat_verified_at, enterprise_wechat_contact, device_id, device_bind_time, has_password, phone, identity_type, created_at, updated_at)
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`
-	result, err := m.DB.Exec(query, profile.UserID, profile.Nickname, profile.Avatar, profile.DesignerBio, profile.SpecialtyStyles, profile.DesignerExperienceYears, profile.ServiceTitle, profile.ServiceQuote, profile.ServiceIntro, profile.ServiceEnabled, profile.DesignerVisible, profile.EnterpriseWechatVerified, profile.EnterpriseWechatVerifiedAt, profile.EnterpriseWechatContact, profile.DeviceID, profile.DeviceBindTime, profile.HasPassword, profile.Phone, profile.IdentityType)
+	query := `INSERT INTO user_profiles (user_id, nickname, avatar, designer_bio, specialty_styles, designer_region, designer_experience_years, service_title, service_quote, service_intro, service_enabled, designer_visible, enterprise_wechat_verified, enterprise_wechat_verified_at, enterprise_wechat_contact, device_id, device_bind_time, has_password, phone, identity_type, created_at, updated_at)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`
+	result, err := m.DB.Exec(query, profile.UserID, profile.Nickname, profile.Avatar, profile.DesignerBio, profile.SpecialtyStyles, profile.DesignerRegion, profile.DesignerExperienceYears, profile.ServiceTitle, profile.ServiceQuote, profile.ServiceIntro, profile.ServiceEnabled, profile.DesignerVisible, profile.EnterpriseWechatVerified, profile.EnterpriseWechatVerifiedAt, profile.EnterpriseWechatContact, profile.DeviceID, profile.DeviceBindTime, profile.HasPassword, profile.Phone, profile.IdentityType)
 	if err != nil {
 		return err
 	}
@@ -223,9 +233,25 @@ func (m *UserProfileModel) UpdateAvatar(userID int64, avatar string) error {
 	return err
 }
 
-func (m *UserProfileModel) UpdateDesignerProfile(userID int64, bio, specialtyStyles string, designerExperienceYears int64, serviceTitle string, serviceQuote int64, serviceIntro string, serviceEnabled bool) error {
-	query := `UPDATE user_profiles SET designer_bio = ?, specialty_styles = ?, designer_experience_years = ?, service_title = ?, service_quote = ?, service_intro = ?, service_enabled = ?, updated_at = NOW() WHERE user_id = ?`
-	_, err := m.DB.Exec(query, bio, specialtyStyles, designerExperienceYears, serviceTitle, serviceQuote, serviceIntro, serviceEnabled, userID)
+func NormalizeDesignerRegion(raw string) (string, error) {
+	if !utf8.ValidString(raw) || utf8.RuneCountInString(raw) > 128 {
+		return "", fmt.Errorf("所在地不能超过 128 个字符")
+	}
+	return strings.Join(strings.Fields(raw), " "), nil
+}
+
+func (m *UserProfileModel) UpdateDesignerProfile(userID int64, bio, specialtyStyles string, designerExperienceYears int64, serviceTitle string, serviceQuote int64, serviceIntro string, serviceEnabled bool, designerRegion ...*string) error {
+	var region *string
+	if len(designerRegion) > 0 && designerRegion[0] != nil {
+		value, err := NormalizeDesignerRegion(*designerRegion[0])
+		if err != nil {
+			return err
+		}
+		region = &value
+	}
+	// 旧客户端、服务配置与后台更新未传所在地时保留原值；显式空串允许清空。
+	query := `UPDATE user_profiles SET designer_bio = ?, specialty_styles = ?, designer_experience_years = ?, service_title = ?, service_quote = ?, service_intro = ?, service_enabled = ?, designer_region = COALESCE(?, designer_region), updated_at = NOW() WHERE user_id = ?`
+	_, err := m.DB.Exec(query, bio, specialtyStyles, designerExperienceYears, serviceTitle, serviceQuote, serviceIntro, serviceEnabled, region, userID)
 	return err
 }
 

@@ -3,6 +3,7 @@
   "navigationStyle": "custom",
   "usingComponents": {
     "login-guard": "/components/login-guard/login-guard",
-    "navigation-bar": "/components/navigation-bar/navigation-bar"
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "t-icon": "/components/tdesign-miniprogram/icon/icon"
   }
 }

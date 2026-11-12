@@ -3,7 +3,7 @@ package function
 import (
 	"bytes"
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"image"
@@ -11,8 +11,10 @@ import (
 	stddraw "image/draw"
 	"image/jpeg"
 	_ "image/png"
+	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +43,13 @@ var variantHTTPClient = &http.Client{
 	Timeout: 15 * time.Second,
 }
 
+const (
+	maxRemoteVariantSourceBytes = 50 << 20
+	maxVariantSourcePixels      = 100_000_000
+	variantEncoderVersion       = "jpeg-v1"
+	variantKeyMetadataHeader    = "x-cos-meta-jdlg-variant-key"
+)
+
 func GenerateRemoteImageVariants(ctx context.Context, cfg *config.Config, client *cos.Client, sourceURL string, namespace string, specs []ImageVariantSpec) (*ImageVariantResult, error) {
 	cleanURL := strings.TrimSpace(sourceURL)
 	if cleanURL == "" {
@@ -56,12 +65,12 @@ func GenerateRemoteImageVariants(ctx context.Context, cfg *config.Config, client
 		return nil, fmt.Errorf("COS client is not initialized")
 	}
 
-	srcImage, width, height, err := downloadImage(cleanURL)
+	srcImage, sourceDigest, width, height, err := downloadImage(ctx, cleanURL)
 	if err != nil {
 		return nil, err
 	}
 
-	return generateImageVariants(ctx, cfg, client, cleanURL, srcImage, width, height, namespace, specs)
+	return generateImageVariants(ctx, cfg, client, sourceDigest, srcImage, width, height, namespace, specs)
 }
 
 func GenerateImageVariantsFromBytes(ctx context.Context, cfg *config.Config, client *cos.Client, sourceKey string, imageBytes []byte, namespace string, specs []ImageVariantSpec) (*ImageVariantResult, error) {
@@ -82,21 +91,21 @@ func GenerateImageVariantsFromBytes(ctx context.Context, cfg *config.Config, cli
 		return nil, fmt.Errorf("COS client is not initialized")
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(imageBytes))
+	img, width, height, err := decodeVariantSource(imageBytes)
 	if err != nil {
 		return nil, err
 	}
-	bounds := img.Bounds()
-	return generateImageVariants(ctx, cfg, client, cleanKey, img, bounds.Dx(), bounds.Dy(), namespace, specs)
+	sourceDigest := sha256.Sum256(imageBytes)
+	return generateImageVariants(ctx, cfg, client, sourceDigest, img, width, height, namespace, specs)
 }
 
-func generateImageVariants(ctx context.Context, cfg *config.Config, client *cos.Client, sourceIdentity string, srcImage image.Image, width int, height int, namespace string, specs []ImageVariantSpec) (*ImageVariantResult, error) {
-	cleanIdentity := strings.TrimSpace(sourceIdentity)
-	if cleanIdentity == "" {
-		return nil, fmt.Errorf("source identity is empty")
-	}
+func generateImageVariants(ctx context.Context, cfg *config.Config, client *cos.Client, sourceDigest [sha256.Size]byte, srcImage image.Image, width int, height int, namespace string, specs []ImageVariantSpec) (*ImageVariantResult, error) {
 	if srcImage == nil || width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("source image is invalid")
+	}
+	cleanNamespace, err := cleanVariantNamespace(namespace)
+	if err != nil {
+		return nil, err
 	}
 
 	result := &ImageVariantResult{
@@ -105,17 +114,26 @@ func generateImageVariants(ctx context.Context, cfg *config.Config, client *cos.
 		URLs:         make(map[string]string, len(specs)),
 	}
 
-	hash := buildVariantHash(cleanIdentity)
 	for _, spec := range specs {
-		if strings.TrimSpace(spec.Name) == "" || spec.MaxWidth <= 0 {
+		spec.Name = strings.TrimSpace(spec.Name)
+		if spec.Name == "" || spec.MaxWidth <= 0 {
+			continue
+		}
+		if !isSafeVariantName(spec.Name) {
+			return nil, fmt.Errorf("variant name %q is invalid", spec.Name)
+		}
+		spec.Quality = normalizeVariantQuality(spec.Quality)
+		hash := buildVariantHash(sourceDigest, spec)
+		objectKey := path.Join("derived_images", cleanNamespace, fmt.Sprintf("%s_%s.jpg", hash, spec.Name))
+		if url, ok := reusableImageVariantURL(ctx, client, cfg, objectKey, hash); ok {
+			result.URLs[spec.Name] = url
 			continue
 		}
 		imageBytes, err := buildJPEGVariant(srcImage, width, height, spec.MaxWidth, spec.Quality)
 		if err != nil {
 			return nil, fmt.Errorf("build variant %s failed: %w", spec.Name, err)
 		}
-		objectKey := path.Join("derived_images", strings.Trim(strings.TrimSpace(namespace), "/"), fmt.Sprintf("%s_%s.jpg", hash, spec.Name))
-		url, err := UploadBytes(ctx, client, cfg, objectKey, imageBytes, "image/jpeg")
+		url, err := uploadImageVariant(ctx, client, cfg, objectKey, hash, imageBytes)
 		if err != nil {
 			return nil, fmt.Errorf("upload variant %s failed: %w", spec.Name, err)
 		}
@@ -125,35 +143,126 @@ func generateImageVariants(ctx context.Context, cfg *config.Config, client *cos.
 	return result, nil
 }
 
-func buildVariantHash(sourceURL string) string {
-	sum := sha1.Sum([]byte(strings.TrimSpace(sourceURL)))
-	return hex.EncodeToString(sum[:])
+func buildVariantHash(sourceDigest [sha256.Size]byte, spec ImageVariantSpec) string {
+	digest := sha256.New()
+	digest.Write([]byte(variantEncoderVersion))
+	digest.Write([]byte{0})
+	digest.Write(sourceDigest[:])
+	digest.Write([]byte{0})
+	digest.Write([]byte(strings.TrimSpace(spec.Name)))
+	digest.Write([]byte{0})
+	digest.Write([]byte(strconv.Itoa(spec.MaxWidth)))
+	digest.Write([]byte{0})
+	digest.Write([]byte(strconv.Itoa(normalizeVariantQuality(spec.Quality))))
+	sum := digest.Sum(nil)
+	return hex.EncodeToString(sum[:20])
 }
 
-func downloadImage(sourceURL string) (image.Image, int, int, error) {
-	req, err := http.NewRequest(http.MethodGet, sourceURL, nil)
+func downloadImage(ctx context.Context, sourceURL string) (image.Image, [sha256.Size]byte, int, int, error) {
+	var emptyDigest [sha256.Size]byte
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, emptyDigest, 0, 0, err
 	}
 	req.Header.Set("Accept", "image/*")
 	req.Header.Set("User-Agent", "jdlg-image-variants/1.0")
 
 	resp, err := variantHTTPClient.Do(req)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, emptyDigest, 0, 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, 0, 0, fmt.Errorf("download image failed with status %d", resp.StatusCode)
+		return nil, emptyDigest, 0, 0, fmt.Errorf("download image failed with status %d", resp.StatusCode)
 	}
+	imageBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxRemoteVariantSourceBytes+1))
+	if err != nil {
+		return nil, emptyDigest, 0, 0, err
+	}
+	if len(imageBytes) > maxRemoteVariantSourceBytes {
+		return nil, emptyDigest, 0, 0, fmt.Errorf("source image exceeds %d bytes", maxRemoteVariantSourceBytes)
+	}
+	img, width, height, err := decodeVariantSource(imageBytes)
+	if err != nil {
+		return nil, emptyDigest, 0, 0, err
+	}
+	return img, sha256.Sum256(imageBytes), width, height, nil
+}
 
-	img, _, err := image.Decode(resp.Body)
+func decodeVariantSource(imageBytes []byte) (image.Image, int, int, error) {
+	info, _, err := image.DecodeConfig(bytes.NewReader(imageBytes))
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	bounds := img.Bounds()
-	return img, bounds.Dx(), bounds.Dy(), nil
+	if info.Width <= 0 || info.Height <= 0 || info.Width > maxVariantSourcePixels/info.Height {
+		return nil, 0, 0, fmt.Errorf("source image dimensions are invalid or exceed %d pixels", maxVariantSourcePixels)
+	}
+	img, _, err := image.Decode(bytes.NewReader(imageBytes))
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return img, info.Width, info.Height, nil
+}
+
+func cleanVariantNamespace(namespace string) (string, error) {
+	clean := strings.Trim(strings.TrimSpace(namespace), "/")
+	if clean == "" || clean != path.Clean(clean) || strings.Contains(clean, "\\") || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("variant namespace is invalid")
+	}
+	return clean, nil
+}
+
+func isSafeVariantName(name string) bool {
+	for _, char := range name {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' {
+			continue
+		}
+		return false
+	}
+	return name != ""
+}
+
+func normalizeVariantQuality(quality int) int {
+	if quality <= 0 || quality > 100 {
+		return 82
+	}
+	return quality
+}
+
+func reusableImageVariantURL(ctx context.Context, client *cos.Client, cfg *config.Config, objectKey string, hash string) (string, bool) {
+	fullKey := buildObjectKey(cfg, objectKey)
+	resp, err := client.Object.Head(ctx, fullKey, nil)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil || resp == nil {
+		return "", false
+	}
+	contentLength, err := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+	if err != nil || contentLength <= 0 || !strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "image/jpeg") {
+		return "", false
+	}
+	if resp.Header.Get(variantKeyMetadataHeader) != hash {
+		return "", false
+	}
+	return component.BuildObjectURL(cfg, fullKey), true
+}
+
+func uploadImageVariant(ctx context.Context, client *cos.Client, cfg *config.Config, objectKey string, hash string, imageBytes []byte) (string, error) {
+	fullKey := buildObjectKey(cfg, objectKey)
+	metadata := make(http.Header)
+	metadata.Set(variantKeyMetadataHeader, hash)
+	_, err := client.Object.Put(ctx, fullKey, bytes.NewReader(imageBytes), &cos.ObjectPutOptions{
+		ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{
+			ContentType: "image/jpeg",
+			XCosMetaXXX: &metadata,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return component.BuildObjectURL(cfg, fullKey), nil
 }
 
 func buildJPEGVariant(src image.Image, srcWidth int, srcHeight int, maxWidth int, quality int) ([]byte, error) {
@@ -166,9 +275,7 @@ func buildJPEGVariant(src image.Image, srcWidth int, srcHeight int, maxWidth int
 	if targetWidth <= 0 || targetHeight <= 0 {
 		return nil, fmt.Errorf("invalid target size %dx%d", targetWidth, targetHeight)
 	}
-	if quality <= 0 || quality > 100 {
-		quality = 82
-	}
+	quality = normalizeVariantQuality(quality)
 
 	dst := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
 	stddraw.Draw(dst, dst.Bounds(), &image.Uniform{C: color.White}, image.Point{}, stddraw.Src)

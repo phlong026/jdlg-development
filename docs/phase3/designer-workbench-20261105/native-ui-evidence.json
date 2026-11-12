@@ -1,0 +1,166 @@
+{
+  "capturedAt": "2026-11-04T20:33:44.068Z",
+  "source": "WeChat DevTools native current page",
+  "pages": [
+    {
+      "name": "01-我的工作台",
+      "route": "pages/my/my",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "02-我的项目",
+      "route": "pages/projectnotes/projectnotes",
+      "view": "list",
+      "error": "",
+      "projectCount": 3,
+      "versionCount": 0
+    },
+    {
+      "name": "03-项目详情",
+      "route": "pages/projectnotes/projectnotes",
+      "view": "detail",
+      "error": "",
+      "projectCount": 3,
+      "versionCount": 1
+    },
+    {
+      "name": "03b-项目资料",
+      "route": "pages/projectnotes/projectnotes",
+      "view": "detail",
+      "error": "",
+      "projectCount": 3,
+      "versionCount": 1
+    },
+    {
+      "name": "04-笔记编辑",
+      "route": "pages/projectnotes/projectnotes",
+      "view": "editor",
+      "error": "",
+      "projectCount": 3,
+      "versionCount": 1
+    },
+    {
+      "name": "04b-新建笔记",
+      "route": "pages/projectnotes/projectnotes",
+      "view": "editor",
+      "error": "",
+      "projectCount": 3,
+      "versionCount": 1
+    },
+    {
+      "name": "04c-取消新笔记保留方案",
+      "route": "pages/projectnotes/projectnotes",
+      "view": "detail",
+      "error": "",
+      "projectCount": 3,
+      "versionCount": 1
+    },
+    {
+      "name": "05-内容创作",
+      "route": "pages/contentworkbench/contentworkbench",
+      "view": "studio",
+      "error": "",
+      "contentCount": 3
+    },
+    {
+      "name": "06-内容编辑",
+      "route": "pages/contentedit/contentedit",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "06b-文案工具",
+      "route": "pages/contentwriting/contentwriting",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "06c-资料库",
+      "route": "pages/nativereferences/nativereferences",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "06d-我的合集",
+      "route": "pages/projectcollections/projectcollections",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "07-客户",
+      "route": "pages/sharevisits/sharevisits",
+      "view": "",
+      "error": "",
+      "customerCount": 1,
+      "contentCount": 0,
+      ".customer-card": {
+        "width": 398,
+        "height": 74
+      }
+    },
+    {
+      "name": "08-客户详情",
+      "route": "pages/visitdetail/visitdetail",
+      "view": "",
+      "error": "",
+      "contentCount": 0
+    },
+    {
+      "name": "09-素材热度",
+      "route": "pages/sharevisits/sharevisits",
+      "view": "",
+      "error": "",
+      "customerCount": 1,
+      "contentCount": 0
+    },
+    {
+      "name": "10-分享记录",
+      "route": "pages/sharevisits/sharevisits",
+      "view": "",
+      "error": "",
+      "customerCount": 1,
+      "contentCount": 20,
+      ".share-card": {
+        "width": 398,
+        "height": 120.5
+      }
+    },
+    {
+      "name": "11a-主页入口",
+      "route": "pages/my/my",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "11-设计师主页",
+      "route": "pages/designerhome/designerhome",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "12-消息中心",
+      "route": "pages/messagecenter/messagecenter",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "12b-提醒设置",
+      "route": "pages/messagecenter/messagecenter",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "13-作品发布",
+      "route": "pages/release/release",
+      "view": "",
+      "error": ""
+    },
+    {
+      "name": "14-作品上传",
+      "route": "pages/release/designerworkpublish",
+      "view": "",
+      "error": ""
+    }
+  ]
+}

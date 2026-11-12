@@ -74,7 +74,8 @@ Component({
 
     showIfMissing(profile: any, required = false) {
       const nickname = String(profile?.nickname || '').trim();
-      if (this.data.visible || (required ? hasCompleteProfile(profile) : hasProfileNickname(nickname))) return false;
+      const complete = hasCompleteProfile(profile);
+      if (this.data.visible || (required ? complete : hasProfileNickname(nickname))) return false;
       const userID = Number(profile?.id || wx.getStorageSync('userInfo')?.id || 0);
       const now = new Date();
       const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;

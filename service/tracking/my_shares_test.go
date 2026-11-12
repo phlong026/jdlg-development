@@ -303,6 +303,39 @@ func TestMySharesRespectReadBudget(t *testing.T) {
 	}
 }
 
+func TestMySharesContentVersionFilterRunsBeforePagination(t *testing.T) {
+	s, rows, scope, now := reviewFixture()
+	scope.Actor = 11
+	scope.Owners = []string{"company"}
+	seed := func(id, content string, version int, at time.Time) {
+		share := Share{ID: id, Route: publishedReaderRoute, Content: content, Version: version, Owner: "company", Sharer: "u:11", Origin: "miniprogram", Expires: now.Add(24 * time.Hour)}
+		row := record("share", "token-"+id, "company", at, share)
+		row.Share, row.Visitor = id, share.Sharer
+		_ = rows.Put(row)
+	}
+	seed("newest-other", "other", 1, now.Add(-time.Minute))
+	seed("target-new", "target", 2, now.Add(-2*time.Minute))
+	seed("middle-other-version", "target", 1, now.Add(-3*time.Minute))
+	seed("target-old", "target", 2, now.Add(-4*time.Minute))
+
+	first, err := s.MyShares(context.Background(), scope, 11, Filter{Content: "target", ContentVersion: 2, Limit: 1, AsOf: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := myShareItems(t, first)
+	if len(items) != 1 || items[0].ID != "target-new" || first.Cursor == "" {
+		t.Fatalf("filtered first page = %+v cursor=%q", items, first.Cursor)
+	}
+	second, err := s.MyShares(context.Background(), scope, 11, Filter{Content: "target", ContentVersion: 2, Limit: 1, AsOf: first.AsOf, Cursor: first.Cursor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items = myShareItems(t, second)
+	if len(items) != 1 || items[0].ID != "target-old" || second.Cursor != "" {
+		t.Fatalf("filtered second page = %+v cursor=%q", items, second.Cursor)
+	}
+}
+
 func TestMySharesSQLUsesExactSharerDescendingKeyset(t *testing.T) {
 	at := time.Date(2026, 10, 27, 10, 0, 0, 0, time.UTC)
 	query, args := buildScopedQuery("tenant", "share", RecordQuery{Owners: []string{"company"}, VisitorKeys: []string{"u:11"}, ExactVisitors: true, Descending: true, BeforeAt: at, BeforeID: "token-share-2", AtThrough: at, Limit: 3}, maxQueryRecords+1)

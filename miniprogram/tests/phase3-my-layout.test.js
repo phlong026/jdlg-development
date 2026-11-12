@@ -18,10 +18,17 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
     previous = position;
   }
   assert.match(wxml, /class="workbench-grid workbench-grid-/);
+  assert.doesNotMatch(wxml, /workbench-description/);
   assert.match(wxml, /class="account-card"/);
   assert.match(wxml, /class="section-grid section-grid-two"/);
   assert.doesNotMatch(wxml, /待处理反馈|今日回访/);
+  assert.doesNotMatch(wxml, /class="share-visits-entry"/);
+  assert.match(scssForLayout(), /\.page \.workbench-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\)/s);
 });
+
+function scssForLayout() {
+  return read('my.scss');
+}
 
 test('工作台入口由后端创作能力控制，普通功能移出设计师分区', () => {
   const source = read('my.ts');
@@ -50,16 +57,18 @@ test('三期真实入口继续使用登录门禁和现有页面', () => {
   assert.match(source, /\/pages\/Identityauthen\/Identityauthen/);
 });
 
-test('我的页使用已有 TDesign 细线图标并保持暖白背景', () => {
+test('我的页使用本地 mini-icon 线性图标并保持暖白背景', () => {
   const config = JSON.parse(read('my.json'));
   const wxml = read('my.wxml');
   const scss = read('my.scss');
   const source = read('my.ts');
-  const iconStyles = fs.readFileSync(path.join(root, '../../components/tdesign-miniprogram/icon/icon.wxss'), 'utf8');
-  assert.equal(config.usingComponents['t-icon'], '/components/tdesign-miniprogram/icon/icon');
+  // 2026-11-04 主包瘦身：t-icon 换成本地 mini-icon（mask SVG + currentColor），TDesign icon+common 退出主包闭包
+  assert.equal(config.usingComponents['mini-icon'], '/components/mini-icon/mini-icon');
+  assert.ok(!config.usingComponents['t-icon'], 't-icon 应已从我的页移除');
+  const iconStyles = fs.readFileSync(path.join(root, '../../components/mini-icon/mini-icon.wxss'), 'utf8');
   for (const icon of ['folder', 'video', 'usergroup', 'file', 'share', 'user-business', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
     assert.ok(source.includes(`icon: '${icon}'`) || wxml.includes(`name="${icon}"`), `应使用已校验图标 ${icon}`);
-    assert.ok(iconStyles.includes(`.t-icon-${icon}:before`), `TDesign 本地字体应包含 ${icon}`);
+    assert.ok(iconStyles.includes(`.mi-${icon} `) || new RegExp(`\\.mi-${icon}\\b`).test(iconStyles), `mini-icon 库应包含 ${icon}`);
   }
   assert.doesNotMatch(wxml, /shortLabel|[□▤◇▯♧⚙✎♙➤⌯▧◎⇥]/);
   assert.doesNotMatch(wxml, /page-background/);

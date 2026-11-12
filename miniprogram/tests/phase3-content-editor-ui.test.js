@@ -16,6 +16,7 @@ function loadEditor(apiOverrides = {}) {
   const modals = [], backs = [];
   const actionSheets = [];
   const mediaChoosers = [];
+  const clipboards = [], mediaPreviews = [], scrolls = [];
   let sessionToken = 'session-token';
   const api = {
     mutationKey: prefix => `${prefix}-key`,
@@ -32,8 +33,11 @@ function loadEditor(apiOverrides = {}) {
     navigateBack: options => backs.push(options),
     showActionSheet: options => actionSheets.push(options),
     chooseMedia: options => mediaChoosers.push(options),
+    setClipboardData: options => { clipboards.push(options.data); options.success(); },
+    previewMedia: options => mediaPreviews.push(options),
     getWindowInfo: () => ({ windowWidth: 375 }),
     createVideoContext: () => ({ pause() {} }),
+    pageScrollTo: options => scrolls.push(options),
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, 'contentedit/contentedit.js'), 'utf8'),
@@ -53,7 +57,7 @@ function loadEditor(apiOverrides = {}) {
     _visible: true,
     setData(values) { Object.assign(this.data, values); },
   };
-  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, mediaChoosers, token(value) { sessionToken = value; } };
+  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, mediaChoosers, clipboards, mediaPreviews, scrolls, token(value) { sessionToken = value; } };
 }
 
 test('editor exposes separate draft, preview, publish and published-reader actions', async () => {
@@ -335,9 +339,9 @@ test('multi-select media uploads serially and batches state updates with failure
   page.chooseMedia();
   assert.equal(mediaChoosers.length, 1, 'chooseMedia 应仍由按钮触发');
   assert.equal(mediaChoosers[0].count, 9, '相册应放开多选（对齐黑谷 9 张）');
-  mediaChoosers[0].success({ tempFiles: [
+  mediaChoosers[0].success({ type: 'image', tempFiles: [
     { tempFilePath: 'tmp://one.jpg', fileType: 'image' },
-    { tempFilePath: 'tmp://two.mp4', fileType: 'video' },
+    { tempFilePath: 'tmp://two.jpg', fileType: 'image' },
     { tempFilePath: 'tmp://three.jpg', fileType: 'image' },
   ] });
   await new Promise(resolve => setImmediate(resolve));
@@ -349,6 +353,80 @@ test('multi-select media uploads serially and batches state updates with failure
   assert.equal(page.data.busy, false, '批量结束后释放 busy');
   assert.match(page.data.notice, /2.*1/);
   assert.ok(page.data.notice.indexOf('失败') >= 0);
+});
+
+test('video chooser consumes the top-level media type and reports cancel or service upgrade clearly', async () => {
+  const { page, mediaChoosers } = loadEditor();
+  page._token = 'session-token';
+  page._epoch = 3;
+  page.setData({ presentation: 'video', context: { media_upload_configured: true, video_resumable_upload: true }, owner_id: 'owner-a', rights: 'own' });
+  let upload;
+  page.uploadMediaBatch = (files, type) => { upload = { files, type }; };
+  page.chooseMedia();
+  mediaChoosers[0].success({ type: 'video', tempFiles: [{ tempFilePath: 'tmp://video.mp4', size: 99 }] });
+  assert.equal(upload.type, 'video');
+  assert.equal(upload.files[0].fileType, undefined, '不得依赖 MediaFile 上不存在的 fileType');
+
+  page.chooseMedia();
+  mediaChoosers[1].fail({ errMsg: 'chooseMedia:fail cancel' });
+  assert.match(page.data.notice, /取消.*原内容/);
+
+  page.setData({ context: { media_upload_configured: true, video_resumable_upload: false } });
+  page.chooseMedia();
+  assert.equal(page.data.error, '当前版本暂不支持本地上传，请从素材库选择视频');
+  assert.equal(mediaChoosers.length, 2, '服务未升级时不应打开本地视频选择器');
+});
+
+test('native media chooser ignores success after account or content ownership changes', () => {
+  const { page, mediaChoosers, token } = loadEditor();
+  let uploads = 0;
+  page.uploadMediaBatch = () => { uploads += 1; };
+  page.setData({ id: 'draft-one', presentation: 'video', context: { media_upload_configured: true, video_resumable_upload: true }, owner_id: 'owner-a', rights: 'own' });
+
+  page.chooseMedia();
+  token('account-two');
+  mediaChoosers[0].success({ type: 'video', tempFiles: [{ tempFilePath: 'tmp://old-account.mp4' }] });
+  assert.equal(uploads, 0);
+
+  token('session-token');
+  page.chooseMedia();
+  page.setData({ owner_id: 'owner-b' });
+  mediaChoosers[1].success({ type: 'video', tempFiles: [{ tempFilePath: 'tmp://old-owner.mp4' }] });
+  assert.equal(uploads, 0);
+
+  page.setData({ owner_id: 'owner-a' });
+  page.chooseMedia();
+  page._epoch += 1;
+  mediaChoosers[2].success({ type: 'video', tempFiles: [{ tempFilePath: 'tmp://same-account.mp4' }] });
+  assert.equal(uploads, 1, '同账号返回时应使用回调当下 epoch，不被 onShow 误丢弃');
+});
+
+test('video owner stays visible at the top and validation scrolls directly to actionable fields', () => {
+  const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /video-workspace-head[^>]*>\s*<picker wx:if="\{\{context\.owner_choices\.length > 1\}\}"[^>]*bindchange="setOwner"/);
+  assert.match(wxml, /wx:if="\{\{fieldErrors\.owner_id\}\}" class="field-error"/);
+  assert.match(wxml, /wx:if="\{\{presentation !== 'video' && context\.owner_choices\.length > 1\}\}"/);
+
+  const { page, scrolls } = loadEditor();
+  page.setData({ presentation: 'video', context: { media_upload_configured: true, video_resumable_upload: true, owner_choices: [{ owner_id: 'one' }, { owner_id: 'two' }] }, owner_id: '' });
+  page.chooseMedia();
+  assert.equal(page.data.settingsExpanded, true);
+  assert.equal(page.data['fieldErrors.owner_id'], '请选择内容归属');
+  assert.equal(scrolls.at(-1).scrollTop, 0);
+
+  page.setData({ owner_id: 'one', title: '', blocks: [], context: { presentation_formats: ['video'], video_editor_fields: true } });
+  assert.equal(page.draftInput(), null);
+  assert.equal(page.data.fieldErrors.video, '请添加主视频');
+  assert.equal(scrolls.at(-1).scrollTop, 0);
+});
+
+test('video copy actions copy only the requested generated field and explain empty copy', () => {
+  const { page, clipboards, toasts } = loadEditor();
+  page.setData({ shareCopy: '转发这条视频', momentsCopy: '' });
+  page.copyVideoField({ currentTarget: { dataset: { field: 'shareCopy' } } });
+  assert.deepEqual(clipboards, ['转发这条视频']);
+  page.copyVideoField({ currentTarget: { dataset: { field: 'momentsCopy' } } });
+  assert.match(toasts.at(-1).title, /还没有可复制/);
 });
 
 test('batch upload aborts without state changes when the page token changes mid-flight', async () => {
@@ -391,10 +469,10 @@ test('U6 form polish: sticky error banner, rights wording and rejection toast ca
   assert.ok(toasts.some(toast => /已发生变化/.test(toast.title)));
 
   const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
-  assert.match(editorWxml, /素材版权来源/);
+  assert.match(editorWxml, /版权来源/);
   assert.ok(editorWxml.indexOf('素材权属') < 0, '旧措辞不得残留');
   const workbenchWxml = fs.readFileSync(path.join(root, 'contentworkbench/contentworkbench.wxml'), 'utf8');
-  assert.match(workbenchWxml, /素材版权来源/);
+  assert.match(workbenchWxml, /版权来源/);
   const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
   assert.match(editorStyle, /\.error,\s*\.notice\s*\{[^}]*position:\s*sticky/);
 });
@@ -404,8 +482,6 @@ test('U6 button baseline lands on content pages that lacked it', () => {
     const style = fs.readFileSync(path.join(root, `${pageName}/${pageName}.wxss`), 'utf8');
     assert.match(style, /button\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/, `${pageName} 应有按钮垂直居中基线`);
   }
-  const writingWxml = fs.readFileSync(path.join(root, 'contentwriting/contentwriting.wxml'), 'utf8');
-  assert.match(writingWxml, /保存会新建一条图文草稿/);
 });
 
 test('editor and reader implement the selected warm-gold content studio hierarchy', () => {
@@ -422,10 +498,109 @@ test('editor and reader implement the selected warm-gold content studio hierarch
   assert.match(editorStyle, /#a87943/i);
   assert.match(editorStyle, /position:\s*sticky/);
 
-  assert.match(readerWxml, /class="reader-brand"/);
-  assert.match(readerWxml, /class="reader-actions"/);
+  assert.doesNotMatch(readerWxml, /class="reader-brand"/, '阅读页不再展示品牌头');
+  assert.match(readerWxml, /class="reader-actions[^"]*"/);
   assert.match(readerWxml, /open-type="share"/);
   assert.match(readerWxml, /bindtap="copyWebLink"/);
   assert.match(readerStyle, /#a87943/i);
   assert.match(readerStyle, /\.reader-actions\s*\{[^}]*position:\s*fixed/);
+});
+
+test('cover picker returns an image without changing body blocks and rejects a stale return', async () => {
+  const harness = loadEditor();
+  const { page, navigationOptions } = harness;
+  page.setData({ blocks: [{ kind: 'paragraph', text: '原正文' }], preview: { preview_token: 'old' } });
+  page.openCoverPicker();
+  assert.equal(navigationOptions[0].url, '/pages/nativereferences/nativereferences?picker=media&kind=image');
+  await navigationOptions[0].events.selectMaterial({ kind: 'media', asset: { media_id: 'image-a', kind: 'image' } });
+  assert.equal(page.data.cover_media_id, 'image-a');
+  assert.equal(page.data.blocks.length, 1);
+  assert.equal(page.data.blocks[0].text, '原正文');
+  assert.equal(page.data.preview, null);
+  page.openCoverPicker();
+  harness.token('other-account');
+  await navigationOptions[1].events.selectMaterial({ kind: 'media', asset: { media_id: 'image-other', kind: 'image' } });
+  assert.equal(page.data.cover_media_id, 'image-a');
+});
+
+test('adding an uploaded asset to the body remains independent of the cover picker', () => {
+  const { page } = loadEditor();
+  page.setData({ media: [{ media_id: 'image-a', kind: 'image' }], blocks: [{ kind: 'paragraph', text: '原正文' }], cover_media_id: '' });
+  page.addMediaBlock({ currentTarget: { dataset: { index: 0 } } });
+  assert.equal(page.data.blocks.length, 2);
+  assert.equal(page.data.blocks[1].media_id, 'image-a');
+  assert.equal(page.data.cover_media_id, '');
+});
+
+test('published reader action does not imply unsaved edits have been published', () => {
+  const {page,navigations,toasts}=loadEditor();
+  page.setData({id:'content-one',status:'published',version:2,title:'原稿'});
+  page._savedSignature=page.draftSignature();page.setData({title:'未保存修改'});page.openPublished();
+  assert.equal(navigations.length,0);assert.match(toasts[0].title,/修改.*未发布/);
+});
+
+
+test('compact video opens full-screen playback with its original video and poster', () => {
+  const { page, mediaPreviews, toasts } = loadEditor();
+  page.setData({ media: [{ media_id: 'video-one', kind: 'video', local_path: '/private/video.mp4', poster_path: '/private/poster.jpg' }] });
+  page.openEditorVideo({ currentTarget: { dataset: { mediaId: 'video-one' } } });
+  assert.equal(mediaPreviews.length, 1);
+  assert.equal(mediaPreviews[0].sources[0].url, '/private/video.mp4');
+  assert.equal(mediaPreviews[0].sources[0].type, 'video');
+  assert.equal(mediaPreviews[0].sources[0].poster, '/private/poster.jpg');
+  mediaPreviews[0].fail({ errMsg: 'previewMedia:fail' });
+  assert.match(toasts[0].title, /播放失败/);
+  page.openEditorVideo({ currentTarget: { dataset: { mediaId: 'missing' } } });
+  assert.equal(mediaPreviews.length, 1);
+});
+
+
+test('library videos without a thumbnail use a touchable preview card without an inline native video layer', () => {
+  const { page, mediaPreviews } = loadEditor();
+  page.setData({ media: [{ media_id: 'library-video', kind: 'video', local_path: '/private/library.mp4' }] });
+  page.openEditorVideo({ currentTarget: { dataset: { mediaId: 'library-video' } } });
+  assert.equal(mediaPreviews[0].sources[0].url, '/private/library.mp4');
+  const template = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const thumbnail = template.slice(template.indexOf('class="video-thumbnail"'), template.indexOf('class="video-media-details"'));
+  assert.ok(thumbnail.includes('bindtap="openEditorVideo"'));
+  assert.doesNotMatch(thumbnail, /<video\b/, 'a controls=false native video would intercept the full-screen preview tap');
+});
+
+
+test('image upload survives the picker returning after its success callback', async () => {
+  let finish;
+  const { page } = loadEditor({ uploadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) });
+  page.setData({ presentation: 'gallery', owner_id: 'owner-a', rights: 'own', blocks: [] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg' }], 'image');
+  page._epoch += 1;
+  finish({ media_id: 'image-one', kind: 'image' });
+  await pending;
+  assert.equal(page.data.imageBlocks.length, 1);
+  assert.equal(page.data.imageBlocks[0].asset.local_path, 'tmp://one.jpg');
+  assert.equal(page.data.busy, false);
+});
+
+test('image upload ignores results after changing owner or unloading', async () => {
+  for (const change of [page => page.setData({ owner_id: 'owner-b' }), page => page.onUnload()]) {
+    let finish;
+    const { page } = loadEditor({ uploadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) });
+    page.setData({ presentation: 'gallery', owner_id: 'owner-a', rights: 'own', blocks: [] });
+    const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg' }], 'image');
+    change(page);
+    finish({ media_id: 'image-one', kind: 'image' });
+    await pending;
+    assert.equal(page.data.imageBlocks.length, 0);
+  }
+});
+
+test('typing gallery copy during upload is preserved when images finish', async () => {
+  let finish;
+  const { page } = loadEditor({ uploadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) });
+  page.setData({ presentation: 'gallery', owner_id: 'owner-a', rights: 'own', blocks: [] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: 'tmp://one.jpg' }], 'image');
+  page.editPostText({ detail: { value: '上传时继续填写的正文' } });
+  finish({ media_id: 'image-one', kind: 'image' });
+  await pending;
+  assert.equal(page.data.postText, '上传时继续填写的正文');
+  assert.equal(page.data.imageBlocks.length, 1);
 });

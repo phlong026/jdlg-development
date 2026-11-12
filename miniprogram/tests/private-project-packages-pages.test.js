@@ -18,6 +18,8 @@ function pageHarness(name, api = {}, wxOverrides = {}) {
   const context = { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/project-packages-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
+    if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
+    if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
     throw new Error(`unexpected require ${id}`);
   }, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent, decodeURIComponent, console };
   vm.runInNewContext(source, context);
@@ -140,6 +142,76 @@ test('invited package opens exact version and returns to directory in-page', asy
   assert.deepEqual(calls[1], ['version', 'package-token', 'version-one']);
   page.handleBack();
   assert.equal(page.data.pageView, 'directory');
+});
+
+test('invited package streams videos and only downloads non-video media', async () => {
+  const downloads = [], playbacks = [];
+  const page = pageHarness('projectpackageview', {
+    getSharedProjectPackageVersion: async (_token, version) => ({
+      version: { version_id: version, body_format: 'plain', body: '', cover: { media_id: 'cover-one', kind: 'image' }, media: [{ media_id: 'video-one', kind: 'video' }] },
+      feedbacks: [], can_confirm: false,
+    }),
+    downloadSharedProjectPackageMedia: async (_token, _version, id) => { downloads.push(id); return '/tmp/' + id; },
+    getSharedProjectPackageMediaPlayback: async (token, version, id) => { playbacks.push([token, version, id]); return { url: 'https://stream.example/' + id, expires_at: '2026-11-11T09:00:00Z' }; },
+  });
+  page.onLoad({ pps: 'package-token' });
+  page._accountToken = 'session-token'; page._epoch = 1;
+  await page.openVersion({ currentTarget: { dataset: { id: 'version-one' } } });
+  assert.deepEqual(downloads, ['cover-one']);
+  assert.deepEqual(playbacks, [['package-token', 'version-one', 'video-one']]);
+  assert.equal(page.data.media.find(item => item.kind === 'video').local_path, 'https://stream.example/video-one');
+});
+
+test('package video response from an old account generation is discarded', async () => {
+  let finishPlayback;
+  const pendingPlayback = new Promise(resolve => { finishPlayback = resolve; });
+  const page = pageHarness('projectpackageview', {
+    getSharedProjectPackageVersion: async (_token, version) => ({ version: { version_id: version, body_format: 'plain', body: '', media: [{ media_id: 'video-one', kind: 'video' }] }, feedbacks: [], can_confirm: false }),
+    getSharedProjectPackageMediaPlayback: async () => pendingPlayback,
+  });
+  page.onLoad({ pps: 'package-token' });
+  page._accountToken = 'session-token'; page._epoch = 1;
+  const opening = page.openVersion({ currentTarget: { dataset: { id: 'version-one' } } });
+  await Promise.resolve();
+  page.setToken('another-account');
+  finishPlayback({ url: 'https://stream.example/stale-video' });
+  await opening;
+  assert.equal(page.data.media.length, 0);
+  assert.equal(page.data.versionView, null);
+});
+
+test('package playback error is retryable with a newly issued video ticket', async () => {
+  let ticket = 0;
+  const page = pageHarness('projectpackageview', {
+    getSharedProjectPackageVersion: async (_token, version) => ({ version: { version_id: version, body_format: 'plain', body: '', media: [{ media_id: 'video-one', kind: 'video' }] }, feedbacks: [], can_confirm: false }),
+    getSharedProjectPackageMediaPlayback: async () => ({ url: 'https://stream.example/ticket-' + (++ticket), expires_at: '2026-11-11T09:00:00Z' }),
+  });
+  page.onLoad({ pps: 'package-token' });
+  page._accountToken = 'session-token'; page._epoch = 1;
+  await page.openVersion({ currentTarget: { dataset: { id: 'version-one' } } });
+  page.onSharedNoteVideoError({ currentTarget: { dataset: { id: 'video-one' } } });
+  assert.equal(page.data.media[0].local_path, '');
+  assert.equal(page.data.mediaFailuresCount, 1);
+  await page.retryMediaDownloads();
+  assert.equal(page.data.media[0].local_path, 'https://stream.example/ticket-2');
+  assert.equal(page.data.mediaFailuresCount, 0);
+  const invited = fs.readFileSync(path.join(root, 'pages/projectpackageview/projectpackageview.wxml'), 'utf8');
+  assert.match(invited, /handleVideoErrors: true/);
+  assert.match(invited, /retryMediaDownloads/);
+});
+
+test('project package playback helper uses the version-bound POST route', async () => {
+  const source = fs.readFileSync(path.join(root, 'utils/project-packages-api.js'), 'utf8');
+  const calls = [], module = { exports: {} };
+  vm.runInNewContext(source, { module, exports: module.exports, wx: {}, require(id) {
+    if (id === './phase3-api') return { request: async (...args) => { calls.push(args); return { url: '/api/v1/shared-video/ticket?sig=short' }; }, mutationKey() {}, ORIGIN: 'https://api.jiadilingguang.com', authHeaders() {} };
+    throw new Error(`unexpected require ${id}`);
+  }, Promise, Object, String, Error, encodeURIComponent });
+  const playback = await module.exports.getSharedProjectPackageMediaPlayback('package-token', 'version-one', 'video-one');
+  assert.equal(calls[0][0], '/api/v1/miniprogram/project-packages/shared/package-token/versions/version-one/media/video-one/playback');
+  assert.equal(calls[0][1], 'POST');
+  assert.equal(Object.keys(calls[0][2]).length, 0);
+  assert.equal(playback.url, 'https://api.jiadilingguang.com/api/v1/shared-video/ticket?sig=short');
 });
 
 test('new package templates keep the workflow compact and avoid fake file-package claims', () => {

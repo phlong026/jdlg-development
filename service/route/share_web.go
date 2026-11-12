@@ -18,6 +18,7 @@ import (
 )
 
 const shareWebCollectionRoute = "pages/collectionreader/collectionreader"
+const shareURLLinkRefreshBefore = time.Hour
 
 type shareURLLinkCache struct {
 	mu       sync.Mutex
@@ -76,7 +77,7 @@ func newShareURLLinkCache(capacity int) *shareURLLinkCache {
 func (c *shareURLLinkCache) load(ctx context.Context, key string, now time.Time, generate func() (tracking.URLLinkResult, error)) (tracking.URLLinkResult, error) {
 	c.mu.Lock()
 	value, ok := c.values[key]
-	if ok && now.Before(value.Expires) {
+	if ok && now.Add(shareURLLinkRefreshBefore).Before(value.Expires) {
 		c.mu.Unlock()
 		return value, nil
 	}
@@ -179,6 +180,8 @@ func registerShareWebRoutes(root *gin.Engine, v1 *gin.RouterGroup, svc *tracking
 func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracking.Service, api *tracking.WechatAPI) {
 	urlLinks := newShareURLLinkCache(10000)
 	urlLinkLimiter := newTrackingPeerLimiter(10000, trackingURLLinkPerMinute, time.Now)
+	publicLinkLimiter := newTrackingPeerLimiter(10000, trackingURLLinkPerMinute, time.Now)
+	publicLinkTrustedProxies := trackingTrustedProxyPrefixes(os.Getenv("TRACKING_TRUSTED_PROXY_CIDRS"))
 	root.GET("/share/assets/:name", func(c *gin.Context) {
 		data, err := shareweb.Asset(c.Param("name"))
 		if err != nil {
@@ -257,6 +260,74 @@ func registerShareWebHandlers(root *gin.Engine, v1 *gin.RouterGroup, svc *tracki
 		if err = shareweb.RenderLoginLanding(c.Writer, code, &position); err != nil {
 			c.Status(http.StatusNotFound)
 		}
+	})
+	// Public links contain only a published target. They deliberately omit a
+	// share token and do not create a Share, Entry, Event or identity handoff.
+	// This keeps ordinary sharing available after access analysis is disabled.
+	v1.POST("/miniprogram/public-share-links", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		c.Header("Cache-Control", "private, no-store")
+		peer := trackingRateKey(c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), publicLinkTrustedProxies)
+		if !publicLinkLimiter.allow(peer) {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusTooManyRequests, Message: "生成分享链接过于频繁，请稍后再试"})
+			return
+		}
+		var input struct {
+			Kind    string `json:"kind"`
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+		}
+		if !trackingBind(c, &input) {
+			return
+		}
+		input.Kind = strings.TrimSpace(input.Kind)
+		input.ID = strings.TrimSpace(input.ID)
+		if input.ID == "" || input.Version < 1 {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "公开内容参数无效"})
+			return
+		}
+		path := ""
+		values := url.Values{}
+		switch input.Kind {
+		case "content":
+			if _, err := svc.ReadContent(c.Request.Context(), input.ID, input.Version); err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			path = trackingReaderRoute
+			values.Set("content_id", input.ID)
+			values.Set("content_version", strconv.Itoa(input.Version))
+			values.Set("untracked_share", "1")
+		case "collection":
+			if _, err := svc.ReadPublishedProjectCollection(c.Request.Context(), input.ID, input.Version); err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			path = shareWebCollectionRoute
+			values.Set("collection_id", input.ID)
+			values.Set("collection_version", strconv.Itoa(input.Version))
+			values.Set("untracked_share", "1")
+		default:
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "公开内容类型无效"})
+			return
+		}
+		credentials := miniprogramCredentials()
+		if !trackingURLLinkEnabled() || credentials.AppID == "" || credentials.Secret == "" || api == nil {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusServiceUnavailable, Message: "普通分享链接尚未配置"})
+			return
+		}
+		cacheKey := "public:" + input.Kind + ":" + input.ID + ":" + strconv.Itoa(input.Version)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+		link, err := urlLinks.load(ctx, cacheKey, svc.Now(), func() (tracking.URLLinkResult, error) {
+			return tracking.WechatURLLink(ctx, api, credentials.AppID, credentials.Secret, path, values.Encode(), trackingWechatEnv(), svc.Now())
+		})
+		if err != nil {
+			log.Printf("[ShareWeb] error operation=public_url_link kind=%s error_type=%T", input.Kind, err)
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadGateway, Message: trackingURLLinkProblem(err)})
+			return
+		}
+		trackingResponse(c, gin.H{"web_url": link.URL, "expires_at": link.Expires}, nil)
 	})
 
 	web := v1.Group("/share-web")

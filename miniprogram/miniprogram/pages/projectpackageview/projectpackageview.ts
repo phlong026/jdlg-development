@@ -2,15 +2,51 @@
 'use strict';
 const api = require('../../utils/project-packages-api');
 const { renderArticleDocument } = require('../../utils/article-document');
+const { fitNoteMedia, fitNoteBlocks, groupNoteImages, noteVideoMetadata } = require('../../utils/project-note-media');
 
 const labels = { very_satisfied: '非常满意', needs_adjustment: '基本满意，需要调整', unsatisfied: '不太满意' };
 const eventID = () => 'package-read-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+const mediaFailureCount = media => (media || []).filter(item => item && (item.preview_error || !item.local_path)).length;
+const loadSharedPackageMedia = async (token, versionID, asset) => {
+  if (asset && asset.kind === 'video') {
+    const playback = await api.getSharedProjectPackageMediaPlayback(token, versionID, asset.media_id);
+    const url = String(playback && playback.url || '');
+    if (!url) throw new Error('视频播放地址获取失败');
+    return Object.assign({}, asset, { local_path: url, playback_expires_at: playback.expires_at || '' });
+  }
+  return Object.assign({}, asset, { local_path: await api.downloadSharedProjectPackageMedia(token, versionID, asset.media_id) });
+};
 
 Page({
+  onNoteGalleryChange(event) {
+    this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
+  },
+  onResize(event) {
+    const windowInfo = event.size || {}, media = fitNoteMedia(this.data.media, windowInfo);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
+  onNoteVideoMetadata(event) {
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
+    const media = noteVideoMetadata(this.data.media, event, windowInfo);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks: fitNoteBlocks(this.data.articleBlocks, media, windowInfo) });
+  },
+  onSharedNoteVideoError(event) {
+    const mediaID = String(event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.id || '');
+    const failedURL = String(event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.src || '');
+    const version = this.data.versionView && this.data.versionView.version;
+    const currentAsset = (this.data.media || []).find(item => item.media_id === mediaID && item.kind === 'video');
+    if (!mediaID || !version || !this.current(this._epoch) || !currentAsset || (failedURL && failedURL !== currentAsset.local_path)) return;
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
+    const media = fitNoteMedia((this.data.media || []).map(item => item.media_id === mediaID && item.kind === 'video'
+      ? Object.assign({}, item, { local_path: '', playback_expires_at: '', preview_error: '视频播放失败' }) : item), windowInfo);
+    const articleBlocks = version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks, mediaFailuresCount: mediaFailureCount(media), notice: '视频播放失败，请重新加载。' });
+  },
   data: {
     loading: true, busy: false, loginRequired: false, error: '', notice: '', pageView: 'directory',
     directory: null, versionView: null, media: [], articleBlocks: [], feedbackText: '', satisfaction: '',
-    readAcknowledged: false, confirmed: false,
+    mediaGroups: [], galleryPositions: {},
+    readAcknowledged: false, confirmed: false, mediaFailuresCount: 0,
   },
   onLoad(options) {
     wx.hideShareMenu();
@@ -34,9 +70,9 @@ Page({
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   clearProtected(preserveInput) {
     this.setData({
-      directory: null, versionView: null, media: [], articleBlocks: [], pageView: 'directory',
+      directory: null, versionView: null, media: [], mediaGroups: [], galleryPositions: {}, articleBlocks: [], pageView: 'directory',
       feedbackText: preserveInput ? this.data.feedbackText : '', satisfaction: preserveInput ? this.data.satisfaction : '',
-      readAcknowledged: false, confirmed: false, notice: '', error: '', loginRequired: false, loading: true, busy: false,
+      readAcknowledged: false, confirmed: false, mediaFailuresCount: 0, notice: '', error: '', loginRequired: false, loading: true, busy: false,
     });
   },
   current(epoch) { return this._visible && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
@@ -62,17 +98,18 @@ Page({
       const assets = [];
       if (versionView.version && versionView.version.cover) assets.push(versionView.version.cover);
       for (const asset of versionView.version && versionView.version.media || []) if (!assets.some(item => item.media_id === asset.media_id)) assets.push(asset);
-      const media = await Promise.all(assets.map(async asset => Object.assign({}, asset, { local_path: await api.downloadSharedProjectPackageMedia(this._packageToken, versionID, asset.media_id) })));
+      let media = await Promise.all(assets.map(asset => loadSharedPackageMedia(this._packageToken, versionID, asset)));
       if (!this.current(epoch)) return;
       const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375 };
-      const articleBlocks = versionView.version.body_format === 'article_v2' ? renderArticleDocument(versionView.version.body, media, Math.max(240, windowInfo.windowWidth - 40), 'package-version') : [];
+      media = fitNoteMedia(media, windowInfo);
+      const articleBlocks = versionView.version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(versionView.version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
       const versionKey = String(versionView.version && versionView.version.version_id || versionID);
-      this.setData({ versionView, media, articleBlocks, pageView: 'version', busy: false, confirmed: !!versionView.confirmation, readAcknowledged: this._acknowledgedVersions.has(versionKey) });
+      this.setData({ versionView, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, articleBlocks, pageView: 'version', busy: false, mediaFailuresCount: 0, confirmed: !!versionView.confirmation, readAcknowledged: this._acknowledgedVersions.has(versionKey) });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '方案加载失败' }); }
   },
   handleBack() {
     if (this.data.pageView === 'version') {
-      this.setData({ pageView: 'directory', versionView: null, media: [], articleBlocks: [], feedbackText: '', satisfaction: '', notice: '' });
+      this.setData({ pageView: 'directory', versionView: null, media: [], mediaGroups: [], galleryPositions: {}, articleBlocks: [], mediaFailuresCount: 0, feedbackText: '', satisfaction: '', notice: '' });
       return;
     }
     wx.navigateBack();
@@ -136,6 +173,26 @@ Page({
     this.setData({ busy: true, notice: '' });
     try { await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath: asset.local_path, success: resolve, fail: reject })); this.setData({ busy: false, notice: '原图已保存。' }); }
     catch (_) { this.setData({ busy: false, notice: '保存失败，请检查相册权限。' }); }
+  },
+  async retryMediaDownloads() {
+    const version = this.data.versionView && this.data.versionView.version;
+    const failures = (this.data.media || []).filter(item => item && (item.preview_error || !item.local_path));
+    if (!version || !failures.length || this._mediaRetrying) return;
+    const epoch = this._epoch;
+    this._mediaRetrying = true;
+    this.setData({ notice: '正在重新加载视频…' });
+    const updated = new Map();
+    await Promise.all(failures.map(async item => {
+      try { updated.set(item.media_id, Object.assign(await loadSharedPackageMedia(this._packageToken, version.version_id, item), { preview_error: '' })); }
+      catch (_) { /* 保留失败状态，由用户再次重试 */ }
+    }));
+    this._mediaRetrying = false;
+    if (!this.current(epoch)) return;
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
+    const media = fitNoteMedia((this.data.media || []).map(item => updated.get(item.media_id) || item), windowInfo);
+    const articleBlocks = version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
+    const failuresLeft = mediaFailureCount(media);
+    this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks, mediaFailuresCount: failuresLeft, notice: failuresLeft ? '视频仍无法播放，请稍后重试。' : '视频已重新加载。' });
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   retry() { return this.data.pageView === 'version' && this.data.versionView ? null : this.loadDirectory(); },

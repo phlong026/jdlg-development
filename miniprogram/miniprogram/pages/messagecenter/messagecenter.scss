@@ -214,3 +214,34 @@ button::after {
   color: #817568;
   line-height: 1.5;
 }
+
+.toolbar-actions,
+.settings-head,
+.binding-row {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-actions { gap: 18rpx; }
+
+.settings-panel {
+  margin-bottom: 20rpx;
+  padding: 24rpx;
+  border: 1rpx solid #e8dfd3;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.settings-head,
+.binding-row { justify-content: space-between; gap: 20rpx; }
+.settings-title { font-size: 29rpx; font-weight: 600; }
+.panel-close { width: 72rpx; max-width: 72rpx; min-width: 0; flex: none; padding: 6rpx 0; background: transparent; color: #8a673f; font-size: 24rpx; }
+.binding-row { padding: 20rpx 0; border-bottom: 1rpx solid #eee8e1; }
+.binding-row > view { min-width: 0; flex: 1; }
+.panel-action { width: 112rpx; max-width: 112rpx; height: 54rpx; line-height: 54rpx; flex: none; min-width: 88rpx; min-height: 54rpx; padding: 0 18rpx; border-radius: 10rpx; background: #a87943; color: #fff; font-size: 23rpx; }
+.panel-action.quiet { border: 1rpx solid #ded3c5; background: #fff; color: #79624b; }
+.panel-state,.panel-error,.inline-warning { color: #8b6540; font-size: 23rpx; line-height: 1.5; }
+.panel-state,.panel-error { padding: 14rpx 0; }
+.inline-warning { margin: -4rpx 0 18rpx; }
+.settings-panel .pref-card { margin: 18rpx 0 0; padding: 0; border: 0; }
+.date-group { display: block; margin: 26rpx 4rpx 12rpx; color: #766656; font-size: 25rpx; font-weight: 600; }

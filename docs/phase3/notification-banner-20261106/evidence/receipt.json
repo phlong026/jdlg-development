@@ -1,0 +1,18 @@
+{
+  "version": "7.4.4",
+  "appid": "wx94fdc48861913ede",
+  "branch": "fix/unread-banner-dismiss-20261106",
+  "source_commit": "4d890d1faaec6fa5bf3f72c869b9f20f22c7ae76",
+  "source_tree": "1babe3ded209463d3a39739001c5090fd9fc9ff8",
+  "upload_status": "success",
+  "upload_task_id": "confirmation_upload_b5f56044-5166-45da-8b22-5b9590e45e6d",
+  "upload_completed_at": "2026-11-06T16:05:25.466000+08:00",
+  "total_bytes": 3035746,
+  "main_package_bytes": 1250475,
+  "source_unchanged_after_upload": true,
+  "experience_status": "confirmed_7.4.4",
+  "formal_review_submitted": false,
+  "formal_release_performed": false,
+  "remote_push": "success",
+  "experience_checked_at": "2026-11-06T08:09:06.982Z"
+}

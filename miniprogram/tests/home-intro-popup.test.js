@@ -16,7 +16,7 @@ const indexScss = read('miniprogram/pages/index/index.scss');
 for (const source of [indexTs, indexJs]) {
   assert.match(source, /HOME_INTRO_POPUP_STORAGE_KEY/, 'home intro popup should use a stable storage key');
   assert.match(source, /homeIntroPopupVisible:\s*false/, 'home intro popup should default to hidden');
-  assert.match(source, /showHomeIntroPopupOnce\(\)/, 'home intro popup should show once from lifecycle');
+  assert.doesNotMatch(source, /this\.showHomeIntroPopupOnce\(\)/, 'home browsing lifecycle must not open an overlay');
   assert.match(source, /closeHomeIntroPopup\(\)/, 'home intro popup should expose a close action');
   assert.match(source, /onHomeIntroTopup\(\)/, 'home intro popup should expose a recharge-rights action');
   assert.match(source, /onHomeIntroItemTap\(/, 'home intro popup should expose item-level navigation');

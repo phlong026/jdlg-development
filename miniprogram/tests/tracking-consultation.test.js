@@ -56,6 +56,17 @@ test('actual page routes only explicit human request to consultation endpoint',a
 });
 test('source TypeScript uses same explicit endpoint and optional header bridge',()=>{const source=fs.readFileSync(path.join(root,'pages/customerservice/customerservice.ts'),'utf8');assert.match(source,/reason === 'handoff_human' \? '\/api\/v1\/miniprogram\/customer-service\/consultation-requests'/);assert.match(source,/optionalConsultationHeaders\(apiPath,/);});
 
+test('human handoff asks before reusing the bound phone and exposes withdrawal',()=>{
+ const source=fs.readFileSync(path.join(root,'pages/customerservice/customerservice.ts'),'utf8');
+ const template=fs.readFileSync(path.join(root,'pages/customerservice/customerservice.wxml'),'utf8');
+ assert.match(source,/ensureBusinessContactConsent/);
+ assert.doesNotMatch(source,/contact_phone_consent:/);
+ assert.match(source,/contact-consent/);
+ assert.match(source,/withdrawBusinessContactConsent/);
+ assert.match(source,/本次需求仍会保存给客服/);
+ assert.match(template,/bindtap="withdrawBusinessContactConsent"/);
+});
+
 test('actual handoff does not claim request saved when business submit fails',async()=>{
  for(const saved of [true,false]){const h=pageHarness();h.p.touchFlow=()=>{};h.p.recordEvent=()=>{};h.p.createLead=async()=>{if(!saved){const e=new Error('missing route');e.statusCode=404;throw e;}return{id:73};};await h.p.handoffHuman();assert.equal(h.toasts.length,1);assert.match(h.toasts[0],saved?/已为你记录需求/:/请求暂未保存/);}
 });

@@ -1,0 +1,26 @@
+[
+  {
+    "path": "/templates/featured",
+    "status": 401
+  },
+  {
+    "path": "/templates/tab-config",
+    "status": 401
+  },
+  {
+    "path": "/templates?page=1&page_size=1",
+    "status": 401
+  },
+  {
+    "path": "/templates/search?keyword=别墅&page=1&page_size=1",
+    "status": 401
+  },
+  {
+    "path": "/inspirations?page=1&page_size=1",
+    "status": 401
+  },
+  {
+    "path": "/designers?page=1&page_size=1",
+    "status": 401
+  }
+]

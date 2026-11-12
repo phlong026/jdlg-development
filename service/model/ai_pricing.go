@@ -18,6 +18,38 @@ type AIPricing struct {
 	UpdatedAt   time.Time      `json:"updated_at" db:"updated_at"`
 }
 
+const aiPricingCacheVersion = 1
+
+// aiPricingCacheEntry is deliberately separate from the public model JSON.
+// ExtraConfig is operational configuration: it must survive internal cache
+// round-trips without becoming a field that API serializers expose by accident.
+type aiPricingCacheEntry struct {
+	Version          int       `json:"version"`
+	ID               int64     `json:"id"`
+	Scene            string    `json:"scene"`
+	Stones           int64     `json:"stones"`
+	ExtraConfig      string    `json:"extra_config"`
+	ExtraConfigValid bool      `json:"extra_config_valid"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func newAIPricingCacheEntry(pricing *AIPricing) aiPricingCacheEntry {
+	return aiPricingCacheEntry{
+		Version: aiPricingCacheVersion, ID: pricing.ID, Scene: pricing.Scene, Stones: pricing.Stones,
+		ExtraConfig: pricing.ExtraConfig.String, ExtraConfigValid: pricing.ExtraConfig.Valid,
+		CreatedAt: pricing.CreatedAt, UpdatedAt: pricing.UpdatedAt,
+	}
+}
+
+func (entry aiPricingCacheEntry) pricing() *AIPricing {
+	return &AIPricing{
+		ID: entry.ID, Scene: entry.Scene, Stones: entry.Stones,
+		ExtraConfig: sql.NullString{String: entry.ExtraConfig, Valid: entry.ExtraConfigValid},
+		CreatedAt:   entry.CreatedAt, UpdatedAt: entry.UpdatedAt,
+	}
+}
+
 // GetExtraConfig 获取额外配置字符串
 func (p *AIPricing) GetExtraConfig() string {
 	if p.ExtraConfig.Valid {
@@ -48,9 +80,9 @@ func (m *AIPricingModel) GetByScene(scene string) (*AIPricing, error) {
 	key := "ai_pricing:scene:" + scene
 	val, err := m.Redis.Get(m.ctx, key).Result()
 	if err == nil {
-		var pricing AIPricing
-		if err := json.Unmarshal([]byte(val), &pricing); err == nil {
-			return &pricing, nil
+		var cached aiPricingCacheEntry
+		if err := json.Unmarshal([]byte(val), &cached); err == nil && cached.Version == aiPricingCacheVersion {
+			return cached.pricing(), nil
 		}
 	}
 
@@ -67,7 +99,7 @@ func (m *AIPricingModel) GetByScene(scene string) (*AIPricing, error) {
 	}
 
 	// 写入Redis缓存
-	data, _ := json.Marshal(pricing)
+	data, _ := json.Marshal(newAIPricingCacheEntry(pricing))
 	m.Redis.Set(m.ctx, key, data, time.Hour*24)
 
 	return pricing, nil

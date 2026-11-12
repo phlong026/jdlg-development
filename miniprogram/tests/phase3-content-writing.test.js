@@ -24,12 +24,13 @@ function harness(name) {
   vm.runInNewContext(fs.readFileSync(path.join(root, `pages/${name}/${name}.js`), 'utf8'), {
     Page(value) { definition = value; }, wx, exports: {}, module: { exports: {} }, console,
     require(id) {
-      if (id.endsWith('/ai-stream')) return aiStreamStub;
+      if (id.endsWith('/ai-stream')) return { startAIStream: options => aiStreamStub.startAIStream(options) };
       if (id.endsWith('/phase3-api')) return apiStub;
       if (id.endsWith('/parameter')) return { generateRequestParams: () => ({}), paramsToHeaders: () => ({}) };
       if (id.endsWith('/deviceFingerprint')) return { getCachedDeviceFingerprint: () => '' };
       if (id.endsWith('/aiError')) return { sanitizeAIGenerationErrorMessage: value => value };
       if (id.endsWith('/promptReview')) return { blockUnsafeText: () => false };
+      if (String(id).includes('writing-policy')) return { ANTI_FABRICATION_CLAUSE: require(path.join(__dirname, '../miniprogram/utils/writing-policy.js')).ANTI_FABRICATION_CLAUSE };
       throw new Error(`unexpected require ${id}`);
     },
     setTimeout() {}, clearTimeout() {}, Promise, JSON, Object, String, Number, Date, Map, Set, Error, Uint8Array, ArrayBuffer,
@@ -106,10 +107,63 @@ test('tab examples arrive from the server registry and never feed fabricated fac
   assert.ok(h.page.data.instruction.indexOf('短句为主') >= 0);
   assert.equal(h.page.data.facts, '', '示例是虚构事实，绝不能自动进入已知资料');
 
-  const writingWxml = fs.readFileSync(path.join(root, 'pages/contentwriting/contentwriting.wxml'), 'utf8');
-  assert.match(writingWxml, /wx:if="\{\{example\}\}" class="example-card"/);
-  const exampleBlock = writingWxml.slice(writingWxml.indexOf('example-card'), writingWxml.indexOf('login-state'));
-  assert.ok(exampleBlock.indexOf('bindtap') < 0, '示例卡必须只读，不得有点填动作');
+});
+
+test('first show reuses the prompt request started by onLoad', async () => {
+  const h = harness('contentwriting');
+  let calls = 0;
+  let finish;
+  h.apiStub.writingPrompts = () => { calls += 1; return new Promise(resolve => { finish = resolve; }); };
+  h.page.onLoad({});
+  h.page.onShow();
+  assert.equal(calls, 1);
+  finish({ prompts: [] });
+  await tick();
+  h.page.onShow();
+  assert.equal(calls, 1);
+});
+
+test('account switch clears personal intro presets before loading the new account', async () => {
+  const h = harness('contentwriting');
+  h.apiStub.writingPrompts = async () => ({ prompts: [], intro_presets: [{ id: 1, name: '旧账号名片', content: '旧账号私有介绍' }] });
+  h.page.onLoad({}); await tick();
+  h.page.selectIntroPreset({ detail: { value: 0 } });
+  let finish;
+  h.apiStub.writingPrompts = () => new Promise(resolve => { finish = resolve; });
+  h.token('session-two'); h.page.onShow();
+  assert.equal(h.page.data.introPresets.length, 0);
+  assert.equal(h.page.data.introPresetIndex, -1);
+  h.page.setData({ facts: '新账号资料' });
+  assert.doesNotMatch(h.page.buildPrompt(), /旧账号私有介绍/);
+  assert.equal(typeof finish, 'function', '新账号应重新加载自己的预设');
+  finish({ prompts: [], intro_presets: [] }); await tick();
+});
+
+test('late prompt response cannot cross accounts or release the new account request', async () => {
+  const h = harness('contentwriting');
+  const requests = [];
+  h.apiStub.writingPrompts = () => new Promise(resolve => requests.push(resolve));
+  h.page.onLoad({});
+  h.token('session-two'); h.page.onShow();
+  assert.equal(requests.length, 2);
+  const currentRequest = h.page._typesRequest;
+  requests[0]({ prompts: [], intro_presets: [{ name: '旧账号', content: '旧资料' }] }); await tick();
+  assert.equal(h.page.data.introPresets.length, 0);
+  assert.equal(h.page._typesRequest, currentRequest);
+  assert.equal(h.page._typesLoadedOnce, false);
+  requests[1]({ prompts: [], intro_presets: [{ name: '新账号', content: '新资料' }] }); await tick();
+  assert.equal(h.page.data.introPresets[0].content, '新资料');
+  assert.equal(h.page._typesLoadedOnce, true);
+});
+
+test('prompt response checks current storage even before account-change onShow', async () => {
+  const h = harness('contentwriting');
+  let finish;
+  h.apiStub.writingPrompts = () => new Promise(resolve => { finish = resolve; });
+  h.page.onLoad({}); h.token('session-two');
+  finish({ prompts: [], intro_presets: [{ name: '旧账号', content: '旧资料' }] }); await tick();
+  assert.equal(h.page.data.introPresets.length, 0);
+  assert.notEqual(h.page._typesLoadedOnce, true);
 });
 
 test('prompt registry drives generation while the anti-fabrication clause stays client-side', async () => {
@@ -119,7 +173,7 @@ test('prompt registry drives generation while the anti-fabrication clause stays 
   ] });
   h.page.onLoad({}); h.page.onShow();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.page.data.heading, '服务端设计标题');
+  assert.equal(h.page.data.heading, '方案设计说明');
   h.page.setData({ title: '庭院方案', facts: '保留现有大树，入口朝南。' });
   h.page.generateWriting();
   const navigation = h.calls.find(call => call.navigate).navigate;
@@ -252,7 +306,7 @@ test('navigation failure and returning from chat preserve user-entered facts and
   assert.equal(h.page.data.result, '手动编辑的文案');
 });
 
-test('writing opened by the editor returns to that same editor instead of opening a second instance', () => {
+test('writing opened by the editor returns to that same editor only after the opener acknowledges', async () => {
   const h = harness('contentwriting'); h.page.onLoad({ source: 'editor' }); h.page.onShow();
   h.page.setData({ title: '庭院方案', result: '用户核对后的设计说明' });
   h.page.saveToDraft();
@@ -260,7 +314,10 @@ test('writing opened by the editor returns to that same editor instead of openin
   const prefill = h.calls.find(call => call.event === 'prefillContent');
   assert.equal(prefill.value.title, '庭院方案');
   assert.equal(prefill.value.text, '用户核对后的设计说明');
-  assert.ok(h.calls.some(call => call.back));
+  assert.equal(h.calls.some(call => call.back), false, '原页面确认前不得返回');
+  h.listeners.writingAck({ state: 'applied', message: '已采纳', request: prefill.value.request, operation: prefill.value.operation });
+  await tick();
+  assert.ok(h.calls.some(call => call.back), '确认成功后才返回同一编辑器');
 });
 
 test('the actual send button includes the current user message once and preserves a genuine repeated historical question', async () => {
@@ -277,4 +334,111 @@ test('the actual send button includes the current user message once and preserve
   assert.equal(messages.filter(item => item.role === 'user' && item.content === '请写庭院说明').length, 2);
   assert.equal(messages[1].content, '上一轮说明');
   assert.equal(messages[2].content, '请写庭院说明');
+});
+
+for (const boundary of ['stop', 'unload', 'account-change', 'storage-change']) {
+  test(`quick generation ignores late callbacks after ${boundary}`, () => {
+    const h = harness('contentwriting'); let callbacks, aborted = 0;
+    h.aiStreamStub.startAIStream = options => { callbacks = options; return { abort() { aborted++; options.onError('abort callback'); } }; };
+    h.page.onLoad({}); h.page.onShow(); h.page.setData({ facts: '真实资料' }); h.page.quickGenerate();
+    if (boundary === 'stop') h.page.stopStream();
+    if (boundary === 'unload') h.page.onUnload();
+    if (boundary === 'account-change' || boundary === 'storage-change') h.token('session-two');
+    if (boundary === 'account-change') h.page.onShow();
+    const before = JSON.stringify(h.page.data);
+    callbacks.onChunk('旧片段'); callbacks.onDone('旧账号文案'); callbacks.onError('旧错误');
+    assert.equal(JSON.stringify(h.page.data), before);
+    if (boundary !== 'storage-change') assert.equal(aborted, 1);
+    if (boundary === 'account-change') assert.equal(h.page.data.streaming, false);
+  });
+}
+
+test('stopped stream cannot overwrite or stop its replacement', () => {
+  const h = harness('contentwriting'); const requests = [];
+  h.aiStreamStub.startAIStream = options => { requests.push(options); return { abort() { options.onError('aborted'); } }; };
+  h.page.onLoad({}); h.page.onShow(); h.page.setData({ facts: '资料' }); h.page.quickGenerate(); h.page.stopStream(); h.page.quickGenerate();
+  requests[1].onChunk('新片段'); requests[0].onDone('旧结果'); requests[0].onError('旧错误');
+  assert.equal(h.page.data.streaming, true); assert.equal(h.page.data.streamPartial, '新片段'); assert.equal(h.page.data.error, '');
+  requests[1].onDone('新结果'); requests[1].onChunk('完成后的片段'); requests[1].onError('完成后的错误');
+  assert.equal(h.page.data.result, '新结果'); assert.equal(h.page.data.streaming, false); assert.equal(h.page.data.streamPartial, ''); assert.equal(h.page.data.error, '');
+});
+
+test('synchronously completed stream leaves no active task and startup errors recover', () => {
+  const h = harness('contentwriting'); let aborted = 0;
+  h.aiStreamStub.startAIStream = options => { options.onDone('同步结果'); return { abort() { aborted++; } }; };
+  h.page.onLoad({}); h.page.onShow(); h.page.setData({ facts: '资料' }); h.page.quickGenerate();
+  assert.equal(h.page.data.result, '同步结果'); assert.equal(h.page.data.streaming, false); assert.ok(!h.page._streamTask);
+  h.aiStreamStub.startAIStream = () => { throw new Error('request unavailable'); };
+  h.page.quickGenerate(); assert.equal(h.page.data.streaming, false); assert.ok(h.page.data.error); assert.equal(aborted, 0);
+});
+
+test('known writing types keep product names while retaining server instructions and custom types', async () => {
+  const h = harness('contentwriting');
+  h.apiStub.writingPrompts = async () => ({ prompts: [
+    ...['design', 'project', 'promotion'].map(key => ({ key, label: 'è®¾', heading: '服务端标题', instruction: key + ' 服务端专用指令' })),
+    { key: 'custom', label: '招募文案', heading: '自定义标题', instruction: '自定义指令' },
+  ] });
+  h.page.onLoad({}); h.page.onShow(); await tick();
+  assert.deepEqual(Array.from(h.page.data.writingTypes, item => item.label), ['设计说明', '项目介绍', '推广文案', '招募文案']);
+  h.page.setData({ facts: '真实资料' });
+  for (const key of ['design', 'project', 'promotion', 'custom']) {
+    h.page.selectType({ currentTarget: { dataset: { type: key } } });
+    assert.match(h.page.buildPrompt(), new RegExp(key === 'custom' ? '自定义指令' : key + ' 服务端专用指令'));
+  }
+  assert.equal(h.page.data.heading, '自定义标题');
+});
+
+const nativeCompiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
+// Native WXML assertions need WeChat DevTools; Linux CI still runs all runtime tests.
+// An explicitly supplied compiler path must work, rather than being skipped.
+test('native error rendering places complete feedback above footer actions and reserves its height', {
+  skip: !process.env.WXML_COMPILER && !fs.existsSync(nativeCompiler) ? 'WeChat native WXML compiler not installed' : false,
+}, () => {
+  const compiler = nativeCompiler;
+  const file = './pages/contentwriting/contentwriting.wxml';
+  const source = require('node:child_process').execFileSync(compiler, [file], { cwd: root, encoding: 'utf8' });
+  const context = { window: {}, console: { log: error => { throw error; } } };
+  vm.createContext(context); vm.runInContext(source, context);
+  const error = '请先填写已知资料和要求，AI 将以这些事实为依据。\n补充项目地点与设计重点后重试。';
+  const nodes = tree => typeof tree === 'object' && tree ? [tree, ...(tree.children || []).flatMap(nodes)] : [];
+  const text = tree => typeof tree === 'string' ? tree : (tree?.children || []).map(text).join('');
+  const tree = context.$gwx(file)({ __profileAccessMounted: true, loginRequired: false, error, result: '', writingTypes: [], introPresets: [] });
+  const all = nodes(tree);
+  const footer = all.find(node => node.attr?.class === 'writing-footer');
+  const alert = nodes(footer).find(node => node.attr?.role === 'alert');
+  assert.ok(alert, 'error must be visible in the fixed footer');
+  assert.equal(text(alert), error);
+  const row = nodes(footer).find(node => node.attr?.class === 'writing-footer-actions');
+  assert.ok(nodes(row).some(node => node.attr?.bindtap === 'quickGenerate'));
+  const reserve = all.find(node => String(node.attr?.class || '').includes('writing-error-reserve'));
+  assert.equal(text(reserve), error, 'reserve the actual wrapped message height without truncating');
+});
+
+test('manual writing clears stale generation errors without changing the entered result', () => {
+  const h = harness('contentwriting');
+  h.page.setData({ error: '请先填写创作要求' });
+  h.page.editResult({ detail: { value: '手动填写的文案' } });
+  assert.equal(h.page.data.result, '手动填写的文案');
+  assert.equal(h.page.data.error, '');
+});
+
+test('video writing generates a validated bundle and adopts only selected fields', () => {
+ const h = harness('contentwriting'); h.page.onLoad({source:'editor'}); h.page.onShow();
+ h.listeners.writingContext({source:'editor',target:'video_bundle',content_id:'video-content',revision:4,title:'人工标题',facts:'庭院改造',share_copy:'人工转发文案'});
+ assert.equal(h.page.data.videoBundle,true);
+ assert.match(h.page.buildPrompt(), /share_copy/); assert.match(h.page.buildPrompt(), /不得编造/);
+ let callbacks;h.aiStreamStub.startAIStream=options=>{callbacks=options;return {abort(){}}};
+ h.page.quickGenerate();callbacks.onDone(JSON.stringify({title:'生成标题',share_copy:'生成转发',moments_copy:'生成朋友圈'}));
+ assert.equal(h.page.data.videoCopy.moments_copy,'生成朋友圈');
+ h.page.saveToDraft();const emitted=h.calls.find(call=>call.event==='prefillContent').value;
+ assert.equal(emitted.content_id,'video-content');assert.equal(emitted.revision,4);
+ assert.equal(emitted.video_copy.moments_copy,'生成朋友圈');assert.equal(emitted.video_copy.title,undefined);assert.equal(emitted.video_copy.share_copy,undefined);
+});
+
+test('video writing rejects malformed structured output and preserves previous results', () => {
+ const h=harness('contentwriting');h.page.onLoad({source:'editor'});h.page.onShow();h.listeners.writingContext({source:'editor',target:'video_bundle',title:'已知主题',facts:''});
+ let callbacks;h.aiStreamStub.startAIStream=options=>{callbacks=options;return {abort(){}}};
+ h.page.quickGenerate();assert.equal(h.page.data.streaming,true,'video theme alone can supply known facts');callbacks.onDone('没有结构化字段的普通正文');
+ assert.equal(h.page.data.streaming,false);assert.match(h.page.data.error,/格式|结构/);assert.equal(h.page.data.videoCopy,null);
+ h.page.saveToDraft();assert.equal(h.calls.some(call=>call.event==='prefillContent'),false);
 });

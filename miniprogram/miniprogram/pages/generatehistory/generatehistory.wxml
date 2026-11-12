@@ -93,6 +93,7 @@
         data-id="{{item.task_no}}"
         data-item="{{item}}"
         bindtap="onItemClick"
+        bindlongpress="onLongDelete"
       >
         <view class="item-main">
           <view class="item-thumbnail">

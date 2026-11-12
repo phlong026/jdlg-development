@@ -1256,11 +1256,14 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 
 			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
 			if err := ossFileModel.Create(ossFile); err != nil {
-				// 如果数据库保存失败，尝试删除COS中的文件
-				cosClient.Object.Delete(context.Background(), objectKey)
+				// 数据库失败后补偿删除已上传对象；补偿失败必须可追踪，不能吞错。
+				cleanupErr := compensateUploadedOSSObject(c.Request.Context(), cosClient, cfg, objectKey, ossObjectDeleteTimeout)
+				if cleanupErr != nil && !errors.Is(cleanupErr, errOSSObjectNotFound) {
+					log.Printf("[OSS][WARN] upload compensation failed admin_id=%d database_error_type=%T compensation_error_type=%T", adminID, err, cleanupErr)
+				}
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
-					"msg":  "保存文件记录失败: " + err.Error(),
+					"msg":  "保存文件记录失败",
 				})
 				return
 			}
@@ -1285,7 +1288,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 		oss.DELETE("/files/:id", func(c *gin.Context) {
 			idStr := c.Param("id")
 			id, err := strconv.ParseInt(idStr, 10, 64)
-			if err != nil {
+			if err != nil || id <= 0 {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
 					"msg":  "无效的文件ID",
@@ -1293,29 +1296,28 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				return
 			}
 
-			// 获取文件记录
 			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
-			file, err := ossFileModel.GetByID(id)
+			err = deleteManagedOSSFile(c.Request.Context(), ossFileModel, newCOSObjectDeleteFunc(component.GetCOSClient(), config.Get()), id, ossObjectDeleteTimeout)
 			if err != nil {
-				c.JSON(http.StatusNotFound, gin.H{
-					"code": 404,
-					"msg":  "文件不存在",
-				})
-				return
-			}
-
-			// 从COS删除文件
-			cosClient := component.GetCOSClient()
-			if cosClient != nil {
-				cosClient.Object.Delete(context.Background(), file.ObjectKey)
-			}
-
-			// 从数据库删除记录
-			if err := ossFileModel.Delete(id); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "删除文件记录失败: " + err.Error(),
-				})
+				if errors.Is(err, errOSSRecordNotFound) {
+					c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "文件已不存在", "already_missing": true})
+					return
+				}
+				reason := classifyOSSDeleteFailure(err)
+				status := http.StatusBadGateway
+				message := "对象存储删除失败，请重试"
+				switch {
+				case errors.Is(err, errOSSStorageUnavailable):
+					status, message = http.StatusServiceUnavailable, "对象存储暂不可用，请稍后重试"
+				case errors.Is(err, errOSSRecordLoadFailed):
+					status, message = http.StatusInternalServerError, "文件记录读取失败，请重试"
+				case errors.Is(err, errOSSObjectKeyAmbiguous):
+					status, message = http.StatusConflict, "文件存储路径无法安全确认，未执行删除"
+				case errors.Is(err, errOSSRecordDeleteFailed):
+					status, message = http.StatusInternalServerError, "文件记录删除失败，请重试"
+				}
+				log.Printf("[OSS][WARN] delete failed id=%d reason=%s error_type=%T", id, reason, err)
+				c.JSON(status, gin.H{"code": status, "msg": message, "retryable": true})
 				return
 			}
 
@@ -1327,13 +1329,14 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 
 		// 批量删除OSS文件
 		oss.POST("/files/batch", func(c *gin.Context) {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, ossDeleteBatchBodyLimit)
 			var req struct {
 				IDs []int64 `json:"ids"`
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"code": 400,
-					"msg":  "参数错误: " + err.Error(),
+					"msg":  "参数错误",
 				})
 				return
 			}
@@ -1345,24 +1348,36 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 				})
 				return
 			}
-
-			// 获取所有文件记录
-			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
-			cosClient := component.GetCOSClient()
-
-			// 从COS删除文件
-			for _, id := range req.IDs {
-				file, err := ossFileModel.GetByID(id)
-				if err == nil && cosClient != nil {
-					cosClient.Object.Delete(context.Background(), file.ObjectKey)
+			ids, err := normalizeOSSDeleteIDs(req.IDs, ossDeleteBatchLimit)
+			if err != nil {
+				message := "文件ID必须为正整数"
+				if errors.Is(err, errOSSDeleteBatchTooLarge) {
+					message = fmt.Sprintf("单次最多删除%d个文件", ossDeleteBatchLimit)
 				}
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": message})
+				return
 			}
 
-			// 从数据库批量删除记录
-			if err := ossFileModel.DeleteBatch(req.IDs); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "批量删除失败: " + err.Error(),
+			ossFileModel := model.NewOSSFileModel(userDBModel.DB)
+			deleteObject := newCOSObjectDeleteFunc(component.GetCOSClient(), config.Get())
+			if deleteObject == nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"code":      http.StatusServiceUnavailable,
+					"msg":       "对象存储暂不可用，未删除任何文件记录",
+					"retryable": true,
+				})
+				return
+			}
+			batchCtx, cancelBatch := context.WithTimeout(c.Request.Context(), ossBatchDeleteTimeout)
+			result := deleteManagedOSSFiles(batchCtx, ossFileModel, deleteObject, ids, ossObjectDeleteTimeout)
+			cancelBatch()
+			if len(result.Failures) > 0 {
+				log.Printf("[OSS][WARN] batch delete partial failure requested=%d deleted=%d failed=%d", len(ids), len(result.DeletedIDs), len(result.Failures))
+				c.JSON(http.StatusMultiStatus, gin.H{
+					"code":      http.StatusMultiStatus,
+					"msg":       "批量删除部分失败，失败项可重试",
+					"retryable": true,
+					"data":      result,
 				})
 				return
 			}
@@ -1370,6 +1385,7 @@ func RegisterManagementRoutes(r *gin.RouterGroup, authProcessor *processor.AuthP
 			c.JSON(http.StatusOK, gin.H{
 				"code": 0,
 				"msg":  "批量删除成功",
+				"data": result,
 			})
 		})
 	}

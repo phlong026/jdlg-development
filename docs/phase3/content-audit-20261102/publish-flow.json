@@ -1,0 +1,59 @@
+[
+  {
+    "label": "真实发布测试内容",
+    "path": "pages/contentedit/contentedit",
+    "error": "",
+    "notice": "已发布",
+    "id": "Z1SyR4YDZz55V2x1sGzuFlIhWE7-G8fm",
+    "status": "published",
+    "revision": 4,
+    "version": 1,
+    "preview": false
+  },
+  {
+    "label": "真实阅读已发布内容",
+    "path": "pages/contentreader/contentreader",
+    "error": "",
+    "notice": "",
+    "preview": false
+  },
+  {
+    "label": "真实保存合集",
+    "path": "pages/projectcollections/projectcollections",
+    "error": "",
+    "notice": "已保存",
+    "id": "b9ZWk8koa83c7HTvsNyGZNDHpKXk2-3Z",
+    "status": "draft",
+    "preview": false,
+    "selected": 1
+  },
+  {
+    "label": "合集发布预览",
+    "path": "pages/projectcollections/projectcollections",
+    "error": "",
+    "notice": "",
+    "id": "b9ZWk8koa83c7HTvsNyGZNDHpKXk2-3Z",
+    "status": "draft",
+    "preview": true,
+    "selected": 1
+  },
+  {
+    "label": "合集发布结果",
+    "path": "pages/projectcollections/projectcollections",
+    "error": "",
+    "notice": "已发布 V1",
+    "id": "b9ZWk8koa83c7HTvsNyGZNDHpKXk2-3Z",
+    "status": "published",
+    "preview": false,
+    "selected": 1
+  },
+  {
+    "fatal": "absent 查看"
+  },
+  {
+    "cleanup": {
+      "collection": "revoked",
+      "content": "revoked"
+    }
+  }
+]

@@ -96,11 +96,14 @@ JSON 请求体最大 128 KiB，拒绝未知字段和尾随内容。除媒体上�
 | `POST` | `/shared/:token/feedback` | `text`、`idempotency_key` | 对固定版本提交反馈；正文最多 4000 UTF-8 字节。响应丢失后必须用相同键重试 |
 | `POST` | `/shared/:token/confirm` | `idempotency_key` | 仅当前指定业主确认精确版本；项目和版本维度唯一 |
 | `GET`、`HEAD` | `/shared/:token/media/:id` | 无 | 只能读取该分享固定版本实际引用的封面和媒体 |
+| `POST` | `/shared/:token/media/:id/playback` | 空对象 | 已登录且头像、昵称完整的受邀账号，为 MP4 视频申请短时播放地址 |
 | `GET`、`HEAD` | `/shared/:token/export.docx` | 无 | 登录受邀账号导出当前分享的固定版本；撤销、过期或成员被移除后拒绝 |
 
 受邀端反馈、处理结果各最多返回最近 50 条；超过时 `activity_truncated=true`。分享响应不返回 raw token，媒体 URL 也只使用该分享的鉴权代理路径。
 
 小程序原生转发继续携带同一 `pns` 分享 token。接收人仍须登录且已被邀请；转发本身不会创建成员或变更确认人。
+
+视频播放响应沿用标准信封，`data` 为 `{url, expires_at}`；相对地址须补齐 API 域名。原生 `video` 使用返回地址直接分段读取，不先 `wx.downloadFile`。播放 GET/HEAD 为 `/api/v1/shared-video/:ticket?exp=...&sig=...`，无需登录头，但每次核验账号、资料、分享、成员及素材权限，支持 Range 206/416。票据有效期10分钟，失败后由用户点击重新加载获取新票据；不把长期登录凭据放入 URL。票据仅存在当前进程内，重启失效，多实例需共享票据存储。退出登录本身不会立即撤销已签发票据；账号停用、资料失效、分享撤销或成员移除会拒绝后续请求。
 
 ## 5. 幂等、并发和分页
 

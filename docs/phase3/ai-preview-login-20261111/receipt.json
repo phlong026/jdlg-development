@@ -1,0 +1,85 @@
+{
+  "status": "deployed_uploaded_trial_verified_audit_in_progress",
+  "source_commit": "e9b2733a8a7e243dd33fc79361e7ef9bd9847eda",
+  "branch": "fix/ai-preview-before-login-20261111",
+  "ui_baseline": "11月11日设计师工作台，保留视频修复",
+  "backend": {
+    "pid": 2964262,
+    "sha256": "03b101dc86583d408419e71c233b1c530f490509c9015c8f9d2584c653f0a4b2",
+    "archive_sha256": "235377a3411214c8d20c3f555208669c3fd83c5d8a8d30a67bfb348b93d9f5fa",
+    "go_vcs_modified": false,
+    "previous_pid": 2821770,
+    "previous_sha256": "a6d9b7fb9210dfee10e1236ce985caa2e100bbeb46b18d5dd15d445b0f4082b6",
+    "backup": "/root/jdlg-ai-backup-8.0.7-e9b2733",
+    "publisher": "/root/jdlg-ai-e9b2733/binary_release.py",
+    "schema_changed": false,
+    "environment_changed": false,
+    "nginx_changed": false
+  },
+  "miniprogram": {
+    "version": "8.0.7",
+    "appid": "wx94fdc48861913ede",
+    "upload_exit_code": 0,
+    "upload_terminal_status": "upload success",
+    "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram"
+  },
+  "platform": {
+    "account": "甲第灵光智能体",
+    "development_version": "8.0.7",
+    "development_uploaded_at": "2026-11-12 00:55:13",
+    "trial_badge": true,
+    "audit_version": "8.0.7",
+    "audit_status": "加急审核中",
+    "audit_submitted_at": "2026-11-12 01:00:04",
+    "official_online_version": "7.3.3",
+    "verification": "已登录Chrome版本管理界面的实际显示；未保留URL令牌",
+    "audit_note_manual_entry_verified": false
+  },
+  "checks": {
+    "mini_native_wxml": {
+      "passed": 1494,
+      "failed": 0,
+      "skipped": 0
+    },
+    "go_test_all": "CGO_ENABLED=0 go test ./... -count=1 passed",
+    "go_vet": "CGO_ENABLED=0 go vet ./... passed",
+    "typecheck": {
+      "existing_diagnostics": 229,
+      "added_diagnostics": 0,
+      "full_clean": false
+    },
+    "production_api": {
+      "checks": 14,
+      "public_ai": 200,
+      "private_account": 401,
+      "invalid_pricing_scene": 400,
+      "hot_cold_config_equal": true
+    },
+    "independent_review": "APPROVE，0未解决问题",
+    "npm_production_audit_vulnerabilities": 0,
+    "reverse_patch_check": "passed",
+    "native_guest": {
+      "ai_forms": 8,
+      "automatic_login_or_profile_panels": 0,
+      "unexpected_guest_401_or_428": 0,
+      "cancelled_login_return_preserves_input": true,
+      "restored_authenticated_return_preserves_input": true,
+      "original_storage_restored": true
+    }
+  },
+  "policy": {
+    "anonymous_business_pages": 11,
+    "ai_public_forms": 8,
+    "account_only_personal_pages": 4,
+    "ai_avatar_nickname_required": false,
+    "ai_phone_required": false,
+    "shared_reports_notes_projects_require_complete_profile": true,
+    "private_generation_tracking_enabled": false
+  },
+  "not_verified": [
+    "微信最终审核结论",
+    "真实手机冷启动、弱网与互动微信登录",
+    "真实付费生成任务；本轮没有发起扣费生成"
+  ],
+  "git_pushed": false
+}

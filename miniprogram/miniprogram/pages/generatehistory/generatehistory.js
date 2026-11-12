@@ -46,6 +46,7 @@ Page({
     },
     manageVisibilityObserver: null,
     visibleIdSet: {},
+    longPressedItemId: '',
     onLoad() {
         this.loadLocalDraft();
         this.loadAITools();
@@ -58,14 +59,25 @@ Page({
     onUnload() {
         this.disconnectManageVisibilityObserver();
     },
+    getGenerateDraftStorageKey() {
+        const token = String(wx.getStorageSync('token') || '');
+        const userInfo = wx.getStorageSync('userInfo') || {};
+        const userID = Number(userInfo.id || 0);
+        const profileToken = String(userInfo.token || '');
+        return token && (!profileToken || profileToken === token) && Number.isSafeInteger(userID) && userID > 0
+            ? `${GENERATE_DRAFT_STORAGE_KEY}:${userID}` : '';
+    },
     loadLocalDraft() {
-        const rawDraft = wx.getStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+        const storageKey = this.getGenerateDraftStorageKey();
+        const rawDraft = storageKey
+            ? wx.getStorageSync(storageKey)
+            : null;
         if (!rawDraft || typeof rawDraft !== 'object') {
             this.setData({
                 hasLocalDraft: false,
                 localDraft: null,
             });
-            return;
+            return false;
         }
         const prompt = String(rawDraft.promptText || '').trim();
         const imageCount = [
@@ -80,12 +92,12 @@ Page({
         const generateCount = Number(rawDraft.selectedGenerateCount || 1);
         const hasContent = !!prompt || imageCount > 0 || !!selectedStyle || generateCount > 1;
         if (!hasContent) {
-            wx.removeStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+            wx.removeStorageSync(storageKey);
             this.setData({
                 hasLocalDraft: false,
                 localDraft: null,
             });
-            return;
+            return false;
         }
         const title = prompt
             ? (prompt.length > 22 ? `${prompt.slice(0, 22)}...` : prompt)
@@ -104,13 +116,19 @@ Page({
                 draftTimeText: this.formatTime(String(rawDraft.updated_at || '')),
             },
         });
+        return true;
     },
     onContinueLocalDraft() {
+        if (!this.loadLocalDraft())
+            return;
         wx.navigateTo({
             url: '/pages/aigenerate/aigenerate?draft=1',
         });
     },
     onDiscardLocalDraft() {
+        const storageKey = this.getGenerateDraftStorageKey();
+        if (!storageKey || !this.loadLocalDraft())
+            return;
         wx.showModal({
             title: '丢弃草稿',
             content: '确定丢弃这份未提交的生成草稿吗？',
@@ -120,7 +138,7 @@ Page({
             success: (res) => {
                 if (!res.confirm)
                     return;
-                wx.removeStorageSync(GENERATE_DRAFT_STORAGE_KEY);
+                wx.removeStorageSync(storageKey);
                 this.setData({
                     hasLocalDraft: false,
                     localDraft: null,
@@ -136,8 +154,7 @@ Page({
                 return;
             }
             const apiPath = '/api/v1/miniprogram/ai-tools';
-            const params = (0, parameter_1.generateRequestParams)(token, '', apiPath);
-            const headers = (0, parameter_1.paramsToHeaders)(params);
+            const headers = await this.getAuthHeaders(apiPath);
             const res = await new Promise((resolve, reject) => {
                 wx.request({
                     url: `${API_BASE_URL}${apiPath}`,
@@ -184,14 +201,14 @@ Page({
             url: '/pages/aigenerate/aigenerate'
         });
     },
-    async getAuthHeaders() {
+    async getAuthHeaders(apiPath) {
         const token = wx.getStorageSync('token');
         if (!token) {
             throw new Error('未登录');
         }
         const requestBody = '';
-        const apiPath = '/api/v1/miniprogram/user/tasks';
-        const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath);
+        const device = String(wx.getStorageSync('device_fingerprint') || '');
+        const params = (0, parameter_1.generateRequestParams)(token, requestBody, apiPath, device);
         return (0, parameter_1.paramsToHeaders)(params);
     },
     async loadHistory() {
@@ -199,15 +216,15 @@ Page({
             return;
         this.setData({ loading: true });
         try {
-            const headers = await this.getAuthHeaders();
             const { page, pageSize, selectedToolId } = this.data;
-            let url = `${API_BASE_URL}/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
+            let apiPath = `/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
             if (selectedToolId) {
-                url += `&tool_id=${selectedToolId}`;
+                apiPath += `&tool_id=${encodeURIComponent(selectedToolId)}`;
             }
+            const headers = await this.getAuthHeaders(apiPath);
             return new Promise((resolve, reject) => {
                 wx.request({
-                    url,
+                    url: `${API_BASE_URL}${apiPath}`,
                     method: 'GET',
                     header: headers,
                     success: (res) => {
@@ -252,14 +269,14 @@ Page({
             page: this.data.page + 1
         });
         try {
-            const headers = await this.getAuthHeaders();
             const { page, pageSize, selectedToolId } = this.data;
-            let url = `${API_BASE_URL}/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
+            let apiPath = `/api/v1/miniprogram/user/tasks?page=${page}&page_size=${pageSize}`;
             if (selectedToolId) {
-                url += `&tool_id=${selectedToolId}`;
+                apiPath += `&tool_id=${encodeURIComponent(selectedToolId)}`;
             }
+            const headers = await this.getAuthHeaders(apiPath);
             wx.request({
-                url,
+                url: `${API_BASE_URL}${apiPath}`,
                 method: 'GET',
                 header: headers,
                 success: (res) => {
@@ -466,6 +483,11 @@ Page({
     },
     /** 点击列表项 */
     onItemClick(e) {
+        const id = String(e.currentTarget.dataset.id || '');
+        if (this.longPressedItemId === id) {
+            this.longPressedItemId = '';
+            return;
+        }
         // 如果有左滑打开的项，先关闭
         if (this.data.swipedItemId) {
             this.setData({ swipedItemId: '' });
@@ -480,6 +502,22 @@ Page({
         }
         // 正常模式跳转详情
         this.goToDetail(e);
+    },
+    /** 长按复用现有侧滑删除与二次确认。 */
+    onLongDelete(e) {
+        if (this.data.isEditMode)
+            return;
+        const id = String(e.currentTarget.dataset.id || '');
+        const token = String(wx.getStorageSync('token') || '');
+        if (!id || !this.data.list.some((item) => item.task_no === id))
+            return;
+        this.longPressedItemId = id;
+        setTimeout(() => { if (this.longPressedItemId === id)
+            this.longPressedItemId = ''; }, 400);
+        wx.showActionSheet({ itemList: ['删除记录'], success: (result) => {
+                if (result.tapIndex === 0 && token === String(wx.getStorageSync('token') || '') && this.data.list.some((item) => item.task_no === id))
+                    this.onDelete(e);
+            } });
     },
     /** 切换单项选中 */
     toggleSelect(id) {
@@ -590,6 +628,7 @@ Page({
         const item = e.currentTarget.dataset.item;
         if (!item || !item.task_no)
             return;
+        const token = String(wx.getStorageSync('token') || '');
         wx.showModal({
             title: '确认删除',
             content: '删除后无法恢复，确定要删除这条记录吗？',
@@ -597,9 +636,11 @@ Page({
             confirmColor: '#c4543a',
             cancelText: '取消',
             success: (res) => {
-                if (!res.confirm)
+                if (!res.confirm || token !== String(wx.getStorageSync('token') || '') || !this.data.list.some((t) => t.task_no === item.task_no))
                     return;
                 this.doDeleteByTaskNo(item.task_no).then(() => {
+                    if (token !== String(wx.getStorageSync('token') || ''))
+                        return;
                     this.setData({
                         list: this.data.list.filter((t) => t.task_no !== item.task_no),
                         total: Math.max(0, (this.data.total || 0) - 1),
@@ -659,13 +700,8 @@ Page({
     },
     /** 按 task_no 删除（通用方法） */
     async doDeleteByTaskNo(taskNo) {
-        const token = wx.getStorageSync('token');
-        if (!token) {
-            throw new Error('未登录');
-        }
-        const apiPath = `/api/v1/miniprogram/user/tasks/${taskNo}`;
-        const params = (0, parameter_1.generateRequestParams)(token, '', apiPath);
-        const headers = (0, parameter_1.paramsToHeaders)(params);
+        const apiPath = `/api/v1/miniprogram/user/tasks/${encodeURIComponent(taskNo)}`;
+        const headers = await this.getAuthHeaders(apiPath);
         const res = await new Promise((resolve, reject) => {
             wx.request({
                 url: `${API_BASE_URL}${apiPath}`,

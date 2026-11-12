@@ -57,20 +57,20 @@ function readerRuntime({ accepted = false, deferConfig = false } = {}) {
   adapter.install(); sandbox.App({}); appDefinition.onShow({});
   vm.runInNewContext(fs.readFileSync(path.join(root, readerRoute + '.js'), 'utf8'), {
     Page: sandbox.Page, wx, Date, Math, Promise,
-    require: name => name.endsWith('/index') ? adapter : name.endsWith('/api') ? api : name.endsWith('/protected-media') ? { resolveProtectedMediaURL: async value => value } : require(path.join(root, 'utils/tracking/video'))
+    require: name => name.endsWith('/index') ? adapter : name.endsWith('/api') ? api : name.endsWith('/content-presentation') ? require(path.join(root, 'utils/content-presentation')) : name.endsWith('/protected-media') ? { resolveProtectedMediaURL: async value => value } : require(path.join(root, 'utils/tracking/video'))
   });
   const page = { ...pageDefinition, route: readerRoute, data: JSON.parse(JSON.stringify(pageDefinition.data)),
     setData(value, callback) { Object.assign(this.data, value); if (callback) callback.call(this); },
     createIntersectionObserver() { return { relativeToViewport() { return this; }, observe(selector, callback) { callback({ intersectionRatio: 1 }); }, disconnect() {} }; }
   };
-  const event = (type, detail = {}) => ({ type, detail, currentTarget: { dataset: { mediaId: 'video_asset' } } });
+  const event = (type, detail = {}) => ({ type, detail, currentTarget: { dataset: { mediaId: 'video_asset', playerKey: page.data.presentationView.media.find(item => item.media_id === 'video_asset').playerKey } } });
   return {
     page, adapter, entries, sent, modals, storage, resolveConfig() { pendingConfig(configuration); },
     async mount() { page.onLoad({ content_id: 'material_id', content_version: 1 }); page.onShow(); page.onReady(); await settle(); },
     progress(position, elapsed = 1000) { mono += elapsed; page.videoProgress(event('timeupdate', { currentTime: position, duration: 100 })); },
     play() { page.videoState(event('play')); },
     videos() { return [...sent, ...adapter.getSDK().queueForTest().map(row => row.event)].filter(event => event.event_type.startsWith('video_')); },
-    player() { return page.players.video_asset; }, paused: () => paused
+    player() { return page.players[page.data.presentationView.media.find(item => item.media_id === 'video_asset').playerKey]; }, paused: () => paused
   };
 }
 

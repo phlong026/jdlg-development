@@ -66,7 +66,7 @@ for SQL_FILE in phase3_writing_prompts_up.sql phase3_notification_prefs_up.sql p
   SQL_PATH="$(dirname "$0")/../service/sql/$SQL_FILE"
   if [ -f "$SQL_PATH" ]; then
     echo "执行 $SQL_FILE ..."
-    mysql -u "$(echo $MYSQL_DSN | sed 's/.*\/\/\([^:]*\):.*/\1/')" -p"$(echo $MYSQL_DSN | sed 's/.*:\([^@]*\)@.*/\1/')" "$(echo $MYSQL_DSN | sed 's/.*\/\([^?]*\).*/\1/')" < "$SQL_PATH" && echo "  ✅ $SQL_FILE" || echo "  ❌ $SQL_FILE 失败"
+    mysql --default-character-set=utf8mb4 -u "$(echo $MYSQL_DSN | sed 's/.*\/\/\([^:]*\):.*/\1/')" -p"$(echo $MYSQL_DSN | sed 's/.*:\([^@]*\)@.*/\1/')" "$(echo $MYSQL_DSN | sed 's/.*\/\([^?]*\).*/\1/')" < "$SQL_PATH" && echo "  ✅ $SQL_FILE" || echo "  ❌ $SQL_FILE 失败"
   fi
 done
 

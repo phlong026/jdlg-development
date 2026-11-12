@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -27,8 +28,8 @@ type miniprogramProfile struct {
 
 type miniprogramProfileLoader func(context.Context, int64) (miniprogramProfile, error)
 
-// These exact endpoints are the only paths that may run before profile completion.
-// Endpoints that read or update a profile keep their existing route-level token check.
+// Bootstrap endpoints keep their existing route-level token checks where required.
+// Public preview and authenticated AI operations are classified separately below.
 var miniprogramProfileBootstrap = map[string]map[string]bool{
 	http.MethodGet: {
 		miniprogramAPIPrefix + "/profile":         true,
@@ -40,7 +41,6 @@ var miniprogramProfileBootstrap = map[string]map[string]bool{
 		miniprogramAPIPrefix + "/login/phone":                      true,
 		miniprogramAPIPrefix + "/sms/send":                         true,
 		miniprogramAPIPrefix + "/profile/password/recover":         true,
-		miniprogramAPIPrefix + "/ai/upload-reference-image":        true,
 		miniprogramAPIPrefix + "/tracking/share-entry":             true,
 		miniprogramAPIPrefix + "/wecom/enterprise-wechat/callback": true,
 	},
@@ -48,6 +48,68 @@ var miniprogramProfileBootstrap = map[string]map[string]bool{
 		miniprogramAPIPrefix + "/profile/nickname": true,
 		miniprogramAPIPrefix + "/profile/avatar":   true,
 		miniprogramAPIPrefix + "/profile/identity": true,
+	},
+}
+
+// These routes carry only public browse data or tracking credentials. The
+// tracking handlers still validate any supplied login or entry credential.
+// Keep this list exact: detail pages and all business mutations remain gated.
+var miniprogramProfilePublicTransport = map[string]map[string]bool{
+	http.MethodGet: {
+		miniprogramAPIPrefix + "/ai/pricing":           true,
+		miniprogramAPIPrefix + "/ai-tools":             true,
+		miniprogramAPIPrefix + "/templates/featured":   true,
+		miniprogramAPIPrefix + "/templates/tab-config": true,
+		miniprogramAPIPrefix + "/templates":            true,
+		miniprogramAPIPrefix + "/templates/search":     true,
+		miniprogramAPIPrefix + "/inspirations":         true,
+		miniprogramAPIPrefix + "/designers":            true,
+	},
+	http.MethodPost: {
+		miniprogramAPIPrefix + "/public-share-links":    true,
+		miniprogramAPIPrefix + "/tracking/entry":        true,
+		miniprogramAPIPrefix + "/tracking/events/batch": true,
+		miniprogramAPIPrefix + "/tracking/shares":       true,
+	},
+}
+
+// AI browsing is public, while creating tasks and reading account-owned AI data
+// only need an authenticated account. Avatar and nickname are presentation data
+// and must not be prerequisites for using these account-scoped AI operations.
+// Keep every static path explicit; dynamic paths are matched by their route shape.
+var miniprogramProfileAuthOnly = map[string]map[string]bool{
+	http.MethodGet: {
+		miniprogramAPIPrefix + "/building-code-documents":              true,
+		miniprogramAPIPrefix + "/user/stones":                          true,
+		miniprogramAPIPrefix + "/user/stones/summary":                  true,
+		miniprogramAPIPrefix + "/user/tasks":                           true,
+		miniprogramAPIPrefix + "/user/ai/download-config":              true,
+		miniprogramAPIPrefix + "/user/ai/task/download-original-file":  true,
+		miniprogramAPIPrefix + "/user/ai/video/download-original-file": true,
+	},
+	http.MethodPost: {
+		miniprogramAPIPrefix + "/ai/draw":                         true,
+		miniprogramAPIPrefix + "/ai/chat":                         true,
+		miniprogramAPIPrefix + "/ai/generate-prompt":              true,
+		miniprogramAPIPrefix + "/ai/upload-reference-image":       true,
+		miniprogramAPIPrefix + "/ai/rural-villa-design":           true,
+		miniprogramAPIPrefix + "/ai/allround-design":              true,
+		miniprogramAPIPrefix + "/ai/building-replacement":         true,
+		miniprogramAPIPrefix + "/ai/parent-child-design":          true,
+		miniprogramAPIPrefix + "/ai/cost/calculate":               true,
+		miniprogramAPIPrefix + "/ai/cost/doc":                     true,
+		miniprogramAPIPrefix + "/ai/chat/stream":                  true,
+		miniprogramAPIPrefix + "/ai/intent/stream":                true,
+		miniprogramAPIPrefix + "/ai/prompt/optimize":              true,
+		miniprogramAPIPrefix + "/ai/building-code/chat":           true,
+		miniprogramAPIPrefix + "/ai/task/status":                  true,
+		miniprogramAPIPrefix + "/ai/video/create":                 true,
+		miniprogramAPIPrefix + "/ai/video/generate-prompts":       true,
+		miniprogramAPIPrefix + "/building-code-documents/upload":  true,
+		miniprogramAPIPrefix + "/user/stones/details":             true,
+		miniprogramAPIPrefix + "/user/ai/wecom/verify-phone":      true,
+		miniprogramAPIPrefix + "/user/ai/task/download-original":  true,
+		miniprogramAPIPrefix + "/user/ai/video/download-original": true,
 	},
 }
 
@@ -83,12 +145,126 @@ func isMiniprogramProfileBootstrap(method, path string) bool {
 	return method == http.MethodOptions || miniprogramProfileBootstrap[method][path]
 }
 
+func pathSingleSegmentBetween(path, prefix, suffix string) string {
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return ""
+	}
+	segment := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	if segment == "" || strings.Contains(segment, "/") {
+		return ""
+	}
+	return segment
+}
+
+func positiveIDSegment(path, prefix, suffix string) bool {
+	segment := pathSingleSegmentBetween(path, prefix, suffix)
+	id, err := strconv.ParseInt(segment, 10, 64)
+	return err == nil && id > 0
+}
+
+func publicTrackingReadPath(method, path string) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	prefix := miniprogramAPIPrefix + "/tracking/"
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	parts := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	positive := func(value string) bool {
+		n, err := strconv.Atoi(value)
+		return err == nil && n >= 0
+	}
+	validID := func(value string, min, max int) bool {
+		if len(value) < min || len(value) > max {
+			return false
+		}
+		for _, char := range value {
+			if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-') {
+				return false
+			}
+		}
+		return true
+	}
+	if len(parts) == 2 && parts[0] == "media" && validID(parts[1], 32, 32) {
+		return true
+	}
+	if method == http.MethodHead {
+		if len(parts) != 8 || parts[0] != "project-collections" || !validID(parts[1], 8, 128) || parts[2] != "versions" || parts[4] != "items" || !positive(parts[5]) || parts[6] != "media" || !validID(parts[7], 8, 128) {
+			return false
+		}
+		version, err := strconv.Atoi(parts[3])
+		return err == nil && version > 0
+	}
+	if method != http.MethodGet {
+		return false
+	}
+	if len(parts) == 4 && parts[0] == "contents" && validID(parts[1], 8, 128) && parts[2] == "versions" {
+		version, err := strconv.Atoi(parts[3])
+		return err == nil && version > 0
+	}
+	if len(parts) < 4 || parts[0] != "project-collections" || !validID(parts[1], 8, 128) || parts[2] != "versions" {
+		return false
+	}
+	version, err := strconv.Atoi(parts[3])
+	if err != nil || version < 1 {
+		return false
+	}
+	if len(parts) == 4 {
+		return true
+	}
+	if len(parts) < 6 || parts[4] != "items" || !positive(parts[5]) {
+		return false
+	}
+	if len(parts) == 6 || len(parts) == 7 && (parts[6] == "content") {
+		return true
+	}
+	return len(parts) == 8 && parts[6] == "media" && validID(parts[7], 8, 128)
+}
+
+func isMiniprogramProfilePublicTransport(method, path string) bool {
+	if miniprogramProfilePublicTransport[method][path] {
+		return true
+	}
+	if publicTrackingReadPath(method, path) {
+		return true
+	}
+	if method != http.MethodGet {
+		return false
+	}
+	return positiveIDSegment(path, miniprogramAPIPrefix+"/templates/", "") ||
+		positiveIDSegment(path, miniprogramAPIPrefix+"/designers/", "/homepage") ||
+		positiveIDSegment(path, miniprogramAPIPrefix+"/inspirations/", "") ||
+		positiveIDSegment(path, miniprogramAPIPrefix+"/ai-tools/", "") ||
+		pathSingleSegmentBetween(path, miniprogramAPIPrefix+"/ai-tools/code/", "") != ""
+}
+
+func isMiniprogramProfileAuthOnly(method, path string) bool {
+	if miniprogramProfileAuthOnly[method][path] {
+		return true
+	}
+	switch method {
+	case http.MethodGet:
+		return positiveIDSegment(path, miniprogramAPIPrefix+"/ai/task/", "/info") ||
+			pathSingleSegmentBetween(path, miniprogramAPIPrefix+"/ai/video/poll/", "") != "" ||
+			pathSingleSegmentBetween(path, miniprogramAPIPrefix+"/ai/video/query/", "") != ""
+	case http.MethodDelete:
+		return positiveIDSegment(path, miniprogramAPIPrefix+"/building-code-documents/", "") ||
+			pathSingleSegmentBetween(path, miniprogramAPIPrefix+"/user/tasks/", "") != ""
+	}
+	return false
+}
+
+func isMiniprogramProfileGateExempt(method, path string) bool {
+	return isMiniprogramProfileBootstrap(method, path) || isMiniprogramProfilePublicTransport(method, path)
+}
+
 // miniprogramProfileAuthentication is deliberately separate from completeness.
 // TokenAuthRequired calls c.Next(), so the next middleware must own the profile
 // check to ensure no business handler runs first.
 func miniprogramProfileAuthentication(auth gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileBootstrap(c.Request.Method, c.Request.URL.Path) {
+		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileGateExempt(c.Request.Method, c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -99,7 +275,7 @@ func miniprogramProfileAuthentication(auth gin.HandlerFunc) gin.HandlerFunc {
 
 func miniprogramProfileCompleteness(load miniprogramProfileLoader) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileBootstrap(c.Request.Method, c.Request.URL.Path) {
+		if !isMiniprogramAPIPath(c.Request.URL.Path) || isMiniprogramProfileGateExempt(c.Request.Method, c.Request.URL.Path) || isMiniprogramProfileAuthOnly(c.Request.Method, c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -151,14 +327,18 @@ func miniprogramProfileLoaderFromModel(profiles *model.UserProfileModel) minipro
 
 func miniprogramProfileMissingFields(profile miniprogramProfile) []string {
 	missing := make([]string, 0, 2)
-	nickname := strings.TrimSpace(profile.Nickname)
-	if nickname == "" || !utf8.ValidString(nickname) || utf8.RuneCountInString(nickname) > 32 {
+	if miniprogramProfileNicknameMissing(profile) {
 		missing = append(missing, "nickname")
 	}
 	if !hasSavedProfileAvatar(profile.Avatar) {
 		missing = append(missing, "avatar")
 	}
 	return missing
+}
+
+func miniprogramProfileNicknameMissing(profile miniprogramProfile) bool {
+	nickname := strings.TrimSpace(profile.Nickname)
+	return nickname == "" || !utf8.ValidString(nickname) || utf8.RuneCountInString(nickname) > 32
 }
 
 func hasSavedProfileAvatar(raw string) bool {

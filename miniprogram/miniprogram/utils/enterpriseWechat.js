@@ -68,7 +68,7 @@ function getDefaultServiceConfig(overrides) {
 function isDevtoolsEnvironment() {
     try {
         const systemInfo = typeof wx !== 'undefined' && typeof wx.getSystemInfoSync === 'function'
-            ? wx.getSystemInfoSync()
+            ? (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync())
             : null;
         return String(systemInfo?.platform || '').toLowerCase() === 'devtools';
     }

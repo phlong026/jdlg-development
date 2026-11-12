@@ -62,14 +62,17 @@ function estimateTotalCost(input) {
             note: '不同地下室因方案不同，价格不同。', estimable: true });
     }
     // 分项与总价统一按九折展示，保留到分，避免明细和总价使用不同口径。
-    const discountedBreakdown = breakdown.map(item => (Object.assign(Object.assign({}, item), { amount: Math.round(item.amount * 90) / 100 })));
+    const discountedBreakdown = breakdown.map(item => ({ ...item, amount: Math.round(item.amount * 90) / 100 }));
     const totalCost = Math.round(discountedBreakdown.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
     return {
         totalCost,
         unitCost: (totalCost / buildingArea).toFixed(2),
         totalLabel: estimable ? '参考总造价' : '已测算部分合计',
         unitLabel: estimable ? '参考单价' : '已测算部分单价',
-        breakdown: discountedBreakdown.map(item => (Object.assign(Object.assign({}, item), { amountText: item.estimable ? formatWan(item.amount) : '按图纸核算', percent: totalCost > 0 ? Math.round(item.amount / totalCost * 100) : 0 }))),
+        breakdown: discountedBreakdown.map(item => ({ ...item,
+            amountText: item.estimable ? formatWan(item.amount) : '按图纸核算',
+            percent: totalCost > 0 ? Math.round(item.amount / totalCost * 100) : 0,
+        })),
         dynamicNotes: ['不同地基因方案不同，价格不同。', '不同屋顶因做法不同，价格不同。'],
     };
 }
@@ -297,6 +300,22 @@ Page({
             wx.showToast({ title: error, icon: 'none' });
             return;
         }
+        const token = String(wx.getStorageSync('token') || '');
+        const userInfo = wx.getStorageSync('userInfo') || {};
+        const userID = Number(userInfo.id || 0);
+        const profileToken = String(userInfo.token || '');
+        if (!token || (profileToken && profileToken !== token) || !Number.isInteger(userID) || userID <= 0) {
+            wx.showModal({
+                title: '提示',
+                content: '登录后可保存本次测算结果',
+                confirmText: '去登录',
+                success: (res) => {
+                    if (res.confirm)
+                        wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
+                },
+            });
+            return;
+        }
         const result = estimateTotalCost({
             footprintArea, buildingArea, foundationType: data.foundationType, basementType: data.basementType,
             structureType: data.structureType, roofType: data.roofType,
@@ -320,7 +339,7 @@ Page({
             { label: '门窗标准', value: data.windowStandard },
         ];
         try {
-            wx.setStorageSync(RESULT_STORAGE_KEY, {
+            wx.setStorageSync(`${RESULT_STORAGE_KEY}:${userID}`, {
                 version: 4,
                 estimatedTotalCost: formatWan(result.totalCost),
                 estimatedUnitCost: `${result.unitCost}元/㎡`,

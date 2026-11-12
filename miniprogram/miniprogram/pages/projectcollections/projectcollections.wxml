@@ -1,6 +1,6 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="page">
-  <navigation-bar title="{{editing ? (current ? '编辑合集' : '新建合集') : '项目合集'}}" back="{{true}}" custom-back="{{true}}" bind:back="goBack" background="#fbfaf7" />
+  <navigation-bar title="{{editing ? (current ? '编辑公开合集' : '新建公开合集') : '公开合集'}}" back="{{true}}" custom-back="{{true}}" bind:back="goBack" background="#fbfaf7" />
   <view class="body">
     <view wx:if="{{loginRequired}}" class="state"><text class="state-title">登录后管理合集</text><button class="primary" bindtap="goLogin">去登录</button></view>
     <view wx:elif="{{denied}}" class="state"><text class="state-title">暂无内容管理权限</text><button class="secondary" bindtap="retry">重新检查</button></view>
@@ -9,12 +9,12 @@
 
     <block wx:elif="{{!editing}}">
       <view class="toolbar"><text class="collection-count">{{collections.length}}个合集</text><button class="primary small-button" bindtap="startCreate">＋ 新建</button></view>
-      <view wx:if="{{!collections.length}}" class="empty"><text class="empty-title">还没有合集</text><text>选择已发布作品，组合成一个对外页面</text></view>
-      <view wx:for="{{collections}}" wx:key="collection_id" class="collection-card">
+      <view wx:if="{{!collections.length}}" class="empty"><text class="empty-title">还没有合集</text><text>公开展示已发布作品</text></view>
+      <view wx:for="{{collections}}" wx:key="collection_id" class="collection-card" data-id="{{item.collection_id}}" bindlongpress="deleteCollectionMenu">
         <image wx:if="{{item.cover_url}}" class="cover" src="{{item.cover_url}}" mode="aspectFill" />
-        <view wx:else class="cover placeholder">甲</view>
+        <view wx:else class="cover placeholder">暂无封面</view>
         <view class="collection-main"><text class="collection-title">{{item.title}}</text><text class="meta">{{item.items.length}}个作品 · {{item.status_text}}</text>
-          <view class="row-actions"><button data-id="{{item.collection_id}}" bindtap="openEditor">编辑</button><button wx:if="{{item.version > 0 && item.status === 'published'}}" data-id="{{item.collection_id}}" data-version="{{item.version}}" bindtap="openReader">查看</button><button wx:if="{{item.version === 0}}" class="danger" data-id="{{item.collection_id}}" bindtap="deleteDraft">删除</button><button wx:if="{{item.status === 'published'}}" class="danger" data-id="{{item.collection_id}}" bindtap="revokePublished">撤回</button></view>
+          <view class="row-actions"><button data-id="{{item.collection_id}}" bindtap="openEditor">编辑</button><button wx:if="{{item.version > 0 && item.status === 'published'}}" data-id="{{item.collection_id}}" data-version="{{item.version}}" bindtap="openReader">查看</button><button wx:if="{{item.version === 0 || item.status === 'published'}}" data-id="{{item.collection_id}}" bindtap="openCollectionMore">更多</button></view>
         </view>
       </view>
       <button wx:if="{{nextCursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
@@ -24,26 +24,37 @@
     <block wx:else>
       <view class="form-card">
         <text class="label">合集名称</text><input value="{{title}}" bindinput="setTitle" maxlength="80" placeholder="例如：新中式乡墅精选" />
-        <text class="label">简介（选填）</text><textarea value="{{description}}" bindinput="setDescription" maxlength="500" placeholder="一句话介绍这个合集" />
+        <text class="label">简介（选填）</text><textarea value="{{description}}" bindinput="setDescription" maxlength="500" />
         <view wx:if="{{ownerChoices.length > 1}}" class="owner-row"><text class="label">内容归属</text><picker range="{{ownerChoices}}" range-key="display_name" value="{{ownerIndex}}" bindchange="setOwner" disabled="{{!!current}}"><view>{{ownerChoices[ownerIndex].display_name}} <text>›</text></view></picker></view>
       </view>
 
       <view wx:if="{{selectedItems.length}}" class="section selected-section"><view class="section-head"><text>已选作品</text><text class="count">{{selectedItems.length}}</text></view>
-        <view wx:for="{{selectedItems}}" wx:key="content_id" class="selected-row"><text class="order">{{index + 1}}</text><view class="selected-main"><text>{{item.title}}</text><text class="meta">V{{item.content_version}}</text></view><view class="sort-actions"><button wx:if="{{index > 0}}" data-index="{{index}}" bindtap="topItem">置顶</button><button data-index="{{index}}" data-direction="-1" bindtap="moveItem" disabled="{{index === 0}}">↑</button><button data-index="{{index}}" data-direction="1" bindtap="moveItem" disabled="{{index === selectedItems.length - 1}}">↓</button><button class="{{coverItemIndex === index ? 'cover-on' : ''}}" data-index="{{index}}" bindtap="setCoverItem">{{coverItemIndex === index ? '封面' : '设封面'}}</button><button class="danger" data-index="{{index}}" bindtap="removeItem">移除</button></view></view>
+        <view wx:for="{{selectedItems}}" wx:key="content_id" class="selected-row">
+          <view class="selected-summary"><text class="order">{{index + 1}}</text><image wx:if="{{item.cover_url}}" class="work-cover" src="{{item.cover_url}}" mode="aspectFill" /><view wx:else class="work-cover placeholder">暂无封面</view><view class="selected-main"><text class="work-title">{{item.title}}</text><text class="meta">{{item.format_label}} · 第{{item.content_version}}版</text></view></view>
+          <view class="sort-actions"><button wx:if="{{index > 0}}" data-index="{{index}}" bindtap="topItem">置顶</button><button data-index="{{index}}" data-direction="-1" bindtap="moveItem" disabled="{{index === 0}}">上移</button><button data-index="{{index}}" data-direction="1" bindtap="moveItem" disabled="{{index === selectedItems.length - 1}}">下移</button><button class="{{coverItemIndex === index ? 'cover-on' : ''}}" data-index="{{index}}" bindtap="setCoverItem">{{coverItemIndex === index ? '已设封面' : '设封面'}}</button><button class="danger" data-index="{{index}}" bindtap="removeItem">移除</button></view>
+        </view>
       </view>
 
       <view class="section"><view class="section-head"><text>添加作品</text></view>
-        <text wx:if="{{!candidates.length}}" class="section-empty">暂无可添加的已发布作品</text>
-        <view wx:for="{{candidates}}" wx:key="content_id" class="candidate-row" data-id="{{item.content_id}}" data-version="{{item.content_version}}" bindtap="toggleCandidate"><view class="check">{{item.selected ? '✓' : '○'}}</view><view><text>{{item.title}}</text><text class="meta">已发布 · V{{item.content_version}}</text></view><text class="add">{{item.selected ? '已选' : '选择'}}</text></view>
+        <text wx:if="{{!candidates.length}}" class="section-empty">暂无已发布作品</text>
+        <view wx:for="{{candidates}}" wx:key="content_id" class="candidate-row" data-id="{{item.content_id}}" data-version="{{item.content_version}}" bindtap="toggleCandidate" role="checkbox" aria-checked="{{item.selected}}"><view class="check {{item.selected ? 'checked' : ''}}">{{item.selected ? '✓' : ''}}</view><image wx:if="{{item.cover_url}}" class="work-cover" src="{{item.cover_url}}" mode="aspectFill" /><view wx:else class="work-cover placeholder">暂无封面</view><view class="candidate-main"><text class="work-title">{{item.title}}</text><text class="meta">{{item.format_label}} · 第{{item.content_version}}版</text></view></view>
         <button wx:if="{{candidateCursor}}" class="load-more" bindtap="loadMoreCandidates">加载更多</button>
       </view>
 
+      <view wx:if="{{current && current.status === 'published' && !dirty}}" class="published-result"><text>已发布</text><button class="primary" bindtap="openPublished">查看并分享</button></view>
       <view wx:if="{{notice}}" class="notice">{{notice}}</view><view wx:if="{{error}}" class="error">{{error}}</view>
       <view class="editor-actions"><button class="secondary" bindtap="saveDraft" loading="{{busy}}">保存草稿</button><button class="primary" bindtap="previewCurrent" disabled="{{busy || !selectedItems.length}}">预览发布</button></view>
     </block>
   </view>
 
-  <view wx:if="{{preview}}" class="mask"><view class="preview-card"><text class="preview-title">{{preview.collection.title}}</text><text class="meta">{{preview.collection.items.length}}个作品</text><view wx:for="{{preview.collection.items}}" wx:key="content_id" class="preview-row"><text>{{index + 1}}</text><text>{{item.title}}</text></view><view class="preview-actions"><button bindtap="closePreview" disabled="{{busy}}">继续编辑</button><button class="primary" bindtap="publishCurrent" loading="{{busy}}">确认发布</button></view></view></view>
+  <view wx:if="{{preview}}" class="mask"><view class="preview-card">
+    <view class="preview-header"><text>发布预览</text><text class="meta">{{preview.collection.items.length}}个作品</text></view>
+    <scroll-view scroll-y class="preview-content">
+      <view class="preview-hero {{preview.collection.cover_url ? '' : 'no-cover'}}"><image wx:if="{{preview.collection.cover_url}}" class="preview-hero-image" src="{{preview.collection.cover_url}}" mode="aspectFill" /><view class="preview-hero-text"><text class="preview-title">{{preview.collection.title}}</text><text wx:if="{{preview.collection.description}}" class="preview-description">{{preview.collection.description}}</text></view></view>
+      <view class="preview-directory"><view wx:for="{{preview.collection.items}}" wx:key="content_id" class="preview-row"><image wx:if="{{item.cover_url}}" class="work-cover" src="{{item.cover_url}}" mode="aspectFill" /><view wx:else class="work-cover placeholder">暂无封面</view><view class="preview-item-main"><text class="work-title">{{item.title}}</text><text class="meta">{{item.format_label}}</text></view></view></view>
+    </scroll-view>
+    <view class="preview-actions"><button class="secondary" bindtap="closePreview" disabled="{{busy}}">继续编辑</button><button class="primary" bindtap="publishCurrent" loading="{{busy}}" disabled="{{busy}}">确认发布</button></view>
+  </view></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -1,0 +1,79 @@
+- initialize
+
+(node:71953) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `Electron --trace-deprecation ...` to show where the warning was created)
+✔ IDE server has started, listening on http://127.0.0.1:9420
+- preparing
+- Fetching AppID () permissions
+✔ Using AppID: wx94fdc48861913ede
+- Upload
+
+┌───────────────────────────────────┬────────────┬─────────────┐
+│ (index)                           │ size       │ size (Byte) │
+├───────────────────────────────────┼────────────┼─────────────┤
+│ TOTAL                             │ '2.9 MB'   │ 3023658     │
+│ main                              │ '1.2 MB'   │ 1247022     │
+│ /pages/adminhome/                 │ '890 B'    │ 890         │
+│ /pages/adminlogin/                │ '677 B'    │ 677         │
+│ /pages/aicost/                    │ '18.2 KB'  │ 18614       │
+│ /pages/aicostresult/              │ '16.7 KB'  │ 17138       │
+│ /pages/aicostshare/               │ '6.8 KB'   │ 6930        │
+│ /pages/aigenerate/                │ '66.7 KB'  │ 68304       │
+│ /pages/aitoolworkbench/           │ '32.8 KB'  │ 33622       │
+│ /pages/aivideo/                   │ '31.8 KB'  │ 32512       │
+│ /pages/allrounddesign/            │ '41.2 KB'  │ 42204       │
+│ /pages/buildingcodedocs/          │ '9.3 KB'   │ 9562        │
+│ /pages/buildingreplacement/       │ '18.4 KB'  │ 18886       │
+│ /pages/chat/                      │ '39.2 KB'  │ 40185       │
+│ /pages/checkin/                   │ '23.6 KB'  │ 24215       │
+│ /pages/collectionreader/          │ '12.1 KB'  │ 12378       │
+│ /pages/contentedit/               │ '59.6 KB'  │ 61073       │
+│ /pages/contentreader/             │ '29.7 KB'  │ 30451       │
+│ /pages/contentworkbench/          │ '38.8 KB'  │ 39722       │
+│ /pages/contentwriting/            │ '20.8 KB'  │ 21316       │
+│ /pages/customerservice/           │ '48.0 KB'  │ 49178       │
+│ /pages/designerhome/              │ '80.1 KB'  │ 82017       │
+│ /pages/generatedetails/           │ '106.5 KB' │ 109084      │
+│ /pages/generatehistory/           │ '37.1 KB'  │ 37994       │
+│ /pages/generateprogress/          │ '9.1 KB'   │ 9316        │
+│ /pages/Identityauthen/            │ '20.8 KB'  │ 21264       │
+│ /pages/inspirationdetail/         │ '11.2 KB'  │ 11485       │
+│ /pages/Invitefriends/             │ '36.6 KB'  │ 37490       │
+│ /pages/lingshidetails/            │ '16.4 KB'  │ 16792       │
+│ /pages/messagecenter/             │ '19.1 KB'  │ 19576       │
+│ /pages/myfavorites/               │ '25.4 KB'  │ 25963       │
+│ /pages/myInformationmodification/ │ '36.4 KB'  │ 37317       │
+│ /pages/myplan/                    │ '30.0 KB'  │ 30675       │
+│ /pages/nativereferences/          │ '16.7 KB'  │ 17121       │
+│ /pages/newminnantool/             │ '25.8 KB'  │ 26438       │
+│ /pages/orderdetail/               │ '16.0 KB'  │ 16435       │
+│ /pages/ordermanagement/           │ '40.1 KB'  │ 41036       │
+│ /pages/Parentchildcreativity/     │ '23.9 KB'  │ 24478       │
+│ /pages/passwordrecovery/          │ '7.0 KB'   │ 7122        │
+│ /pages/phonebind/                 │ '6.2 KB'   │ 6399        │
+│ /pages/privacy/                   │ '11.2 KB'  │ 11513       │
+│ /pages/projectcollections/        │ '33.1 KB'  │ 33888       │
+│ /pages/projectinvite/             │ '5.6 KB'   │ 5707        │
+│ /pages/projectnotes/              │ '81.4 KB'  │ 83381       │
+│ /pages/projectnoteview/           │ '27.0 KB'  │ 27679       │
+│ /pages/projectpackage/            │ '20.4 KB'  │ 20843       │
+│ /pages/projectpackageview/        │ '16.3 KB'  │ 16740       │
+│ /pages/real/                      │ '15.4 KB'  │ 15771       │
+│ /pages/release/                   │ '57.0 KB'  │ 58388       │
+│ /pages/report/                    │ '74.4 KB'  │ 76167       │
+│ /pages/ruralvilladesign/          │ '27.6 KB'  │ 28242       │
+│ /pages/settings/                  │ '35.3 KB'  │ 36174       │
+│ /pages/sharevisits/               │ '27.8 KB'  │ 28503       │
+│ /pages/specadvisor/               │ '24.6 KB'  │ 25158       │
+│ /pages/templatepreview/           │ '8.1 KB'   │ 8269        │
+│ /pages/templatesquaredetails/     │ '68.9 KB'  │ 70507       │
+│ /pages/topupcenter/               │ '50.7 KB'  │ 51962       │
+│ /pages/utilitytooldetail/         │ '6.2 KB'   │ 6356        │
+│ /pages/utilitytools/              │ '7.2 KB'   │ 7412        │
+│ /pages/visitdetail/               │ '15.7 KB'  │ 16100       │
+│ /pages/voicecall/                 │ '5.2 KB'   │ 5300        │
+│ /pages/wallet/                    │ '22.1 KB'  │ 22643       │
+│ /pages/withdrawcenter/            │ '13.7 KB'  │ 14074       │
+└───────────────────────────────────┴────────────┴─────────────┘
+
+✔ upload

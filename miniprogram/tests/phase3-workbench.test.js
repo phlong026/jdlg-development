@@ -38,10 +38,13 @@ function pageHarness(name, api, wxOverrides = {}) {
   }, wxOverrides);
   vm.runInNewContext(source, { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/phase3-api') return api;
+    if (id === '../../utils/protected-media') return { resolveProtectedMediaURL: async url => url };
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
+    if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
+    if (id === '../../utils/resumable-video-upload') return require(path.join(root, 'utils/resumable-video-upload.js'));
     throw new Error(`unexpected require ${id}`);
   }, console, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent });
-  const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values) { Object.assign(this.data, values); } }, definition);
+  const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { Object.assign(this.data, values); if (callback) callback.call(this); } }, definition);
   return page;
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -229,8 +232,8 @@ test('self-share pagination appends only the server page and replays snapshot fi
     { items: [{ share_id: 'share-two', visitor_count: 1, page_views: 1 }], as_of: '2026-10-27T00:00:00Z', metric_version: 'visible-v1' },
   ];
   const page = pageHarness('sharevisits', { listMyShares: async query => { queries.push(query); return pages.shift(); } });
-  await page.load(true);
-  await page.load(false);
+  await page.loadShares(true);
+  await page.loadShares(false);
   assert.deepEqual(page.data.items.map(item => item.share_id), ['share-one', 'share-two']);
   assert.equal(queries[1].cursor, 'next-one');
   assert.equal(queries[1].as_of, '2026-10-27T00:00:00Z');
@@ -255,6 +258,335 @@ test('editor serializes paragraph-image-video order and only referenced media ID
   assert.deepEqual(document.blocks.map(block => block.kind), ['paragraph', 'image', 'video', 'image']);
   assert.deepEqual(Array.from(savedDraft.media_ids), ['asset-image', 'asset-video']);
   assert.equal(savedDraft.body_format, 'article_v2');
+});
+
+test('editor persists presentation without mixing it into tags or media captions', async () => {
+  let savedDraft;
+  const page = pageHarness('contentedit', {
+    saveContent: async draft => { savedDraft = draft; return { content_id: 'gallery-one', revision: 1, version: 0, status: 'draft' }; },
+  });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ context: { presentation_formats: ['article', 'gallery', 'video'] }, presentation: 'gallery', title: '庭院图集', owner_id: 'owner-a', tagsText: '庭院 现代', blocks: [
+    { kind: 'image', media_id: 'image-one', caption: '入口' },
+    { kind: 'image', media_id: 'image-two', caption: '' },
+    { kind: 'paragraph', text: '这是一份独立完整文案，不是图注。' },
+  ] });
+  await page.saveDraft();
+  const document = JSON.parse(savedDraft.body);
+  assert.equal(document.presentation, 'gallery');
+  assert.equal(document.blocks[0].caption, '入口');
+  assert.equal(document.blocks[2].text, '这是一份独立完整文案，不是图注。');
+  assert.deepEqual(Array.from(savedDraft.tags), ['庭院', '现代']);
+});
+
+test('editor keeps social blocks saveable when an older server does not advertise presentation support', async () => {
+  let savedDraft;
+  const page = pageHarness('contentedit', {
+    saveContent: async draft => { savedDraft = draft; return { content_id: 'legacy-server-draft', revision: 1, version: 0, status: 'draft' }; },
+  });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ context: {}, presentation: 'gallery', title: '兼容图集', owner_id: 'owner-a', blocks: [
+    { kind: 'image', media_id: 'image-one', caption: '' },
+    { kind: 'paragraph', text: '仍按原有 article_v2 块保存' },
+  ] });
+  await page.saveDraft();
+  const document = JSON.parse(savedDraft.body);
+  assert.equal(Object.hasOwn(document, 'presentation'), false);
+  assert.deepEqual(Array.from(document.blocks, block => block.kind), ['image', 'paragraph']);
+});
+
+test('editor migrates repeated imported long captions into one independent post paragraph', async () => {
+  const repeated = '这是从平台采集的完整文案，应该只显示一次，而不是每张图片下都重复。';
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '我的内容' }] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    getContent: async () => ({ title: '导入图集', owner_id: 'owner-a', rights: 'own', revision: 1, version: 0, status: 'draft', body_format: 'article_v2', body: JSON.stringify({ schema: 1, presentation: 'gallery', blocks: [
+      { kind: 'image', media_id: 'one', caption: repeated },
+      { kind: 'image', media_id: 'two', caption: repeated },
+      { kind: 'image', media_id: 'three', caption: '独立图注' },
+    ] }), media: [{ media_id: 'one', kind: 'image' }, { media_id: 'two', kind: 'image' }, { media_id: 'three', kind: 'image' }] }),
+    downloadWorkbenchMedia: async id => '/tmp/' + id,
+  });
+  page.setData({ id: 'gallery-one' }); page._token = 'session-token'; page._epoch = 1;
+  await page.load(1);
+  assert.equal(page.data.presentation, 'gallery');
+  assert.equal(page.data.blocks.filter(block => block.kind === 'paragraph' && block.text === repeated).length, 1);
+  assert.equal(page.data.blocks.filter(block => block.caption === repeated).length, 0);
+  assert.equal(page.data.blocks.find(block => block.media_id === 'three').caption, '独立图注');
+  assert.deepEqual(Array.from(page.data.imageBlocks, block => block.media_id), ['one', 'two', 'three']);
+  assert.deepEqual(Array.from(page.data.imageBlocks, block => block.blockIndex), [0, 1, 2]);
+});
+
+test('editor keeps legacy video caption copy readable and exposes a real video loading state', async () => {
+  const legacyCopy = '这是旧视频笔记仅存在 Caption 中的完整文案，打开编辑器后不能丢失或隐藏。';
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '我的内容' }] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    getContent: async () => ({ title: '旧视频', owner_id: 'owner-a', rights: 'own', revision: 1, version: 0, status: 'draft', body_format: 'article_v2', body: JSON.stringify({ schema: 1, presentation: 'video', blocks: [
+      { kind: 'video', media_id: 'video-one', caption: legacyCopy },
+    ] }), media: [{ media_id: 'video-one', kind: 'video', width: 1080, height: 1920 }] }),
+    downloadWorkbenchMedia: () => new Promise(() => {}),
+  });
+  page.setData({ id: 'video-one' }); page._token = 'session-token'; page._epoch = 1;
+  await page.load(1);
+  assert.equal(page.data.presentation, 'video');
+  assert.equal(page.data.postText, legacyCopy);
+  assert.equal(page.data.videoBlocks.length, 1);
+  assert.equal(page.data.videoBlocks[0].caption, '');
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /wx:for="\{\{videoBlocks\}\}"/);
+  assert.match(wxml, /正在加载视频…/);
+});
+
+test('video metadata replaces fallback ratios in the editor media model and shared preview frames', () => {
+  const page = pageHarness('contentedit', {});
+  page.setData({
+    videoStarted: { 'contentedit-preview-player-0': true },
+    blocks: [{ kind: 'video', media_id: 'portrait-video', caption: '' }],
+    media: [{ media_id: 'portrait-video', kind: 'video', local_path: '/tmp/portrait.mp4' }],
+  });
+  page.onContentVideoMetadata({ currentTarget: { dataset: { editor: true, mediaId: 'portrait-video' } }, detail: { width: 1080, height: 1920 } });
+  assert.equal(page.data.videoBlocks[0].asset.width, 1080);
+  assert.equal(page.data.videoBlocks[0].asset.height, 1920);
+  assert.ok(page.data.videoBlocks[0].mediaHeight > 300);
+
+  const content = { title: '竖屏视频', body_format: 'article_v2', body: JSON.stringify({ schema: 1, presentation: 'video', blocks: [{ kind: 'video', media_id: 'portrait-video', caption: '' }] }), media: [{ media_id: 'portrait-video', kind: 'video' }] };
+  page.setData({
+    preview: { preview_token: 'preview-video', content },
+    presentationView: {
+      kind: 'video', galleryIndex: 0, blocks: [],
+      media: [{ kind: 'video', media_id: 'portrait-video', url: '/tmp/portrait.mp4', width: 337, height: 190, intrinsicWidth: 16, intrinsicHeight: 9, errorKey: 'contentedit-previewMedia0' }],
+    },
+  });
+  page.onContentVideoMetadata({ currentTarget: { dataset: { mediaId: 'portrait-video' } }, detail: { width: 1080, height: 1920 } });
+  assert.equal(page.data.presentationView.media[0].intrinsicWidth, 1080);
+  assert.equal(page.data.presentationView.media[0].intrinsicHeight, 1920);
+  assert.ok(page.data.presentationView.media[0].height > 190, '必须用原始竖屏比例重算，不能把已缩放的 337x190 当源尺寸');
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true, '元数据重排不应恢复封面');
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /<template is="content-presentation"/);
+  const shared = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
+  assert.match(shared, /bindloadedmetadata="onContentVideoMetadata"/);
+});
+
+test('editor preview creates the native video after tapping the cover and restores it after an error', () => {
+  let plays = 0;
+  const page = pageHarness('contentedit', {}, { createVideoContext: () => ({ pause() {}, play() { plays += 1; } }) });
+  page.setData({ videoStarted: {} });
+  const target = { dataset: { domId: 'contentedit-preview-media-0', playerKey: 'contentedit-preview-player-0' } };
+  page.playContentVideo({ currentTarget: target });
+  assert.equal(plays, 1);
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true);
+  page.videoState({ type: 'play', currentTarget: target });
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true);
+  page.videoState({ type: 'pause', currentTarget: target });
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], true);
+  page.videoState({ type: 'error', currentTarget: { dataset: { ...target.dataset, errorKey: 'contentedit-previewMedia0' } } });
+  assert.equal(page.data.videoStarted['contentedit-preview-player-0'], undefined);
+});
+
+test('editor does not flatten structured articles when switching to social presentation', () => {
+  let toast = '';
+  const page = pageHarness('contentedit', {}, { showToast(options) { toast = options.title; } });
+  page.setData({ presentation: 'article', blocks: [{ kind: 'heading', level: 2, text: '小标题' }, { kind: 'paragraph', text: '正文' }] });
+  page.selectPresentation({ currentTarget: { dataset: { presentation: 'gallery' } } });
+  assert.equal(page.data.presentation, 'article');
+  assert.match(toast, /文章排版/);
+});
+
+test('editor resumes missing private media previews after returning from another page', async () => {
+  const page = pageHarness('contentedit', { downloadWorkbenchMedia: async id => '/tmp/' + id }, { hideShareMenu() {} });
+  page._token = 'session-token'; page._loaded = true; page._epoch = 3;
+  page.setData({ blocks: [{ kind: 'image', media_id: 'image-one', caption: '' }], media: [{ media_id: 'image-one', kind: 'image', local_path: '' }] });
+  page.onShow();
+  await tick(); await tick();
+  assert.equal(page.data.media[0].local_path, '/tmp/image-one');
+  assert.equal(page.data.renderedBlocks[0].asset.local_path, '/tmp/image-one');
+});
+
+test('replacing a video keeps the existing main video when the new upload fails', async () => {
+  const page = pageHarness('contentedit', { uploadWorkbenchMedia: async () => { throw new Error('上传失败'); } });
+  page._token = 'session-token'; page._epoch = 1;
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-a', rights: 'own', blocks: [
+    { kind: 'video', media_id: 'existing-video', caption: '' },
+    { kind: 'paragraph', text: '保留文案' },
+  ] });
+  await page.uploadMediaBatch([{ tempFilePath: '/tmp/replacement.mp4', fileType: 'video' }]);
+  assert.equal(page.data.blocks.find(block => block.kind === 'video').media_id, 'existing-video');
+  assert.equal(page.data.postText, '保留文案');
+});
+
+test('successful video replacement survives an onShow epoch change from the system picker', async () => {
+  const stored = new Map();
+  let finishPart;
+  const api = {
+    beginVideoUpload: async () => ({ upload_id: 'upload-return', chunk_size: 20, uploaded_parts: [] }),
+    videoUploadStatus: async () => ({ upload_id: 'upload-return', chunk_size: 20, uploaded_parts: [] }),
+    uploadVideoPart: () => new Promise(resolve => { finishPart = resolve; }),
+    completeVideoUpload: async () => ({ media_id: 'replacement-video', kind: 'video' }),
+  };
+  const page = pageHarness('contentedit', api, {
+    env: { USER_DATA_PATH: '/user' }, hideShareMenu() {},
+    getStorageSync(key) { return key === 'token' ? 'session-token' : stored.get(key); },
+    setStorageSync(key, value) { stored.set(key, value); }, removeStorageSync(key) { stored.delete(key); },
+    getFileInfo(options) { options.success({ size: 10, digest: 'replacement-sha1' }); },
+    getFileSystemManager() { return {
+      readFile(options) { options.success({ data: new ArrayBuffer(options.length) }); },
+      writeFile(options) { options.success(); }, unlink(options) { options.success(); },
+    }; },
+  });
+  page._token = 'session-token'; page._epoch = 2; page._loaded = true;
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-a', rights: 'own', blocks: [{ kind: 'video', media_id: 'old-video', caption: '' }], media: [{ kind: 'video', media_id: 'old-video' }] });
+  const pending = page.uploadMediaBatch([{ tempFilePath: '/tmp/new.mp4', size: 10 }], 'video');
+  for (let attempt = 0; attempt < 10 && !finishPart; attempt += 1) await tick();
+  assert.equal(typeof finishPart, 'function', page.data.error || '视频分片未开始');
+  page.onShow();
+  assert.equal(page.data.blocks[0].media_id, 'old-video', '上传完成前保留原视频');
+  finishPart();
+  await pending;
+  assert.equal(page.data.blocks.find(block => block.kind === 'video').media_id, 'replacement-video');
+  assert.equal(page.data.busy, false);
+});
+
+test('a delayed upload from the previous account cannot unlock the new account upload', async () => {
+  const stored = new Map();
+  let token = 'old-token';
+  const releases = new Map();
+  let uploadCount = 0;
+  const api = {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, media_upload_configured: true, video_resumable_upload: true, owners: ['owner-new'], owner_choices: [{ owner_id: 'owner-new', display_name: '新账号' }] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    beginVideoUpload: async () => { uploadCount += 1; return { upload_id: `upload-${uploadCount}`, chunk_size: 20, uploaded_parts: [] }; },
+    videoUploadStatus: async id => ({ upload_id: id, chunk_size: 20, uploaded_parts: [] }),
+    uploadVideoPart: id => new Promise(resolve => { releases.set(id, resolve); }),
+    completeVideoUpload: async id => ({ media_id: `video-${id}`, kind: 'video' }),
+  };
+  const page = pageHarness('contentedit', api, {
+    env: { USER_DATA_PATH: '/user' }, hideShareMenu() {},
+    getStorageSync(key) { return key === 'token' ? token : stored.get(key); },
+    setStorageSync(key, value) { stored.set(key, value); }, removeStorageSync(key) { stored.delete(key); },
+    getFileInfo({ filePath, success }) { success({ size: 10, digest: filePath.includes('old') ? 'sha1-old' : 'sha1-new' }); },
+    getFileSystemManager() { return {
+      readFile(options) { options.success({ data: new ArrayBuffer(options.length) }); },
+      writeFile(options) { options.success(); }, unlink(options) { options.success(); },
+    }; },
+  });
+  page._token = token; page._epoch = 1; page._loaded = true;
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-old', rights: 'own', blocks: [], media: [] });
+  const oldUpload = page.uploadMediaBatch([{ tempFilePath: '/tmp/old.mp4', size: 10 }], 'video');
+  for (let attempt = 0; attempt < 10 && !releases.has('upload-1'); attempt += 1) await tick();
+
+  token = 'new-token';
+  page.onShow();
+  await tick(); await tick();
+  page.setData({ context: { video_resumable_upload: true }, presentation: 'video', owner_id: 'owner-new', rights: 'own', blocks: [], media: [] });
+  const newUpload = page.uploadMediaBatch([{ tempFilePath: '/tmp/new.mp4', size: 10 }], 'video');
+  for (let attempt = 0; attempt < 10 && !releases.has('upload-2'); attempt += 1) await tick();
+  assert.equal(page.data.busy, true);
+
+  releases.get('upload-1')();
+  await oldUpload;
+  assert.equal(page.data.busy, true, '旧账号迟到回调不得解锁新上传');
+  assert.equal(page._mediaUploadActive.ownerID, 'owner-new');
+
+  releases.get('upload-2')();
+  await newUpload;
+  assert.equal(page.data.busy, false);
+  assert.equal(page.data.blocks.find(block => block.kind === 'video').media_id, 'video-upload-2');
+});
+
+test('video drafts persist bundle fields and mark only incomplete drafts as draft-only', () => {
+  const page = pageHarness('contentedit', {});
+  page.setData({
+    context: { presentation_formats: ['video'], video_editor_fields: true }, presentation: 'video', owner_id: 'owner-a', rights: 'own',
+    title: '乡村别墅', videoLayout: 'douyin', shareCopy: '转发文案', momentsCopy: '朋友圈文案',
+    blocks: [{ kind: 'video', media_id: 'video-one', caption: '' }],
+  });
+  const complete = JSON.parse(page.draftInput().draft.body);
+  assert.equal(complete.video_layout, 'douyin');
+  assert.equal(complete.share_copy, '转发文案');
+  assert.equal(complete.moments_copy, '朋友圈文案');
+  assert.equal(complete.draft_only, undefined);
+
+  page.setData({ title: '', blocks: [{ kind: 'paragraph', text: '' }], shareCopy: '', momentsCopy: '', videoLayout: 'channels' });
+  const incomplete = JSON.parse(page.draftInput(true).draft.body);
+  assert.equal(incomplete.draft_only, true);
+  assert.deepEqual(incomplete.blocks, []);
+  assert.equal(page.draftInput(), null, '预览发布仍必须满足完整条件');
+});
+
+test('unsupported video capabilities explain the next user action without backend terminology', () => {
+  const page = pageHarness('contentedit', {});
+  page.setData({ context: { media_upload_configured: true, video_resumable_upload: false }, presentation: 'video', owner_id: 'owner-a' });
+  page.chooseMedia();
+  assert.equal(page.data.error, '当前版本暂不支持本地上传，请从素材库选择视频');
+
+  page.setData({
+    context: { presentation_formats: ['video'], video_editor_fields: false },
+    title: '视频标题', videoLayout: 'douyin', shareCopy: '转发文案', momentsCopy: '',
+    blocks: [{ kind: 'video', media_id: 'video-one', caption: '' }], media: [{ kind: 'video', media_id: 'video-one' }],
+  });
+  assert.equal(page.draftInput(), null);
+  assert.equal(page.data.error, '当前版本暂不能保存视频文案，内容已保留，请联系管理员更新');
+});
+
+test('video editor uses a compact workspace instead of the full-height media stage', () => {
+  const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxss'), 'utf8');
+  assert.match(wxml, /presentation !== 'video'.*class="mode-tabs"/);
+  assert.match(wxml, /class="video-media-card"/);
+  assert.match(wxml, /AI 生成文案/);
+  assert.match(wxml, /maxlength="2000"/);
+  assert.match(style, /\.video-thumbnail\s*\{[^}]*width:\s*188rpx/);
+  assert.match(wxml, /class="video-media-summary"/);
+  assert.match(wxml, /data-field="shareCopy" bindtap="copyVideoField"/);
+  assert.match(wxml, /data-field="momentsCopy" bindtap="copyVideoField"/);
+  assert.ok(wxml.indexOf('class="video-media-card"') < wxml.indexOf('class="panel video-title-card"'));
+});
+
+test('video preview builder receives the resolved private cover path on initial load and retry', async () => {
+  const page = pageHarness('contentedit', { downloadWorkbenchMedia: async id => '/private/' + id });
+  page._token = 'session-token'; page._epoch = 1;
+  const content = {
+    title: '视频预览', body_format: 'article_v2', body: JSON.stringify({ presentation: 'video', blocks: [{ kind: 'video', media_id: 'video-one' }] }),
+    media: [{ media_id: 'video-one', kind: 'video' }], cover: { media_id: 'cover-one', kind: 'image' },
+  };
+  const first = await page.previewView({ content });
+  assert.equal(first.presentation.poster, '/private/cover-one');
+  assert.equal(first.presentation.nativePoster, '', '本地私有封面不能交给原生 video poster');
+
+  page.setData({ preview: { content }, previewBlocks: first.blocks, previewCover: { media_id: 'cover-one', kind: 'image', local_path: '', preview_error: '失败' }, presentationView: first.presentation });
+  await page.retryPreviewMedia({ currentTarget: { dataset: { mediaId: 'cover-one' } } });
+  assert.equal(page.data.presentationView.poster, '/private/cover-one');
+  assert.equal(page.data.presentationView.nativePoster, '', '失败重试后的本地封面仍只用于覆盖层');
+});
+
+test('editor reveals fetched text before private media previews finish', async () => {
+  let finishPreview;
+  const page = pageHarness('contentedit', {
+    workbenchContext: async () => ({ enabled: true, can_manage: true, owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '我的内容' }] }),
+    listWorkbenchMedia: async () => ({ items: [] }),
+    getContent: async () => ({ content_id: 'content-one', title: '庭院说明', owner_id: 'owner-a', rights: 'own', revision: 1, version: 0, status: 'draft', body_format: 'article_v2', body: JSON.stringify({ blocks: [{ kind: 'paragraph', text: '先显示这段正文' }, { kind: 'image', media_id: 'image-one' }] }), media: [{ media_id: 'image-one', kind: 'image' }] }),
+    downloadWorkbenchMedia: () => new Promise(resolve => { finishPreview = resolve; }),
+  }, { hideShareMenu() {} });
+  page.onLoad({ id: 'content-one' });
+  page.onShow();
+  await tick(); await tick();
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.title, '庭院说明');
+  assert.equal(page.data.blocks.find(block => block.kind === 'paragraph').text, '先显示这段正文');
+  assert.equal(page.data.media[0].local_path, '');
+  page.setData({
+    blocks: [{ kind: 'paragraph', text: '用户已经修改正文' }, { kind: 'image', media_id: 'image-new' }],
+    media: [{ ...page.data.media[0], title: '用户刚更新的素材标题', local_path: '/tmp/image-one-newer', preview_error: '' }]
+      .concat({ media_id: 'image-new', kind: 'image', local_path: '/tmp/image-new' }),
+  });
+  finishPreview('/tmp/image-one');
+  await tick(); await tick();
+  assert.equal(page.data.media[0].local_path, '/tmp/image-one-newer', '迟到预览不得覆盖更新的本地路径');
+  assert.equal(page.data.media[0].title, '用户刚更新的素材标题', '迟到预览不得覆盖当前素材元数据');
+  assert.equal(page.data.blocks[0].text, '用户已经修改正文');
+  assert.equal(page.data.media.find(asset => asset.media_id === 'image-new').local_path, '/tmp/image-new');
 });
 
 test('editor uploads a PDF or DOCX as a private document draft and reopens the original file on demand', async () => {
@@ -582,7 +914,8 @@ test('publish preview renders normalized server content and only its signed priv
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
   assert.match(wxml, /item\.items/);
   assert.match(wxml, /item\.caption/);
-  assert.match(wxml, /retryPreviewMedia/);
+  assert.match(wxml, /template is="content-presentation"/);
+  assert.match(wxml, /bindtap="previewMedia"/);
 });
 
 test('editor renders and previews preserved layout with native video without flattening fallback blocks', async () => {
@@ -632,7 +965,7 @@ test('editor renders and previews preserved layout with native video without fla
 
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
   assert.match(wxml, /layoutBlocks/);
-  assert.match(wxml, /previewLayoutBlocks/);
+  assert.match(wxml, /template is="content-presentation"/);
   assert.match(wxml, /<video[^>]+controls/);
 });
 
@@ -670,9 +1003,14 @@ test('account change clears private share rows and ignores the previous account 
       if (calls === 1) return new Promise(resolve => { resolveOld = resolve; });
       return { items: [{ share_id: 'share-account-b' }], as_of: '2026-10-27T01:00:00Z', metric_version: 'visible-v1' };
     },
+    listMyVisitors: async () => ({ items: [] }),
+    listMyContentStats: async () => ({ items: [] }),
   }, { getStorageSync: key => storage[key] || '', hideShareMenu() {} });
   page.onShow(); await tick();
+  // 新交互：分享在切 Tab 时加载
+  page.switchTab({ currentTarget: { dataset: { tab: 'shares' } } }); await tick();
   storage.token = 'account-b'; page.onShow(); await tick();
+  page.switchTab({ currentTarget: { dataset: { tab: 'shares' } } }); await tick();
   resolveOld({ items: [{ share_id: 'share-account-a' }], as_of: '2026-10-27T00:00:00Z', metric_version: 'visible-v1' }); await tick();
   assert.deepEqual(page.data.items.map(item => item.share_id), ['share-account-b']);
 });
@@ -708,9 +1046,53 @@ test('refresh supersedes delayed load-more and duplicate load-more stays single-
     },
   }, { hideShareMenu() {}, stopPullDownRefresh() {} });
   page.onShow(); await tick();
+  page.switchTab({ currentTarget: { dataset: { tab: 'shares' } } }); await tick();
   page.loadMore(); page.loadMore(); await tick();
   assert.equal(calls, 2);
-  const refresh = page.load(true); await tick();
+  const refresh = page.loadShares(true); await tick();
   resolveMore({ items: [{ share_id: 'stale-more' }] }); await refresh; await tick();
   assert.deepEqual(page.data.items.map(item => item.share_id), ['refreshed']);
 });
+
+for (const outcome of ['return', 'account-change', 'draft-change', 'unload']) {
+  test(`media selection survives return and rejects stale ${outcome}`, async () => {
+    let picker, finish, token = 'session-token';
+    const page = pageHarness('contentedit', { downloadWorkbenchMedia: () => new Promise(resolve => { finish = resolve; }) }, {
+      getStorageSync: () => token, hideShareMenu() {}, navigateTo(options) { picker = options; },
+    });
+    page._token = token; page._epoch = 2; page._loaded = true;
+    page.data.blocks = [{ kind: 'paragraph', text: '保留正文' }]; page.data.media = [];
+    page.openMediaPicker(); page.onHide();
+    const pending = picker.events.selectMaterial({ kind: 'media', asset: { media_id: 'picked', kind: 'image' } });
+    page.onShow();
+    if (outcome === 'account-change') token = 'other-account';
+    if (outcome === 'draft-change') page.data.title = '另一份修改';
+    if (outcome === 'unload') page.onUnload();
+    finish('/tmp/picked'); await pending;
+    assert.equal(page.data.blocks.some(block => block.media_id === 'picked'), outcome === 'return');
+  });
+}
+
+for (const field of ['tagsText', 'pinned']) {
+  test(`editor warns for unsaved ${field} and clears warning after saving`, async () => {
+    let warned = 0, left = 0, finish;
+    const page = pageHarness('contentedit', { saveContent: () => new Promise(resolve => { finish = resolve; }) }, {
+      showModal() { warned++; }, navigateBack() { left++; },
+    });
+    page._token = 'session-token'; page._epoch = 1;
+    Object.assign(page.data, { id: 'content-1', title: '作品', owner_id: 'designer-1', blocks: [{ kind: 'paragraph', text: '正文' }] });
+    page._savedSignature = page.draftSignature();
+    page.setData({ [field]: field === 'pinned' ? true : '庭院' });
+    page.handleBack(); assert.equal(warned, 1); assert.equal(left, 0);
+    const save = page.saveDraft();
+    finish({ content_id: 'content-1', revision: 2, version: 0, status: 'draft' }); await save;
+    assert.equal(page._savedSignature, page.draftSignature());
+    page.handleBack(); assert.equal(left, 1);
+    page.setData({ [field]: field === 'pinned' ? false : '别墅' });
+    const secondSave = page.saveDraft();
+    page.setData({ [field]: field === 'pinned' ? true : '花园' });
+    finish({ content_id: 'content-1', revision: 3, version: 0, status: 'draft' }); await secondSave;
+    assert.notEqual(page._savedSignature, page.draftSignature());
+    page.handleBack(); assert.equal(warned, 2);
+  });
+}

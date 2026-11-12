@@ -191,6 +191,37 @@ test('OSS confirmation names exactly the submitted frozen files; repeat batch an
   assert.equal(h.requests.length, 2); assert.equal(selected(page).length, 0);
 });
 
+test('OSS 207 partial delete refreshes the list, reports counts, and keeps only failed items selected for retry', async () => {
+  const h = harness('oss'), page = h.runtime;
+  await resolveFiles(h, [1, 2, 3], 0, 3);
+  all(page).props.onChange(); page.render();
+  const pending = click(page, '批量删除 (3)');
+  h.writes[0].resolve({
+    ok: true,
+    json: async () => ({
+      code: 207,
+      msg: 'partial',
+      data: {
+        deleted_ids: [1],
+        already_missing_ids: [3],
+        failures: [{ id: 2, reason: 'object_delete_failed' }],
+      },
+    }),
+  });
+  await pending; await settle(page);
+  assert.equal(h.alerts.at(-1), '批量删除完成：成功 2 个，失败 1 个。失败项已保留勾选，可重试。');
+  assert.equal(h.requests.length, 2, '部分成功后必须刷新服务端列表');
+  assert.equal(nodes(page.tree, node => node.props?.type === 'checkbox').length, 0, '刷新期间不应显示旧列表');
+
+  await resolveFiles(h, [2, 4], 1, 2);
+  assert.deepEqual(selected(page), ['选择文件 file-2.png（ID: 2）']);
+  assert.match(textOf(page.tree), /批量删除 \(1\)/);
+  assert.doesNotMatch(textOf(page.tree), /file-1|file-3/);
+
+  click(page, '批量删除 (1)');
+  assert.deepEqual(JSON.parse(h.writes[1].options.body), { ids: [2] });
+});
+
 test('OSS cancel, failed delete retry, single identity confirmation and changed-scope completion remain safe', async () => {
   const h = harness('oss'), page = h.runtime;
   await resolveFiles(h); toggle(page, 1);

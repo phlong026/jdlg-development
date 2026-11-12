@@ -6,6 +6,8 @@ const deviceFingerprint_1 = require("../../utils/deviceFingerprint");
 const promptReview_1 = require("../../utils/promptReview");
 const enterpriseWechat_1 = require("../../utils/enterpriseWechat");
 const API_BASE_URL = 'https://api.jiadilingguang.com';
+const BUSINESS_CONTACT_CONSENT_PURPOSE = 'use_bound_phone_for_business_contact';
+const BUSINESS_CONTACT_CONSENT_VERSION = 'phone_contact_v1';
 // 智能客服专用 system prompt，约束 AI 只回答建房相关问题
 const CUSTOMER_SERVICE_SYSTEM_PROMPT = `你是"甲第灵光"平台的 AI 建房顾问，专门帮助用户解决自建房设计相关问题。
 
@@ -247,6 +249,7 @@ Page({
             summary: '',
         },
         submitting: false,
+        contactPhoneConsent: false,
         /** AI 流式回复相关状态 */
         aiStreaming: false,
         aiStreamingMessageId: '',
@@ -299,6 +302,7 @@ Page({
         if (this.data.sessionNo) {
             this.resetSilenceTimers();
         }
+        void this.loadBusinessContactConsent();
     },
     clearSilenceTimers() {
         const page = this;
@@ -695,6 +699,7 @@ Page({
     },
     async handoffHuman() {
         this.touchFlow();
+        await this.ensureBusinessContactConsent();
         let leadSaved = false;
         try {
             const saved = await this.createLead('handoff_human');
@@ -755,6 +760,59 @@ Page({
         // 留资与转人工都汇聚到 createLead：提交成功即以强制模式引导补昵称（登录即完善，未登录自动跳过）。
         this.promptNicknameIfMissing();
         return result;
+    },
+    async loadBusinessContactConsent() {
+        if (!wx.getStorageSync('token')) {
+            this.setData({ contactPhoneConsent: false });
+            return false;
+        }
+        try {
+            const result = await this.postCustomerService('/api/v1/miniprogram/customer-service/contact-consent', {}, 'GET');
+            const accepted = result?.accepted === true && result?.purpose === BUSINESS_CONTACT_CONSENT_PURPOSE && result?.version === BUSINESS_CONTACT_CONSENT_VERSION;
+            this.setData({ contactPhoneConsent: accepted });
+            return accepted;
+        }
+        catch (_error) {
+            this.setData({ contactPhoneConsent: false });
+            return false;
+        }
+    },
+    async ensureBusinessContactConsent() {
+        if (this.data.contactPhoneConsent)
+            return true;
+        if (typeof wx.showModal !== 'function')
+            return false;
+        const accepted = await new Promise((resolve) => {
+            wx.showModal({
+                title: '允许设计老师联系你',
+                content: '同意后，我们会使用你账号已绑定的手机号联系你。选择“仅在线”不会使用该号码，但本次需求仍会保存给客服，便于在线跟进。',
+                confirmText: '同意使用',
+                cancelText: '仅在线',
+                success: result => resolve(result.confirm === true),
+                fail: () => resolve(false),
+            });
+        });
+        if (!accepted)
+            return false;
+        try {
+            await this.postCustomerService('/api/v1/miniprogram/customer-service/contact-consent', { accepted: true, purpose: BUSINESS_CONTACT_CONSENT_PURPOSE, version: BUSINESS_CONTACT_CONSENT_VERSION }, 'PUT');
+            this.setData({ contactPhoneConsent: true });
+            return true;
+        }
+        catch (_error) {
+            wx.showToast({ title: '联系授权保存失败，本次不使用账号手机号', icon: 'none' });
+            return false;
+        }
+    },
+    async withdrawBusinessContactConsent() {
+        try {
+            await this.postCustomerService('/api/v1/miniprogram/customer-service/contact-consent', { accepted: false, purpose: BUSINESS_CONTACT_CONSENT_PURPOSE, version: BUSINESS_CONTACT_CONSENT_VERSION }, 'PUT');
+            this.setData({ contactPhoneConsent: false });
+            wx.showToast({ title: '已撤回手机号业务联系授权', icon: 'none' });
+        }
+        catch (_error) {
+            wx.showToast({ title: '撤回失败，请稍后重试', icon: 'none' });
+        }
     },
     promptNicknameIfMissing() {
         const select = this.selectComponent;
@@ -819,14 +877,14 @@ Page({
             });
         });
     },
-    postCustomerService(apiPath, body) {
+    postCustomerService(apiPath, body, method = 'POST') {
         return new Promise((resolve, reject) => {
             const token = wx.getStorageSync('token');
             const deviceID = (0, deviceFingerprint_1.getCachedDeviceFingerprint)() || '';
             const params = (0, parameter_1.generateRequestParams)(token, body, apiPath, deviceID);
             wx.request({
                 url: `${API_BASE_URL}${apiPath}`,
-                method: 'POST',
+                method,
                 header: require('../../utils/tracking/consultation').optionalConsultationHeaders(apiPath, {
                     ...(0, parameter_1.paramsToHeaders)(params),
                     'Content-Type': 'application/json',

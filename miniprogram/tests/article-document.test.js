@@ -70,12 +70,15 @@ test('article renderer keeps sanitized layout and splits nested video into a nat
   assert.match(blocks[2].html, /^<section[^>]*><table[^>]*><tbody><tr><td[^>]*><blockquote[^>]*>后文<\/blockquote>/);
 });
 
-test('article renderer rejects unsafe or incomplete layout at the client boundary', () => {
+test('article renderer rejects unsafe layout and degrades missing media at the client boundary', () => {
   const media = [{ media_id: 'asset-0001', kind: 'image', url: 'https://example.test/image' }];
-  for (const layout of ['<script>alert(1)</script>', '<img src="https://evil.test/x">', '<img data-media-id="asset-missing">']) {
+  for (const layout of ['<script>alert(1)</script>', '<img src="https://evil.test/x">']) {
     const body = JSON.stringify({ schema: 1, layout_html: layout, blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
     assert.throws(() => renderArticleDocument(body, media, 320), /排版|媒体/);
   }
+  const missing = JSON.stringify({ schema: 1, layout_html: '<img data-media-id="asset-missing">', blocks: [{ kind: 'paragraph', text: '兼容正文' }] });
+  const blocks = renderArticleDocument(missing, media, 320);
+  assert.ok(blocks.some(block => block.html && /素材加载失败/.test(block.html)), '缺失媒体降级为占位');
 });
 
 test('article editor save keeps the complete imported layout body byte-for-byte', () => {
@@ -85,16 +88,16 @@ test('article editor save keeps the complete imported layout body byte-for-byte'
   assert.equal(preserveLayoutBody(rebuilt, rebuilt), rebuilt);
 });
 
-test('reader has an article branch and does not append article media as legacy attachments', () => {
+test('reader delegates all presentation kinds to the shared template', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
-  assert.match(wxml, /body_format === 'article_v2'/);
-  assert.match(wxml, /wx:for="\{\{articleBlocks\}\}"/);
-  assert.match(wxml, /body_format !== 'article_v2'/);
-  assert.match(wxml, /data-player-key="\{\{item\.playerKey\}\}"/);
-  assert.match(wxml, /item\.kind === 'layout'/);
+  const presentation = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
+  assert.match(wxml, /template is="content-presentation"/);
+  assert.match(presentation, /view\.kind === 'gallery'/);
+  assert.match(presentation, /data-player-key="\{\{item\.playerKey\}\}"/);
+  assert.match(presentation, /item\.kind === 'layout'/);
 	const editor = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.js'), 'utf8');
 	const editorView = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
 	assert.match(editor, /preserveLayoutBody\(this\.data\.layoutBody/);
 	assert.match(editor, /layoutMediaIDs/);
-	assert.match(editorView, /正文保留原排版，暂不支持编辑/);
+	assert.match(editorView, /正文保留原排版/);
 });

@@ -61,9 +61,22 @@
       {
         "type": "file",
         "value": "pages/Invitefriends/intro-logo.png"
+      },
+      {
+        "type": "folder",
+        "value": "assets/welcome"
+      },
+      {
+        "type": "file",
+        "value": ".DS_Store"
       }
     ],
-    "include": []
+    "include": [
+      {
+        "type": "file",
+        "value": "components/content-presentation/content-presentation.wxml"
+      }
+    ]
   },
   "appid": "wx94fdc48861913ede",
   "editorSetting": {},

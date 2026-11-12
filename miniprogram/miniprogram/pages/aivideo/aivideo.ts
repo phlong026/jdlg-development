@@ -76,7 +76,9 @@ Page({
         prompt: decodeURIComponent(options.prompt),
       });
     }
-    if (options.taskId) {
+    const token = String(wx.getStorageSync('token') || '');
+    if (options.taskId && !token) this.ensureAIAccount('登录后可查看你的视频任务');
+    if (token && options.taskId) {
       const taskId = parseInt(options.taskId, 10);
       if (taskId) {
         this.setData({ taskId });
@@ -96,7 +98,7 @@ Page({
 
   initNavLayout() {
     try {
-      const systemInfo = wx.getSystemInfoSync();
+      const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
       const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function'
         ? wx.getMenuButtonBoundingClientRect()
         : null;
@@ -307,7 +309,9 @@ Page({
 
   getStoredActiveTaskId() {
     try {
-      const cache = wx.getStorageSync(ACTIVE_VIDEO_TASK_STORAGE_KEY);
+      const storageKey = this.getActiveTaskStorageKey();
+      if (!storageKey) return 0;
+      const cache = wx.getStorageSync(storageKey);
       const taskId = Number(cache?.taskId || 0);
       return Number.isFinite(taskId) && taskId > 0 ? taskId : 0;
     } catch (error) {
@@ -320,7 +324,9 @@ Page({
       return;
     }
     try {
-      wx.setStorageSync(ACTIVE_VIDEO_TASK_STORAGE_KEY, {
+      const storageKey = this.getActiveTaskStorageKey();
+      if (!storageKey) return;
+      wx.setStorageSync(storageKey, {
         taskId,
         updatedAt: Date.now(),
       });
@@ -334,9 +340,33 @@ Page({
       if (taskId && currentTaskId && currentTaskId !== taskId) {
         return;
       }
-      wx.removeStorageSync(ACTIVE_VIDEO_TASK_STORAGE_KEY);
+      const storageKey = this.getActiveTaskStorageKey();
+      if (storageKey) wx.removeStorageSync(storageKey);
     } catch (error) {
     }
+  },
+
+  getActiveTaskStorageKey(): string {
+    const token = String(wx.getStorageSync('token') || '');
+    const userInfo = wx.getStorageSync('userInfo') || {};
+    const userID = Number(userInfo.id || 0);
+    const profileToken = String(userInfo.token || '');
+    return token && (!profileToken || profileToken === token) && Number.isSafeInteger(userID) && userID > 0
+      ? `${ACTIVE_VIDEO_TASK_STORAGE_KEY}:${userID}` : '';
+  },
+
+  ensureAIAccount(message: string = '登录后可继续使用 AI 视频功能'): string {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token) return token;
+    wx.showModal({
+      title: '提示',
+      content: message,
+      confirmText: '去登录',
+      success: (res) => {
+        if (res.confirm) wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
+      },
+    });
+    return '';
   },
 
   restoreActiveTask() {
@@ -396,6 +426,7 @@ Page({
       wx.showToast({ title: '请先输入提示词', icon: 'none' });
       return;
     }
+    if (!this.ensureAIAccount('登录后可使用 AI 提示词优化')) return;
     this.setData({ optimizingPrompt: true });
     const { optimizePrompt } = require('../../utils/promptOptimize');
     const result = await optimizePrompt(rawPrompt, 'video');
@@ -449,6 +480,7 @@ Page({
 
   onSelectStartFrame() {
     if (this.data.uploading) return;
+    if (!this.ensureAIAccount('登录后可上传 AI 视频首帧')) return;
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -477,6 +509,7 @@ Page({
 
   onSelectEndFrame() {
     if (this.data.uploading) return;
+    if (!this.ensureAIAccount('登录后可上传 AI 视频尾帧')) return;
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -775,16 +808,8 @@ Page({
       return;
     }
 
-    const token = wx.getStorageSync('token');
+    const token = this.ensureAIAccount();
     if (!token) {
-      wx.showModal({
-        title: '提示',
-        content: '请先登录',
-        confirmText: '去登录',
-        success: (res) => {
-          if (res.confirm) wx.navigateTo({ url: '/pages/login/login' });
-        },
-      });
       return;
     }
 

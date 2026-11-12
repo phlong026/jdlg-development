@@ -1,0 +1,41 @@
+{
+  "version": "8.0.3",
+  "appid": "wx94fdc48861913ede",
+  "project": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG/miniprogram",
+  "branch": "fix/experience-reader-template-20261111",
+  "source_commit": "2fff57f71018538b2f2ad0a506bb715a6a052052",
+  "miniprogram_tree": "bb2d350f2634b9f885ffbf8afd642ab062e0bb54",
+  "checked_at": "2026-11-11T14:21:41.937420+08:00",
+  "upload_status": "success",
+  "upload_surface": "微信开发者工具原生上传",
+  "upload_message": "代码上传成功",
+  "post_upload_experience_evidence": {
+    "surface": "同一工程成功上传后重新打开上传入口",
+    "message": "上次提交已被选为体验版，本次上传将会覆盖体验版，是否继续？",
+    "action": "核对标记后取消重复上传"
+  },
+  "official_console_verified": false,
+  "device_share_acceptance_verified": false,
+  "backend_deployed": false,
+  "backend_deployment_required": false,
+  "production_review_or_release_performed": false,
+  "source_changed_during_upload": false,
+  "native_log_success": {
+    "time": "2026-11-11 14:19:12.304+08:00",
+    "file": "/Users/honor.pei/Library/Application Support/微信开发者工具/d1e8765721a6c23d43b14c95b1843e6b/WeappLog/logs/2026-11-11-11-28-29-594.log",
+    "line": 33744,
+    "event": "[uploadFile] progressSuccess"
+  },
+  "template_sha256": {
+    "miniprogram/miniprogram/pages/contentreader/contentreader.wxml": "4aa7a6740cb3f1c43acd878a16fa785d7add3366df325ade3a8d7c594c899419",
+    "miniprogram/miniprogram/pages/contentedit/contentedit.wxml": "fede6c9d2eec3671796b3267a03eea4b91d91a554cd76fca946b02a4796a3b3f"
+  },
+  "remaining_checks": [
+    "手机体验版原始分享卡片的冷启动和再次进入",
+    "双账号分享及图集、视频、文章的真机验收"
+  ],
+  "existing_checks": [
+    "TypeScript既有232条诊断与修复前一致",
+    "原生代码质量仍提示未使用JS及资源体积等既有项"
+  ]
+}

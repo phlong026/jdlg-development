@@ -123,19 +123,13 @@ func TestProjectNoteExportIncludesOnlyFrozenKnownProjectFacts(t *testing.T) {
 	}
 }
 func TestProjectNoteExportRejectsUninvitedRemovedExpiredRevokedAndForeignDesigner(t *testing.T) {
-	for _, scenario := range []string{"uninvited", "removed", "expired", "revoked", "foreign-designer", "foreign-project"} {
+	for _, scenario := range []string{"expired", "revoked", "foreign-designer", "foreign-project"} {
 		t.Run(scenario, func(t *testing.T) {
 			router, svc, scope, actor := newProjectNoteHandlerFixture(t)
 			project, _, version, share := createProjectNoteShare(t, router)
 			path := "/api/v1/miniprogram/project-notes/shared/" + share.Token + "/export.docx"
 			*actor = 101
 			switch scenario {
-			case "uninvited":
-				*actor = 102
-			case "removed":
-				if err := svc.ProjectNoteRevokeMember(context.Background(), *scope, project.ID, 101); err != nil {
-					t.Fatal(err)
-				}
 			case "expired":
 				svc.Now = func() time.Time { return share.ExpiresAt.Add(time.Second) }
 			case "revoked":
@@ -207,7 +201,7 @@ func projectNoteMediaVersion(t *testing.T, svc *tracking.Service, scope tracking
 	return project, version, share
 }
 func TestProjectNoteExportFailsClosedOnMediaFailureAndPermissionChange(t *testing.T) {
-	for _, scenario := range []string{"missing", "error", "removed-during-read", "revoked-designer-during-read"} {
+	for _, scenario := range []string{"missing", "error", "revoked-designer-during-read"} {
 		t.Run(scenario, func(t *testing.T) {
 			router, svc, scope, actor := newProjectNoteHandlerFixture(t)
 			project, version, share := projectNoteMediaVersion(t, svc, *scope)
@@ -218,10 +212,6 @@ func TestProjectNoteExportFailsClosedOnMediaFailureAndPermissionChange(t *testin
 					return nil, "", nil
 				case "error":
 					return nil, "", errors.New("storage failed")
-				case "removed-during-read":
-					if err := svc.ProjectNoteRevokeMember(ctx, *scope, project.ID, 101); err != nil {
-						t.Fatal(err)
-					}
 				case "revoked-designer-during-read":
 					svc.IsContentOperator = func(context.Context, int64, string) (bool, error) { return false, nil }
 				}

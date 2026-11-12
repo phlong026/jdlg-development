@@ -45,6 +45,7 @@ type projectNoteInvitationCreateRequest struct {
 
 type ProjectNoteInvitationPreview struct {
 	ProjectID   string    `json:"-"`
+	DesignerID  int64     `json:"-"`
 	ProjectName string    `json:"project_name"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	Status      string    `json:"request_status,omitempty"`
@@ -234,7 +235,7 @@ func (s *Service) ProjectNoteReadInvitation(ctx context.Context, token string, a
 		if err = s.projectNoteGrant(ctx, r, project); err != nil {
 			return err
 		}
-		out = ProjectNoteInvitationPreview{ProjectName: project.Name, ExpiresAt: invitation.ExpiresAt}
+		out = ProjectNoteInvitationPreview{ProjectName: project.Name, ExpiresAt: invitation.ExpiresAt, DesignerID: project.DesignerID}
 		request, readErr := decode[ProjectNoteJoinRequest](r, projectNoteJoinRequestKind, projectNoteJoinRequestID(invitation.ID, actor))
 		if readErr == nil {
 			if request.Status == ProjectNoteJoinApproved {
@@ -280,21 +281,13 @@ func (s *Service) ProjectNoteApplyInvitation(ctx context.Context, token string, 
 			return readErr
 		}
 		now := s.Now().UTC()
-		out = ProjectNoteJoinRequest{ID: id, InvitationID: invitation.ID, ProjectID: project.ID, ActorID: actor, Status: ProjectNoteJoinPending, RequestedAt: now, FirstKeyHash: hash(key)}
+		// 邀请链接本身就是所有者发出的准入凭据：受邀人登录后直接成为成员，不再二次审批。
+		out = ProjectNoteJoinRequest{ID: id, InvitationID: invitation.ID, ProjectID: project.ID, ActorID: actor, Status: ProjectNoteJoinApproved, RequestedAt: now, ApprovedAt: now, ApprovedBy: project.DesignerID, FirstKeyHash: hash(key), ApprovalKeyHash: hash(key)}
 		if err = r.Insert(projectNoteRecord(projectNoteJoinRequestKind, id, project.Owner, now, out, projectNoteActorKey(actor), project.ID, id, invitation.ID)); err != nil {
 			return err
 		}
-		if !s.Config.Enabled || actor == project.DesignerID {
-			return nil
-		}
-		notice := NoticeEvent{ID: projectNoteJoinNoticeID(id), Kind: ProjectNoteJoinRequestNoticeKind, Owner: project.Owner, RecipientID: project.DesignerID, VisitorKey: projectNoteActorKey(actor), ShareID: invitation.ID, ProjectID: project.ID, ContentID: id, Route: ProjectNoteNoticeRoute, OccurredAt: now}
-		noticeRow := record("notice_event", notice.ID, notice.Owner, now, notice)
-		noticeRow.Visitor, noticeRow.Content, noticeRow.Share = notice.VisitorKey, notice.ContentID, notice.ShareID
-		if err = r.Insert(noticeRow); err != nil {
+		if _, err = s.projectNoteJoinMemberIn(r, project, actor, invitation.DesignerID, invitation.ID); err != nil {
 			return err
-		}
-		if s.OnNoticeEvent != nil {
-			return s.OnNoticeEvent(sourceReadContext(ctx, r), notice)
 		}
 		return nil
 	})
@@ -386,7 +379,7 @@ func (s *Service) ProjectNoteApproveJoinRequest(ctx context.Context, scope Scope
 		if invitation.Revoked || !s.Now().Before(invitation.ExpiresAt) {
 			return fail(409, "邀请已失效，请重新邀请")
 		}
-		if _, err = s.projectNoteInviteMemberIn(r, project, request.ActorID); err != nil {
+		if _, err = s.projectNoteJoinMemberIn(r, project, request.ActorID, project.DesignerID, request.InvitationID); err != nil {
 			return err
 		}
 		request.Status = ProjectNoteJoinApproved

@@ -89,6 +89,10 @@ Page({
     },
     async loadFavoriteState() {
         const tool = this.data.tool;
+        if (!wx.getStorageSync('token')) {
+            this.setData({ isFavorited: false });
+            return;
+        }
         if (!tool?.id) {
             this.setData({ isFavorited: false });
             return;
@@ -104,6 +108,18 @@ Page({
     async toggleFavorite() {
         const tool = this.data.tool;
         if (!tool?.id || this.data.favoriteLoading) {
+            return;
+        }
+        if (!wx.getStorageSync('token')) {
+            wx.showModal({
+                title: '提示',
+                content: '登录后可收藏 AI 工具',
+                confirmText: '去登录',
+                success: (res) => {
+                    if (res.confirm)
+                        wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
+                },
+            });
             return;
         }
         try {

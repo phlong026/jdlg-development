@@ -1,6 +1,6 @@
 import { visitorName } from './model';
 import React, { useEffect, useRef, useState } from 'react';
-import { ArticleDocument, Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTracking';
+import { ArticleBlock, ArticleDocument, Asset, Content, LatestVisit, Page, Visitor } from '../../api/shareTracking';
 import { duration, identityBadge, intentLabels, safeMediaURL, time } from './model';
 
 export function useResource<T>(loader: (signal: AbortSignal) => Promise<T>, key: string) {
@@ -72,8 +72,57 @@ export function Dialog({ title, children, close, busy = false }: { title: string
     return <div className="st-overlay"><div className="st-dialog" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}><header><h2>{title}</h2><button onClick={close} disabled={busy} aria-label="关闭详情">{busy ? '处理中…' : '关闭'}</button></header>{children}</div></div>;
 }
 
+export function ArticleBlockEditor({ body, media, onChange }: { body: string; media: Asset[]; onChange: (body: string) => void }) {
+    let document: ArticleDocument;
+    try { document = body ? JSON.parse(body) : { schema: 1, blocks: [] }; }
+    catch { return <p className="st-warning">正文格式无法读取，可在高级源码中修正。</p>; }
+    if (document.schema !== 1 || !Array.isArray(document.blocks) || document.layout_html) return <p className="st-muted">原排版正文保持只读。</p>;
+    function write(blocks: ArticleBlock[]) {
+        const next = { ...document, blocks };
+        const mediaIndexes = blocks.map((block, index) => ['image', 'video'].includes(block.kind) ? index : -1).filter(index => index >= 0);
+        const mediaAreContiguous = mediaIndexes.every((index, position) => position === 0 || index === mediaIndexes[position - 1] + 1);
+        const images = blocks.filter(block => block.kind === 'image').length;
+        const videos = blocks.filter(block => block.kind === 'video').length;
+        const onlySocialBlocks = blocks.every(block => ['image', 'video', 'paragraph'].includes(block.kind));
+        if (next.presentation === 'gallery' && (!onlySocialBlocks || images < 1 || videos > 0 || !mediaAreContiguous)
+            || next.presentation === 'video' && (!onlySocialBlocks || videos !== 1 || images > 0)) next.presentation = 'article';
+        onChange(JSON.stringify(next));
+    }
+    function patch(index: number, changes: Partial<ArticleBlock>) { write(document.blocks.map((block, position) => position === index ? { ...block, ...changes } : block)); }
+    function move(index: number, step: number) {
+        const blocks = document.blocks.slice(), target = index + step;
+        if (target < 0 || target >= blocks.length) return;
+        [blocks[index], blocks[target]] = [blocks[target], blocks[index]]; write(blocks);
+    }
+    const labels = { paragraph: '文字', heading: '小标题', quote: '引用', list: '列表', image: '图片', video: '视频' };
+    return <div className="st-block-editor">{document.blocks.map((block, index) => <section className="st-edit-block" key={index}>
+        <header><strong>{labels[block.kind]} {index + 1}</strong><div>
+            <button type="button" disabled={index === 0} onClick={() => move(index, -1)} aria-label={`上移第${index + 1}段`}>上移</button>
+            <button type="button" disabled={index === document.blocks.length - 1} onClick={() => move(index, 1)} aria-label={`下移第${index + 1}段`}>下移</button>
+            <button type="button" onClick={() => write(document.blocks.filter((_, position) => position !== index))}>移除</button>
+        </div></header>
+        {block.kind === 'image' || block.kind === 'video' ? <><label>选择{labels[block.kind]}<select value={block.media_id || ''} onChange={event => patch(index, { media_id: event.target.value })}><option value="">请选择已上传素材</option>{media.filter(asset => asset.kind === block.kind).map(asset => <option key={asset.media_id} value={asset.media_id}>{asset.title || labels[block.kind]}</option>)}</select></label><label>说明（选填）<input value={block.caption || ''} maxLength={100} onChange={event => patch(index, { caption: event.target.value })} /></label></>
+            : block.kind === 'list' ? <label>每行一项<textarea rows={4} value={(block.items || []).join('\n')} onChange={event => patch(index, { items: event.target.value.split('\n') })} /></label>
+            : <textarea rows={block.kind === 'paragraph' ? 4 : 2} value={block.text || ''} placeholder={`填写${labels[block.kind]}`} onChange={event => patch(index, { text: event.target.value })} />}
+    </section>)}<div className="st-add-blocks">
+        <button type="button" onClick={() => write([...document.blocks, { kind: 'paragraph', text: '' }])}>＋ 文字</button>
+        <button type="button" onClick={() => write([...document.blocks, { kind: 'heading', level: 2, text: '' }])}>＋ 小标题</button>
+        {(['image', 'video'] as const).map(kind => <button type="button" key={kind} disabled={!media.some(asset => asset.kind === kind)} onClick={() => write([...document.blocks, { kind, media_id: media.find(asset => asset.kind === kind)?.media_id }])}>＋ {labels[kind]}</button>)}
+    </div></div>;
+}
+
+export function articleReferencesMedia(content: Pick<Content, 'body' | 'body_format'>, mediaID?: string): boolean {
+    if (!mediaID || content.body_format !== 'article_v2') return false;
+    try {
+        const document = JSON.parse(content.body) as ArticleDocument;
+        const escapedID = mediaID.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return document.blocks?.some(block => block.media_id === mediaID) === true
+            || new RegExp(`data-media-id=["']${escapedID}["']`).test(document.layout_html || '');
+    } catch { return false; }
+}
+
 // Only use persisted server responses here. Unsaved editor input must never reach HTML rendering.
-export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body_format'> & Partial<Pick<Content, 'media'>> }) {
+export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body_format'> & Partial<Pick<Content, 'media' | 'presentation'>> }) {
     if (content.body_format === 'rich_text') return <div className="st-body st-rich-body" dangerouslySetInnerHTML={{ __html: content.body }} />;
     if (content.body_format !== 'article_v2') return <div className="st-body">{content.body}</div>;
     let document: ArticleDocument;
@@ -84,6 +133,12 @@ export function ContentBody({ content }: { content: Pick<Content, 'body' | 'body
 		return layout ? <div className="st-body st-original-layout" dangerouslySetInnerHTML={{ __html: layout }} /> : <div className="st-warning">原排版正文或媒体无法安全预览，请重新导入。</div>;
 	}
     const media = new Map((content.media || []).map(asset => [asset.media_id, asset]));
+    const presentation = document.presentation || content.presentation;
+    if (presentation === 'gallery' || presentation === 'video') {
+        const blocks = document.blocks.filter(block => block.kind === (presentation === 'gallery' ? 'image' : 'video'));
+        const text = document.blocks.filter(block => block.kind === 'paragraph').map(block => block.text || '').join('\n\n');
+        return <div className={`st-body st-social-body st-social-${presentation}`}><div className={presentation === 'gallery' ? 'st-gallery-preview' : 'st-video-preview'}>{blocks.map((block, index) => <figure className="st-gallery-slide" key={index}><MediaPreview asset={media.get(block.media_id || '')} title={block.caption || '内容素材'} />{block.caption && <figcaption>{block.caption}</figcaption>}</figure>)}</div>{presentation === 'gallery' && <p className="st-muted">{blocks.length}张图片 · 左右滑动查看</p>}<div className="st-note-copy">{text}</div></div>;
+    }
     const align = { left: 'left', center: 'center', right: 'right' } as const;
     const size = { small: 'small', normal: 'normal', large: 'large' } as const;
     const border = { left: 'left', box: 'box' } as const;

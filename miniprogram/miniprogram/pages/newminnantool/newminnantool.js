@@ -87,7 +87,7 @@ Page({
             confirmText: '去登录',
             success: (res) => {
                 if (res.confirm) {
-                    wx.navigateTo({ url: '/pages/login/login' });
+                    wx.navigateTo({ url: '/pages/login/login?from=ai-action' });
                 }
             },
         });
@@ -399,6 +399,8 @@ Page({
             wx.showToast({ title: '请先输入提示词', icon: 'none' });
             return;
         }
+        if (!this.ensureToken())
+            return;
         this.setData({ optimizingPrompt: true });
         const { optimizePrompt } = require('../../utils/promptOptimize');
         const result = await optimizePrompt(rawPrompt, 'architecture');

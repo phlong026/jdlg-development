@@ -72,7 +72,25 @@ func registerProjectInvitationHandlers(root, manage *gin.RouterGroup, svc *track
 	})
 	root.GET("/member-invitations/:token", func(c *gin.Context) {
 		out, err := svc.ProjectNoteReadInvitation(c.Request.Context(), c.Param("token"), deps.actor(c))
-		trackingResponse(c, out, err)
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		inviterName := ""
+		if deps.profiles != nil && out.DesignerID > 0 {
+			profiles, resolveErr := deps.profiles(c.Request.Context(), []int64{out.DesignerID})
+			if resolveErr != nil {
+				trackingResponse(c, nil, resolveErr)
+				return
+			}
+			inviterName = projectNoteCreatorDisplayName(profiles[out.DesignerID])
+		}
+		trackingResponse(c, gin.H{
+			"project_name":   out.ProjectName,
+			"expires_at":     out.ExpiresAt,
+			"request_status": out.Status,
+			"inviter_name":   inviterName,
+		}, nil)
 	})
 	root.POST("/member-invitations/:token/apply", func(c *gin.Context) {
 		var input struct {

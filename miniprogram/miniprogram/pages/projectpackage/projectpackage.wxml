@@ -17,11 +17,11 @@
       <block wx:else>
       <view class="card">
         <text class="section-title">分享内容</text>
-        <text wx:if="{{notes.length}}" class="group-title">项目笔记</text>
+        <view class="group-head"><text wx:if="{{notes.length}}" class="group-title">项目笔记</text><text class="group-hint">可继续编辑</text></view>
         <button wx:for="{{notes}}" wx:key="note_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.note_id}}" bindtap="toggleNote">
           <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">当前第 {{item.revision}} 版 · 分享时固定</text></view><text class="check">{{item.selected ? '✓' : ''}}</text>
         </button>
-        <text wx:if="{{versions.length}}" class="group-title">方案版本</text>
+        <view class="group-head"><text wx:if="{{versions.length}}" class="group-title">方案版本</text><text class="group-hint">固定版本 · 对外只读</text></view>
         <button wx:for="{{versions}}" wx:key="version_id" class="pick-row {{item.selected ? 'selected' : ''}}" data-id="{{item.version_id}}" bindtap="toggleVersion">
           <view><text class="row-title">{{item.title || '未命名方案'}}</text><text class="meta">第 {{item.revision}} 版 · {{item.media_count || 0}} 个素材</text></view><text class="check">{{item.selected ? '✓' : ''}}</text>
         </button>

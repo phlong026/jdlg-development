@@ -304,7 +304,7 @@ Page({
                 wx.showToast({ title: 'Canvas 2D 不可用', icon: 'none' });
                 return;
             }
-            const dpr = wx.getSystemInfoSync().pixelRatio || 2;
+            const dpr = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync()).pixelRatio || 2;
             canvas.width = width * dpr;
             canvas.height = height * dpr;
             ctx.scale(dpr, dpr);
@@ -389,7 +389,7 @@ Page({
                     }
                     const canvas = res[0].node;
                     const ctx = canvas.getContext('2d');
-                    const dpr = wx.getSystemInfoSync().pixelRatio || 2;
+                    const dpr = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync()).pixelRatio || 2;
                     const width = this.data.canvasWidth;
                     const height = this.data.canvasHeight;
                     canvas.width = width * dpr;

@@ -36,6 +36,8 @@ type ProjectCollectionDraft struct {
 }
 
 type ProjectCollectionItem struct {
+	Type           string     `json:"type,omitempty"`
+	Presentation   string     `json:"presentation,omitempty"`
 	RouteKey       string     `json:"route_key,omitempty"`
 	ContentID      string     `json:"content_id,omitempty"`
 	ContentVersion int        `json:"content_version,omitempty"`
@@ -176,6 +178,7 @@ func (s *Service) projectCollectionItems(r Repository, scope Scope, owner string
 			return nil, fail(404, "已发布来源不可访问")
 		}
 		items = append(items, ProjectCollectionItem{
+			Type: item.Type, Presentation: item.Presentation,
 			RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion,
 			Title: item.Title, Cover: item.Cover, PublishedAt: item.PublishedAt, Available: true,
 		})
@@ -532,7 +535,7 @@ func (s *Service) ReadPublishedProjectCollection(ctx context.Context, id string,
 				}
 				cover = &copy
 			}
-			items = append(items, ProjectCollectionItem{RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion, Title: item.Title, Cover: cover, PublishedAt: item.PublishedAt, Available: true})
+			items = append(items, ProjectCollectionItem{Type: item.Type, Presentation: item.Presentation, RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion, Title: item.Title, Cover: cover, PublishedAt: item.PublishedAt, Available: true})
 		}
 		out.Items = items
 		out.Cover = projectCollectionCover(items, nil)
@@ -733,8 +736,47 @@ func (s *Service) DeleteProjectCollectionDraft(ctx context.Context, scope Scope,
 		if err = r.Put(projectCollectionRecord(projectCollectionKind, collection, now)); err != nil {
 			return err
 		}
+		if s.OnCollectionRevoke != nil {
+			if err = s.OnCollectionRevoke(sourceReadContext(ctx, r), id); err != nil {
+				return err
+			}
+		}
 		out = ProjectCollectionDeletion{CollectionID: id, Revision: collection.Revision, Status: collection.Status, DeletedAt: now}
 		return audit(r, collection.Owner, "delete_project_collection_draft", scope.Actor, id, now, map[string]any{"revision": collection.Revision})
+	})
+	return out, err
+}
+
+// DeleteProjectCollection soft-deletes any actor-owned collection lifecycle
+// state. Immutable manifests and source works remain stored for audit, while
+// current-master validation makes every old public URL unavailable.
+func (s *Service) DeleteProjectCollection(ctx context.Context, scope Scope, id string, revision int) (ProjectCollectionDeletion, error) {
+	var out ProjectCollectionDeletion
+	if err := s.projectCollectionAccess(scope); err != nil {
+		return out, err
+	}
+	err := s.transaction(ctx, func(r Repository) error {
+		collection, err := projectCollectionOwned(r, scope, id)
+		if err != nil {
+			return err
+		}
+		if collection.Revision != revision {
+			return fail(409, "合集已更新，请重新读取")
+		}
+		now := s.Now().UTC()
+		collection.Status = "deleted"
+		collection.Revision++
+		collection.UpdatedAt = now
+		if err = r.Put(projectCollectionRecord(projectCollectionKind, collection, now)); err != nil {
+			return err
+		}
+		if s.OnCollectionRevoke != nil {
+			if err = s.OnCollectionRevoke(sourceReadContext(ctx, r), id); err != nil {
+				return err
+			}
+		}
+		out = ProjectCollectionDeletion{CollectionID: id, Revision: collection.Revision, Status: collection.Status, DeletedAt: now}
+		return audit(r, collection.Owner, "delete_project_collection", scope.Actor, id, now, map[string]any{"revision": collection.Revision, "last_version": collection.Version})
 	})
 	return out, err
 }

@@ -1,0 +1,10 @@
+{
+  "checked_at": "2026-11-06T08:09:06.982Z",
+  "source": "微信公众平台版本管理页可见内容",
+  "account": "甲第灵光智能体",
+  "online_version": "7.3.3",
+  "development_version": "7.4.4",
+  "experience_marked": true,
+  "review_pending": false,
+  "visible_development_section": "版本号\n\n7.4.4\n\n体验版扫描访问体验版\n\n提交审核\n开发者\n\nHiAi智能体\n\n提交时间\n\n2026-11-06 16:05:24\n\n项目备注\n\n修复首页消息横幅无法关闭及重复弹出，避让微信胶囊，保留未读消息；源码4d890d1"
+}

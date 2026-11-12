@@ -6,20 +6,39 @@ const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '../miniprogram');
 
-function loadPage({ detail, prepareShareCardImage, prepareTimelineShareImage, requestError } = {}) {
+function loadPage({ detail, accountDetail, accountResponses, prepareShareCardImage, prepareTimelineShareImage, requestError, token = '' } = {}) {
   let definition;
   const toasts = [];
+  const requests = [];
+  const errors = [];
+  let accountRequestIndex = 0;
   const wx = {
-    getStorageSync: () => '',
+    getStorageSync: key => key === 'token' ? token : '',
     setBackgroundColor() {},
     getMenuButtonBoundingClientRect: () => ({ top: 24, height: 32 }),
     getSystemInfoSync: () => ({ statusBarHeight: 20, windowWidth: 375 }),
     request(options) {
+      requests.push(options);
       if (requestError) {
         options.fail(requestError);
         return;
       }
-      options.success({ statusCode: 200, data: { code: 0, data: detail } });
+      if (options.url.endsWith('/detail') && Array.isArray(accountResponses)) {
+        const response = accountResponses[Math.min(accountRequestIndex, accountResponses.length - 1)];
+        accountRequestIndex += 1;
+        if (response.fail) {
+          options.fail(response.fail);
+          return;
+        }
+        options.success({ statusCode: response.statusCode, data: response.data });
+        return;
+      }
+      const responseDetail = options.url.endsWith('/detail') ? accountDetail : detail;
+      if (options.url.endsWith('/detail') && !responseDetail) {
+        options.success({ statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } });
+        return;
+      }
+      options.success({ statusCode: 200, data: { code: 0, data: responseDetail } });
     },
     showToast(options) { toasts.push(options); },
   };
@@ -28,7 +47,7 @@ function loadPage({ detail, prepareShareCardImage, prepareTimelineShareImage, re
       if (key === 'resolveAssetPath' || key === 'normalizeCosUrl') return value => value;
       if (key === 'prepareShareCardImage') return prepareShareCardImage || (async value => `local:${value}`);
       if (key === 'prepareTimelineShareImage') return prepareTimelineShareImage || (async value => `timeline:${value}`);
-      if (key === 'getPageCache') return () => detail || null;
+      if (key === 'getPageCache') return () => null;
       if (key === 'setPageCache' || key === 'prefetchImages') return () => {};
       if (key === 'getCachedDeviceFingerprint') return () => '';
       return () => ({});
@@ -40,14 +59,14 @@ function loadPage({ detail, prepareShareCardImage, prepareTimelineShareImage, re
     require: () => dependency,
     Page(value) { definition = value; },
     wx,
-    console: { log() {}, warn() {}, error() {} },
+    console: { log() {}, warn() {}, error(...args) { errors.push(args); } },
     Promise,
     Date,
     Math,
     setTimeout,
     clearTimeout,
   });
-  return { definition, toasts };
+  return { definition, toasts, requests, errors };
 }
 
 function createPage(definition, data = {}) {
@@ -73,6 +92,89 @@ const detail = {
   ],
   is_free: true,
 };
+
+test('logged-in readers load the same public detail projection without profile-gated endpoint', async () => {
+  const { definition, requests } = loadPage({ detail, token: 'incomplete-profile-token' });
+  const page = createPage(definition);
+
+  page.onLoad({ id: '21' });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(requests[0].url, 'https://api.jiadilingguang.com/api/v1/miniprogram/templates/21');
+  assert.equal(requests[0].header.token, undefined);
+  assert.equal(requests.some(request => request.url.endsWith('/templates/21/detail')), true);
+  assert.equal(page.data.contentReady, true);
+  assert.equal(page.data.template.name, detail.name);
+});
+
+test('a complete logged-in account upgrades the public preview with its unlock and download state', async () => {
+  const accountDetail = {
+    ...detail,
+    images: [...detail.images, 'https://static.example.com/original.jpg'],
+    unlocked: true,
+    can_download_images: true,
+    user_phone_verified: true,
+    user_recharge_member: true,
+    download_action_text: '下载当前图片',
+  };
+  const { definition, requests } = loadPage({ detail: { ...detail, unlocked: false }, accountDetail, token: 'complete-profile-token' });
+  const page = createPage(definition);
+
+  page.onLoad({ id: '21' });
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(requests[0].url, 'https://api.jiadilingguang.com/api/v1/miniprogram/templates/21');
+  assert.equal(requests.some(request => request.url === 'https://api.jiadilingguang.com/api/v1/miniprogram/templates/21/detail'), true);
+  assert.equal(page.data.unlocked, true);
+  assert.equal(page.data.canDownloadImages, true);
+  assert.equal(page.data.userPhoneVerified, true);
+  assert.equal(page.data.userRechargeMember, true);
+  assert.equal(page.data.downloadActionText, '下载当前图片');
+  assert.deepEqual(Array.from(page.data.imageList), accountDetail.images);
+});
+
+test('账号权益增强 500 时保留公开正文、记录脱敏诊断并可重试恢复', async () => {
+  const accountDetail = {
+    ...detail,
+    unlocked: true,
+    can_download_images: true,
+    user_phone_verified: true,
+    user_recharge_member: true,
+  };
+  const { definition, requests, errors } = loadPage({
+    detail,
+    token: 'secret-account-token',
+    accountResponses: [
+      { statusCode: 500, data: { code: 500, msg: '数据库包含用户私密信息' } },
+      { statusCode: 200, data: { code: 0, data: accountDetail } },
+    ],
+  });
+  const page = createPage(definition);
+
+  page.onLoad({ id: '21' });
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(page.data.contentReady, true);
+  assert.equal(page.data.template.name, detail.name);
+  assert.equal(page.data.accountEnhancementState, 'retryable');
+  assert.equal(page.data.accountEnhancementError, '账号权益暂未同步，不影响浏览，可重试。');
+  assert.equal(errors.length, 1);
+  const diagnostic = JSON.stringify(errors[0]);
+  assert.match(diagnostic, /模板账号权益同步失败/);
+  assert.match(diagnostic, /"templateId":21/);
+  assert.match(diagnostic, /"statusCode":500/);
+  assert.doesNotMatch(diagnostic, /secret-account-token|数据库包含用户私密信息/);
+
+  await page.retryTemplateAccountEnhancement();
+
+  assert.equal(requests.filter(request => request.url.endsWith('/templates/21/detail')).length, 2);
+  assert.equal(page.data.accountEnhancementState, 'ready');
+  assert.equal(page.data.accountEnhancementError, '');
+  assert.equal(page.data.unlocked, true);
+  assert.equal(page.data.canDownloadImages, true);
+});
 
 test('朋友圈分享把当前第二张图的短标识与封面绑定到同一模板', async () => {
   const { definition } = loadPage();

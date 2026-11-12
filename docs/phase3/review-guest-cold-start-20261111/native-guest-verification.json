@@ -1,0 +1,177 @@
+{
+  "publicPages": [
+    {
+      "hasLogin": false,
+      "route": "pages/index/index",
+      "loginVisible": false,
+      "needsLogin": false,
+      "completingProfile": false,
+      "nicknameVisible": false,
+      "introVisible": false,
+      "profileReady": true,
+      "arrays": {
+        "featuredGroups": 8,
+        "quickRegionOptions": 2,
+        "quickRegionIndex": 2,
+        "quickRegionConfirmedIndex": 2
+      }
+    },
+    {
+      "hasLogin": false,
+      "route": "pages/template/template",
+      "loginVisible": false,
+      "needsLogin": false,
+      "completingProfile": false,
+      "nicknameVisible": false,
+      "introVisible": false,
+      "profileReady": true,
+      "arrays": {
+        "mainTabs": 5,
+        "allSubTabs": 18,
+        "subTabs": 6,
+        "allThirdTabs": 4,
+        "thirdTabs": 0,
+        "displayCards": 12,
+        "leftColumnCards": 6,
+        "rightColumnCards": 6,
+        "skeletonCards": 4
+      }
+    },
+    {
+      "hasLogin": false,
+      "route": "pages/distribution/distribution",
+      "loginVisible": false,
+      "needsLogin": false,
+      "completingProfile": false,
+      "nicknameVisible": false,
+      "introVisible": false,
+      "profileReady": true,
+      "arrays": {
+        "tabs": 6,
+        "designerCards": 10,
+        "traitFilters": 30,
+        "regionPickerValue": 0,
+        "designerSorts": 3,
+        "skeletonCards": 3
+      }
+    }
+  ],
+  "protectedPage": {
+    "route": "pages/templatesquaredetails/templatesquaredetails",
+    "loginVisible": true,
+    "profileReady": false
+  },
+  "protectedPrefetches": 0,
+  "requests": [
+    {
+      "path": "/api/v1/miniprogram/templates/featured",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 403,
+      "results": []
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "results": [
+        "accepted",
+        "accepted"
+      ]
+    },
+    {
+      "path": "/api/v1/miniprogram/templates/tab-config",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/templates",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 503,
+      "results": []
+    },
+    {
+      "path": "/api/v1/miniprogram/designers",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/entry",
+      "method": "POST",
+      "status": 200,
+      "anonymous": true
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/shares",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "results": [
+        "accepted",
+        "accepted"
+      ]
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "results": [
+        "accepted",
+        "accepted",
+        "accepted"
+      ]
+    },
+    {
+      "path": "/api/v1/miniprogram/tracking/events/batch",
+      "method": "POST",
+      "status": 200,
+      "results": [
+        "accepted"
+      ]
+    }
+  ],
+  "summary": {
+    "anonymous_entries": 3,
+    "accepted_events": 8,
+    "unauthorized_responses": 0,
+    "protected_prefetches": 0,
+    "original_login_restored": true,
+    "server_backed_guest_navigation": true,
+    "full_app_restart_cold_start_claimed": false
+  }
+}

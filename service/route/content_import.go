@@ -258,14 +258,17 @@ func registerContentImports(parent context.Context, v1 *gin.RouterGroup, svc *tr
 			if err != nil {
 				return tracking.Asset{}, err
 			}
-			fetch := func(ctx context.Context, platform contentimport.Platform, url string, max int64) ([]byte, string, error) {
-				data, mime, err := fetcher.FetchMedia(ctx, platform, url, max)
+			fetch := func(ctx context.Context, platform contentimport.Platform, url string, max int64) (contentimport.MediaFile, error) {
+				media, err := fetcher.FetchMediaFile(ctx, platform, url, max)
 				if err == nil {
 					_, err = current(ctx, job)
+					if err != nil {
+						_ = media.Remove()
+					}
 				}
-				return data, mime, err
+				return media, err
 			}
-			return saveImportedMedia(ctx, svc, scope, job, index, media, fetch)
+			return saveImportedMediaFile(ctx, svc, scope, job, index, media, fetch)
 		}, SaveDraft: func(ctx context.Context, job contentimport.Job, doc contentimport.Document, assets []tracking.Asset) (string, error) {
 			scope, err := current(ctx, job)
 			if err != nil {

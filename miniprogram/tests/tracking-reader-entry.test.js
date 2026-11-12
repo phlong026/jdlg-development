@@ -56,8 +56,8 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
         events.push(...request.data.events);
         return ok(request, { results: request.data.events.map(event => ({ event_id: event.event_id, status: 'accepted' })) });
       }
-      if (suffix.startsWith('/project-collections/')) { reads.push(suffix); return ok(request, { content_id: 'content_one', version: 1, title: '合集作品', media: [] }); }
-      if (suffix.startsWith('/contents/')) return ok(request, { title: request.data.title || '可读内容', media: [] });
+      if (suffix.startsWith('/project-collections/')) { reads.push(suffix); return ok(request, { content_id: 'content_one', version: 1, title: '合集作品', body: '合集正文', media: [] }); }
+      if (suffix.startsWith('/contents/')) return ok(request, { title: request.data.title || '可读内容', body: '可读正文', media: [] });
       throw new Error('Unexpected request ' + suffix);
     }
   };
@@ -77,7 +77,7 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
   adapter.install(); sandbox.App({}); appDefinition.onShow({});
   vm.runInNewContext(fs.readFileSync(path.join(root, route + '.js'), 'utf8'), {
     Page: sandbox.Page, exports: {}, wx, Date, Math, Promise,
-    require: name => name.endsWith('/tracking/index') ? adapter : name.endsWith('/tracking/api') ? api : require(path.join(root, 'utils/tracking/video'))
+    require: name => name.endsWith('/tracking/index') ? adapter : name.endsWith('/tracking/api') ? api : name.endsWith('/content-presentation') ? require(path.join(root, 'utils/content-presentation')) : require(path.join(root, 'utils/tracking/video'))
   });
   const page = {
     ...pageDefinition, route, data: JSON.parse(JSON.stringify(pageDefinition.data)),
@@ -106,16 +106,38 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
 }
 
 for (const options of [direct, { scene: sceneA }]) {
-  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until the config arrives, then silent consent collects it', async () => {
+  test('real reader holds the first unused ' + (options.scene ? 'scene' : 'st') + ' until config and default-on consent arrive', async () => {
     const t = runtime({ deferConfig: true }); await t.mount(options);
     assert.equal(t.entries.length, 0, 'nothing collects before the config arrives');
     t.resolveConfig(); await settle();
-    assert.ok(t.entries.length >= 1, 'silent consent collects once the config arrives');
+    // T7.1：config 就绪后对从未选择者默认开启，无需再等主动同意。
+    assert.ok(t.entries.length >= 1, 'the held entry starts after default-on consent');
     assert.equal(t.page.data.contentReady, true);
     assert.equal(t.entries.at(-1).share_token, 'original_share');
     assert.equal(t.views().at(-1).share_id, 'share:original_share');
   });
 }
+
+test('real adapter keeps an explicitly plain URL Link readable without entry or events', async () => {
+  const t = runtime({ accepted: true });
+  await t.mount({ content_id: 'content_one', content_version: '1', untracked_share: '1' });
+  await untilReady(t.page); await settle();
+  assert.equal(t.page.data.contentReady, true);
+  assert.equal(t.entries.length, 0, 'plain URL Link must not create an entry even when analytics is enabled');
+  assert.equal(t.events.length, 0, 'plain URL Link must not submit events');
+  assert.equal(t.adapter.getSDK().get(t.page), undefined, 'plain page must not remain registered in the adapter');
+  assert.match(t.page.onShareAppMessage().path, /[?&]untracked_share=1(?:&|$)/);
+  assert.match(t.page.onShareTimeline().query, /[?&]untracked_share=1(?:&|$)/);
+});
+
+test('real adapter still tracks an ordinary direct reader entry without a share token', async () => {
+  const t = runtime({ accepted: true });
+  await t.mount({ content_id: 'content_one', content_version: '1' });
+  await untilReady(t.page); await settle();
+  assert.ok(t.entries.length >= 1, 'ordinary no-st entry must not be disabled by the plain-share exception');
+  assert.equal(t.entries.at(-1).share_token, undefined);
+  assert.ok(t.views().length >= 1);
+});
 
 test('explicit consent while the scene is still resolving preserves the legitimate initial share', async () => {
   const t = runtime({ deferScene: true }); await t.mount({ scene: sceneA });
