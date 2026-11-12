@@ -445,7 +445,6 @@ Page({
           const body = response?.data || {};
           if (response?.statusCode === 200 && body.code === 0 && body.data) {
             setPageCache(cacheKey, body.data, TEMPLATE_DETAIL_CACHE_TTL);
-            void prefetchImages([normalizeCosUrl(body.data.preview_url || ''), normalizeCosUrl(body.data.thumbnail || '')], 2);
           }
         },
         complete: () => {

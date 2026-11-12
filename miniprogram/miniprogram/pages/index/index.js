@@ -442,7 +442,6 @@ Page({
                     const body = response?.data || {};
                     if (response?.statusCode === 200 && body.code === 0 && body.data) {
                         (0, perf_1.setPageCache)(cacheKey, body.data, TEMPLATE_DETAIL_CACHE_TTL);
-                        void (0, perf_1.prefetchImages)([(0, asset_1.normalizeCosUrl)(body.data.preview_url || ''), (0, asset_1.normalizeCosUrl)(body.data.thumbnail || '')], 2);
                     }
                 },
                 complete: () => {

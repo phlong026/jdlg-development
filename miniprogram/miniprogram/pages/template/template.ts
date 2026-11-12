@@ -594,55 +594,6 @@ function buildDetailCacheKey(targetType: 'template' | 'inspiration', id: number)
   return `${targetType}-detail:${Number(id || 0)}`;
 }
 
-function parseTemplateImages(value: unknown): string[] {
-  const rawValue = typeof value === 'string' ? value.trim() : '';
-  if (!rawValue) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    const urls: string[] = [];
-    parsed.forEach((item) => {
-      if (typeof item === 'string' && item.trim()) {
-        urls.push(item.trim());
-        return;
-      }
-      if (item && typeof item === 'object') {
-        const imageUrl = String((item as { image?: string; url?: string; preview_url?: string }).image || (item as { url?: string }).url || (item as { preview_url?: string }).preview_url || '').trim();
-        if (imageUrl) {
-          urls.push(imageUrl);
-        }
-      }
-    });
-    return urls;
-  } catch (error) {
-    return [];
-  }
-}
-
-function getTemplatePrefetchImageCandidates(payload: any, fallbackImage = ''): string[] {
-  return [
-    String(payload?.preview_url || '').trim(),
-    String(payload?.thumbnail || '').trim(),
-    ...parseTemplateImages(payload?.images),
-    String(fallbackImage || '').trim(),
-  ].filter((item, index, list) => Boolean(item) && list.indexOf(item) === index);
-}
-
-function getInspirationPrefetchImageCandidates(payload: any, fallbackImage = ''): string[] {
-  const images = Array.isArray(payload?.images) ? payload.images : [];
-  return [
-    String(payload?.cover_image || '').trim(),
-    ...images.map((item: unknown) => String(item || '').trim()),
-    String(fallbackImage || '').trim(),
-  ].filter((item, index, list) => Boolean(item) && list.indexOf(item) === index);
-}
-
 Page({
   templateFirstPageCache: {} as Record<string, { cards: TemplateListItem[]; hasMore: boolean; nextPage: number }>,
   requestSerial: 0,
@@ -831,10 +782,6 @@ Page({
         }
 
         setPageCache(cacheKey, response.data, TEMPLATE_DETAIL_CACHE_TTL);
-        const imageCandidates = targetType === 'template'
-          ? getTemplatePrefetchImageCandidates(response.data, card.image)
-          : getInspirationPrefetchImageCandidates(response.data, card.image);
-        void prefetchImages(imageCandidates, 2);
       },
       complete: () => {
         detailPrefetchingKeys.delete(cacheKey);

@@ -77,3 +77,18 @@ test('registered users retain home and template protected-detail warming', () =>
   assert.equal(square.requests.length, 1);
   assert.match(square.requests[0].url, /\/templates\/22$/);
 });
+
+test('warming detail data does not download unseen preview or original galleries', () => {
+  const session = { token: 'valid-account', userInfo: completeProfile };
+  const payload = { thumbnail: 'https://img/thumb.jpg', preview_url: 'https://img/preview.jpg', images: ['https://img/original.jpg'] };
+  const home = loadPage('pages/index/index.js', session);
+  home.page.prefetchFeaturedGroups([{ case1: { id: 31, thumbnail: 'https://img/list.jpg' } }]);
+  home.requests[0].success({ statusCode: 200, data: { code: 0, data: payload } });
+  assert.deepEqual(home.prefetchedImages, ['https://img/list.jpg']);
+  for (const targetType of ['template', 'inspiration']) {
+    const square = loadPage('pages/template/template.js', session);
+    square.page.warmLeadingCards([{ id: 32, image: 'https://img/list.jpg', targetType, cardKey: targetType + ':32' }]);
+    square.requests[0].success({ statusCode: 200, data: { code: 0, data: payload } });
+    assert.deepEqual(square.prefetchedImages, ['https://img/list.jpg']);
+  }
+});
