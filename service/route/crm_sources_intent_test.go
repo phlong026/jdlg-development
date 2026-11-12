@@ -44,3 +44,19 @@ func TestCRMSourceUsesConsentFilteredPhoneForPayloadAndCheckpoint(t *testing.T) 
 		t.Fatal("CRM checkpoint hash must not use the raw lead phone")
 	}
 }
+
+func TestCRMSourceIdentityChangesReplayWithoutBreakingCheckpointContracts(t *testing.T) {
+	source, err := os.ReadFile("crm_sources.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(source)
+	for _, want := range []string{"COALESCE(l.identity_type,'')", `"identityType":`, "externalId", "history_cursor", "CustomerLeadExportablePhoneSQL"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("CRM identity delivery contract missing %q", want)
+		}
+	}
+	if strings.Count(content, "COALESCE(l.identity_type,'')") < 3 {
+		t.Fatal("identity must be selected and included in both source-hash expressions")
+	}
+}

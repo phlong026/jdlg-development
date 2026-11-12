@@ -262,6 +262,18 @@ class CustomerIntegrationTest {
   String sourceId=workflow.sourceKey("miniprogram","88");workflow.unlink(admin(),main.getId(),sourceId,fresh(main).getVersion(),"核实为同电话不同户");
   assertThat(fresh(incoming).getMergedInto()).isNull();assertThat(fresh(incoming).getLifecycle()).isEqualTo("pending");assertThat(fresh(main).getProtectionExpiresAt()).isEqualTo(deadline);
  }
+ @Test void miniprogramIdentityReplayOnlyReclassifiesUnconfirmedSystemRecords(){
+  assertThatThrownBy(()->workflow.ingest(new CustomerWorkflow.Ingest("900","","","","","","",null,List.of(),null,null,"魔法师"))).isInstanceOf(ApiException.class).hasMessageContaining("身份无效");
+  Customer partner=workflow.ingest(new CustomerWorkflow.Ingest("901","","","","","","",null,List.of(),null,null,"设计师"));
+  assertThat(partner.getCategory()).isEqualTo("合作咨询");
+  Customer owner=workflow.ingest(new CustomerWorkflow.Ingest("901","","","","","","",null,List.of(),null,null,"乡墅业主"));
+  assertThat(owner.getId()).isEqualTo(partner.getId());assertThat(owner.getCategory()).isEqualTo("待确认");
+  owner.setCategory("重点客户");workflow.customers().saveAndFlush(owner);
+  Customer preserved=workflow.ingest(new CustomerWorkflow.Ingest("901","","","","","","",null,List.of(),null,null,"设计师"));
+  assertThat(preserved.getCategory()).isEqualTo("重点客户");
+  workflow.ingest(new CustomerWorkflow.Ingest("901","","","","","","",null,List.of(),null,null,"设计师"));
+  assertThat(followups.findByCustomerIdOrderByCreatedAtDescIdDesc(preserved.getId()).stream().filter(f->"source_identity".equals(f.getKind())).count()).isEqualTo(2);
+ }
  @Test void supervisorCompletingPendingDoesNotAcquireItsOwnership(){
   Customer c=workflow.ingest(new CustomerWorkflow.Ingest("89","客户","13800001234","","咨询"));
   c=workflow.transfer(admin(),c.getId(),new CustomerWorkflow.Transfer(c.getVersion(),"staff1","分配接待",false));

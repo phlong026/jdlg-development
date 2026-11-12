@@ -27,10 +27,10 @@ func syncCRMLeads(db *sql.DB) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 	visiblePhone := model.CustomerLeadExportablePhoneSQL("l")
-	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.created_at,l.intent_level,COALESCE((SELECT u.unionid FROM users u WHERE u.id=l.user_id),''),
- SHA2(CONCAT_WS('|',l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,'')),256),COALESCE(d.history_cursor,0)
+	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,COALESCE(l.identity_type,''),l.created_at,l.intent_level,COALESCE((SELECT u.unionid FROM users u WHERE u.id=l.user_id),''),
+ SHA2(CONCAT_WS('|',l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,''),COALESCE(l.identity_type,'')),256),COALESCE(d.history_cursor,0)
  FROM customer_leads l LEFT JOIN customer_lead_crm_delivery d ON d.lead_id=l.id
-	WHERE (EXISTS(SELECT 1 FROM customer_lead_followups f WHERE f.lead_id=l.id AND f.id>COALESCE(d.history_cursor,0)) OR d.lead_id IS NULL OR d.source_hash<>SHA2(CONCAT_WS('|',l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,'')),256))
+	WHERE (EXISTS(SELECT 1 FROM customer_lead_followups f WHERE f.lead_id=l.id AND f.id>COALESCE(d.history_cursor,0)) OR d.lead_id IS NULL OR d.source_hash<>SHA2(CONCAT_WS('|',l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,''),COALESCE(l.identity_type,'')),256))
  AND (d.next_attempt_at IS NULL OR d.next_attempt_at<=NOW()) ORDER BY l.id LIMIT 20`)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func syncCRMLeads(db *sql.DB) error {
 		id                                 int64
 		name, phone, wechat, summary, hash string
 		userID                             int64
-		channel                            string
+		channel, identity                  string
 		createdAt                          time.Time
 		intent, unionid                    string
 		historyCursor                      int64
@@ -47,7 +47,7 @@ func syncCRMLeads(db *sql.DB) error {
 	var batch []lead
 	for rows.Next() {
 		var l lead
-		if err = rows.Scan(&l.id, &l.name, &l.phone, &l.wechat, &l.summary, &l.userID, &l.channel, &l.createdAt, &l.intent, &l.unionid, &l.hash, &l.historyCursor); err != nil {
+		if err = rows.Scan(&l.id, &l.name, &l.phone, &l.wechat, &l.summary, &l.userID, &l.channel, &l.identity, &l.createdAt, &l.intent, &l.unionid, &l.hash, &l.historyCursor); err != nil {
 			rows.Close()
 			return err
 		}
@@ -63,7 +63,7 @@ func syncCRMLeads(db *sql.DB) error {
 		if historyErr != nil {
 			return historyErr
 		}
-		body, _ := json.Marshal(map[string]any{"history": history, "submittedBy": strconv.FormatInt(l.userID, 10), "channel": crmSourceText(l.channel, 64), "createdAt": l.createdAt.UTC().Format(time.RFC3339), "intent": crmIntent(l.intent), "unionid": crmSourceText(l.unionid, 64), "externalId": strconv.FormatInt(l.id, 10), "name": l.name, "phone": l.phone, "wechat": crmSourceText(l.wechat, 80), "summary": crmSourceText(l.summary, 2000)})
+		body, _ := json.Marshal(map[string]any{"history": history, "submittedBy": strconv.FormatInt(l.userID, 10), "channel": crmSourceText(l.channel, 64), "identityType": crmSourceText(l.identity, 32), "createdAt": l.createdAt.UTC().Format(time.RFC3339), "intent": crmIntent(l.intent), "unionid": crmSourceText(l.unionid, 64), "externalId": strconv.FormatInt(l.id, 10), "name": l.name, "phone": l.phone, "wechat": crmSourceText(l.wechat, 80), "summary": crmSourceText(l.summary, 2000)})
 		status, data, _, remoteErr := crmRemote(ctx, "POST", "/ingest/miniprogram", "@source", 1, nil, body)
 		var ack struct {
 			CustomerID string `json:"customerId"`

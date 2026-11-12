@@ -98,7 +98,8 @@ func registerTrackingMyRoutes(pub *gin.RouterGroup, svc *tracking.Service, users
 			current := c.MustGet("tracking.my.scope").(tracking.Scope)
 			out, err := svc.MyVisitorEntries(c.Request.Context(), current, current.Actor, filter)
 			if err == nil {
-				out.CanConvertLead = trackingLeadGate(out.State, out.IdentityType, out.Intent.CustomerShare) == nil
+				_, gateErr := trackingLeadGate(out.State, out.IdentityType)
+				out.CanConvertLead = gateErr == nil
 			}
 			trackingResponse(c, out, err)
 		})
