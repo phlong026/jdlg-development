@@ -260,7 +260,7 @@ func (builder *articleBuilder) flow(node *html.Node, inherited tracking.ArticleS
 		if node.Data == "h1" || node.Data == "h2" {
 			level = 2
 		}
-		if text := normalizedText(visibleNodeText(node)); text != "" {
+		if text := normalizedText(articleNodeText(node)); text != "" {
 			builder.document.Blocks = append(builder.document.Blocks, tracking.ArticleBlock{Kind: "heading", Text: text, Level: level, Style: style})
 		}
 	case "ul", "ol":
@@ -271,7 +271,7 @@ func (builder *articleBuilder) flow(node *html.Node, inherited tracking.ArticleS
 		}
 	case "blockquote":
 		builder.flush()
-		if text := normalizedText(visibleNodeText(node)); text != "" {
+		if text := normalizedText(articleNodeText(node)); text != "" {
 			builder.document.Blocks = append(builder.document.Blocks, tracking.ArticleBlock{Kind: "quote", Text: text, Style: style})
 		}
 	case "p":
@@ -539,13 +539,22 @@ func selectArticleRoot(root *html.Node) *html.Node {
 		{"id", "js_content"},
 		{"class", "js_inner"},
 		{"class", "rich_media_wrp"},
-		{"id", "js_common_share_desc"},
 	} {
 		if found := findNode(root, func(node *html.Node) bool {
+			matches := attribute(node, selector.key) == selector.value
 			if selector.key == "class" {
-				return hasClass(node, selector.value)
+				matches = hasClass(node, selector.value)
 			}
-			return attribute(node, selector.key) == selector.value
+			if !matches {
+				return false
+			}
+			// Traversal starts at the root's children, so exclude summary roots and descendants here.
+			for ancestor := node; ancestor != nil; ancestor = ancestor.Parent {
+				if attribute(ancestor, "id") == "js_common_share_desc" {
+					return false
+				}
+			}
+			return true
 		}); found != nil {
 			return found
 		}
@@ -554,6 +563,10 @@ func selectArticleRoot(root *html.Node) *html.Node {
 }
 
 func isDroppedArticleNode(node *html.Node) bool {
+	// The share description is a preview, even when it sits inside the article wrapper.
+	if attribute(node, "id") == "js_common_share_desc" {
+		return true
+	}
 	tag := strings.ToLower(node.Data)
 	if tag == "mpprofile" || tag == "mp-weixin-profile" || tag == "mp-weapp" || tag == "mp-miniprogram" {
 		return true
@@ -673,6 +686,22 @@ func normalizedText(raw string) string {
 	return result.String()
 }
 
+// Composite body blocks must apply the same exclusions as the layout traversal.
+func articleNodeText(node *html.Node) string {
+	if node.Type == html.ElementNode && (isProhibitedArticleTag(strings.ToLower(node.Data)) || isDroppedArticleNode(node)) {
+		return ""
+	}
+	if node.Type == html.TextNode {
+		return node.Data
+	}
+	var result strings.Builder
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		result.WriteString(articleNodeText(child))
+		result.WriteByte(' ')
+	}
+	return result.String()
+}
+
 func visibleNodeText(node *html.Node) string {
 	if node.Type == html.ElementNode {
 		switch strings.ToLower(node.Data) {
@@ -695,7 +724,7 @@ func directListItems(node *html.Node) []string {
 	items := make([]string, 0)
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
 		if child.Type == html.ElementNode && child.Data == "li" {
-			if text := normalizedText(visibleNodeText(child)); text != "" {
+			if text := normalizedText(articleNodeText(child)); text != "" {
 				items = append(items, text)
 			}
 		}
