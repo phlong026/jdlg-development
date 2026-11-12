@@ -63,6 +63,15 @@ test('import API uses the authenticated workbench import routes', async () => {
   ]);
 });
 
+test('missing article body is explained without presenting a summary as an imported draft', async () => {
+  const { page } = harness(baseAPI({
+    listImports: async () => ({ items: [{ import_id: 'article-summary', status: 'failed', error_code: 'article_body_missing' }] }),
+  }));
+  page.onShow(); await tick(); await tick();
+  assert.match(page.data.imports[0].error_text, /未取得文章正文/);
+  assert.match(page.data.imports[0].error_text, /完整文章链接|手动补充/);
+});
+
 test('submission keeps one idempotency key after a lost response and changes it with semantic input', async () => {
   const keys = [];
   let calls = 0;

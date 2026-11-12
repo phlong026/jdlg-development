@@ -539,13 +539,22 @@ func selectArticleRoot(root *html.Node) *html.Node {
 		{"id", "js_content"},
 		{"class", "js_inner"},
 		{"class", "rich_media_wrp"},
-		{"id", "js_common_share_desc"},
 	} {
 		if found := findNode(root, func(node *html.Node) bool {
+			matches := attribute(node, selector.key) == selector.value
 			if selector.key == "class" {
-				return hasClass(node, selector.value)
+				matches = hasClass(node, selector.value)
 			}
-			return attribute(node, selector.key) == selector.value
+			if !matches {
+				return false
+			}
+			// Traversal starts at the root's children, so exclude summary roots and descendants here.
+			for ancestor := node; ancestor != nil; ancestor = ancestor.Parent {
+				if attribute(ancestor, "id") == "js_common_share_desc" {
+					return false
+				}
+			}
+			return true
 		}); found != nil {
 			return found
 		}
@@ -554,6 +563,10 @@ func selectArticleRoot(root *html.Node) *html.Node {
 }
 
 func isDroppedArticleNode(node *html.Node) bool {
+	// The share description is a preview, even when it sits inside the article wrapper.
+	if attribute(node, "id") == "js_common_share_desc" {
+		return true
+	}
 	tag := strings.ToLower(node.Data)
 	if tag == "mpprofile" || tag == "mp-weixin-profile" || tag == "mp-weapp" || tag == "mp-miniprogram" {
 		return true
