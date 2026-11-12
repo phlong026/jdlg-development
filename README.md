@@ -65,3 +65,5 @@ npm run check:tracking-routes
 ## 三期内容、分享和通知
 
 首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
+
+剩余分支统一主线、媒体自适应和本地证据见[本轮实施记录](docs/phase3/unify-main-20261113/implementation-status.md)。

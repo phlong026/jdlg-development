@@ -1,3 +1,4 @@
+-- 先切回不依赖新列的旧后端，并备份 identity_type 快照；DROP COLUMN 会丢失线索历史身份快照。
 -- 回退分流 schema；用户资料中的 identity_type 仍保留。
 SET @lead_identity_index_exists := (
   SELECT COUNT(*) FROM information_schema.STATISTICS
