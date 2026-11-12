@@ -595,5 +595,9 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 .note-dock-action[disabled] { background: transparent; color: #a99d90; }
 
 .note-modal-mask { position: fixed; z-index: 40; inset: 0; display: flex; align-items: flex-end; background: rgba(35,27,20,.26); }
-.note-composer { box-sizing: border-box; width: 100%; max-height: 78vh; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; background: #fff; }
+.note-composer,
+.note-collection-sheet { box-sizing: border-box; width: 100%; max-height: 78vh; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; background: #fff; }
 .note-composer textarea { box-sizing: border-box; width: 100%; min-height: 140px; max-height: 240px; padding: 16px 0; font-size: 16px; line-height: 1.7; }
+.note-collection-list { max-height: 36vh; margin: 10px 0; }
+.note-collection-row { display: flex; width: 100%; min-height: 48px; margin: 0; padding: 0 4px; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1ece6; background: transparent; color: #3b322b; font-size: 15px; text-align: left; }
+.note-collection-sheet input { box-sizing: border-box; width: 100%; min-height: 44px; margin: 12px 0; padding: 0 12px; border: 1px solid #ded4c8; border-radius: 9px; background: #faf8f5; }
