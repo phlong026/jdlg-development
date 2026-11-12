@@ -388,8 +388,13 @@ test('known writing types keep product names while retaining server instructions
   assert.equal(h.page.data.heading, '自定义标题');
 });
 
-test('native error rendering places complete feedback above footer actions and reserves its height', () => {
-  const compiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
+const nativeCompiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
+// Native WXML assertions need WeChat DevTools; Linux CI still runs all runtime tests.
+// An explicitly supplied compiler path must work, rather than being skipped.
+test('native error rendering places complete feedback above footer actions and reserves its height', {
+  skip: !process.env.WXML_COMPILER && !fs.existsSync(nativeCompiler) ? 'WeChat native WXML compiler not installed' : false,
+}, () => {
+  const compiler = nativeCompiler;
   const file = './pages/contentwriting/contentwriting.wxml';
   const source = require('node:child_process').execFileSync(compiler, [file], { cwd: root, encoding: 'utf8' });
   const context = { window: {}, console: { log: error => { throw error; } } };
