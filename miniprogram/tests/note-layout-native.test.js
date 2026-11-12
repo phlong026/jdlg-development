@@ -2,8 +2,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{execFileSync}=require('node:child_process');
 const root=path.join(__dirname,'../miniprogram');
 const compiler=process.env.WXML_COMPILER||'/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
-test('current reader WXML compiles note actions without bypassing the access gate',()=>{
- const file='./pages/contentreader/contentreader.wxml',source=execFileSync(compiler,[file],{cwd:root,encoding:'utf8'});
+test('current reader WXML compiles note actions without bypassing the access gate',{skip:!process.env.WXML_COMPILER&&!fs.existsSync(compiler)?'Set WXML_COMPILER to an installed WeChat compiler':false},()=>{
+ const file='./pages/contentreader/contentreader.wxml',source=execFileSync(compiler,[file],{cwd:root,encoding:'utf8',timeout:10000,maxBuffer:4*1024*1024});
  const runtime={window:{},console};vm.createContext(runtime);vm.runInContext(source,runtime);const render=runtime.$gwx(file);
  const base={__profileAccessMounted:true,contentReady:true,loading:false,content:{title:'原木住宅'},presentationView:{kind:'gallery',title:'原木住宅',bodyText:'完整正文',media:[{media_id:'image-one',url:'wxfile://one',width:340,height:300}],galleryHeight:300,galleryIndex:0},comments:[],interactionAvailable:true,commentCount:0,noteMenuOpen:false};
  const output=JSON.stringify(render(base));
