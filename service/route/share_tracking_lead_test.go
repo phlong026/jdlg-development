@@ -183,6 +183,23 @@ func (contactPhoneUnavailableReaderFixture) ConvertTrackingLead(*model.CustomerL
 	return model.TrackingLeadConversionResult{}, model.ErrBusinessContactPhoneUnavailable
 }
 
+type persistedLeadTypeFixture struct{ leadType string }
+
+func (f persistedLeadTypeFixture) ConvertTrackingLead(*model.CustomerLeadCreateInput, *model.CustomerServiceEventCreateInput, bool) (model.TrackingLeadConversionResult, error) {
+	return model.TrackingLeadConversionResult{LeadID: 91, LeadType: f.leadType}, nil
+}
+
+func TestTrackingLeadResponseUsesPersistedLeadType(t *testing.T) {
+	visitor := tracking.Visitor{Key: "u:42", State: "identified", IdentityType: "乡墅业主"}
+	outcome, err := convertVisitorSnapshotToLead(persistedLeadTypeFixture{leadType: model.CustomerLeadTypePartner}, nil, 11, visitor, nil, trackingLeadSource, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.LeadType != model.CustomerLeadTypePartner {
+		t.Fatalf("response lead type=%q, want transaction result %q", outcome.LeadType, model.CustomerLeadTypePartner)
+	}
+}
+
 // Contract test: the conversion endpoint exists behind the tracking
 // management group and keeps the CRM handover rule, dedupe and evidence
 // snapshot wired. Follows the repository's source-contract test style.

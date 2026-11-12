@@ -88,6 +88,9 @@ func TestMySQLConsentUpgradesLegacyLeadOnlyInsideAuthorizedTransaction(t *testin
 	if err != nil || !conversion.Existed {
 		t.Fatalf("conversion=%+v err=%v", conversion, err)
 	}
+	if conversion.LeadType != CustomerLeadTypeIdentityPending {
+		t.Fatalf("conversion lead type=%q, want persisted pending type", conversion.LeadType)
+	}
 	leadID := conversion.LeadID
 	var phone, source string
 	var revision int64
