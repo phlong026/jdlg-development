@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	mysqlDriver "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -94,6 +96,26 @@ func contentInteractionRecord(kind, id, owner, target string, actor int64, at ti
 	return row
 }
 
+func duplicateContentReaction(err error) bool {
+	var mysqlErr *mysqlDriver.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
+func validateContentReaction(r Repository, kind, key, owner, target string, actor int64) error {
+	row, err := r.Get(kind, key)
+	if err != nil {
+		return err
+	}
+	_, selected, err := validateReactionRows([]Record{row}, kind, owner, target, actor)
+	if err != nil {
+		return err
+	}
+	if !selected {
+		return ErrUnavailable
+	}
+	return nil
+}
+
 func (s *Service) setContentReaction(ctx context.Context, id string, version int, actor int64, kind string, active bool) (int, error) {
 	if actor <= 0 {
 		return 0, fail(401, "未登录")
@@ -110,16 +132,21 @@ func (s *Service) setContentReaction(ctx context.Context, id string, version int
 		case active && errors.Is(err, ErrNotFound):
 			reaction := contentReaction{ActorID: actor, Target: target}
 			if err = r.Insert(contentInteractionRecord(kind, key, content.Owner, target, actor, s.Now(), reaction)); err != nil {
-				return err
+				// The deterministic key makes repeated writes idempotent. A concurrent
+				// request can win after Get and before Insert, so accept only a MySQL
+				// duplicate whose committed row still matches this actor and version.
+				if !duplicateContentReaction(err) {
+					return err
+				}
+				if err = validateContentReaction(r, kind, key, content.Owner, target, actor); err != nil {
+					return err
+				}
 			}
 		case active && err != nil:
 			return err
 		case active:
-			if _, selected, validateErr := validateReactionRows([]Record{row}, kind, content.Owner, target, actor); validateErr != nil || !selected {
-				if validateErr != nil {
-					return validateErr
-				}
-				return ErrUnavailable
+			if err = validateContentReaction(r, kind, key, content.Owner, target, actor); err != nil {
+				return err
 			}
 		case !active && errors.Is(err, ErrNotFound):
 			// Explicit false is idempotent.

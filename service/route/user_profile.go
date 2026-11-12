@@ -14,11 +14,7 @@ import (
 
 func sanitizePublicImageURL(raw string) string {
 	clean := strings.TrimSpace(raw)
-	if clean == "" {
-		return ""
-	}
-	lower := strings.ToLower(clean)
-	if strings.HasPrefix(lower, "wxfile://") || strings.HasPrefix(lower, "file://") || strings.HasPrefix(lower, "data:") {
+	if !hasSavedProfileAvatar(clean) {
 		return ""
 	}
 	return clean
@@ -170,7 +166,7 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			"code": 0,
 			"msg":  "密码重置成功",
 			"data": gin.H{
-				"username":      user.Username,
+				"username":       user.Username,
 				"verified_phone": maskRecoveryPhone(verifiedPhone),
 			},
 		})
@@ -211,10 +207,10 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 
 			// 获取用户扩展信息
 			profileData, profileErr := userProfileModel.GetByUserID(codeSession.UserID)
-                if profileErr != nil && !errors.Is(profileErr, sql.ErrNoRows) {
-                    c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取用户资料失败"})
-                    return
-                }
+			if profileErr != nil && !errors.Is(profileErr, sql.ErrNoRows) {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取用户资料失败"})
+				return
+			}
 
 			response := gin.H{
 				"id":         user.ID,
@@ -228,15 +224,15 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				response["designer_bio"] = profileData.DesignerBio
 				response["specialty_styles"] = profileData.SpecialtyStyles
 				response["designer_region"] = profileData.DesignerRegion
-  				response["designer_experience_years"] = profileData.DesignerExperienceYears
-  				response["service_title"] = profileData.ServiceTitle
-  				response["service_quote"] = profileData.ServiceQuote
-  				response["service_intro"] = profileData.ServiceIntro
-  				response["service_enabled"] = profileData.ServiceEnabled
+				response["designer_experience_years"] = profileData.DesignerExperienceYears
+				response["service_title"] = profileData.ServiceTitle
+				response["service_quote"] = profileData.ServiceQuote
+				response["service_intro"] = profileData.ServiceIntro
+				response["service_enabled"] = profileData.ServiceEnabled
 				response["designer_visible"] = profileData.DesignerVisible
-  				response["enterprise_wechat_verified"] = profileData.EnterpriseWechatVerified
-  				response["enterprise_wechat_contact"] = profileData.EnterpriseWechatContact
-  				response["enterprise_wechat_verified_at"] = profileData.EnterpriseWechatVerifiedAt
+				response["enterprise_wechat_verified"] = profileData.EnterpriseWechatVerified
+				response["enterprise_wechat_contact"] = profileData.EnterpriseWechatContact
+				response["enterprise_wechat_verified_at"] = profileData.EnterpriseWechatVerifiedAt
 				response["has_password"] = profileData.HasPassword
 				response["phone"] = profileData.Phone
 				response["identity_type"] = profileData.IdentityType
@@ -246,15 +242,15 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				response["designer_bio"] = ""
 				response["specialty_styles"] = ""
 				response["designer_region"] = ""
-  				response["designer_experience_years"] = 0
-  				response["service_title"] = ""
-  				response["service_quote"] = 0
-  				response["service_intro"] = ""
-  				response["service_enabled"] = false
+				response["designer_experience_years"] = 0
+				response["service_title"] = ""
+				response["service_quote"] = 0
+				response["service_intro"] = ""
+				response["service_enabled"] = false
 				response["designer_visible"] = true
-  				response["enterprise_wechat_verified"] = false
-  				response["enterprise_wechat_contact"] = ""
-  				response["enterprise_wechat_verified_at"] = nil
+				response["enterprise_wechat_verified"] = false
+				response["enterprise_wechat_contact"] = ""
+				response["enterprise_wechat_verified_at"] = nil
 				response["has_password"] = false
 				response["phone"] = ""
 				response["identity_type"] = ""
@@ -290,12 +286,12 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			}
 
 			nickname, err := model.NormalizeNickname(req.Nickname)
-                if err != nil {
-                    c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
-                    return
-                }
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": err.Error()})
+				return
+			}
 
-                if err := userProfileModel.UpdateNickname(codeSession.UserID, nickname); err != nil {
+			if err := userProfileModel.UpdateNickname(codeSession.UserID, nickname); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "修改昵称失败: " + err.Error(),
@@ -306,41 +302,41 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			c.JSON(http.StatusOK, gin.H{
 				"code": 0,
 				"msg":  "修改成功",
-                "data": gin.H{"nickname": nickname},
+				"data": gin.H{"nickname": nickname},
 			})
 		})
 
-			// 修改身份类型
-			profile.PUT("/identity", func(c *gin.Context) {
-				codeSession := GetTokenCodeSession(c)
-				if codeSession == nil {
-					c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未登录"})
-					return
-				}
-				var req struct {
-					IdentityType   string `json:"identity_type" binding:"required"`
-					AdminConfirmed bool   `json:"admin_confirmed"`
-				}
-				if err := c.ShouldBindJSON(&req); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误"})
-					return
-				}
-				profile, err := userProfileModel.GetOrCreate(codeSession.UserID, "")
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取用户资料失败"})
-					return
-				}
-				// 已有身份的用户修改需要管理员确认
-				if profile.IdentityType != "" && !req.AdminConfirmed {
-					c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": "修改身份需要管理员确认"})
-					return
-				}
-				if err := userProfileModel.UpdateIdentityType(codeSession.UserID, req.IdentityType); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "修改身份失败: " + err.Error()})
-					return
-				}
-				c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "修改成功"})
-			})
+		// 修改身份类型
+		profile.PUT("/identity", func(c *gin.Context) {
+			codeSession := GetTokenCodeSession(c)
+			if codeSession == nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "msg": "未登录"})
+				return
+			}
+			var req struct {
+				IdentityType   string `json:"identity_type" binding:"required"`
+				AdminConfirmed bool   `json:"admin_confirmed"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "参数错误"})
+				return
+			}
+			profile, err := userProfileModel.GetOrCreate(codeSession.UserID, "")
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "获取用户资料失败"})
+				return
+			}
+			// 已有身份的用户修改需要管理员确认
+			if profile.IdentityType != "" && !req.AdminConfirmed {
+				c.JSON(http.StatusForbidden, gin.H{"code": 403, "msg": "修改身份需要管理员确认"})
+				return
+			}
+			if err := userProfileModel.UpdateIdentityType(codeSession.UserID, req.IdentityType); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "修改身份失败: " + err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "修改成功"})
+		})
 
 		// 修改头像
 		profile.PUT("/avatar", func(c *gin.Context) {
@@ -411,17 +407,17 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				"code": 0,
 				"msg":  "success",
 				"data": gin.H{
-					"designer_bio":     profileData.DesignerBio,
-					"specialty_styles": profileData.SpecialtyStyles,
-					"designer_region": profileData.DesignerRegion,
-	  				"designer_experience_years": profileData.DesignerExperienceYears,
-  				"service_title":    profileData.ServiceTitle,
-  				"service_quote":    profileData.ServiceQuote,
-  				"service_intro":    profileData.ServiceIntro,
-  				"service_enabled":  profileData.ServiceEnabled,
-				"designer_visible": profileData.DesignerVisible,
-  			},
-  		})
+					"designer_bio":              profileData.DesignerBio,
+					"specialty_styles":          profileData.SpecialtyStyles,
+					"designer_region":           profileData.DesignerRegion,
+					"designer_experience_years": profileData.DesignerExperienceYears,
+					"service_title":             profileData.ServiceTitle,
+					"service_quote":             profileData.ServiceQuote,
+					"service_intro":             profileData.ServiceIntro,
+					"service_enabled":           profileData.ServiceEnabled,
+					"designer_visible":          profileData.DesignerVisible,
+				},
+			})
 		})
 
 		profile.PUT("/designer", func(c *gin.Context) {
@@ -435,19 +431,19 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 			}
 
 			var req struct {
-				DesignerBio     string `json:"designer_bio" binding:"max=1024"`
-				SpecialtyStyles string `json:"specialty_styles" binding:"max=512"`
-				DesignerRegion *string `json:"designer_region" binding:"omitempty,max=128"`
-	  			DesignerExperienceYears int64 `json:"designer_experience_years" binding:"min=0,max=100"`
-  			ServiceTitle    string `json:"service_title" binding:"max=128"`
-  			ServiceQuote    int64  `json:"service_quote" binding:"min=0"`
-  			ServiceIntro    string `json:"service_intro" binding:"max=1024"`
-  			ServiceEnabled  bool   `json:"service_enabled"`
-			DesignerVisible bool   `json:"designer_visible"`
-  		}
-  		if err := c.ShouldBindJSON(&req); err != nil {
-  			c.JSON(http.StatusBadRequest, gin.H{
-  				"code": 400,
+				DesignerBio             string  `json:"designer_bio" binding:"max=1024"`
+				SpecialtyStyles         string  `json:"specialty_styles" binding:"max=512"`
+				DesignerRegion          *string `json:"designer_region" binding:"omitempty,max=128"`
+				DesignerExperienceYears int64   `json:"designer_experience_years" binding:"min=0,max=100"`
+				ServiceTitle            string  `json:"service_title" binding:"max=128"`
+				ServiceQuote            int64   `json:"service_quote" binding:"min=0"`
+				ServiceIntro            string  `json:"service_intro" binding:"max=1024"`
+				ServiceEnabled          bool    `json:"service_enabled"`
+				DesignerVisible         bool    `json:"designer_visible"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"code": 400,
 					"msg":  FormatValidationError("参数错误: " + err.Error()),
 				})
 				return
@@ -459,16 +455,16 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 					"code": 500,
 					"msg":  "获取用户信息失败",
 				})
-  				return
-  			}
+				return
+			}
 
 			if err := userProfileModel.UpdateDesignerProfile(codeSession.UserID, req.DesignerBio, req.SpecialtyStyles, req.DesignerExperienceYears, req.ServiceTitle, req.ServiceQuote, req.ServiceIntro, req.ServiceEnabled, req.DesignerRegion); err != nil {
-  				c.JSON(http.StatusInternalServerError, gin.H{
+				c.JSON(http.StatusInternalServerError, gin.H{
 					"code": 500,
 					"msg":  "保存设计师资料失败: " + err.Error(),
-  				})
-  				return
-  			}
+				})
+				return
+			}
 
 			if err := userProfileModel.SetDesignerVisible(codeSession.UserID, req.DesignerVisible); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
@@ -478,10 +474,10 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 				return
 			}
 
-  			c.JSON(http.StatusOK, gin.H{
-  				"code": 0,
-  				"msg":  "保存成功",
-  			})
+			c.JSON(http.StatusOK, gin.H{
+				"code": 0,
+				"msg":  "保存成功",
+			})
 		})
 
 		profile.PUT("/designer/service-config", func(c *gin.Context) {
@@ -570,10 +566,10 @@ func RegisterUserProfileRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeS
 
 			// 获取profile检查是否已设置密码
 			profileData, profileErr := userProfileModel.GetByUserID(codeSession.UserID)
-                if profileErr != nil && !errors.Is(profileErr, sql.ErrNoRows) {
-                    c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取用户资料失败"})
-                    return
-                }
+			if profileErr != nil && !errors.Is(profileErr, sql.ErrNoRows) {
+				c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "读取用户资料失败"})
+				return
+			}
 			if profileData != nil && profileData.HasPassword {
 				// 已设置密码，需要验证旧密码
 				if req.OldPassword == "" {
