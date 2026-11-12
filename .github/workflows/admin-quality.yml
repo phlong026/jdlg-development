@@ -92,3 +92,24 @@ jobs:
 
       - name: Check tracked files remain unchanged
         run: git diff --exit-code HEAD
+
+  crm-quality:
+    name: CRM identity routing regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: customer-management/phase1
+        shell: bash
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The hosted image already provides JDK 17 and Maven. Match pom.xml
+      # without adding another action or changing project dependencies.
+      - name: Run CRM contracts with the required Java version
+        run: |
+          test -x "${JAVA_HOME_17_X64:?JDK 17 is required}/bin/java"
+          JAVA_HOME="$JAVA_HOME_17_X64" mvn -B test
