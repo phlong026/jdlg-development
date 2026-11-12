@@ -76,7 +76,7 @@ func (h contentInteractionHandler) presentComments(ctx context.Context, comments
 		}
 		out = append(out, contentCommentPresentation{
 			ID: comment.ID, Text: comment.Text, CreatedAt: comment.CreatedAt, Mine: comment.Mine,
-			Author: contentCommentAuthor{Nickname: nickname, Avatar: profile.Avatar},
+			Author: contentCommentAuthor{Nickname: nickname, Avatar: sanitizePublicImageURL(profile.Avatar)},
 		})
 	}
 	return out

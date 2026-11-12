@@ -4,9 +4,46 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	mysqlDriver "github.com/go-sql-driver/mysql"
 )
+
+type concurrentReactionStore struct {
+	Store
+	kind string
+	key  string
+}
+
+type concurrentReactionRepo struct {
+	Repository
+	kind   string
+	key    string
+	hidden bool
+}
+
+func (s concurrentReactionStore) Transaction(ctx context.Context, tenant string, fn func(Repository) error) error {
+	return s.Store.Transaction(ctx, tenant, func(r Repository) error {
+		return fn(&concurrentReactionRepo{Repository: r, kind: s.kind, key: s.key})
+	})
+}
+
+func (r *concurrentReactionRepo) Get(kind, id string) (Record, error) {
+	if !r.hidden && kind == r.kind && id == r.key {
+		r.hidden = true
+		return Record{}, ErrNotFound
+	}
+	return r.Repository.Get(kind, id)
+}
+
+func (r *concurrentReactionRepo) Insert(row Record) error {
+	if row.Kind == r.kind && row.ID == r.key {
+		return &mysqlDriver.MySQLError{Number: 1062, Message: "duplicate reaction"}
+	}
+	return r.Repository.Insert(row)
+}
 
 type failingCommentGetStore struct {
 	Store
@@ -89,6 +126,77 @@ func TestContentInteractionsAreIdempotentAndActorScoped(t *testing.T) {
 	got, err = s.ContentInteractions(ctx, content.ID, content.Version, 11, "", 20)
 	if err != nil || got.LikeCount != 1 || got.Liked {
 		t.Fatalf("idempotent removal failed: %#v %v", got, err)
+	}
+}
+
+func TestConcurrentContentReactionWritesRemainIdempotent(t *testing.T) {
+	s, _, content := publishedInteractionFixture(t)
+	ctx := context.Background()
+	const requests = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, requests)
+	for i := 0; i < requests; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := s.SetContentLike(ctx, content.ID, content.Version, 11, true)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.ContentInteractions(ctx, content.ID, content.Version, 11, "", 20)
+	if err != nil || got.LikeCount != 1 || !got.Liked {
+		t.Fatalf("concurrent reaction result = %#v, %v", got, err)
+	}
+}
+
+func TestContentReactionAcceptsOnlyMatchingDuplicateWinner(t *testing.T) {
+	s, _, content := publishedInteractionFixture(t)
+	ctx := context.Background()
+	target, err := contentInteractionTarget(content.ID, content.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := reactionID(contentLikeKind, target, 11)
+	if err = s.Store.Transaction(ctx, s.Config.Tenant, func(r Repository) error {
+		reaction := contentReaction{ActorID: 11, Target: target}
+		return r.Insert(contentInteractionRecord(contentLikeKind, key, content.Owner, target, 11, s.Now(), reaction))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.Store = concurrentReactionStore{Store: s.Store, kind: contentLikeKind, key: key}
+	count, err := s.SetContentLike(ctx, content.ID, content.Version, 11, true)
+	if err != nil || count != 1 {
+		t.Fatalf("duplicate winner result = %d, %v", count, err)
+	}
+}
+
+func TestContentReactionRejectsOtherDatabaseErrorsAndMismatchedDuplicateWinner(t *testing.T) {
+	if duplicateContentReaction(errors.New("storage unavailable")) || duplicateContentReaction(&mysqlDriver.MySQLError{Number: 1061, Message: "duplicate index name"}) {
+		t.Fatal("non-1062 database error was treated as an idempotent reaction")
+	}
+	s, _, content := publishedInteractionFixture(t)
+	ctx := context.Background()
+	target, err := contentInteractionTarget(content.ID, content.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := reactionID(contentLikeKind, target, 11)
+	if err = s.Store.Transaction(ctx, s.Config.Tenant, func(r Repository) error {
+		mismatched := contentReaction{ActorID: 12, Target: target}
+		return r.Insert(contentInteractionRecord(contentLikeKind, key, content.Owner, target, 12, s.Now(), mismatched))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.Store = concurrentReactionStore{Store: s.Store, kind: contentLikeKind, key: key}
+	if _, err = s.SetContentLike(ctx, content.ID, content.Version, 11, true); err == nil {
+		t.Fatal("mismatched duplicate winner was accepted")
 	}
 }
 

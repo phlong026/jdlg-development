@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,6 +57,27 @@ func contentInteractionRouteFixture(t *testing.T) (*gin.Engine, *tracking.Servic
 	base.POST("/favorite", h.setFavorite)
 	base.DELETE("/comments/:comment_id", h.deleteComment)
 	return router, svc, content
+}
+
+func TestContentCommentProfilesSanitizeAvatarAndDegradeNonCriticalLookup(t *testing.T) {
+	comment := tracking.ContentComment{ID: "comment-001", Text: "评论正文", ActorID: 11}
+	for _, avatar := range []string{"wxfile://private-avatar", "http://127.0.0.1/private.png"} {
+		h := contentInteractionHandler{profiles: func(context.Context, []int64) (map[int64]model.UserProfilePresentation, error) {
+			return map[int64]model.UserProfilePresentation{11: {Nickname: "公开昵称", Avatar: avatar}}, nil
+		}}
+		got := h.presentComments(context.Background(), []tracking.ContentComment{comment})
+		if len(got) != 1 || got[0].Author.Nickname != "公开昵称" || got[0].Author.Avatar != "" {
+			t.Fatalf("unsafe avatar %q escaped: %#v", avatar, got)
+		}
+	}
+
+	h := contentInteractionHandler{profiles: func(context.Context, []int64) (map[int64]model.UserProfilePresentation, error) {
+		return nil, errors.New("profile projection unavailable")
+	}}
+	got := h.presentComments(context.Background(), []tracking.ContentComment{comment})
+	if len(got) != 1 || got[0].Text != comment.Text || got[0].Author.Nickname != "微信用户" || got[0].Author.Avatar != "" {
+		t.Fatalf("non-critical profile failure hid the interaction: %#v", got)
+	}
 }
 
 func TestContentInteractionRoutesProjectOnlyPublicProfile(t *testing.T) {

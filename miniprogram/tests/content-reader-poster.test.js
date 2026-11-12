@@ -37,6 +37,7 @@ function posterReader(options = {}) {
   vm.runInNewContext(fs.readFileSync(path.join(root, 'contentreader.js'), 'utf8'), {
     Page(value) { definition = value; }, wx, Promise, Object, Array, String, Number, Math, Error, Set, Date, encodeURIComponent,
     require(id) {
+      if (['../../utils/note-reader-actions', '../../utils/note-interactions'].includes(id)) return { data: {}, methods: {} };
       if (id === '../../utils/phase3-api') return { request: options.request || (async () => ({ poster_url: 'https://example.test/qr.png' })) };
       if (id === '../../utils/tracking/index') return {};
       if (id === '../../utils/tracking/api') return {};
