@@ -39,7 +39,7 @@ test('客户Tab聚合榜映射意向标签与时长，且他人不出现',async(
  // q 搜索过滤
  page.setData({customerQuery:'陈'});
  await page.reloadCustomers();
- 	assert.equal(page.data.customers.length,1);
+	assert.equal(page.data.customers.length,1);
  assert.equal(page.data.customers[0].nickname,'陈丽芬');
 });
 

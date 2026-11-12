@@ -13,10 +13,10 @@ const CryptoJS = require('./crypto-js/index.js');
 export function generateDeviceFingerprint(): Promise<string> {
   return new Promise((resolve) => {
     try {
-      
+
       // 1. 获取系统信息
       const systemInfo = (wx.getWindowInfo ? Object.assign({}, wx.getDeviceInfo && wx.getDeviceInfo(), wx.getWindowInfo(), wx.getAppBaseInfo && wx.getAppBaseInfo()) : wx.getSystemInfoSync());
-      
+
       // 2. 生成canvas指纹（带超时处理）
       const canvasPromise = generateCanvasFingerprint();
       const timeoutPromise = new Promise<string>((resolve) => {
@@ -24,7 +24,7 @@ export function generateDeviceFingerprint(): Promise<string> {
           resolve('');
         }, 2000); // 2秒超时
       });
-      
+
       Promise.race([canvasPromise, timeoutPromise])
         .then((canvasFingerprint) => {
           // 3. 组合设备信息
@@ -83,13 +83,13 @@ export function generateDeviceFingerprint(): Promise<string> {
 function generateCanvasFingerprint(): Promise<string> {
   return new Promise((resolve) => {
     try {
-      
+
       // 检查是否支持 createOffscreenCanvas
       if (typeof wx.createOffscreenCanvas === 'undefined') {
         resolve('');
         return;
       }
-      
+
       // 尝试使用离屏canvas（微信小程序推荐方式）
       let offscreenCanvas: any;
       try {
@@ -103,18 +103,18 @@ function generateCanvasFingerprint(): Promise<string> {
         resolve('');
         return;
       }
-      
+
       if (!offscreenCanvas) {
         resolve('');
         return;
       }
-      
+
       const ctx = offscreenCanvas.getContext('2d');
       if (!ctx) {
         resolve('');
         return;
       }
-      
+
       // 绘制一些内容以生成设备特定的渲染特征
       try {
         ctx.fillStyle = 'rgb(200, 100, 50)';
@@ -124,7 +124,7 @@ function generateCanvasFingerprint(): Promise<string> {
         ctx.font = '14px Arial';
         ctx.fillStyle = 'rgb(100, 100, 100)';
         ctx.fillText('DeviceFingerprint', 10, 80);
-        
+
         // 添加一些复杂的图形
         ctx.beginPath();
         ctx.arc(100, 100, 30, 0, Math.PI * 2);
@@ -133,7 +133,7 @@ function generateCanvasFingerprint(): Promise<string> {
         resolve('');
         return;
       }
-      
+
       // 设置超时，防止 toDataURL 回调一直不执行
       const timeout = setTimeout(() => {
         try {
@@ -147,7 +147,7 @@ function generateCanvasFingerprint(): Promise<string> {
           resolve(hashString('canvas_' + Date.now()));
         }
       }, 1500); // 1.5秒超时
-      
+
       // 转换为base64数据
       try {
         offscreenCanvas.toDataURL({
@@ -192,7 +192,7 @@ function hashString(str: string): string {
   // 计算MD5
   const md5Hash = CryptoJS.MD5(str);
   const md5Hex = md5Hash.toString(CryptoJS.enc.Hex);
-  
+
   // MD5是32位hex，确保至少18位
   // 如果不够18位（理论上不会），重复直到18位
   let result = md5Hex;
@@ -202,7 +202,7 @@ function hashString(str: string): string {
     }
     result = result.substring(0, 18);
   }
-  
+
   // 返回完整的MD5（32位），确保足够长
   return result;
 }
