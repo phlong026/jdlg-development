@@ -453,6 +453,7 @@ func RegisterCustomerLeadManagementRoutes(r *gin.RouterGroup, customerServiceMod
 			Source:      c.DefaultQuery("source", "all"),
 			Queue:       c.DefaultQuery("queue", "all"),
 			AssignedTo:  c.DefaultQuery("assigned_to", "all"),
+			LeadType:    c.DefaultQuery("lead_type", "all"),
 			Dedupe:      c.DefaultQuery("dedupe", "all"),
 			Limit:       pageSize,
 			Offset:      offset,

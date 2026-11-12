@@ -1,6 +1,6 @@
 # 意向→线索转化通道（share_tracking lead conversion）
 
-> 2026-10-17 P0 交付。管理后台「分享访问记录」的客户视角中，满足条件的访客可一键转为销售线索。
+> 2026-11-13 更新。管理后台「分享访问记录」中，已登录访客可按服务端账号身份转为销售、合作或身份待确认线索。
 > 需求与分期见工作区《分享访问记录×销售线索闭环打通方案-20261017》。
 
 ## 端点
@@ -8,7 +8,7 @@
 `POST /api/v1/management/tracking/visitors/:key/lead`
 
 - 权限：`tracking_access.can_crm`；随管理组继承 `X-Tracking-Request` 同源校验与 `private, no-store`。
-- 响应：`{ lead_id, existed, intent_level, demand_summary }`。
+- 响应：`{ lead_id, existed, lead_type, intent_level, demand_summary }`。
 
 ### 设计师本人客户转线索
 
@@ -39,10 +39,12 @@
 | 访客状态 | 结果 |
 |---|---|
 | 匿名 / 已删除（非 identified） | 422，提示引导留资 |
-| 已识别但身份未选（identity_type 为空） | 客户域浏览占比达到 70% 放行；不足 70% 返回 422，提示人工核实 |
-| 设计师 / 施工队 / 建材商 / 机构用户 | 422，B 端硬排除（渠道不是客户） |
+| 已识别但身份未选（identity_type 为空） | 放行为 `identity_pending`，进入独立待确认队列，不计入销售漏斗 |
+| 设计师 / 施工队 / 建材商 / 机构用户 | 放行为 `partner`，进入合作队列，不计入销售漏斗 |
 | 企业主及其他未知身份值 | 422，fail-closed |
 | 乡墅业主 | 放行 |
+
+三类转化均复用同一个业务联系授权事务：未得到当前版本授权或账号无可用绑定手机号时均不创建线索；`account_bound` 手机号也不会绕过授权进入后台或 CRM。
 
 CRM 桥启用后不阻断转化：线索作为投递记录写入，由 outbox 交给 CRM 承接；线索工作台保持只读，销售跟进仍统一在 CRM 客户档案中完成。
 

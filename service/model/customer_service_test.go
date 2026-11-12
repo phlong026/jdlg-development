@@ -248,6 +248,46 @@ func TestCustomerLeadOverviewSharesQueueConditions(t *testing.T) {
 	}
 }
 
+func TestCustomerLeadIdentityQueuesAreMutuallyExclusive(t *testing.T) {
+	if leadSalesCond != `identity_type = '乡墅业主'` {
+		t.Fatalf("sales condition must contain only homeowners: %s", leadSalesCond)
+	}
+	if leadPartnerCond == "" || leadQueueIdentityPendCond != `identity_type = '' AND `+leadOpenCond {
+		t.Fatalf("partner/pending conditions must be independent: %q / %q", leadPartnerCond, leadQueueIdentityPendCond)
+	}
+	for identity, want := range map[string]string{"": CustomerLeadTypeIdentityPending, "乡墅业主": CustomerLeadTypeSales, "设计师": CustomerLeadTypePartner, "未知": CustomerLeadTypeIdentityPending} {
+		if got := CustomerLeadTypeOf(identity); got != want {
+			t.Fatalf("CustomerLeadTypeOf(%q)=%q want %q", identity, got, want)
+		}
+	}
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(source)
+	for _, name := range []string{"leadQueuePartnerCond", "leadQueueIdentityPendCond"} {
+		if strings.Count(content, name) < 3 {
+			t.Fatalf("%s must be shared by list and overview", name)
+		}
+	}
+	if !strings.Contains(content, "JOIN customer_leads l ON l.id = e.lead_id") || !strings.Contains(content, "l.`+leadSalesCond") {
+		t.Fatal("lead_submit funnel must join the lead identity and count homeowners only")
+	}
+}
+
+func TestIdentityLookupFailuresAreNotDowngradedToPending(t *testing.T) {
+	source, err := os.ReadFile("customer_service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(source)
+	for _, want := range []string{`return "", fmt.Errorf("读取线索账号身份`, `err == sql.ErrNoRows`, `线索账号身份不可识别`} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("identity lookup fail-closed contract missing %q", want)
+		}
+	}
+}
+
 // Contract: the 48h grace period and NULL-safe unassigned check stay in the
 // shared queue criteria used by both Overview and ListLeads; the funnel keeps
 // its per-account dedupe and windowed queries.
@@ -329,10 +369,10 @@ func TestFunnelAndListCountResubmissions(t *testing.T) {
 	}
 	content := string(source)
 	for _, want := range []string{
-		"COUNT(DISTINCT user_id) FROM customer_service_events WHERE event_type = 'lead_submit' AND user_id > 0", // 提交线索按留资动作计
-		"COUNT(DISTINCT CASE WHEN user_id > 0 THEN user_id END)",                                                // 登录用户去重
-		"COUNT(DISTINCT CASE WHEN user_id = 0 THEN session_no END)",                                             // 匿名按会话
-		"FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC",                                  // 列表冒出再次留资
+		"COUNT(DISTINCT e.user_id) FROM customer_service_events e JOIN customer_leads l ON l.id = e.lead_id", // 提交线索按留资动作计，且只计业主
+		"COUNT(DISTINCT CASE WHEN user_id > 0 THEN user_id END)",                                             // 登录用户去重
+		"COUNT(DISTINCT CASE WHEN user_id = 0 THEN session_no END)",                                          // 匿名按会话
+		"FIELD(intent_level, 'high', 'medium', 'low'), last_submitted_at DESC",                               // 列表冒出再次留资
 		"AS last_submitted_at",
 		"e.user_id = customer_leads.user_id", // 只认线索本人的留资事件
 	} {
