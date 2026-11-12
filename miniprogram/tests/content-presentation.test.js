@@ -82,6 +82,11 @@ test('media geometry adapts to viewport changes and late video metadata', () => 
   assert.equal(landscapeWindow.frameWidth, 808);
   assert.ok(landscapeWindow.media[0].height <= Math.round(390 * 0.68), '横屏时媒体高度跟随可用视口');
   assert.ok(Math.abs(landscapeWindow.media[0].width / landscapeWindow.media[0].height - 1920 / 1080) < 0.01);
+
+  const unknownImage = buildContentPresentation(article([{ kind: 'image', media_id: 'image-a' }]), [{ media_id: 'image-a', kind: 'image', url: 'https://example.test/image-a.jpg' }], { windowWidth: 390, windowHeight: 844 });
+  const loadedImage = buildContentPresentation(article([{ kind: 'image', media_id: 'image-a' }]), [{ media_id: 'image-a', kind: 'image', url: 'https://example.test/image-a.jpg', width: 1920, height: 1080 }], { windowWidth: 390, windowHeight: 844 });
+  assert.equal(unknownImage.media[0].intrinsicWidth / unknownImage.media[0].intrinsicHeight, 3 / 4, '图片未加载时使用稳定的回退比例');
+  assert.notDeepEqual([loadedImage.media[0].width, loadedImage.media[0].height], [unknownImage.media[0].width, unknownImage.media[0].height], '图片load宽高到达后必须重建真实比例');
 });
 
 test('video view preserves native player identity and caps portrait and landscape media to the viewport', () => {
@@ -154,6 +159,7 @@ test('shared presentation template keeps swiper, native video controls, tracking
   assert.match(template, /<image[^>]*src="\{\{view\.poster\}\}"[^>]*mode="aspectFill"/s);
   assert.match(template, /presentation-article-image[^>]*style="width:\{\{item\.width\}\}px;height:\{\{item\.height\}\}px"/s);
   assert.match(template, /presentation-article-video[^>]*style="width:\{\{item\.width\}\}px;height:\{\{item\.height\}\}px"/s);
+  assert.equal((template.match(/<image[^>]*bindload="onContentVideoMetadata"/g) || []).length, 2, '图集与文章图片应在load后复用元数据重建契约');
   assert.match(template, /content-video-\{\{view\.videoLayout\}\}/);
   assert.match(template, /bindtap="toggleContentDescription"/);
   assert.match(template, /<block wx:if="\{\{view\.kind === 'article'\}\}">/);
