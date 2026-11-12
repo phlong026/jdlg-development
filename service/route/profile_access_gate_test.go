@@ -49,7 +49,7 @@ func profileGateRequest(router http.Handler, method, path, token string) *httpte
 	return recorder
 }
 
-func TestMiniprogramProfileGateRejectsOldAnonymousBusinessRequests(t *testing.T) {
+func TestMiniprogramProfileGateAllowsPublishedTemplateDetailTransportWithoutProfile(t *testing.T) {
 	loaded := false
 	router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
 		loaded = true
@@ -57,8 +57,12 @@ func TestMiniprogramProfileGateRejectsOldAnonymousBusinessRequests(t *testing.T)
 	})
 
 	response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/templates/9", "")
-	if response.Code != http.StatusUnauthorized || loaded {
-		t.Fatalf("anonymous business request = %d loaded=%v body=%s", response.Code, loaded, response.Body.String())
+	if response.Code != http.StatusOK || loaded {
+		t.Fatalf("anonymous published template detail = %d loaded=%v body=%s", response.Code, loaded, response.Body.String())
+	}
+	response = profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/templates/9", "valid")
+	if response.Code != http.StatusOK || loaded {
+		t.Fatalf("incomplete-profile published template detail = %d loaded=%v body=%s", response.Code, loaded, response.Body.String())
 	}
 }
 
@@ -80,7 +84,7 @@ func TestMiniprogramProfileGateRequiresCompleteProfile(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) { return test.profile, nil })
-			response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/templates/9", "valid")
+			response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects", "valid")
 			if response.Code != http.StatusPreconditionRequired {
 				t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 			}
@@ -130,11 +134,23 @@ func TestMiniprogramProfileGateAllowsOnlyAnonymousPublicBrowseAndTrackingTranspo
 		{http.MethodGet, "/api/v1/miniprogram/templates/tab-config"},
 		{http.MethodGet, "/api/v1/miniprogram/templates"},
 		{http.MethodGet, "/api/v1/miniprogram/templates/search?q=test"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/9"},
 		{http.MethodGet, "/api/v1/miniprogram/inspirations"},
 		{http.MethodGet, "/api/v1/miniprogram/designers"},
+		{http.MethodGet, "/api/v1/miniprogram/designers/9/homepage"},
+		{http.MethodGet, "/api/v1/miniprogram/inspirations/9"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/contents/content-0001/versions/2"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{http.MethodHead, "/api/v1/miniprogram/tracking/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/content"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{http.MethodHead, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 		{http.MethodPost, "/api/v1/miniprogram/tracking/entry"},
 		{http.MethodPost, "/api/v1/miniprogram/tracking/events/batch"},
 		{http.MethodPost, "/api/v1/miniprogram/tracking/shares"},
+		{http.MethodPost, "/api/v1/miniprogram/public-share-links"},
 	}
 	for _, item := range allowed {
 		response := profileGateRequest(router, item[0], item[1], "")
@@ -147,11 +163,28 @@ func TestMiniprogramProfileGateAllowsOnlyAnonymousPublicBrowseAndTrackingTranspo
 	}
 
 	protected := [][2]string{
-		{http.MethodGet, "/api/v1/miniprogram/templates/9"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/0"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/-1"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/9/detail"},
+		{http.MethodPost, "/api/v1/miniprogram/templates/9"},
 		{http.MethodGet, "/api/v1/miniprogram/templates/featured/extra"},
 		{http.MethodPost, "/api/v1/miniprogram/templates"},
-		{http.MethodGet, "/api/v1/miniprogram/designers/9/homepage"},
+		{http.MethodGet, "/api/v1/miniprogram/designers/0/homepage"},
+		{http.MethodGet, "/api/v1/miniprogram/designers/9/homepage/extra"},
+		{http.MethodGet, "/api/v1/miniprogram/inspirations/0"},
+		{http.MethodGet, "/api/v1/miniprogram/inspirations/9/extra"},
 		{http.MethodGet, "/api/v1/miniprogram/tracking/entry"},
+		{http.MethodPost, "/api/v1/miniprogram/tracking/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/signed"},
+		{http.MethodGet, "/api/v1/miniprogram/public-share-links"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/contents/content-0001/versions/0"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/contents/content-0001/versions/2/extra"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/-1/content"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/short"},
+		{http.MethodGet, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/extra"},
+		{http.MethodHead, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2"},
+		{http.MethodHead, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/content"},
+		{http.MethodHead, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/short"},
+		{http.MethodHead, "/api/v1/miniprogram/tracking/project-collections/collection-0001/versions/2/items/0/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/extra"},
 	}
 	for _, item := range protected {
 		response := profileGateRequest(router, item[0], item[1], "")
@@ -329,7 +362,7 @@ func TestMiniprogramProfileGateProtectedErrorsAreNotCached(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) { return test.profile, nil })
-			response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/templates/9", test.token)
+			response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects", test.token)
 			if response.Code != test.status {
 				t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
 			}
@@ -344,7 +377,7 @@ func TestMiniprogramProfileGateFailsClosedWhenProfileReadFails(t *testing.T) {
 	router := profileGateTestRouter(t, func(context.Context, int64) (miniprogramProfile, error) {
 		return miniprogramProfile{}, errors.New("database unavailable")
 	})
-	response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/templates/9", "valid")
+	response := profileGateRequest(router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects", "valid")
 	if response.Code != http.StatusServiceUnavailable || containsJSONQuoted(response.Body.String(), "database unavailable") {
 		t.Fatalf("profile read failure = %d body=%s", response.Code, response.Body.String())
 	}
@@ -374,6 +407,7 @@ func TestMiniprogramProfileGateBootstrapAllowlistIsExact(t *testing.T) {
 		{http.MethodGet, "/api/v1/miniprogram/templates/tab-config"},
 		{http.MethodGet, "/api/v1/miniprogram/templates"},
 		{http.MethodGet, "/api/v1/miniprogram/templates/search"},
+		{http.MethodGet, "/api/v1/miniprogram/templates/9"},
 		{http.MethodGet, "/api/v1/miniprogram/inspirations"},
 		{http.MethodGet, "/api/v1/miniprogram/designers"},
 		{http.MethodPost, "/api/v1/miniprogram/tracking/entry"},

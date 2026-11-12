@@ -21,10 +21,8 @@ for (const source of [indexTs, indexJs]) {
 
 for (const source of [detailTs, detailJs]) {
   assert.match(source, /template-detail:public:/, 'detail page should keep a public detail cache scope for anonymous visits');
-  assert.match(source, /template-detail:auth:/, 'detail page should use an auth-scoped cache for logged-in detail responses');
-  assert.match(source, /buildTemplateDetailCacheKey\([^,\n]+,\s*token\)/, 'detail page cache reads should include the current token');
-  assert.match(source, /buildTokenCacheScope/, 'detail page should avoid storing raw tokens in cache keys');
-  assert.doesNotMatch(source, /getPageCache(?:<any>)?\(buildTemplateDetailCacheKey\([^,\n)]+\)\)/, 'detail page should not read template detail cache without auth scope');
+  assert.doesNotMatch(source, /template-detail:auth:/, 'public detail data must not vary by cached profile token');
+  assert.match(source, /getPageCache(?:<any>)?\)?\(buildPublicTemplateDetailCacheKey\(/, 'detail page should reuse the public projection for every reader');
 }
 
 console.log('template detail cache scope checks passed');

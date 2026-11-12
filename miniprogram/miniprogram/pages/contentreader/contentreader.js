@@ -173,13 +173,21 @@ Page({
  async copyWebLink(){
   if(this.data.webLinkBusy||!this.data.contentReady||!this.data.content)return;
   const token=String(wx.getStorageSync('token')||'');
-  if(!token){wx.navigateTo({url:'/pages/login/login'});return;}
-  if(!tracking.consented()){tracking.showConsentChoices(this);return;}
   const generation=this.entryGeneration;
   const contentID=String(this.options.content_id||''),version=String(this.options.content_version||'');
-  const current=()=>generation===this.entryGeneration&&token===String(wx.getStorageSync('token')||'')&&contentID===String(this.options.content_id||'')&&version===String(this.options.content_version||'');
+  const currentContent=()=>generation===this.entryGeneration&&contentID===String(this.options.content_id||'')&&version===String(this.options.content_version||'');
+  const tracked=tracking.consented()&&String(this.options.untracked_share||'')!=='1';
+  if(tracked&&!token){wx.navigateTo({url:'/pages/login/login'});return;}
+  const current=()=>currentContent()&&(!tracked||token===String(wx.getStorageSync('token')||''));
   this.setData({webLinkBusy:true});
   try{
+   if(!tracked){
+    const result=await require('../../utils/phase3-api').request('/api/v1/miniprogram/public-share-links','POST',{kind:'content',id:contentID,version:Number(version)});
+    if(!current())return;
+    if(!result.web_url||!String(result.web_url).startsWith('https://'))throw new Error('普通分享链接暂未开通');
+    await new Promise((resolve,reject)=>wx.setClipboardData({data:result.web_url,success:resolve,fail:()=>reject(new Error('链接未能复制，请重试'))}));
+    return;
+   }
    const original={title:this.data.content.title,path:'/'+ROUTE+'?content_id='+encodeURIComponent(contentID)+'&content_version='+encodeURIComponent(version)};
    const prepared=await tracking.prepareShare(this,original,'app_message','web:'+contentID+':'+version,false,current);
    if(!current())return;
@@ -221,10 +229,10 @@ Page({
   this.setData({guideVisible:false});
   try{const saved=wx.getStorageSync('share_reader_guide_v1');const record=saved&&typeof saved==='object'?saved:{};record.dismissedUntil=Date.now()+7*86400000;wx.setStorageSync('share_reader_guide_v1',record);}catch(e){}
  },
- onShareAppMessage(){const content=this.data.content,view=this.data.presentationView;if(!this.data.contentReady||!content)return {};return {title:nativeShareTitle(view&&view.shareCopy,content.title),path:'/'+ROUTE+'?content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content.cover?content.cover.url:undefined};},
+ onShareAppMessage(){const content=this.data.content,view=this.data.presentationView;if(!this.data.contentReady||!content)return {};const plain=String(this.options.untracked_share||'')==='1'?'&untracked_share=1':'';return {title:nativeShareTitle(view&&view.shareCopy,content.title),path:'/'+ROUTE+'?content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||'')+plain,imageUrl:content.cover?content.cover.url:undefined};},
  onShareTimeline(){return this.timelineShareValue();},
  // 与 onShareTimeline 同源取值：预热（preheatTimelineShare）以此对象为缓存键，首次分享即带 st 归因令牌
- timelineShareValue(){const content=this.data.content,view=this.data.presentationView;if(!this.data.contentReady||!content)return {};return {title:nativeShareTitle(view&&view.momentsCopy,content.title),query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||''),imageUrl:content.cover?content.cover.url:undefined};},
+ timelineShareValue(){const content=this.data.content,view=this.data.presentationView;if(!this.data.contentReady||!content)return {};const plain=String(this.options.untracked_share||'')==='1'?'&untracked_share=1':'';return {title:nativeShareTitle(view&&view.momentsCopy,content.title),query:'content_id='+encodeURIComponent(this.options.content_id||'')+'&content_version='+encodeURIComponent(this.options.content_version||'')+plain,imageUrl:content.cover?content.cover.url:undefined};},
  // B14: 生成分享海报——封面+标题+小程序码 canvas 合成保存相册
  async generatePoster(){
   if(this.data.posterBusy||!this.posterAccessCurrent())return;

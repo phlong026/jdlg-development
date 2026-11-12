@@ -126,7 +126,9 @@ func audit(r Repository, owner, action string, actor int64, target string, now t
 // tracked before login. AI execution keeps its independent account checks.
 func MiniprogramPublicRoute(route string) bool {
 	switch route {
-	case "pages/index/index", "pages/template/template", "pages/distribution/distribution":
+	case "pages/index/index", "pages/template/template", "pages/templatesquaredetails/templatesquaredetails", "pages/distribution/distribution",
+		"pages/contentreader/contentreader", "pages/collectionreader/collectionreader",
+		"pages/designerhome/designerhome", "pages/inspirationdetail/inspirationdetail":
 		return true
 	case "pages/aitools/aitools", "pages/aitooldetail/aitooldetail", "pages/aitoolworkbench/aitoolworkbench",
 		"pages/aigenerate/aigenerate", "pages/aivideo/aivideo", "pages/aicost/aicost", "pages/newminnantool/newminnantool", "pages/allrounddesign/allrounddesign":

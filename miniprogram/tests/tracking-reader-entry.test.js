@@ -118,6 +118,27 @@ for (const options of [direct, { scene: sceneA }]) {
   });
 }
 
+test('real adapter keeps an explicitly plain URL Link readable without entry or events', async () => {
+  const t = runtime({ accepted: true });
+  await t.mount({ content_id: 'content_one', content_version: '1', untracked_share: '1' });
+  await untilReady(t.page); await settle();
+  assert.equal(t.page.data.contentReady, true);
+  assert.equal(t.entries.length, 0, 'plain URL Link must not create an entry even when analytics is enabled');
+  assert.equal(t.events.length, 0, 'plain URL Link must not submit events');
+  assert.equal(t.adapter.getSDK().get(t.page), undefined, 'plain page must not remain registered in the adapter');
+  assert.match(t.page.onShareAppMessage().path, /[?&]untracked_share=1(?:&|$)/);
+  assert.match(t.page.onShareTimeline().query, /[?&]untracked_share=1(?:&|$)/);
+});
+
+test('real adapter still tracks an ordinary direct reader entry without a share token', async () => {
+  const t = runtime({ accepted: true });
+  await t.mount({ content_id: 'content_one', content_version: '1' });
+  await untilReady(t.page); await settle();
+  assert.ok(t.entries.length >= 1, 'ordinary no-st entry must not be disabled by the plain-share exception');
+  assert.equal(t.entries.at(-1).share_token, undefined);
+  assert.ok(t.views().length >= 1);
+});
+
 test('explicit consent while the scene is still resolving preserves the legitimate initial share', async () => {
   const t = runtime({ deferScene: true }); await t.mount({ scene: sceneA });
   await t.adapter.refreshConfig();t.grant();

@@ -134,7 +134,7 @@ func registerPublicProjectCollectionHandlers(group *gin.RouterGroup, svc *tracki
 		out, err := svc.ReadPublishedProjectCollectionItemContent(c.Request.Context(), c.Param("id"), version, position)
 		trackingResponse(c, out, err)
 	})
-	collections.GET("/:id/versions/:version/items/:position/media/:media", func(c *gin.Context) {
+	serveItemMedia := func(c *gin.Context) {
 		version, position, ok := projectCollectionPosition(c)
 		if !ok {
 			return
@@ -145,7 +145,9 @@ func registerPublicProjectCollectionHandlers(group *gin.RouterGroup, svc *tracki
 			return
 		}
 		serveContentMediaBytes(c, svc, asset)
-	})
+	}
+	collections.GET("/:id/versions/:version/items/:position/media/:media", serveItemMedia)
+	collections.HEAD("/:id/versions/:version/items/:position/media/:media", serveItemMedia)
 }
 
 func projectCollectionPosition(c *gin.Context) (int, int, bool) {

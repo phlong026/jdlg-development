@@ -328,7 +328,7 @@ for (const extension of ['ts', 'js']) {
     assert.equal(Object.keys(h.page.onShareAppMessage()).length, 0);
   });
 
-  test(`${extension}: second reader scene keeps its own share after warm profile verification and reload`, async t => {
+  test(`${extension}: public reader switches to a second scene without waiting for profile verification`, async t => {
     const h = journey({ extension, token: 'session-A', reader: true }); t.after(() => h.close());
     await h.mount();
     assert.equal(h.page.data.contentReady, true);
@@ -338,12 +338,10 @@ for (const extension of ['ts', 'js']) {
     const firstGeneration = h.page.boundEntryGeneration;
     h.background(); h.server.holdProfile = true;
     await h.resume({ scene: nextScene });
-    assert.equal(h.page.data.__profileAccessReady, false);
-    assert.equal(h.entries().length, 1);
-    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 1);
-    h.releaseProfile(); await settle();
+    assert.equal(h.page.data.__profileAccessReady, true);
     assert.equal(h.page.data.contentReady, true);
     assert.equal(h.entries().length, 2);
+    assert.equal(h.requests.filter(request => request.path.endsWith('/tracking/share-entry')).length, 2);
     assert.equal(h.entries()[1].body.content_id, 'content_two');
     assert.equal(h.entries()[1].body.content_version, 2);
     assert.equal(h.entries()[1].body.share_token, 'next-share');

@@ -631,3 +631,18 @@ page {
   line-height: 1.4;
   color: #9d7047;
 }
+
+.contact-consent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 24rpx 4rpx;
+  color: #7d6a57;
+  font-size: 22rpx;
+}
+
+.contact-consent-withdraw {
+  margin-left: 20rpx;
+  color: #9d7047;
+  text-decoration: underline;
+}

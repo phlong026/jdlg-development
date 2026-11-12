@@ -1,4 +1,5 @@
 "use strict";
+const trackingConsent = require('../../utils/tracking/index');
 const POLICY_DOCUMENTS = {
     privacy: {
         pageTitle: '隐私政策',
@@ -13,7 +14,7 @@ const POLICY_DOCUMENTS = {
                     '账号与身份信息：包括微信登录标识、用户名、头像、昵称等基础账号信息。',
                     '设备与系统信息：包括设备指纹、设备型号、系统版本、屏幕信息、语言与 Canvas 渲染特征，用于账号安全和风控校验。',
                     '业务使用信息：包括你上传的图片、输入的文字需求、生成记录、模板使用记录、订单记录、充值记录和邀请关系。',
-                    '访问分析信息：我们默认记录内容的浏览、停留时长与分享行为，用于改进内容与服务体验；你可在“设置 → 访问分析”随时关闭，关闭后不再记录。',
+                    '访问分析信息：我们默认记录公开内容的浏览、停留时长、播放与分享行为，用于改进服务、内容效果分析和意向判断。符合关联条件且你登录后，记录可能关联账号；获得相应访问权限的内容分享方及运营人员可查看关联后的昵称、头像及访问记录，但普通访客列表不因此公开手机号或输入正文。',
                     '联系与认证信息：包括你主动提交的手机号、企业微信联系方式、实名认证与设计师认证资料。',
                 ],
             },
@@ -37,7 +38,7 @@ const POLICY_DOCUMENTS = {
                 title: '四、你的权利',
                 items: [
                     '你可以在产品内查看、修改昵称、头像、密码等账户信息。',
-                    '访问分析默认开启，你可以随时在“设置 → 访问分析”关闭；关闭后不再记录，也不影响任何功能。',
+                    '访问分析默认开启，你可以在本页或“设置 → 访问分析”随时关闭；关闭后不再记录，也不影响公开浏览、播放和普通分享。',
                     '你可以申请变更或删除你主动填写的联系方式与资料。',
                     '如需注销账号、删除信息或反馈隐私问题，可通过页面内提供的联系方式与我们联系。',
                 ],
@@ -206,11 +207,39 @@ Page({
         sections: [],
         contactSectionTitle: '联系我们',
         contactItems: [],
+        trackingAvailable: false,
+        trackingEnabled: false,
     },
     onLoad(options) {
         const from = String(options?.from || '');
         const policyType = normalizePolicyType(String(options?.type || ''));
         this.setData(buildPolicyPageData(policyType, from));
+    },
+    onShow() {
+        if (this.data.policyType !== 'privacy')
+            return;
+        this.syncTrackingState();
+    },
+    async syncTrackingState() {
+        const config = await trackingConsent.refreshConfig();
+        this.setData({
+            trackingAvailable: config?.enabled === true && !!config?.consent_version && !!config?.privacy_notice,
+            trackingEnabled: trackingConsent.consented(),
+        });
+    },
+    async onToggleTracking(event) {
+        if (event.detail.value === true) {
+            this.setData({ trackingEnabled: false });
+            await trackingConsent.showConsentChoices(this);
+            this.setData({ trackingEnabled: trackingConsent.consented() });
+            return;
+        }
+        const saved = trackingConsent.setConsent(false);
+        this.setData({ trackingEnabled: trackingConsent.consented() });
+        wx.showToast({
+            title: saved ? '已关闭访问分析' : '关闭暂未保存成功，本次会话已停止记录',
+            icon: 'none',
+        });
     },
     onShareAppMessage() {
         const policyType = this.data.policyType || 'privacy';

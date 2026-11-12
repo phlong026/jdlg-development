@@ -147,6 +147,45 @@ func TestTrackingLeadDisplayName(t *testing.T) {
 	}
 }
 
+func TestTrackingLeadConversionRequiresBusinessContactConsent(t *testing.T) {
+	visitor := tracking.Visitor{Key: "u:42", State: "identified", IdentityType: "乡墅业主"}
+	_, err := convertVisitorSnapshotToLead(contactConsentReaderFixture(false), nil, 11, visitor, nil, trackingLeadSource, false)
+	if err == nil {
+		t.Fatal("tracking conversion should require explicit business contact consent")
+	}
+	trackingErr, ok := err.(*tracking.Error)
+	if !ok || trackingErr.Status != http.StatusUnprocessableEntity || !strings.Contains(trackingErr.Message, "业务联系") {
+		t.Fatalf("error=%T %v", err, err)
+	}
+}
+
+func TestTrackingLeadConversionRequiresBoundContactPhone(t *testing.T) {
+	visitor := tracking.Visitor{Key: "u:42", State: "identified", IdentityType: "乡墅业主"}
+	_, err := convertVisitorSnapshotToLead(contactPhoneUnavailableReaderFixture{}, nil, 11, visitor, nil, trackingLeadSource, false)
+	if err == nil {
+		t.Fatal("tracking conversion should require a bound contact phone")
+	}
+	trackingErr, ok := err.(*tracking.Error)
+	if !ok || trackingErr.Status != http.StatusUnprocessableEntity || !strings.Contains(trackingErr.Message, "手机号") {
+		t.Fatalf("error=%T %v", err, err)
+	}
+}
+
+type contactConsentReaderFixture bool
+
+func (f contactConsentReaderFixture) ConvertTrackingLead(*model.CustomerLeadCreateInput, *model.CustomerServiceEventCreateInput, bool) (model.TrackingLeadConversionResult, error) {
+	if !bool(f) {
+		return model.TrackingLeadConversionResult{}, model.ErrBusinessContactConsentRequired
+	}
+	return model.TrackingLeadConversionResult{LeadID: 73}, nil
+}
+
+type contactPhoneUnavailableReaderFixture struct{}
+
+func (contactPhoneUnavailableReaderFixture) ConvertTrackingLead(*model.CustomerLeadCreateInput, *model.CustomerServiceEventCreateInput, bool) (model.TrackingLeadConversionResult, error) {
+	return model.TrackingLeadConversionResult{}, model.ErrBusinessContactPhoneUnavailable
+}
+
 // Contract test: the conversion endpoint exists behind the tracking
 // management group and keeps the CRM handover rule, dedupe and evidence
 // snapshot wired. Follows the repository's source-contract test style.
@@ -160,9 +199,7 @@ func TestTrackingLeadConversionContract(t *testing.T) {
 		`"/visitors/:id/lead"`,
 		"!scope.CRM",
 		`"crm":`, // 响应告知前端：线索已交给 CRM 承接，由客户主管分配
-		"FindLatestOpenLeadID",
-		"CreateLead",
-		"CreateEvent",
+		"ConvertTrackingLead",
 		trackingLeadSource,
 		trackingLeadEventType,
 		"buildTrackingLeadEvidence",
@@ -327,8 +364,8 @@ func TestTrackingLeadAutomationContract(t *testing.T) {
 	}
 }
 
-// Contract: mini-program lead creation auto-fills the phone from the bound
-// account identity before CreateLead, closing the contactless-lead hole.
+// Contract: mini-program lead creation delegates account-phone access to the
+// transaction that also locks the purpose-specific consent revision.
 func TestLeadPhoneAutofillContract(t *testing.T) {
 	source, err := os.ReadFile("customer_service.go")
 	if err != nil {
@@ -336,12 +373,23 @@ func TestLeadPhoneAutofillContract(t *testing.T) {
 	}
 	content := string(source)
 	for _, want := range []string{
-		"leadPhoneLookup",
-		"GetUserPhones",
+		"CreateLeadWithBusinessContact",
 		`strings.TrimSpace(req.Phone) == ""`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("phone autofill contract missing %q", want)
+		}
+	}
+	if strings.Contains(content, "GetUserPhones") || strings.Contains(content, "ContactPhoneConsent") {
+		t.Fatal("ordinary lead route must not read the account phone or mutate contact consent outside the atomic model operation")
+	}
+	modelSource, err := os.ReadFile("../model/customer_service_contact_consent.go")
+	if err != nil {
+		t.Fatalf("read atomic contact consent model: %v", err)
+	}
+	for _, want := range []string{"FOR UPDATE", "purpose", "consent_version", "PhoneConsentRevision", "ConvertTrackingLead"} {
+		if !strings.Contains(string(modelSource), want) {
+			t.Fatalf("atomic contact consent model missing %q", want)
 		}
 	}
 }

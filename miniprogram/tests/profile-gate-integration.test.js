@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const completeProfile = { id: 9, nickname: '林间访客', avatar: 'https://cdn.example/avatar.jpg' };
 
-function loadCombined({ profileResponses = [completeProfile], deferProfiles = false } = {}) {
+function loadCombined({ profileResponses = [completeProfile], deferProfiles = false, route = 'pages/contentreader/contentreader' } = {}) {
   let componentDefinition;
   const storage = {};
   const requests = [];
@@ -67,7 +67,7 @@ function loadCombined({ profileResponses = [completeProfile], deferProfiles = fa
   };
   let component;
   const page = {
-    route: 'pages/contentreader/contentreader',
+    route,
     onProfileAccessBlocked() { events.push({ name: 'blocked' }); },
     selectComponent() { return component; },
   };
@@ -179,7 +179,7 @@ test('a late rejection from an old account cannot clear or gate the new account'
 });
 
 test('a same-session 401 takes over an in-flight 428 profile check and restores the login card', async () => {
-  const fixture = loadCombined({ deferProfiles: true });
+  const fixture = loadCombined({ deferProfiles: true, route: 'pages/wallet/wallet' });
   fixture.storage.token = 'session-A';
   fixture.storage.userInfo = { id: 9 };
   fixture.wx.request({ url: 'https://api.jiadilingguang.com/api/v1/miniprogram/projects' });

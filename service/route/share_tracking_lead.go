@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"sort"
@@ -28,9 +29,9 @@ const (
 	trackingLeadSummaryTopN  = 3
 )
 
-// Conversions for the same account are serialized inside the service process.
-// CreateLead performs a second dedupe read, but the table has no unique key
-// that can make the read-then-insert sequence atomic by itself.
+// This local lock avoids redundant work in one process. The model also locks
+// the durable per-user consent row, which supplies cross-process serialization
+// for consent, phone access, dedupe, lead write and evidence append.
 var trackingLeadConversionLocks [64]sync.Mutex
 
 func lockTrackingLeadConversion(userID int64) func() {
@@ -240,6 +241,10 @@ type trackingLeadOutcome struct {
 	DemandSummary string
 }
 
+type trackingLeadAtomicStore interface {
+	ConvertTrackingLead(input *model.CustomerLeadCreateInput, event *model.CustomerServiceEventCreateInput, idempotent bool) (model.TrackingLeadConversionResult, error)
+}
+
 // convertVisitorToLead runs the shared gate → dedupe → convert pipeline for
 // the manual management endpoint and the off-by-default auto converter. All
 // decisions (identity gate, evidence snapshot, phone lookup) happen here so
@@ -265,7 +270,7 @@ func convertVisitorToLead(ctx context.Context, svc *tracking.Service, leads *mod
 	return convertVisitorSnapshotToLead(leads, identities, scope.Actor, visitor, contents, source, false)
 }
 
-func convertVisitorSnapshotToLead(leads *model.CustomerServiceModel, identities *model.UserIdentityModel, actor int64, visitor tracking.Visitor, contents []tracking.VisitorContent, source string, idempotent bool) (trackingLeadOutcome, error) {
+func convertVisitorSnapshotToLead(leads trackingLeadAtomicStore, _ *model.UserIdentityModel, actor int64, visitor tracking.Visitor, contents []tracking.VisitorContent, source string, idempotent bool) (trackingLeadOutcome, error) {
 	userID, ok := trackingVisitorAccount(visitor.Key)
 	if !ok {
 		return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"}
@@ -273,19 +278,11 @@ func convertVisitorSnapshotToLead(leads *model.CustomerServiceModel, identities 
 	if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
 		return trackingLeadOutcome{}, e
 	}
+	if leads == nil {
+		return trackingLeadOutcome{}, &tracking.Error{Status: 503, Message: "业务联系授权服务不可用"}
+	}
 	unlock := lockTrackingLeadConversion(userID)
 	defer unlock()
-	phone := ""
-	if phones, err := identities.GetUserPhones(userID); err != nil {
-		log.Printf("[Tracking] lead conversion phone lookup failed user=%d: %v", userID, err)
-	} else if len(phones) > 0 {
-		phone = phones[0]
-	}
-	existingID, err := leads.FindLatestOpenLeadID(userID)
-	if err != nil {
-		log.Printf("[Tracking] lead dedupe failed user=%d: %v", userID, err)
-		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "线索查重失败，请稍后重试"}
-	}
 	summary := buildTrackingLeadSummary(visitor, contents)
 	intentLevel := strings.TrimSpace(visitor.Intent.Level)
 	event := &model.CustomerServiceEventCreateInput{
@@ -296,39 +293,25 @@ func convertVisitorSnapshotToLead(leads *model.CustomerServiceModel, identities 
 		DemandSummary: summary,
 		Payload:       buildTrackingLeadEvidence(visitor, contents, actor, time.Now()),
 	}
-	if existingID > 0 {
-		if idempotent {
-			return trackingLeadOutcome{LeadID: existingID, Existed: true, IntentLevel: intentLevel, DemandSummary: summary}, nil
-		}
-		// Keep the open lead untouched; append the conversion evidence as a
-		// follow-up signal instead of silently rewriting its fields.
-		event.LeadID = existingID
-		if _, err := leads.CreateEvent(event); err != nil {
-			log.Printf("[Tracking] attach conversion event failed lead=%d: %v", existingID, err)
-			return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "追加转化记录失败，请稍后重试"}
-		}
-		return trackingLeadOutcome{LeadID: existingID, Existed: true, IntentLevel: intentLevel, DemandSummary: summary}, nil
-	}
-	leadID, err := leads.CreateLead(&model.CustomerLeadCreateInput{
+	result, err := leads.ConvertTrackingLead(&model.CustomerLeadCreateInput{
 		UserID:        userID,
 		Name:          trackingLeadDisplayName(visitor.Nickname),
-		Phone:         phone,
 		Source:        source,
 		IntentLevel:   intentLevel,
 		Status:        model.CustomerLeadStatusNew,
 		DemandSummary: summary,
-	})
+	}, event, idempotent)
 	if err != nil {
-		log.Printf("[Tracking] create lead from visitor=%s failed: %v", visitor.Key, err)
+		if errors.Is(err, model.ErrBusinessContactConsentRequired) {
+			return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "客户尚未同意使用账号手机号进行业务联系"}
+		}
+		if errors.Is(err, model.ErrBusinessContactPhoneUnavailable) {
+			return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "客户账号尚未绑定可用于业务联系的手机号"}
+		}
+		log.Printf("[Tracking] atomic lead conversion visitor=%s failed: %v", visitor.Key, err)
 		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "创建线索失败，请稍后重试"}
 	}
-	event.LeadID = leadID
-	if _, err := leads.CreateEvent(event); err != nil {
-		// The lead exists; a missing snapshot degrades auditability, not the
-		// conversion itself. Surface it in logs and still report success.
-		log.Printf("[Tracking] conversion event for lead=%d failed: %v", leadID, err)
-	}
-	return trackingLeadOutcome{LeadID: leadID, Existed: false, IntentLevel: intentLevel, DemandSummary: summary}, nil
+	return trackingLeadOutcome{LeadID: result.LeadID, Existed: result.Existed, IntentLevel: intentLevel, DemandSummary: summary}, nil
 }
 
 func myVisitorLeadContents(entries []tracking.MyVisitEntry) []tracking.VisitorContent {

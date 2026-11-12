@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"service/model"
 )
 
 // The durable lead row is the outbox. A delivery checkpoint advances only after
@@ -24,10 +26,11 @@ func syncCRMLeads(db *sql.DB) error {
 	defer crmSourceWorker.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,l.phone,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.created_at,l.intent_level,COALESCE((SELECT u.unionid FROM users u WHERE u.id=l.user_id),''),
- SHA2(CONCAT_WS('|',l.name,l.phone,l.wechat,COALESCE(l.demand_summary,'')),256),COALESCE(d.history_cursor,0)
+	visiblePhone := model.CustomerLeadExportablePhoneSQL("l")
+	rows, err := db.QueryContext(ctx, `SELECT l.id,l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,''),l.user_id,l.source,l.created_at,l.intent_level,COALESCE((SELECT u.unionid FROM users u WHERE u.id=l.user_id),''),
+ SHA2(CONCAT_WS('|',l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,'')),256),COALESCE(d.history_cursor,0)
  FROM customer_leads l LEFT JOIN customer_lead_crm_delivery d ON d.lead_id=l.id
- WHERE (EXISTS(SELECT 1 FROM customer_lead_followups f WHERE f.lead_id=l.id AND f.id>COALESCE(d.history_cursor,0)) OR d.lead_id IS NULL OR d.source_hash<>SHA2(CONCAT_WS('|',l.name,l.phone,l.wechat,COALESCE(l.demand_summary,'')),256))
+	WHERE (EXISTS(SELECT 1 FROM customer_lead_followups f WHERE f.lead_id=l.id AND f.id>COALESCE(d.history_cursor,0)) OR d.lead_id IS NULL OR d.source_hash<>SHA2(CONCAT_WS('|',l.name,`+visiblePhone+`,l.wechat,COALESCE(l.demand_summary,'')),256))
  AND (d.next_attempt_at IS NULL OR d.next_attempt_at<=NOW()) ORDER BY l.id LIMIT 20`)
 	if err != nil {
 		return err

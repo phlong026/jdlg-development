@@ -364,8 +364,103 @@ func templateHasUsableOriginalTask(template *model.Template, taskLookup original
 	return err == nil && task != nil
 }
 
+func publicTemplateDerivedImageURL(rawURL, variant string) string {
+	if variant != "list_thumb" && variant != "detail_preview" {
+		return ""
+	}
+	cleanURL := normalizeCosImageURL(rawURL)
+	parsed, err := neturl.Parse(cleanURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.ForceQuery || parsed.Opaque != "" {
+		return ""
+	}
+	assetOrigin, err := neturl.Parse(normalizeCosImageURL("https://" + cosRawHost + "/"))
+	if err != nil || !strings.EqualFold(parsed.Host, assetOrigin.Host) {
+		return ""
+	}
+	// Server-generated variants use a literal ASCII path. Reject encoded or
+	// non-canonical paths so dot segments and escaped separators cannot be used
+	// to make an arbitrary asset look like a derivative.
+	if parsed.RawPath != "" || parsed.EscapedPath() != parsed.Path {
+		return ""
+	}
+	const prefix = "/derived_images/templates/"
+	relativePath := strings.TrimPrefix(parsed.Path, prefix)
+	if relativePath == parsed.Path {
+		return ""
+	}
+	parts := strings.Split(relativePath, "/")
+	if len(parts) != 2 || !isTemplateDerivativeNamespace(parts[0]) || !isTemplateDerivativeFilename(parts[1], variant) {
+		return ""
+	}
+	return cleanURL
+}
+
+func isTemplateDerivativeNamespace(namespace string) bool {
+	if namespace == "" || namespace == "." || namespace == ".." {
+		return false
+	}
+	for _, ch := range namespace {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isTemplateDerivativeFilename(filename, variant string) bool {
+	suffix := "_" + variant + ".jpg"
+	if len(filename) != 40+len(suffix) || !strings.HasSuffix(filename, suffix) {
+		return false
+	}
+	for _, ch := range filename[:40] {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func templateMediaFields(template *model.Template, paidLocked bool) (thumbnail, previewURL, images string) {
+	thumbnail = normalizeCosImageURL(template.Thumbnail)
+	previewURL = normalizeCosImageURL(template.PreviewURL)
+	images = normalizeCosImageURL(template.Images)
+	if paidLocked {
+		// Only server-generated derivatives are safe public previews. Historical
+		// caller-supplied URLs fail closed until the backfill creates variants.
+		thumbnail = publicTemplateDerivedImageURL(template.Thumbnail, "list_thumb")
+		previewURL = publicTemplateDerivedImageURL(template.PreviewURL, "detail_preview")
+		images = "[]"
+	}
+	return thumbnail, previewURL, images
+}
+
+func publicTemplateMediaFields(template *model.Template) (thumbnail, previewURL, images string) {
+	return templateMediaFields(template, !template.IsFree && template.Price > 0)
+}
+
+func featuredTemplateResponse(template *model.Template, creatorInfo *gin.H) gin.H {
+	thumbnail, previewURL, _ := publicTemplateMediaFields(template)
+	return gin.H{
+		"id":              template.ID,
+		"name":            template.Name,
+		"description":     template.Description,
+		"thumbnail":       thumbnail,
+		"preview_url":     previewURL,
+		"image_width":     template.ImageWidth,
+		"image_height":    template.ImageHeight,
+		"price":           template.Price,
+		"is_free":         template.IsFree,
+		"download_count":  template.DownloadCount,
+		"like_count":      template.LikeCount,
+		"creator":         template.Creator,
+		"creator_user_id": template.CreatorUserID,
+		"creator_info":    creatorInfo,
+	}
+}
+
 func templateToResponse(template *model.Template, paidLocked bool, creatorInfo *gin.H, taskLookup originalTaskLookup) gin.H {
-	_ = paidLocked
+	thumbnail, previewURL, images := templateMediaFields(template, paidLocked)
 	resp := gin.H{
 		"id":                template.ID,
 		"name":              template.Name,
@@ -374,9 +469,9 @@ func templateToResponse(template *model.Template, paidLocked bool, creatorInfo *
 		"sub_tab":           template.SubTab,
 		"third_tab":         template.ThirdTab,
 		"description":       template.Description,
-		"thumbnail":         normalizeCosImageURL(template.Thumbnail),
-		"preview_url":       normalizeCosImageURL(template.PreviewURL),
-		"images":            normalizeCosImageURL(template.Images),
+		"thumbnail":         thumbnail,
+		"preview_url":       previewURL,
+		"images":            images,
 		"image_width":       template.ImageWidth,
 		"image_height":      template.ImageHeight,
 		"price":             template.Price,
@@ -564,13 +659,14 @@ func RegisterTemplateRoutes(r *gin.RouterGroup, templateModel *model.TemplateMod
 			list := make([]gin.H, 0, len(templateList))
 			for _, t := range templateList {
 				creatorInfo := buildTemplateCreatorInfo(t.CreatorUserID, userProfileModel, userDBModel)
+				thumbnail, previewURL, images := publicTemplateMediaFields(t)
 				list = append(list, gin.H{
 					"id":              t.ID,
 					"name":            t.Name,
 					"description":     t.Description,
-					"thumbnail":       normalizeCosImageURL(t.Thumbnail),
-					"preview_url":     normalizeCosImageURL(t.PreviewURL),
-					"images":          normalizeCosImageURL(t.Images),
+					"thumbnail":       thumbnail,
+					"preview_url":     previewURL,
+					"images":          images,
 					"image_width":     t.ImageWidth,
 					"image_height":    t.ImageHeight,
 					"category":        t.Category,
@@ -651,22 +747,7 @@ func RegisterTemplateRoutes(r *gin.RouterGroup, templateModel *model.TemplateMod
 				case1, err := templateModel.GetByID(group.Case1ID)
 				if err == nil && case1 != nil && isPublicSquareTemplate(case1) {
 					creatorInfo := buildTemplateCreatorInfo(case1.CreatorUserID, userProfileModel, userDBModel)
-					groupData["case1"] = gin.H{
-						"id":              case1.ID,
-						"name":            case1.Name,
-						"description":     case1.Description,
-						"thumbnail":       case1.Thumbnail,
-						"preview_url":     case1.PreviewURL,
-						"image_width":     case1.ImageWidth,
-						"image_height":    case1.ImageHeight,
-						"price":           case1.Price,
-						"is_free":         case1.IsFree,
-						"download_count":  case1.DownloadCount,
-						"like_count":      case1.LikeCount,
-						"creator":         case1.Creator,
-						"creator_user_id": case1.CreatorUserID,
-						"creator_info":    creatorInfo,
-					}
+					groupData["case1"] = featuredTemplateResponse(case1, creatorInfo)
 				}
 
 				// 获取第二个案例（如果存在）
@@ -674,22 +755,7 @@ func RegisterTemplateRoutes(r *gin.RouterGroup, templateModel *model.TemplateMod
 					case2, err := templateModel.GetByID(group.Case2ID)
 					if err == nil && case2 != nil && isPublicSquareTemplate(case2) {
 						creatorInfo := buildTemplateCreatorInfo(case2.CreatorUserID, userProfileModel, userDBModel)
-						groupData["case2"] = gin.H{
-							"id":              case2.ID,
-							"name":            case2.Name,
-							"description":     case2.Description,
-							"thumbnail":       case2.Thumbnail,
-							"preview_url":     case2.PreviewURL,
-							"image_width":     case2.ImageWidth,
-							"image_height":    case2.ImageHeight,
-							"price":           case2.Price,
-							"is_free":         case2.IsFree,
-							"download_count":  case2.DownloadCount,
-							"like_count":      case2.LikeCount,
-							"creator":         case2.Creator,
-							"creator_user_id": case2.CreatorUserID,
-							"creator_info":    creatorInfo,
-						}
+						groupData["case2"] = featuredTemplateResponse(case2, creatorInfo)
 					}
 				}
 
@@ -796,13 +862,14 @@ func RegisterTemplateRoutes(r *gin.RouterGroup, templateModel *model.TemplateMod
 					continue
 				}
 				creatorInfo := buildTemplateCreatorInfo(t.CreatorUserID, userProfileModel, userDBModel)
+				thumbnail, previewURL, images := publicTemplateMediaFields(t)
 				respList = append(respList, gin.H{
 					"id":              t.ID,
 					"name":            t.Name,
 					"description":     t.Description,
-					"thumbnail":       normalizeCosImageURL(t.Thumbnail),
-					"preview_url":     normalizeCosImageURL(t.PreviewURL),
-					"images":          normalizeCosImageURL(t.Images),
+					"thumbnail":       thumbnail,
+					"preview_url":     previewURL,
+					"images":          images,
 					"image_width":     t.ImageWidth,
 					"image_height":    t.ImageHeight,
 					"price":           t.Price,

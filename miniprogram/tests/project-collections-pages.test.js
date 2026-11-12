@@ -216,6 +216,14 @@ test('collection reader opens only the server-validated fixed child target and c
   assert.equal(page.data.items[0].cover_url,'wxfile://tmp/cover-item');
   assert.equal(events[0][1],'content_click');
   assert.equal(page.onShareAppMessage().path, '/pages/collectionreader/collectionreader?collection_id=collection-0001&collection_version=3');
+
+  const plain = readerRuntime(api, 'must-not-be-used');
+  plain.page.onLoad({ collection_id: 'collection-0001', collection_version: '3', untracked_share: '1' });
+  await tick();
+  await plain.page.openItem({ currentTarget: { dataset: { index: 0 } } });
+  assert.equal(plain.navigations[0], '/pages/contentreader/contentreader?collection_id=collection-0001&collection_version=3&content_id=content-0001&content_version=2&item_position=0&untracked_share=1');
+  assert.match(plain.page.onShareAppMessage().path, /[?&]untracked_share=1(?:&|$)/);
+  assert.match(plain.page.onShareTimeline().query, /[?&]untracked_share=1(?:&|$)/);
 });
 
 test('collection pages stay clean and use the existing navigation and brand palette', () => {

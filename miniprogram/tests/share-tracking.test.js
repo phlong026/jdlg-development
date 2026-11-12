@@ -69,10 +69,10 @@ test('logged-in API signs the full query while preserving session token and cach
 
 // Run the actual page callbacks: the flags must be set by real success branches,
 // not by loading=false, placeholder objects, or a synthetic tracker-only fixture.
-function publicPageRuntime(name) {
+function publicPageRuntime(name,storage={}) {
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');let definition;const requests=[];
  const deps=new Proxy({}, {get:(_,key)=>key==='resolveAssetPath'||key==='normalizeCosUrl'?v=>v:()=>{}});
- const sandbox={exports:{},require:()=>deps,Page:value=>{definition=value;},wx:{request:options=>requests.push(options),getStorageSync:()=>'',showToast(){},stopPullDownRefresh(){}},console:{error(){}},setTimeout:()=>0,clearTimeout(){},Set,Promise,Date,Math};
+ const sandbox={exports:{},require:()=>deps,Page:value=>{definition=value;},wx:{request:options=>requests.push(options),getStorageSync:key=>storage[key]||'',showToast(){},stopPullDownRefresh(){}},console:{error(){}},setTimeout:()=>0,clearTimeout(){},Set,Promise,Date,Math};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,`../miniprogram/pages/${name}/${name}.js`),'utf8'),sandbox);
  const page={...definition,data:JSON.parse(JSON.stringify(definition.data)),route:`pages/${name}/${name}`,setData(values){Object.assign(this.data,values);}};
  return {page,requests,respond(data,statusCode=200,code=0){const request=requests.shift();assert.ok(request,'a real request was issued');request.success({statusCode,data:{code,data}});},fail(){requests.shift().fail(new Error('offline'));}};
@@ -112,6 +112,30 @@ test('designer public homepage needs a successful real profile; self-management 
  p.data.isSelfHomepage=false;pending=p.loadDesignerHomepage();t.respond({},403,403);await pending;assert.equal(routes.ready(p.route,p.data,true),false);
  assert.deepEqual(routes.binding(p.route,{userId:'12'}),routes.binding(p.route,{id:'12'}));
  const share=p.onShareAppMessage();assert.equal(share.path,'/pages/designerhome/designerhome?userId=12');assert.equal(share.title,'公开设计师的主页');
+});
+test('designer owner uses the private center but falls back to the public homepage when profile access is unavailable',async()=>{
+ const storage={token:'owner-token'},t=publicPageRuntime('designerhome',storage),p=t.page;p.data.userId=12;p.data.isSelfHomepage=true;
+ let pending=p.loadDesignerHomepage();
+ assert.match(t.requests[0].url,/\/api\/v1\/miniprogram\/user\/designer-center$/);
+ assert.equal(t.requests[0].header.token,'owner-token');
+ t.respond({profile:{user_id:12,name:'设计师本人'},works:[],reviews:[],stats:{total_orders:4}});await pending;
+ assert.equal(p.data.stats.totalOrders,4);
+ pending=p.loadDesignerHomepage();t.respond({},428,428);await new Promise(resolve=>setImmediate(resolve));
+ assert.match(t.requests[0].url,/\/api\/v1\/miniprogram\/designers\/12\/homepage$/);
+ t.respond({profile:{name:'公开设计师'},works:[],reviews:[]});await pending;
+ assert.equal(p.data.profile.name,'公开设计师');assert.equal(p.data.contentReady,true);
+});
+test('designer private homepage rejects route identity mismatch and stale account responses without a broad public fallback',async()=>{
+ for(const scenario of ['identity-mismatch','account-switch','server-error']){
+  const storage={token:'owner-token'},t=publicPageRuntime('designerhome',storage),p=t.page;p.data.userId=12;p.data.isSelfHomepage=true;
+  const pending=p.loadDesignerHomepage();assert.equal(t.requests[0].header.token,'owner-token');
+  if(scenario==='identity-mismatch')t.respond({profile:{user_id:99,name:'其他设计师'},works:[],reviews:[]});
+  if(scenario==='account-switch'){storage.token='next-account-token';t.respond({profile:{user_id:12,name:'旧账号私密页'},works:[],reviews:[]});}
+  if(scenario==='server-error')t.respond({},500,500);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(t.requests.length,0,scenario+' must not be hidden by a public fallback');
+  await pending;assert.equal(p.data.contentReady,false,scenario);assert.notEqual(p.data.profile.name,'旧账号私密页');
+ }
 });
 test('every excluded route has a specific business privacy reason, not an unverified catch-all',()=>{
  for(const [route,policy] of Object.entries(routes.ROUTES))if(!policy.collect){assert.ok(policy.exclusionReason,route);assert.equal(routes.ready(route,{contentReady:true},true),false);assert.doesNotMatch(policy.readiness,/unverified/);}

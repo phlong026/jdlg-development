@@ -45,8 +45,9 @@ Page({
       const parsed = tracking.splitPath(target.path, ''), query = parsed.query;
       const keys = ['content_id', 'content_version', 'collection_id', 'collection_version', 'item_position'];
       if (target.route_key !== 'pages/contentreader/contentreader' || parsed.route !== target.route_key || Object.keys(query).length !== keys.length || keys.some(key => query[key] === undefined) || !/^[A-Za-z0-9_-]{8,128}$/.test(query.content_id) || !/^[1-9]\d*$/.test(query.content_version) || query.collection_id !== id || Number(query.collection_version) !== version || Number(query.item_position) !== position) throw new Error('作品目标无效');
-      const token = tracking.collectionToken(this);
-      const path = target.path + (token ? '&st=' + encodeURIComponent(token) : '');
+      const plain = String(this.options.untracked_share || '') === '1';
+      const token = plain ? '' : tracking.collectionToken(this);
+      const path = target.path + (plain ? '&untracked_share=1' : token ? '&st=' + encodeURIComponent(token) : '');
       this.setData({ opening: -1 });
       tracking.emit(this, 'content_click', { target_content_id: query.content_id, component_key: 'collection_item', action_key: 'open_content' });
       wx.navigateTo({ url: path, fail: () => this.setData({ error: '作品打开失败，请重试' }) });
@@ -59,13 +60,20 @@ Page({
   async copyWebLink() {
     if (this.data.webLinkBusy || !this.data.contentReady || !this.data.collection) return;
     const account = String(wx.getStorageSync('token') || '');
-    if (!account) { wx.navigateTo({url:'/pages/login/login'}); return; }
-    if (!tracking.consented()) { tracking.showConsentChoices(this); return; }
     const collection = this.data.collection, sequence = this.loadSequence;
-    const current = () => sequence === this.loadSequence && account === String(wx.getStorageSync('token') || '') && this.data.collection === collection;
+    const tracked = tracking.consented() && String(this.options.untracked_share || '') !== '1';
+    if (tracked && !account) { wx.navigateTo({url:'/pages/login/login'}); return; }
+    const current = () => sequence === this.loadSequence && (!tracked || account === String(wx.getStorageSync('token') || '')) && this.data.collection === collection;
     const key = 'web:collection:' + collection.collection_id + ':' + collection.version;
     this.setData({webLinkBusy:true});
     try {
+      if (!tracked) {
+        const result = await require('../../utils/phase3-api').request('/api/v1/miniprogram/public-share-links', 'POST', {kind:'collection',id:collection.collection_id,version:Number(collection.version)});
+        if (!current()) return;
+        if (!result.web_url || !String(result.web_url).startsWith('https://')) throw new Error('普通分享链接暂未开通');
+        await new Promise((resolve,reject) => wx.setClipboardData({data:result.web_url,success:resolve,fail:()=>reject(new Error('链接未能复制，请重试'))}));
+        return;
+      }
       const prepared = await tracking.prepareShare(this, this.shareValue(), 'app_message', key, false, current);
       if (!current()) return;
       const token = prepared && prepared.path && tracking.splitPath(prepared.path, 'pages/collectionreader/collectionreader').query.st;
@@ -82,12 +90,14 @@ Page({
   shareValue() {
     const collection = this.data.collection;
     if (!collection) return {};
-    return { title: collection.title, path: '/pages/collectionreader/collectionreader?collection_id=' + encodeURIComponent(collection.collection_id) + '&collection_version=' + collection.version, imageUrl: collection.cover ? collection.cover.url : undefined };
+    const plain = String(this.options.untracked_share || '') === '1' ? '&untracked_share=1' : '';
+    return { title: collection.title, path: '/pages/collectionreader/collectionreader?collection_id=' + encodeURIComponent(collection.collection_id) + '&collection_version=' + collection.version + plain, imageUrl: collection.cover ? collection.cover.url : undefined };
   },
   onShareTimeline() { return this.timelineShareValue(); },
   timelineShareValue() {
     const collection = this.data.collection;
     if (!collection) return {};
-    return { title: collection.title, query: 'collection_id=' + encodeURIComponent(collection.collection_id) + '&collection_version=' + collection.version, imageUrl: collection.cover ? collection.cover.url : undefined };
+    const plain = String(this.options.untracked_share || '') === '1' ? '&untracked_share=1' : '';
+    return { title: collection.title, query: 'collection_id=' + encodeURIComponent(collection.collection_id) + '&collection_version=' + collection.version + plain, imageUrl: collection.cover ? collection.cover.url : undefined };
   },
 });

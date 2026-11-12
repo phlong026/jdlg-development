@@ -181,6 +181,10 @@
         <text class="quick-action-title">{{item.label}}</text>
       </view>
     </view>
+    <view wx:if="{{contactPhoneConsent}}" class="contact-consent-row">
+      <text>已允许设计老师使用账号手机号联系</text>
+      <text class="contact-consent-withdraw" bindtap="withdrawBusinessContactConsent">撤回</text>
+    </view>
 
     <view class="input-panel">
       <view class="composer-shell">

@@ -22,6 +22,11 @@ const (
 	CustomerIntentLevelLow    = "low"
 	CustomerIntentLevelMedium = "medium"
 	CustomerIntentLevelHigh   = "high"
+
+	CustomerLeadPhoneSourceNone          = "none"
+	CustomerLeadPhoneSourceUserProvided  = "user_provided"
+	CustomerLeadPhoneSourceAccountBound  = "account_bound"
+	CustomerLeadPhoneSourceLegacyUnknown = "legacy_unknown"
 )
 
 var ErrInvalidCustomerLeadID = errors.New("invalid customer lead id")
@@ -38,6 +43,8 @@ type CustomerLead struct {
 	UserID                  int64      `json:"user_id"`
 	Name                    string     `json:"name"`
 	Phone                   string     `json:"phone"`
+	PhoneSource             string     `json:"phone_source"`
+	PhoneConsentRevision    int64      `json:"-"`
 	Wechat                  string     `json:"wechat"`
 	EnterpriseWechatContact string     `json:"enterprise_wechat_contact"`
 	DemandSummary           string     `json:"demand_summary"`
@@ -71,6 +78,8 @@ type CustomerLeadCreateInput struct {
 	UserID                  int64
 	Name                    string
 	Phone                   string
+	PhoneSource             string
+	PhoneConsentRevision    int64
 	Wechat                  string
 	EnterpriseWechatContact string
 	DemandSummary           string
@@ -223,6 +232,41 @@ func NormalizeCustomerIntentLevel(level string) string {
 	}
 }
 
+// CustomerLeadVisiblePhoneSQL is shared by management reads and CRM export so
+// a revoked or stale account-phone authorization cannot leak through another
+// query. Legacy rows remain stored but hidden until their provenance is known.
+func CustomerLeadVisiblePhoneSQL(alias string) string {
+	switch alias {
+	case "customer_leads", "l", "base", "t":
+	default:
+		panic("unsupported customer lead SQL alias")
+	}
+	return `CASE
+		WHEN ` + alias + `.phone_source = 'user_provided' THEN ` + alias + `.phone
+		WHEN ` + alias + `.phone_source = 'account_bound' AND EXISTS (
+			SELECT 1 FROM business_contact_consents bc
+			WHERE bc.user_id = ` + alias + `.user_id
+			  AND bc.accepted = 1
+			  AND bc.purpose = 'use_bound_phone_for_business_contact'
+			  AND bc.consent_version = 'phone_contact_v1'
+			  AND bc.revision = ` + alias + `.phone_consent_revision
+		) THEN ` + alias + `.phone
+		ELSE '' END`
+}
+
+// CustomerLeadExportablePhoneSQL deliberately excludes account-bound phones.
+// A remote CRM cannot participate in the local consent-row transaction or
+// prove that a later withdrawal cleared its copy, so only a number explicitly
+// entered in the lead request may cross that boundary.
+func CustomerLeadExportablePhoneSQL(alias string) string {
+	switch alias {
+	case "customer_leads", "l":
+	default:
+		panic("unsupported customer lead export SQL alias")
+	}
+	return `CASE WHEN ` + alias + `.phone_source = 'user_provided' THEN ` + alias + `.phone ELSE '' END`
+}
+
 func containsAnyText(text string, keywords ...string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(text))
 	if normalized == "" {
@@ -260,6 +304,8 @@ CREATE TABLE IF NOT EXISTS customer_leads (
   user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
   name VARCHAR(64) NOT NULL DEFAULT '',
   phone VARCHAR(32) NOT NULL DEFAULT '',
+  phone_source VARCHAR(32) NOT NULL DEFAULT 'legacy_unknown',
+  phone_consent_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
   wechat VARCHAR(128) NOT NULL DEFAULT '',
   enterprise_wechat_contact VARCHAR(128) NOT NULL DEFAULT '',
   demand_summary TEXT,
@@ -295,6 +341,8 @@ CREATE TABLE IF NOT EXISTS customer_leads (
 		`ALTER TABLE customer_leads ADD INDEX idx_session_no (session_no)`,
 		`ALTER TABLE customer_leads ADD COLUMN next_followup_at DATETIME NULL`,
 		`ALTER TABLE customer_leads ADD INDEX idx_next_followup_at (next_followup_at)`,
+		`ALTER TABLE customer_leads ADD COLUMN phone_source VARCHAR(32) NOT NULL DEFAULT 'legacy_unknown'`,
+		`ALTER TABLE customer_leads ADD COLUMN phone_consent_revision BIGINT UNSIGNED NOT NULL DEFAULT 0`,
 	} {
 		if _, err := m.DB.Exec(alter); err != nil && !isIdempotentAlterSkip(err) {
 			log.Printf("customer_leads 增量结构检查: %v", err)
@@ -352,30 +400,80 @@ CREATE TABLE IF NOT EXISTS customer_service_events (
 		return err
 	}
 
+	if _, err := m.DB.Exec(`
+CREATE TABLE IF NOT EXISTS business_contact_consents (
+  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  accepted TINYINT(1) NOT NULL DEFAULT 0,
+  revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  purpose VARCHAR(64) NOT NULL DEFAULT 'use_bound_phone_for_business_contact',
+  consent_version VARCHAR(32) NOT NULL DEFAULT 'phone_contact_v1',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (m *CustomerServiceModel) CreateLead(input *CustomerLeadCreateInput) (int64, error) {
+	return m.createLeadOn(m.DB, input, false)
+}
+
+func normalizeCustomerLeadPhoneMetadata(input *CustomerLeadCreateInput, allowAccountBound bool) {
+	if input == nil {
+		return
+	}
+	if strings.TrimSpace(input.Phone) == "" {
+		input.PhoneSource = CustomerLeadPhoneSourceNone
+		input.PhoneConsentRevision = 0
+		return
+	}
+	switch strings.TrimSpace(input.PhoneSource) {
+	case CustomerLeadPhoneSourceAccountBound:
+		if !allowAccountBound {
+			input.PhoneSource = CustomerLeadPhoneSourceUserProvided
+		}
+	case CustomerLeadPhoneSourceUserProvided:
+	default:
+		// Every new server-side caller that supplies a phone must deliberately use
+		// the account-bound transaction below. The ordinary path therefore means
+		// the user supplied the number in this request. Legacy database rows keep
+		// their migration default and are never upgraded by this fallback.
+		input.PhoneSource = CustomerLeadPhoneSourceUserProvided
+	}
+	if input.PhoneSource != CustomerLeadPhoneSourceAccountBound {
+		input.PhoneConsentRevision = 0
+	}
+}
+
+func (m *CustomerServiceModel) createLeadOn(db customerLeadDB, input *CustomerLeadCreateInput, allowAccountBound bool) (int64, error) {
+	if input == nil {
+		return 0, errors.New("customer lead input is nil")
+	}
+	normalizeCustomerLeadPhoneMetadata(input, allowAccountBound)
 	input.IntentLevel = m.AnalyzeLeadIntentFromInput(input).Level
-	if id, err := m.findExistingLeadID(input.UserID, input.SessionNo, input.SourceTaskNo); err != nil {
+	if id, err := m.findExistingLeadIDOn(db, input.UserID, input.SessionNo, input.SourceTaskNo); err != nil {
 		return 0, err
 	} else if id > 0 {
-		if err := m.updateExistingLead(id, input); err != nil {
+		if err := m.updateExistingLeadOn(db, id, input); err != nil {
 			return 0, err
 		}
-		return id, m.backfillLeadIDForEvents(id, input.UserID, input.SessionNo, input.SourceTaskNo)
+		return id, m.backfillLeadIDForEventsOn(db, id, input.UserID, input.SessionNo, input.SourceTaskNo)
 	}
-	result, err := m.DB.Exec(`
+	result, err := db.Exec(`
 		INSERT INTO customer_leads (
-			user_id, name, phone, wechat, enterprise_wechat_contact, demand_summary,
+			user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact, demand_summary,
 			house_floors, house_style, land_width, land_depth, room_requirement,
 			source, session_no, source_task_no, intent_level, status, assigned_to, remark,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, NOW(), NOW())
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, NOW(), NOW())
 	`,
 		input.UserID,
 		strings.TrimSpace(input.Name),
 		strings.TrimSpace(input.Phone),
+		strings.TrimSpace(input.PhoneSource),
+		input.PhoneConsentRevision,
 		strings.TrimSpace(input.Wechat),
 		strings.TrimSpace(input.EnterpriseWechatContact),
 		strings.TrimSpace(input.DemandSummary),
@@ -398,7 +496,7 @@ func (m *CustomerServiceModel) CreateLead(input *CustomerLeadCreateInput) (int64
 	if err != nil {
 		return 0, err
 	}
-	return id, m.backfillLeadIDForEvents(id, input.UserID, input.SessionNo, input.SourceTaskNo)
+	return id, m.backfillLeadIDForEventsOn(db, id, input.UserID, input.SessionNo, input.SourceTaskNo)
 }
 
 func (m *CustomerServiceModel) AnalyzeLeadIntentFromInput(input *CustomerLeadCreateInput) CustomerIntentAnalysis {
@@ -478,13 +576,17 @@ func containsCustomerLeadContactIntent(text string) bool {
 }
 
 func (m *CustomerServiceModel) findExistingLeadID(userID int64, sessionNo, sourceTaskNo string) (int64, error) {
+	return m.findExistingLeadIDOn(m.DB, userID, sessionNo, sourceTaskNo)
+}
+
+func (m *CustomerServiceModel) findExistingLeadIDOn(db customerLeadDB, userID int64, sessionNo, sourceTaskNo string) (int64, error) {
 	trimmedSessionNo := strings.TrimSpace(sessionNo)
 	trimmedTaskNo := strings.TrimSpace(sourceTaskNo)
 	if userID <= 0 {
 		return 0, nil
 	}
 	if trimmedSessionNo == "" && trimmedTaskNo == "" {
-		return m.findLatestOpenLeadID(userID)
+		return m.findLatestOpenLeadIDOn(db, userID)
 	}
 	where := []string{"user_id = ?"}
 	args := []interface{}{userID}
@@ -496,7 +598,7 @@ func (m *CustomerServiceModel) findExistingLeadID(userID int64, sessionNo, sourc
 		args = append(args, trimmedSessionNo)
 	}
 	var id int64
-	err := m.DB.QueryRow(`
+	err := db.QueryRow(`
 		SELECT id FROM customer_leads
 		WHERE `+strings.Join(where, " AND ")+`
 		ORDER BY id DESC
@@ -508,12 +610,16 @@ func (m *CustomerServiceModel) findExistingLeadID(userID int64, sessionNo, sourc
 	if err != sql.ErrNoRows {
 		return 0, err
 	}
-	return m.findLatestOpenLeadID(userID)
+	return m.findLatestOpenLeadIDOn(db, userID)
 }
 
 func (m *CustomerServiceModel) findLatestOpenLeadID(userID int64) (int64, error) {
+	return m.findLatestOpenLeadIDOn(m.DB, userID)
+}
+
+func (m *CustomerServiceModel) findLatestOpenLeadIDOn(db customerLeadDB, userID int64) (int64, error) {
 	var id int64
-	err := m.DB.QueryRow(`
+	err := db.QueryRow(`
 		SELECT id FROM customer_leads
 		WHERE user_id = ?
 		  AND status IN ('new', 'contacted')
@@ -574,10 +680,16 @@ func (m *CustomerServiceModel) HasLeadUsers(userIDs []int64) (map[int64]bool, er
 }
 
 func (m *CustomerServiceModel) updateExistingLead(id int64, input *CustomerLeadCreateInput) error {
-	_, err := m.DB.Exec(`
+	return m.updateExistingLeadOn(m.DB, id, input)
+}
+
+func (m *CustomerServiceModel) updateExistingLeadOn(db customerLeadDB, id int64, input *CustomerLeadCreateInput) error {
+	_, err := db.Exec(`
 		UPDATE customer_leads
 		SET name = IF(? = '', name, ?),
-		    phone = IF(? = '', phone, ?),
+		    phone_source = CASE WHEN ? = '' THEN phone_source WHEN ? = 'user_provided' OR phone = '' OR phone_source IN ('none', 'account_bound', 'legacy_unknown') THEN ? ELSE phone_source END,
+		    phone_consent_revision = CASE WHEN ? = '' THEN phone_consent_revision WHEN ? = 'user_provided' OR phone = '' OR phone_source IN ('none', 'account_bound', 'legacy_unknown') THEN ? ELSE phone_consent_revision END,
+		    phone = CASE WHEN ? = '' THEN phone WHEN ? = 'user_provided' OR phone = '' OR phone_source IN ('none', 'account_bound', 'legacy_unknown') THEN ? ELSE phone END,
 		    wechat = IF(? = '', wechat, ?),
 		    enterprise_wechat_contact = IF(? = '', enterprise_wechat_contact, ?),
 		    demand_summary = IF(? = '', demand_summary, ?),
@@ -596,7 +708,9 @@ func (m *CustomerServiceModel) updateExistingLead(id int64, input *CustomerLeadC
 		WHERE id = ?
 	`,
 		strings.TrimSpace(input.Name), strings.TrimSpace(input.Name),
-		strings.TrimSpace(input.Phone), strings.TrimSpace(input.Phone),
+		strings.TrimSpace(input.Phone), strings.TrimSpace(input.PhoneSource), strings.TrimSpace(input.PhoneSource),
+		strings.TrimSpace(input.Phone), strings.TrimSpace(input.PhoneSource), input.PhoneConsentRevision,
+		strings.TrimSpace(input.Phone), strings.TrimSpace(input.PhoneSource), strings.TrimSpace(input.Phone),
 		strings.TrimSpace(input.Wechat), strings.TrimSpace(input.Wechat),
 		strings.TrimSpace(input.EnterpriseWechatContact), strings.TrimSpace(input.EnterpriseWechatContact),
 		strings.TrimSpace(input.DemandSummary), strings.TrimSpace(input.DemandSummary),
@@ -617,9 +731,13 @@ func (m *CustomerServiceModel) updateExistingLead(id int64, input *CustomerLeadC
 }
 
 func (m *CustomerServiceModel) CreateEvent(input *CustomerServiceEventCreateInput) (int64, error) {
+	return m.createEventOn(m.DB, input)
+}
+
+func (m *CustomerServiceModel) createEventOn(db customerLeadDB, input *CustomerServiceEventCreateInput) (int64, error) {
 	leadID := input.LeadID
 	if leadID <= 0 {
-		if existingID, err := m.findExistingLeadID(input.UserID, input.SessionNo, input.SourceTaskNo); err != nil {
+		if existingID, err := m.findExistingLeadIDOn(db, input.UserID, input.SessionNo, input.SourceTaskNo); err != nil {
 			return 0, err
 		} else if existingID > 0 {
 			leadID = existingID
@@ -629,7 +747,7 @@ func (m *CustomerServiceModel) CreateEvent(input *CustomerServiceEventCreateInpu
 	if err != nil {
 		return 0, err
 	}
-	result, err := m.DB.Exec(`
+	result, err := db.Exec(`
 		INSERT INTO customer_service_events (
 			user_id, lead_id, session_no, event_type, source, source_task_no,
 			intent_level, demand_summary, payload, created_at
@@ -652,6 +770,10 @@ func (m *CustomerServiceModel) CreateEvent(input *CustomerServiceEventCreateInpu
 }
 
 func (m *CustomerServiceModel) backfillLeadIDForEvents(leadID int64, userID int64, sessionNo, sourceTaskNo string) error {
+	return m.backfillLeadIDForEventsOn(m.DB, leadID, userID, sessionNo, sourceTaskNo)
+}
+
+func (m *CustomerServiceModel) backfillLeadIDForEventsOn(db customerLeadDB, leadID int64, userID int64, sessionNo, sourceTaskNo string) error {
 	if leadID <= 0 || userID <= 0 {
 		return nil
 	}
@@ -669,7 +791,7 @@ func (m *CustomerServiceModel) backfillLeadIDForEvents(leadID int64, userID int6
 		return nil
 	}
 	args = append([]interface{}{leadID}, args...)
-	_, err := m.DB.Exec(`
+	_, err := db.Exec(`
 		UPDATE customer_service_events
 		SET lead_id = ?
 		WHERE `+strings.Join(where, " AND "), args...)
@@ -690,7 +812,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	args := make([]interface{}, 0)
 	if keyword := strings.TrimSpace(params.Keyword); keyword != "" {
 		likeKeyword := "%" + keyword + "%"
-		where = append(where, `(name LIKE ? OR phone LIKE ? OR wechat LIKE ? OR enterprise_wechat_contact LIKE ? OR demand_summary LIKE ? OR source_task_no LIKE ?)`)
+		where = append(where, `(name LIKE ? OR `+CustomerLeadVisiblePhoneSQL("customer_leads")+` LIKE ? OR wechat LIKE ? OR enterprise_wechat_contact LIKE ? OR demand_summary LIKE ? OR source_task_no LIKE ?)`)
 		args = append(args, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword)
 	}
 	if params.UserID > 0 {
@@ -742,7 +864,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 	}
 
 	query := `
-		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
+		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
 		       COALESCE(remark, ''), created_at, updated_at,
@@ -756,7 +878,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		// 同一小程序用户只保留最近一条线索；user_id=0 的匿名线索仍一条一行。
 		// 先算 last_submitted_at，再用窗口函数挑每组最新一条并计数。
 		query = `
-		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
+		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
 		       COALESCE(remark, ''), created_at, updated_at, last_submitted_at, submission_count
@@ -797,6 +919,8 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 			&item.UserID,
 			&item.Name,
 			&item.Phone,
+			&item.PhoneSource,
+			&item.PhoneConsentRevision,
 			&item.Wechat,
 			&item.EnterpriseWechatContact,
 			&item.DemandSummary,
@@ -835,6 +959,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		return nil, 0, err
 	}
 	rows.Close()
+	m.applyLeadPhoneVisibility(list)
 	m.attachLeadCustomerIDs(list)
 	return list, total, nil
 }
@@ -848,7 +973,7 @@ type customerLeadDB interface {
 
 func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
 	item, err := scanCustomerLeadRow(m.DB.QueryRow(`
-		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
+		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
 		       COALESCE(remark, ''), created_at, updated_at
@@ -858,8 +983,88 @@ func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
 	if err != nil {
 		return nil, err
 	}
+	m.applyLeadPhoneVisibility([]*CustomerLead{item})
 	m.attachLeadCustomerIDs([]*CustomerLead{item})
 	return item, nil
+}
+
+func (m *CustomerServiceModel) applyLeadPhoneVisibility(list []*CustomerLead) {
+	if m == nil || m.DB == nil || len(list) == 0 {
+		return
+	}
+	userIDs := make([]int64, 0, len(list))
+	seen := map[int64]bool{}
+	for _, item := range list {
+		if item == nil || item.PhoneSource != CustomerLeadPhoneSourceAccountBound || item.UserID <= 0 || seen[item.UserID] {
+			continue
+		}
+		seen[item.UserID] = true
+		userIDs = append(userIDs, item.UserID)
+	}
+	states := map[int64]businessContactConsentState{}
+	if len(userIDs) > 0 {
+		placeholders := make([]string, len(userIDs))
+		args := make([]interface{}, len(userIDs))
+		for i, userID := range userIDs {
+			placeholders[i] = "?"
+			args[i] = userID
+		}
+		rows, err := m.DB.Query(`
+			SELECT user_id, accepted, revision, purpose, consent_version
+			FROM business_contact_consents
+			WHERE user_id IN (`+strings.Join(placeholders, ",")+`)
+		`, args...)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var userID int64
+				var state businessContactConsentState
+				if rows.Scan(&userID, &state.Accepted, &state.Revision, &state.Purpose, &state.Version) == nil {
+					states[userID] = state
+				}
+			}
+		}
+	}
+	for _, item := range list {
+		if item == nil || strings.TrimSpace(item.Phone) == "" {
+			continue
+		}
+		if customerLeadPhoneVisible(item, states[item.UserID]) {
+			continue
+		}
+		// Preserve the durable value for audit/migration, but do not expose an
+		// unknown, revoked or stale account-derived phone to CRM callers.
+		item.Phone = ""
+	}
+}
+
+func customerLeadPhoneVisible(item *CustomerLead, state businessContactConsentState) bool {
+	if item == nil || strings.TrimSpace(item.Phone) == "" {
+		return false
+	}
+	if item.PhoneSource == CustomerLeadPhoneSourceUserProvided {
+		return true
+	}
+	return item.PhoneSource == CustomerLeadPhoneSourceAccountBound &&
+		validBusinessContactConsent(state) &&
+		state.Revision == item.PhoneConsentRevision
+}
+
+func redactLeadPhoneOn(db customerLeadDB, item *CustomerLead) {
+	if item == nil || strings.TrimSpace(item.Phone) == "" || item.PhoneSource == CustomerLeadPhoneSourceUserProvided {
+		return
+	}
+	var state businessContactConsentState
+	if item.PhoneSource == CustomerLeadPhoneSourceAccountBound && item.UserID > 0 {
+		_ = db.QueryRow(`
+			SELECT accepted, revision, purpose, consent_version
+			FROM business_contact_consents
+			WHERE user_id = ?
+		`, item.UserID).Scan(&state.Accepted, &state.Revision, &state.Purpose, &state.Version)
+	}
+	if !customerLeadPhoneVisible(item, state) {
+		item.Phone = ""
+	}
 }
 
 // attachLeadCustomerIDs 补上「线索 → 客户档案」的客户 ID。
@@ -909,6 +1114,8 @@ func scanCustomerLeadRow(row *sql.Row) (*CustomerLead, error) {
 		&item.UserID,
 		&item.Name,
 		&item.Phone,
+		&item.PhoneSource,
+		&item.PhoneConsentRevision,
 		&item.Wechat,
 		&item.EnterpriseWechatContact,
 		&item.DemandSummary,
@@ -1273,7 +1480,7 @@ func (m *CustomerServiceModel) ApplyLeadAction(id int64, input CustomerLeadActio
 
 func (m *CustomerServiceModel) applyLeadActionOn(db customerLeadDB, id int64, input CustomerLeadActionInput) error {
 	lead, err := scanCustomerLeadRow(db.QueryRow(`
-		SELECT id, user_id, name, phone, wechat, enterprise_wechat_contact,
+		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
 		       COALESCE(remark, ''), created_at, updated_at
@@ -1283,6 +1490,7 @@ func (m *CustomerServiceModel) applyLeadActionOn(db customerLeadDB, id int64, in
 	if err != nil {
 		return err
 	}
+	redactLeadPhoneOn(db, lead)
 	status := NormalizeCustomerLeadStatus(input.Status)
 	analysis := m.AnalyzeLeadIntentFromInput(&CustomerLeadCreateInput{
 		UserID:                  lead.UserID,

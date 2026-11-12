@@ -167,7 +167,7 @@ test('401 clears the expired session and reopens the inline login card on protec
 });
 
 test('public browse pages discard an expired cached account without opening a profile gate', () => {
-  for (const route of ['pages/index/index', 'pages/template/template', 'pages/distribution/distribution']) {
+  for (const route of ['pages/index/index', 'pages/template/template', 'pages/distribution/distribution', 'pages/templatesquaredetails/templatesquaredetails', 'pages/contentreader/contentreader', 'pages/collectionreader/collectionreader', 'pages/designerhome/designerhome', 'pages/inspirationdetail/inspirationdetail']) {
     const delivered = [];
     const h = harness({ route, token: 'expired-account' }); h.guard.install();
     wxCall(h, {
@@ -186,7 +186,7 @@ test('public browse pages discard an expired cached account without opening a pr
 });
 
 test('public browse pages keep a valid incomplete account on 428 without forcing profile completion', () => {
-  const h = harness({ route: 'pages/template/template', token: 'incomplete-account' }); h.guard.install();
+  const h = harness({ route: 'pages/templatesquaredetails/templatesquaredetails', token: 'incomplete-account' }); h.guard.install();
   wxCall(h, { url: 'https://api.jiadilingguang.com/api/v1/miniprogram/templates' });
   h.calls[0].success({ statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } });
   assert.equal(h.storage.token, 'incomplete-account');
@@ -194,6 +194,20 @@ test('public browse pages keep a valid incomplete account on 428 without forcing
   assert.deepEqual(h.blocked, []);
   assert.deepEqual(h.navigations, []);
   assert.deepEqual(h.guardChecks, []);
+});
+
+test('public designer and inspiration details keep incomplete accounts out of the profile gate', () => {
+  for (const route of ['pages/designerhome/designerhome', 'pages/inspirationdetail/inspirationdetail']) {
+    const h = harness({ route, token: 'incomplete-account' }); h.guard.install();
+    wxCall(h, { url: route.includes('designerhome')
+      ? 'https://api.jiadilingguang.com/api/v1/miniprogram/designers/9/homepage'
+      : 'https://api.jiadilingguang.com/api/v1/miniprogram/inspirations/9' });
+    h.calls[0].success({ statusCode: 428, data: { code: 428, msg: '请先补充头像和昵称' } });
+    assert.equal(h.storage.token, 'incomplete-account', route);
+    assert.deepEqual(h.blocked, [], route);
+    assert.deepEqual(h.navigations, [], route);
+    assert.deepEqual(h.guardChecks, [], route);
+  }
 });
 
 test('the first anonymous tracking entry failure on a public page stays anonymous and never opens login', () => {

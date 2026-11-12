@@ -292,6 +292,32 @@ test('privacy copy and the settings modal no longer claim opt-in or a disabled d
   assert.match(ops, /不要.*修改\s*`?TRACKING_CONSENT_VERSION`?/);
 });
 
+test('anonymous privacy page exposes the same analytics switch and explains account-linked visibility', () => {
+  const privacyTs=fs.readFileSync(path.join(root,'pages/privacy/privacy.ts'),'utf8');
+  const privacyJs=fs.readFileSync(path.join(root,'pages/privacy/privacy.js'),'utf8');
+  const privacyWxml=fs.readFileSync(path.join(root,'pages/privacy/privacy.wxml'),'utf8');
+  for(const [name,code] of [['ts',privacyTs],['js',privacyJs]]){
+    assert.match(code,/trackingConsent\.refreshConfig\(\)/,name+' privacy page refreshes current config');
+    assert.match(code,/trackingConsent\.consented\(\)/,name+' privacy page derives the real switch state');
+    assert.match(code,/trackingConsent\.setConsent\(false\)/,name+' privacy page can close analytics anonymously');
+    assert.match(code,/trackingConsent\.showConsentChoices\(this\)/,name+' privacy page can reopen through the reviewed notice');
+    assert.match(code,/登录后[^'\n]*关联账号/,name+' discloses account linkage');
+    assert.match(code,/分享方及运营人员/,name+' discloses who can see linked visits');
+    assert.match(code,/意向判断/,name+' discloses intent use');
+  }
+  assert.match(privacyWxml,/wx:if="\{\{policyType === 'privacy'\}\}"/,'control only appears on the privacy policy');
+  assert.match(privacyWxml,/bindchange="onToggleTracking"/);
+  assert.match(privacyWxml,/checked="\{\{trackingEnabled\}\}"/);
+  assert.match(privacyWxml,/关闭不影响公开浏览、播放和普通分享/);
+});
+
+test('settings copy states the default-on policy instead of calling it opt-in',()=>{
+  const settings=fs.readFileSync(path.join(root,'pages/settings/settings.wxml'),'utf8');
+  assert.match(settings,/默认开启/);
+  assert.doesNotMatch(settings,/自愿开启/);
+  assert.match(settings,/分享方及运营人员/);
+});
+
 // T7.1：一次读取异常后恢复，仍必须尊重存量「明确关闭」，不能被默认开启覆盖。
 test('a transient consent read failure never overrides an explicit decline',async()=>{
   const t=runtime({storage:{share_tracking_consent_choice_v1:{accepted:false,explicit:true,version:'notice-v1',notice}},failChoiceReadOnce:true});

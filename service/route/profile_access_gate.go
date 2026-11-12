@@ -66,6 +66,7 @@ var miniprogramProfilePublicTransport = map[string]map[string]bool{
 		miniprogramAPIPrefix + "/designers":            true,
 	},
 	http.MethodPost: {
+		miniprogramAPIPrefix + "/public-share-links":    true,
 		miniprogramAPIPrefix + "/tracking/entry":        true,
 		miniprogramAPIPrefix + "/tracking/events/batch": true,
 		miniprogramAPIPrefix + "/tracking/shares":       true,
@@ -161,14 +162,80 @@ func positiveIDSegment(path, prefix, suffix string) bool {
 	return err == nil && id > 0
 }
 
+func publicTrackingReadPath(method, path string) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	prefix := miniprogramAPIPrefix + "/tracking/"
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	parts := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	positive := func(value string) bool {
+		n, err := strconv.Atoi(value)
+		return err == nil && n >= 0
+	}
+	validID := func(value string, min, max int) bool {
+		if len(value) < min || len(value) > max {
+			return false
+		}
+		for _, char := range value {
+			if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-') {
+				return false
+			}
+		}
+		return true
+	}
+	if len(parts) == 2 && parts[0] == "media" && validID(parts[1], 32, 32) {
+		return true
+	}
+	if method == http.MethodHead {
+		if len(parts) != 8 || parts[0] != "project-collections" || !validID(parts[1], 8, 128) || parts[2] != "versions" || parts[4] != "items" || !positive(parts[5]) || parts[6] != "media" || !validID(parts[7], 8, 128) {
+			return false
+		}
+		version, err := strconv.Atoi(parts[3])
+		return err == nil && version > 0
+	}
+	if method != http.MethodGet {
+		return false
+	}
+	if len(parts) == 4 && parts[0] == "contents" && validID(parts[1], 8, 128) && parts[2] == "versions" {
+		version, err := strconv.Atoi(parts[3])
+		return err == nil && version > 0
+	}
+	if len(parts) < 4 || parts[0] != "project-collections" || !validID(parts[1], 8, 128) || parts[2] != "versions" {
+		return false
+	}
+	version, err := strconv.Atoi(parts[3])
+	if err != nil || version < 1 {
+		return false
+	}
+	if len(parts) == 4 {
+		return true
+	}
+	if len(parts) < 6 || parts[4] != "items" || !positive(parts[5]) {
+		return false
+	}
+	if len(parts) == 6 || len(parts) == 7 && (parts[6] == "content") {
+		return true
+	}
+	return len(parts) == 8 && parts[6] == "media" && validID(parts[7], 8, 128)
+}
+
 func isMiniprogramProfilePublicTransport(method, path string) bool {
 	if miniprogramProfilePublicTransport[method][path] {
+		return true
+	}
+	if publicTrackingReadPath(method, path) {
 		return true
 	}
 	if method != http.MethodGet {
 		return false
 	}
-	return positiveIDSegment(path, miniprogramAPIPrefix+"/ai-tools/", "") ||
+	return positiveIDSegment(path, miniprogramAPIPrefix+"/templates/", "") ||
+		positiveIDSegment(path, miniprogramAPIPrefix+"/designers/", "/homepage") ||
+		positiveIDSegment(path, miniprogramAPIPrefix+"/inspirations/", "") ||
+		positiveIDSegment(path, miniprogramAPIPrefix+"/ai-tools/", "") ||
 		pathSingleSegmentBetween(path, miniprogramAPIPrefix+"/ai-tools/code/", "") != ""
 }
 

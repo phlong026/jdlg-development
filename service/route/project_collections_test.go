@@ -1,9 +1,13 @@
 package route
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -115,6 +119,76 @@ func TestProjectCollectionRoutesManagePublishAndPublicFixedItem(t *testing.T) {
 	contentRec = workbenchRequest(t, router, http.MethodGet, publicPath+"/items/0/content", nil)
 	if publicRec.Code != http.StatusOK || strings.Contains(publicRec.Body.String(), "案例乙") || targetRec.Code != http.StatusNotFound || contentRec.Code != http.StatusNotFound {
 		t.Fatalf("revoked public=%d %s target=%d %s content=%d %s", publicRec.Code, publicRec.Body.String(), targetRec.Code, targetRec.Body.String(), contentRec.Code, contentRec.Body.String())
+	}
+}
+
+func TestPublishedProjectCollectionMediaSupportsHeadRangeAndRevocation(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	t.Setenv("CONTENT_MEDIA_STORAGE", "filesystem")
+	mediaDir := t.TempDir()
+	t.Setenv("TRACKING_MEDIA_DIR", mediaDir)
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	router, svc := newProjectCollectionRouteFixture(t, &scope)
+	video := []byte("0123456789abcdef")
+	mediaID := strings.Repeat("c", 32)
+	if err := os.WriteFile(filepath.Join(mediaDir, mediaID), video, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AddMedia(context.Background(), scope, tracking.Asset{ID: mediaID, Kind: "video", MIME: "video/mp4", Width: 1280, Height: 720, URL: "/api/v1/miniprogram/tracking/media/" + mediaID}, "owner-a"); err != nil {
+		t.Fatal(err)
+	}
+	draft, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "合集视频", Body: "视频正文", BodyFormat: "plain", Rights: "own", Owner: "owner-a", MediaIDs: []string{mediaID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := svc.Preview(context.Background(), scope, draft.ID, draft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishedResult, err := svc.Publish(context.Background(), scope, draft.ID, draft.Revision, preview["preview_token"].(string), "collection-media-source-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := publishedResult["content"].(tracking.Content)
+	collection, err := svc.SaveProjectCollection(context.Background(), scope, "", tracking.ProjectCollectionDraft{
+		Title: "视频合集", Owner: "owner-a", IdempotencyKey: "collection-media-create",
+		Items: []tracking.ProjectCollectionItemInput{{ContentID: source.ID, ContentVersion: source.Version}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collectionPreview, err := svc.PreviewProjectCollection(context.Background(), scope, collection.ID, collection.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishedCollection, err := svc.PublishProjectCollection(context.Background(), scope, collection.ID, collection.Revision, collectionPreview.PreviewToken, "collection-media-publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaPath := "/public/project-collections/" + collection.ID + "/versions/" + strconv.Itoa(publishedCollection.Version) + "/items/0/media/" + mediaID
+
+	headResponse := httptest.NewRecorder()
+	router.ServeHTTP(headResponse, httptest.NewRequest(http.MethodHead, mediaPath, nil))
+	if headResponse.Code != http.StatusOK || headResponse.Body.Len() != 0 || headResponse.Header().Get("Content-Length") != strconv.Itoa(len(video)) {
+		t.Fatalf("anonymous HEAD=%d length=%q body=%q", headResponse.Code, headResponse.Header().Get("Content-Length"), headResponse.Body.String())
+	}
+	rangeRequest := httptest.NewRequest(http.MethodGet, mediaPath, nil)
+	rangeRequest.Header.Set("Range", "bytes=4-7")
+	rangeResponse := httptest.NewRecorder()
+	router.ServeHTTP(rangeResponse, rangeRequest)
+	if rangeResponse.Code != http.StatusPartialContent || !bytes.Equal(rangeResponse.Body.Bytes(), video[4:8]) || rangeResponse.Header().Get("Content-Range") == "" {
+		t.Fatalf("anonymous Range=%d headers=%v body=%q", rangeResponse.Code, rangeResponse.Header(), rangeResponse.Body.String())
+	}
+
+	if _, err = svc.Revoke(context.Background(), scope, source.ID, source.Revision, "撤回视频", "collection-media-source-revoke"); err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(method, mediaPath, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("revoked %s=%d body=%q", method, response.Code, response.Body.String())
+		}
 	}
 }
 

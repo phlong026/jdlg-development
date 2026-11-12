@@ -30,3 +30,17 @@ func TestCRMSourcePayloadCarriesIntent(t *testing.T) {
 		}
 	}
 }
+
+func TestCRMSourceUsesConsentFilteredPhoneForPayloadAndCheckpoint(t *testing.T) {
+	source, err := os.ReadFile("crm_sources.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(source)
+	if !strings.Contains(content, `CustomerLeadExportablePhoneSQL("l")`) {
+		t.Fatal("CRM source must export only user-provided phone numbers")
+	}
+	if strings.Contains(content, "CONCAT_WS('|',l.name,l.phone") {
+		t.Fatal("CRM checkpoint hash must not use the raw lead phone")
+	}
+}

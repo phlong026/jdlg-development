@@ -18,6 +18,11 @@ const anonymousBusinessRoutes = new Set([
   'pages/index/index',
   'pages/template/template',
   'pages/distribution/distribution',
+  'pages/templatesquaredetails/templatesquaredetails',
+  'pages/contentreader/contentreader',
+  'pages/collectionreader/collectionreader',
+  'pages/designerhome/designerhome',
+  'pages/inspirationdetail/inspirationdetail',
   'pages/aigenerate/aigenerate',
   'pages/aivideo/aivideo',
   'pages/aitools/aitools',
@@ -137,7 +142,7 @@ for (const route of anonymousBusinessRoutes) {
   });
 }
 test('only the approved browse and AI input pages run content lifecycle before profile approval', () => {
-  assert.equal(anonymousBusinessRoutes.size, 11);
+  assert.equal(anonymousBusinessRoutes.size, 16);
   for (const route of businessRoutes) {
     const h = harness(route); h.mount({ route });
     if (anonymousBusinessRoutes.has(route)) {

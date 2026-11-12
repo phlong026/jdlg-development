@@ -1,9 +1,14 @@
 package route
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
+	"service/model"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 const publicDesignerQualitySchema = `
@@ -94,6 +99,134 @@ func TestDesignerPublicDisplayNameNeverLeaksGeneratedAccountNames(t *testing.T) 
 		if got := designerPublicDisplayName(test.username, test.nickname); got != test.want {
 			t.Fatalf("public name=%q want=%q", got, test.want)
 		}
+	}
+}
+
+func TestPublicDesignerHomepageProjectionExcludesPrivateBusinessMetrics(t *testing.T) {
+	payload := gin.H{
+		"public_visible": true,
+		"profile": gin.H{
+			"user_id": int64(7), "name": "林设计", "bio_text": "证件说明：身份证号", "cert_status": "approved",
+		},
+		"public_profile": gin.H{
+			"user_id": int64(7), "name": "林设计", "bio_text": "个人信息：专注乡墅设计",
+		},
+		"stats": gin.H{"total_works": int64(3), "total_orders": int64(9), "month_orders": int64(2), "total_earnings": int64(888)},
+		"service_config": gin.H{
+			"service_type": "乡墅设计", "created_at_text": "2026年1月2日", "fee": int64(99),
+			"service_intro": "设计服务", "service_enabled": true,
+			"total_earnings": int64(888), "month_earnings": int64(66), "total_orders": int64(9),
+		},
+		"public_service_config": gin.H{
+			"service_type": "乡墅设计", "fee": int64(99), "service_intro": "设计服务", "service_enabled": true,
+		},
+		"review_summary": gin.H{"positive_count": int64(2), "negative_count": int64(0)},
+		"works":          []gin.H{{"id": int64(4)}},
+		"reviews": []gin.H{{
+			"id": int64(5), "name": "评价人", "avatar": "https://example.test/avatar.jpg",
+			"score": 5, "content": "服务很好", "sentiment": "positive",
+			"related_title": "客户私密项目", "related_template_id": int64(99),
+		}},
+	}
+
+	public := publicDesignerHomepagePayload(payload)
+	stats, ok := public["stats"].(gin.H)
+	if !ok || stats["total_works"] != int64(3) {
+		t.Fatalf("public stats = %#v", public["stats"])
+	}
+	for _, key := range []string{"total_orders", "month_orders", "total_earnings", "month_earnings"} {
+		if _, exists := stats[key]; exists {
+			t.Fatalf("private stat %s leaked: %#v", key, stats)
+		}
+	}
+	service, ok := public["service_config"].(gin.H)
+	if !ok || service["fee"] != int64(99) || service["service_enabled"] != true {
+		t.Fatalf("public service = %#v", public["service_config"])
+	}
+	for _, key := range []string{"total_orders", "total_earnings", "month_earnings"} {
+		if _, exists := service[key]; exists {
+			t.Fatalf("private service metric %s leaked: %#v", key, service)
+		}
+	}
+	if _, exists := service["created_at_text"]; exists {
+		t.Fatalf("account or certification date leaked: %#v", service)
+	}
+	reviews, ok := public["reviews"].([]gin.H)
+	if !ok || len(reviews) != 1 || reviews[0]["content"] != "服务很好" {
+		t.Fatalf("public reviews = %#v", public["reviews"])
+	}
+	if reviews[0]["name"] != "匿名用户" || reviews[0]["avatar"] != "" {
+		t.Fatalf("reviewer identity leaked: %#v", reviews[0])
+	}
+	if _, exists := reviews[0]["related_title"]; exists {
+		t.Fatalf("private order context leaked: %#v", reviews[0])
+	}
+	profile, ok := public["profile"].(gin.H)
+	if !ok || profile["bio_text"] != "个人信息：专注乡墅设计" {
+		t.Fatalf("public profile = %#v", public["profile"])
+	}
+	for _, key := range []string{"cert_status", "designer_visible"} {
+		if _, exists := profile[key]; exists {
+			t.Fatalf("internal profile field %s leaked: %#v", key, profile)
+		}
+	}
+	if strings.Contains(profile["bio_text"].(string), "证件") {
+		t.Fatalf("certification remark leaked: %#v", profile)
+	}
+}
+
+func TestDesignerHomepageAdmissionMatchesPublicDirectoryBoundary(t *testing.T) {
+	ordinary := &model.User{UserType: "miniprogram", Username: "普通用户"}
+	pendingOnly := &model.UserProfile{Nickname: "待审设计师", DesignerVisible: true}
+	if isDesignerPublicVisible(ordinary, nil, 0) {
+		t.Fatal("ordinary account without a public designer profile became enumerable")
+	}
+	if isDesignerPublicVisible(ordinary, pendingOnly, 0) {
+		t.Fatal("a name or pending certification alone became a public designer homepage")
+	}
+	hidden := &model.UserProfile{
+		Nickname: "隐藏设计师", Avatar: "https://cdn.example/avatar.jpg", DesignerBio: "乡墅设计", DesignerVisible: false,
+	}
+	if isDesignerPublicVisible(ordinary, hidden, 0) {
+		t.Fatal("designer_visible=false became a public designer homepage")
+	}
+	ready := &model.UserProfile{
+		Nickname: "公开设计师", Avatar: "https://cdn.example/avatar.jpg", DesignerBio: "乡墅设计", DesignerVisible: true,
+	}
+	if !isDesignerPublicVisible(ordinary, ready, 0) {
+		t.Fatal("a complete public designer profile was rejected")
+	}
+	creator := &model.User{UserType: "miniprogram", Username: "作品设计师"}
+	if !isDesignerPublicVisible(creator, nil, 1) {
+		t.Fatal("a named creator with a published work was rejected")
+	}
+}
+
+func TestPublicDesignerHomepageReturns404ForNonPublicAccounts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		name    string
+		user    *model.User
+		profile *model.UserProfile
+		works   int64
+	}{
+		{name: "ordinary", user: &model.User{UserType: "miniprogram", Username: "普通用户"}},
+		{name: "pending-only", user: &model.User{UserType: "miniprogram", Username: "待审用户"}, profile: &model.UserProfile{Nickname: "待审设计师", DesignerVisible: true}},
+		{name: "hidden", user: &model.User{UserType: "miniprogram", Username: "隐藏设计师"}, profile: &model.UserProfile{Nickname: "隐藏设计师", Avatar: "https://cdn.example/avatar.jpg", DesignerBio: "乡墅设计", DesignerVisible: false}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router := gin.New()
+			router.GET("/designers/:id/homepage", func(c *gin.Context) {
+				servePublicDesignerHomepage(c, func(int64) (gin.H, error) {
+					return gin.H{"public_visible": isDesignerPublicVisible(test.user, test.profile, test.works)}, nil
+				})
+			})
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/designers/9/homepage", nil))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
 	}
 }
 

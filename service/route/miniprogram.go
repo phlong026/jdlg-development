@@ -906,14 +906,91 @@ func buildDesignerReviewRelatedInfo(order *model.UserOrder) (string, string, int
 	}
 }
 
-func isDesignerPublicVisible(user *model.User, profileData *model.UserProfile, latestCert *model.CertificationApplication) bool {
+func usableDesignerName(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.HasPrefix(strings.ToLower(value), "wx_") {
+		return false
+	}
+	for _, placeholder := range designerPlaceholderNames {
+		if value == placeholder {
+			return false
+		}
+	}
+	return true
+}
+
+func publicDesignerProfileReady(profileData *model.UserProfile) bool {
+	if profileData == nil {
+		return false
+	}
+	avatar := strings.ToLower(strings.TrimSpace(profileData.Avatar))
+	if !(strings.HasPrefix(avatar, "https://") || strings.HasPrefix(avatar, "http://")) ||
+		strings.Contains(avatar, "/assets/images/default-avatar") || strings.Contains(avatar, "/assets/images/home.jpg") {
+		return false
+	}
+	meaningful := func(value string, placeholders ...string) bool {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return false
+		}
+		for _, placeholder := range placeholders {
+			if value == placeholder {
+				return false
+			}
+		}
+		return true
+	}
+	return meaningful(profileData.ServiceTitle, "待完善", "未填写", "设计师", "室内设计师") ||
+		meaningful(profileData.DesignerBio, "待完善", "未填写", "暂无简介", "设计师", "室内设计师", "个人信息：设计师", "个人信息：室内设计师") ||
+		meaningful(profileData.SpecialtyStyles, "待完善", "未填写", "专业领域：待完善", "专业领域：未填写")
+}
+
+func isDesignerPublicVisible(user *model.User, profileData *model.UserProfile, publishedWorks int64) bool {
 	if user == nil || strings.TrimSpace(user.UserType) != "miniprogram" {
 		return false
 	}
 	if profileData != nil && !profileData.DesignerVisible {
 		return false
 	}
-	return true
+	if !usableDesignerName(user.Username) && (profileData == nil || !usableDesignerName(profileData.Nickname)) {
+		return false
+	}
+	return publishedWorks > 0 || publicDesignerProfileReady(profileData)
+}
+
+func buildPublicDesignerProfile(user *model.User, profileData *model.UserProfile) gin.H {
+	nickname, avatar, title, bio, specialties, region := "", "", "室内设计师", "", "", ""
+	experienceYears := int64(0)
+	if profileData != nil {
+		nickname = profileData.Nickname
+		avatar = sanitizePublicImageURL(profileData.Avatar)
+		if candidate := strings.TrimSpace(profileData.ServiceTitle); candidate != "" && candidate != "待完善" && candidate != "未填写" {
+			title = candidate
+		}
+		bio = strings.TrimSpace(profileData.DesignerBio)
+		specialties = profileData.SpecialtyStyles
+		region = profileData.DesignerRegion
+		experienceYears = profileData.DesignerExperienceYears
+	}
+	if bio == "" {
+		bio = title
+	}
+	username := ""
+	userID := int64(0)
+	if user != nil {
+		username = user.Username
+		userID = user.ID
+	}
+	return gin.H{
+		"user_id":          userID,
+		"name":             designerPublicDisplayName(username, nickname),
+		"avatar":           avatar,
+		"title":            title,
+		"experience_text":  designerExperienceText(experienceYears),
+		"bio_text":         "个人信息：" + bio,
+		"specialties_text": buildDesignerSpecialtiesText(specialties),
+		"designer_region":  strings.TrimSpace(region),
+	}
 }
 
 func listPublicDesignerUserIDs(userDBModel *model.UserModel, keyword, mainTab string, limit, offset int) ([]int64, int64, error) {
@@ -1062,9 +1139,10 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 		if item == nil {
 			continue
 		}
-		image := strings.TrimSpace(item.PreviewURL)
+		thumbnail, previewURL, _ := publicTemplateMediaFields(item)
+		image := strings.TrimSpace(previewURL)
 		if image == "" {
-			image = strings.TrimSpace(item.Thumbnail)
+			image = strings.TrimSpace(thumbnail)
 		}
 		worksOut = append(worksOut, gin.H{
 			"id":              item.ID,
@@ -1115,14 +1193,16 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 		})
 	}
 
-	publicVisible := isDesignerPublicVisible(user, profileData, latestCert)
+	publicVisible := isDesignerPublicVisible(user, profileData, totalWorks)
 	designerVisible := true
 	if profileData != nil {
 		designerVisible = profileData.DesignerVisible
 	}
+	publicProfile := buildPublicDesignerProfile(user, profileData)
 
 	return gin.H{
 		"public_visible": publicVisible,
+		"public_profile": publicProfile,
 		"profile": gin.H{
 			"user_id":          targetUserID,
 			"name":             displayName,
@@ -1152,6 +1232,12 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 			"service_intro":   serviceIntro,
 			"service_enabled": serviceEnabled,
 		},
+		"public_service_config": gin.H{
+			"service_type":    publicProfile["title"],
+			"fee":             serviceFee,
+			"service_intro":   serviceIntro,
+			"service_enabled": serviceEnabled,
+		},
 		"review_summary": gin.H{
 			"positive_count": positiveCount,
 			"negative_count": negativeCount,
@@ -1159,6 +1245,62 @@ func buildDesignerCenterPayload(targetUserID int64, userDBModel *model.UserModel
 		"works":   worksOut,
 		"reviews": reviewsOut,
 	}, nil
+}
+
+// Public designer pages deliberately omit order and earnings data. The same
+// center payload powers the owner's private workbench, so the public route must
+// project an explicit allow-list rather than serialize that payload directly.
+func publicDesignerHomepagePayload(payload gin.H) gin.H {
+	stats, _ := payload["stats"].(gin.H)
+	serviceConfig, _ := payload["public_service_config"].(gin.H)
+	reviews, _ := payload["reviews"].([]gin.H)
+	publicReviews := make([]gin.H, 0, len(reviews))
+	for _, review := range reviews {
+		publicReviews = append(publicReviews, gin.H{
+			"id":         review["id"],
+			"name":       "匿名用户",
+			"avatar":     "",
+			"score":      review["score"],
+			"content":    review["content"],
+			"sentiment":  review["sentiment"],
+			"created_at": review["created_at"],
+		})
+	}
+	return gin.H{
+		"public_visible": payload["public_visible"],
+		"profile":        payload["public_profile"],
+		"stats": gin.H{
+			"total_works": stats["total_works"],
+		},
+		"service_config": gin.H{
+			"service_type":    serviceConfig["service_type"],
+			"fee":             serviceConfig["fee"],
+			"service_intro":   serviceConfig["service_intro"],
+			"service_enabled": serviceConfig["service_enabled"],
+		},
+		"review_summary": payload["review_summary"],
+		"works":          payload["works"],
+		"reviews":        publicReviews,
+	}
+}
+
+func servePublicDesignerHomepage(c *gin.Context, build func(int64) (gin.H, error)) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的设计师ID"})
+		return
+	}
+	data, err := build(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "设计师不存在"})
+		return
+	}
+	visible, ok := data["public_visible"].(bool)
+	if !ok || !visible {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "该设计师主页暂未公开"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": publicDesignerHomepagePayload(data)})
 }
 
 func buildEnterpriseWechatQRCodeURL(baseURL, ticket string) string {
@@ -1574,23 +1716,9 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, codeSessionModel *model.CodeSess
 	})
 
 	r.GET("/designers/:id/homepage", func(c *gin.Context) {
-		userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-		if err != nil || userID <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "无效的设计师ID"})
-			return
-		}
-
-		data, err := buildDesignerCenterPayload(userID, userDBModel, templateModel, userProfileModel, certificationModel, stoneRecordModel, userOrderModel, designerReviewModel)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "设计师不存在"})
-			return
-		}
-		if visible, ok := data["public_visible"].(bool); ok && !visible {
-			c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "该设计师主页暂未公开"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "success", "data": data})
+		servePublicDesignerHomepage(c, func(userID int64) (gin.H, error) {
+			return buildDesignerCenterPayload(userID, userDBModel, templateModel, userProfileModel, certificationModel, stoneRecordModel, userOrderModel, designerReviewModel)
+		})
 	})
 
 	r.GET("/user/designers/:id/follow", simpleTokenAuth, func(c *gin.Context) {

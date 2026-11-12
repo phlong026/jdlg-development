@@ -9,7 +9,7 @@ import (
 func miniprogramBoundaryFixture(t *testing.T) *Service {
 	t.Helper()
 	service, _ := fixture(t)
-	for _, route := range []string{"pages/index/index", "pages/template/template", "pages/distribution/distribution", "pages/report/landing", "pages/projectnoteview/projectnoteview", "pages/aitools/aitools", "pages/aitooldetail/aitooldetail", "pages/aitoolworkbench/aitoolworkbench", "pages/aigenerate/aigenerate", "pages/aivideo/aivideo", "pages/aicost/aicost", "pages/newminnantool/newminnantool", "pages/allrounddesign/allrounddesign"} {
+	for _, route := range []string{"pages/index/index", "pages/template/template", "pages/templatesquaredetails/templatesquaredetails", "pages/distribution/distribution", "pages/contentreader/contentreader", "pages/collectionreader/collectionreader", "pages/designerhome/designerhome", "pages/inspirationdetail/inspirationdetail", "pages/report/landing", "pages/projectnoteview/projectnoteview", "pages/aitools/aitools", "pages/aitooldetail/aitooldetail", "pages/aitoolworkbench/aitoolworkbench", "pages/aigenerate/aigenerate", "pages/aivideo/aivideo", "pages/aicost/aicost", "pages/newminnantool/newminnantool", "pages/allrounddesign/allrounddesign"} {
 		service.Config.Routes[route] = Route{Title: route, Public: true}
 	}
 	return service
@@ -17,11 +17,21 @@ func miniprogramBoundaryFixture(t *testing.T) *Service {
 
 func TestEnterMiniprogramRestrictsOnlyAnonymousRoutes(t *testing.T) {
 	service := miniprogramBoundaryFixture(t)
-	input := func(route, client string) EntryInput {
-		return EntryInput{Route: route, Client: client, Anonymous: "anonymous-boundary", Consent: "v1"}
+	service.ResolveLegacy = func(route string, id int64) (LegacyMetadata, error) {
+		if route != "pages/templatesquaredetails/templatesquaredetails" || id != 9 {
+			return LegacyMetadata{}, fail(http.StatusNotFound, "原内容不可访问")
+		}
+		return LegacyMetadata{Title: "公开模板", Type: "template", VersionSeed: "published-template-9"}, nil
 	}
-	publicRoutes := []string{"pages/index/index", "pages/template/template", "pages/distribution/distribution"}
-	publicClients := []string{"client-public-0001", "client-public-0002", "client-public-0003"}
+	input := func(route, client string) EntryInput {
+		content := ""
+		if route == "pages/templatesquaredetails/templatesquaredetails" {
+			content = LegacyID(route, 9)
+		}
+		return EntryInput{Route: route, Content: content, Client: client, Anonymous: "anonymous-boundary", Consent: "v1"}
+	}
+	publicRoutes := []string{"pages/index/index", "pages/template/template", "pages/templatesquaredetails/templatesquaredetails", "pages/distribution/distribution"}
+	publicClients := []string{"client-public-0001", "client-public-0002", "client-public-0003", "client-public-0004"}
 	for index, route := range publicRoutes {
 		entry, err := service.EnterMiniprogram(context.Background(), input(route, publicClients[index]), 0)
 		if err != nil || entry.Account != 0 || entry.Route != route || entry.Token == "" {
@@ -39,6 +49,17 @@ func TestEnterMiniprogramRestrictsOnlyAnonymousRoutes(t *testing.T) {
 	}
 	if entry, err := service.EnterMiniprogram(context.Background(), input("pages/report/landing", "client-protected-user"), 42, MiniprogramProfileAccess{Complete: true}); err != nil || entry.Account != 42 {
 		t.Fatalf("authenticated entry=%+v err=%v", entry, err)
+	}
+}
+
+func TestPublishedReadersAreMiniprogramPublicRoutes(t *testing.T) {
+	for _, route := range []string{"pages/contentreader/contentreader", "pages/collectionreader/collectionreader", "pages/designerhome/designerhome", "pages/inspirationdetail/inspirationdetail"} {
+		if !MiniprogramPublicRoute(route) {
+			t.Fatalf("published reader %s requires a profile gate", route)
+		}
+	}
+	if MiniprogramPublicRoute("pages/projectnoteview/projectnoteview") {
+		t.Fatal("directed project-note reader became public")
 	}
 }
 

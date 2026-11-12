@@ -341,21 +341,53 @@ Page({
         }
         this.setData({ loading: true, contentReady: false });
         try {
-            const data = await new Promise((resolve, reject) => {
+            const requestHomepage = (path, token = '') => new Promise((resolve, reject) => {
                 wx.request({
-                    url: `${API_BASE_URL}/api/v1/miniprogram/designers/${userId}/homepage`,
+                    url: `${API_BASE_URL}${path}`,
                     method: 'GET',
+                    header: token ? { token } : {},
                     success: (res) => {
                         const body = (res.data || {});
                         if (res.statusCode === 200 && body.code === 0) {
                             resolve(body.data || {});
                             return;
                         }
-                        reject(new Error(body.msg || `请求失败: ${res.statusCode}`));
+                        reject(Object.assign(new Error(body.msg || `请求失败: ${res.statusCode}`), {
+                            statusCode: Number(res.statusCode) || Number(body.code) || 0,
+                        }));
                     },
                     fail: reject,
                 });
             });
+            const publicPath = `/api/v1/miniprogram/designers/${userId}/homepage`;
+            let data;
+            const privateToken = this.getAuthToken();
+            if (this.data.isSelfHomepage && privateToken) {
+                try {
+                    data = await requestHomepage('/api/v1/miniprogram/user/designer-center', privateToken);
+                    const sameRoute = this.data.isSelfHomepage && Number(this.data.userId || 0) === userId;
+                    const sameAccount = this.getAuthToken() === privateToken;
+                    const responseUserId = Number(data?.profile?.user_id || 0);
+                    if (!sameRoute || !sameAccount || responseUserId !== userId) {
+                        throw Object.assign(new Error('账号或设计师主页已变更，请重新进入'), { statusCode: 409 });
+                    }
+                }
+                catch (error) {
+                    const statusCode = Number(error?.statusCode || 0);
+                    const currentToken = this.getAuthToken();
+                    const sessionExpired = statusCode === 401 && currentToken === '';
+                    const sameAccount = currentToken === privateToken;
+                    if ((sessionExpired || sameAccount) && [401, 403, 428].includes(statusCode)) {
+                        data = await requestHomepage(publicPath);
+                    }
+                    else {
+                        throw error;
+                    }
+                }
+            }
+            else {
+                data = await requestHomepage(publicPath);
+            }
             const works = Array.isArray(data.works) ? data.works : [];
             const mappedWorks = works.map((item) => ({
                 id: Number(item?.id) || 0,

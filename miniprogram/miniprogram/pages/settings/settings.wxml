@@ -176,7 +176,7 @@
               </view>
               <view class="item-texts">
                 <text class="item-title">访问分析</text>
-                <text class="item-desc">自愿开启；授权人员可见昵称、头像及公开页访问记录，关闭不影响浏览</text>
+                <text class="item-desc">默认开启；授权的内容分享方及运营人员可见关联后的昵称、头像及公开页访问记录，关闭不影响浏览和普通分享</text>
               </view>
             </view>
             <view class="item-tail">

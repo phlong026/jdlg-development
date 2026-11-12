@@ -174,7 +174,7 @@ func TestMiniprogramProfileGateUsesRealTokenAuthenticationChain(t *testing.T) {
 	if err := function.InitCrypto("", "", base64.StdEncoding.EncodeToString([]byte("0123456789abcdef"))); err != nil {
 		t.Fatal(err)
 	}
-	const path = "/api/v1/miniprogram/templates/9"
+	const path = "/api/v1/miniprogram/project-notes/projects"
 	tests := []struct {
 		name             string
 		profile          miniprogramProfile
@@ -224,7 +224,7 @@ func TestMiniprogramProfileGateUsesRealTokenAuthenticationChain(t *testing.T) {
 				miniprogramProfileAuthentication(TokenAuthRequired(model.NewCodeSessionRedisModel(db, redisClient))),
 				miniprogramProfileCompleteness(miniprogramProfileLoaderFromModel(model.NewUserProfileModel(db))),
 			)
-			v1.GET("/miniprogram/templates/9", func(c *gin.Context) {
+			v1.GET("/miniprogram/project-notes/projects", func(c *gin.Context) {
 				handlerCalls++
 				c.JSON(http.StatusOK, gin.H{"code": 0})
 			})

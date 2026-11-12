@@ -360,6 +360,10 @@ function timelineShareValue(value) {
   // must opt in to each safe parameter instead of exposing all launch options.
   return {...value,query:''};
 }
+const PLAIN_SHARE_ROUTES=new Set(['pages/contentreader/contentreader','pages/collectionreader/collectionreader']);
+function plainShareMode(route,options) {
+  return PLAIN_SHARE_ROUTES.has(String(route||'').replace(/^\//,''))&&String(options&&options.untracked_share||'')==='1';
+}
 function showTimelineShareMenu(page, hasCustomTimelineShare) {
   const launch=safely(()=>typeof wx.getLaunchOptionsSync==='function'?wx.getLaunchOptionsSync():null,null);
   if(launch&&launch.scene===1154)return;
@@ -429,7 +433,8 @@ function wrapPage(definition) {
     safely(() => {
       this.__trackingOptions=options||{};
       const route=String(this.route||'').replace(/^\//,'');
-      if (routes.policy(route).collect) {
+      this.__trackingPlainShare=plainShareMode(route,options);
+      if (routes.policy(route).collect&&!this.__trackingPlainShare) {
         const s=getSDK(); if (s) {
           s.register(this,route,routes.binding(route,options||{}),(options||{}).st,(options||{}).ht);
           this.__trackingTimelineStop=s.observe(this,()=>{if(this.__trackingConsentVisible===true){safely(()=>warmTimeline(this));showTimelineShareMenu(this,hasCustomTimelineShare);}});
@@ -458,7 +463,7 @@ function wrapPage(definition) {
     const original=hasCustomAppShare?invoke('onShareAppMessage',this,arguments):{
       title:DEFAULT_SHARE_TITLE,path:routes.policy(route).collect?'/'+route+(query?'?'+query:''):'/pages/index/index'
     };
-    if (!original || typeof original!=='object' || !sdk || !sdk.diagnostics().enabled) return original;
+    if (!original || typeof original!=='object' || this.__trackingPlainShare || !sdk || !sdk.diagnostics().enabled) return original;
     // Original callback executes once. Preserve original synchronous fallback, title/image and original promise semantics.
     return {...original,promise:Promise.resolve(original.promise || {}).then(value=>new Promise(resolve=>{
       const fallback={...original,...value}; const timeout=setTimeout(()=>resolve(fallback),1800);
@@ -467,7 +472,7 @@ function wrapPage(definition) {
   };
   result.onShareTimeline=function() {
     const original=hasCustomTimelineShare?timelineShareValue(invoke('onShareTimeline',this,arguments)):defaultTimeline(this);
-    if(!original||!sdk||!sdk.diagnostics().enabled)return original;
+    if(!original||this.__trackingPlainShare||!sdk||!sdk.diagnostics().enabled)return original;
     const state=sdk.get(this),key=timelineCacheKey(original),cached=cachedTimeline(state,key);
     if(cached){const meta=state.shareIds[key];sdk.shareIntent(meta.context,meta.route,meta.content,meta.id,'timeline');return cached;}
     // Normally the native menu opens after preheating. Programmatic calls,
@@ -504,6 +509,10 @@ function install() {
           if(options&&options.path&&options.query&&typeof getCurrentPages==='function'){
             const pages=getCurrentPages(),page=pages[pages.length-1];
             if(page&&page.route===options.path){
+              if(plainShareMode(options.path,options.query)){
+                const current=s&&s.get(page);if(current)s.hide(page,true);
+                page.__trackingPlainShare=true;
+              }
               if(typeof page.queueProfileEntry==='function')page.queueProfileEntry(options.query);
               else if(typeof page.acceptExternalEntry==='function')page.acceptExternalEntry(options.query);
             }
@@ -518,7 +527,15 @@ function install() {
 }
 function resolvePageOptions(page, options, applyAttribution = true) {
  page.__trackingOptions=options;
- const s=getSDK(),p=s&&s.get(page);if(p&&applyAttribution){p.share=options.st||'';p.handoff=p.share?options.ht||'':'';p.shareRevision=(p.shareRevision||0)+1;}
+ const route=String(page&&page.route||'').replace(/^\//,'');
+ const plain=plainShareMode(route,options),s=getSDK();
+ let p=s&&s.get(page);
+ if(plain){if(p)s.hide(page,true);page.__trackingPlainShare=true;p=null;}
+ else {
+  page.__trackingPlainShare=false;
+  if(s&&routes.policy(route).collect&&!p){p=s.register(page,route,routes.binding(route,options||{}),(options||{}).st,(options||{}).ht);if(page.__trackingConsentVisible===true)s.show(page);}
+ }
+ if(p&&applyAttribution){p.share=options.st||'';p.handoff=p.share?options.ht||'':'';p.shareRevision=(p.shareRevision||0)+1;}
  updateReady(page);
 }
 function shareDiagnostics(page){
