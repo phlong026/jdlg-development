@@ -13,9 +13,9 @@ test('reader requests a poster for the exact published content version', () => {
     const start = source.indexOf('async generatePoster()');
     const block = source.slice(start, source.indexOf('\n }\n});', start));
     assert.ok(start >= 0 && block.length > 0, extension + ' poster block missing');
-    assert.match(block, /contentID=String\(this\.options\.content_id/, extension + ' must capture the content before async work');
-    assert.match(block, /version=String\(this\.options\.content_version/, extension + ' must capture the published version before async work');
-    assert.match(block, /content_id:contentID,content_version:version/, extension + ' must request the captured immutable content version');
+    assert.match(block, /contentID\s*=\s*String\(this\.options\.content_id/, extension + ' must capture the content before async work');
+    assert.match(block, /version\s*=\s*String\(this\.options\.content_version/, extension + ' must capture the published version before async work');
+    assert.match(block, /content_id:\s*contentID,\s*content_version:\s*version/, extension + ' must request the captured immutable content version');
     assert.doesNotMatch(block, /\bpage\s*:/, extension + ' must not choose an arbitrary QR page');
   }
 });

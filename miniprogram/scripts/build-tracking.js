@@ -1,9 +1,11 @@
 'use strict';
 require('./build-content-templates');
-// New SDK sources intentionally use the JS-compatible TypeScript subset.
+// Most SDK sources use the JS-compatible TypeScript subset; the typed reader
+// uses the already locked compiler runtime shared with the authentication signer.
 // This deterministic build avoids relying on a developer's IDE transpilation settings.
 const fs=require('node:fs'),path=require('node:path');
 const root=path.join(__dirname,'../miniprogram');
+const {compileReader}=require('./compile-content-reader');
 const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsWith('.ts')).map(x=>'utils/tracking/'+x).concat([
  'utils/profile-access.ts',
  'utils/protected-media.ts',
@@ -26,5 +28,5 @@ const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsW
  'pages/visitdetail/visitdetail.ts'
 ]);
 let failed=false;
-for(const source of sources){const file=path.join(root,source),js=file.replace(/\.ts$/,'.js');const output=fs.readFileSync(file,'utf8').replace(/^\/\/ @ts-nocheck\n/, '').replace(/\nexport \{\};\n?$/, '\n');if(process.argv.includes('--check')){if(fs.readFileSync(js,'utf8')!==output){console.error('Source/build mismatch: '+source);failed=true;}}else fs.writeFileSync(js,output);}
+for(const source of sources){const file=path.join(root,source),js=file.replace(/\.ts$/,'.js');const sourceText=fs.readFileSync(file,'utf8');const output=source==='pages/contentreader/contentreader.ts'?compileReader(sourceText,file):sourceText.replace(/^\/\/ @ts-nocheck\n/, '').replace(/\nexport \{\};\n?$/, '\n');if(process.argv.includes('--check')){if(fs.readFileSync(js,'utf8')!==output){console.error('Source/build mismatch: '+source);failed=true;}}else fs.writeFileSync(js,output);}
 if(failed)process.exitCode=1;

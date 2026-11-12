@@ -175,3 +175,17 @@ test('copying a web link leaves an in-flight note interaction intact', async () 
   assert.equal(page.data.noteActionBusy, true);
   assert.equal(invalidations, 0);
 });
+
+test('reader closes fixed-version collection dialogs on background and revalidation', async () => {
+  const { page } = reader();
+  page.players = {};
+  page.options = {};
+  page.data.media = [];
+  page.setData({ collectionsOpen: true });
+  page.onHide();
+  assert.equal(page.data.collectionsOpen, false);
+  page.setData({ collectionsOpen: true });
+  const pending = page.loadContent();
+  assert.equal(page.data.collectionsOpen, false);
+  await pending;
+});
