@@ -94,6 +94,30 @@ func TestParseArticleHTMLFindsRealBodyAfterShareDescription(t *testing.T) {
 	}
 }
 
+func TestParseArticleHTMLCompositeTextExcludesShareDescription(t *testing.T) {
+	for name, body := range map[string]string{
+		"heading":           `<h2>完整正文<span id="js_common_share_desc">这只是分享摘要</span></h2>`,
+		"quote":             `<blockquote>完整正文<span id="js_common_share_desc">这只是分享摘要</span></blockquote>`,
+		"list":              `<ul><li>完整正文<span id="js_common_share_desc">这只是分享摘要</span></li></ul>`,
+		"summary list item": `<ul><li id="js_common_share_desc">这只是分享摘要</li><li>完整正文</li></ul>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			doc, err := ParseArticleHTML("https://mp.weixin.qq.com/s/composite", `<div id="js_content">`+body+`</div>`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(doc.Body.Blocks) != 1 {
+				t.Fatalf("expected one real body block: %#v", doc.Body)
+			}
+			block := doc.Body.Blocks[0]
+			text := block.Text + strings.Join(block.Items, "")
+			if text != "完整正文" || strings.Contains(doc.Body.LayoutHTML, "分享摘要") {
+				t.Fatalf("summary leaked into composite body: %#v", doc.Body)
+			}
+		})
+	}
+}
+
 func TestParseArticleHTMLUsesFallbackAndWarnsForUnknownIframe(t *testing.T) {
 	doc, err := ParseArticleHTML("https://mp.weixin.qq.com/s/fallback", `<html><body><div class="rich_media_wrp"><p>备用正文</p><iframe src="https://example.com/embed"></iframe></div></body></html>`)
 	if err != nil {
