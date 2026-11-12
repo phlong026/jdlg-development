@@ -77,6 +77,45 @@ test('draft preview reads unsaved text and project media without saving, freezin
   assert.equal(page.data.noteMedia[0].media_id, 'image-one');
 });
 
+test('shared project note preview rebuilds unknown image and video ratios once without mutating fixed media', async () => {
+  for (const [kind, width, height] of [['image', 1920, 1080], ['video', 1080, 1920]]) {
+    const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => `/tmp/${kind}` });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: `${kind}预览`, noteBody: '保持展示比例', noteMedia: [{ media_id: `${kind}-one`, kind }] });
+    await page.previewNote();
+    const immutablePreviewMedia = JSON.stringify(page.data.previewMedia);
+    const fallback = page.data.previewPresentation.media[0];
+    assert.notEqual(fallback.intrinsicWidth / fallback.intrinsicHeight, width / height);
+
+    let writes = 0;
+    const setData = page.setData.bind(page);
+    page.setData = (values, done) => { writes += 1; setData(values, done); };
+    const event = { currentTarget: { dataset: { mediaId: `${kind}-one` } }, detail: { width, height } };
+    page.onContentVideoMetadata(event);
+    assert.equal(page.data.previewPresentation.media[0].intrinsicWidth, width);
+    assert.equal(page.data.previewPresentation.media[0].intrinsicHeight, height);
+    assert.equal(JSON.stringify(page.data.previewMedia), immutablePreviewMedia, '固定版本展示媒体不应被元数据事件回写');
+    assert.equal(writes, 1);
+    page.onContentVideoMetadata(event);
+    assert.equal(writes, 1, '相同尺寸不应再次setData');
+  }
+});
+
+test('project note gallery swipe rebuilds the selected media height', async () => {
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (_, id) => `/tmp/${id}.jpg` });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({
+    pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '混合图集', noteBody: '滑动后跟随当前图片',
+    noteMedia: [{ media_id: 'wide', kind: 'image', width: 1920, height: 1080 }, { media_id: 'tall', kind: 'image', width: 900, height: 1600 }],
+  });
+  await page.previewNote();
+  const firstHeight = page.data.previewPresentation.galleryHeight;
+  page.onContentGalleryChange({ detail: { current: 1 } });
+  assert.equal(page.data.previewPresentation.galleryIndex, 1);
+  assert.equal(page.data.previewPresentation.galleryHeight, page.data.previewPresentation.media[1].height);
+  assert.notEqual(page.data.previewPresentation.galleryHeight, firstHeight);
+});
+
 test('structured draft preview preserves original block order, headings and captions', async () => {
   const body = JSON.stringify({ schema: 1, blocks: [{ kind: 'heading', level: 2, text: '空间布局' }, { kind: 'image', media_id: 'image-one', caption: '一层平面' }, { kind: 'paragraph', text: '老人房靠近入口。' }] });
   const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => '/tmp/plan.png' });
