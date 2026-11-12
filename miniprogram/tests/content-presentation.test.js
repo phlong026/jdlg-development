@@ -51,7 +51,37 @@ test('gallery view shows one note body and only keeps genuinely distinct image c
   ]), [image('image-a'), image('image-b')], { windowWidth: 390, windowHeight: 844 });
   assert.deepEqual(distinct.media.map(item => item.caption), ['南立面', '室内']);
   const mixedRatios = buildContentPresentation(article([{ kind: 'image', media_id: 'wide' }, { kind: 'image', media_id: 'tall' }]), [image('wide'), { ...image('tall'), width: 900, height: 1600 }], { windowWidth: 390, windowHeight: 844 });
-  assert.equal(mixedRatios.galleryHeight, Math.max(...mixedRatios.media.map(item => item.height)), '滑动切图时舞台高度保持稳定');
+  assert.equal(mixedRatios.galleryHeight, mixedRatios.media[0].height, '图集容器应跟随当前素材而不是预留最高黑边');
+  const tallSelected = buildContentPresentation(article([{ kind: 'image', media_id: 'wide' }, { kind: 'image', media_id: 'tall' }]), [image('wide'), { ...image('tall'), width: 900, height: 1600 }], { windowWidth: 390, windowHeight: 844 }, { galleryIndex: 1 });
+  assert.equal(tallSelected.galleryHeight, tallSelected.media[1].height);
+  assert.notEqual(tallSelected.galleryHeight, mixedRatios.galleryHeight, '滑动后由当前图片重新计算舞台高度');
+});
+
+test('media geometry preserves extreme aspect ratios without artificial letterboxing', () => {
+  const content = article([{ kind: 'image', media_id: 'ultra-wide' }, { kind: 'image', media_id: 'ultra-tall' }]);
+  const view = buildContentPresentation(content, [
+    { ...image('ultra-wide'), width: 4000, height: 300 },
+    { ...image('ultra-tall'), width: 300, height: 4000 },
+  ], { windowWidth: 390, windowHeight: 844 });
+  const [wide, tall] = view.media;
+  assert.ok(wide.height < 120, '超宽图不应被强制撑到固定最小高度');
+  assert.ok(Math.abs(wide.width / wide.height - wide.intrinsicWidth / wide.intrinsicHeight) < 0.25);
+  assert.ok(tall.width < view.frameWidth, '超高图限高后应等比缩小宽度');
+  assert.ok(Math.abs(tall.width / tall.height - tall.intrinsicWidth / tall.intrinsicHeight) < 0.01);
+});
+
+test('media geometry adapts to viewport changes and late video metadata', () => {
+  const content = article([{ kind: 'video', media_id: 'video-a' }]);
+  const unknown = buildContentPresentation(content, [{ media_id: 'video-a', kind: 'video', url: 'https://example.test/video-a.mp4' }], { windowWidth: 390, windowHeight: 844 });
+  assert.equal(unknown.media[0].intrinsicWidth / unknown.media[0].intrinsicHeight, 16 / 9, '元数据未到时使用稳定的视频回退比例');
+  const portrait = buildContentPresentation(content, [video('video-a', 1080, 1920)], { windowWidth: 390, windowHeight: 844 });
+  assert.notDeepEqual([portrait.media[0].width, portrait.media[0].height], [unknown.media[0].width, unknown.media[0].height], '元数据到达后必须重建真实比例');
+  assert.ok(Math.abs(portrait.media[0].width / portrait.media[0].height - 1080 / 1920) < 0.01);
+
+  const landscapeWindow = buildContentPresentation(article([{ kind: 'image', media_id: 'wide' }]), [{ ...image('wide'), width: 1920, height: 1080 }], { windowWidth: 844, windowHeight: 390 });
+  assert.equal(landscapeWindow.frameWidth, 808);
+  assert.ok(landscapeWindow.media[0].height <= Math.round(390 * 0.68), '横屏时媒体高度跟随可用视口');
+  assert.ok(Math.abs(landscapeWindow.media[0].width / landscapeWindow.media[0].height - 1920 / 1080) < 0.01);
 });
 
 test('video view preserves native player identity and caps portrait and landscape media to the viewport', () => {
@@ -120,7 +150,10 @@ test('shared presentation template keeps swiper, native video controls, tracking
   assert.match(template, /<video wx:else[^>]*autoplay="\{\{videoStarted\[view\.media\[0\]\.playerKey\]\}\}"[^>]*controls[^>]*bindplay="videoState"[^>]*bindfullscreenchange="videoFullscreen"/s);
   assert.match(template, /poster="\{\{view\.nativePoster\}\}"/);
   assert.match(template, /wx:if="\{\{view\.poster && !videoStarted\[view\.media\[0\]\.playerKey\]\}\}"[^>]*bindtap="playContentVideo"[\s\S]*<video wx:else/);
-  assert.match(template, /<image[^>]*src="\{\{view\.poster\}\}"[^>]*mode="aspectFit"/s);
+  assert.match(template, /presentation-video-shell" style="width:\{\{view\.media\[0\]\.width\}\}px;height:\{\{view\.media\[0\]\.height\}\}px"/);
+  assert.match(template, /<image[^>]*src="\{\{view\.poster\}\}"[^>]*mode="aspectFill"/s);
+  assert.match(template, /presentation-article-image[^>]*style="width:\{\{item\.width\}\}px;height:\{\{item\.height\}\}px"/s);
+  assert.match(template, /presentation-article-video[^>]*style="width:\{\{item\.width\}\}px;height:\{\{item\.height\}\}px"/s);
   assert.match(template, /content-video-\{\{view\.videoLayout\}\}/);
   assert.match(template, /bindtap="toggleContentDescription"/);
   assert.match(template, /<block wx:if="\{\{view\.kind === 'article'\}\}">/);
