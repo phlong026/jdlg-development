@@ -54,10 +54,16 @@ npm run check:tracking
 npm run check:tracking-routes
 ```
 
-全量测试保留三项需要本机微信 WXML 编译器的用例；缺少编译器时会明确跳过，可通过 `WXML_COMPILER` 指定编译器后执行。CI 的 `Admin quality` 同时执行全量小程序回归及 `npm audit --audit-level=high`，发现高危或严重依赖告警时失败；原有追踪专项与 Go 检查继续执行。
+阅读页现在对生命周期参数进行真实 TypeScript 检查，`npm run build:tracking` 与 `npm run check:tracking` 使用后台锁定的 TypeScript 编译器生成和校验该页 JS；其余兼容页面保持现有确定性构建。此处与鉴权签名构建复用同一编译运行时，无新增依赖。执行前沿用上面的后台锁定安装步骤；上传使用提交中的 JS 产物。
+
+需要本机微信 WXML 编译器的用例在缺少编译器时会明确跳过，可通过 `WXML_COMPILER` 指定编译器后执行。CI 的 `Admin quality` 同时执行全量小程序回归及 `npm audit --audit-level=high`，发现高危或严重依赖告警时失败；原有追踪专项与 Go 检查继续执行。
 
 客服知识问答同时通过 Go 接口回归验证实际回复、分类、引导动作和命中优先级，随现有 Go 测试及竞态检查执行。
+
+`Admin quality` 也使用托管运行器已有的 JDK 17 和 Maven 执行 `customer-management/phase1` 的 `mvn -B test`，持续保护身份分类、CRM 同步及人工确认阶段。
 
 ## 三期内容、分享和通知
 
 首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
+
+剩余分支统一主线、媒体自适应和本地证据见[本轮实施记录](docs/phase3/unify-main-20261113/implementation-status.md)。

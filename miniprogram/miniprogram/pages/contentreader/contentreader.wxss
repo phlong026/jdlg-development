@@ -491,3 +491,113 @@ button:not([size='mini']) { width: auto; min-width: 0; box-sizing: border-box; }
 
 /* 分享阅读不再展示品牌条，正文与视频直接开始。 */
 .presentation-video-brand{display:none}
+
+/* 笔记动作只嫁接到现有阅读布局，不改正文展示规则。 */
+.note-toolbar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  min-height: 44px;
+  margin: 0 -18px;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #fff;
+}
+
+.reader .note-toolbar-action {
+  display: flex;
+  width: 40px;
+  min-width: 40px;
+  height: 36px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #3b2c22;
+}
+
+.note-toolbar-action::after,
+.note-menu-item::after,
+.note-dock-action::after,
+.note-text-button::after,
+.note-comment-entry::after { border: 0; }
+.note-toolbar-action.is-active { background: #f0e2cf; color: #956936; }
+
+.note-menu-dismiss { position: fixed; z-index: 21; inset: 0; background: transparent; }
+.note-menu {
+  position: absolute;
+  z-index: 22;
+  top: 46px;
+  right: 16px;
+  width: 214px;
+  padding: 8px 12px;
+  border: 1px solid #eee6dc;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 7px 26px rgba(48,35,23,.16);
+}
+.note-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 45px;
+  margin: 0;
+  padding: 0 10px;
+  align-items: center;
+  gap: 17px;
+  border: 0;
+  background: #fff;
+  color: #2c2723;
+  font-size: 16px;
+  text-align: left;
+}
+.note-menu-item.has-divider { margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee6dc; }
+.note-menu-item.is-danger { color: #b3483e; }
+.note-menu-icon { flex: none; color: #956936; }
+
+.note-comments { padding: 21px 0 12px; margin-top: 18px; border-top: 1px solid #eee6dc; }
+.note-comments-head,
+.note-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 17px; font-weight: 600; }
+.note-text-button { display: inline-flex; width: auto; min-height: 34px; margin: 0; padding: 4px 8px; align-items: center; border: 0; background: transparent; color: #8e744f; font-size: 13px; }
+.note-muted { display: block; padding: 10px 0; color: #94877a; font-size: 13px; line-height: 1.6; }
+.note-interaction-error { display: block; padding: 8px 0; color: #a3463c; font-size: 13px; line-height: 1.6; }
+.note-comment { display: flex; gap: 11px; padding: 18px 0; border-bottom: 1px solid #f1ece6; }
+.note-comment:last-child { border: 0; }
+.note-avatar { display: flex; width: 36px; height: 36px; flex: none; align-items: center; justify-content: center; border-radius: 50%; background: #eee6dc; }
+.note-avatar-placeholder { color: #8e744f; font-size: 14px; }
+.note-comment-copy { min-width: 0; flex: 1; }
+.note-comment-author { display: block; color: #695d52; font-size: 14px; font-weight: 600; }
+.note-comment-text { display: block; margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.7; }
+.note-comment-meta { display: flex; margin-top: 6px; align-items: center; gap: 8px; color: #a4988d; font-size: 11px; }
+.note-load-more { width: auto; min-height: 38px; background: transparent; color: #9a7548; font-size: 13px; }
+
+.note-interaction-dock {
+  position: fixed;
+  z-index: 25;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  padding: 10px 18px calc(10px + env(safe-area-inset-bottom));
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid #eee6dc;
+  background: rgba(255,255,255,.98);
+}
+.note-comment-entry { display: flex; min-width: 0; min-height: 38px; margin: 0; padding: 8px 14px; flex: 1; align-items: center; gap: 8px; border-radius: 24px; background: #f3f0ec; color: #9d8f81; font-size: 14px; text-align: left; }
+.note-dock-action { display: flex; min-width: 36px; min-height: 44px; margin: 0; padding: 0; flex: none; flex-direction: column; align-items: center; justify-content: center; border: 0; background: transparent; color: #332a24; font-size: 10px; }
+.note-dock-action.is-active { color: #a87943; }
+.note-dock-action[disabled] { background: transparent; color: #a99d90; }
+
+.note-modal-mask { position: fixed; z-index: 40; inset: 0; display: flex; align-items: flex-end; background: rgba(35,27,20,.26); }
+.note-composer,
+.note-collection-sheet { box-sizing: border-box; width: 100%; max-height: 78vh; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; background: #fff; }
+.note-composer textarea { box-sizing: border-box; width: 100%; min-height: 140px; max-height: 240px; padding: 16px 0; font-size: 16px; line-height: 1.7; }
+.note-collection-list { max-height: 36vh; margin: 10px 0; }
+.note-collection-row { display: flex; width: 100%; min-height: 48px; margin: 0; padding: 0 4px; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1ece6; background: transparent; color: #3b322b; font-size: 15px; text-align: left; }
+.note-collection-sheet input { box-sizing: border-box; width: 100%; min-height: 44px; margin: 12px 0; padding: 0 12px; border: 1px solid #ded4c8; border-radius: 9px; background: #faf8f5; }
