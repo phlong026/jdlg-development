@@ -269,7 +269,7 @@ func convertVisitorSnapshotToLead(leads trackingLeadAtomicStore, _ *model.UserId
 	if !ok {
 		return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"}
 	}
-	leadType, e := trackingLeadGate(visitor.State, visitor.IdentityType)
+	_, e := trackingLeadGate(visitor.State, visitor.IdentityType)
 	if e != nil {
 		return trackingLeadOutcome{}, e
 	}
@@ -306,7 +306,7 @@ func convertVisitorSnapshotToLead(leads trackingLeadAtomicStore, _ *model.UserId
 		log.Printf("[Tracking] atomic lead conversion visitor=%s failed: %v", visitor.Key, err)
 		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "创建线索失败，请稍后重试"}
 	}
-	return trackingLeadOutcome{LeadID: result.LeadID, Existed: result.Existed, LeadType: leadType, IntentLevel: intentLevel, DemandSummary: summary}, nil
+	return trackingLeadOutcome{LeadID: result.LeadID, Existed: result.Existed, LeadType: result.LeadType, IntentLevel: intentLevel, DemandSummary: summary}, nil
 }
 
 func myVisitorLeadContents(entries []tracking.MyVisitEntry) []tracking.VisitorContent {
