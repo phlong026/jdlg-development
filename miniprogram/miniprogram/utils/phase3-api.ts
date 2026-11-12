@@ -138,6 +138,9 @@ function downloadProjectNoteFile(path, timeout, message) {
 function downloadProjectNoteMedia(projectID, mediaID) {
   return downloadProjectNoteFile(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/media/' + encodeURIComponent(mediaID)), 15000, '固定版本素材加载失败');
 }
+function downloadContentWord(id, version) {
+  return downloadProjectNoteFile(WORKBENCH + '/contents/' + encodeURIComponent(id) + '/versions/' + Number(version) + '/export.docx', 30000, 'Word 导出失败，请重试');
+}
 function downloadProjectNoteWord(projectID, versionID) {
   return downloadProjectNoteFile(projectNotePath('/projects/' + encodeURIComponent(projectID) + '/versions/' + encodeURIComponent(versionID) + '/export.docx'), 30000, 'Word 导出失败，请重试');
 }
@@ -229,7 +232,7 @@ async function writingPrompts() {
 }
 
 module.exports = {
-  ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, beginVideoUpload, videoUploadStatus, uploadVideoPart, completeVideoUpload, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
+  downloadContentWord, ORIGIN, WORKBENCH, MY_SHARES, PROJECT_NOTES, authHeaders, request, beginVideoUpload, videoUploadStatus, uploadVideoPart, completeVideoUpload, workbenchContext, writingPrompts, listContents, getContent, listWorkbenchMedia,
   saveContent, deleteCreatedContent, deleteContentDraft, previewContent, publishContent, revokeContent, mySharesContext, listMyShares, listMyVisitors, listMyVisitorEntries, convertMyVisitorToLead, listMyContentStats, listMyShareVisits,
   importCapabilities, listImports, submitImport, getImport, retryImport,
   downloadWorkbenchMedia, uploadWorkbenchMedia, mutationKey,
