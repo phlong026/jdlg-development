@@ -19,9 +19,17 @@ test('note menu grants editing only with current management proof', () => {
   page.openNoteMore();
   assert.ok(page.data.noteMenu.some(item => item.key === 'edit'));
   assert.ok(page.data.noteMenu.some(item => item.key === 'delete'));
+  assert.ok(page.data.noteMenu.some(item => item.key === 'collection'));
   page.posterAccessCurrent = () => false;
   page.openNoteMore();
-  assert.ok(!page.data.noteMenu.some(item => ['edit', 'copy', 'delete', 'word'].includes(item.key)));
+  assert.ok(!page.data.noteMenu.some(item => ['edit', 'copy', 'collection', 'delete', 'word'].includes(item.key)));
+});
+test('document archive content never offers a generic copy path', () => {
+  const { page } = harness();
+  page.data.content.body_format = 'document_v1';
+  page.openNoteMore();
+  assert.ok(!page.data.noteMenu.some(item => item.key === 'copy'));
+  assert.ok(page.data.noteMenu.some(item => item.key === 'collection'));
 });
 test('copy retries reuse one create key and clear it only after known success', async () => {
   let calls = 0, sequence = 0;
@@ -54,6 +62,41 @@ test('article copy retains headings and lists as readable text instead of HTML m
  page.data.presentationView={kind:'article',title:'文章标题',bodyText:'',blocks:[{kind:'heading',text:'方案要点'},{kind:'list',items:['客餐厅','院落']},{kind:'layout',html:'<p>采光 &amp; 通风</p>'}]};
  page.copyNoteText();
  assert.match(clipboard[0],/方案要点/);assert.match(clipboard[0],/客餐厅/);assert.match(clipboard[0],/采光 & 通风/);assert.doesNotMatch(clipboard[0],/<p>/);
+});
+
+test('new collection retry reuses one key and binds the viewed fixed version', async()=>{
+ let calls=0,sequence=0;const saved=[];
+ const {page}=harness({mutationKey:()=> 'collection-key-'+(++sequence),saveCollection:async input=>{saved.push(input);if(++calls===1)throw new Error('响应丢失');return {collection_id:'collection-new'};}});
+ page.data.noteCollectionTitle='方案合集';
+ const event={currentTarget:{dataset:{}}};
+ await page.addNoteCollection(event);
+ await page.addNoteCollection(event);
+ assert.equal(saved.length,2);assert.equal(saved[0].idempotency_key,saved[1].idempotency_key);
+ assert.equal(JSON.stringify(saved[1].items),JSON.stringify([{content_id:'note-one',content_version:2}]));
+ assert.equal(page.data.collectionsOpen,false);
+});
+
+test('existing collection uses current revision and exposes a 409 refresh conflict', async()=>{
+ let saved;
+ const conflict=Object.assign(new Error('版本冲突'),{statusCode:409});
+ const {page}=harness({getCollection:async()=>({collection_id:'collection-one',title:'已有合集',description:'',revision:7,items:[{content_id:'other-note',content_version:1}]}),saveCollection:async(input,id)=>{saved={input,id};throw conflict;}});
+ page.data.collectionsOpen=true;page.data.noteCollections=[{collection_id:'collection-one'}];
+ await page.addNoteCollection({currentTarget:{dataset:{id:'collection-one'}}});
+ assert.equal(saved.id,'collection-one');assert.equal(saved.input.expected_revision,7);
+ assert.equal(JSON.stringify(saved.input.items),JSON.stringify([{content_id:'other-note',content_version:1},{content_id:'note-one',content_version:2}]));
+ assert.match(page.data.noteCollectionError,/重新打开/);
+ assert.equal(page.data.collectionsOpen,true);
+});
+
+test('late collection response cannot populate a switched account or version', async()=>{
+ let resolve;
+ const {page,storage}=harness({listCollections:()=>new Promise(done=>{resolve=done;})});
+ const pending=page.openNoteCollections();
+ storage.token='two';page.options.content_version='3';
+ resolve({items:[{collection_id:'old-collection',owner_id:'owner-one',status:'draft'}],next_cursor:'old-cursor'});
+ await pending;
+ assert.equal(page.data.noteCollections.length,0);
+ assert.equal(page.data.noteCollectionCursor,'');
 });
 
 test('note more preserves the existing authorized poster entry', () => {

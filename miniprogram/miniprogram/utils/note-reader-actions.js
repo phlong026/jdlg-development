@@ -31,14 +31,13 @@ async function albumImagePath(source) {
 }
 
 module.exports = {
-  data: { noteMenuOpen: false, noteMenu: [], noteActionBusy: false },
+  data: { noteMenuOpen: false, noteMenu: [], noteActionBusy: false, collectionsOpen: false, noteCollections: [], noteCollectionCursor: '', noteCollectionTitle: '', noteCollectionError: '' },
   methods: {
     openNoteMore() {
       if (!this.data.contentReady || this.data.noteActionBusy) return;
-      const menu = managed(this) ? [
-        { key: 'edit', label: '编辑笔记', icon: 'edit' },
-        { key: 'copy', label: '创建副本', icon: 'copy' },
-      ] : [];
+      const menu = managed(this) ? [{ key: 'edit', label: '编辑笔记', icon: 'edit' }] : [];
+      if (managed(this) && this.data.content.body_format !== 'document_v1') menu.push({ key: 'copy', label: '创建副本', icon: 'copy' });
+      if (managed(this)) menu.push({ key: 'collection', label: '加入合集', icon: 'folder' });
       menu.push({ key: 'text', label: '复制文案', icon: 'copy', divider: true });
       if ((this.data.media || []).some(item => item.kind === 'image')) menu.push({ key: 'images', label: '保存图片', icon: 'image' });
       if (managed(this)) menu.push({ key: 'word', label: '导出 Word', icon: 'file' });
@@ -52,7 +51,7 @@ module.exports = {
     keepNoteMenuOpen() {},
     selectNoteMenu(event) {
       const key = String(event.currentTarget.dataset.key || '');
-      const handlers = { edit: 'editCurrentNote', settings: 'editCurrentNote', copy: 'copyNote', text: 'copyNoteText', images: 'saveNoteImages', word: 'exportNoteWord', poster: 'generatePoster', link: 'copyWebLink', analytics: 'openTrackingSettings', delete: 'deleteCurrentNote' };
+      const handlers = { edit: 'editCurrentNote', settings: 'editCurrentNote', copy: 'copyNote', collection: 'openNoteCollections', text: 'copyNoteText', images: 'saveNoteImages', word: 'exportNoteWord', poster: 'generatePoster', link: 'copyWebLink', analytics: 'openTrackingSettings', delete: 'deleteCurrentNote' };
       if (!this.data.noteMenu.some(item => item.key === key) || !handlers[key]) return;
       this.closeNoteMore();
       return this[handlers[key]]();
@@ -126,6 +125,49 @@ module.exports = {
         if (wx.hideShareMenu) wx.hideShareMenu();
       } catch (error) { if (current(this, proof)) toast(error.message || '删除失败，请刷新后重试'); }
       finally { if (proof.token === String(wx.getStorageSync('token') || '') && proof.sequence === this.loadSequence) this.setData({ noteActionBusy: false }); }
+    },
+    async openNoteCollections(more = false) {
+      if (!this.data.contentReady || !managed(this) || this.data.noteActionBusy) return;
+      const proof = capture(this);
+      this.setData({ noteActionBusy: true, collectionsOpen: true, noteCollectionError: '' });
+      try {
+        const page = await require('./project-collections-api').listCollections({ cursor: more === true ? this.data.noteCollectionCursor : '', limit: 20 });
+        if (!current(this, proof) || !managed(this)) return;
+        const items = (page.items || []).filter(item => item.owner_id === this.data.content.owner_id && item.status !== 'revoked');
+        this.setData({ noteCollections: more === true ? this.data.noteCollections.concat(items) : items, noteCollectionCursor: page.next_cursor || '' });
+      } catch (error) { if (current(this, proof)) this.setData({ noteCollectionError: error.message || '合集读取失败，请重试' }); }
+      finally { if (current(this, proof)) this.setData({ noteActionBusy: false }); }
+    },
+    loadMoreNoteCollections() { return this.openNoteCollections(true); },
+    closeNoteCollections() { if (!this.data.noteActionBusy) this.setData({ collectionsOpen: false }); },
+    setNoteCollectionTitle(event) { this.setData({ noteCollectionTitle: event.detail.value }); },
+    async addNoteCollection(event) {
+      if (!this.data.contentReady || !managed(this) || this.data.noteActionBusy) return;
+      const proof = capture(this), id = String(event.currentTarget.dataset.id || '');
+      if (id && !this.data.noteCollections.some(item => item.collection_id === id)) return;
+      const title = this.data.noteCollectionTitle.trim();
+      if (!id && !title) { this.setData({ noteCollectionError: '请填写合集名称' }); return; }
+      this.setData({ noteActionBusy: true, noteCollectionError: '' });
+      try {
+        const api = require('./project-collections-api');
+        const collection = id ? await api.getCollection(id) : null;
+        if (!current(this, proof) || !managed(this)) return;
+        const items = collection ? (collection.items || []).map(item => ({ content_id: item.content_id, content_version: item.content_version })) : [];
+        if (!items.some(item => item.content_id === proof.id && Number(item.content_version) === proof.version)) items.push({ content_id: proof.id, content_version: proof.version });
+        if (!id) {
+          const identity = JSON.stringify([proof.token, proof.id, proof.version, title]);
+          if (!this._noteCollectionAttempt || this._noteCollectionAttempt.identity !== identity) this._noteCollectionAttempt = { identity, key: api.mutationKey('note-collection') };
+        }
+        await api.saveCollection({ title: collection ? collection.title : title, description: collection && collection.description || '', owner_id: this.data.content.owner_id, items, expected_revision: collection ? collection.revision : 0, idempotency_key: id ? '' : this._noteCollectionAttempt.key, ...(collection && collection.cover_item_index != null ? { cover_item_index: collection.cover_item_index } : {}) }, id);
+        if (!current(this, proof) || !managed(this)) return;
+        this._noteCollectionAttempt = null;
+        this.setData({ collectionsOpen: false, noteCollectionTitle: '' });
+        toast('已加入合集草稿');
+      } catch (error) {
+        if (!current(this, proof)) return;
+        const conflict = Number(error && error.statusCode) === 409;
+        this.setData({ noteCollectionError: conflict ? '合集已在其他端更新，请关闭后重新打开' : error.message || '加入合集失败，请重试' });
+      } finally { if (current(this, proof)) this.setData({ noteActionBusy: false }); }
     },
   },
 };

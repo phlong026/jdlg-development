@@ -11,6 +11,7 @@ test('current reader WXML compiles note actions without bypassing the access gat
  const menu=JSON.stringify(render({...base,noteMenuOpen:true,noteMenu:[{key:'edit',label:'编辑笔记'},{key:'delete',label:'删除笔记'}]}));
  assert.match(menu,/编辑笔记/);assert.match(menu,/删除笔记/);
  const hidden=JSON.stringify(render({...base,__profileAccessMounted:false}));assert.doesNotMatch(hidden,/完整正文|编辑笔记/);
+ const collection=JSON.stringify(render({...base,collectionsOpen:true,noteCollections:[{collection_id:'collection-one',title:'方案合集'}],noteCollectionTitle:'',noteActionBusy:false}));assert.match(collection,/方案合集/);assert.match(collection,/note-collection-sheet/);
 });
 
 test('note action CSS defines layers and every static native icon',()=>{

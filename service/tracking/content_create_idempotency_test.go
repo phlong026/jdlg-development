@@ -2,6 +2,8 @@ package tracking
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -60,8 +62,54 @@ func TestContentCreateIdempotencyCannotRecoverDeletedOrUnauthorizedResult(t *tes
 
 func TestContentCreateIdempotencyDoesNotBypassDocumentArchiveIdentity(t *testing.T) {
 	s, scope := fixture(t)
-	_, err := s.SaveContent(context.Background(), scope, "", Draft{Title: "文档副本", Body: `{}`, BodyFormat: "document_v1", Rights: "own", Owner: scope.Owners[0], IdempotencyKey: "document-copy-key"})
-	if err == nil {
-		t.Fatal("keyed document create bypassed document archive identity")
+	asset := Asset{ID: "document-asset-copy-1", Kind: "document", URL: "/api/v1/miniprogram/tracking/media/document-asset-copy-1", MIME: "application/pdf"}
+	if err := s.AddMedia(context.Background(), scope, asset, scope.Owners[0]); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.SaveContent(context.Background(), scope, "", Draft{Title: "文档副本", Body: `{"schema":1,"media_id":"document-asset-copy-1"}`, BodyFormat: "document_v1", Rights: "own", Owner: scope.Owners[0], MediaIDs: []string{asset.ID}, IdempotencyKey: "document-copy-key"})
+	if err == nil || !strings.Contains(err.Error(), "不接受创建幂等标识") {
+		t.Fatalf("keyed valid document did not reach the archive guard: %v", err)
+	}
+}
+
+func TestContentCreateIdempotencySerializesConcurrentReplays(t *testing.T) {
+	s, scope := fixture(t)
+	draft := Draft{Title: "并发副本", Body: "固定正文", BodyFormat: "plain", Rights: "own", Owner: scope.Owners[0], IdempotencyKey: "copy-content-concurrent-1"}
+	const requests = 12
+	start := make(chan struct{})
+	results := make(chan Content, requests)
+	errors := make(chan error, requests)
+	var wait sync.WaitGroup
+	for range requests {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			created, err := s.SaveContent(context.Background(), scope, "", draft)
+			results <- created
+			errors <- err
+		}()
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatalf("concurrent replay failed: %v", err)
+		}
+	}
+	var contentID string
+	for created := range results {
+		if contentID == "" {
+			contentID = created.ID
+		}
+		if created.ID == "" || created.ID != contentID {
+			t.Fatalf("concurrent replay returned different content: first=%q got=%q", contentID, created.ID)
+		}
+	}
+	listed, err := s.Contents(context.Background(), scope, Filter{}, "")
+	if err != nil || len(listed.Items.([]Content)) != 1 || listed.Items.([]Content)[0].ID != contentID {
+		t.Fatalf("concurrent replay created duplicates: %#v, %v", listed, err)
 	}
 }
