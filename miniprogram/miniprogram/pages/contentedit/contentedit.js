@@ -995,9 +995,19 @@ Page({
     const mediaID = String(event.currentTarget.dataset.mediaId || event.currentTarget.dataset.errorKey || '');
     if (mediaID) return this.retryPreviewMedia({ currentTarget: { dataset: { mediaId: mediaID } } });
   },
+  rebuildPreviewPresentation(sourceMedia, galleryIndex) {
+    if (!this.data.preview || !this.data.presentationView) return;
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 };
+    const previewContent = this.data.preview.content || {};
+    const presentationContent = this.data.presentationView.poster ? { ...previewContent, cover: { ...(previewContent.cover || {}), url: this.data.presentationView.poster } } : previewContent;
+    const presentationView = contentPresentation().buildContentPresentation(presentationContent, sourceMedia, windowInfo, { prefix: 'contentedit-preview', galleryIndex, descriptionExpanded: !!this.data.presentationView.descriptionExpanded });
+    this.setData({ presentationView, presentationMediaErrors: presentationErrors(presentationView, sourceMedia) });
+  },
   onContentGalleryChange(event) {
     if (!this.data.presentationView) return;
-    this.setData({ presentationView: { ...this.data.presentationView, galleryIndex: Number(event.detail.current) || 0 } });
+    const galleryIndex = Number(event.detail.current) || 0;
+    if (galleryIndex === this.data.presentationView.galleryIndex) return;
+    this.rebuildPreviewPresentation(presentationSourceMedia(this.data.presentationView), galleryIndex);
   },
   onContentVideoMetadata(event) {
     const detail = event && event.detail || {};
@@ -1005,17 +1015,22 @@ Page({
     const mediaID = String(event && event.currentTarget && event.currentTarget.dataset.mediaId || '');
     if (!mediaID || width <= 0 || height <= 0) return;
     if (event.currentTarget.dataset.editor) {
-      const media = (this.data.media || []).map(asset => asset.media_id === mediaID ? { ...asset, width, height } : asset);
+      let changed = false;
+      const media = (this.data.media || []).map(asset => {
+        if (asset.media_id !== mediaID || Number(asset.width) === width && Number(asset.height) === height) return asset;
+        changed = true;
+        return { ...asset, width, height };
+      });
+      if (!changed) return;
       this.setData({ media, ...blockViews(this.data.blocks, media) });
       return;
     }
     if (!this.data.preview || !this.data.presentationView) return;
-    const sourceMedia = presentationSourceMedia(this.data.presentationView).map(asset => asset.media_id === mediaID ? { ...asset, width, height } : asset);
-    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: this.editorWidth() + 64 };
-    const previewContent = this.data.preview.content || {};
-    const presentationContent = this.data.presentationView.poster ? { ...previewContent, cover: { ...(previewContent.cover || {}), url: this.data.presentationView.poster } } : previewContent;
-    const presentationView = contentPresentation().buildContentPresentation(presentationContent, sourceMedia, windowInfo, { prefix: 'contentedit-preview', galleryIndex: this.data.presentationView.galleryIndex || 0, descriptionExpanded: !!this.data.presentationView.descriptionExpanded });
-    this.setData({ presentationView, presentationMediaErrors: presentationErrors(presentationView, sourceMedia) });
+    const sourceMedia = presentationSourceMedia(this.data.presentationView);
+    const currentAsset = sourceMedia.find(asset => asset.media_id === mediaID);
+    if (!currentAsset || Number(currentAsset.width) === width && Number(currentAsset.height) === height) return;
+    const updatedMedia = sourceMedia.map(asset => asset.media_id === mediaID ? { ...asset, width, height } : asset);
+    this.rebuildPreviewPresentation(updatedMedia, this.data.presentationView.galleryIndex || 0);
   },
   playContentVideo(event) { const data = event && event.currentTarget && event.currentTarget.dataset || {}, id = String(data.domId || ''), key = String(data.playerKey || ''); if (!id || !key) return; this.setData({ videoStarted: { ...this.data.videoStarted, [key]: true } }, () => wx.createVideoContext(id, this).play()); },
   videoState(event) { const key = String(event && event.currentTarget && (event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId) || ''); if (event && event.type === 'play' && key && !this.data.videoStarted[key]) this.setData({ videoStarted: { ...this.data.videoStarted, [key]: true } }); if (event && event.type === 'error') { const videoStarted = { ...this.data.videoStarted }; delete videoStarted[key]; this.setData({ videoStarted }); this.mediaError(event); } },

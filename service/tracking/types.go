@@ -187,6 +187,9 @@ type Draft struct {
 	Tags       []string `json:"tags,omitempty"`
 	Pinned     *bool    `json:"pinned,omitempty"` // nil=不变，显式 true/false 覆盖
 	Revision   int      `json:"expected_revision"`
+	// IdempotencyKey is optional for backward-compatible general editing, but
+	// callers that may retry a create should reuse it until success is known.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 type Share struct {
 	Channel   string `json:"channel,omitempty"`

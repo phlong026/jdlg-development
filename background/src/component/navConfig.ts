@@ -132,6 +132,8 @@ export const leadQueues: NavQueue[] = [
     { key: 'high', label: '高意向', countKey: 'high_todo_count', help: '优先电话或微信承接', alert: true },
     { key: 'overdue', label: '超时未跟进', countKey: 'overdue_count', help: '该联系但还没推进', alert: true },
     { key: 'unassigned', label: '未分配', countKey: 'unassigned_count', help: '还没有负责人', alert: true },
+	{ key: 'partner', label: '合作线索', countKey: 'partner_todo_count', help: '设计师、施工队等合作方', alert: true },
+	{ key: 'identity_pending', label: '身份待确认', countKey: 'identity_pending_count', help: '先确认身份再分流', alert: true },
     { key: 'all', label: '全部线索', countKey: 'total_count', help: '完整线索池' },
 ];
 

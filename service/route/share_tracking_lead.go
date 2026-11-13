@@ -57,30 +57,23 @@ func trackingVisitorAccount(key string) (int64, bool) {
 	return id, true
 }
 
-// trackingLeadGate keeps the intent→lead route reserved for identified
-// 乡墅业主 accounts. Anonymous visitors have no contactable UserID. Visitors
-// without a declared identity pass only when their customer-domain reading
-// share clears the gray-zone threshold (behaviour over self-declaration).
-const trackingLeadGrayShare = 0.7
-
-func trackingLeadGate(state, identityType string, customerShare float64) *tracking.Error {
+// Identified owners become sales leads, B-side accounts become partner leads,
+// while accounts without a selected identity enter a separate pending queue.
+// Unknown identity values still fail closed.
+func trackingLeadGate(state, identityType string) (string, *tracking.Error) {
 	if state != "identified" {
-		return &tracking.Error{Status: 422, Message: "匿名或已删除访客无法转化为线索，请先引导客户留资"}
+		return "", &tracking.Error{Status: 422, Message: "匿名或已删除访客无法转化为线索，请先引导客户留资"}
 	}
 	identityType = strings.TrimSpace(identityType)
-	if identityType == "" {
-		if customerShare >= trackingLeadGrayShare {
-			return nil
-		}
-		return &tracking.Error{Status: 422, Message: "该访客尚未确认身份，且客户域浏览占比不足70%，请人工核实后再转化"}
+	switch {
+	case identityType == "":
+		return model.CustomerLeadTypeIdentityPending, nil
+	case tracking.BSideIdentities[identityType]:
+		return model.CustomerLeadTypePartner, nil
+	case identityType == trackingCustomerIdentity:
+		return model.CustomerLeadTypeSales, nil
 	}
-	if tracking.BSideIdentities[identityType] {
-		return &tracking.Error{Status: 422, Message: "该访客为B端用户（" + identityType + "），不进入客户线索流程"}
-	}
-	if identityType != trackingCustomerIdentity {
-		return &tracking.Error{Status: 422, Message: "无法识别的访客身份：" + identityType}
-	}
-	return nil
+	return "", &tracking.Error{Status: 422, Message: "无法识别的访客身份：" + identityType}
 }
 
 // Placeholders leak no information and invite the salesperson to fill the
@@ -189,7 +182,7 @@ func registerTrackingLeadRoutes(group *gin.RouterGroup, svc *tracking.Service, l
 			return
 		}
 		outcome, err := convertVisitorToLead(c.Request.Context(), svc, leads, identities, scope, c.Param("id"), trackingLeadSource)
-		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary, "crm": crmEnabled()}, err)
+		trackingResponse(c, gin.H{"lead_id": outcome.LeadID, "existed": outcome.Existed, "lead_type": outcome.LeadType, "intent_level": outcome.IntentLevel, "demand_summary": outcome.DemandSummary, "crm": crmEnabled()}, err)
 	})
 }
 
@@ -231,12 +224,13 @@ func myTrackingLeadResponse(outcome trackingLeadOutcome) gin.H {
 		// Keep the idempotency signal, but never disclose that management-domain ID.
 		leadID = 0
 	}
-	return gin.H{"lead_id": leadID, "existed": outcome.Existed, "converted": true}
+	return gin.H{"lead_id": leadID, "existed": outcome.Existed, "converted": true, "lead_type": outcome.LeadType}
 }
 
 type trackingLeadOutcome struct {
 	LeadID        int64
 	Existed       bool
+	LeadType      string
 	IntentLevel   string
 	DemandSummary string
 }
@@ -275,7 +269,8 @@ func convertVisitorSnapshotToLead(leads trackingLeadAtomicStore, _ *model.UserId
 	if !ok {
 		return trackingLeadOutcome{}, &tracking.Error{Status: 422, Message: "匿名访客无法转化为线索，请先引导客户留资"}
 	}
-	if e := trackingLeadGate(visitor.State, visitor.IdentityType, visitor.Intent.CustomerShare); e != nil {
+	_, e := trackingLeadGate(visitor.State, visitor.IdentityType)
+	if e != nil {
 		return trackingLeadOutcome{}, e
 	}
 	if leads == nil {
@@ -311,7 +306,7 @@ func convertVisitorSnapshotToLead(leads trackingLeadAtomicStore, _ *model.UserId
 		log.Printf("[Tracking] atomic lead conversion visitor=%s failed: %v", visitor.Key, err)
 		return trackingLeadOutcome{}, &tracking.Error{Status: 500, Message: "创建线索失败，请稍后重试"}
 	}
-	return trackingLeadOutcome{LeadID: result.LeadID, Existed: result.Existed, IntentLevel: intentLevel, DemandSummary: summary}, nil
+	return trackingLeadOutcome{LeadID: result.LeadID, Existed: result.Existed, LeadType: result.LeadType, IntentLevel: intentLevel, DemandSummary: summary}, nil
 }
 
 func myVisitorLeadContents(entries []tracking.MyVisitEntry) []tracking.VisitorContent {

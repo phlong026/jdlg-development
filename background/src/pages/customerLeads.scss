@@ -505,6 +505,11 @@
     font-weight: 700;
 }
 
+.identity-tag { display:inline-flex; align-items:center; min-height:22px; padding:0 8px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+.identity-sales { background:rgba(34,197,94,.12); color:#15803d; }
+.identity-pending { background:rgba(245,158,11,.14); color:#b45309; }
+.identity-partner { background:rgba(139,92,246,.12); color:#6d28d9; }
+
 .intent-high {
     background: rgba(239, 68, 68, 0.12);
     color: #b91c1c;

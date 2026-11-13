@@ -8,7 +8,7 @@
 
 `POST /api/v1/miniprogram/project-notes/projects`：原name/owner_id保留；可选`customer_ref`，服务端重新核验目标项目创建权和独立本人客户读取范围。客户端传CRMID仍拒绝；customer_ref不是管理端CRM ID或通用跨域授权。没有客户关联时旧请求保持兼容。
 
-客户详情可返回`customer_handoff`（本人转化状态、是否已分配、下次跟进时间、联系授权是否就绪）与`conversion_reason`。不返回手机号、其他渠道管理线索ID或其他设计师详情。已有线索返回ID0时也通过converted表达完成，不依赖lead_id非零。
+客户详情可返回`customer_handoff`（本人转化状态、是否已分配、下次跟进时间、联系授权是否就绪）与`conversion_reason`。不返回手机号、其他渠道管理线索ID或其他设计师详情。已有线索返回ID0时也通过converted表达完成，不依赖lead_id非零。身份分流遵循main：业主为sales、B端为partner、未选身份为identity_pending，未知身份拒绝；联系授权和手机号仍由真实服务端状态决定。
 
 ## 客户统计窗口与项目活动
 

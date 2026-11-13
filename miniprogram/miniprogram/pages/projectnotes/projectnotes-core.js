@@ -404,7 +404,12 @@ Page({
     this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
   },
   onContentGalleryChange(event) {
-    if (this.data.previewPresentation) this.setData({ 'previewPresentation.galleryIndex': Number(event.detail.current) || 0 });
+    const view = this.data.previewPresentation;
+    if (!view) return;
+    const galleryIndex = Number(event.detail.current) || 0;
+    if (galleryIndex === view.galleryIndex) return;
+    const sourceMedia = (view.media || []).map(item => ({ ...item, width: Number(item.intrinsicWidth) || Number(item.width) || 0, height: Number(item.intrinsicHeight) || Number(item.height) || 0 }));
+    this.rebuildContentPreview(sourceMedia, galleryIndex);
   },
   playContentVideo(event) {
     const key = String(event.currentTarget.dataset.playerKey || '');
@@ -420,7 +425,36 @@ Page({
     this.setData({ noteMedia: (this.data.noteMedia || []).map(item => mediaID(item) === id ? Object.assign({}, item, { local_path: '', preview_error: '', preview_loading: false }) : item) }, () => this.previewNote());
   },
   videoState() {},
-  onContentVideoMetadata() {},
+  rebuildContentPreview(sourceMedia, galleryIndex) {
+    const view = this.data.previewPresentation;
+    if (!view) return;
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const previewPresentation = buildContentPresentation({
+      title: view.title || this.data.noteTitle || '',
+      body: this.data.previewBody || '',
+      body_format: this.data.previewBodyFormat || 'plain',
+      presentation: view.kind,
+      cover: view.poster ? { url: view.poster } : null,
+    }, sourceMedia, windowInfo, { prefix: 'note-preview', galleryIndex, descriptionExpanded: !!view.descriptionExpanded });
+    this.setData({ previewPresentation });
+  },
+  onContentVideoMetadata(event) {
+    const view = this.data.previewPresentation;
+    const detail = event && event.detail || {};
+    const width = Number(detail.width || detail.videoWidth || 0), height = Number(detail.height || detail.videoHeight || 0);
+    const id = String(event && event.currentTarget && event.currentTarget.dataset.mediaId || '');
+    if (!view || !id || width <= 0 || height <= 0) return;
+    const seen = new Set();
+    const sourceMedia = (view.media || []).concat(view.blocks || []).filter(item => item && ['image', 'video'].includes(item.kind) && !seen.has(item.media_id) && seen.add(item.media_id)).map(item => ({
+      ...item,
+      width: Number(item.intrinsicWidth) || Number(item.width) || 0,
+      height: Number(item.intrinsicHeight) || Number(item.height) || 0,
+    }));
+    const current = sourceMedia.find(item => item.media_id === id);
+    if (!current || Number(current.width) === width && Number(current.height) === height) return;
+    const updatedMedia = sourceMedia.map(item => item.media_id === id ? { ...item, width, height } : item);
+    this.rebuildContentPreview(updatedMedia, view.galleryIndex || 0);
+  },
   videoProgress() {},
   videoRate() {},
   videoFullscreen() {},
@@ -466,7 +500,13 @@ Page({
       const images = viewMedia.filter(item => item.kind === 'image');
       const videos = viewMedia.filter(item => item.kind === 'video');
       let previewPresentation = null;
-      if (videos.length) {
+      if (draft.body_format === 'article_v2') {
+        // Structured notes keep every block and its original ordering. A
+        // video inserted into an existing note must not select a single-video view.
+        const completeMedia = (presentation.media || []).map(item => ({ ...item, url: item.local_path || item.url || '' }));
+        const cover = completeMedia.find(item => item.media_id === draft.cover_media_id);
+        previewPresentation = buildContentPresentation({ title: draft.title || '', body: draft.body, body_format: draft.body_format, cover: cover || null }, completeMedia, windowInfo, { prefix: 'note-preview' });
+      } else if (videos.length) {
         const poster = images[0];
         previewPresentation = buildContentPresentation({ title: draft.title || '', body: draft.body || '', body_format: draft.body_format || 'plain', presentation: 'video', cover: poster ? { media_id: poster.media_id, url: poster.url } : null, media: [videos[0]].concat(images) }, [videos[0]].concat(images), windowInfo, { prefix: 'note-preview' });
       } else if (images.length) {

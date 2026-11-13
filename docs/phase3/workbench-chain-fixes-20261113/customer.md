@@ -16,7 +16,7 @@
 | K01 | 客户列表与详情加入本人项目浏览/反馈/确认摘要；关联未浏览单列project_linked，浏览数保持0。只返回项目名称/类型/时间/ID，不返回正文、反馈原文、媒体或分享凭据。 | my_project_customers_test.go：只有项目客户也进入列表；同owner另一设计师无权；150条同事活动不挤掉本人；删除客户不复活；无浏览关联不伪造访问，先失败后通过。 |
 | K02 | converted独立回显；权威读取本人触达的状态/是否分配/下次跟进时间，既有他渠道线索ID保持隐藏。同actor重试去重、另一actor首次触达留证，复用全局客户。 | 前端ID0/重读先失败后通过；customer_handoff_test.go验证actor隔离、同actor去重及另一actor首次记录。 |
 | K03 | 每段400分享预算，返回share_window和独立share_cursor；客户/素材支持更早段、上一段、最新段，明细保留来源段，展示真实分段口径。 | my_visitors_test.go第401条客户可切段、换actor游标拒绝；前端窗口操作先失败后通过。 |
-| K07 | can_convert_lead同时检查身份、业务联系授权、账号手机号和已转化状态；缺失显示合法补齐说明，真实提交仍原事务复验。 | 后端联系未就绪/就绪/已转化三种行为；前端授权说明先失败后通过。 |
+| K07 | can_convert_lead沿用主线身份分流（业主sales、B端partner、未选identity_pending，未知身份拒绝），同时检查业务联系授权、账号手机号和已转化状态；缺失显示合法补齐说明，真实提交仍原事务复验。 | 后端联系未就绪/就绪/已转化三种行为；前端授权说明先失败后通过。 |
 | G01 | 本人客户选择API和可信customer_ref验证；项目Manage权限与客户只读分享图分开，跨公司素材转发可关联本人项目。精确预选不退回普通列表，不受400统计窗口限制。 | project_customer_relationship_test.go：历史关系、跨owner转发、另一actor、非规范ID、Manage撤销、未知ref、SQL参数绑定；创建hook与项目前端由其他通道整合。 |
 
 ### API契约

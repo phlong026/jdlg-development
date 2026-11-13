@@ -13,7 +13,12 @@ export interface CustomerLeadOverview {
     high_todo_count?: number;
     unassigned_count?: number;
     invalid_count?: number;
+	partner_todo_count?: number;
+	partner_count?: number;
+	identity_pending_count?: number;
 }
+
+export type CustomerLeadType = 'sales' | 'partner' | 'identity_pending';
 
 export interface CustomerLeadItem {
     id: number;
@@ -36,6 +41,8 @@ export interface CustomerLeadItem {
     assigned_to?: string;
     next_followup_at?: string | null;
     remark?: string;
+	identity_type?: string;
+	lead_type?: CustomerLeadType | string;
     created_at: string;
     updated_at: string;
     /** 最近一次留资时间（仅列表返回）：老客户再次留资只更新旧线索，created_at 不变 */
@@ -66,6 +73,8 @@ export interface CustomerLeadFollowupItem {
     status: string;
     remark: string;
     assigned_to?: string;
+	source?: string;
+	lead_type?: string;
     next_followup_at?: string | null;
     operator_id: number;
     operator_name: string;

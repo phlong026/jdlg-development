@@ -1,0 +1,32 @@
+{
+  "scope": "note-reader-integration",
+  "visual_verdict_skill": "unavailable",
+  "alternate": "CUA native WeChat DevTools offline fixture observation",
+  "fixture": "jdlg-note-layout-1BG0g3",
+  "tool_version": "2.02.2609250 Stable",
+  "simulator": "iPhone 17",
+  "checked_states": [
+    "article image/title/body visible",
+    "like toggles to cancel-like",
+    "management more menu with edit/copy/text/images/Word/poster/link/settings/delete",
+    "comment composer opens and empty submit is disabled"
+  ],
+  "result": "pass_for_observed_note_states; final_media_native_screenshots_incomplete",
+  "console_errors": 0,
+  "console_warnings": 6,
+  "limitations": [
+    "offline synthetic data; no production API writes",
+    "no physical phone, real keyboard, account or multi-device acceptance",
+    "screenshots observed in CUA tool output, no standalone PNG exported",
+    "final add-to-collection dialog and media native screenshots remain unobserved because the Mac locked; native WXML and behavior regressions passed"
+  ],
+  "media_validation": {
+    "automated_geometry_matrix": "passed",
+    "canonical_WXML_and_consumer_handlers": "passed",
+    "new_native_video_screenshots": "blocked_by_locked_mac",
+    "offline_video_fixtures": [
+      "/tmp/jdlg-adaptive-landscape-20261113",
+      "/tmp/jdlg-adaptive-portrait-20261113"
+    ]
+  }
+}

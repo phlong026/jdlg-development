@@ -1,0 +1,3 @@
+# The CRM Java sources already use CRLF. Keep their existing line endings
+# while retaining the normal trailing-space, EOF and indentation checks.
+customer-management/phase1/**/*.java whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

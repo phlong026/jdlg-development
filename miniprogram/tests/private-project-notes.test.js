@@ -77,6 +77,45 @@ test('draft preview reads unsaved text and project media without saving, freezin
   assert.equal(page.data.noteMedia[0].media_id, 'image-one');
 });
 
+test('shared project note preview rebuilds unknown image and video ratios once without mutating fixed media', async () => {
+  for (const [kind, width, height] of [['image', 1920, 1080], ['video', 1080, 1920]]) {
+    const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => `/tmp/${kind}` });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1;
+    page.setData({ pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: `${kind}预览`, noteBody: '保持展示比例', noteMedia: [{ media_id: `${kind}-one`, kind }] });
+    await page.previewNote();
+    const immutablePreviewMedia = JSON.stringify(page.data.previewMedia);
+    const fallback = page.data.previewPresentation.media[0];
+    assert.notEqual(fallback.intrinsicWidth / fallback.intrinsicHeight, width / height);
+
+    let writes = 0;
+    const setData = page.setData.bind(page);
+    page.setData = (values, done) => { writes += 1; setData(values, done); };
+    const event = { currentTarget: { dataset: { mediaId: `${kind}-one` } }, detail: { width, height } };
+    page.onContentVideoMetadata(event);
+    assert.equal(page.data.previewPresentation.media[0].intrinsicWidth, width);
+    assert.equal(page.data.previewPresentation.media[0].intrinsicHeight, height);
+    assert.equal(JSON.stringify(page.data.previewMedia), immutablePreviewMedia, '固定版本展示媒体不应被元数据事件回写');
+    assert.equal(writes, 1);
+    page.onContentVideoMetadata(event);
+    assert.equal(writes, 1, '相同尺寸不应再次setData');
+  }
+});
+
+test('project note gallery swipe rebuilds the selected media height', async () => {
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async (_, id) => `/tmp/${id}.jpg` });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({
+    pageView: 'editor', selectedProject: { project_id: 'project-one' }, noteTitle: '混合图集', noteBody: '滑动后跟随当前图片',
+    noteMedia: [{ media_id: 'wide', kind: 'image', width: 1920, height: 1080 }, { media_id: 'tall', kind: 'image', width: 900, height: 1600 }],
+  });
+  await page.previewNote();
+  const firstHeight = page.data.previewPresentation.galleryHeight;
+  page.onContentGalleryChange({ detail: { current: 1 } });
+  assert.equal(page.data.previewPresentation.galleryIndex, 1);
+  assert.equal(page.data.previewPresentation.galleryHeight, page.data.previewPresentation.media[1].height);
+  assert.notEqual(page.data.previewPresentation.galleryHeight, firstHeight);
+});
+
 test('structured draft preview preserves original block order, headings and captions', async () => {
   const body = JSON.stringify({ schema: 1, blocks: [{ kind: 'heading', level: 2, text: '空间布局' }, { kind: 'image', media_id: 'image-one', caption: '一层平面' }, { kind: 'paragraph', text: '老人房靠近入口。' }] });
   const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => '/tmp/plan.png' });
@@ -3202,4 +3241,38 @@ test('member media 404 revalidates fixed project and version while true revocati
   page.onLoad({ project_id: 'p' }); page._memberVersionID = 'v'; await page.onShow();
   assert.equal(reads, 2); assert.equal(page.data.view.version.body, '合法成员正文'); assert.equal(page.data.mediaFailuresCount, 1);
   denied = true; await page.revalidateShared(); assert.equal(page.data.view, null); assert.match(page.data.error, /访问权限/);
+});
+
+test('adopted structured note previews original image and both videos in document order without changing saved draft', async () => {
+  const body = JSON.stringify({ schema: 1, blocks: [
+    { kind: 'paragraph', text: '保留原正文' }, { kind: 'image', media_id: 'original-image' },
+    { kind: 'video', media_id: 'original-video' }, { kind: 'video', media_id: 'adopted-video' },
+  ] });
+  let savedPayload;
+  let note = { project_id: 'p', note_id: 'n', revision: 2, title: '采用后方案', body, body_format: 'article_v2', cover_media_id: 'original-image', media_ids: ['original-image', 'original-video', 'adopted-video'] };
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (_project, id) => '/tmp/' + id,
+    saveProjectNote: async (_id, input) => { savedPayload = input; note = { ...note, ...input, revision: 3 }; return note; },
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+  });
+  page._token = 'session-token'; page._epoch = 1; page._visible = true;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: body, bodyReadOnly: true,
+    noteMedia: [
+      { media_id: 'original-image', kind: 'image', local_path: '/tmp/image.jpg', width: 800, height: 600 },
+      { media_id: 'original-video', kind: 'video', local_path: '/tmp/original.mp4', width: 1280, height: 720 },
+      { media_id: 'adopted-video', kind: 'video', local_path: '/tmp/adopted.mp4', width: 1280, height: 720 },
+    ],
+  });
+  const draftBefore = JSON.stringify(page.noteDraft());
+  await page.previewNote();
+  assert.equal(page.data.previewPresentation.kind, 'article');
+  assert.deepEqual(Array.from(page.data.previewPresentation.blocks, item => [item.kind, item.media_id || item.text]), [
+    ['paragraph', '保留原正文'], ['image', 'original-image'], ['video', 'original-video'], ['video', 'adopted-video'],
+  ]);
+  assert.deepEqual(Array.from(page.data.previewPresentation.media, item => item.media_id), ['original-image', 'original-video', 'adopted-video']);
+  assert.equal(JSON.stringify(page.noteDraft()), draftBefore);
+  await page.persistNote(true);
+  assert.equal(savedPayload.body, body); assert.equal(savedPayload.body_format, 'article_v2'); assert.equal(savedPayload.cover_media_id, 'original-image');
+  assert.deepEqual(Array.from(savedPayload.media_ids), ['original-image', 'original-video', 'adopted-video']);
+  page.onUnload();
 });

@@ -367,6 +367,28 @@ test('video metadata replaces fallback ratios in the editor media model and shar
   assert.match(wxml, /<template is="content-presentation"/);
   const shared = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
   assert.match(shared, /bindloadedmetadata="onContentVideoMetadata"/);
+
+  let repeatedWrites = 0;
+  const setData = page.setData.bind(page);
+  page.setData = (values, done) => { repeatedWrites += 1; setData(values, done); };
+  page.onContentVideoMetadata({ currentTarget: { dataset: { mediaId: 'portrait-video' } }, detail: { width: 1080, height: 1920 } });
+  assert.equal(repeatedWrites, 0, '编辑预览相同尺寸的load/metadata不应再次重建');
+});
+
+test('editor gallery swipe rebuilds the selected media height', () => {
+  const page = pageHarness('contentedit', {});
+  const content = { title: '混合图集', body_format: 'article_v2', body: JSON.stringify({ schema: 1, presentation: 'gallery', blocks: [{ kind: 'image', media_id: 'wide' }, { kind: 'image', media_id: 'tall' }] }) };
+  const media = [
+    { media_id: 'wide', kind: 'image', url: '/tmp/wide.jpg', width: 1920, height: 1080 },
+    { media_id: 'tall', kind: 'image', url: '/tmp/tall.jpg', width: 900, height: 1600 },
+  ];
+  const presentationView = require(path.join(root, 'utils/content-presentation.js')).buildContentPresentation(content, media, { windowWidth: 390, windowHeight: 844 }, { prefix: 'contentedit-preview' });
+  page.setData({ preview: { content }, presentationView });
+  const firstHeight = page.data.presentationView.galleryHeight;
+  page.onContentGalleryChange({ detail: { current: 1 } });
+  assert.equal(page.data.presentationView.galleryIndex, 1);
+  assert.equal(page.data.presentationView.galleryHeight, page.data.presentationView.media[1].height);
+  assert.notEqual(page.data.presentationView.galleryHeight, firstHeight);
 });
 
 test('editor preview creates the native video after tapping the cover and restores it after an error', () => {

@@ -171,3 +171,26 @@ func TestProjectCustomerExactPreselectionUsesIndependentAuthorizedRelationship(t
 		t.Fatal("another actor selected private customer")
 	}
 }
+
+func TestMyCustomerHandoffUsesCurrentIdentityRoutingWithoutDroppingConsent(t *testing.T) {
+	for _, tc := range []struct {
+		identity string
+		ready    bool
+		can      bool
+	}{
+		{"乡墅业主", true, true},
+		{"设计师", true, true},
+		{"设计师", false, false},
+		{"", true, true},
+		{"unknown", true, false},
+	} {
+		detail := tracking.MyVisitorDetail{Visitor: tracking.Visitor{Key: "u:101", State: "identified", IdentityType: tc.identity}}
+		out, err := presentMyCustomerHandoff(context.Background(), customerHandoffFixture{model.MyCustomerHandoff{ContactReady: tc.ready}}, tracking.Scope{Actor: 7}, detail)
+		if err != nil || out.CanConvertLead != tc.can {
+			t.Fatalf("identity=%q ready=%v out=%+v err=%v", tc.identity, tc.ready, out, err)
+		}
+		if !tc.can && out.ConversionReason == "" {
+			t.Fatal("missing conversion guidance")
+		}
+	}
+}

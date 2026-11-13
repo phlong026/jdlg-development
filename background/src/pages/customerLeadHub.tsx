@@ -66,7 +66,9 @@ interface HubProps {
  * 客户 · 线索 · 商机 的入口卡片在布局层（SubNavCards），三个页面共用。
  */
 const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onRefresh, activeQueue, queueHref }) => {
-    const total = overview.total_count || 0;
+    const total = STAGES.reduce((sum, stage) => sum + Number(overview[stage.key] || 0), 0);
+    const partnerCount = overview.partner_count || 0;
+    const pendingCount = overview.identity_pending_count || 0;
     const stages = STAGES.map((stage) => {
         const count = Number(overview[stage.key] || 0);
         return { ...stage, count, percent: total > 0 ? Math.round((count / total) * 100) : 0 };
@@ -146,6 +148,8 @@ const CustomerLeadHub: React.FC<HubProps> = ({ overview, loading, updatedAt, onR
                                 <b>{stage.count}({stage.percent}%)</b>
                             </li>
                         ))}
+                        {partnerCount > 0 && <li><span>合作线索另计</span><b><Link to="/customer-leads?queue=partner">{partnerCount}</Link></b></li>}
+                        {pendingCount > 0 && <li><span>身份待确认另计</span><b>{pendingCount}</b></li>}
                     </ul>
                 </div>
             </section>

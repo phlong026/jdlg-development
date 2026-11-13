@@ -14,11 +14,12 @@ function reader(options = {}) {
   const wx = {
     showActionSheet(options) { sheets.push(options); },
     getStorageSync(key) { return key === 'token' ? account.token : null; },
+    setClipboardData(value) { value.success(); },
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.js'), 'utf8'), {
     Page: value => { definition = value; },
     wx, Promise, Object, Array, String, Number, Math, Error, Set, encodeURIComponent,
-    require: name => name.includes('tracking/index') ? { consentChoice: () => ({ resolved: true, accepted: false }) }
+    require: name => name.includes('tracking/index') ? { consentChoice: () => ({ resolved: true, accepted: false }), ...options.tracking }
       : name.includes('content-presentation') ? { buildContentPresentation: () => ({}) }
       : name.includes('protected-media') ? { resolveProtectedMediaURL: async value => value }
       : name.includes('tracking/video') ? { createVideoTracker: () => ({}) }
@@ -29,7 +30,7 @@ function reader(options = {}) {
   const page = Object.assign({}, definition, {
     data: { ...definition.data, contentReady: true, consentAvailable: false, presentationView: { kind: 'video' } },
     setData(values, callback) { Object.assign(this.data, values); if (callback) callback.call(this); },
-    copyWebLink() { calls.push('link'); },
+    copyWebLink: options.realCopy ? definition.copyWebLink : function () { calls.push('link'); },
     generatePoster() { calls.push('poster'); },
     openTrackingSettings() { calls.push('tracking'); },
   });
@@ -45,9 +46,11 @@ test('video footer replaces the duplicate copy button while non-video actions st
   assert.ok(start >= 0, 'video footer missing');
   assert.ok(footer.indexOf('分享给好友') < footer.indexOf('复制文案'));
   assert.ok(footer.indexOf('复制文案') < footer.indexOf('更多'));
-  assert.match(wxml, /wx:else class="reader-actions[^\"]*"/);
-  assert.match(wxml, /bindtap="copyWebLink"[\s\S]*open-type="share"[\s\S]*bindtap="generatePoster"/);
-  assert.match(wxml, /wx:if="\{\{posterAvailable\}\}" class="poster-action"/);
+  assert.match(wxml, /class="note-interaction-dock"/);
+  assert.match(wxml, /bindtap="openNoteMore"/);
+  assert.match(wxml, /class="note-toolbar-action" open-type="share"/);
+  assert.doesNotMatch(wxml, /class="poster-action"/);
+
 });
 
 test('video more menu reuses existing actions and only offers analytics settings when available', () => {
@@ -156,4 +159,33 @@ test('generatePoster is inert until a current server capability proof exists', a
   await page.generatePoster();
   assert.equal(requests, 0);
   assert.equal(page.data.posterAvailable, false);
+});
+
+test('copying a web link leaves an in-flight note interaction intact', async () => {
+  const { page } = reader({ account: { token: 'account-one' }, realCopy: true,
+    tracking: { consented: () => true, prepareShare: async () => ({ path: '/reader?st=proof' }), splitPath: () => ({ query: { st: 'proof' } }), confirmPreparedShare() {} },
+    phase3API: { request: async () => ({ web_url: 'https://example.test/note' }) } });
+  page.options = { content_id: 'content-one', content_version: '3' };
+  page.data.content = { title: '笔记' };
+  page.data.noteActionBusy = true;
+  let invalidations = 0;
+  page.invalidateNoteInteractions = () => { invalidations += 1; };
+  await page.copyWebLink();
+  assert.equal(page.data.webLinkBusy, false);
+  assert.equal(page.data.noteActionBusy, true);
+  assert.equal(invalidations, 0);
+});
+
+test('reader closes fixed-version collection dialogs on background and revalidation', async () => {
+  const { page } = reader();
+  page.players = {};
+  page.options = {};
+  page.data.media = [];
+  page.setData({ collectionsOpen: true });
+  page.onHide();
+  assert.equal(page.data.collectionsOpen, false);
+  page.setData({ collectionsOpen: true });
+  const pending = page.loadContent();
+  assert.equal(page.data.collectionsOpen, false);
+  await pending;
 });

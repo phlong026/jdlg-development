@@ -502,9 +502,10 @@ test('editor and reader implement the selected warm-gold content studio hierarch
   assert.doesNotMatch(readerWxml, /class="reader-brand"/, '阅读页不再展示品牌头');
   assert.match(readerWxml, /class="reader-actions[^"]*"/);
   assert.match(readerWxml, /open-type="share"/);
-  assert.match(readerWxml, /bindtap="copyWebLink"/);
+  assert.match(readerWxml, /bindtap="openNoteMore"/);
+  assert.match(readerWxml, /class="note-interaction-dock"/);
   assert.match(readerStyle, /#a87943/i);
-  assert.match(readerStyle, /\.reader-actions\s*\{[^}]*position:\s*fixed/);
+  assert.match(readerStyle, /\.note-interaction-dock\s*\{[^}]*position:\s*fixed/);
 });
 
 test('cover picker returns an image without changing body blocks and rejects a stale return', async () => {

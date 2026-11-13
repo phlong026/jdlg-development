@@ -19,8 +19,9 @@ var (
 )
 
 type TrackingLeadConversionResult struct {
-	LeadID  int64
-	Existed bool
+	LeadID   int64
+	Existed  bool
+	LeadType string
 }
 
 type businessContactConsentState struct {
@@ -255,10 +256,14 @@ func (m *CustomerServiceModel) ConvertTrackingLead(input *CustomerLeadCreateInpu
 				return TrackingLeadConversionResult{}, err
 			}
 		}
+		leadType, err := persistedLeadTypeOn(tx, existingID)
+		if err != nil {
+			return TrackingLeadConversionResult{}, err
+		}
 		if err := tx.Commit(); err != nil {
 			return TrackingLeadConversionResult{}, err
 		}
-		return TrackingLeadConversionResult{LeadID: existingID, Existed: true}, nil
+		return TrackingLeadConversionResult{LeadID: existingID, Existed: true, LeadType: leadType}, nil
 	}
 	input.Phone = phone
 	input.PhoneSource = CustomerLeadPhoneSourceAccountBound
@@ -271,8 +276,30 @@ func (m *CustomerServiceModel) ConvertTrackingLead(input *CustomerLeadCreateInpu
 	if _, err := m.createEventOn(tx, event); err != nil {
 		return TrackingLeadConversionResult{}, err
 	}
+	leadType, err := persistedLeadTypeOn(tx, leadID)
+	if err != nil {
+		return TrackingLeadConversionResult{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return TrackingLeadConversionResult{}, err
 	}
-	return TrackingLeadConversionResult{LeadID: leadID}, nil
+	return TrackingLeadConversionResult{LeadID: leadID, LeadType: leadType}, nil
+}
+
+func persistedLeadTypeOn(tx *sql.Tx, leadID int64) (string, error) {
+	var identityType string
+	if err := tx.QueryRow(`SELECT COALESCE(identity_type, '') FROM customer_leads WHERE id = ?`, leadID).Scan(&identityType); err != nil {
+		return "", err
+	}
+	identityType = strings.TrimSpace(identityType)
+	if identityType == "" {
+		return CustomerLeadTypeIdentityPending, nil
+	}
+	if identityType == "乡墅业主" {
+		return CustomerLeadTypeSales, nil
+	}
+	if IsPartnerIdentity(identityType) {
+		return CustomerLeadTypePartner, nil
+	}
+	return "", errors.New("persisted customer lead identity is invalid")
 }

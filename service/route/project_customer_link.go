@@ -38,7 +38,7 @@ func presentMyCustomerHandoff(ctx context.Context, m myCustomerHandoffReader, sc
 	if state.Converted {
 		return out, nil
 	}
-	if gate := trackingLeadGate(detail.State, detail.IdentityType, detail.Intent.CustomerShare); gate != nil {
+	if _, gate := trackingLeadGate(detail.State, detail.IdentityType); gate != nil {
 		out.ConversionReason = gate.Message
 		return out, nil
 	}

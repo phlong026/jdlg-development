@@ -5,9 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
+
+type contentCreateRequest struct {
+	ContentID   string `json:"content_id"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+func contentCreateFingerprint(in Draft) string {
+	in.IdempotencyKey = ""
+	return hash(string(marshal(in)))
+}
 
 func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Draft) (Content, error) {
 	var out Content
@@ -16,6 +27,46 @@ func (s *Service) SaveContent(ctx context.Context, scope Scope, id string, in Dr
 		return out, err
 	}
 	e := s.transaction(ctx, func(r Repository) error {
+		if id == "" && in.IdempotencyKey != "" {
+			if in.BodyFormat == "document_v1" {
+				return fail(400, "文档资料使用原文件去重，不接受创建幂等标识")
+			}
+			if !validID(in.IdempotencyKey) {
+				return fail(400, "幂等标识无效")
+			}
+			requestID := hash(fmt.Sprintf("content:create:%d:%s", scope.Actor, in.IdempotencyKey))
+			fingerprint := contentCreateFingerprint(in)
+			requestRow, requestErr := r.Get("content_create", requestID)
+			if requestErr == nil {
+				var request contentCreateRequest
+				if json.Unmarshal(requestRow.Payload, &request) != nil || requestRow.Owner != in.Owner || requestRow.Visitor != "u:"+strconv.FormatInt(scope.Actor, 10) {
+					return ErrUnavailable
+				}
+				if request.Fingerprint != fingerprint {
+					return fail(409, "内容创建幂等参数冲突")
+				}
+				existing, loadErr := loadCatalogContent(r, "content", request.ContentID)
+				if loadErr != nil || !scope.Allows(existing.Owner) || existing.Owner != in.Owner || existing.Status == "deleted" || existing.Status == "revoked" {
+					return fail(409, "原创建结果已不可用，请使用新的请求标识")
+				}
+				out = existing
+				return nil
+			}
+			if !errors.Is(requestErr, ErrNotFound) {
+				return requestErr
+			}
+			saved, saveErr := s.saveContentIn(r, scope, id, in, s.Now())
+			if saveErr != nil {
+				return saveErr
+			}
+			createdRequest := record("content_create", requestID, saved.Owner, s.Now(), contentCreateRequest{ContentID: saved.ID, Fingerprint: fingerprint})
+			createdRequest.Visitor = "u:" + strconv.FormatInt(scope.Actor, 10)
+			if insertErr := r.Insert(createdRequest); insertErr != nil {
+				return insertErr
+			}
+			out = saved
+			return nil
+		}
 		if id == "" && in.BodyFormat == "document_v1" {
 			key, request, err := documentArchiveIdentity(in)
 			if err != nil {

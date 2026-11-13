@@ -279,9 +279,21 @@ func (m *UserProfileModel) UpdateIdentityType(userID int64, identityType string)
 	if identityType != "" && !IsAllowedUserIdentityType(identityType) {
 		return fmt.Errorf("不支持的用户身份类型")
 	}
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	query := `UPDATE user_profiles SET identity_type = ?, updated_at = NOW() WHERE user_id = ?`
-	_, err := m.DB.Exec(query, identityType, userID)
-	return err
+	if _, err := tx.Exec(query, identityType, userID); err != nil {
+		return err
+	}
+	// Identity changes move existing leads between sales and partner queues,
+	// but are not follow-ups and therefore must not refresh updated_at.
+	if _, err := tx.Exec(`UPDATE customer_leads SET identity_type = ?, updated_at = updated_at WHERE user_id = ? AND identity_type <> ?`, identityType, userID, identityType); err != nil {
+		return fmt.Errorf("同步线索身份 user=%d: %w", userID, err)
+	}
+	return tx.Commit()
 }
 
 // UpdatePhone 更新用户手机号
