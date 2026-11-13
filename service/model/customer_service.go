@@ -23,11 +23,43 @@ const (
 	CustomerIntentLevelMedium = "medium"
 	CustomerIntentLevelHigh   = "high"
 
+	CustomerLeadTypeSales           = "sales"
+	CustomerLeadTypePartner         = "partner"
+	CustomerLeadTypeIdentityPending = "identity_pending"
+
 	CustomerLeadPhoneSourceNone          = "none"
 	CustomerLeadPhoneSourceUserProvided  = "user_provided"
 	CustomerLeadPhoneSourceAccountBound  = "account_bound"
 	CustomerLeadPhoneSourceLegacyUnknown = "legacy_unknown"
 )
+
+// PartnerIdentityTypes must stay aligned with tracking.BSideIdentities; route
+// tests cover that cross-package contract.
+var PartnerIdentityTypes = []string{"设计师", "施工队", "建材商", "机构用户"}
+
+func IsPartnerIdentity(identityType string) bool {
+	identityType = strings.TrimSpace(identityType)
+	for _, item := range PartnerIdentityTypes {
+		if item == identityType {
+			return true
+		}
+	}
+	return false
+}
+
+func CustomerLeadTypeOf(identityType string) string {
+	identityType = strings.TrimSpace(identityType)
+	switch {
+	case IsPartnerIdentity(identityType):
+		return CustomerLeadTypePartner
+	case identityType == "":
+		return CustomerLeadTypeIdentityPending
+	case identityType == "乡墅业主":
+		return CustomerLeadTypeSales
+	default:
+		return CustomerLeadTypeIdentityPending
+	}
+}
 
 var ErrInvalidCustomerLeadID = errors.New("invalid customer lead id")
 
@@ -61,6 +93,8 @@ type CustomerLead struct {
 	AssignedTo              string     `json:"assigned_to"`
 	NextFollowupAt          *time.Time `json:"next_followup_at"`
 	Remark                  string     `json:"remark"`
+	IdentityType            string     `json:"identity_type"`
+	LeadType                string     `json:"lead_type"`
 	CreatedAt               time.Time  `json:"created_at"`
 	UpdatedAt               time.Time  `json:"updated_at"`
 	// 最近一次留资时间（仅列表返回）：再次留资只更新旧线索，created_at 不变，
@@ -104,6 +138,7 @@ type CustomerLeadListParams struct {
 	Source      string
 	Queue       string
 	AssignedTo  string
+	LeadType    string
 	Limit       int
 	Offset      int
 	// Dedupe=user 时按小程序用户合并：每个 user_id 只返回最近一条线索，
@@ -121,19 +156,29 @@ type CustomerLeadOverview struct {
 	TodoCount       int64 `json:"todo_count"`
 	OverdueCount    int64 `json:"overdue_count"`
 	// 以下三项与队列列表使用同一段 SQL 条件，保证 Tab 角标 = 点进去看到的条数
-	HighTodoCount   int64 `json:"high_todo_count"`
-	UnassignedCount int64 `json:"unassigned_count"`
-	InvalidCount    int64 `json:"invalid_count"`
+	HighTodoCount        int64 `json:"high_todo_count"`
+	UnassignedCount      int64 `json:"unassigned_count"`
+	InvalidCount         int64 `json:"invalid_count"`
+	PartnerTodoCount     int64 `json:"partner_todo_count"`
+	PartnerCount         int64 `json:"partner_count"`
+	IdentityPendingCount int64 `json:"identity_pending_count"`
 }
 
 // 队列的 SQL 条件：ListLeads（列表）与 Overview（数量）共用，避免两边口径漂移。
 const (
-	leadQueueHighCond = `intent_level = 'high' AND status IN ('new', 'contacted')`
+	leadSalesCond      = `identity_type = '乡墅业主'`
+	leadPartnerCond    = `identity_type IN ('设计师', '施工队', '建材商', '机构用户')`
+	leadOpenCond       = `status IN ('new', 'contacted')`
+	leadQueueTodoCond  = leadSalesCond + ` AND ` + leadOpenCond
+	leadQueueTodayCond = leadSalesCond + ` AND created_at >= CURDATE()`
+	leadQueueHighCond  = leadQueueTodoCond + ` AND intent_level = 'high'`
 	// COALESCE 防御历史行的 NULL：assigned_to='' 对 NULL 不成立，会让未分配数虚低。
-	leadQueueUnassignedCond = `status IN ('new', 'contacted') AND COALESCE(assigned_to, '') = ''`
+	leadQueueUnassignedCond = leadQueueTodoCond + ` AND COALESCE(assigned_to, '') = ''`
 	// 超时口径：已排期且到期立即算；从未排期的给 48 小时宽限——新线索落地
 	// 瞬间不再是"超时"，否则超时队列与待处理恒等，天天 100% 报警即失去意义。
-	leadQueueOverdueCond = `status IN ('new', 'contacted') AND ((next_followup_at IS NOT NULL AND next_followup_at <= NOW()) OR (next_followup_at IS NULL AND updated_at <= DATE_SUB(NOW(), INTERVAL 48 HOUR)))`
+	leadQueueOverdueCond      = leadQueueTodoCond + ` AND ((next_followup_at IS NOT NULL AND next_followup_at <= NOW()) OR (next_followup_at IS NULL AND updated_at <= DATE_SUB(NOW(), INTERVAL 48 HOUR)))`
+	leadQueuePartnerCond      = leadPartnerCond + ` AND ` + leadOpenCond
+	leadQueueIdentityPendCond = `identity_type = '' AND ` + leadOpenCond
 )
 
 type CustomerFunnelMetric struct {
@@ -322,6 +367,7 @@ CREATE TABLE IF NOT EXISTS customer_leads (
   assigned_to VARCHAR(64) NOT NULL DEFAULT '',
   next_followup_at DATETIME NULL,
   remark TEXT,
+  identity_type VARCHAR(32) NOT NULL DEFAULT '',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_user_id (user_id),
@@ -329,7 +375,8 @@ CREATE TABLE IF NOT EXISTS customer_leads (
   INDEX idx_intent_level (intent_level),
   INDEX idx_source_task_no (source_task_no),
   INDEX idx_session_no (session_no),
-  INDEX idx_created_at (created_at)
+  INDEX idx_created_at (created_at),
+  INDEX idx_identity_type (identity_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `); err != nil {
 		return err
@@ -348,7 +395,6 @@ CREATE TABLE IF NOT EXISTS customer_leads (
 			log.Printf("customer_leads 增量结构检查: %v", err)
 		}
 	}
-
 	if _, err := m.DB.Exec(`
 CREATE TABLE IF NOT EXISTS customer_lead_followups (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -453,10 +499,14 @@ func (m *CustomerServiceModel) createLeadOn(db customerLeadDB, input *CustomerLe
 	}
 	normalizeCustomerLeadPhoneMetadata(input, allowAccountBound)
 	input.IntentLevel = m.AnalyzeLeadIntentFromInput(input).Level
+	identityType, err := m.lookupIdentityTypeOn(db, input.UserID)
+	if err != nil {
+		return 0, err
+	}
 	if id, err := m.findExistingLeadIDOn(db, input.UserID, input.SessionNo, input.SourceTaskNo); err != nil {
 		return 0, err
 	} else if id > 0 {
-		if err := m.updateExistingLeadOn(db, id, input); err != nil {
+		if err := m.updateExistingLeadOn(db, id, input, identityType); err != nil {
 			return 0, err
 		}
 		return id, m.backfillLeadIDForEventsOn(db, id, input.UserID, input.SessionNo, input.SourceTaskNo)
@@ -466,8 +516,8 @@ func (m *CustomerServiceModel) createLeadOn(db customerLeadDB, input *CustomerLe
 			user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact, demand_summary,
 			house_floors, house_style, land_width, land_depth, room_requirement,
 			source, session_no, source_task_no, intent_level, status, assigned_to, remark,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, NOW(), NOW())
+			identity_type, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, NOW(), NOW())
 	`,
 		input.UserID,
 		strings.TrimSpace(input.Name),
@@ -488,6 +538,7 @@ func (m *CustomerServiceModel) createLeadOn(db customerLeadDB, input *CustomerLe
 		NormalizeCustomerIntentLevel(input.IntentLevel),
 		NormalizeCustomerLeadStatus(input.Status),
 		strings.TrimSpace(input.Remark),
+		identityType,
 	)
 	if err != nil {
 		return 0, err
@@ -497,6 +548,24 @@ func (m *CustomerServiceModel) createLeadOn(db customerLeadDB, input *CustomerLe
 		return 0, err
 	}
 	return id, m.backfillLeadIDForEventsOn(db, id, input.UserID, input.SessionNo, input.SourceTaskNo)
+}
+
+func (m *CustomerServiceModel) lookupIdentityTypeOn(db customerLeadDB, userID int64) (string, error) {
+	if userID <= 0 {
+		return "", nil
+	}
+	var identityType string
+	if err := db.QueryRow(`SELECT COALESCE(identity_type, '') FROM user_profiles WHERE user_id = ?`, userID).Scan(&identityType); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("读取线索账号身份 user=%d: %w", userID, err)
+	}
+	identityType = strings.TrimSpace(identityType)
+	if identityType != "" && identityType != "乡墅业主" && !IsPartnerIdentity(identityType) {
+		return "", fmt.Errorf("线索账号身份不可识别 user=%d identity=%q", userID, identityType)
+	}
+	return identityType, nil
 }
 
 func (m *CustomerServiceModel) AnalyzeLeadIntentFromInput(input *CustomerLeadCreateInput) CustomerIntentAnalysis {
@@ -680,10 +749,14 @@ func (m *CustomerServiceModel) HasLeadUsers(userIDs []int64) (map[int64]bool, er
 }
 
 func (m *CustomerServiceModel) updateExistingLead(id int64, input *CustomerLeadCreateInput) error {
-	return m.updateExistingLeadOn(m.DB, id, input)
+	identityType, err := m.lookupIdentityTypeOn(m.DB, input.UserID)
+	if err != nil {
+		return err
+	}
+	return m.updateExistingLeadOn(m.DB, id, input, identityType)
 }
 
-func (m *CustomerServiceModel) updateExistingLeadOn(db customerLeadDB, id int64, input *CustomerLeadCreateInput) error {
+func (m *CustomerServiceModel) updateExistingLeadOn(db customerLeadDB, id int64, input *CustomerLeadCreateInput, identityType string) error {
 	_, err := db.Exec(`
 		UPDATE customer_leads
 		SET name = IF(? = '', name, ?),
@@ -704,6 +777,7 @@ func (m *CustomerServiceModel) updateExistingLeadOn(db customerLeadDB, id int64,
 		    intent_level = ?,
 		    status = CASE WHEN status IN ('contacted', 'converted', 'invalid') THEN status ELSE ? END,
 		    remark = IF(? = '', remark, ?),
+		    identity_type = IF(? = '', identity_type, ?),
 		    updated_at = NOW()
 		WHERE id = ?
 	`,
@@ -725,6 +799,7 @@ func (m *CustomerServiceModel) updateExistingLeadOn(db customerLeadDB, id int64,
 		NormalizeCustomerIntentLevel(input.IntentLevel),
 		NormalizeCustomerLeadStatus(input.Status),
 		strings.TrimSpace(input.Remark), strings.TrimSpace(input.Remark),
+		identityType, identityType,
 		id,
 	)
 	return err
@@ -839,17 +914,29 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 			args = append(args, assignedTo)
 		}
 	}
+	switch strings.TrimSpace(params.LeadType) {
+	case CustomerLeadTypeSales:
+		where = append(where, leadSalesCond)
+	case CustomerLeadTypePartner:
+		where = append(where, leadPartnerCond)
+	case CustomerLeadTypeIdentityPending:
+		where = append(where, `identity_type = ''`)
+	}
 	switch strings.TrimSpace(params.Queue) {
 	case "todo":
-		where = append(where, `status IN ('new', 'contacted')`)
+		where = append(where, leadQueueTodoCond)
 	case "today":
-		where = append(where, `created_at >= CURDATE()`)
+		where = append(where, leadQueueTodayCond)
 	case "high":
 		where = append(where, leadQueueHighCond)
 	case "overdue":
 		where = append(where, leadQueueOverdueCond)
 	case "unassigned":
 		where = append(where, leadQueueUnassignedCond)
+	case "partner":
+		where = append(where, leadQueuePartnerCond)
+	case "identity_pending":
+		where = append(where, leadQueueIdentityPendCond)
 	}
 
 	whereSQL := strings.Join(where, " AND ")
@@ -867,7 +954,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
-		       COALESCE(remark, ''), created_at, updated_at,
+		       COALESCE(remark, ''), identity_type, created_at, updated_at,
 		       COALESCE((SELECT MAX(e.created_at) FROM customer_service_events e
 		                 WHERE e.lead_id = customer_leads.id AND e.user_id = customer_leads.user_id AND e.event_type = 'lead_submit'), created_at) AS last_submitted_at
 		FROM customer_leads
@@ -881,7 +968,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
-		       COALESCE(remark, ''), created_at, updated_at, last_submitted_at, submission_count
+		       COALESCE(remark, ''), identity_type, created_at, updated_at, last_submitted_at, submission_count
 		FROM (
 		    SELECT base.*,
 		           ROW_NUMBER() OVER (
@@ -937,6 +1024,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 			&item.AssignedTo,
 			&nextFollowupAt,
 			&item.Remark,
+			&item.IdentityType,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 			&lastSubmittedAt,
@@ -953,6 +1041,7 @@ func (m *CustomerServiceModel) ListLeads(params CustomerLeadListParams) ([]*Cust
 		if lastSubmittedAt.Valid {
 			item.LastSubmittedAt = &lastSubmittedAt.Time
 		}
+		item.LeadType = CustomerLeadTypeOf(item.IdentityType)
 		list = append(list, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -976,7 +1065,7 @@ func (m *CustomerServiceModel) GetLead(id int64) (*CustomerLead, error) {
 		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
-		       COALESCE(remark, ''), created_at, updated_at
+		       COALESCE(remark, ''), identity_type, created_at, updated_at
 		FROM customer_leads
 		WHERE id = ?
 	`, id))
@@ -1132,6 +1221,7 @@ func scanCustomerLeadRow(row *sql.Row) (*CustomerLead, error) {
 		&item.AssignedTo,
 		&nextFollowupAt,
 		&item.Remark,
+		&item.IdentityType,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
@@ -1141,6 +1231,7 @@ func scanCustomerLeadRow(row *sql.Row) (*CustomerLead, error) {
 	if nextFollowupAt.Valid {
 		item.NextFollowupAt = &nextFollowupAt.Time
 	}
+	item.LeadType = CustomerLeadTypeOf(item.IdentityType)
 	return item, nil
 }
 
@@ -1327,16 +1418,19 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 	query := `
 		SELECT
 			COUNT(*) AS total_count,
-			COALESCE(SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END), 0) AS new_count,
-			COALESCE(SUM(CASE WHEN status = 'contacted' THEN 1 ELSE 0 END), 0) AS contacted_count,
-			COALESCE(SUM(CASE WHEN intent_level = 'high' THEN 1 ELSE 0 END), 0) AS high_intent_count,
-			COALESCE(SUM(CASE WHEN status = 'converted' THEN 1 ELSE 0 END), 0) AS converted_count,
-			COALESCE(SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END), 0) AS today_new_count,
-			COALESCE(SUM(CASE WHEN status IN ('new', 'contacted') THEN 1 ELSE 0 END), 0) AS todo_count,
+			COALESCE(SUM(CASE WHEN status = 'new' AND ` + leadSalesCond + ` THEN 1 ELSE 0 END), 0) AS new_count,
+			COALESCE(SUM(CASE WHEN status = 'contacted' AND ` + leadSalesCond + ` THEN 1 ELSE 0 END), 0) AS contacted_count,
+			COALESCE(SUM(CASE WHEN intent_level = 'high' AND ` + leadSalesCond + ` THEN 1 ELSE 0 END), 0) AS high_intent_count,
+			COALESCE(SUM(CASE WHEN status = 'converted' AND ` + leadSalesCond + ` THEN 1 ELSE 0 END), 0) AS converted_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueueTodayCond + ` THEN 1 ELSE 0 END), 0) AS today_new_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueueTodoCond + ` THEN 1 ELSE 0 END), 0) AS todo_count,
 			COALESCE(SUM(CASE WHEN ` + leadQueueOverdueCond + ` THEN 1 ELSE 0 END), 0) AS overdue_count,
 			COALESCE(SUM(CASE WHEN ` + leadQueueHighCond + ` THEN 1 ELSE 0 END), 0) AS high_todo_count,
 			COALESCE(SUM(CASE WHEN ` + leadQueueUnassignedCond + ` THEN 1 ELSE 0 END), 0) AS unassigned_count,
-			COALESCE(SUM(CASE WHEN status = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid_count
+			COALESCE(SUM(CASE WHEN status = 'invalid' AND ` + leadSalesCond + ` THEN 1 ELSE 0 END), 0) AS invalid_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueuePartnerCond + ` THEN 1 ELSE 0 END), 0) AS partner_todo_count,
+			COALESCE(SUM(CASE WHEN ` + leadPartnerCond + ` THEN 1 ELSE 0 END), 0) AS partner_count,
+			COALESCE(SUM(CASE WHEN ` + leadQueueIdentityPendCond + ` THEN 1 ELSE 0 END), 0) AS identity_pending_count
 		FROM customer_leads`
 	if err := m.DB.QueryRow(query).Scan(
 		&overview.TotalCount,
@@ -1350,6 +1444,9 @@ func (m *CustomerServiceModel) Overview() (*CustomerLeadOverview, error) {
 		&overview.HighTodoCount,
 		&overview.UnassignedCount,
 		&overview.InvalidCount,
+		&overview.PartnerTodoCount,
+		&overview.PartnerCount,
+		&overview.IdentityPendingCount,
 	); err != nil {
 		return nil, err
 	}
@@ -1459,12 +1556,13 @@ func (m *CustomerServiceModel) FunnelMetrics(start, end time.Time) ([]CustomerFu
 	}
 
 	var submitCount int64
-	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_service_events WHERE event_type = 'lead_submit' AND user_id > 0`+timeCond, timeArgs...).Scan(&submitCount); err != nil {
+	submitTimeCond := strings.ReplaceAll(timeCond, "created_at", "e.created_at")
+	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT e.user_id) FROM customer_service_events e JOIN customer_leads l ON l.id = e.lead_id WHERE e.event_type = 'lead_submit' AND e.user_id > 0 AND l.`+leadSalesCond+submitTimeCond, timeArgs...).Scan(&submitCount); err != nil {
 		return nil, fmt.Errorf("count funnel submissions: %w", err)
 	}
 	counts.Steps["lead_submit"] = submitCount
 
-	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE status = 'converted' AND user_id > 0`+timeCond, timeArgs...).Scan(&counts.Converted); err != nil {
+	if err := m.DB.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM customer_leads WHERE status = 'converted' AND user_id > 0 AND `+leadSalesCond+timeCond, timeArgs...).Scan(&counts.Converted); err != nil {
 		return nil, fmt.Errorf("count funnel conversions: %w", err)
 	}
 	return buildCustomerFunnel(counts), nil
@@ -1483,7 +1581,7 @@ func (m *CustomerServiceModel) applyLeadActionOn(db customerLeadDB, id int64, in
 		SELECT id, user_id, name, phone, phone_source, phone_consent_revision, wechat, enterprise_wechat_contact,
 		       COALESCE(demand_summary, ''), house_floors, house_style, land_width, land_depth,
 		       room_requirement, source, session_no, source_task_no, intent_level, status, assigned_to, next_followup_at,
-		       COALESCE(remark, ''), created_at, updated_at
+		       COALESCE(remark, ''), identity_type, created_at, updated_at
 		FROM customer_leads
 		WHERE id = ?
 	`, id))

@@ -65,8 +65,8 @@ test('reader share metadata stays inside native share boundaries and video copy 
  const source=fs.readFileSync(path.join(root,route+'.js'),'utf8');
  const template=fs.readFileSync(path.join(root,route+'.wxml'),'utf8');
  assert.match(source,/copyVideoCopy\(\)/);
- assert.match(source,/view&&view\.shareCopy/);
- assert.match(source,/view&&view\.momentsCopy/);
+ assert.match(source,/view\s*&&\s*view\.shareCopy/);
+ assert.match(source,/view\s*&&\s*view\.momentsCopy/);
  assert.match(template,/bindtap="copyVideoCopy"/);
  assert.match(template,/wx:if="\{\{presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
 });

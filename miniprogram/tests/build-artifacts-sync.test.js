@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.join(__dirname, '../miniprogram');
+const { compileReader } = require('../scripts/compile-content-reader');
 
 // strip：去 @ts-nocheck 首行与尾部 export {};
 const stripTS = source => source.replace('// @ts-nocheck\n', '').replace(/\nexport \{\};\n?$/, '\n');
@@ -20,7 +21,6 @@ const PAIRS = [
   'pages/sharevisits/sharevisits',
   'pages/projectcollections/projectcollections',
   'pages/messagecenter/messagecenter',
-  'pages/contentreader/contentreader',
 ];
 
 test('strip-normalized ts sources stay in lockstep with committed js artifacts', () => {
@@ -36,4 +36,10 @@ test('tsc-compiled generatedetails artifact carries the new save-as-content entr
   const js = fs.readFileSync(path.join(root, 'pages/generatedetails/generatedetails.js'), 'utf8');
   assert.match(js, /saveAsContent/, 'saveAsContent 必须存在于编译产物');
   assert.match(js, /workbench\/contents\/from-generation/, '直连管线端点必须存在于编译产物');
+});
+
+test('typed content reader exactly matches its committed compiler output', () => {
+  const file = path.join(root, 'pages/contentreader/contentreader.ts');
+  const expected = compileReader(fs.readFileSync(file, 'utf8'), file);
+  assert.equal(fs.readFileSync(file.replace(/\.ts$/, '.js'), 'utf8'), expected);
 });

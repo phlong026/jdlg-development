@@ -54,6 +54,9 @@
 }
 
 .presentation-video-shell {
+  max-width: 100%;
+  margin-right: auto;
+  margin-left: auto;
   background: #111;
 }
 
@@ -215,13 +218,16 @@
 }
 
 .presentation-article-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   max-width: 100%;
   margin: 20px 0;
 }
 
 .presentation-article-image,
 .presentation-article-video {
-  width: 100%;
+  max-width: 100%;
 }
 
 .presentation-media-error {

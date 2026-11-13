@@ -83,7 +83,9 @@ function mediaFrame(asset, index, frameWidth, windowHeight, prefix, caption, max
   const intrinsicHeight = Math.max(1, Number(asset.height) || (asset.kind === 'video' ? 9 : 4));
   const maxHeight = Math.max(240, Number(maxHeightOverride) || Math.round(windowHeight * 0.68));
   const naturalHeight = Math.round(frameWidth * intrinsicHeight / intrinsicWidth);
-  const height = Math.max(120, Math.min(naturalHeight, maxHeight));
+  // Keep the media box on the asset ratio. A fixed minimum height creates
+  // letterboxing for panoramic media even when aspectFit is used correctly.
+  const height = Math.max(1, Math.min(naturalHeight, maxHeight));
   const displayWidth = Math.min(frameWidth, Math.round(height * intrinsicWidth / intrinsicHeight));
   return {
     ...asset,
@@ -142,7 +144,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   const availableMedia = sourceMedia(safeContent, media, document);
   const kind = inferContentPresentation({ ...safeContent, media: availableMedia });
   const frameWidth = Math.max(240, Math.round(Number(windowInfo && windowInfo.windowWidth || 375) - 36));
-  const windowHeight = Math.max(480, Number(windowInfo && windowInfo.windowHeight || 667));
+  const windowHeight = Math.max(240, Number(windowInfo && windowInfo.windowHeight || 667));
   const prefix = String(options.prefix || 'content-presentation').replace(/[^A-Za-z0-9_-]/g, '-') || 'content-presentation';
   const videoLayout = document && document.video_layout === 'douyin' ? 'douyin' : 'channels';
   const videoChromeHeight = Math.max(120, Number(options.videoChromeHeight) || 150);
@@ -171,6 +173,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   }
 
   const maxGalleryIndex = Math.max(0, viewMedia.length - 1);
+  const galleryIndex = Math.min(maxGalleryIndex, Math.max(0, Number(options.galleryIndex) || 0));
   const sourceNote = String(safeContent.source_note || '').trim();
   return {
     kind,
@@ -189,8 +192,8 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
     blocks,
     media: viewMedia,
     frameWidth,
-    galleryIndex: Math.min(maxGalleryIndex, Math.max(0, Number(options.galleryIndex) || 0)),
-    galleryHeight: viewMedia.reduce((height, item) => Math.max(height, item.height || 0), 0),
+    galleryIndex,
+    galleryHeight: viewMedia[galleryIndex] && viewMedia[galleryIndex].height || 0,
   };
 }
 
