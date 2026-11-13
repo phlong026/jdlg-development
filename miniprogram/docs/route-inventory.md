@@ -35,6 +35,12 @@
 | pages/utilitytools/utilitytools | list | onShareAppMessage | /pages/utilitytools/utilitytools | explicit | 未真机验证 |
 | pages/utilitytooldetail/utilitytooldetail | detail | onShareAppMessage | /pages/utilitytooldetail/utilitytooldetail?id=${this.data.toolId 或 0}（按原回调） | nonempty:tool | 未真机验证 |
 | pages/aivideo/aivideo | form | onShareAppMessage | /pages/aivideo/aivideo | rendered | 未真机验证 |
+| pages/aivideostudio/index | excluded | 无 | 按原回调/无静态path | excluded-private-generated-content | 未真机验证 |
+| pages/aivideostudio/generate | excluded | 无 | 按原回调/无静态path | excluded-private-generated-content | 未真机验证 |
+| pages/aivideostudio/materials | excluded | 无 | 按原回调/无静态path | excluded-private-generated-content | 未真机验证 |
+| pages/aivideostudio/prompts | excluded | 无 | 按原回调/无静态path | excluded-private-generated-content | 未真机验证 |
+| pages/aivideostudio/records | excluded | 无 | 按原回调/无静态path | excluded-private-generated-content | 未真机验证 |
+| pages/aivideostudio/detail | excluded | 无 | 按原回调/无静态path | excluded-private-generated-content | 未真机验证 |
 | pages/real/real | excluded | onShareAppMessage | /pages/Identityauthen/Identityauthen | excluded-private-identity | 未真机验证 |
 | pages/report/landing | landing | onShareAppMessage | /pages/report/landing | nonempty:enabled | 未真机验证 |
 | pages/report/questionnaire | excluded | 无 | 按原回调/无静态path | excluded-private-report | 未真机验证 |

@@ -152,6 +152,27 @@ func registerAIVideoStudioMediaContentRoute(v1 *gin.RouterGroup, media *model.AI
 }
 
 func registerAIVideoStudioMediaRoutes(g *gin.RouterGroup, store *model.AIVideoStudioStore, media *model.AIVideoStudioMediaStore, svc *tracking.Service, users *model.UserModel) {
+	g.GET("/media/:id", func(c *gin.Context) {
+		if !validStoredMediaID(c.Param("id")) {
+			studioError(c, 404, "素材不可访问")
+			return
+		}
+		item, err := media.Get(c.Request.Context(), GetTokenUserID(c), c.Param("id"))
+		if errors.Is(err, sql.ErrNoRows) {
+			studioError(c, 404, "素材不可访问")
+			return
+		}
+		if err != nil {
+			studioMediaFailure(c, "metadata", err)
+			return
+		}
+		item.URL, err = studioMediaSignedURL(item.ID, time.Now().Add(10*time.Minute))
+		if err != nil {
+			studioMediaFailure(c, "metadata_sign", err)
+			return
+		}
+		studioOK(c, item)
+	})
 	g.GET("/media", func(c *gin.Context) {
 		page, size := studioPage(c)
 		kind := c.Query("media_type")

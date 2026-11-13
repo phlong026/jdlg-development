@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "任务详情",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}
