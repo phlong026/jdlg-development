@@ -27,6 +27,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"service/aivideostudio"
 	"service/model"
 	"service/tracking"
 )
@@ -414,7 +415,19 @@ func attachStudioRetainedMedia(ctx context.Context, store *model.AIVideoStudioSt
 }
 
 func studioResult(ctx context.Context, store *model.AIVideoStudioStore, userID int64, id string) (status, raw, stableID string, err error) {
-	err = store.DB.QueryRowContext(ctx, `SELECT status,COALESCE(result_url,''),stable_media_id FROM ai_video_studio_tasks WHERE id=? AND user_id=?`, id, userID).Scan(&status, &raw, &stableID)
+	var external string
+	err = store.DB.QueryRowContext(ctx, `SELECT status,COALESCE(result_url,''),stable_media_id,external_id FROM ai_video_studio_tasks WHERE id=? AND user_id=?`, id, userID).Scan(&status, &raw, &stableID, &external)
+	if err == nil && stableID == "" && external != "" && (status == "completed" || status == "succeeded") {
+		result, e := aivideostudio.NewMetasoProvider(os.Getenv("AI_VIDEO_STUDIO_METASO_API_KEY")).Query(ctx, external)
+		if e != nil {
+			return status, "", stableID, e
+		}
+		if result.Status != "succeeded" || !safeStudioRemoteURL(result.ResultURL) {
+			return status, "", stableID, errors.New("result temporarily unavailable")
+		}
+		raw = result.ResultURL
+		_, err = store.DB.ExecContext(ctx, `UPDATE ai_video_studio_tasks SET result_url=? WHERE id=? AND user_id=?`, raw, id, userID)
+	}
 	return
 }
 

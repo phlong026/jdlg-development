@@ -98,8 +98,8 @@ func TestProviderSubmissionUncertaintyNeverLooksRejected(t *testing.T) {
 		{"request timeout", 408, `{}`, ErrSubmissionUncertain},
 		{"lost response", 200, `{}`, ErrSubmissionUncertain},
 		{"invalid JSON", 200, `not json`, ErrSubmissionUncertain},
-		{"explicit rejection", 422, `{"error":"secret upstream detail"}`, ErrSubmissionRejected},
-		{"rate limit", 429, `{}`, ErrSubmissionRejected},
+		{"unverified rejection", 422, `{"error":"secret upstream detail"}`, ErrSubmissionUncertain},
+		{"rate limit", 429, `{}`, ErrSubmissionUncertain},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testProvider(func(*http.Request) (*http.Response, error) { return providerResponse(tc.status, tc.body), nil })
@@ -153,8 +153,8 @@ func TestProviderQueryChecksIdentityAndPreservesPending(t *testing.T) {
 	}{
 		{`{"task":{"id":"external-1","status":"succeeded","content":{"url":"https://cdn.example.com/result.mp4"},"usage":{"output_seconds":4}}}`, "succeeded", false},
 		{`{"task":{"id":"other-task","status":"succeeded","content":{"url":"https://cdn.example.com/result.mp4"}}}`, "", true},
-		{`{"task":{"status":"unknown-new-state"}}`, "running", false},
-		{`{"items":[{"id":"other-task","status":"failed"}]}`, "running", false},
+		{`{"task":{"status":"unknown-new-state"}}`, "", true},
+		{`{"items":[{"id":"other-task","status":"failed"}]}`, "", true},
 		{`{"task":{"status":"succeeded","content":{"url":"http://127.0.0.1/secret"}}}`, "", true},
 		{`{"task":{"status":"failed","error":{"message":"secret token"}}}`, "failed", false},
 	} {

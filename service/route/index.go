@@ -53,6 +53,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	var virtualPayCompensator *VirtualPayCompensator
 	stopPhase3 := func() {}
 	stopImports := func() {}
+	stopStudio := func() {}
 	reportModule, reportErr := NewReportModule(reportContext, component.GetDB(), cfg)
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
@@ -83,12 +84,17 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		}
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
 		aiVideoStudioStore := model.NewAIVideoStudioStore(userDBModel.DB)
-		if err := aiVideoStudioStore.InitTables(); err != nil {
-			log.Printf("[AI视频工作台] 初始化独立业务表失败，模块保持不可用: %v", err)
-		}
 		aiVideoStudioMediaStore := model.NewAIVideoStudioMediaStore(userDBModel.DB)
-		if err := aiVideoStudioMediaStore.InitTable(); err != nil {
-			log.Printf("[AI视频工作台] 初始化素材表失败，素材能力保持不可用: %v", err)
+		if err := aiVideoStudioStore.InitTables(); err != nil {
+			log.Printf("[AI视频工作台] schema unavailable")
+		} else if err := aiVideoStudioStore.InitExecutionTables(); err != nil {
+			log.Printf("[AI视频工作台] execution schema unavailable")
+		} else if err := aiVideoStudioStore.InitWorkerTables(); err != nil {
+			log.Printf("[AI视频工作台] worker schema unavailable")
+		} else if err := aiVideoStudioMediaStore.InitTable(); err != nil {
+			log.Printf("[AI视频工作台] media schema unavailable")
+		} else {
+			stopStudio = startStudioWorker(reportContext, aiVideoStudioStore, aiVideoStudioMediaStore)
 		}
 		registerAIVideoStudioMediaContentRoute(v1, aiVideoStudioMediaStore, trackingService)
 		stopImports = registerContentImports(reportContext, v1, trackingService, userDBModel, codeSessionModel, cfg)
@@ -249,6 +255,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterUtilityToolRoutes(miniprogram, utilityToolModel)
 	}
 	return func() {
+		stopStudio()
 		stopImports()
 		stopPhase3()
 		virtualPayCompensator.Stop()

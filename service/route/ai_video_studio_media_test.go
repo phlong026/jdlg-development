@@ -64,7 +64,7 @@ func (c studioRetentionConn) QueryContext(_ context.Context, _ string, args []dr
 	return &studioRetentionRows{status: c.fixture.status, stable: c.fixture.stable}, nil
 }
 func (*studioRetentionRows) Columns() []string {
-	return []string{"status", "result_url", "stable_media_id"}
+	return []string{"status", "result_url", "stable_media_id", "external_id"}
 }
 func (*studioRetentionRows) Close() error { return nil }
 func (r *studioRetentionRows) Next(dest []driver.Value) error {
@@ -75,6 +75,7 @@ func (r *studioRetentionRows) Next(dest []driver.Value) error {
 	dest[0] = r.status
 	dest[1] = ""
 	dest[2] = r.stable
+	dest[3] = ""
 	return nil
 }
 

@@ -88,13 +88,11 @@ func (p *metasoProvider) Submit(ctx context.Context, input GenerationRequest) (G
 	if err != nil {
 		return GenerationReceipt{}, fmt.Errorf("%w: %s", ErrSubmissionRejected, err)
 	}
-	response, status, err := p.request(ctx, http.MethodPost, "/video_generation", body)
+	response, _, err := p.request(ctx, http.MethodPost, "/video_generation", body)
 	if err != nil {
-		if explicitSubmissionRejection(status) {
-			return GenerationReceipt{}, ErrSubmissionRejected
-		}
 		// Native H3 has no verified idempotency guarantee. Even malformed 2xx
-		// responses may represent a paid accepted task. The worker must park it.
+		// or HTTP rejection responses may represent an accepted task: its public
+		// native contract does not promise non-acceptance for a particular code.
 		return GenerationReceipt{}, ErrSubmissionUncertain
 	}
 	var receipt struct {
@@ -104,14 +102,6 @@ func (p *metasoProvider) Submit(ctx context.Context, input GenerationRequest) (G
 		return GenerationReceipt{}, ErrSubmissionUncertain
 	}
 	return GenerationReceipt{ExternalID: receipt.TaskID}, nil
-}
-
-func explicitSubmissionRejection(status int) bool {
-	switch status {
-	case 400, 401, 403, 404, 405, 413, 415, 422, 429:
-		return true
-	}
-	return false
 }
 
 func (p *metasoProvider) Query(ctx context.Context, externalID string) (GenerationStatus, error) {
@@ -146,7 +136,7 @@ func (p *metasoProvider) Query(ctx context.Context, externalID string) (Generati
 		}
 	}
 	if task == nil {
-		return GenerationStatus{Status: "running"}, nil
+		return GenerationStatus{}, errors.New("任务状态响应缺少当前任务")
 	}
 	if task.ID != "" && task.ID != externalID {
 		return GenerationStatus{}, errors.New("任务状态标识不匹配")
@@ -168,6 +158,10 @@ func (p *metasoProvider) Query(ctx context.Context, externalID string) (Generati
 	case "cancelled", "canceled":
 		result.Status = "cancelled"
 		result.ErrorCode = "provider_cancelled"
+	case "queued", "pending", "submitted", "running", "processing", "in_progress", "created":
+		// Keep known nonterminal states observable without inventing success.
+	default:
+		return GenerationStatus{}, errors.New("任务状态暂无法识别，请稍后查询")
 	}
 	return result, nil
 }
@@ -333,4 +327,11 @@ func validProviderMediaURL(raw string) bool {
 		return ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast()
 	}
 	return true
+}
+
+// ValidateGenerationRequest applies the same native schema used by Submit,
+// without issuing a network request. Queue builders can fail before dispatch.
+func ValidateGenerationRequest(input GenerationRequest) error {
+	_, err := metasoRequest(input)
+	return err
 }

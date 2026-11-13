@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"service/aivideostudio"
 )
 
 var ErrAIVideoStudioConflict = errors.New("ai video studio revision conflict")
 
-type AIVideoStudioStore struct{ DB *sql.DB }
+type AIVideoStudioStore struct {
+	DB    *sql.DB
+	Ready bool
+}
 
 func NewAIVideoStudioStore(db *sql.DB) *AIVideoStudioStore { return &AIVideoStudioStore{DB: db} }
 
@@ -170,117 +171,6 @@ func (s *AIVideoStudioStore) InitTables() error {
 		`{"max_concurrency":1,"timeout_seconds":900,"max_quantity":1,"max_duration_768p":15,"max_duration_2k":15,"max_reference_images":8,"max_reference_videos":3,"max_reference_audios":3,"max_reference_total":12}`,
 		`[]`)
 	return err
-}
-
-type AIVideoStudioRecoverableTask struct {
-	ID           string `json:"result_id"`
-	BatchID      string `json:"batch_id"`
-	UserID       int64  `json:"-"`
-	ProviderCode string `json:"provider_code"`
-	ExternalID   string `json:"external_id"`
-	Status       string `json:"status"`
-}
-
-// ClaimRecoverableTasks leases only requests that already have a durable external identity
-// or are explicitly uncertain. It never claims queued/submitting work, so a restart cannot
-// create a second paid provider request while billing readiness is unavailable.
-func (s *AIVideoStudioStore) ClaimRecoverableTasks(ctx context.Context, owner string, limit int, lease time.Duration) ([]AIVideoStudioRecoverableTask, error) {
-	if strings.TrimSpace(owner) == "" {
-		return nil, errors.New("worker owner is required")
-	}
-	if limit < 1 || limit > 100 {
-		limit = 20
-	}
-	if lease < time.Minute {
-		lease = time.Minute
-	}
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM ai_video_studio_tasks WHERE status IN ('uncertain','submitted','running') AND (lease_until IS NULL OR lease_until<NOW()) AND (next_poll_at IS NULL OR next_poll_at<=NOW()) ORDER BY updated_at LIMIT ? FOR UPDATE SKIP LOCKED`, limit)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, limit)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if len(ids) == 0 {
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return []AIVideoStudioRecoverableTask{}, nil
-	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
-	args := make([]interface{}, 0, len(ids)+2)
-	args = append(args, owner, int(lease/time.Second))
-	for _, id := range ids {
-		args = append(args, id)
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE ai_video_studio_tasks SET lease_owner=?,lease_until=DATE_ADD(NOW(),INTERVAL ? SECOND) WHERE id IN (`+placeholders+`)`, args...); err != nil {
-		return nil, err
-	}
-	selectArgs := make([]interface{}, 0, len(ids)+1)
-	selectArgs = append(selectArgs, owner)
-	for _, id := range ids {
-		selectArgs = append(selectArgs, id)
-	}
-	claimed, err := tx.QueryContext(ctx, `SELECT id,batch_id,user_id,provider_code,external_id,status FROM ai_video_studio_tasks WHERE lease_owner=? AND id IN (`+placeholders+`) ORDER BY updated_at`, selectArgs...)
-	if err != nil {
-		return nil, err
-	}
-	tasks := make([]AIVideoStudioRecoverableTask, 0, len(ids))
-	for claimed.Next() {
-		var task AIVideoStudioRecoverableTask
-		if err := claimed.Scan(&task.ID, &task.BatchID, &task.UserID, &task.ProviderCode, &task.ExternalID, &task.Status); err != nil {
-			claimed.Close()
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-	if err := claimed.Close(); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return tasks, nil
-}
-
-func (s *AIVideoStudioStore) UpdateRecoveredTask(ctx context.Context, id, owner string, from []string, to, externalID, resultURL, errorCode, errorMessage string, nextPoll time.Time) (bool, error) {
-	if len(from) == 0 {
-		return false, errors.New("source status is required")
-	}
-	for _, status := range from {
-		if !aivideostudio.CanTransition(status, to) {
-			return false, fmt.Errorf("invalid task transition %s -> %s", status, to)
-		}
-	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(from)), ",")
-	var poll interface{}
-	if !nextPoll.IsZero() {
-		poll = nextPoll
-	}
-	args := []interface{}{to, externalID, externalID, resultURL, resultURL, errorCode, errorMessage, poll, id, owner}
-	for _, status := range from {
-		args = append(args, status)
-	}
-	r, err := s.DB.ExecContext(ctx, `UPDATE ai_video_studio_tasks SET status=?,external_id=CASE WHEN ?='' THEN external_id ELSE ? END,result_url=CASE WHEN ?='' THEN result_url ELSE ? END,error_code=?,error_message=?,next_poll_at=?,lease_owner='',lease_until=NULL WHERE id=? AND lease_owner=? AND status IN (`+placeholders+`)`, args...)
-	if err != nil {
-		return false, err
-	}
-	n, _ := r.RowsAffected()
-	return n == 1, nil
 }
 
 func scanAIVideoStudioDraft(scanner interface{ Scan(...interface{}) error }) (*AIVideoStudioDraft, error) {
@@ -575,6 +465,7 @@ func (s *AIVideoStudioStore) GetBatch(ctx context.Context, userID int64, id stri
 	if err := s.DB.QueryRowContext(ctx, `SELECT id,draft_id,quote_id,mode,status,input_snapshot,fee_status,total_stones,error_code,error_message,created_at,updated_at FROM ai_video_studio_batches WHERE `+where, args...).Scan(&batchID, &draftID, &quoteID, &mode, &status, &snapshot, &feeStatus, &totalStones, &errorCode, &errorMessage, &created, &updated); err != nil {
 		return nil, err
 	}
+	canCancel := false
 	tasks := make([]map[string]interface{}, 0)
 	taskWhere := "batch_id=?"
 	taskArgs := []interface{}{id}
@@ -582,7 +473,7 @@ func (s *AIVideoStudioStore) GetBatch(ctx context.Context, userID int64, id stri
 		taskWhere += " AND user_id=?"
 		taskArgs = append(taskArgs, userID)
 	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,item_index,status,delivery_type,result_url,stable_media_id,output_seconds,error_code,error_message,created_at,updated_at FROM ai_video_studio_tasks WHERE `+taskWhere+` ORDER BY item_index`, taskArgs...)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id,item_index,status,delivery_type,COALESCE(result_url,''),stable_media_id,output_seconds,error_code,error_message,created_at,updated_at,external_id FROM ai_video_studio_tasks WHERE `+taskWhere+` ORDER BY item_index`, taskArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -592,14 +483,28 @@ func (s *AIVideoStudioStore) GetBatch(ctx context.Context, userID int64, id stri
 		var index int
 		var output float64
 		var taskCreated, taskUpdated time.Time
-		if err := rows.Scan(&taskID, &index, &taskStatus, &delivery, &resultURL, &stableID, &output, &taskErrorCode, &taskErrorMessage, &taskCreated, &taskUpdated); err != nil {
+		var external string
+		if err := rows.Scan(&taskID, &index, &taskStatus, &delivery, &resultURL, &stableID, &output, &taskErrorCode, &taskErrorMessage, &taskCreated, &taskUpdated, &external); err != nil {
 			return nil, err
+		}
+		if taskStatus == "queued" {
+			canCancel = true
 		}
 		retentionStatus := "not_retained"
 		if stableID != "" {
 			retentionStatus = "retained"
 		}
 		tasks = append(tasks, map[string]interface{}{"result_id": taskID, "item_index": index, "status": taskStatus, "delivery_type": delivery, "result_url": resultURL, "stable_media_id": stableID, "retention_status": retentionStatus, "output_seconds": output, "error_code": taskErrorCode, "error_message": taskErrorMessage, "created_at": taskCreated, "updated_at": taskUpdated})
+		if userID == 0 {
+			tasks[len(tasks)-1]["external_id"] = external
+		}
 	}
-	return map[string]interface{}{"batch_id": batchID, "draft_id": draftID, "quote_id": quoteID, "mode": mode, "status": status, "snapshot": json.RawMessage(snapshot), "charge": map[string]interface{}{"fee_status": feeStatus, "total_stones": totalStones}, "items": tasks, "results": tasks, "error_code": errorCode, "error_message": errorMessage, "created_at": created, "updated_at": updated}, rows.Err()
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	var reserved, settled, released int64
+	if err := s.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(CASE WHEN status='reserved' THEN amount ELSE 0 END),0),COALESCE(SUM(CASE WHEN status='settled' THEN amount ELSE 0 END),0),COALESCE(SUM(CASE WHEN status='refunded' THEN amount ELSE 0 END),0) FROM ai_video_studio_fees WHERE batch_id=? AND kind='reserve'`, id).Scan(&reserved, &settled, &released); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"can_cancel": canCancel, "batch_id": batchID, "draft_id": draftID, "quote_id": quoteID, "mode": mode, "status": status, "snapshot": json.RawMessage(snapshot), "charge": map[string]interface{}{"fee_status": feeStatus, "total_stones": totalStones, "quoted_stones": totalStones, "reserved_stones": reserved, "settled_stones": settled, "released_stones": released}, "items": tasks, "results": tasks, "error_code": errorCode, "error_message": errorMessage, "created_at": created, "updated_at": updated}, rows.Err()
 }

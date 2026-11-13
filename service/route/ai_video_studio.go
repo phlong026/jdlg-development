@@ -236,10 +236,12 @@ func studioProviderConfigured() bool {
 	return strings.TrimSpace(os.Getenv("AI_VIDEO_STUDIO_METASO_API_KEY")) != ""
 }
 
-// Execution and accounting stay hard-disabled until one durable transaction can
-// reserve stones and persist the batch/fee fact without a Redis/MySQL split-brain.
-func studioExecutionReady() bool  { return false }
-func studioAccountingReady() bool { return false }
+func studioExecutionReady(stores ...*model.AIVideoStudioStore) bool {
+	return len(stores) > 0 && stores[0] != nil && stores[0].Ready
+}
+func studioAccountingReady(stores ...*model.AIVideoStudioStore) bool {
+	return studioExecutionReady(stores...)
+}
 
 func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore, media *model.AIVideoStudioMediaStore, trackingService *tracking.Service, users *model.UserModel) {
 	g := group.Group("/ai-video-studio")
@@ -275,7 +277,7 @@ func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStu
 		mediaSigningReady := len(strings.TrimSpace(os.Getenv("TRACKING_MEDIA_SIGN_KEY"))) >= 32
 		imageMediaReady := contentMediaConfigured(trackingService) && mediaSigningReady
 		mixedMediaReady := imageMediaReady && ffprobeErr == nil
-		executionReady, accountingReady := studioExecutionReady(), studioAccountingReady()
+		executionReady, accountingReady := studioExecutionReady(store), studioAccountingReady(store)
 		enabled := config.Enabled && config.ProviderConfigured && billingReady && executionReady && accountingReady
 		reason := ""
 		if !executionReady || !accountingReady {
@@ -306,7 +308,25 @@ func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStu
 			modes = append(modes, gin.H{"code": code, "enabled": open, "disabled_reason": modeReason})
 		}
 		limits := studioLimitsFromConfig(config)
-		studioOK(c, gin.H{"enabled": enabled, "billing_ready": billingReady, "execution_ready": executionReady, "accounting_ready": accountingReady, "history_readable": true, "disabled_reason": reason, "capability_version": config.Version, "quote_version": config.Version, "modes": modes, "ratios": []string{"16:9", "9:16", "1:1", "adaptive"}, "resolutions": []string{"768p", "2k"}, "durations_by_resolution": gin.H{"768p": durationRange(limits.MaxDuration768p), "2k": durationRange(limits.MaxDuration2k)}, "quantity_max": limits.QuantityMax, "image_upload_enabled": imageMediaReady, "media_upload_enabled": mixedMediaReady, "media_disabled_reason": map[bool]string{true: "", false: "素材存储、安全签名或时长探测尚未配置"}[mixedMediaReady], "reference_limits": gin.H{"image_max": limits.ImageMax, "video_max": limits.VideoMax, "audio_max": limits.AudioMax, "total_max": limits.TotalMax, "media_duration_min": limits.MediaDurationMin, "media_duration_max": limits.MediaDurationMax, "video_total_duration_max": limits.VideoTotalDuration, "audio_total_duration_max": limits.AudioTotalDuration}})
+		resolutions := []string{}
+		durations := gin.H{}
+		for _, res := range []string{"768p", "2k"} {
+			max := limits.MaxDuration768p
+			if res == "2k" {
+				max = limits.MaxDuration2k
+			}
+			ds := []int{}
+			for _, d := range durationRange(max) {
+				if price, ok := studioPrice(config.Prices, res, d); ok && price.UnitStones != nil && *price.UnitStones > 0 {
+					ds = append(ds, d)
+				}
+			}
+			if len(ds) > 0 {
+				resolutions = append(resolutions, res)
+				durations[res] = ds
+			}
+		}
+		studioOK(c, gin.H{"enabled": enabled, "billing_ready": billingReady, "execution_ready": executionReady, "accounting_ready": accountingReady, "history_readable": true, "disabled_reason": reason, "capability_version": config.Version, "quote_version": config.Version, "modes": modes, "ratios": []string{"16:9", "9:16", "1:1", "adaptive"}, "resolutions": resolutions, "durations_by_resolution": durations, "quantity_max": limits.QuantityMax, "image_upload_enabled": imageMediaReady, "media_upload_enabled": mixedMediaReady, "media_disabled_reason": map[bool]string{true: "", false: "素材存储、安全签名或时长探测尚未配置"}[mixedMediaReady], "reference_limits": gin.H{"image_max": limits.ImageMax, "video_max": limits.VideoMax, "audio_max": limits.AudioMax, "total_max": limits.TotalMax, "media_duration_min": limits.MediaDurationMin, "media_duration_max": limits.MediaDurationMax, "video_total_duration_max": limits.VideoTotalDuration, "audio_total_duration_max": limits.AudioTotalDuration}})
 	})
 	g.GET("/drafts", func(c *gin.Context) {
 		page, size := studioPage(c)
@@ -415,7 +435,41 @@ func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStu
 	registerAIVideoStudioMediaRoutes(g, store, media, trackingService, users)
 	registerAIVideoStudioAdoptionRoutes(g, media, trackingService, users)
 	g.POST("/quotes", func(c *gin.Context) { handleAIVideoStudioQuote(c, store, media) })
-	g.POST("/batches", func(c *gin.Context) { studioError(c, 503, "生成执行服务尚未完成价格与任务恢复配置") })
+	g.POST("/batches", func(c *gin.Context) { handleStudioBatchCreate(c, store) })
+	g.GET("/submissions/:idempotencyKey", func(c *gin.Context) {
+		key := c.Param("idempotencyKey")
+		if strings.TrimSpace(key) == "" || len(key) > 128 {
+			studioError(c, 400, "请求标识不合法")
+			return
+		}
+		item, e := store.FindStudioSubmission(c, GetTokenUserID(c), key)
+		if errors.Is(e, sql.ErrNoRows) {
+			studioError(c, 404, "尚未找到该请求的任务记录")
+			return
+		}
+		if e != nil {
+			studioError(c, 503, "任务记录暂不可用")
+			return
+		}
+		studioOK(c, item)
+	})
+	g.POST("/batches/:id/cancel", func(c *gin.Context) {
+		uid := GetTokenUserID(c)
+		if _, e := store.GetBatch(c, uid, c.Param("id")); e != nil {
+			studioError(c, 404, "任务不存在")
+			return
+		}
+		if e := store.CancelQueued(c, uid, c.Param("id")); e != nil {
+			studioError(c, 409, "任务状态已变化")
+			return
+		}
+		item, e := store.GetBatch(c, uid, c.Param("id"))
+		if e != nil {
+			studioError(c, 503, "任务读取失败")
+			return
+		}
+		studioOK(c, item)
+	})
 	g.GET("/batches", func(c *gin.Context) {
 		page, size := studioPage(c)
 		items, total, err := store.ListBatches(c, GetTokenUserID(c), size, (page-1)*size)
@@ -579,7 +633,7 @@ func handleAIVideoStudioQuote(c *gin.Context, store *model.AIVideoStudioStore, m
 		studioError(c, 400, "报价参数不合法")
 		return
 	}
-	if !studioExecutionReady() || !studioAccountingReady() {
+	if !studioExecutionReady(store) || !studioAccountingReady(store) {
 		studioError(c, 503, "生成服务尚未开放")
 		return
 	}
@@ -783,6 +837,7 @@ func validateAIVideoStudioConfig(config model.AIVideoStudioConfig) error {
 
 func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore) {
 	g := group.Group("/ai-video-studio")
+	registerStudioReconciliation(g, store)
 	g.GET("/config", func(c *gin.Context) {
 		config, err := store.Config(c, studioProviderConfigured())
 		if err != nil {
@@ -792,7 +847,7 @@ func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.
 		if len(config.Prices) == 0 {
 			config.Prices = defaultAIVideoStudioPrices()
 		}
-		studioOK(c, gin.H{"enabled": config.Enabled, "execution_ready": studioExecutionReady(), "accounting_ready": studioAccountingReady(), "provider_code": config.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": config.ProviderConfigured, "modes": config.Modes, "limits": config.Limits, "prices": config.Prices, "version": config.Version, "updated_at": config.UpdatedAt})
+		studioOK(c, gin.H{"enabled": config.Enabled, "execution_ready": studioExecutionReady(store), "accounting_ready": studioAccountingReady(store), "provider_code": config.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": config.ProviderConfigured, "modes": config.Modes, "limits": config.Limits, "prices": config.Prices, "version": config.Version, "updated_at": config.UpdatedAt})
 	})
 	g.PUT("/config", func(c *gin.Context) {
 		var input struct {
@@ -846,7 +901,7 @@ func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.
 		if len(updated.Prices) == 0 {
 			updated.Prices = defaultAIVideoStudioPrices()
 		}
-		studioOK(c, gin.H{"enabled": updated.Enabled, "execution_ready": studioExecutionReady(), "accounting_ready": studioAccountingReady(), "provider_code": updated.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": updated.ProviderConfigured, "modes": updated.Modes, "limits": updated.Limits, "prices": updated.Prices, "version": updated.Version, "updated_at": updated.UpdatedAt})
+		studioOK(c, gin.H{"enabled": updated.Enabled, "execution_ready": studioExecutionReady(store), "accounting_ready": studioAccountingReady(store), "provider_code": updated.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": updated.ProviderConfigured, "modes": updated.Modes, "limits": updated.Limits, "prices": updated.Prices, "version": updated.Version, "updated_at": updated.UpdatedAt})
 	})
 	g.GET("/tasks", func(c *gin.Context) {
 		page, size := studioPage(c)
