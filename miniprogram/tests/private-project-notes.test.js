@@ -37,7 +37,7 @@ function pageHarness(name, api, wxOverrides = {}) {
     previewImage() {}, openDocument() {}, saveImageToPhotosAlbum() {}, createVideoContext: () => ({ pause() {} }),
   }, wxOverrides);
   const context = { Page(value) { definition = value; }, wx, require(id) {
-    if (id === '../../utils/phase3-api' || id === '../../utils/project-member-api') return api;
+    if (id === '../../utils/phase3-api' || id === '../../utils/project-member-api' || id === '../../utils/customer-link-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
     if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
@@ -3143,4 +3143,52 @@ test('invited member opens a frozen directory without designer management and ca
   assert.equal(page.data.shareReady, false); assert.equal(managementCalls, 0);
   await page.backToMemberDirectory(); assert.equal(page.data.view, null);
   assert.equal(page.data.memberDirectory.project.name, '成员项目');
+});
+
+test('project creation selects only a returned customer and retains paging and older-share scope', async () => {
+  const queries = [], created = [];
+  const page = pageHarness('projectnotes', {
+    projectCustomers: async query => { queries.push(query); return { items: [{ customer_ref: 'u:202', nickname: '张女士' }], next_cursor: 'customer-next', as_of: '2026-11-13T12:00:00Z', share_window: { truncated: true, next_cursor: 'older-shares' } }; },
+    createProjectNoteProject: async input => { created.push(input); return { project_id: 'p1', ...input }; },
+  });
+  page._token = 'session-token'; page._visible = true; page._epoch = 1;
+  page.setData({ pageView: 'create', projectName: '张宅', ownerID: 'designer-101', loading: false });
+  await page.openProjectCustomers(); await page.loadMoreProjectCustomers();
+  assert.equal(queries[1].cursor, 'customer-next'); assert.equal(queries[1].as_of, '2026-11-13T12:00:00Z');
+  await page.loadOlderProjectCustomers(); assert.equal(queries[2].share_cursor, 'older-shares'); assert.equal(queries[2].cursor, '');
+  page.selectProjectCustomer({ currentTarget: { dataset: { ref: 'u:999' } } }); assert.equal(page.data.customerRef, '');
+  page.selectProjectCustomer({ currentTarget: { dataset: { ref: 'u:202' } } });
+  await page.createProjectNoteProject(); page.onUnload();
+  assert.equal(created[0].customer_ref, 'u:202'); assert.equal(created[0].owner_id, 'designer-101');
+});
+
+test('returning to an adopted article note preserves structured body media and cover when saving its title', async () => {
+  const body = JSON.stringify({ schema: 1, blocks: [{ kind: 'paragraph', text: '原正文' }, { kind: 'video', media_id: 'adopted-video' }] });
+  let note = { project_id: 'p', note_id: 'n', revision: 2, title: '原题', body, body_format: 'article_v2', media_ids: ['adopted-video'], cover_media_id: 'original-cover' }, saved;
+  const page = pageHarness('projectnotes', {
+    listProjectNoteProjects: async () => ({ items: [{ project_id: 'p' }] }), workbenchContext: async () => ({ owners: ['designer-101'] }),
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+    saveProjectNote: async (_id, input) => { saved = input; note = { ...note, ...input, revision: 3 }; return note; },
+    downloadProjectNoteMedia: async () => '/tmp/adopted.mp4',
+  });
+  page.onLoad({ project_id: 'p', note_id: 'n', view: 'editor' }); await page.onShow();
+  assert.equal(page.data.pageView, 'editor'); assert.equal(page.data.bodyReadOnly, true);
+  page.setNoteTitle({ detail: { value: '修改标题' } }); await page.persistNote(true);
+  assert.equal(saved.body, body); assert.equal(saved.body_format, 'article_v2'); assert.equal(saved.cover_media_id, 'original-cover');
+  assert.deepEqual(Array.from(saved.media_ids), ['adopted-video']); page.onUnload();
+});
+
+test('customer deep link preselects only a freshly authorized exact customer', async () => {
+  for (const allowed of [true, false]) {
+    let query;
+    const page = pageHarness('projectnotes', {
+      listProjectNoteProjects: async () => ({ items: [] }), workbenchContext: async () => ({ owners: ['designer-101'] }),
+      projectCustomers: async value => { query = value; return { items: allowed ? [{ customer_ref: 'u:202', nickname: '张女士' }] : [] }; },
+    });
+    page.onLoad({ customer_ref: 'u:202' }); await page.onShow();
+    assert.equal(query.visitor, 'u:202'); assert.equal(page.data.pageView, 'create');
+    assert.equal(page.data.customerRef, allowed ? 'u:202' : '');
+    if (!allowed) assert.match(page.data.error, /无法关联/);
+    page.onUnload();
+  }
 });

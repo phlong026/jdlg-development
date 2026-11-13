@@ -21,12 +21,26 @@
         <text class="field-label">项目名称</text>
         <input value="{{projectName}}" bindinput="setProjectName" maxlength="100" placeholder="例如：林宅改造" focus="{{true}}" />
         <label wx:if="{{ownerChoices.length > 1}}" class="owner-field"><text class="field-label">项目归属</text><picker range="{{ownerChoices}}" range-key="display_name" value="{{ownerIndex}}" bindchange="setOwnerID"><view class="picker compact-picker">{{ownerChoices[ownerIndex].display_name}} <text class="arrow small">›</text></view></picker></label>
-        <button class="primary" loading="{{busy}}" disabled="{{busy || !projectName || !ownerID}}" bindtap="createProjectNoteProject">创建项目</button>
+        <text class="field-label">关联客户（选填）</text>
+        <button class="secondary" bindtap="openProjectCustomers" disabled="{{busy}}">{{customerName || '选择本人客户'}}</button>
+        <button wx:if="{{customerRef}}" class="text-button" bindtap="clearProjectCustomer">取消关联</button>
+        <view wx:if="{{customerPickerOpen}}" class="card">
+          <view class="card-head"><text class="section-title">选择客户</text><button class="text-button" bindtap="closeProjectCustomers">收起</button></view>
+          <input value="{{customerKeyword}}" bindinput="setCustomerKeyword" placeholder="搜索客户昵称" /><button class="secondary" bindtap="searchProjectCustomers" disabled="{{customerLoading}}">搜索</button>
+          <text wx:if="{{customerLoading}}" class="project-meta">客户加载中…</text>
+          <button wx:for="{{projectCustomers}}" wx:key="customer_ref" class="content-row" data-ref="{{item.customer_ref}}" bindtap="selectProjectCustomer" disabled="{{customerLoading}}"><text>{{item.nickname || '已识别客户'}}</text><text class="project-meta">{{item.conversion_status === 'not_converted' ? '已识别' : '已转为线索'}}</text></button>
+          <text wx:if="{{!customerLoading && !projectCustomers.length && !customerError}}" class="project-meta">当前范围暂无客户，可尝试更早分享或调整搜索。</text>
+          <button wx:if="{{customerCursor}}" class="secondary" bindtap="loadMoreProjectCustomers" disabled="{{customerLoading}}">下一页客户</button>
+          <button wx:if="{{customerWindowNext}}" class="secondary" bindtap="loadOlderProjectCustomers" disabled="{{customerLoading}}">查看更早分享的客户</button>
+          <text wx:if="{{customerError}}" class="error">{{customerError}}</text><button wx:if="{{customerError}}" class="secondary" bindtap="searchProjectCustomers">重新加载</button>
+        </view>
+        <button class="primary" loading="{{busy}}" disabled="{{busy || customerLoading || !projectName || !ownerID}}" bindtap="createProjectNoteProject">创建项目</button>
       </view>
     </block>
 
     <block wx:elif="{{pageView === 'detail' && selectedProject}}">
       <view class="project-head"><view><text class="project-title">{{selectedProject.name}}</text><view class="project-summary"><text class="status">{{projectStatusLabel}}</text><text wx:if="{{selectedProject.creator_display_name}}" class="creator">创建人 · {{selectedProject.creator_display_name}}</text></view></view><button class="text-button" bindtap="openProjectSettings">编辑资料</button></view>
+      <text wx:if="{{selectedProject.customer_ref}}" class="project-meta">已关联客户</text>
       <view wx:if="{{projectSettingsOpen}}" class="card form-card">
         <view class="card-head"><text class="section-title">项目资料</text><button class="text-button" bindtap="closeProjectSettings">收起</button></view>
         <text class="field-label">项目名称</text><input value="{{projectEdit.name}}" data-field="name" bindinput="setProjectField" maxlength="100" placeholder="请输入项目名称" /><text class="field-label">项目地点</text><input value="{{projectEdit.location}}" data-field="location" bindinput="setProjectField" maxlength="200" placeholder="请输入项目地点" />
