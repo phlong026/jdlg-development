@@ -436,3 +436,22 @@ test('collection long press deletes the current revision through the general end
   assert.deepEqual(calls[0], ['collection-a', 5]);
   assert.equal(page.data.collections.length, 0);
 });
+
+test('editing during a pending collection preview rejects its stale token', async () => {
+  let finish, publications = 0;
+  const { page } = pageRuntime({
+    previewCollection: () => new Promise(resolve => { finish = resolve; }), mediaURL: () => '',
+    publishCollection: async () => { publications += 1; return {}; }, mutationKey: () => 'publish-key',
+    listCollections: async () => ({ items: [] }),
+  });
+  Object.assign(page, { visible: true, account: 'designer-session', epoch: 1 });
+  page.setData({ current: { collection_id: 'collection-0001', revision: 1, owner_id: 'owner-a' }, title: '原题', selectedItems: [{ content_id: 'content-0001', content_version: 1 }], dirty: false });
+  const pending = page.previewCurrent();
+  page.setTitle({ detail: { value: '刚修改的标题' } });
+  finish({ preview_token: 'stale-preview', collection: { title: '原题', items: [] } });
+  await pending;
+  assert.equal(page.data.preview, null);
+  assert.equal(page.data.busy, false);
+  await page.publishCurrent();
+  assert.equal(publications, 0);
+});

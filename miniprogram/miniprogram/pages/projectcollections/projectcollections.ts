@@ -216,19 +216,25 @@ Page({
     let collection = this.data.current;
     if (!collection || this.data.dirty) collection = await this.saveDraft();
     if (!collection || this.data.busy || this.data.dirty) return;
-    const epoch = this.epoch;
+    const epoch = this.epoch, signature = JSON.stringify(this.draftInput());
     this.setData({ busy: true, error: '' });
     try {
       const preview = await api.previewCollection(collection.collection_id, collection.revision);
       if (!this.currentRequest(epoch)) return;
       const [collections, items] = await Promise.all([this.resolveCovers([preview.collection]), this.resolveCovers(preview.collection.items)]);
-      if (this.currentRequest(epoch)) this.setData({ preview: { ...preview, collection: { ...collections[0], items } }, busy: false, notice: '' });
+      if (!this.currentRequest(epoch)) return;
+      if (this.data.dirty || signature !== JSON.stringify(this.draftInput())) {
+        this.setData({ preview: null, busy: false, notice: '内容已修改，请重新保存并预览' });
+        return;
+      }
+      this._previewSignature = signature;
+      this.setData({ preview: { ...preview, collection: { ...collections[0], items } }, busy: false, notice: '' });
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '预览失败' }); }
   },
   closePreview() { if (!this.data.busy) this.setData({ preview: null }); },
   async publishCurrent() {
     const collection = this.data.current, preview = this.data.preview;
-    if (!collection || !preview || this.data.busy) return;
+    if (!collection || !preview || this.data.busy || this.data.dirty || this._previewSignature !== JSON.stringify(this.draftInput())) return;
     this.publishKey = this.publishKey || api.mutationKey('collection-publish');
     const epoch = this.epoch;
     this.setData({ busy: true, error: '' });
