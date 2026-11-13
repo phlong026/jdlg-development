@@ -52,6 +52,10 @@ Page({
   onLoad(options) {
     const tab = ['customers', 'materials', 'shares'].includes(options && options.tab) ? options.tab : 'customers';
     const version = Number(options && options.content_version || 0);
+    const validDate = value => value && !Number.isNaN(new Date(routeValue(value)).getTime()) ? routeValue(value) : '';
+    const rangeIndex = Number(options && options.range_index || 0);
+    this._drillAsOf = validDate(options && options.as_of);
+    this.setData({ rangeIndex: Number.isInteger(rangeIndex) && rangeIndex >= 0 && rangeIndex <= 3 ? rangeIndex : 0, filterStart: validDate(options && options.start), filterEnd: validDate(options && options.end) });
     this.setData({ activeTab: tab, navigationTitle: this.tabTitle(tab), contentFilter: routeValue(options && options.content_id), contentVersion: Number.isInteger(version) && version > 0 ? version : 0, contentTitle: routeValue(options && options.title) });
   },
   tabTitle(tab) { return { customers: '客户', materials: '素材热度', shares: '分享记录' }[tab] || '客户'; },
@@ -68,6 +72,7 @@ Page({
   selectRange(event) {
     const index = Number(event.detail.value), days = [0, 3, 7, 30][index];
     if (days === undefined) return;
+    this._drillAsOf = '';
     const end = new Date(), start = new Date(end.getTime() - days * 86400000);
     ['customers', 'materials', 'shares'].forEach(tab => this.bumpEpoch(tab));
     this._loadedTabs = {};
@@ -87,7 +92,7 @@ Page({
   openMaterial(event) {
     const item = this.data.materials[Number(event.currentTarget.dataset.index)];
     if (!item || !item.content_id) return;
-    wx.navigateTo({ url: '/pages/sharevisits/sharevisits?tab=shares&content_id=' + encodeURIComponent(item.content_id) + '&content_version=' + encodeURIComponent(String(item.content_version || 1)) + '&title=' + encodeURIComponent(item.title) });
+    wx.navigateTo({ url: '/pages/sharevisits/sharevisits?tab=shares&content_id=' + encodeURIComponent(item.content_id) + '&content_version=' + encodeURIComponent(String(item.content_version || 1)) + '&title=' + encodeURIComponent(item.title) + '&range_index=' + this.data.rangeIndex + '&start=' + encodeURIComponent(this.data.filterStart || '') + '&end=' + encodeURIComponent(this.data.filterEnd || '') + '&as_of=' + encodeURIComponent(this.data.materials_as_of || '') });
   },
   // 每个 Tab 独立 epoch：慢响应不会覆盖其它 Tab 的新响应，Tab 间互不作废。
   bumpEpoch(which) {
@@ -119,6 +124,7 @@ Page({
     return epoch === this[map[which]] && this._token === String(wx.getStorageSync('token') || '');
   },
   onPullDownRefresh() {
+    this._drillAsOf = '';
     const done = () => wx.stopPullDownRefresh();
     if (this.data.activeTab === 'customers') this.loadCustomers(true, this.bumpEpoch('customers')).finally(done);
     else if (this.data.activeTab === 'shares') this.loadShares(true, this.bumpEpoch('shares')).finally(done);
@@ -255,6 +261,7 @@ Page({
     else this.setData({ loadingMore: true, error: '' });
     try {
       const query = { limit: 20, ...this.filterQuery() };
+      if (reset && this._drillAsOf) query.as_of = this._drillAsOf;
       if (this.data.shareQuery) query.q = this.data.shareQuery;
       if (!reset) Object.assign(query, { cursor: this.data.next_cursor, as_of: this.data.as_of, metric_version: this.data.metric_version });
       const page = await api.listMyShares(query);

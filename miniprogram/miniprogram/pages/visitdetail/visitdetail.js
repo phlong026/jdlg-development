@@ -40,7 +40,7 @@ Page({
   },
   onUnload() { this._epoch = (this._epoch || 0) + 1; },
   current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
-  onPullDownRefresh() { const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false; this.load(true, epoch).finally(() => wx.stopPullDownRefresh()); },
+  onPullDownRefresh() { const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false; this._entryFilters = { ...(this._entryFilters || {}) }; delete this._entryFilters.as_of; this.setData({ as_of: '' }); return this.load(true, epoch).finally(() => wx.stopPullDownRefresh()); },
   async load(reset, suppliedEpoch) {
     if (this._mode === 'customer') return this.loadCustomerEntries(reset, suppliedEpoch);
     if (!this._token) this._token = String(wx.getStorageSync('token') || '');

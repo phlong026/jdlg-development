@@ -10,7 +10,7 @@ function runtime(name, api) {
   const storage = { token: 'account-one' }, navigation = [], toasts = [];
   const source = fs.readFileSync(path.join(__dirname, '../miniprogram/pages', name, name + '.ts'), 'utf8').replace(/\nexport \{\};?\s*$/, '');
   vm.runInNewContext(source, { Page: value => definition = value, require: () => api,
-    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, navigateTo: value => navigation.push(value.url), showToast: value => toasts.push(value.title), showModal() {} },
+    wx: { getStorageSync: key => storage[key], hideShareMenu() {}, stopPullDownRefresh() {}, navigateTo: value => navigation.push(value.url), showToast: value => toasts.push(value.title), showModal() {} },
     Date, Promise, Number, String, Set, encodeURIComponent, setTimeout, clearTimeout, console });
   const page = { ...definition, data: structuredClone(definition.data), setData(value) { Object.assign(this.data, value); } };
   return { page, storage, navigation, toasts };
@@ -33,6 +33,48 @@ test('客户详情读取真实后端的顶层摘要，不把时长当匿名人�
   assert.equal(page.data.visitor_name, '陈先生');
   assert.equal(calls[0][1].as_of, '2026-11-04T12:00:00Z');
   assert.equal(calls[0][1].start, '2026-11-01T00:00:00Z');
+});
+
+test('K04 素材钻取保持时间范围和统计快照，返回目标实际使用该范围', () => {
+  const h = runtime('sharevisits', {});
+  h.page.setData({ rangeIndex: 1, filterStart: '2026-11-10T00:00:00Z', filterEnd: '2026-11-13T00:00:00Z', materials_as_of: '2026-11-13T00:00:00Z', materials: [{ content_id: 'content-one', content_version: 2, title: '庭院' }] });
+  h.page.openMaterial({ currentTarget: { dataset: { index: 0 } } });
+  const options = Object.fromEntries(new URL('https://example.invalid' + h.navigation[0]).searchParams);
+  const target = runtime('sharevisits', {}).page; target.onLoad(options);
+  assert.equal(target.data.rangeIndex, 1);
+  assert.equal(target.filterQuery().start, '2026-11-10T00:00:00Z');
+  assert.equal(target.filterQuery().end, '2026-11-13T00:00:00Z');
+  assert.equal(target._drillAsOf, '2026-11-13T00:00:00Z');
+});
+
+test('K05 设置保存期间返回，释放旧操作UI锁且不允许旧响应覆盖新状态', async () => {
+  let release;
+  const h = runtime('messagecenter', { request: async (url, method) => {
+    if (url.endsWith('/preferences') && method === 'PUT') return new Promise(resolve => release = resolve);
+    if (url.endsWith('/unread-count')) return { unread_count: 0 };
+    return { items: [] };
+  } });
+  h.page._token = 'account-one'; h.page._epoch = 1;
+  const pending = h.page.savePrefs(false, false);
+  h.page.onShow(); release({}); await pending;
+  assert.equal(h.page.data.prefsBusy, false);
+  assert.equal(h.page.data.browseDelivery, true);
+  h.page.data.bindingBusy = true; h.page.onShow();
+  assert.equal(h.page.data.bindingBusy, false);
+});
+
+test('K06 初次明细保留列表快照，显式刷新才请求新快照', async () => {
+  const calls = [];
+  const h = runtime('visitdetail', { listMyVisitorEntries: async (_, query) => {
+    calls.push({ ...query }); return { items: [], as_of: '2026-11-13T00:00:00Z' };
+  } });
+  h.page.onLoad({ visitor: 'u:77', as_of: '2026-11-12T00:00:00Z', start: '2026-11-10T00:00:00Z' });
+  h.page._token = 'account-one'; h.page._epoch = 1;
+  await h.page.loadCustomerEntries(true, 1);
+  await h.page.onPullDownRefresh();
+  assert.equal(calls[0].as_of, '2026-11-12T00:00:00Z');
+  assert.equal(calls[1].as_of, undefined);
+  assert.equal(calls[1].start, '2026-11-10T00:00:00Z');
 });
 
 test('客户详情在账号切换后拒绝旧响应', async () => {
