@@ -447,3 +447,22 @@ func TestWorkbenchMediaHEADUsesSameGrantAsGET(t *testing.T) {
 		t.Fatal("HEAD bypassed grant", w.Code)
 	}
 }
+
+func TestWorkbenchMediaOwnerSelectionNeverWidensGrantedScope(t *testing.T) {
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a", "owner-b"}, Manage: true}
+	router, svc := newWorkbenchHandlerFixture(t, &scope)
+	for _, owner := range scope.Owners {
+		id := "media-" + owner
+		if err := svc.AddMedia(context.Background(), scope, tracking.Asset{ID: id, Kind: "image", MIME: "image/png", Width: 2, Height: 2, URL: "/api/v1/miniprogram/tracking/media/" + id}, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	response := workbenchRequest(t, router, http.MethodGet, "/workbench/media?owner=owner-a", nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "media-owner-a") || strings.Contains(response.Body.String(), "media-owner-b") {
+		t.Fatalf("owner filter: %d %s", response.Code, response.Body.String())
+	}
+	denied := workbenchRequest(t, router, http.MethodGet, "/workbench/media?owner=foreign-owner", nil)
+	if denied.Code != 403 {
+		t.Fatalf("foreign owner: %d %s", denied.Code, denied.Body.String())
+	}
+}

@@ -455,3 +455,17 @@ test('editing during a pending collection preview rejects its stale token', asyn
   await page.publishCurrent();
   assert.equal(publications, 0);
 });
+
+test('collection candidates follow the target owner and ignore a previous-owner response', async () => {
+  const queries = [], finishes = [];
+  const { page } = pageRuntime({ listCandidates: query => { queries.push(query); return new Promise(resolve => finishes.push(resolve)); }, mediaURL: () => '' });
+  Object.assign(page, { visible: true, account: 'designer-session', epoch: 1 });
+  page.setData({ ownerChoices: [{ owner_id: 'owner-a' }, { owner_id: 'owner-b' }], ownerIndex: 0, editing: true });
+  const first = page.loadCandidates(false);
+  page.setOwner({ detail: { value: 1 } });
+  assert.equal(queries[0].owner, 'owner-a');
+  assert.equal(queries[1].owner, 'owner-b');
+  finishes[1]({ items: [{ content_id: 'company-one', content_version: 1 }] }); await tick();
+  finishes[0]({ items: [{ content_id: 'personal-old', content_version: 1 }] }); await first;
+  assert.equal(page.data.candidates[0].content_id, 'company-one');
+});

@@ -21,7 +21,12 @@ func registerProjectCollectionHandlers(group *gin.RouterGroup, svc *tracking.Ser
 
 	collections.GET("/candidates", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.Query("limit"))
-		out, err := svc.ProjectCollectionCandidates(c.Request.Context(), scope(c), c.Query("cursor"), limit)
+		currentScope, err := workbenchQueryOwner(scope(c), c.Query("owner"))
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		out, err := svc.ProjectCollectionCandidates(c.Request.Context(), currentScope, c.Query("cursor"), limit)
 		trackingResponse(c, out, err)
 	})
 	collections.GET("", func(c *gin.Context) {

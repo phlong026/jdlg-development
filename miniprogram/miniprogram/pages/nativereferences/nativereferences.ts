@@ -17,6 +17,7 @@ Page({
     const pickerMode = options && (options.picker === 'media' || options.picker === 'content') ? options.picker : '';
     const mediaKinds = pickerMode === 'media' ? String(options.kind || '') : '';
     this._pickerMode = pickerMode; this._mediaKinds = mediaKinds;
+    this._pickerOwner = pickerMode ? String(options.owner || '') : '';
     this._pickerChannel = this.getOpenerEventChannel ? this.getOpenerEventChannel() : null;
     this.setData(empty(pickerMode, mediaKinds));
   },
@@ -41,7 +42,7 @@ Page({
     this.setData({ loading: !quiet, busy: false, searching: true, error: '', notice: '' });
     try {
       if (this.data.pickerMode === 'media') {
-        const media = await api.listWorkbenchMedia(searchQuery(this.data.search, this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}));
+        const media = await api.listWorkbenchMedia(searchQuery(this.data.search, { ...(this._pickerOwner ? { owner: this._pickerOwner } : {}), ...(this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}) }));
         if (this.current(epoch)) {
           this._loaded = true;
           const rows = (media.items || []).map(mediaRow);
@@ -69,7 +70,7 @@ Page({
       const cursor = this.data.mediaCursor; if (!cursor) return;
       const epoch = this._epoch; this.setData({ busy: true, error: '' });
       try {
-        const page = await api.listWorkbenchMedia(searchQuery(this.data.search, { cursor, ...(this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}) }));
+        const page = await api.listWorkbenchMedia(searchQuery(this.data.search, { cursor, ...(this._pickerOwner ? { owner: this._pickerOwner } : {}), ...(this.data.mediaKinds ? { kind: this.data.mediaKinds } : {}) }));
         if (!this.current(epoch)) return;
         const seen = new Set(this.data.media.map(item => item.media_id));
         const incoming = (page.items || []).filter(item => !seen.has(item.media_id)).map(mediaRow);

@@ -178,9 +178,11 @@ Page({
       const context = await api.workbenchContext();
       if (!this.current(epoch)) return;
       if (!context.enabled || context.can_manage === false) { this.setData({ context, denied: context.can_manage === false, disabled: !context.enabled, loading: false }); return; }
-      const values = await Promise.all([api.listWorkbenchMedia(), this.data.id ? api.getContent(this.data.id) : Promise.resolve(null)]);
+      const content = this.data.id ? await api.getContent(this.data.id) : null;
       if (!this.current(epoch)) return;
-      const mediaPage = values[0] || {}, content = values[1];
+      const targetOwner = content ? content.owner_id : (context.owners || [])[0] || '';
+      const mediaPage = await api.listWorkbenchMedia({ owner: targetOwner });
+      if (!this.current(epoch)) return;
       const bodyFormat = content ? content.body_format || 'plain' : 'article_v2';
       const documentReadOnly = !!content && bodyFormat === 'document_v1' && content.type === 'document';
       const legacyReadOnly = !!content && bodyFormat !== 'article_v2' && !documentReadOnly;
@@ -248,7 +250,7 @@ Page({
     if (this.data.busy || this.data.documentReadOnly || this.data.legacyReadOnly) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, cover: true };
     wx.navigateTo({
-      url: '/pages/nativereferences/nativereferences?picker=media&kind=image',
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=image' + (this.data.owner_id ? '&owner=' + encodeURIComponent(this.data.owner_id) : ''),
       events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
       fail: () => this.setData({ error: '素材选择页暂时无法打开，请重试' }),
     });
@@ -258,7 +260,7 @@ Page({
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, replaceVideo: this.data.presentation === 'video' && mediaBlocks(this.data.blocks, 'video').length > 0 };
     const kinds = this.data.presentation === 'gallery' ? 'image' : this.data.presentation === 'video' ? 'video' : 'image%2Cvideo';
     wx.navigateTo({
-      url: '/pages/nativereferences/nativereferences?picker=media&kind=' + kinds,
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=' + kinds + (this.data.owner_id ? '&owner=' + encodeURIComponent(this.data.owner_id) : ''),
       events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
     });
   },
@@ -514,7 +516,27 @@ Page({
   setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
   togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
-  setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, 'fieldErrors.owner_id': '', error: '', preview: null }); },
+  setOwner(event) {
+    if (this.data.busy || this.data.id) return;
+    const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex];
+    if (!choice || choice.owner_id === this.data.owner_id) return;
+    const token = this._token, previousOwner = this.data.owner_id;
+    const apply = async () => {
+      if (!this.sameSaveAccount(token) || this.data.id || this.data.busy || this.data.owner_id !== previousOwner) return;
+      const blocks = this.data.blocks.filter(block => !block.media_id);
+      const next = blocks.length ? blocks : [textBlock('')];
+      this.setData({ owner_id: choice.owner_id, ownerDisplayName: choice.display_name, ownerIndex, blocks: next, ...blockViews(next, []), media: [], documentCandidates: [], cover_media_id: '', 'fieldErrors.owner_id': '', error: '', preview: null });
+      try {
+        const page = await api.listWorkbenchMedia({ owner: choice.owner_id });
+        if (this.sameSaveAccount(token) && !this.data.id && this.data.owner_id === choice.owner_id) {
+          const media = mergeAssets(this.data.media, (page.items || []).filter(asset => asset.kind === 'image' || asset.kind === 'video'));
+          this.setData({ media, documentCandidates: (page.items || []).filter(asset => asset.kind === 'document'), ...blockViews(this.data.blocks, media) });
+        }
+      } catch (error) { if (this.sameSaveAccount(token) && this.data.owner_id === choice.owner_id) this.setData({ error: error.message || '素材加载失败，请重试选择素材' }); }
+    };
+    if (mediaIDs(this.data.blocks).length || this.data.cover_media_id) wx.showModal({ title: '切换内容归属？', content: '将移除当前媒体引用，标题和文字保留。', success: result => { if (result.confirm) void apply(); } });
+    else void apply();
+  },
   editBlock(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);

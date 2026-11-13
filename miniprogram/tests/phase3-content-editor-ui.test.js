@@ -638,3 +638,10 @@ test('late content save cannot apply another account or an unloaded page', async
     assert.equal(page.data.id, '');
   }
 });
+
+test('media and cover pickers carry the target content owner', () => {
+  const { page, navigations } = loadEditor();
+  page.setData({ owner_id: 'owner-company' });
+  page.openMediaPicker(); page.openCoverPicker();
+  assert.ok(navigations.every(url => url.includes('owner=owner-company')));
+});

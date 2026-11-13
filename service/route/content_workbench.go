@@ -26,6 +26,19 @@ func workbenchMediaConfigured() bool {
 	return err == nil && info.IsDir() && info.Mode().Perm()&0077 == 0
 }
 
+// 选择器归属只能收窄服务端授权，不能由查询参数扩张可读范围。
+func workbenchQueryOwner(scope tracking.Scope, owner string) (tracking.Scope, error) {
+	owner = strings.TrimSpace(owner)
+	if owner == "" {
+		return scope, nil
+	}
+	if !scope.Allows(owner) {
+		return tracking.Scope{}, &tracking.Error{Status: http.StatusForbidden, Message: "内容归属未授权"}
+	}
+	scope.Owners = []string{owner}
+	return scope, nil
+}
+
 func registerContentWorkbenchRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users *model.UserModel, codes *model.CodeSessionRedisModel) {
 	g := v1.Group("/miniprogram/workbench", func(c *gin.Context) {
 		// Authentication reads the body for signature verification. Bound it first,
@@ -251,7 +264,12 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 		if raw := strings.TrimSpace(c.Query("kind")); raw != "" {
 			kinds = strings.Split(raw, ",")
 		}
-		out, err := svc.ListMediaPage(c.Request.Context(), scope(c), c.Query("cursor"), limit, c.Query("q"), kinds)
+		currentScope, err := workbenchQueryOwner(scope(c), c.Query("owner"))
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		out, err := svc.ListMediaPage(c.Request.Context(), currentScope, c.Query("cursor"), limit, c.Query("q"), kinds)
 		trackingResponse(c, out, err)
 	})
 	g.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {

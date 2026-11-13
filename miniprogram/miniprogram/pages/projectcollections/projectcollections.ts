@@ -111,23 +111,31 @@ Page({
   goBack() { if (this.data.editing) { this.closeEditor(); return; } wx.navigateBack({delta:1}); },
   setTitle(event) { this.setData({ title: event.detail.value, dirty: true, preview: null }); },
   setDescription(event) { this.setData({ description: event.detail.value, dirty: true, preview: null }); },
-  setOwner(event) { if (!this.data.current) this.setData({ ownerIndex: Number(event.detail.value) || 0, dirty: true, preview: null }); },
+  setOwner(event) {
+    if (this.data.current || this.data.busy) return;
+    const ownerIndex = Number(event.detail.value) || 0;
+    if (ownerIndex === this.data.ownerIndex || !this.data.ownerChoices[ownerIndex]) return;
+    this.setData({ ownerIndex, selectedItems: [], candidates: [], candidateCursor: '', coverItemIndex: null, dirty: true, preview: null });
+    return this.loadCandidates(false);
+  },
   async loadCandidates(more) {
     if (this.data.busy && more) return;
     const cursor = more ? this.data.candidateCursor : '';
     if (more && !cursor) return;
-    const epoch = this.epoch;
+    const epoch = this.epoch, owner = this.data.current ? this.data.current.owner_id : (this.data.ownerChoices[this.data.ownerIndex] || {}).owner_id;
+    const request = this._candidateRequest = (this._candidateRequest || 0) + 1;
+    const current = () => this.currentRequest(epoch) && request === this._candidateRequest;
     if (more) this.setData({ busy: true });
     try {
-      const page = await api.listCandidates({ cursor, limit: 20 });
-      if (!this.currentRequest(epoch)) return;
+      const page = await api.listCandidates({ cursor, limit: 20, owner });
+      if (!current()) return;
       const decorated = await this.resolveCovers(page.items);
-      if (!this.currentRequest(epoch)) return;
+      if (!current()) return;
       const incoming = decorated.map(item => ({...item, selected: this.data.selectedItems.some(ref => sourceKey(ref) === sourceKey(item))}));
       const base = more ? this.data.candidates : [];
       const seen = new Set(base.map(sourceKey));
       this.setData({ candidates: base.concat(incoming.filter(item => !seen.has(sourceKey(item)))), candidateCursor: page.next_cursor || '', busy: false });
-    } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '可选内容加载失败' }); }
+    } catch (error) { if (current()) this.setData({ busy: false, error: error.message || '可选内容加载失败' }); }
   },
   loadMoreCandidates() { return this.loadCandidates(true); },
   toggleCandidate(event) {

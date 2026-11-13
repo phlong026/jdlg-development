@@ -176,3 +176,13 @@ test('returning to the library restarts a read invalidated on hide', async () =>
   page.onShow();page.onHide();page.onShow();assert.equal(reads,2);
   pending[1]({items:[{content_id:'new'}]});await tick();pending[0]({items:[{content_id:'old'}]});await tick();assert.equal(page.data.candidates[0].content_id,'new');
 });
+
+test('media picker retains the requested owner on the next page', async () => {
+  const queries = [];
+  const { page } = pageHarness({ listWorkbenchMedia: async query => { queries.push(query); return { items: [], next_cursor: queries.length === 1 ? 'next-owner-page' : '' }; } });
+  page.onLoad({ picker: 'media', kind: 'image', owner: 'owner-company' });
+  page.onShow(); await tick();
+  await page.loadMore({ currentTarget: { dataset: { kind: 'media' } } });
+  assert.equal(queries.length, 2);
+  assert.ok(queries.every(query => query.owner === 'owner-company'));
+});
