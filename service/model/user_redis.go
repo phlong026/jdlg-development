@@ -1,221 +1,188 @@
 package model
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
-	"strings"
-	"sync"
+	"math"
 
 	"github.com/redis/go-redis/v9"
 )
 
-// UserRedisModel 用户Redis操作层
+// UserRedisModel retains the legacy API; MySQL is the only wallet authority.
 type UserRedisModel struct {
 	DB    *sql.DB
 	Redis *redis.Client
-	ctx   context.Context
 }
 
-// NewUserRedisModel 创建用户Redis模型
 func NewUserRedisModel(db *sql.DB, rdb *redis.Client) *UserRedisModel {
-	return &UserRedisModel{
-		DB:    db,
-		Redis: rdb,
-		ctx:   context.Background(),
-	}
+	return &UserRedisModel{DB: db, Redis: rdb}
 }
 
-// ErrInsufficientStones 灵石余额不足，由 DeductStones 在原子扣费失败时返回
 var ErrInsufficientStones = errors.New("余额不足")
+var ErrWalletUnavailable = errors.New("wallet database unavailable")
 
-// LoadStonesFromMySQL 从MySQL加载所有用户余额到Redis
-func (m *UserRedisModel) LoadStonesFromMySQL() error {
-	query := `SELECT id, COALESCE(stones, 0) as stones FROM users`
-	rows, err := m.DB.Query(query)
-	if err != nil {
-		return err
+func (m *UserRedisModel) available() error {
+	if m == nil || m.DB == nil {
+		return ErrWalletUnavailable
 	}
-	defer rows.Close()
-
-	count := 0
-	for rows.Next() {
-		var userID int64
-		var stones int64
-		if err := rows.Scan(&userID, &stones); err != nil {
-			continue
-		}
-
-		// 存储到Redis
-		key := "user:stones:" + strconv.FormatInt(userID, 10)
-		if err := m.Redis.Set(m.ctx, key, stones, 0).Err(); err != nil {
-			log.Printf("save user stones to redis failed: %v", err)
-			continue
-		}
-		count++
-	}
-
-	log.Printf("从 MySQL 加载了 %d 条用户灵石余额至 Redis", count)
 	return nil
 }
 
-// GetStones 获取用户灵石余额（从Redis）
+// Retained startup compatibility: never overwrite legacy Redis reconciliation evidence.
+func (m *UserRedisModel) LoadStonesFromMySQL() error { return m.available() }
 func (m *UserRedisModel) GetStones(userID int64) (int64, error) {
-	key := "user:stones:" + strconv.FormatInt(userID, 10)
-	val, err := m.Redis.Get(m.ctx, key).Result()
-	if err == redis.Nil {
-		// Redis中没有，从MySQL加载
-		var stones int64
-		err := m.DB.QueryRow("SELECT COALESCE(stones, 0) FROM users WHERE id = ?", userID).Scan(&stones)
-		if err != nil {
+	if err := m.available(); err != nil {
+		return 0, err
+	}
+	var n int64
+	err := m.DB.QueryRow("SELECT stones FROM users WHERE id=?", userID).Scan(&n)
+	return n, err
+}
+func (m *UserRedisModel) DeductStones(userID, amount int64) error {
+	if amount < 0 {
+		return errors.New("deduction must be nonnegative")
+	}
+	if err := m.available(); err != nil {
+		return err
+	}
+	if amount == 0 {
+		_, err := m.GetStones(userID)
+		return err
+	}
+	r, err := m.DB.Exec("UPDATE users SET stones=stones-? WHERE id=? AND stones>=? AND stones<=?", amount, userID, amount, int64(math.MaxInt64))
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrInsufficientStones
+	}
+	return nil
+}
+func (m *UserRedisModel) AddStones(userID, amount int64) error {
+	if amount < 0 {
+		return errors.New("addition must be nonnegative")
+	}
+	if err := m.available(); err != nil {
+		return err
+	}
+	if amount == 0 {
+		_, err := m.GetStones(userID)
+		return err
+	}
+	r, err := m.DB.Exec("UPDATE users SET stones=stones+? WHERE id=? AND stones<=?", amount, userID, int64(math.MaxInt64)-amount)
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return errors.New("wallet missing or balance overflow")
+	}
+	return nil
+}
+func (m *UserRedisModel) SetStones(userID, amount int64) error {
+	if amount < 0 {
+		return errors.New("balance must be nonnegative")
+	}
+	if err := m.available(); err != nil {
+		return err
+	}
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var old int64
+	if err = tx.QueryRow("SELECT stones FROM users WHERE id=? FOR UPDATE", userID).Scan(&old); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("UPDATE users SET stones=? WHERE id=?", amount, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SetStonesWithRecord serializes the actual delta and its ledger with all wallet writes.
+func (m *UserRedisModel) SetStonesWithRecord(userID, amount int64, remark string) (int64, error) {
+	if amount < 0 {
+		return 0, errors.New("balance must be nonnegative")
+	}
+	if err := m.available(); err != nil {
+		return 0, err
+	}
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var old int64
+	if err = tx.QueryRow("SELECT stones FROM users WHERE id=? FOR UPDATE", userID).Scan(&old); err != nil {
+		return 0, err
+	}
+	if _, err = tx.Exec("UPDATE users SET stones=? WHERE id=?", amount, userID); err != nil {
+		return 0, err
+	}
+	delta := amount - old
+	if delta != 0 {
+		typ := "manual_grant"
+		if delta < 0 {
+			typ = "manual_deduct"
+			delta = -delta
+		}
+		if err = NewStoneRecordModel(m.DB).CreateWithTx(tx, userID, typ, delta, "管理员设置灵石", remark); err != nil {
 			return 0, err
 		}
-		// 写入Redis
-		m.Redis.Set(m.ctx, key, stones, 0)
-		return stones, nil
 	}
-	if err != nil {
-		return 0, err
-	}
-
-	stones, err := strconv.ParseInt(val, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return stones, nil
+	return old, tx.Commit()
 }
 
-// DeductStones 扣除用户灵石（原子操作，先检查余额，再扣费）
-func (m *UserRedisModel) DeductStones(userID int64, amount int64) error {
-	key := "user:stones:" + strconv.FormatInt(userID, 10)
-
-	// 使用Lua脚本保证原子性
-	luaScript := `
-		local current = redis.call('GET', KEYS[1])
-		if not current then
-			return {err = 'user_not_found'}
-		end
-		current = tonumber(current)
-		if current < tonumber(ARGV[1]) then
-			return {err = 'insufficient_balance'}
-		end
-		local new_balance = current - tonumber(ARGV[1])
-		redis.call('SET', KEYS[1], new_balance)
-		return {ok = new_balance}
-	`
-
-	result, err := m.Redis.Eval(m.ctx, luaScript, []string{key}, amount).Result()
-	if err != nil {
-		// go-redis 会把 Lua 的 {err='xxx'} 作为一个普通 error 抛出，
-		// 这里需要识别 insufficient_balance 并映射成 ErrInsufficientStones，
-		// 以便调用方用 errors.Is 判定余额不足。
-		if strings.Contains(err.Error(), "insufficient_balance") {
-			return ErrInsufficientStones
-		}
-		return err
+// AdjustStonesWithRecord commits the administrator delta and its audit record together.
+func (m *UserRedisModel) AdjustStonesWithRecord(userID, delta int64, remark string) (int64, int64, error) {
+	if err := m.available(); err != nil {
+		return 0, 0, err
 	}
-
-	// Lua 返回 {ok=new_balance} 时，go-redis 会解析成普通 int/string；
-	// 但在某些情况下也可能返回 []interface{}。这里只做兜底识别，主路径走上面的 err 分支。
-	if resultMap, ok := result.([]interface{}); ok {
-		if len(resultMap) > 1 {
-			if errStr, ok := resultMap[0].(string); ok && errStr == "err" {
-				errMsg, _ := resultMap[1].(string)
-				if errMsg == "insufficient_balance" {
-					return ErrInsufficientStones
-				}
-				return errors.New(errMsg)
-			}
+	if delta == math.MinInt64 {
+		return 0, 0, errors.New("adjustment overflow")
+	}
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+	var old int64
+	if err = tx.QueryRow("SELECT stones FROM users WHERE id=? FOR UPDATE", userID).Scan(&old); err != nil {
+		return 0, 0, err
+	}
+	if delta < 0 && old < -delta {
+		return 0, 0, ErrInsufficientStones
+	}
+	if delta > 0 && old > math.MaxInt64-delta {
+		return 0, 0, errors.New("balance overflow")
+	}
+	next := old + delta
+	if _, err = tx.Exec("UPDATE users SET stones=? WHERE id=?", next, userID); err != nil {
+		return 0, 0, err
+	}
+	if delta != 0 {
+		typ := "manual_grant"
+		amount := delta
+		if amount < 0 {
+			typ = "manual_deduct"
+			amount = -amount
+		}
+		if err = NewStoneRecordModel(m.DB).CreateWithTx(tx, userID, typ, amount, "管理员调整灵石", remark); err != nil {
+			return 0, 0, err
 		}
 	}
-
-	// 异步同步到MySQL
-	go m.syncStonesToMySQL(userID)
-
-	return nil
-}
-
-// AddStones 增加用户灵石
-func (m *UserRedisModel) AddStones(userID int64, amount int64) error {
-	key := "user:stones:" + strconv.FormatInt(userID, 10)
-	_, err := m.Redis.IncrBy(m.ctx, key, amount).Result()
-	if err != nil {
-		return err
-	}
-
-	// 异步同步到MySQL
-	go m.syncStonesToMySQL(userID)
-	return nil
-}
-
-// SetStones 直接设置用户灵石余额（管理员操作）
-func (m *UserRedisModel) SetStones(userID int64, amount int64) error {
-	key := "user:stones:" + strconv.FormatInt(userID, 10)
-
-	// 与异步同步共用同一把用户锁，避免"设置"与"异步同步"交错写 MySQL
-	mu := lockStonesSync(userID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	// 直接设置新余额到Redis
-	if err := m.Redis.Set(m.ctx, key, amount, 0).Err(); err != nil {
-		return err
-	}
-
-	// 同步到MySQL（同步执行以确保数据一致性）
-	query := `UPDATE users SET stones = ? WHERE id = ?`
-	_, err := m.DB.Exec(query, amount, userID)
-	if err != nil {
-		// 如果MySQL更新失败，记录日志但不回滚Redis（管理员可以重试）
-		log.Printf("sync stones to MySQL failed: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// syncStonesToMySQL 异步同步余额到MySQL。
-//
-// 同一用户的同步必须串行且写入前重读 Redis 最新值：多个 goroutine 并发
-// "读 Redis → 写 MySQL" 时，慢的那个会用自己的旧读值覆盖刚写入的新值，
-// 服务重启回填（LoadStonesFromMySQL）后表现为用户余额回退。
-// 进程内按用户加锁 + 锁内重读，保证后执行的同步一定写入更新的值。
-var stonesSyncLocks sync.Map // map[int64]*sync.Mutex
-
-func lockStonesSync(userID int64) *sync.Mutex {
-	muAny, _ := stonesSyncLocks.LoadOrStore(userID, &sync.Mutex{})
-	return muAny.(*sync.Mutex)
-}
-
-func (m *UserRedisModel) syncStonesToMySQL(userID int64) {
-	if m.DB == nil {
-		return
-	}
-	mu := lockStonesSync(userID)
-	mu.Lock()
-	defer mu.Unlock()
-
-	key := "user:stones:" + strconv.FormatInt(userID, 10)
-	val, err := m.Redis.Get(m.ctx, key).Result()
-	if err != nil {
-		log.Printf("get stones from redis failed: %v", err)
-		return
-	}
-
-	stones, err := strconv.ParseInt(val, 10, 64)
-	if err != nil {
-		log.Printf("parse stones failed: %v", err)
-		return
-	}
-
-	query := `UPDATE users SET stones = ? WHERE id = ?`
-	_, err = m.DB.Exec(query, stones, userID)
-	if err != nil {
-		log.Printf("sync stones to MySQL failed: %v", err)
-	}
+	return old, next, tx.Commit()
 }
 
 // InitStonesColumn 初始化用户表的stones字段

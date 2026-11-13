@@ -638,7 +638,7 @@ func handleAIVideoStudioQuote(c *gin.Context, store *model.AIVideoStudioStore, m
 		studioError(c, 503, "当前生成档位价格无效")
 		return
 	}
-	quote := model.AIVideoStudioQuote{ID: uuid.NewString(), UserID: GetTokenUserID(c), DraftID: draft.ID, DraftRevision: draft.Revision, QuoteVersion: config.Version, InputHash: hex.EncodeToString(sum[:]), PriceCode: price.Code, UnitStones: unitStones, BillableUnits: units, TotalStones: totalStones, InputSnapshot: snapshot, ExpiresAt: time.Now().Add(10 * time.Minute)}
+	quote := model.AIVideoStudioQuote{ID: uuid.NewString(), UserID: GetTokenUserID(c), DraftID: draft.ID, DraftRevision: draft.Revision, QuoteVersion: config.Version, InputHash: hex.EncodeToString(sum[:]), PriceCode: price.Code, UnitStones: unitStones, BillingUnit: price.BillingUnit, BillableUnits: units, TotalStones: totalStones, InputSnapshot: snapshot, ExpiresAt: time.Now().Add(10 * time.Minute)}
 	if err := store.CreateQuote(c, quote); err != nil {
 		studioError(c, 500, "报价创建失败")
 		return

@@ -77,6 +77,7 @@ type AIVideoStudioQuote struct {
 	InputHash     string          `json:"input_hash"`
 	PriceCode     string          `json:"price_code"`
 	UnitStones    int64           `json:"unit_stones"`
+	BillingUnit   string          `json:"billing_unit"`
 	BillableUnits int64           `json:"billable_units"`
 	TotalStones   int64           `json:"total_stones"`
 	InputSnapshot json.RawMessage `json:"input_snapshot"`
@@ -465,7 +466,7 @@ func (s *AIVideoStudioStore) UpdateConfig(ctx context.Context, c AIVideoStudioCo
 }
 
 func (s *AIVideoStudioStore) CreateQuote(ctx context.Context, q AIVideoStudioQuote) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO ai_video_studio_quotes (id,user_id,draft_id,draft_revision,quote_version,input_hash,price_code,unit_stones,billable_units,total_stones,input_snapshot,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, q.ID, q.UserID, q.DraftID, q.DraftRevision, q.QuoteVersion, q.InputHash, q.PriceCode, q.UnitStones, q.BillableUnits, q.TotalStones, string(q.InputSnapshot), q.ExpiresAt)
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO ai_video_studio_quotes (id,user_id,draft_id,draft_revision,quote_version,input_hash,price_code,unit_stones,billing_unit,billable_units,total_stones,input_snapshot,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, q.ID, q.UserID, q.DraftID, q.DraftRevision, q.QuoteVersion, q.InputHash, q.PriceCode, q.UnitStones, q.BillingUnit, q.BillableUnits, q.TotalStones, string(q.InputSnapshot), q.ExpiresAt)
 	return err
 }
 
