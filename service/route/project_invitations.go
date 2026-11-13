@@ -51,6 +51,7 @@ func presentProjectJoinRequests(ctx context.Context, requests []tracking.Project
 }
 
 func registerProjectInvitationHandlers(root, manage *gin.RouterGroup, svc *tracking.Service, deps projectNoteHandlerDeps) {
+	registerProjectMemberReader(root, svc, deps)
 	manage.GET("/projects/:id/member-invitations", func(c *gin.Context) {
 		items, err := svc.ProjectNoteListInvitations(c.Request.Context(), projectNoteScope(c), c.Param("id"))
 		trackingResponse(c, gin.H{"items": items}, err)
@@ -85,12 +86,16 @@ func registerProjectInvitationHandlers(root, manage *gin.RouterGroup, svc *track
 			}
 			inviterName = projectNoteCreatorDisplayName(profiles[out.DesignerID])
 		}
-		trackingResponse(c, gin.H{
+		preview := gin.H{
 			"project_name":   out.ProjectName,
 			"expires_at":     out.ExpiresAt,
 			"request_status": out.Status,
 			"inviter_name":   inviterName,
-		}, nil)
+		}
+		if out.Status == tracking.ProjectNoteJoinApproved {
+			preview["project_id"] = out.ProjectID
+		}
+		trackingResponse(c, preview, nil)
 	})
 	root.POST("/member-invitations/:token/apply", func(c *gin.Context) {
 		var input struct {

@@ -26,12 +26,14 @@ type sharedVideoKind string
 
 const (
 	sharedVideoNote      sharedVideoKind = "note"
+	sharedVideoMember    sharedVideoKind = "member"
 	sharedVideoPackage   sharedVideoKind = "package"
 	sharedVideoPublished sharedVideoKind = "published"
 )
 
 type sharedVideoPlaybackGrant struct {
 	Kind       sharedVideoKind
+	ProjectID  string
 	ShareToken string
 	Actor      int64
 	VersionID  string
@@ -108,7 +110,7 @@ func registerSharedVideoPlaybackRoutes(v1 *gin.RouterGroup, svc *tracking.Servic
 			return
 		}
 		switch grant.Kind {
-		case sharedVideoNote, sharedVideoPackage:
+		case sharedVideoNote, sharedVideoPackage, sharedVideoMember:
 			if !projectNotesEnabled() {
 				trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "私人项目笔记暂未开通"})
 				return
@@ -129,6 +131,8 @@ func registerSharedVideoPlaybackRoutes(v1 *gin.RouterGroup, svc *tracking.Servic
 				return tracking.Asset{}, err
 			}
 			switch grant.Kind {
+			case sharedVideoMember:
+				return svc.ProjectNoteMemberMedia(validationContext, grant.Actor, grant.ProjectID, grant.VersionID, grant.AssetID)
 			case sharedVideoNote:
 				return svc.ProjectNoteReadShareMedia(validationContext, grant.ShareToken, grant.Actor, grant.AssetID)
 			case sharedVideoPackage:

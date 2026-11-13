@@ -37,7 +37,7 @@ function pageHarness(name, api, wxOverrides = {}) {
     previewImage() {}, openDocument() {}, saveImageToPhotosAlbum() {}, createVideoContext: () => ({ pause() {} }),
   }, wxOverrides);
   const context = { Page(value) { definition = value; }, wx, require(id) {
-    if (id === '../../utils/phase3-api') return api;
+    if (id === '../../utils/phase3-api' || id === '../../utils/project-member-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
     if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
@@ -1061,7 +1061,7 @@ test('private reader template uses native branches for view, rich text, truncati
   assert.match(document, /nodes="\{\{body\}\}"/);
   assert.match(document, />\{\{body\}\}<\/text>/);
   assert.match(template, /wx:if="\{\{view\.activity_truncated\}\}"[^>]*>[^<]*最近 50 条记录/);
-  assert.match(template, /wx:if="\{\{canConfirm \|\| confirmed\}\}"\s+class="card confirm"/);
+  assert.match(template, /wx:if="\{\{!memberMode && \(canConfirm \|\| confirmed\)\}\}"\s+class="card confirm"/);
   assert.match(template, /disabled="\{\{busy \|\| confirmed\}\}"/);
 });
 
@@ -3126,4 +3126,21 @@ test('pending media survives normal unload and a fresh onLoad onShow for the sam
   third._selectedNoteID = 'n1';
   third.applyProjectDetail({ project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 1, title: '方案', body: '正文', body_format: 'plain' }], versions: [] }, '', null, null, 'editor');
   assert.equal(third.data.noteMedia.some(item => item.media_id === 'pending-image'), false);
+});
+
+
+test('invited member opens a frozen directory without designer management and cannot share it', async () => {
+  let managementCalls = 0;
+  const page = pageHarness('projectnoteview', {
+    directory: async () => ({ project: { project_id: 'p', name: '成员项目' }, versions: [{ version_id: 'v', title: '固定方案' }] }),
+    version: async () => ({ project: { project_id: 'p' }, version: { version_id: 'v', body: '固定正文', body_format: 'plain', media: [] } }),
+    getProjectNoteProject: async () => { managementCalls++; throw new Error('must not request management'); },
+  });
+  page.onLoad({ project_id: 'p' }); await page.onShow();
+  assert.equal(page.data.memberDirectory.versions[0].version_id, 'v');
+  await page.openMemberVersion({ currentTarget: { dataset: { id: 'v' } } });
+  assert.equal(page.data.view.version.body, '固定正文');
+  assert.equal(page.data.shareReady, false); assert.equal(managementCalls, 0);
+  await page.backToMemberDirectory(); assert.equal(page.data.view, null);
+  assert.equal(page.data.memberDirectory.project.name, '成员项目');
 });

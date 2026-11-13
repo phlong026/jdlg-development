@@ -61,12 +61,12 @@ Page({
   async applyInvitation() {
     if (this.data.busy) return;
     if (!this._applyAttempt) this._applyAttempt = { key: api.mutationKey('project-join-request') };
-    const attempt = this._applyAttempt;
+    const attempt = this._applyAttempt, epoch = this._epoch;
     this.setData({ busy: true, error: '' });
     try {
       const result = await api.applyProjectInvitation(this._invitationToken, attempt.key);
       if (this._applyAttempt === attempt) this._applyAttempt = null;
-      if (!this._visible) return;
+      if (!this.current(epoch)) return;
       const projectID = String(result && result.project_id || this.data.projectID || '');
       const approved = !(result && result.status === 'pending');
       this.setData({ loading: false, busy: false, applied: true, requestStatus: approved ? 'approved' : 'pending', projectID });
@@ -75,18 +75,18 @@ Page({
         if (this._enterTimer) clearTimeout(this._enterTimer);
         this._enterTimer = setTimeout(() => {
           this._enterTimer = null;
-          if (this._visible) wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(projectID) });
+          if (this.current(epoch)) wx.navigateTo({ url: '/pages/projectnoteview/projectnoteview?project_id=' + encodeURIComponent(projectID) });
         }, 900);
       }
     } catch (error) {
-      if (!this._visible) return;
+      if (!this.current(epoch)) return;
       this.setData({ busy: false, error: error.message || '加入失败，请重试。' });
     }
   },
   enterProject() {
     const projectID = String(this.data.projectID || '');
     if (!projectID) { void this.loadInvitation(); return; }
-    wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(projectID) });
+    wx.navigateTo({ url: '/pages/projectnoteview/projectnoteview?project_id=' + encodeURIComponent(projectID) });
   },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   handleBack() { wx.navigateBack(); },

@@ -244,6 +244,9 @@ func (s *Service) ProjectNoteReadInvitation(ctx context.Context, token string, a
 				}
 			}
 			out.Status = request.Status
+			if request.Status == ProjectNoteJoinApproved {
+				out.ProjectID = project.ID
+			}
 		} else if !errors.Is(readErr, ErrNotFound) {
 			return readErr
 		}

@@ -68,15 +68,17 @@ Page({
     this.setData({ media, mediaGroups: groupNoteImages(media, media, windowInfo), articleBlocks, mediaFailuresCount: mediaFailureCount(media), notice: '视频播放失败，请重新加载。' });
   },
   data: {
-    loading: true, busy: false, loginRequired: false, error: '', notice: '',
+    loading: true, busy: false, loginRequired: false, error: '', notice: '', memberMode: false, memberDirectory: null, memberNextCursor: '',
     activityTypes: [{ key: 'feedbacks', label: '反馈意见' }, { key: 'resolutions', label: '处理记录' }, { key: 'confirmations', label: '确认记录' }], activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false,
     satisfaction: '', readAcknowledged: false, acknowledgingRead: false,
-    view: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], feedbackText: '', canConfirm: false, confirmed: false, shareReady: false,
+    view: null, memberDirectory: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], feedbackText: '', canConfirm: false, confirmed: false, shareReady: false,
     mediaGroups: [], galleryPositions: {},
   },
   onLoad(options) {
     wx.hideShareMenu();
     this._shareToken = String(options && options.pns || '').trim();
+    this._memberProjectID = String(options && options.project_id || '').trim();
+    this.setData({ memberMode: !!this._memberProjectID });
     this._openEventID = eventID();
     this._visible = true;
   },
@@ -89,6 +91,7 @@ Page({
     }
     this._visible = true;
     if (!token) { wx.hideShareMenu(); this.setData({ loading: false, loginRequired: true, error: '' }); return; }
+    if (this._memberProjectID && !this._memberVersionID) return this.loadMemberDirectory();
     return this.data.view ? this.revalidateShared() : this.loadShared();
   },
   onHide() {
@@ -108,17 +111,52 @@ Page({
   clearProtected() {
     this._accessAttempt = null;
     this._accessVerified = false;
-    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
+    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, memberDirectory: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
+  },
+  async loadMemberDirectory(event) {
+    const append = !!(event && event.currentTarget);
+    if (append && !this.data.memberNextCursor) return;
+    const epoch = this._epoch = (this._epoch || 0) + 1;
+    this.setData({ loading: true, error: '' });
+    try {
+      const directory = await require('../../utils/project-member-api').directory(this._memberProjectID, { limit: 30, cursor: append ? this.data.memberNextCursor : '' });
+      if (!this.current(epoch)) return;
+      const versions = append && this.data.memberDirectory ? this.data.memberDirectory.versions.concat(directory.versions || []) : directory.versions || [];
+      this.setData({ loading: false, memberDirectory: Object.assign({}, directory, { versions }), memberNextCursor: directory.next_cursor || '' });
+    } catch (error) {
+      if (!this.current(epoch)) return;
+      this.clearProtected(); this.setData({ loading: false, error: error.message || '项目暂不可访问', loginRequired: Number(error.statusCode) === 401 });
+    }
+  },
+  openMemberVersion(event) {
+    this._memberVersionID = String(event.currentTarget.dataset.id || '');
+    return this.loadShared();
+  },
+  backToMemberDirectory() { this._memberVersionID = ''; this.clearProtected(); return this.loadMemberDirectory(); },
+  readSharedView() {
+    return this._memberProjectID
+      ? require('../../utils/project-member-api').version(this._memberProjectID, this._memberVersionID)
+      : api.getSharedProjectNote(this._shareToken);
+  },
+  async loadSharedAsset(asset) {
+    if (!this._memberProjectID) return loadSharedMedia(this._shareToken, asset);
+    const member = require('../../utils/project-member-api');
+    if (asset.kind === 'video') {
+      const playback = await member.playback(this._memberProjectID, this._memberVersionID, asset.media_id);
+      if (!playback.url) throw new Error('视频播放地址获取失败');
+      return Object.assign({}, asset, { local_path: playback.url, preview_error: '' });
+    }
+    return Object.assign({}, asset, { local_path: await member.download(this._memberProjectID, this._memberVersionID, asset.media_id), preview_error: '' });
   },
   async loadShared() {
     const accountToken = String(wx.getStorageSync('token') || '');
     if (!accountToken) { this.clearProtected(); this.setData({ loading: false, loginRequired: true, error: '' }); return; }
-    if (!/^[A-Za-z0-9_-]{8,256}$/.test(this._shareToken || '')) { this.clearProtected(); this.setData({ loading: false, loginRequired: false, error: SHARE_ERROR.gone }); return; }
+    if (!this._memberProjectID && !/^[A-Za-z0-9_-]{8,256}$/.test(this._shareToken || '')) { this.clearProtected(); this.setData({ loading: false, loginRequired: false, error: SHARE_ERROR.gone }); return; }
     this._accountToken = accountToken;
     const epoch = this._epoch = (this._epoch || 0) + 1;
     wx.hideShareMenu(); this.clearProtected(); this.setData({ loading: true, loginRequired: false, error: '' });
     try {
-      const view = await api.getSharedProjectNote(this._shareToken);
+      const view = await this.readSharedView();
       if (!this.current(epoch)) return;
       const assets = [];
       if (view.version && view.version.cover) assets.push(view.version.cover);
@@ -133,14 +171,14 @@ Page({
         while (mediaCursor < assets.length) {
           const index = mediaCursor++;
           const asset = assets[index];
-          try { media[index] = await loadSharedMedia(this._shareToken, asset); continue; }
+          try { media[index] = await this.loadSharedAsset(asset); continue; }
           catch (error) {
             const status = Number(error && error.statusCode);
             if ([401, 403].includes(status)) throw error;
             if (status === 404) {
               shareValidity = shareValidity || (async () => {
                 try {
-                  const fresh = await api.getSharedProjectNote(this._shareToken);
+                  const fresh = await this.readSharedView();
                   const same = !!(fresh && fresh.share && String(fresh.share.share_id || '') === String(view.share && view.share.share_id || ''));
                   return same ? { ok: true } : { ok: false, error: Object.assign(new Error('分享内容已更新'), { statusCode: 403 }) };
                 } catch (error) { return { ok: false, error }; }
@@ -166,7 +204,7 @@ Page({
       this._accessVerified = true;
       this.setData({ view, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, notice: mediaFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, () => {
         if (!this.current(epoch)) return;
-        if (wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
+        if (!this._memberProjectID && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
 
       });
     } catch (error) {
@@ -183,7 +221,7 @@ Page({
     this._accessVerified = false;
     wx.hideShareMenu(); this.setData({ loading: true, loginRequired: false, error: '', notice: '' });
     try {
-      const view = await api.getSharedProjectNote(this._shareToken);
+      const view = await this.readSharedView();
       if (!this.current(epoch)) return;
       const sameShare = String(view.share && view.share.share_id || '') === String(cached.share && cached.share.share_id || '');
       const sameVersion = String(view.version && view.version.version_id || '') === String(cached.version && cached.version.version_id || '');
@@ -194,7 +232,7 @@ Page({
       if (hasVideos) {
         media = await Promise.all(media.map(async item => {
           if (!item || item.kind !== 'video') return item;
-          try { return await loadSharedMedia(this._shareToken, item); }
+          try { return await this.loadSharedAsset(item); }
           catch (error) {
             if ([401, 403].includes(Number(error && error.statusCode))) throw error;
             videoRefreshFailed = true;
@@ -213,14 +251,14 @@ Page({
         const mediaFailures = media.some(item => item && (item.preview_error || !item.local_path));
         const mediaPatch = hasVideos ? { media, mediaGroups: groupNoteImages(media, media, wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()), articleBlocks } : {};
         this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: mediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, mediaPatch), () => {
-          if (this.current(epoch) && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
+          if (this.current(epoch) && !this._memberProjectID && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
         });
         return;
       }
       const pendingMediaFailures = media.some(item => item && (item.preview_error || !item.local_path));
       const mediaPatch = hasVideos ? { media, mediaGroups: groupNoteImages(media, media, wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()), articleBlocks } : {};
       this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: pendingMediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, mediaPatch), () => {
-        if (this.current(epoch) && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
+        if (this.current(epoch) && !this._memberProjectID && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
       });
     } catch (error) {
       if (!this.current(epoch)) return;
@@ -336,7 +374,9 @@ Page({
     if (!this.data.media.some(item => item.media_id === mediaID && item.kind === 'image')) return;
     const epoch = this._epoch; this.setData({ busy: true, notice: '' });
     try {
-      const filePath = await api.downloadSharedProjectNoteMedia(this._shareToken, mediaID);
+      const filePath = this._memberProjectID
+        ? await require('../../utils/project-member-api').download(this._memberProjectID, this._memberVersionID, mediaID)
+        : await api.downloadSharedProjectNoteMedia(this._shareToken, mediaID);
       if (!this.current(epoch)) return;
       await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath, success: resolve, fail: () => reject(new Error('原图未保存，请检查相册权限后重试')) }));
       if (this.current(epoch)) this.setData({ busy: false, notice: '原图已保存到相册。' });
@@ -355,7 +395,7 @@ Page({
   goLogin() { wx.navigateTo({ url: '/pages/login/login?from=share-view' }); },
   // T7.8 / P9：错误区联系客服跳平台客服页，不暴露设计师个人联系方式。
   openCustomerService() { wx.navigateTo({ url: '/pages/customerservice/customerservice' }); },
-  retry() { return this.data.view ? this.revalidateShared() : this.loadShared(); },
+  retry() { return this._memberProjectID && !this._memberVersionID ? this.loadMemberDirectory() : this.data.view ? this.revalidateShared() : this.loadShared(); },
   // D16：分享有效时定向重试失败素材，只重下失败项（并发上限 4）。
   async retryMediaDownloads() {
     const failures = (this.data.media || []).filter(item => item && (item.preview_error || !item.local_path));
@@ -368,7 +408,7 @@ Page({
     const worker = async () => {
       while (cursor < failures.length) {
         const item = failures[cursor++];
-        try { updated.set(item.media_id, await loadSharedMedia(this._shareToken, item)); }
+        try { updated.set(item.media_id, await this.loadSharedAsset(item)); }
         catch (_) { /* 保持失败状态，等下次重试 */ }
       }
     };
