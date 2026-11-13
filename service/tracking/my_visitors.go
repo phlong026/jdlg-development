@@ -31,17 +31,20 @@ const (
 // MyVisitEntry is one counted page view of one visitor: 时间、来源、时长与
 // 视频进度。它是逐次明细的最小单位（仿真稿④的时间线）。
 type MyVisitEntry struct {
-	View       string    `json:"view_id"`
-	Session    string    `json:"session_id"`
-	Occurred   time.Time `json:"occurred_at"`
-	Route      string    `json:"route_key"`
-	Content    string    `json:"content_id,omitempty"`
-	Version    int       `json:"content_version,omitempty"`
-	Title      string    `json:"title,omitempty"`
-	ShareID    string    `json:"share_id,omitempty"`
-	Visible    int64     `json:"visible_ms"`
-	VideoWatch int64     `json:"video_watch_ms"`
-	Progress   int       `json:"progress_pct"`
+	View              string    `json:"view_id"`
+	Session           string    `json:"session_id"`
+	Occurred          time.Time `json:"occurred_at"`
+	Route             string    `json:"route_key"`
+	Content           string    `json:"content_id,omitempty"`
+	Version           int       `json:"content_version,omitempty"`
+	Title             string    `json:"title,omitempty"`
+	ShareID           string    `json:"share_id,omitempty"`
+	Visible           int64     `json:"visible_ms"`
+	VideoWatch        int64     `json:"video_watch_ms"`
+	Progress          int       `json:"progress_pct"`
+	videoPeaks        map[string][2]int64
+	coverageProgress  int
+	coverageAvailable bool
 }
 
 // MyVisitor is one customer aggregated across every share of the actor.
@@ -300,7 +303,13 @@ func (s *Service) myVisitorAggregates(ctx context.Context, r Repository, scope S
 	if err != nil {
 		return out, nil, err
 	}
-	out.window = window
+	return foldMyVisitorAggregates(events, shares, window, f), shares, nil
+}
+
+// foldMyVisitorAggregates lets callers reuse one authorized event scan for
+// multiple time windows. It performs no repository reads.
+func foldMyVisitorAggregates(events []myShareScanEvent, shares []Share, window *MyShareWindow, f Filter) myVisitorAggregates {
+	out := myVisitorAggregates{window: window, visitors: map[string]*myVisitorAccumulator{}}
 	byID := sharesByID(shares)
 	sort.Slice(events, func(i, j int) bool {
 		if events[i].ev.Occurred.Equal(events[j].ev.Occurred) {
@@ -311,15 +320,15 @@ func (s *Service) myVisitorAggregates(ctx context.Context, r Repository, scope S
 	viewVisitor := map[string]string{}
 	for _, item := range events {
 		visitor := item.visitor
-		a := out.visitors[visitor]
-		if a == nil {
-			a = &myVisitorAccumulator{sessions: map[string]bool{}, shares: map[string]bool{}, contents: map[string]bool{}, entries: map[string]*MyVisitEntry{}, entryCovered: map[string][]interval{}}
-			out.visitors[visitor] = a
-		}
 		ev := item.ev
 		if ev.Type == "page_view" {
 			if !within(ev.Occurred, f) {
 				continue
+			}
+			a := out.visitors[visitor]
+			if a == nil {
+				a = &myVisitorAccumulator{sessions: map[string]bool{}, shares: map[string]bool{}, contents: map[string]bool{}, entries: map[string]*MyVisitEntry{}, entryCovered: map[string][]interval{}}
+				out.visitors[visitor] = a
 			}
 			viewVisitor[ev.View] = visitor
 			a.shares[ev.Share] = true
@@ -381,6 +390,31 @@ func (s *Service) myVisitorAggregates(ctx context.Context, r Repository, scope S
 			target.watch += ev.Watch
 			entry.VideoWatch += ev.Watch
 			pct := videoProgressPct(ev)
+			if ev.Media != "" && ev.Duration > 0 && (ev.Unique > 0 || len(ev.Ranges) > 0) {
+				if entry.videoPeaks == nil {
+					entry.videoPeaks = map[string][2]int64{}
+				}
+				peak := entry.videoPeaks[ev.Media]
+				if ev.Unique > peak[0] {
+					peak[0] = ev.Unique
+				}
+				if ev.Duration > peak[1] {
+					peak[1] = ev.Duration
+				}
+				entry.videoPeaks[ev.Media] = peak
+				var unique, duration int64
+				for _, media := range entry.videoPeaks {
+					unique += media[0]
+					duration += media[1]
+				}
+				entry.coverageAvailable = duration > 0
+				if duration > 0 {
+					entry.coverageProgress = int(unique * 100 / duration)
+					if entry.coverageProgress > 100 {
+						entry.coverageProgress = 100
+					}
+				}
+			}
 			if pct > target.progress {
 				target.progress = pct
 			}
@@ -389,7 +423,7 @@ func (s *Service) myVisitorAggregates(ctx context.Context, r Repository, scope S
 			}
 		}
 	}
-	return out, shares, nil
+	return out
 }
 
 // myVisitorAggregates 是一次窗口聚合的结果：按访客的累计器 + 本次涉及的分享。

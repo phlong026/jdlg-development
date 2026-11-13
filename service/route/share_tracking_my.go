@@ -78,6 +78,17 @@ func registerTrackingMyRoutes(pub *gin.RouterGroup, svc *tracking.Service, users
 	// 9.6 策略预留开关：默认关闭（不配置=不注册路由，保持历史行为），
 	// 发布时在服务器 .env 配置 TRACKING_MY_CUSTOMER_VIEW_ENABLED=true 开启。
 	if os.Getenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED") == "true" {
+		visits := pub.Group("/my-visits", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
+		visits.GET("", func(c *gin.Context) {
+			filter, err := trackingFilter(c)
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			current := c.MustGet("tracking.my.scope").(tracking.Scope)
+			out, err := svc.MyVisitFeed(c.Request.Context(), current, current.Actor, filter)
+			trackingResponse(c, out, err)
+		})
 		visitors := pub.Group("/my-visitors", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
 		visitors.GET("", func(c *gin.Context) {
 			filter, err := trackingFilter(c)

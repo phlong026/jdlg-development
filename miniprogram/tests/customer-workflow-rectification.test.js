@@ -143,6 +143,7 @@ test('原生跳转传入编码参数时只解码一次，访客和快照不会�
 test('K03 更早分享分段可返回上一段或最新段，明细继承来源段', async () => {
  const queries=[];
  const h=runtime('sharevisits',{listMyVisitors:async q=>{queries.push({...q});return {items:[],as_of:'2026-11-13T00:00:00Z',share_window:{limit:400,truncated:true,next_cursor:'older-segment'}};}});
+ h.page.setData({customerViewMode:'people'});
  h.page._token='account-one'; await h.page.loadCustomers(true);
  await h.page.nextShareWindow();
  assert.equal(queries[1].share_cursor,'older-segment');

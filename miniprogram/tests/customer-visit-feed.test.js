@@ -1,0 +1,148 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const root=path.join(__dirname,'../miniprogram/pages/sharevisits');
+const source=()=>fs.readFileSync(path.join(root,'sharevisits.ts'),'utf8').replace(/^\/\/ @ts-nocheck\n/,'').replace(/\nexport \{\};\n?$/,'\n');
+
+function runtime(feed,stubs={}){
+ let definition;const navigation=[],clipboard=[],queries=[],warnings=[],actionSheets=[];
+ const apiStub=Object.assign({
+  ORIGIN:'https://api.jiadilingguang.com',
+  listMyVisits:async query=>{queries.push(query);return{items:feed,as_of:'2026-11-13T08:00:00Z',next_cursor:'next-feed',share_window:{next_cursor:'older'}}},
+  listMyVisitors:async()=>({items:[]}),listMyContentStats:async()=>({items:[]}),listMyShares:async()=>({items:[]}),
+  downloadWorkbenchMedia:async id=>'temp://'+id,
+ },stubs);
+ const wx={getStorageSync:()=> 'login-token',hideShareMenu(){},stopPullDownRefresh(){},navigateTo:o=>navigation.push(o.url),setClipboardData:o=>{clipboard.push(o.data);o.success&&o.success()},showToast(){},showActionSheet(options){actionSheets.push(options.itemList);if(stubs.actionSheetTap!==undefined)options.success({tapIndex:stubs.actionSheetTap})}};
+ const protectedMedia=stubs.protectedMedia||{resolveProtectedMediaURL:async url=>'resolved:'+url};
+ vm.runInNewContext(source(),{Page:o=>definition=o,wx,require:id=>id.includes('phase3-api')?apiStub:protectedMedia,Promise,Date,Number,String,Math,Set,encodeURIComponent,decodeURIComponent,setTimeout,clearTimeout,console:{log(){},warn(...args){warnings.push(args)},error(){}}});
+ const page={...definition,data:structuredClone(definition.data),setData(value){Object.assign(this.data,value)}};
+ return{page,navigation,clipboard,queries,warnings,actionSheets};
+}
+
+const feed=[
+ {view_id:'v1',occurred_at:'2026-11-13T06:26:00Z',title:'现代简约庭院别墅设计方案',type:'article',visible_ms:26000,video_watch_ms:24000,progress_available:true,progress_pct:80,content_page_views:3,cover:{media_id:'cover-1',kind:'image'},source:{kind:'share',channel:'app_message'},visitor:{visitor_key:'u:7',nickname:'张先生',avatar_url:'https://avatar.example/7',identity_state:'identified',intent:{level:'high'}}},
+ {view_id:'v2',occurred_at:'2026-11-13T05:48:00Z',title:'原木奶油风客厅',type:'video',visible_ms:18000,video_watch_ms:0,progress_available:false,content_page_views:2,cover:{url:'/media/2',kind:'image'},source:{kind:'share',channel:'timeline'},visitor:{visitor_key:'a:anon',nickname:'',identity_state:'anonymous',intent:{level:'unknown'}}},
+];
+
+test('客户查看默认按次加载近30天，并把卡片字段映射为可读文案',async()=>{
+ const {page,queries}=runtime(feed);page.onLoad({});page._token='login-token';page._epochCustomers=1;
+ assert.equal(page.data.customerViewMode,'visits');
+ assert.equal(page.data.rangeIndex,3);
+ await page.loadCustomerVisits(true,1);
+ assert.equal(queries.length,1);
+ assert.ok(queries[0].start&&queries[0].end);
+ assert.equal(page.data.customerVisits.length,2);
+ const video=page.data.customerVisits[0],article=page.data.customerVisits[1];
+ assert.equal(video.nickname,'张先生');
+ assert.equal(video.occurred_text,'11-13 14:26');
+ assert.equal(video.source_text,'微信分享');
+ assert.equal(video.duration_text,'本次观看24秒');
+ assert.equal(video.progress_text,'进度80%');
+ assert.equal(video.views_text,'累计浏览3次');
+ assert.equal(article.nickname,'匿名访客');
+ assert.equal(article.can_copy_name,false);
+ assert.equal(article.source_text,'朋友圈');
+ assert.equal(article.duration_text,'本次停留18秒');
+ assert.equal(article.progress_text,'');
+ assert.equal(article.media_kind,'video');assert.equal(article.media_icon,'▶');
+});
+
+test('按次筛选在服务端分页前传递客户、意向、来源，自定义日期包含结束日',async()=>{
+ const {page,queries}=runtime([]);page._token='login-token';page._epochCustomers=1;
+ page.setData({customerQuery:'张',customerIntent:'high',customerChannel:'timeline',customStartDate:'2026-11-01',customEndDate:'2026-11-13'});
+ await page.applyCustomRange();
+ const query=queries.at(-1);
+ assert.equal(query.q,'张');assert.equal(query.intent,'high');assert.equal(query.channel,'timeline');
+ assert.equal(query.start,'2026-10-31T16:00:00.000Z');
+ assert.equal(query.end,'2026-11-13T16:00:00.000Z');
+});
+
+test('搜索确认的事件对象不会被误当 epoch，非法自定义日期不发请求',async()=>{
+ const {page,queries}=runtime(feed);page._token='login-token';
+ await page.reloadCustomerView({type:'confirm'});
+ assert.equal(page.data.customerVisits.length,2);
+ const before=queries.length;
+ page.setData({customStartDate:'2026-02-31',customEndDate:'2026-03-02'});
+ await page.applyCustomRange();
+ assert.equal(queries.length,before);
+});
+
+test('默认近30天在页面初始化时重算，分页按 view_id 去重',async()=>{
+ let calls=0;
+ const {page}=runtime([],{listMyVisits:async()=>calls++===0?{items:[feed[0]],as_of:'2026-11-13T08:00:00Z',next_cursor:'next'}:{items:[feed[0],feed[1]],as_of:'2026-11-13T08:00:00Z'}});
+ page.setData({filterStart:'2000-01-01T00:00:00.000Z',filterEnd:'2000-02-01T00:00:00.000Z'});
+ page.onLoad({});
+ assert.notEqual(page.data.filterStart,'2000-01-01T00:00:00.000Z');
+ page._token='login-token';page._epochCustomers=1;
+ await page.loadCustomerVisits(true,1);await page.loadCustomerVisits(false);
+ assert.deepEqual(page.data.customerVisits.map(item=>item.visit_key),['v1','v2']);
+});
+
+test('快速加载下一页不会作废上一页尚在解析的封面',async()=>{
+ let releaseFirstCover,calls=0;
+ const firstCover=new Promise(resolve=>{releaseFirstCover=resolve});
+ const first={...feed[0],cover:{url:'https://cdn.example/first.jpg',kind:'image'}},second={...feed[1],view_id:'v3',cover:{url:'https://cdn.example/second.jpg',kind:'image'}};
+ const protectedMedia={resolveProtectedMediaURL:url=>url.includes('first')?firstCover:Promise.resolve(url)};
+ const listMyVisits=async()=>calls++===0?{items:[first],next_cursor:'next',as_of:'2026-11-13T08:00:00Z'}:{items:[second],as_of:'2026-11-13T08:00:00Z'};
+ const {page}=runtime([],{protectedMedia,listMyVisits});page._token='login-token';page._epochCustomers=1;
+ await page.loadCustomerVisits(true,1);await page.loadCustomerVisits(false);
+ releaseFirstCover('https://cdn.example/first.jpg');await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(page.data.customerVisits.find(item=>item.visit_key==='v1').cover,'https://cdn.example/first.jpg');
+});
+
+test('客户查看顶部菜单可真实切换查看记录与按客户汇总',async()=>{
+ const aggregate=[];
+ const {page,actionSheets}=runtime([],{actionSheetTap:1,listMyVisitors:async query=>{aggregate.push(query);return{items:[]}}});
+ page._token='login-token';page._epochCustomers=1;
+ page.setData({activeTab:'materials'});
+ page.chooseCustomerView();await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(JSON.stringify(actionSheets),JSON.stringify([['查看记录','按客户汇总']]));
+ assert.equal(page.data.customerViewMode,'people');assert.equal(aggregate.length,1);
+ assert.equal(page.data.activeTab,'customers');
+});
+
+test('从分享记录选择当前查看模式仍会回到客户查看并加载',async()=>{
+ const {page,queries}=runtime(feed,{actionSheetTap:0});
+ page._token='login-token';page.setData({activeTab:'shares',customerViewMode:'visits'});
+ page.chooseCustomerView();await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(page.data.activeTab,'customers');
+ assert.equal(queries.length,1);assert.equal(page.data.customerVisits.length,2);
+});
+
+test('访问卡头像进入既有客户详情并携带筛选快照，复制只复制已展示实名',async()=>{
+ const {page,navigation,clipboard}=runtime(feed);page._token='login-token';page._epochCustomers=1;await page.loadCustomerVisits(true,1);
+ page.openVisitCustomer({currentTarget:{dataset:{index:0}}});
+ assert.match(navigation[0],/^\/pages\/visitdetail\/visitdetail\?visitor=u%3A7/);
+ assert.match(navigation[0],/&as_of=2026-11-13T08%3A00%3A00Z/);
+ page.copyVisitCustomerName({currentTarget:{dataset:{index:0}}});
+ page.copyVisitCustomerName({currentTarget:{dataset:{index:1}}});
+ assert.deepEqual(clipboard,['张先生']);
+});
+
+test('封面解析失败只降级单卡，不阻塞访问列表',async()=>{
+ const {page,warnings}=runtime(feed,{downloadWorkbenchMedia:async()=>{throw Object.assign(new Error('private url must not log'),{statusCode:403})}});page._token='login-token';page._epochCustomers=1;await page.loadCustomerVisits(true,1);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(page.data.customerVisits.length,2);
+ assert.equal(page.data.customerVisits[0].cover_error,true);
+ assert.equal(warnings[0][1].view_id,'v1');assert.equal(warnings[0][1].status,403);assert.doesNotMatch(JSON.stringify(warnings),/private url/);
+});
+
+test('封面同时有 url 和 media_id 时优先读取可发布URL，不要求素材管理权限',async()=>{
+ let downloads=0,resolvedURL='';
+ const relativeURL='/api/v1/miniprogram/tracking/media/1234567890abcdef1234567890abcdef';
+ const withPublishedCover=[{...feed[0],cover:{media_id:'private-media',url:relativeURL,kind:'image'}}];
+ const protectedMedia={resolveProtectedMediaURL:async url=>{resolvedURL=url;if(!url.startsWith('https://'))throw new Error('素材地址无效');return url}};
+ const {page}=runtime(withPublishedCover,{protectedMedia,downloadWorkbenchMedia:async()=>{downloads++;throw new Error('403')}});page._token='login-token';page._epochCustomers=1;await page.loadCustomerVisits(true,1);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(downloads,0);assert.equal(resolvedURL,'https://api.jiadilingguang.com'+relativeURL);assert.equal(page.data.customerVisits[0].cover,resolvedURL);
+});
+
+test('WXML保留三个业务视角并以逐次卡为主视图',()=>{
+ const wxml=fs.readFileSync(path.join(root,'sharevisits.wxml'),'utf8');
+ assert.match(wxml,/>客户查看</);assert.match(wxml,/>素材跟踪</);assert.match(wxml,/>分享记录</);
+ assert.match(wxml,/customerVisits/);assert.match(wxml,/item\.progress_text/);assert.match(wxml,/item\.source_text/);
+ assert.match(wxml,/item\.media_icon/);
+ assert.match(wxml,/binderror="onVisitCoverError"/);
+ assert.match(wxml,/catchtap="chooseCustomerView"/);assert.doesNotMatch(wxml,/class="feed-toolbar"/);
+ assert.match(wxml,/class="customer-filters"[\s\S]*customerViewMode === 'visits'[\s\S]*sourceOptions[\s\S]*sortOptions/);
+ assert.match(wxml,/wx:for="{{rangeOptions}}"/);assert.match(source(),/['"]自定义['"]/);assert.match(source(),/按客户汇总/);
+});

@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-14",
+  "baseline": "108eec7",
+  "branch": "feat/customer-visit-feed-20261113",
+  "miniprogram_tests": {"total": 1659, "passed": 1659, "failed": 0, "skipped": 0, "timezone": "UTC", "native_wxml_compiler_enabled": true},
+  "go_tests": {"packages": ["tracking", "route", "model"], "cgo_enabled": false, "passed": true, "vet_passed": true},
+  "static": {"js_syntax": true, "tracking_build_sync": true, "auth_signer_sync": true, "route_inventory": true, "wxml_compilation": true, "diff_check": true},
+  "typecheck": {"passed": false, "current_errors": 188, "baseline_errors": 188, "new_errors": 0, "baseline_method": "git archive HEAD before feature commit, same TypeScript compiler and dependencies"},
+  "npm_production_audit": {"vulnerabilities": 0, "new_dependencies": false},
+  "review": {"independent_read_only": true, "final_status": "approved"},
+  "native_visual": {"offline_fixture": true, "actual_page_sources": true, "filter_rows": 1, "visible_complete_sample_cards": 4, "device": "iPhone17 simulator", "warnings": ["DevTools WAServiceMainContext preload", "DevTools WAAutoService preload"]},
+  "delivery": {"production_deployed": false, "miniprogram_uploaded": false, "business_database_written": false, "real_account_or_device_uat": false},
+  "evidence_directory_relative_to_repository": "../检查记录/20261114-客户跟踪按次列表"
+}

@@ -70,4 +70,6 @@ npm run check:tracking-routes
 
 工作台链路逐项修复及服务号开通依赖见[修复计划](docs/phase3/workbench-chain-fixes-20261113/PLAN.md)和[服务号配置门禁](docs/phase3/workbench-chain-fixes-20261113/official-account.md)。服务号独立配置项见`service/env.example`，缺少真实账号和模板时保持关闭。
 
+客户跟踪逐次访问列表的页面、统计口径、本人权限、验证和回滚说明见[实施说明](docs/phase3/customer-visit-feed-20261114/README.md)。
+
 剩余分支统一主线、媒体自适应和本地证据见[本轮实施记录](docs/phase3/unify-main-20261113/implementation-status.md)。

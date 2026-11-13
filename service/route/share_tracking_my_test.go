@@ -325,7 +325,7 @@ func TestMyCustomerViewRoutesGateBehindEnvSwitch(t *testing.T) {
 		} else {
 			t.Setenv("TRACKING_MY_CUSTOMER_VIEW_ENABLED", "")
 		}
-		for _, path := range []string{"/api/v1/miniprogram/tracking/my-visitors", "/api/v1/miniprogram/tracking/my-content-stats"} {
+		for _, path := range []string{"/api/v1/miniprogram/tracking/my-visits", "/api/v1/miniprogram/tracking/my-visitors", "/api/v1/miniprogram/tracking/my-content-stats"} {
 			router := gin.New()
 			registerTrackingMyRoutes(router.Group("/api/v1/miniprogram/tracking"), svc, &model.UserModel{}, nil)
 			response := httptest.NewRecorder()

@@ -8,8 +8,17 @@ function displayTime(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
+  const beijing = new Date(date.getTime() + 8 * 3600000);
   const two = number => String(number).padStart(2, '0');
-  return date.getFullYear() + '-' + two(date.getMonth() + 1) + '-' + two(date.getDate()) + ' ' + two(date.getHours()) + ':' + two(date.getMinutes());
+  return beijing.getUTCFullYear() + '-' + two(beijing.getUTCMonth() + 1) + '-' + two(beijing.getUTCDate()) + ' ' + two(beijing.getUTCHours()) + ':' + two(beijing.getUTCMinutes());
+}
+function displayVisitTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const beijing = new Date(date.getTime() + 8 * 3600000);
+  const two = number => String(number).padStart(2, '0');
+  return two(beijing.getUTCMonth() + 1) + '-' + two(beijing.getUTCDate()) + ' ' + two(beijing.getUTCHours()) + ':' + two(beijing.getUTCMinutes());
 }
 function formatDuration(ms) {
   const total = Math.round(Number(ms || 0) / 1000);
@@ -22,6 +31,44 @@ function displayChannel(value) {
   if (value === 'app_message') return '微信好友';
   if (value === 'timeline') return '朋友圈';
   return '分享方式未记录';
+}
+function visitSourceText(source) {
+  source = source || {};
+  if (source.channel === 'app_message') return '微信分享';
+  if (source.channel === 'timeline') return '朋友圈';
+  if (['code_link', 'link', 'qrcode', 'qr_code'].includes(source.kind)) return '链接或扫码';
+  return '未知';
+}
+function visitIntentText(level) { return { high: '高意向', medium: '中意向', low: '低意向' }[level] || ''; }
+function visitMedia(type, watch) {
+  const normalized = String(type || '').trim().toLowerCase();
+  if (watch > 0 || ['video', 'ai_video', 'shared_video', 'short_video'].includes(normalized) || normalized.startsWith('video/')) return { kind: 'video', icon: '▶' };
+  if (['image', 'article', 'note', 'gallery', 'rich_text', 'picture', 'graphic'].includes(normalized) || normalized.startsWith('image/')) return { kind: 'image', icon: '▧' };
+  return { kind: '', icon: '' };
+}
+function visitRange(days) {
+  if (!days) return { start: '', end: '' };
+  const end = new Date(), start = new Date(end.getTime() - days * 86400000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+function localDate(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return '';
+  const beijing = new Date(date.getTime() + 8 * 3600000);
+  const two = number => String(number).padStart(2, '0');
+  return beijing.getUTCFullYear() + '-' + two(beijing.getUTCMonth() + 1) + '-' + two(beijing.getUTCDate());
+}
+function calendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
+  const [year, month, day] = value.split('-').map(Number), date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return { year, month, day };
+}
+function customRange(start, end) {
+  const fromParts = calendarDate(start), endParts = calendarDate(end);
+  if (!fromParts || !endParts || start > end) return null;
+  const atBeijingMidnight = parts => Date.UTC(parts.year, parts.month - 1, parts.day) - 8 * 3600000;
+  return { start: new Date(atBeijingMidnight(fromParts)).toISOString(), end: new Date(atBeijingMidnight(endParts) + 86400000).toISOString() };
 }
 function displayTitle(item) {
   const title = String(item.title || '').trim();
@@ -41,11 +88,14 @@ function displayStatus(item) {
 
 Page({
   data: {
-    activeTab: 'customers', navigationTitle: '客户', contentFilter: '', contentVersion: 0, contentTitle: '',
+    activeTab: 'customers', navigationTitle: '客户跟踪', contentFilter: '', contentVersion: 0, contentTitle: '',
     shareWindowCursor: '', shareWindowNext: '', shareWindowIndex: 0,
-    rangeOptions: ['保留期内', '近3天', '近7天', '近30天'], rangeIndex: 0, filterStart: '', filterEnd: '',
+    rangeOptions: ['全部', '近3天', '近7天', '近30天', '自定义'], rangeIndex: 3, filterStart: '', filterEnd: '',
+    customRangeOpen: false, customStartDate: '', customEndDate: '',
     intentOptions: ['全部意向', '高意向', '中意向', '低意向', '待判断'], intentIndex: 0,
+    sourceOptions: ['全部来源', '微信分享', '朋友圈', '来源未知'], sourceIndex: 0, customerChannel: '',
     sortOptions: ['最近访问', '浏览次数', '停留时长'], sortIndex: 0,
+    customerViewMode: 'visits', customerVisits: [], customerVisitsCursor: '', customerVisitsAsOf: '', customerVisitLoading: true, customerVisitLoadingMore: false, customerVisitError: '',
     customers: [], customers_cursor: '', customers_as_of: '', customerQuery: '', customerIntent: '', customerLoading: true, customerLoadingMore: false, customerError: '',
     materials: [], materials_cursor: '', materials_as_of: '', materialQuery: '', materialLoading: false, materialLoadingMore: false, materialError: '', materialsLoaded: false,
     shareQuery: '', loading: false, loadingMore: false, error: '', denied: false, loginRequired: false,
@@ -55,12 +105,23 @@ Page({
     const tab = ['customers', 'materials', 'shares'].includes(options && options.tab) ? options.tab : 'customers';
     const version = Number(options && options.content_version || 0);
     const validDate = value => value && !Number.isNaN(new Date(routeValue(value)).getTime()) ? routeValue(value) : '';
-    const rangeIndex = Number(options && options.range_index || 0);
+    const hasRange = options && options.range_index !== undefined;
+    const rangeIndex = hasRange ? Number(options.range_index) : this.data.rangeIndex;
     this._drillAsOf = validDate(options && options.as_of);
-    this.setData({ rangeIndex: Number.isInteger(rangeIndex) && rangeIndex >= 0 && rangeIndex <= 3 ? rangeIndex : 0, filterStart: validDate(options && options.start), filterEnd: validDate(options && options.end) });
-    this.setData({ activeTab: tab, navigationTitle: this.tabTitle(tab), contentFilter: routeValue(options && options.content_id), contentVersion: Number.isInteger(version) && version > 0 ? version : 0, contentTitle: routeValue(options && options.title) });
+    const routedStart = validDate(options && options.start), routedEnd = validDate(options && options.end);
+    const normalizedIndex = Number.isInteger(rangeIndex) && rangeIndex >= 0 && rangeIndex <= 4 ? rangeIndex : 3;
+    const rollingRange = visitRange([0, 3, 7, 30][normalizedIndex]);
+    this.setData({ rangeIndex: normalizedIndex, filterStart: routedStart || rollingRange.start, filterEnd: routedEnd || rollingRange.end, customStartDate: localDate(routedStart || rollingRange.start), customEndDate: localDate(routedEnd || rollingRange.end) });
+    this.setData({ activeTab: tab, navigationTitle: '客户跟踪', contentFilter: routeValue(options && options.content_id), contentVersion: Number.isInteger(version) && version > 0 ? version : 0, contentTitle: routeValue(options && options.title) });
   },
-  tabTitle(tab) { return { customers: '客户', materials: '素材热度', shares: '分享记录' }[tab] || '客户'; },
+  tabTitle() { return '客户跟踪'; },
+  goBack() { wx.navigateBack({ delta: 1, fail: () => wx.switchTab({ url: '/pages/index/index' }) }); },
+  refreshRollingRange() {
+    const days = [0, 3, 7, 30][this.data.rangeIndex];
+    if (days === undefined) return;
+    const range = visitRange(days);
+    this.setData({ filterStart: range.start, filterEnd: range.end, customStartDate: localDate(range.start), customEndDate: localDate(range.end) });
+  },
   filterQuery() {
     const query = {};
     if (this.data.shareWindowCursor && this.data.activeTab !== 'shares') query.share_cursor = this.data.shareWindowCursor;
@@ -73,21 +134,32 @@ Page({
     return query;
   },
   selectRange(event) {
-    const index = Number(event.detail.value), days = [0, 3, 7, 30][index];
+    const index = Number(event.currentTarget && event.currentTarget.dataset.index !== undefined ? event.currentTarget.dataset.index : event.detail.value), days = [0, 3, 7, 30][index];
+    if (index === 4) { this.setData({ rangeIndex: 4, customRangeOpen: true }); return; }
     if (days === undefined) return;
     this._drillAsOf = ''; this.clearShareWindow();
-    const end = new Date(), start = new Date(end.getTime() - days * 86400000);
+    const range = visitRange(days);
     ['customers', 'materials', 'shares'].forEach(tab => this.bumpEpoch(tab));
     this._loadedTabs = {};
-    this.setData({ rangeIndex: index, filterStart: days ? start.toISOString() : '', filterEnd: days ? end.toISOString() : '', customers: [], materials: [], items: [], customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', metric_version: '', customerError: '', materialError: '', error: '' });
+    this.setData({ rangeIndex: index, customRangeOpen: false, filterStart: range.start, filterEnd: range.end, customerVisits: [], customers: [], materials: [], items: [], customerVisitsCursor: '', customerVisitsAsOf: '', customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', metric_version: '', customerVisitError: '', customerError: '', materialError: '', error: '' });
+    return this.reloadActive();
+  },
+  setCustomStart(event) { this.setData({ customStartDate: event.detail.value }); },
+  setCustomEnd(event) { this.setData({ customEndDate: event.detail.value }); },
+  applyCustomRange() {
+    const range = customRange(this.data.customStartDate, this.data.customEndDate);
+    if (!range) { wx.showToast({ title: '请选择正确的起止日期', icon: 'none' }); return Promise.resolve(); }
+    this._drillAsOf = ''; this.clearShareWindow(); ['customers', 'materials', 'shares'].forEach(tab => this.bumpEpoch(tab)); this._loadedTabs = {};
+    this.setData({ rangeIndex: 4, customRangeOpen: false, filterStart: range.start, filterEnd: range.end, customerVisits: [], customers: [], materials: [], items: [], customerVisitsCursor: '', customerVisitsAsOf: '', customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', metric_version: '', customerVisitError: '', customerError: '', materialError: '', error: '' });
     return this.reloadActive();
   },
   selectIntent(event) {
     const index = Number(event.detail.value), intent = ['', 'high', 'medium', 'low', 'unknown'][index];
     if (intent === undefined) return;
     this.setData({ intentIndex: index, customerIntent: intent });
-    return this.loadCustomers(true);
+    return this.reloadCustomerView();
   },
+  selectSource(event) { const index = Number(event.detail.value), channel = ['', 'app_message', 'timeline', 'unknown'][index]; if (channel === undefined) return; this.setData({ sourceIndex: index, customerChannel: channel }); return this.loadCustomerVisits(true); },
   selectSort(event) { const index = Number(event.detail.value); if (index < 0 || index > 2) return; this.setData({ sortIndex: index }); return this.loadCustomers(true); },
   setMaterialQuery(event) { this.setData({ materialQuery: event.detail.value }); },
   goContents() { wx.navigateTo({ url: '/pages/contentworkbench/contentworkbench' }); },
@@ -107,14 +179,14 @@ Page({
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
     if (this._token !== token) this.clearShareWindow();
-    if (this._token !== token) this.setData({ customers: [], materials: [], items: [], customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', customerError: '', materialError: '', error: '' });
+    if (this._token !== token) this.setData({ customerVisits: [], customers: [], materials: [], items: [], customerVisitsCursor: '', customerVisitsAsOf: '', customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', customerVisitError: '', customerError: '', materialError: '', error: '' });
     this._token = token;
     ['customers', 'materials', 'shares'].forEach(which => this.bumpEpoch(which));
     this.setData({ loginRequired: !this._token });
     if (!this._token) return;
     // 每次 onShow 刷新当前激活 Tab（旧页语义：onShow 必重拉）；其余 Tab 待切换时再拉。
     this._loadedTabs = {};
-    this.loadCustomers(true, this._epochCustomers);
+    this.reloadCustomerView(this._epochCustomers);
     if (this.data.activeTab === 'shares') this.loadShares(true, this._epochShares);
     else if (this.data.activeTab === 'materials') this.loadMaterials(true, this._epochMaterials);
   },
@@ -129,8 +201,9 @@ Page({
   },
   onPullDownRefresh() {
     this._drillAsOf = ''; if (this.data.activeTab !== 'shares') this.clearShareWindow();
+    this.refreshRollingRange();
     const done = () => wx.stopPullDownRefresh();
-    if (this.data.activeTab === 'customers') this.loadCustomers(true, this.bumpEpoch('customers')).finally(done);
+    if (this.data.activeTab === 'customers') this.reloadCustomerView(this.bumpEpoch('customers')).finally(done);
     else if (this.data.activeTab === 'shares') this.loadShares(true, this.bumpEpoch('shares')).finally(done);
     else this.loadMaterials(true, this.bumpEpoch('materials')).finally(done);
   },
@@ -141,7 +214,7 @@ Page({
     this._loadedTabs = this._loadedTabs || {};
     this.setData({ activeTab: tab, navigationTitle: this.tabTitle(tab) });
     if (!this._token) return;
-    if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true);
+    if (tab === 'customers' && !this.data.customerVisits.length && !this.data.customers.length && !this.data.customerVisitError && !this.data.customerError) this.reloadCustomerView();
     if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true); }
     if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true); }
   },
@@ -163,17 +236,32 @@ Page({
   resetShareWindow() { this.clearShareWindow(); return this.changeShareWindow(0); },
   changeShareWindow(index) {
     ['customers', 'materials'].forEach(tab => this.bumpEpoch(tab)); this._loadedTabs = {};
-    this.setData({ shareWindowIndex: index, shareWindowCursor: (this._shareWindows || [''])[index] || '', shareWindowNext: '', customers: [], materials: [], customers_cursor: '', materials_cursor: '', customers_as_of: '', materials_as_of: '' });
-    return this.data.activeTab === 'materials' ? this.loadMaterials(true) : this.loadCustomers(true);
+    this.setData({ shareWindowIndex: index, shareWindowCursor: (this._shareWindows || [''])[index] || '', shareWindowNext: '', customerVisits: [], customers: [], materials: [], customerVisitsCursor: '', customerVisitsAsOf: '', customers_cursor: '', materials_cursor: '', customers_as_of: '', materials_as_of: '' });
+    return this.data.activeTab === 'materials' ? this.loadMaterials(true) : this.reloadCustomerView();
   },
   reloadActive() {
     const tab = this.data.activeTab;
-    if (tab === 'customers') this.loadCustomers(true);
+    if (tab === 'customers') return this.reloadCustomerView();
     else if (tab === 'materials') this.loadMaterials(true);
     else this.loadShares(true);
   },
 
   // ===== 客户 Tab（my-visitors 意向榜） =====
+  chooseCustomerView() {
+    wx.showActionSheet({
+      itemList: ['查看记录', '按客户汇总'],
+      success: result => {
+        const mode = ['visits', 'people'][Number(result.tapIndex)];
+        if (!mode) return;
+        this.setData({ activeTab: 'customers', customerViewMode: mode });
+        this.reloadCustomerView();
+      },
+    });
+  },
+  reloadCustomerView(suppliedEpoch) {
+    const epoch = typeof suppliedEpoch === 'number' ? suppliedEpoch : undefined;
+    return this.data.customerViewMode === 'people' ? this.loadCustomers(true, epoch) : this.loadCustomerVisits(true, epoch);
+  },
   // 操作入口不推进 epoch：loader 在通过锁检查后才自动分配（codex 复审 P1：先 bump 再被锁挡会作废在途请求）。
   setCustomerQuery(e) { this.setData({ customerQuery: e.detail.value }); },
   toggleIntent() { this.setData({ customerIntent: this.data.customerIntent === 'high' ? '' : 'high' }); this.loadCustomers(true); },
@@ -219,6 +307,77 @@ Page({
     const level = item.intent_level ? '&intent=' + encodeURIComponent(item.intent_level) : '';
     wx.navigateTo({ url: '/pages/visitdetail/visitdetail?visitor=' + encodeURIComponent(item.visitor_key) + '&name=' + encodeURIComponent(item.nickname || '客户') + '&share_cursor=' + encodeURIComponent(this.data.shareWindowCursor || '') + level + '&as_of=' + encodeURIComponent(this.data.customers_as_of || '') + '&start=' + encodeURIComponent(this.data.filterStart || '') + '&end=' + encodeURIComponent(this.data.filterEnd || '') });
   },
+  reloadCustomerVisits() { return this.loadCustomerVisits(true); },
+  loadMoreCustomerVisits() { return this.loadCustomerVisits(false); },
+  async loadCustomerVisits(reset, suppliedEpoch) {
+    if (!this._token) return;
+    if (!reset && (this._customerVisitMorePending || !this.data.customerVisitsCursor)) return;
+    const epoch = typeof suppliedEpoch === 'number' ? suppliedEpoch : (reset ? this.bumpEpoch('customers') : this._epochCustomers);
+    if (!epoch) return;
+    if (reset && this._customerVisitMorePending && !this.tokenAlive(this._customerVisitMorePending, 'customers')) this._customerVisitMorePending = false;
+    if (reset) this.setData({ customerVisitLoading: true, customerVisitError: '', customerVisitsCursor: '', customerVisitsAsOf: '' });
+    else { this._customerVisitMorePending = epoch; this.setData({ customerVisitLoadingMore: true }); }
+    try {
+      const query = { limit: 20, ...this.filterQuery(), as_of: this.data.customerVisitsAsOf || this._windowAsOf || undefined };
+      if (this.data.customerIntent) query.intent = this.data.customerIntent;
+      if (this.data.customerChannel) query.channel = this.data.customerChannel;
+      if (this.data.customerQuery) query.q = this.data.customerQuery;
+      if (!reset) query.cursor = this.data.customerVisitsCursor;
+      const page = await api.listMyVisits(query);
+      if (!this.tokenAlive(epoch, 'customers')) return;
+      this.acceptShareWindow(page);
+      const rows = (page.items || []).map(item => {
+        const visitor = item.visitor || {}, intentLevel = visitor.intent && visitor.intent.level || '';
+        const watch = Number(item.video_watch_ms || 0), visible = Number(item.visible_ms || 0), progressAvailable = item.progress_available === true;
+        const media = visitMedia(item.type, watch);
+        return {
+          visit_key: item.view_id || [visitor.visitor_key, item.occurred_at, item.content_id].join(':'), visitor_key: visitor.visitor_key || '',
+          nickname: visitor.nickname || (visitor.identity_state === 'identified' ? '已识别访客' : '匿名访客'), avatar: visitor.avatar_url || '', can_copy_name: visitor.identity_state === 'identified' && !!String(visitor.nickname || '').trim(),
+          intent_level: intentLevel, intent_text: visitIntentText(intentLevel), title: displayTitle(item), occurred_text: displayVisitTime(item.occurred_at),
+          source_text: visitSourceText(item.source), duration_text: watch > 0 ? '本次观看' + formatDuration(watch) : '本次停留' + formatDuration(visible),
+          progress_text: progressAvailable ? '进度' + Math.min(100, Math.max(0, Number(item.progress_pct || 0))) + '%' : '', views_text: '累计浏览' + Number(item.content_page_views || 1) + '次',
+          coverAsset: item.cover || null, cover: '', cover_error: false, content_type: item.type || '', media_kind: media.kind, media_icon: media.icon,
+        };
+      });
+      const seen = new Set(), merged = (reset ? rows : this.data.customerVisits.concat(rows)).filter(item => item.visit_key && !seen.has(item.visit_key) && seen.add(item.visit_key));
+      this.setData({ customerVisits: merged, customerVisitsCursor: page.next_cursor || '', customerVisitsAsOf: page.as_of || this.data.customerVisitsAsOf, customerVisitLoading: false, customerVisitLoadingMore: false, customerVisitError: '' });
+      this.loadCustomerVisitCovers(rows, epoch);
+    } catch (error) {
+      if (this.tokenAlive(epoch, 'customers')) this.setData({ customerVisitError: error.message || '客户访问记录加载失败', customerVisitLoading: false, customerVisitLoadingMore: false });
+    } finally { if (this._customerVisitMorePending === epoch) this._customerVisitMorePending = false; if (this.tokenAlive(epoch, 'customers')) this.setData({ customerVisitLoading: false, customerVisitLoadingMore: false }); }
+  },
+  async loadCustomerVisitCovers(rows, epoch) {
+    const queue = rows.filter(item => item.coverAsset && item.coverAsset.kind === 'image');
+    const worker = async () => {
+      while (queue.length && this.tokenAlive(epoch, 'customers')) {
+        const item = queue.shift(), asset = item.coverAsset; let cover = '';
+        try {
+          if (asset.url) {
+            const rawURL = String(asset.url), url = rawURL.startsWith('/') && !rawURL.startsWith('//') ? api.ORIGIN + rawURL : rawURL;
+            if (rawURL.startsWith('//')) throw Object.assign(new Error('素材地址无效'), { code: 'INVALID_MEDIA_URL' });
+            cover = await resolveProtectedMediaURL(url);
+          }
+          else if (asset.media_id) cover = await api.downloadWorkbenchMedia(asset.media_id);
+        } catch (error) {
+          console.warn('[sharevisits] visit cover resolve failed', { view_id: item.visit_key, status: error && (error.statusCode || error.status || error.code) || 'unknown' });
+        }
+        if (!this.tokenAlive(epoch, 'customers')) return;
+        this.setData({ customerVisits: this.data.customerVisits.map(row => row.visit_key === item.visit_key ? { ...row, cover, cover_error: !cover } : row) });
+      }
+    };
+    await Promise.all([worker(), worker()]);
+  },
+  onVisitCoverError(event) {
+    const visitKey = event.currentTarget.dataset.key;
+    this.setData({ customerVisits: this.data.customerVisits.map(row => row.visit_key === visitKey ? { ...row, cover: '', cover_error: true } : row) });
+  },
+  visitDetailURL(item) {
+    if (!item || !item.visitor_key) return '';
+    const level = item.intent_level ? '&intent=' + encodeURIComponent(item.intent_level) : '';
+    return '/pages/visitdetail/visitdetail?visitor=' + encodeURIComponent(item.visitor_key) + '&name=' + encodeURIComponent(item.nickname || '客户') + '&share_cursor=' + encodeURIComponent(this.data.shareWindowCursor || '') + level + '&as_of=' + encodeURIComponent(this.data.customerVisitsAsOf || '') + '&start=' + encodeURIComponent(this.data.filterStart || '') + '&end=' + encodeURIComponent(this.data.filterEnd || '');
+  },
+  openVisitCustomer(event) { const item = this.data.customerVisits[Number(event.currentTarget.dataset.index)]; const url = this.visitDetailURL(item); if (url) wx.navigateTo({ url }); },
+  copyVisitCustomerName(event) { const item = this.data.customerVisits[Number(event.currentTarget.dataset.index)]; if (!item || !item.can_copy_name) return; wx.setClipboardData({ data: item.nickname, success: () => wx.showToast({ title: '客户名称已复制', icon: 'none' }) }); },
 
   // ===== 素材 Tab（my-content-stats 热度榜） =====
   reloadMaterials() { return this.loadMaterials(true); },
@@ -226,7 +385,8 @@ Page({
   async loadMaterials(reset, suppliedEpoch) {
     if (!this._token) return;
     if (!reset && (this._materialMorePending || !this.data.materials_cursor)) return;
-    const epoch = suppliedEpoch || this.bumpEpoch('materials');
+    const epoch = typeof suppliedEpoch === 'number' ? suppliedEpoch : (reset ? this.bumpEpoch('materials') : this._epochMaterials);
+    if (!epoch) return;
     if (reset && this._materialMorePending && !this.tokenAlive(this._materialMorePending, 'materials')) this._materialMorePending = false;
     if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
     else { this._materialMorePending = epoch; this.setData({ materialLoadingMore: true }); }
