@@ -1,0 +1,55 @@
+{
+  "date": "2026-11-13",
+  "generator": "built-in image_gen",
+  "type": "static-design-mockups",
+  "scope": [
+    "文生视频",
+    "图生视频",
+    "首尾帧生成",
+    "混合参考生成"
+  ],
+  "images": [
+    {
+      "file": "01-设计师工作台四入口-v2.png",
+      "source": "/Users/honor.pei/.codex/generated_images/01a1d101-f8d1-72b3-8cb4-894f217d453b/exec-c229e0b4-cdec-4a34-83ea-ee53ffba57f9.png",
+      "width": 852,
+      "height": 1846,
+      "sha256": "6415110c061b765b902dba44d3c48c8f6a435b1a0ee9fa21c144b79ea97bf328"
+    },
+    {
+      "file": "02-文图生视频.png",
+      "source": "/Users/honor.pei/.codex/generated_images/01a1d101-f8d1-72b3-8cb4-894f217d453b/exec-749e4240-45a5-4f9e-9ea5-bc3975942a79.png",
+      "width": 852,
+      "height": 1846,
+      "sha256": "f4612c1da55587ae16a44e4f6d7b4cdd7fdf3a6cd3133ba10f8b5ef0bf7051e5"
+    },
+    {
+      "file": "03-参考生视频.png",
+      "source": "/Users/honor.pei/.codex/generated_images/01a1d101-f8d1-72b3-8cb4-894f217d453b/exec-995a371b-de0f-4966-9ae3-ac04303ec8ac.png",
+      "width": 852,
+      "height": 1846,
+      "sha256": "2e988cdba1138c414ff8d08b33eb9ab849f0f417f5101392b726d1e9dc445b53"
+    }
+  ],
+  "previous_versions": [
+    {
+      "status": "superseded",
+      "reason": "工作台四入口顺序修订",
+      "file": "01-设计师工作台新增入口.png",
+      "source": "/Users/honor.pei/.codex/generated_images/01a1d101-f8d1-72b3-8cb4-894f217d453b/exec-19ba3c91-a272-4f7d-9184-a5b453a660a1.png",
+      "width": 852,
+      "height": 1846,
+      "sha256": "53c4811e7686fa6a2a39f13b9e9478043092d6adb1478475c6c77d58cacf7625"
+    }
+  ],
+  "workbench_layout": {
+    "columns": 2,
+    "order": [
+      "我的项目",
+      "内容创作",
+      "AI 视频",
+      "客户跟踪"
+    ],
+    "revision": "v2"
+  }
+}
