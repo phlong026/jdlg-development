@@ -246,7 +246,7 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 		return out, err
 	}
 	in.Title, in.Description = strings.TrimSpace(in.Title), strings.TrimSpace(in.Description)
-	if !trim(in.Title, 80) || len(in.Description) > 500 || !scope.Allows(in.Owner) {
+	if !trim(in.Title, 80) || len([]rune(in.Description)) > 500 || !scope.Allows(in.Owner) {
 		return out, fail(400, "合集名称、简介或归属无效")
 	}
 	// B10: 协作者上限 20，去重。

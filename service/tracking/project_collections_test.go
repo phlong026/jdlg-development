@@ -557,3 +557,18 @@ func TestProjectCollectionCollaboratorsPersistAndValidate(t *testing.T) {
 		t.Fatal("协作者超过 20 人应被拒绝")
 	}
 }
+
+func TestProjectCollectionDescriptionCountsCharacters(t *testing.T) {
+	s, scope := fixture(t)
+	source := publishNativeReferenceContent(t, s, scope, "简介案例", "description-source")
+	input := collectionInput(scope.Owners[0], "description-create", source)
+	input.Description = strings.Repeat("中", 500)
+	if _, err := s.SaveProjectCollection(context.Background(), scope, "", input); err != nil {
+		t.Fatalf("500汉字应可保存: %v", err)
+	}
+	input.Description += "中"
+	input.IdempotencyKey = "description-too-long"
+	if _, err := s.SaveProjectCollection(context.Background(), scope, "", input); err == nil {
+		t.Fatal("501汉字不得保存")
+	}
+}
