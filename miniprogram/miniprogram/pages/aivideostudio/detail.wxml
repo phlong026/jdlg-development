@@ -2,5 +2,32 @@
 <navigation-bar title="任务详情" back="{{true}}" background="#fbfaf7" /><view class="page"><view wx:if="{{loading}}" class="state">正在读取任务…</view><view wx:elif="{{error && !batch}}" class="card state error"><text>{{error}}</text><button class="button-secondary" bindtap="load">重试</button></view><block wx:else><view class="hero"><view class="row"><text class="hero-title grow">任务详情</text><text class="badge">{{statusLabel}}</text></view><text class="hero-copy">批次 {{batch.batch_id}}</text></view>
 <view class="card section"><text class="title">输入快照</text><text class="meta">{{snapshot.mode_label}} · {{snapshot.resolution}} · {{snapshot.duration}} 秒 · {{snapshot.quantity}} 条</text><text class="meta">{{snapshot.prompt || snapshot.reference_prompt}}</text></view>
 <view class="card"><text class="title">费用</text><text class="meta">预计 {{batch.charge.quoted_stones || batch.charge.total_stones || 0}} 灵石 · 已结算 {{batch.charge.settled_stones || 0}} · 已退回 {{batch.charge.released_stones || 0}}</text><text wx:if="{{batch.status==='uncertain'}}" class="meta">部分提交结果仍待核对，费用保留中，请勿重复生成。</text><button wx:if="{{batch.can_cancel}}" class="button-secondary" bindtap="cancelQueued" loading="{{cancelling}}" disabled="{{cancelling}}">取消未开始的任务并退回灵石</button></view>
-<view class="section"><text class="section-title">生成结果</text><view wx:if="{{!results.length}}" class="card state">当前还没有可播放结果，可下拉刷新状态。</view><view wx:for="{{results}}" wx:key="result_id" class="card"><view class="row"><text class="title grow">结果 {{index+1}}</text><text class="badge">{{item.status_label}}</text></view><video wx:if="{{item.playback_url}}" class="video" src="{{item.playback_url}}" controls enable-progress-gesture></video><text wx:if="{{item.error_message}}" class="meta error">{{item.error_message}}</text><view class="row"><button wx:if="{{item.status==='completed'}}" class="button-secondary grow" data-index="{{index}}" bindtap="play">{{item.playback_url?'刷新播放地址':'播放'}}</button><button wx:if="{{item.playback_url}}" class="button-secondary grow" data-index="{{index}}" bindtap="download">保存相册</button></view><button wx:if="{{item.status==='completed' && !item.retained}}" class="button" data-index="{{index}}" bindtap="retain">保存到创作素材</button><block wx:if="{{item.retained}}"><text class="meta">已稳定留存，可长期使用。</text><button class="button" data-index="{{index}}" bindtap="adoptContent" loading="{{adoptingResultID===item.result_id}}" disabled="{{!!adoptingResultID}}">创建内容草稿</button><text class="meta">插入项目笔记需进入具体项目并选择笔记和位置，当前详情页不自动回填。</text></block></view></view><view wx:if="{{error}}" class="card error">{{error}}</view>
+<view class="section"><text class="section-title">生成结果</text><view wx:if="{{!results.length}}" class="card state">当前还没有可播放结果，可下拉刷新状态。</view><view wx:for="{{results}}" wx:key="result_id" class="card"><view class="row"><text class="title grow">结果 {{index+1}}</text><text class="badge">{{item.status_label}}</text></view><video wx:if="{{item.playback_url}}" class="video" src="{{item.playback_url}}" controls enable-progress-gesture></video><text wx:if="{{item.error_message}}" class="meta error">{{item.error_message}}</text><view class="row"><button wx:if="{{item.status==='completed'}}" class="button-secondary grow" data-index="{{index}}" bindtap="play">{{item.playback_url?'刷新播放地址':'播放'}}</button><button wx:if="{{item.playback_url}}" class="button-secondary grow" data-index="{{index}}" bindtap="download">保存相册</button></view><button wx:if="{{item.status==='completed' && !item.retained}}" class="button" data-index="{{index}}" bindtap="retain">保存到创作素材</button><block wx:if="{{item.retained}}"><text class="meta">已稳定留存，可长期使用。</text><button class="button" data-index="{{index}}" bindtap="adoptContent" loading="{{adoptingResultID===item.result_id}}" disabled="{{!!adoptingResultID}}">创建内容草稿</button><button class="button-secondary" data-index="{{index}}" bindtap="startNoteAdoption" disabled="{{!!adoptingResultID}}">插入项目笔记</button></block></view></view><view wx:if="{{error}}" class="card error">{{error}}</view>
+
+<view wx:if="{{noteAdoptionOpen}}" class="card section">
+  <view class="row"><text class="title grow">插入项目笔记</text><button class="button-secondary" bindtap="closeNoteAdoption" disabled="{{adoptionLoading}}">取消</button></view>
+  <text wx:if="{{adoptionLoading}}" class="meta">正在处理…</text>
+  <block wx:if="{{adoptionStep==='project'}}">
+    <text class="meta">选择本人可编辑的项目</text>
+    <button wx:for="{{adoptionProjects}}" wx:key="project_id" class="button-secondary" data-id="{{item.project_id}}" bindtap="selectAdoptionProject" disabled="{{adoptionLoading}}">{{item.name}}</button>
+    <text wx:if="{{!adoptionLoading && !adoptionProjects.length}}" class="meta">暂无可用项目，请先在我的项目中新建。</text>
+    <button wx:if="{{adoptionCursor}}" class="button-secondary" bindtap="loadAdoptionProjects" disabled="{{adoptionLoading}}">加载更多项目</button>
+    <button wx:if="{{adoptionError}}" class="button-secondary" bindtap="loadAdoptionProjects">重新加载项目</button>
+  </block>
+  <block wx:elif="{{adoptionStep==='note'}}">
+    <text class="meta">{{adoptionProject.name}} · 选择已保存笔记</text>
+    <button wx:for="{{adoptionNotes}}" wx:key="note_id" class="button-secondary" data-id="{{item.note_id}}" bindtap="selectAdoptionNote" disabled="{{adoptionLoading}}">{{item.title}} · 修订 {{item.revision}}</button>
+    <text wx:if="{{!adoptionLoading && !adoptionNotes.length}}" class="meta">项目中暂无笔记，请先保存一条笔记。</text>
+    <button wx:if="{{adoptionCursor}}" class="button-secondary" bindtap="loadAdoptionNotes" disabled="{{adoptionLoading}}">加载更多笔记</button>
+    <button wx:if="{{adoptionError}}" class="button-secondary" bindtap="loadAdoptionNotes">重新加载笔记</button>
+  </block>
+  <block wx:else>
+    <text class="title">{{adoptionTarget.title}}</text>
+    <text wx:if="{{adoptionPending}}" class="meta">上次插入结果待核对，将安全重试同一笔记和位置。</text>
+    <text wx:else class="meta">原正文、素材和封面会保留。插入后可完整预览并编辑标题，固定分享版本保持原样。</text>
+    <picker wx:if="{{!adoptionPending}}" range="{{adoptionPositions}}" range-key="label" value="{{adoptionPosition}}" bindchange="setAdoptionPosition" disabled="{{adoptionLoading}}"><view class="button-secondary">{{adoptionPositions[adoptionPosition].label}}</view></picker>
+    <button class="button" bindtap="confirmNoteAdoption" loading="{{adoptionLoading}}" disabled="{{adoptionLoading}}">{{adoptionPending ? '核对并重试上次插入' : '确认插入此位置'}}</button>
+  </block>
+  <text wx:if="{{adoptionError}}" class="meta error">{{adoptionError}}</text>
+</view>
 </block></view></block><login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

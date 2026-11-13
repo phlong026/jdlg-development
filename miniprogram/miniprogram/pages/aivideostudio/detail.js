@@ -5,10 +5,20 @@ const statusText = status => ({ queued: '等待处理', submitting: '提交中',
 const modeText = mode => ({ text: '文生视频', first_frame: '首帧图生', first_last_frame: '首尾帧', reference: '参考生成' }[mode] || '视频创作');
 
 Page({
-  data: { loading: true, error: '', batch: null, snapshot: {}, results: [], statusLabel: '', adoptingResultID: '', cancelling: false },
+  data: { loading: true, error: '', batch: null, snapshot: {}, results: [], statusLabel: '', adoptingResultID: '', cancelling: false, noteAdoptionOpen: false, adoptionStep: 'project', adoptionProjects: [], adoptionNotes: [], adoptionPositions: [], adoptionPosition: 0, adoptionCursor: '', adoptionLoading: false, adoptionError: '', adoptionProject: null, adoptionTarget: null, adoptionPending: false },
   onLoad(options) { this.id = options.batch_id; this._token = String(wx.getStorageSync('token') || ''); this._visible = true; this.load(); },
-  onShow() { if (this._visible === false) { this._visible = true; this.load(true); } },
-  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopPolling(); this.abortDownload(); },
+  onShow() {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token !== this._token) {
+      this.stopPolling(); this.abortDownload(); this.closeNoteAdoption();
+      this._token = token; this._epoch = (this._epoch || 0) + 1; this._visible = true;
+      this.setData({ batch: null, snapshot: {}, results: [], loading: !!token, error: token ? '' : '请先登录', adoptingResultID: '', cancelling: false });
+      if (token) return this.load();
+      return;
+    }
+    if (this._visible === false) { this._visible = true; return this.load(true); }
+  },
+  onHide() { this.closeNoteAdoption(); this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopPolling(); this.abortDownload(); },
   onUnload() { this._unloaded = true; this.onHide(); },
   current(epoch) { return !this._unloaded && this._token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._epoch); },
   abortDownload() { if (this._downloadTask && this._downloadTask.abort) this._downloadTask.abort(); this._downloadTask = null; },
@@ -86,6 +96,89 @@ Page({
       results[index] = Object.assign({}, item, { retained: true, retention_status: 'retained', stable_media_id: value.media_id || item.stable_media_id });
       this.setData({ results, error: '' });
     } catch (error) { if (this.current()) this.setData({ error: error.message || '素材留存失败，可稍后重试' }); }
+  },
+  adoptionCurrent(epoch) { return this.current() && this._visible !== false && epoch === this._adoptionEpoch; },
+  closeNoteAdoption() {
+    this._adoptionEpoch = (this._adoptionEpoch || 0) + 1;
+    this._adoptionInput = null; this._adoptionMediaID = '';
+    this.setData({ noteAdoptionOpen: false, adoptionProjects: [], adoptionNotes: [], adoptionPositions: [], adoptionTarget: null, adoptionProject: null, adoptionLoading: false, adoptionError: '', adoptionPending: false });
+  },
+  async startNoteAdoption(event) {
+    const item = this.data.results[Number(event.currentTarget.dataset.index)];
+    if (!item || !item.stable_media_id || this.data.adoptingResultID) return;
+    this.closeNoteAdoption();
+    this._adoptionMediaID = item.stable_media_id;
+    const epoch = this._adoptionEpoch;
+    this.setData({ noteAdoptionOpen: true, adoptionStep: 'project', adoptionPosition: 0, adoptionCursor: '' });
+    try {
+      const pending = api.pendingAdoption('project-note', this._adoptionMediaID);
+      if (pending) {
+        const target = await api.getProjectNoteAdoptionTarget(pending.project_id, pending.note_id);
+        if (!this.adoptionCurrent(epoch)) return;
+        this._adoptionInput = pending;
+        this.setData({ adoptionStep: 'position', adoptionTarget: target, adoptionPending: true, adoptionPosition: pending.insert_at, adoptionPositions: [{ label: '重试上次选定位置', value: pending.insert_at }] });
+        return;
+      }
+      return this.loadAdoptionProjects();
+    } catch (error) { if (this.adoptionCurrent(epoch)) this.setData({ adoptionError: error.message || '项目加载失败' }); }
+  },
+  async loadAdoptionProjects(event) {
+    const append = !!(event && event.currentTarget), epoch = this._adoptionEpoch;
+    if (append && !this.data.adoptionCursor) return;
+    this.setData({ adoptionLoading: true, adoptionError: '' });
+    try {
+      const page = await phase3.listProjectNoteProjects({ limit: 30, cursor: append ? this.data.adoptionCursor : '' });
+      if (!this.adoptionCurrent(epoch)) return;
+      this.setData({ adoptionLoading: false, adoptionProjects: append ? this.data.adoptionProjects.concat(page.items || []) : page.items || [], adoptionCursor: page.next_cursor || '' });
+    } catch (error) { if (this.adoptionCurrent(epoch)) this.setData({ adoptionLoading: false, adoptionError: error.message || '项目加载失败' }); }
+  },
+  selectAdoptionProject(event) {
+    const project = this.data.adoptionProjects.find(item => item.project_id === String(event.currentTarget.dataset.id));
+    if (!project || this.data.adoptionLoading) return;
+    this.setData({ adoptionProject: project, adoptionStep: 'note', adoptionCursor: '', adoptionNotes: [] });
+    return this.loadAdoptionNotes();
+  },
+  async loadAdoptionNotes(event) {
+    const append = !!(event && event.currentTarget), epoch = this._adoptionEpoch;
+    if (!this.data.adoptionProject || (append && !this.data.adoptionCursor)) return;
+    this.setData({ adoptionLoading: true, adoptionError: '' });
+    try {
+      const page = await phase3.getProjectNoteHistory(this.data.adoptionProject.project_id, 'notes', { limit: 30, cursor: append ? this.data.adoptionCursor : '' });
+      if (!this.adoptionCurrent(epoch)) return;
+      this.setData({ adoptionLoading: false, adoptionNotes: append ? this.data.adoptionNotes.concat(page.items || []) : page.items || [], adoptionCursor: page.next_cursor || '' });
+    } catch (error) { if (this.adoptionCurrent(epoch)) this.setData({ adoptionLoading: false, adoptionError: error.message || '笔记加载失败' }); }
+  },
+  async selectAdoptionNote(event) {
+    if (this.data.adoptionLoading || !this.data.adoptionProject) return;
+    const noteID = String(event.currentTarget.dataset.id || ''), epoch = this._adoptionEpoch;
+    if (!this.data.adoptionNotes.some(item => item.note_id === noteID)) return;
+    this.setData({ adoptionLoading: true, adoptionError: '' });
+    try {
+      const target = await api.getProjectNoteAdoptionTarget(this.data.adoptionProject.project_id, noteID);
+      if (!this.adoptionCurrent(epoch)) return;
+      const blocks = target.blocks || [], positions = [{ value: 0, label: '放在正文最前面' }];
+      blocks.forEach((block, index) => positions.push({ value: index + 1, label: '放在第 ' + (index + 1) + ' 块后：' + (block.text ? String(block.text).slice(0, 24) : block.kind === 'image' ? '图片' : block.kind === 'video' ? '视频' : '原内容') }));
+      this._adoptionInput = null;
+      this.setData({ adoptionLoading: false, adoptionStep: 'position', adoptionTarget: target, adoptionPositions: positions, adoptionPosition: positions.length - 1, adoptionPending: false });
+    } catch (error) { if (this.adoptionCurrent(epoch)) this.setData({ adoptionLoading: false, adoptionError: error.message || '笔记读取失败' }); }
+  },
+  setAdoptionPosition(event) { if (!this.data.adoptionPending && !this.data.adoptionLoading) this.setData({ adoptionPosition: Number(event.detail.value) || 0 }); },
+  async confirmNoteAdoption() {
+    const target = this.data.adoptionTarget, epoch = this._adoptionEpoch;
+    if (!target || this.data.adoptionLoading || !this._adoptionMediaID) return;
+    const position = this.data.adoptionPositions[this.data.adoptionPosition];
+    const input = this._adoptionInput || { project_id: target.project_id, note_id: target.note_id, expected_revision: target.revision, insert_at: position ? position.value : 0 };
+    this._adoptionInput = input;
+    this.setData({ adoptionLoading: true, adoptionError: '' });
+    try {
+      const saved = await api.adoptProjectNote(this._adoptionMediaID, input);
+      if (!this.adoptionCurrent(epoch)) return;
+      this.closeNoteAdoption();
+      wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(input.project_id) + '&note_id=' + encodeURIComponent(saved.note_id || input.note_id) + '&view=editor' });
+    } catch (error) {
+      if (!this.adoptionCurrent(epoch)) return;
+      this.setData({ adoptionLoading: false, adoptionError: error.message || '插入失败，可重试原位置' });
+    }
   },
   async adoptContent(event) {
     const item = this.data.results[Number(event.currentTarget.dataset.index)];

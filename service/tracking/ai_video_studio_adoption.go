@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -118,6 +120,90 @@ func (s *Service) AdoptAIVideoStudioContent(ctx context.Context, scope Scope, in
 	return out, err
 }
 
+type StudioProjectNoteTarget struct {
+	ProjectID string         `json:"project_id"`
+	NoteID    string         `json:"note_id"`
+	Revision  int            `json:"revision"`
+	Title     string         `json:"title"`
+	Blocks    []ArticleBlock `json:"blocks"`
+}
+
+// The target preview and commit share this conversion so a chosen position
+// never changes meaning between plain notes and structured notes.
+func projectNoteStudioDocument(r Repository, project ProjectNoteProject, note ProjectNote) (ArticleDocument, error) {
+	var document ArticleDocument
+	if note.BodyFormat == "article_v2" {
+		if json.Unmarshal([]byte(note.Body), &document) != nil || document.Schema != 1 {
+			return document, ErrUnavailable
+		}
+		return document, nil
+	}
+	if note.BodyFormat != "plain" && note.BodyFormat != "plain_text" {
+		return document, fail(409, "此笔记格式暂不支持插入视频")
+	}
+	document = ArticleDocument{Schema: 1, Blocks: []ArticleBlock{}}
+	text := strings.TrimSpace(note.Body)
+	for len(text) > 0 {
+		cut := len(text)
+		if cut > 9000 {
+			cut = 9000
+			for cut > 0 {
+				if utf8.RuneStart(text[cut]) {
+					last, _ := utf8.DecodeLastRuneInString(text[:cut])
+					if !unicode.IsSpace(last) && !unicode.IsSpace(firstRune(text[cut:])) {
+						break
+					}
+				}
+				cut--
+			}
+			if cut == 0 {
+				return document, fail(409, "正文空白过长，请先分段后再插入视频")
+			}
+		}
+		document.Blocks = append(document.Blocks, ArticleBlock{Kind: "paragraph", Text: text[:cut]})
+		text = text[cut:]
+	}
+	_, assets, err := projectNoteSnapshotAssets(r, project.ID, project.Owner, ProjectNoteDraft{Body: note.Body, BodyFormat: note.BodyFormat, CoverID: note.CoverID, MediaIDs: note.MediaIDs})
+	if err != nil {
+		return document, err
+	}
+	for _, asset := range assets {
+		document.Blocks = append(document.Blocks, ArticleBlock{Kind: asset.Kind, MediaID: asset.ID})
+	}
+	return document, nil
+}
+func firstRune(value string) rune { r, _ := utf8.DecodeRuneInString(value); return r }
+
+func (s *Service) StudioProjectNoteAdoptionTarget(ctx context.Context, scope Scope, projectID, noteID string) (StudioProjectNoteTarget, error) {
+	var out StudioProjectNoteTarget
+	err := s.readTransaction(ctx, func(r Repository) error {
+		project, err := s.projectNoteManaged(r, scope, projectID)
+		if err != nil {
+			return err
+		}
+		note, err := projectNoteRequired[ProjectNote](r, projectNoteKind, noteID, "项目笔记不存在")
+		if err != nil {
+			return err
+		}
+		if note.ProjectID != project.ID {
+			return fail(404, "项目笔记不存在")
+		}
+		if project.Status == ProjectNoteProjectStatusArchived {
+			return fail(409, "项目已归档，请先取消归档后再插入视频")
+		}
+		if err = projectNoteRequireActive(r, note.ID); err != nil {
+			return err
+		}
+		document, err := projectNoteStudioDocument(r, project, note)
+		if err != nil {
+			return err
+		}
+		out = StudioProjectNoteTarget{ProjectID: project.ID, NoteID: note.ID, Revision: note.Revision, Title: note.Title, Blocks: document.Blocks}
+		return nil
+	})
+	return out, err
+}
+
 // AdoptAIVideoStudioProjectNote inserts one already-finalized private video at
 // the exact selected block position. It never changes title, cover or existing blocks.
 func (s *Service) AdoptAIVideoStudioProjectNote(ctx context.Context, scope Scope, input AIVideoStudioProjectNoteAdoption) (ProjectNote, error) {
@@ -146,7 +232,7 @@ func (s *Service) AdoptAIVideoStudioProjectNote(ctx context.Context, scope Scope
 			if activeErr := projectNoteRequireActive(r, current.ID); activeErr != nil {
 				return activeErr
 			}
-			out = stored.Note
+			out = current
 			return nil
 		}
 		if !errors.Is(readErr, ErrNotFound) {
@@ -163,14 +249,14 @@ func (s *Service) AdoptAIVideoStudioProjectNote(ctx context.Context, scope Scope
 		if note.ProjectID != project.ID {
 			return fail(404, "项目笔记不存在")
 		}
+		if project.Status == ProjectNoteProjectStatusArchived {
+			return fail(409, "项目已归档，请先取消归档后再插入视频")
+		}
 		if err = projectNoteRequireActive(r, note.ID); err != nil {
 			return err
 		}
 		if note.Revision != input.ExpectedRevision {
 			return fail(409, "项目笔记已更新，请重新读取")
-		}
-		if note.BodyFormat != "article_v2" {
-			return fail(409, "请先将项目笔记转为块编辑格式")
 		}
 		privateMedia, err := projectNoteRequired[ProjectNoteMedia](r, projectNoteMediaKind, input.MediaID, "私人项目媒体不存在")
 		if err != nil {
@@ -179,9 +265,9 @@ func (s *Service) AdoptAIVideoStudioProjectNote(ctx context.Context, scope Scope
 		if privateMedia.ProjectID != project.ID || privateMedia.Owner != project.Owner || privateMedia.Asset.Kind != "video" || privateMedia.Asset.MIME != "video/mp4" {
 			return fail(404, "私人项目媒体不存在")
 		}
-		var document ArticleDocument
-		if json.Unmarshal([]byte(note.Body), &document) != nil || document.Schema != 1 {
-			return ErrUnavailable
+		document, err := projectNoteStudioDocument(r, project, note)
+		if err != nil {
+			return err
 		}
 		if input.InsertAt > len(document.Blocks) || len(document.Blocks) >= maxArticleBlocks {
 			return fail(409, "选定的笔记插入位置已失效")
@@ -189,13 +275,27 @@ func (s *Service) AdoptAIVideoStudioProjectNote(ctx context.Context, scope Scope
 		document.Blocks = append(document.Blocks, ArticleBlock{})
 		copy(document.Blocks[input.InsertAt+1:], document.Blocks[input.InsertAt:])
 		document.Blocks[input.InsertAt] = ArticleBlock{Kind: "video", MediaID: input.MediaID}
+		if document.Presentation != "" {
+			document.Presentation = "article"
+		}
 		body, err := json.Marshal(document)
 		if err != nil {
 			return ErrUnavailable
 		}
+		mediaIDs := append([]string(nil), note.MediaIDs...)
+		hasCover := note.CoverID == ""
+		for _, id := range mediaIDs {
+			if id == note.CoverID {
+				hasCover = true
+			}
+		}
+		if !hasCover {
+			mediaIDs = append(mediaIDs, note.CoverID)
+		}
+		mediaIDs = append(mediaIDs, input.MediaID)
 		draft, err := s.projectNoteValidateDraft(scope, project.Owner, ProjectNoteDraft{
-			Title: note.Title, Body: string(body), BodyFormat: note.BodyFormat,
-			CoverID: note.CoverID, MediaIDs: append(append([]string(nil), note.MediaIDs...), input.MediaID),
+			Title: note.Title, Body: string(body), BodyFormat: "article_v2",
+			CoverID: note.CoverID, MediaIDs: mediaIDs,
 		})
 		if err != nil {
 			return err

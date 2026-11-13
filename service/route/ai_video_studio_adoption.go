@@ -101,6 +101,15 @@ func storeAndVerifyStudioAdoptionMedia(ctx context.Context, svc *tracking.Servic
 }
 
 func registerAIVideoStudioAdoptionRoutes(g *gin.RouterGroup, media *model.AIVideoStudioMediaStore, svc *tracking.Service, users *model.UserModel) {
+	g.GET("/adoption-targets/projects/:project/notes/:note", func(c *gin.Context) {
+		scope, err := loadMiniTrackingMaterialScope(c.Request.Context(), users.DB, svc.Config.Tenant, GetTokenUserID(c))
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		out, err := svc.StudioProjectNoteAdoptionTarget(c.Request.Context(), scope, c.Param("project"), c.Param("note"))
+		trackingResponse(c, out, err)
+	})
 	g.POST("/media/:id/adopt/content", func(c *gin.Context) {
 		var input studioContentAdoptionRequest
 		if c.ShouldBindJSON(&input) != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestAdoptStudioVideoAsContentDraftIsAtomicAndIdempotent(t *testing.T) {
@@ -130,5 +131,109 @@ func TestAdoptStudioVideoProjectNoteRequiresExplicitLocationAndPrivateMedia(t *t
 	base.InsertAt = 0
 	if _, err = svc.AdoptAIVideoStudioProjectNote(context.Background(), scope, base); !errors.As(err, new(*Error)) {
 		t.Fatalf("missing private media should return a domain error: %v", err)
+	}
+}
+
+func TestStudioPlainNoteConvertsPreservesMediaThenSavesFreezesAndReads(t *testing.T) {
+	ctx := context.Background()
+	svc, scope, _ := projectNoteFixture(t)
+	project, err := svc.ProjectNoteCreateProject(ctx, scope, ProjectNoteProjectInput{Name: "测试宅", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, asset := range []Asset{
+		{ID: "plain-cover-0001", Kind: "image", MIME: "image/jpeg", Width: 800, Height: 600},
+		{ID: "plain-video-0001", Kind: "video", MIME: "video/mp4", Width: 1280, Height: 720},
+	} {
+		asset.URL = projectNoteMediaURL(project.ID, asset.ID)
+		op, _, err := svc.ProjectNotePrepareMedia(ctx, scope, project.ID, asset, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "ai_video_studio")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = svc.ProjectNoteFinalizeMedia(ctx, scope, project.ID, asset.ID, op); err != nil {
+			t.Fatal(err)
+		}
+	}
+	note, err := svc.ProjectNoteCreateNote(ctx, scope, project.ID, ProjectNoteDraft{Title: "原方案", Body: "原正文上\n\n原正文下", BodyFormat: "plain", CoverID: "plain-cover-0001", MediaIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := svc.StudioProjectNoteAdoptionTarget(ctx, scope, project.ID, note.ID)
+	if err != nil || len(target.Blocks) != 2 {
+		t.Fatalf("plain target: %+v %v", target, err)
+	}
+	adopted, err := svc.AdoptAIVideoStudioProjectNote(ctx, scope, AIVideoStudioProjectNoteAdoption{DraftInstanceID: "plain-adoption-001", SourceMediaID: "studio-media-001", ProjectID: project.ID, NoteID: note.ID, ExpectedRevision: note.Revision, InsertAt: 1, MediaID: "plain-video-0001"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc ArticleDocument
+	if json.Unmarshal([]byte(adopted.Body), &doc) != nil || len(doc.Blocks) != 3 || doc.Blocks[0].Text != note.Body || doc.Blocks[1].MediaID != "plain-video-0001" || doc.Blocks[2].MediaID != note.CoverID || adopted.CoverID != note.CoverID || adopted.BodyFormat != "article_v2" {
+		t.Fatalf("lost original note: %+v", adopted)
+	}
+	saved, err := svc.ProjectNoteSaveNote(ctx, scope, note.ID, ProjectNoteDraft{Title: "保留视频后保存", Body: adopted.Body, BodyFormat: adopted.BodyFormat, CoverID: adopted.CoverID, MediaIDs: adopted.MediaIDs}, adopted.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := svc.ProjectNoteFreezeVersion(ctx, scope, note.ID, saved.Revision)
+	if err != nil || frozen.Body != adopted.Body || len(frozen.Media) != 2 {
+		t.Fatalf("freeze: %+v %v", frozen, err)
+	}
+	share, err := svc.ProjectNoteCreateShare(ctx, scope, frozen.ID, svc.Now().Add(time.Hour), "plain-share-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := svc.ProjectNoteReadShare(ctx, share.Token, 102)
+	if err != nil || read.Version.Body != adopted.Body {
+		t.Fatalf("shared read lost adopted video: %+v %v", read, err)
+	}
+}
+
+func TestStudioNoteAdoptionRejectsArchivedWritesAndReplayReturnsCurrentRevision(t *testing.T) {
+	ctx := context.Background()
+	svc, scope := fixture(t)
+	project, err := svc.ProjectNoteCreateProject(ctx, scope, ProjectNoteProjectInput{Name: "归档宅", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset := Asset{ID: "archived-video-01", Kind: "video", MIME: "video/mp4", URL: projectNoteMediaURL(project.ID, "archived-video-01"), Width: 1280, Height: 720}
+	op, _, err := svc.ProjectNotePrepareMedia(ctx, scope, project.ID, asset, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "ai_video_studio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.ProjectNoteFinalizeMedia(ctx, scope, project.ID, asset.ID, op); err != nil {
+		t.Fatal(err)
+	}
+	note, err := svc.ProjectNoteCreateNote(ctx, scope, project.ID, ProjectNoteDraft{Title: "原稿", Body: "原正文", BodyFormat: "plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := AIVideoStudioProjectNoteAdoption{DraftInstanceID: "archived-adoption", SourceMediaID: "studio-media-0001", ProjectID: project.ID, NoteID: note.ID, ExpectedRevision: note.Revision, InsertAt: 1, MediaID: asset.ID}
+	adopted, err := svc.AdoptAIVideoStudioProjectNote(ctx, scope, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer, err := svc.ProjectNoteSaveNote(ctx, scope, note.ID, ProjectNoteDraft{Title: "后来改的标题", Body: adopted.Body, BodyFormat: adopted.BodyFormat, MediaIDs: adopted.MediaIDs}, adopted.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := svc.AdoptAIVideoStudioProjectNote(ctx, scope, input)
+	if err != nil || replay.Revision != newer.Revision || replay.Title != newer.Title {
+		t.Fatalf("replay returned stale snapshot: %+v %v", replay, err)
+	}
+	archived := ProjectNoteProjectStatusArchived
+	if _, err = svc.ProjectNoteUpdateProject(ctx, scope, project.ID, ProjectNoteProjectUpdate{ExpectedRevision: project.Revision, Status: &archived}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.StudioProjectNoteAdoptionTarget(ctx, scope, project.ID, note.ID); err == nil {
+		t.Fatal("archived target remained editable")
+	}
+	input.DraftInstanceID = "archived-new-write"
+	input.ExpectedRevision = newer.Revision
+	if _, err = svc.AdoptAIVideoStudioProjectNote(ctx, scope, input); err == nil {
+		t.Fatal("archived note accepted insertion")
+	}
+	current, err := svc.ProjectNoteGetNote(ctx, scope, project.ID, note.ID)
+	if err != nil || current.Revision != newer.Revision {
+		t.Fatalf("archived revision changed: %+v %v", current, err)
 	}
 }
