@@ -15,6 +15,7 @@ const pages = {
   rechargeConfig: '/recharge-config', membershipPlans: '/membership-plans',
   aiOverview: '/ai-overview', aiTaskCenter: '/ai-tasks', aiContentAudits: '/ai-content-audits',
   aiTools: '/ai-tools', aiPricing: '/ai-pricing', 'ai-config': '/ai-config',
+  aiVideoStudio: '/ai-video-studio',
 };
 const compile = (file) => postcss.parse(sass.compile(path.join(root, file), { logger: sass.Logger.silent }).css);
 const withinKeyframes = (node) => {

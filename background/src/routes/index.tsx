@@ -39,6 +39,7 @@ const AIOverview = lazy(() => import('../pages/aiOverview'));
 const AIPricing = lazy(() => import('../pages/aiPricing'));
 const AIContentAudits = lazy(() => import('../pages/aiContentAudits'));
 const AIConfig = lazy(() => import('../pages/ai-config'));
+const AIVideoStudio = lazy(() => import('../pages/aiVideoStudio'));
 const OSS = lazy(() => import('../pages/oss'));
 const Templates = lazy(() => import('../pages/templates'));
 const Inspirations = lazy(() => import('../pages/inspirations'));
@@ -189,6 +190,12 @@ export const routes: AppRoute[] = [
         title: 'AI配置',
         element: withSuspense(<AIConfig />),
         icon: FiSettings,
+    },
+    {
+        path: '/ai-video-studio',
+        title: 'AI 视频工作区',
+        element: withSuspense(<AIVideoStudio />),
+        icon: FiActivity,
     },
     {
         path: '/oss',
