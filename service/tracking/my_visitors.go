@@ -2,6 +2,7 @@ package tracking
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"sort"
 	"strconv"
@@ -47,6 +48,7 @@ type MyVisitEntry struct {
 // Visitor 裸嵌入：字段提升到顶层（visitor_key/nickname/page_views/visible_ms/
 // session_count/last_visit/intent），小程序按顶层字段消费。
 type MyVisitor struct {
+	ProjectActivityCount int `json:"project_activity_count"`
 	Visitor
 	First        time.Time `json:"first_visit"`
 	ContentCount int       `json:"content_count"`
@@ -73,6 +75,9 @@ type MyContentStat struct {
 // MyVisitorDetail is the drill-down payload of one visitor: 页头（身份+意向+累计）
 // 与逐次明细一次返回，小程序访问详情页一次拉取即可渲染。
 type MyVisitorDetail struct {
+	ProjectActivities          []MyProjectCustomerActivity `json:"project_activities"`
+	ProjectActivitiesTruncated bool                        `json:"project_activities_truncated,omitempty"`
+	ShareWindow                *MyShareWindow              `json:"share_window,omitempty"`
 	Visitor
 	CanConvertLead bool           `json:"can_convert_lead"`
 	Intent         Intent         `json:"intent"`
@@ -114,30 +119,59 @@ func (a *myVisitorAccumulator) entry(view string) *MyVisitEntry {
 }
 
 // myActorShares collects the actor's newest shares up to the aggregation cap.
-func (s *Service) myActorShares(r Repository, scope Scope, actor int64, f Filter) ([]Share, error) {
+type MyShareWindow struct {
+	Limit      int    `json:"limit"`
+	Truncated  bool   `json:"truncated"`
+	NextCursor string `json:"next_cursor,omitempty"`
+}
+
+type myShareWindowCursor struct {
+	At        time.Time `json:"at"`
+	ID        string    `json:"id"`
+	Signature string    `json:"signature"`
+}
+
+func myShareWindowSignature(scope Scope, actor int64, f Filter) string {
+	return detailSignature(Filter{AsOf: f.AsOf, Owner: f.Owner}, "my-share-window-v1", actorVisitorKey(actor), scope)
+}
+
+func (s *Service) myActorShares(r Repository, scope Scope, actor int64, f Filter) ([]Share, *MyShareWindow, error) {
 	out := []Share{}
+	window := &MyShareWindow{Limit: myVisitorShareCap}
 	beforeAt, beforeID := time.Time{}, ""
-	for len(out) < myVisitorShareCap {
-		rows, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, myVisitorSharePage)
-		if err != nil {
-			return nil, err
+	if f.ShareCursor != "" {
+		var cursor myShareWindowCursor
+		raw, err := base64.RawURLEncoding.DecodeString(f.ShareCursor)
+		if len(f.ShareCursor) > 4096 || err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.At.IsZero() || cursor.ID == "" || cursor.Signature != myShareWindowSignature(scope, actor, f) {
+			return nil, nil, fail(400, "分享统计窗口已变化，请返回最新分享")
 		}
-		if len(rows) == 0 {
-			break
+		beforeAt, beforeID = cursor.At, cursor.ID
+	}
+	var last actorShareRow
+	for len(out) <= myVisitorShareCap {
+		limit := myVisitorSharePage
+		if remaining := myVisitorShareCap + 1 - len(out); remaining < limit {
+			limit = remaining
+		}
+		rows, err := s.actorShares(r, scope, actor, f, "", beforeAt, beforeID, limit)
+		if err != nil {
+			return nil, nil, err
 		}
 		for _, row := range rows {
+			if len(out) == myVisitorShareCap {
+				window.Truncated = true
+				window.NextCursor = base64.RawURLEncoding.EncodeToString(marshal(myShareWindowCursor{last.at, last.id, myShareWindowSignature(scope, actor, f)}))
+				return out, window, nil
+			}
 			out = append(out, row.share)
+			last = row
 		}
-		last := rows[len(rows)-1]
-		beforeAt, beforeID = last.at, last.id
-		if len(rows) < myVisitorSharePage {
+		if len(rows) < limit {
 			break
 		}
+		beforeAt, beforeID = last.at, last.id
 	}
-	if len(out) > myVisitorShareCap {
-		out = out[:myVisitorShareCap]
-	}
-	return out, nil
+	return out, window, nil
 }
 
 type myShareScanEvent struct {
@@ -149,14 +183,14 @@ type myShareScanEvent struct {
 // myShareEventScan gathers the accepted events of the actor's shares with the
 // visitor already resolved (identity links + deletion tombstones applied).
 // 删除标记走分块批量查询（复用 deletedMyShareVisitors 的模式，避免 N+1）。
-func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scope, actor int64, f Filter) ([]myShareScanEvent, []Share, error) {
+func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scope, actor int64, f Filter) ([]myShareScanEvent, []Share, *MyShareWindow, error) {
 	actorKey := actorVisitorKey(actor)
-	shares, err := s.myActorShares(r, scope, actor, f)
+	shares, window, err := s.myActorShares(r, scope, actor, f)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if len(shares) == 0 {
-		return nil, shares, nil
+		return nil, shares, window, nil
 	}
 	shareIDs := make([]string, 0, len(shares))
 	byID := make(map[string]Share, len(shares))
@@ -166,14 +200,14 @@ func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scop
 	}
 	rows, err := scopedRecords(r, "event", RecordQuery{Owners: permittedOwners(scope, f.Owner), Shares: shareIDs, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sessions := make([]string, 0, len(rows))
 	accepted := make([]myShareScanEvent, 0, len(rows))
 	for _, row := range rows {
 		var ev Event
 		if json.Unmarshal(row.Payload, &ev) != nil {
-			return nil, nil, ErrUnavailable
+			return nil, nil, nil, ErrUnavailable
 		}
 		if _, known := byID[row.Share]; !known {
 			continue
@@ -189,7 +223,7 @@ func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scop
 	}
 	meta, err := loadSessionMeta(r, sessions, true, true, false)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	resolve := func(row Record) string { return resolvedMyShareVisitor(meta, row, f.AsOf) }
 	keys := make([]string, 0, len(accepted))
@@ -205,7 +239,7 @@ func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scop
 		}
 		tombstones, err := scopedRecords(r, "deletion", RecordQuery{IDs: keys[:n]})
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, row := range tombstones {
 			deleted[row.ID] = true
@@ -219,7 +253,7 @@ func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scop
 		}
 		kept = append(kept, accepted[i])
 	}
-	return kept, shares, nil
+	return kept, shares, window, nil
 }
 
 // myEventContentKey 归组键：合集路由的所有事件（目录与作品）都记到合集名下，
@@ -262,10 +296,11 @@ func sharesByID(shares []Share) map[string]Share {
 // 不建条目、不计 session/素材/分享，heartbeats 只属于窗口内已建立的访问。
 func (s *Service) myVisitorAggregates(ctx context.Context, r Repository, scope Scope, actor int64, f Filter) (myVisitorAggregates, []Share, error) {
 	out := myVisitorAggregates{visitors: map[string]*myVisitorAccumulator{}}
-	events, shares, err := s.myShareEventScan(ctx, r, scope, actor, f)
+	events, shares, window, err := s.myShareEventScan(ctx, r, scope, actor, f)
 	if err != nil {
 		return out, nil, err
 	}
+	out.window = window
 	byID := sharesByID(shares)
 	sort.Slice(events, func(i, j int) bool {
 		if events[i].ev.Occurred.Equal(events[j].ev.Occurred) {
@@ -359,6 +394,7 @@ func (s *Service) myVisitorAggregates(ctx context.Context, r Repository, scope S
 
 // myVisitorAggregates 是一次窗口聚合的结果：按访客的累计器 + 本次涉及的分享。
 type myVisitorAggregates struct {
+	window   *MyShareWindow
 	visitors map[string]*myVisitorAccumulator
 	shares   []Share
 }
@@ -599,15 +635,22 @@ func (s *Service) MyVisitors(ctx context.Context, scope Scope, actor int64, f Fi
 		if ruleErr != nil {
 			return ruleErr
 		}
-		ruleFilter := Filter{Start: f.AsOf.AddDate(0, 0, -rule.WindowDays), End: f.AsOf.Add(time.Nanosecond), AsOf: f.AsOf}
+		ruleFilter := Filter{Start: f.AsOf.AddDate(0, 0, -rule.WindowDays), End: f.AsOf.Add(time.Nanosecond), AsOf: f.AsOf, Owner: f.Owner, ShareCursor: f.ShareCursor}
 		dispAgg, _, err := s.myVisitorAggregates(ctx, r, scope, actor, f)
 		if err != nil {
 			return err
 		}
+		projectActivities, projectTruncated, err := s.myProjectCustomerActivities(ctx, r, scope, actor, f)
+		if err != nil {
+			return err
+		}
+		includeProjectCustomers(dispAgg.visitors, projectActivities)
+		out.ShareWindow = dispAgg.window
 		ruleAgg, _, err := s.myVisitorAggregates(ctx, r, scope, actor, ruleFilter)
 		if err != nil {
 			return err
 		}
+		out.ProjectActivitiesTruncated = projectTruncated
 		keys := make([]string, 0, len(dispAgg.visitors))
 		facts := make([]factView, 0, len(dispAgg.visitors))
 		for key := range dispAgg.visitors {
@@ -625,6 +668,9 @@ func (s *Service) MyVisitors(ctx context.Context, scope Scope, actor int64, f Fi
 		}
 		items := make([]MyVisitor, 0, len(dispAgg.visitors))
 		for key, a := range dispAgg.visitors {
+			if f.Visitor != "" && key != f.Visitor {
+				continue
+			}
 			visitor := profiles[key]
 			visitor.Last = a.last
 			visitor.Views = a.views
@@ -646,7 +692,7 @@ func (s *Service) MyVisitors(ctx context.Context, scope Scope, actor int64, f Fi
 			} else {
 				out.Anonymous++
 			}
-			items = append(items, MyVisitor{Visitor: visitor, First: a.first, ContentCount: len(a.contents), VideoWatch: a.watch, Progress: a.progress})
+			items = append(items, MyVisitor{ProjectActivityCount: len(projectActivities[key]), Visitor: visitor, First: a.first, ContentCount: len(a.contents), VideoWatch: a.watch, Progress: a.progress})
 		}
 		sort.Slice(items, func(i, j int) bool {
 			a, b := items[i].Visitor, items[j].Visitor
@@ -712,15 +758,23 @@ func (s *Service) MyVisitorEntries(ctx context.Context, scope Scope, actor int64
 		if ruleErr != nil {
 			return ruleErr
 		}
-		ruleFilter := Filter{Start: f.AsOf.AddDate(0, 0, -rule.WindowDays), End: f.AsOf.Add(time.Nanosecond), AsOf: f.AsOf}
+		ruleFilter := Filter{Start: f.AsOf.AddDate(0, 0, -rule.WindowDays), End: f.AsOf.Add(time.Nanosecond), AsOf: f.AsOf, Owner: f.Owner, ShareCursor: f.ShareCursor}
 		dispAgg, shares, err := s.myVisitorAggregates(ctx, r, scope, actor, f)
 		if err != nil {
 			return err
 		}
+		projectActivities, projectTruncated, err := s.myProjectCustomerActivities(ctx, r, scope, actor, f)
+		if err != nil {
+			return err
+		}
+		includeProjectCustomers(dispAgg.visitors, projectActivities)
+		out.ShareWindow = dispAgg.window
 		ruleAgg, _, err := s.myVisitorAggregates(ctx, r, scope, actor, ruleFilter)
 		if err != nil {
 			return err
 		}
+		out.ProjectActivities = projectActivities[f.Visitor]
+		out.ProjectActivitiesTruncated = projectTruncated
 		a, ok := dispAgg.visitors[f.Visitor]
 		if !ok {
 			return fail(404, "访客记录不可访问")
@@ -822,10 +876,11 @@ func (s *Service) MyContentStats(ctx context.Context, scope Scope, actor int64, 
 	}
 	out.Snapshot = Snapshot{f.AsOf, MetricVersion}
 	err = s.readQueryTransaction(ctx, func(r Repository) error {
-		events, shares, err := s.myShareEventScan(ctx, r, scope, actor, f)
+		events, shares, window, err := s.myShareEventScan(ctx, r, scope, actor, f)
 		if err != nil {
 			return err
 		}
+		out.ShareWindow = window
 		if len(events) == 0 {
 			return nil
 		}

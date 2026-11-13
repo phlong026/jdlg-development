@@ -232,6 +232,10 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 			args = append(args, value)
 		}
 	}
+	if q.ProjectDesigner > 0 {
+		where = append(where, "EXISTS(SELECT 1 FROM tracking_records project_owner WHERE project_owner.tenant_id=r.tenant_id AND project_owner.kind='note_project' AND project_owner.record_id=JSON_UNQUOTE(JSON_EXTRACT(r.payload,'$.project_id')) AND project_owner.owner_id=r.owner_id AND JSON_UNQUOTE(JSON_EXTRACT(project_owner.payload,'$.designer_id'))=?)")
+		args = append(args, q.ProjectDesigner)
+	}
 	addIn("r.owner_id", q.Owners)
 	addIn("r.record_id", q.IDs)
 	addIn(recordSessionColumn(kind), q.Sessions)

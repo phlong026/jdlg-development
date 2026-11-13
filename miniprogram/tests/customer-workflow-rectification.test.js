@@ -139,3 +139,36 @@ test('原生跳转传入编码参数时只解码一次，访客和快照不会�
   assert.equal(page.data.visitor_name,'陈先生');
   const {page:shares}=runtime('sharevisits',{});shares.onLoad({tab:'shares',title:'%E5%BA%AD%E9%99%A2',content_id:'c1'});assert.equal(shares.data.contentTitle,'庭院');
 });
+
+test('K03 更早分享分段可返回上一段或最新段，明细继承来源段', async () => {
+ const queries=[];
+ const h=runtime('sharevisits',{listMyVisitors:async q=>{queries.push({...q});return {items:[],as_of:'2026-11-13T00:00:00Z',share_window:{limit:400,truncated:true,next_cursor:'older-segment'}};}});
+ h.page._token='account-one'; await h.page.loadCustomers(true);
+ await h.page.nextShareWindow();
+ assert.equal(queries[1].share_cursor,'older-segment');
+ assert.equal(queries[1].as_of,'2026-11-13T00:00:00Z');
+ h.page.setData({customers:[{visitor_key:'u:77',nickname:'陈先生'}]});h.page.openCustomer({currentTarget:{dataset:{index:0}}});
+ assert.equal(new URL('https://example.invalid'+h.navigation[0]).searchParams.get('share_cursor'),'older-segment');
+ await h.page.previousShareWindow();assert.equal(queries[2].share_cursor,undefined);
+ await h.page.nextShareWindow();await h.page.resetShareWindow();assert.equal(h.page.data.shareWindowCursor,'');assert.equal(h.page.data.shareWindowIndex,0);
+});
+
+test('K02 已有线索不暴露ID也保持完成状态，重读呈现本人承接摘要', async () => {
+ const h=runtime('visitdetail',{convertMyVisitorToLead:async()=>({converted:true,existed:true,lead_id:0}),listMyVisitorEntries:async()=>({items:[],customer_handoff:{converted:true,status:'contacted',assigned:true},can_convert_lead:false})});
+ h.page.onLoad({visitor:'u:77'});h.page._token='account-one';h.page._epoch=1;h.page.setData({canConvertLead:true});
+ await h.page.convertLead();assert.equal(h.page.data.leadConverted,true);assert.equal(h.page.data.canConvertLead,false);
+ await h.page.loadCustomerEntries(true);assert.equal(h.page.data.leadConverted,true);assert.match(h.page.data.handoffText,/跟进/);
+});
+
+test('K07 联系授权不足时显示原因和客户引导而不是允许必败转化', async () => {
+ const h=runtime('visitdetail',{listMyVisitorEntries:async()=>({items:[],can_convert_lead:false,conversion_reason:'客户尚未授权业务联系',customer_handoff:{converted:false,contact_ready:false}})});
+ h.page.onLoad({visitor:'u:77'});h.page._token='account-one';h.page._epoch=1;
+ await h.page.loadCustomerEntries(true,1);assert.equal(h.page.data.canConvertLead,false);assert.match(h.page.data.conversionReason,/授权/);
+});
+
+test('K01 客户明细只展示项目活动摘要且可打开本人项目，保留公开访问统计口径', async()=>{
+ const h=runtime('visitdetail',{listMyVisitorEntries:async()=>({items:[],page_views:0,project_activities:[{activity_id:'fact1',project_id:'project-one',project_name:'张宅',kind:'note_feedback',occurred_at:'2026-11-13T00:00:00Z'}]})});
+ h.page.onLoad({visitor:'u:101'});h.page._token='account-one';h.page._epoch=1;await h.page.loadCustomerEntries(true,1);
+ assert.equal(h.page.data.customerViews,0);assert.equal(h.page.data.projectActivities.length,1);assert.match(h.page.data.projectActivities[0].kindText,/反馈/);
+ h.page.openCustomerProject({currentTarget:{dataset:{id:'project-one'}}});assert.match(h.navigation[0],/project_id=project-one/);
+});

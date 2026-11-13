@@ -292,6 +292,7 @@ type Result struct {
 	Reason string `json:"reason,omitempty"`
 }
 type Filter struct {
+	ShareCursor                                      string // Bounded actor-share aggregation window; independent of detail pagination.
 	ContentVersion                                   int
 	Start, End, AsOf                                 time.Time
 	Content, Identity, Intent, Search, ContentSearch string
@@ -321,13 +322,15 @@ type Snapshot struct {
 	Metric string    `json:"metric_version"`
 }
 type List struct {
-	FirstCursor      string `json:"first_cursor,omitempty"`
-	ProfileRevision  string `json:"profile_revision,omitempty"`
-	OmittedPageCount int    `json:"omitted_page_count,omitempty"`
-	Items            any    `json:"items"`
-	Cursor           string `json:"next_cursor,omitempty"`
-	Identified       int    `json:"identified_count"`
-	Anonymous        int    `json:"anonymous_count"`
+	ProjectActivitiesTruncated bool           `json:"project_activities_truncated,omitempty"`
+	ShareWindow                *MyShareWindow `json:"share_window,omitempty"`
+	FirstCursor                string         `json:"first_cursor,omitempty"`
+	ProfileRevision            string         `json:"profile_revision,omitempty"`
+	OmittedPageCount           int            `json:"omitted_page_count,omitempty"`
+	Items                      any            `json:"items"`
+	Cursor                     string         `json:"next_cursor,omitempty"`
+	Identified                 int            `json:"identified_count"`
+	Anonymous                  int            `json:"anonymous_count"`
 	Snapshot
 }
 type IntentRule struct {

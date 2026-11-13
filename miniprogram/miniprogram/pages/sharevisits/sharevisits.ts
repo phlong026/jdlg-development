@@ -42,7 +42,8 @@ function displayStatus(item) {
 Page({
   data: {
     activeTab: 'customers', navigationTitle: '客户', contentFilter: '', contentVersion: 0, contentTitle: '',
-    rangeOptions: ['全部时间', '近3天', '近7天', '近30天'], rangeIndex: 0, filterStart: '', filterEnd: '',
+    shareWindowCursor: '', shareWindowNext: '', shareWindowIndex: 0,
+    rangeOptions: ['保留期内', '近3天', '近7天', '近30天'], rangeIndex: 0, filterStart: '', filterEnd: '',
     intentOptions: ['全部意向', '高意向', '中意向', '低意向', '待判断'], intentIndex: 0,
     sortOptions: ['最近访问', '浏览次数', '停留时长'], sortIndex: 0,
     customers: [], customers_cursor: '', customers_as_of: '', customerQuery: '', customerIntent: '', customerLoading: true, customerLoadingMore: false, customerError: '',
@@ -62,6 +63,7 @@ Page({
   tabTitle(tab) { return { customers: '客户', materials: '素材热度', shares: '分享记录' }[tab] || '客户'; },
   filterQuery() {
     const query = {};
+    if (this.data.shareWindowCursor && this.data.activeTab !== 'shares') query.share_cursor = this.data.shareWindowCursor;
     if (this.data.filterStart) query.start = this.data.filterStart;
     if (this.data.filterEnd) query.end = this.data.filterEnd;
     if (this.data.contentFilter) {
@@ -73,7 +75,7 @@ Page({
   selectRange(event) {
     const index = Number(event.detail.value), days = [0, 3, 7, 30][index];
     if (days === undefined) return;
-    this._drillAsOf = '';
+    this._drillAsOf = ''; this.clearShareWindow();
     const end = new Date(), start = new Date(end.getTime() - days * 86400000);
     ['customers', 'materials', 'shares'].forEach(tab => this.bumpEpoch(tab));
     this._loadedTabs = {};
@@ -104,6 +106,7 @@ Page({
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
+    if (this._token !== token) this.clearShareWindow();
     if (this._token !== token) this.setData({ customers: [], materials: [], items: [], customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', customerError: '', materialError: '', error: '' });
     this._token = token;
     ['customers', 'materials', 'shares'].forEach(which => this.bumpEpoch(which));
@@ -125,7 +128,7 @@ Page({
     return epoch === this[map[which]] && this._token === String(wx.getStorageSync('token') || '');
   },
   onPullDownRefresh() {
-    this._drillAsOf = '';
+    this._drillAsOf = ''; if (this.data.activeTab !== 'shares') this.clearShareWindow();
     const done = () => wx.stopPullDownRefresh();
     if (this.data.activeTab === 'customers') this.loadCustomers(true, this.bumpEpoch('customers')).finally(done);
     else if (this.data.activeTab === 'shares') this.loadShares(true, this.bumpEpoch('shares')).finally(done);
@@ -141,6 +144,27 @@ Page({
     if (tab === 'customers' && !this.data.customers.length && !this.data.customerError) this.loadCustomers(true);
     if (tab === 'materials' && !this._loadedTabs.materials) { this._loadedTabs.materials = true; this.loadMaterials(true); }
     if (tab === 'shares' && !this._loadedTabs.shares) { this._loadedTabs.shares = true; this.loadShares(true); }
+  },
+  clearShareWindow() {
+    this._shareWindows = ['']; this._windowAsOf = '';
+    this.setData({ shareWindowCursor: '', shareWindowIndex: 0, shareWindowNext: '' });
+  },
+  acceptShareWindow(page) {
+    this._windowAsOf = page.as_of || this._windowAsOf;
+    this.setData({ projectActivitiesTruncated: page.project_activities_truncated === true, shareWindowNext: page.share_window && page.share_window.next_cursor || '' });
+  },
+  nextShareWindow() {
+    if (!this.data.shareWindowNext) return;
+    this._shareWindows = (this._shareWindows || ['']).slice(0, this.data.shareWindowIndex + 1);
+    this._shareWindows.push(this.data.shareWindowNext);
+    return this.changeShareWindow(this.data.shareWindowIndex + 1);
+  },
+  previousShareWindow() { if (this.data.shareWindowIndex > 0) return this.changeShareWindow(this.data.shareWindowIndex - 1); },
+  resetShareWindow() { this.clearShareWindow(); return this.changeShareWindow(0); },
+  changeShareWindow(index) {
+    ['customers', 'materials'].forEach(tab => this.bumpEpoch(tab)); this._loadedTabs = {};
+    this.setData({ shareWindowIndex: index, shareWindowCursor: (this._shareWindows || [''])[index] || '', shareWindowNext: '', customers: [], materials: [], customers_cursor: '', materials_cursor: '', customers_as_of: '', materials_as_of: '' });
+    return this.data.activeTab === 'materials' ? this.loadMaterials(true) : this.loadCustomers(true);
   },
   reloadActive() {
     const tab = this.data.activeTab;
@@ -163,16 +187,17 @@ Page({
     if (reset) this.setData({ customerLoading: true, customerError: '', customers_cursor: '', customers_as_of: '' });
     else { this._customerMorePending = epoch; this.setData({ customerLoadingMore: true }); }
     try {
-      const query = { limit: 20, ...this.filterQuery(), sort: ['last_visit', 'page_views', 'visible_ms'][this.data.sortIndex || 0], as_of: this.data.customers_as_of };
+      const query = { limit: 20, ...this.filterQuery(), sort: ['last_visit', 'page_views', 'visible_ms'][this.data.sortIndex || 0], as_of: this.data.customers_as_of || this._windowAsOf || undefined };
       if (this.data.customerIntent) query.intent = this.data.customerIntent;
       if (this.data.customerQuery) query.q = this.data.customerQuery;
       if (!reset) query.cursor = this.data.customers_cursor;
       const page = await api.listMyVisitors(query);
       if (!this.tokenAlive(epoch, 'customers')) return;
+      this.acceptShareWindow(page);
       const rows = (page.items || []).map(item => ({
         visitor_key: item.visitor_key,
         nickname: item.nickname || (item.identity_state === 'identified' ? '已识别访客' : '匿名访客'), avatar: item.avatar_url || '',
-        views: Number(item.page_views || 0),
+        project_activity_count: Number(item.project_activity_count || 0), views: Number(item.page_views || 0),
         intent_level: item.intent && item.intent.level ? item.intent.level : '',
         last_visit_text: displayTime(item.last_visit),
         duration_text: formatDuration(item.visible_ms),
@@ -192,7 +217,7 @@ Page({
     const item = this.data.customers[Number(event.currentTarget.dataset.index)];
     if (!item) return;
     const level = item.intent_level ? '&intent=' + encodeURIComponent(item.intent_level) : '';
-    wx.navigateTo({ url: '/pages/visitdetail/visitdetail?visitor=' + encodeURIComponent(item.visitor_key) + '&name=' + encodeURIComponent(item.nickname || '客户') + level + '&as_of=' + encodeURIComponent(this.data.customers_as_of || '') + '&start=' + encodeURIComponent(this.data.filterStart || '') + '&end=' + encodeURIComponent(this.data.filterEnd || '') });
+    wx.navigateTo({ url: '/pages/visitdetail/visitdetail?visitor=' + encodeURIComponent(item.visitor_key) + '&name=' + encodeURIComponent(item.nickname || '客户') + '&share_cursor=' + encodeURIComponent(this.data.shareWindowCursor || '') + level + '&as_of=' + encodeURIComponent(this.data.customers_as_of || '') + '&start=' + encodeURIComponent(this.data.filterStart || '') + '&end=' + encodeURIComponent(this.data.filterEnd || '') });
   },
 
   // ===== 素材 Tab（my-content-stats 热度榜） =====
@@ -206,11 +231,12 @@ Page({
     if (reset) this.setData({ materialLoading: true, materialError: '', materials_cursor: '', materials_as_of: '' });
     else { this._materialMorePending = epoch; this.setData({ materialLoadingMore: true }); }
     try {
-      const query = { limit: 20, ...this.filterQuery(), sort: 'visitor_count', as_of: this.data.materials_as_of };
+      const query = { limit: 20, ...this.filterQuery(), sort: 'visitor_count', as_of: this.data.materials_as_of || this._windowAsOf || undefined };
       if (this.data.materialQuery) query.q = this.data.materialQuery;
       if (!reset) query.cursor = this.data.materials_cursor;
       const page = await api.listMyContentStats(query);
       if (!this.tokenAlive(epoch, 'materials')) return;
+      this.acceptShareWindow(page);
       const rows = (page.items || []).map(item => ({
         content_key: item.route_key + '\x00' + (item.content_id || '') + ':' + (item.content_version || 0),
         content_id: item.content_id, content_version: item.content_version, route_key: item.route_key, coverAsset: item.cover || null, cover: '', coverError: false,
