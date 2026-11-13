@@ -63,7 +63,7 @@ func TestGenerationImportFixturePathRejectsInvalidTaskNo(t *testing.T) {
 	// from-generation 挂在带认证的 routes 版本；fixture 走无认证 handlers 组，补挂同前缀组并注入 scope。
 	testScope := tracking.Scope{Actor: 7, Manage: true, Owners: []string{"owner-a"}}
 	registerGenerationImportRoute(r.Group("/workbench", func(c *gin.Context) { c.Set("workbench.scope", testScope); c.Next() }), svc, &model.UserModel{})
-	for _, body := range []string{`{}`, `{"task_no":"short"}`, `{"task_no":"../../etc","title":"x"}`} {
+	for _, body := range []string{`{}`, `{"task_no":"short"}`, `{"task_no":"../../etc","title":"x"}`, `{"task_no":"valid-task-0001","idempotency_key":"short"}`, `{"task_no":"valid-task-0001","idempotency_key":"../../invalid-key"}`} {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/workbench/contents/from-generation", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")

@@ -160,6 +160,7 @@ function getPublishThirdTabsByParent(allThirdTabs, parentValue) {
 const LOCAL_ENTERPRISE_WECHAT_QRCODE = (0, asset_1.resolveAssetPath)('/assets/企业微信二维码.png');
 const GENERATED_TASK_PROGRESS_STORAGE_PREFIX = 'generated_task_progress_';
 Page({
+    contentSaveUnloaded: false,
     data: {
         taskData: {},
         contentSaving: false,
@@ -781,6 +782,7 @@ Page({
         this.stopEnterpriseWechatAutoCheck();
     },
     onUnload() {
+        this.contentSaveUnloaded = true;
         this.persistCurrentProgressState();
         this.stopPolling();
         this.stopVisualProgress();
@@ -1877,20 +1879,69 @@ Page({
             wx.showToast({ title: '生成成功后才能保存为内容', icon: 'none' });
             return;
         }
+        const token = String(wx.getStorageSync('token') || '');
+        const current = () => !this.contentSaveUnloaded && token === String(wx.getStorageSync('token') || '') && taskNo === String(this.data.taskData?.task_no || '');
+        const confirmCopy = () => new Promise(resolve => wx.showModal({ title: '另存新草稿？', content: '原内容已删除、撤回或不可访问，生成结果仍保留。', confirmText: '另存新草稿', success: result => resolve(result.confirm), fail: () => resolve(false) }));
         this.setData({ contentSaving: true });
         try {
             const { request } = require('../../utils/phase3-api');
+            const { attemptFor, completeAttempt, savedContent, forgetAttempt } = require('../../utils/generation-content-save');
+            const savedID = savedContent(taskNo);
+            if (savedID) {
+                const choice = await new Promise(resolve => wx.showActionSheet({ itemList: ['继续编辑已有内容', '另存新草稿'], success: result => resolve(result.tapIndex), fail: () => resolve(-1) }));
+                if (!current())
+                    return;
+                if (choice === 0) {
+                    let unavailable = false;
+                    try {
+                        const existing = await request('/api/v1/miniprogram/workbench/contents/' + encodeURIComponent(savedID), 'GET');
+                        unavailable = ['deleted', 'revoked'].includes(existing.status);
+                    }
+                    catch (error) {
+                        if (![404, 410].includes(Number(error.statusCode)))
+                            throw error;
+                        unavailable = true;
+                    }
+                    if (!current())
+                        return;
+                    if (!unavailable) {
+                        wx.navigateTo({ url: '/pages/contentedit/contentedit?id=' + encodeURIComponent(savedID) });
+                        return;
+                    }
+                    if (!await confirmCopy() || !current())
+                        return;
+                }
+                else if (choice !== 1)
+                    return;
+                forgetAttempt(taskNo);
+            }
             const title = String(this.data.taskData.user_prompt || this.data.taskData.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-            const result = await request('/api/v1/miniprogram/workbench/contents/from-generation', 'POST', { task_no: taskNo, title });
+            const attempt = attemptFor(taskNo, title);
+            const result = await request('/api/v1/miniprogram/workbench/contents/from-generation', 'POST', { task_no: taskNo, title, idempotency_key: attempt.key });
+            if (!current())
+                return;
             const contentId = String(result && result.content_id || '');
             if (!contentId)
-                throw new Error('保存失败');
-            this.setData({ contentSaving: false });
+                throw new Error('保存结果待核对，请重试');
+            completeAttempt(attempt, contentId);
             wx.navigateTo({ url: `/pages/contentedit/contentedit?id=${encodeURIComponent(contentId)}` });
         }
         catch (error) {
-            this.setData({ contentSaving: false });
+            if (!current())
+                return;
+            if (Number(error.statusCode) === 409 && /另存新内容/.test(String(error.message || ''))) {
+                if (await confirmCopy() && current()) {
+                    require('../../utils/generation-content-save').forgetAttempt(taskNo);
+                    this.setData({ contentSaving: false });
+                    await this.saveAsContent();
+                }
+                return;
+            }
             wx.showToast({ title: (error instanceof Error && error.message) || '保存失败，请重试', icon: 'none' });
+        }
+        finally {
+            if (current())
+                this.setData({ contentSaving: false });
         }
     },
     publishToSquare() {

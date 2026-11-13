@@ -18,6 +18,7 @@ import (
 )
 
 var generationTaskNoPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
+var generationSaveKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
 // generationResultImages 只提取"生成结果图"：images / image_urls / image_url。
 // 刻意不含 reference_images 与 original_image——那是用户上传的参考图与模板原图，
@@ -61,9 +62,14 @@ func registerGenerationImportRoute(g *gin.RouterGroup, svc *tracking.Service, us
 			OwnerID   string `json:"owner_id"`
 			Rights    string `json:"rights"`
 			ProjectID string `json:"project_id"`
+			Key       string `json:"idempotency_key"`
 		}
 		if c.ShouldBindJSON(&body) != nil || !generationTaskNoPattern.MatchString(body.TaskNo) {
 			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "请提供有效的生成任务编号"})
+			return
+		}
+		if body.Key != "" && !generationSaveKeyPattern.MatchString(body.Key) {
+			trackingResponse(c, nil, &tracking.Error{Status: http.StatusBadRequest, Message: "保存请求标识无效"})
 			return
 		}
 		if users == nil || users.DB == nil {
@@ -161,7 +167,13 @@ func registerGenerationImportRoute(g *gin.RouterGroup, svc *tracking.Service, us
 			ProjectID:  body.ProjectID,
 			SourceNote: "来自AI生成任务 " + body.TaskNo,
 		}
-		content, err := svc.SaveContent(c.Request.Context(), ownerScope, "", draft)
+		key := body.Key
+		if key == "" {
+			// 兼容旧客户端：没有操作键时，同一任务/归属默认返回原草稿。
+			digest := sha256.Sum256([]byte(body.TaskNo + "\x00" + owner))
+			key = "legacy-generation-" + base64.RawURLEncoding.EncodeToString(digest[:24])
+		}
+		content, err := svc.SaveContentFromGeneration(c.Request.Context(), ownerScope, body.TaskNo, key, draft)
 		if err != nil {
 			trackingResponse(c, nil, err)
 			return

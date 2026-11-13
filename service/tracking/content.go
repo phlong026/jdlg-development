@@ -524,3 +524,55 @@ func (s *Service) ListMediaPage(ctx context.Context, scope Scope, cursor string,
 	})
 	return out, e
 }
+
+type generationContentSave struct {
+	Fingerprint string `json:"fingerprint"`
+	ContentID   string `json:"content_id"`
+}
+
+// SaveContentFromGeneration replays one explicit save, without merging a later
+// intentional copy or overwriting edits made after the first response was lost.
+func (s *Service) SaveContentFromGeneration(ctx context.Context, scope Scope, taskNo, key string, in Draft) (Content, error) {
+	var out Content
+	if !validID(taskNo) || !validID(key) {
+		return out, fail(400, "生成任务或保存标识无效")
+	}
+	in, err := s.validateDraft(scope, in)
+	if err != nil {
+		return out, err
+	}
+	fingerprint := hash(string(marshal(struct {
+		Task  string
+		Draft Draft
+	}{taskNo, in})))
+	requestID := hash(fmt.Sprintf("generation-content:%d:%s", scope.Actor, key))
+	err = s.transaction(ctx, func(r Repository) error {
+		old, readErr := decode[generationContentSave](r, "generation_content_save", requestID)
+		if readErr == nil {
+			if old.Fingerprint != fingerprint {
+				return fail(409, "保存请求参数已变化，请另存新内容")
+			}
+			current, loadErr := loadCatalogContent(r, "content", old.ContentID)
+			if loadErr != nil && !errors.Is(loadErr, ErrNotFound) {
+				return loadErr
+			}
+			if loadErr != nil || current.Owner != in.Owner || !scope.Allows(current.Owner) || current.ReadOnly {
+				return fail(404, "内容草稿不可访问")
+			}
+			if current.Status == "deleted" || current.Status == "revoked" {
+				return fail(409, "原内容已删除或撤回，请另存新内容")
+			}
+			out = current
+			return nil
+		}
+		if !errors.Is(readErr, ErrNotFound) {
+			return readErr
+		}
+		out, err = s.saveContentIn(r, scope, "", in, s.Now())
+		if err != nil {
+			return err
+		}
+		return r.Insert(record("generation_content_save", requestID, in.Owner, s.Now(), generationContentSave{Fingerprint: fingerprint, ContentID: out.ID}))
+	})
+	return out, err
+}
