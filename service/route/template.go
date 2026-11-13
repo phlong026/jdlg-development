@@ -383,8 +383,13 @@ func publicTemplateDerivedImageURL(rawURL, variant string) string {
 	if parsed.RawPath != "" || parsed.EscapedPath() != parsed.Path {
 		return ""
 	}
-	const prefix = "/derived_images/templates/"
+	// Match the uploader's configured object root while retaining legacy
+	// unprefixed derivatives. Never normalize the caller-supplied URL path.
+	prefix := "/" + strings.Trim(function.ResolveCOSObjectKey(config.Get(), "derived_images/templates"), "/") + "/"
 	relativePath := strings.TrimPrefix(parsed.Path, prefix)
+	if relativePath == parsed.Path {
+		relativePath = strings.TrimPrefix(parsed.Path, "/derived_images/templates/")
+	}
 	if relativePath == parsed.Path {
 		return ""
 	}
