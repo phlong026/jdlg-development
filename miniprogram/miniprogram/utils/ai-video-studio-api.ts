@@ -76,6 +76,36 @@ async function createBatch(input) {
     throw error;
   }
 }
+function adoptionStorageKey(kind, mediaID) {
+  const info = wx.getStorageSync('userInfo') || {};
+  const account = Number(info.id);
+  if (!currentToken() || !Number.isSafeInteger(account) || account < 1 || (info.token && info.token !== currentToken())) throw new Error('账号资料尚未就绪，请重新登录后采用视频');
+  return 'aivs:adopt:' + account + ':' + kind + ':' + encodeURIComponent(mediaID);
+}
+function pendingAdoption(kind, mediaID) {
+  const value = wx.getStorageSync(adoptionStorageKey(kind, mediaID));
+  return value && value.input && typeof value.input.draft_instance_id === 'string' ? Object.assign({}, value.input) : null;
+}
+async function adoptMedia(kind, mediaID, input) {
+  const storageKey = adoptionStorageKey(kind, mediaID), token = currentToken();
+  const payload = Object.assign({}, input); delete payload.draft_instance_id;
+  const signature = JSON.stringify(payload), previous = wx.getStorageSync(storageKey);
+  if (previous && previous.signature !== signature) throw new Error('上次采用结果待核对，请先重试原目标');
+  const attempt = previous || { signature, input: Object.assign({}, payload, { draft_instance_id: input.draft_instance_id || idempotencyKey() }) };
+  wx.setStorageSync(storageKey, attempt);
+  const clear = () => {
+    if (token !== currentToken()) return;
+    const current = wx.getStorageSync(storageKey);
+    if (current && current.input && current.input.draft_instance_id === attempt.input.draft_instance_id) wx.removeStorageSync(storageKey);
+  };
+  try {
+    const result = await request(ROOT + '/media/' + encodeURIComponent(mediaID) + '/adopt/' + kind, 'POST', attempt.input);
+    clear(); return result;
+  } catch (error) {
+    if ([400, 403, 404, 409, 410, 422].includes(Number(error.statusCode))) clear();
+    throw error;
+  }
+}
 function normalizeBatch(value) {
   const batch = value || {};
   const items = Array.isArray(batch.items) ? batch.items : [];
@@ -125,6 +155,9 @@ module.exports = {
   cancelBatch: id => request(ROOT + '/batches/' + encodeURIComponent(id) + '/cancel', 'POST', {}),
   playback: id => request(ROOT + '/results/' + encodeURIComponent(id) + '/playback', 'POST', {}),
   retain: id => request(ROOT + '/results/' + encodeURIComponent(id) + '/retain', 'POST', {}),
-  adoptContent: (mediaID, input) => request(ROOT + '/media/' + encodeURIComponent(mediaID) + '/adopt/content', 'POST', input),
+  adoptContent: (mediaID, input) => adoptMedia('content', mediaID, input),
+  adoptProjectNote: (mediaID, input) => adoptMedia('project-note', mediaID, input),
+  pendingAdoption,
+  getProjectNoteAdoptionTarget: (projectID, noteID) => request(ROOT + '/adoption-targets/projects/' + encodeURIComponent(projectID) + '/notes/' + encodeURIComponent(noteID)),
   normalizeBatch,
 };

@@ -79,8 +79,10 @@ test('studio API signs the exact path with query and rejects a response after ac
   } };
   delete require.cache[apiPath];
   let token = 'account-a', pending, uploadOptions, progressHandler, uploadAborted = false;
+  const apiStorage = new Map();
   global.wx = {
-    getStorageSync(key) { return key === 'token' ? token : 'device'; },
+    getStorageSync(key) { return key === 'token' ? token : key === 'userInfo' ? { id: 1001 } : apiStorage.get(key); },
+    setStorageSync(key, value) { apiStorage.set(key, value); }, removeStorageSync(key) { apiStorage.delete(key); },
     request(options) { pending = options; },
     uploadFile(options) { uploadOptions = options; return { onProgressUpdate(handler) { progressHandler = handler; }, abort() { uploadAborted = true; options.fail({ errMsg: 'uploadFile:fail abort' }); } }; },
   };

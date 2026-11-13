@@ -171,3 +171,30 @@ test('completed detail stops polling and exposes the actual fee totals', async (
   assert.equal(page.data.batch.charge.settled_stones, 10);
   assert.equal(page.data.statusLabel, '部分完成');
 });
+
+test('content adoption reuses its persisted identity after a lost response and a fresh API instance', async () => {
+  const storage = new Map([['token', 'account-token'], ['userInfo', { id: 1001 }]]);
+  const requests = [];
+  let api = submissionAPI(storage, request => { requests.push(request); request.fail({ errMsg: 'timeout' }); });
+  await assert.rejects(api.adoptContent('media-1', { owner_id: 'designer-1001', title: '成片', draft_instance_id: 'first-adoption' }));
+  api = submissionAPI(storage, request => { requests.push(request); request.success({ statusCode: 200, data: { code: 0, data: { content_id: 'same-draft' } } }); });
+  const saved = await api.adoptContent('media-1', { owner_id: 'designer-1001', title: '成片', draft_instance_id: 'different-new-attempt' });
+  assert.equal(saved.content_id, 'same-draft');
+  assert.equal(requests[1].data.draft_instance_id, requests[0].data.draft_instance_id);
+  assert.equal([...storage.keys()].some(key => key.startsWith('aivs:adopt:')), false);
+});
+
+test('uncertain note adoption keeps its original target and is isolated by account', async () => {
+  const storage = new Map([['token', 'account-a'], ['userInfo', { id: 1001 }]]); let calls = 0;
+  const api = submissionAPI(storage, request => { calls++; request.fail({ errMsg: 'timeout' }); });
+  const original = { project_id: 'project-a', note_id: 'note-a', expected_revision: 3, insert_at: 1 };
+  await assert.rejects(api.adoptProjectNote('media-a', original));
+  const pending = api.pendingAdoption('project-note', 'media-a');
+  assert.equal(pending.project_id, 'project-a'); assert.ok(pending.draft_instance_id);
+  await assert.rejects(api.adoptProjectNote('media-a', { ...original, note_id: 'note-b' }), /核对/);
+  assert.equal(calls, 1);
+  storage.set('token', 'account-b'); storage.set('userInfo', { id: 1002 });
+  assert.equal(api.pendingAdoption('project-note', 'media-a'), null);
+  storage.set('token', 'account-a'); storage.set('userInfo', { id: 1001 });
+  assert.equal(api.pendingAdoption('project-note', 'media-a').draft_instance_id, pending.draft_instance_id);
+});
