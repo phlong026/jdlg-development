@@ -259,7 +259,11 @@ func metasoRequest(input GenerationRequest) ([]byte, error) {
 		counts := map[string]int{}
 		duration := map[string]float64{}
 		seen := map[string]bool{}
-		for _, ref := range input.References {
+		bindings := make([]string, 0, len(input.References))
+		for index, ref := range input.References {
+			if ref.Position != 0 && ref.Position != index+1 {
+				return nil, errors.New("参考素材编号与请求顺序不一致")
+			}
 			if ref.MediaID == "" || seen[ref.MediaID] || !validProviderMediaURL(ref.URL) {
 				return nil, errors.New("参考素材失效或重复")
 			}
@@ -279,10 +283,26 @@ func metasoRequest(input GenerationRequest) ([]byte, error) {
 			}
 			mediaType := ref.Type + "_url"
 			item := map[string]any{"type": mediaType, mediaType: map[string]string{"url": ref.URL}, "role": "reference_" + ref.Type}
+			label := map[string]string{"image": "图片", "video": "视频", "audio": "音频"}[ref.Type] + fmt.Sprint(counts[ref.Type])
 			if ref.Type == "image" {
-				item["name"] = ref.MediaID
+				item["name"] = label
+			}
+			if purpose := strings.TrimSpace(ref.Purpose); purpose != "" {
+				if utf8.RuneCountInString(purpose) > 120 {
+					return nil, errors.New("单项素材用途不能超过120字")
+				}
+				bindings = append(bindings, fmt.Sprintf("%s（引用编号%d）：%s", label, index+1, purpose))
 			}
 			content = append(content, item)
+		}
+		// The native API has no purpose field. Keep the binding in model-visible
+		// text instead of silently dropping user intent or inventing JSON fields.
+		if len(bindings) > 0 {
+			prompt := input.Prompt + "\n\n参考素材用途：\n" + strings.Join(bindings, "\n")
+			if utf8.RuneCountInString(prompt) > 7000 {
+				return nil, errors.New("画面描述与素材用途合计不能超过7000字")
+			}
+			content[0]["text"] = prompt
 		}
 	default:
 		return nil, errors.New("生成模式不支持")

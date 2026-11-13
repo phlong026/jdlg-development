@@ -180,3 +180,38 @@ func TestProviderDoesNotFollowRedirectsOrClaimCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestProviderReferencePurposeAndOrderReachNativeRequest(t *testing.T) {
+	input := validProviderRequest()
+	input.Mode = "reference"
+	input.References = []GenerationReference{
+		{MediaID: "courtyard", Type: "image", URL: "https://media.example.com/garden.jpg", Position: 1, Purpose: "空间与材质"},
+		{MediaID: "camera", Type: "video", URL: "https://media.example.com/motion.mp4", Position: 2, Duration: 5, Purpose: "镜头运动"},
+		{MediaID: "rain", Type: "audio", URL: "https://media.example.com/rain.wav", Position: 3, Duration: 5, Purpose: "自然环境声"},
+	}
+	p := testProvider(func(r *http.Request) (*http.Response, error) {
+		var body struct {
+			Content []map[string]any `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		prompt, _ := body.Content[0]["text"].(string)
+		for _, expected := range []string{"图片1", "视频1", "音频1", "空间与材质", "镜头运动", "自然环境声"} {
+			if !strings.Contains(prompt, expected) {
+				t.Fatalf("missing binding %q in %q", expected, prompt)
+			}
+		}
+		if body.Content[1]["name"] != "图片1" || body.Content[2]["type"] != "video_url" || body.Content[3]["type"] != "audio_url" {
+			t.Fatalf("native order mismatch: %+v", body.Content)
+		}
+		return providerResponse(200, `{"task_id":"external-1"}`), nil
+	})
+	if _, err := p.Submit(context.Background(), input); err != nil {
+		t.Fatal(err)
+	}
+	input.References[1].Position = 1
+	if _, err := p.Submit(context.Background(), input); !errors.Is(err, ErrSubmissionRejected) {
+		t.Fatalf("mismatched position accepted: %v", err)
+	}
+}
