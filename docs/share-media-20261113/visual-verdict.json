@@ -1,0 +1,22 @@
+{
+  "scope": "share-media-cover",
+  "date": "2026-11-13",
+  "method": "browser-canvas-and-manual-comparison",
+  "visualVerdictSkillAvailable": false,
+  "alternative": "Render the actual before/after shareImage.js in Chrome Canvas and inspect against the user's reference: direct full-frame media without nested decorations.",
+  "evidence": "canvas-comparison.png",
+  "checks": {
+    "photoFillsCard": true,
+    "landscapeCoverFillsCard": true,
+    "portraitCoverFillsCard": true,
+    "noNestedFrame": true,
+    "noDecorativeBackgroundOrShadow": true,
+    "noAddedLetterboxing": true
+  },
+  "limitations": [
+    "Video covers are aspect-ratio fixtures using a project sample image, not actual video frames.",
+    "Cover mode crops source edges to fit the native share aspect ratio.",
+    "No WeChat development upload or physical-device acceptance has been performed.",
+    "Black borders encoded in source media are not detected or removed."
+  ]
+}
