@@ -214,19 +214,12 @@ func (s *AIVideoStudioStore) FinalizeTask(ctx context.Context, taskID string, o 
 			query += ` AND lease_owner=? AND lease_until>NOW()`
 			args = append(args, o.LeaseOwner)
 		}
-		result, err := s.DB.ExecContext(ctx, query, args...)
+		_, err := s.DB.ExecContext(ctx, query, args...)
 		if err != nil {
 			return err
 		}
-		if o.LeaseOwner != "" {
-			n, e := result.RowsAffected()
-			if e != nil {
-				return e
-			}
-			if n != 1 {
-				return ErrAIVideoStudioConflict
-			}
-		}
+		// MySQL reports changed rows, so a repeated identical durable result
+		// can return zero. The transaction below checks the actual lease/state.
 	}
 	var userID int64
 	var batchID string
@@ -252,11 +245,11 @@ func (s *AIVideoStudioStore) FinalizeTask(ctx context.Context, taskID string, o 
 	if err = tx.QueryRowContext(ctx, `SELECT status,lease_owner,lease_until,result_url FROM ai_video_studio_tasks WHERE id=? FOR UPDATE`, taskID).Scan(&status, &owner, &lease, &existingResult); err != nil {
 		return err
 	}
-	if o.LeaseOwner != "" && (owner != o.LeaseOwner || !lease.Valid || !lease.Time.After(time.Now())) {
-		return ErrAIVideoStudioConflict
-	}
 	if status == "completed" || status == "failed" || status == "cancelled" {
 		return tx.Commit()
+	}
+	if o.LeaseOwner != "" && (owner != o.LeaseOwner || !lease.Valid || !lease.Time.After(time.Now())) {
+		return ErrAIVideoStudioConflict
 	}
 	if o.Status == "completed" && o.ResultURL == "" && (!existingResult.Valid || existingResult.String == "") {
 		return errors.New("completed task requires durable result evidence")

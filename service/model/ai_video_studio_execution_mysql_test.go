@@ -149,7 +149,10 @@ func TestStudioPaidAtomicLifecycle(t *testing.T) {
 	if _, e = db.Exec("CREATE TRIGGER studio_fail_settle BEFORE UPDATE ON ai_video_studio_fees FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture settlement failure'"); e != nil {
 		t.Fatal(e)
 	}
-	result := StudioTaskOutcome{Status: "completed", ResultURL: "https://example.com/durable.mp4", DeliveryType: "DIRECT"}
+	if _, e = db.Exec(`UPDATE ai_video_studio_tasks SET status='submitted',lease_owner='recovery-worker',lease_until=DATE_ADD(NOW(),INTERVAL 5 MINUTE) WHERE id=?`, recoveryTask); e != nil {
+		t.Fatal(e)
+	}
+	result := StudioTaskOutcome{Status: "completed", ResultURL: "https://example.com/durable.mp4", DeliveryType: "DIRECT", LeaseOwner: "recovery-worker"}
 	if e = s.FinalizeTask(ctx, recoveryTask, result); e == nil {
 		t.Fatal("settlement fixture failure ignored")
 	}
