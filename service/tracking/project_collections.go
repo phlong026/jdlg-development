@@ -48,16 +48,17 @@ type ProjectCollectionItem struct {
 }
 
 type ProjectCollection struct {
-	ID           string                  `json:"collection_id"`
-	Title        string                  `json:"title"`
-	Description  string                  `json:"description,omitempty"`
-	Owner        string                  `json:"owner_id"`
-	Cover        *Asset                  `json:"cover,omitempty"`
-	Items        []ProjectCollectionItem `json:"items"`
-	Status       string                  `json:"status"`
-	Revision     int                     `json:"revision"`
-	Version      int                     `json:"version"`
-	CreatorActor int64                   `json:"-"`
+	ID             string                  `json:"collection_id"`
+	Title          string                  `json:"title"`
+	Description    string                  `json:"description,omitempty"`
+	Owner          string                  `json:"owner_id"`
+	Cover          *Asset                  `json:"cover,omitempty"`
+	CoverItemIndex *int                    `json:"cover_item_index,omitempty"`
+	Items          []ProjectCollectionItem `json:"items"`
+	Status         string                  `json:"status"`
+	Revision       int                     `json:"revision"`
+	Version        int                     `json:"version"`
+	CreatorActor   int64                   `json:"-"`
 	// Collaborators 只读共享的协作者列表（B10 方案A）。
 	Collaborators []int64    `json:"collaborators,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
@@ -77,16 +78,17 @@ type ProjectCollectionPreview struct {
 }
 
 type PublishedProjectCollection struct {
-	ID          string                  `json:"collection_id"`
-	Title       string                  `json:"title"`
-	Description string                  `json:"description,omitempty"`
-	Cover       *Asset                  `json:"cover,omitempty"`
-	Items       []ProjectCollectionItem `json:"items"`
-	Status      string                  `json:"status"`
-	Revision    int                     `json:"revision"`
-	Version     int                     `json:"version"`
-	PublishedAt time.Time               `json:"published_at"`
-	Owner       string                  `json:"-"`
+	ID             string                  `json:"collection_id"`
+	Title          string                  `json:"title"`
+	Description    string                  `json:"description,omitempty"`
+	Cover          *Asset                  `json:"cover,omitempty"`
+	CoverItemIndex *int                    `json:"cover_item_index,omitempty"`
+	Items          []ProjectCollectionItem `json:"items"`
+	Status         string                  `json:"status"`
+	Revision       int                     `json:"revision"`
+	Version        int                     `json:"version"`
+	PublishedAt    time.Time               `json:"published_at"`
+	Owner          string                  `json:"-"`
 }
 
 type ProjectCollectionDeletion struct {
@@ -138,11 +140,12 @@ func projectCollectionRecord(kind string, collection ProjectCollection, at time.
 
 func projectCollectionFingerprint(in ProjectCollectionDraft) string {
 	return hash(string(marshal(struct {
-		Title       string                       `json:"title"`
-		Description string                       `json:"description"`
-		Owner       string                       `json:"owner_id"`
-		Items       []ProjectCollectionItemInput `json:"items"`
-	}{strings.TrimSpace(in.Title), strings.TrimSpace(in.Description), in.Owner, in.Items})))
+		Title          string                       `json:"title"`
+		Description    string                       `json:"description"`
+		Owner          string                       `json:"owner_id"`
+		Items          []ProjectCollectionItemInput `json:"items"`
+		CoverItemIndex *int                         `json:"cover_item_index,omitempty"`
+	}{strings.TrimSpace(in.Title), strings.TrimSpace(in.Description), in.Owner, in.Items, in.CoverItemIndex})))
 }
 
 func (s *Service) projectCollectionAccess(scope Scope) error {
@@ -200,6 +203,19 @@ func projectCollectionCover(items []ProjectCollectionItem, preferred *int) *Asse
 		}
 	}
 	return nil
+}
+
+// 旧记录只有封面媒体ID；重解析来源时按原封面寻找位置，避免升级后重置存量封面。
+func projectCollectionSavedCover(items []ProjectCollectionItem, preferred *int, saved *Asset) *Asset {
+	if preferred == nil && saved != nil {
+		for index, item := range items {
+			if item.Cover != nil && item.Cover.ID == saved.ID {
+				preferred = &index
+				break
+			}
+		}
+	}
+	return projectCollectionCover(items, preferred)
 }
 
 func projectCollectionOwned(r Repository, scope Scope, id string) (ProjectCollection, error) {
@@ -277,7 +293,7 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 			if err != nil {
 				return err
 			}
-			out = ProjectCollection{ID: opaque(), Title: in.Title, Description: in.Description, Owner: in.Owner, Cover: projectCollectionCover(items, in.CoverItemIndex), Items: items, Status: "draft", Revision: 1, CreatorActor: scope.Actor, Collaborators: in.Collaborators, CreatedAt: now, UpdatedAt: now}
+			out = ProjectCollection{ID: opaque(), Title: in.Title, Description: in.Description, Owner: in.Owner, Cover: projectCollectionCover(items, in.CoverItemIndex), CoverItemIndex: in.CoverItemIndex, Items: items, Status: "draft", Revision: 1, CreatorActor: scope.Actor, Collaborators: in.Collaborators, CreatedAt: now, UpdatedAt: now}
 			if err = r.Insert(projectCollectionRecord(projectCollectionKind, out, now)); err != nil {
 				return err
 			}
@@ -308,6 +324,7 @@ func (s *Service) SaveProjectCollection(ctx context.Context, scope Scope, id str
 		}
 		existing.Title, existing.Description = in.Title, in.Description
 		existing.Items, existing.Cover = items, projectCollectionCover(items, in.CoverItemIndex)
+		existing.CoverItemIndex = in.CoverItemIndex
 		existing.Revision++
 		existing.UpdatedAt = now
 		out = existing
@@ -393,7 +410,7 @@ func (s *Service) PreviewProjectCollection(ctx context.Context, scope Scope, id 
 		if err != nil {
 			return err
 		}
-		collection.Items, collection.Cover = items, projectCollectionCover(items, nil)
+		collection.Items, collection.Cover = items, projectCollectionSavedCover(items, collection.CoverItemIndex, collection.Cover)
 		now := s.Now().UTC()
 		expires := now.Add(15 * time.Minute)
 		token := opaque()
@@ -474,12 +491,12 @@ func (s *Service) PublishProjectCollection(ctx context.Context, scope Scope, id 
 			return err
 		}
 		now := s.Now().UTC()
-		collection.Items, collection.Cover = items, projectCollectionCover(items, nil)
+		collection.Items, collection.Cover = items, projectCollectionSavedCover(items, collection.CoverItemIndex, collection.Cover)
 		collection.Status = "published"
 		collection.Version++
 		collection.Revision++
 		collection.UpdatedAt, collection.PublishedAt = now, &now
-		out = PublishedProjectCollection{ID: collection.ID, Title: collection.Title, Description: collection.Description, Cover: collection.Cover, Items: collection.Items, Status: "published", Revision: collection.Revision, Version: collection.Version, PublishedAt: now, Owner: collection.Owner}
+		out = PublishedProjectCollection{ID: collection.ID, Title: collection.Title, Description: collection.Description, Cover: collection.Cover, CoverItemIndex: collection.CoverItemIndex, Items: collection.Items, Status: "published", Revision: collection.Revision, Version: collection.Version, PublishedAt: now, Owner: collection.Owner}
 		versionRow := record(projectCollectionVersionKind, projectCollectionVersionKey(collection.ID, collection.Version), collection.Owner, now, publishedProjectCollectionStored{PublishedProjectCollection: out, Owner: collection.Owner})
 		versionRow.Content = collection.ID
 		if err = r.Insert(versionRow); err != nil {
@@ -538,7 +555,7 @@ func (s *Service) ReadPublishedProjectCollection(ctx context.Context, id string,
 			items = append(items, ProjectCollectionItem{Type: item.Type, Presentation: item.Presentation, RouteKey: item.RouteKey, ContentID: item.ContentID, ContentVersion: item.ContentVersion, Title: item.Title, Cover: cover, PublishedAt: item.PublishedAt, Available: true})
 		}
 		out.Items = items
-		out.Cover = projectCollectionCover(items, nil)
+		out.Cover = projectCollectionSavedCover(items, out.CoverItemIndex, out.Cover)
 		return nil
 	})
 	return out, err
