@@ -111,4 +111,3 @@ function ratioOptionsForMode(mode, serverRatios) {
 }
 
 module.exports = { DEFAULT_LIMITS, normalizedReferences, validateReferences, validateCreation, billableFingerprint, isQuoteUsable, buildBatchRequest, ratioOptionsForMode };
-

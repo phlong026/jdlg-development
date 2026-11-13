@@ -25,4 +25,3 @@ Page({
   openDraft(event) { wx.navigateTo({ url: '/pages/aivideostudio/generate?draft_id=' + encodeURIComponent(event.currentTarget.dataset.id) }); },
   openBatch(event) { wx.navigateTo({ url: '/pages/aivideostudio/detail?batch_id=' + encodeURIComponent(event.currentTarget.dataset.id) }); },
 });
-

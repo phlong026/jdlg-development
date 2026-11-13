@@ -87,4 +87,3 @@ Page({
     } catch (error) { if (this.current()) this.setData({ adoptingResultID: '', error: /cancel/i.test(String(error && error.errMsg || '')) ? '已取消选择，视频保持不变' : (error.message || '内容草稿创建失败') }); }
   },
 });
-

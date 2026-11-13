@@ -87,4 +87,3 @@ module.exports = {
   adoptContent: (mediaID, input) => request(ROOT + '/media/' + encodeURIComponent(mediaID) + '/adopt/content', 'POST', input),
   normalizeBatch,
 };
-

@@ -17,4 +17,3 @@ Page({
   async upload(file,kind){const path=file.tempFilePath||file.path;if(!path)return;this.setData({uploading:true,uploadProgress:0,error:''});const operation=api.uploadMedia(path,progress=>{if(this.current())this.setData({uploadProgress:Number(progress.progress||0)})});this._uploadOperation=operation;try{await operation.promise;if(!this.current())return;this._uploadOperation=null;this.setData({uploading:false,uploadProgress:100,mediaType:kind});wx.showToast({title:'素材已上传',icon:'success'});await this.load();}catch(error){if(this.current()){this._uploadOperation=null;this.setData({uploading:false,error:error.message||'素材上传失败'})}}},
   cancelUpload(){if(this._uploadOperation)this._uploadOperation.cancel()},
 });
-
