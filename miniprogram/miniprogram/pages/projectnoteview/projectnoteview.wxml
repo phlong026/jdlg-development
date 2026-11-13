@@ -5,9 +5,9 @@
   <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">登录后即可查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
   <view wx:elif="{{memberMode && memberDirectory && !view}}" class="card">
-    <text class="title">{{memberDirectory.project.name}}</text><text class="muted">已共享给项目成员的固定方案</text>
+    <text class="title">{{memberDirectory.project.name}}</text><text class="muted">当前已向你共享的方案</text>
     <button wx:for="{{memberDirectory.versions}}" wx:key="version_id" class="secondary" data-id="{{item.version_id}}" bindtap="openMemberVersion">{{item.title}} · V{{item.revision}}</button>
-    <text wx:if="{{!memberDirectory.versions.length}}" class="muted">设计师尚未生成方案版本。</text>
+    <text wx:if="{{!memberDirectory.versions.length}}" class="muted">当前页暂无已共享方案。</text>
     <button wx:if="{{memberNextCursor}}" class="secondary" bindtap="loadMemberDirectory">加载更多</button>
   </view>
   <block wx:elif="{{view}}">
@@ -36,7 +36,7 @@
     </view>
     <view wx:if="{{!memberMode && (canConfirm || confirmed)}}" class="card confirm"><text class="section-title">方案版本确认</text><text class="muted">确认仅针对当前 V{{view.version.revision}}，新版本需重新确认。</text><button class="primary" bindtap="confirmVersion" loading="{{busy}}" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
     <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="text-button" bindtap="retryMediaDownloads">重试失败素材</button></view>
-    <text class="footer">{{memberMode ? "项目成员可查看固定方案；反馈和确认请使用设计师分享的方案链接。" : "收到链接的用户登录后即可查看。"}}</text>
+    <text class="footer">{{memberMode ? "仅显示当前已向你共享的方案；反馈和确认请使用设计师分享的方案链接。" : "收到链接的用户登录后即可查看。"}}</text>
   </block>
   <view wx:if="{{shareReady}}" class="share-dock"><button class="primary" open-type="share">发给客户</button></view>
 </view>
