@@ -82,3 +82,5 @@
 私人项目的全部接口、幂等规则、媒体隔离和当前限制见[私人项目笔记](private-project-notes.md)。采集部署文件及实际服务器证据见[采集部署](capture-deployment.md)。
 
 原生引用见[引用库](native-references.md)，固定版本导出见[Word导出](private-note-export.md)，跨端协议和隐私边界见[可信交接](share-handoff.md)。
+
+2026-11-13 工作台链路修复的客户关联、统计窗口、成员阅读及视频采用契约见[接口补充](workbench-chain-fixes-20261113/API.md)。四入口保持“我的项目、内容创作、AI 视频、客户跟踪”；公开主页整改独立排期。
