@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-13",
+  "branch": "feat/designer-ai-video-implementation-20261113",
+  "baseline": "a4e0011",
+  "code_head": "0a3eda9",
+  "mini_program": {
+    "total": 1562,
+    "passed": 1558,
+    "failed": 0,
+    "skipped": 4,
+    "skip_reason": "existing standalone compiler fixtures; changed generate/detail WXML additionally compiled through installed WeChat tools",
+    "js_ts_consistency": "passed",
+    "signer_and_route_checks": "passed",
+    "log": "/tmp/jdlg-paid-mini-tests.log"
+  },
+  "admin": {
+    "passed": 774,
+    "failed": 0,
+    "typecheck": "passed",
+    "route_check": "passed",
+    "build": "passed",
+    "log": "/tmp/jdlg-paid-admin-tests.log"
+  },
+  "go": {
+    "full_suite": "AI_VIDEO_STUDIO_TEST_DSN= CGO_ENABLED=0 go test ./... -count=1 passed",
+    "vet": "CGO_ENABLED=0 go vet ./... passed",
+    "linux_amd64_build": "passed",
+    "host_constraint": "existing go-m1cpu cgo initialization crashes on this host; CGO disabled for executable verification",
+    "log": "/tmp/jdlg-paid-go-tests.log"
+  },
+  "mysql": {
+    "environment": "disposable mysql:8.4, loopback 127.0.0.1:33079, independent test schemas",
+    "core_isolation_and_revisions": "passed",
+    "wallet_atomicity_idempotency_price_snapshot_partial_refunds": "passed",
+    "injected_ledger_failure_and_leased_settlement_recovery": "passed",
+    "worker_restart_concurrency_deadline_and_manual_reconciliation": "passed",
+    "real_provider": false,
+    "real_user_balance": false,
+    "container_removed": true
+  },
+  "independent_reviews": {
+    "wallet": "PASS after leased-result recovery fix",
+    "client": "PASS after account-scoped pending-key compare-and-clear and read-only automatic recovery fixes",
+    "whole_change": "spec compliance PASS, code quality PASS; P0/P1/P2 unresolved 0/0/0",
+    "whole_review_scope": "a4e0011..4b06db1 plus status filter fix included in 0a3eda9"
+  },
+  "security": {
+    "npm_mini_vulnerabilities": 0,
+    "npm_admin_vulnerabilities": 0,
+    "credential_shaped_added_literals": 0,
+    "private_environment_ignored": true,
+    "private_environment_mode": "0600",
+    "go_vulnerability_scan": "not run; govulncheck not installed, dependencies unchanged"
+  },
+  "rollback": {
+    "isolated_code_revert_to_baseline": "a4e0011..4b06db1 clean and matched baseline",
+    "final_status_fix_reverse_patch_check": "passed",
+    "temporary_worktree_removed": true,
+    "wallet_data_rollback": "requires stopping all writers and reconciling SQL/current cache; source revert alone is insufficient"
+  },
+  "delivery": {
+    "local_commits": true,
+    "remote_push": false,
+    "ci_run": false,
+    "server_deployment": false,
+    "mini_program_upload": false,
+    "real_provider_trial": false,
+    "real_device_acceptance": false
+  },
+  "remaining_dependencies": [
+    "user to fill independent AI_VIDEO_STUDIO_METASO_API_KEY in private service/.env.local",
+    "configure production media signing/storage and backend tariffs before opening modes",
+    "real four-mode provider and wallet/role UAT",
+    "production wallet cutover reconciliation, deployment and Mini Program upload under corresponding authorization"
+  ]
+}

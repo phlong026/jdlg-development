@@ -3,13 +3,73 @@
   "branch": "feat/designer-ai-video-implementation-20261113",
   "baseline": "c1877f5",
   "code_head": "1a17da4",
-  "mini_program": { "tests": 1551, "passed": 1547, "failed": 0, "skipped": 4, "skip_reason": "existing standalone WXML compiler fixtures; affected templates additionally compiled through installed WeChat tools" },
-  "admin": { "tests": 773, "passed": 773, "failed": 0, "typecheck": "passed", "routes": "passed", "build": "passed" },
-  "go": { "full_suite": "CGO_ENABLED=0 go test ./... -count=1 passed", "final_affected_packages": "CGO_ENABLED=0 go test ./route ./model ./aivideostudio -count=1 passed", "vet": "CGO_ENABLED=0 go vet ./route ./model ./aivideostudio passed", "mysql_fixture": "isolated mysql:8.4 loopback cross-account and revision tests passed; container removed" },
-  "static": { "generated_js_matches_ts": true, "auth_signer": "passed", "route_inventory": { "total": 78, "public": 23, "excluded": 55 }, "wxml": "passed", "wxss": "passed", "git_diff_check": "passed" },
-  "audit": { "npm_admin_vulnerabilities": 0, "npm_mini_program_vulnerabilities": 0, "credential_shaped_added_literals": "none", "go_dependency_vulnerability_scan": "not run; govulncheck not installed and dependencies unchanged" },
-  "rollback": { "isolated_worktree": true, "reverse_commits": "c1877f5..1a17da4", "matched_baseline": true, "temporary_worktree_removed": true },
-  "native_ui": { "environment": "WeChat DevTools isolated fixture", "real_provider": false, "real_charges": false, "sample_stones": 36, "real_device_acceptance": false },
-  "delivery": { "local_commits": true, "remote_push": false, "ci_run": false, "server_deployment": false, "mini_program_upload": false, "formal_release": false },
-  "unfinished": ["durable shared-wallet reservation, settlement and release", "paid batch submission and executing worker", "paid AI prompt optimization", "project note picker UI", "real provider and real device validation"]
+  "mini_program": {
+    "tests": 1551,
+    "passed": 1547,
+    "failed": 0,
+    "skipped": 4,
+    "skip_reason": "existing standalone WXML compiler fixtures; affected templates additionally compiled through installed WeChat tools"
+  },
+  "admin": {
+    "tests": 773,
+    "passed": 773,
+    "failed": 0,
+    "typecheck": "passed",
+    "routes": "passed",
+    "build": "passed"
+  },
+  "go": {
+    "full_suite": "CGO_ENABLED=0 go test ./... -count=1 passed",
+    "final_affected_packages": "CGO_ENABLED=0 go test ./route ./model ./aivideostudio -count=1 passed",
+    "vet": "CGO_ENABLED=0 go vet ./route ./model ./aivideostudio passed",
+    "mysql_fixture": "isolated mysql:8.4 loopback cross-account and revision tests passed; container removed"
+  },
+  "static": {
+    "generated_js_matches_ts": true,
+    "auth_signer": "passed",
+    "route_inventory": {
+      "total": 78,
+      "public": 23,
+      "excluded": 55
+    },
+    "wxml": "passed",
+    "wxss": "passed",
+    "git_diff_check": "passed"
+  },
+  "audit": {
+    "npm_admin_vulnerabilities": 0,
+    "npm_mini_program_vulnerabilities": 0,
+    "credential_shaped_added_literals": "none",
+    "go_dependency_vulnerability_scan": "not run; govulncheck not installed and dependencies unchanged"
+  },
+  "rollback": {
+    "isolated_worktree": true,
+    "reverse_commits": "c1877f5..1a17da4",
+    "matched_baseline": true,
+    "temporary_worktree_removed": true
+  },
+  "native_ui": {
+    "environment": "WeChat DevTools isolated fixture",
+    "real_provider": false,
+    "real_charges": false,
+    "sample_stones": 36,
+    "real_device_acceptance": false
+  },
+  "delivery": {
+    "local_commits": true,
+    "remote_push": false,
+    "ci_run": false,
+    "server_deployment": false,
+    "mini_program_upload": false,
+    "formal_release": false
+  },
+  "unfinished": [
+    "durable shared-wallet reservation, settlement and release",
+    "paid batch submission and executing worker",
+    "paid AI prompt optimization",
+    "project note picker UI",
+    "real provider and real device validation"
+  ],
+  "scope": "previous UI-stage evidence; historical unfinished list is superseded for paid execution",
+  "paid_execution_verification": "paid-verification.json"
 }

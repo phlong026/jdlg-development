@@ -360,9 +360,9 @@ func main() {
 		log.Printf("加载 code_sessions 警告: %v（继续运行）", err)
 	}
 
-	log.Println("从 MySQL 加载用户灵石余额至 Redis 中...")
+	log.Println("共享灵石钱包使用 MySQL 持久余额，不再向 Redis 回填...")
 	if err := userModel.LoadStonesFromMySQL(); err != nil {
-		log.Printf("加载用户灵石余额警告: %v（继续运行）", err)
+		log.Printf("检查共享灵石钱包警告: %v（相关付费操作将拒绝）", err)
 	}
 
 	// 12. 初始化加密模块（SM2+SM4）

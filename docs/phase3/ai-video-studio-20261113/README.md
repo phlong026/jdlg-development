@@ -14,17 +14,19 @@
 - 独立后台 `/admin/ai-video-studio` 配置四类模式、限额和价格目录，并查询真实任务及费用表；配置保存使用版本校验。
 - 图片、视频、音频上传执行实际类型检查；音视频使用 ffprobe 探测。本人素材查询、短期签名访问、显式留存、内容草稿和项目笔记采用有独立接口与权限验证。
 
-## 尚未完成的生成闭环
+## 真实执行与账务代码
 
-**当前版本的 `execution_ready` 和 `accounting_ready` 固定为 `false`。配置凭据与价格不会解除这个门禁。**
+用户确认界面后，本轮补齐秘塔 H3 执行器和灵石账务：共享钱包以 MySQL 为权威，批次、子任务、预留、用户流水同事务；服务端持久提交与查询，明确失败逐条退款，成功只结算一次。有效报价冻结单价和计费单位，后台改价只影响新报价。客户端断网重进先只读查询，显式恢复沿用原请求键。
 
-共享灵石钱包在 Redis 扣减后异步写 MySQL，启动时又会用 MySQL 覆写 Redis；缺少可持久恢复的幂等预留、结算、退款事务。直接连接新的 MySQL 批次/费用表会留下扣费与建单不一致窗口。因此：
+原固定关闭的执行/账务门禁改为初始化与执行器实际就绪状态。运营开关、独立供应商凭据、有效档位价格和素材依赖仍需同时满足，缺配置不会以零价或假任务放行。当前独立凭据尚待填入，因此不能把代码和隔离测试称为已通过真实供应商生成。
 
-- `POST /quotes` 和 `POST /batches` 返回明确的未开放状态；小程序仍能编辑、选素材、管理提示词和保存草稿。
-- 秘塔原生协议适配、四类输入校验、任务状态机、租约与恢复 CAS 已有代码和隔离测试；**没有开放后台付费提交执行器**。
-- 未实现可计费的 AI 润色；页面准确提示未开放。
-- 项目笔记采用已有服务端身份/修订/位置校验，但小程序主动选择项目与笔记的完整入口尚未完成。
-- 没有真实供应商生成、真实费用结算、真机相册验收、服务器部署或开发/体验版上传证据。原任务书 T01–T32 不能整体勾选通过。
+完整费用规则、接口、钱包迁移及回退步骤见 [真实执行与账务交接](paid-execution.md)。**钱包切换必须停止旧实例并核对 Redis/MySQL 差异，不能直接混版本上线或仅替换旧二进制回退。**
+
+## 剩余独立验收
+
+- 本次只补齐真实生成/扣费代码，未实现可计费的 AI 润色，页面仍准确提示未开放。
+- 项目笔记采用已有服务端校验，但小程序主动选择项目与笔记的完整入口仍未完成。
+- 真实供应商四类输入、真机播放/相册、服务器部署及开发/体验版上传分别验收。原任务书 T01–T32 不能整体勾选通过。
 
 ## 接口与配置
 
@@ -36,10 +38,11 @@
 | 草稿 | `GET/POST /drafts`，`GET/PATCH/DELETE /drafts/:id`，写入使用 `expected_revision` |
 | 提示词 | `GET/POST /prompts`，`PATCH/DELETE /prompts/:id` |
 | 素材 | `GET /media`、`GET /media/:id`、`POST /media/uploads`、`POST /media/register` |
-| 报价/批次 | `POST /quotes`、`POST /batches`（当前关闭），`GET /batches`、`GET /batches/:id` |
+| 报价/批次 | `POST /quotes`、`POST /batches`（按实际配置开放），`GET /batches`、`GET /batches/:id` |
+| 提交恢复/取消 | `GET /submissions/:idempotencyKey`（只读），`POST /batches/:id/cancel` |
 | 成片 | `POST /results/:id/playback`、`POST /results/:id/retain` |
 | 业务采用 | `POST /media/:id/adopt/content`、`POST /media/:id/adopt/project-note` |
-| 后台 | `GET/PUT /config`、`GET /tasks`、`GET /tasks/:id`、`GET /ledger` |
+| 后台 | `GET/PUT /config`、`GET /tasks`、`GET /tasks/:id`、`GET /ledger`、`POST /results/:id/reconcile` |
 
 素材访问地址为 `/api/v1/ai-video-studio-media/:id?exp=…&sig=…`，使用 `studio:` 签名域，不能使用未配置密钥时的可预测回退值。
 
@@ -54,6 +57,8 @@
 秘塔适配固定使用原生 `/api/minimax/v2/video_generation` 与路径式查询接口；不会用只支持单图的 OpenAI 兼容接口承接混合参考。供应商没有已验证的提交幂等保证，超时、5xx 或丢失响应进入待确认，不能盲目重发。核对来源：[秘塔接入说明](https://metaso.cn/minimax-h3/new-api-guide)、[原生适配官方源码](https://github.com/meta-sota/ComfyUI-MiniMaxH3-API/blob/main/api_client.py)。
 
 ## 验证与回滚
+
+本轮生成/计费代码的自动化与隔离数据库证据见 [付费执行验证](paid-verification.json)，独立审查见 [代码审查记录](paid-review.md)。早期 `verification.json` 保留界面阶段的历史记录，不代表本轮之后的生成实现状态。
 
 最终界面截图与逐项对照记录见项目根目录 `design-qa.md`。离线预览通过 `node miniprogram/scripts/create-ai-video-studio-preview.js` 重建，目录名明确标记离线：只复制实际页面代码和现有庭院图片，模拟草稿/素材/报价，不读写真实 token、不调用供应商、不扣费。原生音视频使用本机夹具服务时加 `--media-origin=http://127.0.0.1:8769`，不会连接外部网络。截图不作为真实生成或真机验收证据。
 

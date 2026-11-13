@@ -234,8 +234,7 @@ func GetUserByID(ctx context.Context, q SQLRowQueryer, id int64) (*User, error) 
 	return user, nil
 }
 
-// GetStonesByID 读取用户当前灵石余额（users.stones，由 UserRedisModel 同步落库）。
-// 供管理端资金视图等低频读场景使用；小程序高频路径仍应走 UserRedisModel.GetStones。
+// GetStonesByID 读取权威的持久余额；UserRedisModel 的兼容接口读取同一字段。
 func (m *UserModel) GetStonesByID(userID int64) (int64, error) {
 	var stones int64
 	err := m.DB.QueryRow(`SELECT COALESCE(stones, 0) FROM users WHERE id = ?`, userID).Scan(&stones)
