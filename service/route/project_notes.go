@@ -34,9 +34,10 @@ import (
 const projectNoteScopeKey = "project-notes.scope"
 
 type projectNoteHandlerDeps struct {
-	actor        func(*gin.Context) int64
-	verifyMember func(context.Context, int64) error
-	profiles     projectNoteProfileResolver
+	actor              func(*gin.Context) int64
+	verifyMember       func(context.Context, int64) error
+	profiles           projectNoteProfileResolver
+	verifyCustomerLink func(context.Context, tracking.Scope, string) error
 }
 
 // P4（2026-11-10 用户定稿）：私有笔记素材上限图片 20 MiB、视频 500 MiB。
@@ -117,8 +118,9 @@ func registerProjectNoteRoutes(v1 *gin.RouterGroup, svc *tracking.Service, users
 	})
 	actor := func(c *gin.Context) int64 { return GetTokenUserID(c) }
 	registerProjectNoteHandlers(root, manage, svc, projectNoteHandlerDeps{
-		actor:    actor,
-		profiles: makeProjectNoteProfileResolver(users.DB),
+		actor:              actor,
+		profiles:           makeProjectNoteProfileResolver(users.DB),
+		verifyCustomerLink: makeProjectCustomerLinkVerifier(users.DB, svc),
 		verifyMember: func(ctx context.Context, account int64) error {
 			return verifyActiveMiniProgramAccount(ctx, users.DB, account)
 		},
@@ -190,6 +192,16 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 		if strings.TrimSpace(input.CRMID) != "" {
 			trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "小程序设计师CRM引用校验尚未开通"})
 			return
+		}
+		if input.CustomerRef != "" {
+			if deps.verifyCustomerLink == nil {
+				trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "客户关联验证暂不可用"})
+				return
+			}
+			if err := deps.verifyCustomerLink(c.Request.Context(), projectNoteScope(c), input.CustomerRef); err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
 		}
 		out, err := svc.ProjectNoteCreateProject(c.Request.Context(), projectNoteScope(c), input)
 		if err == nil {

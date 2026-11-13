@@ -224,7 +224,7 @@ func myTrackingLeadResponse(outcome trackingLeadOutcome) gin.H {
 		// Keep the idempotency signal, but never disclose that management-domain ID.
 		leadID = 0
 	}
-	return gin.H{"lead_id": leadID, "existed": outcome.Existed, "lead_type": outcome.LeadType}
+	return gin.H{"lead_id": leadID, "existed": outcome.Existed, "converted": true, "lead_type": outcome.LeadType}
 }
 
 type trackingLeadOutcome struct {

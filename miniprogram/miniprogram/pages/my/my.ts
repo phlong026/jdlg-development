@@ -149,11 +149,11 @@ function buildWorkbenchMenuItems(options: {
   const items: MyMenuItem[] = [
     { action: 'myProjects', label: '我的项目', icon: 'folder', description: '项目与方案', available: true },
     { action: 'contentWorkbench', label: '内容创作', icon: 'video', description: '作品与资料', available: true },
-    { action: 'customers', label: '客户', icon: 'user', description: '浏览 · 意向 · 追踪', available: true },
   ];
   if (hasDesignerAccess) {
-    items.push({ action: 'designerHome', label: '设计师主页', icon: 'user-business', description: '对外展示', available: true });
+    items.push({ action: 'aiVideoStudio', label: 'AI 视频', icon: 'play-circle', description: '独立视频创作', available: true });
   }
+  items.push({ action: 'customers', label: '客户跟踪', icon: 'user', description: '浏览 · 意向 · 追踪', available: true });
   return items;
 }
 
@@ -1172,7 +1172,7 @@ Page({
       return;
     }
 
-    const contentActions = ['myProjects', 'projectNotes', 'contentWorkbench', 'aiWriting', 'assetLibrary', 'shareMaterials', 'publish', 'designerHome'];
+    const contentActions = ['myProjects', 'projectNotes', 'contentWorkbench', 'aiWriting', 'assetLibrary', 'shareMaterials', 'publish', 'aiVideoStudio'];
     if (
       contentActions.includes(action)
       && (!this.data.hasContentWorkbenchAccess || !storedToken || storedToken !== String(this.data.token || ''))
@@ -1186,7 +1186,7 @@ Page({
       return;
     }
 
-    if (action === 'designerHome') {
+    if (action === 'aiVideoStudio') {
       const hasDesignerAccess = hasDesignerWorkbenchAccess({
         hasLoginToken: this.data.hasLoginToken,
         certStatus: this.data.certStatus,
@@ -1200,16 +1200,8 @@ Page({
         });
         return;
       }
-      const userId = Number((this.data.userInfo || {}).id || 0);
-      if (!userId) {
-        wx.showToast({
-          title: '暂未获取到设计师信息',
-          icon: 'none',
-        });
-        return;
-      }
       wx.navigateTo({
-        url: `/pages/designerhome/designerhome?userId=${userId}`,
+        url: '/pages/aivideostudio/index',
         fail: () => {
           wx.showToast({
             title: '页面跳转失败',

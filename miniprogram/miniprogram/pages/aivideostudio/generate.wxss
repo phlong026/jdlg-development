@@ -1,0 +1,72 @@
+@import "./common.wxss";
+
+page { background:#fbfaf7; color:#30251c; }
+.editor-page { min-height:100vh; box-sizing:border-box; padding-bottom:calc(150rpx + env(safe-area-inset-bottom)); background:#fbfaf7; font-size:28rpx; }
+.tabs { display:flex; margin:0 32rpx 24rpx; border-bottom:1rpx solid #e8e1d8; background:#fbfaf7; }
+.tab { position:relative; flex:1; display:flex; align-items:center; justify-content:center; padding:14rpx 4rpx 22rpx; color:#544a40; font-size:28rpx; line-height:1.5; }
+.tab-active { color:#a87943; font-weight:600; border-bottom:4rpx solid #a87943; }
+.tab-active::after { display:none; }
+.draft-row { display:flex; align-items:center; min-height:82rpx; margin:0 32rpx; padding:0 22rpx; border-radius:18rpx 18rpx 0 0; background:#fff; }
+.draft-name { flex:1; min-width:0; height:72rpx; font-size:29rpx; font-weight:600; }
+.edit-mark { margin-left:8rpx; color:#806345; }
+.draft-save { margin:0 0 0 20rpx; padding:0; min-width:96rpx; color:#9a6b36; background:transparent; font-size:25rpx; line-height:72rpx; }
+.draft-save::after { border:0; }
+.tool-row { display:flex; align-items:center; justify-content:center; height:84rpx; margin:0 32rpx 24rpx; padding:0 12rpx; border-top:1rpx solid #eee6dc; border-radius:0 0 18rpx 18rpx; background:#fff; }
+.tool { flex:1; display:flex; align-items:center; justify-content:center; gap:10rpx; color:#4a3d35; font-size:24rpx; white-space:nowrap; }
+.tool-divider { width:1rpx; height:30rpx; background:#d8cfc7; }
+.inline-state,.capability-note { margin:18rpx 32rpx 0; padding:18rpx 20rpx; border-radius:10rpx; background:#f3f1e7; color:#6d6847; font-size:23rpx; line-height:1.6; }
+.state-error,.message-error { color:#9a3d32; }
+.retry { margin-left:18rpx; color:#a7662c; }
+.section-block { margin:24rpx 32rpx 0; padding:26rpx; border-radius:18rpx; background:#fff; }
+.section-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:18rpx; font-size:31rpx; font-weight:600; line-height:1.5; }
+.optional { margin-left:16rpx; color:#8b7b70; font-size:23rpx; font-weight:400; }
+.reference-actions { display:flex; align-items:center; gap:22rpx; color:#77685d; font-size:23rpx; font-weight:400; }
+.add-reference { color:#9a6b36; font-size:25rpx; }
+.frame-layout { display:flex; gap:14rpx; }
+.frame-slot { position:relative; flex:1; overflow:hidden; border:1rpx dashed #d7cec3; border-radius:14rpx; background:#faf9f6; }
+.frame-slot::before { content:""; display:block; padding-top:56.25%; }
+.frame-image,.frame-empty { position:absolute; inset:0; width:100%; height:100%; }
+.frame-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12rpx; color:#6f6259; font-size:24rpx; }
+.plus { color:#4a3c33; font-size:52rpx; font-weight:300; line-height:1; }
+.frame-tag,.reference-tag { position:absolute; left:12rpx; bottom:12rpx; padding:6rpx 11rpx; border-radius:7rpx; color:#fff; background:rgba(47,32,25,.78); font-size:21rpx; }
+.remove { position:absolute; top:10rpx; right:10rpx; display:flex; align-items:center; justify-content:center; width:42rpx; height:42rpx; border-radius:50%; color:#2f2019; background:rgba(255,255,255,.94); font-size:31rpx; line-height:1; }
+.library-link { display:inline-block; margin-top:16rpx; color:#9a6b36; font-size:24rpx; }
+.reference-empty { height:180rpx; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12rpx; border:1rpx dashed #cfc5bc; border-radius:14rpx; color:#75675d; background:#fff; font-size:24rpx; }
+.visual-references { display:grid; grid-template-columns:1fr 1fr; gap:16rpx; }
+.reference-preview { position:relative; overflow:hidden; height:182rpx; border-radius:13rpx; background:#eee9e4; }
+.reference-preview image,.reference-preview video { width:100%; height:100%; }
+.preview-fallback { height:100%; display:flex; align-items:center; justify-content:center; color:#84766c; font-size:24rpx; }
+.purpose-input { width:100%; box-sizing:border-box; height:58rpx; padding:0 4rpx; color:#4c4038; font-size:23rpx; }
+.audio-reference { display:flex; align-items:center; gap:12rpx; min-height:72rpx; margin-top:14rpx; padding:0 16rpx; border:1rpx solid #ddd5cd; border-radius:13rpx; background:#fff; color:#46382f; font-size:23rpx; }
+.audio-name { white-space:nowrap; }
+.audio-purpose { flex:1; min-width:0; }
+.audio-remove { color:#a34c3f; }
+.prompt-section { padding-top:26rpx; }
+.prompt-box { overflow:hidden; border:1rpx solid #d9d1ca; border-radius:15rpx; background:#fff; }
+.prompt-input { width:100%; height:198rpx; box-sizing:border-box; padding:20rpx; color:#30241e; font-size:27rpx; line-height:1.55; }
+.prompt-footer { display:flex; align-items:center; justify-content:space-between; min-height:60rpx; padding:0 18rpx; color:#94867b; font-size:22rpx; }
+.polish-disabled { color:#a87546; }
+.settings-section { padding-bottom:26rpx; }
+.setting-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10rpx; }
+.setting-picker { display:flex; align-items:center; justify-content:space-between; height:68rpx; box-sizing:border-box; padding:0 14rpx; border:1rpx solid #ded6cf; border-radius:11rpx; background:#fff; color:#3d3028; font-size:23rpx; white-space:nowrap; }
+.setting-picker text { color:#3d3028; }
+.picker-chevron { flex:none; color:#7d6e63; transform:rotate(-90deg); }
+.message { margin:20rpx 32rpx 0; padding:18rpx 20rpx; border-radius:10rpx; background:#f3f1e7; color:#6d6847; font-size:23rpx; }
+.page-spacer { height:20rpx; }
+.bottom-bar { position:fixed; z-index:20; left:0; right:0; bottom:0; display:flex; align-items:center; gap:20rpx; min-height:112rpx; box-sizing:border-box; padding:16rpx 32rpx calc(16rpx + env(safe-area-inset-bottom)); border-top:1rpx solid #eee6dc; background:#fbfaf7; }
+.bottom-hint { flex:1; color:#5d4f45; font-size:23rpx; }
+.price-retry { color:#9a6b36; }
+.quote-button { width:330rpx; height:84rpx; margin:0; border-radius:12rpx; color:#fff; background:#bd8144; font-size:28rpx; font-weight:600; line-height:84rpx; }
+.quote-button::after { border:0; }
+.quote-button[disabled] { color:#a99e94; background:#e9e4de; }
+
+/* Mixed media needs one extra audio row; preserve the parameter row above
+   the fixed action bar without shrinking thumbnails or touch targets. */
+.editor-page-reference .section-block { margin-top:16rpx; padding-top:22rpx; padding-bottom:22rpx; }
+.editor-page-reference .prompt-input { height:176rpx; }
+
+@media (max-width:350px) {
+  .tool { font-size:22rpx; }
+  .setting-grid { gap:6rpx; }
+  .setting-picker { padding:0 9rpx; font-size:21rpx; }
+}

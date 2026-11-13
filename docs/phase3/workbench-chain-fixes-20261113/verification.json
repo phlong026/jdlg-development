@@ -1,0 +1,176 @@
+{
+  "date": "2026-11-13T15:46:28.251389+08:00",
+  "baseline": "dc8e5f5",
+  "code_head": "30c70aeb600719901d823542e8290b5b154daa10",
+  "branch": "fix/workbench-chain-20261113",
+  "scope": {
+    "workbench": 23,
+    "workbench_code_complete": 22,
+    "ai_adoption_code_complete": 2,
+    "service_account_configuration_pending": 1,
+    "public_homepage_H01_H07": "excluded_separate_work"
+  },
+  "items": {
+    "P01": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P02": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P03": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P04": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P05": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P06": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P07": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "P08": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "C01": {
+      "status": "code_complete_local_verified",
+      "evidence": "content.md"
+    },
+    "C02": {
+      "status": "code_complete_local_verified",
+      "evidence": "content.md"
+    },
+    "C03": {
+      "status": "code_complete_local_verified",
+      "evidence": "content.md"
+    },
+    "C04": {
+      "status": "code_complete_local_verified",
+      "evidence": "content.md"
+    },
+    "C05": {
+      "status": "code_complete_local_verified",
+      "evidence": "content.md"
+    },
+    "C06": {
+      "status": "code_complete_local_verified",
+      "evidence": "content.md"
+    },
+    "K01": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "K02": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "K03": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "K04": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "K05": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "K06": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "K07": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md"
+    },
+    "G01": {
+      "status": "code_complete_local_verified",
+      "evidence": "customer.md + projects.md + API.md"
+    },
+    "E02": {
+      "status": "external_configuration_required",
+      "evidence": "official-account.md",
+      "missing": [
+        "OFFICIAL_ACCOUNT_APP_ID",
+        "OFFICIAL_ACCOUNT_APP_SECRET",
+        "OFFICIAL_ACCOUNT_CALLBACK_TOKEN",
+        "OFFICIAL_ACCOUNT_ENCODING_AES_KEY",
+        "OFFICIAL_ACCOUNT_BROWSE_TEMPLATE_ID",
+        "OFFICIAL_ACCOUNT_BROWSE_FIELDS"
+      ],
+      "binding_enabled": false,
+      "delivery_enabled": false
+    },
+    "A01": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    },
+    "A02": {
+      "status": "code_complete_local_verified",
+      "evidence": "projects.md"
+    }
+  },
+  "validation": {
+    "miniprogram": {
+      "pass": 1598,
+      "fail": 0,
+      "skip": 0,
+      "native_wxml_compiler": "/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc"
+    },
+    "go": "CGO_ENABLED=0 go test ./... -count=1 passed",
+    "go_vet": "CGO_ENABLED=0 go vet ./... passed",
+    "static": [
+      "check:auth-signer passed",
+      "check:tracking passed",
+      "check:tracking-routes passed,78 routes",
+      "node --check changed JS passed",
+      "gofmt/diff checks passed"
+    ],
+    "npm_audit": {
+      "mini_vulnerabilities": 0,
+      "admin_vulnerabilities": 0
+    },
+    "rollback": {
+      "base": "dc8e5f5",
+      "code_head": "30c70aeb600719901d823542e8290b5b154daa10",
+      "isolated_worktree": true,
+      "revert_exit_code": 0,
+      "baseline_match": true,
+      "revert_output": "",
+      "scope": "source rollback only; no business database, media or production configuration was changed"
+    },
+    "reviews": [
+      "project and AI adoption independently reviewed by content lane; findings fixed",
+      "root G01 gate and generation adoption independently reviewed by customer lane; finding fixed",
+      "root narrowed member directory to current sharing/delivery permissions and verified negative tests"
+    ]
+  },
+  "delivery": {
+    "local_commits": true,
+    "pushed": false,
+    "deployed": false,
+    "mini_uploaded": false,
+    "real_role_device_UAT": false,
+    "paid_generation": false,
+    "messages_sent": false,
+    "production_configuration_written": false
+  },
+  "limitations": [
+    "Service-account configuration absent; no actual message delivery proof",
+    "Go live-database/provider tests not enabled; no production or real-device UAT",
+    "govulncheck unavailable; dependencies unchanged",
+    "Block-format project body is preserved read-only with preview and title edit; never flattened back to plain"
+  ]
+}

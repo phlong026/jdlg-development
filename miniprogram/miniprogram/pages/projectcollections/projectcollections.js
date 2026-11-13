@@ -110,23 +110,31 @@ Page({
   goBack() { if (this.data.editing) { this.closeEditor(); return; } wx.navigateBack({delta:1}); },
   setTitle(event) { this.setData({ title: event.detail.value, dirty: true, preview: null }); },
   setDescription(event) { this.setData({ description: event.detail.value, dirty: true, preview: null }); },
-  setOwner(event) { if (!this.data.current) this.setData({ ownerIndex: Number(event.detail.value) || 0, dirty: true, preview: null }); },
+  setOwner(event) {
+    if (this.data.current || this.data.busy) return;
+    const ownerIndex = Number(event.detail.value) || 0;
+    if (ownerIndex === this.data.ownerIndex || !this.data.ownerChoices[ownerIndex]) return;
+    this.setData({ ownerIndex, selectedItems: [], candidates: [], candidateCursor: '', coverItemIndex: null, dirty: true, preview: null });
+    return this.loadCandidates(false);
+  },
   async loadCandidates(more) {
     if (this.data.busy && more) return;
     const cursor = more ? this.data.candidateCursor : '';
     if (more && !cursor) return;
-    const epoch = this.epoch;
+    const epoch = this.epoch, owner = this.data.current ? this.data.current.owner_id : (this.data.ownerChoices[this.data.ownerIndex] || {}).owner_id;
+    const request = this._candidateRequest = (this._candidateRequest || 0) + 1;
+    const current = () => this.currentRequest(epoch) && request === this._candidateRequest;
     if (more) this.setData({ busy: true });
     try {
-      const page = await api.listCandidates({ cursor, limit: 20 });
-      if (!this.currentRequest(epoch)) return;
+      const page = await api.listCandidates({ cursor, limit: 20, owner });
+      if (!current()) return;
       const decorated = await this.resolveCovers(page.items);
-      if (!this.currentRequest(epoch)) return;
+      if (!current()) return;
       const incoming = decorated.map(item => ({...item, selected: this.data.selectedItems.some(ref => sourceKey(ref) === sourceKey(item))}));
       const base = more ? this.data.candidates : [];
       const seen = new Set(base.map(sourceKey));
       this.setData({ candidates: base.concat(incoming.filter(item => !seen.has(sourceKey(item)))), candidateCursor: page.next_cursor || '', busy: false });
-    } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '可选内容加载失败' }); }
+    } catch (error) { if (current()) this.setData({ busy: false, error: error.message || '可选内容加载失败' }); }
   },
   loadMoreCandidates() { return this.loadCandidates(true); },
   toggleCandidate(event) {
@@ -215,19 +223,25 @@ Page({
     let collection = this.data.current;
     if (!collection || this.data.dirty) collection = await this.saveDraft();
     if (!collection || this.data.busy || this.data.dirty) return;
-    const epoch = this.epoch;
+    const epoch = this.epoch, signature = JSON.stringify(this.draftInput());
     this.setData({ busy: true, error: '' });
     try {
       const preview = await api.previewCollection(collection.collection_id, collection.revision);
       if (!this.currentRequest(epoch)) return;
       const [collections, items] = await Promise.all([this.resolveCovers([preview.collection]), this.resolveCovers(preview.collection.items)]);
-      if (this.currentRequest(epoch)) this.setData({ preview: { ...preview, collection: { ...collections[0], items } }, busy: false, notice: '' });
+      if (!this.currentRequest(epoch)) return;
+      if (this.data.dirty || signature !== JSON.stringify(this.draftInput())) {
+        this.setData({ preview: null, busy: false, notice: '内容已修改，请重新保存并预览' });
+        return;
+      }
+      this._previewSignature = signature;
+      this.setData({ preview: { ...preview, collection: { ...collections[0], items } }, busy: false, notice: '' });
     } catch (error) { if (this.currentRequest(epoch)) this.setData({ busy: false, error: error.message || '预览失败' }); }
   },
   closePreview() { if (!this.data.busy) this.setData({ preview: null }); },
   async publishCurrent() {
     const collection = this.data.current, preview = this.data.preview;
-    if (!collection || !preview || this.data.busy) return;
+    if (!collection || !preview || this.data.busy || this.data.dirty || this._previewSignature !== JSON.stringify(this.draftInput())) return;
     this.publishKey = this.publishKey || api.mutationKey('collection-publish');
     const epoch = this.epoch;
     this.setData({ busy: true, error: '' });

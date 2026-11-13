@@ -226,3 +226,23 @@ func TestProjectCollectionManagementRoutesKeepActorAndOwnerScope(t *testing.T) {
 		t.Fatalf("foreign owner write=%d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestCollectionCandidatesIntersectRequestedOwnerWithGrantedOwners(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a", "owner-b"}, Manage: true}
+	router, svc := newProjectCollectionRouteFixture(t, &scope)
+	a := scope
+	a.Owners = []string{"owner-a"}
+	b := scope
+	b.Owners = []string{"owner-b"}
+	first := publishCollectionRouteContent(t, svc, a, "个人作品", "owner-candidate-a")
+	second := publishCollectionRouteContent(t, svc, b, "公司作品", "owner-candidate-b")
+	response := workbenchRequest(t, router, http.MethodGet, "/workbench/project-collections/candidates?owner=owner-a", nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), first.ID) || strings.Contains(response.Body.String(), second.ID) {
+		t.Fatalf("owner filter: %d %s", response.Code, response.Body.String())
+	}
+	denied := workbenchRequest(t, router, http.MethodGet, "/workbench/project-collections/candidates?owner=foreign-owner", nil)
+	if denied.Code != 403 {
+		t.Fatalf("foreign owner: %d %s", denied.Code, denied.Body.String())
+	}
+}

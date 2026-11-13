@@ -1,0 +1,26 @@
+<block wx:if="{{__profileAccessMounted}}">
+<navigation-bar title="AI 视频" back="{{true}}" background="#fbfaf7" />
+<view class="page">
+  <view class="hero"><text class="hero-title">AI 视频</text><text class="hero-copy">从画面描述或创作素材开始，费用以提交前的服务端报价为准。</text></view>
+  <view class="section"><text class="section-title">新建创作</text><view class="grid">
+    <view class="card action" data-kind="standard" bindtap="newCreation"><text class="title">文 / 图生视频</text><text class="meta">文生、首帧、首尾帧</text></view>
+    <view class="card action" data-kind="reference" bindtap="newCreation"><text class="title">参考生视频</text><text class="meta">图片、视频、音频混合参考</text></view>
+    <view class="card action" data-url="/pages/aivideostudio/materials" bindtap="navigate"><text class="title">创作素材</text><text class="meta">本人可用素材</text></view>
+    <view class="card action" data-url="/pages/aivideostudio/prompts" bindtap="navigate"><text class="title">我的提示词</text><text class="meta">保存并再次使用</text></view>
+  </view></view>
+  <view wx:if="{{loading}}" class="state">正在读取创作空间…</view>
+  <view wx:elif="{{error}}" class="card state error"><text>{{error}}</text><button class="button-secondary" bindtap="load">重新加载</button></view>
+  <block wx:else>
+    <view wx:if="{{!capabilities.enabled}}" class="card section"><text class="title">生成服务暂未开放</text><text class="meta">{{capabilities.disabled_reason || '管理员完成能力和价格配置后即可使用；历史记录仍可查看。'}}</text></view>
+    <view class="section"><view class="row"><text class="section-title grow">继续草稿</text><text class="meta" data-url="/pages/aivideostudio/records?tab=drafts" bindtap="navigate">全部 ›</text></view>
+      <view wx:if="{{!drafts.length}}" class="card state">暂无草稿，可从上方新建创作。</view>
+      <view wx:for="{{drafts}}" wx:key="draft_id" class="card" data-id="{{item.draft_id}}" bindtap="openDraft"><text class="title">{{item.name || '未命名创作'}}</text><text class="meta">{{item.mode_label}} · 修订 {{item.revision}}</text></view>
+    </view>
+    <view class="section"><view class="row"><text class="section-title grow">最近任务</text><text class="meta" data-url="/pages/aivideostudio/records" bindtap="navigate">全部 ›</text></view>
+      <view wx:if="{{!batches.length}}" class="card state">暂无已提交任务。</view>
+      <view wx:for="{{batches}}" wx:key="batch_id" class="card" data-id="{{item.batch_id}}" bindtap="openBatch"><view class="row"><text class="title grow">{{item.name || 'AI 视频任务'}}</text><text class="badge">{{item.status_label}}</text></view><text class="meta">{{item.mode_label}} · {{item.created_at_label}}</text></view>
+    </view>
+  </block>
+</view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

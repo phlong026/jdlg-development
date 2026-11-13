@@ -53,6 +53,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 	var virtualPayCompensator *VirtualPayCompensator
 	stopPhase3 := func() {}
 	stopImports := func() {}
+	stopStudio := func() {}
 	reportModule, reportErr := NewReportModule(reportContext, component.GetDB(), cfg)
 	if reportErr != nil {
 		log.Printf("[report] error module=disabled reason=readiness_check_failed")
@@ -82,6 +83,20 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 			v1.Use(gateMiddleware)
 		}
 		trackingService := RegisterTrackingRoutes(v1, userDBModel, codeSessionModel, customerServiceModel)
+		aiVideoStudioStore := model.NewAIVideoStudioStore(userDBModel.DB)
+		aiVideoStudioMediaStore := model.NewAIVideoStudioMediaStore(userDBModel.DB)
+		if err := aiVideoStudioStore.InitTables(); err != nil {
+			log.Printf("[AI视频工作台] schema unavailable")
+		} else if err := aiVideoStudioStore.InitExecutionTables(); err != nil {
+			log.Printf("[AI视频工作台] execution schema unavailable")
+		} else if err := aiVideoStudioStore.InitWorkerTables(); err != nil {
+			log.Printf("[AI视频工作台] worker schema unavailable")
+		} else if err := aiVideoStudioMediaStore.InitTable(); err != nil {
+			log.Printf("[AI视频工作台] media schema unavailable")
+		} else {
+			stopStudio = startStudioWorker(reportContext, aiVideoStudioStore, aiVideoStudioMediaStore)
+		}
+		registerAIVideoStudioMediaContentRoute(v1, aiVideoStudioMediaStore, trackingService)
 		stopImports = registerContentImports(reportContext, v1, trackingService, userDBModel, codeSessionModel, cfg)
 		costShareStore := model.NewCostEstimateShareRedisModel(component.GetRedis())
 		trackingService.ResolvePublicSnapshot = makeTrackingCostSnapshotResolver(costShareStore)
@@ -127,6 +142,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterTaskStatusRoute(miniprogramAI, codeSessionModel, userModel, pricingModel, taskModel, videoTaskModel, stoneRecordModel, aiToolModel, cfg)
 		// AI 生成视频：发起、轮询、查询（结果存自家 OSS）
 		RegisterAIVideoRoutes(miniprogramAI, codeSessionModel, userModel, pricingModel, stoneRecordModel, videoTaskModel, supportTicketModel, cfg)
+		RegisterAIVideoStudioRoutes(miniprogramAI, aiVideoStudioStore, aiVideoStudioMediaStore, trackingService, userDBModel)
 		// 微信支付：JSAPI 预支付（需 token）、提现（需 token）、支付结果回调（v1 组下无需 token，含认证费回调）
 		RegisterWechatPayRoutes(miniprogramAI, v1, cfg, userOrderModel, stoneRecordModel, userModel, userDBModel, certificationApplicationModel, membershipPlanModel, userMembershipModel)
 		// 虚拟支付：小程序端 prepare 下单（需 token），confirm/补偿/推送由后续阶段补齐
@@ -205,6 +221,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 			log.Printf("[AI运营] 初始化告警设置表失败（告警将使用默认阈值）: %v", err)
 		}
 		RegisterAIManagementRoutes(managementAuth, pricingModel, apiConfigModel, pricingVersionModel)
+		RegisterAIVideoStudioManagementRoutes(managementAuth, aiVideoStudioStore)
 		RegisterAIOverviewManagementRoutes(managementAuth, taskModel, videoTaskModel, pricingModel, pricingVersionModel, aiToolModel, supportTicketModel, aiOpsSettingsModel)
 		// 内容抽检（4a）：模型在 main.go 初始化并注入 processor；nil 安全（建表失败时接口返回空）
 		RegisterAIContentAuditManagementRoutes(managementAuth, contentAuditModel)
@@ -238,6 +255,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		RegisterUtilityToolRoutes(miniprogram, utilityToolModel)
 	}
 	return func() {
+		stopStudio()
 		stopImports()
 		stopPhase3()
 		virtualPayCompensator.Stop()

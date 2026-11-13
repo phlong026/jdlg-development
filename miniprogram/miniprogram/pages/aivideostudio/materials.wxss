@@ -1,0 +1,2 @@
+@import "./common.wxss";
+.toolbar { display:flex; gap:12rpx; margin-top:20rpx; }.toolbar .input{flex:1}.type-tabs{margin:20rpx 0}.upload-row{display:flex;gap:12rpx}.upload-row button{flex:1}.progress{margin-top:10rpx;color:#9b5b27;font-size:24rpx}

@@ -501,6 +501,35 @@ func TestProjectCollectionCoverItemIndexOverridesFirstCover(t *testing.T) {
 	if err != nil || tailCollection.Cover == nil || tailCollection.Cover.ID != first.Cover.ID {
 		t.Fatalf("索引 1 应取第二个条目封面 got=%v err=%v", tailCollection.Cover, err)
 	}
+	if tailCollection.CoverItemIndex == nil || *tailCollection.CoverItemIndex != 1 {
+		t.Fatal("封面位置未保存")
+	}
+	legacySelected := tailCollection
+	legacySelected.CoverItemIndex = nil
+	if err := s.Store.Transaction(ctx, s.Config.Tenant, func(r Repository) error {
+		return r.Put(projectCollectionRecord(projectCollectionKind, legacySelected, s.Now()))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := s.PreviewProjectCollection(ctx, scope, tailCollection.ID, tailCollection.Revision)
+	if err != nil || preview.Collection.Cover == nil || preview.Collection.Cover.ID != first.Cover.ID {
+		t.Fatalf("自选封面必须贯穿预览: cover=%v err=%v", preview.Collection.Cover, err)
+	}
+	published, err := s.PublishProjectCollection(ctx, scope, tailCollection.ID, tailCollection.Revision, preview.PreviewToken, "chosen-cover-publish")
+	if err != nil || published.Cover == nil || published.Cover.ID != first.Cover.ID {
+		t.Fatalf("自选封面必须贯穿发布: cover=%v err=%v", published.Cover, err)
+	}
+	read, err := s.ReadPublishedProjectCollection(ctx, tailCollection.ID, published.Version)
+	if err != nil || read.Cover == nil || read.Cover.ID != first.Cover.ID {
+		t.Fatalf("自选封面必须贯穿公开读取: cover=%v err=%v", read.Cover, err)
+	}
+	if _, err = s.Revoke(ctx, scope, first.ID, first.Revision, "来源撤回", "chosen-cover-revoke"); err != nil {
+		t.Fatal(err)
+	}
+	read, err = s.ReadPublishedProjectCollection(ctx, tailCollection.ID, published.Version)
+	if err != nil || read.Cover == nil || read.Cover.ID != second.Cover.ID {
+		t.Fatalf("已撤回封面应安全回退: cover=%v err=%v", read.Cover, err)
+	}
 }
 
 // B10 方案A：协作者字段持久化与上限校验。
@@ -526,5 +555,20 @@ func TestProjectCollectionCollaboratorsPersistAndValidate(t *testing.T) {
 	}
 	if _, err = s.SaveProjectCollection(context.Background(), scope, "", over); err == nil {
 		t.Fatal("协作者超过 20 人应被拒绝")
+	}
+}
+
+func TestProjectCollectionDescriptionCountsCharacters(t *testing.T) {
+	s, scope := fixture(t)
+	source := publishNativeReferenceContent(t, s, scope, "简介案例", "description-source")
+	input := collectionInput(scope.Owners[0], "description-create", source)
+	input.Description = strings.Repeat("中", 500)
+	if _, err := s.SaveProjectCollection(context.Background(), scope, "", input); err != nil {
+		t.Fatalf("500汉字应可保存: %v", err)
+	}
+	input.Description += "中"
+	input.IdempotencyKey = "description-too-long"
+	if _, err := s.SaveProjectCollection(context.Background(), scope, "", input); err == nil {
+		t.Fatal("501汉字不得保存")
 	}
 }

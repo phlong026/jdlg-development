@@ -63,7 +63,16 @@ func TestProjectInvitationRouteGrantsMembershipOnApply(t *testing.T) {
 	}
 	request := projectNoteData[map[string]any](t, applyRec)
 	requestID, _ := request["request_id"].(string)
+	joinedPreview := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/member-invitations/"+token, nil)
+	joined := projectNoteData[map[string]any](t, joinedPreview)
+	if joined["project_id"] != projectID {
+		t.Fatalf("joined preview lost member reading target: %v", joined)
+	}
 
+	memberDirectory := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/member-projects/"+projectID, nil)
+	if memberDirectory.Code != http.StatusOK || strings.Contains(memberDirectory.Body.String(), `"notes"`) {
+		t.Fatalf("member directory: %d %s", memberDirectory.Code, memberDirectory.Body.String())
+	}
 	_ = requestID
 	*actor = 7
 	// 邀请链接即准入凭据：受邀人登录后直接成为成员，无需设计师二次审批。

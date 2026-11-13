@@ -37,7 +37,7 @@ function pageHarness(name, api, wxOverrides = {}) {
     previewImage() {}, openDocument() {}, saveImageToPhotosAlbum() {}, createVideoContext: () => ({ pause() {} }),
   }, wxOverrides);
   const context = { Page(value) { definition = value; }, wx, require(id) {
-    if (id === '../../utils/phase3-api') return api;
+    if (id === '../../utils/phase3-api' || id === '../../utils/project-member-api' || id === '../../utils/customer-link-api') return api;
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
     if (id === '../../utils/project-note-media') return require(path.join(root, 'utils/project-note-media.js'));
@@ -1100,7 +1100,7 @@ test('private reader template uses native branches for view, rich text, truncati
   assert.match(document, /nodes="\{\{body\}\}"/);
   assert.match(document, />\{\{body\}\}<\/text>/);
   assert.match(template, /wx:if="\{\{view\.activity_truncated\}\}"[^>]*>[^<]*最近 50 条记录/);
-  assert.match(template, /wx:if="\{\{canConfirm \|\| confirmed\}\}"\s+class="card confirm"/);
+  assert.match(template, /wx:if="\{\{!memberMode && \(canConfirm \|\| confirmed\)\}\}"\s+class="card confirm"/);
   assert.match(template, /disabled="\{\{busy \|\| confirmed\}\}"/);
 });
 
@@ -3144,4 +3144,135 @@ test('the AI insertion queue times out instead of waiting forever', async () => 
   await page.insertNoteAI();
   assert.ok(Date.now() - started >= 180, '必须等待到超时');
   assert.equal(page.data.noteBody, '原文', '超时后不得插入');
+});
+
+test('pending media survives normal unload and a fresh onLoad onShow for the same account', async () => {
+  const storage = { token: 'session-token', userInfo: { id: 101 } };
+  const wxStubs = { getStorageSync: key => storage[key], setStorageSync: (key, value) => { storage[key] = value; }, removeStorageSync: key => { delete storage[key]; } };
+  const first = pageHarness('projectnotes', {}, wxStubs);
+  first._token = 'session-token'; first._visible = true; first._epoch = 1;
+  first.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n1', revision: 1 } });
+  first.stashPendingMedia(first.mediaFailureOwnerKey(), [{ file: { tempFilePath: '/tmp/p.jpg' }, asset: { media_id: 'pending-image', kind: 'image' } }]);
+  first.onUnload();
+  assert.ok(storage.project_note_pending_media_v1, 'unload must retain account-scoped recovery records');
+  const second = pageHarness('projectnotes', { listProjectNoteProjects: async () => ({ items: [] }), workbenchContext: async () => ({ owners: ['designer-101'] }) }, wxStubs);
+  second.onLoad({}); await second.onShow();
+  second._selectedNoteID = 'n1';
+  second.applyProjectDetail({ project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 1, title: '方案', body: '保留正文', body_format: 'plain' }], versions: [] }, '', null, null, 'editor');
+  assert.ok(second.data.noteMedia.some(item => item.media_id === 'pending-image'));
+  storage.userInfo = { id: 102 };
+  const third = pageHarness('projectnotes', {}, wxStubs);
+  third._selectedNoteID = 'n1';
+  third.applyProjectDetail({ project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 1, title: '方案', body: '正文', body_format: 'plain' }], versions: [] }, '', null, null, 'editor');
+  assert.equal(third.data.noteMedia.some(item => item.media_id === 'pending-image'), false);
+});
+
+
+test('invited member opens a frozen directory without designer management and cannot share it', async () => {
+  let managementCalls = 0;
+  const page = pageHarness('projectnoteview', {
+    directory: async () => ({ project: { project_id: 'p', name: '成员项目' }, versions: [{ version_id: 'v', title: '固定方案' }] }),
+    version: async () => ({ project: { project_id: 'p' }, version: { version_id: 'v', body: '固定正文', body_format: 'plain', media: [] } }),
+    getProjectNoteProject: async () => { managementCalls++; throw new Error('must not request management'); },
+  });
+  page.onLoad({ project_id: 'p' }); await page.onShow();
+  assert.equal(page.data.memberDirectory.versions[0].version_id, 'v');
+  await page.openMemberVersion({ currentTarget: { dataset: { id: 'v' } } });
+  assert.equal(page.data.view.version.body, '固定正文');
+  assert.equal(page.data.shareReady, false); assert.equal(managementCalls, 0);
+  await page.backToMemberDirectory(); assert.equal(page.data.view, null);
+  assert.equal(page.data.memberDirectory.project.name, '成员项目');
+});
+
+test('project creation selects only a returned customer and retains paging and older-share scope', async () => {
+  const queries = [], created = [];
+  const page = pageHarness('projectnotes', {
+    projectCustomers: async query => { queries.push(query); return { items: [{ customer_ref: 'u:202', nickname: '张女士' }], next_cursor: 'customer-next', as_of: '2026-11-13T12:00:00Z', share_window: { truncated: true, next_cursor: 'older-shares' } }; },
+    createProjectNoteProject: async input => { created.push(input); return { project_id: 'p1', ...input }; },
+  });
+  page._token = 'session-token'; page._visible = true; page._epoch = 1;
+  page.setData({ pageView: 'create', projectName: '张宅', ownerID: 'designer-101', loading: false });
+  await page.openProjectCustomers(); await page.loadMoreProjectCustomers();
+  assert.equal(queries[1].cursor, 'customer-next'); assert.equal(queries[1].as_of, '2026-11-13T12:00:00Z');
+  await page.loadOlderProjectCustomers(); assert.equal(queries[2].share_cursor, 'older-shares'); assert.equal(queries[2].cursor, '');
+  page.selectProjectCustomer({ currentTarget: { dataset: { ref: 'u:999' } } }); assert.equal(page.data.customerRef, '');
+  page.selectProjectCustomer({ currentTarget: { dataset: { ref: 'u:202' } } });
+  await page.createProjectNoteProject(); page.onUnload();
+  assert.equal(created[0].customer_ref, 'u:202'); assert.equal(created[0].owner_id, 'designer-101');
+});
+
+test('returning to an adopted article note preserves structured body media and cover when saving its title', async () => {
+  const body = JSON.stringify({ schema: 1, blocks: [{ kind: 'paragraph', text: '原正文' }, { kind: 'video', media_id: 'adopted-video' }] });
+  let note = { project_id: 'p', note_id: 'n', revision: 2, title: '原题', body, body_format: 'article_v2', media_ids: ['adopted-video'], cover_media_id: 'original-cover' }, saved;
+  const page = pageHarness('projectnotes', {
+    listProjectNoteProjects: async () => ({ items: [{ project_id: 'p' }] }), workbenchContext: async () => ({ owners: ['designer-101'] }),
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+    saveProjectNote: async (_id, input) => { saved = input; note = { ...note, ...input, revision: 3 }; return note; },
+    downloadProjectNoteMedia: async () => '/tmp/adopted.mp4',
+  });
+  page.onLoad({ project_id: 'p', note_id: 'n', view: 'editor' }); await page.onShow();
+  assert.equal(page.data.pageView, 'editor'); assert.equal(page.data.bodyReadOnly, true);
+  page.setNoteTitle({ detail: { value: '修改标题' } }); await page.persistNote(true);
+  assert.equal(saved.body, body); assert.equal(saved.body_format, 'article_v2'); assert.equal(saved.cover_media_id, 'original-cover');
+  assert.deepEqual(Array.from(saved.media_ids), ['adopted-video']); page.onUnload();
+});
+
+test('customer deep link preselects only a freshly authorized exact customer', async () => {
+  for (const allowed of [true, false]) {
+    let query;
+    const page = pageHarness('projectnotes', {
+      listProjectNoteProjects: async () => ({ items: [] }), workbenchContext: async () => ({ owners: ['designer-101'] }),
+      projectCustomers: async value => { query = value; return { items: allowed ? [{ customer_ref: 'u:202', nickname: '张女士' }] : [] }; },
+    });
+    page.onLoad({ customer_ref: 'u:202' }); await page.onShow();
+    assert.equal(query.visitor, 'u:202'); assert.equal(page.data.pageView, 'create');
+    assert.equal(page.data.customerRef, allowed ? 'u:202' : '');
+    if (!allowed) assert.match(page.data.error, /无法关联/);
+    page.onUnload();
+  }
+});
+
+test('member media 404 revalidates fixed project and version while true revocation clears the view', async () => {
+  let denied = false, reads = 0;
+  const page = pageHarness('projectnoteview', {
+    version: async () => { reads++; if (denied) throw Object.assign(new Error('成员已撤销'), { statusCode: 403 }); return { project: { project_id: 'p' }, version: { version_id: 'v', body_format: 'plain', body: '合法成员正文', media: [{ media_id: 'missing-image', kind: 'image' }] } }; },
+    download: async () => { throw Object.assign(new Error('图片暂不可用'), { statusCode: 404 }); },
+  });
+  page.onLoad({ project_id: 'p' }); page._memberVersionID = 'v'; await page.onShow();
+  assert.equal(reads, 2); assert.equal(page.data.view.version.body, '合法成员正文'); assert.equal(page.data.mediaFailuresCount, 1);
+  denied = true; await page.revalidateShared(); assert.equal(page.data.view, null); assert.match(page.data.error, /访问权限/);
+});
+
+test('adopted structured note previews original image and both videos in document order without changing saved draft', async () => {
+  const body = JSON.stringify({ schema: 1, blocks: [
+    { kind: 'paragraph', text: '保留原正文' }, { kind: 'image', media_id: 'original-image' },
+    { kind: 'video', media_id: 'original-video' }, { kind: 'video', media_id: 'adopted-video' },
+  ] });
+  let savedPayload;
+  let note = { project_id: 'p', note_id: 'n', revision: 2, title: '采用后方案', body, body_format: 'article_v2', cover_media_id: 'original-image', media_ids: ['original-image', 'original-video', 'adopted-video'] };
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (_project, id) => '/tmp/' + id,
+    saveProjectNote: async (_id, input) => { savedPayload = input; note = { ...note, ...input, revision: 3 }; return note; },
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, notes: [note], versions: [] }),
+  });
+  page._token = 'session-token'; page._epoch = 1; page._visible = true;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: body, bodyReadOnly: true,
+    noteMedia: [
+      { media_id: 'original-image', kind: 'image', local_path: '/tmp/image.jpg', width: 800, height: 600 },
+      { media_id: 'original-video', kind: 'video', local_path: '/tmp/original.mp4', width: 1280, height: 720 },
+      { media_id: 'adopted-video', kind: 'video', local_path: '/tmp/adopted.mp4', width: 1280, height: 720 },
+    ],
+  });
+  const draftBefore = JSON.stringify(page.noteDraft());
+  await page.previewNote();
+  assert.equal(page.data.previewPresentation.kind, 'article');
+  assert.deepEqual(Array.from(page.data.previewPresentation.blocks, item => [item.kind, item.media_id || item.text]), [
+    ['paragraph', '保留原正文'], ['image', 'original-image'], ['video', 'original-video'], ['video', 'adopted-video'],
+  ]);
+  assert.deepEqual(Array.from(page.data.previewPresentation.media, item => item.media_id), ['original-image', 'original-video', 'adopted-video']);
+  assert.equal(JSON.stringify(page.noteDraft()), draftBefore);
+  await page.persistNote(true);
+  assert.equal(savedPayload.body, body); assert.equal(savedPayload.body_format, 'article_v2'); assert.equal(savedPayload.cover_media_id, 'original-image');
+  assert.deepEqual(Array.from(savedPayload.media_ids), ['original-image', 'original-video', 'adopted-video']);
+  page.onUnload();
 });

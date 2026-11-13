@@ -246,8 +246,12 @@ func (m *CustomerServiceModel) ConvertTrackingLead(input *CustomerLeadCreateInpu
 		if err := refreshExistingLeadAccountPhoneOn(tx, existingID, phone, state.Revision); err != nil {
 			return TrackingLeadConversionResult{}, err
 		}
-		if !idempotent {
-			event.LeadID = existingID
+		event.LeadID = existingID
+		if idempotent {
+			if err := m.appendMyTrackingTouchOn(tx, event); err != nil {
+				return TrackingLeadConversionResult{}, err
+			}
+		} else {
 			if _, err := m.createEventOn(tx, event); err != nil {
 				return TrackingLeadConversionResult{}, err
 			}

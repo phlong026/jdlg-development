@@ -404,7 +404,7 @@ func TestProjectNoteShareViewOnlyAggregatesFixedVersion(t *testing.T) {
 	}
 }
 
-func TestProjectNoteOpenNoticeIsAtomicAndEligibilityRechecksMembership(t *testing.T) {
+func TestProjectNoteOpenNoticeIsAtomicAndEligibilityRechecksShare(t *testing.T) {
 	ctx := context.Background()
 	s, designer, _ := projectNoteFixture(t)
 	project, _, _, share := seedProjectNote(t, s, designer, 101)
@@ -435,7 +435,7 @@ func TestProjectNoteOpenNoticeIsAtomicAndEligibilityRechecksMembership(t *testin
 	if ok, err := s.ProjectNoteNoticeEligible(ctx, fact.ID, designer.Actor, "owner-a"); err != nil || !ok {
 		t.Fatalf("eligible=%v err=%v", ok, err)
 	}
-	if err = s.ProjectNoteRevokeMember(ctx, designer, project.ID, 101); err != nil {
+	if err = s.ProjectNoteRevokeShare(ctx, designer, share.ID); err != nil {
 		t.Fatal(err)
 	}
 	if ok, err := s.ProjectNoteNoticeEligible(ctx, fact.ID, designer.Actor, "owner-a"); err != nil || ok {
@@ -495,5 +495,25 @@ func TestProjectNotePrivacyDeletionOnlyRemovesSelectedVisitorOpenFacts(t *testin
 	}
 	if _, ok := rows[projectNoteOpenKind+":project-open-after-delete"]; ok {
 		t.Fatal("rejected open wrote a raw fact")
+	}
+}
+
+func TestNonmemberShareReceiptKeepsNotificationEligibilityUntilShareRevoked(t *testing.T) {
+	ctx := context.Background()
+	s, designer, _ := projectNoteFixture(t)
+	_, _, _, share := seedProjectNote(t, s, designer, 101)
+	s.NoticeRules.BrowseEnabled = true
+	fact, err := s.ProjectNoteOpenShare(ctx, share.Token, 102, "nonmember-open-notice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.ProjectNoteNoticeEligible(ctx, fact.ID, designer.Actor, "owner-a"); err != nil || !ok {
+		t.Fatalf("valid nonmember receipt filtered: %v %v", ok, err)
+	}
+	if err := s.ProjectNoteRevokeShare(ctx, designer, share.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.ProjectNoteNoticeEligible(ctx, fact.ID, designer.Actor, "owner-a"); err != nil || ok {
+		t.Fatalf("revoked share retained notice: %v %v", ok, err)
 	}
 }

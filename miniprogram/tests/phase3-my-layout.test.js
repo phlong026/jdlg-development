@@ -32,9 +32,10 @@ function scssForLayout() {
 
 test('工作台入口由后端创作能力控制，普通功能移出设计师分区', () => {
   const source = read('my.ts');
-  for (const action of ['myProjects', 'contentWorkbench', 'designerHome']) {
+  for (const action of ['myProjects', 'contentWorkbench', 'aiVideoStudio', 'customers']) {
     assert.match(source, new RegExp(`action: '${action}'`));
   }
+  assert.doesNotMatch(source.match(/function buildWorkbenchMenuItems[\s\S]+?return items;/)[0], /action: 'designerHome'/);
   for (const action of ['projectNotes', 'aiWriting', 'assetLibrary', 'shareMaterials', 'publish']) {
     assert.doesNotMatch(source.match(/function buildWorkbenchMenuItems[\s\S]+?return items;/)[0], new RegExp(`action: '${action}'`));
   }
@@ -66,7 +67,7 @@ test('我的页使用本地 mini-icon 线性图标并保持暖白背景', () => 
   assert.equal(config.usingComponents['mini-icon'], '/components/mini-icon/mini-icon');
   assert.ok(!config.usingComponents['t-icon'], 't-icon 应已从我的页移除');
   const iconStyles = fs.readFileSync(path.join(root, '../../components/mini-icon/mini-icon.wxss'), 'utf8');
-  for (const icon of ['folder', 'video', 'usergroup', 'file', 'share', 'user-business', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
+  for (const icon of ['folder', 'video', 'play-circle', 'usergroup', 'file', 'share', 'star', 'verified', 'mobile', 'notification', 'setting', 'user', 'order-list', 'logout']) {
     assert.ok(source.includes(`icon: '${icon}'`) || wxml.includes(`name="${icon}"`), `应使用已校验图标 ${icon}`);
     assert.ok(iconStyles.includes(`.mi-${icon} `) || new RegExp(`\\.mi-${icon}\\b`).test(iconStyles), `mini-icon 库应包含 ${icon}`);
   }

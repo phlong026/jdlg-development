@@ -23,6 +23,7 @@ var ErrQueryTooLarge = fail(422, "查询范围过大，请缩小时间或归属�
 // VisitorKeys selects original OR snapshot-linked identities; the fact layer
 // still resolves the exact identity before exposing any result.
 type RecordQuery struct {
+	ProjectDesigner                            int64 // Server-selected actor; filters project fact ownership before LIMIT.
 	Owners, IDs, Sessions, VisitorKeys, Shares []string
 	Content, View                              string
 	// TitleSearch and AssetKinds are catalog predicates. SQL repositories push
@@ -246,6 +247,25 @@ func scopedRecords(r Repository, kind string, q RecordQuery) ([]Record, error) {
 func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 	if !includes(q.Owners, row.Owner) || !includes(q.IDs, row.ID) {
 		return false, nil
+	}
+	if q.ProjectDesigner > 0 {
+		var fact struct {
+			ProjectID string `json:"project_id"`
+		}
+		if json.Unmarshal(row.Payload, &fact) != nil {
+			return false, ErrUnavailable
+		}
+		p, err := projectNoteLoadProjectRaw(r, fact.ProjectID)
+		if err != nil {
+			var missing *Error
+			if errors.As(err, &missing) && missing.Status == 404 {
+				return false, nil
+			}
+			return false, err
+		}
+		if p.DesignerID != q.ProjectDesigner || p.Owner != row.Owner {
+			return false, nil
+		}
 	}
 	// SQL DATETIME(6) truncates sub-microsecond precision. Use equally broad
 	// index bounds in memory; exact event and business-day clipping follows.

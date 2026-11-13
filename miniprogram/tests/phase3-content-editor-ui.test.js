@@ -26,6 +26,7 @@ function loadEditor(apiOverrides = {}) {
     ...apiOverrides,
   };
   const wx = {
+    hideShareMenu() {},
     getStorageSync: key => key === 'token' ? sessionToken : '',
     navigateTo: options => { navigations.push(options.url); navigationOptions.push(options); },
     showToast: options => toasts.push(options),
@@ -604,4 +605,44 @@ test('typing gallery copy during upload is preserved when images finish', async 
   await pending;
   assert.equal(page.data.postText, '上传时继续填写的正文');
   assert.equal(page.data.imageBlocks.length, 1);
+});
+
+test('content save survives same-account background return without losing the saved identity', async () => {
+  let finish;
+  const { page } = loadEditor({ saveContent: () => new Promise(resolve => { finish = resolve; }) });
+  page._loaded = true;
+  page.setData({ title: '原题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+  const saving = page.saveDraft();
+  page.onHide(); page.onShow();
+  assert.equal(page.data.busy, true, '同一保存仍在途时不能解锁再次创建');
+  page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '请求中的新输入' } });
+  finish({ content_id: 'content-saved', revision: 1, status: 'draft', version: 0 });
+  await saving;
+  assert.equal(page.data.id, 'content-saved');
+  assert.equal(page.data.revision, 1);
+  assert.equal(page.data.title, '请求中的新输入');
+  assert.equal(page.data.busy, false);
+  assert.match(page.data.notice, /未保存/);
+});
+
+test('late content save cannot apply another account or an unloaded page', async () => {
+  for (const invalidation of ['account', 'unload']) {
+    let finish;
+    const runtime = loadEditor({ saveContent: () => new Promise(resolve => { finish = resolve; }) });
+    const { page } = runtime;
+    page._loaded = true;
+    page.setData({ title: '原题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+    const saving = page.saveDraft();
+    if (invalidation === 'account') runtime.token('another-account'); else page.onUnload();
+    finish({ content_id: 'foreign-save', revision: 2, version: 0, status: 'draft' });
+    await saving;
+    assert.equal(page.data.id, '');
+  }
+});
+
+test('media and cover pickers carry the target content owner', () => {
+  const { page, navigations } = loadEditor();
+  page.setData({ owner_id: 'owner-company' });
+  page.openMediaPicker(); page.openCoverPicker();
+  assert.ok(navigations.every(url => url.includes('owner=owner-company')));
 });

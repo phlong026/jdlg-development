@@ -89,6 +89,16 @@ func registerTrackingMyRoutes(pub *gin.RouterGroup, svc *tracking.Service, users
 			out, err := svc.MyVisitors(c.Request.Context(), current, current.Actor, filter)
 			trackingResponse(c, out, err)
 		})
+		visitors.GET("/project-customers", func(c *gin.Context) {
+			filter, err := trackingFilter(c)
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+			current := c.MustGet("tracking.my.scope").(tracking.Scope)
+			out, err := myProjectCustomerChoices(c.Request.Context(), svc, model.NewCustomerServiceModel(users.DB), current, filter)
+			trackingResponse(c, out, err)
+		})
 		visitors.GET("/entries", func(c *gin.Context) {
 			filter, err := trackingFilter(c)
 			if err != nil {
@@ -97,11 +107,12 @@ func registerTrackingMyRoutes(pub *gin.RouterGroup, svc *tracking.Service, users
 			}
 			current := c.MustGet("tracking.my.scope").(tracking.Scope)
 			out, err := svc.MyVisitorEntries(c.Request.Context(), current, current.Actor, filter)
-			if err == nil {
-				_, gateErr := trackingLeadGate(out.State, out.IdentityType)
-				out.CanConvertLead = gateErr == nil
+			if err != nil {
+				trackingResponse(c, nil, err)
+				return
 			}
-			trackingResponse(c, out, err)
+			presented, err := presentMyCustomerHandoff(c.Request.Context(), model.NewCustomerServiceModel(users.DB), current, out)
+			trackingResponse(c, presented, err)
 		})
 		stats := pub.Group("/my-content-stats", TokenAuthRequired(codes), MiniprogramBannedBlock(users), miniTrackingMyScopeMiddleware(users.DB, svc.Config.Tenant))
 		stats.GET("", func(c *gin.Context) {

@@ -38,7 +38,7 @@
      </block>
 
      <block wx:if="{{presentation === 'video'}}">
-      <view class="video-workspace-head"><picker wx:if="{{context.owner_choices.length > 1}}" range="{{context.owner_choices}}" range-key="display_name" value="{{ownerIndex}}" bindchange="setOwner"><view>{{ownerDisplayName || '请选择内容归属'}} ›</view></picker><text wx:else>{{ownerDisplayName || '我的内容'}}</text><text class="muted">视频创作</text></view>
+      <view class="video-workspace-head"><picker wx:if="{{context.owner_choices.length > 1}}" range="{{context.owner_choices}}" range-key="display_name" value="{{ownerIndex}}" bindchange="setOwner" disabled="{{busy || !!id}}"><view>{{ownerDisplayName || '请选择内容归属'}} ›</view></picker><text wx:else>{{ownerDisplayName || '我的内容'}}</text><text class="muted">视频创作</text></view>
       <text wx:if="{{fieldErrors.owner_id}}" class="field-error">{{fieldErrors.owner_id}}</text>
       <view class="video-media-card">
        <view wx:if="{{videoBlocks.length}}" class="video-media-summary">

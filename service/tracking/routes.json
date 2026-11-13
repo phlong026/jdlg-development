@@ -155,6 +155,12 @@
     "Public": true,
     "Audience": "neutral"
   },
+  "pages/aivideostudio/index": {"Title":"AI 视频工作区","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/generate": {"Title":"AI 视频生成","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/materials": {"Title":"AI 视频创作素材","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/prompts": {"Title":"AI 视频提示词","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/records": {"Title":"AI 视频创作记录","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/detail": {"Title":"AI 视频任务详情","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/real/real": {
     "Title": "pages/real/real",
     "Type": "excluded",

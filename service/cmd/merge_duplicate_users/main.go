@@ -44,6 +44,8 @@ type duplicatePair struct {
 }
 
 func main() {
+	log.Fatal("MySQL钱包迁移后已禁用旧合并命令；请使用经过审计的事务迁移方案")
+
 	envPath := flag.String("env", filepath.Join("bin", ".env"), "env file path")
 	mode := flag.String("mode", "detect", "运行模式: detect, merge, auto-detect-merge")
 	sourceID := flag.Int64("source", 0, "被合并用户ID（merge模式必填）")
@@ -465,24 +467,7 @@ func mergeProfiles(tx *sql.Tx, sourceID, targetID int64) {
 }
 
 func mergeRedisStones(rdb *redis.Client, sourceID, targetID int64) {
-	if rdb == nil {
-		return
-	}
-	ctx := context.Background()
-	sourceKey := "user:stones:" + strconv.FormatInt(sourceID, 10)
-	targetKey := "user:stones:" + strconv.FormatInt(targetID, 10)
-
-	sourceStones, err := rdb.Get(ctx, sourceKey).Int64()
-	if err != nil || sourceStones <= 0 {
-		return
-	}
-
-	// 将源用户灵石加到目标用户
-	rdb.IncrBy(ctx, targetKey, sourceStones)
-	// 清零源用户灵石
-	rdb.Set(ctx, sourceKey, 0, 0)
-
-	log.Printf("  ✓ Redis灵石: 转移 %d 灵石到目标用户", sourceStones)
+	log.Fatal("余额已迁移到 MySQL；禁止使用旧用户合并命令。须先实现双用户余额与流水事务迁移")
 }
 
 func printMergePlan(db *sql.DB, rdb *redis.Client, sourceID, targetID int64) {

@@ -21,14 +21,14 @@
     <view class="card action-row"><button class="secondary" bindtap="acknowledgeRead" disabled="{{busy || readAcknowledged}}">{{readAcknowledged ? '已发送回执' : '发送阅读回执'}}</button><button wx:for="{{media}}" wx:key="media_id" wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveImage">保存原图</button></view>
     <view class="card feedback-card">
       <text class="section-title">反馈给设计师</text>
-      <view wx:for="{{versionView.feedbacks}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction}}" class="rating">{{item.satisfaction === 'very_satisfied' ? '非常满意' : item.satisfaction === 'needs_adjustment' ? '需要调整' : '不太满意'}}</text><text class="feedback-text">{{item.text}}</text></view>
+      <view wx:for="{{versionView.feedbacks}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction}}" class="rating">{{item.satisfaction === 'very_satisfied' ? '非常满意' : item.satisfaction === 'needs_adjustment' ? '需要调整' : '不太满意'}}</text><text class="feedback-text">{{item.text}}</text><text class="meta">{{item.resolved ? "已处理" : "待设计师处理"}}</text><text wx:if="{{item.resolution_reply}}" class="feedback-text">设计师处理说明：{{item.resolution_reply}}</text></view>
       <radio-group class="ratings" bindchange="setSatisfaction"><label><radio value="very_satisfied" color="#9f7140" />满意</label><label><radio value="needs_adjustment" color="#9f7140" />需要调整</label><label><radio value="unsatisfied" color="#9f7140" />不满意</label></radio-group>
       <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" cursor-spacing="120" placeholder="请具体说明希望修改的位置或内容" />
       <button class="primary" bindtap="submitFeedback" disabled="{{busy || !feedbackText}}">提交反馈</button>
     </view>
     <view wx:if="{{versionView.can_confirm || confirmed}}" class="card"><text class="section-title">版本确认</text><button class="primary" bindtap="confirmVersion" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
   </block>
-  <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="secondary" bindtap="retryMediaDownloads">重新加载视频</button></view>
+  <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="secondary" bindtap="retryMediaDownloads">重试失败素材</button></view>
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

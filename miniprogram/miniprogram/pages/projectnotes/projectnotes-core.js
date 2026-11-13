@@ -9,6 +9,7 @@ const { ANTI_FABRICATION_CLAUSE, noteWritingPrompt } = require('../../utils/writ
 
 const blankProtected = () => ({
   pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectLoadFailed: false,
+  customerRef: '', customerName: '', customerPickerOpen: false, projectCustomers: [], customerKeyword: '', customerCursor: '', customerAsOf: '', customerShareCursor: '', customerWindowNext: '', customerLoading: false, customerError: '',
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
   projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
@@ -165,9 +166,11 @@ Page({
   onLoad(options) {
     wx.hideShareMenu(); this._visible = true; this._unloaded = false;
     this._targetProjectID = String(options && options.project_id || '');
+    this._targetNoteID = String(options && options.note_id || '');
+    this._targetCustomerRef = String(options && options.customer_ref || '');
     this._targetVersionID = String(options && options.version_id || '');
     this._targetFeedbackID = String(options && options.feedback_id || '');
-    this._targetView = String(options && options.view || '') === 'members' ? 'members' : '';
+    this._targetView = ['members', 'editor'].includes(String(options && options.view || '')) ? String(options.view) : '';
     this._returnToPackage = this._targetView === 'members' && String(options && options.return_to || '') === 'package';
   },
   onShow() {
@@ -236,7 +239,7 @@ Page({
   clearProtected() {
     // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
     this._protectedGeneration = (this._protectedGeneration || 0) + 1;
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; writePendingMediaStore({}); this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -268,7 +271,7 @@ Page({
     if (this.data.pageView === 'list') { wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/my/my' }) }); return; }
     if (this.data.pageView === 'create') {
       const epoch = this._epoch, view = this.data.pageView;
-      if (!await this.confirmDiscardChanges(!!this.data.projectName)
+      if (!await this.confirmDiscardChanges(!!this.data.projectName || !!this.data.customerRef)
         || !this.current(epoch) || this.data.pageView !== view || this.data.busy) return;
       this.setData({ pageView: 'list', navigationTitle: '我的项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' }, () => this.scrollPage('list'));
       return;
@@ -297,7 +300,7 @@ Page({
   openProjectCreation() {
     if (this.data.busy || this.data.loading || this.data.projectLoadFailed) return;
     if (!this.data.owners.length) { this.setData({ projectLoadFailed: true, error: '暂无可用的项目归属，请重新加载或联系管理员。' }); return; }
-    this.setData({ pageView: 'create', navigationTitle: '新建项目', projectName: '', ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' }, () => this.scrollPage('create'));
+    this.setData({ pageView: 'create', navigationTitle: '新建项目', projectName: '', customerRef: '', customerName: '', customerPickerOpen: false, projectCustomers: [], customerCursor: '', customerAsOf: '', customerShareCursor: '', customerWindowNext: '', customerKeyword: '', customerLoading: false, ownerIndex: 0, ownerID: this.data.owners[0] || '', error: '', notice: '' }, () => this.scrollPage('create'));
   },
   async closeProjectSettings() {
     if (this.data.busy) return;
@@ -380,7 +383,8 @@ Page({
       this._loaded = true;
       this.setData({ projects, owners, ownerChoices, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
       const selectedID = this._targetProjectID || this._selectedProjectID;
-      if (selectedID) { this._targetProjectID = ''; if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
+      if (selectedID) { this._targetProjectID = ''; if (this._targetNoteID) { this._selectedNoteID = this._targetNoteID; this._targetNoteID = ''; } if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
+      else if (this._targetCustomerRef) await this.preselectProjectCustomer(epoch);
     } catch (error) {
       if (!this.current(epoch)) return;
       this._loaded = false;
@@ -496,7 +500,13 @@ Page({
       const images = viewMedia.filter(item => item.kind === 'image');
       const videos = viewMedia.filter(item => item.kind === 'video');
       let previewPresentation = null;
-      if (videos.length) {
+      if (draft.body_format === 'article_v2') {
+        // Structured notes keep every block and its original ordering. A
+        // video inserted into an existing note must not select a single-video view.
+        const completeMedia = (presentation.media || []).map(item => ({ ...item, url: item.local_path || item.url || '' }));
+        const cover = completeMedia.find(item => item.media_id === draft.cover_media_id);
+        previewPresentation = buildContentPresentation({ title: draft.title || '', body: draft.body, body_format: draft.body_format, cover: cover || null }, completeMedia, windowInfo, { prefix: 'note-preview' });
+      } else if (videos.length) {
         const poster = images[0];
         previewPresentation = buildContentPresentation({ title: draft.title || '', body: draft.body || '', body_format: draft.body_format || 'plain', presentation: 'video', cover: poster ? { media_id: poster.media_id, url: poster.url } : null, media: [videos[0]].concat(images) }, [videos[0]].concat(images), windowInfo, { prefix: 'note-preview' });
       } else if (images.length) {
@@ -643,14 +653,65 @@ Page({
       });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目资料保存失败，请重新载入后重试' }); }
   },
+  async preselectProjectCustomer(epoch) {
+    const ref = this._targetCustomerRef, request = this._customerRequest = (this._customerRequest || 0) + 1;
+    this.openProjectCreation();
+    this.setData({ customerLoading: true });
+    try {
+      const result = await require('../../utils/customer-link-api').projectCustomers({ visitor: ref, limit: 1 });
+      if (!this.current(epoch) || this._targetCustomerRef !== ref || request !== this._customerRequest || this.data.pageView !== 'create') return;
+      this._targetCustomerRef = ''; this.setData({ customerLoading: false });
+      const item = (result.items || []).find(item => item.customer_ref === ref);
+      if (!item) { this.setData({ error: '无法关联该客户，请重新选择本人客户。' }); return; }
+      this.setData({ customerRef: item.customer_ref, customerName: item.nickname || '已识别客户' });
+    } catch (error) {
+      if (!this.current(epoch) || this._targetCustomerRef !== ref || request !== this._customerRequest || this.data.pageView !== 'create') return;
+      this._targetCustomerRef = '';
+      this.setData({ customerLoading: false, error: error.message || '客户权限核验失败，请重新选择。' });
+    }
+  },
+  openProjectCustomers() {
+    if (this.data.busy) return;
+    this.setData({ customerPickerOpen: true, customerCursor: '', customerAsOf: '', customerShareCursor: '', customerWindowNext: '', projectCustomers: [] });
+    return this.loadProjectCustomers();
+  },
+  closeProjectCustomers() { this._customerRequest = (this._customerRequest || 0) + 1; this.setData({ customerPickerOpen: false, customerLoading: false, customerError: '' }); },
+  clearProjectCustomer() { this.closeProjectCustomers(); this.setData({ customerRef: '', customerName: '' }); },
+  setCustomerKeyword(event) { this.setData({ customerKeyword: String(event.detail.value || '') }); },
+  searchProjectCustomers() { this.setData({ customerCursor: '', customerAsOf: '', customerShareCursor: '', projectCustomers: [] }); return this.loadProjectCustomers(); },
+  loadMoreProjectCustomers() { if (this.data.customerCursor && !this.data.customerLoading) return this.loadProjectCustomers(true); },
+  loadOlderProjectCustomers() {
+    if (!this.data.customerWindowNext || this.data.customerLoading) return;
+    this.setData({ customerShareCursor: this.data.customerWindowNext, customerCursor: '', customerWindowNext: '', projectCustomers: [] });
+    return this.loadProjectCustomers();
+  },
+  async loadProjectCustomers(append) {
+    const epoch = this._epoch, request = this._customerRequest = (this._customerRequest || 0) + 1;
+    this.setData({ customerLoading: true, customerError: '' });
+    try {
+      const page = await require('../../utils/customer-link-api').projectCustomers({ limit: 30, q: this.data.customerKeyword.trim(), cursor: append === true ? this.data.customerCursor : '', as_of: this.data.customerAsOf, share_cursor: this.data.customerShareCursor });
+      if (!this.current(epoch) || request !== this._customerRequest || !this.data.customerPickerOpen) return;
+      const items = append === true ? this.data.projectCustomers.concat(page.items || []) : page.items || [];
+      const seen = new Set();
+      this.setData({ customerLoading: false, projectCustomers: items.filter(item => { if (!item.customer_ref || seen.has(item.customer_ref)) return false; seen.add(item.customer_ref); return true; }), customerCursor: page.next_cursor || page.cursor || '', customerAsOf: page.as_of || this.data.customerAsOf, customerWindowNext: page.share_window && page.share_window.next_cursor || '' });
+    } catch (error) { if (this.current(epoch) && request === this._customerRequest) this.setData({ customerLoading: false, customerError: error.message || '客户加载失败，可重试' }); }
+  },
+  selectProjectCustomer(event) {
+    const item = this.data.projectCustomers.find(item => item.customer_ref === String(event.currentTarget.dataset.ref || ''));
+    if (!item || this.data.customerLoading) return;
+    this.closeProjectCustomers(); this.setData({ customerRef: item.customer_ref, customerName: item.nickname || '已识别客户' });
+  },
   async createProjectNoteProject() {
+    if (this.data.customerLoading) return;
     if (this.data.busy || this.data.loading || this.data.projectLoadFailed) return;
     if (!this.data.ownerID) { this.setData({ error: '暂无可用的项目归属，请返回重新加载。' }); return; }
     if (!this.data.projectName) { this.setData({ error: '请填写项目名称。' }); return; }
     if (!await this.confirmDiscardChanges()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
     try {
-      const project = await api.createProjectNoteProject({ name: this.data.projectName, owner_id: this.data.ownerID });
+      const input = { name: this.data.projectName, owner_id: this.data.ownerID };
+      if (this.data.customerRef) input.customer_ref = this.data.customerRef;
+      const project = await api.createProjectNoteProject(input);
       if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); setTimeout(() => { if (this.current(epoch)) void this.startNewNote(); }, 0); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },

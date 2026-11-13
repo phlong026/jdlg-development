@@ -278,6 +278,17 @@
       ]
     },
     {
+      "root": "pages/aivideostudio",
+      "pages": [
+        "index",
+        "generate",
+        "materials",
+        "prompts",
+        "records",
+        "detail"
+      ]
+    },
+    {
       "root": "pages/aitoolworkbench",
       "pages": [
         "aitoolworkbench"

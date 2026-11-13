@@ -3,6 +3,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -271,5 +272,50 @@ func TestMySharesSearchCollectsMatchesBeforePagination(t *testing.T) {
 	windowItems := myShareItems(t, out)
 	if len(windowItems) != 1 || windowItems[0].ID != "share-1" {
 		t.Fatalf("创建窗 [08:00,09:30] 应仅含本人 share-1: %+v", windowItems)
+	}
+}
+
+func TestMyVisitorsShareWindowIsExplicitAndCanResumeOlderShares(t *testing.T) {
+	s, rows, scope, now := myVisitorsFixture(t)
+	for i := 0; i < 401; i++ {
+		seedMyShare(rows, fmt.Sprintf("recent-%04d", i), "company", "u:11", now.Add(-time.Duration(i+1)*time.Second))
+	}
+	first, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ShareWindow == nil || !first.ShareWindow.Truncated || first.ShareWindow.NextCursor == "" {
+		t.Fatalf("missing explicit bounded window: %+v", first)
+	}
+	if len(myVisitorItems(t, first)) != 0 {
+		t.Fatal("first share window must not include older share visitors")
+	}
+	second, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Limit: 20, ShareCursor: first.ShareWindow.NextCursor})
+	if err != nil || len(myVisitorItems(t, second)) != 2 {
+		t.Fatalf("older share visits cannot be resumed: %+v %v", second, err)
+	}
+	other := scope
+	other.Actor = 22
+	if _, err = s.MyVisitors(context.Background(), other, 22, Filter{AsOf: now, ShareCursor: first.ShareWindow.NextCursor}); err == nil {
+		t.Fatal("window cursor must be bound to the actor")
+	}
+}
+
+func TestMyVisitorsExactCustomerFilterPrecedesPagination(t *testing.T) {
+	s, _, scope, now := myVisitorsFixture(t)
+	list, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Visitor: "u:88", Sort: "page_views", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := myVisitorItems(t, list)
+	if len(items) != 1 || items[0].Key != "u:88" {
+		t.Fatalf("exact target lost before page: %+v", items)
+	}
+	missing, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Visitor: "u:999", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(myVisitorItems(t, missing)) != 0 {
+		t.Fatal("unknown target fell back to another customer")
 	}
 }

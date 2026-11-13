@@ -20,7 +20,7 @@ Page({
  onLoad(options){this._pendingNotice=String(options.notification_id||'');},
  onShow(){
   wx.hideShareMenu();this._epoch=(this._epoch||0)+1;this._token=String(wx.getStorageSync('token')||'');
-  this.setData({messages:[],cursor:'',unread:0,error:'',unreadError:'',loading:false,loginRequired:!this._token,settingsOpen:false,settingsLoading:false,settingsError:'',bindingLabel:'提醒状态待读取',bindingError:'',canBind:false,prefsLoaded:false});
+  this.setData({messages:[],cursor:'',unread:0,error:'',unreadError:'',loading:false,loginRequired:!this._token,settingsOpen:false,settingsLoading:false,settingsError:'',bindingLabel:'提醒状态待读取',bindingError:'',canBind:false,prefsLoaded:false,prefsBusy:false,bindingBusy:false});
   if(!this._token)return;
   this.loadMessages(false);
  },

@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-13T15:59:42.748366+08:00",
+  "previous_head": "06a9e20bbe07c37df111dbed6ee7516f0a15e18e",
+  "main_base": "b0ca49509fae09c1a9c2b43f4f25e9111e9fb537",
+  "pr": "https://github.com/phlong026/jdlg-development/pull/50",
+  "resolved": [
+    "README.md",
+    "service/route/share_tracking_lead.go",
+    "service/route/share_tracking_my.go"
+  ],
+  "compatibility": [
+    "Preserved main identity routing and contact consent with customer handoff state",
+    "Kept content create and generation adoption idempotency independent",
+    "Structured note preview preserves text, image and all videos in block order without changing saved draft"
+  ],
+  "validation": {
+    "miniprogram": {
+      "pass": 1638,
+      "fail": 0,
+      "skip": 0,
+      "native_wxml_compiler": true
+    },
+    "admin": {
+      "pass": 776,
+      "fail": 0,
+      "skip": 0,
+      "typecheck": true,
+      "routes": true,
+      "build": true
+    },
+    "go_full": "passed, CGO_ENABLED=0",
+    "go_vet": "passed, CGO_ENABLED=0",
+    "go_race": "passed, GOARCH=amd64 CGO_ENABLED=1, aivideostudio/contentimport/tracking/route/model",
+    "template_contract": "passed",
+    "release_builder": "passed",
+    "signer_artifacts_routes": "passed",
+    "npm_audit_mini_admin": "0 vulnerabilities each",
+    "credential_shape_scan": "passed"
+  },
+  "ci": {
+    "status": "not_started_billing_limit",
+    "evidence_run": 43388961618,
+    "annotation": "The job was not started because recent account payments have failed or your spending limit needs to be increased."
+  },
+  "limitations": [
+    "E02 service-account real configuration absent",
+    "No production deployment, mini upload, paid generation, message delivery or real-device UAT",
+    "Cloud CI not passed; equivalent local checks passed"
+  ]
+}

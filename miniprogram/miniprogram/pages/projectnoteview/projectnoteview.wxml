@@ -4,22 +4,29 @@
   <view wx:if="{{loading}}" class="state">正在核验账号与项目权限…</view>
   <view wx:elif="{{loginRequired}}" class="state"><text>设计师分享给你的私密方案</text><text class="muted">登录后即可查看。</text><button class="primary" bindtap="goLogin">去登录</button></view>
   <view wx:elif="{{error}}" class="state"><text>{{error}}</text><button class="secondary" bindtap="retry">重试</button><button class="text-button" bindtap="openCustomerService">联系客服</button></view>
+  <view wx:elif="{{memberMode && memberDirectory && !view}}" class="card">
+    <text class="title">{{memberDirectory.project.name}}</text><text class="muted">当前已向你共享的方案</text>
+    <button wx:for="{{memberDirectory.versions}}" wx:key="version_id" class="secondary" data-id="{{item.version_id}}" bindtap="openMemberVersion">{{item.title}} · V{{item.revision}}</button>
+    <text wx:if="{{!memberDirectory.versions.length}}" class="muted">当前页暂无已共享方案。</text>
+    <button wx:if="{{memberNextCursor}}" class="secondary" bindtap="loadMemberDirectory">加载更多</button>
+  </view>
   <block wx:elif="{{view}}">
+    <button wx:if="{{memberMode}}" class="secondary" bindtap="backToMemberDirectory">返回项目方案</button>
     <view class="header"><text class="project">{{view.project.name}}</text><text class="title">{{view.version.title}}</text><view class="version-line"><text class="version-badge">V{{view.version.revision}}</text><text class="muted">固定版本</text></view></view>
     <view class="paper"><template is="note-document" data="{{format: view.version.body_format, body: view.version.body, blocks: articleBlocks, media: media, groups: mediaGroups, galleryPositions: galleryPositions, allowAttachments: true, handleVideoErrors: true}}" /></view>
-    <view class="card">
+    <view wx:if="{{!memberMode}}" class="card">
       <text class="section-title">阅读回执</text><text class="muted">发送后设计师会看到你已查看。</text>
       <button class="secondary" bindtap="acknowledgeRead" loading="{{acknowledgingRead}}" disabled="{{readAcknowledged || acknowledgingRead}}">{{readAcknowledged ? '已发送阅读回执' : '告知设计师我已查看'}}</button>
     </view>
-    <view class="card"><text class="section-title">下载当前固定版本</text><text class="muted">Word 保留文字与图片顺序。</text><button class="secondary" bindtap="exportSharedProjectNoteWord" disabled="{{busy}}" loading="{{busy}}">导出 Word</button><block wx:for="{{media}}" wx:key="media_id"><button wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveOriginalImage" disabled="{{busy}}">保存原图{{index + 1}}</button></block></view>
-    <view class="card feedback-card"><text class="section-title">反馈给设计师</text><text wx:if="{{view.activity_truncated}}" class="muted">仅显示最近 50 条记录。</text><view wx:for="{{feedbackRows}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text><text class="feedback-text">{{item.text}}</text><text class="muted">{{item.resolved ? '已处理' : '待设计师处理'}}</text><text wx:if="{{item.resolution_reply}}" class="resolution">设计师处理说明：{{item.resolution_reply}}</text></view><text class="muted feedback-help">提交的评价和意见将以当前账号发送给项目设计师，并保留在此方案版本下。</text>
+    <view wx:if="{{!memberMode}}" class="card"><text class="section-title">下载当前固定版本</text><text class="muted">Word 保留文字与图片顺序。</text><button class="secondary" bindtap="exportSharedProjectNoteWord" disabled="{{busy}}" loading="{{busy}}">导出 Word</button><block wx:for="{{media}}" wx:key="media_id"><button wx:if="{{item.kind === 'image'}}" class="secondary" data-id="{{item.media_id}}" bindtap="saveOriginalImage" disabled="{{busy}}">保存原图{{index + 1}}</button></block></view>
+    <view wx:if="{{!memberMode}}" class="card feedback-card"><text class="section-title">反馈给设计师</text><text wx:if="{{view.activity_truncated}}" class="muted">仅显示最近 50 条记录。</text><view wx:for="{{feedbackRows}}" wx:key="feedback_id" class="feedback"><text wx:if="{{item.satisfaction_label}}" class="rating-label">{{item.satisfaction_label}}</text><text class="feedback-text">{{item.text}}</text><text class="muted">{{item.resolved ? '已处理' : '待设计师处理'}}</text><text wx:if="{{item.resolution_reply}}" class="resolution">设计师处理说明：{{item.resolution_reply}}</text></view><text class="muted feedback-help">提交的评价和意见将以当前账号发送给项目设计师，并保留在此方案版本下。</text>
       <radio-group class="satisfaction-options" bindchange="setSatisfaction">
         <label><radio value="very_satisfied" checked="{{satisfaction === 'very_satisfied'}}" color="#a7793d" />非常满意</label>
         <label><radio value="needs_adjustment" checked="{{satisfaction === 'needs_adjustment'}}" color="#a7793d" />基本满意，需要调整</label>
         <label><radio value="unsatisfied" checked="{{satisfaction === 'unsatisfied'}}" color="#a7793d" />不太满意</label>
       </radio-group>
       <textarea value="{{feedbackText}}" bindinput="setFeedbackText" maxlength="500" cursor-spacing="120" placeholder="说明希望修改的位置或内容" /><button class="primary" bindtap="submitFeedback" loading="{{busy}}" disabled="{{busy || !feedbackText}}">提交反馈</button></view>
-    <view class="card">
+    <view wx:if="{{!memberMode}}" class="card">
       <text class="section-title">此版本完整协作记录</text>
       <picker range="{{activityTypes}}" range-key="label" value="{{activityIndex}}" bindchange="setActivityType"><view class="picker">{{activityTypes[activityIndex].label}}</view></picker>
       <button wx:if="{{!activityLoaded}}" class="secondary" bindtap="loadActivityHistory" loading="{{activityLoading}}" disabled="{{activityLoading}}">查看历史</button>
@@ -27,9 +34,9 @@
       <text wx:if="{{activityLoaded && !activityItems.length}}" class="muted">暂无此类记录。</text>
       <view wx:if="{{activityLoaded}}" class="actions"><button class="secondary" data-direction="previous" bindtap="loadActivityHistory" disabled="{{activityPage === 0 || activityLoading}}">上一页</button><text class="muted">第 {{activityPage + 1}} 页</text><button class="secondary" data-direction="next" bindtap="loadActivityHistory" disabled="{{!activityNextCursor || activityLoading}}" loading="{{activityLoading}}">下一页</button></view>
     </view>
-    <view wx:if="{{canConfirm || confirmed}}" class="card confirm"><text class="section-title">方案版本确认</text><text class="muted">确认仅针对当前 V{{view.version.revision}}，新版本需重新确认。</text><button class="primary" bindtap="confirmVersion" loading="{{busy}}" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
+    <view wx:if="{{!memberMode && (canConfirm || confirmed)}}" class="card confirm"><text class="section-title">方案版本确认</text><text class="muted">确认仅针对当前 V{{view.version.revision}}，新版本需重新确认。</text><button class="primary" bindtap="confirmVersion" loading="{{busy}}" disabled="{{busy || confirmed}}">{{confirmed ? '已确认当前版本' : '确认当前版本'}}</button></view>
     <view wx:if="{{notice}}" class="notice">{{notice}}<button wx:if="{{mediaFailuresCount}}" class="text-button" bindtap="retryMediaDownloads">重试失败素材</button></view>
-    <text class="footer">收到链接的用户登录后即可查看。</text>
+    <text class="footer">{{memberMode ? "仅显示当前已向你共享的方案；反馈和确认请使用设计师分享的方案链接。" : "收到链接的用户登录后即可查看。"}}</text>
   </block>
   <view wx:if="{{shareReady}}" class="share-dock"><button class="primary" open-type="share">发给客户</button></view>
 </view>

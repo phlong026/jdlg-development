@@ -396,7 +396,13 @@ const ROUTES = {
   "pages/projectpackageview/projectpackageview": {"kind": "excluded", "readiness": "excluded-private-project-notes", "collect": false, "exclusionReason": "private-project-notes"},
   "pages/projectinvite/projectinvite": {"kind": "excluded", "readiness": "excluded-private-project-notes", "collect": false, "exclusionReason": "private-project-notes"},
   "pages/collectionreader/collectionreader": {"kind":"collection","readiness":"explicit","collect":true,"idKey":"collection_id"},
-  "pages/nativereferences/nativereferences": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
+  "pages/nativereferences/nativereferences": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/index": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/generate": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/materials": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/prompts": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/records": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/detail": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }
 function ready(route, data, rendered) {

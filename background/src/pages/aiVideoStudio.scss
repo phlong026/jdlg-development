@@ -1,0 +1,45 @@
+:where(.layout-content[data-admin-page="/ai-video-studio"]) {
+  .aivs-page { display: flex; flex-direction: column; gap: 14px; }
+  .aivs-intro { margin: -8px 0 0; color: var(--admin-text-muted); font-size: var(--admin-font-body); }
+  .aivs-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .aivs-tabs button, .aivs-actions button, .aivs-filters button, .aivs-state button { min-height: 38px; padding: 7px 14px; border: 1px solid var(--admin-border); border-radius: 8px; background: var(--admin-surface); color: var(--admin-text); cursor: pointer; }
+  .aivs-tabs button.on, button.primary { color: #fff; background: var(--admin-accent); border-color: var(--admin-accent); }
+  button.danger { background: #a94b3d; border-color: #a94b3d; }
+  button:disabled { opacity: .5; cursor: default; }
+  .aivs-panel, .aivs-card { border: 1px solid var(--admin-border); border-radius: var(--admin-radius-md); background: var(--admin-surface); }
+  .aivs-panel { padding: 16px; }
+  .aivs-card { padding: 14px; margin-top: 12px; }
+  .aivs-card h3 { margin: 0 0 10px; font-size: var(--admin-font-section); }
+  .aivs-card p, .aivs-note { color: var(--admin-text-muted); font-size: var(--admin-font-caption); line-height: 1.6; }
+  .aivs-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .aivs-summary > div { padding: 12px; border-radius: 10px; background: var(--admin-surface-muted); display: flex; flex-direction: column; gap: 4px; }
+  .aivs-summary span, table small { display: block; color: var(--admin-text-muted); font-size: var(--admin-font-caption); }
+  .aivs-summary b.ok { color: #2f8f6b; }
+  .aivs-mode-grid, .aivs-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .aivs-mode-grid label, .aivs-switch { display: flex; gap: 8px; align-items: center; }
+  .aivs-form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: var(--admin-font-caption); color: var(--admin-text-muted); }
+  input, select { min-height: 38px; border: 1px solid var(--admin-border); border-radius: 7px; padding: 6px 9px; background: var(--admin-surface); color: var(--admin-text); }
+  input[type="checkbox"] { min-height: auto; }
+  .admin-table-region { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: var(--admin-font-body); }
+  th, td { padding: 9px 10px; border-bottom: 1px solid var(--admin-border); text-align: left; vertical-align: top; white-space: nowrap; }
+  th { color: var(--admin-text-muted); font-size: var(--admin-font-caption); }
+  td input[type="number"] { width: 110px; }
+  .aivs-errors, .aivs-state.error { margin-top: 12px; padding: 11px; border: 1px solid #e3b6ae; border-radius: 8px; background: #fbeae6; color: #9b3a2d; }
+  .aivs-state { padding: 28px 12px; text-align: center; color: var(--admin-text-muted); }
+  .aivs-actions, .aivs-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .aivs-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; color: var(--admin-text-muted); font-size: var(--admin-font-caption); }
+  .aivs-pagination button { min-height: 36px; padding: 6px 12px; border: 1px solid var(--admin-border); border-radius: 7px; background: var(--admin-surface); color: var(--admin-text); }
+  .aivs-actions { justify-content: flex-end; }
+  .aivs-evidence { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: var(--admin-font-caption); }
+  .aivs-evidence textarea { min-height: 88px; padding: 9px; border: 1px solid var(--admin-border); border-radius: 7px; background: var(--admin-surface); color: var(--admin-text); resize: vertical; }
+  .aivs-filters { margin: 0 0 14px; }
+  .aivs-filters input { min-width: 260px; }
+  @media (max-width: 900px) {
+    .aivs-summary, .aivs-mode-grid, .aivs-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .aivs-summary, .aivs-mode-grid, .aivs-form-grid { grid-template-columns: 1fr; }
+    .aivs-filters input, .aivs-filters select, .aivs-filters button { width: 100%; }
+  }
+}

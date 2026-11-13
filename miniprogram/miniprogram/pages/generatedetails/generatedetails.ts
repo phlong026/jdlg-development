@@ -224,6 +224,9 @@ const LOCAL_ENTERPRISE_WECHAT_QRCODE = resolveAssetPath('/assets/企业微信二
 const GENERATED_TASK_PROGRESS_STORAGE_PREFIX = 'generated_task_progress_';
 
 Page({
+  contentSaveUnloaded: false,
+  contentSaveAccountToken: '',
+  contentSaveOperation: null as { token: string; taskNo: string } | null,
   data: {
     taskData: {} as TaskData,
     contentSaving: false,
@@ -303,6 +306,10 @@ Page({
   enterpriseWechatAutoResumeInProgress: false,
 
   onLoad(options) {
+    this.contentSaveUnloaded = false;
+    this.contentSaveOperation = null;
+    this.contentSaveAccountToken = String(wx.getStorageSync('token') || '');
+    this.setData({ contentSaving: false });
     this.initNavLayout();
     this.loadTemplateTabConfig();
     const decodedTaskNo = options?.task_no ? decodeURIComponent(options.task_no) : '';
@@ -606,6 +613,7 @@ Page({
   },
 
   onShow() {
+    this.syncContentSaveAccount();
     const taskNo = String(this.data.taskData?.task_no || '').trim();
     const taskStatus = String(this.data.taskData?.status || '');
     if (this.data.showEnterpriseWechatModal && this.data.pendingDownloadType) {
@@ -878,6 +886,8 @@ Page({
   },
 
   onUnload() {
+    this.contentSaveUnloaded = true;
+    this.contentSaveOperation = null;
     this.persistCurrentProgressState();
     this.stopPolling();
     this.stopVisualProgress();
@@ -2045,25 +2055,74 @@ Page({
   },
 
   // B1 直连管线：把本次生成结果一键转存为内容工作台的图文草稿，随后进入编辑器排版发布。
+  syncContentSaveAccount() {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token !== this.contentSaveAccountToken) {
+      this.contentSaveAccountToken = token;
+      this.contentSaveOperation = null;
+      this.setData({ contentSaving: false });
+    }
+    return token;
+  },
   async saveAsContent() {
+    const token = this.syncContentSaveAccount();
     if (this.data.contentSaving) return;
     const taskNo = String(this.data.taskData?.task_no || '');
     if (!taskNo || this.data.taskData?.status !== 'success') {
       wx.showToast({ title: '生成成功后才能保存为内容', icon: 'none' });
       return;
     }
+    const operation = { token, taskNo };
+    this.contentSaveOperation = operation;
+    const current = () => this.contentSaveOperation === operation && !this.contentSaveUnloaded && token === String(wx.getStorageSync('token') || '') && taskNo === String(this.data.taskData?.task_no || '');
+    const confirmCopy = () => new Promise(resolve => wx.showModal({ title: '另存新草稿？', content: '原内容已删除、撤回或不可访问，生成结果仍保留。', confirmText: '另存新草稿', success: result => resolve(result.confirm), fail: () => resolve(false) }));
     this.setData({ contentSaving: true });
     try {
       const { request } = require('../../utils/phase3-api');
+      const { attemptFor, completeAttempt, savedContent, forgetAttempt } = require('../../utils/generation-content-save');
+      const savedID = savedContent(taskNo);
+      if (savedID) {
+        const choice = await new Promise(resolve => wx.showActionSheet({ itemList: ['继续编辑已有内容', '另存新草稿'], success: result => resolve(result.tapIndex), fail: () => resolve(-1) }));
+        if (!current()) return;
+        if (choice === 0) {
+          let unavailable = false;
+          try {
+            const existing = await request('/api/v1/miniprogram/workbench/contents/' + encodeURIComponent(savedID), 'GET');
+            unavailable = ['deleted', 'revoked'].includes(existing.status);
+          } catch (error: any) {
+            if (![404, 410].includes(Number(error.statusCode))) throw error;
+            unavailable = true;
+          }
+          if (!current()) return;
+          if (!unavailable) { wx.navigateTo({ url: '/pages/contentedit/contentedit?id=' + encodeURIComponent(savedID) }); return; }
+          if (!await confirmCopy() || !current()) return;
+        } else if (choice !== 1) return;
+        forgetAttempt(taskNo);
+      }
       const title = String(this.data.taskData.user_prompt || this.data.taskData.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-      const result = await request('/api/v1/miniprogram/workbench/contents/from-generation', 'POST', { task_no: taskNo, title });
+      const attempt = attemptFor(taskNo, title);
+      const result = await request('/api/v1/miniprogram/workbench/contents/from-generation', 'POST', { task_no: taskNo, title, idempotency_key: attempt.key });
+      if (!current()) return;
       const contentId = String(result && result.content_id || '');
-      if (!contentId) throw new Error('保存失败');
-      this.setData({ contentSaving: false });
+      if (!contentId) throw new Error('保存结果待核对，请重试');
+      completeAttempt(attempt, contentId);
       wx.navigateTo({ url: `/pages/contentedit/contentedit?id=${encodeURIComponent(contentId)}` });
-    } catch (error) {
-      this.setData({ contentSaving: false });
+    } catch (error: any) {
+      if (!current()) return;
+      if (Number(error.statusCode) === 409 && /另存新内容/.test(String(error.message || ''))) {
+        if (await confirmCopy() && current()) {
+          require('../../utils/generation-content-save').forgetAttempt(taskNo);
+          this.setData({ contentSaving: false });
+          await this.saveAsContent();
+        }
+        return;
+      }
       wx.showToast({ title: (error instanceof Error && error.message) || '保存失败，请重试', icon: 'none' });
+    } finally {
+      if (this.contentSaveOperation === operation) {
+        this.contentSaveOperation = null;
+        if (!this.contentSaveUnloaded && token === String(wx.getStorageSync('token') || '')) this.setData({ contentSaving: false });
+      }
     }
   },
 

@@ -131,6 +131,13 @@ export const API_ENDPOINTS = {
         VIDEO_DETAIL: (id: string) => `/api/v1/management/ai/video-tasks/${id}`,
         VIDEO_SUPPORT_TICKET: (id: string) => `/api/v1/management/ai/video-tasks/${id}/support-ticket`,
     },
+    AI_VIDEO_STUDIO: {
+        CONFIG: '/api/v1/management/ai-video-studio/config',
+        TASKS: '/api/v1/management/ai-video-studio/tasks',
+        TASK_DETAIL: (id: string) => `/api/v1/management/ai-video-studio/tasks/${encodeURIComponent(id)}`,
+        RECONCILE: (id: string) => `/api/v1/management/ai-video-studio/results/${encodeURIComponent(id)}/reconcile`,
+        LEDGER: '/api/v1/management/ai-video-studio/ledger',
+    },
     // OSS管理
     OSS: {
         LIST: '/api/v1/management/oss/files',

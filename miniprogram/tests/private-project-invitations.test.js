@@ -30,7 +30,7 @@ function invitePage(api, wxOverrides = {}) {
   vm.runInNewContext(source, { Page(value) { definition = value; }, wx, require(id) {
     if (id === '../../utils/phase3-api') return api;
     throw new Error(`unexpected require ${id}`);
-  }, Promise, JSON, Error, Object, String, Number, Date, encodeURIComponent, console });
+  }, Promise, JSON, Error, Object, String, Number, Date, encodeURIComponent, console, setTimeout, clearTimeout });
   const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values, done) { Object.assign(this.data, values); if (done) done(); }, setToken(value) { token = value; } }, definition);
   return page;
 }
@@ -154,4 +154,17 @@ test('project invitation page is registered as private and excluded from trackin
   const policy = routes.policy('pages/projectinvite/projectinvite');
   assert.equal(policy.collect, false);
   assert.equal(policy.exclusionReason, 'private-project-notes');
+});
+
+
+test('invitation enter opens the member reader and discards a late apply from another account', async () => {
+  let resolveApply; const navigation = [];
+  const page = invitePage({ mutationKey: () => 'stable-key', getProjectInvitation: async () => ({ project_name: '方案', request_status: 'approved', project_id: 'project-b' }), applyProjectInvitation: () => new Promise(resolve => { resolveApply = resolve; }) }, { navigateTo: value => navigation.push(value.url) });
+  page.onLoad({ pni: 'invite-token' }); await page.onShow();
+  page.enterProject();
+  assert.equal(navigation[0], '/pages/projectnoteview/projectnoteview?project_id=project-b');
+  const pending = page.applyInvitation(); page.onHide(); page.setToken('account-b'); await page.onShow();
+  resolveApply({ status: 'approved', project_id: 'project-a' }); await pending;
+  assert.equal(page.data.projectID, 'project-b');
+  assert.equal(navigation.length, 1);
 });

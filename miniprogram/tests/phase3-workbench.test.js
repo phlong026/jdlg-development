@@ -884,6 +884,8 @@ test('a stale save response cannot overwrite or unlock a newer editor request', 
     page.setData({ title: '旧页面标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '旧页面正文' }] });
     const oldRequest = page[action]();
     page.onUnload();
+    // 模拟新页面重新进入；卸载后的旧实例本身不能接受保存回填。
+    page.onLoad({ id: 'current-content' });
     page.setData({ id: 'current-content', revision: 7, busy: false, title: '新页面标题', blocks: [{ kind: 'paragraph', text: '新页面正文' }] });
     const currentRequest = page[action]();
     responses[0]({ content_id: 'stale-content', revision: 1, version: 0, status: 'draft' });

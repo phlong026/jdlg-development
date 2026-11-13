@@ -140,6 +140,8 @@ Page({
     settingsExpanded: false, mediaExpanded: false, moreExpanded: false, tagsText: '', pinned: false,
   },
   onLoad(options) {
+    this._unloaded = false;
+    this._contentSaveActive = null;
     this.setData({ id: String(options.id || '') });
     const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
     const sourceToken = String(wx.getStorageSync('token') || '');
@@ -156,10 +158,11 @@ Page({
       this._loaded = false;
       this._savedSignature = '';
       this._mediaUploadActive = null;
+      this._contentSaveActive = null;
       this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
     this._token = token; this._epoch = (this._epoch || 0) + 1;
-    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._mediaUploadActive });
+    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._mediaUploadActive || !!this._contentSaveActive });
     if (token && !this._loaded) this.load(this._epoch);
     else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
@@ -177,9 +180,11 @@ Page({
       const context = await api.workbenchContext();
       if (!this.current(epoch)) return;
       if (!context.enabled || context.can_manage === false) { this.setData({ context, denied: context.can_manage === false, disabled: !context.enabled, loading: false }); return; }
-      const values = await Promise.all([api.listWorkbenchMedia(), this.data.id ? api.getContent(this.data.id) : Promise.resolve(null)]);
+      const content = this.data.id ? await api.getContent(this.data.id) : null;
       if (!this.current(epoch)) return;
-      const mediaPage = values[0] || {}, content = values[1];
+      const targetOwner = content ? content.owner_id : (context.owners || [])[0] || '';
+      const mediaPage = await api.listWorkbenchMedia({ owner: targetOwner });
+      if (!this.current(epoch)) return;
       const bodyFormat = content ? content.body_format || 'plain' : 'article_v2';
       const documentReadOnly = !!content && bodyFormat === 'document_v1' && content.type === 'document';
       const legacyReadOnly = !!content && bodyFormat !== 'article_v2' && !documentReadOnly;
@@ -247,7 +252,7 @@ Page({
     if (this.data.busy || this.data.documentReadOnly || this.data.legacyReadOnly) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, cover: true };
     wx.navigateTo({
-      url: '/pages/nativereferences/nativereferences?picker=media&kind=image',
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=image' + (this.data.owner_id ? '&owner=' + encodeURIComponent(this.data.owner_id) : ''),
       events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
       fail: () => this.setData({ error: '素材选择页暂时无法打开，请重试' }),
     });
@@ -257,7 +262,7 @@ Page({
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, replaceVideo: this.data.presentation === 'video' && mediaBlocks(this.data.blocks, 'video').length > 0 };
     const kinds = this.data.presentation === 'gallery' ? 'image' : this.data.presentation === 'video' ? 'video' : 'image%2Cvideo';
     wx.navigateTo({
-      url: '/pages/nativereferences/nativereferences?picker=media&kind=' + kinds,
+      url: '/pages/nativereferences/nativereferences?picker=media&kind=' + kinds + (this.data.owner_id ? '&owner=' + encodeURIComponent(this.data.owner_id) : ''),
       events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
     });
   },
@@ -513,7 +518,27 @@ Page({
   setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
   togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
-  setOwner(event) { const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex]; this.setData({ owner_id: choice && choice.owner_id || '', ownerDisplayName: choice && choice.display_name || '', ownerIndex, 'fieldErrors.owner_id': '', error: '', preview: null }); },
+  setOwner(event) {
+    if (this.data.busy || this.data.id) return;
+    const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex];
+    if (!choice || choice.owner_id === this.data.owner_id) return;
+    const token = this._token, previousOwner = this.data.owner_id;
+    const apply = async () => {
+      if (!this.sameSaveAccount(token) || this.data.id || this.data.busy || this.data.owner_id !== previousOwner) return;
+      const blocks = this.data.blocks.filter(block => !block.media_id);
+      const next = blocks.length ? blocks : [textBlock('')];
+      this.setData({ owner_id: choice.owner_id, ownerDisplayName: choice.display_name, ownerIndex, blocks: next, ...blockViews(next, []), media: [], documentCandidates: [], cover_media_id: '', 'fieldErrors.owner_id': '', error: '', preview: null });
+      try {
+        const page = await api.listWorkbenchMedia({ owner: choice.owner_id });
+        if (this.sameSaveAccount(token) && !this.data.id && this.data.owner_id === choice.owner_id) {
+          const media = mergeAssets(this.data.media, (page.items || []).filter(asset => asset.kind === 'image' || asset.kind === 'video'));
+          this.setData({ media, documentCandidates: (page.items || []).filter(asset => asset.kind === 'document'), ...blockViews(this.data.blocks, media) });
+        }
+      } catch (error) { if (this.sameSaveAccount(token) && this.data.owner_id === choice.owner_id) this.setData({ error: error.message || '素材加载失败，请重试选择素材' }); }
+    };
+    if (mediaIDs(this.data.blocks).length || this.data.cover_media_id) wx.showModal({ title: '切换内容归属？', content: '将移除当前媒体引用，标题和文字保留。', success: result => { if (result.confirm) void apply(); } });
+    else void apply();
+  },
   editBlock(event) {
     if (this.data.layoutReadOnly) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
@@ -841,27 +866,40 @@ Page({
     const tags = String(this.data.tagsText || '').split(/[\s,，]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
     return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), tags, pinned: this.data.pinned, expected_revision: this.data.revision } };
   },
-  async persistDraft(input, epoch) {
+  sameSaveAccount(token) {
+    return !this._unloaded && token === this._token && token === String(wx.getStorageSync('token') || '');
+  },
+  async persistDraft(input) {
     const signature = this.draftSignature();
-    const saved = await api.saveContent(input.draft, this.data.id);
-    if (!this.current(epoch)) return null;
-    const draftChanged = signature !== this.draftSignature();
-    const blocks = draftChanged ? this.data.blocks : input.blocks;
-    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, ...blockViews(blocks, this.data.media) });
-    // 保存的是提交时的内容，不能把请求期间的新输入误当成已保存。
-    this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
-    return { ...saved, draftChanged };
+    const operation = { token: this._token, id: this.data.id, revision: this.data.revision };
+    this._contentSaveActive = operation;
+    try {
+      const saved = await api.saveContent(input.draft, operation.id);
+      // 页面前后台切换只改变读请求代次；同账号同草稿的保存必须收尾。
+      if (this._contentSaveActive !== operation || !this.sameSaveAccount(operation.token)
+        || operation.id !== this.data.id || operation.revision !== this.data.revision) return null;
+      const draftChanged = signature !== this.draftSignature();
+      const blocks = draftChanged ? this.data.blocks : input.blocks;
+      this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, ...blockViews(blocks, this.data.media) });
+      this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
+      return { ...saved, draftChanged, saveEpoch: this._epoch };
+    } finally {
+      if (this._contentSaveActive === operation) {
+        this._contentSaveActive = null;
+        if (this.sameSaveAccount(operation.token)) this.setData({ busy: false });
+      }
+    }
   },
   async saveDraft() {
     if (this.data.busy) return;
     const input = this.draftInput(this.data.presentation === 'video');
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    const token = this._token; this.setData({ busy: true, error: '', notice: '' });
     try {
-      const saved = await this.persistDraft(input, epoch);
-      if (!saved || !this.current(epoch)) return;
+      const saved = await this.persistDraft(input);
+      if (!saved || !this.sameSaveAccount(token)) return;
       this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: saved.draftChanged ? '当前仍有未保存修改，请再次保存' : '草稿已保存' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
+    } catch (error) { if (this.sameSaveAccount(token)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
   },
   publishKey() {
     const signature = JSON.stringify([this.data.id, this.data.revision, this.data.preview && this.data.preview.preview_token]);
@@ -913,10 +951,12 @@ Page({
     if (this.data.busy) return;
     const input = this.draftInput();
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, videoStarted: {} });
+    let epoch = this._epoch; const token = this._token; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, videoStarted: {} });
     try {
       const saved = await this.persistDraft(input, epoch);
-      if (!saved || !this.current(epoch)) return;
+      if (!saved || !this.sameSaveAccount(token)) return;
+      epoch = saved.saveEpoch;
+      this.setData({ busy: true });
       if (saved.draftChanged) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
       const signature = this.draftSignature();
       const preview = await api.previewContent(saved.content_id, saved.revision);
@@ -925,7 +965,7 @@ Page({
       if (!this.current(epoch)) return;
       if (signature !== this.draftSignature()) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
       this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, presentationView: view.presentation, presentationMediaErrors: view.errors, busy: false, notice: '' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
+    } catch (error) { if (this.sameSaveAccount(token)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
     if (this.data.busy || !this.data.preview) return;
