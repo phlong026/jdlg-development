@@ -155,10 +155,11 @@ Page({
       this._loaded = false;
       this._savedSignature = '';
       this._mediaUploadActive = null;
+      this._contentSaveActive = null;
       this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
     this._token = token; this._epoch = (this._epoch || 0) + 1;
-    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._mediaUploadActive });
+    this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._mediaUploadActive || !!this._contentSaveActive });
     if (token && !this._loaded) this.load(this._epoch);
     else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
@@ -840,27 +841,40 @@ Page({
     const tags = String(this.data.tagsText || '').split(/[\s,，]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
     return { blocks, draft: { title, body, body_format: 'article_v2', source_url: String(this.data.source_url || '').trim(), source_note: String(this.data.source_note || '').trim(), rights: this.data.rights, owner_id: this.data.owner_id, cover_media_id: this.data.cover_media_id, media_ids: this.data.layoutReadOnly ? this.data.layoutMediaIDs : mediaIDs(blocks), tags, pinned: this.data.pinned, expected_revision: this.data.revision } };
   },
-  async persistDraft(input, epoch) {
+  sameSaveAccount(token) {
+    return !this._unloaded && token === this._token && token === String(wx.getStorageSync('token') || '');
+  },
+  async persistDraft(input) {
     const signature = this.draftSignature();
-    const saved = await api.saveContent(input.draft, this.data.id);
-    if (!this.current(epoch)) return null;
-    const draftChanged = signature !== this.draftSignature();
-    const blocks = draftChanged ? this.data.blocks : input.blocks;
-    this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, ...blockViews(blocks, this.data.media) });
-    // 保存的是提交时的内容，不能把请求期间的新输入误当成已保存。
-    this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
-    return { ...saved, draftChanged };
+    const operation = { token: this._token, id: this.data.id, revision: this.data.revision };
+    this._contentSaveActive = operation;
+    try {
+      const saved = await api.saveContent(input.draft, operation.id);
+      // 页面前后台切换只改变读请求代次；同账号同草稿的保存必须收尾。
+      if (this._contentSaveActive !== operation || !this.sameSaveAccount(operation.token)
+        || operation.id !== this.data.id || operation.revision !== this.data.revision) return null;
+      const draftChanged = signature !== this.draftSignature();
+      const blocks = draftChanged ? this.data.blocks : input.blocks;
+      this.setData({ id: saved.content_id, revision: saved.revision, version: saved.version, status: saved.status, blocks, ...blockViews(blocks, this.data.media) });
+      this._savedSignature = JSON.stringify({ ...JSON.parse(signature), id: saved.content_id, revision: saved.revision, blocks: input.blocks });
+      return { ...saved, draftChanged, saveEpoch: this._epoch };
+    } finally {
+      if (this._contentSaveActive === operation) {
+        this._contentSaveActive = null;
+        if (this.sameSaveAccount(operation.token)) this.setData({ busy: false });
+      }
+    }
   },
   async saveDraft() {
     if (this.data.busy) return;
     const input = this.draftInput(this.data.presentation === 'video');
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    const token = this._token; this.setData({ busy: true, error: '', notice: '' });
     try {
-      const saved = await this.persistDraft(input, epoch);
-      if (!saved || !this.current(epoch)) return;
+      const saved = await this.persistDraft(input);
+      if (!saved || !this.sameSaveAccount(token)) return;
       this.setData({ preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: saved.draftChanged ? '当前仍有未保存修改，请再次保存' : '草稿已保存' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
+    } catch (error) { if (this.sameSaveAccount(token)) this.setData({ busy: false, error: error.message || '保存草稿失败' }); }
   },
   publishKey() {
     const signature = JSON.stringify([this.data.id, this.data.revision, this.data.preview && this.data.preview.preview_token]);
@@ -912,10 +926,12 @@ Page({
     if (this.data.busy) return;
     const input = this.draftInput();
     if (!input) return;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, videoStarted: {} });
+    let epoch = this._epoch; const token = this._token; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, videoStarted: {} });
     try {
       const saved = await this.persistDraft(input, epoch);
-      if (!saved || !this.current(epoch)) return;
+      if (!saved || !this.sameSaveAccount(token)) return;
+      epoch = saved.saveEpoch;
+      this.setData({ busy: true });
       if (saved.draftChanged) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
       const signature = this.draftSignature();
       const preview = await api.previewContent(saved.content_id, saved.revision);
@@ -924,7 +940,7 @@ Page({
       if (!this.current(epoch)) return;
       if (signature !== this.draftSignature()) { this.setData({ busy: false, notice: '当前仍有未保存修改，请再次保存并预览' }); return; }
       this.setData({ preview, previewBlocks: view.blocks, previewCover: view.cover, previewLayoutReadOnly: view.layoutReadOnly, previewLayoutBlocks: view.layoutBlocks, presentationView: view.presentation, presentationMediaErrors: view.errors, busy: false, notice: '' });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
+    } catch (error) { if (this.sameSaveAccount(token)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
     if (this.data.busy || !this.data.preview) return;
