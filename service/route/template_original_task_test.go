@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"service/config"
 	"service/model"
 )
 
@@ -91,6 +92,71 @@ func TestPublicTemplateMediaFieldsProtectPaidOriginalsInLists(t *testing.T) {
 	thumbnail, preview, images = publicTemplateMediaFields(&free)
 	if thumbnail != free.Thumbnail || preview != free.PreviewURL || images != free.Images {
 		t.Fatalf("free public media projection = thumbnail=%q preview=%q images=%q", thumbnail, preview, images)
+	}
+}
+
+func TestPaidTemplatePreviewsUseConfiguredCOSPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		prefix string
+		root   string
+	}{
+		{"production prefix", "ai_assets/", "https://static.jiadilingguang.com/ai_assets/derived_images/templates/user_submit/"},
+		{"nested prefix", "tenant-root/media/", "https://static.jiadilingguang.com/tenant-root/media/derived_images/templates/user_submit/"},
+		{"no prefix", "", "https://static.jiadilingguang.com/derived_images/templates/user_submit/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Get()
+			previous := cfg.COS
+			t.Cleanup(func() { cfg.COS = previous })
+			cfg.COS.Prefix = tt.prefix
+			cfg.COS.Domain = "https://static.jiadilingguang.com"
+			paid := &model.Template{
+				ID:         764,
+				Thumbnail:  tt.root + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+				PreviewURL: tt.root + testTemplateDerivativeSHA1 + "_detail_preview.jpg",
+				Images:     `["https://static.jiadilingguang.com/ai_assets/reference/original.jpg"]`,
+				Price:      10,
+			}
+
+			thumbnail, preview, images := publicTemplateMediaFields(paid)
+			if thumbnail != paid.Thumbnail || preview != paid.PreviewURL || images != "[]" {
+				t.Errorf("public paid media lost configured-prefix previews or exposed originals: thumbnail=%q preview=%q images=%q", thumbnail, preview, images)
+			}
+			locked := templateToResponse(paid, true, nil, nil)
+			if locked["thumbnail"] != paid.Thumbnail || locked["preview_url"] != paid.PreviewURL || locked["images"] != "[]" {
+				t.Errorf("locked detail lost configured-prefix previews or exposed originals: %#v", locked)
+			}
+			featured := featuredTemplateResponse(paid, nil)
+			if featured["thumbnail"] != paid.Thumbnail || featured["preview_url"] != paid.PreviewURL {
+				t.Errorf("featured paid template lost configured-prefix previews: %#v", featured)
+			}
+		})
+	}
+}
+
+func TestConfiguredTemplatePreviewPrefixDoesNotPermitOtherObjects(t *testing.T) {
+	cfg := config.Get()
+	previous := cfg.COS
+	t.Cleanup(func() { cfg.COS = previous })
+	cfg.COS.Prefix = "ai_assets/"
+	cfg.COS.Domain = "https://static.jiadilingguang.com"
+	root := "https://static.jiadilingguang.com/ai_assets/derived_images/templates/"
+	invalid := []string{
+		"https://static.jiadilingguang.com/other/derived_images/templates/admin/" + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+		"https://static.jiadilingguang.com/ai_assets/reference/" + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+		"https://static.jiadilingguang.com/%61i_assets/derived_images/templates/admin/" + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+		root + "admin/%2e%2e/private/" + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+		root + "admin%2fprivate/" + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+		root + "admin//" + testTemplateDerivativeSHA1 + "_list_thumb.jpg",
+		root + "admin/" + testTemplateDerivativeSHA1 + "_list_thumb.jpg?download=1",
+		root + "admin/" + testTemplateDerivativeSHA1 + "_detail_preview.jpg",
+	}
+	for _, rawURL := range invalid {
+		if got := publicTemplateDerivedImageURL(rawURL, "list_thumb"); got != "" {
+			t.Errorf("non-preview object or non-canonical URL %q accepted as %q", rawURL, got)
+		}
 	}
 }
 
