@@ -835,6 +835,14 @@ func validateAIVideoStudioConfig(config model.AIVideoStudioConfig) error {
 	return nil
 }
 
+func validStudioBatchStatus(status string) bool {
+	switch status {
+	case "", "queued", "submitting", "submitted", "running", "uncertain", "completed", "partial_success", "failed", "cancelled":
+		return true
+	}
+	return false
+}
+
 func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore) {
 	g := group.Group("/ai-video-studio")
 	registerStudioReconciliation(g, store)
@@ -907,8 +915,7 @@ func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.
 		page, size := studioPage(c)
 		status := strings.TrimSpace(c.Query("status"))
 		keyword := strings.TrimSpace(c.Query("keyword"))
-		allowedStatus := map[string]bool{"": true, "queued": true, "submitting": true, "submitted": true, "running": true, "succeeded": true, "partial_failed": true, "failed": true, "cancelled": true, "uncertain": true}
-		if !allowedStatus[status] || len([]rune(keyword)) > 100 {
+		if !validStudioBatchStatus(status) || len([]rune(keyword)) > 100 {
 			studioError(c, 400, "任务筛选参数不合法")
 			return
 		}

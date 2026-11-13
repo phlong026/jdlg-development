@@ -142,6 +142,19 @@ func TestAIVideoStudioGenerationReadinessFailsClosed(t *testing.T) {
 	}
 }
 
+func TestAIVideoStudioManagementAcceptsWorkerBatchStates(t *testing.T) {
+	for _, status := range []string{"", "queued", "submitting", "submitted", "running", "uncertain", "completed", "partial_success", "failed", "cancelled"} {
+		if !validStudioBatchStatus(status) {
+			t.Errorf("worker/client batch state rejected by management: %q", status)
+		}
+	}
+	for _, status := range []string{"retain_failed", "reconciliation_required", "unknown", "completed OR 1=1"} {
+		if validStudioBatchStatus(status) {
+			t.Errorf("unimplemented or invalid batch filter accepted: %q", status)
+		}
+	}
+}
+
 func completeStudioPrices(unit int64) []model.AIVideoStudioPrice {
 	return []model.AIVideoStudioPrice{
 		{Code: "ai_video_studio_prompt_optimize", Label: "提示词优化", BillingUnit: "per_request", UnitStones: &unit},
